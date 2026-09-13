@@ -19,6 +19,7 @@
 package io.prometheus.harness
 
 import com.pambrose.common.util.simpleClassName
+import io.prometheus.common.TestPorts
 import io.prometheus.harness.HarnessConstants.DEFAULT_CHUNK_SIZE_BYTES
 import io.prometheus.harness.HarnessConstants.DEFAULT_SCRAPE_TIMEOUT_SECS
 import io.prometheus.harness.HarnessConstants.HARNESS_CONFIG
@@ -35,7 +36,7 @@ class TlsWithMutualAuthTest :
       ProxyCallTestArgs(
         agent = agent,
         proxyPort = PROXY_PORT,
-        startPort = 10800,
+        startPort = TestPorts.TLS_MUTUAL_AUTH_START_PORT,
         caller = simpleClassName,
       )
     },

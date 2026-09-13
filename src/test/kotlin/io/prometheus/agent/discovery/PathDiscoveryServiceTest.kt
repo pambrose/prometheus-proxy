@@ -19,10 +19,20 @@
 package io.prometheus.agent.discovery
 
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.ints.shouldBeGreaterThanOrEqual
+import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import io.prometheus.agent.AgentPathManager
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import java.io.IOException
+import kotlin.concurrent.atomics.AtomicBoolean
+import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.incrementAndFetch
+import kotlin.time.Duration.Companion.seconds
 
 class PathDiscoveryServiceTest : StringSpec() {
   init {
@@ -52,6 +62,48 @@ class PathDiscoveryServiceTest : StringSpec() {
       service.reconcileOnce()
 
       coVerify(exactly = 1) { pathManager.reconcileDiscoveredPaths(emptyList()) }
+    }
+
+    // run() is what the Agent launches. Its interval wait is sliced so a disconnect ends discovery within one slice,
+    // rather than a full interval later, which would otherwise hold up shutdown.
+    "run should stop within one wait slice once keepRunning turns false" {
+      val pathManager = mockk<AgentPathManager>(relaxed = true)
+      val running = AtomicBoolean(true)
+      val firstRead = CompletableDeferred<Unit>()
+      // A 60s interval, so an unsliced wait would keep run() alive far past the timeout below.
+      val service =
+        PathDiscoveryService(pathManager, { emptyList<DiscoveredPath>().also { firstRead.complete(Unit) } }, 60)
+
+      val job = launch(Dispatchers.Default) { service.run { running.load() } }
+      withTimeout(5.seconds) { firstRead.await() }
+      running.store(false)
+      withTimeout(5.seconds) { job.join() }
+
+      coVerify(exactly = 1) { pathManager.reconcileDiscoveredPaths(emptyList()) }
+    }
+
+    // A failed read skips only its own tick: the loop must still reconcile on the next one.
+    "run should keep reconciling on later ticks after a read fails" {
+      val desired = [DiscoveredPath("a", "a_metrics", "http://a/m", "{}")]
+      val pathManager = mockk<AgentPathManager>(relaxed = true)
+      val reconciled = CompletableDeferred<Unit>()
+      coEvery { pathManager.reconcileDiscoveredPaths(desired) } answers {
+        reconciled.complete(Unit)
+        Unit
+      }
+      val reads = AtomicInt(0)
+      val running = AtomicBoolean(true)
+      val source = PathDiscoverySource { if (reads.incrementAndFetch() == 1) throw IOException("boom") else desired }
+      val service = PathDiscoveryService(pathManager, source, 1)
+
+      val job = launch(Dispatchers.Default) { service.run { running.load() } }
+      try {
+        withTimeout(10.seconds) { reconciled.await() }
+      } finally {
+        running.store(false)
+        withTimeout(5.seconds) { job.join() }
+      }
+      reads.load() shouldBeGreaterThanOrEqual 2
     }
   }
 }

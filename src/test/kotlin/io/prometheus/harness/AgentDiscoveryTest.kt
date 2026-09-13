@@ -30,6 +30,7 @@ import io.prometheus.Proxy
 import io.prometheus.agent.PathSource
 import io.prometheus.agent.discovery.DiscoveryTestSupport.discoveryPathsHocon
 import io.prometheus.client.CollectorRegistry
+import io.prometheus.common.TestPorts
 import io.prometheus.harness.HarnessConstants.CONFIG_ARG
 import io.prometheus.harness.support.TestUtils
 import io.prometheus.harness.support.exceptionHandler
@@ -121,7 +122,7 @@ class AgentDiscoveryTest : StringSpec() {
     private val logger = logger {}
 
     // Dedicated ports to avoid clashing with the shared harness ports and the auth tests.
-    private const val HTTP_PORT = 9516
-    private const val AGENT_PORT = 50464
+    private const val HTTP_PORT = TestPorts.DISCOVERY_HTTP_PORT
+    private const val AGENT_PORT = TestPorts.DISCOVERY_AGENT_PORT
   }
 }

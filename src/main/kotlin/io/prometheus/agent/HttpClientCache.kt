@@ -41,6 +41,7 @@ import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 import kotlin.time.TimeSource.Monotonic
 
 /**
@@ -56,6 +57,7 @@ import kotlin.time.TimeSource.Monotonic
  * @param maxAge maximum lifetime of a cache entry
  * @param maxIdleTime maximum idle time before an entry is considered expired
  * @param cleanupInterval interval between background cleanup sweeps
+ * @param timeSource clock that entry ages and idle times are measured on
  * @see AgentHttpService
  */
 internal class HttpClientCache(
@@ -63,6 +65,8 @@ internal class HttpClientCache(
   private val maxAge: Duration = 30.minutes,
   private val maxIdleTime: Duration = 10.minutes,
   private val cleanupInterval: Duration = 5.minutes,
+  // Where entry ages and idle times are measured; injectable so tests advance time instead of sleeping.
+  private val timeSource: TimeSource = TimeSource.Monotonic,
 ) {
   // A single access-ordered LinkedHashMap (accessOrder = true) is both the cache and the recency
   // tracker: get() moves an entry to the most-recently-used end, so the least-recently-used entry is
@@ -218,7 +222,7 @@ internal class HttpClientCache(
         // cache[cacheKey] is a get(): on an accessOrder LinkedHashMap it also marks the entry MRU.
         val result = cache[cacheKey]?.let { existing ->
           if (isEntryValid(existing)) {
-            existing.lastAccessedAt = Monotonic.markNow()
+            existing.lastAccessedAt = timeSource.markNow()
             logger.debug { "Using cached HTTP client for key: $maskedString" }
             existing.onStartWithClient()
             existing
@@ -259,7 +263,8 @@ internal class HttpClientCache(
 
     // A no-op once the sweeper has started, or after close() has cancelled it.
     sweeper.start()
-    val entry = CacheEntry(clientFactory())
+    val now = timeSource.markNow()
+    val entry = CacheEntry(clientFactory(), createdAt = now, lastAccessedAt = now)
     cache[keyString] = entry
     cacheSize.store(cache.size)
     logger.info { "Created and cached HTTP client for key: $maskedKey" }

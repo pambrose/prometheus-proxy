@@ -37,6 +37,7 @@ import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
 import io.prometheus.Proxy
+import io.prometheus.client.Counter
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.testConfigVals
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
@@ -61,14 +62,30 @@ import java.util.zip.CRC32
 
 @Suppress("LargeClass")
 class ProxyServiceImplTest : StringSpec() {
+  // The chunk-failure counters, stubbed individually so a test can tell which counter and stage label moved.
+  private class ChunkFailureCounters {
+    val metrics = mockk<ProxyMetrics>(relaxed = true)
+    val chunkStage = mockk<Counter.Child>(relaxed = true)
+    val summaryStage = mockk<Counter.Child>(relaxed = true)
+    val abandoned = mockk<Counter>(relaxed = true)
+
+    init {
+      val validationFailures = mockk<Counter>(relaxed = true)
+      every { metrics.chunkValidationFailures } returns validationFailures
+      every { validationFailures.labels(ProxyMetrics.STAGE_CHUNK) } returns chunkStage
+      every { validationFailures.labels(ProxyMetrics.STAGE_SUMMARY) } returns summaryStage
+      every { metrics.chunkedTransfersAbandoned } returns abandoned
+    }
+  }
+
   private fun createMockProxy(
     transportFilterDisabled: Boolean = false,
     isRunning: Boolean = true,
+    metrics: ProxyMetrics = mockk(relaxed = true),
   ): Proxy {
     val mockOptions = mockk<ProxyOptions>(relaxed = true)
     every { mockOptions.transportFilterDisabled } returns transportFilterDisabled
 
-    val mockMetrics = mockk<ProxyMetrics>(relaxed = true)
     val mockAgentContextManager = mockk<AgentContextManager>(relaxed = true)
     val mockPathManager = mockk<ProxyPathManager>(relaxed = true)
     val mockScrapeRequestManager = mockk<ScrapeRequestManager>(relaxed = true)
@@ -95,7 +112,7 @@ class ProxyServiceImplTest : StringSpec() {
     every { mockProxy.proxyConfigVals } returns configVals.proxy
     every { mockProxy.metrics(any<ProxyMetrics.() -> Unit>()) } answers {
       val block = firstArg<ProxyMetrics.() -> Unit>()
-      block(mockMetrics)
+      block(metrics)
     }
     every { mockProxy.agentContextManager } returns mockAgentContextManager
     every { mockProxy.pathManager } returns mockPathManager
@@ -1211,7 +1228,8 @@ class ProxyServiceImplTest : StringSpec() {
     }
 
     "writeChunkedResponsesToProxy should clean up orphaned contexts on stream failure" {
-      val proxy = createMockProxy(isRunning = true)
+      val counters = ChunkFailureCounters()
+      val proxy = createMockProxy(isRunning = true, metrics = counters.metrics)
       val contextManager = proxy.agentContextManager
       val scrapeRequestManager = proxy.scrapeRequestManager
       val scrapeId = 400L
@@ -1247,6 +1265,10 @@ class ProxyServiceImplTest : StringSpec() {
       verify { contextManager.removeChunkedContext(scrapeId) }
       // Bug #4: Verify the waiting HTTP handler is notified via failScrapeRequest
       verify { scrapeRequestManager.failScrapeRequest(scrapeId, match { it.contains("abandoned") }) }
+      // Counted as an abandoned transfer, not as a validation failure at either stage.
+      verify(exactly = 1) { counters.abandoned.inc() }
+      verify(exactly = 0) { counters.chunkStage.inc() }
+      verify(exactly = 0) { counters.summaryStage.inc() }
     }
 
     "writeChunkedResponsesToProxy should clean up multiple orphaned contexts on stream failure" {
@@ -1399,7 +1421,8 @@ class ProxyServiceImplTest : StringSpec() {
     // The fix calls failScrapeRequest() to notify the handler immediately.
 
     "writeChunkedResponsesToProxy should notify handler on chunk validation failure" {
-      val proxy = createMockProxy()
+      val counters = ChunkFailureCounters()
+      val proxy = createMockProxy(metrics = counters.metrics)
       val contextManager = proxy.agentContextManager
       val scrapeRequestManager = proxy.scrapeRequestManager
       val scrapeId = 500L
@@ -1441,10 +1464,15 @@ class ProxyServiceImplTest : StringSpec() {
       verify { scrapeRequestManager.failScrapeRequest(scrapeId, match { it.contains("Chunk") }) }
       // Context should have been cleaned up
       verify { contextManager.removeChunkedContext(scrapeId) }
+      // Counted at the chunk stage only: the failed transfer is not also counted as abandoned at stream end.
+      verify(exactly = 1) { counters.chunkStage.inc() }
+      verify(exactly = 0) { counters.summaryStage.inc() }
+      verify(exactly = 0) { counters.abandoned.inc() }
     }
 
     "writeChunkedResponsesToProxy should notify handler on summary validation failure" {
-      val proxy = createMockProxy()
+      val counters = ChunkFailureCounters()
+      val proxy = createMockProxy(metrics = counters.metrics)
       val contextManager = proxy.agentContextManager
       val scrapeRequestManager = proxy.scrapeRequestManager
       val scrapeId = 501L
@@ -1498,6 +1526,10 @@ class ProxyServiceImplTest : StringSpec() {
 
       // The waiting HTTP handler should have been notified via failScrapeRequest
       verify { scrapeRequestManager.failScrapeRequest(scrapeId, match { it.contains("Summary") }) }
+      // Counted at the summary stage only.
+      verify(exactly = 1) { counters.summaryStage.inc() }
+      verify(exactly = 0) { counters.chunkStage.inc() }
+      verify(exactly = 0) { counters.abandoned.inc() }
     }
 
     // ==================== Bug #20: transportFilterDisabled cleanup Tests ====================

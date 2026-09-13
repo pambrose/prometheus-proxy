@@ -26,6 +26,7 @@ import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldNotBeEmpty
 import io.mockk.coEvery
 import io.mockk.spyk
+import io.prometheus.common.TestPorts
 import io.prometheus.grpc.heartBeatResponse
 import io.prometheus.harness.support.HarnessSetup
 import io.prometheus.harness.support.TestUtils.startAgent
@@ -41,7 +42,7 @@ import kotlin.time.Duration.Companion.seconds
 class InProcessHeartbeatEvictionTest : StringSpec() {
   companion object : HarnessSetup() {
     private const val SERVER_NAME = "hb-eviction"
-    private const val HTTP_PORT = 9569
+    private const val HTTP_PORT = TestPorts.HEARTBEAT_EVICTION_HTTP_PORT
   }
 
   init {

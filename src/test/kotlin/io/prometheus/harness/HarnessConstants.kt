@@ -17,6 +17,7 @@
 package io.prometheus.harness
 
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
+import io.prometheus.common.TestPorts
 import io.prometheus.harness.HarnessConfig.MEDIUM
 import java.io.File
 
@@ -38,7 +39,7 @@ object HarnessConstants {
     logger.info { "HarnessConfig: ${HARNESS_CONFIG.name}" }
   }
 
-  const val PROXY_PORT = 9505
+  const val PROXY_PORT = TestPorts.HARNESS_PROXY_PORT
 
   const val MIN_DELAY_MILLIS = 400
   const val MAX_DELAY_MILLIS = 600
@@ -48,11 +49,15 @@ object HarnessConstants {
 
   private const val HARNESS_CONFIG_FILE = "config/test-configs/harness.conf"
   private const val JUNIT_FILE = "config/test-configs/junit-test.conf"
-  private const val GH_PREFIX = "https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/"
 
-  private fun localOrGitHub(path: String): String = if (File(path).exists()) path else "$GH_PREFIX$path"
+  // Tests run from the project root. A missing file used to fall back to a copy on GitHub master, which hid a
+  // renamed or deleted config and quietly tested against whatever master held.
+  internal fun localConfigFile(path: String): String {
+    require(File(path).exists()) { "Test config file not found: $path" }
+    return path
+  }
 
-  val CONFIG_ARG = ["--config", localOrGitHub(HARNESS_CONFIG_FILE)]
+  val CONFIG_ARG = ["--config", localConfigFile(HARNESS_CONFIG_FILE)]
 
-  val OPTIONS_CONFIG = localOrGitHub(JUNIT_FILE)
+  val OPTIONS_CONFIG = localConfigFile(JUNIT_FILE)
 }

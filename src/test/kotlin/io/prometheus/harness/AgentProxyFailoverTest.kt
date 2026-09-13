@@ -37,6 +37,7 @@ import io.prometheus.Agent
 import io.prometheus.Proxy
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.LOOPBACK_HOST
+import io.prometheus.common.TestPorts
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
 import kotlin.time.Duration.Companion.seconds
@@ -153,13 +154,13 @@ class AgentProxyFailoverTest : StringSpec() {
 
     // Dedicated ports, following the one-off convention used by the other standalone harness specs
     // (9512, 9525, 9526, 9527) rather than TestPorts.kt, which mirrors real default config values.
-    private const val PROXY_A_HTTP_PORT = 9530
-    private const val PROXY_A_GRPC_PORT = 9531
-    private const val PROXY_B_HTTP_PORT = 9532
-    private const val PROXY_B_GRPC_PORT = 9533
+    private const val PROXY_A_HTTP_PORT = TestPorts.FAILOVER_PROXY_A_HTTP_PORT
+    private const val PROXY_A_GRPC_PORT = TestPorts.FAILOVER_PROXY_A_GRPC_PORT
+    private const val PROXY_B_HTTP_PORT = TestPorts.FAILOVER_PROXY_B_HTTP_PORT
+    private const val PROXY_B_GRPC_PORT = TestPorts.FAILOVER_PROXY_B_GRPC_PORT
 
     // Must match the pathConfigs url in proxy-failover.conf, which cannot see a dynamically bound port.
-    private const val STUB_PORT = 9534
+    private const val STUB_PORT = TestPorts.FAILOVER_STUB_PORT
 
     private val STOP_TIMEOUT = 10.seconds
 

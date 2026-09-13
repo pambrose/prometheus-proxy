@@ -24,6 +24,7 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.ktor.http.HttpStatusCode
 import io.prometheus.common.ConfigVals
+import io.prometheus.common.TestPorts.ADMIN_EMPTY_PATH_ADMIN_PORT
 import io.prometheus.harness.HarnessConstants.PROXY_PORT
 import io.prometheus.harness.support.HarnessSetup
 import io.prometheus.harness.support.TestUtils.startAgent
@@ -43,7 +44,7 @@ class AdminEmptyPathTest : StringSpec() {
           startProxy(
             adminEnabled = true,
             args = [
-              "-Dproxy.admin.port=8098",
+              "-Dproxy.admin.port=$ADMIN_EMPTY_PATH_ADMIN_PORT",
               "-Dproxy.admin.pingPath=\"\"",
               "-Dproxy.admin.versionPath=\"\"",
               "-Dproxy.admin.healthCheckPath=\"\"",
@@ -61,7 +62,7 @@ class AdminEmptyPathTest : StringSpec() {
 
     "proxy ping path should return not found when empty" {
       proxyConfigVals.admin.apply {
-        port shouldBe 8098
+        port shouldBe ADMIN_EMPTY_PATH_ADMIN_PORT
         pingPath shouldBe ""
 
         KtorDsl.blockingGet("$port/$pingPath".withPrefix()) { response ->
@@ -72,7 +73,7 @@ class AdminEmptyPathTest : StringSpec() {
 
     "proxy version path should return not found when empty" {
       proxyConfigVals.admin.apply {
-        port shouldBe 8098
+        port shouldBe ADMIN_EMPTY_PATH_ADMIN_PORT
         versionPath shouldBe ""
 
         KtorDsl.blockingGet("$port/$versionPath".withPrefix()) { response ->

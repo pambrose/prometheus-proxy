@@ -113,7 +113,7 @@ for the current spec list.
 
 All container specs require Docker and are gated on `RUN_CONTAINER_TESTS=true` (set automatically by `make container-tests` / `make scaling-tests`). Default `./gradlew test` registers placeholders marked SKIPPED.
 
-Unit tests in `src/test/kotlin/io/prometheus/{agent,proxy,common}/`. Shared test constants live in `src/test/kotlin/io/prometheus/common/TestPorts.kt` (`TestPorts` object) — canonical proxy/agent/Prometheus/nginx port numbers used across the unit, harness, and container suites; reference these instead of hard-coding port literals in new tests.
+Unit tests in `src/test/kotlin/io/prometheus/{agent,proxy,common}/`. Shared test constants live in `src/test/kotlin/io/prometheus/common/TestPorts.kt` (`TestPorts` object) — canonical proxy/agent/Prometheus/nginx port numbers used across the unit, harness, and container suites; reference these instead of hard-coding port literals in new tests. Each harness spec's dedicated ports live there too, and `TestPortsTest` fails on a duplicate, so give a new spec its own entries.
 
 `EnvVars.getEnv()` reads `java.lang.System.getenv()`, which can't be set in-process, so its parse-and-throw branches aren't reachable by setting an env var in a test. The numeric/boolean parsing is therefore extracted into `internal` companion helpers (`parseBooleanStrict` / `parseIntStrict` / `parseLongStrict`) that the tests call directly. When adding a new typed `getEnv` overload, follow this pattern so the invalid-value path stays testable.
 

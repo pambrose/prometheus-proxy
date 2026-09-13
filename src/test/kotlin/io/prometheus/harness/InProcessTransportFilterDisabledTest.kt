@@ -36,6 +36,7 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.LOOPBACK_HOST
+import io.prometheus.common.TestPorts
 import io.prometheus.common.startAndAwaitReady
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
@@ -113,6 +114,6 @@ class InProcessTransportFilterDisabledTest : StringSpec() {
   }
 
   companion object {
-    private const val HTTP_PORT = 9562
+    private const val HTTP_PORT = TestPorts.TF_DISABLED_HTTP_PORT
   }
 }

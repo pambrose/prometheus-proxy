@@ -56,8 +56,8 @@ require the build or tests to pass before merging; and the CLI reference has dri
 | 27 | Testing docs cite a nonexistent Gradle task and an incomplete spec list      | Docs          | medium   | ✅      |
 | 28 | CHANGELOG/RELEASE_NOTES behind; release checklist misses version literals    | Docs          | medium   | ✅      |
 | 29 | Metrics doc and CLAUDE.md drift                                              | Docs          | low      | ⬜      |
-| 30 | Discovery and chunk-failure paths untested                                   | Tests         | medium   | ⬜      |
-| 31 | Timing-sensitive and vacuously passing tests                                 | Tests         | medium   | ⬜      |
+| 30 | Discovery and chunk-failure paths untested                                   | Tests         | medium   | ✅      |
+| 31 | Timing-sensitive and vacuously passing tests                                 | Tests         | medium   | ✅      |
 | 32 | Coverage gate checks totals only                                             | Tests         | low      | ⬜      |
 | 33 | Tracked IDE state, point-in-time docs, dead local directory                  | Hygiene       | low      | ⬜      |
 | 34 | Minor build tidy-ups                                                         | Hygiene       | low      | ⬜      |
@@ -608,7 +608,7 @@ which also makes container runs non-reproducible.
 
 ## 🧪 Tests
 
-### 30. [ ] Discovery and chunk-failure paths are untested
+### 30. [x] Discovery and chunk-failure paths are untested
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -625,7 +625,15 @@ and alerts depend on those counters.
 **Fix:** add failure-isolation and `run()`-exit tests for discovery; assert the specific counter and
 label in the chunk-failure tests.
 
-### 31. [ ] Timing-sensitive and vacuously passing tests
+**Resolution:** `PathDiscoveryServiceTest` now drives `run()`: it stops within one wait slice of `keepRunning`
+turning false (a 60s interval would otherwise hold it), and it keeps reconciling after a tick whose read fails.
+`AgentPathManagerTest` checks that a rejected registration and a failed unregister each leave the rest of a
+reconcile intact. The chunk-failure tests stub each counter and assert the exact one moved --
+`chunkValidationFailures` with the `chunk` or `summary` label, or `chunkedTransfersAbandoned` -- and that the other
+two did not. Each new assertion was confirmed to fail against a deliberately broken implementation: an unsliced
+wait, uncaught discovery and reconcile failures, and swapped stage labels.
+
+### 31. [x] Timing-sensitive and vacuously passing tests
 
 **Severity:** medium · **Confidence:** confirmed (flakiness itself suspected, not observed)
 
@@ -646,6 +654,15 @@ label in the chunk-failure tests.
 
 **Fix:** inject a clock into `HttpClientCache`; wait on a sweep-count signal instead of sleeping; move
 the ports into `TestPorts`; fail fast in both harness helpers.
+
+**Resolution:** `HttpClientCache` takes an injectable `TimeSource`, and the expiry tests advance a `TestTimeSource`
+instead of sleeping against real timeouts; the max-age test also keeps the entry fresh, so only its age can expire
+it. The cleanup-service tests wait until a spied `findStaleAgents` has run instead of sleeping, so a sweep loop that
+never runs now fails all of them. All 73 hard-coded harness ports, including the admin tests' 8098 and 8099 and the
+`startPort` bases, live in `TestPorts`, and `TestPortsTest` fails on a duplicate. `awaitPortFree` (formerly
+`waitForPortAvailable`) throws when a port stays taken, and `HarnessConstants.localConfigFile` (formerly
+`localOrGitHub`) requires the file to exist instead of fetching it from GitHub `master`; `HarnessHelpersTest`
+covers both.
 
 ### 32. [ ] Coverage gate checks totals only
 

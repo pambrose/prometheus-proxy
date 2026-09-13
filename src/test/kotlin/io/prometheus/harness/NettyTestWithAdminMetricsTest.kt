@@ -26,6 +26,7 @@ import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
+import io.prometheus.common.TestPorts
 import io.prometheus.common.TestPorts.AGENT_ADMIN_PORT
 import io.prometheus.common.TestPorts.PROXY_ADMIN_PORT
 import io.prometheus.harness.HarnessConstants.DEFAULT_CHUNK_SIZE_BYTES
@@ -46,7 +47,7 @@ class NettyTestWithAdminMetricsTest :
       ProxyCallTestArgs(
         agent = agent,
         proxyPort = PROXY_PORT,
-        startPort = 10300,
+        startPort = TestPorts.NETTY_WITH_ADMIN_START_PORT,
         caller = simpleClassName,
       )
     },

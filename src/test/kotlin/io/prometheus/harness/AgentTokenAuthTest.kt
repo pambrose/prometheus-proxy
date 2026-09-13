@@ -26,6 +26,7 @@ import io.prometheus.Agent
 import io.prometheus.Proxy
 import io.prometheus.agent.AgentOptions
 import io.prometheus.client.CollectorRegistry
+import io.prometheus.common.TestPorts
 import io.prometheus.harness.HarnessConstants.CONFIG_ARG
 import io.prometheus.harness.support.exceptionHandler
 import io.prometheus.proxy.ProxyOptions
@@ -126,9 +127,9 @@ class AgentTokenAuthTest : StringSpec() {
     private const val TOKEN = "harness-secret-token"
 
     // Dedicated ports to avoid clashing with the shared harness ports and the TLS tests.
-    private const val HTTP_PORT_OK = 9513
-    private const val AGENT_PORT_OK = 50461
-    private const val HTTP_PORT_BAD = 9514
-    private const val AGENT_PORT_BAD = 50462
+    private const val HTTP_PORT_OK = TestPorts.TOKEN_AUTH_HTTP_PORT_OK
+    private const val AGENT_PORT_OK = TestPorts.TOKEN_AUTH_AGENT_PORT_OK
+    private const val HTTP_PORT_BAD = TestPorts.TOKEN_AUTH_HTTP_PORT_BAD
+    private const val AGENT_PORT_BAD = TestPorts.TOKEN_AUTH_AGENT_PORT_BAD
   }
 }

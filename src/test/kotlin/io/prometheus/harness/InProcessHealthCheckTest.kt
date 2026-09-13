@@ -24,6 +24,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
+import io.prometheus.common.TestPorts
 import io.prometheus.harness.support.HarnessSetup
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
@@ -38,10 +39,10 @@ import io.prometheus.proxy.ScrapeRequestWrapper
 class InProcessHealthCheckTest : StringSpec() {
   companion object : HarnessSetup() {
     private const val SERVER_NAME = "health-check"
-    private const val HTTP_PORT = 9565
-    private const val PROXY_ADMIN_PORT = 9566
-    private const val AGENT_ADMIN_PORT = 9567
-    private const val DASHBOARD_PORT = 9568
+    private const val HTTP_PORT = TestPorts.HEALTH_CHECK_HTTP_PORT
+    private const val PROXY_ADMIN_PORT = TestPorts.HEALTH_CHECK_PROXY_ADMIN_PORT
+    private const val AGENT_ADMIN_PORT = TestPorts.HEALTH_CHECK_AGENT_ADMIN_PORT
+    private const val DASHBOARD_PORT = TestPorts.HEALTH_CHECK_DASHBOARD_PORT
 
     // Low so the proxy-side check can be tripped with a couple of queued requests.
     private const val PROXY_BACKLOG_THRESHOLD = 2
