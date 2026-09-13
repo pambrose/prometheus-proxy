@@ -37,7 +37,7 @@ require the build or tests to pass before merging; and the CLI reference has dri
 | 8  | Failover never leaves a proxy that rejects registration                      | Agent         | medium   | ✅      |
 | 9  | Failed discovery unregister leaves a stale path forever                      | Agent         | medium   | ✅      |
 | 10 | Dead-connection detection (~90s) slower than proxy eviction (60s)            | Agent         | medium   | ✅      |
-| 11 | Embedded agent startup failure leaks channel and cache                       | Agent         | medium   | ⬜      |
+| 11 | Embedded agent startup failure leaks channel and cache                       | Agent         | medium   | ✅      |
 | 12 | Chunk size and gzip threshold unbounded vs gRPC 4 MiB limit                  | Agent         | low      | ⬜      |
 | 13 | Host-only proxy address ignores `agent.proxy.port`                           | Agent         | low      | ⬜      |
 | 14 | Prometheus-cancelled scrapes leave no metric or debug trace                  | Proxy         | low      | ⬜      |
@@ -276,7 +276,7 @@ deadlines disabled, heartbeats have no deadline either, as before. The second pa
 not being cancelled when a write stream dies -- is not addressed: it was never confirmed, and no failing
 test could be written for it.
 
-### 11. [ ] Embedded agent startup failure leaks the channel and cache
+### 11. [x] Embedded agent startup failure leaks the channel and cache
 
 **Severity:** medium · **Confidence:** plausible (depends on Guava service lifecycle semantics)
 
@@ -293,6 +293,18 @@ TLS path, bad filter regex) leaks the coroutine the same way and surfaces as
 
 **Fix:** create the channel and cache lazily, or close them from `failed()` / a `Service.Listener`;
 have `startAsyncAgent` await running or report failure; make `shutdown()` tolerate FAILED.
+
+**Resolution:** confirmed. Guava's `AbstractExecutionThreadService` calls `notifyFailed()` without `shutDown()` when
+`startUp()` throws, and a test with the admin port taken showed the gRPC channel still open, the metrics server
+(started before admin) still running, the HTTP client cache still handing out clients, and `stop()` throwing.
+`Agent.startUp()` now releases the channel, the cache, and the admin, metrics, and Zipkin services when
+`super.startUp()` throws; `Agent.stop()` returns on a FAILED service; `startAsyncAgent` starts the agent with
+`startSync()`, so a startup failure reaches the caller as `IllegalStateException` with the failure as its cause; and
+the cache's cleanup coroutine starts with the first client, so a constructor that throws after building the cache
+leaves nothing running. Not changed: such a constructor failure (a bad TLS path, for instance) still surfaces as its
+own exception rather than `ConfigLoadException`, which is documented for config-loading failures only, and a JMX
+reporter started before the failure is not stopped: it holds no thread or port, and its class is not on the
+project's compile classpath.
 
 ### 12. [ ] Chunk size and gzip threshold are unbounded against gRPC's 4 MiB limit
 

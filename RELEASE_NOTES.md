@@ -131,6 +131,11 @@ interval as their deadline, capped at the unary deadline.
 - **The agent scraped targets for requests Prometheus had already abandoned.** When Prometheus timed
   out or disconnected, the request stayed queued for the agent. The proxy now skips requests it no
   longer tracks.
+- **An embedded agent that failed to start leaked what it had opened and could not be shut down.** With an
+  admin or metrics port already in use, the agent's gRPC channel, HTTP client cache, and any server that
+  had already started stayed open, and `shutdown()` threw. A failed start now releases all of them, and
+  `startAsyncAgent` waits for startup and throws the failure instead of returning a handle to a failed
+  agent.
 
 ### Also in this release
 
