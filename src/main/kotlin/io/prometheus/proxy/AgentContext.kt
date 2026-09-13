@@ -30,8 +30,8 @@ import java.time.Instant
 import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.AtomicLong
-import kotlin.concurrent.atomics.decrementAndFetch
 import kotlin.concurrent.atomics.incrementAndFetch
+import kotlin.concurrent.atomics.minusAssign
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource.Monotonic
 
@@ -140,7 +140,7 @@ internal class AgentContext(
     maxBacklog: Int = Int.MAX_VALUE,
   ): Boolean {
     if (queuedCount.incrementAndFetch() > maxBacklog) {
-      queuedCount.decrementAndFetch()
+      queuedCount -= 1
       return false
     }
     scrapeRequestQueue.add(scrapeRequest)
@@ -149,7 +149,7 @@ internal class AgentContext(
     } catch (e: Exception) {
       // Release the slot only if this request was still queued; invalidate() may have drained it already.
       if (scrapeRequestQueue.remove(scrapeRequest))
-        queuedCount.decrementAndFetch()
+        queuedCount -= 1
       throw e
     }
     return true
@@ -157,7 +157,7 @@ internal class AgentContext(
 
   suspend fun readScrapeRequest(): ScrapeRequestWrapper? =
     scrapeRequestNotifier.receiveCatching().getOrNull()?.let {
-      scrapeRequestQueue.poll()?.also { queuedCount.decrementAndFetch() }
+      scrapeRequestQueue.poll()?.also { queuedCount -= 1 }
     }
 
   fun isValid() = valid && !scrapeRequestNotifier.isClosedForReceive
@@ -170,7 +170,7 @@ internal class AgentContext(
     // Drain any buffered scrape requests and FAIL them with an agent-disconnected result (not a bare
     // channel close) so a waiting HTTP handler's awaitCompleted() sees a truthful 502 instead of a null
     // result that submitScrapeRequest would mislabel as timed_out (finding 15).
-    generateSequence { scrapeRequestQueue.poll()?.also { queuedCount.decrementAndFetch() } }.forEach { wrapper ->
+    generateSequence { scrapeRequestQueue.poll()?.also { queuedCount -= 1 } }.forEach { wrapper ->
       wrapper.complete(
         ScrapeResults(
           srAgentId = agentId,

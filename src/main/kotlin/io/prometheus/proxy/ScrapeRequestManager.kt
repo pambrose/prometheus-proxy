@@ -21,8 +21,8 @@ import io.ktor.http.HttpStatusCode
 import io.prometheus.common.ScrapeResults
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.concurrent.atomics.AtomicInt
-import kotlin.concurrent.atomics.decrementAndFetch
-import kotlin.concurrent.atomics.incrementAndFetch
+import kotlin.concurrent.atomics.minusAssign
+import kotlin.concurrent.atomics.plusAssign
 
 /**
  * Tracks in-flight scrape requests and assigns results when responses arrive.
@@ -64,7 +64,7 @@ internal class ScrapeRequestManager {
     logger.debug { "Adding scrapeId: $scrapeId to scrapeRequestMap" }
     return scrapeRequestMapView.put(scrapeId, scrapeRequest).also { previous ->
       if (previous == null)
-        inFlightCount.incrementAndFetch()
+        inFlightCount += 1
     }
   }
 
@@ -129,13 +129,13 @@ internal class ScrapeRequestManager {
     logger.debug { "Adding scrapeId: $scrapeId to scrapeRequestMap" }
     // A replaced entry did not take a new slot, so give back the one just claimed.
     if (scrapeRequestMapView.put(scrapeId, scrapeRequest) != null)
-      inFlightCount.decrementAndFetch()
+      inFlightCount -= 1
     return true
   }
 
   fun removeFromScrapeRequestMap(scrapeId: Long): ScrapeRequestWrapper? {
     logger.debug { "Removing scrapeId: $scrapeId from scrapeRequestMap" }
-    return scrapeRequestMapView.remove(scrapeId)?.also { inFlightCount.decrementAndFetch() }
+    return scrapeRequestMapView.remove(scrapeId)?.also { inFlightCount -= 1 }
   }
 
   companion object {

@@ -69,7 +69,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import java.net.URI
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.concurrent.atomics.AtomicInt
-import kotlin.concurrent.atomics.decrementAndFetch
+import kotlin.concurrent.atomics.minusAssign
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
@@ -277,7 +277,7 @@ internal class ProxyDashboardService(
               }
             } finally {
               sessions.remove(session)
-              sessionCount.decrementAndFetch()
+              sessionCount -= 1
             }
           }
         }
