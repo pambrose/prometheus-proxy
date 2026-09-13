@@ -35,7 +35,7 @@ require the build or tests to pass before merging; and the CLI reference has dri
 | 6  | Auth warning logic wrong; TLS examples use public test keys                  | Security      | low      | ✅      |
 | 7  | One rejected static path takes the whole agent offline                       | Agent         | high     | ✅      |
 | 8  | Failover never leaves a proxy that rejects registration                      | Agent         | medium   | ✅      |
-| 9  | Failed discovery unregister leaves a stale path forever                      | Agent         | medium   | ⬜      |
+| 9  | Failed discovery unregister leaves a stale path forever                      | Agent         | medium   | ✅      |
 | 10 | Dead-connection detection (~90s) slower than proxy eviction (60s)            | Agent         | medium   | ⬜      |
 | 11 | Embedded agent startup failure leaks channel and cache                       | Agent         | medium   | ⬜      |
 | 12 | Chunk size and gzip threshold unbounded vs gRPC 4 MiB limit                  | Agent         | low      | ⬜      |
@@ -45,15 +45,15 @@ require the build or tests to pass before merging; and the CLI reference has dri
 | 16 | Duplicate consolidated registration adds the agent twice                     | Proxy         | low      | ⬜      |
 | 17 | Per-scrape debug/dashboard bookkeeping runs when both are off                | Proxy         | low      | ⬜      |
 | 18 | `master` does not require build or tests to pass                             | CI/build      | high     | ✅      |
-| 19 | Docs site built with different Zensical/Python in CI than locally            | CI/build      | medium   | ⬜      |
+| 19 | Docs site built with different Zensical/Python in CI than locally            | CI/build      | medium   | ✅      |
 | 20 | Workflow supply-chain and efficiency gaps                                    | CI/build      | medium   | ⬜      |
 | 21 | Gradle 10 deprecation comes from the `taskinfo` plugin                       | CI/build      | medium   | ⬜      |
-| 22 | `bin/docker-*.sh` produce an empty image tag                                 | CI/build      | medium   | ⬜      |
+| 22 | `bin/docker-*.sh` produce an empty image tag                                 | CI/build      | medium   | ✅      |
 | 23 | Oversized Docker build context; wrong `EXPOSE` ports                         | CI/build      | low      | ⬜      |
 | 24 | Stale compose file and nginx run script                                      | CI/build      | low      | ⬜      |
 | 25 | `docs/cli-args.md` documents a nonexistent env var and omits current flags   | Docs          | high     | ✅      |
 | 26 | `security-agent-authentication.md` predates per-agent auth                   | Docs          | medium   | ✅      |
-| 27 | Testing docs cite a nonexistent Gradle task and an incomplete spec list      | Docs          | medium   | ⬜      |
+| 27 | Testing docs cite a nonexistent Gradle task and an incomplete spec list      | Docs          | medium   | ✅      |
 | 28 | CHANGELOG/RELEASE_NOTES behind; release checklist misses version literals    | Docs          | medium   | ✅      |
 | 29 | Metrics doc and CLAUDE.md drift                                              | Docs          | low      | ⬜      |
 | 30 | Discovery and chunk-failure paths untested                                   | Tests         | medium   | ⬜      |
@@ -220,7 +220,7 @@ connection. With endpoints `[A rejects, B healthy]` the agent retries A forever;
 **Fix:** mark the connection successful only after `registerAgent` and `registerPaths` complete, and
 otherwise advance to the next endpoint. Fix together with #7.
 
-### 9. [ ] A failed discovery unregister leaves a stale path forever
+### 9. [x] A failed discovery unregister leaves a stale path forever
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -366,7 +366,7 @@ with failing tests or a coverage drop.
 **Fix:** add `build` as a required check. Add `container-tests` too once its workflow always reports
 a status (it currently has a `paths` filter on pull requests).
 
-### 19. [ ] Docs site built with different Zensical and Python in CI than locally
+### 19. [x] Docs site built with different Zensical and Python in CI than locally
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -409,7 +409,7 @@ every non-IntelliJ build, but only `make tibuild` uses it.
 
 **Fix:** upgrade the plugin, or apply it only when a `ti*` task is requested.
 
-### 22. [ ] `bin/docker-agent.sh` and `bin/docker-proxy.sh` produce an empty image tag
+### 22. [x] `bin/docker-agent.sh` and `bin/docker-proxy.sh` produce an empty image tag
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -480,7 +480,7 @@ globs shipped in #204 and are documented on the website's security page, but not
 **Fix:** add a section on `proxy.auth` identities and path-glob authorization and update the status,
 or mark the document as a dated finding.
 
-### 27. [ ] Testing docs cite a nonexistent Gradle task and an incomplete spec list
+### 27. [x] Testing docs cite a nonexistent Gradle task and an incomplete spec list
 
 **Severity:** medium · **Confidence:** confirmed
 

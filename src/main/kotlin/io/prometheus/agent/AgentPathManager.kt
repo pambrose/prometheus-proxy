@@ -194,7 +194,15 @@ internal class AgentPathManager(
     require(pathVal.isNotEmpty()) { EMPTY_PATH_MSG }
 
     val path = pathVal.removePrefix("/")
-    agent.grpcService.unregisterPathOnProxy(path)
+    // The proxy rejects an unregister (valid=false) only when it no longer maps this path to this agent: the path
+    // is gone, or another agent now holds it. The local entry is stale either way, so it is removed below. Keeping
+    // it made reconcile retry forever and blocked a changed URL from ever applying. Transport failures still
+    // propagate and keep the entry, so the next reconcile retries them.
+    try {
+      agent.grpcService.unregisterPathOnProxy(path)
+    } catch (e: RequestFailureException) {
+      logger.warn { "Proxy no longer holds /$path for this agent; removing the local entry: ${e.message}" }
+    }
     val pathContext = pathContextMap.remove(path)
     if (pathContext == null) {
       logger.info { "No path value /$path found in pathContextMap when unregistering" }

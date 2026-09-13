@@ -100,6 +100,10 @@ response" log is now WARN rather than INFO, since it now means something needs a
   agent ID into every later call. It now cancels the call, the same as a missing header.
 - **A connect timeout from Ktor's CIO engine was reported as 503** instead of 408, because its exception
   type is a `ConnectException` rather than one of the recognized timeout types.
+- **A discovered path could get stuck forever** when the proxy rejected its unregister, for example after
+  another agent took it over. The agent kept the stale entry, and a changed URL never applied.
+- **`bin/docker-agent.sh` and `bin/docker-proxy.sh` ran Docker with an empty image tag**, because they read
+  the version from a file that no longer has it.
 
 ### Also in this release
 
@@ -108,6 +112,8 @@ response" log is now WARN rather than INFO, since it now means something needs a
   `--gzip` and `--proxy` defaults are corrected.
 - The TLS example configs now say plainly that their certificates are committed test fixtures with public
   private keys, and the no-mutual-auth example no longer turns on `enableTrustAllX509Certificates`.
+- The documentation site now builds in CI from the same lockfile as `make site`, so the published site
+  matches a local preview.
 - `DESIGN.md` and `PRODUCT.md` moved to `docs/`, and `prom-agent.conf` moved to `examples/` with a stale
   test path removed.
 - The build now enforces coverage floors (line 95%, branch 87%) in CI, and coverage rose to 97.4% line

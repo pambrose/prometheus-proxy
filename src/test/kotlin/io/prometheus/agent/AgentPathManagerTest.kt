@@ -244,6 +244,32 @@ class AgentPathManagerTest : StringSpec() {
       coVerify { agent.grpcService.unregisterPathOnProxy("nonexistent") }
     }
 
+    // The proxy rejects an unregister (valid=false) when it no longer maps the path to this agent: the path is
+    // gone, or another agent now holds it. Either way the local entry is stale and must not be kept.
+    "unregisterPath should remove the local entry when the proxy rejects the unregister" {
+      val agent = createMockAgent()
+      val manager = AgentPathManager(agent)
+      manager.registerPath("metrics", "http://localhost:$PROXY_HTTP_PORT/metrics")
+      coEvery { agent.grpcService.unregisterPathOnProxy("metrics") } throws
+        RequestFailureException("unregisterPathOnProxy() - Unable to remove path /metrics - path not found")
+
+      manager.unregisterPath("metrics")
+
+      manager["metrics"].shouldBeNull()
+    }
+
+    // A transport failure says nothing about the proxy's state, so the entry stays and the error propagates.
+    "unregisterPath should keep the local entry when the unregister fails in transport" {
+      val agent = createMockAgent()
+      val manager = AgentPathManager(agent)
+      manager.registerPath("metrics", "http://localhost:$PROXY_HTTP_PORT/metrics")
+      coEvery { agent.grpcService.unregisterPathOnProxy("metrics") } throws StatusException(Status.UNAVAILABLE)
+
+      shouldThrow<StatusException> { manager.unregisterPath("metrics") }
+
+      manager["metrics"].shouldNotBeNull()
+    }
+
     "get operator should return null for non-existent path" {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
@@ -384,6 +410,37 @@ class AgentPathManagerTest : StringSpec() {
       manager["a_metrics"].shouldNotBeNull().url shouldBe "http://a/v2"
       coVerify(exactly = 1) { grpc.unregisterPathOnProxy("a_metrics") }
       coVerify(exactly = 2) { grpc.registerPathOnProxy("a_metrics", any(), any(), any()) }
+    }
+
+    // Another agent took over the path, so the proxy rejects this agent's unregister. The new URL must still be
+    // applied rather than blocked forever behind the failed unregister.
+    "reconcile should apply a changed URL when the proxy rejects the unregister" {
+      val agent = createMockAgent()
+      val grpc = agent.grpcService
+      val manager = AgentPathManager(agent)
+      manager.reconcileDiscoveredPaths([DiscoveredPath("a", "a_metrics", "http://a/v1", "{}")])
+      coEvery { grpc.unregisterPathOnProxy("a_metrics") } throws
+        RequestFailureException(
+          "unregisterPathOnProxy() - Unable to remove path /a_metrics - invalid agentId: 1 -- [2]",
+        )
+
+      manager.reconcileDiscoveredPaths([DiscoveredPath("a", "a_metrics", "http://a/v2", "{}")])
+
+      manager["a_metrics"].shouldNotBeNull().url shouldBe "http://a/v2"
+      coVerify(exactly = 1) { grpc.registerPathOnProxy("a_metrics", any(), "http://a/v2", any()) }
+    }
+
+    "reconcile should drop a stale discovered path the proxy no longer holds" {
+      val agent = createMockAgent()
+      val grpc = agent.grpcService
+      val manager = AgentPathManager(agent)
+      manager.reconcileDiscoveredPaths([DiscoveredPath("a", "a_metrics", "http://a/m", "{}")])
+      coEvery { grpc.unregisterPathOnProxy("a_metrics") } throws
+        RequestFailureException("unregisterPathOnProxy() - Unable to remove path /a_metrics - path not found")
+
+      manager.reconcileDiscoveredPaths(emptyList())
+
+      manager["a_metrics"].shouldBeNull()
     }
 
     "reconcile skips a discovered path colliding with a static path" {
