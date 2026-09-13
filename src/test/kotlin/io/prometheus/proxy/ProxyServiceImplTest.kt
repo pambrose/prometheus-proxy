@@ -1586,5 +1586,193 @@ class ProxyServiceImplTest : StringSpec() {
       // No ChunkedContext should be created for an unknown scrapeId.
       verify(exactly = 0) { contextManager.putChunkedContext(any(), any()) }
     }
+
+    // ==================== scrape results bound to the requesting agent ====================
+    //
+    // Scrape IDs come from one process-wide counter, and the response RPCs look the waiting request up
+    // by scrapeId alone. Without an ownership check, an authenticated agent could answer, fail, or hijack
+    // the chunked transfer of a scrape that was sent to a different agent -- defeating per-agent path
+    // authorization. Results are now accepted only from the agent the scrape was sent to.
+
+    suspend fun <T> onConnection(
+      connectionAgentId: String,
+      block: suspend () -> T,
+    ): T {
+      val context = Context.current().withValue(ProxyServerInterceptor.CONNECTION_AGENT_ID_KEY, connectionAgentId)
+      val previous = context.attach()
+      return try {
+        block()
+      } finally {
+        context.detach(previous)
+      }
+    }
+
+    "writeResponsesToProxy should ignore a result for a scrape sent to another agent" {
+      val proxy = createMockProxy()
+      val scrapeRequestManager = proxy.scrapeRequestManager
+      every { scrapeRequestManager.ownerAgentId(900L) } returns "victim-agent"
+
+      val forged = scrapeResponse {
+        agentId = "attacker-agent"
+        scrapeId = 900L
+        validResponse = true
+        statusCode = 200
+        contentAsText = "forged_metric 1"
+      }
+
+      onConnection("attacker-agent") {
+        ProxyServiceImpl(proxy).writeResponsesToProxy(flowOf(forged))
+      }
+
+      verify(exactly = 0) { scrapeRequestManager.assignScrapeResults(any()) }
+    }
+
+    "writeResponsesToProxy should accept a result for a scrape sent to the connection's agent" {
+      val proxy = createMockProxy()
+      val scrapeRequestManager = proxy.scrapeRequestManager
+      every { scrapeRequestManager.ownerAgentId(901L) } returns "own-agent"
+
+      val response = scrapeResponse {
+        agentId = "own-agent"
+        scrapeId = 901L
+        validResponse = true
+        statusCode = 200
+      }
+
+      onConnection("own-agent") {
+        ProxyServiceImpl(proxy).writeResponsesToProxy(flowOf(response))
+      }
+
+      verify(exactly = 1) { scrapeRequestManager.assignScrapeResults(match { it.srScrapeId == 901L }) }
+    }
+
+    "writeResponsesToProxy should not fail a scrape sent to another agent when processing its result throws" {
+      val proxy = createMockProxy()
+      val scrapeRequestManager = proxy.scrapeRequestManager
+      every { scrapeRequestManager.ownerAgentId(902L) } returns "victim-agent"
+      every { scrapeRequestManager.assignScrapeResults(any()) } answers { error("Simulated processing failure") }
+
+      val malformed = scrapeResponse {
+        agentId = "attacker-agent"
+        scrapeId = 902L
+        validResponse = true
+        statusCode = 200
+      }
+
+      onConnection("attacker-agent") {
+        ProxyServiceImpl(proxy).writeResponsesToProxy(flowOf(malformed))
+      }
+
+      verify(exactly = 0) { scrapeRequestManager.failScrapeRequest(902L, any()) }
+    }
+
+    "writeChunkedResponsesToProxy should not open a transfer for a scrape sent to another agent" {
+      val proxy = createMockProxy()
+      val contextManager = proxy.agentContextManager
+      // Stub through a captured reference: a chained `proxy.scrapeRequestManager.x()` stub makes MockK swap
+      // in a child mock, which would drop createMockProxy()'s containsScrapeRequest=true stub.
+      val scrapeRequestManager = proxy.scrapeRequestManager
+      every { scrapeRequestManager.ownerAgentId(903L) } returns "victim-agent"
+
+      val header = chunkedScrapeResponse {
+        header = headerData {
+          headerValidResponse = true
+          headerScrapeId = 903L
+          headerAgentId = "attacker-agent"
+          headerStatusCode = 200
+          headerContentType = "text/plain"
+        }
+      }
+
+      onConnection("attacker-agent") {
+        ProxyServiceImpl(proxy).writeChunkedResponsesToProxy(flowOf(header))
+      }
+
+      verify(exactly = 0) { contextManager.putChunkedContext(any(), any()) }
+    }
+
+    "writeChunkedResponsesToProxy should open a transfer for a scrape sent to the connection's agent" {
+      val proxy = createMockProxy()
+      val contextManager = proxy.agentContextManager
+      val scrapeRequestManager = proxy.scrapeRequestManager
+      every { scrapeRequestManager.ownerAgentId(906L) } returns "own-agent"
+
+      val header = chunkedScrapeResponse {
+        header = headerData {
+          headerValidResponse = true
+          headerScrapeId = 906L
+          headerAgentId = "own-agent"
+          headerStatusCode = 200
+          headerContentType = "text/plain"
+        }
+      }
+
+      onConnection("own-agent") {
+        ProxyServiceImpl(proxy).writeChunkedResponsesToProxy(flowOf(header))
+      }
+
+      verify(exactly = 1) { contextManager.putChunkedContext(906L, any()) }
+    }
+
+    "writeChunkedResponsesToProxy should not apply a chunk to a transfer for another agent's scrape" {
+      val proxy = createMockProxy()
+      val contextManager = proxy.agentContextManager
+      val scrapeRequestManager = proxy.scrapeRequestManager
+      every { scrapeRequestManager.ownerAgentId(904L) } returns "victim-agent"
+
+      // The victim's in-progress transfer. A chunk with a bad checksum would fail validation, discard this
+      // context, and fail the victim's scrape if it were ever applied.
+      val victimHeader = chunkedScrapeResponse {
+        header = headerData {
+          headerValidResponse = true
+          headerScrapeId = 904L
+          headerAgentId = "victim-agent"
+          headerStatusCode = 200
+          headerContentType = "text/plain"
+        }
+      }
+      every { contextManager.getChunkedContext(904L) } returns ChunkedContext(victimHeader, 1000000)
+
+      val data = "forged chunk".toByteArray()
+      val badChunk = chunkedScrapeResponse {
+        chunk = chunkData {
+          chunkScrapeId = 904L
+          chunkCount = 1
+          chunkByteCount = data.size
+          chunkChecksum = 12345L
+          chunkBytes = ByteString.copyFrom(data)
+        }
+      }
+
+      onConnection("attacker-agent") {
+        ProxyServiceImpl(proxy).writeChunkedResponsesToProxy(flowOf(badChunk))
+      }
+
+      verify(exactly = 0) { contextManager.removeChunkedContext(904L) }
+      verify(exactly = 0) { scrapeRequestManager.failScrapeRequest(904L, any()) }
+    }
+
+    "writeChunkedResponsesToProxy should not apply a summary to a transfer for another agent's scrape" {
+      val proxy = createMockProxy()
+      val contextManager = proxy.agentContextManager
+      val scrapeRequestManager = proxy.scrapeRequestManager
+      every { scrapeRequestManager.ownerAgentId(905L) } returns "victim-agent"
+
+      val summary = chunkedScrapeResponse {
+        summary = summaryData {
+          summaryScrapeId = 905L
+          summaryChunkCount = 1
+          summaryByteCount = 10
+          summaryChecksum = 12345L
+        }
+      }
+
+      onConnection("attacker-agent") {
+        ProxyServiceImpl(proxy).writeChunkedResponsesToProxy(flowOf(summary))
+      }
+
+      // Removing the context is what a summary does first; the victim's transfer must be left intact.
+      verify(exactly = 0) { contextManager.removeChunkedContext(905L) }
+    }
   }
 }

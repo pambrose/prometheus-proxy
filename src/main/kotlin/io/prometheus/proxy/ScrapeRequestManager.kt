@@ -45,6 +45,10 @@ internal class ScrapeRequestManager {
 
   fun containsScrapeRequest(scrapeId: Long): Boolean = scrapeRequestMapView.containsKey(scrapeId)
 
+  // The agent the scrape was sent to, or null when the scrape is no longer tracked. The response RPCs
+  // compare this with the connection's agent so one agent can't answer another agent's scrapes.
+  fun ownerAgentId(scrapeId: Long): String? = scrapeRequestMapView[scrapeId]?.agentContext?.agentId
+
   val scrapeMapSize: Int
     get() = scrapeRequestMapView.size
 

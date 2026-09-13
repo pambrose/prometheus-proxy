@@ -404,5 +404,23 @@ class ScrapeRequestManagerTest : StringSpec() {
         listAppender.stop()
       }
     }
+
+    // ==================== ownerAgentId ====================
+
+    // The response RPCs use this to confirm a result comes from the agent the scrape was sent to.
+
+    "ownerAgentId should return the agentId of the agent a tracked scrape was sent to" {
+      val manager = ScrapeRequestManager()
+      val wrapper = createMockWrapper(1000L)
+      every { wrapper.agentContext.agentId } returns "agent-7"
+
+      manager.addToScrapeRequestMap(wrapper)
+
+      manager.ownerAgentId(1000L) shouldBe "agent-7"
+    }
+
+    "ownerAgentId should return null for a scrape that is not tracked" {
+      ScrapeRequestManager().ownerAgentId(1001L).shouldBeNull()
+    }
   }
 }

@@ -6,29 +6,32 @@ icon: lucide/terminal
 
 ## Proxy Options
 
-| CLI Option           | Env Var                           | Property                                | Default                  | Description                  |
-|:---------------------|:----------------------------------|:----------------------------------------|:-------------------------|:-----------------------------|
-| `--config, -c`       | `PROXY_CONFIG`                    |                                         |                          | Config file path or URL      |
-| `--port, -p`         | `PROXY_PORT`                      | `proxy.http.port`                       | 8080                     | HTTP listen port             |
-| `--agent_port, -a`   | `AGENT_PORT`                      | `proxy.agent.port`                      | 50051                    | gRPC listen port for agents  |
-| `--agent_token`      | `AGENT_TOKEN`                     | `proxy.agentToken`                      | ""                       | Pre-shared agent auth token  |
-| `--admin, -r`        | `ADMIN_ENABLED`                   | `proxy.admin.enabled`                   | false                    | Enable admin endpoints       |
-| `--admin_port, -i`   | `ADMIN_PORT`                      | `proxy.admin.port`                      | 8092                     | Admin listen port            |
-| `--debug, -b`        | `DEBUG_ENABLED`                   | `proxy.admin.debugEnabled`              | false                    | Enable debug servlet         |
-| `--metrics, -e`      | `METRICS_ENABLED`                 | `proxy.metrics.enabled`                 | false                    | Enable metrics collection    |
-| `--metrics_port, -m` | `METRICS_PORT`                    | `proxy.metrics.port`                    | 8082                     | Metrics listen port          |
-| `--sd_enabled`       | `SD_ENABLED`                      | `proxy.service.discovery.enabled`       | false                    | Enable service discovery     |
-| `--sd_path`          | `SD_PATH`                         | `proxy.service.discovery.path`          | "discovery"              | SD endpoint path             |
-| `--sd_target_prefix` | `SD_TARGET_PREFIX`                | `proxy.service.discovery.targetPrefix`  | "http://localhost:8080/" | SD target prefix             |
-| `--tf_disabled`      | `TRANSPORT_FILTER_DISABLED`       | `proxy.transportFilterDisabled`         | false                    | Disable transport filter     |
-| `--ref_disabled`     | `REFLECTION_DISABLED`             | `proxy.reflectionDisabled`              | false                    | Disable gRPC reflection      |
-| `--log_level`        | `PROXY_LOG_LEVEL`                 | `proxy.logLevel`                        | "info"                   | Log level                    |
-| `--cert, -t`         | `CERT_CHAIN_FILE_PATH`            | `proxy.tls.certChainFilePath`           |                          | TLS cert chain file          |
-| `--key, -k`          | `PRIVATE_KEY_FILE_PATH`           | `proxy.tls.privateKeyFilePath`          |                          | TLS private key file         |
-| `--trust, -s`        | `TRUST_CERT_COLLECTION_FILE_PATH` | `proxy.tls.trustCertCollectionFilePath` |                          | TLS trust cert file          |
-| `--version, -v`      |                                   |                                         |                          | Print version info and exit  |
-| `--usage, -u`        |                                   |                                         |                          | Print usage message and exit |
-| `-D`                 |                                   |                                         |                          | Dynamic property assignment  |
+| CLI Option                       | Env Var                           | Property                                | Default                  | Description                  |
+|:---------------------------------|:----------------------------------|:----------------------------------------|:-------------------------|:-----------------------------|
+| `--config, --conf, -c`           | `PROXY_CONFIG`                    |                                         |                          | Config file path or URL      |
+| `--port, -p`                     | `PROXY_PORT`                      | `proxy.http.port`                       | 8080                     | HTTP listen port             |
+| `--agent_port, -a`               | `AGENT_PORT`                      | `proxy.agent.port`                      | 50051                    | gRPC listen port for agents  |
+| `--agent_token`                  | `AGENT_TOKEN`                     | `proxy.agentToken`                      | ""                       | Pre-shared agent auth token  |
+| `--admin, -r`                    | `ADMIN_ENABLED`                   | `proxy.admin.enabled`                   | false                    | Enable admin endpoints       |
+| `--admin_port, -i`               | `ADMIN_PORT`                      | `proxy.admin.port`                      | 8092                     | Admin listen port            |
+| `--debug, -b`                    | `DEBUG_ENABLED`                   | `proxy.admin.debugEnabled`              | false                    | Enable debug servlet         |
+| `--metrics, -e`                  | `METRICS_ENABLED`                 | `proxy.metrics.enabled`                 | false                    | Enable metrics collection    |
+| `--metrics_port, -m`             | `METRICS_PORT`                    | `proxy.metrics.port`                    | 8082                     | Metrics listen port          |
+| `--sd_enabled`                   | `SD_ENABLED`                      | `proxy.service.discovery.enabled`       | false                    | Enable service discovery     |
+| `--sd_path`                      | `SD_PATH`                         | `proxy.service.discovery.path`          | "discovery"              | SD endpoint path             |
+| `--sd_target_prefix`             | `SD_TARGET_PREFIX`                | `proxy.service.discovery.targetPrefix`  | "http://localhost:8080/" | SD target prefix             |
+| `--dashboard`                    | `DASHBOARD_ENABLED`               | `proxy.dashboard.enabled`               | false                    | Enable operational dashboard |
+| `--dashboard_port`               | `DASHBOARD_PORT`                  | `proxy.dashboard.port`                  | 8094                     | Dashboard listen port        |
+| `--dashboard_path`               | `DASHBOARD_PATH`                  | `proxy.dashboard.path`                  | "dashboard"              | Dashboard base path          |
+| `--tf-disabled, --tf_disabled`   | `TRANSPORT_FILTER_DISABLED`       | `proxy.transportFilterDisabled`         | false                    | Disable transport filter     |
+| `--ref-disabled, --ref_disabled` | `REFLECTION_DISABLED`             | `proxy.reflectionDisabled`              | false                    | Disable gRPC reflection      |
+| `--log_level`                    | `PROXY_LOG_LEVEL`                 | `proxy.logLevel`                        | "info"                   | Log level                    |
+| `--cert, -t`                     | `CERT_CHAIN_FILE_PATH`            | `proxy.tls.certChainFilePath`           |                          | TLS cert chain file          |
+| `--key, -k`                      | `PRIVATE_KEY_FILE_PATH`           | `proxy.tls.privateKeyFilePath`          |                          | TLS private key file         |
+| `--trust, -s`                    | `TRUST_CERT_COLLECTION_FILE_PATH` | `proxy.tls.trustCertCollectionFilePath` |                          | TLS trust cert file          |
+| `--version, -v`                  |                                   |                                         |                          | Print version info and exit  |
+| `--usage, -u`                    |                                   |                                         |                          | Print usage message and exit |
+| `-D`                             |                                   |                                         |                          | Dynamic property assignment  |
 
 ### Proxy gRPC Options
 
@@ -45,37 +48,37 @@ icon: lucide/terminal
 
 ## Agent Options
 
-| CLI Option                    | Env Var                           | Property                                    | Default | Description                        |
-|:------------------------------|:----------------------------------|:--------------------------------------------|:--------|:-----------------------------------|
-| `--config, -c`                | `AGENT_CONFIG`                    |                                             |         | Config file path or URL (required) |
-| `--proxy, -p`                 | `PROXY_HOSTNAME`                  | `agent.proxy.hostname`                      |         | Proxy hostname (can include :port) |
-| `--name, -n`                  | `AGENT_NAME`                      | `agent.name`                                |         | Agent name                         |
-| `--admin, -r`                 | `ADMIN_ENABLED`                   | `agent.admin.enabled`                       | false   | Enable admin endpoints             |
-| `--admin_port, -i`            | `ADMIN_PORT`                      | `agent.admin.port`                          | 8093    | Admin listen port                  |
-| `--debug, -b`                 | `DEBUG_ENABLED`                   | `agent.admin.debugEnabled`                  | false   | Enable debug servlet               |
-| `--metrics, -e`               | `METRICS_ENABLED`                 | `agent.metrics.enabled`                     | false   | Enable metrics collection          |
-| `--metrics_port, -m`          | `METRICS_PORT`                    | `agent.metrics.port`                        | 8083    | Metrics listen port                |
-| `--consolidated, -o`          | `CONSOLIDATED`                    | `agent.consolidated`                        | false   | Allow multiple agents per path     |
-| `--timeout`                   | `SCRAPE_TIMEOUT_SECS`             | `agent.scrapeTimeoutSecs`                   | 15      | Scrape timeout (seconds)           |
-| `--max_retries`               | `SCRAPE_MAX_RETRIES`              | `agent.scrapeMaxRetries`                    | 0       | Max scrape retries (0 = disabled)  |
-| `--chunk`                     | `CHUNK_CONTENT_SIZE_KBS`          | `agent.chunkContentSizeKbs`                 | 32      | Chunking threshold (KB)            |
-| `--gzip`                      | `MIN_GZIP_SIZE_BYTES`             | `agent.minGzipSizeBytes`                    | 1024    | Min size for gzip (bytes)          |
-| `--tf_disabled`               | `TRANSPORT_FILTER_DISABLED`       | `agent.transportFilterDisabled`             | false   | Disable transport filter           |
-| `--agent_token`               | `AGENT_TOKEN`                     | `agent.agentToken`                          | ""      | Pre-shared token presented to proxy |
-| `--trust_all_x509`            | `TRUST_ALL_X509_CERTIFICATES`     | `agent.http.enableTrustAllX509Certificates` | false   | Disable SSL verification           |
-| `--https_truststore`          | `HTTPS_TRUST_STORE_PATH`          | `agent.http.trustStorePath`                 | ""      | Trust store for HTTPS targets      |
-| `--https_truststore_password` | `HTTPS_TRUST_STORE_PASSWORD`      | `agent.http.trustStorePassword`             | ""      | Password for the trust store       |
-| `--max_concurrent_clients`    | `MAX_CONCURRENT_CLIENTS`          | `agent.http.maxConcurrentClients`           | 1       | Max parallel scrapes               |
-| `--client_timeout_secs`       | `CLIENT_TIMEOUT_SECS`             | `agent.http.clientTimeoutSecs`              | 90      | HTTP client timeout (seconds)      |
-| `--max_content_length_mbytes` | `AGENT_MAX_CONTENT_LENGTH_MBYTES` | `agent.http.maxContentLengthMBytes`         | 10      | Max response size (MB)             |
-| `--log_level`                 | `AGENT_LOG_LEVEL`                 | `agent.logLevel`                            | "info"  | Log level                          |
-| `--cert, -t`                  | `CERT_CHAIN_FILE_PATH`            | `agent.tls.certChainFilePath`               |         | TLS cert chain file                |
-| `--key, -k`                   | `PRIVATE_KEY_FILE_PATH`           | `agent.tls.privateKeyFilePath`              |         | TLS private key file               |
-| `--trust, -s`                 | `TRUST_CERT_COLLECTION_FILE_PATH` | `agent.tls.trustCertCollectionFilePath`     |         | TLS trust cert file                |
-| `--override`                  | `OVERRIDE_AUTHORITY`              | `agent.tls.overrideAuthority`               |         | TLS authority override             |
-| `--version, -v`               |                                   |                                             |         | Print version info and exit        |
-| `--usage, -u`                 |                                   |                                             |         | Print usage message and exit       |
-| `-D`                          |                                   |                                             |         | Dynamic property assignment        |
+| CLI Option                     | Env Var                           | Property                                    | Default     | Description                                         |
+|:-------------------------------|:----------------------------------|:--------------------------------------------|:------------|:----------------------------------------------------|
+| `--config, --conf, -c`         | `AGENT_CONFIG`                    |                                             |             | Config file path or URL (required)                  |
+| `--proxy, -p`                  | `PROXY_HOSTNAME`                  | `agent.proxy.hostname`                      | "localhost" | Proxy host[:port], or comma-separated failover list |
+| `--name, -n`                   | `AGENT_NAME`                      | `agent.name`                                |             | Agent name                                          |
+| `--admin, -r`                  | `ADMIN_ENABLED`                   | `agent.admin.enabled`                       | false       | Enable admin endpoints                              |
+| `--admin_port, -i`             | `ADMIN_PORT`                      | `agent.admin.port`                          | 8093        | Admin listen port                                   |
+| `--debug, -b`                  | `DEBUG_ENABLED`                   | `agent.admin.debugEnabled`                  | false       | Enable debug servlet                                |
+| `--metrics, -e`                | `METRICS_ENABLED`                 | `agent.metrics.enabled`                     | false       | Enable metrics collection                           |
+| `--metrics_port, -m`           | `METRICS_PORT`                    | `agent.metrics.port`                        | 8083        | Metrics listen port                                 |
+| `--consolidated, -o`           | `CONSOLIDATED`                    | `agent.consolidated`                        | false       | Allow multiple agents per path                      |
+| `--timeout`                    | `SCRAPE_TIMEOUT_SECS`             | `agent.scrapeTimeoutSecs`                   | 15          | Scrape timeout (seconds)                            |
+| `--max_retries`                | `SCRAPE_MAX_RETRIES`              | `agent.scrapeMaxRetries`                    | 0           | Max scrape retries (0 = disabled)                   |
+| `--chunk`                      | `CHUNK_CONTENT_SIZE_KBS`          | `agent.chunkContentSizeKbs`                 | 32          | Chunking threshold (KB)                             |
+| `--gzip`                       | `MIN_GZIP_SIZE_BYTES`             | `agent.minGzipSizeBytes`                    | 512         | Min size for gzip (bytes)                           |
+| `--tf-disabled, --tf_disabled` | `TRANSPORT_FILTER_DISABLED`       | `agent.transportFilterDisabled`             | false       | Disable transport filter                            |
+| `--agent_token`                | `AGENT_TOKEN`                     | `agent.agentToken`                          | ""          | Pre-shared token presented to proxy                 |
+| `--trust_all_x509`             | `TRUST_ALL_X509_CERTIFICATES`     | `agent.http.enableTrustAllX509Certificates` | false       | Disable SSL verification                            |
+| `--https_truststore`           | `HTTPS_TRUST_STORE_PATH`          | `agent.http.trustStorePath`                 | ""          | Trust store for HTTPS targets                       |
+| `--https_truststore_password`  | `HTTPS_TRUST_STORE_PASSWORD`      | `agent.http.trustStorePassword`             | ""          | Password for the trust store                        |
+| `--max_concurrent_clients`     | `MAX_CONCURRENT_CLIENTS`          | `agent.http.maxConcurrentClients`           | 1           | Max parallel scrapes                                |
+| `--client_timeout_secs`        | `CLIENT_TIMEOUT_SECS`             | `agent.http.clientTimeoutSecs`              | 90          | HTTP client timeout (seconds)                       |
+| `--max_content_length_mbytes`  |                                   | `agent.http.maxContentLengthMBytes`         | 10          | Max response size (MB)                              |
+| `--log_level`                  | `AGENT_LOG_LEVEL`                 | `agent.logLevel`                            | "info"      | Log level                                           |
+| `--cert, -t`                   | `CERT_CHAIN_FILE_PATH`            | `agent.tls.certChainFilePath`               |             | TLS cert chain file                                 |
+| `--key, -k`                    | `PRIVATE_KEY_FILE_PATH`           | `agent.tls.privateKeyFilePath`              |             | TLS private key file                                |
+| `--trust, -s`                  | `TRUST_CERT_COLLECTION_FILE_PATH` | `agent.tls.trustCertCollectionFilePath`     |             | TLS trust cert file                                 |
+| `--override, --over`           | `OVERRIDE_AUTHORITY`              | `agent.tls.overrideAuthority`               |             | TLS authority override                              |
+| `--version, -v`                |                                   |                                             |             | Print version info and exit                         |
+| `--usage, -u`                  |                                   |                                             |             | Print usage message and exit                        |
+| `-D`                           |                                   |                                             |             | Dynamic property assignment                         |
 
 ### Agent HTTP Client Cache Options
 
