@@ -89,6 +89,11 @@ An agent with no static paths (discovery-only) is not failed over for path rejec
 single-endpoint agent keeps retrying its one proxy. The "Disconnected from proxy … after invalid
 response" log is now WARN rather than INFO, since it now means something needs attention.
 
+A silently dropped connection is also noticed much sooner: about 16 seconds instead of about 90. A
+heartbeat used to wait out the full 30-second unary deadline, three times over, so the agent learned of
+the dead connection only after the proxy had already evicted it. Heartbeats now use the heartbeat
+interval as their deadline, capped at the unary deadline.
+
 ### Bug Fixes
 
 - **`--tf_disabled` was ignored by the agent** unless the config file also set it. The agent chose its
@@ -104,6 +109,9 @@ response" log is now WARN rather than INFO, since it now means something needs a
   another agent took it over. The agent kept the stale entry, and a changed URL never applied.
 - **`bin/docker-agent.sh` and `bin/docker-proxy.sh` ran Docker with an empty image tag**, because they read
   the version from a file that no longer has it.
+- **The agent scraped targets for requests Prometheus had already abandoned.** When Prometheus timed
+  out or disconnected, the request stayed queued for the agent. The proxy now skips requests it no
+  longer tracks.
 
 ### Also in this release
 

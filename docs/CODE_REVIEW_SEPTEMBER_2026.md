@@ -36,7 +36,7 @@ require the build or tests to pass before merging; and the CLI reference has dri
 | 7  | One rejected static path takes the whole agent offline                       | Agent         | high     | ✅      |
 | 8  | Failover never leaves a proxy that rejects registration                      | Agent         | medium   | ✅      |
 | 9  | Failed discovery unregister leaves a stale path forever                      | Agent         | medium   | ✅      |
-| 10 | Dead-connection detection (~90s) slower than proxy eviction (60s)            | Agent         | medium   | ⬜      |
+| 10 | Dead-connection detection (~90s) slower than proxy eviction (60s)            | Agent         | medium   | ✅      |
 | 11 | Embedded agent startup failure leaks channel and cache                       | Agent         | medium   | ⬜      |
 | 12 | Chunk size and gzip threshold unbounded vs gRPC 4 MiB limit                  | Agent         | low      | ⬜      |
 | 13 | Host-only proxy address ignores `agent.proxy.port`                           | Agent         | low      | ⬜      |
@@ -124,6 +124,10 @@ slow agent keeps scraping for nobody and its backlog grows.
 **Fix:** cap each agent's backlog and return 503 when full; add a global in-flight limit; skip
 dequeued requests for which `containsScrapeRequest(scrapeId)` is false; make the bind host
 configurable. Optionally honor `X-Prometheus-Scrape-Timeout-Seconds` as a cap on the wait.
+
+**Progress:** the proxy now skips a dequeued request it no longer tracks, so the agent no longer scrapes
+for requests Prometheus has abandoned. Still open: the per-agent backlog cap, the global in-flight limit,
+and a configurable bind host.
 
 ### 4. [ ] Dashboard: open bind, no Origin check, unlimited sessions, per-frame snapshot
 
@@ -233,7 +237,7 @@ for a changed URL the re-register step never runs, so the new URL is never appli
 
 **Fix:** treat "not found" and "not owner" as already unregistered and remove the local entry anyway.
 
-### 10. [ ] Dead-connection detection (~90s) is slower than proxy eviction (60s)
+### 10. [x] Dead-connection detection (~90s) is slower than proxy eviction (60s)
 
 **Severity:** medium · **Confidence:** confirmed for the timing; plausible for the idle read stream
 
@@ -249,6 +253,12 @@ enclosing scope stays open and the agent does not reconnect until a scrape arriv
 
 **Fix:** give heartbeats a short dedicated deadline; when any connection task completes, cancel the
 connection scope's children or call `grpcService.shutDownChannel()`.
+
+**Resolution:** a heartbeat's deadline is now the heartbeat interval, capped at the unary deadline and
+never below 1s, so a half-open connection is detected in about 16s instead of about 90s. With unary
+deadlines disabled, heartbeats have no deadline either, as before. The second part -- an idle read stream
+not being cancelled when a write stream dies -- is not addressed: it was never confirmed, and no failing
+test could be written for it.
 
 ### 11. [ ] Embedded agent startup failure leaks the channel and cache
 

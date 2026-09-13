@@ -192,6 +192,30 @@ class AgentTest : StringSpec() {
         .shouldBeNull()
     }
 
+    // ==================== heartbeat deadline ====================
+
+    // A heartbeat that inherits the 30s unary deadline takes about 90s to detect a silently dropped connection
+    // (three failures), longer than the proxy's 60s eviction. Heartbeats get their own deadline: the heartbeat
+    // interval, capped at the unary deadline and never below 1s.
+
+    "heartbeatDeadlineSecs should use the heartbeat interval when it is shorter than the unary deadline" {
+      createTestAgent().heartbeatDeadlineSecs(heartbeatMaxInactivitySecs = 5, unaryDeadlineSecs = 30) shouldBe 5L
+    }
+
+    "heartbeatDeadlineSecs should be capped at the unary deadline" {
+      createTestAgent().heartbeatDeadlineSecs(heartbeatMaxInactivitySecs = 120, unaryDeadlineSecs = 30) shouldBe 30L
+    }
+
+    // Disabled unary deadlines apply to heartbeats too, as to every other unary RPC; 0 applies no deadline.
+    "heartbeatDeadlineSecs should apply no deadline when unary deadlines are disabled" {
+      createTestAgent().heartbeatDeadlineSecs(heartbeatMaxInactivitySecs = 5, unaryDeadlineSecs = 0) shouldBe 0L
+    }
+
+    // A zero deadline would fail every heartbeat instantly and force a reconnect loop.
+    "heartbeatDeadlineSecs should never be below one second" {
+      createTestAgent().heartbeatDeadlineSecs(heartbeatMaxInactivitySecs = 0, unaryDeadlineSecs = 30) shouldBe 1L
+    }
+
     // ==================== updateScrapeCounter Tests ====================
 
     "updateScrapeCounter should not fail for empty type" {

@@ -707,6 +707,39 @@ class ProxyServiceImplTest : StringSpec() {
       emittedRequests[0] shouldBe mockScrapeRequest
     }
 
+    // Prometheus times out or disconnects, and the proxy stops tracking the request -- but the request is still
+    // queued for the agent. Delivering it would make the agent scrape the target for nobody and grow a slow
+    // agent's backlog, so a request the proxy no longer tracks is skipped.
+    "readRequestsFromProxy should skip a queued request the proxy no longer tracks" {
+      val proxy = createMockProxy(isRunning = true)
+      val scrapeRequestManager = proxy.scrapeRequestManager
+      val agentContextManager = proxy.agentContextManager
+      val agentContext = mockk<AgentContext>(relaxed = true)
+      val testAgentId = "test-agent-123"
+
+      val abandoned = mockk<ScrapeRequestWrapper>(relaxed = true)
+      val abandonedRequest = mockk<ScrapeRequest>(relaxed = true)
+      every { abandoned.scrapeId } returns 41L
+      every { abandoned.scrapeRequest } returns abandonedRequest
+
+      val awaited = mockk<ScrapeRequestWrapper>(relaxed = true)
+      val awaitedRequest = mockk<ScrapeRequest>(relaxed = true)
+      every { awaited.scrapeId } returns 42L
+      every { awaited.scrapeRequest } returns awaitedRequest
+
+      every { agentContext.agentId } returns testAgentId
+      every { agentContext.isValid() } returnsMany [true, true, false]
+      coEvery { agentContext.readScrapeRequest() } returns abandoned andThen awaited
+      every { agentContextManager.getAgentContext(testAgentId) } returns agentContext
+      every { scrapeRequestManager.containsScrapeRequest(41L) } returns false
+      every { scrapeRequestManager.containsScrapeRequest(42L) } returns true
+
+      val emitted: MutableList<ScrapeRequest> = []
+      ProxyServiceImpl(proxy).readRequestsFromProxy(agentInfo { agentId = testAgentId }).collect { emitted.add(it) }
+
+      emitted shouldBe [awaitedRequest]
+    }
+
     "readRequestsFromProxy should throw NOT_FOUND when agent context is missing" {
       val proxy = createMockProxy()
       val testAgentId = "missing-agent-123"
