@@ -31,7 +31,7 @@ require the build or tests to pass before merging; and the CLI reference has dri
 | 2  | Agent identity unenforced with transport filter off; heartbeats never bound  | Security      | medium   | ✅      |
 | 3  | No backpressure on the scrape queue; timed-out requests still dispatched     | Security      | medium   | ⬜      |
 | 4  | Dashboard: open bind, no Origin check, unlimited sessions, per-frame snapshot | Security      | medium   | ⬜      |
-| 5  | Credentials in target URLs leak to proxy, dashboard, logs                    | Security      | medium   | ⬜      |
+| 5  | Credentials in target URLs leak to proxy, dashboard, logs                    | Security      | medium   | ✅      |
 | 6  | Auth warning logic wrong; TLS examples use public test keys                  | Security      | low      | ✅      |
 | 7  | One rejected static path takes the whole agent offline                       | Agent         | high     | ✅      |
 | 8  | Failover never leaves a proxy that rejects registration                      | Agent         | medium   | ✅      |
@@ -145,7 +145,7 @@ the proxy runs out of memory.
 incoming frame update the selection and serve the cached snapshot; set a ping period/timeout and a
 latest-frame-only per-session buffer.
 
-### 5. [ ] Credentials in target URLs leak to the proxy, the dashboard, and logs
+### 5. [x] Credentials in target URLs leak to the proxy, the dashboard, and logs
 
 **Severity:** medium · **Confidence:** confirmed for the raw `targetUrl`; plausible for the Ktor
 exception-message path
@@ -164,6 +164,12 @@ the CIO engine's `ConnectTimeoutException`, so those timeouts report 503 rather 
 the sanitizer before logging or returning them; add the CIO connect-timeout type to
 `hasTimeoutCause`. Also avoid dumping whole protos at DEBUG (`AgentGrpcService.kt:462` includes
 `authHeader`).
+
+**Resolution:** target URLs are redacted everywhere they are sent, logged, or rendered, including inside
+exception messages; the proxy also redacts URLs from older agents; `hasTimeoutCause` recognizes Ktor's
+`ConnectTimeoutException`; and the DEBUG trace logs only the scrape ID and path. One gap remains: the stack
+trace of a failed scrape, now logged at DEBUG instead of WARN, still renders the exception's unredacted
+message.
 
 ### 6. [x] Auth warning logic is wrong; TLS examples use public test keys
 

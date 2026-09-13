@@ -18,6 +18,12 @@
 
 package io.prometheus.agent
 
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
+import io.kotest.matchers.string.shouldNotContain
+import org.slf4j.LoggerFactory
 import brave.Tracing
 import com.pambrose.common.concurrent.await
 import com.pambrose.common.service.ZipkinReporterService
@@ -742,6 +748,41 @@ class AgentGrpcServiceTest : StringSpec() {
       service.shutDown()
     }
 
+    // A scrape request carries the Authorization header Prometheus sent, so the DEBUG trace of each request must
+    // not dump the whole message.
+    "readRequestsFromProxy should not log the scrape request's auth header" {
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+      val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
+      val request = scrapeRequest {
+        agentId = "test-agent-123"
+        scrapeId = 7L
+        path = "/metrics"
+        authHeader = "Bearer s3cr3t-token"
+      }
+      every { mockStub.readRequestsFromProxy(any(), any()) } returns flowOf(request)
+      service.grpcStub = mockStub
+
+      val logbackLogger = LoggerFactory.getLogger(AgentGrpcService::class.java) as Logger
+      val previousLevel = logbackLogger.level
+      val appender = ListAppender<ILoggingEvent>().apply { start() }
+      logbackLogger.level = Level.DEBUG
+      logbackLogger.addAppender(appender)
+      try {
+        service.readRequestsFromProxy(mockk<AgentHttpService>(relaxed = true), AgentConnectionContext(128))
+      } finally {
+        logbackLogger.detachAppender(appender)
+        logbackLogger.level = previousLevel
+        appender.stop()
+        service.shutDown()
+      }
+
+      val output = appender.list.joinToString("\n") { it.formattedMessage }
+      // Guards against a vacuous pass: the request must actually have been traced.
+      output shouldContain "readRequestsFromProxy"
+      output shouldNotContain "s3cr3t-token"
+    }
+
     "readRequestsFromProxy should handle empty flow from proxy" {
       val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
@@ -1050,6 +1091,23 @@ class AgentGrpcServiceTest : StringSpec() {
           )
         }
         verify { service.agent.markMsgSent() }
+      }
+    }
+
+    // The target URL is shown on the proxy's dashboard and /debug page, so credentials in it must not leave
+    // the agent.
+    "registerPathOnProxy should send the target URL with credentials redacted" {
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
+        coEvery { mockStub.registerPath(any(), any<Metadata>()) } returns registerPathResponse { valid = true }
+
+        service.registerPathOnProxy("metrics", "{}", "http://admin:hunter2@target:9100/metrics?token=s3cr3t", "STATIC")
+
+        coVerify {
+          mockStub.registerPath(
+            match { it.targetUrl == "http://***@target:9100/metrics?token=***" },
+            any<Metadata>(),
+          )
+        }
       }
     }
 

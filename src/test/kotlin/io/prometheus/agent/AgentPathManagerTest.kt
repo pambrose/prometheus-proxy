@@ -53,6 +53,7 @@ import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.concurrent.atomics.update
 import kotlin.time.Duration.Companion.milliseconds
 
+@Suppress("LargeClass")
 class AgentPathManagerTest : StringSpec() {
   // Captures the "Registered ..." lines doRegisterPath emits, which is the only place the agent reports
   // whether a configured filter actually attached to a path. Mirrors the ListAppender pattern in
@@ -481,6 +482,96 @@ class AgentPathManagerTest : StringSpec() {
       text shouldContain "metrics"
       text shouldContain "app"
       text.shouldNotBeEmpty()
+    }
+
+    // Path registration logs name the target URL at INFO, so its credentials must be redacted there too.
+    "path registration logs should redact credentials in the target URL" {
+      val agent = createMockAgent()
+      every { agent.isTestMode } returns false
+      val manager = AgentPathManager(agent)
+      val logbackLogger = LoggerFactory.getLogger(AgentPathManager::class.java) as Logger
+      val appender = ListAppender<ILoggingEvent>().apply { start() }
+      logbackLogger.addAppender(appender)
+      try {
+        manager.registerPath("metrics", "http://admin:hunter2@localhost:9100/metrics?token=s3cr3t")
+        manager.unregisterPath("metrics")
+      } finally {
+        logbackLogger.detachAppender(appender)
+        appender.stop()
+      }
+
+      val output = appender.list.joinToString("\n") { it.formattedMessage }
+      output shouldContain "http://***@localhost:9100/metrics?token=***"
+      output shouldNotContain "hunter2"
+      output shouldNotContain "s3cr3t"
+    }
+
+    // Each configured path is logged once when the path manager is built.
+    "the startup log of configured paths should redact credentials in the target URL" {
+      val configVals = testConfigVals(
+        """
+        agent {
+          pathConfigs = [
+            {
+              name = "secured"
+              path = "metrics"
+              url = "http://admin:hunter2@localhost:9100/metrics?token=s3cr3t"
+              labels = "{}"
+            }
+          ]
+          filters = []
+        }
+        proxy { auth = [] }
+        """,
+      )
+      val mockAgent = mockk<Agent>(relaxed = true)
+      every { mockAgent.grpcService } returns mockk<AgentGrpcService>(relaxed = true)
+      every { mockAgent.configVals } returns configVals
+      every { mockAgent.isTestMode } returns true
+      val logbackLogger = LoggerFactory.getLogger(AgentPathManager::class.java) as Logger
+      val appender = ListAppender<ILoggingEvent>().apply { start() }
+      logbackLogger.addAppender(appender)
+      try {
+        AgentPathManager(mockAgent)
+      } finally {
+        logbackLogger.detachAppender(appender)
+        appender.stop()
+      }
+
+      val output = appender.list.joinToString("\n") { it.formattedMessage }
+      output shouldContain "http://***@localhost:9100/metrics?token=***"
+      output shouldNotContain "hunter2"
+      output shouldNotContain "s3cr3t"
+    }
+
+    // toPlainText backs the agent's debug output, so a configured URL's credentials must not appear in it.
+    "toPlainText should redact credentials in configured target URLs" {
+      val configVals = testConfigVals(
+        """
+        agent {
+          pathConfigs = [
+            {
+              name = "secured"
+              path = "metrics"
+              url = "http://admin:hunter2@localhost:9100/metrics?token=s3cr3t"
+              labels = "{}"
+            }
+          ]
+          filters = []
+        }
+        proxy { auth = [] }
+        """,
+      )
+      val mockAgent = mockk<Agent>(relaxed = true)
+      every { mockAgent.grpcService } returns mockk<AgentGrpcService>(relaxed = true)
+      every { mockAgent.configVals } returns configVals
+      every { mockAgent.isTestMode } returns true
+
+      val text = AgentPathManager(mockAgent).toPlainText()
+
+      text shouldContain "http://***@localhost:9100/metrics?token=***"
+      text shouldNotContain "hunter2"
+      text shouldNotContain "s3cr3t"
     }
 
     "toPlainText should include URL column for configured paths" {

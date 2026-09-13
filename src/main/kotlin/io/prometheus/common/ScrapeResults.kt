@@ -23,10 +23,12 @@ import com.pambrose.common.util.simpleClassName
 import io.prometheus.common.Utils.causeChain
 import com.google.protobuf.ByteString
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
+import io.ktor.client.network.sockets.ConnectTimeoutException
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.http.HttpStatusCode.Companion.RequestTimeout
 import io.ktor.http.HttpStatusCode.Companion.ServiceUnavailable
 import io.ktor.network.sockets.SocketTimeoutException
+import io.prometheus.common.Utils.sanitizeUrlsInText
 import io.prometheus.grpc.ScrapeResponse
 import io.prometheus.grpc.chunkedScrapeResponse
 import io.prometheus.grpc.headerData
@@ -99,22 +101,26 @@ internal class ScrapeResults(
       e: Throwable,
       url: String,
     ): Int {
+      // Exception messages embed the request URL, credentials included, so WARN logs carry only the redacted
+      // message. The stack trace -- whose rendered message is unredacted -- is kept at DEBUG.
+      val detail = "[${e.simpleClassName}: ${e.message?.let { sanitizeUrlsInText(it) }}]"
+
       // Detect wrapped timeout exceptions (Ktor sometimes wraps them) via the shared cause-walk.
       if (e.hasTimeoutCause()) {
-        // Message without $e -- the throwable is already passed for the stack trace, so interpolating
-        // its toString() too would render it twice (finding 30).
-        logger.warn(e) { "fetchScrapeUrl() timed out - $url" }
+        logger.warn { "fetchScrapeUrl() timed out - $url $detail" }
+        logger.debug(e) { "fetchScrapeUrl() timed out - $url" }
         return RequestTimeout.value
       }
 
       return when (e) {
         is IOException -> {
-          logger.warn { "Failed HTTP request: $url [${e.simpleClassName}: ${e.message}]" }
+          logger.warn { "Failed HTTP request: $url $detail" }
           ServiceUnavailable.value
         }
 
         else -> {
-          logger.warn(e) { "fetchScrapeUrl() - $url" }
+          logger.warn { "fetchScrapeUrl() - $url $detail" }
+          logger.debug(e) { "fetchScrapeUrl() - $url" }
           ServiceUnavailable.value
         }
       }
@@ -127,6 +133,8 @@ internal class ScrapeResults(
 internal fun Throwable.hasTimeoutCause(): Boolean =
   causeChain().any {
     it is TimeoutCancellationException ||
+      // Ktor's CIO engine raises its own connect-timeout type, a java.net.ConnectException.
+      it is ConnectTimeoutException ||
       it is HttpConnectTimeoutException ||
       it is SocketTimeoutException ||
       it is HttpRequestTimeoutException

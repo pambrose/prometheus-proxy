@@ -40,6 +40,7 @@ import io.prometheus.common.ScrapeResults
 import io.prometheus.common.Utils.logStreamFailure
 import io.prometheus.common.Utils.HostPort
 import io.prometheus.common.Utils.parseEndpointList
+import io.prometheus.common.Utils.sanitizeUrl
 import io.prometheus.grpc.ChunkedScrapeResponse
 import io.prometheus.grpc.ProxyServiceGrpcKt
 import io.prometheus.grpc.RegisterPathResponse
@@ -396,7 +397,8 @@ internal class AgentGrpcService(
         labels = labelsJson
         // The target and its origin are known only here. Reported at registration because that is the
         // one moment they are established -- a path is re-registered rather than mutated in place.
-        targetUrl = urlVal
+        // Redacted here: the proxy shows the target on its dashboard and /debug page.
+        targetUrl = sanitizeUrl(urlVal)
         pathSource = sourceVal
       },
     ).apply {
@@ -459,7 +461,8 @@ internal class AgentGrpcService(
     grpcStub.readRequestsFromProxy(agentInfo)
       .collect { grpcRequest: ScrapeRequest ->
         // The actual fetch happens at the other end of the channel, not here.
-        logger.debug { "readRequestsFromProxy():\n$grpcRequest" }
+        // Not the whole message: a scrape request carries the Authorization header Prometheus sent.
+        logger.debug { "readRequestsFromProxy(): scrapeId=${grpcRequest.scrapeId} path=${grpcRequest.path}" }
         agent.scrapeRequestBacklogSize += 1
         try {
           connectionContext.sendScrapeRequestAction { agentHttpService.fetchScrapeUrl(grpcRequest) }

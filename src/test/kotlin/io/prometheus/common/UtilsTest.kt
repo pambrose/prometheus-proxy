@@ -36,6 +36,7 @@ import io.prometheus.common.Utils.sanitizeQueryParams
 import io.prometheus.common.Utils.sanitizeUrl
 import io.prometheus.common.Utils.setLogLevel
 import io.prometheus.common.Utils.toJsonElement
+import io.prometheus.common.Utils.sanitizeUrlsInText
 import io.prometheus.common.TestPorts.PROMETHEUS_PORT
 import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
@@ -508,6 +509,32 @@ class UtilsTest : StringSpec() {
 
     "sanitizeQueryParams should leave a valueless key untouched" {
       sanitizeQueryParams("debug&token=abc") shouldBe "debug&token=***"
+    }
+
+    // ==================== sanitizeUrlsInText Tests ====================
+
+    // HTTP client exception messages embed the request URL verbatim (Ktor's timeout messages use
+    // "[url=..., ...]"), so every URL inside free text must be redacted before the text is logged or sent to
+    // the proxy.
+    "sanitizeUrlsInText should redact a URL embedded in an exception message" {
+      sanitizeUrlsInText(
+        "Connect timeout has expired [url=http://user:pass@host:9100/metrics?token=abc, connect_timeout=unknown ms]",
+      ) shouldBe "Connect timeout has expired [url=http://***@host:9100/metrics?token=***, connect_timeout=unknown ms]"
+    }
+
+    "sanitizeUrlsInText should redact every URL in the text" {
+      sanitizeUrlsInText("from https://a:b@one/x?k=1 to http://two/y?s=2") shouldBe
+        "from https://***@one/x?k=*** to http://two/y?s=***"
+    }
+
+    // A URL ends at whitespace, not at a comma: a comma is legal inside a query value, and stopping there
+    // would leave the rest of the query unredacted.
+    "sanitizeUrlsInText should redact query values that contain a comma" {
+      sanitizeUrlsInText("failed: http://host/m?ids=1,2&token=abc") shouldBe "failed: http://host/m?ids=***&token=***"
+    }
+
+    "sanitizeUrlsInText should leave text without URLs unchanged" {
+      sanitizeUrlsInText("Connection refused") shouldBe "Connection refused"
     }
 
     // ==================== parseEndpointList Tests ====================
