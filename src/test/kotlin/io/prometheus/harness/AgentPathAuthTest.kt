@@ -27,6 +27,7 @@ import io.prometheus.Proxy
 import io.prometheus.agent.AgentOptions
 import io.prometheus.agent.RequestFailureException
 import io.prometheus.client.CollectorRegistry
+import io.prometheus.common.TestPorts
 import io.prometheus.harness.support.exceptionHandler
 import io.prometheus.proxy.ProxyOptions
 import kotlinx.coroutines.Dispatchers
@@ -132,7 +133,7 @@ class AgentPathAuthTest : StringSpec() {
     private val CONFIG_ARG = ["--config", localOrGitHub(AUTH_CONFIG_FILE)]
 
     // Dedicated ports to avoid clashing with the shared harness ports and the other auth tests.
-    private const val HTTP_PORT = 9515
-    private const val AGENT_PORT = 50463
+    private const val HTTP_PORT = TestPorts.PATH_AUTH_HTTP_PORT
+    private const val AGENT_PORT = TestPorts.PATH_AUTH_AGENT_PORT
   }
 }

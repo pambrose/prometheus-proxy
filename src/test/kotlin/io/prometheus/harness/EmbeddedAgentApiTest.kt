@@ -26,6 +26,7 @@ import io.prometheus.Agent
 import io.prometheus.agent.EmbeddedAgentInfo
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.LOOPBACK_HOST
+import io.prometheus.common.TestPorts
 import io.prometheus.harness.support.TestUtils.startProxy
 import kotlin.io.path.createTempFile
 import kotlin.time.Duration.Companion.seconds
@@ -89,7 +90,7 @@ class EmbeddedAgentApiTest : StringSpec() {
     private const val AGENT_NAME = "embedded-api-agent"
 
     // Dedicated ports, following the one-off convention the other standalone harness specs use.
-    private const val HTTP_PORT = 9560
-    private const val GRPC_PORT = 9561
+    private const val HTTP_PORT = TestPorts.EMBEDDED_API_HTTP_PORT
+    private const val GRPC_PORT = TestPorts.EMBEDDED_API_GRPC_PORT
   }
 }

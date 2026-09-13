@@ -50,9 +50,14 @@ import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TestTimeSource
 
 class HttpClientCacheTest : StringSpec() {
   private lateinit var cache: HttpClientCache
+
+  // Entry ages and idle times are measured on this clock, so expiry tests advance it instead of sleeping against
+  // real timeouts, where a CI stall of a few hundred milliseconds changes the outcome.
+  private lateinit var clock: TestTimeSource
   private var clientCount = 0
 
   private fun createMockHttpClient(): HttpClient {
@@ -65,11 +70,13 @@ class HttpClientCacheTest : StringSpec() {
   init {
     beforeEach {
       clientCount = 0
+      clock = TestTimeSource()
       cache = HttpClientCache(
         maxCacheSize = 5,
         maxAge = 1.seconds,
         maxIdleTime = 500.milliseconds,
         cleanupInterval = 100.milliseconds,
+        timeSource = clock,
       )
     }
 
@@ -292,16 +299,22 @@ class HttpClientCacheTest : StringSpec() {
       val entry1 = cache.getOrCreateClient(key) { createMockHttpClient() }
       val originalClient = entry1.client
       cache.currentCacheSize() shouldBe 1
+      cache.onFinishedWithClient(entry1)
 
-      // Wait for max age to expire
-      delay(1200.milliseconds)
+      // Touch the entry more often than the idle timeout, so only its age can expire it.
+      repeat(2) {
+        clock += 400.milliseconds
+        cache.getOrCreateClient(key) { createMockHttpClient() }
+          .also { it.client shouldBe originalClient }
+          .also { cache.onFinishedWithClient(it) }
+      }
+      clock += 400.milliseconds
 
-      // Request again - should create a new client
+      // 1200ms old but idle only 400ms: max age alone expires it, so a new client is created.
       val entry2 = cache.getOrCreateClient(key) { createMockHttpClient() }
       entry2.client shouldNotBe originalClient
 
       // Clean up
-      cache.onFinishedWithClient(entry1)
       cache.onFinishedWithClient(entry2)
     }
 
@@ -313,8 +326,8 @@ class HttpClientCacheTest : StringSpec() {
       val originalClient = entry1.client
       cache.currentCacheSize() shouldBe 1
 
-      // Wait for max idle time to expire
-      delay(600.milliseconds)
+      // Past max idle time, still within max age
+      clock += 600.milliseconds
 
       // Request again - should create a new client
       val entry2 = cache.getOrCreateClient(key) { createMockHttpClient() }
@@ -333,16 +346,16 @@ class HttpClientCacheTest : StringSpec() {
       val originalClient = entry1.client
       cache.onFinishedWithClient(entry1)
 
-      // Wait half the idle time
-      delay(300.milliseconds)
+      // Advance half the idle time
+      clock += 300.milliseconds
 
       // Access again - should reset last accessed time
       val entry2 = cache.getOrCreateClient(key) { createMockHttpClient() }
       entry2.client shouldBe originalClient
       cache.onFinishedWithClient(entry2)
 
-      // Wait another half idle time (total would exceed idle time but entry was accessed)
-      delay(300.milliseconds)
+      // Advance another half idle time (total would exceed idle time but entry was accessed)
+      clock += 300.milliseconds
 
       // Should still be the same client (not expired)
       val entry3 = cache.getOrCreateClient(key) { createMockHttpClient() }
@@ -385,11 +398,13 @@ class HttpClientCacheTest : StringSpec() {
 
     "should provide accurate cache statistics" {
       // Create a cache with longer cleanup interval to prevent automatic cleanup
+      val statsClock = TestTimeSource()
       val testCache = HttpClientCache(
         maxCacheSize = 5,
         maxAge = 500.milliseconds,
         maxIdleTime = 300.milliseconds,
         cleanupInterval = 10.seconds, // Long cleanup interval
+        timeSource = statsClock,
       )
 
       try {
@@ -410,8 +425,8 @@ class HttpClientCacheTest : StringSpec() {
         stats.validEntries shouldBe 2
         stats.expiredEntries shouldBe 0
 
-        // Wait for entries to expire but not be cleaned up
-        delay(600.milliseconds)
+        // Expire the entries without letting the (10s) cleanup run
+        statsClock += 600.milliseconds
 
         stats = testCache.getCacheStats()
         stats.totalEntries shouldBe 2
@@ -433,14 +448,11 @@ class HttpClientCacheTest : StringSpec() {
       val entry = cache.getOrCreateClient(key) { createMockHttpClient() }
       cache.currentCacheSize() shouldBe 1
 
-      // Wait for expiration and cleanup
-      delay(1200.milliseconds)
-
-      // Give cleanup time to run
-      delay(200.milliseconds)
-
-      // Cache should be cleaned up
-      cache.currentCacheSize() shouldBe 0
+      // Expire the entry, then wait for the (100ms) sweeper to remove it
+      clock += 1200.milliseconds
+      withTimeout(5.seconds) {
+        while (cache.currentCacheSize() > 0) delay(25.milliseconds)
+      }
 
       // Clean up
       cache.onFinishedWithClient(entry)

@@ -31,6 +31,7 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.LOOPBACK_HOST
+import io.prometheus.common.TestPorts
 import io.prometheus.common.startAndAwaitReady
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
@@ -89,7 +90,7 @@ class InProcessClientCancelledScrapeTest : StringSpec() {
   }
 
   companion object {
-    private const val HTTP_PORT = 9590
+    private const val HTTP_PORT = TestPorts.CLIENT_CANCELLED_HTTP_PORT
     private const val PATH = "slowpath"
     private val TARGET_DELAY = 3.seconds
     private val CLIENT_TIMEOUT = 1.seconds

@@ -28,6 +28,7 @@ import io.kotest.matchers.string.shouldStartWith
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.prometheus.common.ConfigVals
+import io.prometheus.common.TestPorts.ADMIN_CUSTOM_PATH_ADMIN_PORT
 import io.prometheus.harness.HarnessConstants.PROXY_PORT
 import io.prometheus.harness.support.HarnessSetup
 import io.prometheus.harness.support.TestUtils.startAgent
@@ -47,7 +48,7 @@ class AdminNonDefaultPathTest : StringSpec() {
           startProxy(
             adminEnabled = true,
             args = [
-              "-Dproxy.admin.port=8099",
+              "-Dproxy.admin.port=$ADMIN_CUSTOM_PATH_ADMIN_PORT",
               "-Dproxy.admin.pingPath=pingPath2",
               "-Dproxy.admin.versionPath=versionPath2",
               "-Dproxy.admin.healthCheckPath=healthCheckPath2",
@@ -65,7 +66,7 @@ class AdminNonDefaultPathTest : StringSpec() {
 
     "proxy ping path should respond with pong" {
       proxyConfigVals.admin.apply {
-        port shouldBe 8099
+        port shouldBe ADMIN_CUSTOM_PATH_ADMIN_PORT
         pingPath shouldBe "pingPath2"
 
         KtorDsl.blockingGet("$port/$pingPath".withPrefix()) { response ->
@@ -77,7 +78,7 @@ class AdminNonDefaultPathTest : StringSpec() {
 
     "proxy version path should return version info" {
       proxyConfigVals.admin.apply {
-        port shouldBe 8099
+        port shouldBe ADMIN_CUSTOM_PATH_ADMIN_PORT
         versionPath shouldBe "versionPath2"
 
         KtorDsl.blockingGet("$port/$versionPath".withPrefix()) { response ->

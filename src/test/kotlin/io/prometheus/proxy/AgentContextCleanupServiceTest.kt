@@ -26,6 +26,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.spyk
 import io.mockk.verify
 import io.prometheus.Proxy
 import io.prometheus.common.ConfigVals
@@ -53,6 +54,13 @@ class AgentContextCleanupServiceTest : StringSpec() {
     val config = overrideConfig.withFallback(ConfigFactory.load())
     return ConfigVals(config).proxy.internal
   }
+
+  // Waits until the sweep loop has called findStaleAgents [count] times: proof the loop actually ran. A fixed sleep
+  // followed by verify(exactly = 0) cannot give that, since it passes just as well when no sweep ever happened.
+  private suspend fun awaitSweeps(
+    manager: AgentContextManager,
+    count: Int,
+  ) = eventually(10.seconds) { verify(atLeast = count) { manager.findStaleAgents(any()) } }
 
   init {
     // ==================== Configuration Tests ====================
@@ -132,7 +140,7 @@ class AgentContextCleanupServiceTest : StringSpec() {
         staleAgentCheckPauseSecs = 1,
       )
 
-      val agentContextManager = AgentContextManager(isTestMode = true)
+      val agentContextManager = spyk(AgentContextManager(isTestMode = true))
 
       // Create an agent with recent activity (within threshold)
       val activeAgentContext = mockk<AgentContext>(relaxed = true)
@@ -146,9 +154,9 @@ class AgentContextCleanupServiceTest : StringSpec() {
 
       val service = AgentContextCleanupService(mockProxy, configVals)
 
-      // Start and quickly stop
+      // Two sweeps, so at least one ran to completion before stopping
       service.startAsync()
-      Thread.sleep(1500)
+      awaitSweeps(agentContextManager, 2)
       service.stopAsync().awaitTerminated()
 
       // Verify the active agent was NOT removed
@@ -192,7 +200,7 @@ class AgentContextCleanupServiceTest : StringSpec() {
 
     "cleanup should handle empty agent context map gracefully" {
       val configVals = createConfigVals(staleAgentCheckPauseSecs = 1)
-      val agentContextManager = AgentContextManager(isTestMode = true)
+      val agentContextManager = spyk(AgentContextManager(isTestMode = true))
       // Leave the map empty
 
       val mockProxy = mockk<Proxy>(relaxed = true)
@@ -202,7 +210,7 @@ class AgentContextCleanupServiceTest : StringSpec() {
 
       // Should not throw even with empty map
       service.startAsync()
-      Thread.sleep(1500)
+      awaitSweeps(agentContextManager, 2)
       service.stopAsync().awaitTerminated()
 
       // Verify no removal was attempted
@@ -214,7 +222,7 @@ class AgentContextCleanupServiceTest : StringSpec() {
     "service should stop promptly without waiting for full pause duration" {
       // Use a very long pause time so that blocking sleep would be obvious
       val configVals = createConfigVals(staleAgentCheckPauseSecs = 60)
-      val agentContextManager = AgentContextManager(isTestMode = true)
+      val agentContextManager = spyk(AgentContextManager(isTestMode = true))
 
       val mockProxy = mockk<Proxy>(relaxed = true)
       every { mockProxy.agentContextManager } returns agentContextManager
@@ -223,8 +231,8 @@ class AgentContextCleanupServiceTest : StringSpec() {
 
       service.startAsync().awaitRunning()
 
-      // Give the service thread time to enter the wait
-      Thread.sleep(200)
+      // Wait for a sweep to finish, so the thread is in, or entering, its 60s pause when the stop arrives
+      awaitSweeps(agentContextManager, 1)
 
       val stopStart = System.currentTimeMillis()
       service.stopAsync().awaitTerminated()
@@ -243,7 +251,7 @@ class AgentContextCleanupServiceTest : StringSpec() {
         staleAgentCheckPauseSecs = 1,
       )
 
-      val agentContextManager = AgentContextManager(isTestMode = true)
+      val agentContextManager = spyk(AgentContextManager(isTestMode = true))
 
       // Create an agent that starts stale but becomes active before eviction.
       // The first call to inactivityDuration (during findStaleAgents) returns 5s (stale).
@@ -260,7 +268,7 @@ class AgentContextCleanupServiceTest : StringSpec() {
       val service = AgentContextCleanupService(mockProxy, configVals)
 
       service.startAsync()
-      Thread.sleep(1500)
+      awaitSweeps(agentContextManager, 2)
       service.stopAsync().awaitTerminated()
 
       // The agent was stale at check time but active at eviction time -- should NOT be evicted

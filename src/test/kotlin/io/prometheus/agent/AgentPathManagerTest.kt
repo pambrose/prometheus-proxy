@@ -47,6 +47,7 @@ import io.prometheus.grpc.unregisterPathResponse
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.decrementAndFetch
 import kotlin.concurrent.atomics.incrementAndFetch
@@ -441,6 +442,49 @@ class AgentPathManagerTest : StringSpec() {
       manager.reconcileDiscoveredPaths(emptyList())
 
       manager["a_metrics"].shouldBeNull()
+    }
+
+    // Each path reconciles on its own: one the proxy rejects must not keep the rest of the desired set from
+    // registering. The desired set keeps its order, so the failing path sits between two that must still register.
+    "reconcile should still register the other discovered paths when one registration fails" {
+      val agent = createMockAgent()
+      val grpc = agent.grpcService
+      val manager = AgentPathManager(agent)
+      coEvery { grpc.registerPathOnProxy("b_metrics", any(), any(), any()) } throws
+        RequestFailureException("registerPathOnProxy() - path /b_metrics is not authorized")
+
+      manager.reconcileDiscoveredPaths(
+        [
+          DiscoveredPath("a", "a_metrics", "http://a/m", "{}"),
+          DiscoveredPath("b", "b_metrics", "http://b/m", "{}"),
+          DiscoveredPath("c", "c_metrics", "http://c/m", "{}"),
+        ],
+      )
+
+      manager["a_metrics"].shouldNotBeNull()
+      manager["b_metrics"].shouldBeNull()
+      manager["c_metrics"].shouldNotBeNull()
+    }
+
+    // Likewise for removals. A transport failure keeps its path for the next reconcile to retry, but must not stop
+    // the other stale paths being removed. The map's iteration order is unspecified, so the first unregister
+    // attempted is the one that fails.
+    "reconcile should still remove the other stale discovered paths when one unregister fails" {
+      val agent = createMockAgent()
+      val grpc = agent.grpcService
+      val manager = AgentPathManager(agent)
+      val paths = ["a_metrics", "b_metrics", "c_metrics"]
+      manager.reconcileDiscoveredPaths(paths.map { DiscoveredPath(it, it, "http://$it/m", "{}") })
+      val failedOnce = AtomicBoolean(false)
+      coEvery { grpc.unregisterPathOnProxy(any()) } answers {
+        if (failedOnce.compareAndSet(false, true)) throw StatusException(Status.UNAVAILABLE)
+        unregisterPathResponse { valid = true }
+      }
+
+      manager.reconcileDiscoveredPaths(emptyList())
+
+      coVerify(exactly = 3) { grpc.unregisterPathOnProxy(any()) }
+      paths.count { manager[it] != null } shouldBe 1
     }
 
     "reconcile skips a discovered path colliding with a static path" {

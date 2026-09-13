@@ -23,6 +23,7 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.prometheus.client.CollectorRegistry
+import io.prometheus.common.TestPorts
 import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.proxy.AgentContext
 import kotlin.time.Duration.Companion.seconds
@@ -68,7 +69,7 @@ class InProcessStaleAgentCleanupTest : StringSpec() {
   }
 
   companion object {
-    private const val OFF_HTTP_PORT = 9563
-    private const val FORCED_HTTP_PORT = 9564
+    private const val OFF_HTTP_PORT = TestPorts.STALE_CLEANUP_OFF_HTTP_PORT
+    private const val FORCED_HTTP_PORT = TestPorts.STALE_CLEANUP_FORCED_HTTP_PORT
   }
 }

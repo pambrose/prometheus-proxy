@@ -210,13 +210,15 @@ something.
 - **ConstantsTest** — Constant values (EMPTY_AGENT_ID_MSG, EMPTY_PATH_MSG, EMPTY_INSTANCE)
 - **EnvVarsTest** — Environment variable mappings and fallback defaults
 - **ScrapeResultsTest** — ScrapeResults data class, error code mapping, timeout handling, protobuf conversion
+- **TestPortsTest** — every port in `TestPorts` is distinct, so no two specs can bind the same port
 - **UtilsTest** — Utility functions: parseHostPort, sanitizeUrl, appendQueryParams, decodeParams, toJsonElement,
   setLogLevel, exceptionDetails
 
 Three support helpers also live here (not test classes themselves):
 
 - **TestPorts** — canonical port constants shared across the unit, harness, and container suites (mirrors the
-  proxy/agent config defaults and the fixed container ports), so no test hard-codes a port literal
+  proxy/agent config defaults and the fixed container ports), plus each harness spec's dedicated ports, so no test
+  hard-codes a port literal
 - **TestOptions** — factories that build `ProxyOptions` / `AgentOptions` from a list, `ConfigVals` from a HOCON
   fragment merged with the reference config, and `ProxyOptions` from a temp config file
 - **EmbeddedTestServer** — `EmbeddedServer.startAndAwaitReady()`, which starts a Ktor server with `wait = false`
@@ -292,6 +294,8 @@ mechanism that the standard suite cannot reach:
 #### Harness Infrastructure (`harness/support/`)
 
 - **HarnessSetup** — Base class providing `setupProxyAndAgent()` / `takeDownProxyAndAgent()` lifecycle
+- **HarnessHelpersTest** — `awaitPortFree()` fails when a port stays taken, and `HarnessConstants.localConfigFile()`
+  fails for a missing test config rather than fetching one from GitHub
 - **HarnessSupport** — Utility functions: `startProxy()`, `startAgent()`, `exceptionHandler()`
 - **AbstractHarnessTests** — Abstract base defining the standard 7-test suite
 - **BasicHarnessTests** — Reusable test implementations (missing path, invalid path, add/remove paths, etc.)

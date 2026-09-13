@@ -44,6 +44,7 @@ import io.mockk.verify
 import io.prometheus.Agent
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.LOOPBACK_HOST
+import io.prometheus.common.TestPorts
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml
@@ -445,69 +446,69 @@ class ProxyWebDashboardTest : StringSpec() {
     private const val AGENT_NAME = "web-ui-agent"
 
     // Dedicated ports, following the one-off convention the other standalone harness specs use.
-    private const val PROXY_HTTP_PORT = 9540
-    private const val PROXY_GRPC_PORT = 9541
-    private const val DASHBOARD_PORT = 9542
-    private const val OFF_HTTP_PORT = 9543
-    private const val OFF_GRPC_PORT = 9544
-    private const val OFF_DASHBOARD_PORT = 9545
+    private const val PROXY_HTTP_PORT = TestPorts.DASHBOARD_UI_PROXY_HTTP_PORT
+    private const val PROXY_GRPC_PORT = TestPorts.DASHBOARD_UI_PROXY_GRPC_PORT
+    private const val DASHBOARD_PORT = TestPorts.DASHBOARD_UI_DASHBOARD_PORT
+    private const val OFF_HTTP_PORT = TestPorts.DASHBOARD_UI_OFF_HTTP_PORT
+    private const val OFF_GRPC_PORT = TestPorts.DASHBOARD_UI_OFF_GRPC_PORT
+    private const val OFF_DASHBOARD_PORT = TestPorts.DASHBOARD_UI_OFF_DASHBOARD_PORT
 
     // Bounded so a push that never carries the agent fails the assertion rather than hanging the suite.
     private const val MAX_FRAMES = 12
 
-    private const val FAILOVER_HTTP_PORT = 9546
-    private const val FAILOVER_GRPC_PORT = 9547
-    private const val FAILOVER_DASHBOARD_PORT = 9548
+    private const val FAILOVER_HTTP_PORT = TestPorts.DASHBOARD_UI_FAILOVER_HTTP_PORT
+    private const val FAILOVER_GRPC_PORT = TestPorts.DASHBOARD_UI_FAILOVER_GRPC_PORT
+    private const val FAILOVER_DASHBOARD_PORT = TestPorts.DASHBOARD_UI_FAILOVER_DASHBOARD_PORT
 
     // Nothing listens here, so the agent's first endpoint fails and it advances to the second.
-    private const val DEAD_PORT = 9549
+    private const val DEAD_PORT = TestPorts.DASHBOARD_UI_DEAD_PORT
 
     private val AGENT_ID_PATTERN = """hx-get="/dashboard/agents/([^"]+)"""".toRegex()
 
-    private const val NAV_HTTP_PORT = 9550
-    private const val NAV_GRPC_PORT = 9551
-    private const val NAV_DASHBOARD_PORT = 9552
+    private const val NAV_HTTP_PORT = TestPorts.DASHBOARD_UI_NAV_HTTP_PORT
+    private const val NAV_GRPC_PORT = TestPorts.DASHBOARD_UI_NAV_GRPC_PORT
+    private const val NAV_DASHBOARD_PORT = TestPorts.DASHBOARD_UI_NAV_DASHBOARD_PORT
 
-    private const val ROOT_HTTP_PORT = 9553
-    private const val ROOT_GRPC_PORT = 9554
-    private const val ROOT_DASHBOARD_PORT = 9558
+    private const val ROOT_HTTP_PORT = TestPorts.DASHBOARD_UI_ROOT_HTTP_PORT
+    private const val ROOT_GRPC_PORT = TestPorts.DASHBOARD_UI_ROOT_GRPC_PORT
+    private const val ROOT_DASHBOARD_PORT = TestPorts.DASHBOARD_UI_ROOT_DASHBOARD_PORT
 
     // Registers a real path, so it needs its own config and its own ports.
     private const val PATHS_CONFIG_FILE = "config/test-configs/web-ui-paths.conf"
-    private const val PATHS_HTTP_PORT = 9555
-    private const val PATHS_GRPC_PORT = 9556
-    private const val PATHS_DASHBOARD_PORT = 9557
+    private const val PATHS_HTTP_PORT = TestPorts.DASHBOARD_UI_PATHS_HTTP_PORT
+    private const val PATHS_GRPC_PORT = TestPorts.DASHBOARD_UI_PATHS_GRPC_PORT
+    private const val PATHS_DASHBOARD_PORT = TestPorts.DASHBOARD_UI_PATHS_DASHBOARD_PORT
 
-    private const val SELECT_HTTP_PORT = 9570
-    private const val SELECT_GRPC_PORT = 9571
-    private const val SELECT_DASHBOARD_PORT = 9572
+    private const val SELECT_HTTP_PORT = TestPorts.DASHBOARD_UI_SELECT_HTTP_PORT
+    private const val SELECT_GRPC_PORT = TestPorts.DASHBOARD_UI_SELECT_GRPC_PORT
+    private const val SELECT_DASHBOARD_PORT = TestPorts.DASHBOARD_UI_SELECT_DASHBOARD_PORT
 
-    private const val MOUNT_HTTP_PORT = 9573
-    private const val MOUNT_GRPC_PORT = 9574
-    private const val MOUNT_DASHBOARD_PORT = 9575
+    private const val MOUNT_HTTP_PORT = TestPorts.DASHBOARD_UI_MOUNT_HTTP_PORT
+    private const val MOUNT_GRPC_PORT = TestPorts.DASHBOARD_UI_MOUNT_GRPC_PORT
+    private const val MOUNT_DASHBOARD_PORT = TestPorts.DASHBOARD_UI_MOUNT_DASHBOARD_PORT
 
-    private const val ORIGIN_HTTP_PORT = 9576
-    private const val ORIGIN_GRPC_PORT = 9577
-    private const val ORIGIN_DASHBOARD_PORT = 9578
+    private const val ORIGIN_HTTP_PORT = TestPorts.DASHBOARD_UI_ORIGIN_HTTP_PORT
+    private const val ORIGIN_GRPC_PORT = TestPorts.DASHBOARD_UI_ORIGIN_GRPC_PORT
+    private const val ORIGIN_DASHBOARD_PORT = TestPorts.DASHBOARD_UI_ORIGIN_DASHBOARD_PORT
     private const val ORIGINS_CONFIG_FILE = "config/test-configs/web-ui-origins.conf"
 
     // Must match the allowedOrigins entry in ORIGINS_CONFIG_FILE.
     private const val ALLOWED_ORIGIN = "https://dash.example.com"
 
-    private const val CAP_HTTP_PORT = 9579
-    private const val CAP_GRPC_PORT = 9580
-    private const val CAP_DASHBOARD_PORT = 9581
+    private const val CAP_HTTP_PORT = TestPorts.DASHBOARD_UI_CAP_HTTP_PORT
+    private const val CAP_GRPC_PORT = TestPorts.DASHBOARD_UI_CAP_GRPC_PORT
+    private const val CAP_DASHBOARD_PORT = TestPorts.DASHBOARD_UI_CAP_DASHBOARD_PORT
 
-    private const val FRAME_HTTP_PORT = 9582
-    private const val FRAME_GRPC_PORT = 9583
-    private const val FRAME_DASHBOARD_PORT = 9584
+    private const val FRAME_HTTP_PORT = TestPorts.DASHBOARD_UI_FRAME_HTTP_PORT
+    private const val FRAME_GRPC_PORT = TestPorts.DASHBOARD_UI_FRAME_GRPC_PORT
+    private const val FRAME_DASHBOARD_PORT = TestPorts.DASHBOARD_UI_FRAME_DASHBOARD_PORT
 
     // Far past the incoming frame cap, and far past any message the dashboard page sends.
     private const val OVERSIZED_MESSAGE_CHARS = 1_000_000
 
-    private const val CACHE_HTTP_PORT = 9585
-    private const val CACHE_GRPC_PORT = 9586
-    private const val CACHE_DASHBOARD_PORT = 9587
+    private const val CACHE_HTTP_PORT = TestPorts.DASHBOARD_UI_CACHE_HTTP_PORT
+    private const val CACHE_GRPC_PORT = TestPorts.DASHBOARD_UI_CACHE_GRPC_PORT
+    private const val CACHE_DASHBOARD_PORT = TestPorts.DASHBOARD_UI_CACHE_DASHBOARD_PORT
     private const val MESSAGE_COUNT = 5
 
     // The agent-list row marker for the session's selected agent (the nav uses aria-current="page").

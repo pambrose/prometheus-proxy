@@ -44,6 +44,7 @@ import io.ktor.server.routing.routing
 import io.prometheus.Agent
 import io.prometheus.agent.AgentPathManager
 import io.prometheus.agent.RequestFailureException
+import io.prometheus.common.TestPorts
 import io.prometheus.harness.HarnessConstants.HARNESS_CONFIG
 import io.prometheus.harness.HarnessConstants.MAX_DELAY_MILLIS
 import io.prometheus.harness.HarnessConstants.MIN_DELAY_MILLIS
@@ -67,7 +68,7 @@ data class ProxyCallTestArgs(
   val sequentialQueryCount: Int = HARNESS_CONFIG.sequentialQueryCount,
   val parallelQueryCount: Int = HARNESS_CONFIG.parallelQueryCount,
   val proxyCallTimeoutSecs: Int = HARNESS_CONFIG.proxyCallTimeoutSecs,
-  val startPort: Int = 9600,
+  val startPort: Int = TestPorts.HARNESS_DEFAULT_START_PORT,
   val caller: String,
 )
 

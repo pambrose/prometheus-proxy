@@ -25,6 +25,7 @@ import io.prometheus.Agent
 import io.prometheus.Proxy
 import io.prometheus.agent.AgentOptions
 import io.prometheus.client.CollectorRegistry
+import io.prometheus.common.TestPorts
 import io.prometheus.harness.HarnessConstants.CONFIG_ARG
 import io.prometheus.harness.support.exceptionHandler
 import io.prometheus.proxy.ProxyOptions
@@ -98,7 +99,7 @@ class TlsMutualAuthRejectionTest : StringSpec() {
     private val logger = logger {}
 
     // Dedicated ports to avoid clashing with the shared harness ports (9505 / 50051 / 50440).
-    private const val HTTP_PORT = 9512
-    private const val AGENT_PORT = 50460
+    private const val HTTP_PORT = TestPorts.TLS_REJECTION_HTTP_PORT
+    private const val AGENT_PORT = TestPorts.TLS_REJECTION_AGENT_PORT
   }
 }

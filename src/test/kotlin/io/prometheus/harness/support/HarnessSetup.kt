@@ -42,7 +42,7 @@ open class HarnessSetup {
     CollectorRegistry.defaultRegistry.clear()
 
     // Wait for the proxy port to be available (previous test may not have fully released it)
-    waitForPortAvailable(proxyPort)
+    awaitPortFree(proxyPort)
 
     // Start the proxy first and then allow the agent to connect
     proxy = proxySetup.invoke()
@@ -68,19 +68,25 @@ open class HarnessSetup {
 
     logger.info { "Stopped ${proxy.simpleClassName} and ${agent.simpleClassName}" }
   }
+}
 
-  private fun waitForPortAvailable(
-    port: Int,
-    maxAttempts: Int = 50,
-    delayMs: Long = 200,
-  ) {
-    repeat(maxAttempts) {
-      try {
-        ServerSocket(port).use { return }
-      } catch (_: Exception) {
-        Thread.sleep(delayMs)
-      }
+/**
+ * Waits for [port] to be free, and fails if it is still taken after [maxAttempts] tries.
+ *
+ * A previous spec may not have released the port yet, so a short wait is normal. A port that stays taken means
+ * something else holds it, and carrying on would only fail later, at bind time, with a less useful error.
+ */
+internal fun awaitPortFree(
+  port: Int,
+  maxAttempts: Int = 50,
+  delayMs: Long = 200,
+) {
+  repeat(maxAttempts) {
+    try {
+      ServerSocket(port).use { return }
+    } catch (_: Exception) {
+      Thread.sleep(delayMs)
     }
-    logger.warn { "Port $port may not be available after ${maxAttempts * delayMs}ms" }
   }
+  error("Port $port is still in use after ${maxAttempts * delayMs}ms")
 }
