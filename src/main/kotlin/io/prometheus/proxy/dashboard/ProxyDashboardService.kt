@@ -26,8 +26,10 @@ import com.pambrose.common.util.simpleClassName
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.http.CacheControl
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.CachingOptions
+import io.ktor.server.application.createRouteScopedPlugin
 import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.connector
@@ -38,10 +40,14 @@ import io.ktor.server.response.respondBytes
 import io.ktor.server.response.respondRedirect
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
+import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
 import io.ktor.server.websocket.webSocket
+import io.ktor.websocket.ChannelOverflow
+import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
+import io.ktor.websocket.close
 import io.ktor.websocket.readText
 import io.prometheus.BuildConfig
 import io.prometheus.Proxy
@@ -60,8 +66,13 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.net.URI
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.decrementAndFetch
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 
 /**
  * Read-only operational dashboard, served from its own Ktor server on its own port.
@@ -86,9 +97,17 @@ import kotlin.time.Duration.Companion.seconds
  * monitor every scrape request takes and defeating the decoupling this service is built around. Scrape
  * history is a drifting value, so the timer covers it, for the same reason backlog depths and eviction
  * countdowns are timer-driven.
+ *
+ * ### Exposure
+ *
+ * The port has no authentication, so what the service can bound, it does: a WebSocket handshake from a foreign
+ * browser origin is refused, sessions are capped at `proxy.dashboard.maxSessions`, a session that stops reading is
+ * closed rather than buffered for, and a browser message re-renders the recent snapshot rather than collecting one.
+ * The listen address is `proxy.dashboard.host`; binding it to a private address is what keeps the page private.
  */
 internal class ProxyDashboardService(
   private val proxy: Proxy,
+  private val dashboardHost: String,
   private val dashboardPort: Int,
   dashboardPath: String,
 ) : GenericIdleService() {
@@ -117,13 +136,43 @@ internal class ProxyDashboardService(
   private val wake = Channel<Unit>(Channel.CONFLATED)
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
   private val refreshInterval = proxy.proxyConfigVals.dashboard.refreshIntervalSecs.seconds
+  private val maxSessions = proxy.proxyConfigVals.dashboard.maxSessions
+  private val allowedOrigins: List<String> = proxy.proxyConfigVals.dashboard.allowedOrigins
+
+  // Claimed before a session joins [sessions] and released after it leaves, so the cap holds under concurrent
+  // connects; the set's own size is only an estimate while another thread is adding to it.
+  private val sessionCount = AtomicInt(0)
+
+  /** A collected snapshot and when it was taken. */
+  private class TimedSnapshot(
+    val snapshot: ProxySnapshot,
+    val taken: TimeMark,
+  )
+
+  // Written by every collect and cleared by topology events; read by sessions. See recentSnapshot.
+  @Volatile
+  private var latestSnapshot: TimedSnapshot? = null
+
+  // Runs before the WebSocket upgrade, so a refused page never receives a frame. See isOriginAllowed.
+  private val originCheck =
+    createRouteScopedPlugin("DashboardOriginCheck") {
+      onCall { call ->
+        val origin = call.request.headers[HttpHeaders.Origin]
+        if (!isOriginAllowed(origin, call.request.headers[HttpHeaders.Host], allowedOrigins)) {
+          logger.info {
+            "Refused a dashboard WebSocket from origin $origin; add it to proxy.dashboard.allowedOrigins if expected"
+          }
+          call.respondText("Origin not allowed", ContentType.Text.Plain, HttpStatusCode.Forbidden)
+        }
+      }
+    }
 
   private val server =
     embeddedServer(
       factory = CIO,
       configure = {
         connector {
-          host = "0.0.0.0"
+          host = dashboardHost
           port = dashboardPort
         }
       },
@@ -132,7 +181,16 @@ internal class ProxyDashboardService(
       // a failure returns a logged 500 rather than a bare one, and DefaultHeaders. Request logging is
       // off -- a dashboard polling its own socket would drown the proxy's logs.
       configureKtorServer(isLoggingEnabled = false)
-      install(WebSockets)
+      install(WebSockets) {
+        // Ktor's defaults send no pings and buffer outgoing frames without limit, so a client that stops reading
+        // would pile up a frame per push until the proxy ran out of memory. Pings find a dead peer, and a full
+        // buffer closes that session instead of growing -- so the shared push loop never waits on a slow one.
+        pingPeriodMillis = PING_PERIOD_MILLIS
+        timeoutMillis = PING_TIMEOUT_MILLIS
+        // A browser message is a few dozen bytes; the default accepts, and buffers whole, a frame of any size.
+        maxFrameSize = MAX_INCOMING_FRAME_BYTES
+        channels { outgoing = bounded(OUTGOING_FRAME_BUFFER, ChannelOverflow.CLOSE) }
+      }
       install(CachingHeaders) {
         // Webjar paths are version-pinned, so their content is immutable by construction.
         options { _, outgoing ->
@@ -197,22 +255,30 @@ internal class ProxyDashboardService(
             }
         }
 
-        webSocket("$routeBase/events") {
-          val session = Session { text -> outgoing.send(Frame.Text(text)) }
-          sessions.add(session)
-          try {
-            // Render immediately rather than making the browser wait for the first event or tick.
-            push(session, snapshot())
-            for (frame in incoming) {
-              if (frame is Frame.Text) {
-                val text = frame.readText()
-                session.selectedId = parseSelection(text)
-                session.layout = parseLayout(text)
-                push(session, snapshot())
-              }
+        route("$routeBase/events") {
+          install(originCheck)
+          webSocket {
+            if (!reserveSession()) {
+              close(CloseReason(CloseReason.Codes.TRY_AGAIN_LATER, "Too many dashboard sessions"))
+              return@webSocket
             }
-          } finally {
-            sessions.remove(session)
+            val session = Session { text -> outgoing.send(Frame.Text(text)) }
+            sessions.add(session)
+            try {
+              // Render immediately rather than making the browser wait for the first event or tick.
+              push(session, recentSnapshot())
+              for (frame in incoming) {
+                if (frame is Frame.Text) {
+                  val text = frame.readText()
+                  session.selectedId = parseSelection(text)
+                  session.layout = parseLayout(text)
+                  push(session, recentSnapshot())
+                }
+              }
+            } finally {
+              sessions.remove(session)
+              sessionCount.decrementAndFetch()
+            }
           }
         }
       }
@@ -238,9 +304,13 @@ internal class ProxyDashboardService(
       // a burst (a fleet reconnecting at once) collapses into a single collect.
       proxy.eventBus.flow
         .filter { it !is ProxyEvent.ScrapeCompleted }
-        .collect { wake.trySend(Unit) }
+        .collect {
+          // Clear the cache so a session never renders a topology older than the change it is reacting to.
+          latestSnapshot = null
+          wake.trySend(Unit)
+        }
     }
-    logger.info { "Started $simpleClassName on port $dashboardPort at $basePath" }
+    logger.info { "Started $simpleClassName on $dashboardHost:$dashboardPort at $basePath" }
   }
 
   override fun shutDown() {
@@ -258,7 +328,7 @@ internal class ProxyDashboardService(
     while (scope.isActive) {
       withTimeoutOrNull(refreshInterval) { wake.receive() }
       if (sessions.isEmpty()) continue
-      val snapshot = snapshot()
+      val snapshot = freshSnapshot()
       sessions.forEach { push(it, snapshot) }
     }
   }
@@ -282,6 +352,30 @@ internal class ProxyDashboardService(
    */
   private suspend fun snapshot(): ProxySnapshot = withContext(Dispatchers.IO) { ProxySnapshot.collect(proxy) }
 
+  /** Collects a snapshot and records it as the most recent one. */
+  private suspend fun freshSnapshot(): ProxySnapshot =
+    snapshot().also { latestSnapshot = TimedSnapshot(it, TimeSource.Monotonic.markNow()) }
+
+  /**
+   * The most recent snapshot if it is younger than the refresh interval, otherwise a fresh collect.
+   *
+   * What a WebSocket session renders from. A client decides how fast its messages arrive, so collecting per
+   * message would reintroduce the scrape-latency coupling [snapshot] is built to avoid. The price is data up to
+   * one refresh interval old, the staleness the push loop already accepts; a topology change clears the cache,
+   * so a session never waits a full interval to see a new agent.
+   */
+  private suspend fun recentSnapshot(): ProxySnapshot =
+    latestSnapshot?.takeIf { it.taken.elapsedNow() < refreshInterval }?.snapshot ?: freshSnapshot()
+
+  /** Claims a session slot, or returns false when [maxSessions] sessions are already connected. */
+  private fun reserveSession(): Boolean {
+    while (true) {
+      val current = sessionCount.load()
+      if (current >= maxSessions) return false
+      if (sessionCount.compareAndSet(current, current + 1)) return true
+    }
+  }
+
   /**
    * The static assets, read from the classpath once.
    *
@@ -296,6 +390,7 @@ internal class ProxyDashboardService(
 
   override fun toString() =
     toStringElements {
+      add("host", dashboardHost)
       add("port", dashboardPort)
       add("path", basePath)
       add("sessions", sessions.size)
@@ -321,6 +416,12 @@ internal class ProxyDashboardService(
     private const val ASSET_MAX_AGE_SECS = 31_536_000
     private const val GRACE_MILLIS = 2_000L
     private const val TIMEOUT_MILLIS = 5_000L
+    private const val PING_PERIOD_MILLIS = 15_000L
+    private const val PING_TIMEOUT_MILLIS = 15_000L
+    private const val MAX_INCOMING_FRAME_BYTES = 64L * 1024
+
+    // Frames a session may have waiting before it is closed. A reading browser drains each push long before the next.
+    private const val OUTGOING_FRAME_BUFFER = 32
 
     /**
      * Reads `{"select": "<agentId>"}` from a session message.
@@ -356,5 +457,30 @@ internal class ProxyDashboardService(
           ?.content
           ?.let { name -> DashboardLayout.entries.firstOrNull { it.name == name } }
       }.getOrNull() ?: DashboardLayout.AGENT
+
+    /**
+     * Whether a WebSocket handshake carrying [origin] may proceed, given the request's [host] header.
+     *
+     * No Origin is allowed: browsers send one on every WebSocket handshake, so its absence means a non-browser
+     * client, and this check exists to stop a browser being turned against the dashboard. Otherwise the origin
+     * must name the host the request was addressed to -- the dashboard's own page -- or match an [allowedOrigins]
+     * entry, for a dashboard behind a reverse proxy that rewrites Host. Anything unparseable, including the opaque
+     * `null` origin, is refused.
+     *
+     * This does not stop DNS rebinding, where the attacker's origin and the Host header agree. Binding the
+     * dashboard to a private address (`proxy.dashboard.host`) does.
+     */
+    internal fun isOriginAllowed(
+      origin: String?,
+      host: String?,
+      allowedOrigins: Collection<String>,
+    ): Boolean {
+      if (origin == null) return true
+      val authority = runCatching { URI(origin).rawAuthority }.getOrNull()
+      return allowedOrigins.any { normalizeOrigin(it) == normalizeOrigin(origin) } ||
+        (authority != null && host != null && authority.equals(host, ignoreCase = true))
+    }
+
+    private fun normalizeOrigin(origin: String) = origin.trim().trimEnd('/').lowercase()
   }
 }

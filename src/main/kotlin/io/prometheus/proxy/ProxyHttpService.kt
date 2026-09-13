@@ -62,7 +62,7 @@ internal class ProxyHttpService(
   private fun getConfig(httpPort: Int): Configuration.() -> Unit =
     {
       connector {
-        host = "0.0.0.0"
+        host = proxy.proxyConfigVals.http.host
         port = httpPort
       }
       connectionIdleTimeoutSeconds = idleTimeout.toInt(SECONDS)

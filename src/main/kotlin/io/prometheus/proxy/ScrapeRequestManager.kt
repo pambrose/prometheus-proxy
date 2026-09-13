@@ -20,6 +20,9 @@ import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.http.HttpStatusCode
 import io.prometheus.common.ScrapeResults
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.decrementAndFetch
+import kotlin.concurrent.atomics.incrementAndFetch
 
 /**
  * Tracks in-flight scrape requests and assigns results when responses arrive.
@@ -52,10 +55,17 @@ internal class ScrapeRequestManager {
   val scrapeMapSize: Int
     get() = scrapeRequestMapView.size
 
+  // Scrape requests in flight across all agents. Claimed atomically before a request is added, so concurrent
+  // submissions cannot overshoot the limit the way a size check followed by a put could.
+  private val inFlightCount = AtomicInt(0)
+
   fun addToScrapeRequestMap(scrapeRequest: ScrapeRequestWrapper): ScrapeRequestWrapper? {
     val scrapeId = scrapeRequest.scrapeId
     logger.debug { "Adding scrapeId: $scrapeId to scrapeRequestMap" }
-    return scrapeRequestMapView.put(scrapeId, scrapeRequest)
+    return scrapeRequestMapView.put(scrapeId, scrapeRequest).also { previous ->
+      if (previous == null)
+        inFlightCount.incrementAndFetch()
+    }
   }
 
   fun assignScrapeResults(scrapeResults: ScrapeResults) {
@@ -98,9 +108,34 @@ internal class ScrapeRequestManager {
     scrapeRequestMapView.values.forEach { failScrapeRequest(it.scrapeId, failureReason) }
   }
 
+  /**
+   * Adds [scrapeRequest] only while fewer than [maxInFlight] requests are in flight across all agents.
+   *
+   * Bounds the proxy's memory when many agents are busy at once. Returns false, without tracking the request,
+   * when the limit is reached.
+   */
+  fun tryAddToScrapeRequestMap(
+    scrapeRequest: ScrapeRequestWrapper,
+    maxInFlight: Int,
+  ): Boolean {
+    while (true) {
+      val current = inFlightCount.load()
+      if (current >= maxInFlight)
+        return false
+      if (inFlightCount.compareAndSet(current, current + 1))
+        break
+    }
+    val scrapeId = scrapeRequest.scrapeId
+    logger.debug { "Adding scrapeId: $scrapeId to scrapeRequestMap" }
+    // A replaced entry did not take a new slot, so give back the one just claimed.
+    if (scrapeRequestMapView.put(scrapeId, scrapeRequest) != null)
+      inFlightCount.decrementAndFetch()
+    return true
+  }
+
   fun removeFromScrapeRequestMap(scrapeId: Long): ScrapeRequestWrapper? {
     logger.debug { "Removing scrapeId: $scrapeId from scrapeRequestMap" }
-    return scrapeRequestMapView.remove(scrapeId)
+    return scrapeRequestMapView.remove(scrapeId)?.also { inFlightCount.decrementAndFetch() }
   }
 
   companion object {

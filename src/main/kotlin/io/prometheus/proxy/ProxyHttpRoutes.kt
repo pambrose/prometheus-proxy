@@ -75,6 +75,12 @@ internal object ProxyHttpRoutes {
   // upstream_timed_out, which is the agent answering promptly to report that its own fetch of the
   // target exceeded agent.scrapeTimeoutSecs -- see upstreamErrorLabel.
   internal const val PROXY_TIMEOUT_LABEL = "timed_out"
+  internal const val IN_FLIGHT_LIMIT_LABEL = "proxy_in_flight_limit"
+  internal const val BACKLOG_FULL_LABEL = "agent_backlog_full"
+
+  // Each agent's queue is capped at this multiple of scrapeRequestBacklogUnhealthySize, matching how the agent
+  // sizes its own request channel.
+  private const val BACKLOG_CAPACITY_MULTIPLIER = 2
 
   fun Routing.handleRequests(proxy: Proxy) {
     handleServiceDiscoveryEndpoint(proxy)
@@ -306,27 +312,12 @@ internal object ProxyHttpRoutes {
     scrapeRequest: ScrapeRequestWrapper,
     timeoutTime: Duration,
   ): ScrapeRequestResponse? {
-    try {
-      proxy.scrapeRequestManager.addToScrapeRequestMap(scrapeRequest)
-      try {
-        agentContext.writeScrapeRequest(scrapeRequest)
-      } catch (_: ClosedSendChannelException) {
-        return ScrapeRequestResponse(
-          statusCode = HttpStatusCode.ServiceUnavailable,
-          updateMsg = "agent_disconnected",
-          fetchDuration = scrapeRequest.ageDuration(),
-        )
-      }
-
-      // Suspends until completed, agent disconnects, or timeout expires.
-      if (!scrapeRequest.awaitCompleted(timeoutTime))
-        return ScrapeRequestResponse(
-          statusCode = HttpStatusCode.ServiceUnavailable,
-          updateMsg = PROXY_TIMEOUT_LABEL,
-          fetchDuration = scrapeRequest.ageDuration(),
-        )
-
-      return null
+    // Checked before the try: a refused request was never tracked, so the finally must not try to remove it.
+    val maxInFlight = proxy.proxyConfigVals.internal.maxInFlightScrapeRequests
+    if (!proxy.scrapeRequestManager.tryAddToScrapeRequestMap(scrapeRequest, maxInFlight))
+      return unavailable(scrapeRequest, IN_FLIGHT_LIMIT_LABEL)
+    return try {
+      queueAndAwait(agentContext, proxy, scrapeRequest, timeoutTime)
     } finally {
       scrapeRequest.closeChannel()
       val scrapeId = scrapeRequest.scrapeId
@@ -334,6 +325,38 @@ internal object ProxyHttpRoutes {
         ?: logger.error { "Scrape request $scrapeId missing in map" }
     }
   }
+
+  // Queues an already-tracked request for the agent and waits for its result. Returns a terminal 503 response, or
+  // null once the request has completed.
+  private suspend fun queueAndAwait(
+    agentContext: AgentContext,
+    proxy: Proxy,
+    scrapeRequest: ScrapeRequestWrapper,
+    timeoutTime: Duration,
+  ): ScrapeRequestResponse? {
+    val maxBacklog = proxy.proxyConfigVals.internal.scrapeRequestBacklogUnhealthySize * BACKLOG_CAPACITY_MULTIPLIER
+    val queued =
+      try {
+        agentContext.writeScrapeRequest(scrapeRequest, maxBacklog)
+      } catch (_: ClosedSendChannelException) {
+        return unavailable(scrapeRequest, "agent_disconnected")
+      }
+    // awaitCompleted suspends until the request completes, the agent disconnects, or the timeout expires.
+    return when {
+      !queued -> unavailable(scrapeRequest, BACKLOG_FULL_LABEL)
+      !scrapeRequest.awaitCompleted(timeoutTime) -> unavailable(scrapeRequest, PROXY_TIMEOUT_LABEL)
+      else -> null
+    }
+  }
+
+  private fun unavailable(
+    scrapeRequest: ScrapeRequestWrapper,
+    updateMsg: String,
+  ) = ScrapeRequestResponse(
+    statusCode = HttpStatusCode.ServiceUnavailable,
+    updateMsg = updateMsg,
+    fetchDuration = scrapeRequest.ageDuration(),
+  )
 
   // Parses the agent-reported Content-Type, falling back to text/plain (the correct default for the
   // Prometheus exposition format) with a warning when it is malformed.

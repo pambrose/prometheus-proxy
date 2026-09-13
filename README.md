@@ -564,6 +564,7 @@ Typesafe Config highlights include:
 | **Proxy** | `--agent_port, -a` | `AGENT_PORT`                    | Port for Agents to connect via gRPC (Default: 50051) |
 | **Proxy** | `--dashboard`      | `DASHBOARD_ENABLED`             | Enable the read-only operational dashboard (Default: disabled) |
 | **Proxy** | `--dashboard_port` | `DASHBOARD_PORT`                | Port for the operational dashboard (Default: 8094)      |
+| **Proxy** | `--dashboard_host` | `DASHBOARD_HOST`                | Listen address for the dashboard (Default: 0.0.0.0)     |
 | **Agent** | `--proxy, -p`      | `PROXY_HOSTNAME`                | Hostname/IP of the Proxy. Accepts a comma-separated failover list (e.g. `proxy-a:50051,proxy-b:50051`); see `agent.proxy.endpoints` |
 
 ### Configuration Notes

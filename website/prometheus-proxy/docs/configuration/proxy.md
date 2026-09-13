@@ -107,13 +107,21 @@ proxy {
     enabled = false                 // Enable the operational dashboard
     port = 8094                     // Its own port, NOT the admin port
     path = "dashboard"              // Served at http://<proxy>:8094/dashboard
+    host = "0.0.0.0"                // Listen address; "127.0.0.1" keeps it on the proxy host
     refreshIntervalSecs = 2         // Re-push interval for drifting counters
     recentScrapesQueueSize = 200    // Scrape records retained for the dashboard
+    maxSessions = 50                // Concurrent WebSocket sessions; more are closed
+    allowedOrigins = []             // Browser origins allowed besides the dashboard's own host
   }
 }
 ```
 
-Also settable as `--dashboard` / `--dashboard_port` / `--dashboard_path`, or `DASHBOARD_ENABLED` / `DASHBOARD_PORT` / `DASHBOARD_PATH`.
+Also settable as `--dashboard` / `--dashboard_port` / `--dashboard_path` / `--dashboard_host`, or `DASHBOARD_ENABLED` / `DASHBOARD_PORT` / `DASHBOARD_PATH` / `DASHBOARD_HOST`.
+
+The proxy logs a warning at startup when the dashboard is enabled on all interfaces. A WebSocket from a browser
+origin other than the dashboard's own host is refused; behind a reverse proxy that rewrites the Host header, list the
+public origin (for example `"https://dash.example.com"`) in `allowedOrigins`. Being a list, `allowedOrigins` must be
+set in a config file rather than with `-D`.
 
 It runs on its own port rather than the admin port, partly because the admin port is a servlet container
 that cannot host WebSockets, and partly so the dashboard can be firewalled without also cutting off the
@@ -140,12 +148,14 @@ Configure agent cleanup and scrape request management:
 --8<-- "AdvancedExamples.txt:stale-agent-config"
 ```
 
-| Setting                    | Default | Description                                   |
-|:---------------------------|:--------|:----------------------------------------------|
-| `staleAgentCheckEnabled`   | true    | Enable periodic stale agent cleanup           |
-| `maxAgentInactivitySecs`   | 60      | Seconds of inactivity before agent is evicted |
-| `staleAgentCheckPauseSecs` | 10      | Interval between cleanup checks               |
-| `scrapeRequestTimeoutSecs` | 90      | Timeout for individual scrape requests        |
+| Setting                             | Default | Description                                                                        |
+|:------------------------------------|:--------|:-----------------------------------------------------------------------------------|
+| `staleAgentCheckEnabled`            | true    | Enable periodic stale agent cleanup                                                |
+| `maxAgentInactivitySecs`            | 60      | Seconds of inactivity before agent is evicted                                      |
+| `staleAgentCheckPauseSecs`          | 10      | Interval between cleanup checks                                                    |
+| `scrapeRequestTimeoutSecs`          | 90      | Timeout for individual scrape requests                                             |
+| `scrapeRequestBacklogUnhealthySize` | 25      | Backlog that marks the proxy unhealthy; each agent's queue is capped at twice this |
+| `maxInFlightScrapeRequests`         | 1000    | Max scrapes in flight across all agents; more get a 503                            |
 
 ## Content Size Limits
 

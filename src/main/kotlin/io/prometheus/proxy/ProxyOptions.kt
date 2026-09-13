@@ -19,9 +19,11 @@
 package io.prometheus.proxy
 
 import com.beust.jcommander.Parameter
+import com.google.common.net.InetAddresses
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Proxy
 import io.prometheus.common.BaseOptions
+import io.prometheus.common.ConfigVals
 import io.prometheus.common.EnvVars.AGENT_PORT
 import io.prometheus.common.EnvVars.AGENT_TOKEN
 import io.prometheus.common.EnvVars.HANDSHAKE_TIMEOUT_SECS
@@ -38,6 +40,7 @@ import io.prometheus.common.EnvVars.SD_ENABLED
 import io.prometheus.common.EnvVars.SD_PATH
 import io.prometheus.common.EnvVars.SD_TARGET_PREFIX
 import io.prometheus.common.EnvVars.DASHBOARD_ENABLED
+import io.prometheus.common.EnvVars.DASHBOARD_HOST
 import io.prometheus.common.EnvVars.DASHBOARD_PATH
 import io.prometheus.common.EnvVars.DASHBOARD_PORT
 
@@ -124,6 +127,15 @@ class ProxyOptions(
     private set
 
   /**
+   * Address the operational dashboard listens on. Empty means "fall back to [DASHBOARD_HOST] env var, then
+   * `proxy.dashboard.host` config (default `0.0.0.0`)". The dashboard has no authentication, so enabling it on a
+   * wildcard address logs a startup warning; `127.0.0.1` keeps it reachable only from the proxy host.
+   */
+  @Parameter(names = ["--dashboard_host"], description = "Operational dashboard listen address")
+  var dashboardHost = ""
+    private set
+
+  /**
    * Disables the gRPC server reflection service on the Proxy.
    *
    * Both `--ref-disabled` (current) and `--ref_disabled` (legacy typo) are accepted to preserve
@@ -195,6 +207,7 @@ class ProxyOptions(
           proxyPort = PROXY_PORT.getEnv(proxyConfigVals.http.port)
         require(proxyPort in 1..65535) { "proxyPort must be in 1..65535: $proxyPort" }
         logger.info { "proxyPort: $proxyPort" }
+        validateHttpHostAndInFlightLimit(proxyConfigVals)
 
         if (proxyAgentPort == -1)
           proxyAgentPort = AGENT_PORT.getEnv(proxyConfigVals.agent.port)
@@ -217,20 +230,7 @@ class ProxyOptions(
           require(sdTargetPrefix.isNotEmpty()) { "sdTargetPrefix is empty" }
         logger.info { "sdTargetPrefix: $sdTargetPrefix" }
 
-        dashboardEnabled =
-          resolveBooleanOption(dashboardEnabled, DASHBOARD_ENABLED, proxyConfigVals.dashboard.enabled, "--dashboard")
-        logger.info { "dashboardEnabled: $dashboardEnabled" }
-
-        if (dashboardPort == -1)
-          dashboardPort = DASHBOARD_PORT.getEnv(proxyConfigVals.dashboard.port)
-        require(dashboardPort in 1..65535) { "dashboardPort must be in 1..65535: $dashboardPort" }
-
-        if (dashboardPath.isEmpty())
-          dashboardPath = DASHBOARD_PATH.getEnv(proxyConfigVals.dashboard.path)
-        if (dashboardEnabled)
-          require(dashboardPath.isNotEmpty()) { "dashboardPath is empty" }
-        if (dashboardEnabled)
-          logger.info { "dashboardPort: $dashboardPort, dashboardPath: $dashboardPath" }
+        assignDashboardOptions(proxyConfigVals.dashboard)
 
         reflectionDisabled =
           resolveBooleanOption(
@@ -353,6 +353,49 @@ class ProxyOptions(
       }
   }
 
+  // Resolves and validates the dashboard options, kept out of assignConfigVals so that function stays within
+  // detekt's length limit.
+  private fun assignDashboardOptions(dashboard: ConfigVals.Proxy2.Dashboard) {
+    dashboardEnabled = resolveBooleanOption(dashboardEnabled, DASHBOARD_ENABLED, dashboard.enabled, "--dashboard")
+    logger.info { "dashboardEnabled: $dashboardEnabled" }
+
+    if (dashboardPort == -1)
+      dashboardPort = DASHBOARD_PORT.getEnv(dashboard.port)
+    require(dashboardPort in 1..65535) { "dashboardPort must be in 1..65535: $dashboardPort" }
+
+    if (dashboardPath.isEmpty())
+      dashboardPath = DASHBOARD_PATH.getEnv(dashboard.path)
+    if (dashboardHost.isEmpty())
+      dashboardHost = DASHBOARD_HOST.getEnv(dashboard.host)
+
+    if (dashboardEnabled) {
+      require(dashboardPath.isNotEmpty()) { "dashboardPath is empty" }
+      require(dashboardHost.isNotBlank()) { "dashboardHost is blank" }
+      require(dashboard.maxSessions > 0) { "dashboard.maxSessions must be > 0: ${dashboard.maxSessions}" }
+      logger.info { "dashboardHost: $dashboardHost, dashboardPort: $dashboardPort, dashboardPath: $dashboardPath" }
+      if (isWildcardAddress(dashboardHost)) {
+        logger.warn {
+          "The dashboard has no authentication and listens on all interfaces ($dashboardHost:$dashboardPort). " +
+            "Set proxy.dashboard.host (--dashboard_host) to 127.0.0.1, or firewall the port."
+        }
+      }
+    }
+  }
+
+  // Checks for the scrape-port bind address and the in-flight limit, kept out of assignConfigVals so that function
+  // stays within detekt's length limit.
+  private fun validateHttpHostAndInFlightLimit(proxyConfigVals: ConfigVals.Proxy2) {
+    val http = proxyConfigVals.http
+    // A blank bind address would otherwise fail only when the scrape server starts, with an opaque Ktor error.
+    require(http.host.isNotBlank()) { "proxy.http.host must not be blank" }
+    logger.info { "http.host: ${http.host}" }
+
+    val maxInFlight = proxyConfigVals.internal.maxInFlightScrapeRequests
+    // A non-positive limit would refuse every scrape.
+    require(maxInFlight > 0) { "internal.maxInFlightScrapeRequests must be > 0: $maxInFlight" }
+    logger.info { "internal.maxInFlightScrapeRequests: $maxInFlight" }
+  }
+
   internal companion object {
     private val logger = logger {}
 
@@ -387,6 +430,16 @@ class ProxyOptions(
       authIdentityCount: Int,
       isTlsEnabled: Boolean,
     ): Boolean = (agentToken.isNotEmpty() || authIdentityCount > 0) && !isTlsEnabled
+
+    /**
+     * True when [host] is a literal wildcard address (`0.0.0.0`, `::`), which listens on every interface.
+     *
+     * Only a literal counts: a hostname is never resolved at startup just to decide whether to log a warning.
+     */
+    internal fun isWildcardAddress(host: String): Boolean {
+      val literal = host.removeSurrounding("[", "]")
+      return InetAddresses.isInetAddress(literal) && InetAddresses.forString(literal).isAnyLocalAddress
+    }
 
     // gRPC timeout fields use -1L as the "leave the gRPC default in place" sentinel (the
     // `> -1L` guards in ProxyGrpcService rely on it). Any other non-positive value is invalid

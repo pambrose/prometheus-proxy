@@ -28,7 +28,9 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
 import java.time.Instant
 import java.util.concurrent.ConcurrentLinkedQueue
+import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.AtomicLong
+import kotlin.concurrent.atomics.decrementAndFetch
 import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource.Monotonic
@@ -59,6 +61,10 @@ internal class AgentContext(
   val agentId = AGENT_ID_GENERATOR.incrementAndFetch().toString()
 
   private val scrapeRequestQueue = ConcurrentLinkedQueue<ScrapeRequestWrapper>()
+
+  // Admission counter for the per-agent backlog cap. Tracks the queue's contents, but is claimed atomically
+  // before a request is queued, so concurrent writers cannot overshoot the cap.
+  private val queuedCount = AtomicInt(0)
   private val scrapeRequestNotifier = Channel<Unit>(UNLIMITED)
 
   private val clock = Monotonic
@@ -123,19 +129,35 @@ internal class AgentContext(
     currentEndpointIndex = request.currentEndpointIndex
   }
 
-  suspend fun writeScrapeRequest(scrapeRequest: ScrapeRequestWrapper) {
+  /**
+   * Queues [scrapeRequest] for this agent unless [maxBacklog] requests are already queued.
+   *
+   * Returns false, without queueing, when the cap is reached, so one slow agent cannot pile up requests without
+   * bound.
+   */
+  suspend fun writeScrapeRequest(
+    scrapeRequest: ScrapeRequestWrapper,
+    maxBacklog: Int = Int.MAX_VALUE,
+  ): Boolean {
+    if (queuedCount.incrementAndFetch() > maxBacklog) {
+      queuedCount.decrementAndFetch()
+      return false
+    }
     scrapeRequestQueue.add(scrapeRequest)
     try {
       scrapeRequestNotifier.send(Unit)
     } catch (e: Exception) {
-      scrapeRequestQueue.remove(scrapeRequest)
+      // Release the slot only if this request was still queued; invalidate() may have drained it already.
+      if (scrapeRequestQueue.remove(scrapeRequest))
+        queuedCount.decrementAndFetch()
       throw e
     }
+    return true
   }
 
   suspend fun readScrapeRequest(): ScrapeRequestWrapper? =
     scrapeRequestNotifier.receiveCatching().getOrNull()?.let {
-      scrapeRequestQueue.poll()
+      scrapeRequestQueue.poll()?.also { queuedCount.decrementAndFetch() }
     }
 
   fun isValid() = valid && !scrapeRequestNotifier.isClosedForReceive
@@ -148,7 +170,7 @@ internal class AgentContext(
     // Drain any buffered scrape requests and FAIL them with an agent-disconnected result (not a bare
     // channel close) so a waiting HTTP handler's awaitCompleted() sees a truthful 502 instead of a null
     // result that submitScrapeRequest would mislabel as timed_out (finding 15).
-    generateSequence { scrapeRequestQueue.poll() }.forEach { wrapper ->
+    generateSequence { scrapeRequestQueue.poll()?.also { queuedCount.decrementAndFetch() } }.forEach { wrapper ->
       wrapper.complete(
         ScrapeResults(
           srAgentId = agentId,

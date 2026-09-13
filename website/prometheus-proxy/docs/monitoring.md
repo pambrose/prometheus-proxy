@@ -74,6 +74,8 @@ The same options are available under `agent.metrics`.
 | `no_agents`             | No agents registered for the requested path                         |
 | `invalid_path`          | Requested path is empty or unrecognized                             |
 | `agent_disconnected`    | Agent stream closed before response was received                    |
+| `agent_backlog_full`    | Agent's queue was full (2 × `scrapeRequestBacklogUnhealthySize`)    |
+| `proxy_in_flight_limit` | In-flight scrapes across agents hit `maxInFlightScrapeRequests`     |
 | `missing_results`       | Internal error: results object was null                             |
 | `path_not_found`        | Agent has no registration for the target path (404)                 |
 | `upstream_error`        | Target returned a non-2xx status not covered above, e.g. 5xx        |

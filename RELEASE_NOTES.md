@@ -8,8 +8,9 @@ _Not yet released_
 
 A security and reliability release. It closes three ways an authenticated agent could interfere with
 another agent on the same proxy, and fixes agent failover for a proxy that accepts connections but
-rejects registration. Nothing here changes configuration, metrics, or the wire protocol, but agents
-using failover or path authorization behave differently when a proxy rejects them — see below.
+rejects registration. It also bounds scrape requests and hardens the dashboard, which adds a few settings.
+The wire protocol is unchanged, but agents using failover or path authorization behave differently when a
+proxy rejects them — see below.
 
 ### Highlights
 
@@ -66,6 +67,24 @@ client error messages carried it into WARN logs and into the failure reason sent
 are now redacted everywhere they are sent, logged, or shown, and the proxy also redacts URLs from older
 agents. The per-scrape DEBUG trace no longer dumps the request, which included Prometheus's
 `Authorization` header.
+
+**Scrape request limits.** Anything that could reach the scrape port could queue scrapes without limit,
+each one making an agent fetch an internal target and the proxy buffer the response. Each agent's queue is
+now capped at twice `proxy.internal.scrapeRequestBacklogUnhealthySize` (50 by default), and scrapes in flight
+across all agents at the new `proxy.internal.maxInFlightScrapeRequests` (default 1000). A scrape beyond
+either limit gets an immediate 503, recorded as `agent_backlog_full` or `proxy_in_flight_limit` so it shows up
+in metrics. The scrape port's bind address is now configurable too, with the new `proxy.http.host` (default
+`0.0.0.0`, unchanged).
+
+**Dashboard hardening.** The dashboard has no authentication, and until now nothing limited what a client
+could do with it. Its listen address is configurable with the new `proxy.dashboard.host` (default `0.0.0.0`,
+unchanged), and the proxy warns at startup when the dashboard is enabled on all interfaces; set it to
+`127.0.0.1` to keep the page on the proxy host. A page on another site can no longer read the dashboard
+through an operator's browser: a WebSocket handshake from a foreign origin gets a 403. If you reach the
+dashboard through a reverse proxy that rewrites the Host header, list its public origin in the new
+`proxy.dashboard.allowedOrigins`. Sessions are capped at the new `proxy.dashboard.maxSessions` (default 50),
+a client that stops reading or sends an oversized message is disconnected, and a browser message no longer
+takes the lock the scrape path uses. The Origin check does not stop DNS rebinding; a private bind address does.
 
 ### Agent registration and failover
 
