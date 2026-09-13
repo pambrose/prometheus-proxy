@@ -50,6 +50,16 @@ docker pull pambrose/prometheus-agent:4.0.1
 --8<-- "DockerExamples.txt:docker-compose-full"
 ```
 
+For a stack you can start as-is, [`etc/compose/proxy.yml`](https://github.com/pambrose/prometheus-proxy/blob/master/etc/compose/proxy.yml)
+runs a proxy, an agent, and a Prometheus server that scrapes the proxy's and agent's own metrics through the proxy.
+From a checkout of the repository:
+
+```bash
+docker compose -f etc/compose/proxy.yml up
+```
+
+Prometheus is then at `http://localhost:9090`, with both targets up on its **Targets** page.
+
 ## TLS with Docker
 
 Mount your certificate files into the container:

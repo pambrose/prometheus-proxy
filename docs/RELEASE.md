@@ -13,7 +13,7 @@ by hand.
      paragraph for the new version at the top of the **New Features** section; the earlier releases'
      paragraphs stay as they are.
    - `llms.txt` — the Docker tag examples and the Maven Central dependency block.
-   - `etc/compose/proxy.yml` — the proxy image tag.
+   - `etc/compose/proxy.yml` — the proxy and agent image tags.
    - `website/prometheus-proxy/docs/getting-started.md`, `index.md`, and `docker.md` — the Docker pull
      and run examples, plus the explicit-version-tag tip in `docker.md`.
    - `src/test/kotlin/website/DockerExamples.txt`, `EmbeddedAgentExamples.txt` (Gradle and Maven), and

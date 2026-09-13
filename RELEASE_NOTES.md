@@ -134,6 +134,9 @@ interval as their deadline, capped at the unary deadline.
 
 ### Also in this release
 
+- `etc/compose/proxy.yml` is a working Compose file again: it starts a proxy, an agent, and a Prometheus
+  server that scrapes through them. `.dockerignore` now admits only the two JARs the images copy, and the
+  proxy image exposes the dashboard port instead of the nginx example's.
 - The CLI reference (`docs/cli-args.md` and the website) now matches the real flags: a nonexistent
   environment variable is gone, the token, dashboard, and HTTPS truststore flags are documented, and the
   `--gzip` and `--proxy` defaults are corrected.
