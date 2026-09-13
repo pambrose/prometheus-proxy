@@ -38,11 +38,11 @@ require the build or tests to pass before merging; and the CLI reference has dri
 | 9  | Failed discovery unregister leaves a stale path forever                      | Agent         | medium   | ✅      |
 | 10 | Dead-connection detection (~90s) slower than proxy eviction (60s)            | Agent         | medium   | ✅      |
 | 11 | Embedded agent startup failure leaks channel and cache                       | Agent         | medium   | ✅      |
-| 12 | Chunk size and gzip threshold unbounded vs gRPC 4 MiB limit                  | Agent         | low      | ⬜      |
-| 13 | Host-only proxy address ignores `agent.proxy.port`                           | Agent         | low      | ⬜      |
-| 14 | Prometheus-cancelled scrapes leave no metric or debug trace                  | Proxy         | low      | ⬜      |
+| 12 | Chunk size and gzip threshold unbounded vs gRPC 4 MiB limit                  | Agent         | low      | ✅      |
+| 13 | Host-only proxy address ignores `agent.proxy.port`                           | Agent         | low      | ✅      |
+| 14 | Prometheus-cancelled scrapes leave no metric or debug trace                  | Proxy         | low      | ✅      |
 | 15 | Per-path metric series never removed                                         | Proxy         | low      | ⬜      |
-| 16 | Duplicate consolidated registration adds the agent twice                     | Proxy         | low      | ⬜      |
+| 16 | Duplicate consolidated registration adds the agent twice                     | Proxy         | low      | ✅      |
 | 17 | Per-scrape debug/dashboard bookkeeping runs when both are off                | Proxy         | low      | ⬜      |
 | 18 | `master` does not require build or tests to pass                             | CI/build      | high     | ✅      |
 | 19 | Docs site built with different Zensical/Python in CI than locally            | CI/build      | medium   | ✅      |
@@ -306,7 +306,7 @@ own exception rather than `ConfigLoadException`, which is documented for config-
 reporter started before the failure is not stopped: it holds no thread or port, and its class is not on the
 project's compile classpath.
 
-### 12. [ ] Chunk size and gzip threshold are unbounded against gRPC's 4 MiB limit
+### 12. [x] Chunk size and gzip threshold are unbounded against gRPC's 4 MiB limit
 
 **Severity:** low · **Confidence:** plausible (the proxy-side rejection follows from gRPC's default)
 
@@ -319,7 +319,12 @@ write stream and dropping every in-flight result on that connection, on every sc
 
 **Fix:** `require` both values to stay below a safe bound (4 MiB less protocol overhead).
 
-### 13. [ ] Host-only proxy address ignores `agent.proxy.port`
+**Resolution:** `AgentOptions` now requires `chunkContentSizeKbs` × 1024 and `minGzipSizeBytes` to be at most
+`MAX_GRPC_PAYLOAD_BYTES`, 4 MiB less 64 KiB (4032 KB and 4128768 bytes). An unzipped scrape at or below the gzip
+threshold is sent as one message, which is why that threshold shares the bound. The proxy's inbound limit is
+unchanged.
+
+### 13. [x] Host-only proxy address ignores `agent.proxy.port`
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -332,11 +337,15 @@ the KDoc.
 
 **Fix:** pass `configVals.agent.proxy.port` as the default port, or correct the KDoc.
 
+**Resolution:** `AgentOptions` parses the resolved endpoint list with `agent.proxy.port` as the default and writes
+it back into `proxyHostname`, so a host-only entry from `--proxy` or `PROXY_HOSTNAME` carries the configured port
+and the KDoc is now accurate. `proxyHostname` reports every entry with its port (`host5` becomes `host5:50051`).
+
 ---
 
 ## 📡 Proxy observability and performance
 
-### 14. [ ] Prometheus-cancelled scrapes leave no metric or debug trace
+### 14. [x] Prometheus-cancelled scrapes leave no metric or debug trace
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -348,6 +357,13 @@ most common real failure (agent slower than Prometheus's timeout but faster than
 absent from `proxy_scrape_requests`, the latency histogram, `/debug`, and the dashboard.
 
 **Fix:** catch the cancellation and record a `client_cancelled` outcome inside `NonCancellable`.
+
+**Resolution:** confirmed with a harness spec: with a target slower than the client's timeout, the proxy logged
+Ktor's `HttpRequestLifecycle` cancellation and recorded nothing, even after the target answered.
+`executeScrapeRequests` now catches the cancellation and, for each agent on the path, records a `client_cancelled`
+outcome (status 499 on `/debug` and the dashboard), the latency observation, and the request count before
+rethrowing. `NonCancellable` was not needed, since none of that recording suspends. A cancellation during proxy
+shutdown is recorded the same way, and the WARN stack trace StatusPages logs for the cancellation is unchanged.
 
 ### 15. [ ] Per-path metric series are never removed
 
@@ -361,7 +377,7 @@ on `/metrics` indefinitely.
 
 **Fix:** remove the label sets when a path's last registration goes away, or drop the `path` label.
 
-### 16. [ ] Duplicate consolidated registration adds the agent twice
+### 16. [x] Duplicate consolidated registration adds the agent twice
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -374,6 +390,10 @@ non-consolidated mode the agent "displaces" itself, incrementing `proxy_agent_di
 
 **Fix:** replace an existing entry for the same agent instead of appending, and skip the displacement
 count when the only existing owner is the registering agent.
+
+**Resolution:** a consolidated re-registration by an agent already on the path replaces that agent's entry in
+place, and a non-consolidated one no longer logs, counts, or considers invalidating a displacement of the
+registering agent. The agent still accepts a path listed twice in its config.
 
 ### 17. [ ] Per-scrape debug and dashboard bookkeeping runs when both are off
 
