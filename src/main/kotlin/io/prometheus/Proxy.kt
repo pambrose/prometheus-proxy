@@ -181,7 +181,10 @@ class Proxy(
   // Null unless proxy.dashboard.enabled. Off by default, matching the admin and metrics posture: the dashboard shows
   // agent names, hostnames, target URLs and recent activity in one place, on a port with no auth.
   private val dashboardService =
-    if (options.dashboardEnabled) ProxyDashboardService(this, options.dashboardPort, options.dashboardPath) else null
+    if (options.dashboardEnabled)
+      ProxyDashboardService(this, options.dashboardHost, options.dashboardPort, options.dashboardPath)
+    else
+      null
   private val recentReqs: EvictingQueue<String> = EvictingQueue.create(proxyConfigVals.admin.recentRequestsQueueSize)
 
   // Structured counterpart to recentReqs, for the operational dashboard. Separate queue rather than a

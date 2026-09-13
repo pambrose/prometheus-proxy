@@ -205,6 +205,27 @@ class AgentContextTest : StringSpec() {
       context.scrapeRequestBacklogSize shouldBe 1
     }
 
+    // One slow agent must not pile up requests without bound, so each agent's queue is capped.
+    "writeScrapeRequest should refuse a request once the agent's backlog cap is reached" {
+      val context = AgentContext("remote-addr")
+
+      context.writeScrapeRequest(mockk(relaxed = true), maxBacklog = 2).shouldBeTrue()
+      context.writeScrapeRequest(mockk(relaxed = true), maxBacklog = 2).shouldBeTrue()
+      context.writeScrapeRequest(mockk(relaxed = true), maxBacklog = 2).shouldBeFalse()
+
+      context.scrapeRequestBacklogSize shouldBe 2
+    }
+
+    "writeScrapeRequest should admit a request again after one is read" {
+      val context = AgentContext("remote-addr")
+
+      context.writeScrapeRequest(mockk(relaxed = true), maxBacklog = 1).shouldBeTrue()
+      context.writeScrapeRequest(mockk(relaxed = true), maxBacklog = 1).shouldBeFalse()
+      context.readScrapeRequest()
+
+      context.writeScrapeRequest(mockk(relaxed = true), maxBacklog = 1).shouldBeTrue()
+    }
+
     // ==================== Backlog Counter Consistency Tests ====================
 
     "invalidate should decrement backlog size for drained items" {

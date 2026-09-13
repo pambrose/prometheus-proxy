@@ -21,6 +21,7 @@ package io.prometheus.proxy
 import com.pambrose.common.dsl.KtorDsl.newHttpClient
 import com.pambrose.common.util.ensureLeadingSlash
 import com.pambrose.common.util.zip
+import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
@@ -58,6 +59,8 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource.Monotonic
 import io.ktor.server.cio.CIO as ServerCIO
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 
 // Bug #12: The service discovery endpoint was registered using the raw sdPath config value,
 // which defaults to "discovery" (no leading slash). The fix normalizes the path with
@@ -474,6 +477,46 @@ class ProxyHttpRoutesTest : StringSpec() {
 
       response.statusCode shouldBe HttpStatusCode.ServiceUnavailable
       response.updateMsg shouldBe "timed_out"
+    }
+
+    // Beyond maxInFlightScrapeRequests across all agents, a scrape is refused at once with a 503 rather than
+    // queued, and the refused request is not left tracked.
+    "submitScrapeRequest should return 503 when the proxy's in-flight limit is reached" {
+      val proxy = createSpyProxyForSubmit(timeoutSecs = 5, args = ["-Dproxy.internal.maxInFlightScrapeRequests=1"])
+      val agentContext = AgentContext("test-remote")
+
+      val first =
+        async { ProxyHttpRoutes.submitScrapeRequest(agentContext, proxy, "metrics", "", mockk(relaxed = true)) }
+      eventually(2.seconds) { proxy.scrapeRequestManager.scrapeMapSize shouldBe 1 }
+
+      val refused = ProxyHttpRoutes.submitScrapeRequest(agentContext, proxy, "metrics", "", mockk(relaxed = true))
+
+      refused.statusCode shouldBe HttpStatusCode.ServiceUnavailable
+      refused.updateMsg shouldBe "proxy_in_flight_limit"
+      proxy.scrapeRequestManager.scrapeMapSize shouldBe 1
+      agentContext.invalidate()
+      first.await()
+    }
+
+    // Each agent's queue is capped at twice scrapeRequestBacklogUnhealthySize; here that is 2.
+    "submitScrapeRequest should return 503 when the agent's backlog cap is reached" {
+      val proxy =
+        createSpyProxyForSubmit(timeoutSecs = 5, args = ["-Dproxy.internal.scrapeRequestBacklogUnhealthySize=1"])
+      val agentContext = AgentContext("test-remote")
+
+      val queued =
+        List(2) {
+          async { ProxyHttpRoutes.submitScrapeRequest(agentContext, proxy, "metrics", "", mockk(relaxed = true)) }
+        }
+      eventually(2.seconds) { agentContext.scrapeRequestBacklogSize shouldBe 2 }
+
+      val refused = ProxyHttpRoutes.submitScrapeRequest(agentContext, proxy, "metrics", "", mockk(relaxed = true))
+
+      refused.statusCode shouldBe HttpStatusCode.ServiceUnavailable
+      refused.updateMsg shouldBe "agent_backlog_full"
+      proxy.scrapeRequestManager.scrapeMapSize shouldBe 2
+      agentContext.invalidate()
+      queued.awaitAll()
     }
 
     "submitScrapeRequest should report agent-disconnect (not timed_out) when the agent disconnects mid-scrape" {

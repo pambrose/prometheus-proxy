@@ -13,6 +13,9 @@ and how recent scrapes actually went.
     shows agent names, hostnames, target URLs, labels and recent activity in one place, so treat its
     port as internal and do not expose it publicly.
 
+    It listens on all interfaces by default, and the proxy logs a warning at startup when it does. Set
+    `proxy.dashboard.host` (or `--dashboard_host`) to `127.0.0.1` to keep it on the proxy host.
+
 ## Enabling it
 
 === "Config file"
@@ -23,6 +26,7 @@ and how recent scrapes actually went.
         enabled = true
         port = 8094                 // Its own port, not the admin port
         path = "dashboard"          // Served at http://<proxy>:8094/dashboard
+        host = "0.0.0.0"            // "127.0.0.1" keeps it on the proxy host
         refreshIntervalSecs = 2     // How often drifting counters are re-pushed
         recentScrapesQueueSize = 200
       }
@@ -200,7 +204,11 @@ The agent ID will *not* match — that one is assigned by each proxy independent
 ## Limits
 
 - **Read-only.** There is nothing to click that changes proxy state.
-- **No authentication.** Rely on network isolation, as with the admin port.
+- **No authentication.** Rely on network isolation, as with the admin port. What the dashboard does
+  guard: a WebSocket from a foreign browser origin is refused (list a reverse proxy's public origin in
+  `proxy.dashboard.allowedOrigins`), sessions are capped at `proxy.dashboard.maxSessions` (default 50), and a
+  client that stops reading or sends an oversized message is disconnected. The Origin check does not stop DNS
+  rebinding; a private bind address does.
 - **Consolidated paths report one agent's metadata.** When several agents register the same path, the
   target URL and source shown are the **first registrant's**. Later agents contribute their contexts —
   they are counted in the `+N` — but not their own target URL, which matches how path labels have

@@ -23,6 +23,7 @@ icon: lucide/terminal
 | `--dashboard`                    | `DASHBOARD_ENABLED`               | `proxy.dashboard.enabled`               | false                    | Enable operational dashboard |
 | `--dashboard_port`               | `DASHBOARD_PORT`                  | `proxy.dashboard.port`                  | 8094                     | Dashboard listen port        |
 | `--dashboard_path`               | `DASHBOARD_PATH`                  | `proxy.dashboard.path`                  | "dashboard"              | Dashboard base path          |
+| `--dashboard_host`               | `DASHBOARD_HOST`                  | `proxy.dashboard.host`                  | "0.0.0.0"                | Dashboard listen address     |
 | `--tf-disabled, --tf_disabled`   | `TRANSPORT_FILTER_DISABLED`       | `proxy.transportFilterDisabled`         | false                    | Disable transport filter     |
 | `--ref-disabled, --ref_disabled` | `REFLECTION_DISABLED`             | `proxy.reflectionDisabled`              | false                    | Disable gRPC reflection      |
 | `--log_level`                    | `PROXY_LOG_LEVEL`                 | `proxy.logLevel`                        | "info"                   | Log level                    |

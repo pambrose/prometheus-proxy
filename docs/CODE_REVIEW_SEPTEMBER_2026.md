@@ -29,8 +29,8 @@ require the build or tests to pass before merging; and the CLI reference has dri
 |----|------------------------------------------------------------------------------|---------------|----------|--------|
 | 1  | Proxy accepts scrape results from any agent                                  | Security      | high     | ✅      |
 | 2  | Agent identity unenforced with transport filter off; heartbeats never bound  | Security      | medium   | ✅      |
-| 3  | No backpressure on the scrape queue; timed-out requests still dispatched     | Security      | medium   | ⬜      |
-| 4  | Dashboard: open bind, no Origin check, unlimited sessions, per-frame snapshot | Security      | medium   | ⬜      |
+| 3  | No backpressure on the scrape queue; timed-out requests still dispatched     | Security      | medium   | ✅      |
+| 4  | Dashboard: open bind, no Origin check, unlimited sessions, per-frame snapshot | Security      | medium   | ✅      |
 | 5  | Credentials in target URLs leak to proxy, dashboard, logs                    | Security      | medium   | ✅      |
 | 6  | Auth warning logic wrong; TLS examples use public test keys                  | Security      | low      | ✅      |
 | 7  | One rejected static path takes the whole agent offline                       | Agent         | high     | ✅      |
@@ -107,7 +107,7 @@ evicted.
 **Fix:** record the resolved identity on `AgentContext` at connect and require the same identity on
 every later call, including heartbeats.
 
-### 3. [ ] No backpressure on the scrape queue; timed-out requests still dispatched
+### 3. [x] No backpressure on the scrape queue; timed-out requests still dispatched
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -125,11 +125,15 @@ slow agent keeps scraping for nobody and its backlog grows.
 dequeued requests for which `containsScrapeRequest(scrapeId)` is false; make the bind host
 configurable. Optionally honor `X-Prometheus-Scrape-Timeout-Seconds` as a cap on the wait.
 
-**Progress:** the proxy now skips a dequeued request it no longer tracks, so the agent no longer scrapes
-for requests Prometheus has abandoned. Still open: the per-agent backlog cap, the global in-flight limit,
-and a configurable bind host.
+**Resolution:** the proxy skips a dequeued request it no longer tracks, so the agent no longer scrapes for
+requests Prometheus has abandoned. Each agent's queue is capped at twice
+`proxy.internal.scrapeRequestBacklogUnhealthySize` (50 by default), and `proxy.internal.maxInFlightScrapeRequests`
+(default 1000) limits in-flight scrapes across all agents; a request beyond either limit gets a 503 with outcome
+`agent_backlog_full` or `proxy_in_flight_limit`. The scrape listener's address is configurable through
+`proxy.http.host` (default `0.0.0.0`, unchanged). Honoring `X-Prometheus-Scrape-Timeout-Seconds` is not
+addressed.
 
-### 4. [ ] Dashboard: open bind, no Origin check, unlimited sessions, per-frame snapshot
+### 4. [x] Dashboard: open bind, no Origin check, unlimited sessions, per-frame snapshot
 
 **Severity:** medium (only when the dashboard is enabled) · **Confidence:** confirmed for the bind,
 the missing Origin check, and the per-frame snapshot; plausible for the buffer growth
@@ -148,6 +152,18 @@ the proxy runs out of memory.
 **Fix:** default the bind host to localhost (configurable); validate Origin; cap sessions; on an
 incoming frame update the selection and serve the cached snapshot; set a ping period/timeout and a
 latest-frame-only per-session buffer.
+
+**Resolution:** the listen address is configurable through `proxy.dashboard.host` (`--dashboard_host`,
+`DASHBOARD_HOST`). The default stays `0.0.0.0` so existing deployments keep working, and enabling the dashboard on
+a wildcard address logs a startup warning. A WebSocket handshake whose Origin names neither the request's own host
+nor a `proxy.dashboard.allowedOrigins` entry gets a 403; a missing Origin (a non-browser client) is allowed.
+Sessions are capped at `proxy.dashboard.maxSessions` (default 50), and a session over the cap is closed with
+TRY_AGAIN_LATER. The WebSocket pings every 15s, closes a session whose incoming frame exceeds 64 KiB, and closes a
+session with 32 unsent frames rather than buffering for it (instead of a latest-frame-only buffer). A browser
+message re-renders the most recent snapshot -- at most one refresh interval old, and cleared on any topology
+change -- instead of collecting a new one. Not addressed: DNS rebinding, which an Origin check cannot stop
+(binding to a private address does), and the page GET routes, which still collect per request. The outgoing
+buffer cap has no automated test, because TCP buffers hide a client that stops reading in an in-process test.
 
 ### 5. [x] Credentials in target URLs leak to the proxy, the dashboard, and logs
 

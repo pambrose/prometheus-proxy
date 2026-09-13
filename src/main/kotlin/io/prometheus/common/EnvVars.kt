@@ -60,6 +60,9 @@ enum class EnvVars {
   /** Base HTTP path the operational dashboard is served from. Default `dashboard`. */
   DASHBOARD_PATH,
 
+  /** Listen address for the Proxy's operational dashboard. Default `0.0.0.0`. */
+  DASHBOARD_HOST,
+
   /** Disable the gRPC server reflection service on the Proxy. Default `false` (reflection enabled). */
   REFLECTION_DISABLED,
 

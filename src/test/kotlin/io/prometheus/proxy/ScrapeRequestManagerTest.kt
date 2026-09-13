@@ -422,5 +422,31 @@ class ScrapeRequestManagerTest : StringSpec() {
     "ownerAgentId should return null for a scrape that is not tracked" {
       ScrapeRequestManager().ownerAgentId(1001L).shouldBeNull()
     }
+
+    // ==================== in-flight limit ====================
+
+    // The tracking map holds every scrape request in flight across all agents, so admitting through it
+    // bounds the proxy's memory when many agents are busy at once.
+
+    "tryAddToScrapeRequestMap should refuse a request once the in-flight limit is reached" {
+      val manager = ScrapeRequestManager()
+
+      manager.tryAddToScrapeRequestMap(createMockWrapper(1L), maxInFlight = 2) shouldBe true
+      manager.tryAddToScrapeRequestMap(createMockWrapper(2L), maxInFlight = 2) shouldBe true
+      manager.tryAddToScrapeRequestMap(createMockWrapper(3L), maxInFlight = 2) shouldBe false
+
+      manager.scrapeMapSize shouldBe 2
+      manager.containsScrapeRequest(3L) shouldBe false
+    }
+
+    "tryAddToScrapeRequestMap should admit a request again after one is removed" {
+      val manager = ScrapeRequestManager()
+
+      manager.tryAddToScrapeRequestMap(createMockWrapper(1L), maxInFlight = 1) shouldBe true
+      manager.tryAddToScrapeRequestMap(createMockWrapper(2L), maxInFlight = 1) shouldBe false
+      manager.removeFromScrapeRequestMap(1L)
+
+      manager.tryAddToScrapeRequestMap(createMockWrapper(2L), maxInFlight = 1) shouldBe true
+    }
   }
 }

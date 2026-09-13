@@ -408,6 +408,36 @@ class ProxyOptionsTest : StringSpec() {
       exception.message shouldContain "dashboardPort"
     }
 
+    "dashboardHost should default to all interfaces and be settable from the command line" {
+      proxyOptions(emptyList()).dashboardHost shouldBe "0.0.0.0"
+      proxyOptions(["--dashboard_host", "127.0.0.1"]).dashboardHost shouldBe "127.0.0.1"
+    }
+
+    "a blank dashboardHost should be rejected when the dashboard is enabled" {
+      val exception =
+        shouldThrow<IllegalArgumentException> {
+          proxyOptionsFromConfig("""proxy.dashboard.host = "" """, extraArgs = ["--dashboard"])
+        }
+      exception.message shouldContain "dashboardHost"
+    }
+
+    "a non-positive dashboard maxSessions should be rejected when the dashboard is enabled" {
+      val exception =
+        shouldThrow<IllegalArgumentException> { proxyOptions(["--dashboard", "-Dproxy.dashboard.maxSessions=0"]) }
+      exception.message shouldContain "maxSessions"
+    }
+
+    // The dashboard has no authentication, so listening on every interface earns a startup warning. Only a
+    // literal wildcard address counts: a hostname is never resolved at startup just to decide whether to warn.
+    "only a wildcard address counts as listening on all interfaces" {
+      ProxyOptions.isWildcardAddress("0.0.0.0").shouldBeTrue()
+      ProxyOptions.isWildcardAddress("::").shouldBeTrue()
+      ProxyOptions.isWildcardAddress("[::]").shouldBeTrue()
+      ProxyOptions.isWildcardAddress("127.0.0.1").shouldBeFalse()
+      ProxyOptions.isWildcardAddress("::1").shouldBeFalse()
+      ProxyOptions.isWildcardAddress("dashboard.internal").shouldBeFalse()
+    }
+
     // The startup "agent gRPC port is unauthenticated" warning predates per-agent identities. Left
     // guarded on only the legacy token and mTLS, it fires for a proxy.auth-only config — the very
     // setup the docs recommend — training operators to ignore a security-critical warning.
@@ -490,6 +520,20 @@ class ProxyOptionsTest : StringSpec() {
     "nothing is sent in cleartext when no tokens are configured" {
       ProxyOptions.areAgentTokensSentInCleartext(agentToken = "", authIdentityCount = 0, isTlsEnabled = false)
         .shouldBeFalse()
+    }
+
+    // A non-positive limit would refuse every scrape.
+    "maxInFlightScrapeRequests of 0 should be rejected" {
+      val exception = shouldThrow<IllegalArgumentException> {
+        proxyOptions(["-Dproxy.internal.maxInFlightScrapeRequests=0"])
+      }
+      exception.message shouldContain "maxInFlightScrapeRequests"
+    }
+
+    // A blank bind address would fail only when the scrape server starts, with an opaque Ktor error.
+    "a blank proxy.http.host should be rejected" {
+      val exception = shouldThrow<IllegalArgumentException> { proxyOptions(["-Dproxy.http.host="]) }
+      exception.message shouldContain "http.host"
     }
   }
 }

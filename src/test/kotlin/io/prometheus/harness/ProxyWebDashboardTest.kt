@@ -21,6 +21,7 @@ package io.prometheus.harness
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
@@ -32,15 +33,22 @@ import io.ktor.client.plugins.websocket.webSocket
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
+import io.mockk.verify
 import io.prometheus.Agent
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml
+import io.prometheus.proxy.dashboard.ProxySnapshot
+import kotlinx.coroutines.withTimeout
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -326,6 +334,110 @@ class ProxyWebDashboardTest : StringSpec() {
         client.get("$base/agents/1").bodyAsText() shouldContain "<body"
       }
     }
+
+    // The same-origin policy does not cover WebSockets, so without an Origin check a page on any site could read the
+    // dashboard through an operator's browser. The refusal comes at the handshake, before a single frame is sent.
+    "a WebSocket from a foreign origin should be refused at the handshake" {
+      withDashboard(
+        ORIGIN_HTTP_PORT,
+        ORIGIN_GRPC_PORT,
+        ORIGIN_DASHBOARD_PORT,
+        // A file, because a list cannot be passed as -D: those overrides parse as properties, where values are strings.
+        configFile = ORIGINS_CONFIG_FILE,
+        newClient = { HttpClient(CIO) { install(WebSockets) } },
+      ) {
+        val refused =
+          runCatching {
+            client.webSocket(socketUrl, request = { header(HttpHeaders.Origin, "https://evil.example.com") }) {
+              nextText()
+            }
+          }
+        refused.exceptionOrNull()?.message.orEmpty() shouldContain "403"
+
+        // The dashboard's own page, a configured origin, and a non-browser client that sends no Origin are let in.
+        listOf(base, ALLOWED_ORIGIN, null).forEach { origin ->
+          client.webSocket(socketUrl, request = { origin?.also { header(HttpHeaders.Origin, it) } }) {
+            nextText() shouldContain "hx-swap-oob"
+          }
+        }
+      }
+    }
+
+    // Every session costs a socket and a render per push, on a port with no authentication, so the count is capped.
+    // A session over the cap is closed at once with a retry-later code, and closing a session frees its slot.
+    "sessions beyond maxSessions should be turned away until one closes" {
+      withDashboard(
+        CAP_HTTP_PORT,
+        CAP_GRPC_PORT,
+        CAP_DASHBOARD_PORT,
+        dashboardArgs = ["--dashboard", "--dashboard_port", "$CAP_DASHBOARD_PORT", "-Dproxy.dashboard.maxSessions=1"],
+        newClient = { HttpClient(CIO) { install(WebSockets) } },
+      ) {
+        client.webSocket(socketUrl) {
+          nextText() shouldContain "hx-swap-oob"
+
+          client.webSocket(socketUrl) {
+            withTimeout(10.seconds) { incoming.receiveCatching().getOrNull().shouldBeNull() }
+            closeReason.await()?.knownReason shouldBe CloseReason.Codes.TRY_AGAIN_LATER
+          }
+        }
+
+        // The slot is released when the first session closes, which may land just after the client returns.
+        eventually(10.seconds) {
+          client.webSocket(socketUrl) { nextText() shouldContain "hx-swap-oob" }
+        }
+      }
+    }
+
+    // Ktor accepts frames of any size by default and buffers each one whole. A browser message is a few dozen bytes,
+    // so a frame past the cap closes the session rather than costing the proxy memory.
+    "an oversized message should close the session" {
+      withDashboard(
+        FRAME_HTTP_PORT,
+        FRAME_GRPC_PORT,
+        FRAME_DASHBOARD_PORT,
+        newClient = { HttpClient(CIO) { install(WebSockets) } },
+      ) {
+        client.webSocket(socketUrl) {
+          nextText() shouldContain "hx-swap-oob"
+          send(Frame.Text("x".repeat(OVERSIZED_MESSAGE_CHARS)))
+          withTimeout(10.seconds) { closeReason.await() }?.knownReason shouldBe CloseReason.Codes.TOO_BIG
+        }
+      }
+    }
+
+    // A browser message used to run a full snapshot collect, which takes the path-map lock every scrape takes, so a
+    // client looping messages coupled scrape latency to the dashboard. A message now re-renders the recent snapshot.
+    // No agent connects and the refresh interval outlasts the spec, so nothing may collect while the spy counts.
+    "messages over the WebSocket should re-render without collecting a snapshot each" {
+      withDashboard(
+        CACHE_HTTP_PORT,
+        CACHE_GRPC_PORT,
+        CACHE_DASHBOARD_PORT,
+        dashboardArgs = [
+          "--dashboard",
+          "--dashboard_port",
+          "$CACHE_DASHBOARD_PORT",
+          "-Dproxy.dashboard.refreshIntervalSecs=60",
+        ],
+        newClient = { HttpClient(CIO) { install(WebSockets) } },
+      ) {
+        client.webSocket(socketUrl) {
+          nextText() shouldContain "hx-swap-oob"
+
+          mockkObject(ProxySnapshot.Companion)
+          try {
+            repeat(MESSAGE_COUNT) {
+              send(Frame.Text("""{"layout":"AGENT"}"""))
+              nextText() shouldContain "hx-swap-oob"
+            }
+            verify(exactly = 0) { ProxySnapshot.collect(any()) }
+          } finally {
+            unmockkObject(ProxySnapshot.Companion)
+          }
+        }
+      }
+    }
   }
 
   companion object {
@@ -373,6 +485,30 @@ class ProxyWebDashboardTest : StringSpec() {
     private const val MOUNT_HTTP_PORT = 9573
     private const val MOUNT_GRPC_PORT = 9574
     private const val MOUNT_DASHBOARD_PORT = 9575
+
+    private const val ORIGIN_HTTP_PORT = 9576
+    private const val ORIGIN_GRPC_PORT = 9577
+    private const val ORIGIN_DASHBOARD_PORT = 9578
+    private const val ORIGINS_CONFIG_FILE = "config/test-configs/web-ui-origins.conf"
+
+    // Must match the allowedOrigins entry in ORIGINS_CONFIG_FILE.
+    private const val ALLOWED_ORIGIN = "https://dash.example.com"
+
+    private const val CAP_HTTP_PORT = 9579
+    private const val CAP_GRPC_PORT = 9580
+    private const val CAP_DASHBOARD_PORT = 9581
+
+    private const val FRAME_HTTP_PORT = 9582
+    private const val FRAME_GRPC_PORT = 9583
+    private const val FRAME_DASHBOARD_PORT = 9584
+
+    // Far past the incoming frame cap, and far past any message the dashboard page sends.
+    private const val OVERSIZED_MESSAGE_CHARS = 1_000_000
+
+    private const val CACHE_HTTP_PORT = 9585
+    private const val CACHE_GRPC_PORT = 9586
+    private const val CACHE_DASHBOARD_PORT = 9587
+    private const val MESSAGE_COUNT = 5
 
     // The agent-list row marker for the session's selected agent (the nav uses aria-current="page").
     private const val SELECTED_ROW = """aria-current="true""""
