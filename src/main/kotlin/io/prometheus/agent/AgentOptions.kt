@@ -299,8 +299,11 @@ class AgentOptions(
       proxyHostname = PROXY_HOSTNAME.getEnv(fallback)
     }
     // Parse eagerly so a malformed endpoint fails at startup with a clear message rather than surfacing
-    // later as a connect failure that rotation would paper over by moving to the next endpoint.
-    val endpoints = parseEndpointList(proxyHostname, DEFAULT_GRPC_PORT)
+    // later as a connect failure that rotation would paper over by moving to the next endpoint. Written back with
+    // agent.proxy.port as the default, so a host-only entry from --proxy or PROXY_HOSTNAME gets the configured port
+    // rather than the 50051 AgentGrpcService would otherwise apply.
+    val endpoints = parseEndpointList(proxyHostname, agentConfigVals.proxy.port)
+    proxyHostname = endpoints.joinToString(",") { it.spec }
     val failoverSuffix =
       if (endpoints.size == 1) "" else " (${endpoints.size} failover endpoints, tried in order)"
     logger.info { "proxyHostname: $proxyHostname$failoverSuffix" }
@@ -331,10 +334,11 @@ class AgentOptions(
       chunkContentSizeKbs = CHUNK_CONTENT_SIZE_KBS.getEnv(agentConfigVals.chunkContentSizeKbs)
     require(chunkContentSizeKbs > 0) { "chunkContentSizeKbs must be > 0: ($chunkContentSizeKbs)" }
     logger.info { "chunkContentSizeKbs: $chunkContentSizeKbs" }
-    // Derive the byte value once, with overflow protection, into the runtime field.
+    // Derive the byte value once into the runtime field. A chunk travels as one gRPC message, so it must fit the
+    // proxy's inbound limit; computed as a Long so a huge KB value cannot overflow past the check.
     val chunkSizeAsBytes = chunkContentSizeKbs.toLong() * 1024
-    require(chunkSizeAsBytes <= Int.MAX_VALUE) {
-      "chunkContentSizeKbs value $chunkContentSizeKbs is too large (max: ${Int.MAX_VALUE / 1024})"
+    require(chunkSizeAsBytes <= MAX_GRPC_PAYLOAD_BYTES) {
+      "chunkContentSizeKbs value $chunkContentSizeKbs is too large (max: ${MAX_GRPC_PAYLOAD_BYTES / 1024})"
     }
     chunkContentSizeBytes = chunkSizeAsBytes.toInt()
     logger.info { "chunkContentSizeBytes: $chunkContentSizeBytes" }
@@ -343,6 +347,10 @@ class AgentOptions(
       minGzipSizeBytes = MIN_GZIP_SIZE_BYTES.getEnv(agentConfigVals.minGzipSizeBytes)
     // 0 is valid (gzip every non-empty payload); a negative threshold would gzip everything (finding 11).
     require(minGzipSizeBytes >= 0) { "minGzipSizeBytes must be >= 0: $minGzipSizeBytes" }
+    // A scrape at or below this size is sent unzipped as one message, so it has the same bound as a chunk.
+    require(minGzipSizeBytes <= MAX_GRPC_PAYLOAD_BYTES) {
+      "minGzipSizeBytes value $minGzipSizeBytes is too large (max: $MAX_GRPC_PAYLOAD_BYTES)"
+    }
     logger.info { "minGzipSizeBytes: $minGzipSizeBytes" }
 
     if (overrideAuthority.isEmpty())
@@ -518,6 +526,11 @@ class AgentOptions(
     // AgentOptions -- the reverse import would have the public options type reaching into the internals
     // of the gRPC client it configures.
     internal const val DEFAULT_GRPC_PORT = 50051
+
+    // gRPC's default inbound message limit (4 MiB), which the proxy does not raise, less 64 KiB for the fields around
+    // the payload. A chunk, or an unzipped scrape at or below minGzipSizeBytes, travels as a single message; one past
+    // the limit ends the agent's write stream and drops every in-flight result on that connection.
+    internal const val MAX_GRPC_PAYLOAD_BYTES = 4 * 1024 * 1024 - 64 * 1024
 
     /**
      * True when the agent has a token but its gRPC channel is plaintext, so the token is sent in the clear.

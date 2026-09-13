@@ -269,6 +269,8 @@ mechanism that the standard suite cannot reach:
 - **AgentTokenAuthTest** — the legacy pre-shared agent token, over Netty so the header crosses the wire: a
   matching token registers, and a wrong one is rejected with UNAUTHENTICATED and never registers; a security
   boundary
+- **InProcessClientCancelledScrapeTest** — a scrape Prometheus abandons before a slow target answers is
+  still recorded, as `client_cancelled`, rather than vanishing from the metrics, `/debug`, and the dashboard
 - **InProcessHealthCheckTest** — the agent and proxy scrape-backlog health checks through the admin
   endpoint, including both unhealthy branches
 - **InProcessHeartbeatDisabledTest** — with the heartbeat disabled the connection stays usable and shutdown

@@ -40,6 +40,7 @@ import io.prometheus.proxy.ProxyUtils.DecodedContent
 import io.prometheus.proxy.ProxyUtils.incrementScrapeRequestCount
 import io.prometheus.proxy.ProxyUtils.respondWith
 import io.prometheus.proxy.ProxyUtils.unzip
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.ClosedSendChannelException
@@ -50,6 +51,7 @@ import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.DurationUnit
+import kotlin.time.TimeSource
 
 /**
  * HTTP routing logic for the proxy's Ktor server.
@@ -77,6 +79,12 @@ internal object ProxyHttpRoutes {
   internal const val PROXY_TIMEOUT_LABEL = "timed_out"
   internal const val IN_FLIGHT_LIMIT_LABEL = "proxy_in_flight_limit"
   internal const val BACKLOG_FULL_LABEL = "agent_backlog_full"
+
+  // Prometheus hung up before the agent answered, usually because its scrape timeout is shorter than the proxy's.
+  internal const val CLIENT_CANCELLED_LABEL = "client_cancelled"
+
+  // nginx's non-standard 499 (Client Closed Request): the client left, so no status ever reached it.
+  private val CLIENT_CLOSED_REQUEST = HttpStatusCode(499, "Client Closed Request")
 
   // Each agent's queue is capped at this multiple of scrapeRequestBacklogUnhealthySize, matching how the agent
   // sizes its own request channel.
@@ -205,30 +213,63 @@ internal object ProxyHttpRoutes {
     proxy: Proxy,
     path: String,
     queryParams: String,
-  ): List<ScrapeRequestResponse> =
-    coroutineScope {
-      // map and awaitAll both preserve order, so zipping recovers which agent produced which response.
-      // That keeps provenance at the one site that needs it, rather than as a field on the response.
-      agentContextInfo.agentContexts
-        .map { agentContext ->
-          async { submitScrapeRequest(agentContext, proxy, path, queryParams, call.request) }
-        }
-        .awaitAll()
-        .also { responses ->
-          agentContextInfo.agentContexts.zip(responses).forEach { (agentContext, response) ->
-            recordScrapeOutcome(path, agentContext.agentId, agentContext.agentName, response, proxy)
+  ): List<ScrapeRequestResponse> {
+    val started = TimeSource.Monotonic.markNow()
+    return try {
+      coroutineScope {
+        // map and awaitAll both preserve order, so zipping recovers which agent produced which response.
+        // That keeps provenance at the one site that needs it, rather than as a field on the response.
+        agentContextInfo.agentContexts
+          .map { agentContext ->
+            async { submitScrapeRequest(agentContext, proxy, path, queryParams, call.request) }
           }
-        }
-        .onEach { response ->
-          // Record latency labeled with the request outcome. This single site covers every outcome
-          // — including the timeout and agent-disconnected early returns the old per-request timer
-          // missed — since each branch yields a ScrapeRequestResponse with updateMsg + fetchDuration.
-          proxy.metrics {
-            val elapsedSecs = response.fetchDuration.toDouble(DurationUnit.SECONDS)
-            scrapeRequestLatency.labels(path, response.updateMsg).observe(elapsedSecs)
+          .awaitAll()
+          .also { responses ->
+            agentContextInfo.agentContexts.zip(responses).forEach { (agentContext, response) ->
+              recordScrapeOutcome(path, agentContext.agentId, agentContext.agentName, response, proxy)
+            }
           }
-        }
+          .onEach { response ->
+            // Record latency labeled with the request outcome. This single site covers every outcome
+            // — including the timeout and agent-disconnected early returns the old per-request timer
+            // missed — since each branch yields a ScrapeRequestResponse with updateMsg + fetchDuration.
+            proxy.metrics {
+              val elapsedSecs = response.fetchDuration.toDouble(DurationUnit.SECONDS)
+              scrapeRequestLatency.labels(path, response.updateMsg).observe(elapsedSecs)
+            }
+          }
+      }
+    } catch (e: CancellationException) {
+      // Ktor cancels the call when Prometheus hangs up, usually at a scrape timeout shorter than the proxy's. The
+      // bookkeeping above runs only after awaitAll() returns, so without this the most common real failure -- a
+      // target slower than Prometheus but faster than the proxy -- would vanish from the scrape metrics, /debug,
+      // and the dashboard. Nothing in it suspends, so it runs to completion in the cancelled coroutine.
+      recordClientCancelled(agentContextInfo, proxy, path, started.elapsedNow())
+      throw e
     }
+  }
+
+  private fun recordClientCancelled(
+    agentContextInfo: ProxyPathManager.AgentContextInfo,
+    proxy: Proxy,
+    path: String,
+    elapsed: Duration,
+  ) {
+    val response =
+      ScrapeRequestResponse(
+        statusCode = CLIENT_CLOSED_REQUEST,
+        updateMsg = CLIENT_CANCELLED_LABEL,
+        failureReason = "client closed the connection before the agent answered",
+        fetchDuration = elapsed,
+      )
+    agentContextInfo.agentContexts.forEach { agentContext ->
+      recordScrapeOutcome(path, agentContext.agentId, agentContext.agentName, response, proxy)
+      incrementScrapeRequestCount(proxy, CLIENT_CANCELLED_LABEL)
+      proxy.metrics {
+        scrapeRequestLatency.labels(path, CLIENT_CANCELLED_LABEL).observe(elapsed.toDouble(DurationUnit.SECONDS))
+      }
+    }
+  }
 
   // Named for what it now does: this is where a completed scrape becomes observable -- as a text line
   // on /debug, as a structured record for the dashboard, and as an event on the bus.

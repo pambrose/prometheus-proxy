@@ -449,14 +449,33 @@ class AgentOptionsTest : StringSpec() {
       options.chunkContentSizeBytes shouldBe 1024
     }
 
-    "Bug #9: chunkContentSizeBytes at max safe KB value should be accepted" {
-      // Int.MAX_VALUE / 1024 = 2097151
-      val maxSafeKb = (Int.MAX_VALUE / 1024).toString()
-      val options = agentOptions(
-        ["--name", "test", "--proxy", "host", "--chunk", maxSafeKb],
-        false,
-      )
-      options.chunkContentSizeBytes shouldBe (Int.MAX_VALUE / 1024) * 1024
+    // The proxy keeps gRPC's default 4 MiB inbound message limit, and a chunk -- or an unchunked payload below the gzip
+    // threshold -- past it ends the agent's write stream, dropping every in-flight result on that connection. The
+    // bound leaves 64 KiB of that 4 MiB for the rest of the message.
+    "chunkContentSizeKbs at the gRPC message bound should be accepted" {
+      val options = agentOptions(["--name", "test", "--proxy", "host", "--chunk", "$MAX_CHUNK_KBS"], false)
+      options.chunkContentSizeBytes shouldBe MAX_CHUNK_KBS * 1024
+    }
+
+    "chunkContentSizeKbs past the gRPC message bound should be rejected" {
+      val e =
+        shouldThrow<IllegalArgumentException> {
+          agentOptions(["--name", "test", "--proxy", "host", "--chunk", "${MAX_CHUNK_KBS + 1}"], false)
+        }
+      e.message shouldContain "chunkContentSizeKbs"
+    }
+
+    "minGzipSizeBytes at the gRPC message bound should be accepted" {
+      val options = agentOptions(["--name", "test", "--proxy", "host", "--gzip", "$MAX_PAYLOAD_BYTES"], false)
+      options.minGzipSizeBytes shouldBe MAX_PAYLOAD_BYTES
+    }
+
+    "minGzipSizeBytes past the gRPC message bound should be rejected" {
+      val e =
+        shouldThrow<IllegalArgumentException> {
+          agentOptions(["--name", "test", "--proxy", "host", "--gzip", "${MAX_PAYLOAD_BYTES + 1}"], false)
+        }
+      e.message shouldContain "minGzipSizeBytes"
     }
 
     "Bug #9: chunkContentSizeBytes exceeding max safe KB should throw" {
@@ -552,6 +571,17 @@ class AgentOptionsTest : StringSpec() {
       options.proxyHostname shouldBe "override:1234"
     }
 
+    // agent.proxy.port is the default port for every entry, not just those read from config: a host-only --proxy
+    // or PROXY_HOSTNAME used to fall through to 50051.
+    "a host-only --proxy should take its port from agent.proxy.port" {
+      val options =
+        agentOptions(
+          ["--name", "test", "--proxy", "proxy-a,proxy-b:1234,[2001:db8::1]", "-Dagent.proxy.port=60000"],
+          false,
+        )
+      options.proxyHostname shouldBe "proxy-a:60000,proxy-b:1234,[2001:db8::1]:60000"
+    }
+
     "a comma-separated --proxy should resolve to multiple endpoints" {
       val options = agentOptions(["--name", "test", "--proxy", "first:1234,second:5678"], false)
 
@@ -607,6 +637,10 @@ class AgentOptionsTest : StringSpec() {
   }
 
   companion object {
+    // 4 MiB, gRPC's default inbound message limit, less 64 KiB for the rest of the message.
+    private const val MAX_PAYLOAD_BYTES = 4 * 1024 * 1024 - 64 * 1024
+    private const val MAX_CHUNK_KBS = MAX_PAYLOAD_BYTES / 1024
+
     private const val ENDPOINTS_CONFIG_FILE = "config/test-configs/proxy-endpoints.conf"
     private const val DISCOVERY_FILE_ARG = "-Dagent.discovery.file.path=discovered.conf"
   }

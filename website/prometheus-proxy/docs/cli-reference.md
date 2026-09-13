@@ -62,8 +62,8 @@ icon: lucide/terminal
 | `--consolidated, -o`           | `CONSOLIDATED`                    | `agent.consolidated`                        | false       | Allow multiple agents per path                      |
 | `--timeout`                    | `SCRAPE_TIMEOUT_SECS`             | `agent.scrapeTimeoutSecs`                   | 15          | Scrape timeout (seconds)                            |
 | `--max_retries`                | `SCRAPE_MAX_RETRIES`              | `agent.scrapeMaxRetries`                    | 0           | Max scrape retries (0 = disabled)                   |
-| `--chunk`                      | `CHUNK_CONTENT_SIZE_KBS`          | `agent.chunkContentSizeKbs`                 | 32          | Chunking threshold (KB)                             |
-| `--gzip`                       | `MIN_GZIP_SIZE_BYTES`             | `agent.minGzipSizeBytes`                    | 512         | Min size for gzip (bytes)                           |
+| `--chunk`                      | `CHUNK_CONTENT_SIZE_KBS`          | `agent.chunkContentSizeKbs`                 | 32          | Chunking threshold (KB, max 4032)                   |
+| `--gzip`                       | `MIN_GZIP_SIZE_BYTES`             | `agent.minGzipSizeBytes`                    | 512         | Min size for gzip (bytes, max 4128768)              |
 | `--tf-disabled, --tf_disabled` | `TRANSPORT_FILTER_DISABLED`       | `agent.transportFilterDisabled`             | false       | Disable transport filter                            |
 | `--agent_token`                | `AGENT_TOKEN`                     | `agent.agentToken`                          | ""          | Pre-shared token presented to proxy                 |
 | `--trust_all_x509`             | `TRUST_ALL_X509_CERTIFICATES`     | `agent.http.enableTrustAllX509Certificates` | false       | Disable SSL verification                            |

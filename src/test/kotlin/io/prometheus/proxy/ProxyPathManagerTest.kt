@@ -31,6 +31,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import io.prometheus.Proxy
 import io.prometheus.grpc.RegisterAgentRequest
 import kotlin.concurrent.atomics.AtomicLong
@@ -142,6 +143,40 @@ class ProxyPathManagerTest : StringSpec() {
       info.labels shouldBe """{"job":"test2"}"""
       info.agentContexts.shouldHaveSize(1)
       info.agentContexts[0].agentId shouldBe context2.agentId
+    }
+
+    // A path listed twice in an agent's config registers twice from the same agent. Appending it again sent that agent
+    // two requests per scrape, and Prometheus rejects the duplicate samples the merge produced.
+    "a consolidated agent re-registering a path should replace its own entry rather than add a second" {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val context1 = createMockAgentContext(consolidated = true)
+      val context2 = createMockAgentContext(consolidated = true)
+
+      manager.addPath("/metrics", """{"job":"test"}""", context1)
+      manager.addPath("/metrics", """{"job":"test"}""", context2)
+      manager.addPath("/metrics", """{"job":"test"}""", context1)
+
+      val info = manager.getAgentContextInfo("/metrics")
+      info.shouldNotBeNull()
+      info.agentContexts.map { it.agentId } shouldBe [context1.agentId, context2.agentId]
+    }
+
+    // In non-consolidated mode the same re-registration "displaced" the agent from its own path, counting a
+    // displacement in proxy_agent_displacement_total that never happened.
+    "a non-consolidated agent re-registering its own path should not count as a displacement" {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val context = createMockAgentContext()
+
+      manager.addPath("/metrics", """{"job":"test"}""", context)
+      manager.addPath("/metrics", """{"job":"test"}""", context)
+
+      verify(exactly = 0) { proxy.metrics(any()) }
+      verify(exactly = 0) { context.invalidate() }
+      val info = manager.getAgentContextInfo("/metrics")
+      info.shouldNotBeNull()
+      info.agentContexts.map { it.agentId } shouldBe [context.agentId]
     }
 
     // Tests consolidated path behavior: when multiple agents register the same path with

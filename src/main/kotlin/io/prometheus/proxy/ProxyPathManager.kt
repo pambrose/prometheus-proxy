@@ -119,7 +119,15 @@ internal class ProxyPathManager(
             logger.error { reason }
             return reason
           }
-          pathMap[path] = agentInfo.copy(agentContexts = agentInfo.agentContexts + agentContext)
+          // An agent re-registering a path it already backs (a path listed twice in its config) replaces its own
+          // entry: a second copy would send it two requests per scrape, and Prometheus rejects the duplicate samples.
+          val contexts = agentInfo.agentContexts
+          val updated =
+            if (contexts.any { it.agentId == agentContext.agentId })
+              contexts.map { if (it.agentId == agentContext.agentId) agentContext else it }
+            else
+              contexts + agentContext
+          pathMap[path] = agentInfo.copy(agentContexts = updated)
         }
       } else {
         if (agentInfo != null && agentInfo.isConsolidated) {
@@ -127,9 +135,10 @@ internal class ProxyPathManager(
           logger.error { reason }
           return reason
         }
-        val displacedContexts = agentInfo?.agentContexts ?: emptyList()
-        if (agentInfo != null) {
-          logger.info { "Overwriting path /$path for ${agentInfo.agentContexts.firstOrNull()}" }
+        // An agent re-registering its own path displaces no one, so it is neither logged nor counted as a displacement.
+        val displacedContexts = agentInfo?.agentContexts.orEmpty().filterNot { it.agentId == agentContext.agentId }
+        if (displacedContexts.isNotEmpty()) {
+          logger.info { "Overwriting path /$path for ${displacedContexts.first()}" }
           proxy.metrics { agentDisplacementCount.inc() }
         }
         pathMap[path] = AgentContextInfo(false, labels, [agentContext], targetUrl, pathSource)

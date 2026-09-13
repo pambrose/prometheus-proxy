@@ -93,7 +93,7 @@ class OptionsTest : StringSpec() {
           metricsEnabled shouldBe false
           dynamicParams.size shouldBe 0
           agentName shouldBe "test-name"
-          proxyHostname shouldBe "host5"
+          proxyHostname shouldBe "host5:50051"
         }
     }
 

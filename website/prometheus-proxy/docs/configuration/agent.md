@@ -217,8 +217,8 @@ trust store, and `--trust_all_x509` (which disables verification entirely) takes
 |:----------------------|:--------|:--------------------------------------------------|
 | `scrapeTimeoutSecs`   | 15      | Total time allowed for a scrape including retries |
 | `scrapeMaxRetries`    | 0       | Maximum retries; 0 disables retries               |
-| `chunkContentSizeKbs` | 32      | Responses larger than this are chunked            |
-| `minGzipSizeBytes`    | 512     | Responses larger than this are gzip-compressed    |
+| `chunkContentSizeKbs` | 32      | Chunked above this; at most 4032                  |
+| `minGzipSizeBytes`    | 512     | Gzip-compressed above this; at most 4128768       |
 
 ## Metric Filtering
 

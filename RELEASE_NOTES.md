@@ -136,6 +136,17 @@ interval as their deadline, capped at the unary deadline.
   had already started stayed open, and `shutdown()` threw. A failed start now releases all of them, and
   `startAsyncAgent` waits for startup and throws the failure instead of returning a handle to a failed
   agent.
+- **A path listed twice in an agent's config registered the agent twice.** Every scrape then hit the agent
+  twice and Prometheus rejected the duplicate samples, or, on a non-consolidated path, the agent counted as
+  displacing itself. A repeat registration now replaces the agent's own entry.
+- **Scrapes Prometheus gave up on left no trace.** A target slower than Prometheus's timeout but faster than
+  the proxy's, the most common real failure, was missing from the scrape metrics, `/debug`, and the
+  dashboard. It now appears under the new outcome `client_cancelled`.
+- **A host-only `--proxy` or `PROXY_HOSTNAME` ignored `agent.proxy.port`** and dialed 50051. It now uses the
+  configured port.
+- **A chunk size or gzip threshold above gRPC's 4 MiB message limit broke every scrape** on the connection.
+  `agent.chunkContentSizeKbs` is now limited to 4032 and `agent.minGzipSizeBytes` to 4128768, checked at
+  startup.
 
 ### Also in this release
 
