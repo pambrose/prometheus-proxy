@@ -3,13 +3,11 @@ on:
   push:
     branches:
       - master
-      - main
   workflow_dispatch:
 
+# Least privilege by default; each job asks for what it needs.
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages
@@ -23,17 +21,18 @@ jobs:
   # named "github-pages", which is what re-running a combined build+deploy job did.
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: read
     steps:
       - uses: actions/configure-pages@v5
       - uses: actions/checkout@v5
 
-      # Build Zensical documentation site
-      - uses: actions/setup-python@v5
-        with:
-          python-version: 3.x
-      # Pinned for reproducible doc builds; bump deliberately when upgrading the toolchain.
-      - run: pip install zensical==0.0.45 mkdocs-material==9.7.6
-      - run: zensical build --clean
+      # Build the Zensical documentation site from website/uv.lock, the same resolution `make site`
+      # uses locally. uv reads website/.python-version and installs that Python itself.
+      - uses: astral-sh/setup-uv@v6
+      # mkdocs-material is not in uv.lock (make site adds it with --with), so it stays pinned here.
+      - run: uv run --locked --with mkdocs-material==9.7.6 zensical build --clean
         working-directory: website/prometheus-proxy
 
       # Build KDoc API documentation
@@ -57,6 +56,10 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+      actions: read
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

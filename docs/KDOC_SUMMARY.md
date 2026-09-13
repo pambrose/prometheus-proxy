@@ -69,25 +69,26 @@ responsibilities, constructor parameters, and cross-references:
 
 ## Test Coverage
 
-The test suite comprises **63 test-related files** across 5 directories. See [docs/TESTING.md](docs/TESTING.md) for the
-full testing guide.
+The test suite is organized by component under `src/test/kotlin/io/prometheus/`. See [TESTING.md](TESTING.md) for
+the full testing guide, including an inventory of every spec.
 
 ### Test Files by Component
 
-| Component | Files | Description                                                         |
-|:----------|------:|:--------------------------------------------------------------------|
-| Agent     |    17 | Lifecycle, gRPC streaming, HTTP scraping, options, metrics, SSL     |
-| Proxy     |    21 | Lifecycle, gRPC service, HTTP routing, path management, cleanup     |
-| Common    |     6 | CLI parsing, config wrappers, env vars, scrape results, utilities   |
-| Misc      |     6 | Admin endpoints, ConfigVals, data classes, options integration      |
-| Harness   |    13 | Integration tests (in-process, Netty, TLS) + support infrastructure |
+| Component  | Description                                                                            |
+|:-----------|:---------------------------------------------------------------------------------------|
+| Agent      | Lifecycle, gRPC streaming, HTTP scraping, endpoint failover, discovery, filtering, SSL |
+| Proxy      | Lifecycle, gRPC service, HTTP routing, path management, agent auth, cleanup, dashboard |
+| Common     | CLI parsing, config wrappers, env vars, scrape results, utilities                      |
+| Misc       | Admin endpoints, ConfigVals, data classes, options integration                         |
+| Harness    | Integration tests (in-process, Netty, TLS), targeted specs + support infrastructure    |
+| Containers | Testcontainers end-to-end suite, gated on `RUN_CONTAINER_TESTS`                        |
 
 ### Testing Frameworks
 
 - **Kotest** (StringSpec style) with JUnit 5 runner
 - **Kotest matchers** (`shouldBe`, `shouldNotBeNull`, `shouldContain`, etc.)
 - **MockK** (`mockk`, `every`, `verify`)
-- **Kotlin Coroutines** (`runBlocking`)
+- **Kotlin Coroutines** (suspending test bodies)
 - **Ktor** (client & server) for HTTP testing
 - **gRPC in-process transport** for integration tests
 - **Kover** for coverage reporting
@@ -129,9 +130,9 @@ message shouldContain "Expected text"
 
 **Test Structure:**
 
-- Descriptive test names with backticks
+- `StringSpec` classes with descriptive string test names in an `init {}` block
 - AAA pattern (Arrange, Act, Assert)
-- `runBlocking` for coroutine tests
+- Suspend functions called directly from the (already suspending) test body
 - Factory methods for mock creation
 - `@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")` on all test files
 
@@ -140,11 +141,12 @@ message shouldContain "Expected text"
 Generate coverage report:
 
 ```bash
-./gradlew koverMergedHtmlReport
+./gradlew koverHtmlReport
 # Report available at build/reports/kover/html/index.html
 ```
 
-Coverage excludes generated gRPC classes (`io.prometheus.grpc.*`).
+Coverage excludes generated code (see `configureCoverage()` in `build.gradle.kts`): the gRPC stubs
+(`io.prometheus.grpc.*`), `io.prometheus.BuildConfig`, and `io.prometheus.common.ConfigVals` with its nested classes.
 
 ## Package-Level Documentation
 

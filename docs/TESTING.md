@@ -21,7 +21,7 @@ This document describes the test suite structure and how to run tests for the pr
 ./gradlew test --tests "*PathManager*"
 
 # Run tests with coverage report
-./gradlew koverMergedHtmlReport
+./gradlew koverHtmlReport
 ```
 
 ### Make Targets
@@ -100,7 +100,7 @@ make scaling-tests SCALE_AGENTS=100 SCALE_ENDPOINTS_PER_AGENT=200 SCALE_SERIES_P
 - **Kotest** (StringSpec style) — primary test framework with JUnit 5 runner
 - **Kotest matchers** — assertions (`shouldBe`, `shouldNotBeNull`, `shouldContain`, etc.)
 - **MockK** — mocking library (`mockk`, `every`, `verify`)
-- **Kotlin Coroutines** — async and concurrency testing (`runBlocking`)
+- **Kotlin Coroutines** — async and concurrency testing (suspending test bodies)
 - **Ktor** (client & server) — HTTP testing utilities
 - **gRPC in-process transport** — integration tests without network I/O
 - **Kover** — code coverage
@@ -114,12 +114,12 @@ src/test/kotlin/io/prometheus/
 ├── agent/          # Agent component tests
 │   ├── discovery/  # Path-discovery tests
 │   └── filter/     # Metric-filter tests
-├── common/         # Shared utility tests, plus test-only support (TestPorts, EmbeddedTestServer)
+├── common/         # Shared utility tests, plus test-only support (TestPorts, TestOptions, EmbeddedTestServer)
 ├── proxy/          # Proxy component tests
 │   └── dashboard/  # Dashboard renderer tests and fixtures
 ├── misc/           # Cross-cutting tests (admin paths, config classes, options)
-├── harness/        # Integration tests: real proxy + agent, in-process or over Netty
-│   └── support/    # Harness infrastructure (setup, the standard suite, scale configs)
+├── harness/        # Integration tests: real proxy + agent, in-process or over Netty; scale configs
+│   └── support/    # Harness infrastructure (setup, the standard suite)
 └── containers/     # Testcontainers end-to-end tests, gated on RUN_CONTAINER_TESTS
     └── support/    # Container factories and the loopback port-binding hook
 ```
@@ -145,6 +145,9 @@ something.
 - **AgentPathManagerTest** — Path registration/unregistration, path lookup, concurrent access
 - **AgentOptionsTest** — CLI parsing, defaults, validation, SSL settings, gRPC options
 - **AgentClientInterceptorTest** — gRPC client interceptor that adds agent-id metadata to outbound calls
+- **AgentTokenClientInterceptorTest** — gRPC client interceptor that attaches the agent token header to outbound calls
+- **EndpointFailoverTest** — Proxy endpoint rotation: a failed connect or a rejected registration moves to the next
+  endpoint, a dropped registered connection returns to the primary, and whether each case reuses or rebuilds the channel
 - **AgentMetricsTest** — Prometheus metrics registration and gauge/counter updates
 - **AgentBacklogDriftTest** — scrapeRequestBacklogSize drift when sendScrapeRequestAction fails
 - **HttpClientCacheTest** — HTTP client caching with TTL/idle eviction, keyed by auth credentials
@@ -152,6 +155,12 @@ something.
 - **RequestFailureExceptionTest** — RequestFailureException custom exception class
 - **SslSettingsTest** — SSL keystore/truststore loading for TLS configuration
 - **TrustAllX509TrustManagerTest** — TrustAllX509TrustManager (dev/test only, bypasses SSL validation)
+- **FileDiscoverySourceTest** (`discovery/`) — Discovery-file parsing: HOCON and JSON, empty or absent `paths`,
+  rejection of missing files, malformed files and incomplete entries, and HOCON substitution resolution
+- **PathDiscoveryServiceTest** (`discovery/`) — A read failure skips reconcile so the last-known-good set is kept;
+  a successful read, including an empty one, reconciles the desired set
+- **MetricFilterTest** (`filter/`) — Allow/deny filtering: fully anchored regexes, deny winning over allow, whole
+  families dropped or kept (HELP/TYPE/UNIT lines, histogram, summary and OpenMetrics series), line endings preserved
 
 ### Unit Tests — Proxy (`proxy/`)
 
@@ -182,6 +191,17 @@ something.
   ConcurrentModificationException)
 - **ScrapeRequestManagerTest** — Add/remove scrape requests, timeout handling, concurrent access
 - **ScrapeRequestWrapperTest** — Scrape request lifecycle, timeout behavior, response delivery
+- **AgentAuthManagerTest** — Per-agent auth: path-glob matching, token resolution (including the legacy allow-all
+  token), `isEnabled`, and fail-fast rejection of empty, duplicate or colliding identities
+- **AgentAuthServerInterceptorTest** — gRPC auth interceptor: a valid token exposes the resolved identity in the
+  context; a missing, unknown or same-length wrong token closes the call with UNAUTHENTICATED
+- **ProxyEventBusTest** — Dashboard event bus: ordered delivery, non-blocking emit with no subscriber, no replay to a
+  late subscriber, fan-out to multiple subscribers, and AgentContextManager emitting on connect only
+- **ProxyDashboardHtmlTest** (`dashboard/`) — Dashboard renderer: top-level out-of-band push regions, agent- and
+  path-centric layouts, tolerant selection and layout parsing, departed paths, failover markers, accessibility, and
+  the WebSocket connection indicator
+- **ProxySnapshotTest** (`dashboard/`) — Dashboard view models: eviction countdown, health thresholds, failover
+  position, and `buildPathViews` joining registered paths to their latest scrape and surfacing departed ones
 
 ### Unit Tests — Common (`common/`)
 
@@ -193,10 +213,12 @@ something.
 - **UtilsTest** — Utility functions: parseHostPort, sanitizeUrl, appendQueryParams, decodeParams, toJsonElement,
   setLogLevel, exceptionDetails
 
-Two support helpers also live here (not test classes themselves):
+Three support helpers also live here (not test classes themselves):
 
 - **TestPorts** — canonical port constants shared across the unit, harness, and container suites (mirrors the
   proxy/agent config defaults and the fixed container ports), so no test hard-codes a port literal
+- **TestOptions** — factories that build `ProxyOptions` / `AgentOptions` from a list, `ConfigVals` from a HOCON
+  fragment merged with the reference config, and `ProxyOptions` from a temp config file
 - **EmbeddedTestServer** — `EmbeddedServer.startAndAwaitReady()`, which starts a Ktor server with `wait = false`
   and polls with real HTTP probes until it serves several consecutive clean replies before returning the port
 
@@ -244,13 +266,17 @@ mechanism that the standard suite cannot reach:
   only: an in-process channel ignores host and port, so failover cannot be expressed there
 - **EmbeddedAgentApiTest** — the public `startAsyncAgent()` handle connects from a config file, reports its
   identity, and disconnects on `shutdown()`
+- **AgentTokenAuthTest** — the legacy pre-shared agent token, over Netty so the header crosses the wire: a
+  matching token registers, and a wrong one is rejected with UNAUTHENTICATED and never registers; a security
+  boundary
 - **InProcessHealthCheckTest** — the agent and proxy scrape-backlog health checks through the admin
   endpoint, including both unhealthy branches
 - **InProcessHeartbeatDisabledTest** — with the heartbeat disabled the connection stays usable and shutdown
-  still completes promptly (finding 6)
+  still completes promptly (finding 6 in `CODE_REVIEW_JULY_2026.md`)
 - **InProcessHeartbeatEvictionTest** — a heartbeat reporting eviction tears the channel down so the run
   loop reconnects, rather than leaving a zombie agent
-- **InProcessIdleShutdownTest** — stopping an idle connected agent must not deadlock (finding 1)
+- **InProcessIdleShutdownTest** — stopping an idle connected agent must not deadlock (finding 1 in
+  `CODE_REVIEW_JULY_2026.md`)
 - **InProcessReconnectTest** — the full disconnect → reconnect → re-register cycle, in-process
 - **InProcessStaleAgentCleanupTest** — the eviction thread staying off, and being forced on by the
   transport-filter mode
@@ -259,7 +285,7 @@ mechanism that the standard suite cannot reach:
 - **ProxyWebDashboardTest** — the dashboard service rather than the renderer: page, WebSocket push,
   selection round-trip, both layouts, and a root-mounted base path
 - **TlsMutualAuthRejectionTest** — the negative mutual-TLS path over a real Netty handshake, which the
-  in-process TLS specs cannot perform (item 28)
+  in-process TLS specs cannot perform (item 28 in `CODE_REVIEW_JUNE_2026.md`)
 
 #### Harness Infrastructure (`harness/support/`)
 
@@ -269,8 +295,12 @@ mechanism that the standard suite cannot reach:
 - **BasicHarnessTests** — Reusable test implementations (missing path, invalid path, add/remove paths, etc.)
 - **HarnessTests** — Core integration logic: `proxyCallTest()` (sequential, parallel, concurrent queries) and
   `timeoutTest()`
+
+Two more live one level up, in `harness/` itself:
+
 - **HarnessConfig** — Enum defining test scale configs (MINI, SMALL, MEDIUM, LARGE, XLARGE, XXLARGE)
-- **HarnessConstants** — Test constants (ports, delays, config paths)
+- **HarnessConstants** — Test constants (ports, delays, config paths) and the active `HarnessConfig`, selected by
+  the `HARNESS_CONFIG` env var (default MEDIUM)
 
 ### Container Tests (`containers/`)
 
@@ -346,15 +376,27 @@ val manager = ProxyPathManager(proxy, isTestMode = true)
 
 ### Coroutine Testing
 
-Async operations are tested using `runBlocking`:
+Specs are `StringSpec` classes that declare their tests in an `init {}` block. Kotest test bodies are already
+suspending, so a test calls suspend functions directly with no `runBlocking` wrapper, and MockK's `coEvery` /
+`coVerify` stub and verify suspend functions:
 
 ```kotlin
-@Test
-fun `test async operation`(): Unit = runBlocking {
-    val result = suspendFunction()
-    result shouldBe expectedValue
+class PathDiscoveryServiceTest : StringSpec() {
+  init {
+    "a successful read reconciles the desired set" {
+      val desired = [DiscoveredPath("a", "a_metrics", "http://a/m", "{}")]
+      val pathManager = mockk<AgentPathManager>(relaxed = true)
+      val service = PathDiscoveryService(pathManager, { desired }, 30)
+
+      service.reconcileOnce()
+
+      coVerify(exactly = 1) { pathManager.reconcileDiscoveredPaths(desired) }
+    }
   }
+}
 ```
+
+`runBlocking` is only needed from non-suspending code, such as a lifecycle callback.
 
 ### Harness Test Scaling
 
@@ -374,18 +416,20 @@ Several tests serve as regression guards for specific bugs, documented inline:
 Generate coverage report:
 
 ```bash
-./gradlew koverMergedHtmlReport
+./gradlew koverHtmlReport
 # Report available at build/reports/kover/html/index.html
 ```
 
-Coverage excludes generated gRPC classes (`io.prometheus.grpc.*`).
+Coverage excludes generated code, as configured in `configureCoverage()` in `build.gradle.kts`: the gRPC stubs
+(`io.prometheus.grpc.*`), `io.prometheus.BuildConfig` (buildconfig plugin), and `io.prometheus.common.ConfigVals`
+with its nested classes (tscfg).
 
 ## Writing New Tests
 
 1. Place tests in the appropriate package under `src/test/kotlin/io/prometheus/`
 2. Use Kotest matchers (`shouldBe`, `shouldNotBeNull`, etc.)
 3. Use MockK for mocking (`mockk`, `every`, `verify`)
-4. Wrap async tests in `runBlocking`
+4. Write each spec as a `StringSpec` with its tests in an `init {}` block; call suspend functions directly
 5. Add `@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")` to avoid lint warnings
 6. Add comments for complex test scenarios explaining what is being validated
 7. For integration tests, extend `AbstractHarnessTests` and use the harness support infrastructure
