@@ -86,7 +86,10 @@ internal class ProxyServiceImpl(
     }
 
     proxy.metrics { connectCount.inc() }
-    val agentContext = AgentContext(UNKNOWN_ADDRESS)
+    // With no transport filter there is no connection-assigned agentId to bind later calls to, so bind them
+    // to the auth identity this call presented instead (see identityMismatchReason). Empty when auth is off.
+    val identityName = AgentAuthManager.AGENT_IDENTITY_KEY.get()?.name.orEmpty()
+    val agentContext = AgentContext(UNKNOWN_ADDRESS, identityName)
     return agentInfo {
       agentId = agentContext.agentId
     }.also {
@@ -104,7 +107,7 @@ internal class ProxyServiceImpl(
    *
    * Returns null (allow) when the connection agentId is unset, which happens when no transport
    * filter ran: `transportFilterDisabled` deployments and in-process tests. Those paths have no
-   * transport-assigned identity to compare against, so behavior there is unchanged.
+   * transport-assigned identity to compare against; [identityMismatchReason] binds them instead.
    */
   private fun connectionMismatchReason(
     requestAgentId: String,
@@ -121,6 +124,35 @@ internal class ProxyServiceImpl(
     }
   }
 
+  /**
+   * Rejects a call acting on [agentContext] when that agent connected as a different auth identity.
+   *
+   * With `transportFilterDisabled` there is no transport-assigned agentId, so [connectionMismatchReason]
+   * can't bind calls to a connection. The auth identity presented at connect is the remaining signal:
+   * [connectAgentWithTransportFilterDisabled] records it on the context, and every later call naming that
+   * agent must present the same one. Returns null (allow) when the context has no bound identity -- per-agent
+   * auth disabled, or a context created by the transport filter. Agents that share one identity, such as the
+   * legacy `proxy.agentToken`, remain indistinguishable from each other in this mode.
+   */
+  private fun identityMismatchReason(
+    agentContext: AgentContext,
+    rpcName: String,
+  ): String? {
+    val boundIdentityName = agentContext.authIdentityName
+    if (boundIdentityName.isEmpty())
+      return null
+    val callerIdentityName = AgentAuthManager.AGENT_IDENTITY_KEY.get()?.name
+    return if (callerIdentityName == boundIdentityName) {
+      null
+    } else {
+      logger.warn {
+        "Identity '$callerIdentityName' sent $rpcName() for agentId ${agentContext.agentId}, " +
+          "which connected as identity '$boundIdentityName'; rejecting"
+      }
+      "agentId ${agentContext.agentId} is bound to a different agent identity ($rpcName)"
+    }
+  }
+
   override suspend fun registerAgent(request: RegisterAgentRequest): RegisterAgentResponse {
     val failureReason =
       connectionMismatchReason(request.agentId, "registerAgent") ?: run {
@@ -129,13 +161,15 @@ internal class ProxyServiceImpl(
           logger.error { "registerAgent() missing AgentContext agentId: ${request.agentId}" }
           "Invalid agentId: ${request.agentId} (registerAgent)"
         } else {
-          agentContext.assignProperties(request)
-          agentContext.markActivityTime(false)
-          logger.info { "Connected to $agentContext" }
-          // Identity is only populated here; AgentConnected fired at transport-ready, before the agent
-          // had told us who it is.
-          proxy.eventBus.emit(ProxyEvent.AgentRegistered(request.agentId))
-          null
+          identityMismatchReason(agentContext, "registerAgent") ?: run {
+            agentContext.assignProperties(request)
+            agentContext.markActivityTime(false)
+            logger.info { "Connected to $agentContext" }
+            // Identity is only populated here; AgentConnected fired at transport-ready, before the agent
+            // had told us who it is.
+            proxy.eventBus.emit(ProxyEvent.AgentRegistered(request.agentId))
+            null
+          }
         }
       }
 
@@ -160,24 +194,26 @@ internal class ProxyServiceImpl(
           logger.error { "Missing AgentContext for agentId: ${request.agentId}" }
           "Invalid agentId: ${request.agentId} (registerPath)"
         } else {
-          // AGENT_IDENTITY_KEY is null when per-agent auth is disabled (no interceptor); an identity
-          // with no path patterns authorizes everything, so legacy single-token behavior is unchanged.
-          val identity = AgentAuthManager.AGENT_IDENTITY_KEY.get()
-          val reason =
-            if (identity != null && !identity.isAuthorized(request.path)) {
-              val normalizedPath = request.path.removePrefix("/")
-              logger.warn { "Agent identity '${identity.name}' denied registration of path /$normalizedPath" }
-              "Agent identity '${identity.name}' is not authorized to register path /$normalizedPath"
-            } else {
-              proxy.pathManager.addPath(
-                request.path,
-                request.labels,
-                agentContext,
-                request.targetUrl,
-                request.pathSource,
-              )
-            }
-          reason.also { agentContext.markActivityTime(false) }
+          identityMismatchReason(agentContext, "registerPath") ?: run {
+            // AGENT_IDENTITY_KEY is null when per-agent auth is disabled (no interceptor); an identity
+            // with no path patterns authorizes everything, so legacy single-token behavior is unchanged.
+            val identity = AgentAuthManager.AGENT_IDENTITY_KEY.get()
+            val reason =
+              if (identity != null && !identity.isAuthorized(request.path)) {
+                val normalizedPath = request.path.removePrefix("/")
+                logger.warn { "Agent identity '${identity.name}' denied registration of path /$normalizedPath" }
+                "Agent identity '${identity.name}' is not authorized to register path /$normalizedPath"
+              } else {
+                proxy.pathManager.addPath(
+                  request.path,
+                  request.labels,
+                  agentContext,
+                  request.targetUrl,
+                  request.pathSource,
+                )
+              }
+            reason.also { agentContext.markActivityTime(false) }
+          }
         }
       }
 
@@ -204,11 +240,17 @@ internal class ProxyServiceImpl(
     }
 
     val agentContext = proxy.agentContextManager.getAgentContext(agentId)
+    val identityReason = agentContext?.let { identityMismatchReason(it, "unregisterPath") }
     return if (agentContext == null) {
       logger.error { "Missing AgentContext for agentId: $agentId" }
       unregisterPathResponse {
         valid = false
         reason = "Invalid agentId: $agentId (unregisterPath)"
+      }
+    } else if (identityReason != null) {
+      unregisterPathResponse {
+        valid = false
+        reason = identityReason
       }
     } else {
       // The activity-time bump is unrelated to the response receiver, so .also (not .apply) -- finding 36.
@@ -225,12 +267,22 @@ internal class ProxyServiceImpl(
     proxy.agentContextManager.getAgentContext(request.agentId)
       .let { agentContext ->
         proxy.metrics { heartbeatCount.inc() }
-        agentContext?.markActivityTime(false)
-          ?: logger.error { "sendHeartBeat() missing AgentContext agentId: ${request.agentId}" }
+        // Bound like every other agent RPC: a spoofed heartbeat would otherwise keep another agent's
+        // context from ever being evicted.
+        val failureReason =
+          connectionMismatchReason(request.agentId, "sendHeartBeat")
+            ?: if (agentContext == null) {
+              logger.error { "sendHeartBeat() missing AgentContext agentId: ${request.agentId}" }
+              "Invalid agentId: ${request.agentId} (sendHeartBeat)"
+            } else {
+              identityMismatchReason(agentContext, "sendHeartBeat")
+            }
+        if (failureReason == null)
+          agentContext?.markActivityTime(false)
         heartBeatResponse {
-          valid = agentContext != null
-          if (!valid)
-            reason = "Invalid agentId: ${request.agentId} (sendHeartBeat)"
+          valid = failureReason == null
+          if (failureReason != null)
+            reason = failureReason
         }
       }
 
@@ -242,6 +294,9 @@ internal class ProxyServiceImpl(
         // a spoofed id must not be able to evict another agent's context.
         throw StatusException(Status.PERMISSION_DENIED.withDescription(reason))
       }
+      proxy.agentContextManager.getAgentContext(agentId)
+        ?.let { identityMismatchReason(it, "readRequestsFromProxy") }
+        ?.also { reason -> throw StatusException(Status.PERMISSION_DENIED.withDescription(reason)) }
       try {
         val agentContext = proxy.agentContextManager.getAgentContext(agentId)
           ?: throw StatusException(
@@ -274,24 +329,30 @@ internal class ProxyServiceImpl(
    * Returns whether this connection may act on [scrapeId]'s result.
    *
    * Scrape IDs come from one process-wide counter, so without this check any authenticated agent could
-   * answer, fail, or disrupt the chunked transfer of a scrape that was sent to a different agent. Allows the
-   * call when the connection has no transport-assigned identity (see [connectionMismatchReason]) or when the
-   * scrape is no longer tracked, where the existing missing-request handling applies.
+   * answer, fail, or disrupt the chunked transfer of a scrape that was sent to a different agent. Compares the
+   * connection's transport-assigned agentId when there is one, and otherwise the owner's bound auth identity
+   * (see [identityMismatchReason]). Allows the call when the scrape is no longer tracked, where the existing
+   * missing-request handling applies.
    */
   private fun isScrapeOwnedByConnection(
     connectionAgentId: String?,
     scrapeId: Long,
     rpcName: String,
   ): Boolean {
-    if (connectionAgentId == null)
-      return true
     val ownerAgentId = proxy.scrapeRequestManager.ownerAgentId(scrapeId) ?: return true
-    return (ownerAgentId == connectionAgentId).also { owned ->
-      if (!owned)
-        logger.warn {
-          "Agent on connection $connectionAgentId sent $rpcName() data for scrapeId $scrapeId, " +
-            "which was sent to agent $ownerAgentId; ignoring"
-        }
+    return if (connectionAgentId == null) {
+      // No transport-assigned agentId (transportFilterDisabled): fall back to the owner's bound auth identity.
+      proxy.agentContextManager.getAgentContext(ownerAgentId)
+        ?.let { owner -> identityMismatchReason(owner, rpcName) == null }
+        ?: true
+    } else {
+      (ownerAgentId == connectionAgentId).also { owned ->
+        if (!owned)
+          logger.warn {
+            "Agent on connection $connectionAgentId sent $rpcName() data for scrapeId $scrapeId, " +
+              "which was sent to agent $ownerAgentId; ignoring"
+          }
+      }
     }
   }
 

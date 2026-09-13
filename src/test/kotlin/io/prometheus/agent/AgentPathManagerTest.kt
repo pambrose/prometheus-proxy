@@ -654,6 +654,28 @@ class AgentPathManagerTest : StringSpec() {
       shouldThrow<StatusException> { manager.registerPaths() }
     }
 
+    // A proxy that accepts the agent but rejects every one of its static paths isn't usable. Failing the
+    // connection attempt (rather than staying connected with nothing registered) lets EndpointFailover move
+    // on to the next proxy endpoint.
+    "registerPaths should fail when the proxy rejects every static path" {
+      val (mockAgent, mockGrpcService) = agentWithStaticPaths("metrics1", "metrics2")
+      coEvery { mockGrpcService.registerPathOnProxy(any(), any(), any(), any()) } throws
+        RequestFailureException("registerPathOnProxy() - not authorized")
+
+      val manager = AgentPathManager(mockAgent)
+
+      shouldThrow<RequestFailureException> { manager.registerPaths() }
+    }
+
+    // An agent with no static paths (discovery-only, say) has nothing to reject, so it must still register.
+    "registerPaths should succeed when there are no static paths" {
+      val (mockAgent, mockGrpcService) = agentWithStaticPaths()
+      coEvery { mockGrpcService.registerPathOnProxy(any(), any(), any(), any()) } throws
+        RequestFailureException("registerPathOnProxy() - not authorized")
+
+      AgentPathManager(mockAgent).registerPaths()
+    }
+
     "registerPath should attach a configured filter to the path context" {
       val agent = createMockAgent("""{ path = "metrics", metricNameAllow = [], metricNameDeny = ["go_.*"] }""")
       val manager = AgentPathManager(agent)

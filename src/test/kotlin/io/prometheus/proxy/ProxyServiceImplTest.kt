@@ -1774,5 +1774,242 @@ class ProxyServiceImplTest : StringSpec() {
       // Removing the context is what a summary does first; the victim's transfer must be left intact.
       verify(exactly = 0) { contextManager.removeChunkedContext(905L) }
     }
+
+    // ==================== heartbeats bound to the connection ====================
+
+    "sendHeartBeat should reject a request whose agentId is not the connection's" {
+      val proxy = createMockProxy()
+      val agentContextManager = proxy.agentContextManager
+      val victimContext = mockk<AgentContext>(relaxed = true)
+      every { victimContext.agentId } returns "victim-agent"
+      every { agentContextManager.getAgentContext("victim-agent") } returns victimContext
+
+      val response =
+        onConnection("attacker-agent") {
+          ProxyServiceImpl(proxy).sendHeartBeat(heartBeatRequest { agentId = "victim-agent" })
+        }
+
+      response.valid.shouldBeFalse()
+      response.reason shouldContain "does not match"
+      // A spoofed heartbeat must not keep the victim's context from being evicted.
+      verify(exactly = 0) { victimContext.markActivityTime(any()) }
+    }
+
+    "sendHeartBeat should accept a request whose agentId is the connection's" {
+      val proxy = createMockProxy()
+      val agentContextManager = proxy.agentContextManager
+      val ownContext = mockk<AgentContext>(relaxed = true)
+      every { ownContext.agentId } returns "own-agent"
+      every { agentContextManager.getAgentContext("own-agent") } returns ownContext
+
+      val response =
+        onConnection("own-agent") {
+          ProxyServiceImpl(proxy).sendHeartBeat(heartBeatRequest { agentId = "own-agent" })
+        }
+
+      response.valid.shouldBeTrue()
+      verify { ownContext.markActivityTime(false) }
+    }
+
+    // ==================== identity binding with the transport filter disabled ====================
+    //
+    // With transportFilterDisabled (the nginx deployment) there is no transport-assigned agentId, so the
+    // connection check above can't run. The only per-call signal is the auth identity the token resolved
+    // to. connectAgentWithTransportFilterDisabled records it on the new AgentContext, and every later call
+    // naming that agent must present the same identity -- otherwise an agent authenticated as one identity
+    // could act on an agent that connected as another.
+
+    suspend fun <T> asIdentity(
+      identityName: String,
+      block: suspend () -> T,
+    ): T {
+      val identity = AgentIdentity(identityName, ByteArray(0), emptyList())
+      val context = Context.current().withValue(AgentAuthManager.AGENT_IDENTITY_KEY, identity)
+      val previous = context.attach()
+      return try {
+        block()
+      } finally {
+        context.detach(previous)
+      }
+    }
+
+    "connectAgentWithTransportFilterDisabled should record the caller's identity on the new agent context" {
+      val proxy = createMockProxy(transportFilterDisabled = true)
+      val agentContextManager = proxy.agentContextManager
+
+      asIdentity("team-a") {
+        ProxyServiceImpl(proxy).connectAgentWithTransportFilterDisabled(EMPTY_INSTANCE)
+      }
+
+      val added = slot<AgentContext>()
+      verify { agentContextManager.addAgentContext(capture(added)) }
+      added.captured.authIdentityName shouldBe "team-a"
+    }
+
+    "registerPath should reject an agentId whose context is bound to a different identity" {
+      val proxy = createMockProxy(transportFilterDisabled = true)
+      val agentContextManager = proxy.agentContextManager
+      val pathManager = proxy.pathManager
+      val victimContext = AgentContext("victim-host", authIdentityName = "team-a")
+      every { agentContextManager.getAgentContext(victimContext.agentId) } returns victimContext
+      // Stubbed to succeed so a rejection can only come from the identity check.
+      every { pathManager.addPath(any(), any(), any(), any(), any()) } returns null
+
+      val response =
+        asIdentity("team-b") {
+          ProxyServiceImpl(proxy).registerPath(
+            registerPathRequest {
+              agentId = victimContext.agentId
+              path = "any_metrics"
+            },
+          )
+        }
+
+      response.valid.shouldBeFalse()
+      response.reason shouldContain "identity"
+      verify(exactly = 0) { pathManager.addPath(any(), any(), any(), any(), any()) }
+    }
+
+    "registerPath should allow an agentId whose context is bound to the caller's identity" {
+      val proxy = createMockProxy(transportFilterDisabled = true)
+      val agentContextManager = proxy.agentContextManager
+      val pathManager = proxy.pathManager
+      val ownContext = AgentContext("own-host", authIdentityName = "team-a")
+      every { agentContextManager.getAgentContext(ownContext.agentId) } returns ownContext
+      every { pathManager.addPath(any(), any(), any(), any(), any()) } returns null
+
+      val response =
+        asIdentity("team-a") {
+          ProxyServiceImpl(proxy).registerPath(
+            registerPathRequest {
+              agentId = ownContext.agentId
+              path = "any_metrics"
+            },
+          )
+        }
+
+      response.valid.shouldBeTrue()
+      verify { pathManager.addPath("any_metrics", any(), ownContext, any(), any()) }
+    }
+
+    // Contexts the transport filter creates, and contexts created without auth, record no identity. Binding
+    // must not reject those, or enabling auth would break every filter-enabled deployment.
+    "registerPath should allow a caller identity when the agent context has no bound identity" {
+      val proxy = createMockProxy()
+      val agentContextManager = proxy.agentContextManager
+      val pathManager = proxy.pathManager
+      val unboundContext = AgentContext("some-host")
+      every { agentContextManager.getAgentContext(unboundContext.agentId) } returns unboundContext
+      every { pathManager.addPath(any(), any(), any(), any(), any()) } returns null
+
+      val response =
+        asIdentity("team-a") {
+          ProxyServiceImpl(proxy).registerPath(
+            registerPathRequest {
+              agentId = unboundContext.agentId
+              path = "any_metrics"
+            },
+          )
+        }
+
+      response.valid.shouldBeTrue()
+    }
+
+    "unregisterPath should reject an agentId whose context is bound to a different identity" {
+      val proxy = createMockProxy(transportFilterDisabled = true)
+      val agentContextManager = proxy.agentContextManager
+      val pathManager = proxy.pathManager
+      val victimContext = AgentContext("victim-host", authIdentityName = "team-a")
+      every { agentContextManager.getAgentContext(victimContext.agentId) } returns victimContext
+
+      val response =
+        asIdentity("team-b") {
+          ProxyServiceImpl(proxy).unregisterPath(
+            unregisterPathRequest {
+              agentId = victimContext.agentId
+              path = "team_a_metrics"
+            },
+          )
+        }
+
+      response.valid.shouldBeFalse()
+      coVerify(exactly = 0) { pathManager.removePath(any(), any()) }
+    }
+
+    "registerAgent should reject an agentId whose context is bound to a different identity" {
+      val proxy = createMockProxy(transportFilterDisabled = true)
+      val agentContextManager = proxy.agentContextManager
+      val victimContext = AgentContext("victim-host", authIdentityName = "team-a")
+      every { agentContextManager.getAgentContext(victimContext.agentId) } returns victimContext
+
+      val response =
+        asIdentity("team-b") {
+          ProxyServiceImpl(proxy).registerAgent(
+            registerAgentRequest {
+              agentId = victimContext.agentId
+              agentName = "spoofed-name"
+            },
+          )
+        }
+
+      response.valid.shouldBeFalse()
+      victimContext.agentName shouldBe "Unassigned"
+    }
+
+    "readRequestsFromProxy should reject an agentId whose context is bound to a different identity" {
+      val proxy = createMockProxy(transportFilterDisabled = true)
+      val agentContextManager = proxy.agentContextManager
+      val victimContext = AgentContext("victim-host", authIdentityName = "team-a")
+      // Invalidated so an unfixed build exits the read loop at once instead of waiting on the queue.
+      victimContext.invalidate()
+      every { agentContextManager.getAgentContext(victimContext.agentId) } returns victimContext
+
+      val exception =
+        asIdentity("team-b") {
+          shouldThrow<StatusException> {
+            ProxyServiceImpl(proxy).readRequestsFromProxy(agentInfo { agentId = victimContext.agentId }).collect {}
+          }
+        }
+
+      exception.status.code shouldBe Status.PERMISSION_DENIED.code
+      // With the transport filter disabled, a closing stream removes the agent it named.
+      verify(exactly = 0) { proxy.removeAgentContext(any(), any()) }
+    }
+
+    "sendHeartBeat should reject an agentId whose context is bound to a different identity" {
+      val proxy = createMockProxy(transportFilterDisabled = true)
+      val agentContextManager = proxy.agentContextManager
+      val victimContext = AgentContext("victim-host", authIdentityName = "team-a")
+      every { agentContextManager.getAgentContext(victimContext.agentId) } returns victimContext
+
+      val response =
+        asIdentity("team-b") {
+          ProxyServiceImpl(proxy).sendHeartBeat(heartBeatRequest { agentId = victimContext.agentId })
+        }
+
+      response.valid.shouldBeFalse()
+    }
+
+    "writeResponsesToProxy should ignore a result from a different identity when the transport filter is disabled" {
+      val proxy = createMockProxy(transportFilterDisabled = true)
+      val agentContextManager = proxy.agentContextManager
+      val scrapeRequestManager = proxy.scrapeRequestManager
+      val victimContext = AgentContext("victim-host", authIdentityName = "team-a")
+      every { scrapeRequestManager.ownerAgentId(910L) } returns victimContext.agentId
+      every { agentContextManager.getAgentContext(victimContext.agentId) } returns victimContext
+
+      val forged = scrapeResponse {
+        agentId = victimContext.agentId
+        scrapeId = 910L
+        validResponse = true
+        statusCode = 200
+      }
+
+      asIdentity("team-b") {
+        ProxyServiceImpl(proxy).writeResponsesToProxy(flowOf(forged))
+      }
+
+      verify(exactly = 0) { scrapeRequestManager.assignScrapeResults(any()) }
+    }
   }
 }

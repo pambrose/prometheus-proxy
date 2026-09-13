@@ -28,7 +28,7 @@ require the build or tests to pass before merging; and the CLI reference has dri
 | #  | Finding                                                                      | Area          | Severity | Status |
 |----|------------------------------------------------------------------------------|---------------|----------|--------|
 | 1  | Proxy accepts scrape results from any agent                                  | Security      | high     | ✅      |
-| 2  | Agent identity unenforced with transport filter off; heartbeats never bound  | Security      | medium   | ⬜      |
+| 2  | Agent identity unenforced with transport filter off; heartbeats never bound  | Security      | medium   | ✅      |
 | 3  | No backpressure on the scrape queue; timed-out requests still dispatched     | Security      | medium   | ⬜      |
 | 4  | Dashboard: open bind, no Origin check, unlimited sessions, per-frame snapshot | Security      | medium   | ⬜      |
 | 5  | Credentials in target URLs leak to proxy, dashboard, logs                    | Security      | medium   | ⬜      |
@@ -90,7 +90,7 @@ fails its checksum.
 `wrapper.agentContext.agentId` differs. Key chunked transfers by `(agentId, scrapeId)` and use
 `putIfAbsent`. Add tests modeled on the existing attacker-agent specs.
 
-### 2. [ ] Agent identity unenforced with the transport filter off; heartbeats never bound
+### 2. [x] Agent identity unenforced with the transport filter off; heartbeats never bound
 
 **Severity:** medium · **Confidence:** confirmed
 
