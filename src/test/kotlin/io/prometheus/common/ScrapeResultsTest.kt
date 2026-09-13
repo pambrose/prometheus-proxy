@@ -18,7 +18,14 @@
 
 package io.prometheus.common
 
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.string.shouldNotContain
+import io.ktor.client.network.sockets.ConnectTimeoutException
+import org.slf4j.LoggerFactory
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
@@ -323,6 +330,37 @@ class ScrapeResultsTest : StringSpec() {
       val code = errorCode(exception, "http://test.com")
 
       code shouldBe HttpStatusCode.ServiceUnavailable.value
+    }
+
+    // Ktor's CIO engine raises its own ConnectTimeoutException (a java.net.ConnectException) when a connect
+    // times out. It is a timeout, so it must map to 408 like the other timeout types rather than 503.
+    "errorCode should return RequestTimeout for Ktor's ConnectTimeoutException" {
+      val exception = ConnectTimeoutException("Connect timeout has expired [url=http://host/metrics]")
+      errorCode(exception, "http://host/metrics") shouldBe HttpStatusCode.RequestTimeout.value
+    }
+
+    // Exception messages embed the request URL, credentials included. Nothing logged at WARN -- neither the
+    // message text nor a rendered throwable -- may carry them.
+    "errorCode should not log credentials from exception messages" {
+      val secretUrl = "http://admin:hunter2@host:9100/metrics?token=s3cr3t"
+      val safeUrl = "http://***@host:9100/metrics?token=***"
+      val logbackLogger = LoggerFactory.getLogger(ScrapeResults::class.java) as Logger
+      val appender = ListAppender<ILoggingEvent>().apply { start() }
+      logbackLogger.addAppender(appender)
+      try {
+        errorCode(ConnectTimeoutException("Connect timeout has expired [url=$secretUrl]"), safeUrl)
+        errorCode(IOException("Failed to connect to $secretUrl"), safeUrl)
+        errorCode(IllegalStateException("Unexpected failure for $secretUrl"), safeUrl)
+      } finally {
+        logbackLogger.detachAppender(appender)
+        appender.stop()
+      }
+      val warnOutput =
+        appender.list
+          .filter { it.level.isGreaterOrEqual(Level.WARN) }
+          .joinToString("\n") { "${it.formattedMessage} ${it.throwableProxy?.message.orEmpty()}" }
+      warnOutput shouldNotContain "hunter2"
+      warnOutput shouldNotContain "s3cr3t"
     }
 
     // ==================== errorCode Cause-Chain Tests ====================

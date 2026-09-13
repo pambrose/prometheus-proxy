@@ -33,6 +33,10 @@ internal object Utils {
   private const val REDACTED = "***"
   private val USERINFO_REGEX = Regex("(://)[^@/?#]+@")
 
+  // A URL inside free text: a scheme, "://", then everything up to the next whitespace.
+  private val URL_IN_TEXT_REGEX = Regex("""[A-Za-z][A-Za-z0-9+.-]*://\S+""")
+  private const val TRAILING_PUNCTUATION = ",.;:)]}>'\""
+
   internal fun getVersionDesc(asJson: Boolean = false): String = Proxy::class.versionDesc(asJson)
 
   /**
@@ -59,6 +63,21 @@ internal object Utils {
    */
   fun sanitizeQueryParams(encodedQueryParams: String): String =
     if (encodedQueryParams.isBlank()) encodedQueryParams else redactQueryValues(encodedQueryParams)
+
+  /**
+   * Applies [sanitizeUrl] to every URL embedded in free text, such as an exception message.
+   *
+   * HTTP client exceptions embed the request URL verbatim (Ktor's timeout messages read
+   * `[url=http://user:pass@host/path?token=..., ...]`). A URL runs to the next whitespace rather than
+   * to the next comma, since a comma is legal inside a query value and stopping there would leave the
+   * rest of the query unredacted. Punctuation trailing the URL (`,`, `]`, `.` …) is kept outside it.
+   */
+  fun sanitizeUrlsInText(text: String): String =
+    URL_IN_TEXT_REGEX.replace(text) { match ->
+      val token = match.value
+      val url = token.trimEnd { it in TRAILING_PUNCTUATION }
+      sanitizeUrl(url) + token.substring(url.length)
+    }
 
   private fun redactQueryValues(query: String): String =
     query.split("&").joinToString("&") { param ->

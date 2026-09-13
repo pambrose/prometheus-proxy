@@ -411,6 +411,22 @@ class AgentHttpServiceTest : StringSpec() {
       service.close()
     }
 
+    // An HTTP client's exception message embeds the request URL, credentials included, and the failure reason
+    // is sent to the proxy -- and written to its activity log -- even with debug off.
+    "scrapeFailureReason should redact credentials from the exception message" {
+      val e = IllegalStateException("Connect timeout has expired [url=http://admin:hunter2@host:9100/m?token=s3cr3t]")
+
+      AgentHttpService.scrapeFailureReason(e, debugEnabled = false) shouldBe
+        "Connect timeout has expired [url=http://***@host:9100/m?token=***]"
+      AgentHttpService.scrapeFailureReason(e, debugEnabled = true) shouldBe
+        "IllegalStateException - Connect timeout has expired [url=http://***@host:9100/m?token=***]"
+    }
+
+    "scrapeFailureReason should fall back to the exception type when there is no message" {
+      AgentHttpService.scrapeFailureReason(IllegalStateException(), debugEnabled = false) shouldBe
+        "IllegalStateException"
+    }
+
     "fetchScrapeUrl should include query params in URL" {
       var receivedUrl = ""
       val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {

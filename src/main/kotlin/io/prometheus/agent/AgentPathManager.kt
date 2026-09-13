@@ -23,6 +23,7 @@ import io.prometheus.agent.discovery.DiscoveredPath
 import io.prometheus.agent.filter.MetricFilter
 import io.prometheus.common.Messages.EMPTY_PATH_MSG
 import io.prometheus.common.Utils.defaultEmptyJsonObject
+import io.prometheus.common.Utils.sanitizeUrl
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
@@ -70,7 +71,7 @@ internal class AgentPathManager(
     agentConfigVals.pathConfigs
       .map { PathConfig(name = it.name, path = it.path, url = it.url, labels = it.labels) }
       .onEach {
-        logger.info { "Proxy path /${it.path} will be assigned to ${it.url} with labels ${it.labels}" }
+        logger.info { "Proxy path /${it.path} will be assigned to ${sanitizeUrl(it.url)} with labels ${it.labels}" }
       }
 
   // Compiled once at startup, never per scrape. Keyed by normalized path, so a filter applies to
@@ -181,7 +182,7 @@ internal class AgentPathManager(
     val filter = filtersByPath[path]
     if (!agent.isTestMode) {
       logger.info {
-        "Registered $url as /$path with labels $labelsJson (${source.name.lowercase()})" +
+        "Registered ${sanitizeUrl(url)} as /$path with labels $labelsJson (${source.name.lowercase()})" +
           if (filter != null) " with a metric filter" else ""
       }
     }
@@ -198,7 +199,7 @@ internal class AgentPathManager(
     if (pathContext == null) {
       logger.info { "No path value /$path found in pathContextMap when unregistering" }
     } else if (!agent.isTestMode) {
-      logger.info { "Unregistered /$path for ${pathContext.url}" }
+      logger.info { "Unregistered /$path for ${sanitizeUrl(pathContext.url)}" }
     }
   }
 
@@ -206,7 +207,9 @@ internal class AgentPathManager(
     val maxName = pathConfigs.maxOfOrNull { it.quotedName.length } ?: 0
     val maxPath = pathConfigs.maxOfOrNull { it.path.length } ?: 0
     return "Agent Path Configs:\n" + "Name".padEnd(maxName + 1) + "Path".padEnd(maxPath + 2) + "URL\n" +
-      pathConfigs.joinToString("\n") { c -> "${c.quotedName.padEnd(maxName)} /${c.path.padEnd(maxPath)} ${c.url}" }
+      pathConfigs.joinToString("\n") { c ->
+        "${c.quotedName.padEnd(maxName)} /${c.path.padEnd(maxPath)} ${sanitizeUrl(c.url)}"
+      }
   }
 
   companion object {

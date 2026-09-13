@@ -20,6 +20,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Proxy
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.Messages.EMPTY_PATH_MSG
+import io.prometheus.common.Utils.sanitizeUrl
 import io.prometheus.grpc.UnregisterPathResponse
 import io.prometheus.grpc.unregisterPathResponse
 
@@ -83,7 +84,10 @@ internal class ProxyPathManager(
     pathSource: String = "",
   ): String? {
     require(path.isNotEmpty()) { EMPTY_PATH_MSG }
-    return multiSegmentPathError(path) ?: addValidatedPath(path, labels, agentContext, targetUrl, pathSource)
+    // Redacted on the way in so the dashboard and /debug never show credentials, even from an agent that
+    // predates agent-side redaction.
+    return multiSegmentPathError(path)
+      ?: addValidatedPath(path, labels, agentContext, sanitizeUrl(targetUrl), pathSource)
   }
 
   @Suppress("ReturnCount")

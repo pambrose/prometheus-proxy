@@ -60,6 +60,13 @@ trust store was configured, even though TLS was off and nothing checked client c
 now counts only when TLS is actually enabled. The proxy and the agent also now warn at startup when agent
 tokens are configured without TLS, because those tokens are sent in cleartext.
 
+**Credentials in target URLs.** A scrape target such as `http://user:pass@host/metrics?api_key=…` used to
+leave the agent in full: the proxy's dashboard and `/debug` page showed it, agent logs printed it, and HTTP
+client error messages carried it into WARN logs and into the failure reason sent to the proxy. Target URLs
+are now redacted everywhere they are sent, logged, or shown, and the proxy also redacts URLs from older
+agents. The per-scrape DEBUG trace no longer dumps the request, which included Prometheus's
+`Authorization` header.
+
 ### Agent registration and failover
 
 What the agent does next now depends on how far the previous attempt got:
@@ -91,6 +98,8 @@ response" log is now WARN rather than INFO, since it now means something needs a
   named `paths`.
 - **An empty `agent_id` response header made the agent throw inside a gRPC callback** and carry an empty
   agent ID into every later call. It now cancels the call, the same as a missing header.
+- **A connect timeout from Ktor's CIO engine was reported as 503** instead of 408, because its exception
+  type is a `ConnectException` rather than one of the recognized timeout types.
 
 ### Also in this release
 

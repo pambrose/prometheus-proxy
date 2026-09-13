@@ -52,6 +52,7 @@ import io.prometheus.common.ScrapeResults
 import io.prometheus.common.ScrapeResults.Companion.errorCode
 import io.prometheus.common.Utils.appendQueryParams
 import io.prometheus.common.Utils.sanitizeUrl
+import io.prometheus.common.Utils.sanitizeUrlsInText
 import io.prometheus.common.hasTimeoutCause
 import io.prometheus.grpc.ScrapeRequest
 import kotlinx.coroutines.CancellationException
@@ -139,8 +140,7 @@ internal class AgentHttpService(
           srAgentId = req.agentId,
           srScrapeId = req.scrapeId,
           srStatusCode = errorCode(e, logUrl),
-          srFailureReason =
-            if (req.debugEnabled) "${e.simpleClassName} - ${e.message}" else (e.message ?: e.simpleClassName),
+          srFailureReason = scrapeFailureReason(e, req.debugEnabled),
           srUrl = if (req.debugEnabled) logUrl else "",
         )
       } finally {
@@ -325,6 +325,16 @@ internal class AgentHttpService(
 
   companion object {
     private val logger = logger {}
+
+    // The failure reason is sent to the proxy -- which writes it to its activity log -- even with debug off,
+    // and HTTP client exception messages embed the request URL, credentials included.
+    internal fun scrapeFailureReason(
+      e: Throwable,
+      debugEnabled: Boolean,
+    ): String {
+      val safeMessage = e.message?.let { sanitizeUrlsInText(it) }
+      return if (debugEnabled) "${e.simpleClassName} - $safeMessage" else (safeMessage ?: e.simpleClassName)
+    }
 
     // Factory default (in seconds) shared by both http.clientTimeoutSecs and the deprecated
     // internal.cioTimeoutSecs in config/config.conf. Used to detect whether the deprecated

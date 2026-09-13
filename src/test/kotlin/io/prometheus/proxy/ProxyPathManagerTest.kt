@@ -76,6 +76,19 @@ class ProxyPathManagerTest : StringSpec() {
       info.agentContexts.shouldHaveSize(1)
     }
 
+    // An agent from before target-URL redaction still sends the URL raw. The proxy redacts it on the way in,
+    // so the dashboard and /debug never show credentials either way.
+    "addPath should store the target URL with credentials redacted" {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val context = createMockAgentContext()
+
+      manager.addPath("metrics", "{}", context, "http://admin:hunter2@target:9100/metrics?token=s3cr3t")
+
+      manager.getAgentContextInfo("metrics").shouldNotBeNull().targetUrl shouldBe
+        "http://***@target:9100/metrics?token=***"
+    }
+
     "addPath should throw when path is empty" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
