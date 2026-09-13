@@ -52,9 +52,9 @@ require the build or tests to pass before merging; and the CLI reference has dri
 | 23 | Oversized Docker build context; wrong `EXPOSE` ports                         | CI/build      | low      | ⬜      |
 | 24 | Stale compose file and nginx run script                                      | CI/build      | low      | ⬜      |
 | 25 | `docs/cli-args.md` documents a nonexistent env var and omits current flags   | Docs          | high     | ✅      |
-| 26 | `security-agent-authentication.md` predates per-agent auth                   | Docs          | medium   | ⬜      |
+| 26 | `security-agent-authentication.md` predates per-agent auth                   | Docs          | medium   | ✅      |
 | 27 | Testing docs cite a nonexistent Gradle task and an incomplete spec list      | Docs          | medium   | ⬜      |
-| 28 | CHANGELOG/RELEASE_NOTES behind; release checklist misses version literals    | Docs          | medium   | ⬜      |
+| 28 | CHANGELOG/RELEASE_NOTES behind; release checklist misses version literals    | Docs          | medium   | ✅      |
 | 29 | Metrics doc and CLAUDE.md drift                                              | Docs          | low      | ⬜      |
 | 30 | Discovery and chunk-failure paths untested                                   | Tests         | medium   | ⬜      |
 | 31 | Timing-sensitive and vacuously passing tests                                 | Tests         | medium   | ⬜      |
@@ -461,7 +461,7 @@ config file". The website reference also lacks the dashboard flags.
 **Fix:** regenerate both tables from the `@Parameter` definitions and `EnvVars`, or remove the
 phantom entry and add the missing flags by hand.
 
-### 26. [ ] `security-agent-authentication.md` predates per-agent auth
+### 26. [x] `security-agent-authentication.md` predates per-agent auth
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -493,7 +493,7 @@ stale test-file counts.
 **Fix:** correct the task name, inventory, locations, exclusions, and example; fix the link and drop
 or refresh the counts.
 
-### 28. [ ] CHANGELOG and RELEASE_NOTES are behind; release checklist misses version literals
+### 28. [x] CHANGELOG and RELEASE_NOTES are behind; release checklist misses version literals
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -508,6 +508,10 @@ and `llms.txt`, but `4.0.1` is also hard-coded in the website's `getting-started
 
 **Fix:** add an `[Unreleased]` section updated per PR; keep one detailed log and make the other a
 short highlights file; list every version literal in the checklist or template them in the site.
+
+**Resolution:** both logs now have an `Unreleased` section, and the release checklists list every
+version literal. The maintainer chose to keep both logs as they are (2026-09-13): `CHANGELOG.md` as
+the categorized record and `RELEASE_NOTES.md` as the narrative notes.
 
 ### 29. [ ] Metrics doc and CLAUDE.md drift
 

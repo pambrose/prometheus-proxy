@@ -2,6 +2,115 @@
 
 ---
 
+## Unreleased
+
+_Not yet released_
+
+A security and reliability release. It closes three ways an authenticated agent could interfere with
+another agent on the same proxy, and fixes agent failover for a proxy that accepts connections but
+rejects registration. Nothing here changes configuration, metrics, or the wire protocol, but agents
+using failover or path authorization behave differently when a proxy rejects them — see below.
+
+### Highlights
+
+- **One agent can no longer answer another agent's scrapes.** The proxy matched an incoming scrape
+  result to its waiting request by scrape ID alone, and scrape IDs come from one counter shared by every
+  agent. An agent holding a valid token could therefore answer, fail, or break the chunked transfer of a
+  scrape that was sent to someone else. Results are now accepted only from the agent the scrape went to.
+
+- **Deployments behind a reverse proxy get the same protection, as far as their identities allow.** With
+  `transportFilterDisabled`, the proxy had nothing to tie a call to a connection, so any authenticated
+  agent could read another agent's scrape requests, unregister its paths, or remove it outright. Calls
+  are now bound to the auth identity the agent connected with. Read the limit below before relying on it.
+
+- **A rejected path no longer takes the whole agent offline, and a proxy that rejects an agent is now
+  failed over.** Previously one unauthorized path disconnected the agent and it reconnected forever with
+  every path down; and a proxy that accepted the connection but refused registration kept the agent
+  pinned to it, never reaching the standby.
+
+### Security
+
+**Scrape results.** `writeResponsesToProxy` and `writeChunkedResponsesToProxy` now check a result, a
+failure, and every chunked `HEADER`, `CHUNK`, and `SUMMARY` message against the agent that owns the
+scrape. A message for someone else's scrape is dropped and logged at WARN; the rest of the stream is
+still processed, so the sender's own results continue to arrive. With the transport filter enabled the
+check compares the connection's transport-assigned `agentId`.
+
+**Heartbeats.** `sendHeartBeat` was the one agent RPC with no binding at all, so any caller could send
+heartbeats in another agent's name and keep a dead agent from ever being evicted. It now gets the same
+connection check as the other RPCs, and a rejected heartbeat does not refresh the target agent's activity.
+
+**Behind a reverse proxy (`transportFilterDisabled`).** The proxy now records the identity an agent
+authenticated as when it connects, and rejects `registerAgent`, `registerPath`, `unregisterPath`,
+`readRequestsFromProxy`, `sendHeartBeat`, and scrape results that name that agent under a different
+identity. The exposure this closes was not small: the scrape requests another agent could read include
+the auth header Prometheus sent with the scrape.
+
+The binding is only as fine-grained as your identities:
+
+- With no agent auth configured, calls are unbound, exactly as before.
+- Agents that share an identity are indistinguishable from each other. That includes **every agent on
+  the legacy `proxy.agentToken`**, which the proxy treats as a single allow-all identity.
+
+So behind a reverse proxy, a distinct `proxy.auth` token per agent is what actually separates agents.
+With the transport filter enabled, calls are bound by connection and this limit does not apply.
+
+### Agent registration and failover
+
+What the agent does next now depends on how far the previous attempt got:
+
+| Previous attempt | Next attempt |
+|------------------|--------------|
+| Could not connect | Next endpoint |
+| Connected, but the proxy rejected the agent's registration | Next endpoint |
+| Connected, but the proxy rejected **every** static path | Next endpoint |
+| Registered, with **some** static paths rejected | Stays connected; each rejected path is logged at WARN |
+| Registered, then the connection dropped | Back to the head of the list |
+
+The last row is the failback that makes the endpoint list a priority order, and it still picks up a
+recovered primary with nothing for you to do. What changed is that it now requires a *registered*
+connection. 4.0.0 counted a connection as up once the proxy assigned an agent ID — which happens before
+registration — so a primary that accepted connections but refused the agent sent it back to that same
+primary on every retry.
+
+An agent with no static paths (discovery-only) is not failed over for path rejections, and a
+single-endpoint agent keeps retrying its one proxy. The "Disconnected from proxy … after invalid
+response" log is now WARN rather than INFO, since it now means something needs attention.
+
+### Bug Fixes
+
+- **`--tf_disabled` was ignored by the agent** unless the config file also set it. The agent chose its
+  connect RPC from the config-file value while the gRPC layer used the resolved option, so the proxy
+  rejected the connection as a configuration mismatch. The same applied to `TRANSPORT_FILTER_DISABLED`.
+- **A dashboard mounted at `/` emitted links like `//paths`,** which a browser reads as a URL on a host
+  named `paths`.
+- **An empty `agent_id` response header made the agent throw inside a gRPC callback** and carry an empty
+  agent ID into every later call. It now cancels the call, the same as a missing header.
+
+### Also in this release
+
+- The CLI reference (`docs/cli-args.md` and the website) now matches the real flags: a nonexistent
+  environment variable is gone, the token, dashboard, and HTTPS truststore flags are documented, and the
+  `--gzip` and `--proxy` defaults are corrected.
+- `DESIGN.md` and `PRODUCT.md` moved to `docs/`, and `prom-agent.conf` moved to `examples/` with a stale
+  test path removed.
+- The build now enforces coverage floors (line 95%, branch 87%) in CI, and coverage rose to 97.4% line
+  and 90.4% branch.
+- The container tests no longer strand a ~591MB Docker image on every run, and `make docker-clean`
+  reclaims what they leave behind without touching unrelated images.
+- The dashboard's htmx asset paths are now generated from the dependency catalog, so an htmx bump can no
+  longer silently break `/dashboard/assets/htmx.min.js`.
+
+### Dependency updates
+
+Runtime: Kotlin 2.4.10 → 2.4.20, gRPC 1.83.1 → 1.84.0, Logback 1.6.1 → 1.6.3, SLF4J 2.0.18 → 2.0.19,
+Dropwizard metrics 4.2.39 → 4.2.40, and common-utils 3.2.2 → 3.2.3. Build and test only: Gradle 9.6.1 →
+9.7.1, detekt 2.0.0-alpha.5 → alpha.6, Kotest 6.2.3 → 6.2.5, the Gradle versions plugin 0.57.0 → 0.61.0,
+and the shared convention plugins 1.1.1 → 1.1.4. The documentation site's Python lock picks up Zensical
+0.0.52 → 0.0.59.
+
+---
+
 ## 4.0.1
 
 _Released 2026-07-31_
