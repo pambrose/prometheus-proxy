@@ -286,6 +286,14 @@ internal class ProxyServiceImpl(
         }
       }
 
+  // The HTTP handler stops tracking a request when Prometheus times out or disconnects, but the request stays
+  // queued. Delivering it would have the agent scrape for nobody and grow a slow agent's backlog.
+  private fun isStillAwaited(wrapper: ScrapeRequestWrapper): Boolean =
+    proxy.scrapeRequestManager.containsScrapeRequest(wrapper.scrapeId).also { awaited ->
+      if (!awaited)
+        logger.debug { "Skipping scrapeId ${wrapper.scrapeId}: no longer awaited" }
+    }
+
   override fun readRequestsFromProxy(request: AgentInfo): Flow<ScrapeRequest> =
     flow {
       val agentId = request.agentId
@@ -305,7 +313,7 @@ internal class ProxyServiceImpl(
             ),
           )
         while (proxy.isRunning && agentContext.isValid()) {
-          val wrapper = agentContext.readScrapeRequest() ?: continue
+          val wrapper = agentContext.readScrapeRequest()?.takeIf { isStillAwaited(it) } ?: continue
           try {
             emit(wrapper.scrapeRequest)
           } catch (e: CancellationException) {

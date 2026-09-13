@@ -122,8 +122,10 @@ internal class AgentGrpcService(
   // Deadline applied to all unary RPCs. Set to 0 to disable (e.g., in tests).
   internal var unaryDeadlineSecs = options.unaryDeadlineSecs.toLong()
 
-  private fun unaryStub() =
-    if (unaryDeadlineSecs > 0) grpcStub.withDeadlineAfter(unaryDeadlineSecs, SECONDS) else grpcStub
+  private fun unaryStub() = stubWithDeadline(unaryDeadlineSecs)
+
+  private fun stubWithDeadline(deadlineSecs: Long) =
+    if (deadlineSecs > 0) grpcStub.withDeadlineAfter(deadlineSecs, SECONDS) else grpcStub
 
   lateinit var channel: ManagedChannel
 
@@ -426,13 +428,15 @@ internal class AgentGrpcService(
   // to EVICTED; any RPC failure -- DEADLINE_EXCEEDED / UNAVAILABLE / non-gRPC -- maps to TRANSIENT_FAILURE
   // so the caller can force a reconnect after N consecutive failures rather than spinning forever on a
   // half-open transport (finding 2). Cancellation propagates (runCatchingCancellable) for clean shutdown.
-  suspend fun sendHeartBeat(): HeartBeatResult {
+  // Takes its own deadline (see Agent.heartbeatDeadlineSecs) so a half-open connection is detected within a few
+  // heartbeat intervals rather than several unary deadlines.
+  suspend fun sendHeartBeat(deadlineSecs: Long = unaryDeadlineSecs): HeartBeatResult {
     val anAgentId = agent.agentId
     if (anAgentId.isEmpty())
       return HeartBeatResult.SUCCESS
 
     return runCatchingCancellable {
-      unaryStub().sendHeartBeat(heartBeatRequest { agentId = anAgentId })
+      stubWithDeadline(deadlineSecs).sendHeartBeat(heartBeatRequest { agentId = anAgentId })
         .let { response ->
           agent.markMsgSent()
           if (response.valid) {

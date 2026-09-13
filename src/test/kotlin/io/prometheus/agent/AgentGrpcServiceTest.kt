@@ -81,6 +81,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import java.lang.reflect.InvocationTargetException
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit.SECONDS
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.decrementAndFetch
@@ -1015,6 +1016,20 @@ class AgentGrpcServiceTest : StringSpec() {
         coEvery { mockStub.sendHeartBeat(any(), any<Metadata>()) } returns heartBeatResponse { valid = true }
 
         service.sendHeartBeat() shouldBe HeartBeatResult.SUCCESS
+      }
+    }
+
+    // The heartbeat deadline is passed in rather than inherited from the unary deadline, so a half-open
+    // connection is detected within a few heartbeat intervals instead of three 30s unary deadlines.
+    "sendHeartBeat should apply the deadline it is given" {
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
+        val deadlineStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
+        every { mockStub.withDeadlineAfter(5L, SECONDS) } returns deadlineStub
+        coEvery { deadlineStub.sendHeartBeat(any(), any<Metadata>()) } returns heartBeatResponse { valid = true }
+
+        service.sendHeartBeat(deadlineSecs = 5L) shouldBe HeartBeatResult.SUCCESS
+
+        verify { mockStub.withDeadlineAfter(5L, SECONDS) }
       }
     }
 

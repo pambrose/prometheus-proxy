@@ -470,7 +470,9 @@ class Agent(
     while (isRunning && connectionContext.connected) {
       if (lastMsgSentMark.elapsedNow() > maxInactivityTime) {
         logger.debug { "Sending heartbeat" }
-        val result = grpcService.sendHeartBeat()
+        // Evaluated per heartbeat so a change to the unary deadline takes effect on the next one.
+        val deadlineSecs = heartbeatDeadlineSecs(cfg.heartbeatMaxInactivitySecs, grpcService.unaryDeadlineSecs)
+        val result = grpcService.sendHeartBeat(deadlineSecs)
         val nextCount = nextHeartbeatFailureCount(result, consecutiveFailures, MAX_HEARTBEAT_FAILURES)
         if (nextCount == null) {
           // EVICTED, or MAX_HEARTBEAT_FAILURES consecutive failures on a half-open transport. Tear the
@@ -487,6 +489,23 @@ class Agent(
     }
     logger.info { "Heartbeat completed" }
   }
+
+  /**
+   * Deadline for a single heartbeat RPC: the heartbeat interval, capped at the unary deadline and never below 1s.
+   *
+   * Inheriting the 30s unary deadline meant a silently dropped connection took three 30s timeouts -- about 90s
+   * -- to detect, longer than the proxy's 60s eviction. A healthy proxy answers a heartbeat in milliseconds, so
+   * the heartbeat interval is ample. When unary deadlines are disabled (a non-positive [unaryDeadlineSecs]),
+   * heartbeats get none either, like every other unary RPC; that returns 0, which applies no deadline.
+   */
+  internal fun heartbeatDeadlineSecs(
+    heartbeatMaxInactivitySecs: Int,
+    unaryDeadlineSecs: Long,
+  ): Long =
+    if (unaryDeadlineSecs > 0)
+      minOf(heartbeatMaxInactivitySecs.toLong().coerceAtLeast(1L), unaryDeadlineSecs)
+    else
+      0L
 
   // Given the latest heartbeat [result] and the running [consecutiveFailures] count, returns the updated
   // count, or null to signal the connection should be torn down: immediately on EVICTED, or once transient
