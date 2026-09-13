@@ -83,7 +83,24 @@ internal class AgentPathManager(
       }
       .toMap()
 
-  suspend fun registerPaths() = pathConfigs.forEach { registerPath(it.path, it.url, it.labels) }
+  // A proxy rejecting one path (valid=false -- e.g. the agent's identity isn't authorized for it) must not
+  // abort registration of the others: that used to end the connection, and the agent then reconnected
+  // forever with every path down. A proxy that rejects every static path isn't usable, though, so that fails
+  // the attempt and lets EndpointFailover move on. Transport failures still propagate: the connection is gone.
+  suspend fun registerPaths() {
+    val rejectedCount =
+      pathConfigs.count { config ->
+        try {
+          registerPath(config.path, config.url, config.labels)
+          false
+        } catch (e: RequestFailureException) {
+          logger.warn { "Proxy rejected static path /${config.path.removePrefix("/")}: ${e.message}" }
+          true
+        }
+      }
+    if (pathConfigs.isNotEmpty() && rejectedCount == pathConfigs.size)
+      throw RequestFailureException("Proxy rejected all ${pathConfigs.size} static paths")
+  }
 
   suspend fun registerPath(
     pathVal: String,

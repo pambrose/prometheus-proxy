@@ -7,10 +7,28 @@ by hand.
 
 1) Bump `version` in `gradle.properties` (the single source of truth).
 
-2) Update the `4.0.1` literals in `README.md` and `llms.txt` (the Docker tag examples and the Maven
-   Central dependency block) to the new version.
+2) Update the `4.0.1` literals to the new version everywhere they are hard-coded
+   (`git grep -n` for the outgoing version finds them all):
+   - `README.md` — the Docker tag examples and the Maven Central dependency block. Also add a summary
+     paragraph for the new version at the top of the **New Features** section; the earlier releases'
+     paragraphs stay as they are.
+   - `llms.txt` — the Docker tag examples and the Maven Central dependency block.
+   - `etc/compose/proxy.yml` — the proxy image tag.
+   - `website/prometheus-proxy/docs/getting-started.md`, `index.md`, and `docker.md` — the Docker pull
+     and run examples, plus the explicit-version-tag tip in `docker.md`.
+   - `src/test/kotlin/website/DockerExamples.txt`, `EmbeddedAgentExamples.txt` (Gradle and Maven), and
+     `KubernetesExamples.txt` — snippet sources included by the website's Docker, Embedded Agent, and
+     Kubernetes pages, so the published site shows whatever version is here.
+   - This step, and the matching line in `.claude/skills/publishing-release/SKILL.md`.
 
-3) Update `CHANGELOG.md` and `RELEASE_NOTES.md` with the changes in this release.
+   Leave historical and illustrative mentions alone: `CHANGELOG.md`, `RELEASE_NOTES.md`,
+   `docs/CODE_REVIEW_*.md`, the per-feature release annotations in `llms.txt`, the release reference in
+   `.claude/rules/dashboard-constraints.md`, the `-PoverrideVersion` snapshot example in `CLAUDE.md`, and
+   the tag and title examples in step 7. `docs/PRODUCT.md` names the latest GitHub release as a product
+   signal; refresh it if it should stay current.
+
+3) Update `CHANGELOG.md` and `RELEASE_NOTES.md` with the changes in this release, renaming each file's
+   `Unreleased` section to the new version and release date.
 
 4) Verify everything passes before merging: `make tests` (or `make all-tests` to also run the
    Docker-based container suite).

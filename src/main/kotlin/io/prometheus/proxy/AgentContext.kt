@@ -43,6 +43,7 @@ import kotlin.time.TimeSource.Monotonic
  * requests are drained and closed.
  *
  * @param remoteAddr the remote address of the connected agent
+ * @param authIdentityName the per-agent auth identity the agent connected as, or empty when unbound
  * @see AgentContextManager
  * @see ProxyPathManager
  */
@@ -50,6 +51,10 @@ internal class AgentContext(
   // Readable: the operational dashboard shows which machine an agent is actually on, which a self-reported
   // agentName cannot establish.
   val remoteAddr: String,
+  // The per-agent auth identity the agent connected as. Recorded only when the transport filter is disabled,
+  // where there is no transport-assigned agentId to bind later calls to. Empty when unbound -- auth disabled,
+  // or a context created by the transport filter. Identity names are never empty, so "" can't collide.
+  val authIdentityName: String = "",
 ) {
   val agentId = AGENT_ID_GENERATOR.incrementAndFetch().toString()
 

@@ -21,7 +21,8 @@ package io.prometheus.agent
 import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
-import com.typesafe.config.ConfigFactory
+import io.grpc.Status
+import io.grpc.StatusException
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.nulls.shouldBeNull
@@ -593,6 +594,86 @@ class AgentPathManagerTest : StringSpec() {
 
       manager["metrics1"].shouldNotBeNull()
       manager["metrics2"].shouldNotBeNull()
+    }
+
+    // A proxy rejects a single path (valid=false, surfaced as RequestFailureException) when, for example,
+    // the agent's identity isn't authorized for it. That rejection must not abort registration of the
+    // agent's other paths -- previously it ended the whole connection and the agent reconnected forever
+    // with every path down.
+    fun agentWithStaticPaths(vararg paths: String): Pair<Agent, AgentGrpcService> {
+      val pathConfigsHocon =
+        paths.joinToString(",\n") { path ->
+          """{ name = "$path", path = "$path", url = "http://localhost:9100/$path", labels = "{}" }"""
+        }
+      val configVals = testConfigVals(
+        """
+        agent {
+          pathConfigs = [
+            $pathConfigsHocon
+          ]
+          filters = []
+        }
+        proxy { auth = [] }
+        """,
+      )
+      val mockGrpcService = mockk<AgentGrpcService>(relaxed = true)
+      val mockAgent = mockk<Agent>(relaxed = true)
+      every { mockAgent.grpcService } returns mockGrpcService
+      every { mockAgent.configVals } returns configVals
+      every { mockAgent.isTestMode } returns true
+      every { mockAgent.agentId } returns "test-agent"
+      return mockAgent to mockGrpcService
+    }
+
+    "registerPaths should register the remaining paths when the proxy rejects one" {
+      val (mockAgent, mockGrpcService) = agentWithStaticPaths("metrics1", "metrics2", "metrics3")
+      coEvery { mockGrpcService.registerPathOnProxy(any(), any(), any(), any()) } returns registerPathResponse {
+        valid = true
+        pathId = 1L
+      }
+      coEvery { mockGrpcService.registerPathOnProxy("metrics2", any(), any(), any()) } throws
+        RequestFailureException("registerPathOnProxy() - path /metrics2 not authorized")
+
+      val manager = AgentPathManager(mockAgent)
+      manager.registerPaths()
+
+      manager["metrics1"].shouldNotBeNull()
+      manager["metrics2"].shouldBeNull()
+      manager["metrics3"].shouldNotBeNull()
+    }
+
+    // Only a proxy's rejection of an individual path is isolated. A transport failure means the
+    // connection itself is gone, so it must still propagate and end the connection attempt.
+    "registerPaths should propagate a transport failure" {
+      val (mockAgent, mockGrpcService) = agentWithStaticPaths("metrics1", "metrics2")
+      coEvery { mockGrpcService.registerPathOnProxy(any(), any(), any(), any()) } throws
+        StatusException(Status.UNAVAILABLE)
+
+      val manager = AgentPathManager(mockAgent)
+
+      shouldThrow<StatusException> { manager.registerPaths() }
+    }
+
+    // A proxy that accepts the agent but rejects every one of its static paths isn't usable. Failing the
+    // connection attempt (rather than staying connected with nothing registered) lets EndpointFailover move
+    // on to the next proxy endpoint.
+    "registerPaths should fail when the proxy rejects every static path" {
+      val (mockAgent, mockGrpcService) = agentWithStaticPaths("metrics1", "metrics2")
+      coEvery { mockGrpcService.registerPathOnProxy(any(), any(), any(), any()) } throws
+        RequestFailureException("registerPathOnProxy() - not authorized")
+
+      val manager = AgentPathManager(mockAgent)
+
+      shouldThrow<RequestFailureException> { manager.registerPaths() }
+    }
+
+    // An agent with no static paths (discovery-only, say) has nothing to reject, so it must still register.
+    "registerPaths should succeed when there are no static paths" {
+      val (mockAgent, mockGrpcService) = agentWithStaticPaths()
+      coEvery { mockGrpcService.registerPathOnProxy(any(), any(), any(), any()) } throws
+        RequestFailureException("registerPathOnProxy() - not authorized")
+
+      AgentPathManager(mockAgent).registerPaths()
     }
 
     "registerPath should attach a configured filter to the path context" {
