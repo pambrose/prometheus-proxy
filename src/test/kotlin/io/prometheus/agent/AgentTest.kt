@@ -20,9 +20,11 @@ package io.prometheus.agent
 
 import ch.qos.logback.classic.Level
 import com.google.common.util.concurrent.RateLimiter
+import com.google.common.util.concurrent.Service
 import io.grpc.Status
 import io.grpc.StatusException
 import io.grpc.StatusRuntimeException
+import io.kotest.assertions.assertSoftly
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.assertions.throwables.shouldNotThrow
 import io.kotest.assertions.throwables.shouldThrow
@@ -31,13 +33,17 @@ import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.ints.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeEmpty
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.cio.CIO
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import io.prometheus.Agent
+import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.agentOptions
 import io.prometheus.common.ConfigLoadException
 import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
@@ -48,9 +54,11 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
+import java.net.ServerSocket
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.minusAssign
 import kotlin.concurrent.atomics.plusAssign
+import kotlin.io.path.createTempFile
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import ch.qos.logback.classic.Logger as LogbackLogger
@@ -94,6 +102,66 @@ class AgentTest : StringSpec() {
           Agent.startAsyncAgent("nonexistent.conf", exitOnMissingConfig = false, logBanner = false)
         }
       exception.message shouldContain "nonexistent.conf"
+    }
+
+    // ==================== Failed startup Tests ====================
+
+    // Guava calls shutDown() only after startUp() succeeds. When startUp() throws -- here because the admin port is
+    // taken -- nothing released the gRPC channel and HTTP client cache the constructor built, or the metrics server
+    // startUp() had already started, and stop() (what EmbeddedAgentInfo.shutdown() calls) threw on the FAILED service.
+    "a failed startup should release what the agent holds and leave stop() safe to call" {
+      CollectorRegistry.defaultRegistry.clear()
+      val metricsPort = ServerSocket(0).use { it.localPort }
+      ServerSocket(0).use { takenAdminPort ->
+        val agent =
+          createTestAgent(
+            "--metrics",
+            "--metrics_port",
+            "$metricsPort",
+            "--admin",
+            "--admin_port",
+            "${takenAdminPort.localPort}",
+          )
+
+        shouldThrow<IllegalStateException> { agent.startSync() }
+
+        // Captured as values first, so each check below reports on its own inside assertSoftly.
+        val state = agent.state()
+        val cacheFailure =
+          runCatching {
+            agent.agentHttpService.httpClientCache.getOrCreateClient(HttpClientCache.ClientKey(null, null)) {
+              HttpClient(CIO)
+            }
+          }.exceptionOrNull()
+        val stopFailure = runCatching { agent.stop() }.exceptionOrNull()
+
+        assertSoftly {
+          state shouldBe Service.State.FAILED
+          agent.grpcService.channel.isShutdown.shouldBeTrue()
+          agent.metricsService.isRunning.shouldBeFalse()
+          cacheFailure?.message.orEmpty() shouldContain "closed"
+          stopFailure.shouldBeNull()
+        }
+      }
+    }
+
+    // The embedded entry point returned its handle right after startAsync(), so a startup failure left the host
+    // holding what looked like a live agent. It now waits for startup and throws the failure.
+    "startAsyncAgent should throw when the agent fails to start" {
+      CollectorRegistry.defaultRegistry.clear()
+      ServerSocket(0).use { takenAdminPort ->
+        val config =
+          createTempFile("failed-start", ".conf").toFile().apply {
+            writeText("agent { admin { enabled = true, port = ${takenAdminPort.localPort} }, pathConfigs = [] }")
+          }
+        try {
+          shouldThrow<IllegalStateException> {
+            Agent.startAsyncAgent(config.absolutePath, exitOnMissingConfig = false, logBanner = false)
+          }.cause.shouldNotBeNull()
+        } finally {
+          config.delete()
+        }
+      }
     }
 
     "awaitInitialConnection should return false immediately with zero timeout" {

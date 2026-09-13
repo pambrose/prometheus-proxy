@@ -63,6 +63,10 @@ Starts the agent in background threads/coroutines.
 
 **Returns:** `EmbeddedAgentInfo`
 
+**Throws:** `ConfigLoadException` when the config cannot be loaded and `exitOnMissingConfig` is `false`;
+`IllegalStateException` when the agent fails to start (for example, its admin or metrics port is already in
+use), with the startup failure as its cause. A failed start releases everything the agent had opened.
+
 ### `EmbeddedAgentInfo`
 
 | Property    | Type     | Description                     |
@@ -75,10 +79,10 @@ Starts the agent in background threads/coroutines.
 When you call `startAsyncAgent()`:
 
 1. The agent reads the configuration file
-2. Starts background coroutines for gRPC communication
-3. Connects to the proxy and registers paths
-4. Returns immediately with agent metadata
-5. The agent continues running in the background, processing scrape requests
+2. Starts its admin and metrics servers, if enabled, and waits for them to come up
+3. Returns with agent metadata, without waiting for a proxy connection
+4. Connects to the proxy and registers paths in the background
+5. Keeps running in the background, processing scrape requests
 
 Your application code runs normally while the agent handles metrics scraping in the background.
 

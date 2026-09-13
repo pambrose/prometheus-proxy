@@ -21,6 +21,8 @@ import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -93,8 +95,11 @@ internal class HttpClientCache(
   // so that potentially slow HttpClient.close() calls don't block other cache operations.
   private val pendingCloses: MutableList<HttpClient> = []
 
-  init {
-    scope.launch {
+  // Started by the first createAndCacheClient() rather than at construction. An Agent builds this cache in its
+  // constructor, ahead of steps that can still throw, and a sweeper already running would outlive that failed
+  // construction with nothing left to cancel it. Until a client exists there is nothing to sweep anyway.
+  private val sweeper: Job =
+    scope.launch(start = CoroutineStart.LAZY) {
       while (isActive) {
         delay(cleanupInterval)
         val clientsToClose =
@@ -110,7 +115,6 @@ internal class HttpClientCache(
         clientsToClose.forEach { closeQuietly(it) }
       }
     }
-  }
 
   class CacheEntry(
     val client: HttpClient,
@@ -197,6 +201,9 @@ internal class HttpClientCache(
 
   fun currentCacheSize() = cacheSize.load()
 
+  // Visible for testing: whether the cleanup sweeper has been started and not yet cancelled.
+  internal val isSweeperRunning: Boolean get() = sweeper.isActive
+
   // When an entry is returned from the cache, it is marked as in use.
   suspend fun getOrCreateClient(
     key: ClientKey,
@@ -250,6 +257,8 @@ internal class HttpClientCache(
     if (cache.size >= maxCacheSize)
       evictLeastRecentlyUsed()
 
+    // A no-op once the sweeper has started, or after close() has cancelled it.
+    sweeper.start()
     val entry = CacheEntry(clientFactory())
     cache[keyString] = entry
     cacheSize.store(cache.size)

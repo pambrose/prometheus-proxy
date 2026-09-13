@@ -22,6 +22,7 @@ import com.pambrose.common.concurrent.await
 import com.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.pambrose.common.dsl.MetricsDsl.healthCheck
+import com.google.common.util.concurrent.Service
 import com.pambrose.common.service.GenericService
 import com.pambrose.common.servlet.LambdaServlet
 import com.pambrose.common.time.format
@@ -592,6 +593,32 @@ class Agent(
       .onFailure { e -> logger.warn(e) { "triggerShutdown() failed to shut down the gRPC channel: ${e.message}" } }
   }
 
+  // Guava calls shutDown() only after startUp() succeeds: when startUp() throws -- an admin or metrics port already in
+  // use -- the service goes straight to FAILED. Without this, the gRPC channel and HTTP client cache built in the
+  // constructor, and any server startUp() had already started, would stay open for the life of the JVM.
+  override fun startUp() {
+    runCatching { super.startUp() }
+      .onFailure { releaseAfterFailedStartUp() }
+      .getOrThrow()
+  }
+
+  // Each step runs whether or not the others succeed: the service whose start failed is itself FAILED, and a FAILED
+  // service rejects stopSync(). The JMX reporter startUp() may also have started is left alone: it holds no thread or
+  // port, and its class is not on this module's compile classpath.
+  private fun releaseAfterFailedStartUp() {
+    val steps: List<() -> Unit> =
+      [
+        { grpcService.shutDown() },
+        { runBlocking { agentHttpService.close() } },
+        { if (isAdminEnabled) servletService.stopSync() },
+        { if (isMetricsEnabled) metricsService.stopSync() },
+        { if (isZipkinEnabled) zipkinReporterService.stopSync() },
+      ]
+    steps.forEach { step ->
+      runCatching(step).onFailure { e -> logger.debug(e) { "Releasing after a failed startup: ${e.message}" } }
+    }
+  }
+
   override fun shutDown() {
     grpcService.shutDown()
     runBlocking { agentHttpService.close() }
@@ -605,6 +632,10 @@ class Agent(
   // and blocks until the service reaches TERMINATED. Calling shutDown() directly would tear down the
   // channel/servlets but leave isRunning true, so the run loop would reconnect forever.
   fun stop() {
+    // A FAILED service rejects stopSync(), and has nothing left to stop: a failure in run() already went through
+    // shutDown(), and a failure in startUp() through releaseAfterFailedStartUp().
+    if (state() == Service.State.FAILED)
+      return
     stopSync()
   }
 
@@ -671,12 +702,13 @@ class Agent(
     }
 
     /**
-     * Starts an Agent on a background thread and returns immediately, suitable for embedding inside another
-     * JVM application.
+     * Starts an Agent on a background thread and returns once it has started, suitable for embedding inside
+     * another JVM application.
      *
-     * Unlike [startSyncAgent], this does not block — the Agent's lifecycle is owned by the caller via the
-     * returned [EmbeddedAgentInfo], which exposes the agent's `launchId` and `agentName` and a `stop()` method
-     * for graceful shutdown.
+     * Unlike [startSyncAgent], this does not block for the Agent's lifetime. It waits only for startup -- the
+     * admin and metrics servers binding their ports -- and not for a proxy connection. The Agent's lifecycle is
+     * then owned by the caller via the returned [EmbeddedAgentInfo], which exposes the agent's `launchId` and
+     * `agentName` and a `shutdown()` method for graceful shutdown.
      *
      * @param configFilename Path or URL to the HOCON config file. Forwarded to the
      *   [AgentOptions] config-filename constructor so it follows the same resolution rules as the
@@ -686,6 +718,8 @@ class Agent(
      * @param logBanner When `true` (default), logs the Agent ASCII banner and version on startup. Pass `false`
      *   to suppress banner output when embedding inside an app that owns its own logging surface.
      * @return An [EmbeddedAgentInfo] handle for inspecting and shutting down the launched Agent.
+     * @throws IllegalStateException if the Agent fails to start, for example because its admin or metrics port is
+     *   already in use. The startup failure is the cause, and whatever the Agent had opened is released first.
      */
     @Suppress("unused")
     @JvmStatic
@@ -699,7 +733,9 @@ class Agent(
           info { getBanner("banners/agent.txt", this) }
           info { getVersionDesc() }
         }
-      val agent = Agent(options = AgentOptions(configFilename, exitOnMissingConfig)) { startAsync() }
+      // startSync(), not startAsync(): a startup failure must reach the caller as an exception rather than leave it
+      // holding a handle to a FAILED agent.
+      val agent = Agent(options = AgentOptions(configFilename, exitOnMissingConfig)) { startSync() }
       return EmbeddedAgentInfo(agent)
     }
   }

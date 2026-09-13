@@ -77,6 +77,15 @@ class HttpClientCacheTest : StringSpec() {
       cache.close()
     }
 
+    // An Agent builds this cache in its constructor, before steps that can still throw (the TLS context is built
+    // after it). A sweeper started at construction would outlive such a failed construction with nothing left to
+    // cancel it, so it starts with the first client instead.
+    "the cleanup sweeper should not start until the first client is created" {
+      cache.isSweeperRunning.shouldBeFalse()
+      cache.getOrCreateClient(ClientKey(null, null)) { createMockHttpClient() }.also { cache.onFinishedWithClient(it) }
+      cache.isSweeperRunning.shouldBeTrue()
+    }
+
     // Finding 9: a throwing HttpClient.close() must never propagate. In the background sweeper loop it
     // would break out of the while(isActive) loop and kill the sweeper permanently (leaking every
     // future expired client); at the batch-close sites it would abort the remaining closes. closeQuietly
