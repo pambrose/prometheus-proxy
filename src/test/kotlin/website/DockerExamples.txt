@@ -35,8 +35,6 @@ docker run --rm \
 ; --8<-- [end:docker-agent-local-config]
 
 ; --8<-- [start:docker-compose-full]
-version: '3.8'
-
 services:
   proxy:
     image: pambrose/prometheus-proxy:4.0.1

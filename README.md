@@ -289,7 +289,8 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
         pambrose/prometheus-agent:4.0.1
 ```
 
-Or use docker-compose: see `etc/compose/proxy.yml` for a working example.
+Or use Docker Compose: [`etc/compose/proxy.yml`](etc/compose/proxy.yml) runs a proxy, an agent, and a Prometheus server
+that scrapes through them (`docker compose -f etc/compose/proxy.yml up`).
 
 Using the config
 file [simple.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf), the proxy

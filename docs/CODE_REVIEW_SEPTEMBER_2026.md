@@ -49,8 +49,8 @@ require the build or tests to pass before merging; and the CLI reference has dri
 | 20 | Workflow supply-chain and efficiency gaps                                    | CI/build      | medium   | ⬜      |
 | 21 | Gradle 10 deprecation comes from the `taskinfo` plugin                       | CI/build      | medium   | ⬜      |
 | 22 | `bin/docker-*.sh` produce an empty image tag                                 | CI/build      | medium   | ✅      |
-| 23 | Oversized Docker build context; wrong `EXPOSE` ports                         | CI/build      | low      | ⬜      |
-| 24 | Stale compose file and nginx run script                                      | CI/build      | low      | ⬜      |
+| 23 | Oversized Docker build context; wrong `EXPOSE` ports                         | CI/build      | low      | ✅      |
+| 24 | Stale compose file and nginx run script                                      | CI/build      | low      | ✅      |
 | 25 | `docs/cli-args.md` documents a nonexistent env var and omits current flags   | Docs          | high     | ✅      |
 | 26 | `security-agent-authentication.md` predates per-agent auth                   | Docs          | medium   | ✅      |
 | 27 | Testing docs cite a nonexistent Gradle task and an incomplete spec list      | Docs          | medium   | ✅      |
@@ -447,7 +447,7 @@ now lives in `gradle.properties`. The lookup returns nothing, so `docker run` re
 
 **Fix:** `sed -n 's/^version=//p' gradle.properties`, matching the Makefile's `VERSION`.
 
-### 23. [ ] Oversized Docker build context; wrong `EXPOSE` ports
+### 23. [x] Oversized Docker build context; wrong `EXPOSE` ports
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -461,7 +461,14 @@ default `8094`. There is no `HEALTHCHECK`, which is defensible because admin `/p
 **Fix:** convert `.dockerignore` to an allowlist (`*` then `!build/libs/prometheus-*.jar`); correct
 the `EXPOSE` list; optionally merge the three `RUN` lines.
 
-### 24. [ ] Stale compose file and nginx run script
+**Resolution:** `.dockerignore` is an allowlist of the two fat JARs. Measuring showed the finding overstated the
+cost: BuildKit, which `docker build` and `make docker-push` use, already transferred only the `COPY` source
+(52 MB) with the old file, and only the deprecated legacy builder sent the full ~137 MB context. `proxy.df` exposes 8080, 8082, 8092, 8094, and 50051, dropping the nginx example's
+50440, and both Dockerfiles create the user and `/app` in one `RUN`. No `HEALTHCHECK` was added, since admin
+`/ping` defaults off. The container suite passes its files to Testcontainers explicitly, so the allowlist does
+not affect it.
+
+### 24. [x] Stale compose file and nginx run script
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -472,6 +479,12 @@ the `EXPOSE` list; optionally merge the three `RUN` lines.
 `run.sh` has no shebang and builds `pambrose/nginx2`.
 
 **Fix:** rewrite `proxy.yml` as a current Compose file or delete it; add a shebang to `run.sh`.
+
+**Resolution:** `proxy.yml` is now a current Compose file that runs the proxy, an agent (`agent.conf`), and
+Prometheus (`prometheus.yml`), which scrapes the proxy's and agent's own metrics through the proxy. `run.sh` has a
+shebang, runs from its own directory, and tags its image `prometheus-proxy-nginx`; its header says to point
+`nginx.conf`'s `grpc_pass` at a real proxy first. The website's Compose snippet also drops the obsolete `version`
+key. Verified by starting the stack: the agent registers both paths, and Prometheus reports both targets up.
 
 ---
 

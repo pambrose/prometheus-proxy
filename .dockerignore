@@ -1,10 +1,7 @@
-.idea/
-.git/
-bin/
-out/
-target/
-etc/docker
-etc/compose
-*.yml
-*.iml
-*.md
+# The images copy only the fat JARs, so nothing else belongs in the build context. BuildKit already transfers only
+# what a COPY names, but the legacy builder sends the whole context (build/ alone is over 130 MB), and an allowlist
+# keeps a later COPY from picking up anything unintended. The container tests pass their files to Testcontainers
+# explicitly and do not read this file.
+*
+!build/libs/prometheus-proxy.jar
+!build/libs/prometheus-agent.jar

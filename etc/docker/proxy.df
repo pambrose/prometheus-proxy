@@ -9,11 +9,10 @@ LABEL maintainer="Paul Ambrose <pambrose@mac.com>"
 # Define the user to use in this instance to prevent using root that even in a container, can be a security risk.
 ENV APPLICATION_USER=prometheus
 
-# Then add the user, create the /app folder and give permissions to our user.
-RUN adduser --disabled-password --gecos '' $APPLICATION_USER
-
-RUN mkdir /app
-RUN chown -R $APPLICATION_USER /app
+# Then add the user, create the /app folder and give permissions to our user, in a single layer.
+RUN adduser --disabled-password --gecos '' $APPLICATION_USER \
+    && mkdir /app \
+    && chown -R $APPLICATION_USER /app
 
 # Mark this container to use the specified $APPLICATION_USER
 USER $APPLICATION_USER
@@ -23,11 +22,8 @@ WORKDIR /app
 
 COPY ./build/libs/prometheus-proxy.jar /app/prometheus-proxy.jar
 
-EXPOSE 8080
-EXPOSE 8082
-EXPOSE 8092
-EXPOSE 50051
-EXPOSE 50440
+# Default ports: scrape (8080), metrics (8082), admin (8092), dashboard (8094), and agent gRPC (50051).
+EXPOSE 8080 8082 8092 8094 50051
 
 CMD []
 

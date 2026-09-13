@@ -1,21 +1,46 @@
-prometheus-proxy:
-  autoredeploy: true
-  image: 'pambrose/prometheus-proxy:4.0.1'
-  ports:
-    - '8080:8080'
-    - '8082:8082'
-    - '8092:8092'
-    - '50051:50051'
-  environment:
-    - PROXY_CONFIG=https://raw.githubusercontent.com/pambrose/config-data/master/prometheus-proxy/cloud-proxy.conf
+# Runs a proxy, an agent, and a Prometheus server that scrapes the proxy's and the agent's own metrics through
+# the proxy. From the repository root:
+#
+#   docker compose -f etc/compose/proxy.yml up
+#
+# then open Prometheus at http://localhost:9090 and check that both targets are up under Status > Targets.
+# In a real deployment the agent runs inside the firewall on another host, with PROXY_HOSTNAME set to the proxy.
 
-prometheus-test:
-  autoredeploy: true
-  image: 'pambrose/prometheus-test:latest'
-  ports:
-    - '9090:9090'
+services:
+  proxy:
+    image: pambrose/prometheus-proxy:4.0.1
+    ports:
+      - "8080:8080"    # Scrape port, for Prometheus
+      - "50051:50051"  # gRPC port, for agents
+      - "8082:8082"    # Proxy metrics
+      - "8092:8092"    # Admin endpoints (/ping, /healthcheck)
+    environment:
+      METRICS_ENABLED: "true"
+      ADMIN_ENABLED: "true"
+    restart: unless-stopped
 
-#zipkin:
-#  image: 'openzipkin/zipkin'
-#  ports:
-#    - '9411:9411'
+  agent:
+    image: pambrose/prometheus-agent:4.0.1
+    ports:
+      - "8083:8083"    # Agent metrics
+      - "8093:8093"    # Admin endpoints
+    environment:
+      AGENT_CONFIG: /app/agent.conf
+      PROXY_HOSTNAME: proxy
+      METRICS_ENABLED: "true"
+      ADMIN_ENABLED: "true"
+    volumes:
+      - ./agent.conf:/app/agent.conf:ro
+    depends_on:
+      - proxy
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.14.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - proxy
+    restart: unless-stopped
