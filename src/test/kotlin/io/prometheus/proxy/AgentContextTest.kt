@@ -450,7 +450,7 @@ class AgentContextTest : StringSpec() {
 
     // ==================== Equality Edge Case Tests ====================
 
-    @Suppress("EqualsNullCall")
+    @Suppress("EqualsNullCall", "SENSELESS_COMPARISON")
     "equals with null should return false" {
       val context = AgentContext("remote-addr")
 

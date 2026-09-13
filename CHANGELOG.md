@@ -63,6 +63,7 @@ All notable changes to this project are documented in this file.
 
 ### Internal
 
+- Clear the compiler warnings from the scrape-limit and dashboard-session counters: the unused-return-value checker flagged `decrementAndFetch()` / `incrementAndFetch()` calls made only for their side effect, which now use the `-=` / `+=` atomic operators, and a deliberate `== null` comparison in `AgentContextTest` now suppresses `SENSELESS_COMPARISON`
 - Simplify string handling in `Utils` (`sanitizeUrl`, `redactQueryValues`, `parseHostPort`) with `substringBefore` / `substringAfter`, and compile the userinfo-redaction regex once instead of on every scrape request. No behavior change
 - Update dependencies: Kotlin 2.4.10 → 2.4.20, gRPC 1.83.1 → 1.84.0, Logback 1.6.1 → 1.6.3, SLF4J 2.0.18 → 2.0.19, Dropwizard metrics 4.2.39 → 4.2.40, and common-utils 3.2.2 → 3.2.3
 - Update build and test tooling: Gradle wrapper 9.6.1 → 9.7.1, detekt 2.0.0-alpha.5 → 2.0.0-alpha.6, Kotest 6.2.3 → 6.2.5, the Gradle versions plugin 0.57.0 → 0.61.0, and the `pambrose-gradle-plugins` convention plugins 1.1.1 → 1.1.4
