@@ -40,7 +40,11 @@ jobs:
       - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           distribution: temurin
-          java-version: 17
+          # JDK 25 (the last, so the default) runs Gradle and the tests, matching the Docker runtime; JDK 17 is the
+          # toolchain the main code compiles with.
+          java-version: |
+            17
+            25
 
       - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
 

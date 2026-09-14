@@ -2,6 +2,8 @@
 # Toolchain
 gradle-wrapper = "9.7.1"
 jvm = "17"
+# The JVM the tests run on: the runtime the Docker images ship (main code still compiles for `jvm`)
+testJvm = "25"
 
 # Kotlin
 kotlin = "2.4.20"
@@ -22,8 +24,8 @@ versions = "0.61.0"
 # gRPC / Protobuf
 grpc = "1.84.0"
 gengrpc = "1.5.0"
-# Keep in sync with grpc
-protoc = "3.25.3"
+# Keep in sync with the protobuf-java version grpc-protobuf depends on (3.25.9 for grpc 1.84.0)
+protoc = "3.25.9"
 # Keep in sync with grpc
 tcnative = "2.0.75.Final"
 

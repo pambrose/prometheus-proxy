@@ -25,6 +25,7 @@ import io.prometheus.containers.support.ContainerTestSupport.LARGE_PAYLOAD_SERIE
 import io.prometheus.containers.support.ContainerTestSupport.METRICS_STUB_ALIAS
 import io.prometheus.common.TestPorts.NGINX_PORT
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
+import io.prometheus.containers.support.ContainerTestSupport.NGINX_IMAGE
 import io.prometheus.containers.support.ContainerTestSupport.SENTINEL_METRIC
 import io.prometheus.containers.support.ContainerTestSupport.SENTINEL_VALUE
 import io.prometheus.containers.support.ContainerTestSupport.agentContainer
@@ -57,7 +58,7 @@ class ContainersLargePayloadTest : StringSpec() {
       val network = Network.newNetwork()
       val largePayload = largeMetricsText().first
       val metricsStub =
-        GenericContainer<Nothing>("nginx:alpine").apply {
+        GenericContainer<Nothing>(NGINX_IMAGE).apply {
           withNetwork(network)
           withNetworkAliases(METRICS_STUB_ALIAS)
           withCopyToContainer(transferable(largePayload), "/usr/share/nginx/html/large")

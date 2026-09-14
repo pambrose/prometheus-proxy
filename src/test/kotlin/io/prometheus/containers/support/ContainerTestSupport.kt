@@ -56,6 +56,12 @@ object ContainerTestSupport {
   /** The default nginx document root path the metrics stub serves its exposition file from. */
   const val NGINX_METRICS_DEST = "/usr/share/nginx/html/metrics"
 
+  /**
+   * The image every nginx stub runs. Pinned rather than the floating `nginx:alpine`, so container runs are
+   * reproducible; the same version as the reverse-proxy example in `nginx/docker/Dockerfile`.
+   */
+  const val NGINX_IMAGE = "nginx:1.29-alpine"
+
   /** True only when `RUN_CONTAINER_TESTS=true`; otherwise every spec registers a single disabled placeholder. */
   fun containerTestsEnabled(): Boolean = System.getenv("RUN_CONTAINER_TESTS") == "true"
 
@@ -102,7 +108,7 @@ object ContainerTestSupport {
     Slf4jLogConsumer(LoggerFactory.getLogger("container.$name")).withPrefix(name)
 
   /**
-   * An `nginx:alpine` container serving one or more classpath exposition files.
+   * An nginx ([NGINX_IMAGE]) container serving one or more classpath exposition files.
    *
    * @param files map of classpath resource → container path (defaults to serving `metrics.txt` at `/metrics`).
    */
@@ -112,7 +118,7 @@ object ContainerTestSupport {
     files: Map<String, String> = mapOf("containers/metrics.txt" to NGINX_METRICS_DEST),
     waitPath: String = "/metrics",
   ): GenericContainer<*> =
-    GenericContainer<Nothing>("nginx:alpine").apply {
+    GenericContainer<Nothing>(NGINX_IMAGE).apply {
       withNetwork(network)
       withNetworkAliases(alias)
       files.forEach { (resource, dest) -> withClasspathResourceMapping(resource, dest, BindMode.READ_ONLY) }

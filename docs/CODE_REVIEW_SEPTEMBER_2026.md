@@ -47,7 +47,7 @@ require the build or tests to pass before merging; and the CLI reference has dri
 | 18 | `master` does not require build or tests to pass                             | CI/build      | high     | ✅      |
 | 19 | Docs site built with different Zensical/Python in CI than locally            | CI/build      | medium   | ✅      |
 | 20 | Workflow supply-chain and efficiency gaps                                    | CI/build      | medium   | ✅      |
-| 21 | Gradle 10 deprecation comes from the `taskinfo` plugin                       | CI/build      | medium   | ⬜      |
+| 21 | Gradle 10 deprecation comes from the `taskinfo` plugin                       | CI/build      | medium   | ✅      |
 | 22 | `bin/docker-*.sh` produce an empty image tag                                 | CI/build      | medium   | ✅      |
 | 23 | Oversized Docker build context; wrong `EXPOSE` ports                         | CI/build      | low      | ✅      |
 | 24 | Stale compose file and nginx run script                                      | CI/build      | low      | ✅      |
@@ -55,12 +55,12 @@ require the build or tests to pass before merging; and the CLI reference has dri
 | 26 | `security-agent-authentication.md` predates per-agent auth                   | Docs          | medium   | ✅      |
 | 27 | Testing docs cite a nonexistent Gradle task and an incomplete spec list      | Docs          | medium   | ✅      |
 | 28 | CHANGELOG/RELEASE_NOTES behind; release checklist misses version literals    | Docs          | medium   | ✅      |
-| 29 | Metrics doc and CLAUDE.md drift                                              | Docs          | low      | ⬜      |
+| 29 | Metrics doc and CLAUDE.md drift                                              | Docs          | low      | ✅      |
 | 30 | Discovery and chunk-failure paths untested                                   | Tests         | medium   | ✅      |
 | 31 | Timing-sensitive and vacuously passing tests                                 | Tests         | medium   | ✅      |
 | 32 | Coverage gate checks totals only                                             | Tests         | low      | ⬜      |
 | 33 | Tracked IDE state, point-in-time docs, dead local directory                  | Hygiene       | low      | ✅      |
-| 34 | Minor build tidy-ups                                                         | Hygiene       | low      | ⬜      |
+| 34 | Minor build tidy-ups                                                         | Hygiene       | low      | ✅      |
 
 **Suggested starting points:** #1, #7, and #8 (they undo per-agent authorization or take an agent
 offline with no failover), #18 (a PR can merge with failing tests), and #25 (operators are told to
@@ -469,7 +469,7 @@ making them. `ci.yml` and `container-tests.yml` share a concurrency group per wo
 superseded pull-request run but never a run on `master`. The separate lint and detekt step is gone, since
 `build -x test` runs `check`, which includes both. `container-tests.yml` still runs on every `master` push.
 
-### 21. [ ] Gradle 10 deprecation comes from the `taskinfo` plugin
+### 21. [x] Gradle 10 deprecation comes from the `taskinfo` plugin
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -480,6 +480,10 @@ removal in Gradle 10, attributed to `org.barfuin.gradle.taskinfo` 3.0.2. The plu
 every non-IntelliJ build, but only `make tibuild` uses it.
 
 **Fix:** upgrade the plugin, or apply it only when a `ti*` task is requested.
+
+**Resolution:** 3.0.2 is still the latest `taskinfo` release, so the plugin is now applied only when a requested
+task name starts with `ti` (as `make tibuild`'s `tiTree` does), and still never during IntelliJ sync.
+`./gradlew help --warning-mode=all` no longer reports the deprecation, and `tiTree` still resolves.
 
 ### 22. [x] `bin/docker-agent.sh` and `bin/docker-proxy.sh` produce an empty image tag
 
@@ -604,7 +608,7 @@ short highlights file; list every version literal in the checklist or template t
 version literal. The maintainer chose to keep both logs as they are (2026-09-13): `CHANGELOG.md` as
 the categorized record and `RELEASE_NOTES.md` as the narrative notes.
 
-### 29. [ ] Metrics doc and CLAUDE.md drift
+### 29. [x] Metrics doc and CLAUDE.md drift
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -617,6 +621,10 @@ container tests use an `nginx:1.29-alpine` stub, but the code uses the floating 
 which also makes container runs non-reproducible.
 
 **Fix:** add the two metrics; pin the nginx tag in code (preferred) or correct CLAUDE.md.
+
+**Resolution:** `docs/metrics-and-grafana.md` lists both `agent_filter_*` counters and notes that they only exist
+for filtered paths. The container stubs share `ContainerTestSupport.NGINX_IMAGE = "nginx:1.29-alpine"` in all four
+places, matching CLAUDE.md and the reverse-proxy example image.
 
 ---
 
@@ -723,7 +731,7 @@ archived plans, and the release checklist now name the archived paths. This revi
 has open findings. `kotlinx-rpc-stubs/`, which held only empty source directories and stale build output, is
 deleted.
 
-### 34. [ ] Minor build tidy-ups
+### 34. [x] Minor build tidy-ups
 
 **Severity:** low · **Confidence:** confirmed unless noted
 
@@ -744,6 +752,14 @@ deleted.
 
 **Fix:** remove the unused dependency and duplicate exclusion; bump `protoc`/`protobuf-kotlin` to
 match grpc; switch to providers; add a JDK 25 CI leg.
+
+**Resolution:** `kotlin("test")` is gone, and so is the `grpc.**` exclusion, which duplicated `grpc.*`; the generated
+stubs are still excluded from the coverage report. `protoc` and `protobuf-kotlin` are at 3.25.9, the protobuf-java
+version grpc 1.84.0 depends on, and Dependabot ignores protobuf majors, which grpc does not support. Both
+`System.getenv` reads use `providers.environmentVariable`. `compileKotlin dependsOn generateProto` was redundant: a
+`--dry-run` without it still runs `generateProto` first, so it is removed. Instead of adding a second CI leg, CI moved
+to JDK 25 as decided: the `Test` tasks run on a Java 25 toolchain launcher (`testJvm`) while main code still
+compiles for Java 17, and `setup-java` installs JDK 17 as the compile toolchain alongside JDK 25.
 
 ---
 

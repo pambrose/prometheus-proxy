@@ -150,6 +150,8 @@ interval as their deadline, capped at the unary deadline.
 
 ### Also in this release
 
+- The tests now run on Java 25, the JVM the Docker images use, while the published artifact still targets
+  Java 17. Protobuf is aligned with grpc at 3.25.9, and the build no longer reports a Gradle 10 deprecation.
 - A path's per-path metric series are removed when its last registration goes away, so paths retired by
   discovery no longer accumulate on `/metrics`.
 - The GitHub Actions workflows pin every action to a commit SHA, cancel superseded pull-request runs, and

@@ -141,11 +141,13 @@ live data structures on each Prometheus scrape, not pushed on every state change
 
 ### Counters
 
-| Metric                       | Labels              | Description                             |
-|------------------------------|---------------------|-----------------------------------------|
-| `agent_scrape_request_count` | `launch_id`, `type` | Scrape requests processed by this agent |
-| `agent_scrape_result_count`  | `launch_id`, `type` | Scrape results sent to proxy            |
-| `agent_connect_count`        | `launch_id`, `type` | Connection attempts to the proxy        |
+| Metric                       | Labels              | Description                                  |
+|------------------------------|---------------------|----------------------------------------------|
+| `agent_scrape_request_count` | `launch_id`, `type` | Scrape requests processed by this agent      |
+| `agent_scrape_result_count`  | `launch_id`, `type` | Scrape results sent to proxy                 |
+| `agent_connect_count`        | `launch_id`, `type` | Connection attempts to the proxy             |
+| `agent_filter_lines_dropped` | `launch_id`, `path` | Lines removed by the path's metric filter    |
+| `agent_filter_bytes_saved`   | `launch_id`, `path` | Bytes saved before gzip by the metric filter |
 
 **`agent_scrape_result_count` type labels:** `non-gzipped`, `gzipped`, `chunked`
 
@@ -153,6 +155,9 @@ live data structures on each Prometheus scrape, not pushed on every state change
 
 The `launch_id` label uniquely identifies each agent process lifetime, allowing
 you to distinguish metrics from agent restarts.
+
+The two `agent_filter_*` counters only create series for paths that have a metric filter configured
+(`agent.filters`), so they are absent entirely unless metric filtering is in use.
 
 ### Histograms
 

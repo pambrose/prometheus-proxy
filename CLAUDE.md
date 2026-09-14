@@ -99,6 +99,7 @@ The `ConfigVals` class is auto-generated from the HOCON schema using tscfg (`mak
 ## Testing
 
 - **Coverage**: kotlinx-kover. HTML report: `./gradlew koverHtmlReport`. XML report (CI): `./gradlew koverXmlReport`. Console summary: `./gradlew koverLog` (also runs after `koverXmlReport` / `koverVerify` via `onCheck = true`). Generated gRPC stubs, `BuildConfig`, and `ConfigVals` are excluded from report statistics (configured in `build.gradle.kts` `configureCoverage()`).
+- **JVMs**: main code compiles for Java 17 (`jvm` in `libs.versions.toml`), the floor the published artifact supports; the `Test` tasks run on a Java 25 launcher (`testJvm`), the runtime the Docker images ship. The foojay resolver provisions either toolchain when it isn't installed.
 
 ### Test Structure
 
