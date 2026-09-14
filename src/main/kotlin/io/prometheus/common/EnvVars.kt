@@ -63,7 +63,7 @@ enum class EnvVars {
   /** Listen address for the Proxy's operational dashboard. Default `0.0.0.0`. */
   DASHBOARD_HOST,
 
-  /** Disable the gRPC server reflection service on the Proxy. Default `false` (reflection enabled). */
+  /** Disable the Proxy's gRPC server reflection service. Default `true` (disabled); `false` enables it. */
   REFLECTION_DISABLED,
 
   /** gRPC handshake timeout for the Proxy server, in seconds. `-1` uses the gRPC default. */

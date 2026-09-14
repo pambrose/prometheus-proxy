@@ -644,7 +644,10 @@ are removed after inactivity timeout (default: 1 minute, controlled by `proxy.in
 
 ### gRPC Reflection
 
-[gRPC Reflection](https://grpc.io/docs/guides/reflection/) is enabled by default for debugging and tooling.
+[gRPC Reflection](https://grpc.io/docs/guides/reflection/) is **disabled by default**, because it lets anyone who reaches
+the agent port list and describe the proxy's API. Enable it for debugging and tooling with
+`proxy.reflectionDisabled=false` in the config file, `-Dproxy.reflectionDisabled=false` on the command line, or
+`REFLECTION_DISABLED=false`.
 
 **Test with [grpcurl](https://github.com/fullstorydev/grpcurl):**
 
@@ -653,22 +656,21 @@ are removed after inactivity timeout (default: 1 minute, controlled by `proxy.in
 grpcurl -plaintext localhost:50051 list
 
 # Describe a service
-grpcurl -plaintext localhost:50051 describe io.prometheus.ProxyService
+grpcurl -plaintext localhost:50051 describe ProxyService
+
+# When the proxy requires agent tokens, present one
+grpcurl -plaintext -H 'agent-token: <token>' localhost:50051 list
 ```
 
 If you use grpcurl `-plaintext` option, make sure that you run the proxy in plaintext
 mode, i.e., do not define any TLS properties.
 
-**Disable reflection:** Use `--ref_disabled`, `REFLECTION_DISABLED`, or `proxy.reflectionDisabled=true`.
-
-**⚠️ Security Note:** Reflection is **unauthenticated** and exposes the full gRPC API surface to anyone who can reach the
-agent port (default `50051`). A client such as `grpcurl` can enumerate every service, method, and message type without
-credentials, making it trivial for an attacker who reaches the port to discover and craft calls (for example, to attempt
-agent or path registration). The optional [agent token](#agent-token-authentication) does **not** protect reflection — the
-token interceptor guards only the `ProxyService` RPCs, not the separate reflection service. Leave reflection on only for
-local debugging on a trusted network; **disable it in production** and anywhere the agent port is reachable beyond trusted
-agents. Disabling reflection only hides the API shape — it is not a substitute for authentication, so still pair the agent
-port with the pre-shared agent token, mutual TLS, and/or network segmentation.
+**⚠️ Security Note:** Reflection exposes the full gRPC API surface: every service, method, and message type. When agent
+authentication is configured (the [agent token](#agent-token-authentication) or per-agent identities), reflection calls
+need a valid token like every other call on the agent port, and fail with `UNAUTHENTICATED` without one. With no agent
+authentication, anyone who can reach the agent port (default `50051`) can use it, so enable it only on a trusted network.
+Hiding the API shape is not a substitute for authentication: still pair the agent port with agent tokens, mutual TLS,
+and/or network segmentation.
 
 ## 🔐 Security & TLS
 

@@ -167,9 +167,11 @@ something.
 - **ProxyTest** — Proxy main class lifecycle, agent info retrieval, JSON serialization, stale agent cleanup
 - **ProxyServiceImplTest** — gRPC implementation: registerAgent, registerPath, heartbeat, scrape responses, chunked
   responses
-- **ProxyGrpcServiceTest** — gRPC server configuration: TLS, keepalive, transport filter, reflection settings
+- **ProxyGrpcServiceTest** — gRPC server configuration: TLS, keepalive, transport filter; reflection is not served
+  when disabled, and when enabled it requires a valid agent token if agent auth is configured
 - **ProxyHttpServiceTest** — ProxyHttpService string representation
-- **ProxyHttpConfigTest** — HTTP server config: Ktor compression, status pages, CORS
+- **ProxyHttpConfigTest** — HTTP server config: Ktor compression, status pages, CORS; a call cancelled by a client
+  disconnect is logged at DEBUG, while an unexpected exception still logs at WARN
 - **ProxyHttpRoutesTest** — HTTP routing: path resolution, query params, error responses, compression,
   ensureLeadingSlash
 - **ProxyPathManagerTest** — Path registration/unregistration, consolidated mode, agent selection, concurrent access

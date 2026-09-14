@@ -18,7 +18,18 @@
 
 package io.prometheus.proxy
 
+import com.pambrose.common.dsl.GrpcDsl.channel
+import com.pambrose.common.utils.TlsContext.Companion.PLAINTEXT_CONTEXT
+import io.grpc.ManagedChannel
+import io.grpc.Metadata
+import io.grpc.Status
+import io.grpc.reflection.v1.ServerReflectionGrpc
+import io.grpc.reflection.v1.ServerReflectionRequest
+import io.grpc.reflection.v1.ServerReflectionResponse
+import io.grpc.stub.MetadataUtils
+import io.grpc.stub.StreamObserver
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -26,7 +37,12 @@ import io.kotest.matchers.string.shouldNotContain
 import io.mockk.every
 import io.mockk.mockk
 import io.prometheus.Proxy
+import io.prometheus.common.GrpcConstants.META_AGENT_TOKEN_KEY
 import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
+import io.prometheus.grpc.ProxyServiceGrpc
+import io.prometheus.proxy.AgentAuthManager.AuthEntry
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
 
 class ProxyGrpcServiceTest : StringSpec() {
   private fun createMockProxy(
@@ -40,6 +56,7 @@ class ProxyGrpcServiceTest : StringSpec() {
     maxConnectionIdleSecs: Long = -1L,
     maxConnectionAgeSecs: Long = -1L,
     maxConnectionAgeGraceSecs: Long = -1L,
+    authManager: AgentAuthManager? = null,
   ): Proxy {
     val mockOptions = mockk<ProxyOptions>(relaxed = true)
     every { mockOptions.certChainFilePath } returns ""
@@ -59,7 +76,63 @@ class ProxyGrpcServiceTest : StringSpec() {
     val mockProxy = mockk<Proxy>(relaxed = true)
     every { mockProxy.options } returns mockOptions
     every { mockProxy.isZipkinEnabled } returns false
+    if (authManager != null)
+      every { mockProxy.agentAuthManager } returns authManager
     return mockProxy
+  }
+
+  // Starts an in-process ProxyGrpcService for [proxy] and runs [block] with a plaintext channel to it.
+  private fun withChannelTo(
+    proxy: Proxy,
+    block: (ManagedChannel) -> Unit,
+  ) {
+    val serverName = "reflection-test-${System.nanoTime()}"
+    val service = ProxyGrpcService(proxy, inProcessName = serverName)
+    service.startAsync().awaitRunning()
+    val channel = channel(tlsContext = PLAINTEXT_CONTEXT, inProcessServerName = serverName) {}
+    try {
+      block(channel)
+    } finally {
+      channel.shutdownNow()
+      service.stopAsync().awaitTerminated()
+    }
+  }
+
+  // Sends one list_services request over the reflection stream, presenting [token] as the agent token when given, and
+  // returns the listed service names or the status the call failed with.
+  private fun listServices(
+    channel: ManagedChannel,
+    token: String? = null,
+  ): Result<List<String>> {
+    val names = CompletableFuture<List<String>>()
+    val stub =
+      ServerReflectionGrpc.newStub(channel).let { stub ->
+        if (token == null)
+          stub
+        else
+          stub.withInterceptors(
+            MetadataUtils.newAttachHeadersInterceptor(Metadata().apply { put(META_AGENT_TOKEN_KEY, token) }),
+          )
+      }
+    val requests =
+      stub.serverReflectionInfo(
+        object : StreamObserver<ServerReflectionResponse> {
+          override fun onNext(value: ServerReflectionResponse) {
+            names.complete(value.listServicesResponse.serviceList.map { it.name })
+          }
+
+          override fun onError(t: Throwable) {
+            names.completeExceptionally(t)
+          }
+
+          override fun onCompleted() {
+            names.completeExceptionally(IllegalStateException("Reflection stream completed without a response"))
+          }
+        },
+      )
+    requests.onNext(ServerReflectionRequest.newBuilder().setListServices("").build())
+    requests.onCompleted()
+    return runCatching { names.get(5, TimeUnit.SECONDS) }
   }
 
   init {
@@ -190,6 +263,41 @@ class ProxyGrpcServiceTest : StringSpec() {
 
       val service = ProxyGrpcService(mockProxy, inProcessName = "no-reflection-test")
       service.shouldNotBeNull()
+    }
+
+    // ==================== Reflection Tests ====================
+    // Reflection lists and describes every service on the agent port, so it is served only when enabled, and then only
+    // to callers that pass the same agent authentication as ProxyService.
+
+    "reflection should not be served when disabled" {
+      withChannelTo(createMockProxy(reflectionDisabled = true)) { channel ->
+        val failure = listServices(channel).exceptionOrNull().shouldNotBeNull()
+        Status.fromThrowable(failure).code shouldBe Status.Code.UNIMPLEMENTED
+      }
+    }
+
+    "reflection should list ProxyService when enabled without agent auth" {
+      withChannelTo(createMockProxy(reflectionDisabled = false)) { channel ->
+        listServices(channel).getOrThrow() shouldContain ProxyServiceGrpc.SERVICE_NAME
+      }
+    }
+
+    "reflection should require a valid agent token when agent auth is configured" {
+      val authManager =
+        AgentAuthManager.create(
+          authEntries = [AuthEntry("team_a", "s3cret", ["team_a_*"])],
+          legacyToken = "",
+        )
+
+      withChannelTo(createMockProxy(reflectionDisabled = false, authManager = authManager)) { channel ->
+        val missingToken = listServices(channel).exceptionOrNull().shouldNotBeNull()
+        val wrongToken = listServices(channel, token = "wrong").exceptionOrNull().shouldNotBeNull()
+        val validToken = listServices(channel, token = "s3cret")
+
+        Status.fromThrowable(missingToken).code shouldBe Status.Code.UNAUTHENTICATED
+        Status.fromThrowable(wrongToken).code shouldBe Status.Code.UNAUTHENTICATED
+        validToken.getOrThrow() shouldContain ProxyServiceGrpc.SERVICE_NAME
+      }
     }
   }
 }

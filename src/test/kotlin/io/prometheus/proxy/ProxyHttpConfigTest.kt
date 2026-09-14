@@ -18,12 +18,20 @@
 
 package io.prometheus.proxy
 
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import com.pambrose.common.dsl.KtorDsl.newHttpClient
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldContain
+import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
+import io.ktor.client.HttpClient
+import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType.Text
@@ -51,7 +59,10 @@ import io.mockk.mockk
 import io.prometheus.Proxy
 import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.common.startAndAwaitReady
+import kotlinx.coroutines.CancellationException
+import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
+import ch.qos.logback.classic.Level as LogbackLevel
 import io.ktor.server.cio.CIO as ServerCIO
 import io.prometheus.common.proxyOptions
 
@@ -490,6 +501,67 @@ class ProxyHttpConfigTest : StringSpec() {
       } finally {
         server.stop(0, 0)
       }
+    }
+
+    // Ktor's HttpRequestLifecycle cancels a call when its client disconnects, which happens on every scrape Prometheus
+    // abandons at its own timeout. The catch-all handler logged each one at WARN with a stack trace.
+    "configureKtorServer should log a call cancelled by a client disconnect at DEBUG, not WARN" {
+      val events =
+        captureProxyHttpConfigLogs {
+          runCatching { it.get("/cancelled") }
+        }
+
+      events.map { it.formattedMessage }.filter { "CancellationException" in it }.shouldNotBeEmpty()
+      events.filter { it.level == LogbackLevel.WARN }.shouldBeEmpty()
+    }
+
+    "configureKtorServer should still log an unexpected exception at WARN" {
+      val events =
+        captureProxyHttpConfigLogs {
+          it.get("/throw").status shouldBe HttpStatusCode.InternalServerError
+        }
+
+      events.filter { it.level == LogbackLevel.WARN }.map { it.throwableProxy?.className } shouldContain
+        IllegalStateException::class.java.name
+    }
+  }
+
+  // Runs [block] against a proxy-configured server whose /cancelled route fails the way HttpRequestLifecycle cancels a
+  // call and whose /throw route fails unexpectedly, and returns what ProxyHttpConfig logged at DEBUG and above. The
+  // server's handlers finish before the response is sent, so the events are complete once [block] returns.
+  private suspend fun captureProxyHttpConfigLogs(block: suspend (HttpClient) -> Unit): List<ILoggingEvent> {
+    val logbackLogger = LoggerFactory.getLogger(ProxyHttpConfig::class.java) as Logger
+    val previousLevel = logbackLogger.level
+    val appender = ListAppender<ILoggingEvent>().apply { start() }
+    logbackLogger.level = LogbackLevel.DEBUG
+    logbackLogger.addAppender(appender)
+
+    val proxy = createTestProxy()
+    val server =
+      embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
+        val app = this
+        with(ProxyHttpConfig) { app.configureKtorServer(proxy, isTestMode = true) }
+        routing {
+          get("/cancelled") {
+            throw CancellationException("Call context was cancelled by `HttpRequestLifecycle` plugin")
+          }
+          get("/throw") { throw IllegalStateException("Test error") }
+        }
+      }
+
+    try {
+      val port = server.startAndAwaitReady()
+      val client = HttpClient { defaultRequest { url("http://localhost:$port") } }
+      try {
+        block(client)
+      } finally {
+        client.close()
+      }
+      return appender.list.toList()
+    } finally {
+      server.stop(0, 0)
+      logbackLogger.detachAppender(appender)
+      logbackLogger.level = previousLevel
     }
   }
 }

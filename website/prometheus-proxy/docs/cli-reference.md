@@ -25,7 +25,7 @@ icon: lucide/terminal
 | `--dashboard_path`               | `DASHBOARD_PATH`                  | `proxy.dashboard.path`                  | "dashboard"              | Dashboard base path          |
 | `--dashboard_host`               | `DASHBOARD_HOST`                  | `proxy.dashboard.host`                  | "0.0.0.0"                | Dashboard listen address     |
 | `--tf-disabled, --tf_disabled`   | `TRANSPORT_FILTER_DISABLED`       | `proxy.transportFilterDisabled`         | false                    | Disable transport filter     |
-| `--ref-disabled, --ref_disabled` | `REFLECTION_DISABLED`             | `proxy.reflectionDisabled`              | false                    | Disable gRPC reflection      |
+| `--ref-disabled, --ref_disabled` | `REFLECTION_DISABLED`             | `proxy.reflectionDisabled`              | true                     | Disable gRPC reflection      |
 | `--log_level`                    | `PROXY_LOG_LEVEL`                 | `proxy.logLevel`                        | "info"                   | Log level                    |
 | `--cert, -t`                     | `CERT_CHAIN_FILE_PATH`            | `proxy.tls.certChainFilePath`           |                          | TLS cert chain file          |
 | `--key, -k`                      | `PRIVATE_KEY_FILE_PATH`           | `proxy.tls.privateKeyFilePath`          |                          | TLS private key file         |

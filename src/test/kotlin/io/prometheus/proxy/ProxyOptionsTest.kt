@@ -77,8 +77,14 @@ class ProxyOptionsTest : StringSpec() {
       shouldThrow<IllegalArgumentException> { proxyOptions(["--dashboard_port", "70000"]) }
     }
 
-    "reflectionDisabled should default to false" {
+    // Reflection lets any peer that reaches the agent port list the proxy's API, so it is off unless asked for.
+    "reflectionDisabled should default to true" {
       val options = proxyOptions(emptyList())
+      options.reflectionDisabled.shouldBeTrue()
+    }
+
+    "reflection should be re-enabled by proxy.reflectionDisabled=false" {
+      val options = proxyOptions(["-Dproxy.reflectionDisabled=false"])
       options.reflectionDisabled.shouldBeFalse()
     }
 

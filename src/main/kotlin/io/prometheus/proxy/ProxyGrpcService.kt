@@ -95,27 +95,31 @@ internal class ProxyGrpcService(
       inProcessServerName = inProcessName,
     ) {
       val proxyService = ProxyServiceImpl(proxy)
+      val authInterceptors: List<ServerInterceptor> =
+        if (proxy.agentAuthManager.isEnabled)
+          listOf(AgentAuthServerInterceptor(proxy.agentAuthManager))
+        else
+          emptyList()
       val interceptors: List<ServerInterceptor> =
         buildList {
           // Auth check first: an unrecognized token is rejected (call.close) before the call proceeds.
           // Ordering is not security-critical (close() short-circuits regardless), but keeps the intent clear.
-          if (proxy.agentAuthManager.isEnabled)
-            add(AgentAuthServerInterceptor(proxy.agentAuthManager))
+          addAll(authInterceptors)
           if (!options.transportFilterDisabled)
             add(ProxyServerInterceptor())
           if (proxy.isZipkinEnabled)
             add(grpcTracing.newServerInterceptor())
         }
 
-      // Only the ProxyService is token-protected. The reflection service (registered separately below) is
-      // intentionally not wrapped; disabling reflection by default is tracked separately (security doc item #3).
       addService(ServerInterceptors.intercept(proxyService.bindService(), interceptors))
 
       if (!options.transportFilterDisabled)
         addTransportFilter(ProxyServerTransportFilter(proxy))
 
+      // Reflection lists and describes every service on the agent port, so it is off by default and, when enabled,
+      // requires the same agent authentication as ProxyService (security doc remediation item 3).
       if (!options.reflectionDisabled)
-        addService(ProtoReflectionServiceV1.newInstance())
+        addService(ServerInterceptors.intercept(ProtoReflectionServiceV1.newInstance(), authInterceptors))
 
       if (options.handshakeTimeoutSecs > -1L)
         handshakeTimeout(options.handshakeTimeoutSecs, SECONDS)
