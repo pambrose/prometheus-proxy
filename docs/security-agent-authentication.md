@@ -10,7 +10,7 @@ open.
 > This document tracks a security limitation in the proxy's agent-facing gRPC interface. It was first recorded as
 > a design gap: the proxy performed no application-level agent authentication. Since then the proxy has gained a
 > pre-shared token, per-agent identities with path authorization (#204), and checks that bind each agent call to
-> the agent it names (#208, and findings #1 and #2 of `docs/CODE_REVIEW_SEPTEMBER_2026.md`). The sections below
+> the agent it names (#208, and findings #1 and #2 of `docs/archive/CODE_REVIEW_SEPTEMBER_2026.md`). The sections below
 > describe the current state and the gaps that remain.
 
 ## Summary
@@ -175,10 +175,10 @@ Item 3 is small and non-breaking; item 4 is a behavior change that needs its own
 - **agentId bound to the connection** (#208) — `registerAgent`, `registerPath`, `unregisterPath`, and
   `readRequestsFromProxy` reject a request naming another connection's agent.
 - **Scrape results and heartbeats bound, and identity binding with the transport filter disabled** (#241, findings
-  #1 and #2 of `docs/CODE_REVIEW_SEPTEMBER_2026.md`) — scrape results are accepted only from the agent the scrape
+  #1 and #2 of `docs/archive/CODE_REVIEW_SEPTEMBER_2026.md`) — scrape results are accepted only from the agent the scrape
   was sent to, `sendHeartBeat` is bound like the other calls, and filter-disabled deployments bind calls to the
   identity recorded at connect.
-- **Accurate startup warnings** (finding #6 of `docs/CODE_REVIEW_SEPTEMBER_2026.md`) — the "agent port is
+- **Accurate startup warnings** (finding #6 of `docs/archive/CODE_REVIEW_SEPTEMBER_2026.md`) — the "agent port is
   unauthenticated" warning no longer treats a trust store as mutual TLS unless TLS is enabled, and the proxy and
   the agent each warn when agent tokens are configured without TLS and would be sent in cleartext.
 

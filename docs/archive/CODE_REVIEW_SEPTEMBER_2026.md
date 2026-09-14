@@ -742,8 +742,8 @@ constructed it without a cause; `ConfigLoadExceptionTest` covers that.
 `SweepConfig.xml`, `material_theme_project_new.xml`, `php.xml`) are no longer tracked, and the personal files are now
 listed in `.gitignore`; local copies are untouched. The June and July reviews, `FEATURE_PROPOSALS_JULY_2026.md`, and
 `superpowers/` moved to `docs/archive/` with a short README, and the references to them in `docs/TESTING.md`, the
-archived plans, and the release checklist now name the archived paths. This review stays in `docs/` while it still
-has open findings. `kotlinx-rpc-stubs/`, which held only empty source directories and stale build output, is
+archived plans, and the release checklist now name the archived paths. This review moved there too once its last
+finding was resolved. `kotlinx-rpc-stubs/`, which held only empty source directories and stale build output, is
 deleted.
 
 ### 34. [x] Minor build tidy-ups

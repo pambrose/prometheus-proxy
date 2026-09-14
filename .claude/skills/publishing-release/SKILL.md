@@ -23,4 +23,4 @@ When bumping the version, update `version` in `gradle.properties` and every hard
 - `src/test/kotlin/website/{DockerExamples,EmbeddedAgentExamples,KubernetesExamples}.txt` — snippet sources the website's Docker, Embedded Agent, and Kubernetes pages include
 - this line, and step 2 of `docs/RELEASE.md`
 
-Leave historical mentions alone (`CHANGELOG.md`, `RELEASE_NOTES.md`, `docs/CODE_REVIEW_*.md`, `docs/archive/`, the per-feature release annotations in `llms.txt`). The release flow itself is documented in `docs/RELEASE.md`.
+Leave historical mentions alone (`CHANGELOG.md`, `RELEASE_NOTES.md`, `docs/archive/`, the per-feature release annotations in `llms.txt`). The release flow itself is documented in `docs/RELEASE.md`.
