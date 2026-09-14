@@ -181,11 +181,16 @@ interval as their deadline, capped at the unary deadline.
   reclaims what they leave behind without touching unrelated images.
 - The dashboard's htmx asset paths are now generated from the dependency catalog, so an htmx bump can no
   longer silently break `/dashboard/assets/htmx.min.js`.
+- The agent and proxy JARs are about 10 MB smaller (50 MB → 40 MB): they no longer carry an unused shaded
+  copy of gRPC's Netty transport. TLS is unchanged. The JARs use the JDK's TLS implementation, as before, and
+  an application that embeds the agent and is built with Maven still gets OpenSSL through `netty-tcnative`.
+  An application that used `grpc-netty-shaded` through the agent now needs to declare that dependency itself.
 
 ### Dependency updates
 
 Runtime: Kotlin 2.4.10 → 2.4.20, gRPC 1.83.1 → 1.84.0, Logback 1.6.1 → 1.6.3, SLF4J 2.0.18 → 2.0.19,
-Dropwizard metrics 4.2.39 → 4.2.40, and common-utils 3.2.2 → 3.2.3. Build and test only: Gradle 9.6.1 →
+Dropwizard metrics 4.2.39 → 4.2.40, and common-utils 3.2.2 → 3.2.3; `grpc-netty-shaded` is removed.
+Build and test only: Gradle 9.6.1 →
 9.7.1, detekt 2.0.0-alpha.5 → alpha.6, Kotest 6.2.3 → 6.2.5, the Gradle versions plugin 0.57.0 → 0.61.0,
 and the shared convention plugins 1.1.1 → 1.1.4. The documentation site's Python lock picks up Zensical
 0.0.52 → 0.0.59.

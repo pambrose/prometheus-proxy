@@ -77,7 +77,6 @@ kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect", version.ref =
 kotlinx-serialization = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 
 # gRPC / Protobuf
-grpc-netty = { module = "io.grpc:grpc-netty-shaded", version.ref = "grpc" }
 grpc-protobuf = { module = "io.grpc:grpc-protobuf", version.ref = "grpc" }
 grpc-stub = { module = "io.grpc:grpc-stub", version.ref = "grpc" }
 grpc-services = { module = "io.grpc:grpc-services", version.ref = "grpc" }
@@ -142,7 +141,6 @@ testcontainers = { module = "org.testcontainers:testcontainers", version.ref = "
 
 [bundles]
 grpc = [
-  "grpc-netty",
   "grpc-protobuf",
   "grpc-stub",
   "grpc-services"
