@@ -16,6 +16,11 @@ build/
 .idea/misc.xml
 .idea/kotlinc.xml
 .idea/inspectionProfiles/Project_Default.xml
+# Personal plugin state
+.idea/copilot.data.migration.*.xml
+.idea/SweepConfig.xml
+.idea/material_theme_project_new.xml
+.idea/php.xml
 
 *.iws
 *.iml

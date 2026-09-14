@@ -276,11 +276,11 @@ mechanism that the standard suite cannot reach:
 - **InProcessHealthCheckTest** — the agent and proxy scrape-backlog health checks through the admin
   endpoint, including both unhealthy branches
 - **InProcessHeartbeatDisabledTest** — with the heartbeat disabled the connection stays usable and shutdown
-  still completes promptly (finding 6 in `CODE_REVIEW_JULY_2026.md`)
+  still completes promptly (finding 6 in `docs/archive/CODE_REVIEW_JULY_2026.md`)
 - **InProcessHeartbeatEvictionTest** — a heartbeat reporting eviction tears the channel down so the run
   loop reconnects, rather than leaving a zombie agent
 - **InProcessIdleShutdownTest** — stopping an idle connected agent must not deadlock (finding 1 in
-  `CODE_REVIEW_JULY_2026.md`)
+  `docs/archive/CODE_REVIEW_JULY_2026.md`)
 - **InProcessReconnectTest** — the full disconnect → reconnect → re-register cycle, in-process
 - **InProcessStaleAgentCleanupTest** — the eviction thread staying off, and being forced on by the
   transport-filter mode
@@ -289,7 +289,7 @@ mechanism that the standard suite cannot reach:
 - **ProxyWebDashboardTest** — the dashboard service rather than the renderer: page, WebSocket push,
   selection round-trip, both layouts, and a root-mounted base path
 - **TlsMutualAuthRejectionTest** — the negative mutual-TLS path over a real Netty handshake, which the
-  in-process TLS specs cannot perform (item 28 in `CODE_REVIEW_JUNE_2026.md`)
+  in-process TLS specs cannot perform (item 28 in `docs/archive/CODE_REVIEW_JUNE_2026.md`)
 
 #### Harness Infrastructure (`harness/support/`)
 

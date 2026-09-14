@@ -2,7 +2,7 @@
 
 Date: 2026-07-20
 Status: Approved, not yet implemented
-Feature: #2 of `docs/FEATURE_PROPOSALS_JULY_2026.md`
+Feature: #2 of `docs/archive/FEATURE_PROPOSALS_JULY_2026.md`
 
 ## Problem
 

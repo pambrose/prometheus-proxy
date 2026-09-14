@@ -1,0 +1,21 @@
+# Keeps the workflow actions and the Gradle version catalog current. Actions are pinned to commit SHAs with the
+# version in a trailing comment; Dependabot updates the SHA and the comment together. Updates are grouped per
+# ecosystem so a routine week produces one PR each rather than one per dependency.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  - package-ecosystem: gradle
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      gradle-minor-and-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]

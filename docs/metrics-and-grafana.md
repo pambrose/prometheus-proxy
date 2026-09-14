@@ -113,6 +113,8 @@ Several values come in proxy-side / agent-side pairs, and the distinction determ
 | `proxy_scrape_request_latency_seconds` | `path`             | 5ms–10s  | End-to-end scrape latency from request creation to response |
 | `proxy_scrape_response_bytes`          | `path`, `encoding` | 1KB–10MB | Response payload size after decompression                   |
 
+A path's series are removed when its last registration goes away, whether it is unregistered or its agent disconnects, so a retired path stops appearing on `/metrics`.
+
 The `encoding` label is `gzipped` or `plain`.
 
 Latency buckets: `.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10` seconds.
