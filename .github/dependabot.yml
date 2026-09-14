@@ -30,3 +30,6 @@ updates:
       # major changes that API and needs a planned upgrade, not a routine bump.
       - dependency-name: "org.webjars.npm:htmx*"
         update-types: ["version-update:semver-major"]
+      # netty-tcnative follows grpc-java, not tcnative's own releases: it stays at the version grpc is built and tested
+      # with, and is updated together with grpc.
+      - dependency-name: "io.netty:netty-tcnative*"
