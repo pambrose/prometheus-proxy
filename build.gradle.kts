@@ -93,8 +93,11 @@ dependencies {
   implementation(libs.protobuf.kotlin)
   implementation(libs.grpc.kotlin.stub)
 
-  // Native BoringSSL/OpenSSL bindings Netty loads reflectively at runtime for TLS; no compile-time
-  // references, so runtimeOnly. Still bundled into the fat JARs via runtimeClasspath (see configureJars).
+  // BoringSSL bindings that let Netty use OpenSSL for TLS instead of the JDK. This artifact holds no native
+  // code: its POM pulls in per-platform classifier jars, which Maven resolves and Gradle does not. So the fat
+  // JARs, and Gradle builds that embed the agent, use the JDK's TLS, while Maven builds that embed the agent
+  // load OpenSSL. Declared to give those builds the tcnative version grpc is tested with (see libs.versions.toml);
+  // runtimeOnly because nothing references it at compile time.
   runtimeOnly(libs.netty.tcnative)
 
   implementation(libs.jetty.servlet)
