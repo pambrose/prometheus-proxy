@@ -1,11 +1,11 @@
 # Security Finding: Unauthenticated Agent Registration / Path Hijacking
 
 **Status:** Mitigated when agent authentication is configured — per-agent identities (`proxy.auth`), a pre-shared
-token, and/or mutual TLS. The agent port is still **unauthenticated by default**, and remediation items 3–4 remain
+token, and/or mutual TLS. The agent port is still **unauthenticated by default**, and remediation item 4 remains
 open.
 **Severity:** High when no authentication is configured and the agent port is reachable
 **Component:** Proxy gRPC service (agent-facing port, default `50051`)
-**Identified:** 2026-06 code review · **Updated:** 2026-09 (per-agent identities and call binding)
+**Identified:** 2026-06 code review · **Updated:** 2026-09 (per-agent identities, call binding, and reflection off by default)
 
 > This document tracks a security limitation in the proxy's agent-facing gRPC interface. It was first recorded as
 > a design gap: the proxy performed no application-level agent authentication. Since then the proxy has gained a
@@ -35,9 +35,9 @@ deployment.
 
 1. **Authentication.** When at least one identity is configured (a `proxy.auth` entry or the legacy
    `proxy.agentToken`), `AgentAuthServerInterceptor` requires an `agent-token` metadata header on every
-   `ProxyService` call. `AgentAuthManager` resolves the token to an identity by comparing SHA-256 digests with
-   `MessageDigest.isEqual`. A missing or unknown token is rejected with `UNAUTHENTICATED` before the call runs, and
-   token values are never logged.
+   `ProxyService` call and, when reflection is enabled, every reflection call. `AgentAuthManager` resolves the token
+   to an identity by comparing SHA-256 digests with `MessageDigest.isEqual`. A missing or unknown token is rejected
+   with `UNAUTHENTICATED` before the call runs, and token values are never logged.
 2. **Path authorization.** `registerPath` rejects a path that matches none of the caller identity's glob patterns.
    An identity with an empty `paths` list — and the legacy shared token — may register any path.
 3. **Binding calls to the agent they name.** Agent calls carry a caller-supplied `agentId`, and agentIds are
@@ -57,7 +57,8 @@ context.
 ## Remaining gaps
 
 - **Unauthenticated by default.** With no token, no identities, and no mutual TLS, the original finding applies in
-  full. The proxy logs a startup warning in this configuration.
+  full. The proxy logs a startup warning in this configuration. If reflection is also enabled, any peer can list
+  and describe the API.
 - **A shared token authenticates agents but cannot tell them apart.** Every holder of `proxy.agentToken` has
   allow-all path authorization, so any of them can displace any other agent's path. When `proxy.auth` is added
   alongside a legacy token, the legacy token keeps that allow-all access until it is removed.
@@ -66,9 +67,6 @@ context.
   that connect with no authentication at all are indistinguishable to the proxy. One of them can act on another's
   agent context: read its scrape requests (including a forwarded Prometheus `Authorization` header), unregister its
   paths, or answer its scrapes. Give each agent its own identity, or keep the transport filter enabled.
-- **gRPC reflection is enabled by default** (`reflectionDisabled = false` in `config/config.conf`), and the
-  reflection service is registered outside the auth interceptor, so a peer can enumerate the API even when tokens
-  are required. See remediation item 3.
 - **Silent path displacement.** A non-consolidated registration still overwrites the path's owner, which is
   convenient for redeploys but lets any agent authorized for a path take it over. See remediation item 4.
 
@@ -84,8 +82,9 @@ These code paths define the default, unauthenticated behavior:
   non-consolidated registration of a path that already has a non-consolidated owner, the proxy overwrites the
   path, increments `agentDisplacementCount`, and invalidates the displaced agent's context if it holds no other
   paths.
-- `proxy/ProxyGrpcService.kt` — installs `AgentAuthServerInterceptor` only when `AgentAuthManager` holds at least
-  one identity, and registers the reflection service unless `reflectionDisabled` is set.
+- `proxy/ProxyGrpcService.kt` — installs `AgentAuthServerInterceptor` for every service on the agent port only when
+  `AgentAuthManager` holds at least one identity, and registers the reflection service only when
+  `reflectionDisabled` is false (the default is true).
 
 ## Preconditions
 
@@ -106,8 +105,8 @@ The original finding is exploitable when **all** of the following hold:
 1. The attacker reaches `proxy-host:50051` — for example, the port is exposed to a wider network than intended, or
    the attacker has a foothold on an adjacent host. *Blocked by network segmentation.*
 2. The attacker runs a minimal gRPC client speaking the `ProxyService` protocol
-   (`src/main/proto/proxy_service.proto`). Because gRPC reflection is enabled by default, the service shape can be
-   enumerated with `grpcurl` rather than reading the source.
+   (`src/main/proto/proxy_service.proto`), which is public in the project's repository. If gRPC reflection has been
+   enabled without agent authentication, `grpcurl` can also enumerate the service shape.
 3. The attacker calls `connectAgent` → `registerAgent` → `registerPath` for an existing path such as
    `/node-exporter`. *Blocked by mutual TLS or by agent authentication; per-agent identities also block a path
    outside the attacker's globs.*
@@ -127,7 +126,8 @@ fabricated data.
   risk: monitoring, alerting, and autoscaling built on these metrics can be misled.
 - **Availability** — the legitimate agent's context is invalidated on displacement, so it must reconnect and
   re-register; an attacker re-registering in a loop can keep a path effectively denied to the real agent.
-- **Information disclosure** — gRPC reflection lets a peer enumerate the full RPC surface.
+- **Information disclosure** — when reflection is enabled without agent authentication, a peer can enumerate the
+  full RPC surface.
 - **Confidentiality, in one configuration** — with the transport filter disabled, a peer that shares another
   agent's identity (or any peer, when no authentication is configured) can read that agent's scrape requests,
   which include any `Authorization` header Prometheus forwards. With the transport filter enabled, the connection
@@ -161,13 +161,14 @@ In rough priority order:
 2. **Document mutual TLS as the recommended production posture** and network segmentation as the minimum bar for
    plaintext deployments. **Partially addressed:** the documentation site's Security page recommends mutual TLS
    and/or restricting the agent port for production.
-3. **Disable gRPC reflection by default** (`reflectionDisabled = true` in `config/config.conf`), so a peer cannot
-   trivially enumerate the API. Operators who need reflection for tooling can opt back in. **Open.**
+3. **Disable gRPC reflection by default.** ✅ **Implemented.** `reflectionDisabled` defaults to `true` in
+   `config/config.conf`, so a peer cannot trivially enumerate the API; operators who need reflection for tooling can
+   set it to `false`. When enabled, reflection sits behind the same agent authentication as `ProxyService`.
 4. **Consider rejecting path displacement by default**, making overwrite an explicit, configurable behavior. The
    silent overwrite is convenient for redeploys but is the mechanism that turns missing or shared authentication
    into hijacking. `agentDisplacementCount` already exists as an observability hook for this event. **Open.**
 
-Item 3 is small and non-breaking; item 4 is a behavior change that needs its own design discussion.
+Item 4 is a behavior change that needs its own design discussion.
 
 ### Implemented since the original finding
 
@@ -195,5 +196,5 @@ Item 3 is small and non-breaking; item 4 is a behavior change that needs its own
 - TLS configuration: `config/config.conf` (`tls { … }` blocks), `common/BaseOptions.kt`
 - Documentation site: `website/prometheus-proxy/docs/security/index.md`, `website/prometheus-proxy/docs/security/tls.md`
 - Tests: `harness/AgentTokenAuthTest.kt`, `harness/AgentPathAuthTest.kt`, `harness/TlsWithMutualAuthTest.kt`,
-  `harness/TlsMutualAuthRejectionTest.kt`, `containers/ContainersAgentTokenAuthTest.kt`, and the binding tests in
-  `proxy/ProxyServiceImplTest.kt`
+  `harness/TlsMutualAuthRejectionTest.kt`, `containers/ContainersAgentTokenAuthTest.kt`, the binding tests in
+  `proxy/ProxyServiceImplTest.kt`, and the reflection tests in `proxy/ProxyGrpcServiceTest.kt`

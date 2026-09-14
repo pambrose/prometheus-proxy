@@ -41,8 +41,8 @@ grpcurl -plaintext localhost:50051 describe ProxyService
 
 # Note: If using TLS, omit the -plaintext flag and provide cert flags.
 
-# Disable reflection:
-java -jar prometheus-proxy.jar --ref_disabled
+# When the proxy requires agent tokens, present one:
+grpcurl -plaintext -H 'agent-token: <token>' localhost:50051 list
 ; --8<-- [end:grpc-reflection-describe]
 
 ; --8<-- [start:performance-tuning-cli]

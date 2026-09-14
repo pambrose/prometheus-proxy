@@ -183,12 +183,15 @@ proxy.transportFilterDisabled = true
 
 ## gRPC Reflection
 
-[gRPC Reflection](https://grpc.io/docs/guides/reflection/) is enabled by default for debugging
-and tooling. Disable it in production if desired:
+[gRPC Reflection](https://grpc.io/docs/guides/reflection/) is disabled by default, because it lets anyone who
+reaches the agent port list and describe the proxy's API. Enable it for debugging and tooling:
 
 ```hocon
-proxy.reflectionDisabled = true
+proxy.reflectionDisabled = false
 ```
+
+When agent authentication is configured (`proxy.agentToken` or `proxy.auth`), reflection calls need a valid agent
+token, like every other call on the agent port.
 
 ## Log Level
 

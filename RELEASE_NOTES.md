@@ -68,6 +68,11 @@ are now redacted everywhere they are sent, logged, or shown, and the proxy also 
 agents. The per-scrape DEBUG trace no longer dumps the request, which included Prometheus's
 `Authorization` header.
 
+**gRPC reflection.** Reflection is now off by default. It let anyone who could reach the agent port list and
+describe the proxy's API, and it ignored agent tokens. If you point `grpcurl` or another reflection client at the
+proxy, set `proxy.reflectionDisabled = false`; when the proxy requires agent tokens, the client must now send one
+in the `agent-token` header, or the call fails with `UNAUTHENTICATED`.
+
 **Scrape request limits.** Anything that could reach the scrape port could queue scrapes without limit,
 each one making an agent fetch an internal target and the proxy buffer the response. Each agent's queue is
 now capped at twice `proxy.internal.scrapeRequestBacklogUnhealthySize` (50 by default), and scrapes in flight
@@ -142,6 +147,8 @@ interval as their deadline, capped at the unary deadline.
 - **Scrapes Prometheus gave up on left no trace.** A target slower than Prometheus's timeout but faster than
   the proxy's, the most common real failure, was missing from the scrape metrics, `/debug`, and the
   dashboard. It now appears under the new outcome `client_cancelled`.
+- **Every scrape Prometheus gave up on also logged a WARN with a stack trace.** The cancellation is now logged at
+  DEBUG.
 - **A host-only `--proxy` or `PROXY_HOSTNAME` ignored `agent.proxy.port`** and dialed 50051. It now uses the
   configured port.
 - **A chunk size or gzip threshold above gRPC's 4 MiB message limit broke every scrape** on the connection.

@@ -95,25 +95,28 @@ internal class ProxyGrpcService(
       inProcessServerName = inProcessName,
     ) {
       val proxyService = ProxyServiceImpl(proxy)
+
+      // Agent authentication covers every service on the agent port, reflection included, so a service registered
+      // here later cannot be left open. gRPC runs server-wide interceptors before per-service ones, so an
+      // unrecognized token is rejected (call.close) before any other interceptor or handler runs.
+      if (proxy.agentAuthManager.isEnabled)
+        intercept(AgentAuthServerInterceptor(proxy.agentAuthManager))
+
       val interceptors: List<ServerInterceptor> =
         buildList {
-          // Auth check first: an unrecognized token is rejected (call.close) before the call proceeds.
-          // Ordering is not security-critical (close() short-circuits regardless), but keeps the intent clear.
-          if (proxy.agentAuthManager.isEnabled)
-            add(AgentAuthServerInterceptor(proxy.agentAuthManager))
           if (!options.transportFilterDisabled)
             add(ProxyServerInterceptor())
           if (proxy.isZipkinEnabled)
             add(grpcTracing.newServerInterceptor())
         }
 
-      // Only the ProxyService is token-protected. The reflection service (registered separately below) is
-      // intentionally not wrapped; disabling reflection by default is tracked separately (security doc item #3).
       addService(ServerInterceptors.intercept(proxyService.bindService(), interceptors))
 
       if (!options.transportFilterDisabled)
         addTransportFilter(ProxyServerTransportFilter(proxy))
 
+      // Reflection lists and describes every service on the agent port, so it is off by default (security doc
+      // remediation item 3); when enabled, the server-wide agent authentication above covers it.
       if (!options.reflectionDisabled)
         addService(ProtoReflectionServiceV1.newInstance())
 

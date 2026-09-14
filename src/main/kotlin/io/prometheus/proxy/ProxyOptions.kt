@@ -138,6 +138,10 @@ class ProxyOptions(
   /**
    * Disables the gRPC server reflection service on the Proxy.
    *
+   * Reflection is disabled by default (`proxy.reflectionDisabled = true`), and when enabled it
+   * requires the same agent authentication as `ProxyService`. Enable it with
+   * `proxy.reflectionDisabled = false` or `REFLECTION_DISABLED=false`; this flag can only disable it.
+   *
    * Both `--ref-disabled` (current) and `--ref_disabled` (legacy typo) are accepted to preserve
    * backwards compatibility for existing deployments.
    */

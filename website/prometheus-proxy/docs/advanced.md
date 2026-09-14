@@ -60,8 +60,11 @@ Use cases:
 
 ## gRPC Reflection
 
-[gRPC Reflection](https://grpc.io/docs/guides/reflection/) is enabled by default, allowing
-tools like [grpcurl](https://github.com/fullstorydev/grpcurl) to inspect the service:
+[gRPC Reflection](https://grpc.io/docs/guides/reflection/) is disabled by default, because it lets anyone who
+reaches the agent port list and describe the proxy's API. Enable it with `proxy.reflectionDisabled = false` (or
+`-Dproxy.reflectionDisabled=false` on the command line) to let tools like
+[grpcurl](https://github.com/fullstorydev/grpcurl) inspect the service. When agent authentication is configured,
+reflection calls need a valid agent token, like every other call on the agent port:
 
 ```text
 --8<-- "AdvancedExamples.txt:grpc-reflection-list"

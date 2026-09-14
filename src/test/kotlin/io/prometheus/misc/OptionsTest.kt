@@ -189,11 +189,6 @@ class OptionsTest : StringSpec() {
       options.sdTargetPrefix shouldBe "http://proxy:$PROXY_HTTP_PORT"
     }
 
-    "verifyProxyReflection can be disabled" {
-      val options = proxyOptions(["--ref_disabled"])
-      options.reflectionDisabled.shouldBeTrue()
-    }
-
     "verifyProxyGrpcSettings should accept custom timeouts" {
       val options = proxyOptions(
         [

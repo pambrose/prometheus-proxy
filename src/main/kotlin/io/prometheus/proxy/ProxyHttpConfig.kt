@@ -43,6 +43,7 @@ import io.ktor.server.plugins.statuspages.StatusPagesConfig
 import io.ktor.server.request.path
 import io.ktor.server.response.respond
 import io.prometheus.Proxy
+import kotlinx.coroutines.CancellationException
 import org.slf4j.event.Level
 
 internal object ProxyHttpConfig {
@@ -111,6 +112,12 @@ internal object ProxyHttpConfig {
   }
 
   fun StatusPagesConfig.configureStatusPages() {
+    // HttpRequestLifecycle cancels a call when its client disconnects, as Prometheus does when a scrape outlives its
+    // timeout. That is routine -- the scrape is already recorded as client_cancelled -- and there is no one to answer.
+    exception<CancellationException> { call, cause ->
+      logger.debug { "Call to ${call.request.path()} cancelled: ${cause.simpleClassName} - ${cause.message}" }
+    }
+
     // Catch all
     exception<Throwable> { call, cause ->
       logger.warn(cause) { "Throwable caught: ${cause.simpleClassName}" }

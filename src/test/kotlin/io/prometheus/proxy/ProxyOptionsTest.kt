@@ -77,8 +77,14 @@ class ProxyOptionsTest : StringSpec() {
       shouldThrow<IllegalArgumentException> { proxyOptions(["--dashboard_port", "70000"]) }
     }
 
-    "reflectionDisabled should default to false" {
+    // Reflection lets any peer that reaches the agent port list the proxy's API, so it is off unless asked for.
+    "reflectionDisabled should default to true" {
       val options = proxyOptions(emptyList())
+      options.reflectionDisabled.shouldBeTrue()
+    }
+
+    "reflection should be re-enabled by proxy.reflectionDisabled=false" {
+      val options = proxyOptions(["-Dproxy.reflectionDisabled=false"])
       options.reflectionDisabled.shouldBeFalse()
     }
 
@@ -128,13 +134,14 @@ class ProxyOptionsTest : StringSpec() {
       options.sdTargetPrefix shouldBe "http://proxy:$PROXY_HTTP_PORT"
     }
 
+    // Reflection is off by default, so each flag test first turns it on in config; the flag has to win over config.
     "reflectionDisabled should be settable via --ref_disabled" {
-      val options = proxyOptions(["--ref_disabled"])
+      val options = proxyOptions(["-Dproxy.reflectionDisabled=false", "--ref_disabled"])
       options.reflectionDisabled.shouldBeTrue()
     }
 
     "reflectionDisabled should accept hyphenated variant --ref-disabled" {
-      val options = proxyOptions(["--ref-disabled"])
+      val options = proxyOptions(["-Dproxy.reflectionDisabled=false", "--ref-disabled"])
       options.reflectionDisabled.shouldBeTrue()
     }
 
