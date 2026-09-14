@@ -644,10 +644,9 @@ are removed after inactivity timeout (default: 1 minute, controlled by `proxy.in
 
 ### gRPC Reflection
 
-[gRPC Reflection](https://grpc.io/docs/guides/reflection/) is **disabled by default**, because it lets anyone who reaches
-the agent port list and describe the proxy's API. Enable it for debugging and tooling with
-`proxy.reflectionDisabled=false` in the config file, `-Dproxy.reflectionDisabled=false` on the command line, or
-`REFLECTION_DISABLED=false`.
+[gRPC Reflection](https://grpc.io/docs/guides/reflection/) is **disabled by default** (see the security note below).
+Enable it for debugging and tooling with `proxy.reflectionDisabled=false` in the config file,
+`-Dproxy.reflectionDisabled=false` on the command line, or `REFLECTION_DISABLED=false`.
 
 **Test with [grpcurl](https://github.com/fullstorydev/grpcurl):**
 

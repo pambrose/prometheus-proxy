@@ -95,16 +95,15 @@ internal class ProxyGrpcService(
       inProcessServerName = inProcessName,
     ) {
       val proxyService = ProxyServiceImpl(proxy)
-      val authInterceptors: List<ServerInterceptor> =
-        if (proxy.agentAuthManager.isEnabled)
-          listOf(AgentAuthServerInterceptor(proxy.agentAuthManager))
-        else
-          emptyList()
+
+      // Agent authentication covers every service on the agent port, reflection included, so a service registered
+      // here later cannot be left open. gRPC runs server-wide interceptors before per-service ones, so an
+      // unrecognized token is rejected (call.close) before any other interceptor or handler runs.
+      if (proxy.agentAuthManager.isEnabled)
+        intercept(AgentAuthServerInterceptor(proxy.agentAuthManager))
+
       val interceptors: List<ServerInterceptor> =
         buildList {
-          // Auth check first: an unrecognized token is rejected (call.close) before the call proceeds.
-          // Ordering is not security-critical (close() short-circuits regardless), but keeps the intent clear.
-          addAll(authInterceptors)
           if (!options.transportFilterDisabled)
             add(ProxyServerInterceptor())
           if (proxy.isZipkinEnabled)
@@ -116,10 +115,10 @@ internal class ProxyGrpcService(
       if (!options.transportFilterDisabled)
         addTransportFilter(ProxyServerTransportFilter(proxy))
 
-      // Reflection lists and describes every service on the agent port, so it is off by default and, when enabled,
-      // requires the same agent authentication as ProxyService (security doc remediation item 3).
+      // Reflection lists and describes every service on the agent port, so it is off by default (security doc
+      // remediation item 3); when enabled, the server-wide agent authentication above covers it.
       if (!options.reflectionDisabled)
-        addService(ServerInterceptors.intercept(ProtoReflectionServiceV1.newInstance(), authInterceptors))
+        addService(ProtoReflectionServiceV1.newInstance())
 
       if (options.handshakeTimeoutSecs > -1L)
         handshakeTimeout(options.handshakeTimeoutSecs, SECONDS)

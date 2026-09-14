@@ -134,13 +134,14 @@ class ProxyOptionsTest : StringSpec() {
       options.sdTargetPrefix shouldBe "http://proxy:$PROXY_HTTP_PORT"
     }
 
+    // Reflection is off by default, so each flag test first turns it on in config; the flag has to win over config.
     "reflectionDisabled should be settable via --ref_disabled" {
-      val options = proxyOptions(["--ref_disabled"])
+      val options = proxyOptions(["-Dproxy.reflectionDisabled=false", "--ref_disabled"])
       options.reflectionDisabled.shouldBeTrue()
     }
 
     "reflectionDisabled should accept hyphenated variant --ref-disabled" {
-      val options = proxyOptions(["--ref-disabled"])
+      val options = proxyOptions(["-Dproxy.reflectionDisabled=false", "--ref-disabled"])
       options.reflectionDisabled.shouldBeTrue()
     }
 

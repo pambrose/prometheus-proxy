@@ -82,9 +82,9 @@ These code paths define the default, unauthenticated behavior:
   non-consolidated registration of a path that already has a non-consolidated owner, the proxy overwrites the
   path, increments `agentDisplacementCount`, and invalidates the displaced agent's context if it holds no other
   paths.
-- `proxy/ProxyGrpcService.kt` — installs `AgentAuthServerInterceptor` only when `AgentAuthManager` holds at least
-  one identity, and registers the reflection service, behind the same interceptor, only when `reflectionDisabled`
-  is false (the default is true).
+- `proxy/ProxyGrpcService.kt` — installs `AgentAuthServerInterceptor` for every service on the agent port only when
+  `AgentAuthManager` holds at least one identity, and registers the reflection service only when
+  `reflectionDisabled` is false (the default is true).
 
 ## Preconditions
 
@@ -182,8 +182,6 @@ Item 4 is a behavior change that needs its own design discussion.
 - **Accurate startup warnings** (finding #6 of `docs/archive/CODE_REVIEW_SEPTEMBER_2026.md`) — the "agent port is
   unauthenticated" warning no longer treats a trust store as mutual TLS unless TLS is enabled, and the proxy and
   the agent each warn when agent tokens are configured without TLS and would be sent in cleartext.
-- **Reflection off by default and behind agent authentication** (remediation item 3) — `reflectionDisabled`
-  defaults to `true`, and an enabled reflection service requires the same agent token as `ProxyService`.
 
 ## References
 

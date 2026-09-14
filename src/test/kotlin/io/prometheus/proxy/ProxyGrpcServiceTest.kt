@@ -21,12 +21,10 @@ package io.prometheus.proxy
 import com.pambrose.common.dsl.GrpcDsl.channel
 import com.pambrose.common.utils.TlsContext.Companion.PLAINTEXT_CONTEXT
 import io.grpc.ManagedChannel
-import io.grpc.Metadata
 import io.grpc.Status
 import io.grpc.reflection.v1.ServerReflectionGrpc
 import io.grpc.reflection.v1.ServerReflectionRequest
 import io.grpc.reflection.v1.ServerReflectionResponse
-import io.grpc.stub.MetadataUtils
 import io.grpc.stub.StreamObserver
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldContain
@@ -37,7 +35,7 @@ import io.kotest.matchers.string.shouldNotContain
 import io.mockk.every
 import io.mockk.mockk
 import io.prometheus.Proxy
-import io.prometheus.common.GrpcConstants.META_AGENT_TOKEN_KEY
+import io.prometheus.agent.AgentTokenClientInterceptor
 import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
 import io.prometheus.grpc.ProxyServiceGrpc
 import io.prometheus.proxy.AgentAuthManager.AuthEntry
@@ -47,7 +45,7 @@ import java.util.concurrent.TimeUnit
 class ProxyGrpcServiceTest : StringSpec() {
   private fun createMockProxy(
     transportFilterDisabled: Boolean = true,
-    reflectionDisabled: Boolean = false,
+    reflectionDisabled: Boolean = true,
     handshakeTimeoutSecs: Long = -1L,
     keepAliveTimeSecs: Long = -1L,
     keepAliveTimeoutSecs: Long = -1L,
@@ -98,8 +96,8 @@ class ProxyGrpcServiceTest : StringSpec() {
     }
   }
 
-  // Sends one list_services request over the reflection stream, presenting [token] as the agent token when given, and
-  // returns the listed service names or the status the call failed with.
+  // Sends one list_services request over the reflection stream, presenting [token] through the agent's own token
+  // interceptor when given, and returns the listed service names or the status the call failed with.
   private fun listServices(
     channel: ManagedChannel,
     token: String? = null,
@@ -107,12 +105,7 @@ class ProxyGrpcServiceTest : StringSpec() {
     val names = CompletableFuture<List<String>>()
     val stub =
       ServerReflectionGrpc.newStub(channel).let { stub ->
-        if (token == null)
-          stub
-        else
-          stub.withInterceptors(
-            MetadataUtils.newAttachHeadersInterceptor(Metadata().apply { put(META_AGENT_TOKEN_KEY, token) }),
-          )
+        if (token == null) stub else stub.withInterceptors(AgentTokenClientInterceptor(token))
       }
     val requests =
       stub.serverReflectionInfo(
@@ -258,19 +251,12 @@ class ProxyGrpcServiceTest : StringSpec() {
       service.shouldNotBeNull()
     }
 
-    "should create server with reflection disabled" {
-      val mockProxy = createMockProxy(reflectionDisabled = true)
-
-      val service = ProxyGrpcService(mockProxy, inProcessName = "no-reflection-test")
-      service.shouldNotBeNull()
-    }
-
     // ==================== Reflection Tests ====================
     // Reflection lists and describes every service on the agent port, so it is served only when enabled, and then only
     // to callers that pass the same agent authentication as ProxyService.
 
     "reflection should not be served when disabled" {
-      withChannelTo(createMockProxy(reflectionDisabled = true)) { channel ->
+      withChannelTo(createMockProxy()) { channel ->
         val failure = listServices(channel).exceptionOrNull().shouldNotBeNull()
         Status.fromThrowable(failure).code shouldBe Status.Code.UNIMPLEMENTED
       }

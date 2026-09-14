@@ -31,7 +31,6 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import io.ktor.client.HttpClient
-import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType.Text
@@ -479,57 +478,38 @@ class ProxyHttpConfigTest : StringSpec() {
       }
     }
 
-    "configureKtorServer should handle exceptions via StatusPages" {
-      val proxy = createTestProxy()
-      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
-        val app = this
-        with(ProxyHttpConfig) { app.configureKtorServer(proxy, isTestMode = true) }
-        routing {
-          get("/throw") { throw IllegalStateException("Test error") }
+    "configureKtorServer should handle exceptions via StatusPages and log them at WARN" {
+      val events =
+        captureProxyHttpConfigLogs { client, baseUrl ->
+          val response = client.get("$baseUrl/throw")
+          response.status shouldBe HttpStatusCode.InternalServerError
+          response.headers["X-Engine"] shouldBe "Ktor"
         }
-      }
 
-      try {
-        val port = server.startAndAwaitReady()
-        val client = newHttpClient()
-
-        val response = client.get("http://localhost:$port/throw")
-        response.status shouldBe HttpStatusCode.InternalServerError
-        response.headers["X-Engine"] shouldBe "Ktor"
-
-        client.close()
-      } finally {
-        server.stop(0, 0)
-      }
+      events.filter { it.level == LogbackLevel.WARN }.map { it.throwableProxy?.className } shouldContain
+        IllegalStateException::class.java.name
     }
 
     // Ktor's HttpRequestLifecycle cancels a call when its client disconnects, which happens on every scrape Prometheus
     // abandons at its own timeout. The catch-all handler logged each one at WARN with a stack trace.
     "configureKtorServer should log a call cancelled by a client disconnect at DEBUG, not WARN" {
       val events =
-        captureProxyHttpConfigLogs {
-          runCatching { it.get("/cancelled") }
+        captureProxyHttpConfigLogs { client, baseUrl ->
+          runCatching { client.get("$baseUrl/cancelled") }
         }
 
       events.map { it.formattedMessage }.filter { "CancellationException" in it }.shouldNotBeEmpty()
       events.filter { it.level == LogbackLevel.WARN }.shouldBeEmpty()
     }
-
-    "configureKtorServer should still log an unexpected exception at WARN" {
-      val events =
-        captureProxyHttpConfigLogs {
-          it.get("/throw").status shouldBe HttpStatusCode.InternalServerError
-        }
-
-      events.filter { it.level == LogbackLevel.WARN }.map { it.throwableProxy?.className } shouldContain
-        IllegalStateException::class.java.name
-    }
   }
 
-  // Runs [block] against a proxy-configured server whose /cancelled route fails the way HttpRequestLifecycle cancels a
-  // call and whose /throw route fails unexpectedly, and returns what ProxyHttpConfig logged at DEBUG and above. The
-  // server's handlers finish before the response is sent, so the events are complete once [block] returns.
-  private suspend fun captureProxyHttpConfigLogs(block: suspend (HttpClient) -> Unit): List<ILoggingEvent> {
+  // Runs [block] with a client and the base URL of a proxy-configured server whose /cancelled route fails the way
+  // HttpRequestLifecycle cancels a call and whose /throw route fails unexpectedly, and returns what ProxyHttpConfig
+  // logged at DEBUG and above. The server's handlers finish before the response is sent, so the events are complete
+  // once [block] returns.
+  private suspend fun captureProxyHttpConfigLogs(
+    block: suspend (client: HttpClient, baseUrl: String) -> Unit,
+  ): List<ILoggingEvent> {
     val logbackLogger = LoggerFactory.getLogger(ProxyHttpConfig::class.java) as Logger
     val previousLevel = logbackLogger.level
     val appender = ListAppender<ILoggingEvent>().apply { start() }
@@ -551,9 +531,9 @@ class ProxyHttpConfigTest : StringSpec() {
 
     try {
       val port = server.startAndAwaitReady()
-      val client = HttpClient { defaultRequest { url("http://localhost:$port") } }
+      val client = newHttpClient()
       try {
-        block(client)
+        block(client, "http://localhost:$port")
       } finally {
         client.close()
       }
