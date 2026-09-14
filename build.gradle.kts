@@ -6,6 +6,7 @@ import com.vanniktech.maven.publish.KotlinJvm
 import com.vanniktech.maven.publish.SourcesJar
 import kotlinx.kover.gradle.plugin.dsl.AggregationType
 import kotlinx.kover.gradle.plugin.dsl.CoverageUnit
+import kotlinx.kover.gradle.plugin.dsl.GroupingEntityType
 import org.gradle.api.provider.ValueSource
 import org.gradle.api.provider.ValueSourceParameters
 import org.gradle.kotlin.dsl.withType
@@ -61,6 +62,11 @@ val detektConfigDir = "$projectDir/config/detekt"
 // Coverage floors enforced by koverVerify; see configureCoverage() for why these values.
 val MIN_LINE_COVERAGE_PCT = 95
 val MIN_BRANCH_COVERAGE_PCT = 87
+
+// Per-class line coverage floor (the perClass report variant in configureCoverage). The totals above leave a few
+// points of headroom that a new, untested class could hide in; this catches it on its own. Set well below the
+// lowest measured hand-written class (ProxyHttpConfig, 90.6%) so ordinary churn does not trip it.
+val MIN_CLASS_LINE_COVERAGE_PCT = 80
 
 buildConfig {
   packageName(basePackage)
@@ -394,6 +400,14 @@ fun Project.configureDetekt() {
 
 fun Project.configureCoverage() {
   kover {
+    // A second report variant over the same JVM test coverage, so the per-class rule below can have filters of its
+    // own: Kover's verification rules cannot be filtered individually.
+    currentProject {
+      createVariant("perClass") {
+        add("jvm")
+      }
+    }
+
     reports {
       filters {
         excludes {
@@ -441,6 +455,50 @@ fun Project.configureCoverage() {
           }
         }
       }
+
+      // Every hand-written class must clear MIN_CLASS_LINE_COVERAGE_PCT on its own, so a new untested class fails the
+      // build instead of disappearing into the totals.
+      variant("perClass") {
+        filtersAppend {
+          excludes {
+            classes(
+              // Compiler-generated classes (lambdas, coroutine bodies, SAM adapters) are named Outer$method$N, and
+              // Kover counts each as a class: a one-line error-handler lambda at 0% would fail the floor while its
+              // enclosing class is fully tested. Their lines still count toward the total floors above.
+              "*$*$*",
+              // JVM entry points (main, startSyncAgent) start a whole process and block, so tests use the embedded
+              // entry point instead.
+              "$basePackage.Proxy\$Companion",
+              "$basePackage.Agent\$Companion",
+            )
+          }
+        }
+        verify {
+          onCheck = false
+          rule("Per-class line coverage floor") {
+            groupBy = GroupingEntityType.CLASS
+            minBound(MIN_CLASS_LINE_COVERAGE_PCT, CoverageUnit.LINE, AggregationType.COVERED_PERCENTAGE)
+          }
+        }
+      }
+    }
+  }
+
+  // Kover 0.9.9 applies one report variant's filters to every Kover report built in the same Gradle invocation, so
+  // running the perClass tasks alongside the total ones silently corrupts the total report -- and with it the total
+  // floors and the Codecov upload. The per-class check therefore runs as its own invocation (a separate ci.yml step and
+  // a second `make coverage-verify` command), and this guard fails fast if the two are ever requested together.
+  val totalKoverTasks =
+    setOf("koverXmlReport", "koverHtmlReport", "koverBinaryReport", "koverVerify", "koverCachedVerify", "koverLog")
+  gradle.taskGraph.whenReady {
+    val names = allTasks.map { it.name }
+    val perClass = names.filter { it.startsWith("kover") && it.endsWith("PerClass") }
+    val total = names.filter { it in totalKoverTasks }
+    if (perClass.isNotEmpty() && total.isNotEmpty()) {
+      throw GradleException(
+        "Run ${perClass.joinToString()} in a separate Gradle invocation from ${total.joinToString()}: Kover 0.9.9 " +
+          "applies one report variant's filters to every report built in the same run, corrupting the total report.",
+      )
     }
   }
 }

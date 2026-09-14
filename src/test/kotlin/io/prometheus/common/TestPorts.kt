@@ -93,6 +93,7 @@ object TestPorts {
 
   // InProcessClientCancelledScrapeTest
   const val CLIENT_CANCELLED_HTTP_PORT = 9590
+  const val CLIENT_CANCELLED_DASHBOARD_PORT = 9591
 
   // ProxyWebDashboardTest
   const val DASHBOARD_UI_PROXY_HTTP_PORT = 9540

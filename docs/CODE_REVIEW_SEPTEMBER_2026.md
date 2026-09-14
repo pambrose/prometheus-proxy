@@ -43,7 +43,7 @@ require the build or tests to pass before merging; and the CLI reference has dri
 | 14 | Prometheus-cancelled scrapes leave no metric or debug trace                  | Proxy         | low      | ✅      |
 | 15 | Per-path metric series never removed                                         | Proxy         | low      | ✅      |
 | 16 | Duplicate consolidated registration adds the agent twice                     | Proxy         | low      | ✅      |
-| 17 | Per-scrape debug/dashboard bookkeeping runs when both are off                | Proxy         | low      | ⬜      |
+| 17 | Per-scrape debug/dashboard bookkeeping runs when both are off                | Proxy         | low      | ✅      |
 | 18 | `master` does not require build or tests to pass                             | CI/build      | high     | ✅      |
 | 19 | Docs site built with different Zensical/Python in CI than locally            | CI/build      | medium   | ✅      |
 | 20 | Workflow supply-chain and efficiency gaps                                    | CI/build      | medium   | ✅      |
@@ -58,7 +58,7 @@ require the build or tests to pass before merging; and the CLI reference has dri
 | 29 | Metrics doc and CLAUDE.md drift                                              | Docs          | low      | ✅      |
 | 30 | Discovery and chunk-failure paths untested                                   | Tests         | medium   | ✅      |
 | 31 | Timing-sensitive and vacuously passing tests                                 | Tests         | medium   | ✅      |
-| 32 | Coverage gate checks totals only                                             | Tests         | low      | ⬜      |
+| 32 | Coverage gate checks totals only                                             | Tests         | low      | ✅      |
 | 33 | Tracked IDE state, point-in-time docs, dead local directory                  | Hygiene       | low      | ✅      |
 | 34 | Minor build tidy-ups                                                         | Hygiene       | low      | ✅      |
 
@@ -401,7 +401,7 @@ count when the only existing owner is the registering agent.
 place, and a non-consolidated one no longer logs, counts, or considers invalidating a displacement of the
 registering agent. The agent still accepts a path listed twice in its config.
 
-### 17. [ ] Per-scrape debug and dashboard bookkeeping runs when both are off
+### 17. [x] Per-scrape debug and dashboard bookkeeping runs when both are off
 
 **Severity:** low (performance) · **Confidence:** confirmed
 
@@ -412,6 +412,11 @@ the current time, takes the process-wide `recentReqs` and `recentScrapes` locks,
 `ScrapeCompleted` event — even though `debugEnabled` and the dashboard both default to off.
 
 **Fix:** skip this work unless `debugEnabled` or the dashboard is enabled.
+
+**Resolution:** `recordScrapeOutcome` builds and logs the `/debug` activity line only when `debugEnabled`, and
+records the dashboard's `ScrapeRecord` and emits `ScrapeCompleted` only when the dashboard is enabled, so with both
+off (the default) a scrape does none of it. `InProcessClientCancelledScrapeTest`, which reads the recent scrapes, now
+turns the dashboard on.
 
 ---
 
@@ -686,7 +691,7 @@ never runs now fails all of them. All 73 hard-coded harness ports, including the
 `localOrGitHub`) requires the file to exist instead of fetching it from GitHub `master`; `HarnessHelpersTest`
 covers both.
 
-### 32. [ ] Coverage gate checks totals only
+### 32. [x] Coverage gate checks totals only
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -697,6 +702,16 @@ apply to totals only, so a new file with no coverage fits inside the ~2–3 poin
 Codecov patch target is `informational: true`, so it never blocks a PR.
 
 **Fix:** make the patch target blocking, or add a per-class minimum rule in kover.
+
+**Resolution:** a per-class rule, in a `perClass` Kover report variant because Kover's verification rules cannot be
+filtered individually. Every class must reach `MIN_CLASS_LINE_COVERAGE_PCT` = 80% line coverage, well below the
+lowest measured hand-written class (`ProxyHttpConfig`, 90.6%). The variant excludes compiler-generated classes
+(`*$*$*`: lambdas, coroutine bodies, SAM adapters), whose lines still count toward the totals, and the `Proxy` and
+`Agent` companions, whose `main` and `startSyncAgent` start a process. It runs as its own Gradle invocation, a separate
+`ci.yml` step and a second `make coverage-verify` command: Kover 0.9.9 applies one report variant's filters to every
+Kover report built in the same run (with both variants in one run the total report dropped to 98 classes), and a
+task-graph guard fails the build if the two are requested together. `ConfigLoadException` sat at 50% because nothing
+constructed it without a cause; `ConfigLoadExceptionTest` covers that.
 
 ---
 

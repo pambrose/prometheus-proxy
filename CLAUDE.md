@@ -98,7 +98,7 @@ The `ConfigVals` class is auto-generated from the HOCON schema using tscfg (`mak
 
 ## Testing
 
-- **Coverage**: kotlinx-kover. HTML report: `./gradlew koverHtmlReport`. XML report (CI): `./gradlew koverXmlReport`. Console summary: `./gradlew koverLog` (also runs after `koverXmlReport` / `koverVerify` via `onCheck = true`). Generated gRPC stubs, `BuildConfig`, and `ConfigVals` are excluded from report statistics (configured in `build.gradle.kts` `configureCoverage()`).
+- **Coverage**: kotlinx-kover. HTML report: `./gradlew koverHtmlReport`. XML report (CI): `./gradlew koverXmlReport`. Console summary: `./gradlew koverLog` (also runs after `koverXmlReport` / `koverVerify` via `onCheck = true`). Generated gRPC stubs, `BuildConfig`, and `ConfigVals` are excluded from report statistics (configured in `build.gradle.kts` `configureCoverage()`). `koverVerify` enforces the total line and branch floors; `koverVerifyPerClass` (the `perClass` report variant) enforces a per-class line floor that skips compiler-generated lambda classes and the `Proxy`/`Agent` entry points, so a new class needs its own tests. Run `koverVerifyPerClass` in its own Gradle invocation: Kover 0.9.9 applies one report variant's filters to every Kover report in the same run, corrupting the total report, so the build fails fast if the two are requested together.
 - **JVMs**: main code compiles for Java 17 (`jvm` in `libs.versions.toml`), the floor the published artifact supports; the `Test` tasks run on a Java 25 launcher (`testJvm`), the runtime the Docker images ship. The foojay resolver provisions either toolchain when it isn't installed.
 
 ### Test Structure

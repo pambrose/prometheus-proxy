@@ -204,8 +204,10 @@ coverage-xml:  ## Generate XML coverage report
 coverage-log:  ## Print coverage % to console
 	$(GRADLE) koverLog
 
-coverage-verify:  ## Run kover coverage threshold verification
+# Two invocations on purpose: Kover 0.9.9 applies one report variant's filters to every report built in the same run.
+coverage-verify:  ## Run kover coverage threshold verification (total floors, then the per-class floor)
 	$(GRADLE) koverVerify
+	$(GRADLE) koverVerifyPerClass
 
 coverage-open: coverage-html  ## Open the HTML coverage report
 	open build/reports/kover/html/index.html

@@ -150,6 +150,8 @@ interval as their deadline, capped at the unary deadline.
 
 ### Also in this release
 
+- A scrape no longer does `/debug` or dashboard bookkeeping unless debug or the dashboard is on, and every
+  hand-written class must now meet a per-class line coverage floor.
 - The tests now run on Java 25, the JVM the Docker images use, while the published artifact still targets
   Java 17. Protobuf is aligned with grpc at 3.25.9, and the build no longer reports a Gradle 10 deprecation.
 - A path's per-path metric series are removed when its last registration goes away, so paths retired by
