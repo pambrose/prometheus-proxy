@@ -232,6 +232,9 @@ Three support helpers also live here (not test classes themselves):
 - **ConfigValsTest** — ConfigVals auto-generated from HOCON schema (validates default values)
 - **DataClassTest** — Config data classes (AdminConfig, MetricsConfig, ZipkinConfig parsing)
 - **OptionsTest** — ProxyOptions and AgentOptions config file loading
+- **ShadowServiceFilesTest** — every class listed in the pinned fat-JAR service files
+  (`src/shadow/resources/META-INF/services/`) loads and implements its service, so a stale provider name fails here
+  instead of only in the container suite
 
 ### Integration Tests (`harness/`)
 
