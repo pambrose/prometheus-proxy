@@ -35,7 +35,7 @@ ktor = "3.5.2"
 # htmx:wsOpen/wsClose/wsError events, neither of which survives the htmx 4 rewrite. Bumping the major
 # means porting ProxyDashboardHtml's connection indicator and reconnect backoff, not just the version.
 # ProxyDashboardService reads these through BuildConfig, so the served asset paths follow them.
-htmx = "2.0.10"
+htmx = "4.0.0"
 htmxWs = "2.0.4"
 
 # Jetty
