@@ -19,3 +19,17 @@ updates:
       gradle-minor-and-patch:
         patterns: ["*"]
         update-types: [minor, patch]
+    ignore:
+      # grpc-java pins protobuf 3.x (grpc 1.84 depends on protobuf-java 3.25.9), and protobuf-generated code does not
+      # carry across a protobuf major, so a protobuf major waits for a grpc release that supports it.
+      - dependency-name: "com.google.protobuf:protobuf-*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "com.google.protobuf:protoc"
+        update-types: ["version-update:semver-major"]
+      # The dashboard is built against the htmx 2 API and its matching WebSocket extension (htmx-ext-ws). An htmx
+      # major changes that API and needs a planned upgrade, not a routine bump.
+      - dependency-name: "org.webjars.npm:htmx*"
+        update-types: ["version-update:semver-major"]
+      # netty-tcnative follows grpc-java, not tcnative's own releases: it stays at the version grpc is built and tested
+      # with, and is updated together with grpc.
+      - dependency-name: "io.netty:netty-tcnative*"

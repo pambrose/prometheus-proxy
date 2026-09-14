@@ -26,6 +26,7 @@ import io.prometheus.common.TestPorts.NGINX_PORT
 import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.common.TestPorts.PROXY_METRICS_PORT
+import io.prometheus.containers.support.ContainerTestSupport.NGINX_IMAGE
 import io.prometheus.containers.support.ContainerTestSupport.agentContainer
 import io.prometheus.containers.support.ContainerTestSupport.containerTestsEnabled
 import io.prometheus.containers.support.ContainerTestSupport.httpClient
@@ -324,14 +325,14 @@ private fun agentConfig(
     appendLine("}")
   }
 
-/** An `nginx:alpine` stub whose document root is populated by [configure]; ready once [waitPath] serves 200. */
+/** An nginx ([NGINX_IMAGE]) stub whose document root is populated by [configure]; ready once [waitPath] serves 200. */
 private fun nginxStub(
   network: Network,
   alias: String,
   waitPath: String,
   configure: GenericContainer<Nothing>.() -> Unit,
 ): GenericContainer<*> =
-  GenericContainer<Nothing>("nginx:alpine").apply {
+  GenericContainer<Nothing>(NGINX_IMAGE).apply {
     withNetwork(network)
     withNetworkAliases(alias)
     withExposedPorts(NGINX_PORT)

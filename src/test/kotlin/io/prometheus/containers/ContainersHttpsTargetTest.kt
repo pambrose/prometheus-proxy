@@ -22,6 +22,7 @@ import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.prometheus.containers.support.ContainerTestSupport.NGINX_IMAGE
 import io.prometheus.containers.support.ContainerTestSupport.NGINX_METRICS_DEST
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.containers.support.ContainerTestSupport.agentContainer
@@ -58,7 +59,7 @@ class ContainersHttpsTargetTest : StringSpec() {
       afterSpec { httpClient.close() }
 
       fun tlsStub(network: Network): GenericContainer<*> =
-        GenericContainer<Nothing>("nginx:alpine").apply {
+        GenericContainer<Nothing>(NGINX_IMAGE).apply {
           withNetwork(network)
           withNetworkAliases("waterzooi.test.google.be")
           withClasspathResourceMapping("containers/nginx-tls.conf", "/etc/nginx/conf.d/https.conf", BindMode.READ_ONLY)
