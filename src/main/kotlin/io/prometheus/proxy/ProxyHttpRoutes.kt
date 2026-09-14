@@ -273,35 +273,42 @@ internal object ProxyHttpRoutes {
 
   // Named for what it now does: this is where a completed scrape becomes observable -- as a text line
   // on /debug, as a structured record for the dashboard, and as an event on the bus.
-  private fun recordScrapeOutcome(
+  internal fun recordScrapeOutcome(
     path: String,
     agentId: String,
     agentName: String,
     response: ScrapeRequestResponse,
     proxy: Proxy,
   ) {
-    val status =
-      buildString {
-        append("/$path - ${response.updateMsg} - ${response.statusCode}")
-        if (!response.statusCode.isSuccess())
-          append(" reason: [${response.failureReason}]")
-        append(" time: ${response.fetchDuration} url: ${response.url}")
-      }
-    proxy.logActivity(status)
-    proxy.recordScrape(
-      ScrapeRecord(
-        agentId = agentId,
-        agentName = agentName,
-        path = path,
-        statusCode = response.statusCode.value,
-        outcome = response.updateMsg,
-        durationMillis = response.fetchDuration.inWholeMilliseconds,
-        contentLength = response.contentText.length,
-      ),
-    )
-    proxy.eventBus.emit(
-      ProxyEvent.ScrapeCompleted(agentId, path, response.statusCode.isSuccess()),
-    )
+    // Each consumer is optional and off by default: the activity line feeds only /debug, and the scrape record and
+    // ScrapeCompleted event feed only the dashboard. Without these checks every agent on every scrape paid for a
+    // formatted status string, two process-wide locks, and an event that nothing reads.
+    if (proxy.options.debugEnabled) {
+      val status =
+        buildString {
+          append("/$path - ${response.updateMsg} - ${response.statusCode}")
+          if (!response.statusCode.isSuccess())
+            append(" reason: [${response.failureReason}]")
+          append(" time: ${response.fetchDuration} url: ${response.url}")
+        }
+      proxy.logActivity(status)
+    }
+    if (proxy.options.dashboardEnabled) {
+      proxy.recordScrape(
+        ScrapeRecord(
+          agentId = agentId,
+          agentName = agentName,
+          path = path,
+          statusCode = response.statusCode.value,
+          outcome = response.updateMsg,
+          durationMillis = response.fetchDuration.inWholeMilliseconds,
+          contentLength = response.contentText.length,
+        ),
+      )
+      proxy.eventBus.emit(
+        ProxyEvent.ScrapeCompleted(agentId, path, response.statusCode.isSuccess()),
+      )
+    }
   }
 
   internal suspend fun submitScrapeRequest(

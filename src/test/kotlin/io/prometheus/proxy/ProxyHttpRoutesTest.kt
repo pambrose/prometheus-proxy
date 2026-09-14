@@ -46,6 +46,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.spyk
+import io.mockk.verify
 import io.prometheus.Proxy
 import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.common.ScrapeResults
@@ -69,6 +70,24 @@ import kotlinx.coroutines.awaitAll
 class ProxyHttpRoutesTest : StringSpec() {
   private val testProxies: MutableList<Proxy> = []
 
+  // A mock proxy with debug and the dashboard switched as given, plus its event bus, for the bookkeeping tests.
+  private fun bookkeepingProxy(
+    debugEnabled: Boolean,
+    dashboardEnabled: Boolean,
+  ): Pair<Proxy, ProxyEventBus> {
+    val options = mockk<ProxyOptions>(relaxed = true)
+    every { options.debugEnabled } returns debugEnabled
+    every { options.dashboardEnabled } returns dashboardEnabled
+    val bus = mockk<ProxyEventBus>(relaxed = true)
+    val proxy = mockk<Proxy>(relaxed = true)
+    every { proxy.options } returns options
+    every { proxy.eventBus } returns bus
+    return proxy to bus
+  }
+
+  private fun scrapedResponse() =
+    ScrapeRequestResponse(statusCode = HttpStatusCode.OK, updateMsg = "success", fetchDuration = 10.milliseconds)
+
   init {
     afterTest {
       testProxies.forEach { proxy ->
@@ -77,25 +96,53 @@ class ProxyHttpRoutesTest : StringSpec() {
       }
       testProxies.clear()
     }
+
+    // ==================== Per-scrape bookkeeping ====================
+
+    // The activity log feeds only /debug, and the scrape record and ScrapeCompleted event feed only the dashboard.
+    // Both are off by default, so a scrape must not pay for either one unless it is on.
+    "recordScrapeOutcome should skip all bookkeeping when debug and the dashboard are both off" {
+      val (proxy, bus) = bookkeepingProxy(debugEnabled = false, dashboardEnabled = false)
+
+      ProxyHttpRoutes.recordScrapeOutcome("metrics", "agent-1", "agent", scrapedResponse(), proxy)
+
+      verify(exactly = 0) { proxy.logActivity(any()) }
+      verify(exactly = 0) { proxy.recordScrape(any()) }
+      verify(exactly = 0) { bus.emit(any()) }
+    }
+
+    "recordScrapeOutcome should write only the activity log when only debug is on" {
+      val (proxy, bus) = bookkeepingProxy(debugEnabled = true, dashboardEnabled = false)
+
+      ProxyHttpRoutes.recordScrapeOutcome("metrics", "agent-1", "agent", scrapedResponse(), proxy)
+
+      verify(exactly = 1) { proxy.logActivity(match { it.contains("/metrics - success - 200") }) }
+      verify(exactly = 0) { proxy.recordScrape(any()) }
+      verify(exactly = 0) { bus.emit(any()) }
+    }
+
+    "recordScrapeOutcome should record the scrape and emit its event when only the dashboard is on" {
+      val (proxy, bus) = bookkeepingProxy(debugEnabled = false, dashboardEnabled = true)
+
+      ProxyHttpRoutes.recordScrapeOutcome("metrics", "agent-1", "agent", scrapedResponse(), proxy)
+
+      verify(exactly = 0) { proxy.logActivity(any()) }
+      verify(exactly = 1) { proxy.recordScrape(match { it.path == "metrics" && it.outcome == "success" }) }
+      verify(exactly = 1) { bus.emit(ofType<ProxyEvent.ScrapeCompleted>()) }
+    }
   }
 
+  // Calls recordScrapeOutcome on [proxy] with debug switched on, so the /debug activity line these tests assert is
+  // written.
   private fun callRecordScrapeOutcome(
     path: String,
     response: ScrapeRequestResponse,
     proxy: Proxy,
-    agentId: String = "test-agent",
-    agentName: String = "test-agent-name",
   ) {
-    val method = ProxyHttpRoutes::class.java.getDeclaredMethod(
-      "recordScrapeOutcome",
-      String::class.java,
-      String::class.java,
-      String::class.java,
-      ScrapeRequestResponse::class.java,
-      Proxy::class.java,
-    )
-    method.isAccessible = true
-    method.invoke(ProxyHttpRoutes, path, agentId, agentName, response, proxy)
+    val options = mockk<ProxyOptions>(relaxed = true)
+    every { options.debugEnabled } returns true
+    every { proxy.options } returns options
+    ProxyHttpRoutes.recordScrapeOutcome(path, "agent-1", "agent", response, proxy)
   }
 
   private fun createSpyProxyForSubmit(
@@ -354,9 +401,9 @@ class ProxyHttpRoutesTest : StringSpec() {
     }
 
     // ==================== recordScrapeOutcome Tests ====================
-    // recordScrapeOutcome is private, so we test it via reflection. It is the single point where a
-    // completed scrape becomes observable: the /debug text line asserted here, plus a structured
-    // record for the dashboard and an event on the bus.
+    // recordScrapeOutcome is the single point where a completed scrape becomes observable: the /debug text line
+    // asserted here (written only while debug is on), plus a structured record for the dashboard and an event on the
+    // bus (only while the dashboard is on).
     // It formats: "/$path - $updateMsg - $statusCode [reason: [$failureReason]] time: $fetchDuration url: $url"
 
     "recordScrapeOutcome should format success status without failure reason" {

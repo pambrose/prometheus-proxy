@@ -61,7 +61,13 @@ class InProcessClientCancelledScrapeTest : StringSpec() {
         }
       val stubPort = stub.startAndAwaitReady()
 
-      val proxy = startProxy(serverName = serverName, proxyPort = HTTP_PORT)
+      // The assertion reads the dashboard's recent scrapes, which the proxy records only while the dashboard is on.
+      val proxy =
+        startProxy(
+          serverName = serverName,
+          proxyPort = HTTP_PORT,
+          args = ["--dashboard", "--dashboard_port", "$DASHBOARD_PORT"],
+        )
       val client =
         HttpClient(CIO) {
           install(HttpTimeout) { requestTimeoutMillis = CLIENT_TIMEOUT.inWholeMilliseconds }
@@ -91,6 +97,7 @@ class InProcessClientCancelledScrapeTest : StringSpec() {
 
   companion object {
     private const val HTTP_PORT = TestPorts.CLIENT_CANCELLED_HTTP_PORT
+    private const val DASHBOARD_PORT = TestPorts.CLIENT_CANCELLED_DASHBOARD_PORT
     private const val PATH = "slowpath"
     private val TARGET_DELAY = 3.seconds
     private val CLIENT_TIMEOUT = 1.seconds
