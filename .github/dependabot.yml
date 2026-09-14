@@ -26,3 +26,7 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "com.google.protobuf:protoc"
         update-types: ["version-update:semver-major"]
+      # The dashboard is built against the htmx 2 API and its matching WebSocket extension (htmx-ext-ws). An htmx
+      # major changes that API and needs a planned upgrade, not a routine bump.
+      - dependency-name: "org.webjars.npm:htmx*"
+        update-types: ["version-update:semver-major"]
