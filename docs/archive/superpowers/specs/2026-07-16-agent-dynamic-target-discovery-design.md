@@ -2,7 +2,7 @@
 
 - **Date:** 2026-07-16
 - **Status:** Approved (design); implementation pending
-- **Feature:** Feature 1 from `docs/FEATURE_PROPOSALS_JULY_2026.md`
+- **Feature:** Feature 1 from `docs/archive/FEATURE_PROPOSALS_JULY_2026.md`
 
 ## Context
 

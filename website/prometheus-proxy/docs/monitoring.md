@@ -103,6 +103,8 @@ The same options are available under `agent.metrics`.
 | `proxy_scrape_request_latency_seconds` | `path`             | End-to-end scrape latency                 |
 | `proxy_scrape_response_bytes`          | `path`, `encoding` | Response payload size after decompression |
 
+A path's series are removed when its last registration goes away, whether it is unregistered or its agent disconnects, so a retired path stops appearing on `/metrics`.
+
 Latency buckets: 5ms, 10ms, 25ms, 50ms, 100ms, 250ms, 500ms, 1s, 2.5s, 5s, 10s
 
 Response size buckets: 1KB, 10KB, 100KB, 500KB, 1MB, 5MB, 10MB

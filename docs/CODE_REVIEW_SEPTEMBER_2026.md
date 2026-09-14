@@ -41,12 +41,12 @@ require the build or tests to pass before merging; and the CLI reference has dri
 | 12 | Chunk size and gzip threshold unbounded vs gRPC 4 MiB limit                  | Agent         | low      | ✅      |
 | 13 | Host-only proxy address ignores `agent.proxy.port`                           | Agent         | low      | ✅      |
 | 14 | Prometheus-cancelled scrapes leave no metric or debug trace                  | Proxy         | low      | ✅      |
-| 15 | Per-path metric series never removed                                         | Proxy         | low      | ⬜      |
+| 15 | Per-path metric series never removed                                         | Proxy         | low      | ✅      |
 | 16 | Duplicate consolidated registration adds the agent twice                     | Proxy         | low      | ✅      |
 | 17 | Per-scrape debug/dashboard bookkeeping runs when both are off                | Proxy         | low      | ⬜      |
 | 18 | `master` does not require build or tests to pass                             | CI/build      | high     | ✅      |
 | 19 | Docs site built with different Zensical/Python in CI than locally            | CI/build      | medium   | ✅      |
-| 20 | Workflow supply-chain and efficiency gaps                                    | CI/build      | medium   | ⬜      |
+| 20 | Workflow supply-chain and efficiency gaps                                    | CI/build      | medium   | ✅      |
 | 21 | Gradle 10 deprecation comes from the `taskinfo` plugin                       | CI/build      | medium   | ⬜      |
 | 22 | `bin/docker-*.sh` produce an empty image tag                                 | CI/build      | medium   | ✅      |
 | 23 | Oversized Docker build context; wrong `EXPOSE` ports                         | CI/build      | low      | ✅      |
@@ -59,7 +59,7 @@ require the build or tests to pass before merging; and the CLI reference has dri
 | 30 | Discovery and chunk-failure paths untested                                   | Tests         | medium   | ✅      |
 | 31 | Timing-sensitive and vacuously passing tests                                 | Tests         | medium   | ✅      |
 | 32 | Coverage gate checks totals only                                             | Tests         | low      | ⬜      |
-| 33 | Tracked IDE state, point-in-time docs, dead local directory                  | Hygiene       | low      | ⬜      |
+| 33 | Tracked IDE state, point-in-time docs, dead local directory                  | Hygiene       | low      | ✅      |
 | 34 | Minor build tidy-ups                                                         | Hygiene       | low      | ⬜      |
 
 **Suggested starting points:** #1, #7, and #8 (they undo per-agent authorization or take an agent
@@ -365,7 +365,7 @@ outcome (status 499 on `/debug` and the dashboard), the latency observation, and
 rethrowing. `NonCancellable` was not needed, since none of that recording suspends. A cancellation during proxy
 shutdown is recorded the same way, and the WARN stack trace StatusPages logs for the cancellation is unchanged.
 
-### 15. [ ] Per-path metric series are never removed
+### 15. [x] Per-path metric series are never removed
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -376,6 +376,12 @@ creating and retiring paths, every path ever scraped keeps its full histogram se
 on `/metrics` indefinitely.
 
 **Fix:** remove the label sets when a path's last registration goes away, or drop the `path` label.
+
+**Resolution:** the label sets are removed; the `path` label stays. `ProxyMetrics.removePathSeries` reads the series
+each per-path histogram currently holds for the path and removes every one, whatever its outcome or encoding, and
+`ProxyPathManager` calls it when an unregister or an agent disconnect removes a path's last registration. A
+consolidated path keeps its series while any agent still serves it. A scrape still in flight when its path is
+removed can record into the histograms afterwards and recreate that path's series.
 
 ### 16. [x] Duplicate consolidated registration adds the agent twice
 
@@ -438,7 +444,7 @@ exist and grants `pages: write` and `id-token: write` at workflow level rather t
 **Fix:** use `astral-sh/setup-uv` and `uv run --locked zensical build`; drop the `main` trigger; move
 the write permissions onto the deploy job.
 
-### 20. [ ] Workflow supply-chain and efficiency gaps
+### 20. [x] Workflow supply-chain and efficiency gaps
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -454,6 +460,14 @@ have no concurrency groups, so repeated pushes stack runs, and `container-tests.
 **Fix:** pin actions to SHAs; add Dependabot for `github-actions` and `gradle`; add
 `concurrency: { group: ${{ github.workflow }}-${{ github.ref }}, cancel-in-progress: true }`; drop
 the duplicate lint step.
+
+**Resolution:** every action in the four workflows is pinned to the commit SHA of the major version already in use,
+with the exact version in a trailing comment; `claude.yml` moved from `actions/checkout` v4 to v5 with the rest.
+Several actions are now one or more majors behind their latest release, and the new `.github/dependabot.yml`
+(weekly, grouped updates for `github-actions` and `gradle`) will propose those upgrades rather than this change
+making them. `ci.yml` and `container-tests.yml` share a concurrency group per workflow and ref that cancels a
+superseded pull-request run but never a run on `master`. The separate lint and detekt step is gone, since
+`build -x test` runs `check`, which includes both. `container-tests.yml` still runs on every `master` push.
 
 ### 21. [ ] Gradle 10 deprecation comes from the `taskinfo` plugin
 
@@ -680,7 +694,7 @@ Codecov patch target is `informational: true`, so it never blocks a PR.
 
 ## 🧹 Repository hygiene
 
-### 33. [ ] Tracked IDE state, point-in-time docs, and a dead local directory
+### 33. [x] Tracked IDE state, point-in-time docs, and a dead local directory
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -700,6 +714,14 @@ Codecov patch target is `informational: true`, so it never blocks a PR.
 
 **Fix:** `git rm --cached` the ignored and personal `.idea` files; move dated documents to
 `docs/archive/` and qualify the finding references; delete `kotlinx-rpc-stubs/` locally.
+
+**Resolution:** the three ignored-but-tracked `.idea` files and the personal plugin state (`copilot.data.migration.*`,
+`SweepConfig.xml`, `material_theme_project_new.xml`, `php.xml`) are no longer tracked, and the personal files are now
+listed in `.gitignore`; local copies are untouched. The June and July reviews, `FEATURE_PROPOSALS_JULY_2026.md`, and
+`superpowers/` moved to `docs/archive/` with a short README, and the references to them in `docs/TESTING.md`, the
+archived plans, and the release checklist now name the archived paths. This review stays in `docs/` while it still
+has open findings. `kotlinx-rpc-stubs/`, which held only empty source directories and stale build output, is
+deleted.
 
 ### 34. [ ] Minor build tidy-ups
 

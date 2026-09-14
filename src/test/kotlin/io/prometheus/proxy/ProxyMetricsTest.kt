@@ -47,6 +47,14 @@ class ProxyMetricsTest : StringSpec() {
     return mockProxy
   }
 
+  // Every path label value across the per-path histograms' series.
+  private fun seriesPaths(metrics: ProxyMetrics): Set<String> =
+    listOf(metrics.scrapeRequestLatency, metrics.scrapeResponseBytes)
+      .flatMap { it.collect() }
+      .flatMap { it.samples }
+      .map { it.labelValues.first() }
+      .toSet()
+
   init {
     beforeEach {
       // Clear the default Prometheus registry to avoid "already registered" errors
@@ -97,6 +105,23 @@ class ProxyMetricsTest : StringSpec() {
       val metrics = ProxyMetrics(proxy)
 
       metrics.scrapeResponseBytes.shouldNotBeNull()
+    }
+
+    // ==================== Per-path Series Removal Tests ====================
+
+    // A retired path's series used to stay in memory and on /metrics forever. Removal must take every series for the
+    // path, whatever its outcome or encoding, and leave other paths alone.
+    "removePathSeries should drop every series for the path and keep other paths" {
+      val metrics = ProxyMetrics(createMockProxy())
+      metrics.scrapeRequestLatency.labels("retired", "success").observe(0.1)
+      metrics.scrapeRequestLatency.labels("retired", "timed_out").observe(0.2)
+      metrics.scrapeRequestLatency.labels("kept", "success").observe(0.1)
+      metrics.scrapeResponseBytes.labels("retired", "gzipped").observe(1_000.0)
+      metrics.scrapeResponseBytes.labels("kept", "plain").observe(1_000.0)
+
+      metrics.removePathSeries("retired")
+
+      seriesPaths(metrics) shouldBe setOf("kept")
     }
 
     // ==================== New Counter Initialization Tests ====================

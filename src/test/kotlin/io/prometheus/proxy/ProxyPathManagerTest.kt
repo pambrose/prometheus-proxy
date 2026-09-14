@@ -62,6 +62,14 @@ class ProxyPathManagerTest : StringSpec() {
     return context
   }
 
+  // Runs the manager's proxy.metrics { } blocks against [target], so a test can verify which metric calls it made.
+  private fun routeMetrics(
+    proxy: Proxy,
+    target: ProxyMetrics,
+  ) {
+    every { proxy.metrics(any<ProxyMetrics.() -> Unit>()) } answers { firstArg<ProxyMetrics.() -> Unit>()(target) }
+  }
+
   init {
     "addPath should add new path successfully" {
       val proxy = createMockProxy()
@@ -639,6 +647,57 @@ class ProxyPathManagerTest : StringSpec() {
     }
 
     // ==================== removeFromPathManager Edge Cases ====================
+
+    // A path's per-path metric series go when its last registration does, so a retired path stops holding series
+    // in memory and on /metrics.
+    "removePath should remove the path's metric series when its last registration goes away" {
+      val proxy = createMockProxy()
+      val metrics = mockk<ProxyMetrics>(relaxed = true)
+      routeMetrics(proxy, metrics)
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val context = createMockAgentContext()
+      manager.addPath("metrics", "{}", context)
+
+      manager.removePath("metrics", context.agentId)
+
+      verify(exactly = 1) { metrics.removePathSeries("metrics") }
+    }
+
+    "removePath should keep a consolidated path's metric series while another agent still serves it" {
+      val proxy = createMockProxy()
+      val metrics = mockk<ProxyMetrics>(relaxed = true)
+      routeMetrics(proxy, metrics)
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val context1 = createMockAgentContext(consolidated = true)
+      val context2 = createMockAgentContext(consolidated = true)
+      manager.addPath("metrics", "{}", context1)
+      manager.addPath("metrics", "{}", context2)
+
+      manager.removePath("metrics", context1.agentId)
+      verify(exactly = 0) { metrics.removePathSeries(any()) }
+
+      manager.removePath("metrics", context2.agentId)
+      verify(exactly = 1) { metrics.removePathSeries("metrics") }
+    }
+
+    // An agent disconnect retires every path it alone served, and only those.
+    "removeFromPathManager should remove the metric series of each path the disconnect retires" {
+      val proxy = createMockProxy()
+      val metrics = mockk<ProxyMetrics>(relaxed = true)
+      routeMetrics(proxy, metrics)
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val leaving = createMockAgentContext()
+      val staying = createMockAgentContext()
+      manager.addPath("a", "{}", leaving)
+      manager.addPath("b", "{}", leaving)
+      manager.addPath("c", "{}", staying)
+
+      manager.removeFromPathManager(leaving.agentId, "disconnect")
+
+      verify(exactly = 1) { metrics.removePathSeries("a") }
+      verify(exactly = 1) { metrics.removePathSeries("b") }
+      verify(exactly = 0) { metrics.removePathSeries("c") }
+    }
 
     "removeFromPathManager should throw when agentId is empty" {
       val proxy = createMockProxy()

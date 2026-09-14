@@ -2,7 +2,7 @@
 
 - **Date:** 2026-07-19
 - **Status:** Approved (design); implementation pending
-- **Feature:** Feature 4 from `docs/FEATURE_PROPOSALS_JULY_2026.md` (MVP scope)
+- **Feature:** Feature 4 from `docs/archive/FEATURE_PROPOSALS_JULY_2026.md` (MVP scope)
 
 ## Context
 
@@ -277,7 +277,7 @@ Beyond the unit suite:
 | `agent/AgentMetrics.kt` | Two counters |
 | Tests | `MetricFilterTest` (new) plus additions to agent and harness suites |
 | Docs | `config/config.conf` comments, an `examples/` config, website agent page |
-| `docs/FEATURE_PROPOSALS_JULY_2026.md` | "Implementation Notes (As Built)" recording Decision 6 |
+| `docs/archive/FEATURE_PROPOSALS_JULY_2026.md` | "Implementation Notes (As Built)" recording Decision 6 |
 
 ## Future Work (deferred, enabled by this design)
 

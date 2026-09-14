@@ -68,6 +68,25 @@ internal class ProxyMetrics(
       .buckets(1_024.0, 10_240.0, 102_400.0, 512_000.0, 1_048_576.0, 5_242_880.0, 10_485_760.0)
       .register()
 
+  /**
+   * Removes every series labelled with [path] from the per-path histograms.
+   *
+   * Called when a path's last registration goes away, so a retired path stops holding series in memory and on
+   * `/metrics`. Each histogram's second label (outcome or encoding) is open-ended, so the label sets to remove are
+   * read from the series the histogram currently holds rather than from a list of known values.
+   */
+  fun removePathSeries(path: String) {
+    listOf(scrapeRequestLatency, scrapeResponseBytes).forEach { histogram ->
+      histogram.collect()
+        .flatMap { it.samples }
+        .filter { it.labelValues.firstOrNull() == path }
+        // A bucket sample carries an extra "le" label; the series itself is identified by the first two.
+        .map { it.labelValues.take(2) }
+        .distinct()
+        .forEach { histogram.remove(*it.toTypedArray()) }
+    }
+  }
+
   val chunkValidationFailures =
     counter {
       name("proxy_chunk_validation_failures_total")

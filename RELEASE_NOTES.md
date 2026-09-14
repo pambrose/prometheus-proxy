@@ -150,6 +150,12 @@ interval as their deadline, capped at the unary deadline.
 
 ### Also in this release
 
+- A path's per-path metric series are removed when its last registration goes away, so paths retired by
+  discovery no longer accumulate on `/metrics`.
+- The GitHub Actions workflows pin every action to a commit SHA, cancel superseded pull-request runs, and
+  get weekly Dependabot updates along with the Gradle version catalog.
+- Point-in-time reviews, proposals, and design plans moved to `docs/archive/`, and IDE state that was already
+  meant to be ignored is no longer tracked.
 - The test suite relies less on timing: expiry and cleanup tests use a test clock or wait for a real signal
   instead of sleeping, harness ports are checked for duplicates, and a missing test config fails the run
   instead of being fetched from GitHub.

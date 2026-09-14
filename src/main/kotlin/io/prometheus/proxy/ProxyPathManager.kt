@@ -213,6 +213,8 @@ internal class ProxyPathManager(
           logger.info { "Removed element of path /$path for $updated" }
       } else {
         pathMap.remove(path)
+        // The path's last registration is gone, so its per-path metric series go with it.
+        proxy.metrics { removePathSeries(path) }
         if (!isTestMode)
           logger.info { "Removed path /$path for $agentInfo" }
       }
@@ -270,6 +272,7 @@ internal class ProxyPathManager(
         pathMap.remove(k)
           ?.also {
             removedPathCount++
+            proxy.metrics { removePathSeries(k) }
             if (!isTestMode)
               logger.info { "Removed path /$k for $it" }
             proxy.eventBus.emit(ProxyEvent.PathUnregistered(k, agentId))

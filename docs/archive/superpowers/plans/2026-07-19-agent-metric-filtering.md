@@ -8,7 +8,7 @@
 
 **Tech Stack:** Kotlin 2.4, Gradle (Kotlin DSL), Typesafe Config + tscfg-generated `ConfigVals`, Kotest `StringSpec` + MockK, Prometheus simpleclient.
 
-**Spec:** `docs/superpowers/specs/2026-07-19-agent-metric-filtering-design.md`
+**Spec:** `docs/archive/superpowers/specs/2026-07-19-agent-metric-filtering-design.md`
 
 ## Global Constraints
 
@@ -1362,7 +1362,7 @@ EOF
 
 **Files:**
 - Create: `examples/agent-filters.conf`
-- Modify: `docs/FEATURE_PROPOSALS_JULY_2026.md` (Feature 4, after line 451)
+- Modify: `docs/archive/FEATURE_PROPOSALS_JULY_2026.md` (Feature 4, after line 451)
 - Modify: `website/prometheus-proxy/docs/configuration/agent.md`
 
 **Interfaces:**
@@ -1400,7 +1400,7 @@ agent {
 
 - [ ] **Step 2: Record the as-built notes**
 
-In `docs/FEATURE_PROPOSALS_JULY_2026.md`, add an `### Implementation Notes (As Built)` section under `## Feature 4`, matching how Features 1 and 3 record theirs. It must state that the proposal's nested `pathConfigs[].filter` block was **not** implementable — tscfg 1.2.5 crashes on `[]` and generates an unguarded `getList` for `[ String ]`, which breaks every config omitting the block — and that filters therefore live in a top-level `agent.filters` list keyed by path. Link to `docs/superpowers/specs/2026-07-19-agent-metric-filtering-design.md` for the full reasoning. Note that `dropLabels` and relabeling remain unimplemented.
+In `docs/archive/FEATURE_PROPOSALS_JULY_2026.md`, add an `### Implementation Notes (As Built)` section under `## Feature 4`, matching how Features 1 and 3 record theirs. It must state that the proposal's nested `pathConfigs[].filter` block was **not** implementable — tscfg 1.2.5 crashes on `[]` and generates an unguarded `getList` for `[ String ]`, which breaks every config omitting the block — and that filters therefore live in a top-level `agent.filters` list keyed by path. Link to `docs/archive/superpowers/specs/2026-07-19-agent-metric-filtering-design.md` for the full reasoning. Note that `dropLabels` and relabeling remain unimplemented.
 
 - [ ] **Step 3: Document the config in the website docs**
 
