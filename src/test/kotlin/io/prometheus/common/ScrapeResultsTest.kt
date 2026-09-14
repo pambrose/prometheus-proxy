@@ -19,17 +19,15 @@
 package io.prometheus.common
 
 import ch.qos.logback.classic.Level
-import ch.qos.logback.classic.Logger
-import ch.qos.logback.classic.spi.ILoggingEvent
-import ch.qos.logback.core.read.ListAppender
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.string.shouldNotContain
 import io.ktor.client.network.sockets.ConnectTimeoutException
-import org.slf4j.LoggerFactory
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldBeEmpty
+import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.string.shouldContain
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.http.HttpStatusCode
 import io.ktor.network.sockets.SocketTimeoutException
@@ -339,28 +337,23 @@ class ScrapeResultsTest : StringSpec() {
       errorCode(exception, "http://host/metrics") shouldBe HttpStatusCode.RequestTimeout.value
     }
 
-    // Exception messages embed the request URL, credentials included. Nothing logged at WARN -- neither the
-    // message text nor a rendered throwable -- may carry them.
-    "errorCode should not log credentials from exception messages" {
+    // Exception messages embed the request URL, credentials included. Nothing errorCode logs, at any level, may carry
+    // them: the message text is redacted, and no event renders the raw throwable, whose message is not.
+    "errorCode should not log credentials from exception messages at any level" {
       val secretUrl = "http://admin:hunter2@host:9100/metrics?token=s3cr3t"
       val safeUrl = "http://***@host:9100/metrics?token=***"
-      val logbackLogger = LoggerFactory.getLogger(ScrapeResults::class.java) as Logger
-      val appender = ListAppender<ILoggingEvent>().apply { start() }
-      logbackLogger.addAppender(appender)
-      try {
-        errorCode(ConnectTimeoutException("Connect timeout has expired [url=$secretUrl]"), safeUrl)
-        errorCode(IOException("Failed to connect to $secretUrl"), safeUrl)
-        errorCode(IllegalStateException("Unexpected failure for $secretUrl"), safeUrl)
-      } finally {
-        logbackLogger.detachAppender(appender)
-        appender.stop()
-      }
-      val warnOutput =
-        appender.list
-          .filter { it.level.isGreaterOrEqual(Level.WARN) }
-          .joinToString("\n") { "${it.formattedMessage} ${it.throwableProxy?.message.orEmpty()}" }
-      warnOutput shouldNotContain "hunter2"
-      warnOutput shouldNotContain "s3cr3t"
+      val events =
+        captureLogs<ScrapeResults>(Level.DEBUG) {
+          errorCode(ConnectTimeoutException("Connect timeout has expired [url=$secretUrl]"), safeUrl)
+          errorCode(IOException("Failed to connect to $secretUrl"), safeUrl)
+          errorCode(IllegalStateException("Unexpected failure for $secretUrl"), safeUrl)
+        }
+
+      val output = events.joinToString("\n") { "${it.formattedMessage} ${it.throwableProxy?.message.orEmpty()}" }
+      output shouldContain safeUrl
+      output shouldNotContain "hunter2"
+      output shouldNotContain "s3cr3t"
+      events.mapNotNull { it.throwableProxy }.shouldBeEmpty()
     }
 
     // ==================== errorCode Cause-Chain Tests ====================

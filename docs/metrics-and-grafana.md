@@ -81,7 +81,7 @@ The same options are available under `agent.metrics`.
 |-------------------------|------------------------------------------------------------------------------|
 | `success`               | Scrape completed successfully                                                |
 | `timed_out`             | Agent did not answer within the proxy's `scrapeRequestTimeoutSecs`           |
-| `upstream_timed_out`    | Agent answered, but its own fetch exceeded `agent.scrapeTimeoutSecs` (408/504) |
+| `upstream_timed_out`    | Agent answered, but its fetch exceeded `agent.scrapeTimeoutSecs`, or Prometheus's shorter scrape timeout (408/504) |
 | `no_agents`             | No agents registered for the requested path                                  |
 | `invalid_path`          | Requested path is empty or unrecognized                                      |
 | `agent_disconnected`    | Agent stream closed before response was received                             |
@@ -102,7 +102,8 @@ Several values come in proxy-side / agent-side pairs, and the distinction determ
 - `timed_out` is the proxy giving up on an unresponsive agent; `upstream_timed_out` is the agent
   reporting promptly that the *target* was slow. Under stock config the agent's 15s timeout trips
   well before the proxy's 90s, so `upstream_timed_out` is the common case — raise
-  `agent.scrapeTimeoutSecs` or fix the slow target, rather than touching the proxy timeout.
+  `agent.scrapeTimeoutSecs` (and Prometheus's `scrape_timeout`, which the agent also honors) or fix the slow target,
+  rather than touching the proxy timeout.
 - `content_too_large` is the agent's own `maxContentLengthMBytes` limit rejecting the target
   response; `payload_too_large` is the proxy's unzip limit. Both surface as HTTP 413.
 

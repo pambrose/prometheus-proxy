@@ -83,6 +83,9 @@ internal object ProxyHttpRoutes {
   // Prometheus hung up before the agent answered, usually because its scrape timeout is shorter than the proxy's.
   internal const val CLIENT_CANCELLED_LABEL = "client_cancelled"
 
+  // Prometheus's scrape timeout. The proxy forwards it to the agent, which stops a scrape no one is still waiting for.
+  internal const val SCRAPE_TIMEOUT_HEADER = "X-Prometheus-Scrape-Timeout-Seconds"
+
   // nginx's non-standard 499 (Client Closed Request): the client left, so no status ever reached it.
   private val CLIENT_CLOSED_REQUEST = HttpStatusCode(499, "Client Closed Request")
 
@@ -495,6 +498,11 @@ internal object ProxyHttpRoutes {
       else -> "upstream_error"
     }
 
+  // Prometheus sends its scrape timeout as a decimal number of seconds. A missing, malformed, or non-positive value
+  // means the client set no limit.
+  internal fun scrapeTimeoutFromHeader(value: String?): Duration? =
+    value?.trim()?.toDoubleOrNull()?.takeIf { it.isFinite() && it > 0.0 }?.seconds
+
   private fun createScrapeRequest(
     agentContext: AgentContext,
     proxy: Proxy,
@@ -520,6 +528,7 @@ internal object ProxyHttpRoutes {
       authHeaderVal = authHeader,
       acceptVal = request.header(HttpHeaders.Accept),
       debugEnabledVal = proxy.options.debugEnabled,
+      scrapeTimeoutVal = scrapeTimeoutFromHeader(request.header(SCRAPE_TIMEOUT_HEADER)),
     )
   }
 }

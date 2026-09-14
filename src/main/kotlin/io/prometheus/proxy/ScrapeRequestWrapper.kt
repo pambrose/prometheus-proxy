@@ -37,6 +37,7 @@ internal class ScrapeRequestWrapper(
   authHeaderVal: String,
   acceptVal: String?,
   debugEnabledVal: Boolean,
+  scrapeTimeoutVal: Duration? = null,
 ) {
   private val clock = Monotonic
   private val createTimeMark = clock.markNow()
@@ -53,6 +54,8 @@ internal class ScrapeRequestWrapper(
       debugEnabled = debugEnabledVal
       encodedQueryParams = encodedQueryParamsVal
       authHeader = authHeaderVal
+      // A positive timeout under a millisecond still limits the scrape: round up to 1, not down to 0 (no limit).
+      scrapeTimeoutMillis = scrapeTimeoutVal?.let { maxOf(1L, it.inWholeMilliseconds) } ?: 0L
     }
 
   @Volatile

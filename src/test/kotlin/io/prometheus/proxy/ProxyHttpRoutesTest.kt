@@ -855,6 +855,18 @@ class ProxyHttpRoutesTest : StringSpec() {
         ProxyHttpRoutes.PROXY_TIMEOUT_LABEL
     }
 
+    // Prometheus sends its scrape timeout in X-Prometheus-Scrape-Timeout-Seconds as a decimal number of seconds.
+    "scrapeTimeoutFromHeader should parse whole and fractional seconds" {
+      ProxyHttpRoutes.scrapeTimeoutFromHeader("10") shouldBe 10.seconds
+      ProxyHttpRoutes.scrapeTimeoutFromHeader(" 2.5 ") shouldBe 2500.milliseconds
+    }
+
+    "scrapeTimeoutFromHeader should ignore a missing, malformed, or non-positive value" {
+      listOf(null, "", " ", "abc", "0", "-1", "NaN", "Infinity").forEach { value ->
+        ProxyHttpRoutes.scrapeTimeoutFromHeader(value) shouldBe null
+      }
+    }
+
     "Finding 10: submitScrapeRequest labels a 500 upstream response upstream_error" {
       val proxy = createSpyProxyForSubmit(timeoutSecs = 30)
       val agentContext = AgentContext("test-remote")

@@ -18,9 +18,7 @@
 
 package io.prometheus.proxy
 
-import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.spi.ILoggingEvent
-import ch.qos.logback.core.read.ListAppender
 import com.pambrose.common.dsl.KtorDsl.newHttpClient
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldBeEmpty
@@ -58,12 +56,15 @@ import io.mockk.mockk
 import io.prometheus.Proxy
 import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.common.startAndAwaitReady
+import io.ktor.util.cio.ChannelWriteException
+import io.ktor.utils.io.ClosedWriteChannelException
 import kotlinx.coroutines.CancellationException
-import org.slf4j.LoggerFactory
+import java.io.IOException
 import org.slf4j.event.Level
 import ch.qos.logback.classic.Level as LogbackLevel
 import io.ktor.server.cio.CIO as ServerCIO
 import io.prometheus.common.proxyOptions
+import io.prometheus.common.captureLogs
 
 // Tests for ProxyHttpConfig which configures Ktor server plugins for the proxy HTTP service.
 // Note: Full integration tests with testApplication would require ktor-server-test-host dependency.
@@ -478,6 +479,18 @@ class ProxyHttpConfigTest : StringSpec() {
       }
     }
 
+    // A client that disconnects while its response is being written makes the write fail with a ChannelIOException
+    // (ChannelWriteException caused by a closed channel). Like a cancellation, that is routine, not a server error.
+    "configureKtorServer should log a write to a disconnected client at DEBUG, not WARN" {
+      val events =
+        captureProxyHttpConfigLogs { client, baseUrl ->
+          runCatching { client.get("$baseUrl/write-failed") }
+        }
+
+      events.map { it.formattedMessage }.filter { "ChannelWriteException" in it }.shouldNotBeEmpty()
+      events.filter { it.level == LogbackLevel.WARN }.shouldBeEmpty()
+    }
+
     "configureKtorServer should handle exceptions via StatusPages and log them at WARN" {
       val events =
         captureProxyHttpConfigLogs { client, baseUrl ->
@@ -503,45 +516,42 @@ class ProxyHttpConfigTest : StringSpec() {
     }
   }
 
-  // Runs [block] with a client and the base URL of a proxy-configured server whose /cancelled route fails the way
-  // HttpRequestLifecycle cancels a call and whose /throw route fails unexpectedly, and returns what ProxyHttpConfig
-  // logged at DEBUG and above. The server's handlers finish before the response is sent, so the events are complete
-  // once [block] returns.
+  // The routes captureProxyHttpConfigLogs serves, each failing with the exception built here.
+  private val failingRoutes: Map<String, () -> Throwable> =
+    mapOf(
+      "/cancelled" to { CancellationException("Call context was cancelled by `HttpRequestLifecycle` plugin") },
+      "/write-failed" to { ChannelWriteException(exception = ClosedWriteChannelException(IOException("Broken pipe"))) },
+      "/throw" to { IllegalStateException("Test error") },
+    )
+
+  // Runs [block] with a client and the base URL of a proxy-configured server that serves [failingRoutes], and returns
+  // what ProxyHttpConfig logged at DEBUG and above. The server's handlers finish before the response is sent, so the
+  // events are complete once [block] returns.
   private suspend fun captureProxyHttpConfigLogs(
     block: suspend (client: HttpClient, baseUrl: String) -> Unit,
   ): List<ILoggingEvent> {
-    val logbackLogger = LoggerFactory.getLogger(ProxyHttpConfig::class.java) as Logger
-    val previousLevel = logbackLogger.level
-    val appender = ListAppender<ILoggingEvent>().apply { start() }
-    logbackLogger.level = LogbackLevel.DEBUG
-    logbackLogger.addAppender(appender)
-
     val proxy = createTestProxy()
     val server =
       embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         val app = this
         with(ProxyHttpConfig) { app.configureKtorServer(proxy, isTestMode = true) }
         routing {
-          get("/cancelled") {
-            throw CancellationException("Call context was cancelled by `HttpRequestLifecycle` plugin")
-          }
-          get("/throw") { throw IllegalStateException("Test error") }
+          failingRoutes.forEach { (route, failure) -> get(route) { throw failure() } }
         }
       }
 
-    try {
+    return try {
       val port = server.startAndAwaitReady()
-      val client = newHttpClient()
-      try {
-        block(client, "http://localhost:$port")
-      } finally {
-        client.close()
+      captureLogs<ProxyHttpConfig>(LogbackLevel.DEBUG) {
+        val client = newHttpClient()
+        try {
+          block(client, "http://localhost:$port")
+        } finally {
+          client.close()
+        }
       }
-      return appender.list.toList()
     } finally {
       server.stop(0, 0)
-      logbackLogger.detachAppender(appender)
-      logbackLogger.level = previousLevel
     }
   }
 }

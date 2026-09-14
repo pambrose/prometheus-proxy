@@ -83,6 +83,9 @@ message ScrapeRequest {
   bool debug_enabled = 5;
   string encodedQueryParams = 6;
   string authHeader = 7;
+  // How long the scraping client will wait, in milliseconds, from Prometheus's X-Prometheus-Scrape-Timeout-Seconds
+  // header. 0 means the client sent none, and the agent uses only its own scrapeTimeoutSecs.
+  int64 scrape_timeout_millis = 8;
 }
 
 message ScrapeResponse {

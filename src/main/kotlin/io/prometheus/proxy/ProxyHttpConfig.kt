@@ -42,6 +42,7 @@ import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.plugins.statuspages.StatusPagesConfig
 import io.ktor.server.request.path
 import io.ktor.server.response.respond
+import io.ktor.util.cio.ChannelIOException
 import io.prometheus.Proxy
 import kotlinx.coroutines.CancellationException
 import org.slf4j.event.Level
@@ -112,11 +113,11 @@ internal object ProxyHttpConfig {
   }
 
   fun StatusPagesConfig.configureStatusPages() {
-    // HttpRequestLifecycle cancels a call when its client disconnects, as Prometheus does when a scrape outlives its
-    // timeout. That is routine -- the scrape is already recorded as client_cancelled -- and there is no one to answer.
-    exception<CancellationException> { call, cause ->
-      logger.debug { "Call to ${call.request.path()} cancelled: ${cause.simpleClassName} - ${cause.message}" }
-    }
+    // A client that disconnects -- as Prometheus does when a scrape outlives its timeout -- ends its call in one of two
+    // routine ways: HttpRequestLifecycle cancels it (CancellationException), or a write to the closed connection fails
+    // (ChannelIOException). The scrape is already recorded as client_cancelled, and there is no one to answer.
+    exception<CancellationException> { call, cause -> logClientGone(call, cause) }
+    exception<ChannelIOException> { call, cause -> logClientGone(call, cause) }
 
     // Catch all
     exception<Throwable> { call, cause ->
@@ -127,5 +128,12 @@ internal object ProxyHttpConfig {
     status(NotFound) { call, cause ->
       call.respond(TextContent("${cause.value} ${cause.description}", Text.Plain.withCharset(Charsets.UTF_8), cause))
     }
+  }
+
+  private fun logClientGone(
+    call: ApplicationCall,
+    cause: Throwable,
+  ) {
+    logger.debug { "Call to ${call.request.path()} ended by the client: ${cause.simpleClassName} - ${cause.message}" }
   }
 }

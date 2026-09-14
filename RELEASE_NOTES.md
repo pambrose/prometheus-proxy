@@ -9,8 +9,8 @@ _Not yet released_
 A security and reliability release. It closes three ways an authenticated agent could interfere with
 another agent on the same proxy, and fixes agent failover for a proxy that accepts connections but
 rejects registration. It also bounds scrape requests and hardens the dashboard, which adds a few settings.
-The wire protocol is unchanged, but agents using failover or path authorization behave differently when a
-proxy rejects them — see below.
+The wire protocol gains one optional field, which older agents and proxies ignore, and agents using failover or
+path authorization behave differently when a proxy rejects them — see below.
 
 ### Highlights
 
@@ -66,7 +66,8 @@ leave the agent in full: the proxy's dashboard and `/debug` page showed it, agen
 client error messages carried it into WARN logs and into the failure reason sent to the proxy. Target URLs
 are now redacted everywhere they are sent, logged, or shown, and the proxy also redacts URLs from older
 agents. The per-scrape DEBUG trace no longer dumps the request, which included Prometheus's
-`Authorization` header.
+`Authorization` header, and a failed scrape no longer logs its stack trace, whose exception message carried the
+unredacted URL.
 
 **gRPC reflection.** Reflection is now off by default. It let anyone who could reach the agent port list and
 describe the proxy's API, and it ignored agent tokens. If you point `grpcurl` or another reflection client at the
@@ -149,6 +150,8 @@ interval as their deadline, capped at the unary deadline.
   dashboard. It now appears under the new outcome `client_cancelled`.
 - **Every scrape Prometheus gave up on also logged a WARN with a stack trace.** The cancellation is now logged at
   DEBUG.
+- **A client disconnecting while its response was being written logged a WARN with a stack trace**, from the
+  failed write. It is now logged at DEBUG.
 - **A host-only `--proxy` or `PROXY_HOSTNAME` ignored `agent.proxy.port`** and dialed 50051. It now uses the
   configured port.
 - **A chunk size or gzip threshold above gRPC's 4 MiB message limit broke every scrape** on the connection.
@@ -157,6 +160,10 @@ interval as their deadline, capped at the unary deadline.
 
 ### Also in this release
 
+- The agent now stops a scrape at Prometheus's own scrape timeout. The proxy forwards
+  `X-Prometheus-Scrape-Timeout-Seconds` to the agent in a new optional request field, so an agent no longer
+  finishes a slow target's scrape after Prometheus has given up. To scrape a slow target, raise `scrape_timeout` in
+  Prometheus as well as the agent's `scrapeTimeoutSecs`. Older agents ignore the field and keep their own timeout.
 - A scrape no longer does `/debug` or dashboard bookkeeping unless debug or the dashboard is on, and every
   hand-written class must now meet a per-class line coverage floor.
 - The tests now run on Java 25, the JVM the Docker images use, while the published artifact still targets

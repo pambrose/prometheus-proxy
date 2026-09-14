@@ -171,7 +171,7 @@ something.
   when disabled, and when enabled it requires a valid agent token if agent auth is configured
 - **ProxyHttpServiceTest** — ProxyHttpService string representation
 - **ProxyHttpConfigTest** — HTTP server config: Ktor compression, status pages, CORS; a call cancelled by a client
-  disconnect is logged at DEBUG, while an unexpected exception still logs at WARN
+  disconnect, or a write to one that has gone, is logged at DEBUG, while an unexpected exception still logs at WARN
 - **ProxyHttpRoutesTest** — HTTP routing: path resolution, query params, error responses, compression,
   ensureLeadingSlash
 - **ProxyPathManagerTest** — Path registration/unregistration, consolidated mode, agent selection, concurrent access
@@ -216,7 +216,7 @@ something.
 - **UtilsTest** — Utility functions: parseHostPort, sanitizeUrl, appendQueryParams, decodeParams, toJsonElement,
   setLogLevel, exceptionDetails
 
-Three support helpers also live here (not test classes themselves):
+Four support helpers also live here (not test classes themselves):
 
 - **TestPorts** — canonical port constants shared across the unit, harness, and container suites (mirrors the
   proxy/agent config defaults and the fixed container ports), plus each harness spec's dedicated ports, so no test
@@ -225,6 +225,8 @@ Three support helpers also live here (not test classes themselves):
   fragment merged with the reference config, and `ProxyOptions` from a temp config file
 - **EmbeddedTestServer** — `EmbeddedServer.startAndAwaitReady()`, which starts a Ktor server with `wait = false`
   and polls with real HTTP probes until it serves several consecutive clean replies before returning the port
+- **LogCapture** — `captureLogs<T>(level) { … }`, which runs a block and returns what `T`'s logger emitted,
+  optionally at a lower level, restoring the logger's appenders and level afterward
 
 ### Unit Tests — Misc (`misc/`)
 
@@ -278,6 +280,8 @@ mechanism that the standard suite cannot reach:
   boundary
 - **InProcessClientCancelledScrapeTest** — a scrape Prometheus abandons before a slow target answers is
   still recorded, as `client_cancelled`, rather than vanishing from the metrics, `/debug`, and the dashboard
+- **InProcessScrapeTimeoutHeaderTest** — a client's `X-Prometheus-Scrape-Timeout-Seconds` reaches the agent, which
+  stops a slow target's scrape at that deadline (408) instead of running to its own longer `scrapeTimeoutSecs`
 - **InProcessHealthCheckTest** — the agent and proxy scrape-backlog health checks through the admin
   endpoint, including both unhealthy branches
 - **InProcessHeartbeatDisabledTest** — with the heartbeat disabled the connection stays usable and shutdown

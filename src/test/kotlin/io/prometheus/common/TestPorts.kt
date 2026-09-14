@@ -95,6 +95,9 @@ object TestPorts {
   const val CLIENT_CANCELLED_HTTP_PORT = 9590
   const val CLIENT_CANCELLED_DASHBOARD_PORT = 9591
 
+  // InProcessScrapeTimeoutHeaderTest
+  const val SCRAPE_TIMEOUT_HEADER_HTTP_PORT = 9592
+
   // ProxyWebDashboardTest
   const val DASHBOARD_UI_PROXY_HTTP_PORT = 9540
   const val DASHBOARD_UI_PROXY_GRPC_PORT = 9541

@@ -110,7 +110,9 @@ the *target* was slow, while `timed_out` means the agent never answered the prox
 normally shows up as `upstream_timed_out`.
 
 - **`upstream_timed_out`** — the target endpoint is slow. Raise the agent's `scrapeTimeoutSecs`
-  (default `15`) and/or `clientTimeoutSecs` (default `90`), or fix the target.
+  (default `15`) and/or `clientTimeoutSecs` (default `90`), or fix the target. The agent also stops at
+  Prometheus's own `scrape_timeout`, which the proxy forwards in `X-Prometheus-Scrape-Timeout-Seconds`, so raise
+  that too.
 - **`timed_out`** — the agent is unresponsive or the link to it is broken. Check the agent is still
   connected (`proxy_connected_agents`) and raise `proxy.internal.scrapeRequestTimeoutSecs` only if
   the agent legitimately needs longer than 90s.

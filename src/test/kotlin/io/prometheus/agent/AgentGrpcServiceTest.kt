@@ -19,11 +19,7 @@
 package io.prometheus.agent
 
 import ch.qos.logback.classic.Level
-import ch.qos.logback.classic.Logger
-import ch.qos.logback.classic.spi.ILoggingEvent
-import ch.qos.logback.core.read.ListAppender
 import io.kotest.matchers.string.shouldNotContain
-import org.slf4j.LoggerFactory
 import brave.Tracing
 import com.pambrose.common.concurrent.await
 import com.pambrose.common.service.ZipkinReporterService
@@ -67,6 +63,7 @@ import io.prometheus.grpc.registerAgentResponse
 import io.prometheus.grpc.registerPathResponse
 import io.prometheus.grpc.scrapeRequest
 import io.prometheus.grpc.unregisterPathResponse
+import io.prometheus.common.captureLogs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
@@ -764,21 +761,16 @@ class AgentGrpcServiceTest : StringSpec() {
       every { mockStub.readRequestsFromProxy(any(), any()) } returns flowOf(request)
       service.grpcStub = mockStub
 
-      val logbackLogger = LoggerFactory.getLogger(AgentGrpcService::class.java) as Logger
-      val previousLevel = logbackLogger.level
-      val appender = ListAppender<ILoggingEvent>().apply { start() }
-      logbackLogger.level = Level.DEBUG
-      logbackLogger.addAppender(appender)
-      try {
-        service.readRequestsFromProxy(mockk<AgentHttpService>(relaxed = true), AgentConnectionContext(128))
-      } finally {
-        logbackLogger.detachAppender(appender)
-        logbackLogger.level = previousLevel
-        appender.stop()
-        service.shutDown()
-      }
+      val events =
+        try {
+          captureLogs<AgentGrpcService>(Level.DEBUG) {
+            service.readRequestsFromProxy(mockk<AgentHttpService>(relaxed = true), AgentConnectionContext(128))
+          }
+        } finally {
+          service.shutDown()
+        }
 
-      val output = appender.list.joinToString("\n") { it.formattedMessage }
+      val output = events.joinToString("\n") { it.formattedMessage }
       // Guards against a vacuous pass: the request must actually have been traced.
       output shouldContain "readRequestsFromProxy"
       output shouldNotContain "s3cr3t-token"

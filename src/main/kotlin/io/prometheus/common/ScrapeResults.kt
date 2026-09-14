@@ -101,14 +101,13 @@ internal class ScrapeResults(
       e: Throwable,
       url: String,
     ): Int {
-      // Exception messages embed the request URL, credentials included, so WARN logs carry only the redacted
-      // message. The stack trace -- whose rendered message is unredacted -- is kept at DEBUG.
+      // Exception messages embed the request URL, credentials included, so the logs carry only the exception type and
+      // its redacted message. The throwable itself is never logged: a rendered stack trace would print the raw message.
       val detail = "[${e.simpleClassName}: ${e.message?.let { sanitizeUrlsInText(it) }}]"
 
       // Detect wrapped timeout exceptions (Ktor sometimes wraps them) via the shared cause-walk.
       if (e.hasTimeoutCause()) {
         logger.warn { "fetchScrapeUrl() timed out - $url $detail" }
-        logger.debug(e) { "fetchScrapeUrl() timed out - $url" }
         return RequestTimeout.value
       }
 
@@ -120,7 +119,6 @@ internal class ScrapeResults(
 
         else -> {
           logger.warn { "fetchScrapeUrl() - $url $detail" }
-          logger.debug(e) { "fetchScrapeUrl() - $url" }
           ServiceUnavailable.value
         }
       }
