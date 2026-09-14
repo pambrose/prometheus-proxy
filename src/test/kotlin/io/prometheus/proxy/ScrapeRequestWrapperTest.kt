@@ -30,6 +30,8 @@ import io.mockk.every
 import io.mockk.mockk
 import io.prometheus.common.ScrapeResults
 import kotlinx.coroutines.launch
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.microseconds
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -43,6 +45,7 @@ class ScrapeRequestWrapperTest : StringSpec() {
     authHeader: String = "",
     accept: String? = null,
     debugEnabled: Boolean = false,
+    scrapeTimeout: Duration? = null,
   ) = ScrapeRequestWrapper(
     agentContext = agentContext,
     pathVal = path,
@@ -50,10 +53,24 @@ class ScrapeRequestWrapperTest : StringSpec() {
     authHeaderVal = authHeader,
     acceptVal = accept,
     debugEnabledVal = debugEnabled,
+    scrapeTimeoutVal = scrapeTimeout,
   )
 
   init {
     // ==================== Creation Tests ====================
+
+    // The client's timeout travels to the agent, which stops a scrape nobody is still waiting for.
+    "should carry the client's scrape timeout in milliseconds" {
+      createWrapper(scrapeTimeout = 2500.milliseconds).scrapeRequest.scrapeTimeoutMillis shouldBe 2500L
+    }
+
+    "should send no scrape timeout when the client gave none" {
+      createWrapper().scrapeRequest.scrapeTimeoutMillis shouldBe 0L
+    }
+
+    "should round a positive sub-millisecond scrape timeout up to one millisecond" {
+      createWrapper(scrapeTimeout = 400.microseconds).scrapeRequest.scrapeTimeoutMillis shouldBe 1L
+    }
 
     "should create scrape request with correct path" {
       val wrapper = createWrapper(path = "/test/metrics")

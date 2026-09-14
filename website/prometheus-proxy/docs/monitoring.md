@@ -91,7 +91,8 @@ The same options are available under `agent.metrics`.
     `timed_out` means the proxy gave up waiting on the agent; `upstream_timed_out` means the agent
     answered promptly to report that the *target* was slow. Since `agent.scrapeTimeoutSecs` (15s)
     is well under the proxy's `scrapeRequestTimeoutSecs` (90s), `upstream_timed_out` is the one you
-    will usually see for a slow endpoint.
+    will usually see for a slow endpoint. The agent also stops at Prometheus's own `scrape_timeout` when that is
+    shorter.
 
     Likewise `content_too_large` is the agent's `maxContentLengthMBytes` limit, while
     `payload_too_large` is the proxy's unzip limit. Both surface as HTTP 413.

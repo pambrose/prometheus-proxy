@@ -64,6 +64,7 @@ import javax.net.ssl.X509TrustManager
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.measureTime
 import io.ktor.server.cio.CIO as ServerCIO
 
@@ -173,6 +174,21 @@ class AgentHttpServiceTest : StringSpec() {
 
   init {
     // ==================== Invalid Path Tests ====================
+
+    // The proxy forwards the scraping client's timeout, so the agent stops a scrape nobody is still waiting for.
+    "scrapeTimeout should use the agent's scrapeTimeoutSecs when the request carries no client timeout" {
+      AgentHttpService(createMockAgent()).scrapeTimeout(scrapeRequest { path = "/metrics" }) shouldBe 10.seconds
+    }
+
+    "scrapeTimeout should use a client timeout shorter than the agent's scrapeTimeoutSecs" {
+      AgentHttpService(createMockAgent()).scrapeTimeout(scrapeRequest { scrapeTimeoutMillis = 2_500L }) shouldBe
+        2500.milliseconds
+    }
+
+    "scrapeTimeout should keep the agent's scrapeTimeoutSecs when the client timeout is longer" {
+      AgentHttpService(createMockAgent()).scrapeTimeout(scrapeRequest { scrapeTimeoutMillis = 30_000L }) shouldBe
+        10.seconds
+    }
 
     "fetchScrapeUrl should return error results for invalid path" {
       val mockAgent = createMockAgent()

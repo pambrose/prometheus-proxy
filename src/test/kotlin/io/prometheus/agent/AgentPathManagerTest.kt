@@ -18,9 +18,6 @@
 
 package io.prometheus.agent
 
-import ch.qos.logback.classic.Logger
-import ch.qos.logback.classic.spi.ILoggingEvent
-import ch.qos.logback.core.read.ListAppender
 import io.grpc.Status
 import io.grpc.StatusException
 import io.kotest.assertions.throwables.shouldThrow
@@ -31,7 +28,6 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeEmpty
 import io.kotest.matchers.string.shouldNotContain
-import org.slf4j.LoggerFactory
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -44,6 +40,7 @@ import io.prometheus.common.TestPorts.PROMETHEUS_PORT
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.grpc.registerPathResponse
 import io.prometheus.grpc.unregisterPathResponse
+import io.prometheus.common.captureLogs
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -57,21 +54,9 @@ import kotlin.time.Duration.Companion.milliseconds
 @Suppress("LargeClass")
 class AgentPathManagerTest : StringSpec() {
   // Captures the "Registered ..." lines doRegisterPath emits, which is the only place the agent reports
-  // whether a configured filter actually attached to a path. Mirrors the ListAppender pattern in
-  // ScrapeRequestManagerTest.
-  private suspend fun captureRegistrationLogs(block: suspend () -> Unit): List<String> {
-    val logbackLogger = LoggerFactory.getLogger(AgentPathManager::class.java) as Logger
-    val listAppender = ListAppender<ILoggingEvent>()
-    listAppender.start()
-    logbackLogger.addAppender(listAppender)
-    try {
-      block()
-      return listAppender.list.map { it.formattedMessage }.filter { it.startsWith("Registered ") }
-    } finally {
-      logbackLogger.detachAppender(listAppender)
-      listAppender.stop()
-    }
-  }
+  // whether a configured filter actually attached to a path.
+  private suspend fun captureRegistrationLogs(block: suspend () -> Unit): List<String> =
+    captureLogs<AgentPathManager> { block() }.map { it.formattedMessage }.filter { it.startsWith("Registered ") }
 
   // [filtersHocon] is spliced into `agent.filters` (empty means no filters), which is what makes the
   // path manager compile and attach a MetricFilter to a matching registered path.
@@ -590,18 +575,13 @@ class AgentPathManagerTest : StringSpec() {
       val agent = createMockAgent()
       every { agent.isTestMode } returns false
       val manager = AgentPathManager(agent)
-      val logbackLogger = LoggerFactory.getLogger(AgentPathManager::class.java) as Logger
-      val appender = ListAppender<ILoggingEvent>().apply { start() }
-      logbackLogger.addAppender(appender)
-      try {
-        manager.registerPath("metrics", "http://admin:hunter2@localhost:9100/metrics?token=s3cr3t")
-        manager.unregisterPath("metrics")
-      } finally {
-        logbackLogger.detachAppender(appender)
-        appender.stop()
-      }
+      val events =
+        captureLogs<AgentPathManager> {
+          manager.registerPath("metrics", "http://admin:hunter2@localhost:9100/metrics?token=s3cr3t")
+          manager.unregisterPath("metrics")
+        }
 
-      val output = appender.list.joinToString("\n") { it.formattedMessage }
+      val output = events.joinToString("\n") { it.formattedMessage }
       output shouldContain "http://***@localhost:9100/metrics?token=***"
       output shouldNotContain "hunter2"
       output shouldNotContain "s3cr3t"
@@ -629,17 +609,9 @@ class AgentPathManagerTest : StringSpec() {
       every { mockAgent.grpcService } returns mockk<AgentGrpcService>(relaxed = true)
       every { mockAgent.configVals } returns configVals
       every { mockAgent.isTestMode } returns true
-      val logbackLogger = LoggerFactory.getLogger(AgentPathManager::class.java) as Logger
-      val appender = ListAppender<ILoggingEvent>().apply { start() }
-      logbackLogger.addAppender(appender)
-      try {
-        AgentPathManager(mockAgent)
-      } finally {
-        logbackLogger.detachAppender(appender)
-        appender.stop()
-      }
+      val events = captureLogs<AgentPathManager> { AgentPathManager(mockAgent) }
 
-      val output = appender.list.joinToString("\n") { it.formattedMessage }
+      val output = events.joinToString("\n") { it.formattedMessage }
       output shouldContain "http://***@localhost:9100/metrics?token=***"
       output shouldNotContain "hunter2"
       output shouldNotContain "s3cr3t"

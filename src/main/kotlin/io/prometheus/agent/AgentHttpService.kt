@@ -59,6 +59,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withTimeout
 import kotlinx.io.readByteArray
 import javax.net.ssl.X509TrustManager
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
@@ -120,7 +122,7 @@ internal class AgentHttpService(
     // Content is fetched here
     val results =
       try {
-        withTimeout(agent.options.scrapeTimeoutSecs.seconds) {
+        withTimeout(scrapeTimeout(req)) {
           fetchContent(url, req, pathContext.filter)
         }
       } catch (e: Throwable) {
@@ -150,6 +152,17 @@ internal class AgentHttpService(
     return results
   }
 
+  // A scrape stops at the agent's scrapeTimeoutSecs, or sooner when the proxy forwards a shorter timeout from the
+  // scraping client (Prometheus's X-Prometheus-Scrape-Timeout-Seconds), so the agent does not finish a scrape nobody is
+  // still waiting for. 0 means the client sent none, or the proxy predates the field.
+  internal fun scrapeTimeout(request: ScrapeRequest): Duration {
+    val configured = agent.options.scrapeTimeoutSecs.seconds
+    return if (request.scrapeTimeoutMillis > 0)
+      minOf(configured, request.scrapeTimeoutMillis.milliseconds)
+    else
+      configured
+  }
+
   internal suspend fun fetchContent(
     url: String,
     scrapeRequest: ScrapeRequest,
@@ -173,9 +186,9 @@ internal class AgentHttpService(
 
   private fun prepareRequestHeaders(request: ScrapeRequest): HttpRequestBuilder.() -> Unit =
     {
-      val scrapeTimeout = agent.options.scrapeTimeoutSecs.seconds
-      logger.debug { "Setting scrapeTimeoutSecs = $scrapeTimeout" }
-      timeout { requestTimeoutMillis = scrapeTimeout.inWholeMilliseconds }
+      val limit = scrapeTimeout(request)
+      logger.debug { "Setting scrape timeout = $limit" }
+      timeout { requestTimeoutMillis = limit.inWholeMilliseconds }
 
       // Set non-default headers
       if (request.accept.isNotEmpty()) header(ACCEPT, request.accept)
