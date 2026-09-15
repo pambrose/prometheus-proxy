@@ -456,11 +456,19 @@ class AgentPathManagerTest : StringSpec() {
       manager["c_metrics"].shouldNotBeNull()
     }
 
+    fun rejectPath(
+      grpcService: AgentGrpcService,
+      path: String,
+      cause: PathRejectionCause,
+    ) {
+      coEvery { grpcService.registerPathOnProxy(path, any(), any(), any()) } throws
+        RequestFailureException("registerPathOnProxy() - proxy rejected path /$path", rejectionCause = cause)
+    }
+
     // A manager whose proxy rejects discovered path d_metrics for cause, and accepts every other registration.
     fun managerRejectingDiscovered(cause: PathRejectionCause): Pair<AgentPathManager, AgentGrpcService> {
       val agent = createMockAgent()
-      coEvery { agent.grpcService.registerPathOnProxy("d_metrics", any(), any(), any()) } throws
-        RequestFailureException("registerPathOnProxy() - proxy rejected path /d_metrics", rejectionCause = cause)
+      rejectPath(agent.grpcService, "d_metrics", cause)
       return AgentPathManager(agent) to agent.grpcService
     }
 
@@ -886,14 +894,6 @@ class AgentPathManagerTest : StringSpec() {
       manager["metrics3"].shouldNotBeNull()
     }
 
-    fun rejectMetrics2(
-      grpcService: AgentGrpcService,
-      cause: PathRejectionCause,
-    ) {
-      coEvery { grpcService.registerPathOnProxy("metrics2", any(), any(), any()) } throws
-        RequestFailureException("registerPathOnProxy() - proxy rejected path /metrics2", rejectionCause = cause)
-    }
-
     // Static paths metrics1 and metrics2, where the proxy accepts metrics1 and rejects metrics2 -- by default because a
     // live agent of another identity serves it, a rejection that clears while the agent stays connected.
     fun managerRejectingMetrics2(
@@ -904,7 +904,7 @@ class AgentPathManagerTest : StringSpec() {
         valid = true
         pathId = 1L
       }
-      rejectMetrics2(mockGrpcService, cause)
+      rejectPath(mockGrpcService, "metrics2", cause)
       return AgentPathManager(mockAgent) to mockGrpcService
     }
 
@@ -990,7 +990,7 @@ class AgentPathManagerTest : StringSpec() {
       val (manager, grpcService) = managerRejectingMetrics2()
       manager.registerPaths()
 
-      rejectMetrics2(grpcService, PathRejectionCause.NOT_AUTHORIZED)
+      rejectPath(grpcService, "metrics2", PathRejectionCause.NOT_AUTHORIZED)
       manager.retryRejectedStaticPaths()
       manager.hasRejectedStaticPaths.shouldBeFalse()
 

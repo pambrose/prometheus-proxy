@@ -277,10 +277,8 @@ mechanism that the standard suite cannot reach:
   only: an in-process channel ignores host and port, so failover cannot be expressed there
 - **AgentRejectedPathRetryTest** — a static path rejected because a live agent of another identity serves it
   registers once that agent disconnects, with no reconnect, while a path the agent's identity may never register
-  reaches the proxy once rather than on every retry; Netty, so each token resolves to its own identity
-- **AgentDiscoveredPathRejectionTest** — a discovered path the agent's identity may never register reaches the
-  proxy once rather than on every reconcile, while the file's other paths keep reconciling; Netty, so the token
-  resolves to its identity
+  reaches the proxy once rather than on every retry, whether static or discovered; Netty, so each token resolves
+  to its own identity
 - **EmbeddedAgentApiTest** — the public `startAsyncAgent()` handle connects from a config file, reports its
   identity, and disconnects on `shutdown()`
 - **AgentTokenAuthTest** — the legacy pre-shared agent token, over Netty so the header crosses the wire: a
