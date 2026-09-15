@@ -29,6 +29,9 @@ import io.prometheus.grpc.ChunkedScrapeResponse
 import io.prometheus.grpc.ChunkedScrapeResponse.ChunkOneOfCase
 import io.prometheus.grpc.HeartBeatRequest
 import io.prometheus.grpc.PathMapSizeRequest
+import io.prometheus.grpc.PathRejectionCause.BINDING_MISMATCH
+import io.prometheus.grpc.PathRejectionCause.INVALID_AGENT
+import io.prometheus.grpc.PathRejectionCause.NOT_AUTHORIZED
 import io.prometheus.grpc.ProxyServiceGrpcKt
 import io.prometheus.grpc.RegisterAgentRequest
 import io.prometheus.grpc.RegisterAgentResponse
@@ -186,16 +189,16 @@ internal class ProxyServiceImpl(
   }
 
   override suspend fun registerPath(request: RegisterPathRequest): RegisterPathResponse {
-    // addPath() and the binding and authorization checks below return null on success or the rejection. The
-    // checks' rejections last as long as the connection, so they aren't retryable. rejection is null iff valid.
+    // addPath() and the binding and authorization checks below return null on success or the rejection; rejection
+    // is null iff valid.
     val rejection =
-      connectionMismatchReason(request.agentId, "registerPath")?.let { PathRejection(it) } ?: run {
+      connectionMismatchReason(request.agentId, "registerPath")?.let { PathRejection(it, BINDING_MISMATCH) } ?: run {
         val agentContext = proxy.agentContextManager.getAgentContext(request.agentId)
         if (agentContext == null) {
           logger.error { "Missing AgentContext for agentId: ${request.agentId}" }
-          PathRejection("Invalid agentId: ${request.agentId} (registerPath)")
+          PathRejection("Invalid agentId: ${request.agentId} (registerPath)", INVALID_AGENT)
         } else {
-          identityMismatchReason(agentContext, "registerPath")?.let { PathRejection(it) } ?: run {
+          identityMismatchReason(agentContext, "registerPath")?.let { PathRejection(it, BINDING_MISMATCH) } ?: run {
             // AGENT_IDENTITY_KEY is null when per-agent auth is disabled (no interceptor); an identity
             // with no path patterns authorizes everything, so legacy single-token behavior is unchanged.
             val identity = AgentAuthManager.AGENT_IDENTITY_KEY.get()
@@ -203,7 +206,10 @@ internal class ProxyServiceImpl(
               if (identity != null && !identity.isAuthorized(request.path)) {
                 val normalizedPath = request.path.removePrefix("/")
                 logger.warn { "Agent identity '${identity.name}' denied registration of path /$normalizedPath" }
-                PathRejection("Agent identity '${identity.name}' is not authorized to register path /$normalizedPath")
+                PathRejection(
+                  "Agent identity '${identity.name}' is not authorized to register path /$normalizedPath",
+                  NOT_AUTHORIZED,
+                )
               } else {
                 proxy.pathManager.addPath(
                   request.path,
@@ -225,7 +231,7 @@ internal class ProxyServiceImpl(
       valid = rejection == null
       if (rejection != null) {
         reason = rejection.reason
-        retryable = rejection.retryable
+        rejectionCause = rejection.cause
       }
       pathCount = proxy.pathManager.pathMapSize
     }

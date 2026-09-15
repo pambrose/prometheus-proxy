@@ -51,10 +51,27 @@ message RegisterPathResponse {
   string reason = 2;
   int32 path_count = 3;
   int64 path_id = 4;
-  // Set on a rejection that can clear while the agent stays connected -- a live agent holds the path, and this
-  // registration can neither join nor replace it -- so the agent retries it. False on success and on a rejection that
-  // can't clear, such as a path the agent's identity isn't authorized for. A proxy predating it leaves it false.
-  bool retryable = 5;
+  // Why the proxy rejected the path; REJECTION_CAUSE_UNSPECIFIED when valid.
+  PathRejectionCause rejection_cause = 5;
+}
+
+// Why the proxy rejected a registerPath. The proxy reports the cause, and the agent decides from it whether a retry
+// can succeed while it stays connected, treating a cause it doesn't recognize as one that can't.
+enum PathRejectionCause {
+  // No cause: the path was accepted, or the proxy predates the field.
+  REJECTION_CAUSE_UNSPECIFIED = 0;
+  // A live agent of another identity serves the path. Clears once that agent leaves.
+  HELD_BY_ANOTHER_IDENTITY = 1;
+  // The path's agents are consolidated and this one isn't, or the reverse. Clears once they leave.
+  CONSOLIDATION_MISMATCH = 2;
+  // The agent's identity isn't authorized for the path.
+  NOT_AUTHORIZED = 3;
+  // The path can't be registered as given, such as a multi-segment path.
+  INVALID_PATH = 4;
+  // The agent's context is missing or invalidated: its connection is going away.
+  INVALID_AGENT = 5;
+  // The request's agentId isn't the connection's, or its context is bound to another identity.
+  BINDING_MISMATCH = 6;
 }
 
 message UnregisterPathRequest {

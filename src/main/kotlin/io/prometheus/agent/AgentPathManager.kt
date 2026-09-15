@@ -24,6 +24,8 @@ import io.prometheus.agent.filter.MetricFilter
 import io.prometheus.common.Messages.EMPTY_PATH_MSG
 import io.prometheus.common.Utils.defaultEmptyJsonObject
 import io.prometheus.common.Utils.sanitizeUrl
+import io.prometheus.grpc.PathRejectionCause.CONSOLIDATION_MISMATCH
+import io.prometheus.grpc.PathRejectionCause.HELD_BY_ANOTHER_IDENTITY
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
@@ -113,7 +115,7 @@ internal class AgentPathManager(
     get() = rejectedStaticPaths.isNotEmpty()
 
   // Registers a static path, keeping rejectedStaticPaths in step, and returns the proxy's rejection, or null once
-  // registered. Only a retryable rejection (see RegisterPathResponse.retryable) stays for retrying; any other can't
+  // registered. Only a rejection whose cause is in RETRYABLE_CAUSES stays for retrying; any other can't
   // clear before a reconnect, so it is dropped and logged here, once. A transport failure propagates.
   private suspend fun registerStaticPath(config: PathConfig): RequestFailureException? =
     try {
@@ -266,6 +268,13 @@ internal class AgentPathManager(
 
   companion object {
     private val logger = logger {}
+
+    // The rejection causes that clear while the agent stays connected: a live agent holds the path, and it leaves
+    // eventually. No other cause does, including none (a proxy predating the field) and one this agent doesn't know.
+    private val RETRYABLE_CAUSES = setOf(HELD_BY_ANOTHER_IDENTITY, CONSOLIDATION_MISMATCH)
+
+    private val RequestFailureException.retryable: Boolean
+      get() = rejectionCause in RETRYABLE_CAUSES
   }
 
   // Strongly-typed view of a single `agent.pathConfigs` entry, replacing the prior magic-string map.

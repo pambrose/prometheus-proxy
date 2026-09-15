@@ -33,6 +33,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import io.prometheus.Proxy
+import io.prometheus.grpc.PathRejectionCause
 import io.prometheus.grpc.RegisterAgentRequest
 import kotlin.concurrent.atomics.AtomicLong
 import kotlin.concurrent.atomics.incrementAndFetch
@@ -121,8 +122,7 @@ class ProxyPathManagerTest : StringSpec() {
       val rejection = manager.addPath("app/metrics", """{"job":"test"}""", context)
 
       rejection.shouldNotBeNull().reason shouldContain "single"
-      // The path itself is the problem, so no retry can succeed.
-      rejection.retryable.shouldBeFalse()
+      rejection.cause shouldBe PathRejectionCause.INVALID_PATH
       manager.pathMapSize shouldBe 0
     }
 
@@ -199,8 +199,7 @@ class ProxyPathManagerTest : StringSpec() {
       val rejection = manager.addPath("/metrics", """{"job":"test"}""", intruder, identityName = "team_b")
 
       rejection.shouldNotBeNull().reason shouldContain "team_a"
-      // It clears once the owner leaves, so the intruder's agent retries it.
-      rejection.retryable.shouldBeTrue()
+      rejection.cause shouldBe PathRejectionCause.HELD_BY_ANOTHER_IDENTITY
       manager.getAgentContextInfo("/metrics")?.agentContexts?.map { it.agentId } shouldBe [owner.agentId]
       owner.isValid().shouldBeTrue()
     }
@@ -620,7 +619,8 @@ class ProxyPathManagerTest : StringSpec() {
 
       manager.addPath("/metrics", """{"job":"test"}""", nonConsolidatedContext).shouldBeNull()
       // Consolidated agent should be rejected on a non-consolidated path
-      manager.addPath("/metrics", """{"job":"test"}""", consolidatedContext).shouldNotBeNull().retryable.shouldBeTrue()
+      val rejection = manager.addPath("/metrics", """{"job":"test"}""", consolidatedContext)
+      rejection.shouldNotBeNull().cause shouldBe PathRejectionCause.CONSOLIDATION_MISMATCH
 
       manager.pathMapSize shouldBe 1
       val info = manager.getAgentContextInfo("/metrics")
@@ -638,9 +638,9 @@ class ProxyPathManagerTest : StringSpec() {
 
       // First register as consolidated
       manager.addPath("/metrics", """{"job":"test"}""", consolidatedContext).shouldBeNull()
-      // Non-consolidated should be rejected on a consolidated path, retryably: it clears once the path's agents leave
+      // Non-consolidated should be rejected on a consolidated path
       val rejection = manager.addPath("/metrics", """{"job":"test2"}""", nonConsolidatedContext)
-      rejection.shouldNotBeNull().retryable.shouldBeTrue()
+      rejection.shouldNotBeNull().cause shouldBe PathRejectionCause.CONSOLIDATION_MISMATCH
 
       manager.pathMapSize shouldBe 1
       val info = manager.getAgentContextInfo("/metrics")
@@ -777,8 +777,7 @@ class ProxyPathManagerTest : StringSpec() {
       val rejection = manager.addPath("/metrics", """{"job":"test"}""", context)
 
       rejection.shouldNotBeNull().reason shouldContain "invalidated"
-      // The connection is going away, and its reconnect registers again.
-      rejection.retryable.shouldBeFalse()
+      rejection.cause shouldBe PathRejectionCause.INVALID_AGENT
       manager.pathMapSize shouldBe 0
       manager.getAgentContextInfo("/metrics").shouldBeNull()
     }

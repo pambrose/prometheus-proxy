@@ -18,10 +18,12 @@
 
 package io.prometheus.agent
 
+import io.prometheus.grpc.PathRejectionCause
+
 internal class RequestFailureException(
   message: String,
-  // RegisterPathResponse.retryable, for a registerPath rejection; false for any other failure.
-  val retryable: Boolean = false,
+  // Why the proxy rejected a registerPath (RegisterPathResponse.rejection_cause); unspecified for any other failure.
+  val rejectionCause: PathRejectionCause = PathRejectionCause.REJECTION_CAUSE_UNSPECIFIED,
 ) : Exception(message) {
   companion object {
     private const val serialVersionUID = 8748724180953791199L

@@ -54,6 +54,7 @@ import io.prometheus.common.TestPorts.PROMETHEUS_PORT
 import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.grpc.ChunkedScrapeResponse
+import io.prometheus.grpc.PathRejectionCause
 import io.prometheus.grpc.ProxyServiceGrpcKt
 import io.prometheus.grpc.RegisterAgentRequest
 import io.prometheus.grpc.ScrapeResponse
@@ -1131,22 +1132,22 @@ class AgentGrpcServiceTest : StringSpec() {
           }
         exception.message shouldContain "registerPathOnProxy()"
         exception.message shouldContain "not authorized"
-        // A proxy predating the retryable field, or a rejection that can't clear, leaves it false.
-        exception.retryable.shouldBeFalse()
+        // A proxy predating the field sends no cause.
+        exception.rejectionCause shouldBe PathRejectionCause.REJECTION_CAUSE_UNSPECIFIED
       }
     }
 
-    "registerPathOnProxy should mark the RequestFailureException retryable when the response is" {
+    "registerPathOnProxy should carry the response's rejection cause on the RequestFailureException" {
       withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
         coEvery { mockStub.registerPath(any(), any<Metadata>()) } returns registerPathResponse {
           valid = false
           reason = "Path /metrics is served by identity 'team_a'"
-          retryable = true
+          rejectionCause = PathRejectionCause.HELD_BY_ANOTHER_IDENTITY
         }
 
         shouldThrow<RequestFailureException> {
           service.registerPathOnProxy("metrics", "{}", "http://target:9100/metrics", "STATIC")
-        }.retryable.shouldBeTrue()
+        }.rejectionCause shouldBe PathRejectionCause.HELD_BY_ANOTHER_IDENTITY
       }
     }
 

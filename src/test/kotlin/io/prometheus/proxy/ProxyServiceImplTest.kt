@@ -42,6 +42,7 @@ import io.prometheus.common.ConfigVals
 import io.prometheus.common.testConfigVals
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
 import io.prometheus.grpc.ChunkedScrapeResponse
+import io.prometheus.grpc.PathRejectionCause
 import io.prometheus.grpc.ScrapeRequest
 import io.prometheus.grpc.ScrapeResponse
 import io.prometheus.grpc.agentInfo
@@ -268,7 +269,7 @@ class ProxyServiceImplTest : StringSpec() {
       every { mockAgentContext.agentId } returns testAgentId
       every { proxy.agentContextManager.getAgentContext(testAgentId) } returns mockAgentContext
       every { proxy.pathManager.addPath(testPath, any(), mockAgentContext) } returns
-        PathRejection(rejectionReason, retryable = true)
+        PathRejection(rejectionReason, cause = PathRejectionCause.CONSOLIDATION_MISMATCH)
       every { proxy.pathManager.pathMapSize } returns 0
 
       val request = registerPathRequest {
@@ -284,8 +285,8 @@ class ProxyServiceImplTest : StringSpec() {
       // Before the fix, this was "Invalid agentId: test-agent-consolidated (registerPath)"
       response.reason shouldBe rejectionReason
       response.reason shouldContain "Consolidated"
-      // The agent retries only a rejection marked retryable, so addPath's verdict must reach the response.
-      response.retryable.shouldBeTrue()
+      // The agent decides from the cause whether to retry, so addPath's cause must reach the response.
+      response.rejectionCause shouldBe PathRejectionCause.CONSOLIDATION_MISMATCH
     }
 
     "registerPath should say Invalid agentId when agent context is missing" {
@@ -306,6 +307,7 @@ class ProxyServiceImplTest : StringSpec() {
       response.valid.shouldBeFalse()
       response.reason shouldContain "Invalid agentId"
       response.reason shouldContain testAgentId
+      response.rejectionCause shouldBe PathRejectionCause.INVALID_AGENT
     }
 
     "registerPath should fail with missing agent context" {
@@ -363,8 +365,7 @@ class ProxyServiceImplTest : StringSpec() {
       response.pathId shouldBe -1
       response.reason shouldContain "not authorized"
       response.reason shouldContain "team_a"
-      // Authorization is fixed for the life of the connection, so the agent must not retry.
-      response.retryable.shouldBeFalse()
+      response.rejectionCause shouldBe PathRejectionCause.NOT_AUTHORIZED
       // addPath must not be called when authorization fails.
       verify(exactly = 0) { pathManager.addPath(any(), any(), any()) }
       verify { mockAgentContext.markActivityTime(false) }
@@ -444,6 +445,7 @@ class ProxyServiceImplTest : StringSpec() {
         }
 
       response.valid.shouldBeFalse()
+      response.rejectionCause shouldBe PathRejectionCause.BINDING_MISMATCH
       response.pathId shouldBe -1
       response.reason shouldContain "does not match"
       // The victim's context must never be handed to addPath.
@@ -1939,6 +1941,7 @@ class ProxyServiceImplTest : StringSpec() {
 
       response.valid.shouldBeFalse()
       response.reason shouldContain "identity"
+      response.rejectionCause shouldBe PathRejectionCause.BINDING_MISMATCH
       verify(exactly = 0) { pathManager.addPath(any(), any(), any(), any(), any()) }
     }
 
