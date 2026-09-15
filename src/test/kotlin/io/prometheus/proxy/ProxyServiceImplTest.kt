@@ -372,7 +372,7 @@ class ProxyServiceImplTest : StringSpec() {
 
       every { mockAgentContext.agentId } returns testAgentId
       every { proxy.agentContextManager.getAgentContext(testAgentId) } returns mockAgentContext
-      every { proxy.pathManager.addPath(allowedPath, any(), mockAgentContext) } returns null
+      every { proxy.pathManager.addPath(allowedPath, any(), mockAgentContext, any(), any(), "team_a") } returns null
       every { proxy.pathManager.pathMapSize } returns 1
 
       val identity = AgentIdentity("team_a", ByteArray(0), [AgentAuthManager.globToRegex("team_a_*")])
@@ -392,7 +392,8 @@ class ProxyServiceImplTest : StringSpec() {
         }
 
       response.valid.shouldBeTrue()
-      verify { proxy.pathManager.addPath(allowedPath, any(), mockAgentContext) }
+      // The caller's identity reaches addPath, which lets only the same identity take over a live agent's path.
+      verify { proxy.pathManager.addPath(allowedPath, any(), mockAgentContext, any(), any(), "team_a") }
     }
 
     // ==================== agentId / connection binding ====================
@@ -1941,7 +1942,7 @@ class ProxyServiceImplTest : StringSpec() {
       val pathManager = proxy.pathManager
       val ownContext = AgentContext("own-host", authIdentityName = "team-a")
       every { agentContextManager.getAgentContext(ownContext.agentId) } returns ownContext
-      every { pathManager.addPath(any(), any(), any(), any(), any()) } returns null
+      every { pathManager.addPath(any(), any(), any(), any(), any(), "team-a") } returns null
 
       val response =
         asIdentity("team-a") {
@@ -1954,7 +1955,7 @@ class ProxyServiceImplTest : StringSpec() {
         }
 
       response.valid.shouldBeTrue()
-      verify { pathManager.addPath("any_metrics", any(), ownContext, any(), any()) }
+      verify { pathManager.addPath("any_metrics", any(), ownContext, any(), any(), "team-a") }
     }
 
     // Contexts the transport filter creates, and contexts created without auth, record no identity. Binding
@@ -1965,7 +1966,7 @@ class ProxyServiceImplTest : StringSpec() {
       val pathManager = proxy.pathManager
       val unboundContext = AgentContext("some-host")
       every { agentContextManager.getAgentContext(unboundContext.agentId) } returns unboundContext
-      every { pathManager.addPath(any(), any(), any(), any(), any()) } returns null
+      every { pathManager.addPath(any(), any(), any(), any(), any(), "team-a") } returns null
 
       val response =
         asIdentity("team-a") {

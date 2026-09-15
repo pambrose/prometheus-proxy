@@ -201,14 +201,34 @@ To follow one specific agent across the pair, use its **launch ID**. That value 
 agent process, so it survives a failover and identifies the same process on whichever proxy it lands on.
 The agent ID will *not* match — that one is assigned by each proxy independently.
 
+## Exposure
+
+The dashboard has no authentication, so anyone who can reach its port can read it. Keep the port on an
+internal network, or bind it to a private address with `proxy.dashboard.host`; the proxy warns at startup
+when the dashboard listens on all interfaces.
+
+A browser inside that network can still be used to reach it. The dashboard guards against the two ways a
+web page can do that:
+
+- **A WebSocket from another site.** Browsers let any page open a WebSocket to any address, so the
+  dashboard refuses a handshake whose `Origin` is not its own host. Behind a reverse proxy that rewrites
+  the Host header, the browser's origin is the proxy's public name, so list it in
+  `proxy.dashboard.allowedOrigins`.
+- **DNS rebinding.** A page can point its own DNS name at the dashboard's address, after which the browser
+  sends that name as both `Origin` and `Host`, and the Origin check passes. List the names you reach the
+  dashboard by in `proxy.dashboard.allowedHosts` and it refuses any other host name with a 403, on every
+  route; IP addresses, `localhost`, and the hosts in `allowedOrigins` are always allowed. This check is off
+  until you set it.
+
+Sessions are also capped at `proxy.dashboard.maxSessions` (default 50), and a client that stops reading or
+sends an oversized message is disconnected. Neither list stops someone who can reach the port directly.
+Both are lists, so set them in a config file; see [Dashboard configuration](configuration/proxy.md#dashboard).
+
 ## Limits
 
 - **Read-only.** There is nothing to click that changes proxy state.
-- **No authentication.** Rely on network isolation, as with the admin port. What the dashboard does
-  guard: a WebSocket from a foreign browser origin is refused (list a reverse proxy's public origin in
-  `proxy.dashboard.allowedOrigins`), sessions are capped at `proxy.dashboard.maxSessions` (default 50), and a
-  client that stops reading or sends an oversized message is disconnected. The Origin check does not stop DNS
-  rebinding; a private bind address does.
+- **No authentication.** Rely on network isolation, as with the admin port; see [Exposure](#exposure) for
+  what the dashboard itself guards against.
 - **Consolidated paths report one agent's metadata.** When several agents register the same path, the
   target URL and source shown are the **first registrant's**. Later agents contribute their contexts —
   they are counted in the `+N` — but not their own target URL, which matches how path labels have

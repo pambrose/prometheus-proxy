@@ -133,7 +133,8 @@ something.
 
 ### Unit Tests — Agent (`agent/`)
 
-- **AgentTest** — Agent main class lifecycle, heartbeats, reconnection, scrape request processing
+- **AgentTest** — Agent main class lifecycle, heartbeats, reconnection, scrape request processing; when one
+  connection task ends, the others are cancelled, so an idle read stream cannot hold a dead connection open
 - **AgentGrpcServiceTest** — gRPC service: scrape request/response streaming, heartbeats, registration, error handling,
   channel shutdown
 - **AgentHttpServiceTest** — HTTP service: scraping endpoints, compression support, response handling, timeout behavior,
@@ -174,7 +175,8 @@ something.
   disconnect, or a write to one that has gone, is logged at DEBUG, while an unexpected exception still logs at WARN
 - **ProxyHttpRoutesTest** — HTTP routing: path resolution, query params, error responses, compression,
   ensureLeadingSlash
-- **ProxyPathManagerTest** — Path registration/unregistration, consolidated mode, agent selection, concurrent access
+- **ProxyPathManagerTest** — Path registration/unregistration, consolidated mode, agent selection, concurrent access;
+  a live agent's path is taken over only by the same auth identity
 - **AgentContextTest** — Proxy's AgentContext: unique ID generation, validity, path registration, ScrapeRequestWrapper
   queue
 - **AgentContextManagerTest** — Proxy's AgentContextManager: add/remove contexts, chunked context management, concurrent
@@ -286,8 +288,8 @@ mechanism that the standard suite cannot reach:
   endpoint, including both unhealthy branches
 - **InProcessHeartbeatDisabledTest** — with the heartbeat disabled the connection stays usable and shutdown
   still completes promptly (finding 6 in `docs/archive/CODE_REVIEW_JULY_2026.md`)
-- **InProcessHeartbeatEvictionTest** — a heartbeat reporting eviction tears the channel down so the run
-  loop reconnects, rather than leaving a zombie agent
+- **InProcessHeartbeatEvictionTest** — a heartbeat reporting eviction ends the connection so the run loop
+  reconnects with a fresh agent id, rather than leaving a zombie agent
 - **InProcessIdleShutdownTest** — stopping an idle connected agent must not deadlock (finding 1 in
   `docs/archive/CODE_REVIEW_JULY_2026.md`)
 - **InProcessReconnectTest** — the full disconnect → reconnect → re-register cycle, in-process
@@ -296,7 +298,8 @@ mechanism that the standard suite cannot reach:
 - **InProcessTransportFilterDisabledTest** — both sides with the transport filter off: a scrape succeeds,
   and the request stream's own termination is what reclaims the agent context
 - **ProxyWebDashboardTest** — the dashboard service rather than the renderer: page, WebSocket push,
-  selection round-trip, both layouts, and a root-mounted base path
+  selection round-trip, both layouts, a root-mounted base path, and, with `allowedHosts` set, a 403 on every route
+  for a request naming an unknown host
 - **TlsMutualAuthRejectionTest** — the negative mutual-TLS path over a real Netty handshake, which the
   in-process TLS specs cannot perform (item 28 in `docs/archive/CODE_REVIEW_JUNE_2026.md`)
 

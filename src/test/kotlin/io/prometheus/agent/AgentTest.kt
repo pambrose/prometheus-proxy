@@ -48,12 +48,16 @@ import io.prometheus.common.agentOptions
 import io.prometheus.common.ConfigLoadException
 import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import org.slf4j.LoggerFactory
+import java.io.IOException
 import java.net.ServerSocket
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.minusAssign
@@ -74,6 +78,34 @@ class AgentTest : StringSpec() {
   }
 
   init {
+    // ==================== Connection Task Tests ====================
+
+    // A connection's tasks end together, or an idle readRequestsFromProxy collect holds a dead connection open. See
+    // Agent.launchConnectionTask.
+    "when one connection task ends, the other connection tasks should be cancelled" {
+      val agent = createTestAgent()
+      val connectionContext = AgentConnectionContext(8)
+      lateinit var idleTask: Job
+
+      val connectionEnded =
+        withTimeoutOrNull(5.seconds) {
+          coroutineScope {
+            with(agent) {
+              idleTask = launchConnectionTask(connectionContext, "idle read stream") { awaitCancellation() }
+              launchConnectionTask(connectionContext, "failed write stream") {
+                throw IOException("write stream failed")
+              }
+            }
+          }
+          true
+        }
+
+      connectionEnded shouldBe true
+      // Asserted on the Job, not a finally in the task: the idle task may be cancelled before it ever starts running.
+      idleTask.isCancelled.shouldBeTrue()
+      connectionContext.connected.shouldBeFalse()
+    }
+
     // ==================== awaitInitialConnection Tests ====================
 
     "awaitInitialConnection should return false when timeout expires" {

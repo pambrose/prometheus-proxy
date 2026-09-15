@@ -524,6 +524,13 @@ without cutting off Kubernetes health probes, and it loads no CDN assets, so it 
 deployments. Like the admin and metrics endpoints it has **no authentication or TLS**: keep the port
 internal.
 
+Keeping the port internal does not stop a web page from reaching the dashboard through the browser of
+someone who can. The dashboard refuses a WebSocket from a foreign site; behind a reverse proxy that
+rewrites the Host header, list the public origin in `proxy.dashboard.allowedOrigins`. It answers to any
+host name by default, which leaves it open to DNS rebinding (a page pointing its own DNS name at the
+dashboard's address); list the names you reach it by in `proxy.dashboard.allowedHosts` to close that. See
+[Dashboard exposure](https://pambrose.github.io/prometheus-proxy/web-dashboard/#exposure).
+
 Accessibility: text and UI colors clear the WCAG AA contrast thresholds with a measured floor of
 4.59:1, the path table carries proper header semantics, and connection loss and recovery are
 announced to screen readers rather than signalled by colour alone.

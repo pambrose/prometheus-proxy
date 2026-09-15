@@ -232,7 +232,9 @@ checksums. Two metrics track integrity issues:
 When a non-consolidated agent registers a path already owned by another agent,
 the previous agent is displaced. `proxy_agent_displacement_total` tracks these
 events. Frequent displacement indicates a configuration issue (two agents
-claiming the same exclusive path) or deliberate failover.
+claiming the same exclusive path) or deliberate failover. A live agent's path is
+displaced only by an agent of the same auth identity, as in a redeploy; another
+identity's registration is rejected and logged at WARN instead.
 
 ---
 

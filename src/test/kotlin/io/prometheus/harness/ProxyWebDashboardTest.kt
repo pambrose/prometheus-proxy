@@ -146,6 +146,13 @@ class ProxyWebDashboardTest : StringSpec() {
 
   private suspend fun DefaultClientWebSocketSession.nextText() = (incoming.receive() as Frame.Text).readText()
 
+  // The status of a GET for [path] on this dashboard whose Host header names [host] rather than the address it
+  // connects to.
+  private suspend fun DashboardEnv.statusWithHost(
+    path: String,
+    host: String,
+  ) = client.get("$base$path") { header(HttpHeaders.Host, host) }.status
+
   /** Reads frames until one carries [marker]. `any` short-circuits, so MAX_FRAMES is a budget, not a count. */
   private suspend fun DefaultClientWebSocketSession.awaitFrame(marker: String) =
     (1..MAX_FRAMES).any { nextText().contains(marker) }.shouldBeTrue()
@@ -364,6 +371,19 @@ class ProxyWebDashboardTest : StringSpec() {
       }
     }
 
+    // The DNS-rebinding Host check (see ProxyDashboardService.isHostAllowed) covers every route. It is opt-in; every
+    // other spec runs without it.
+    "with allowedHosts set, a request naming an unknown Host should be refused on every route" {
+      withDashboard(HOST_HTTP_PORT, HOST_GRPC_PORT, HOST_DASHBOARD_PORT, configFile = HOSTS_CONFIG_FILE) {
+        listOf("/dashboard", "/dashboard/paths", "/dashboard/events", "/dashboard/assets/htmx.min.js").forEach { path ->
+          statusWithHost(path, "evil.example.com:$HOST_DASHBOARD_PORT") shouldBe HttpStatusCode.Forbidden
+        }
+        listOf(ALLOWED_HOST, "localhost:$HOST_DASHBOARD_PORT", "$LOOPBACK_HOST:$HOST_DASHBOARD_PORT").forEach { host ->
+          statusWithHost("/dashboard", host) shouldBe HttpStatusCode.OK
+        }
+      }
+    }
+
     // Every session costs a socket and a render per push, on a port with no authentication, so the count is capped.
     // A session over the cap is closed at once with a retry-later code, and closing a session frees its slot.
     "sessions beyond maxSessions should be turned away until one closes" {
@@ -494,6 +514,14 @@ class ProxyWebDashboardTest : StringSpec() {
 
     // Must match the allowedOrigins entry in ORIGINS_CONFIG_FILE.
     private const val ALLOWED_ORIGIN = "https://dash.example.com"
+
+    private const val HOST_HTTP_PORT = TestPorts.DASHBOARD_UI_HOST_HTTP_PORT
+    private const val HOST_GRPC_PORT = TestPorts.DASHBOARD_UI_HOST_GRPC_PORT
+    private const val HOST_DASHBOARD_PORT = TestPorts.DASHBOARD_UI_HOST_DASHBOARD_PORT
+    private const val HOSTS_CONFIG_FILE = "config/test-configs/web-ui-hosts.conf"
+
+    // Must match the allowedHosts entry in HOSTS_CONFIG_FILE.
+    private const val ALLOWED_HOST = "dash.internal"
 
     private const val CAP_HTTP_PORT = TestPorts.DASHBOARD_UI_CAP_HTTP_PORT
     private const val CAP_GRPC_PORT = TestPorts.DASHBOARD_UI_CAP_GRPC_PORT
