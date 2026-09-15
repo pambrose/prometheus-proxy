@@ -136,6 +136,9 @@ object TestPorts {
   const val DASHBOARD_UI_CACHE_HTTP_PORT = 9585
   const val DASHBOARD_UI_CACHE_GRPC_PORT = 9586
   const val DASHBOARD_UI_CACHE_DASHBOARD_PORT = 9587
+  const val DASHBOARD_UI_HOST_HTTP_PORT = 9588
+  const val DASHBOARD_UI_HOST_GRPC_PORT = 9589
+  const val DASHBOARD_UI_HOST_DASHBOARD_PORT = 9593
 
   // First port of the block each standard harness suite registers scrape targets on (startPort + i)
   const val HARNESS_DEFAULT_START_PORT = 9600

@@ -74,6 +74,16 @@ describe the proxy's API, and it ignored agent tokens. If you point `grpcurl` or
 proxy, set `proxy.reflectionDisabled = false`; when the proxy requires agent tokens, the client must now send one
 in the `agent-token` header, or the call fails with `UNAUTHENTICATED`.
 
+**Path takeover between identities.** With per-agent identities, an agent registering a path that a live agent
+of *another* identity already serves is now rejected, instead of silently replacing it. A redeploy under the same
+identity still reclaims its paths at once. With no agent auth, or only the shared `proxy.agentToken`, every agent
+has the same identity and nothing changes.
+
+**DNS rebinding and the dashboard.** The new, opt-in `proxy.dashboard.allowedHosts` makes the dashboard refuse a
+request naming any host that isn't listed, an IP address, `localhost`, or an `allowedOrigins` host. That stops a
+web page from reading the dashboard through an operator's browser by pointing its own DNS name at the dashboard's
+address. It is off by default; set it if browsers you don't control can reach the dashboard.
+
 **Scrape request limits.** Anything that could reach the scrape port could queue scrapes without limit,
 each one making an agent fetch an internal target and the proxy buffer the response. Each agent's queue is
 now capped at twice `proxy.internal.scrapeRequestBacklogUnhealthySize` (50 by default), and scrapes in flight
@@ -152,6 +162,8 @@ interval as their deadline, capped at the unary deadline.
   DEBUG.
 - **A client disconnecting while its response was being written logged a WARN with a stack trace**, from the
   failed write. It is now logged at DEBUG.
+- **An agent could stay half-connected after a stream failed**, holding its connection open with its paths
+  registered until a scrape request arrived or the proxy evicted it. It now reconnects immediately.
 - **A host-only `--proxy` or `PROXY_HOSTNAME` ignored `agent.proxy.port`** and dialed 50051. It now uses the
   configured port.
 - **A chunk size or gzip threshold above gRPC's 4 MiB message limit broke every scrape** on the connection.

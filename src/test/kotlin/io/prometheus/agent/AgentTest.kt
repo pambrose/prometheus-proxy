@@ -48,12 +48,15 @@ import io.prometheus.common.agentOptions
 import io.prometheus.common.ConfigLoadException
 import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import org.slf4j.LoggerFactory
+import java.io.IOException
 import java.net.ServerSocket
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.minusAssign
@@ -74,6 +77,41 @@ class AgentTest : StringSpec() {
   }
 
   init {
+    // ==================== Connection Task Tests ====================
+
+    // A connection's tasks end together. When one finishes -- a failed write stream, say -- the rest must be cancelled.
+    // Otherwise an idle readRequestsFromProxy collect, which neither the closed connection context nor a finished
+    // heartbeat loop can unblock, holds the connection open, and the agent does not reconnect until a scrape request
+    // arrives or the proxy evicts it.
+    "when one connection task ends, the other connection tasks should be cancelled" {
+      val agent = createTestAgent()
+      val connectionContext = AgentConnectionContext(8)
+      val idleCancelled = CompletableDeferred<Unit>()
+
+      val connectionEnded =
+        withTimeoutOrNull(5.seconds) {
+          coroutineScope {
+            with(agent) {
+              launchConnectionTask(connectionContext, "idle read stream") {
+                try {
+                  awaitCancellation()
+                } finally {
+                  idleCancelled.complete(Unit)
+                }
+              }
+              launchConnectionTask(connectionContext, "failed write stream") {
+                throw IOException("write stream failed")
+              }
+            }
+          }
+          true
+        }
+
+      connectionEnded shouldBe true
+      idleCancelled.isCompleted.shouldBeTrue()
+      connectionContext.connected.shouldBeFalse()
+    }
+
     // ==================== awaitInitialConnection Tests ====================
 
     "awaitInitialConnection should return false when timeout expires" {

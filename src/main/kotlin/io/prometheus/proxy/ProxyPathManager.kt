@@ -52,6 +52,9 @@ internal class ProxyPathManager(
     // exactly as labels has always behaved. Empty when the agent predates the fields.
     val targetUrl: String = "",
     val pathSource: String = "",
+    // The auth identity the registrant connected as, empty when agent auth is disabled. On a consolidated path, the
+    // FIRST registrant's, like labels.
+    val identityName: String = "",
   ) {
     fun isNotValid() = agentContexts.all { it.isNotValid() }
   }
@@ -82,12 +85,13 @@ internal class ProxyPathManager(
     agentContext: AgentContext,
     targetUrl: String = "",
     pathSource: String = "",
+    identityName: String = "",
   ): String? {
     require(path.isNotEmpty()) { EMPTY_PATH_MSG }
     // Redacted on the way in so the dashboard and /debug never show credentials, even from an agent that
     // predates agent-side redaction.
     return multiSegmentPathError(path)
-      ?: addValidatedPath(path, labels, agentContext, sanitizeUrl(targetUrl), pathSource)
+      ?: addValidatedPath(path, labels, agentContext, sanitizeUrl(targetUrl), pathSource, identityName)
   }
 
   @Suppress("ReturnCount")
@@ -97,6 +101,7 @@ internal class ProxyPathManager(
     agentContext: AgentContext,
     targetUrl: String,
     pathSource: String,
+    identityName: String,
   ): String? {
     synchronized(pathMap) {
       // Re-check validity inside the lock: agent removal (transportTerminated / cleanup eviction) can
@@ -112,7 +117,7 @@ internal class ProxyPathManager(
       val agentInfo = pathMap[path]
       if (agentContext.consolidated) {
         if (agentInfo == null) {
-          pathMap[path] = AgentContextInfo(true, labels, [agentContext], targetUrl, pathSource)
+          pathMap[path] = AgentContextInfo(true, labels, [agentContext], targetUrl, pathSource, identityName)
         } else {
           if (agentContext.consolidated != agentInfo.isConsolidated) {
             val reason = "Consolidated agent rejected for non-consolidated path /$path"
@@ -137,11 +142,22 @@ internal class ProxyPathManager(
         }
         // An agent re-registering its own path displaces no one, so it is neither logged nor counted as a displacement.
         val displacedContexts = agentInfo?.agentContexts.orEmpty().filterNot { it.agentId == agentContext.agentId }
+        // A live registrant's path can be taken over only by an agent of the same auth identity: a redeploy reclaims
+        // its paths at once, but one identity cannot silently replace another's metrics. With no agent auth, or only
+        // the legacy shared token, every agent has the same identity, so nothing changes there. A registrant that is
+        // no longer valid can always be replaced.
+        if (agentInfo != null && agentInfo.identityName != identityName && displacedContexts.any { it.isValid() }) {
+          val reason =
+            "Path /$path is served by identity '${agentInfo.identityName}'; " +
+              "identity '$identityName' cannot take it over"
+          logger.warn { reason }
+          return reason
+        }
         if (displacedContexts.isNotEmpty()) {
           logger.info { "Overwriting path /$path for ${displacedContexts.first()}" }
           proxy.metrics { agentDisplacementCount.inc() }
         }
-        pathMap[path] = AgentContextInfo(false, labels, [agentContext], targetUrl, pathSource)
+        pathMap[path] = AgentContextInfo(false, labels, [agentContext], targetUrl, pathSource, identityName)
 
         // Invalidate displaced agent contexts that have no other registered paths.
         // Even live agents are invalidated here — a displaced agent with zero paths

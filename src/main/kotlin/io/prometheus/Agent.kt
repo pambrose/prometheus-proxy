@@ -60,6 +60,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Semaphore
@@ -372,13 +373,19 @@ class Agent(
    * completion closes the shared [connectionContext], decrementing the backlog by whatever it
    * drained. [block] is a [CoroutineScope] extension so a task (e.g. scrape processing) can launch
    * its own child coroutines against the task's scope.
+   *
+   * Any task ending ends the connection, so completion also cancels the receiver scope's other tasks. Closing the
+   * context stops the tasks that poll it, but not an idle readRequestsFromProxy collect: without the cancellation, a
+   * failed write stream left that collect holding the connection open until a scrape request arrived or the proxy
+   * evicted the agent.
    */
-  private fun CoroutineScope.launchConnectionTask(
+  internal fun CoroutineScope.launchConnectionTask(
     connectionContext: AgentConnectionContext,
     name: String,
     block: suspend CoroutineScope.() -> Unit,
-  ): Job =
-    launch(Dispatchers.IO) {
+  ): Job {
+    val connectionJob = coroutineContext.job
+    return launch(Dispatchers.IO) {
       runCatchingCancellable { block() }
         .onFailure { e ->
           if (isRunning)
@@ -388,8 +395,10 @@ class Agent(
       invokeOnCompletion {
         val drained = connectionContext.close()
         if (drained > 0) decrementBacklog(drained)
+        connectionJob.children.forEach { it.cancel() }
       }
     }
+  }
 
   internal fun handleConnectionFailure(e: Throwable) {
     when (e) {

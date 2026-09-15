@@ -41,7 +41,9 @@ A complete federation config is available at:
 ## Consolidated Mode
 
 By default, each scrape path is owned by a single agent. If a second agent tries to register
-the same path, it displaces the first agent.
+the same path, it displaces the first agent, provided both connected with the same auth identity.
+With [per-agent identities](security/index.md#per-agent-identities-and-path-authorization), another
+identity's registration is rejected while the first agent is connected.
 
 In **consolidated mode**, multiple agents can register the same path for redundancy:
 

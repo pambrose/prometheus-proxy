@@ -17,6 +17,8 @@
 package io.prometheus.proxy.dashboard
 
 import com.codahale.metrics.health.HealthCheck
+import com.google.common.net.HostAndPort
+import com.google.common.net.InetAddresses
 import com.google.common.util.concurrent.MoreExecutors
 import com.pambrose.common.concurrent.GenericIdleService
 import com.pambrose.common.concurrent.genericServiceListener
@@ -29,6 +31,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.CachingOptions
+import io.ktor.server.application.createApplicationPlugin
 import io.ktor.server.application.createRouteScopedPlugin
 import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
@@ -103,6 +106,7 @@ import kotlin.time.TimeSource
  * The port has no authentication, so what the service can bound, it does: a WebSocket handshake from a foreign
  * browser origin is refused, sessions are capped at `proxy.dashboard.maxSessions`, a session that stops reading is
  * closed rather than buffered for, and a browser message re-renders the recent snapshot rather than collecting one.
+ * Setting `proxy.dashboard.allowedHosts` also refuses a request naming an unknown host, which stops DNS rebinding.
  * The listen address is `proxy.dashboard.host`; binding it to a private address is what keeps the page private.
  */
 internal class ProxyDashboardService(
@@ -138,6 +142,10 @@ internal class ProxyDashboardService(
   private val refreshInterval = proxy.proxyConfigVals.dashboard.refreshIntervalSecs.seconds
   private val maxSessions = proxy.proxyConfigVals.dashboard.maxSessions
   private val allowedOrigins: List<String> = proxy.proxyConfigVals.dashboard.allowedOrigins
+  private val allowedHosts: List<String> = proxy.proxyConfigVals.dashboard.allowedHosts
+
+  // Hosts already logged as refused, so repeated rebinding attempts cannot flood the log. Bounded for the same reason.
+  private val refusedHosts = ConcurrentHashMap.newKeySet<String>()
 
   // Claimed before a session joins [sessions] and released after it leaves, so the cap holds under concurrent
   // connects; the set's own size is only an estimate while another thread is adding to it.
@@ -167,6 +175,22 @@ internal class ProxyDashboardService(
       }
     }
 
+  // Installed only when proxy.dashboard.allowedHosts is set. Application-wide rather than route-scoped, so it runs
+  // before routing and covers every page, asset, and the WebSocket. See isHostAllowed.
+  private val hostCheck =
+    createApplicationPlugin("DashboardHostCheck") {
+      onCall { call ->
+        val host = call.request.headers[HttpHeaders.Host]
+        if (!isHostAllowed(host, allowedHosts, allowedOrigins)) {
+          if (refusedHosts.size < MAX_LOGGED_REFUSED_HOSTS && refusedHosts.add(host.orEmpty()))
+            logger.warn {
+              "Refused a dashboard request for host $host; add it to proxy.dashboard.allowedHosts if expected"
+            }
+          call.respondText("Host not allowed", ContentType.Text.Plain, HttpStatusCode.Forbidden)
+        }
+      }
+    }
+
   private val server =
     embeddedServer(
       factory = CIO,
@@ -181,6 +205,8 @@ internal class ProxyDashboardService(
       // a failure returns a logged 500 rather than a bare one, and DefaultHeaders. Request logging is
       // off -- a dashboard polling its own socket would drown the proxy's logs.
       configureKtorServer(isLoggingEnabled = false)
+      if (allowedHosts.isNotEmpty())
+        install(hostCheck)
       install(WebSockets) {
         // Ktor's defaults send no pings and buffer outgoing frames without limit, so a client that stops reading
         // would pile up a frame per push until the proxy ran out of memory. Pings find a dead peer, and a full
@@ -467,8 +493,9 @@ internal class ProxyDashboardService(
      * entry, for a dashboard behind a reverse proxy that rewrites Host. Anything unparseable, including the opaque
      * `null` origin, is refused.
      *
-     * This does not stop DNS rebinding, where the attacker's origin and the Host header agree. Binding the
-     * dashboard to a private address (`proxy.dashboard.host`) does.
+     * This does not stop DNS rebinding, where the attacker's origin and the Host header agree. [isHostAllowed] does,
+     * when `proxy.dashboard.allowedHosts` is set, and so does binding the dashboard to a private address
+     * (`proxy.dashboard.host`).
      */
     internal fun isOriginAllowed(
       origin: String?,
@@ -482,5 +509,44 @@ internal class ProxyDashboardService(
     }
 
     private fun normalizeOrigin(origin: String) = origin.trim().trimEnd('/').lowercase()
+
+    private const val LOCALHOST = "localhost"
+    private const val MAX_LOGGED_REFUSED_HOSTS = 100
+
+    /**
+     * Whether a request whose Host header is [host] may proceed, given the configured [allowedHosts].
+     *
+     * Opt-in protection against DNS rebinding, where an attacker points their own name at the dashboard's address: a
+     * rebound browser sends that name as both Origin and Host, so [isOriginAllowed] lets it through. With
+     * [allowedHosts] empty -- the default -- every Host is allowed. Otherwise the dashboard answers only to an IP
+     * address, `localhost`, a name in [allowedHosts], or the host of an [allowedOrigins] entry (a reverse proxy's
+     * public name), ignoring the port, case, and a trailing dot. A request with no Host is allowed, since browsers
+     * always send one; an empty or unparseable Host is refused. `X-Forwarded-Host` is never consulted: a rebound page
+     * is same-origin and can set it.
+     */
+    internal fun isHostAllowed(
+      host: String?,
+      allowedHosts: Collection<String>,
+      allowedOrigins: Collection<String>,
+    ): Boolean {
+      if (allowedHosts.isEmpty() || host == null) return true
+      val name = hostName(host) ?: return false
+      return InetAddresses.isInetAddress(name) ||
+        name == LOCALHOST ||
+        allowedHosts.any { hostName(it) == name } ||
+        allowedOrigins.any { originHost(it) == name }
+    }
+
+    // The host part of a Host header or an allowedHosts entry: port and IPv6 brackets removed, lowercased, and
+    // without a trailing dot. Null when empty or unparseable.
+    private fun hostName(value: String): String? =
+      runCatching { HostAndPort.fromString(value.trim()).host }
+        .getOrNull()
+        ?.trimEnd('.')
+        ?.lowercase()
+        ?.takeIf { it.isNotEmpty() }
+
+    private fun originHost(origin: String): String? =
+      runCatching { URI(origin.trim()).host }.getOrNull()?.trimEnd('.')?.lowercase()
   }
 }

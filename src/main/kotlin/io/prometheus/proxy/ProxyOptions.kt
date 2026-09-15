@@ -378,9 +378,14 @@ class ProxyOptions(
       require(dashboard.maxSessions > 0) { "dashboard.maxSessions must be > 0: ${dashboard.maxSessions}" }
       logger.info { "dashboardHost: $dashboardHost, dashboardPort: $dashboardPort, dashboardPath: $dashboardPath" }
       if (isWildcardAddress(dashboardHost)) {
+        val rebindingHint =
+          if (dashboard.allowedHosts.isEmpty())
+            " Set proxy.dashboard.allowedHosts to refuse unknown host names."
+          else
+            ""
         logger.warn {
           "The dashboard has no authentication and listens on all interfaces ($dashboardHost:$dashboardPort). " +
-            "Set proxy.dashboard.host (--dashboard_host) to 127.0.0.1, or firewall the port."
+            "Set proxy.dashboard.host (--dashboard_host) to 127.0.0.1, or firewall the port.$rebindingHint"
         }
       }
     }

@@ -1,8 +1,8 @@
 # Security Finding: Unauthenticated Agent Registration / Path Hijacking
 
 **Status:** Mitigated when agent authentication is configured — per-agent identities (`proxy.auth`), a pre-shared
-token, and/or mutual TLS. The agent port is still **unauthenticated by default**, and remediation item 4 remains
-open.
+token, and/or mutual TLS. The agent port is still **unauthenticated by default**, and remediation item 4 is only
+partly implemented.
 **Severity:** High when no authentication is configured and the agent port is reachable
 **Component:** Proxy gRPC service (agent-facing port, default `50051`)
 **Identified:** 2026-06 code review · **Updated:** 2026-09 (per-agent identities, call binding, and reflection off by default)
@@ -60,15 +60,17 @@ context.
   full. The proxy logs a startup warning in this configuration. If reflection is also enabled, any peer can list
   and describe the API.
 - **A shared token authenticates agents but cannot tell them apart.** Every holder of `proxy.agentToken` has
-  allow-all path authorization, so any of them can displace any other agent's path. When `proxy.auth` is added
-  alongside a legacy token, the legacy token keeps that allow-all access until it is removed.
+  allow-all path authorization and the same identity, so any of them can take over any other holder's path. When
+  `proxy.auth` is added alongside a legacy token, the legacy token keeps allow-all path authorization until it is
+  removed, though it can no longer take over a path a live `proxy.auth` identity serves.
 - **Transport filter disabled, without per-agent identities.** In this mode calls can be bound only to an
   identity. Agents that share one — the legacy token, or a single `proxy.auth` entry used by several agents — or
   that connect with no authentication at all are indistinguishable to the proxy. One of them can act on another's
   agent context: read its scrape requests (including a forwarded Prometheus `Authorization` header), unregister its
   paths, or answer its scrapes. Give each agent its own identity, or keep the transport filter enabled.
-- **Silent path displacement.** A non-consolidated registration still overwrites the path's owner, which is
-  convenient for redeploys but lets any agent authorized for a path take it over. See remediation item 4.
+- **Path takeover within one identity.** A non-consolidated registration still replaces a live owner that
+  connected with the same identity, which keeps redeploys working. Unauthenticated agents, and every holder of the
+  legacy token, share one identity, so any of them can still take over another's path. See remediation item 4.
 
 ## Affected code
 
@@ -80,8 +82,9 @@ These code paths define the default, unauthenticated behavior:
   matches the proxy's. With no identities configured, no token or client identity is required.
 - `proxy/ProxyServiceImpl.kt` → `proxy/ProxyPathManager.kt` — `registerPath()` → `addPath()`. For a
   non-consolidated registration of a path that already has a non-consolidated owner, the proxy overwrites the
-  path, increments `agentDisplacementCount`, and invalidates the displaced agent's context if it holds no other
-  paths.
+  path when the owner connected with the same identity or is no longer valid, increments
+  `agentDisplacementCount`, and invalidates the displaced agent's context if it holds no other paths. A live owner
+  of another identity keeps the path.
 - `proxy/ProxyGrpcService.kt` — installs `AgentAuthServerInterceptor` for every service on the agent port only when
   `AgentAuthManager` holds at least one identity, and registers the reflection service only when
   `reflectionDisabled` is false (the default is true).
@@ -109,7 +112,7 @@ The original finding is exploitable when **all** of the following hold:
    enabled without agent authentication, `grpcurl` can also enumerate the service shape.
 3. The attacker calls `connectAgent` → `registerAgent` → `registerPath` for an existing path such as
    `/node-exporter`. *Blocked by mutual TLS or by agent authentication; per-agent identities also block a path
-   outside the attacker's globs.*
+   outside the attacker's globs, and a path a live agent of another identity already serves.*
 4. The proxy overwrites the path's owner with the attacker's context and invalidates the legitimate agent if it has
    no other paths.
 5. Prometheus scrapes `proxy-host:8080/node-exporter` and receives **attacker-controlled metrics**. The attacker
@@ -164,11 +167,12 @@ In rough priority order:
 3. **Disable gRPC reflection by default.** ✅ **Implemented.** `reflectionDisabled` defaults to `true` in
    `config/config.conf`, so a peer cannot trivially enumerate the API; operators who need reflection for tooling can
    set it to `false`. When enabled, reflection sits behind the same agent authentication as `ProxyService`.
-4. **Consider rejecting path displacement by default**, making overwrite an explicit, configurable behavior. The
-   silent overwrite is convenient for redeploys but is the mechanism that turns missing or shared authentication
-   into hijacking. `agentDisplacementCount` already exists as an observability hook for this event. **Open.**
-
-Item 4 is a behavior change that needs its own design discussion.
+4. **Consider rejecting path displacement by default.** **Partly implemented.** A live agent's non-consolidated
+   path can now be taken over only by an agent that connected with the same identity, so a redeploy still reclaims
+   its paths while one `proxy.auth` identity can no longer replace another's. Takeover between agents that share an
+   identity — every unauthenticated agent, or every holder of the legacy token — is unchanged, because rejecting it
+   would break redeploys; separating those agents takes per-agent identities. `agentDisplacementCount` counts each
+   takeover.
 
 ### Implemented since the original finding
 
@@ -182,6 +186,8 @@ Item 4 is a behavior change that needs its own design discussion.
 - **Accurate startup warnings** (finding #6 of `docs/archive/CODE_REVIEW_SEPTEMBER_2026.md`) — the "agent port is
   unauthenticated" warning no longer treats a trust store as mutual TLS unless TLS is enabled, and the proxy and
   the agent each warn when agent tokens are configured without TLS and would be sent in cleartext.
+- **Path takeover limited to the same identity** (remediation item 4, in part) — a live agent's non-consolidated
+  path can be replaced only by an agent that connected with the same identity.
 
 ## References
 

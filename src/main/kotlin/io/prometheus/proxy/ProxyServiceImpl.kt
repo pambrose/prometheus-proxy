@@ -210,6 +210,8 @@ internal class ProxyServiceImpl(
                   agentContext,
                   request.targetUrl,
                   request.pathSource,
+                  // Only the same identity may take over a path a live agent already serves.
+                  identity?.name.orEmpty(),
                 )
               }
             reason.also { agentContext.markActivityTime(false) }

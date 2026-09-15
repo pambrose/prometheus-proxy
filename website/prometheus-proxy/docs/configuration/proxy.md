@@ -112,6 +112,7 @@ proxy {
     recentScrapesQueueSize = 200    // Scrape records retained for the dashboard
     maxSessions = 50                // Concurrent WebSocket sessions; more are closed
     allowedOrigins = []             // Browser origins allowed besides the dashboard's own host
+    allowedHosts = []               // Host names the dashboard answers to; empty turns the check off
   }
 }
 ```
@@ -122,6 +123,12 @@ The proxy logs a warning at startup when the dashboard is enabled on all interfa
 origin other than the dashboard's own host is refused; behind a reverse proxy that rewrites the Host header, list the
 public origin (for example `"https://dash.example.com"`) in `allowedOrigins`. Being a list, `allowedOrigins` must be
 set in a config file rather than with `-D`.
+
+The Origin check does not stop DNS rebinding, where an attacker points their own DNS name at the dashboard's address and
+a browser then sends that name as both Origin and Host. To stop it, list the names you reach the dashboard by in
+`allowedHosts` (for example `["dash.internal"]`). Once set, a request whose Host header names anything else gets a
+403 on every route; IP addresses, `localhost`, and the hosts in `allowedOrigins` are always allowed. The check is off
+while `allowedHosts` is empty, the default, and like `allowedOrigins` the list must be set in a config file.
 
 It runs on its own port rather than the admin port, partly because the admin port is a servlet container
 that cannot host WebSockets, and partly so the dashboard can be firewalled without also cutting off the

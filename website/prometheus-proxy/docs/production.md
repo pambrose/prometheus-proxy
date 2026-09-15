@@ -24,7 +24,10 @@ security, reliability, and tuning knobs documented elsewhere into one operationa
   operational tools, not public endpoints — keep `8092`/`8093` on an internal network only. The
   [dashboard](web-dashboard.md) port (`8094`) is equally unauthenticated and shows agent names,
   hostnames, and target URLs; it runs on its own port precisely so it can be firewalled without
-  cutting off the `/ping` and `/healthcheck` probes.
+  cutting off the `/ping` and `/healthcheck` probes. Bind it to a private address with
+  `proxy.dashboard.host`. If browsers that also load untrusted pages can reach it, set
+  `proxy.dashboard.allowedHosts` to the names you use, and behind a reverse proxy list its public
+  origin in `proxy.dashboard.allowedOrigins`. See [Exposure](web-dashboard.md#exposure).
 - When forwarding auth headers to targets, **require TLS** so credentials aren't sent in
   plaintext between proxy and agent. See
   [Auth Header Forwarding](security/index.md#auth-header-forwarding).

@@ -40,6 +40,10 @@ import io.kotest.matchers.maps.shouldHaveSize as mapShouldHaveSize
 
 @Suppress("LargeClass")
 class ProxyPathManagerTest : StringSpec() {
+  private companion object {
+    const val LABELS = """{"job":"test"}"""
+  }
+
   private fun createMockProxy(): Proxy {
     val mockManager = mockk<AgentContextManager>(relaxed = true)
     val proxy = mockk<Proxy>(relaxed = true)
@@ -185,6 +189,46 @@ class ProxyPathManagerTest : StringSpec() {
       val info = manager.getAgentContextInfo("/metrics")
       info.shouldNotBeNull()
       info.agentContexts.map { it.agentId } shouldBe [context.agentId]
+    }
+
+    // A live agent's path can be taken over only by an agent of the same auth identity. Otherwise an identity whose
+    // path patterns overlap another's could silently replace that identity's metrics.
+    "another identity should not take over a live agent's non-consolidated path" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val owner = AgentContext("remote-owner")
+      val intruder = AgentContext("remote-intruder")
+
+      manager.addPath("/metrics", LABELS, owner, identityName = "team_a").shouldBeNull()
+      val reason = manager.addPath("/metrics", LABELS, intruder, identityName = "team_b")
+
+      reason.shouldNotBeNull() shouldContain "team_a"
+      manager.getAgentContextInfo("/metrics")?.agentContexts?.map { it.agentId } shouldBe [owner.agentId]
+      owner.isValid().shouldBeTrue()
+    }
+
+    // A redeployed agent presents the same identity, so it reclaims its paths at once.
+    "an agent of the same identity should take over a live agent's non-consolidated path" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val owner = AgentContext("remote-owner")
+      val redeployed = AgentContext("remote-redeployed")
+
+      manager.addPath("/metrics", LABELS, owner, identityName = "team_a").shouldBeNull()
+      manager.addPath("/metrics", LABELS, redeployed, identityName = "team_a").shouldBeNull()
+
+      manager.getAgentContextInfo("/metrics")?.agentContexts?.map { it.agentId } shouldBe [redeployed.agentId]
+    }
+
+    // A registrant that is already gone -- invalidated, but not yet cleaned up -- must not hold its path hostage.
+    "another identity should take over a path whose registrant is no longer valid" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val owner = AgentContext("remote-owner")
+      val newcomer = AgentContext("remote-newcomer")
+
+      manager.addPath("/metrics", LABELS, owner, identityName = "team_a").shouldBeNull()
+      owner.invalidate()
+      manager.addPath("/metrics", LABELS, newcomer, identityName = "team_b").shouldBeNull()
+
+      manager.getAgentContextInfo("/metrics")?.agentContexts?.map { it.agentId } shouldBe [newcomer.agentId]
     }
 
     // Tests consolidated path behavior: when multiple agents register the same path with
