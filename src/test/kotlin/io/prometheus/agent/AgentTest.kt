@@ -79,10 +79,8 @@ class AgentTest : StringSpec() {
   init {
     // ==================== Connection Task Tests ====================
 
-    // A connection's tasks end together. When one finishes -- a failed write stream, say -- the rest must be cancelled.
-    // Otherwise an idle readRequestsFromProxy collect, which neither the closed connection context nor a finished
-    // heartbeat loop can unblock, holds the connection open, and the agent does not reconnect until a scrape request
-    // arrives or the proxy evicts it.
+    // A connection's tasks end together, or an idle readRequestsFromProxy collect holds a dead connection open. See
+    // Agent.launchConnectionTask.
     "when one connection task ends, the other connection tasks should be cancelled" {
       val agent = createTestAgent()
       val connectionContext = AgentConnectionContext(8)

@@ -50,7 +50,6 @@ import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml
 import io.prometheus.proxy.dashboard.ProxySnapshot
 import kotlinx.coroutines.withTimeout
-import java.net.Socket
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -147,18 +146,12 @@ class ProxyWebDashboardTest : StringSpec() {
 
   private suspend fun DefaultClientWebSocketSession.nextText() = (incoming.receive() as Frame.Text).readText()
 
-  // The status of a GET that names [host] in its Host header. HTTP clients set Host from the URL themselves, so this
-  // writes the request over a raw socket.
-  private fun statusWithHost(
-    port: Int,
+  // The status of a GET for [path] on this dashboard whose Host header names [host] rather than the address it
+  // connects to.
+  private suspend fun DashboardEnv.statusWithHost(
     path: String,
     host: String,
-  ): Int =
-    Socket(LOOPBACK_HOST, port).use { socket ->
-      socket.soTimeout = SOCKET_TIMEOUT_MILLIS
-      socket.getOutputStream().write("GET $path HTTP/1.1\r\nHost: $host\r\nConnection: close\r\n\r\n".toByteArray())
-      socket.getInputStream().bufferedReader().readLine().split(" ")[1].toInt()
-    }
+  ) = client.get("$base$path") { header(HttpHeaders.Host, host) }.status
 
   /** Reads frames until one carries [marker]. `any` short-circuits, so MAX_FRAMES is a budget, not a count. */
   private suspend fun DefaultClientWebSocketSession.awaitFrame(marker: String) =
@@ -378,16 +371,15 @@ class ProxyWebDashboardTest : StringSpec() {
       }
     }
 
-    // DNS rebinding points an attacker's name at the dashboard's address, and a rebound browser sends that name as both
-    // Origin and Host, so the Origin check passes. With proxy.dashboard.allowedHosts set, the dashboard answers only to
-    // names it knows, on every route. The check is opt-in; every other spec runs without it.
+    // The DNS-rebinding Host check (see ProxyDashboardService.isHostAllowed) covers every route. It is opt-in; every
+    // other spec runs without it.
     "with allowedHosts set, a request naming an unknown Host should be refused on every route" {
       withDashboard(HOST_HTTP_PORT, HOST_GRPC_PORT, HOST_DASHBOARD_PORT, configFile = HOSTS_CONFIG_FILE) {
         listOf("/dashboard", "/dashboard/paths", "/dashboard/events", "/dashboard/assets/htmx.min.js").forEach { path ->
-          statusWithHost(HOST_DASHBOARD_PORT, path, "evil.example.com:$HOST_DASHBOARD_PORT") shouldBe 403
+          statusWithHost(path, "evil.example.com:$HOST_DASHBOARD_PORT") shouldBe HttpStatusCode.Forbidden
         }
         listOf(ALLOWED_HOST, "localhost:$HOST_DASHBOARD_PORT", "$LOOPBACK_HOST:$HOST_DASHBOARD_PORT").forEach { host ->
-          statusWithHost(HOST_DASHBOARD_PORT, "/dashboard", host) shouldBe 200
+          statusWithHost("/dashboard", host) shouldBe HttpStatusCode.OK
         }
       }
     }
@@ -530,7 +522,6 @@ class ProxyWebDashboardTest : StringSpec() {
 
     // Must match the allowedHosts entry in HOSTS_CONFIG_FILE.
     private const val ALLOWED_HOST = "dash.internal"
-    private const val SOCKET_TIMEOUT_MILLIS = 10_000
 
     private const val CAP_HTTP_PORT = TestPorts.DASHBOARD_UI_CAP_HTTP_PORT
     private const val CAP_GRPC_PORT = TestPorts.DASHBOARD_UI_CAP_GRPC_PORT

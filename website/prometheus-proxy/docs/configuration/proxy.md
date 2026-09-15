@@ -124,11 +124,9 @@ origin other than the dashboard's own host is refused; behind a reverse proxy th
 public origin (for example `"https://dash.example.com"`) in `allowedOrigins`. Being a list, `allowedOrigins` must be
 set in a config file rather than with `-D`.
 
-The Origin check does not stop DNS rebinding, where an attacker points their own DNS name at the dashboard's address and
-a browser then sends that name as both Origin and Host. To stop it, list the names you reach the dashboard by in
-`allowedHosts` (for example `["dash.internal"]`). Once set, a request whose Host header names anything else gets a
-403 on every route; IP addresses, `localhost`, and the hosts in `allowedOrigins` are always allowed. The check is off
-while `allowedHosts` is empty, the default, and like `allowedOrigins` the list must be set in a config file.
+`allowedHosts` (for example `["dash.internal"]`) lists the names you reach the dashboard by, which stops DNS rebinding.
+It is off while empty, the default, and like `allowedOrigins` must be set in a config file. See
+[Exposure](../web-dashboard.md#exposure) for what both lists guard against.
 
 It runs on its own port rather than the admin port, partly because the admin port is a servlet container
 that cannot host WebSockets, and partly so the dashboard can be firewalled without also cutting off the

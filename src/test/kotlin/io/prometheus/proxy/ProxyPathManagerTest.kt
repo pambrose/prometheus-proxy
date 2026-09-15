@@ -40,10 +40,6 @@ import io.kotest.matchers.maps.shouldHaveSize as mapShouldHaveSize
 
 @Suppress("LargeClass")
 class ProxyPathManagerTest : StringSpec() {
-  private companion object {
-    const val LABELS = """{"job":"test"}"""
-  }
-
   private fun createMockProxy(): Proxy {
     val mockManager = mockk<AgentContextManager>(relaxed = true)
     val proxy = mockk<Proxy>(relaxed = true)
@@ -198,8 +194,8 @@ class ProxyPathManagerTest : StringSpec() {
       val owner = AgentContext("remote-owner")
       val intruder = AgentContext("remote-intruder")
 
-      manager.addPath("/metrics", LABELS, owner, identityName = "team_a").shouldBeNull()
-      val reason = manager.addPath("/metrics", LABELS, intruder, identityName = "team_b")
+      manager.addPath("/metrics", """{"job":"test"}""", owner, identityName = "team_a").shouldBeNull()
+      val reason = manager.addPath("/metrics", """{"job":"test"}""", intruder, identityName = "team_b")
 
       reason.shouldNotBeNull() shouldContain "team_a"
       manager.getAgentContextInfo("/metrics")?.agentContexts?.map { it.agentId } shouldBe [owner.agentId]
@@ -212,8 +208,8 @@ class ProxyPathManagerTest : StringSpec() {
       val owner = AgentContext("remote-owner")
       val redeployed = AgentContext("remote-redeployed")
 
-      manager.addPath("/metrics", LABELS, owner, identityName = "team_a").shouldBeNull()
-      manager.addPath("/metrics", LABELS, redeployed, identityName = "team_a").shouldBeNull()
+      manager.addPath("/metrics", """{"job":"test"}""", owner, identityName = "team_a").shouldBeNull()
+      manager.addPath("/metrics", """{"job":"test"}""", redeployed, identityName = "team_a").shouldBeNull()
 
       manager.getAgentContextInfo("/metrics")?.agentContexts?.map { it.agentId } shouldBe [redeployed.agentId]
     }
@@ -224,9 +220,9 @@ class ProxyPathManagerTest : StringSpec() {
       val owner = AgentContext("remote-owner")
       val newcomer = AgentContext("remote-newcomer")
 
-      manager.addPath("/metrics", LABELS, owner, identityName = "team_a").shouldBeNull()
+      manager.addPath("/metrics", """{"job":"test"}""", owner, identityName = "team_a").shouldBeNull()
       owner.invalidate()
-      manager.addPath("/metrics", LABELS, newcomer, identityName = "team_b").shouldBeNull()
+      manager.addPath("/metrics", """{"job":"test"}""", newcomer, identityName = "team_b").shouldBeNull()
 
       manager.getAgentContextInfo("/metrics")?.agentContexts?.map { it.agentId } shouldBe [newcomer.agentId]
     }

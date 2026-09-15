@@ -58,6 +58,7 @@ import io.prometheus.common.Utils.logStreamFailure
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.job
@@ -395,7 +396,7 @@ class Agent(
       invokeOnCompletion {
         val drained = connectionContext.close()
         if (drained > 0) decrementBacklog(drained)
-        connectionJob.children.forEach { it.cancel() }
+        connectionJob.cancelChildren()
       }
     }
   }
@@ -464,8 +465,8 @@ class Agent(
       // Stay alive for the connection's lifetime instead of returning: launchConnectionTask treats any
       // task's completion as a disconnect and closes the shared connectionContext, so returning here would
       // close the context right after connect -- the first scrape then hits a ClosedSendChannelException
-      // and the agent flaps, dropping its paths (finding 6). Poll connected (rather than awaitCancellation,
-      // which nothing cancels here) so the task still ends promptly once the connection actually closes.
+      // and the agent flaps, dropping its paths (finding 6). Poll connected so the task ends promptly once the
+      // connection closes; a sibling task ending also cancels it (see launchConnectionTask).
       while (isRunning && connectionContext.connected) {
         delay(heartbeatPauseTime)
       }
@@ -485,12 +486,10 @@ class Agent(
         val result = grpcService.sendHeartBeat(deadlineSecs)
         val nextCount = nextHeartbeatFailureCount(result, consecutiveFailures, MAX_HEARTBEAT_FAILURES)
         if (nextCount == null) {
-          // EVICTED, or MAX_HEARTBEAT_FAILURES consecutive failures on a half-open transport. Tear the
-          // channel down so the idle readRequestsFromProxy collect errors out and the run loop reconnects
-          // (findings 1 & 2); closing the connection context alone cannot unblock that collect, so the
-          // agent would otherwise linger as a zombie until proxy eviction.
+          // EVICTED, or MAX_HEARTBEAT_FAILURES consecutive failures on a half-open transport. Ending this task
+          // ends the connection (findings 1 & 2): launchConnectionTask cancels the sibling tasks, including the
+          // idle readRequestsFromProxy collect, and the next attempt replaces the channel.
           logger.warn { "Heartbeat signalled disconnect ($result); tearing down connection to reconnect" }
-          grpcService.shutDownChannel()
           break
         }
         consecutiveFailures = nextCount

@@ -34,8 +34,8 @@ import io.prometheus.harness.support.TestUtils.startProxy
 import kotlin.time.Duration.Companion.seconds
 
 // The heartbeat loop's teardown (findings 1 & 2): when a heartbeat reports the agent evicted, the loop
-// shuts the channel down so the idle request stream errors out and the run loop reconnects, instead of
-// the agent lingering as a zombie. InProcessReconnectTest cannot reach that branch: dropping the
+// ends, which cancels the idle request stream so the run loop reconnects, instead of the agent
+// lingering as a zombie. InProcessReconnectTest cannot reach that branch: dropping the
 // proxy-side context ends the request stream, which reconnects the agent before a heartbeat gets a say.
 // Here the stream stays healthy and only the heartbeat's answer changes, so the teardown is the sole
 // route back to the run loop.

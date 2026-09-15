@@ -21,6 +21,9 @@ package io.prometheus.proxy.dashboard
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.shouldBe
+import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.hostAllowlist
 import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.isHostAllowed
 import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.isOriginAllowed
 
@@ -30,6 +33,12 @@ import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.isOriginAll
  * from a foreign one. The live refusal is covered by `ProxyWebDashboardTest`.
  */
 class ProxyDashboardServiceTest : StringSpec() {
+  private fun allowed(
+    host: String?,
+    allowedHosts: List<String>,
+    allowedOrigins: List<String> = emptyList(),
+  ) = isHostAllowed(host, hostAllowlist(allowedHosts, allowedOrigins))
+
   init {
     "a request with no Origin header should be allowed, since only browsers send one" {
       isOriginAllowed(origin = null, host = "proxy:8094", allowedOrigins = emptyList()).shouldBeTrue()
@@ -62,49 +71,51 @@ class ProxyDashboardServiceTest : StringSpec() {
       isOriginAllowed("http://proxy:8094", host = null, allowedOrigins = emptyList()).shouldBeFalse()
     }
 
-    // ==================== Host allowlist (opt-in DNS-rebinding protection) ====================
-    //
-    // DNS rebinding points an attacker's own name at the dashboard's address, so the browser sends that name as both
-    // Origin and Host and the Origin check passes. proxy.dashboard.allowedHosts makes the dashboard answer only to
-    // names it knows. It is opt-in: with nothing configured, every Host is allowed, as before.
+    // ==================== Host allowlist: see ProxyDashboardService.isHostAllowed ====================
 
+    // Opt-in: with no allowedHosts, there is no allowlist and every Host is allowed, even with allowedOrigins set.
     "with no allowedHosts configured every Host should be allowed" {
-      isHostAllowed("evil.example.com", emptyList(), emptyList()).shouldBeTrue()
+      hostAllowlist(emptyList(), listOf("https://dash.example.com")).shouldBeNull()
+      allowed("evil.example.com", emptyList()).shouldBeTrue()
     }
 
     "with allowedHosts configured an unknown Host name should be refused" {
-      isHostAllowed("evil.example.com", listOf("dash.internal"), emptyList()).shouldBeFalse()
-      isHostAllowed("evil.example.com:8094", listOf("dash.internal"), emptyList()).shouldBeFalse()
+      allowed("evil.example.com", listOf("dash.internal")).shouldBeFalse()
+      allowed("evil.example.com:8094", listOf("dash.internal")).shouldBeFalse()
     }
 
     "with allowedHosts configured a listed name should be allowed, ignoring port, case, and a trailing dot" {
-      val allowed = listOf("Dash.Internal", "metrics.example.com:8094")
-      isHostAllowed("dash.internal", allowed, emptyList()).shouldBeTrue()
-      isHostAllowed("DASH.internal.:8094", allowed, emptyList()).shouldBeTrue()
-      isHostAllowed("metrics.example.com", allowed, emptyList()).shouldBeTrue()
+      val hosts = listOf("Dash.Internal", "metrics.example.com:8094")
+      allowed("dash.internal", hosts).shouldBeTrue()
+      allowed("DASH.internal.:8094", hosts).shouldBeTrue()
+      allowed("metrics.example.com", hosts).shouldBeTrue()
     }
 
     // A rebound browser sends the attacker's name, never an address, so addresses and localhost stay reachable.
     "with allowedHosts configured IP addresses and localhost should always be allowed" {
-      val allowed = listOf("dash.internal")
-      isHostAllowed("10.0.0.5:8094", allowed, emptyList()).shouldBeTrue()
-      isHostAllowed("[::1]:8094", allowed, emptyList()).shouldBeTrue()
-      isHostAllowed("localhost:8094", allowed, emptyList()).shouldBeTrue()
+      val hosts = listOf("dash.internal")
+      allowed("10.0.0.5:8094", hosts).shouldBeTrue()
+      allowed("[::1]:8094", hosts).shouldBeTrue()
+      allowed("localhost:8094", hosts).shouldBeTrue()
     }
 
     // Behind a reverse proxy that forwards the public Host, that name is already configured as an allowed origin.
     "with allowedHosts configured the hosts of allowedOrigins should be allowed" {
-      isHostAllowed("dash.example.com", listOf("dash.internal"), listOf("https://dash.example.com")).shouldBeTrue()
+      allowed("dash.example.com", listOf("dash.internal"), listOf("https://dash.example.com")).shouldBeTrue()
+    }
+
+    "an allowedHosts or allowedOrigins entry that does not parse should be ignored" {
+      hostAllowlist(listOf("dash.internal", ""), listOf("not a url")) shouldBe setOf("localhost", "dash.internal")
     }
 
     // Browsers always send Host, so a request without one is not a rebound browser.
     "with allowedHosts configured a request with no Host header should be allowed" {
-      isHostAllowed(null, listOf("dash.internal"), emptyList()).shouldBeTrue()
+      allowed(null, listOf("dash.internal")).shouldBeTrue()
     }
 
     "with allowedHosts configured an empty or malformed Host should be refused" {
-      isHostAllowed("", listOf("dash.internal"), emptyList()).shouldBeFalse()
-      isHostAllowed("not a host:port:junk", listOf("dash.internal"), emptyList()).shouldBeFalse()
+      allowed("", listOf("dash.internal")).shouldBeFalse()
+      allowed("not a host:port:junk", listOf("dash.internal")).shouldBeFalse()
     }
   }
 }

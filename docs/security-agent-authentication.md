@@ -186,8 +186,6 @@ In rough priority order:
 - **Accurate startup warnings** (finding #6 of `docs/archive/CODE_REVIEW_SEPTEMBER_2026.md`) — the "agent port is
   unauthenticated" warning no longer treats a trust store as mutual TLS unless TLS is enabled, and the proxy and
   the agent each warn when agent tokens are configured without TLS and would be sent in cleartext.
-- **Path takeover limited to the same identity** (remediation item 4, in part) — a live agent's non-consolidated
-  path can be replaced only by an agent that connected with the same identity.
 
 ## References
 

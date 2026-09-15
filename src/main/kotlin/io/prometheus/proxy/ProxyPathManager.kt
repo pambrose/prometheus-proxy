@@ -52,8 +52,8 @@ internal class ProxyPathManager(
     // exactly as labels has always behaved. Empty when the agent predates the fields.
     val targetUrl: String = "",
     val pathSource: String = "",
-    // The auth identity the registrant connected as, empty when agent auth is disabled. On a consolidated path, the
-    // FIRST registrant's, like labels.
+    // The auth identity a non-consolidated path's registrant connected as, empty when agent auth is disabled. Unused
+    // on consolidated paths, which agents join rather than take over.
     val identityName: String = "",
   ) {
     fun isNotValid() = agentContexts.all { it.isNotValid() }
@@ -117,7 +117,7 @@ internal class ProxyPathManager(
       val agentInfo = pathMap[path]
       if (agentContext.consolidated) {
         if (agentInfo == null) {
-          pathMap[path] = AgentContextInfo(true, labels, [agentContext], targetUrl, pathSource, identityName)
+          pathMap[path] = AgentContextInfo(true, labels, [agentContext], targetUrl, pathSource)
         } else {
           if (agentContext.consolidated != agentInfo.isConsolidated) {
             val reason = "Consolidated agent rejected for non-consolidated path /$path"

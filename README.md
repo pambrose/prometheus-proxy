@@ -529,7 +529,7 @@ someone who can. The dashboard refuses a WebSocket from a foreign site; behind a
 rewrites the Host header, list the public origin in `proxy.dashboard.allowedOrigins`. It answers to any
 host name by default, which leaves it open to DNS rebinding (a page pointing its own DNS name at the
 dashboard's address); list the names you reach it by in `proxy.dashboard.allowedHosts` to close that. See
-[Dashboard configuration](https://pambrose.github.io/prometheus-proxy/configuration/proxy/#dashboard).
+[Dashboard exposure](https://pambrose.github.io/prometheus-proxy/web-dashboard/#exposure).
 
 Accessibility: text and UI colors clear the WCAG AA contrast thresholds with a measured floor of
 4.59:1, the path table carries proper header semantics, and connection loss and recovery are
