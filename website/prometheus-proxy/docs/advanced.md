@@ -51,14 +51,22 @@ In **consolidated mode**, multiple agents can register the same path for redunda
 agent.consolidated = true
 ```
 
-When a scrape request arrives for a consolidated path, the proxy selects one of the available
-agents. If one agent disconnects, the remaining agents continue serving the path.
+When a scrape request arrives for a consolidated path, the proxy sends it to every agent serving the
+path, waits for all of them, and merges their responses into one. If one agent disconnects, the
+remaining agents continue serving the path.
 
 Use cases:
 
 - **High availability** -- multiple agents serving the same endpoints
-- **Load distribution** -- spread scrape load across agents
 - **Rolling upgrades** -- new agent registers before old one deregisters
+
+!!! warning "Any authorized identity can join"
+
+    The rule that stops another identity from taking over a path applies only to non-consolidated
+    paths. With [per-agent identities](security/index.md#per-agent-identities-and-path-authorization),
+    any agent whose identity's path patterns include a consolidated path can join it, and its output
+    is merged into every scrape of that path. An agent that never answers holds each scrape until it
+    times out. Keep identities' path patterns from overlapping on paths you consolidate.
 
 ## gRPC Reflection
 

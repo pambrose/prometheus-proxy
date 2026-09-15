@@ -103,7 +103,9 @@ enforces, on every path registration, that the requested path matches one of the
 Patterns are single-segment globs: `*` matches any run of characters and `?` matches exactly one
 (e.g. `team_a_*`). Because authorization is per-identity-per-path,
 [consolidated mode](../advanced.md#consolidated-mode) still works as long as each participating
-agent's identity permits the shared path.
+agent's identity permits the shared path. The flip side is that any identity whose patterns include a
+consolidated path can join it, even while agents of another identity serve it, and its output is
+merged into every scrape of that path, so keep patterns from overlapping on paths you consolidate.
 
 !!! note "Config-file only"
 
@@ -120,7 +122,12 @@ active), so you can adopt per-agent identities incrementally:
 
 1. Add a `proxy.auth` entry per agent while leaving `proxy.agentToken` in place — existing agents
    keep connecting with the shared token.
-2. Move each agent onto its own identity token, one at a time.
+2. Move each agent onto its own identity token, one at a time, stopping the old agent before starting
+   its replacement. While the old agent still serves a path, the proxy rejects the new identity's
+   registration of it; the new agent retries a rejected static path every
+   `agent.internal.rejectedPathRetrySecs` (default 10s) and registers it once the old agent is gone.
+   Agents from 4.0.1 or earlier instead treat the rejection as a failed connection and retry with
+   every path down until the old agent disconnects.
 3. Once every agent presents an identity token, remove `proxy.agentToken` to close the shared
    allow-all path.
 

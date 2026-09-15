@@ -235,5 +235,6 @@ Both are lists, so set them in a config file; see [Dashboard configuration](conf
   always behaved.
 - **Departed paths age out.** They survive only as long as their last scrape stays in the recent-scrape
   window (`recentScrapesQueueSize`, default 200).
-- **Per-agent identities** from [agent authentication](security/index.md) are not surfaced yet — the
-  identity lives in a gRPC context key and is never stored on the agent context.
+- **Per-agent identities** from [agent authentication](security/index.md) are not shown. The proxy
+  checks an agent's identity on its calls and records it with each non-consolidated path it registers,
+  to decide whether another agent may take that path over, but the dashboard does not display it.

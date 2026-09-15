@@ -84,11 +84,16 @@ internal class AgentPathManager(
       }
       .toMap()
 
+  // Static paths the proxy rejected at the last registerPaths, which retryRejectedStaticPaths works through.
+  private val rejectedStaticPaths = ConcurrentHashMap.newKeySet<PathConfig>()
+
   // A proxy rejecting one path (valid=false -- e.g. the agent's identity isn't authorized for it) must not
   // abort registration of the others: that used to end the connection, and the agent then reconnected
-  // forever with every path down. A proxy that rejects every static path isn't usable, though, so that fails
-  // the attempt and lets EndpointFailover move on. Transport failures still propagate: the connection is gone.
+  // forever with every path down. A rejected path is remembered and retried while the connection lasts. A
+  // proxy that rejects every static path isn't usable, though, so that fails the attempt and lets
+  // EndpointFailover move on. Transport failures still propagate: the connection is gone.
   suspend fun registerPaths() {
+    rejectedStaticPaths.clear()
     val rejectedCount =
       pathConfigs.count { config ->
         try {
@@ -96,11 +101,36 @@ internal class AgentPathManager(
           false
         } catch (e: RequestFailureException) {
           logger.warn { "Proxy rejected static path /${config.path.removePrefix("/")}: ${e.message}" }
+          rejectedStaticPaths += config
           true
         }
       }
     if (pathConfigs.isNotEmpty() && rejectedCount == pathConfigs.size)
       throw RequestFailureException("Proxy rejected all ${pathConfigs.size} static paths")
+  }
+
+  val hasRejectedStaticPaths: Boolean
+    get() = rejectedStaticPaths.isNotEmpty()
+
+  // Retries each static path the proxy rejected at connect. Static paths are otherwise registered only at connect, but
+  // a rejection can clear while the agent stays connected: the live agent of another identity that held the path
+  // disconnects, or the proxy widens this identity's path patterns. Each path is isolated, as in
+  // reconcileDiscoveredPaths: a path the proxy still rejects is logged at DEBUG and any other failure at WARN, and
+  // neither ends the connection, whose other tasks already end it when it is really gone.
+  suspend fun retryRejectedStaticPaths() {
+    for (config in rejectedStaticPaths.toList()) {
+      val path = config.path.removePrefix("/")
+      runCatchingCancellable { registerPath(config.path, config.url, config.labels) }
+        .onSuccess {
+          rejectedStaticPaths -= config
+          logger.info { "Registered static path /$path after the proxy had rejected it" }
+        }.onFailure { e ->
+          if (e is RequestFailureException)
+            logger.debug { "Proxy still rejects static path /$path: ${e.message}" }
+          else
+            logger.warn(e) { "Failed to retry static path /$path" }
+        }
+    }
   }
 
   suspend fun registerPath(

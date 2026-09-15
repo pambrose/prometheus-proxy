@@ -50,6 +50,8 @@ import kotlin.concurrent.atomics.decrementAndFetch
 import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.concurrent.atomics.update
 import kotlin.time.Duration.Companion.milliseconds
+import io.kotest.matchers.booleans.shouldBeFalse
+import io.kotest.matchers.booleans.shouldBeTrue
 
 @Suppress("LargeClass")
 class AgentPathManagerTest : StringSpec() {
@@ -804,6 +806,84 @@ class AgentPathManagerTest : StringSpec() {
       manager["metrics1"].shouldNotBeNull()
       manager["metrics2"].shouldBeNull()
       manager["metrics3"].shouldNotBeNull()
+    }
+
+    // A rejected static path is remembered so the connection can retry it: the rejection may clear while the agent
+    // stays connected, as when a live agent of another identity that held the path disconnects.
+    "registerPaths should remember the static paths the proxy rejects" {
+      val (mockAgent, mockGrpcService) = agentWithStaticPaths("metrics1", "metrics2")
+      coEvery { mockGrpcService.registerPathOnProxy(any(), any(), any(), any()) } returns registerPathResponse {
+        valid = true
+        pathId = 1L
+      }
+      val manager = AgentPathManager(mockAgent)
+
+      manager.registerPaths()
+      manager.hasRejectedStaticPaths.shouldBeFalse()
+
+      coEvery { mockGrpcService.registerPathOnProxy("metrics2", any(), any(), any()) } throws
+        RequestFailureException("registerPathOnProxy() - path /metrics2 is served by another identity")
+      manager.registerPaths()
+      manager.hasRejectedStaticPaths.shouldBeTrue()
+    }
+
+    "retryRejectedStaticPaths should register a rejected static path once the proxy accepts it" {
+      val (mockAgent, mockGrpcService) = agentWithStaticPaths("metrics1", "metrics2")
+      coEvery { mockGrpcService.registerPathOnProxy(any(), any(), any(), any()) } returns registerPathResponse {
+        valid = true
+        pathId = 1L
+      }
+      coEvery { mockGrpcService.registerPathOnProxy("metrics2", any(), any(), any()) } throws
+        RequestFailureException("registerPathOnProxy() - path /metrics2 is served by another identity")
+      val manager = AgentPathManager(mockAgent)
+      manager.registerPaths()
+
+      coEvery { mockGrpcService.registerPathOnProxy("metrics2", any(), any(), any()) } returns registerPathResponse {
+        valid = true
+        pathId = 2L
+      }
+      manager.retryRejectedStaticPaths()
+
+      manager["metrics2"].shouldNotBeNull()
+      manager.hasRejectedStaticPaths.shouldBeFalse()
+    }
+
+    "retryRejectedStaticPaths should keep a path the proxy still rejects" {
+      val (mockAgent, mockGrpcService) = agentWithStaticPaths("metrics1", "metrics2")
+      coEvery { mockGrpcService.registerPathOnProxy(any(), any(), any(), any()) } returns registerPathResponse {
+        valid = true
+        pathId = 1L
+      }
+      coEvery { mockGrpcService.registerPathOnProxy("metrics2", any(), any(), any()) } throws
+        RequestFailureException("registerPathOnProxy() - path /metrics2 is served by another identity")
+      val manager = AgentPathManager(mockAgent)
+      manager.registerPaths()
+
+      manager.retryRejectedStaticPaths()
+
+      manager["metrics2"].shouldBeNull()
+      manager.hasRejectedStaticPaths.shouldBeTrue()
+    }
+
+    // Unlike registerPaths at connect, a retry isolates a transport failure: the retry runs beside the connection's
+    // other tasks, and those already end the connection when it is really gone.
+    "retryRejectedStaticPaths should keep the path, not throw, on a transport failure" {
+      val (mockAgent, mockGrpcService) = agentWithStaticPaths("metrics1", "metrics2")
+      coEvery { mockGrpcService.registerPathOnProxy(any(), any(), any(), any()) } returns registerPathResponse {
+        valid = true
+        pathId = 1L
+      }
+      coEvery { mockGrpcService.registerPathOnProxy("metrics2", any(), any(), any()) } throws
+        RequestFailureException("registerPathOnProxy() - path /metrics2 is served by another identity")
+      val manager = AgentPathManager(mockAgent)
+      manager.registerPaths()
+
+      coEvery { mockGrpcService.registerPathOnProxy("metrics2", any(), any(), any()) } throws
+        StatusException(Status.UNAVAILABLE)
+      manager.retryRejectedStaticPaths()
+
+      manager["metrics2"].shouldBeNull()
+      manager.hasRejectedStaticPaths.shouldBeTrue()
     }
 
     // Only a proxy's rejection of an individual path is isolated. A transport failure means the

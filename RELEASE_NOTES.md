@@ -77,7 +77,15 @@ in the `agent-token` header, or the call fails with `UNAUTHENTICATED`.
 **Path takeover between identities.** With per-agent identities, an agent registering a path that a live agent
 of *another* identity already serves is now rejected, instead of silently replacing it. A redeploy under the same
 identity still reclaims its paths at once. With no agent auth, or only the shared `proxy.agentToken`, every agent
-has the same identity and nothing changes.
+has the same identity and nothing changes. The rule covers only non-consolidated paths: an identity whose path
+patterns include a consolidated path can still join it alongside another identity's agents.
+
+If you are moving agents onto per-agent identities, or moving a path from one identity to another, stop the old
+agent before starting its replacement where you can. While the old agent is connected, the new agent's registration
+of its paths is rejected. The new agent retries a rejected static path every `agent.internal.rejectedPathRetrySecs`
+(default 10s) and registers it once the old agent is gone, and it retries discovered paths on each reconcile. Agents
+from 4.0.1 or earlier instead treat any rejected path as a failed connection and retry with every path down until
+the old agent disconnects, so for them stopping the old agent first matters.
 
 **DNS rebinding and the dashboard.** The new, opt-in `proxy.dashboard.allowedHosts` makes the dashboard refuse a
 request naming any host that isn't listed, an IP address, `localhost`, or an `allowedOrigins` host. That stops a
@@ -111,7 +119,7 @@ What the agent does next now depends on how far the previous attempt got:
 | Could not connect | Next endpoint |
 | Connected, but the proxy rejected the agent's registration | Next endpoint |
 | Connected, but the proxy rejected **every** static path | Next endpoint |
-| Registered, with **some** static paths rejected | Stays connected; each rejected path is logged at WARN |
+| Registered, with **some** static paths rejected | Stays connected; each rejected path is logged at WARN and retried |
 | Registered, then the connection dropped | Back to the head of the list |
 
 The last row is the failback that makes the endpoint list a priority order, and it still picks up a

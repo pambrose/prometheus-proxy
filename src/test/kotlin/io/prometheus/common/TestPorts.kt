@@ -64,6 +64,10 @@ object TestPorts {
   const val DISCOVERY_HTTP_PORT = 9516
   const val DISCOVERY_AGENT_PORT = 50464
 
+  // AgentRejectedPathRetryTest
+  const val REJECTED_PATH_RETRY_HTTP_PORT = 9594
+  const val REJECTED_PATH_RETRY_AGENT_PORT = 50465
+
   // AgentProxyFailoverTest
   const val FAILOVER_PROXY_A_HTTP_PORT = 9530
   const val FAILOVER_PROXY_A_GRPC_PORT = 9531
