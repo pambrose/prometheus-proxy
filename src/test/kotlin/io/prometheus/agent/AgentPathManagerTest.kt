@@ -456,6 +456,81 @@ class AgentPathManagerTest : StringSpec() {
       manager["c_metrics"].shouldNotBeNull()
     }
 
+    // A manager whose proxy rejects discovered path d_metrics for cause, and accepts every other registration.
+    fun managerRejectingDiscovered(cause: PathRejectionCause): Pair<AgentPathManager, AgentGrpcService> {
+      val agent = createMockAgent()
+      coEvery { agent.grpcService.registerPathOnProxy("d_metrics", any(), any(), any()) } throws
+        RequestFailureException("registerPathOnProxy() - proxy rejected path /d_metrics", rejectionCause = cause)
+      return AgentPathManager(agent) to agent.grpcService
+    }
+
+    val dMetrics: List<DiscoveredPath> = [DiscoveredPath("d", "d_metrics", "http://d/m", "{}")]
+
+    // Retrying a rejection that can't clear would only repeat it on the proxy every reconcile.
+    "reconcile should not retry a discovered path the proxy rejects for a cause that can't clear" {
+      val (manager, grpc) = managerRejectingDiscovered(PathRejectionCause.NOT_AUTHORIZED)
+
+      repeat(3) { manager.reconcileDiscoveredPaths(dMetrics) }
+
+      manager["d_metrics"].shouldBeNull()
+      coVerify(exactly = 1) { grpc.registerPathOnProxy("d_metrics", any(), any(), any()) }
+    }
+
+    "reconcile should retry a discovered path rejected for a cause that can clear, and register it once accepted" {
+      val (manager, grpc) = managerRejectingDiscovered(PathRejectionCause.HELD_BY_ANOTHER_IDENTITY)
+
+      repeat(3) { manager.reconcileDiscoveredPaths(dMetrics) }
+      coVerify(exactly = 3) { grpc.registerPathOnProxy("d_metrics", any(), any(), any()) }
+
+      coEvery { grpc.registerPathOnProxy("d_metrics", any(), any(), any()) } returns registerPathResponse {
+        valid = true
+        pathId = 2L
+      }
+      manager.reconcileDiscoveredPaths(dMetrics)
+      manager["d_metrics"].shouldNotBeNull()
+    }
+
+    // A rejection is the proxy's answer, not a fault, so it is logged once and without a stack trace. A retryable one
+    // that repeats is logged at DEBUG.
+    "reconcile should log a discovered path's rejection once, without a stack trace" {
+      for (cause in [PathRejectionCause.NOT_AUTHORIZED, PathRejectionCause.HELD_BY_ANOTHER_IDENTITY]) {
+        val (manager, _) = managerRejectingDiscovered(cause)
+
+        val warnings =
+          captureLogs<AgentPathManager>(Level.WARN) {
+            repeat(3) { manager.reconcileDiscoveredPaths(dMetrics) }
+          }.filter { "/d_metrics" in it.formattedMessage }
+
+        withClue(cause) {
+          warnings shouldHaveSize 1
+          warnings.single().throwableProxy.shouldBeNull()
+        }
+      }
+    }
+
+    "reconcile should try a discovered path rejected for a cause that can't clear again once its entry changes" {
+      val (manager, grpc) = managerRejectingDiscovered(PathRejectionCause.NOT_AUTHORIZED)
+
+      repeat(2) { manager.reconcileDiscoveredPaths(dMetrics) }
+      manager.reconcileDiscoveredPaths([DiscoveredPath("d", "d_metrics", "http://d/v2", "{}")])
+
+      coVerify(exactly = 2) { grpc.registerPathOnProxy("d_metrics", any(), any(), any()) }
+    }
+
+    // Leaving the file and returning, or reconnecting -- which clears the path manager first -- starts afresh.
+    "reconcile should retry a rejected discovered path that leaves the file and returns, or after a reconnect" {
+      val (manager, grpc) = managerRejectingDiscovered(PathRejectionCause.NOT_AUTHORIZED)
+
+      manager.reconcileDiscoveredPaths(dMetrics)
+      manager.reconcileDiscoveredPaths(emptyList())
+      manager.reconcileDiscoveredPaths(dMetrics)
+      coVerify(exactly = 2) { grpc.registerPathOnProxy("d_metrics", any(), any(), any()) }
+
+      manager.clear()
+      manager.reconcileDiscoveredPaths(dMetrics)
+      coVerify(exactly = 3) { grpc.registerPathOnProxy("d_metrics", any(), any(), any()) }
+    }
+
     // Likewise for removals. A transport failure keeps its path for the next reconcile to retry, but must not stop
     // the other stale paths being removed. The map's iteration order is unspecified, so the first unregister
     // attempted is the one that fails.

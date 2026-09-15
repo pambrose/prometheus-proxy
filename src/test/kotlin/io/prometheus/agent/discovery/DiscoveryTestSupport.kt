@@ -22,5 +22,11 @@ internal object DiscoveryTestSupport {
   fun discoveryPathsHocon(
     path: String,
     url: String,
-  ): String = """paths = [ { name = "$path", path = "$path", url = "$url" } ]"""
+  ): String = discoveryPathsHocon(path to url)
+
+  /** A `paths = [...]` discovery-file body with one entry per (path, url) pair, formatted as above. */
+  fun discoveryPathsHocon(vararg entries: Pair<String, String>): String =
+    entries.joinToString(", ", prefix = "paths = [ ", postfix = " ]") { (path, url) ->
+      """{ name = "$path", path = "$path", url = "$url" }"""
+    }
 }
