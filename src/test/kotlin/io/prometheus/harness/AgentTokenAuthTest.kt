@@ -18,7 +18,6 @@
 
 package io.prometheus.harness
 
-import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
@@ -28,11 +27,8 @@ import io.prometheus.agent.AgentOptions
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.TestPorts
 import io.prometheus.harness.HarnessConstants.CONFIG_ARG
-import io.prometheus.harness.support.exceptionHandler
+import io.prometheus.harness.support.TestUtils.stopAll
 import io.prometheus.proxy.ProxyOptions
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.seconds
 
 // Pre-shared agent-token authentication (security doc item #1). Both cases use the Netty transport
@@ -110,20 +106,7 @@ class AgentTokenAuthTest : StringSpec() {
     return Agent(options = agentOptions, testMode = true) { startSync() }
   }
 
-  private suspend fun stopAll(
-    proxy: Proxy,
-    agent: Agent,
-  ) {
-    coroutineScope {
-      for (service in [proxy, agent]) {
-        launch(Dispatchers.IO + exceptionHandler(logger)) { service.stopSync() }
-      }
-    }
-  }
-
   companion object {
-    private val logger = logger {}
-
     private const val TOKEN = "harness-secret-token"
 
     // Dedicated ports to avoid clashing with the shared harness ports and the TLS tests.

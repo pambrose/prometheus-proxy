@@ -18,7 +18,6 @@
 
 package io.prometheus.harness
 
-import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeTrue
@@ -29,10 +28,7 @@ import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.TestPorts
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
-import io.prometheus.harness.support.exceptionHandler
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
+import io.prometheus.harness.support.TestUtils.stopAll
 import kotlin.time.Duration.Companion.seconds
 
 // A static path the proxy rejects at connect -- here because a live agent of another identity still serves it -- is
@@ -61,7 +57,7 @@ class AgentRejectedPathRetryTest : StringSpec() {
 
         eventually(15.seconds) { ownerOf(proxy, SHARED_PATH) shouldBe agentB.agentId }
       } finally {
-        stopAll(proxy, agents)
+        stopAll(proxy, *agents.toTypedArray())
       }
     }
   }
@@ -74,21 +70,7 @@ class AgentRejectedPathRetryTest : StringSpec() {
   private fun startAgentWithToken(token: String): Agent =
     startAgent(args = ["--proxy", "localhost:$AGENT_PORT", "--agent_token", token], configArgs = CONFIG_ARG)
 
-  private suspend fun stopAll(
-    proxy: Proxy,
-    agents: List<Agent>,
-  ) {
-    coroutineScope {
-      for (agent in agents.filter { it.isRunning }) {
-        launch(Dispatchers.IO + exceptionHandler(logger)) { agent.stopSync() }
-      }
-    }
-    proxy.stopSync()
-  }
-
   companion object {
-    private val logger = logger {}
-
     private const val TOKEN_A = "team-a-token"
     private const val TOKEN_B = "team-b-token"
 

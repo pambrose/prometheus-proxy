@@ -18,7 +18,6 @@
 
 package io.prometheus.harness
 
-import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeTrue
@@ -28,11 +27,8 @@ import io.prometheus.agent.AgentOptions
 import io.prometheus.agent.RequestFailureException
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.TestPorts
-import io.prometheus.harness.support.exceptionHandler
+import io.prometheus.harness.support.TestUtils.stopAll
 import io.prometheus.proxy.ProxyOptions
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
 import java.io.File
 import kotlin.time.Duration.Companion.seconds
 
@@ -103,20 +99,7 @@ class AgentPathAuthTest : StringSpec() {
     return Agent(options = agentOptions, testMode = true) { startSync() }
   }
 
-  private suspend fun stopAll(
-    proxy: Proxy,
-    agent: Agent,
-  ) {
-    coroutineScope {
-      for (service in [proxy, agent]) {
-        launch(Dispatchers.IO + exceptionHandler(logger)) { service.stopSync() }
-      }
-    }
-  }
-
   companion object {
-    private val logger = logger {}
-
     // Only team_a's token is exercised here: the deny path is driven by having the team_a agent
     // attempt a team_b_* registration. Resolving a *different* token to a different identity is
     // covered at unit level by AgentAuthManagerTest.

@@ -21,8 +21,6 @@ import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Agent
 import io.prometheus.Proxy
 import io.prometheus.client.CollectorRegistry
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.net.ServerSocket
 import kotlin.properties.Delegates.notNull
@@ -59,12 +57,7 @@ open class HarnessSetup {
   }
 
   protected fun takeDownProxyAndAgent() {
-    runBlocking {
-      for (service in [proxy, agent]) {
-        logger.info { "Stopping ${service.simpleClassName}" }
-        launch(Dispatchers.IO + exceptionHandler(logger)) { service.stopSync() }
-      }
-    }
+    runBlocking { TestUtils.stopAll(proxy, agent) }
 
     logger.info { "Stopped ${proxy.simpleClassName} and ${agent.simpleClassName}" }
   }
