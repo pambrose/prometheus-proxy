@@ -21,6 +21,7 @@ package io.prometheus.harness
 import ch.qos.logback.classic.Level
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
 import io.prometheus.Agent
@@ -33,7 +34,6 @@ import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.harness.support.TestUtils.stopAll
 import io.prometheus.proxy.ProxyServiceImpl
 import kotlin.time.Duration.Companion.seconds
-import kotlinx.coroutines.delay
 
 // A static path the proxy rejects at connect because a live agent of another identity still serves it is retried for
 // the connection's lifetime, so it registers once that agent is gone, with no reconnect. A path the agent's identity
@@ -63,8 +63,9 @@ class AgentRejectedPathRetryTest : StringSpec() {
             agentA.stopSync(10.seconds)
 
             eventually(15.seconds) { ownerOf(proxy, SHARED_PATH) shouldBe agentB.agentId }
-            // Several retry intervals, in which agent B must not try a_metrics again.
-            delay(3.seconds)
+            // a_metrics, which team_b may never register, was never kept for a retry. Eventually, since the proxy
+            // records shared_metrics just before agent B drops it from its retries.
+            eventually(5.seconds) { agentB.pathManager.hasRejectedStaticPaths.shouldBeFalse() }
           } finally {
             stopAll(proxy, *agents.toTypedArray())
           }

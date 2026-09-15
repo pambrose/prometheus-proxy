@@ -1131,28 +1131,22 @@ class AgentGrpcServiceTest : StringSpec() {
           }
         exception.message shouldContain "registerPathOnProxy()"
         exception.message shouldContain "not authorized"
+        // A proxy predating the retryable field, or a rejection that can't clear, leaves it false.
+        exception.retryable.shouldBeFalse()
       }
     }
 
-    // The agent retries only a rejection the proxy marks retryable; a proxy predating the field leaves it false.
-    "registerPathOnProxy should carry the response's retryable flag on the RequestFailureException" {
+    "registerPathOnProxy should mark the RequestFailureException retryable when the response is" {
       withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
         coEvery { mockStub.registerPath(any(), any<Metadata>()) } returns registerPathResponse {
           valid = false
           reason = "Path /metrics is served by identity 'team_a'"
           retryable = true
         }
+
         shouldThrow<RequestFailureException> {
           service.registerPathOnProxy("metrics", "{}", "http://target:9100/metrics", "STATIC")
         }.retryable.shouldBeTrue()
-
-        coEvery { mockStub.registerPath(any(), any<Metadata>()) } returns registerPathResponse {
-          valid = false
-          reason = "not authorized to register path /metrics"
-        }
-        shouldThrow<RequestFailureException> {
-          service.registerPathOnProxy("metrics", "{}", "http://target:9100/metrics", "STATIC")
-        }.retryable.shouldBeFalse()
       }
     }
 

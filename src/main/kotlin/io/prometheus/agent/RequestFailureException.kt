@@ -20,7 +20,7 @@ package io.prometheus.agent
 
 internal class RequestFailureException(
   message: String,
-  // Whether the proxy marked a registerPath rejection as able to clear while the agent stays connected.
+  // RegisterPathResponse.retryable, for a registerPath rejection; false for any other failure.
   val retryable: Boolean = false,
 ) : Exception(message) {
   companion object {

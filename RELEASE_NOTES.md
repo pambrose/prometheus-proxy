@@ -136,8 +136,8 @@ A rejected static path is retried every `agent.internal.rejectedPathRetrySecs` (
 rejection can clear. The proxy says so in a new `retryable` field of its registration response, set when a
 live agent holds the path, such as an agent of another identity. A rejection that can't clear, such as a
 path the agent's identity isn't authorized for, is logged once and not retried, and an older proxy marks
-nothing retryable. While a static path waits for its retry, discovery doesn't register the same path from
-the discovery file, so the static entry keeps priority.
+nothing retryable. Discovery doesn't register a path from the discovery file that is also in `pathConfigs`, even
+while that static path is unregistered, so the static entry keeps priority.
 
 A silently dropped connection is also noticed much sooner: about 16 seconds instead of about 90. A
 heartbeat used to wait out the full 30-second unary deadline, three times over, so the agent learned of

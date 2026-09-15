@@ -59,11 +59,10 @@ internal class ProxyPathManager(
     fun isNotValid() = agentContexts.all { it.isNotValid() }
   }
 
-  // Why addPath refused a path. retryable marks a rejection that can clear while the agent stays connected -- a live
-  // registrant holds the path, and this registration can neither join nor replace it -- so the agent retries it.
+  // Why addPath refused a path, and whether the agent may retry it: see RegisterPathResponse.retryable.
   data class PathRejection(
     val reason: String,
-    val retryable: Boolean,
+    val retryable: Boolean = false,
   )
 
   private val pathMap = HashMap<String, AgentContextInfo>()
@@ -97,7 +96,7 @@ internal class ProxyPathManager(
     require(path.isNotEmpty()) { EMPTY_PATH_MSG }
     // Redacted on the way in so the dashboard and /debug never show credentials, even from an agent that
     // predates agent-side redaction.
-    return multiSegmentPathError(path)?.let { PathRejection(it, retryable = false) }
+    return multiSegmentPathError(path)?.let { PathRejection(it) }
       ?: addValidatedPath(path, labels, agentContext, sanitizeUrl(targetUrl), pathSource, identityName)
   }
 
@@ -118,7 +117,7 @@ internal class ProxyPathManager(
       if (agentContext.isNotValid()) {
         val reason = "Agent context ${agentContext.agentId} was invalidated during registration of /$path"
         logger.warn { reason }
-        return PathRejection(reason, retryable = false)
+        return PathRejection(reason)
       }
 
       val agentInfo = pathMap[path]

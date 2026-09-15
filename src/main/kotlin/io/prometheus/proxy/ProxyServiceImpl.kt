@@ -186,16 +186,16 @@ internal class ProxyServiceImpl(
   }
 
   override suspend fun registerPath(request: RegisterPathRequest): RegisterPathResponse {
-    // addPath() returns null on success or the rejection. The binding and authorization checks below reject
-    // for the life of the connection, so their rejections are never retryable. rejection is null iff valid.
+    // addPath() and the binding and authorization checks below return null on success or the rejection. The
+    // checks' rejections last as long as the connection, so they aren't retryable. rejection is null iff valid.
     val rejection =
-      connectionMismatchReason(request.agentId, "registerPath")?.let { PathRejection(it, retryable = false) } ?: run {
+      connectionMismatchReason(request.agentId, "registerPath")?.let { PathRejection(it) } ?: run {
         val agentContext = proxy.agentContextManager.getAgentContext(request.agentId)
         if (agentContext == null) {
           logger.error { "Missing AgentContext for agentId: ${request.agentId}" }
-          PathRejection("Invalid agentId: ${request.agentId} (registerPath)", retryable = false)
+          PathRejection("Invalid agentId: ${request.agentId} (registerPath)")
         } else {
-          identityMismatchReason(agentContext, "registerPath")?.let { PathRejection(it, retryable = false) } ?: run {
+          identityMismatchReason(agentContext, "registerPath")?.let { PathRejection(it) } ?: run {
             // AGENT_IDENTITY_KEY is null when per-agent auth is disabled (no interceptor); an identity
             // with no path patterns authorizes everything, so legacy single-token behavior is unchanged.
             val identity = AgentAuthManager.AGENT_IDENTITY_KEY.get()
@@ -203,10 +203,7 @@ internal class ProxyServiceImpl(
               if (identity != null && !identity.isAuthorized(request.path)) {
                 val normalizedPath = request.path.removePrefix("/")
                 logger.warn { "Agent identity '${identity.name}' denied registration of path /$normalizedPath" }
-                PathRejection(
-                  "Agent identity '${identity.name}' is not authorized to register path /$normalizedPath",
-                  retryable = false,
-                )
+                PathRejection("Agent identity '${identity.name}' is not authorized to register path /$normalizedPath")
               } else {
                 proxy.pathManager.addPath(
                   request.path,
