@@ -22,14 +22,22 @@ import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
 import org.slf4j.LoggerFactory
 
-// Runs [block] and returns the events that [T]'s logger emitted meanwhile. [level], when given, overrides that logger's
-// level for the duration -- needed to see DEBUG events under the default INFO configuration. The appender and the
-// previous level are restored even when [block] throws. Inline, so [block] may suspend when the caller does.
+// Runs [block] and returns the events that [T]'s logger emitted meanwhile; see the [loggerName] overload.
 internal inline fun <reified T : Any> captureLogs(
   level: Level? = null,
   block: () -> Unit,
+): List<ILoggingEvent> = captureLogs(T::class.java.name, level, block)
+
+// Runs [block] and returns the events [loggerName]'s logger emitted meanwhile, including its children's:
+// capturing "io.prometheus.proxy" sees every proxy logger at once. [level], when given, overrides that logger's
+// level for the duration -- needed to see DEBUG events under the default INFO configuration. The appender and the
+// previous level are restored even when [block] throws. Inline, so [block] may suspend when the caller does.
+internal inline fun captureLogs(
+  loggerName: String,
+  level: Level? = null,
+  block: () -> Unit,
 ): List<ILoggingEvent> {
-  val logbackLogger = LoggerFactory.getLogger(T::class.java) as Logger
+  val logbackLogger = LoggerFactory.getLogger(loggerName) as Logger
   val previousLevel = logbackLogger.level
   val appender = ListAppender<ILoggingEvent>().apply { start() }
   level?.let { logbackLogger.level = it }

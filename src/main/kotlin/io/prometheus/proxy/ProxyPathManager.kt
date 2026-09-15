@@ -194,7 +194,6 @@ internal class ProxyPathManager(
         }
       }
 
-      // A conflict that clears is news if it re-forms, so this path's rejection is forgotten once it registers.
       agentContext.forgetRejection(path)
       if (!isTestMode) logger.info { "Added path /$path for $agentContext" }
       // Inside synchronized(pathMap) on purpose: tryEmit never suspends or blocks, so publishing here

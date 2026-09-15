@@ -69,8 +69,8 @@ internal class AgentContext(
   private val queuedCount = AtomicInt(0)
   private val scrapeRequestNotifier = Channel<Unit>(UNLIMITED)
 
-  // The rejection cause this connection was last told for each path, so ProxyPathManager can log a repeat at
-  // DEBUG rather than WARN. Dies with the connection: a reconnect is a new context, and is told afresh.
+  // The rejection cause this connection was last told for each path; see ProxyPathManager.rejectPath. Dies with
+  // the connection, so a reconnect is told afresh.
   private val loggedPathRejections = ConcurrentHashMap<String, PathRejectionCause>()
 
   private val clock = Monotonic
@@ -175,7 +175,10 @@ internal class AgentContext(
   fun recordRejection(
     path: String,
     cause: PathRejectionCause,
-  ): Boolean = loggedPathRejections.put(path, cause) != cause
+  ): Boolean {
+    val previous = loggedPathRejections.put(path, cause)
+    return previous != cause
+  }
 
   // Forgets [path]'s rejection once it registers, so a conflict that re-forms later is reported again.
   fun forgetRejection(path: String) {
