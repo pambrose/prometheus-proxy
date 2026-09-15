@@ -306,6 +306,17 @@ class Agent(
             }
           }
 
+          // Retries the static paths the proxy rejected at connect; see AgentPathManager.retryRejectedStaticPaths.
+          if (pathManager.hasRejectedStaticPaths) {
+            val retryInterval = agentConfigVals.internal.rejectedPathRetrySecs.seconds
+            launchConnectionTask(connectionContext, "retryRejectedStaticPaths") {
+              while (isRunning && connectionContext.connected) {
+                delay(retryInterval)
+                pathManager.retryRejectedStaticPaths()
+              }
+            }
+          }
+
           launchConnectionTask(connectionContext, "writeResponsesToProxyUntilDisconnected") {
             grpcService.writeResponsesToProxyUntilDisconnected(this@Agent, connectionContext)
             logger.info { "writeResponsesToProxyUntilDisconnected() completed" }

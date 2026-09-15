@@ -50,6 +50,8 @@ import kotlin.concurrent.atomics.decrementAndFetch
 import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.concurrent.atomics.update
 import kotlin.time.Duration.Companion.milliseconds
+import io.kotest.matchers.booleans.shouldBeFalse
+import io.kotest.matchers.booleans.shouldBeTrue
 
 @Suppress("LargeClass")
 class AgentPathManagerTest : StringSpec() {
@@ -804,6 +806,87 @@ class AgentPathManagerTest : StringSpec() {
       manager["metrics1"].shouldNotBeNull()
       manager["metrics2"].shouldBeNull()
       manager["metrics3"].shouldNotBeNull()
+    }
+
+    // Static paths metrics1 and metrics2, where the proxy accepts metrics1 but rejects metrics2 because a live agent of
+    // another identity serves it.
+    fun managerRejectingMetrics2(): Pair<AgentPathManager, AgentGrpcService> {
+      val (mockAgent, mockGrpcService) = agentWithStaticPaths("metrics1", "metrics2")
+      coEvery { mockGrpcService.registerPathOnProxy(any(), any(), any(), any()) } returns registerPathResponse {
+        valid = true
+        pathId = 1L
+      }
+      coEvery { mockGrpcService.registerPathOnProxy("metrics2", any(), any(), any()) } throws
+        RequestFailureException("registerPathOnProxy() - path /metrics2 is served by another identity")
+      return AgentPathManager(mockAgent) to mockGrpcService
+    }
+
+    fun acceptMetrics2(grpcService: AgentGrpcService) {
+      coEvery { grpcService.registerPathOnProxy("metrics2", any(), any(), any()) } returns registerPathResponse {
+        valid = true
+        pathId = 2L
+      }
+    }
+
+    "registerPaths should remember a rejected static path until a later registerPaths registers it" {
+      val (manager, grpcService) = managerRejectingMetrics2()
+      manager.registerPaths()
+      manager.hasRejectedStaticPaths.shouldBeTrue()
+
+      acceptMetrics2(grpcService)
+      manager.registerPaths()
+      manager.hasRejectedStaticPaths.shouldBeFalse()
+    }
+
+    "retryRejectedStaticPaths should register a rejected static path once the proxy accepts it" {
+      val (manager, grpcService) = managerRejectingMetrics2()
+      manager.registerPaths()
+
+      acceptMetrics2(grpcService)
+      manager.retryRejectedStaticPaths()
+
+      manager["metrics2"].shouldNotBeNull()
+      manager.hasRejectedStaticPaths.shouldBeFalse()
+    }
+
+    "retryRejectedStaticPaths should keep a path the proxy still rejects" {
+      val (manager, _) = managerRejectingMetrics2()
+      manager.registerPaths()
+
+      manager.retryRejectedStaticPaths()
+
+      manager["metrics2"].shouldBeNull()
+      manager.hasRejectedStaticPaths.shouldBeTrue()
+    }
+
+    // Unlike registerPaths at connect, a retry isolates a transport failure: the connection's other tasks already end
+    // the connection when it is really gone.
+    "retryRejectedStaticPaths should keep the path, not throw, on a transport failure" {
+      val (manager, grpcService) = managerRejectingMetrics2()
+      manager.registerPaths()
+
+      coEvery { grpcService.registerPathOnProxy("metrics2", any(), any(), any()) } throws
+        StatusException(Status.UNAVAILABLE)
+      manager.retryRejectedStaticPaths()
+
+      manager["metrics2"].shouldBeNull()
+      manager.hasRejectedStaticPaths.shouldBeTrue()
+    }
+
+    // Static wins even while the proxy rejects the static path: discovery must not register the path in the meantime,
+    // only for the retry to replace it.
+    "reconcile skips a discovered path colliding with a static path the proxy rejected" {
+      val (manager, grpcService) = managerRejectingMetrics2()
+      manager.registerPaths()
+
+      acceptMetrics2(grpcService)
+      manager.reconcileDiscoveredPaths([DiscoveredPath("m2", "metrics2", "http://discovered/m", "{}")])
+      manager["metrics2"].shouldBeNull()
+
+      manager.retryRejectedStaticPaths()
+      val context = manager["metrics2"].shouldNotBeNull()
+      context.source shouldBe PathSource.STATIC
+      context.url shouldBe "http://localhost:9100/metrics2"
     }
 
     // Only a proxy's rejection of an individual path is isolated. A transport failure means the

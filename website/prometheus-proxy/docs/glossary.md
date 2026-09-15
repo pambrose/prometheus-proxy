@@ -38,8 +38,9 @@ path, and the agent returns a **ScrapeResponse** with the fetched body, status, 
 ### Consolidated mode
 
 A mode (`agent.consolidated = true`) in which multiple agents may register the **same** path
-for redundancy or load distribution, instead of the later registration displacing the earlier
-one. See [Advanced Topics](advanced.md#consolidated-mode).
+for redundancy, instead of the later registration displacing the earlier one. A scrape of the path
+goes to every agent serving it, and their responses are merged. See
+[Advanced Topics](advanced.md#consolidated-mode).
 
 ### Chunking
 

@@ -424,6 +424,13 @@ class AgentOptions(
       }
       logger.info { "agent.internal.reconnectPauseSecs: ${internal.reconnectPauseSecs}" }
 
+      // rejectedPathRetrySecs paces the loop in Agent.connectToProxy that retries rejected static paths; a
+      // non-positive value would spin that loop for the connection's lifetime.
+      require(internal.rejectedPathRetrySecs > 0) {
+        "agent.internal.rejectedPathRetrySecs must be > 0: ${internal.rejectedPathRetrySecs}"
+      }
+      logger.info { "agent.internal.rejectedPathRetrySecs: ${internal.rejectedPathRetrySecs}" }
+
       // scrapeRequestBacklogUnhealthySize * 2 is the AgentConnectionContext channel capacity: 0 makes it
       // a rendezvous channel (every send blocks). A negative value is worse than it looks -- -1 yields
       // Channel(-2), which kotlinx maps to BUFFERED, i.e. a silent 64-slot channel rather than an error,

@@ -18,14 +18,12 @@
 
 package io.prometheus.harness
 
-import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
-import io.prometheus.Agent
 import io.prometheus.Proxy
 import io.prometheus.agent.PathSource
 import io.prometheus.agent.discovery.DiscoveryTestSupport.discoveryPathsHocon
@@ -33,11 +31,8 @@ import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.TestPorts
 import io.prometheus.harness.HarnessConstants.CONFIG_ARG
 import io.prometheus.harness.support.TestUtils
-import io.prometheus.harness.support.exceptionHandler
+import io.prometheus.harness.support.TestUtils.stopAll
 import io.prometheus.proxy.ProxyOptions
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
 import java.io.File
 import kotlin.time.Duration.Companion.seconds
 
@@ -107,20 +102,7 @@ class AgentDiscoveryTest : StringSpec() {
     return Proxy(options = proxyOptions, proxyPort = httpPort, testMode = true) { startSync() }
   }
 
-  private suspend fun stopAll(
-    proxy: Proxy,
-    agent: Agent,
-  ) {
-    coroutineScope {
-      for (service in [proxy, agent]) {
-        launch(Dispatchers.IO + exceptionHandler(logger)) { service.stopSync() }
-      }
-    }
-  }
-
   companion object {
-    private val logger = logger {}
-
     // Dedicated ports to avoid clashing with the shared harness ports and the auth tests.
     private const val HTTP_PORT = TestPorts.DISCOVERY_HTTP_PORT
     private const val AGENT_PORT = TestPorts.DISCOVERY_AGENT_PORT

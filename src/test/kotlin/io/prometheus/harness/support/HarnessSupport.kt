@@ -18,7 +18,10 @@
 
 package io.prometheus.harness.support
 
+import com.pambrose.common.service.GenericService
+import com.pambrose.common.util.simpleClassName
 import io.github.oshai.kotlinlogging.KLogger
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Agent
 import io.prometheus.Proxy
 import io.prometheus.common.agentOptions
@@ -26,6 +29,9 @@ import io.prometheus.harness.HarnessConstants.CONFIG_ARG
 import io.prometheus.harness.HarnessConstants.PROXY_PORT
 import io.prometheus.common.proxyOptions
 import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.PrimitiveKind
@@ -62,7 +68,7 @@ object CustomEnumSerializer : KSerializer<MyEnum> {
 }
 
 object TestUtils {
-//  private val logger = logger {}
+  private val logger = logger {}
 
   @JvmStatic
   fun main(args: Array<String>) {
@@ -139,6 +145,18 @@ object TestUtils {
       exitOnMissingConfig = false,
     )
     return Agent(options = agentOptions, inProcessServerName = serverName, testMode = true) { startSync() }
+  }
+
+  /**
+   * Stops [services] concurrently, skipping any a test already stopped.
+   */
+  suspend fun stopAll(vararg services: GenericService<*>) {
+    coroutineScope {
+      for (service in services.filter { it.isRunning }) {
+        logger.info { "Stopping ${service.simpleClassName}" }
+        launch(Dispatchers.IO + exceptionHandler(logger)) { service.stopSync() }
+      }
+    }
   }
 }
 

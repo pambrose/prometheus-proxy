@@ -892,7 +892,8 @@ scrapes, and it takes precedence over `--https_truststore`. Prefer a custom trus
 
 - Increase `max_concurrent_clients` for high-throughput scenarios
 - Tune HTTP client cache settings
-- Consider running multiple agents for load distribution
+- Consider splitting targets across multiple agents (a consolidated path is scraped through every agent that
+  serves it, so extra agents on one path add redundancy, not throughput)
 
 ## 📖 Documentation
 

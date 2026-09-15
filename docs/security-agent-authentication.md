@@ -71,6 +71,11 @@ context.
 - **Path takeover within one identity.** A non-consolidated registration still replaces a live owner that
   connected with the same identity, which keeps redeploys working. Unauthenticated agents, and every holder of the
   legacy token, share one identity, so any of them can still take over another's path. See remediation item 4.
+- **Consolidated paths are open to any authorized identity.** The same-identity rule covers only non-consolidated
+  paths. An agent that registers with `consolidated = true` joins a consolidated path whenever its identity's path
+  patterns allow it, even while agents of another identity serve that path. Every scrape of the path then goes to it
+  too: its output is merged into the response, and an agent that never answers holds each scrape until it times out.
+  It stays on the path until it disconnects. Keep identities' path patterns from overlapping on consolidated paths.
 
 ## Affected code
 
@@ -172,7 +177,7 @@ In rough priority order:
    its paths while one `proxy.auth` identity can no longer replace another's. Takeover between agents that share an
    identity — every unauthenticated agent, or every holder of the legacy token — is unchanged, because rejecting it
    would break redeploys; separating those agents takes per-agent identities. `agentDisplacementCount` counts each
-   takeover.
+   takeover. Consolidated paths, which agents join rather than take over, are not covered; see Remaining gaps.
 
 ### Implemented since the original finding
 

@@ -275,6 +275,8 @@ mechanism that the standard suite cannot reach:
   actually crosses the wire; a security boundary
 - **AgentProxyFailoverTest** — the agent lands on its second endpoint once the first proxy stops. Netty
   only: an in-process channel ignores host and port, so failover cannot be expressed there
+- **AgentRejectedPathRetryTest** — a static path rejected because a live agent of another identity serves it
+  registers once that agent disconnects, with no reconnect; Netty, so each token resolves to its own identity
 - **EmbeddedAgentApiTest** — the public `startAsyncAgent()` handle connects from a config file, reports its
   identity, and disconnects on `shutdown()`
 - **AgentTokenAuthTest** — the legacy pre-shared agent token, over Netty so the header crosses the wire: a
