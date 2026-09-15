@@ -406,7 +406,7 @@ internal class AgentGrpcService(
     ).apply {
       agent.markMsgSent()
       if (!valid)
-        throw RequestFailureException("registerPathOnProxy() - $reason")
+        throw RequestFailureException("registerPathOnProxy() - $reason", retryable)
     }
 
   suspend fun unregisterPathOnProxy(pathVal: String): UnregisterPathResponse =

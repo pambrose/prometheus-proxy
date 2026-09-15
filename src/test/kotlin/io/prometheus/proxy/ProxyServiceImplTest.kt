@@ -55,6 +55,7 @@ import io.prometheus.grpc.registerPathRequest
 import io.prometheus.grpc.scrapeResponse
 import io.prometheus.grpc.summaryData
 import io.prometheus.grpc.unregisterPathRequest
+import io.prometheus.proxy.ProxyPathManager.PathRejection
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -266,7 +267,8 @@ class ProxyServiceImplTest : StringSpec() {
 
       every { mockAgentContext.agentId } returns testAgentId
       every { proxy.agentContextManager.getAgentContext(testAgentId) } returns mockAgentContext
-      every { proxy.pathManager.addPath(testPath, any(), mockAgentContext) } returns rejectionReason
+      every { proxy.pathManager.addPath(testPath, any(), mockAgentContext) } returns
+        PathRejection(rejectionReason, retryable = false)
       every { proxy.pathManager.pathMapSize } returns 0
 
       val request = registerPathRequest {
@@ -282,6 +284,30 @@ class ProxyServiceImplTest : StringSpec() {
       // Before the fix, this was "Invalid agentId: test-agent-consolidated (registerPath)"
       response.reason shouldBe rejectionReason
       response.reason shouldContain "Consolidated"
+    }
+
+    // The agent retries only a rejection marked retryable, so addPath's verdict must reach the response.
+    "registerPath should mark the response retryable when addPath's rejection is retryable" {
+      val proxy = createMockProxy()
+      val mockAgentContext = mockk<AgentContext>(relaxed = true)
+      val testAgentId = "test-agent-held"
+      val testPath = "/metrics"
+
+      every { mockAgentContext.agentId } returns testAgentId
+      every { proxy.agentContextManager.getAgentContext(testAgentId) } returns mockAgentContext
+      every { proxy.pathManager.addPath(testPath, any(), mockAgentContext) } returns
+        PathRejection("Path /metrics is served by identity 'team_a'", retryable = true)
+      every { proxy.pathManager.pathMapSize } returns 1
+
+      val request = registerPathRequest {
+        agentId = testAgentId
+        path = testPath
+      }
+
+      val response = ProxyServiceImpl(proxy).registerPath(request)
+
+      response.valid.shouldBeFalse()
+      response.retryable.shouldBeTrue()
     }
 
     "registerPath should say Invalid agentId when agent context is missing" {
@@ -359,6 +385,8 @@ class ProxyServiceImplTest : StringSpec() {
       response.pathId shouldBe -1
       response.reason shouldContain "not authorized"
       response.reason shouldContain "team_a"
+      // Authorization is fixed for the life of the connection, so the agent must not retry.
+      response.retryable.shouldBeFalse()
       // addPath must not be called when authorization fails.
       verify(exactly = 0) { pathManager.addPath(any(), any(), any()) }
       verify { mockAgentContext.markActivityTime(false) }

@@ -183,7 +183,7 @@ class ProxyTest : StringSpec() {
       val agentContext = createAgentContext()
       proxy.agentContextManager.addAgentContext(agentContext)
 
-      val reason = proxy.pathManager.addPath("app/metrics", "", agentContext)
+      val reason = proxy.pathManager.addPath("app/metrics", "", agentContext)?.reason
 
       reason.shouldNotBeNull()
       proxy.buildServiceDiscoveryJson().size shouldBe 0
@@ -390,7 +390,7 @@ class ProxyTest : StringSpec() {
       proxy.agentContextManager.addAgentContext(agentContext)
 
       proxy.removeAgentContext(agentContext.agentId, "test disconnect")
-      val error = proxy.pathManager.addPath("metrics", "", agentContext)
+      val error = proxy.pathManager.addPath("metrics", "", agentContext)?.reason
 
       error.shouldNotBeNull()
       error shouldContain "was invalidated during registration"

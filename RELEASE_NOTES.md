@@ -119,7 +119,7 @@ What the agent does next now depends on how far the previous attempt got:
 | Could not connect | Next endpoint |
 | Connected, but the proxy rejected the agent's registration | Next endpoint |
 | Connected, but the proxy rejected **every** static path | Next endpoint |
-| Registered, with **some** static paths rejected | Stays connected; each rejected path is logged at WARN and retried |
+| Registered, with **some** static paths rejected | Stays connected; each rejected path is logged at WARN, and retried if the rejection can clear |
 | Registered, then the connection dropped | Back to the head of the list |
 
 The last row is the failback that makes the endpoint list a priority order, and it still picks up a
@@ -131,6 +131,13 @@ primary on every retry.
 An agent with no static paths (discovery-only) is not failed over for path rejections, and a
 single-endpoint agent keeps retrying its one proxy. The "Disconnected from proxy … after invalid
 response" log is now WARN rather than INFO, since it now means something needs attention.
+
+A rejected static path is retried every `agent.internal.rejectedPathRetrySecs` (default 10s) only when the
+rejection can clear. The proxy says so in a new `retryable` field of its registration response, set when a
+live agent holds the path, such as an agent of another identity. A rejection that can't clear, such as a
+path the agent's identity isn't authorized for, is logged once and not retried, and an older proxy marks
+nothing retryable. While a static path waits for its retry, discovery doesn't register the same path from
+the discovery file, so the static entry keeps priority.
 
 A silently dropped connection is also noticed much sooner: about 16 seconds instead of about 90. A
 heartbeat used to wait out the full 30-second unary deadline, three times over, so the agent learned of

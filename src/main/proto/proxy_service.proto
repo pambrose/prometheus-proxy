@@ -51,6 +51,10 @@ message RegisterPathResponse {
   string reason = 2;
   int32 path_count = 3;
   int64 path_id = 4;
+  // Set on a rejection that can clear while the agent stays connected -- a live agent holds the path, and this
+  // registration can neither join nor replace it -- so the agent retries it. False on success and on a rejection that
+  // can't clear, such as a path the agent's identity isn't authorized for. A proxy predating it leaves it false.
+  bool retryable = 5;
 }
 
 message UnregisterPathRequest {

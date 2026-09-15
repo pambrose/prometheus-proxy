@@ -20,6 +20,8 @@ package io.prometheus.agent
 
 internal class RequestFailureException(
   message: String,
+  // Whether the proxy marked a registerPath rejection as able to clear while the agent stays connected.
+  val retryable: Boolean = false,
 ) : Exception(message) {
   companion object {
     private const val serialVersionUID = 8748724180953791199L

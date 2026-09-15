@@ -118,7 +118,7 @@ class ProxyPathManagerTest : StringSpec() {
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context = createMockAgentContext()
 
-      val reason = manager.addPath("app/metrics", """{"job":"test"}""", context)
+      val reason = manager.addPath("app/metrics", """{"job":"test"}""", context)?.reason
 
       reason.shouldNotBeNull()
       reason shouldContain "single"
@@ -130,7 +130,7 @@ class ProxyPathManagerTest : StringSpec() {
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context = createMockAgentContext()
 
-      val reason = manager.addPath("/app/metrics", """{"job":"test"}""", context)
+      val reason = manager.addPath("/app/metrics", """{"job":"test"}""", context)?.reason
 
       reason.shouldNotBeNull()
       manager.pathMapSize shouldBe 0
@@ -195,7 +195,7 @@ class ProxyPathManagerTest : StringSpec() {
       val intruder = AgentContext("remote-intruder")
 
       manager.addPath("/metrics", """{"job":"test"}""", owner, identityName = "team_a").shouldBeNull()
-      val reason = manager.addPath("/metrics", """{"job":"test"}""", intruder, identityName = "team_b")
+      val reason = manager.addPath("/metrics", """{"job":"test"}""", intruder, identityName = "team_b")?.reason
 
       reason.shouldNotBeNull() shouldContain "team_a"
       manager.getAgentContextInfo("/metrics")?.agentContexts?.map { it.agentId } shouldBe [owner.agentId]
@@ -225,6 +225,48 @@ class ProxyPathManagerTest : StringSpec() {
       manager.addPath("/metrics", """{"job":"test"}""", newcomer, identityName = "team_b").shouldBeNull()
 
       manager.getAgentContextInfo("/metrics")?.agentContexts?.map { it.agentId } shouldBe [newcomer.agentId]
+    }
+
+    // A rejection because a live registrant holds the path clears once that registrant leaves, so it is retryable.
+    "a path a live agent of another identity serves should be rejected as retryable" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val owner = AgentContext("remote-owner")
+      val intruder = AgentContext("remote-intruder")
+      manager.addPath("/metrics", """{"job":"test"}""", owner, identityName = "team_a").shouldBeNull()
+
+      val rejection = manager.addPath("/metrics", """{"job":"test"}""", intruder, identityName = "team_b")
+
+      rejection.shouldNotBeNull().retryable.shouldBeTrue()
+    }
+
+    // A consolidated/non-consolidated mismatch clears once the path's current agents leave, so it is retryable too.
+    "a consolidated mismatch with a registered path should be rejected as retryable" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val plainAgent = createMockAgentContext(consolidated = false)
+      val consolidatedAgent = createMockAgentContext(consolidated = true)
+      manager.addPath("/plain", """{"job":"test"}""", plainAgent).shouldBeNull()
+      manager.addPath("/shared", """{"job":"test"}""", consolidatedAgent).shouldBeNull()
+
+      val consolidatedNewcomer = createMockAgentContext(consolidated = true)
+      val plainNewcomer = createMockAgentContext(consolidated = false)
+      val consolidatedJoiner = manager.addPath("/plain", """{"job":"test"}""", consolidatedNewcomer)
+      val plainJoiner = manager.addPath("/shared", """{"job":"test"}""", plainNewcomer)
+
+      consolidatedJoiner.shouldNotBeNull().retryable.shouldBeTrue()
+      plainJoiner.shouldNotBeNull().retryable.shouldBeTrue()
+    }
+
+    // Neither can clear while the agent stays connected, so retrying either would only repeat the rejection.
+    "a multi-segment path or an invalidated agent context should be rejected as not retryable" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val invalidated = createMockAgentContext()
+      every { invalidated.isNotValid() } returns true
+
+      val multiSegment = manager.addPath("app/metrics", """{"job":"test"}""", createMockAgentContext())
+      val gone = manager.addPath("/metrics", """{"job":"test"}""", invalidated)
+
+      multiSegment.shouldNotBeNull().retryable.shouldBeFalse()
+      gone.shouldNotBeNull().retryable.shouldBeFalse()
     }
 
     // Tests consolidated path behavior: when multiple agents register the same path with
@@ -655,7 +697,7 @@ class ProxyPathManagerTest : StringSpec() {
       val consolidatedContext = createMockAgentContext(consolidated = true)
 
       manager.addPath("/metrics", """{"job":"test"}""", nonConsolidatedContext)
-      val reason = manager.addPath("/metrics", """{"job":"test"}""", consolidatedContext)
+      val reason = manager.addPath("/metrics", """{"job":"test"}""", consolidatedContext)?.reason
 
       reason.shouldNotBeNull()
       reason shouldContain "Consolidated"
@@ -669,7 +711,7 @@ class ProxyPathManagerTest : StringSpec() {
       val nonConsolidatedContext = createMockAgentContext(consolidated = false)
 
       manager.addPath("/metrics", """{"job":"test"}""", consolidatedContext)
-      val reason = manager.addPath("/metrics", """{"job":"test2"}""", nonConsolidatedContext)
+      val reason = manager.addPath("/metrics", """{"job":"test2"}""", nonConsolidatedContext)?.reason
 
       reason.shouldNotBeNull()
       reason shouldContain "Non-consolidated"
@@ -770,7 +812,7 @@ class ProxyPathManagerTest : StringSpec() {
       // Simulate the context being invalidated by a racing removal between the caller's check and here.
       every { context.isNotValid() } returns true
 
-      val reason = manager.addPath("/metrics", """{"job":"test"}""", context)
+      val reason = manager.addPath("/metrics", """{"job":"test"}""", context)?.reason
 
       reason.shouldNotBeNull()
       reason shouldContain "invalidated"

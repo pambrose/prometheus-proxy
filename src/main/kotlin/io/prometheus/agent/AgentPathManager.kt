@@ -88,13 +88,14 @@ internal class AgentPathManager(
       }
       .toMap()
 
-  // Static paths the proxy rejected at the last registerPaths, which retryRejectedStaticPaths works through.
+  // Static paths the proxy rejected as retryable at the last registerPaths, for retryRejectedStaticPaths to retry.
   private val rejectedStaticPaths = ConcurrentHashMap.newKeySet<PathConfig>()
 
   // A proxy rejecting one path (valid=false -- e.g. the agent's identity isn't authorized for it) must not
   // abort registration of the others: that used to end the connection, and the agent then reconnected
-  // forever with every path down. A rejected path is remembered and retried while the connection lasts. A
-  // proxy that rejects every static path isn't usable, though, so that fails the attempt and lets
+  // forever with every path down. A rejection the proxy marks retryable -- a live agent holds the path -- is
+  // remembered and retried while the connection lasts; any other can't clear before a reconnect, so it is only
+  // logged. A proxy that rejects every static path isn't usable, though, so that fails the attempt and lets
   // EndpointFailover move on. Transport failures still propagate: the connection is gone.
   suspend fun registerPaths() {
     rejectedStaticPaths.clear()
@@ -104,8 +105,13 @@ internal class AgentPathManager(
           registerPath(config.path, config.url, config.labels)
           false
         } catch (e: RequestFailureException) {
-          logger.warn { "Proxy rejected static path /${config.path.removePrefix("/")}: ${e.message}" }
-          rejectedStaticPaths += config
+          val path = config.path.removePrefix("/")
+          if (e.retryable) {
+            logger.warn { "Proxy rejected static path /$path, retrying while connected: ${e.message}" }
+            rejectedStaticPaths += config
+          } else {
+            logger.warn { "Proxy rejected static path /$path, not retrying: ${e.message}" }
+          }
           true
         }
       }
@@ -116,11 +122,11 @@ internal class AgentPathManager(
   val hasRejectedStaticPaths: Boolean
     get() = rejectedStaticPaths.isNotEmpty()
 
-  // Retries each static path the proxy rejected at connect. Static paths are otherwise registered only at connect, but
-  // a rejection can clear while the agent stays connected: the live agent of another identity that held the path
-  // disconnects. Each path is isolated, as in reconcileDiscoveredPaths: a path the proxy still rejects is logged at
-  // DEBUG and any other failure at WARN, and neither ends the connection, whose other tasks already end it when it
-  // is really gone.
+  // Retries each static path the proxy rejected as retryable at connect. Static paths are otherwise registered only at
+  // connect, but a retryable rejection can clear while the agent stays connected: the live agent of another identity
+  // that held the path disconnects. Each path is isolated, as in reconcileDiscoveredPaths: a path the proxy still
+  // rejects as retryable is logged at DEBUG and any other failure at WARN, and a rejection no longer retryable drops
+  // the path from the retries. None ends the connection, whose other tasks already end it when it is really gone.
   suspend fun retryRejectedStaticPaths() {
     for (config in rejectedStaticPaths.toList()) {
       val path = config.path.removePrefix("/")
@@ -129,10 +135,14 @@ internal class AgentPathManager(
           rejectedStaticPaths -= config
           logger.info { "Registered static path /$path after the proxy had rejected it" }
         }.onFailure { e ->
-          if (e is RequestFailureException)
-            logger.debug { "Proxy still rejects static path /$path: ${e.message}" }
-          else
+          if (e !is RequestFailureException) {
             logger.warn(e) { "Failed to retry static path /$path" }
+          } else if (e.retryable) {
+            logger.debug { "Proxy still rejects static path /$path: ${e.message}" }
+          } else {
+            rejectedStaticPaths -= config
+            logger.warn { "Proxy rejected static path /$path, not retrying: ${e.message}" }
+          }
         }
     }
   }

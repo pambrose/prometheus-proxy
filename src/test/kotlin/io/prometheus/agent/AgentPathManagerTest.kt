@@ -18,10 +18,12 @@
 
 package io.prometheus.agent
 
+import ch.qos.logback.classic.Level
 import io.grpc.Status
 import io.grpc.StatusException
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -817,7 +819,10 @@ class AgentPathManagerTest : StringSpec() {
         pathId = 1L
       }
       coEvery { mockGrpcService.registerPathOnProxy("metrics2", any(), any(), any()) } throws
-        RequestFailureException("registerPathOnProxy() - path /metrics2 is served by another identity")
+        RequestFailureException(
+          "registerPathOnProxy() - path /metrics2 is served by another identity",
+          retryable = true,
+        )
       return AgentPathManager(mockAgent) to mockGrpcService
     }
 
@@ -871,6 +876,50 @@ class AgentPathManagerTest : StringSpec() {
 
       manager["metrics2"].shouldBeNull()
       manager.hasRejectedStaticPaths.shouldBeTrue()
+    }
+
+    // The proxy rejects metrics2 for the life of the connection: the agent's identity isn't authorized for it.
+    fun rejectMetrics2Permanently(grpcService: AgentGrpcService) {
+      coEvery { grpcService.registerPathOnProxy("metrics2", any(), any(), any()) } throws
+        RequestFailureException("registerPathOnProxy() - identity 'team_a' is not authorized for path /metrics2")
+    }
+
+    // Retrying a rejection that can't clear would only log it again on the proxy every interval.
+    "registerPaths should not retry a static path the proxy rejects as not retryable" {
+      val (manager, grpcService) = managerRejectingMetrics2()
+      rejectMetrics2Permanently(grpcService)
+
+      manager.registerPaths()
+      manager.hasRejectedStaticPaths.shouldBeFalse()
+
+      manager.retryRejectedStaticPaths()
+      coVerify(exactly = 1) { grpcService.registerPathOnProxy("metrics2", any(), any(), any()) }
+    }
+
+    "retryRejectedStaticPaths should stop retrying a path once the proxy rejects it as not retryable" {
+      val (manager, grpcService) = managerRejectingMetrics2()
+      manager.registerPaths()
+
+      rejectMetrics2Permanently(grpcService)
+      manager.retryRejectedStaticPaths()
+      manager.hasRejectedStaticPaths.shouldBeFalse()
+
+      manager.retryRejectedStaticPaths()
+      coVerify(exactly = 2) { grpcService.registerPathOnProxy("metrics2", any(), any(), any()) }
+    }
+
+    // Logged once, at connect. A retryable rejection, by contrast, is logged at DEBUG on every retry.
+    "a static path the proxy rejects as not retryable should be logged once" {
+      val (manager, grpcService) = managerRejectingMetrics2()
+      rejectMetrics2Permanently(grpcService)
+
+      val warnings =
+        captureLogs<AgentPathManager> {
+          manager.registerPaths()
+          repeat(3) { manager.retryRejectedStaticPaths() }
+        }.filter { it.level == Level.WARN && "/metrics2" in it.formattedMessage }
+
+      warnings shouldHaveSize 1
     }
 
     // Static wins even while the proxy rejects the static path: discovery must not register the path in the meantime,
