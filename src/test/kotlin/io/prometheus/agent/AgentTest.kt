@@ -50,6 +50,7 @@ import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -84,19 +85,13 @@ class AgentTest : StringSpec() {
     "when one connection task ends, the other connection tasks should be cancelled" {
       val agent = createTestAgent()
       val connectionContext = AgentConnectionContext(8)
-      val idleCancelled = CompletableDeferred<Unit>()
+      lateinit var idleTask: Job
 
       val connectionEnded =
         withTimeoutOrNull(5.seconds) {
           coroutineScope {
             with(agent) {
-              launchConnectionTask(connectionContext, "idle read stream") {
-                try {
-                  awaitCancellation()
-                } finally {
-                  idleCancelled.complete(Unit)
-                }
-              }
+              idleTask = launchConnectionTask(connectionContext, "idle read stream") { awaitCancellation() }
               launchConnectionTask(connectionContext, "failed write stream") {
                 throw IOException("write stream failed")
               }
@@ -106,7 +101,8 @@ class AgentTest : StringSpec() {
         }
 
       connectionEnded shouldBe true
-      idleCancelled.isCompleted.shouldBeTrue()
+      // Asserted on the Job, not a finally in the task: the idle task may be cancelled before it ever starts running.
+      idleTask.isCancelled.shouldBeTrue()
       connectionContext.connected.shouldBeFalse()
     }
 
