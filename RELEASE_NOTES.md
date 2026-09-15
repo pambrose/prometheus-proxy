@@ -133,12 +133,15 @@ single-endpoint agent keeps retrying its one proxy. The "Disconnected from proxy
 response" log is now WARN rather than INFO, since it now means something needs attention.
 
 A rejected static path is retried every `agent.internal.rejectedPathRetrySecs` (default 10s) only when the
-rejection can clear. The proxy now says why it rejected a path, in a new
-`rejection_cause` field of its registration response, and the agent retries only the causes that clear
-once a live agent holding the path leaves: another identity's agent serving it, or a consolidated/non-consolidated
-mismatch. A rejection for any other cause, such as a path the agent's identity isn't authorized for, is
-logged once and not retried, as is one from an older proxy, which sends no cause. Discovery doesn't register a path from the discovery file that is also in `pathConfigs`, even
-while that static path is unregistered, so the static entry keeps priority.
+rejection can clear. The proxy now says why it rejected a path, in a new `rejection_cause` field of its
+registration response, and the agent retries only the causes that clear once a live agent holding the path
+leaves: another identity's agent serving it, or a consolidated/non-consolidated mismatch. A rejection for any
+other cause, such as a path the agent's identity isn't authorized for, is logged once and not retried, as is one
+from an older proxy, which sends no cause. Discovered paths follow the same rule: discovery tries an entry
+rejected for a cause that can't clear again only when its URL or labels change, when it leaves the file and
+returns, or after a reconnect, where it used to retry and log it on every poll. Discovery doesn't register a
+path from the discovery file that is also in `pathConfigs`, even while that static path is unregistered, so
+the static entry keeps priority.
 
 A silently dropped connection is also noticed much sooner: about 16 seconds instead of about 90. A
 heartbeat used to wait out the full 30-second unary deadline, three times over, so the agent learned of

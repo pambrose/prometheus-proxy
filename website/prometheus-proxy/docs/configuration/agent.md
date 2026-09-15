@@ -93,6 +93,7 @@ and is shown verbatim on the [Example Configs](../examples.md) page.
 | File missing / unreadable / malformed   | Keeps the last-known-good set (a read failure drops nothing) |
 | Valid but empty file                    | Removes all discovered paths                                |
 | `pathConfigs` empty                     | Discovery-only — every path comes from the file             |
+| Proxy rejects a discovered path         | Logged once; retried each poll only if the rejection can clear, otherwise tried again when the entry changes or the agent reconnects |
 
 !!! note "Polling, not file-watching"
 

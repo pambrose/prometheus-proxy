@@ -61,11 +61,21 @@ internal class AgentPathManager(
   private val pathContextMap = ConcurrentHashMap<String, PathContext>()
   private val pathMutex = Mutex()
 
+  // The proxy's latest rejection of each discovered path, by normalized path; see registerDiscoveredPath. Guarded
+  // by pathMutex.
+  private val discoveredRejections = HashMap<String, DiscoveredRejection>()
+
   operator fun get(path: String): PathContext? = pathContextMap[path]
 
   // Routed through pathMutex so a dynamic registerPath racing a reconcile can't insert a stale
-  // PathContext into the freshly-cleared map (finding 19).
-  suspend fun clear() = pathMutex.withLock { pathContextMap.clear() }
+  // PathContext into the freshly-cleared map (finding 19). A reconnect clears first, which forgets every
+  // rejection, so each static and discovered path is tried again.
+  suspend fun clear() =
+    pathMutex.withLock {
+      pathContextMap.clear()
+      rejectedStaticPaths.clear()
+      discoveredRejections.clear()
+    }
 
   suspend fun pathMapSize(): Int = agent.grpcService.pathMapSize()
 
@@ -99,14 +109,7 @@ internal class AgentPathManager(
   // fails the attempt and lets EndpointFailover move on. Transport failures still propagate: the
   // connection is gone.
   suspend fun registerPaths() {
-    rejectedStaticPaths.clear()
-    val rejectedCount =
-      pathConfigs.count { config ->
-        registerStaticPath(config)?.also { e ->
-          if (e.retryable)
-            logger.warn { "Proxy rejected static path /${config.path.removePrefix("/")}, retrying: ${e.message}" }
-        } != null
-      }
+    val rejectedCount = pathConfigs.count { registerStaticPath(it, repeat = false) != null }
     if (pathConfigs.isNotEmpty() && rejectedCount == pathConfigs.size)
       throw RequestFailureException("Proxy rejected all ${pathConfigs.size} static paths")
   }
@@ -115,20 +118,19 @@ internal class AgentPathManager(
     get() = rejectedStaticPaths.isNotEmpty()
 
   // Registers a static path, keeping rejectedStaticPaths in step, and returns the proxy's rejection, or null once
-  // registered. Only a rejection whose cause is in RETRYABLE_CAUSES stays for retrying; any other can't
-  // clear before a reconnect, so it is dropped and logged here, once. A transport failure propagates.
-  private suspend fun registerStaticPath(config: PathConfig): RequestFailureException? =
+  // registered. Only a rejection whose cause is in RETRYABLE_CAUSES stays for retrying; any other can't clear before a
+  // reconnect. repeat says whether a retryable rejection was already logged. A transport failure propagates.
+  private suspend fun registerStaticPath(
+    config: PathConfig,
+    repeat: Boolean,
+  ): RequestFailureException? =
     try {
       registerPath(config.path, config.url, config.labels)
       rejectedStaticPaths -= config
       null
     } catch (e: RequestFailureException) {
-      if (e.retryable) {
-        rejectedStaticPaths += config
-      } else {
-        rejectedStaticPaths -= config
-        logger.warn { "Proxy rejected static path /${config.path.removePrefix("/")}, not retrying: ${e.message}" }
-      }
+      if (e.retryable) rejectedStaticPaths += config else rejectedStaticPaths -= config
+      logRejection(PathSource.STATIC, config.path.removePrefix("/"), e, repeat)
       e
     }
 
@@ -139,13 +141,27 @@ internal class AgentPathManager(
   suspend fun retryRejectedStaticPaths() {
     for (config in rejectedStaticPaths.toList()) {
       val path = config.path.removePrefix("/")
-      runCatchingCancellable { registerStaticPath(config) }
+      runCatchingCancellable { registerStaticPath(config, repeat = true) }
         .onSuccess { rejection ->
           if (rejection == null)
             logger.info { "Registered static path /$path after the proxy had rejected it" }
-          else if (rejection.retryable)
-            logger.debug { "Proxy still rejects static path /$path: ${rejection.message}" }
         }.onFailure { e -> logger.warn(e) { "Failed to retry static path /$path" } }
+    }
+  }
+
+  // Logs the proxy's rejection of a path. A rejection is the proxy's answer, not a fault, so it carries no stack
+  // trace: one that can't clear is logged at WARN, and a retryable one at WARN the first time and at DEBUG on a repeat.
+  private fun logRejection(
+    source: PathSource,
+    path: String,
+    e: RequestFailureException,
+    repeat: Boolean,
+  ) {
+    val kind = source.name.lowercase()
+    when {
+      !e.retryable -> logger.warn { "Proxy rejected $kind path /$path, not retrying: ${e.message}" }
+      !repeat -> logger.warn { "Proxy rejected $kind path /$path, retrying: ${e.message}" }
+      else -> logger.debug { "Proxy still rejects $kind path /$path: ${e.message}" }
     }
   }
 
@@ -165,7 +181,8 @@ internal class AgentPathManager(
    * paths no longer desired, and re-registers a discovered path whose URL or labels changed. A
    * desired path colliding with a [PathSource.STATIC] path, or with a configured static path the proxy
    * rejected, is skipped (static wins). Each per-path operation is isolated, so one failing path does
-   * not abort the rest of the reconcile; the failure is retried on the next call (reconcile is idempotent).
+   * not abort the rest of the reconcile. A failure is retried on the next call (reconcile is idempotent),
+   * except a rejection for a cause that can't clear: see [registerDiscoveredPath].
    */
   suspend fun reconcileDiscoveredPaths(desired: List<DiscoveredPath>) =
     pathMutex.withLock {
@@ -192,19 +209,48 @@ internal class AgentPathManager(
           .onFailure { logger.warn(it) { "Failed to unregister discovered path /$path" } }
       }
 
+      // Forget the rejections of paths no longer desired.
+      discoveredRejections.keys.retainAll(desiredByPath.keys)
+
       // Register new discovered paths and re-register changed ones (unregister-then-register keeps the
       // local mapping and the proxy's stored labels in agreement).
       for ((path, entry) in desiredByPath) {
         val current = pathContextMap[path]
-        if (current != null && current.url == entry.url && current.labels == entry.labels.defaultEmptyJsonObject())
+        val labels = entry.labels.defaultEmptyJsonObject()
+        if (current != null && current.url == entry.url && current.labels == labels)
           continue // Unchanged discovered path.
-        runCatchingCancellable {
-          if (current != null)
-            doUnregisterPath(path)
-          doRegisterPath(path, entry.url, entry.labels, PathSource.DISCOVERED)
-        }.onFailure { logger.warn(it) { "Failed to register discovered path /$path" } }
+        registerDiscoveredPath(path, entry, labels, current)
       }
     }
+
+  // Registers, or re-registers, one discovered path; callers MUST hold pathMutex. The proxy's rejection is recorded in
+  // discoveredRejections, and one whose cause can't clear (see RETRYABLE_CAUSES) isn't tried again until the entry's
+  // URL or labels change, it leaves the desired set and returns, or the agent reconnects. Any other failure is logged
+  // in full and retried on the next reconcile.
+  private suspend fun registerDiscoveredPath(
+    path: String,
+    entry: DiscoveredPath,
+    labels: String,
+    current: PathContext?,
+  ) {
+    val prior = discoveredRejections[path]?.takeIf { it.url == entry.url && it.labels == labels }
+    if (prior?.retryable == false)
+      return
+    runCatchingCancellable {
+      if (current != null)
+        doUnregisterPath(path)
+      doRegisterPath(path, entry.url, entry.labels, PathSource.DISCOVERED)
+    }.onSuccess {
+      discoveredRejections -= path
+    }.onFailure { e ->
+      if (e is RequestFailureException) {
+        discoveredRejections[path] = DiscoveredRejection(entry.url, labels, e.retryable)
+        logRejection(PathSource.DISCOVERED, path, e, repeat = prior != null)
+      } else {
+        logger.warn(e) { "Failed to register discovered path /$path" }
+      }
+    }
+  }
 
   // Lock-free registration body; callers MUST hold pathMutex. Kotlin's Mutex is not reentrant, so
   // reconcileDiscoveredPaths (which holds the lock across the whole diff) calls this directly rather
@@ -276,6 +322,12 @@ internal class AgentPathManager(
     private val RequestFailureException.retryable: Boolean
       get() = rejectionCause in RETRYABLE_CAUSES
   }
+
+  private data class DiscoveredRejection(
+    val url: String,
+    val labels: String,
+    val retryable: Boolean,
+  )
 
   // Strongly-typed view of a single `agent.pathConfigs` entry, replacing the prior magic-string map.
   private data class PathConfig(
