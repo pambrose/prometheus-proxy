@@ -18,10 +18,13 @@
 
 package io.prometheus.agent
 
+import ch.qos.logback.classic.Level
 import io.grpc.Status
 import io.grpc.StatusException
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -34,10 +37,10 @@ import io.mockk.every
 import io.mockk.mockk
 import io.prometheus.Agent
 import io.prometheus.agent.discovery.DiscoveredPath
-import io.prometheus.common.ConfigVals
 import io.prometheus.common.testConfigVals
 import io.prometheus.common.TestPorts.PROMETHEUS_PORT
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
+import io.prometheus.grpc.PathRejectionCause
 import io.prometheus.grpc.registerPathResponse
 import io.prometheus.grpc.unregisterPathResponse
 import io.prometheus.common.captureLogs
@@ -808,16 +811,25 @@ class AgentPathManagerTest : StringSpec() {
       manager["metrics3"].shouldNotBeNull()
     }
 
-    // Static paths metrics1 and metrics2, where the proxy accepts metrics1 but rejects metrics2 because a live agent of
-    // another identity serves it.
-    fun managerRejectingMetrics2(): Pair<AgentPathManager, AgentGrpcService> {
+    fun rejectMetrics2(
+      grpcService: AgentGrpcService,
+      cause: PathRejectionCause,
+    ) {
+      coEvery { grpcService.registerPathOnProxy("metrics2", any(), any(), any()) } throws
+        RequestFailureException("registerPathOnProxy() - proxy rejected path /metrics2", rejectionCause = cause)
+    }
+
+    // Static paths metrics1 and metrics2, where the proxy accepts metrics1 and rejects metrics2 -- by default because a
+    // live agent of another identity serves it, a rejection that clears while the agent stays connected.
+    fun managerRejectingMetrics2(
+      cause: PathRejectionCause = PathRejectionCause.HELD_BY_ANOTHER_IDENTITY,
+    ): Pair<AgentPathManager, AgentGrpcService> {
       val (mockAgent, mockGrpcService) = agentWithStaticPaths("metrics1", "metrics2")
       coEvery { mockGrpcService.registerPathOnProxy(any(), any(), any(), any()) } returns registerPathResponse {
         valid = true
         pathId = 1L
       }
-      coEvery { mockGrpcService.registerPathOnProxy("metrics2", any(), any(), any()) } throws
-        RequestFailureException("registerPathOnProxy() - path /metrics2 is served by another identity")
+      rejectMetrics2(mockGrpcService, cause)
       return AgentPathManager(mockAgent) to mockGrpcService
     }
 
@@ -871,6 +883,44 @@ class AgentPathManagerTest : StringSpec() {
 
       manager["metrics2"].shouldBeNull()
       manager.hasRejectedStaticPaths.shouldBeTrue()
+    }
+
+    // Only a rejection by a live agent holding the path clears while the agent stays connected. No other cause
+    // does, including none (a proxy predating the field) and one this agent doesn't recognize.
+    "registerPaths should keep a rejected static path for retrying only for a cause that can clear" {
+      val clearing = setOf(PathRejectionCause.HELD_BY_ANOTHER_IDENTITY, PathRejectionCause.CONSOLIDATION_MISMATCH)
+      for (cause in PathRejectionCause.entries) {
+        val (manager, _) = managerRejectingMetrics2(cause)
+        manager.registerPaths()
+        withClue(cause) { manager.hasRejectedStaticPaths shouldBe (cause in clearing) }
+      }
+    }
+
+    // Retrying a rejection that can't clear would only repeat it on the proxy every interval.
+    "registerPaths should try and log once a static path rejected for a cause that can't clear" {
+      val (manager, grpcService) = managerRejectingMetrics2(PathRejectionCause.NOT_AUTHORIZED)
+
+      val warnings =
+        captureLogs<AgentPathManager>(Level.WARN) {
+          manager.registerPaths()
+          repeat(3) { manager.retryRejectedStaticPaths() }
+        }.filter { "/metrics2" in it.formattedMessage }
+
+      manager.hasRejectedStaticPaths.shouldBeFalse()
+      coVerify(exactly = 1) { grpcService.registerPathOnProxy("metrics2", any(), any(), any()) }
+      warnings shouldHaveSize 1
+    }
+
+    "retryRejectedStaticPaths should stop retrying a path once the proxy rejects it for a cause that can't clear" {
+      val (manager, grpcService) = managerRejectingMetrics2()
+      manager.registerPaths()
+
+      rejectMetrics2(grpcService, PathRejectionCause.NOT_AUTHORIZED)
+      manager.retryRejectedStaticPaths()
+      manager.hasRejectedStaticPaths.shouldBeFalse()
+
+      manager.retryRejectedStaticPaths()
+      coVerify(exactly = 2) { grpcService.registerPathOnProxy("metrics2", any(), any(), any()) }
     }
 
     // Static wins even while the proxy rejects the static path: discovery must not register the path in the meantime,

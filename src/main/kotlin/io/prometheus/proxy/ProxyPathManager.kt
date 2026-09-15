@@ -21,6 +21,11 @@ import io.prometheus.Proxy
 import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
 import io.prometheus.common.Messages.EMPTY_PATH_MSG
 import io.prometheus.common.Utils.sanitizeUrl
+import io.prometheus.grpc.PathRejectionCause
+import io.prometheus.grpc.PathRejectionCause.CONSOLIDATION_MISMATCH
+import io.prometheus.grpc.PathRejectionCause.HELD_BY_ANOTHER_IDENTITY
+import io.prometheus.grpc.PathRejectionCause.INVALID_AGENT
+import io.prometheus.grpc.PathRejectionCause.INVALID_PATH
 import io.prometheus.grpc.UnregisterPathResponse
 import io.prometheus.grpc.unregisterPathResponse
 
@@ -59,6 +64,12 @@ internal class ProxyPathManager(
     fun isNotValid() = agentContexts.all { it.isNotValid() }
   }
 
+  // Why addPath refused a path: the reason, for people, and the cause, which the agent decides from whether to retry.
+  data class PathRejection(
+    val reason: String,
+    val cause: PathRejectionCause,
+  )
+
   private val pathMap = HashMap<String, AgentContextInfo>()
 
   // AgentContextInfo is deeply immutable and mutations replace the pathMap entry (never mutate in
@@ -77,7 +88,7 @@ internal class ProxyPathManager(
   /**
    * Adds a path to the path map for the given agent context.
    *
-   * @return null on success, or a failure reason string on failure.
+   * @return null on success, or the [PathRejection] on failure.
    */
   fun addPath(
     path: String,
@@ -86,11 +97,11 @@ internal class ProxyPathManager(
     targetUrl: String = "",
     pathSource: String = "",
     identityName: String = "",
-  ): String? {
+  ): PathRejection? {
     require(path.isNotEmpty()) { EMPTY_PATH_MSG }
     // Redacted on the way in so the dashboard and /debug never show credentials, even from an agent that
     // predates agent-side redaction.
-    return multiSegmentPathError(path)
+    return multiSegmentPathError(path)?.let { PathRejection(it, INVALID_PATH) }
       ?: addValidatedPath(path, labels, agentContext, sanitizeUrl(targetUrl), pathSource, identityName)
   }
 
@@ -102,7 +113,7 @@ internal class ProxyPathManager(
     targetUrl: String,
     pathSource: String,
     identityName: String,
-  ): String? {
+  ): PathRejection? {
     synchronized(pathMap) {
       // Re-check validity inside the lock: agent removal (transportTerminated / cleanup eviction) can
       // interleave between the caller's out-of-lock getAgentContext() check and here, invalidating the
@@ -111,7 +122,7 @@ internal class ProxyPathManager(
       if (agentContext.isNotValid()) {
         val reason = "Agent context ${agentContext.agentId} was invalidated during registration of /$path"
         logger.warn { reason }
-        return reason
+        return PathRejection(reason, INVALID_AGENT)
       }
 
       val agentInfo = pathMap[path]
@@ -122,7 +133,7 @@ internal class ProxyPathManager(
           if (agentContext.consolidated != agentInfo.isConsolidated) {
             val reason = "Consolidated agent rejected for non-consolidated path /$path"
             logger.error { reason }
-            return reason
+            return PathRejection(reason, CONSOLIDATION_MISMATCH)
           }
           // An agent re-registering a path it already backs (a path listed twice in its config) replaces its own
           // entry: a second copy would send it two requests per scrape, and Prometheus rejects the duplicate samples.
@@ -138,7 +149,7 @@ internal class ProxyPathManager(
         if (agentInfo != null && agentInfo.isConsolidated) {
           val reason = "Non-consolidated agent rejected for consolidated path /$path"
           logger.error { reason }
-          return reason
+          return PathRejection(reason, CONSOLIDATION_MISMATCH)
         }
         // An agent re-registering its own path displaces no one, so it is neither logged nor counted as a displacement.
         val displacedContexts = agentInfo?.agentContexts.orEmpty().filterNot { it.agentId == agentContext.agentId }
@@ -151,7 +162,7 @@ internal class ProxyPathManager(
             "Path /$path is served by identity '${agentInfo.identityName}'; " +
               "identity '$identityName' cannot take it over"
           logger.warn { reason }
-          return reason
+          return PathRejection(reason, HELD_BY_ANOTHER_IDENTITY)
         }
         if (displacedContexts.isNotEmpty()) {
           logger.info { "Overwriting path /$path for ${displacedContexts.first()}" }

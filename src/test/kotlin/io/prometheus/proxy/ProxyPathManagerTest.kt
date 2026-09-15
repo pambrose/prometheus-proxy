@@ -33,6 +33,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import io.prometheus.Proxy
+import io.prometheus.grpc.PathRejectionCause
 import io.prometheus.grpc.RegisterAgentRequest
 import kotlin.concurrent.atomics.AtomicLong
 import kotlin.concurrent.atomics.incrementAndFetch
@@ -118,10 +119,10 @@ class ProxyPathManagerTest : StringSpec() {
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context = createMockAgentContext()
 
-      val reason = manager.addPath("app/metrics", """{"job":"test"}""", context)
+      val rejection = manager.addPath("app/metrics", """{"job":"test"}""", context)
 
-      reason.shouldNotBeNull()
-      reason shouldContain "single"
+      rejection.shouldNotBeNull().reason shouldContain "single"
+      rejection.cause shouldBe PathRejectionCause.INVALID_PATH
       manager.pathMapSize shouldBe 0
     }
 
@@ -130,7 +131,7 @@ class ProxyPathManagerTest : StringSpec() {
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context = createMockAgentContext()
 
-      val reason = manager.addPath("/app/metrics", """{"job":"test"}""", context)
+      val reason = manager.addPath("/app/metrics", """{"job":"test"}""", context)?.reason
 
       reason.shouldNotBeNull()
       manager.pathMapSize shouldBe 0
@@ -195,9 +196,10 @@ class ProxyPathManagerTest : StringSpec() {
       val intruder = AgentContext("remote-intruder")
 
       manager.addPath("/metrics", """{"job":"test"}""", owner, identityName = "team_a").shouldBeNull()
-      val reason = manager.addPath("/metrics", """{"job":"test"}""", intruder, identityName = "team_b")
+      val rejection = manager.addPath("/metrics", """{"job":"test"}""", intruder, identityName = "team_b")
 
-      reason.shouldNotBeNull() shouldContain "team_a"
+      rejection.shouldNotBeNull().reason shouldContain "team_a"
+      rejection.cause shouldBe PathRejectionCause.HELD_BY_ANOTHER_IDENTITY
       manager.getAgentContextInfo("/metrics")?.agentContexts?.map { it.agentId } shouldBe [owner.agentId]
       owner.isValid().shouldBeTrue()
     }
@@ -617,7 +619,8 @@ class ProxyPathManagerTest : StringSpec() {
 
       manager.addPath("/metrics", """{"job":"test"}""", nonConsolidatedContext).shouldBeNull()
       // Consolidated agent should be rejected on a non-consolidated path
-      manager.addPath("/metrics", """{"job":"test"}""", consolidatedContext).shouldNotBeNull()
+      val rejection = manager.addPath("/metrics", """{"job":"test"}""", consolidatedContext)
+      rejection.shouldNotBeNull().cause shouldBe PathRejectionCause.CONSOLIDATION_MISMATCH
 
       manager.pathMapSize shouldBe 1
       val info = manager.getAgentContextInfo("/metrics")
@@ -636,7 +639,8 @@ class ProxyPathManagerTest : StringSpec() {
       // First register as consolidated
       manager.addPath("/metrics", """{"job":"test"}""", consolidatedContext).shouldBeNull()
       // Non-consolidated should be rejected on a consolidated path
-      manager.addPath("/metrics", """{"job":"test2"}""", nonConsolidatedContext).shouldNotBeNull()
+      val rejection = manager.addPath("/metrics", """{"job":"test2"}""", nonConsolidatedContext)
+      rejection.shouldNotBeNull().cause shouldBe PathRejectionCause.CONSOLIDATION_MISMATCH
 
       manager.pathMapSize shouldBe 1
       val info = manager.getAgentContextInfo("/metrics")
@@ -655,7 +659,7 @@ class ProxyPathManagerTest : StringSpec() {
       val consolidatedContext = createMockAgentContext(consolidated = true)
 
       manager.addPath("/metrics", """{"job":"test"}""", nonConsolidatedContext)
-      val reason = manager.addPath("/metrics", """{"job":"test"}""", consolidatedContext)
+      val reason = manager.addPath("/metrics", """{"job":"test"}""", consolidatedContext)?.reason
 
       reason.shouldNotBeNull()
       reason shouldContain "Consolidated"
@@ -669,7 +673,7 @@ class ProxyPathManagerTest : StringSpec() {
       val nonConsolidatedContext = createMockAgentContext(consolidated = false)
 
       manager.addPath("/metrics", """{"job":"test"}""", consolidatedContext)
-      val reason = manager.addPath("/metrics", """{"job":"test2"}""", nonConsolidatedContext)
+      val reason = manager.addPath("/metrics", """{"job":"test2"}""", nonConsolidatedContext)?.reason
 
       reason.shouldNotBeNull()
       reason shouldContain "Non-consolidated"
@@ -770,10 +774,10 @@ class ProxyPathManagerTest : StringSpec() {
       // Simulate the context being invalidated by a racing removal between the caller's check and here.
       every { context.isNotValid() } returns true
 
-      val reason = manager.addPath("/metrics", """{"job":"test"}""", context)
+      val rejection = manager.addPath("/metrics", """{"job":"test"}""", context)
 
-      reason.shouldNotBeNull()
-      reason shouldContain "invalidated"
+      rejection.shouldNotBeNull().reason shouldContain "invalidated"
+      rejection.cause shouldBe PathRejectionCause.INVALID_AGENT
       manager.pathMapSize shouldBe 0
       manager.getAgentContextInfo("/metrics").shouldBeNull()
     }

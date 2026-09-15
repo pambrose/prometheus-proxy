@@ -24,6 +24,8 @@ import io.prometheus.agent.filter.MetricFilter
 import io.prometheus.common.Messages.EMPTY_PATH_MSG
 import io.prometheus.common.Utils.defaultEmptyJsonObject
 import io.prometheus.common.Utils.sanitizeUrl
+import io.prometheus.grpc.PathRejectionCause.CONSOLIDATION_MISMATCH
+import io.prometheus.grpc.PathRejectionCause.HELD_BY_ANOTHER_IDENTITY
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
@@ -88,26 +90,22 @@ internal class AgentPathManager(
       }
       .toMap()
 
-  // Static paths the proxy rejected at the last registerPaths, which retryRejectedStaticPaths works through.
+  // Static paths whose last registration the proxy rejected as retryable, for retryRejectedStaticPaths to retry.
   private val rejectedStaticPaths = ConcurrentHashMap.newKeySet<PathConfig>()
 
   // A proxy rejecting one path (valid=false -- e.g. the agent's identity isn't authorized for it) must not
   // abort registration of the others: that used to end the connection, and the agent then reconnected
-  // forever with every path down. A rejected path is remembered and retried while the connection lasts. A
-  // proxy that rejects every static path isn't usable, though, so that fails the attempt and lets
-  // EndpointFailover move on. Transport failures still propagate: the connection is gone.
+  // forever with every path down. A proxy that rejects every static path isn't usable, though, so that
+  // fails the attempt and lets EndpointFailover move on. Transport failures still propagate: the
+  // connection is gone.
   suspend fun registerPaths() {
     rejectedStaticPaths.clear()
     val rejectedCount =
       pathConfigs.count { config ->
-        try {
-          registerPath(config.path, config.url, config.labels)
-          false
-        } catch (e: RequestFailureException) {
-          logger.warn { "Proxy rejected static path /${config.path.removePrefix("/")}: ${e.message}" }
-          rejectedStaticPaths += config
-          true
-        }
+        registerStaticPath(config)?.also { e ->
+          if (e.retryable)
+            logger.warn { "Proxy rejected static path /${config.path.removePrefix("/")}, retrying: ${e.message}" }
+        } != null
       }
     if (pathConfigs.isNotEmpty() && rejectedCount == pathConfigs.size)
       throw RequestFailureException("Proxy rejected all ${pathConfigs.size} static paths")
@@ -116,24 +114,38 @@ internal class AgentPathManager(
   val hasRejectedStaticPaths: Boolean
     get() = rejectedStaticPaths.isNotEmpty()
 
-  // Retries each static path the proxy rejected at connect. Static paths are otherwise registered only at connect, but
-  // a rejection can clear while the agent stays connected: the live agent of another identity that held the path
-  // disconnects. Each path is isolated, as in reconcileDiscoveredPaths: a path the proxy still rejects is logged at
-  // DEBUG and any other failure at WARN, and neither ends the connection, whose other tasks already end it when it
-  // is really gone.
+  // Registers a static path, keeping rejectedStaticPaths in step, and returns the proxy's rejection, or null once
+  // registered. Only a rejection whose cause is in RETRYABLE_CAUSES stays for retrying; any other can't
+  // clear before a reconnect, so it is dropped and logged here, once. A transport failure propagates.
+  private suspend fun registerStaticPath(config: PathConfig): RequestFailureException? =
+    try {
+      registerPath(config.path, config.url, config.labels)
+      rejectedStaticPaths -= config
+      null
+    } catch (e: RequestFailureException) {
+      if (e.retryable) {
+        rejectedStaticPaths += config
+      } else {
+        rejectedStaticPaths -= config
+        logger.warn { "Proxy rejected static path /${config.path.removePrefix("/")}, not retrying: ${e.message}" }
+      }
+      e
+    }
+
+  // Retries each static path the proxy rejected as retryable. Static paths are otherwise registered only at connect,
+  // but such a rejection can clear while the agent stays connected: the live agent that held the path disconnects.
+  // Each path is isolated, as in reconcileDiscoveredPaths, so no failure ends the connection, whose other tasks
+  // already end it when it is really gone.
   suspend fun retryRejectedStaticPaths() {
     for (config in rejectedStaticPaths.toList()) {
       val path = config.path.removePrefix("/")
-      runCatchingCancellable { registerPath(config.path, config.url, config.labels) }
-        .onSuccess {
-          rejectedStaticPaths -= config
-          logger.info { "Registered static path /$path after the proxy had rejected it" }
-        }.onFailure { e ->
-          if (e is RequestFailureException)
-            logger.debug { "Proxy still rejects static path /$path: ${e.message}" }
-          else
-            logger.warn(e) { "Failed to retry static path /$path" }
-        }
+      runCatchingCancellable { registerStaticPath(config) }
+        .onSuccess { rejection ->
+          if (rejection == null)
+            logger.info { "Registered static path /$path after the proxy had rejected it" }
+          else if (rejection.retryable)
+            logger.debug { "Proxy still rejects static path /$path: ${rejection.message}" }
+        }.onFailure { e -> logger.warn(e) { "Failed to retry static path /$path" } }
     }
   }
 
@@ -256,6 +268,13 @@ internal class AgentPathManager(
 
   companion object {
     private val logger = logger {}
+
+    // The rejection causes that clear while the agent stays connected: a live agent holds the path, and it leaves
+    // eventually. No other cause does, including none (a proxy predating the field) and one this agent doesn't know.
+    private val RETRYABLE_CAUSES = setOf(HELD_BY_ANOTHER_IDENTITY, CONSOLIDATION_MISMATCH)
+
+    private val RequestFailureException.retryable: Boolean
+      get() = rejectionCause in RETRYABLE_CAUSES
   }
 
   // Strongly-typed view of a single `agent.pathConfigs` entry, replacing the prior magic-string map.
