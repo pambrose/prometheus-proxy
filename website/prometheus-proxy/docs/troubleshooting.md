@@ -134,6 +134,11 @@ The proxy logs the reason and returns `valid = false` to the agent:
 
 See [Consolidated Mode](advanced.md#consolidated-mode) for the all-or-nothing rule.
 
+The proxy logs the first rejection of a path for an agent connection at WARN, and an identical repeat at
+DEBUG -- an agent retries a rejection that can clear, and a lasting conflict would otherwise fill the log.
+To see every attempt, set `io.prometheus.proxy.ProxyPathManager` to DEBUG. The agent logs its own side of
+the same conflict, so its log shows whether it is still retrying.
+
 ---
 
 ## TLS handshake failures

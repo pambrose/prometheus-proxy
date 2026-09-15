@@ -143,6 +143,12 @@ returns, or after a reconnect, where it used to retry and log it on every poll. 
 path from the discovery file that is also in `pathConfigs`, even while that static path is unregistered, so
 the static entry keeps priority.
 
+The proxy no longer repeats itself either. It logs the first rejection of a path for an agent connection
+at WARN and an identical repeat at DEBUG, so a conflict that lasts is reported once rather than on every
+retry. A consolidated/non-consolidated mismatch now logs at WARN rather than ERROR, matching the other
+rejection that a conflict between agents causes, so check any alerting that keys on those ERROR lines.
+The proxy forgets a path's rejection once it registers, so a conflict that re-forms is reported again.
+
 A silently dropped connection is also noticed much sooner: about 16 seconds instead of about 90. A
 heartbeat used to wait out the full 30-second unary deadline, three times over, so the agent learned of
 the dead connection only after the proxy had already evicted it. Heartbeats now use the heartbeat

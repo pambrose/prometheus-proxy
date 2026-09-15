@@ -35,6 +35,7 @@ import io.prometheus.common.captureLogs
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.harness.support.TestUtils.stopAll
+import io.prometheus.proxy.ProxyPathManager
 import io.prometheus.proxy.ProxyServiceImpl
 import java.io.File
 import kotlin.time.Duration.Companion.seconds
@@ -50,33 +51,41 @@ class AgentRejectedPathRetryTest : StringSpec() {
 
       val proxy = startProxy(args = ["--agent_port", "$AGENT_PORT"], proxyPort = HTTP_PORT, configArgs = CONFIG_ARG)
       val agents = mutableListOf<Agent>()
-      val proxyWarnings =
-        captureLogs<ProxyServiceImpl>(Level.WARN) {
-          try {
-            val agentA = startAgentWithToken(TOKEN_A).also { agents += it }
-            agentA.awaitInitialConnection(10.seconds).shouldBeTrue()
-            eventually(10.seconds) { ownerOf(proxy, SHARED_PATH) shouldBe agentA.agentId }
+      var proxyWarnings = emptyList<ILoggingEvent>()
+      // Agent B retries shared_metrics every second while agent A holds it, so ProxyPathManager's takeover WARN
+      // counts how often the proxy reports one lasting conflict.
+      val takeoverWarnings =
+        captureLogs<ProxyPathManager>(Level.WARN) {
+          proxyWarnings =
+            captureLogs<ProxyServiceImpl>(Level.WARN) {
+              try {
+                val agentA = startAgentWithToken(TOKEN_A).also { agents += it }
+                agentA.awaitInitialConnection(10.seconds).shouldBeTrue()
+                eventually(10.seconds) { ownerOf(proxy, SHARED_PATH) shouldBe agentA.agentId }
 
-            val agentB = startAgentWithToken(TOKEN_B).also { agents += it }
-            agentB.awaitInitialConnection(10.seconds).shouldBeTrue()
-            eventually(10.seconds) { ownerOf(proxy, B_PATH) shouldBe agentB.agentId }
-            // team_b may register shared_metrics, but team_a's live agent serves it, so agent B's registration of it
-            // was rejected.
-            ownerOf(proxy, SHARED_PATH) shouldBe agentA.agentId
+                val agentB = startAgentWithToken(TOKEN_B).also { agents += it }
+                agentB.awaitInitialConnection(10.seconds).shouldBeTrue()
+                eventually(10.seconds) { ownerOf(proxy, B_PATH) shouldBe agentB.agentId }
+                // team_b may register shared_metrics, but team_a's live agent serves it, so agent B's registration
+                // of it was rejected.
+                ownerOf(proxy, SHARED_PATH) shouldBe agentA.agentId
 
-            agentA.stopSync(10.seconds)
+                agentA.stopSync(10.seconds)
 
-            eventually(15.seconds) { ownerOf(proxy, SHARED_PATH) shouldBe agentB.agentId }
-            // a_metrics, which team_b may never register, was never kept for a retry. Eventually, since the proxy
-            // records shared_metrics just before agent B drops it from its retries.
-            eventually(5.seconds) { agentB.pathManager.hasRejectedStaticPaths.shouldBeFalse() }
-          } finally {
-            stopAll(proxy, *agents.toTypedArray())
-          }
+                eventually(15.seconds) { ownerOf(proxy, SHARED_PATH) shouldBe agentB.agentId }
+                // a_metrics, which team_b may never register, was never kept for a retry. Eventually, since the
+                // proxy records shared_metrics just before agent B drops it from its retries.
+                eventually(5.seconds) { agentB.pathManager.hasRejectedStaticPaths.shouldBeFalse() }
+              } finally {
+                stopAll(proxy, *agents.toTypedArray())
+              }
+            }
         }
 
       // team_b may never register a_metrics, so agent B's attempt at connect is its only one.
       proxyWarnings.deniedCount("team_b", A_PATH) shouldBe 1
+      // However often agent B retried shared_metrics, the proxy reported that conflict once.
+      takeoverWarnings.count { "cannot take it over" in it.formattedMessage } shouldBe 1
     }
 
     "a discovered path the agent's identity may never register should reach the proxy once" {

@@ -23,7 +23,9 @@ import com.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.pambrose.common.dsl.GuavaDsl.toStringElements
 import io.ktor.http.HttpStatusCode
 import io.prometheus.common.ScrapeResults
+import io.prometheus.grpc.PathRejectionCause
 import io.prometheus.grpc.RegisterAgentRequest
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
 import java.time.Instant
@@ -66,6 +68,10 @@ internal class AgentContext(
   // before a request is queued, so concurrent writers cannot overshoot the cap.
   private val queuedCount = AtomicInt(0)
   private val scrapeRequestNotifier = Channel<Unit>(UNLIMITED)
+
+  // The rejection cause this connection was last told for each path, so ProxyPathManager can log a repeat at
+  // DEBUG rather than WARN. Dies with the connection: a reconnect is a new context, and is told afresh.
+  private val loggedPathRejections = ConcurrentHashMap<String, PathRejectionCause>()
 
   private val clock = Monotonic
 
@@ -163,6 +169,18 @@ internal class AgentContext(
   fun isValid() = valid && !scrapeRequestNotifier.isClosedForReceive
 
   fun isNotValid() = !isValid()
+
+  // Records that this connection was told [cause] for [path], returning true when that is news: the first
+  // rejection of the path, or a different cause than last time.
+  fun recordRejection(
+    path: String,
+    cause: PathRejectionCause,
+  ): Boolean = loggedPathRejections.put(path, cause) != cause
+
+  // Forgets [path]'s rejection once it registers, so a conflict that re-forms later is reported again.
+  fun forgetRejection(path: String) {
+    loggedPathRejections.remove(path)
+  }
 
   fun invalidate() {
     valid = false
