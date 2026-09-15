@@ -25,11 +25,11 @@ import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
 import io.prometheus.Agent
 import io.prometheus.Proxy
-import io.prometheus.agent.AgentOptions
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.TestPorts
+import io.prometheus.harness.support.TestUtils.startAgent
+import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.harness.support.exceptionHandler
-import io.prometheus.proxy.ProxyOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -43,14 +43,14 @@ class AgentRejectedPathRetryTest : StringSpec() {
     "a rejected static path should register once the agent of another identity that held it disconnects" {
       CollectorRegistry.defaultRegistry.clear()
 
-      val proxy = startProxy()
+      val proxy = startProxy(args = ["--agent_port", "$AGENT_PORT"], proxyPort = HTTP_PORT, configArgs = CONFIG_ARG)
       val agents = mutableListOf<Agent>()
       try {
-        val agentA = startAgent(TOKEN_A).also { agents += it }
+        val agentA = startAgentWithToken(TOKEN_A).also { agents += it }
         agentA.awaitInitialConnection(10.seconds).shouldBeTrue()
         eventually(10.seconds) { ownerOf(proxy, SHARED_PATH) shouldBe agentA.agentId }
 
-        val agentB = startAgent(TOKEN_B).also { agents += it }
+        val agentB = startAgentWithToken(TOKEN_B).also { agents += it }
         agentB.awaitInitialConnection(10.seconds).shouldBeTrue()
         eventually(10.seconds) { ownerOf(proxy, B_PATH) shouldBe agentB.agentId }
         // team_b may register shared_metrics, but team_a's live agent serves it, so agent B's registration of it was
@@ -71,35 +71,8 @@ class AgentRejectedPathRetryTest : StringSpec() {
     path: String,
   ): String? = proxy.pathManager.getAgentContextInfo(path)?.agentContexts?.singleOrNull()?.agentId
 
-  private fun startProxy(): Proxy {
-    val proxyOptions =
-      ProxyOptions(
-        buildList {
-          addAll(CONFIG_ARG)
-          addAll(["--agent_port", AGENT_PORT.toString()])
-          add("-Dproxy.admin.enabled=false")
-          add("-Dproxy.metrics.enabled=false")
-        },
-      )
-    // Empty inProcessServerName => Netty transport => the token header crosses the wire.
-    return Proxy(options = proxyOptions, proxyPort = HTTP_PORT, testMode = true) { startSync() }
-  }
-
-  private fun startAgent(token: String): Agent {
-    val agentOptions =
-      AgentOptions(
-        args =
-          buildList {
-            addAll(CONFIG_ARG)
-            addAll(["--proxy", "localhost:$AGENT_PORT"])
-            addAll(["--agent_token", token])
-            add("-Dagent.admin.enabled=false")
-            add("-Dagent.metrics.enabled=false")
-          },
-        exitOnMissingConfig = false,
-      )
-    return Agent(options = agentOptions, testMode = true) { startSync() }
-  }
+  private fun startAgentWithToken(token: String): Agent =
+    startAgent(args = ["--proxy", "localhost:$AGENT_PORT", "--agent_token", token], configArgs = CONFIG_ARG)
 
   private suspend fun stopAll(
     proxy: Proxy,

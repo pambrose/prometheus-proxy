@@ -74,6 +74,10 @@ internal class AgentPathManager(
         logger.info { "Proxy path /${it.path} will be assigned to ${sanitizeUrl(it.url)} with labels ${it.labels}" }
       }
 
+  // Normalized pathConfigs paths. reconcileDiscoveredPaths skips these even while unregistered -- rejected by the
+  // proxy and awaiting retryRejectedStaticPaths -- so a discovered entry never takes over a configured static path.
+  private val configuredStaticPaths: Set<String> = pathConfigs.mapTo(HashSet()) { it.path.removePrefix("/") }
+
   // Compiled once at startup, never per scrape. Keyed by normalized path, so a filter applies to
   // that path regardless of whether it was registered statically or by discovery.
   private val filtersByPath: Map<String, MetricFilter> =
@@ -114,9 +118,9 @@ internal class AgentPathManager(
 
   // Retries each static path the proxy rejected at connect. Static paths are otherwise registered only at connect, but
   // a rejection can clear while the agent stays connected: the live agent of another identity that held the path
-  // disconnects, or the proxy widens this identity's path patterns. Each path is isolated, as in
-  // reconcileDiscoveredPaths: a path the proxy still rejects is logged at DEBUG and any other failure at WARN, and
-  // neither ends the connection, whose other tasks already end it when it is really gone.
+  // disconnects. Each path is isolated, as in reconcileDiscoveredPaths: a path the proxy still rejects is logged at
+  // DEBUG and any other failure at WARN, and neither ends the connection, whose other tasks already end it when it
+  // is really gone.
   suspend fun retryRejectedStaticPaths() {
     for (config in rejectedStaticPaths.toList()) {
       val path = config.path.removePrefix("/")
@@ -147,9 +151,9 @@ internal class AgentPathManager(
    * Runs the whole diff-and-apply under [pathMutex] so it is atomic with respect to any other
    * register/unregister/clear call. Registers desired paths not yet present, unregisters discovered
    * paths no longer desired, and re-registers a discovered path whose URL or labels changed. A
-   * desired path colliding with a [PathSource.STATIC] path is skipped (static wins). Each per-path
-   * operation is isolated, so one failing path does not abort the rest of the reconcile; the failure
-   * is retried on the next call (reconcile is idempotent).
+   * desired path colliding with a [PathSource.STATIC] path, or with a configured static path the proxy
+   * rejected, is skipped (static wins). Each per-path operation is isolated, so one failing path does
+   * not abort the rest of the reconcile; the failure is retried on the next call (reconcile is idempotent).
    */
   suspend fun reconcileDiscoveredPaths(desired: List<DiscoveredPath>) =
     pathMutex.withLock {
@@ -157,7 +161,7 @@ internal class AgentPathManager(
       val desiredByPath = LinkedHashMap<String, DiscoveredPath>()
       for (entry in desired) {
         val path = entry.path.removePrefix("/")
-        if (pathContextMap[path]?.source == PathSource.STATIC) {
+        if (path in configuredStaticPaths || pathContextMap[path]?.source == PathSource.STATIC) {
           logger.warn { "Discovered path /$path collides with a static path; keeping the static entry" }
           continue
         }

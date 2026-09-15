@@ -285,7 +285,6 @@ class AgentOptionsTest : StringSpec() {
       }
     }
 
-    // It paces the loop that retries rejected static paths; 0 would spin that loop for the connection's lifetime.
     "rejectedPathRetrySecs of 0 should throw IllegalArgumentException" {
       shouldThrow<IllegalArgumentException> {
         agentOptions(["--name", "test", "--proxy", "host", "-Dagent.internal.rejectedPathRetrySecs=0"], false)

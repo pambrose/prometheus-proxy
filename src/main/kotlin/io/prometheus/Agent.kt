@@ -306,16 +306,13 @@ class Agent(
             }
           }
 
-          // A static path the proxy rejected at connect is retried for the connection's lifetime, so it registers
-          // once the rejection clears -- say, a live agent of another identity that held it disconnects -- without
-          // a reconnect.
+          // Retries the static paths the proxy rejected at connect; see AgentPathManager.retryRejectedStaticPaths.
           if (pathManager.hasRejectedStaticPaths) {
             val retryInterval = agentConfigVals.internal.rejectedPathRetrySecs.seconds
             launchConnectionTask(connectionContext, "retryRejectedStaticPaths") {
               while (isRunning && connectionContext.connected) {
                 delay(retryInterval)
-                if (pathManager.hasRejectedStaticPaths)
-                  pathManager.retryRejectedStaticPaths()
+                pathManager.retryRejectedStaticPaths()
               }
             }
           }
