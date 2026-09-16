@@ -57,8 +57,8 @@ internal class ProxyPathManager(
     // exactly as labels has always behaved. Empty when the agent predates the fields.
     val targetUrl: String = "",
     val pathSource: String = "",
-    // The auth identity a non-consolidated path's registrant connected as, empty when agent auth is disabled. Unused
-    // on consolidated paths, which agents join rather than take over.
+    // The auth identity the path's first registrant connected as, empty when agent auth is disabled. On a
+    // consolidated path it is the identity every later agent must also present to join.
     val identityName: String = "",
   ) {
     fun isNotValid() = agentContexts.all { it.isNotValid() }
@@ -138,14 +138,34 @@ internal class ProxyPathManager(
       }
 
       val agentInfo = pathMap[path]
+      if (agentInfo != null && agentInfo.isConsolidated != agentContext.consolidated) {
+        val reason =
+          if (agentContext.consolidated)
+            "Consolidated agent rejected for non-consolidated path /$path"
+          else
+            "Non-consolidated agent rejected for consolidated path /$path"
+        return rejectPath(agentContext, path, reason, CONSOLIDATION_MISMATCH)
+      }
+
+      // The path's agents other than this one. An agent re-registering a path it already backs neither conflicts with
+      // nor displaces itself.
+      val others = agentInfo?.agentContexts.orEmpty().filterNot { it.agentId == agentContext.agentId }
+      // While a live agent serves a path, only an agent of the same auth identity may take it over or, on a
+      // consolidated path, join it: a redeploy reclaims its paths at once, but one identity can neither replace
+      // another's metrics nor merge its own into them. With no agent auth, or only the legacy shared token, every agent
+      // has the same identity, so nothing changes there. A path whose agents are no longer valid is nobody's, which is
+      // how such a conflict clears.
+      if (agentInfo != null && agentInfo.identityName != identityName && others.any { it.isValid() }) {
+        val action = if (agentContext.consolidated) "join it" else "take it over"
+        val reason =
+          "Path /$path is served by identity '${agentInfo.identityName}'; identity '$identityName' cannot $action"
+        return rejectPath(agentContext, path, reason, HELD_BY_ANOTHER_IDENTITY)
+      }
+
       if (agentContext.consolidated) {
         if (agentInfo == null) {
-          pathMap[path] = AgentContextInfo(true, labels, [agentContext], targetUrl, pathSource)
+          pathMap[path] = AgentContextInfo(true, labels, [agentContext], targetUrl, pathSource, identityName)
         } else {
-          if (agentContext.consolidated != agentInfo.isConsolidated) {
-            val reason = "Consolidated agent rejected for non-consolidated path /$path"
-            return rejectPath(agentContext, path, reason, CONSOLIDATION_MISMATCH)
-          }
           // An agent re-registering a path it already backs (a path listed twice in its config) replaces its own
           // entry: a second copy would send it two requests per scrape, and Prometheus rejects the duplicate samples.
           val contexts = agentInfo.agentContexts
@@ -154,25 +174,12 @@ internal class ProxyPathManager(
               contexts.map { if (it.agentId == agentContext.agentId) agentContext else it }
             else
               contexts + agentContext
-          pathMap[path] = agentInfo.copy(agentContexts = updated)
+          // The path takes this agent's identity, which differs only when every earlier agent is gone.
+          pathMap[path] = agentInfo.copy(agentContexts = updated, identityName = identityName)
         }
       } else {
-        if (agentInfo != null && agentInfo.isConsolidated) {
-          val reason = "Non-consolidated agent rejected for consolidated path /$path"
-          return rejectPath(agentContext, path, reason, CONSOLIDATION_MISMATCH)
-        }
-        // An agent re-registering its own path displaces no one, so it is neither logged nor counted as a displacement.
-        val displacedContexts = agentInfo?.agentContexts.orEmpty().filterNot { it.agentId == agentContext.agentId }
-        // A live registrant's path can be taken over only by an agent of the same auth identity: a redeploy reclaims
-        // its paths at once, but one identity cannot silently replace another's metrics. With no agent auth, or only
-        // the legacy shared token, every agent has the same identity, so nothing changes there. A registrant that is
-        // no longer valid can always be replaced.
-        if (agentInfo != null && agentInfo.identityName != identityName && displacedContexts.any { it.isValid() }) {
-          val reason =
-            "Path /$path is served by identity '${agentInfo.identityName}'; " +
-              "identity '$identityName' cannot take it over"
-          return rejectPath(agentContext, path, reason, HELD_BY_ANOTHER_IDENTITY)
-        }
+        // Every other agent on the path is displaced; re-registering its own path is neither logged nor counted.
+        val displacedContexts = others
         if (displacedContexts.isNotEmpty()) {
           logger.info { "Overwriting path /$path for ${displacedContexts.first()}" }
           proxy.metrics { agentDisplacementCount.inc() }

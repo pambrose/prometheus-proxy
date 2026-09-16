@@ -60,13 +60,14 @@ Use cases:
 - **High availability** -- multiple agents serving the same endpoints
 - **Rolling upgrades** -- new agent registers before old one deregisters
 
-!!! warning "Any authorized identity can join"
+!!! note "A consolidated path belongs to one identity"
 
-    The rule that stops another identity from taking over a path applies only to non-consolidated
-    paths. With [per-agent identities](security/index.md#per-agent-identities-and-path-authorization),
-    any agent whose identity's path patterns include a consolidated path can join it, and its output
-    is merged into every scrape of that path. An agent that never answers holds each scrape until it
-    times out. Keep identities' path patterns from overlapping on paths you consolidate.
+    With [per-agent identities](security/index.md#per-agent-identities-and-path-authorization), a
+    consolidated path records the identity that registered it, and only agents presenting that identity
+    may join. Another identity's registration is rejected and retried, so it joins once the agents
+    serving the path disconnect. Agents that share an identity -- all of them, when agent auth is off --
+    can still join each other's consolidated paths, and a joining agent's output is merged into every
+    scrape of the path, so one that never answers holds each scrape until it times out.
 
 ## gRPC Reflection
 

@@ -52,7 +52,12 @@ import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.decrementAndFetch
 import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.concurrent.atomics.update
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TestTimeSource
+import kotlin.time.TimeSource
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 
@@ -62,6 +67,18 @@ class AgentPathManagerTest : StringSpec() {
   // whether a configured filter actually attached to a path.
   private suspend fun captureRegistrationLogs(block: suspend () -> Unit): List<String> =
     captureLogs<AgentPathManager> { block() }.map { it.formattedMessage }.filter { it.startsWith("Registered ") }
+
+  // Runs [action] [times] times, advancing this clock by [step] before each -- how a retry or reconcile loop ticks.
+  private suspend fun TestTimeSource.tick(
+    times: Int,
+    step: Duration,
+    action: suspend () -> Unit,
+  ) {
+    repeat(times) {
+      this += step
+      action()
+    }
+  }
 
   // [filtersHocon] is spliced into `agent.filters` (empty means no filters), which is what makes the
   // path manager compile and attach a MetricFilter to a matching registered path.
@@ -488,10 +505,14 @@ class AgentPathManagerTest : StringSpec() {
     }
 
     // A manager whose proxy rejects discovered path d_metrics for cause, and accepts every other registration.
-    fun managerRejectingDiscovered(cause: PathRejectionCause): Pair<AgentPathManager, AgentGrpcService> {
+    // [clock] is what the retry backoff is measured on, so a test can advance it instead of waiting.
+    fun managerRejectingDiscovered(
+      cause: PathRejectionCause,
+      clock: TimeSource = TimeSource.Monotonic,
+    ): Pair<AgentPathManager, AgentGrpcService> {
       val agent = createMockAgent()
       rejectPath(agent.grpcService, "d_metrics", cause)
-      return AgentPathManager(agent) to agent.grpcService
+      return AgentPathManager(agent, clock) to agent.grpcService
     }
 
     val dMetrics: List<DiscoveredPath> = [DiscoveredPath("d", "d_metrics", "http://d/m", "{}")]
@@ -507,17 +528,33 @@ class AgentPathManagerTest : StringSpec() {
     }
 
     "reconcile should retry a discovered path rejected for a cause that can clear, and register it once accepted" {
-      val (manager, grpc) = managerRejectingDiscovered(PathRejectionCause.HELD_BY_ANOTHER_IDENTITY)
+      val clock = TestTimeSource()
+      val (manager, grpc) = managerRejectingDiscovered(PathRejectionCause.HELD_BY_ANOTHER_IDENTITY, clock)
 
-      repeat(3) { manager.reconcileDiscoveredPaths(dMetrics) }
+      // The reconcile loop polls every agent.discovery.reconcileIntervalSecs, 30s by default.
+      clock.tick(3, 30.seconds) { manager.reconcileDiscoveredPaths(dMetrics) }
       coVerify(exactly = 3) { grpc.registerPathOnProxy("d_metrics", any(), any(), any()) }
 
       coEvery { grpc.registerPathOnProxy("d_metrics", any(), any(), any()) } returns registerPathResponse {
         valid = true
         pathId = 2L
       }
+      // Three rejections in, the next retry waits 60s rather than coming on the very next poll.
+      clock += 60.seconds
       manager.reconcileDiscoveredPaths(dMetrics)
       manager["d_metrics"].shouldNotBeNull()
+    }
+
+    // Reconciling re-registered a rejected path on every poll, so a conflict that lasted cost the proxy a round trip
+    // every interval for as long as it lasted.
+    "reconcile should back off a discovered path the proxy keeps rejecting" {
+      val clock = TestTimeSource()
+      val (manager, grpc) = managerRejectingDiscovered(PathRejectionCause.HELD_BY_ANOTHER_IDENTITY, clock)
+
+      clock.tick(6, 30.seconds) { manager.reconcileDiscoveredPaths(dMetrics) }
+
+      // Tried on the first three polls, then once more at 150s -- four times over six polls, not six.
+      coVerify(exactly = 4) { grpc.registerPathOnProxy("d_metrics", any(), any(), any()) }
     }
 
     // A rejection is the proxy's answer, not a fault, so it is logged once and without a stack trace. A retryable one
@@ -936,6 +973,7 @@ class AgentPathManagerTest : StringSpec() {
     // live agent of another identity serves it, a rejection that clears while the agent stays connected.
     fun managerRejectingMetrics2(
       cause: PathRejectionCause = PathRejectionCause.HELD_BY_ANOTHER_IDENTITY,
+      clock: TimeSource = TimeSource.Monotonic,
     ): Pair<AgentPathManager, AgentGrpcService> {
       val (mockAgent, mockGrpcService) = agentWithStaticPaths("metrics1", "metrics2")
       coEvery { mockGrpcService.registerPathOnProxy(any(), any(), any(), any()) } returns registerPathResponse {
@@ -943,7 +981,7 @@ class AgentPathManagerTest : StringSpec() {
         pathId = 1L
       }
       rejectPath(mockGrpcService, "metrics2", cause)
-      return AgentPathManager(mockAgent) to mockGrpcService
+      return AgentPathManager(mockAgent, clock) to mockGrpcService
     }
 
     fun acceptMetrics2(grpcService: AgentGrpcService) {
@@ -982,6 +1020,51 @@ class AgentPathManagerTest : StringSpec() {
 
       manager["metrics2"].shouldBeNull()
       manager.hasRejectedStaticPaths.shouldBeTrue()
+    }
+
+    // A conflict that lasts used to cost the proxy a round trip for the path on every tick of the retry loop, for the
+    // life of the connection. The first retry still comes one interval later; each further rejection doubles the wait.
+    "retryRejectedStaticPaths should back off while the proxy keeps rejecting a static path" {
+      val clock = TestTimeSource()
+      val (manager, grpcService) = managerRejectingMetrics2(clock = clock)
+      manager.registerPaths()
+
+      // Ten ticks of the retry loop, which runs every agent.internal.rejectedPathRetrySecs, 10s by default.
+      clock.tick(10, 10.seconds) { manager.retryRejectedStaticPaths() }
+
+      // The connect attempt, then retries at 10s, 20s, 40s and 80s -- five round trips over ten ticks, not eleven.
+      coVerify(exactly = 5) { grpcService.registerPathOnProxy("metrics2", any(), any(), any()) }
+      manager.hasRejectedStaticPaths.shouldBeTrue()
+    }
+
+    // Doubling has to stop somewhere, or a conflict lasting a day would leave the path unregistered for hours after
+    // it cleared.
+    "a static path's retry wait should stop doubling at the cap" {
+      val clock = TestTimeSource()
+      val (manager, grpcService) = managerRejectingMetrics2(clock = clock)
+      manager.registerPaths()
+
+      // Well past the point where the doubling reaches the cap.
+      clock.tick(20, 5.minutes) { manager.retryRejectedStaticPaths() }
+
+      // Once the wait is capped every tick this long is due, so all twenty retry, plus the connect attempt.
+      coVerify(exactly = 21) { grpcService.registerPathOnProxy("metrics2", any(), any(), any()) }
+    }
+
+    // The wait belongs in the log: an operator reading a repeated rejection needs to know it is still coming back.
+    "a repeated static rejection should log when the path will be retried" {
+      val clock = TestTimeSource()
+      val (manager, _) = managerRejectingMetrics2(clock = clock)
+
+      val events =
+        captureLogs<AgentPathManager>(Level.DEBUG) {
+          manager.registerPaths()
+          clock.tick(2, 10.seconds) { manager.retryRejectedStaticPaths() }
+        }.filter { "/metrics2" in it.formattedMessage }
+
+      // The first rejection is retried on the next tick, so it promises no particular wait; the repeat names one.
+      events.first().formattedMessage shouldContain "retrying:"
+      events.any { "retrying in 10s" in it.formattedMessage }.shouldBeTrue()
     }
 
     // Unlike registerPaths at connect, a retry isolates a transport failure: the connection's other tasks already end

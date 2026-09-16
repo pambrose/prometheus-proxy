@@ -103,8 +103,9 @@ enforces, on every path registration, that the requested path matches one of the
 Patterns are single-segment globs: `*` matches any run of characters and `?` matches exactly one
 (e.g. `team_a_*`). Because authorization is per-identity-per-path,
 [consolidated mode](../advanced.md#consolidated-mode) still works as long as each participating
-agent's identity permits the shared path. The flip side is that any identity whose patterns include a
-consolidated path can join it, even while another identity's agents serve it.
+agent's identity permits the shared path. A consolidated path belongs to the identity that registered
+it, though: another identity whose patterns match is refused while agents still serve the path, and
+joins only once they are gone.
 
 !!! note "Config-file only"
 

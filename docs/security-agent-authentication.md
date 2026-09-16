@@ -71,11 +71,12 @@ context.
 - **Path takeover within one identity.** A non-consolidated registration still replaces a live owner that
   connected with the same identity, which keeps redeploys working. Unauthenticated agents, and every holder of the
   legacy token, share one identity, so any of them can still take over another's path. See remediation item 4.
-- **Consolidated paths are open to any authorized identity.** The same-identity rule covers only non-consolidated
-  paths. An agent that registers with `consolidated = true` joins a consolidated path whenever its identity's path
-  patterns allow it, even while agents of another identity serve that path. Every scrape of the path then goes to it
-  too: its output is merged into the response, and an agent that never answers holds each scrape until it times out.
-  It stays on the path until it disconnects. Keep identities' path patterns from overlapping on consolidated paths.
+- **Consolidated paths within one identity.** A consolidated path now records the identity that registered it, and
+  an agent of another identity is refused while agents still serve it — but agents that share an identity can still
+  join each other's consolidated paths, and every unauthenticated agent, like every holder of the legacy token,
+  shares one. An agent that joins answers a share of every scrape of the path: its output is merged into the
+  response, and one that never answers holds each scrape until it times out. Separating those agents takes
+  per-agent identities.
 
 ## Affected code
 
@@ -125,8 +126,9 @@ The original finding is exploitable when **all** of the following hold:
    decisions driven by those metrics.
 
 In **consolidated** mode the attacker cannot displace the existing owner — the proxy rejects a consolidated /
-non-consolidated mismatch — but can still *join* a consolidated path and answer a fraction of scrape requests with
-fabricated data.
+non-consolidated mismatch — and can no longer *join* the path either, unless it holds the identity that registered
+it or the agents serving it are already gone. Where every agent shares one identity — no agent auth, or the legacy
+token — joining still answers a fraction of scrape requests with fabricated data.
 
 ## Impact
 
@@ -177,7 +179,8 @@ In rough priority order:
    its paths while one `proxy.auth` identity can no longer replace another's. Takeover between agents that share an
    identity — every unauthenticated agent, or every holder of the legacy token — is unchanged, because rejecting it
    would break redeploys; separating those agents takes per-agent identities. `agentDisplacementCount` counts each
-   takeover. Consolidated paths, which agents join rather than take over, are not covered; see Remaining gaps.
+   takeover. A consolidated path is covered by the same rule: it records the identity that registered it, and an
+   agent of another identity may join only once no valid agent still serves it.
 
 ### Implemented since the original finding
 
@@ -191,6 +194,9 @@ In rough priority order:
 - **Accurate startup warnings** (finding #6 of `docs/archive/CODE_REVIEW_SEPTEMBER_2026.md`) — the "agent port is
   unauthenticated" warning no longer treats a trust store as mutual TLS unless TLS is enabled, and the proxy and
   the agent each warn when agent tokens are configured without TLS and would be sent in cleartext.
+- **Consolidated paths bound to one identity** — a consolidated path records the identity that registered it, and an
+  agent of another identity may join only once no valid agent still serves it, closing the last way one identity
+  could put its metrics on another's path.
 
 ## References
 

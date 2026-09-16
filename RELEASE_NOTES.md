@@ -77,8 +77,9 @@ in the `agent-token` header, or the call fails with `UNAUTHENTICATED`.
 **Path takeover between identities.** With per-agent identities, an agent registering a path that a live agent
 of *another* identity already serves is now rejected, instead of silently replacing it. A redeploy under the same
 identity still reclaims its paths at once. With no agent auth, or only the shared `proxy.agentToken`, every agent
-has the same identity and nothing changes. The rule covers only non-consolidated paths: an identity whose path
-patterns include a consolidated path can still join it alongside another identity's agents.
+has the same identity and nothing changes. Consolidated paths follow the same rule: a consolidated path records the
+identity that registered it, and another identity's agents join only once the agents serving it are gone. If you run
+consolidated agents under different identities, move them onto one identity before upgrading.
 
 If you are moving agents onto per-agent identities, or moving a path from one identity to another, stop the old
 agent before starting its replacement where you can. While the old agent is connected, the new agent's registration
@@ -132,8 +133,11 @@ An agent with no static paths (discovery-only) is not failed over for path rejec
 single-endpoint agent keeps retrying its one proxy. The "Disconnected from proxy … after invalid
 response" log is now WARN rather than INFO, since it now means something needs attention.
 
-A rejected static path is retried every `agent.internal.rejectedPathRetrySecs` (default 10s) only when the
-rejection can clear. The proxy now says why it rejected a path, in a new `rejection_cause` field of its
+A rejected static path is retried only when the rejection can clear, and on a backoff: the first retry comes one
+`agent.internal.rejectedPathRetrySecs` (default 10s) after the rejection, and each further rejection doubles the
+wait, capped at five minutes. A conflict that lasts an hour now costs the proxy about a dozen round trips for the
+path instead of 360, at the price of registering up to five minutes after it clears. Discovered paths are paced
+the same way, from `agent.discovery.reconcileIntervalSecs`. The proxy now says why it rejected a path, in a new `rejection_cause` field of its
 registration response, and the agent retries only the causes that clear once a live agent holding the path
 leaves: another identity's agent serving it, or a consolidated/non-consolidated mismatch. A rejection for any
 other cause, such as a path the agent's identity isn't authorized for, is logged once and not retried, as is one
