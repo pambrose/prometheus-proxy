@@ -234,10 +234,10 @@ internal class AgentPathManager(
       }
     }
 
-  // Registers, or re-registers, one discovered path; callers MUST hold pathMutex. The proxy's rejection is recorded in
-  // discoveredRejections, and one whose cause can't clear (see RETRYABLE_CAUSES) isn't tried again until the entry's
-  // URL or labels change, it leaves the desired set and returns, or the agent reconnects. Any other failure is logged
-  // in full and retried on the next reconcile.
+  // Registers, or re-registers, one discovered path; callers MUST hold pathMutex. The failure is recorded in
+  // discoveredRejections, and a rejection whose cause can't clear (see RETRYABLE_CAUSES) isn't tried again until the
+  // entry's URL or labels change, it leaves the desired set and returns, or the agent reconnects. Any other failure
+  // is still retried on the next reconcile, and its stack trace is logged once rather than on every one.
   private suspend fun registerDiscoveredPath(
     path: String,
     entry: DiscoveredPath,
@@ -254,12 +254,16 @@ internal class AgentPathManager(
     }.onSuccess {
       discoveredRejections -= path
     }.onFailure { e ->
-      if (e is RequestFailureException) {
-        discoveredRejections[path] = DiscoveredRejection(entry.url, labels, e.retryable)
-        logRejection(PathSource.DISCOVERED, path, e, repeat = prior != null)
-      } else {
+      val failure = "${e::class.simpleName}: ${e.message}"
+      val repeat = prior?.failure == failure
+      discoveredRejections[path] =
+        DiscoveredRejection(entry.url, labels, retryable = e !is RequestFailureException || e.retryable, failure)
+      if (e is RequestFailureException)
+        logRejection(PathSource.DISCOVERED, path, e, repeat)
+      else if (repeat)
+        logger.debug { "Still failing to register discovered path /$path: $failure" }
+      else
         logger.warn(e) { "Failed to register discovered path /$path" }
-      }
     }
   }
 
@@ -314,6 +318,17 @@ internal class AgentPathManager(
     }
   }
 
+  // The paths discovery registered, for the agent's debug page: toPlainText lists only the static config, so a
+  // discovery-only agent showed nothing at all.
+  fun discoveredToPlainText(): String {
+    val discovered = pathContextMap.values.filter { it.source == PathSource.DISCOVERED }.sortedBy { it.path }
+    if (discovered.isEmpty())
+      return "Discovered Paths: none"
+    val maxPath = discovered.maxOf { it.path.length }
+    return "Discovered Paths:\n" +
+      discovered.joinToString("\n") { "/${it.path.padEnd(maxPath)} ${sanitizeUrl(it.url)}" }
+  }
+
   fun toPlainText(): String {
     val maxName = pathConfigs.maxOfOrNull { it.quotedName.length } ?: 0
     val maxPath = pathConfigs.maxOfOrNull { it.path.length } ?: 0
@@ -334,10 +349,13 @@ internal class AgentPathManager(
       get() = rejectionCause in RETRYABLE_CAUSES
   }
 
+  // The last failure to register a discovered entry. [retryable] says whether the entry stays in the desired set;
+  // [failure] identifies the failure, so an identical repeat is logged at DEBUG instead of a fresh stack trace.
   private data class DiscoveredRejection(
     val url: String,
     val labels: String,
     val retryable: Boolean,
+    val failure: String,
   )
 
   // Strongly-typed view of a single `agent.pathConfigs` entry, replacing the prior magic-string map.

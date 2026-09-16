@@ -20,6 +20,7 @@ package io.prometheus.agent.discovery
 
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.ints.shouldBeGreaterThanOrEqual
+import io.kotest.matchers.shouldBe
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -43,6 +44,18 @@ class PathDiscoveryServiceTest : StringSpec() {
       service.reconcileOnce()
 
       coVerify(exactly = 0) { pathManager.reconcileDiscoveredPaths(any()) }
+    }
+
+    "skippedEntries should come from the source" {
+      val skipped = [DiscoveredPath("bad", "", "http://bad.local/metrics", "{}")]
+      val source =
+        object : PathDiscoverySource {
+          override fun read(): List<DiscoveredPath> = emptyList()
+
+          override val skippedEntries: List<DiscoveredPath> get() = skipped
+        }
+
+      PathDiscoveryService(mockk(relaxed = true), source, 1).skippedEntries shouldBe skipped
     }
 
     "a successful read reconciles the desired set" {

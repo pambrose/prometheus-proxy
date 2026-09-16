@@ -97,6 +97,7 @@ and is shown verbatim on the [Example Configs](../examples.md) page.
 | File missing / unreadable / malformed   | Keeps the last-known-good set (a read failure drops nothing) |
 | Valid but empty file                    | Removes all discovered paths                                |
 | Entry with a blank `path` or `url`      | Skipped when the file is read, reported once until the set of skipped entries changes; the file's other entries still apply |
+| Seeing what discovery did               | The agent's `/debug` page lists the discovered paths it registered and the entries it skipped |
 | `pathConfigs` empty                     | Discovery-only — every path comes from the file             |
 | Proxy rejects a discovered path         | Logged once; retried each poll only if the rejection can clear, otherwise tried again when the entry changes or the agent reconnects |
 

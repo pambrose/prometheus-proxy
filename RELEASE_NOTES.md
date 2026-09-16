@@ -165,6 +165,11 @@ interval as their deadline, capped at the unary deadline.
   agent ID into every later call. It now cancels the call, the same as a missing header.
 - **A connect timeout from Ktor's CIO engine was reported as 503** instead of 408, because its exception
   type is a `ConnectException` rather than one of the recognized timeout types.
+- **A repeating failure to register a discovered path logged a full stack trace on every reconcile.** Only a
+  proxy rejection was recorded, so a transport error printed a fresh trace every poll for as long as it lasted.
+  The first is still logged in full, an identical repeat at DEBUG, and the path is still retried.
+- **The agent's `/debug` page now shows what discovery did** -- the paths it registered and the entries it
+  skipped. It listed only the static `pathConfigs`, so a discovery-only agent showed nothing at all.
 - **A whitespace-only `path` or `url` was accepted where an empty one was refused.** A `path` of `"   "`
   registered on the proxy and could never be scraped, since the scrape route answers a blank path with a 404.
   The guards now require a non-blank value, and a blank `pathConfigs` entry is skipped at startup, with a

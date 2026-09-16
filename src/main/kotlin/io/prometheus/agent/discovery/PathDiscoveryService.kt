@@ -19,6 +19,7 @@ package io.prometheus.agent.discovery
 import com.pambrose.common.util.runCatchingCancellable
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.agent.AgentPathManager
+import io.prometheus.agent.discovery.DiscoveredPath
 import kotlinx.coroutines.delay
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -43,6 +44,9 @@ internal class PathDiscoveryService(
   private val source: PathDiscoverySource,
   private val intervalSecs: Int,
 ) {
+  // The entries the last read dropped as unusable; see PathDiscoverySource.skippedEntries.
+  val skippedEntries: List<DiscoveredPath> get() = source.skippedEntries
+
   /**
    * Polls and reconciles until [keepRunning] returns false.
    *
