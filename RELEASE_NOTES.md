@@ -165,6 +165,9 @@ interval as their deadline, capped at the unary deadline.
   agent ID into every later call. It now cancels the call, the same as a missing header.
 - **A connect timeout from Ktor's CIO engine was reported as 503** instead of 408, because its exception
   type is a `ConnectException` rather than one of the recognized timeout types.
+- **A discovery entry with a blank `path` or `url` logged a stack trace on every reconcile.** It parses, but
+  could never register, so it failed every poll for as long as the file kept it. It is now skipped where the
+  file is read -- the file's other entries still apply -- and reported once rather than every 30 seconds.
 - **A discovered path could get stuck forever** when the proxy rejected its unregister, for example after
   another agent took it over. The agent kept the stale entry, and a changed URL never applied.
 - **`bin/docker-agent.sh` and `bin/docker-proxy.sh` ran Docker with an empty image tag**, because they read

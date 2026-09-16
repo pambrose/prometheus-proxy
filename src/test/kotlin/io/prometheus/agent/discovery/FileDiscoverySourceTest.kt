@@ -18,11 +18,13 @@
 
 package io.prometheus.agent.discovery
 
+import ch.qos.logback.classic.Level
 import com.typesafe.config.ConfigException
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
+import io.prometheus.common.captureLogs
 import java.io.File
 
 class FileDiscoverySourceTest : StringSpec() {
@@ -79,6 +81,56 @@ class FileDiscoverySourceTest : StringSpec() {
 
     "an element missing a required field throws" {
       shouldThrow<ConfigException> { FileDiscoverySource(writeTemp("""paths = [ { name = "a" } ]""")).read() }
+    }
+
+    // A blank path or url parses, but could never register: doRegisterPath requires both. Left in the desired set it
+    // threw on every reconcile, logging a stack trace each time, so it is dropped where the file is read.
+    "an entry with a blank path or url is skipped, and the rest of the file still reads" {
+      val path =
+        writeTemp(
+          """
+          paths = [
+            { path = "", url = "http://app1.local/metrics" }
+            { path = "app2_metrics", url = "" }
+            { path = "app3_metrics", url = "   " }
+            { path = "good_metrics", url = "http://good.local/metrics" }
+          ]
+          """.trimIndent(),
+        )
+
+      FileDiscoverySource(path).read().map { it.path } shouldBe ["good_metrics"]
+    }
+
+    "a file that keeps the same bad entries should be reported once, not on every read" {
+      val path =
+        writeTemp(
+          """
+          paths = [
+            { path = "", url = "http://app1.local/metrics" }
+            { path = "good_metrics", url = "http://good.local/metrics" }
+          ]
+          """.trimIndent(),
+        )
+      val source = FileDiscoverySource(path)
+
+      val events = captureLogs<FileDiscoverySource> { repeat(3) { source.read() } }
+
+      events.count { it.level == Level.WARN } shouldBe 1
+    }
+
+    "a change to which entries are bad should be reported again" {
+      val file = File.createTempFile("discovery", ".conf").apply { deleteOnExit() }
+      file.writeText("""paths = [ { path = "", url = "http://app1.local/metrics" } ]""")
+      val source = FileDiscoverySource(file.absolutePath)
+
+      val events =
+        captureLogs<FileDiscoverySource> {
+          source.read()
+          file.writeText("""paths = [ { path = "app2_metrics", url = "" } ]""")
+          source.read()
+        }
+
+      events.count { it.level == Level.WARN } shouldBe 2
     }
 
     "an empty file path is rejected" {
