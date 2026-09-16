@@ -50,8 +50,10 @@ class AgentRejectedPathRetryTest : StringSpec() {
 
       val proxy = startProxy(args = ["--agent_port", "$AGENT_PORT"], proxyPort = HTTP_PORT, configArgs = CONFIG_ARG)
       val agents = mutableListOf<Agent>()
+      // One capture of the proxy's loggers: the denial comes from ProxyServiceImpl and the takeover rejection
+      // from ProxyPathManager.
       val proxyWarnings =
-        captureLogs<ProxyServiceImpl>(Level.WARN) {
+        captureLogs(PROXY_LOGGERS, Level.WARN) {
           try {
             val agentA = startAgentWithToken(TOKEN_A).also { agents += it }
             agentA.awaitInitialConnection(10.seconds).shouldBeTrue()
@@ -60,8 +62,8 @@ class AgentRejectedPathRetryTest : StringSpec() {
             val agentB = startAgentWithToken(TOKEN_B).also { agents += it }
             agentB.awaitInitialConnection(10.seconds).shouldBeTrue()
             eventually(10.seconds) { ownerOf(proxy, B_PATH) shouldBe agentB.agentId }
-            // team_b may register shared_metrics, but team_a's live agent serves it, so agent B's registration of it
-            // was rejected.
+            // team_b may register shared_metrics, but team_a's live agent serves it, so agent B's registration of
+            // it was rejected.
             ownerOf(proxy, SHARED_PATH) shouldBe agentA.agentId
 
             agentA.stopSync(10.seconds)
@@ -77,6 +79,8 @@ class AgentRejectedPathRetryTest : StringSpec() {
 
       // team_b may never register a_metrics, so agent B's attempt at connect is its only one.
       proxyWarnings.deniedCount("team_b", A_PATH) shouldBe 1
+      // However often agent B retried shared_metrics, the proxy reported that conflict once.
+      proxyWarnings.count { "cannot take it over" in it.formattedMessage } shouldBe 1
     }
 
     "a discovered path the agent's identity may never register should reach the proxy once" {
@@ -142,6 +146,8 @@ class AgentRejectedPathRetryTest : StringSpec() {
     private const val B_PATH = "b_metrics"
     private const val DISCOVERED_DENIED_PATH = "a_discovered"
     private const val TARGET_URL = "http://localhost:9100/metrics"
+
+    private const val PROXY_LOGGERS = "io.prometheus.proxy"
 
     private val CONFIG_ARG = ["--config", "config/test-configs/path-retry.conf"]
 

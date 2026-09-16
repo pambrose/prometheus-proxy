@@ -105,6 +105,19 @@ internal class ProxyPathManager(
       ?: addValidatedPath(path, labels, agentContext, sanitizeUrl(targetUrl), pathSource, identityName)
   }
 
+  // Logs why a path was refused and returns the rejection. The first time this connection is told a cause for a
+  // path it is logged at WARN; an identical repeat -- an agent retrying a rejection that can clear -- at DEBUG, so
+  // a lasting conflict is reported once rather than on every retry. Mirrors AgentPathManager.logRejection.
+  private fun rejectPath(
+    agentContext: AgentContext,
+    path: String,
+    reason: String,
+    cause: PathRejectionCause,
+  ): PathRejection {
+    if (agentContext.recordRejection(path, cause)) logger.warn { reason } else logger.debug { reason }
+    return PathRejection(reason, cause)
+  }
+
   @Suppress("ReturnCount")
   private fun addValidatedPath(
     path: String,
@@ -121,8 +134,7 @@ internal class ProxyPathManager(
       // cleanup sweeps, so reject it and let the agent re-register on reconnect (finding 7).
       if (agentContext.isNotValid()) {
         val reason = "Agent context ${agentContext.agentId} was invalidated during registration of /$path"
-        logger.warn { reason }
-        return PathRejection(reason, INVALID_AGENT)
+        return rejectPath(agentContext, path, reason, INVALID_AGENT)
       }
 
       val agentInfo = pathMap[path]
@@ -132,8 +144,7 @@ internal class ProxyPathManager(
         } else {
           if (agentContext.consolidated != agentInfo.isConsolidated) {
             val reason = "Consolidated agent rejected for non-consolidated path /$path"
-            logger.error { reason }
-            return PathRejection(reason, CONSOLIDATION_MISMATCH)
+            return rejectPath(agentContext, path, reason, CONSOLIDATION_MISMATCH)
           }
           // An agent re-registering a path it already backs (a path listed twice in its config) replaces its own
           // entry: a second copy would send it two requests per scrape, and Prometheus rejects the duplicate samples.
@@ -148,8 +159,7 @@ internal class ProxyPathManager(
       } else {
         if (agentInfo != null && agentInfo.isConsolidated) {
           val reason = "Non-consolidated agent rejected for consolidated path /$path"
-          logger.error { reason }
-          return PathRejection(reason, CONSOLIDATION_MISMATCH)
+          return rejectPath(agentContext, path, reason, CONSOLIDATION_MISMATCH)
         }
         // An agent re-registering its own path displaces no one, so it is neither logged nor counted as a displacement.
         val displacedContexts = agentInfo?.agentContexts.orEmpty().filterNot { it.agentId == agentContext.agentId }
@@ -161,8 +171,7 @@ internal class ProxyPathManager(
           val reason =
             "Path /$path is served by identity '${agentInfo.identityName}'; " +
               "identity '$identityName' cannot take it over"
-          logger.warn { reason }
-          return PathRejection(reason, HELD_BY_ANOTHER_IDENTITY)
+          return rejectPath(agentContext, path, reason, HELD_BY_ANOTHER_IDENTITY)
         }
         if (displacedContexts.isNotEmpty()) {
           logger.info { "Overwriting path /$path for ${displacedContexts.first()}" }
@@ -185,6 +194,7 @@ internal class ProxyPathManager(
         }
       }
 
+      agentContext.forgetRejection(path)
       if (!isTestMode) logger.info { "Added path /$path for $agentContext" }
       // Inside synchronized(pathMap) on purpose: tryEmit never suspends or blocks, so publishing here
       // cannot stall a registration, and the event is emitted only once the map actually reflects it.

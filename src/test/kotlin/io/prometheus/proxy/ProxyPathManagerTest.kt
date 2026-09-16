@@ -18,6 +18,8 @@
 
 package io.prometheus.proxy
 
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.spi.ILoggingEvent
 import com.google.protobuf.LazyStringArrayList
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
@@ -33,8 +35,10 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import io.prometheus.Proxy
+import io.prometheus.common.captureLogs
 import io.prometheus.grpc.PathRejectionCause
 import io.prometheus.grpc.RegisterAgentRequest
+import io.prometheus.grpc.registerAgentRequest
 import kotlin.concurrent.atomics.AtomicLong
 import kotlin.concurrent.atomics.incrementAndFetch
 import io.kotest.matchers.maps.shouldHaveSize as mapShouldHaveSize
@@ -62,6 +66,20 @@ class ProxyPathManagerTest : StringSpec() {
     every { context.desc } returns if (consolidated) "consolidated " else ""
     return context
   }
+
+  // A real context, which remembers the rejections it is told -- what makes a repeat log at DEBUG. consolidated
+  // has a private set, so it is assigned the way an agent assigns it at registration.
+  private fun createAgentContext(consolidated: Boolean = false): AgentContext =
+    AgentContext("remote-${agentIdCounter.incrementAndFetch()}").apply {
+      assignProperties(registerAgentRequest { this.consolidated = consolidated })
+    }
+
+  // The rejections ProxyPathManager logged during [block] whose message contains [marker], at every level.
+  private fun rejectionLogs(
+    marker: String,
+    block: () -> Unit,
+  ): List<ILoggingEvent> =
+    captureLogs<ProxyPathManager>(Level.DEBUG) { block() }.filter { marker in it.formattedMessage }
 
   // Runs the manager's proxy.metrics { } blocks against [target], so a test can verify which metric calls it made.
   private fun routeMetrics(
@@ -227,6 +245,77 @@ class ProxyPathManagerTest : StringSpec() {
       manager.addPath("/metrics", """{"job":"test"}""", newcomer, identityName = "team_b").shouldBeNull()
 
       manager.getAgentContextInfo("/metrics")?.agentContexts?.map { it.agentId } shouldBe [newcomer.agentId]
+    }
+
+    // An agent retries a rejection that can clear -- here a path another identity's live agent holds -- every
+    // rejectedPathRetrySecs, so the proxy reports it once and logs the repeats at DEBUG.
+    "a rejection repeated for the same path and agent should be logged once" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val owner = AgentContext("remote-owner")
+      val intruder = AgentContext("remote-intruder")
+      manager.addPath("/metrics", """{"job":"test"}""", owner, identityName = "team_a").shouldBeNull()
+
+      val events =
+        rejectionLogs("cannot take it over") {
+          repeat(3) { manager.addPath("/metrics", """{"job":"test"}""", intruder, identityName = "team_b") }
+        }
+
+      events.count { it.level == Level.WARN } shouldBe 1
+      events.count { it.level == Level.DEBUG } shouldBe 2
+    }
+
+    // The record lives on the agent's connection, so another agent -- or the same agent reconnected, which gets a new
+    // context -- is told in its own right.
+    "a rejection of the same path by another agent should be logged again" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val owner = AgentContext("remote-owner")
+      manager.addPath("/metrics", """{"job":"test"}""", owner, identityName = "team_a").shouldBeNull()
+
+      val events =
+        rejectionLogs("cannot take it over") {
+          manager.addPath("/metrics", """{"job":"test"}""", AgentContext("remote-1"), identityName = "team_b")
+          manager.addPath("/metrics", """{"job":"test"}""", AgentContext("remote-2"), identityName = "team_b")
+        }
+
+      events.count { it.level == Level.WARN } shouldBe 2
+    }
+
+    // A conflict that clears and later re-forms is news again, so registering the path forgets its rejection.
+    "a rejection after the agent registered the path should be logged again" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val owner = AgentContext("remote-owner")
+      val intruder = AgentContext("remote-intruder")
+      manager.addPath("/metrics", """{"job":"test"}""", owner, identityName = "team_a").shouldBeNull()
+
+      val events =
+        rejectionLogs("cannot take it over") {
+          manager.addPath("/metrics", """{"job":"test"}""", intruder, identityName = "team_b")
+          manager.removePath("/metrics", owner.agentId)
+          manager.addPath("/metrics", """{"job":"test"}""", intruder, identityName = "team_b").shouldBeNull()
+          manager.removePath("/metrics", intruder.agentId)
+          manager.addPath("/metrics", """{"job":"test"}""", AgentContext("remote-next"), identityName = "team_a")
+            .shouldBeNull()
+          manager.addPath("/metrics", """{"job":"test"}""", intruder, identityName = "team_b")
+        }
+
+      events.count { it.level == Level.WARN } shouldBe 2
+    }
+
+    // A mismatch is an operator's config conflict between agents, like a takeover, and it clears when they leave.
+    "a consolidation mismatch should be logged at WARN, then DEBUG, never ERROR" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val plainAgent = createAgentContext(consolidated = false)
+      val joiner = createAgentContext(consolidated = true)
+      manager.addPath("/metrics", """{"job":"test"}""", plainAgent).shouldBeNull()
+
+      val events =
+        rejectionLogs("Consolidated agent rejected") {
+          repeat(3) { manager.addPath("/metrics", """{"job":"test"}""", joiner) }
+        }
+
+      events.count { it.level == Level.ERROR } shouldBe 0
+      events.count { it.level == Level.WARN } shouldBe 1
+      events.count { it.level == Level.DEBUG } shouldBe 2
     }
 
     // Tests consolidated path behavior: when multiple agents register the same path with
