@@ -23,17 +23,17 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
-import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
-import io.prometheus.common.Messages.EMPTY_PATH_MSG
+import io.prometheus.common.Messages.BLANK_AGENT_ID_MSG
+import io.prometheus.common.Messages.BLANK_PATH_MSG
 
 class ConstantsTest : StringSpec() {
   init {
-    "EMPTY_AGENT_ID_MSG should have expected value" {
-      EMPTY_AGENT_ID_MSG shouldBe "Empty agentId"
+    "BLANK_AGENT_ID_MSG should have expected value" {
+      BLANK_AGENT_ID_MSG shouldBe "Blank agentId"
     }
 
-    "EMPTY_PATH_MSG should have expected value" {
-      EMPTY_PATH_MSG shouldBe "Empty path"
+    "BLANK_PATH_MSG should have expected value" {
+      BLANK_PATH_MSG shouldBe "Blank path"
     }
 
     "EMPTY_INSTANCE should be a protobuf Empty instance" {

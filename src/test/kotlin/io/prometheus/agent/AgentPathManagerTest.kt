@@ -147,6 +147,28 @@ class AgentPathManagerTest : StringSpec() {
       coVerify { agent.grpcService.registerPathOnProxy("health", "{}", any(), any()) }
     }
 
+    // A whitespace path registers on the proxy but can never be scraped: the scrape route answers a blank path
+    // with a 404, so it is refused here, where an empty one already is.
+    "registerPath should throw when path or url is blank" {
+      val agent = createMockAgent()
+      val manager = AgentPathManager(agent)
+
+      shouldThrow<IllegalArgumentException> {
+        manager.registerPath("   ", "http://localhost:$PROXY_HTTP_PORT/metrics")
+      }.message shouldContain "Blank path"
+
+      shouldThrow<IllegalArgumentException> { manager.registerPath("metrics", "   ") }
+        .message shouldContain "Blank URL"
+    }
+
+    "unregisterPath should throw when path is blank" {
+      val agent = createMockAgent()
+      val manager = AgentPathManager(agent)
+
+      shouldThrow<IllegalArgumentException> { manager.unregisterPath("   ") }
+        .message shouldContain "Blank path"
+    }
+
     "registerPath should throw when path is empty" {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
@@ -155,7 +177,7 @@ class AgentPathManagerTest : StringSpec() {
         manager.registerPath("", "http://localhost:$PROXY_HTTP_PORT/metrics")
       }
 
-      exception.message shouldContain "Empty path"
+      exception.message shouldContain "Blank path"
     }
 
     "registerPath should throw when url is empty" {
@@ -166,7 +188,7 @@ class AgentPathManagerTest : StringSpec() {
         manager.registerPath("metrics", "")
       }
 
-      exception.message shouldContain "Empty URL"
+      exception.message shouldContain "Blank URL"
     }
 
     "unregisterPath should remove path from map" {
@@ -218,7 +240,7 @@ class AgentPathManagerTest : StringSpec() {
         manager.unregisterPath("")
       }
 
-      exception.message shouldContain "Empty path"
+      exception.message shouldContain "Blank path"
     }
 
     "unregisterPath should not throw when path not in map" {
@@ -875,6 +897,22 @@ class AgentPathManagerTest : StringSpec() {
       every { mockAgent.isTestMode } returns true
       every { mockAgent.agentId } returns "test-agent"
       return mockAgent to mockGrpcService
+    }
+
+    // A blank entry in static pathConfigs is dropped at load: registerPaths does not catch the require(), so letting
+    // it through would fail the connect attempt and reconnect-loop the agent over one config typo.
+    "a blank static pathConfigs entry should be dropped, and the rest still register" {
+      val (mockAgent, mockGrpcService) = agentWithStaticPaths("   ", "metrics2")
+      coEvery { mockGrpcService.registerPathOnProxy(any(), any(), any(), any()) } returns registerPathResponse {
+        valid = true
+        pathId = 1L
+      }
+      val manager = AgentPathManager(mockAgent)
+
+      manager.registerPaths()
+
+      manager["metrics2"].shouldNotBeNull()
+      coVerify(exactly = 1) { mockGrpcService.registerPathOnProxy(any(), any(), any(), any()) }
     }
 
     "registerPaths should register the remaining paths when the proxy rejects one" {

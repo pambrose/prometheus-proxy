@@ -117,6 +117,21 @@ class ProxyPathManagerTest : StringSpec() {
         "http://***@target:9100/metrics?token=***"
     }
 
+    "addPath should throw when path is blank" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+
+      shouldThrow<IllegalArgumentException> {
+        manager.addPath("   ", """{"job":"test"}""", createMockAgentContext())
+      }.message shouldContain "Blank path"
+    }
+
+    "removePath should throw when path is blank" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+
+      shouldThrow<IllegalArgumentException> { manager.removePath("   ", "agent-1") }
+        .message shouldContain "Blank path"
+    }
+
     "addPath should throw when path is empty" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
@@ -126,7 +141,7 @@ class ProxyPathManagerTest : StringSpec() {
         manager.addPath("", """{"job":"test"}""", context)
       }
 
-      exception.message shouldContain "Empty path"
+      exception.message shouldContain "Blank path"
     }
 
     // The scrape route is registered as get("/*"), which matches exactly one path segment, so a
@@ -383,7 +398,7 @@ class ProxyPathManagerTest : StringSpec() {
         manager.removePath("", "agent-123")
       }
 
-      exception.message shouldContain "Empty path"
+      exception.message shouldContain "Blank path"
     }
 
     "removePath should throw when agentId is empty" {
@@ -394,7 +409,7 @@ class ProxyPathManagerTest : StringSpec() {
         manager.removePath("/metrics", "")
       }
 
-      exception.message shouldContain "Empty agentId"
+      exception.message shouldContain "Blank agentId"
     }
 
     // Tests partial removal from a consolidated path group. When one agent disconnects,
@@ -840,7 +855,7 @@ class ProxyPathManagerTest : StringSpec() {
         manager.removeFromPathManager("", "test")
       }
 
-      exception.message shouldContain "Empty agentId"
+      exception.message shouldContain "Blank agentId"
     }
 
     "removeFromPathManager should handle missing agent context gracefully" {

@@ -34,8 +34,8 @@ import io.grpc.ManagedChannel
 import io.prometheus.Agent
 import io.prometheus.agent.AgentOptions.Companion.DEFAULT_GRPC_PORT
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
-import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
-import io.prometheus.common.Messages.EMPTY_PATH_MSG
+import io.prometheus.common.Messages.BLANK_AGENT_ID_MSG
+import io.prometheus.common.Messages.BLANK_PATH_MSG
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.Utils.logStreamFailure
 import io.prometheus.common.Utils.HostPort
@@ -347,7 +347,7 @@ internal class AgentGrpcService(
   suspend fun registerAgent(initialConnectionLatch: CountDownLatch) {
     val request =
       registerAgentRequest {
-        require(agent.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
+        require(agent.agentId.isNotBlank()) { BLANK_AGENT_ID_MSG }
         agentId = agent.agentId
         launchId = agent.launchId
         agentName = agent.agentName
@@ -376,7 +376,7 @@ internal class AgentGrpcService(
   suspend fun pathMapSize(): Int =
     unaryStub().pathMapSize(
       pathMapSizeRequest {
-        require(agent.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
+        require(agent.agentId.isNotBlank()) { BLANK_AGENT_ID_MSG }
         agentId = agent.agentId
       },
     ).run {
@@ -392,8 +392,8 @@ internal class AgentGrpcService(
   ): RegisterPathResponse =
     unaryStub().registerPath(
       registerPathRequest {
-        require(agent.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
-        require(pathVal.isNotEmpty()) { EMPTY_PATH_MSG }
+        require(agent.agentId.isNotBlank()) { BLANK_AGENT_ID_MSG }
+        require(pathVal.isNotBlank()) { BLANK_PATH_MSG }
         agentId = agent.agentId
         path = pathVal
         labels = labelsJson
@@ -412,8 +412,8 @@ internal class AgentGrpcService(
   suspend fun unregisterPathOnProxy(pathVal: String): UnregisterPathResponse =
     unaryStub().unregisterPath(
       unregisterPathRequest {
-        require(agent.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
-        require(pathVal.isNotEmpty()) { EMPTY_PATH_MSG }
+        require(agent.agentId.isNotBlank()) { BLANK_AGENT_ID_MSG }
+        require(pathVal.isNotBlank()) { BLANK_PATH_MSG }
         agentId = agent.agentId
         path = pathVal
       },
@@ -459,7 +459,7 @@ internal class AgentGrpcService(
   ) {
     val agentInfo =
       agentInfo {
-        require(agent.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
+        require(agent.agentId.isNotBlank()) { BLANK_AGENT_ID_MSG }
         agentId = agent.agentId
       }
     grpcStub.readRequestsFromProxy(agentInfo)

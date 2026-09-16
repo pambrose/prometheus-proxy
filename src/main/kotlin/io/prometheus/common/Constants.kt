@@ -21,8 +21,10 @@ import io.grpc.Metadata
 import io.grpc.Metadata.ASCII_STRING_MARSHALLER
 
 internal object Messages {
-  const val EMPTY_AGENT_ID_MSG = "Empty agentId"
-  const val EMPTY_PATH_MSG = "Empty path"
+  // A path or agentId of only whitespace is as unusable as an empty one: the proxy's scrape route answers a blank
+  // path with a 404, so the registration guards reject both.
+  const val BLANK_AGENT_ID_MSG = "Blank agentId"
+  const val BLANK_PATH_MSG = "Blank path"
 }
 
 internal object GrpcConstants {
