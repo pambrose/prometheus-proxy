@@ -19,6 +19,7 @@
 package io.prometheus.agent.discovery
 
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.ints.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.shouldBe
 import io.mockk.coEvery
@@ -49,13 +50,20 @@ class PathDiscoveryServiceTest : StringSpec() {
     "skippedEntries should come from the source" {
       val skipped = [DiscoveredPath("bad", "", "http://bad.local/metrics", "{}")]
       val source =
-        object : PathDiscoverySource {
+        object : PathDiscoverySource, SkippedEntryReporter {
           override fun read(): List<DiscoveredPath> = emptyList()
 
           override val skippedEntries: List<DiscoveredPath> get() = skipped
         }
 
       PathDiscoveryService(mockk(relaxed = true), source, 1).skippedEntries shouldBe skipped
+    }
+
+    // A lambda source reports nothing, which is why the property is not on PathDiscoverySource itself.
+    "skippedEntries should be empty for a source that does not report them" {
+      val source = PathDiscoverySource { emptyList() }
+
+      PathDiscoveryService(mockk(relaxed = true), source, 1).skippedEntries.shouldBeEmpty()
     }
 
     "a successful read reconciles the desired set" {

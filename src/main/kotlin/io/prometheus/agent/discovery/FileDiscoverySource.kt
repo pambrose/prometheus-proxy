@@ -39,7 +39,8 @@ import java.io.File
  */
 internal class FileDiscoverySource(
   private val filePath: String,
-) : PathDiscoverySource {
+) : PathDiscoverySource,
+  SkippedEntryReporter {
   // What the last read dropped, so the same bad file is reported once -- as AgentPathManager does for the paths a
   // proxy rejects -- and so the agent's debug page can show them. Read and written only by the discovery
   // coroutine, which polls this source one read at a time.

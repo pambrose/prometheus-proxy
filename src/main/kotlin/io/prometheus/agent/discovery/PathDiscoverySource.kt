@@ -48,11 +48,15 @@ internal fun interface PathDiscoverySource {
    * caller can tell failure apart from emptiness and preserve the last-known-good set.
    */
   fun read(): List<DiscoveredPath>
+}
 
-  /**
-   * The entries the last [read] dropped as unusable, for the agent's debug page.
-   *
-   * Empty by default: a source that drops nothing, or does not track what it dropped, need not implement this.
-   */
-  val skippedEntries: List<DiscoveredPath> get() = emptyList()
+/**
+ * A [PathDiscoverySource] that reports the entries its last [PathDiscoverySource.read] dropped as unusable, for the
+ * agent's debug page.
+ *
+ * Separate from [PathDiscoverySource] on purpose: that stays a single-method interface, so a source can still be a
+ * lambda, and a source with nothing to report need not implement this at all.
+ */
+internal interface SkippedEntryReporter {
+  val skippedEntries: List<DiscoveredPath>
 }

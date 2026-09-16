@@ -44,8 +44,9 @@ internal class PathDiscoveryService(
   private val source: PathDiscoverySource,
   private val intervalSecs: Int,
 ) {
-  // The entries the last read dropped as unusable; see PathDiscoverySource.skippedEntries.
-  val skippedEntries: List<DiscoveredPath> get() = source.skippedEntries
+  // The entries the last read dropped as unusable, empty for a source that does not report them.
+  val skippedEntries: List<DiscoveredPath>
+    get() = (source as? SkippedEntryReporter)?.skippedEntries.orEmpty()
 
   /**
    * Polls and reconciles until [keepRunning] returns false.
