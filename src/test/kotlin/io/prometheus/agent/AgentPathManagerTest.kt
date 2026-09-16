@@ -1036,6 +1036,45 @@ class AgentPathManagerTest : StringSpec() {
       coVerify(exactly = 2) { grpcService.registerPathOnProxy("metrics2", any(), any(), any()) }
     }
 
+    // A transport failure repeats every reconcile while it lasts. The first is worth a stack trace; the same failure
+    // on every poll is not, which is the rule rejections already follow.
+    "reconcile should log a repeating non-rejection failure in full once, then at DEBUG" {
+      val agent = createMockAgent()
+      val grpc = agent.grpcService
+      val manager = AgentPathManager(agent)
+      coEvery { grpc.registerPathOnProxy("d_metrics", any(), any(), any()) } throws
+        StatusException(Status.UNAVAILABLE)
+
+      val events =
+        captureLogs<AgentPathManager>(Level.DEBUG) {
+          repeat(3) { manager.reconcileDiscoveredPaths(dMetrics) }
+        }.filter { "d_metrics" in it.formattedMessage }
+
+      events.count { it.level == Level.WARN } shouldBe 1
+      events.single { it.level == Level.WARN }.throwableProxy.shouldNotBeNull()
+      events.count { it.level == Level.DEBUG } shouldBe 2
+      // Still retried: the failure may clear, unlike a rejection whose cause cannot.
+      coVerify(exactly = 3) { grpc.registerPathOnProxy("d_metrics", any(), any(), any()) }
+    }
+
+    // A discovery-only agent showed nothing on its debug page, since toPlainText lists only the static config.
+    "discoveredToPlainText should list the discovered paths, and say so when there are none" {
+      val agent = createMockAgent()
+      val manager = AgentPathManager(agent)
+
+      manager.discoveredToPlainText() shouldContain "none"
+
+      manager.reconcileDiscoveredPaths(
+        [DiscoveredPath("d", "d_metrics", "http://admin:hunter2@d.local/metrics?token=s3cr3t", "{}")],
+      )
+
+      val text = manager.discoveredToPlainText()
+      text shouldContain "d_metrics"
+      text shouldContain "http://***@d.local/metrics?token=***"
+      text shouldNotContain "hunter2"
+      text shouldNotContain "s3cr3t"
+    }
+
     // Static wins even while the proxy rejects the static path: discovery must not register the path in the meantime,
     // only for the retry to replace it.
     "reconcile skips a discovered path colliding with a static path the proxy rejected" {

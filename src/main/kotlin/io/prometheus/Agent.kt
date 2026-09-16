@@ -55,6 +55,7 @@ import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import io.prometheus.common.Utils.getVersionDesc
 import io.prometheus.common.Utils.logStreamFailure
+import io.prometheus.common.Utils.sanitizeUrl
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -234,12 +235,29 @@ class Agent(
         logger.info { "Adding /$DEBUG endpoint" }
         addServlet(
           path = DEBUG,
-          servlet = LambdaServlet { [toPlainText(), pathManager.toPlainText()].joinToString("\n") },
+          servlet =
+            LambdaServlet {
+              [toPlainText(), pathManager.toPlainText(), discoveryToPlainText()].joinToString("\n")
+            },
         )
       }
     }
 
     initBlock?.invoke(this)
+  }
+
+  // The discovery half of the debug page: the paths discovery registered, and the entries it skipped as unusable,
+  // which otherwise appeared only in one log line when the file was first read.
+  private fun discoveryToPlainText(): String {
+    val service = pathDiscoveryService ?: return "Path Discovery: disabled"
+    val skipped = service.skippedEntries
+    return pathManager.discoveredToPlainText() + "\n\n" +
+      if (skipped.isEmpty()) {
+        "Skipped Discovery Entries: none"
+      } else {
+        "Skipped Discovery Entries (a path and a url are required):\n" +
+          skipped.joinToString("\n") { "path='${it.path}' url='${sanitizeUrl(it.url)}'" }
+      }
   }
 
   // Built once at construction; null when discovery is disabled. AgentOptions has already validated

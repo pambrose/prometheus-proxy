@@ -161,6 +161,20 @@ class FileDiscoverySourceTest : StringSpec() {
       events.count { it.level == Level.INFO } shouldBe 1
     }
 
+    // Skipped entries lived only in one log line, so an operator who missed it had no way to see them.
+    "skippedEntries should report what the last read dropped" {
+      val file = File(writeTemp("""paths = [ { path = "", url = "http://app1.local/metrics" } ]"""))
+      val source = FileDiscoverySource(file.absolutePath)
+
+      source.skippedEntries.shouldBeEmpty()
+      source.read()
+      source.skippedEntries.map { it.url } shouldBe ["http://app1.local/metrics"]
+
+      file.writeText("""paths = [ { path = "good_metrics", url = "http://good.local/metrics" } ]""")
+      source.read()
+      source.skippedEntries.shouldBeEmpty()
+    }
+
     "an empty file path is rejected" {
       shouldThrow<IllegalArgumentException> { FileDiscoverySource("").read() }
     }
