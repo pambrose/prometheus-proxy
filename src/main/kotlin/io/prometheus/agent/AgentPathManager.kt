@@ -21,7 +21,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Agent
 import io.prometheus.agent.discovery.DiscoveredPath
 import io.prometheus.agent.filter.MetricFilter
-import io.prometheus.common.Messages.EMPTY_PATH_MSG
+import io.prometheus.common.Messages.BLANK_PATH_MSG
 import io.prometheus.common.Utils.defaultEmptyJsonObject
 import io.prometheus.common.Utils.sanitizeUrl
 import io.prometheus.grpc.PathRejectionCause.CONSOLIDATION_MISMATCH
@@ -79,9 +79,20 @@ internal class AgentPathManager(
 
   suspend fun pathMapSize(): Int = agent.grpcService.pathMapSize()
 
+  // A blank path or url could never register, and registerPaths does not catch the require() that would reject it,
+  // so one config typo would fail every connect attempt. Dropped here instead, the way discovery drops its own.
   private val pathConfigs: List<PathConfig> =
     agentConfigVals.pathConfigs
       .map { PathConfig(name = it.name, path = it.path, url = it.url, labels = it.labels) }
+      .filter { config ->
+        config.usable.also {
+          if (!it)
+            logger.warn {
+              "Skipping pathConfigs entry ${config.quotedName}: a path and a url are required " +
+                "(path='${config.path}', url='${sanitizeUrl(config.url)}')"
+            }
+        }
+      }
       .onEach {
         logger.info { "Proxy path /${it.path} will be assigned to ${sanitizeUrl(it.url)} with labels ${it.labels}" }
       }
@@ -261,8 +272,8 @@ internal class AgentPathManager(
     labels: String,
     source: PathSource,
   ) {
-    require(pathVal.isNotEmpty()) { EMPTY_PATH_MSG }
-    require(url.isNotEmpty()) { "Empty URL" }
+    require(pathVal.isNotBlank()) { BLANK_PATH_MSG }
+    require(url.isNotBlank()) { "Blank URL" }
 
     val path = pathVal.removePrefix("/")
     val labelsJson = labels.defaultEmptyJsonObject()
@@ -283,7 +294,7 @@ internal class AgentPathManager(
 
   // Lock-free unregistration body; callers MUST hold pathMutex (see doRegisterPath).
   private suspend fun doUnregisterPath(pathVal: String) {
-    require(pathVal.isNotEmpty()) { EMPTY_PATH_MSG }
+    require(pathVal.isNotBlank()) { BLANK_PATH_MSG }
 
     val path = pathVal.removePrefix("/")
     // The proxy rejects an unregister (valid=false) only when it no longer maps this path to this agent: the path
@@ -338,6 +349,9 @@ internal class AgentPathManager(
   ) {
     // Name wrapped in double-quotes for the toPlainText() display, preserving the original format.
     val quotedName: String get() = "\"$name\""
+
+    // Mirrors DiscoveredPath.usable: doRegisterPath requires both, so an entry missing either can never register.
+    val usable: Boolean get() = path.isNotBlank() && url.isNotBlank()
   }
 
   data class PathContext(

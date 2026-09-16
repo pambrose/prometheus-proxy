@@ -34,7 +34,7 @@ import io.prometheus.common.ConfigVals
 import io.prometheus.common.ConfigWrappers.newAdminConfig
 import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
-import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
+import io.prometheus.common.Messages.BLANK_AGENT_ID_MSG
 import io.prometheus.common.Utils.getVersionDesc
 import io.prometheus.common.Utils.toJsonElement
 import io.prometheus.proxy.AgentAuthManager
@@ -385,7 +385,7 @@ class Proxy(
     agentId: String,
     reason: String,
   ): AgentContext? {
-    require(agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
+    require(agentId.isNotBlank()) { BLANK_AGENT_ID_MSG }
 
     // Drop the context first: removeFromContextManager invalidates it, and registerPath re-checks
     // validity inside the pathMap lock. Invalidating before the sweep below means a registration

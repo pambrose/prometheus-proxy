@@ -19,7 +19,7 @@
 package io.prometheus.proxy
 
 import com.pambrose.common.dsl.GuavaDsl.toStringElements
-import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
+import io.prometheus.common.Messages.BLANK_AGENT_ID_MSG
 import io.prometheus.common.ScrapeResults
 import io.prometheus.grpc.scrapeRequest
 import kotlinx.coroutines.channels.Channel
@@ -46,7 +46,7 @@ internal class ScrapeRequestWrapper(
 
   val scrapeRequest =
     scrapeRequest {
-      require(agentContext.agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
+      require(agentContext.agentId.isNotBlank()) { BLANK_AGENT_ID_MSG }
       agentId = agentContext.agentId
       scrapeId = SCRAPE_ID_GENERATOR.fetchAndIncrement()
       path = pathVal

@@ -1060,8 +1060,12 @@ class AgentGrpcServiceTest : StringSpec() {
           registerPathOnProxy("metrics", "{}", target, "STATIC")
         },
         Triple("registerPathOnProxy on an empty path", false) { registerPathOnProxy("", "{}", target, "STATIC") },
+        Triple("registerPathOnProxy on a blank path", false) {
+          registerPathOnProxy("   ", "{}", target, "STATIC")
+        },
         Triple("unregisterPathOnProxy on an empty agentId", true) { unregisterPathOnProxy("metrics") },
         Triple("unregisterPathOnProxy on an empty path", false) { unregisterPathOnProxy("") },
+        Triple("unregisterPathOnProxy on a blank path", false) { unregisterPathOnProxy("   ") },
         Triple("readRequestsFromProxy on an empty agentId", true) {
           readRequestsFromProxy(mockk(relaxed = true), AgentConnectionContext(128))
         },

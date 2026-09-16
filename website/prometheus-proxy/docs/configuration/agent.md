@@ -35,11 +35,15 @@ Each path config entry has these fields:
 | Field    | Required | Description                                                   |
 |:---------|:---------|:--------------------------------------------------------------|
 | `name`   | Yes      | Human-readable endpoint name (for logs and debugging)         |
-| `path`   | Yes      | Single URL segment on the proxy that Prometheus scrapes (no embedded `/`) |
+| `path`   | Yes      | Single URL segment on the proxy that Prometheus scrapes (no embedded `/`, not blank) |
 | `url`    | Yes      | Actual metrics endpoint the agent fetches from                |
 | `labels` | No       | JSON string of labels for service discovery (default: `"{}"`) |
 
 !!! note "Paths are a single segment"
+
+    An entry whose `path` or `url` is blank is skipped at startup, with a warning naming it, and the
+    agent's other paths still register: the proxy answers a blank path with a 404, so such an entry
+    could only ever be a dead registration.
 
     A `path` is one URL segment — it must not contain an embedded `/`. The proxy serves each
     registered path at `/<path>` (a one-segment route), so a multi-segment value like

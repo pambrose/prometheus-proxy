@@ -18,8 +18,8 @@ package io.prometheus.proxy
 
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Proxy
-import io.prometheus.common.Messages.EMPTY_AGENT_ID_MSG
-import io.prometheus.common.Messages.EMPTY_PATH_MSG
+import io.prometheus.common.Messages.BLANK_AGENT_ID_MSG
+import io.prometheus.common.Messages.BLANK_PATH_MSG
 import io.prometheus.common.Utils.sanitizeUrl
 import io.prometheus.grpc.PathRejectionCause
 import io.prometheus.grpc.PathRejectionCause.CONSOLIDATION_MISMATCH
@@ -98,7 +98,7 @@ internal class ProxyPathManager(
     pathSource: String = "",
     identityName: String = "",
   ): PathRejection? {
-    require(path.isNotEmpty()) { EMPTY_PATH_MSG }
+    require(path.isNotBlank()) { BLANK_PATH_MSG }
     // Redacted on the way in so the dashboard and /debug never show credentials, even from an agent that
     // predates agent-side redaction.
     return multiSegmentPathError(path)?.let { PathRejection(it, INVALID_PATH) }
@@ -218,8 +218,8 @@ internal class ProxyPathManager(
     path: String,
     agentId: String,
   ): UnregisterPathResponse {
-    require(path.isNotEmpty()) { EMPTY_PATH_MSG }
-    require(agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
+    require(path.isNotBlank()) { BLANK_PATH_MSG }
+    require(agentId.isNotBlank()) { BLANK_AGENT_ID_MSG }
 
     synchronized(pathMap) {
       val agentInfo = pathMap[path]
@@ -268,7 +268,7 @@ internal class ProxyPathManager(
     agentId: String,
     reason: String,
   ) {
-    require(agentId.isNotEmpty()) { EMPTY_AGENT_ID_MSG }
+    require(agentId.isNotBlank()) { BLANK_AGENT_ID_MSG }
 
     // Always sweep the pathMap by agentId, even when the context is already gone from the manager: a
     // registerPath that raced this removal can strand a path pointing at an invalidated context, and

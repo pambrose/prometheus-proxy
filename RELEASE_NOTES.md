@@ -165,6 +165,10 @@ interval as their deadline, capped at the unary deadline.
   agent ID into every later call. It now cancels the call, the same as a missing header.
 - **A connect timeout from Ktor's CIO engine was reported as 503** instead of 408, because its exception
   type is a `ConnectException` rather than one of the recognized timeout types.
+- **A whitespace-only `path` or `url` was accepted where an empty one was refused.** A `path` of `"   "`
+  registered on the proxy and could never be scraped, since the scrape route answers a blank path with a 404.
+  The guards now require a non-blank value, and a blank `pathConfigs` entry is skipped at startup, with a
+  warning naming it, so one config typo cannot fail every connect attempt.
 - **A discovery entry with a blank `path` or `url` logged a stack trace on every reconcile.** It parses, but
   could never register, so it failed every poll for as long as the file kept it. It is now skipped where the
   file is read -- the file's other entries still apply -- and reported once rather than every 30 seconds.
