@@ -52,6 +52,7 @@ import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.decrementAndFetch
 import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.concurrent.atomics.update
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -66,6 +67,18 @@ class AgentPathManagerTest : StringSpec() {
   // whether a configured filter actually attached to a path.
   private suspend fun captureRegistrationLogs(block: suspend () -> Unit): List<String> =
     captureLogs<AgentPathManager> { block() }.map { it.formattedMessage }.filter { it.startsWith("Registered ") }
+
+  // Runs [action] [times] times, advancing this clock by [step] before each -- how a retry or reconcile loop ticks.
+  private suspend fun TestTimeSource.tick(
+    times: Int,
+    step: Duration,
+    action: suspend () -> Unit,
+  ) {
+    repeat(times) {
+      this += step
+      action()
+    }
+  }
 
   // [filtersHocon] is spliced into `agent.filters` (empty means no filters), which is what makes the
   // path manager compile and attach a MetricFilter to a matching registered path.
@@ -519,10 +532,7 @@ class AgentPathManagerTest : StringSpec() {
       val (manager, grpc) = managerRejectingDiscovered(PathRejectionCause.HELD_BY_ANOTHER_IDENTITY, clock)
 
       // The reconcile loop polls every agent.discovery.reconcileIntervalSecs, 30s by default.
-      repeat(3) {
-        clock += 30.seconds
-        manager.reconcileDiscoveredPaths(dMetrics)
-      }
+      clock.tick(3, 30.seconds) { manager.reconcileDiscoveredPaths(dMetrics) }
       coVerify(exactly = 3) { grpc.registerPathOnProxy("d_metrics", any(), any(), any()) }
 
       coEvery { grpc.registerPathOnProxy("d_metrics", any(), any(), any()) } returns registerPathResponse {
@@ -541,10 +551,7 @@ class AgentPathManagerTest : StringSpec() {
       val clock = TestTimeSource()
       val (manager, grpc) = managerRejectingDiscovered(PathRejectionCause.HELD_BY_ANOTHER_IDENTITY, clock)
 
-      repeat(6) {
-        clock += 30.seconds
-        manager.reconcileDiscoveredPaths(dMetrics)
-      }
+      clock.tick(6, 30.seconds) { manager.reconcileDiscoveredPaths(dMetrics) }
 
       // Tried on the first three polls, then once more at 150s -- four times over six polls, not six.
       coVerify(exactly = 4) { grpc.registerPathOnProxy("d_metrics", any(), any(), any()) }
@@ -1023,10 +1030,7 @@ class AgentPathManagerTest : StringSpec() {
       manager.registerPaths()
 
       // Ten ticks of the retry loop, which runs every agent.internal.rejectedPathRetrySecs, 10s by default.
-      repeat(10) {
-        clock += 10.seconds
-        manager.retryRejectedStaticPaths()
-      }
+      clock.tick(10, 10.seconds) { manager.retryRejectedStaticPaths() }
 
       // The connect attempt, then retries at 10s, 20s, 40s and 80s -- five round trips over ten ticks, not eleven.
       coVerify(exactly = 5) { grpcService.registerPathOnProxy("metrics2", any(), any(), any()) }
@@ -1041,10 +1045,7 @@ class AgentPathManagerTest : StringSpec() {
       manager.registerPaths()
 
       // Well past the point where the doubling reaches the cap.
-      repeat(20) {
-        clock += 5.minutes
-        manager.retryRejectedStaticPaths()
-      }
+      clock.tick(20, 5.minutes) { manager.retryRejectedStaticPaths() }
 
       // Once the wait is capped every tick this long is due, so all twenty retry, plus the connect attempt.
       coVerify(exactly = 21) { grpcService.registerPathOnProxy("metrics2", any(), any(), any()) }
@@ -1058,10 +1059,7 @@ class AgentPathManagerTest : StringSpec() {
       val events =
         captureLogs<AgentPathManager>(Level.DEBUG) {
           manager.registerPaths()
-          repeat(2) {
-            clock += 10.seconds
-            manager.retryRejectedStaticPaths()
-          }
+          clock.tick(2, 10.seconds) { manager.retryRejectedStaticPaths() }
         }.filter { "/metrics2" in it.formattedMessage }
 
       // The first rejection is retried on the next tick, so it promises no particular wait; the repeat names one.

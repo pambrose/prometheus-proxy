@@ -66,9 +66,8 @@ internal class AgentPathManager(
 ) {
   private val agentConfigVals = agent.configVals.agent
 
-  // The loop that retries each kind of rejection: Agent.connectToProxy's retry task for static paths, the discovery
-  // reconcile for discovered ones. A backoff is measured from its own loop's tick, so the first retry still lands one
-  // tick after the rejection and only a repeat is paced out.
+  // The base of each kind of path's backoff: the tick of the loop that retries it -- Agent.connectToProxy's retry task
+  // for static paths, the discovery reconcile for discovered ones. See nextBackoff.
   private val staticRetryInterval = agentConfigVals.internal.rejectedPathRetrySecs.seconds
   private val discoveredRetryInterval = agentConfigVals.discovery.reconcileIntervalSecs.seconds
   private val pathContextMap = ConcurrentHashMap<String, PathContext>()
@@ -154,12 +153,10 @@ internal class AgentPathManager(
       rejectedStaticPaths -= config
       null
     } catch (e: RequestFailureException) {
+      // A null from compute removes the entry, so a rejection that can't clear drops the path from retrying.
       val backoff =
-        if (e.retryable) {
-          nextBackoff(rejectedStaticPaths[config], staticRetryInterval).also { rejectedStaticPaths[config] = it }
-        } else {
-          rejectedStaticPaths -= config
-          null
+        rejectedStaticPaths.compute(config) { _, prior ->
+          if (e.retryable) nextBackoff(prior, staticRetryInterval) else null
         }
       logRejection(PathSource.STATIC, config.path.removePrefix("/"), e, repeat, backoff?.wait)
       e
@@ -171,8 +168,7 @@ internal class AgentPathManager(
   // already end it when it is really gone.
   suspend fun retryRejectedStaticPaths() {
     for ((config, backoff) in rejectedStaticPaths.toList()) {
-      // Paced by the path's own backoff rather than retried on every tick: a conflict that lasts would otherwise cost
-      // the proxy a round trip per rejected path per interval for the life of the connection.
+      // Each path waits out its own backoff; see nextBackoff.
       if (!backoff.isDue)
         continue
       val path = config.path.removePrefix("/")
@@ -204,22 +200,17 @@ internal class AgentPathManager(
     }
   }
 
-  // The backoff for a path the proxy rejected for a cause that can clear, after [prior] (null when this is its first
-  // rejection). The first retry still comes one [base] later -- the retry loop's own tick -- and each further
-  // rejection doubles the wait, capped at MAX_RETRY_BACKOFF. A conflict that lasts then costs the proxy a handful of
-  // round trips an hour instead of one every tick; the price is that a cleared conflict takes up to the current wait
-  // to be noticed.
+  // The backoff for a path the proxy rejected for a cause that can clear, given its [prior] backoff (null on the first
+  // rejection). The first retry waits only for the next tick of the loop that retries the path; after that the wait
+  // starts at [base] and doubles with each rejection, up to MAX_RETRY_BACKOFF. Retrying on every tick cost the proxy a
+  // round trip per rejected path per interval for as long as a conflict lasted; the price of pacing is that a cleared
+  // conflict is noticed up to the current wait later.
   private fun nextBackoff(
     prior: RetryBackoff?,
     base: Duration,
   ): RetryBackoff {
-    val attempts = (prior?.attempts ?: 0) + 1
-    val wait =
-      if (attempts <= 1)
-        Duration.ZERO
-      else
-        minOf(base * (1 shl (attempts - 2).coerceAtMost(MAX_BACKOFF_DOUBLINGS)), MAX_RETRY_BACKOFF)
-    return RetryBackoff(attempts, wait, timeSource.markNow() + wait)
+    val wait = if (prior == null) Duration.ZERO else minOf(maxOf(prior.wait * 2, base), MAX_RETRY_BACKOFF)
+    return RetryBackoff(wait, timeSource.markNow() + wait)
   }
 
   suspend fun registerPath(
@@ -293,9 +284,8 @@ internal class AgentPathManager(
     val prior = discoveredRejections[path]?.takeIf { it.url == entry.url && it.labels == labels }
     if (prior?.retryable == false)
       return
-    // A rejection that can clear is retried on a backoff, so a lasting conflict costs the proxy a round trip every
-    // few minutes rather than one on every poll. A changed URL or labels is a different registration, and leaves
-    // prior null, so an edit to the entry is always tried at once.
+    // Still waiting out its backoff (see nextBackoff). A changed URL or labels leaves prior null, so an edited entry is
+    // tried at once.
     if (prior?.backoff?.isDue == false)
       return
     runCatchingCancellable {
@@ -307,15 +297,13 @@ internal class AgentPathManager(
     }.onFailure { e ->
       val failure = "${e::class.simpleName}: ${e.message}"
       val repeat = prior?.failure == failure
-      // Only a rejection is backed off: it is the proxy's answer, and every retry costs it a round trip. Any other
-      // failure never reached the proxy -- a transport failure means the connection is already going -- so it keeps
-      // the reconcile's own pace.
-      val rejection = e as? RequestFailureException
-      val backoff = if (rejection?.retryable == true) nextBackoff(prior?.backoff, discoveredRetryInterval) else null
+      // Only a rejection is backed off: any other failure never reached the proxy, so it keeps the reconcile's pace.
+      val backoff =
+        if (e is RequestFailureException && e.retryable) nextBackoff(prior?.backoff, discoveredRetryInterval) else null
       discoveredRejections[path] =
-        DiscoveredRejection(entry.url, labels, rejection == null || rejection.retryable, failure, backoff)
-      if (rejection != null)
-        logRejection(PathSource.DISCOVERED, path, rejection, repeat, backoff?.wait)
+        DiscoveredRejection(entry.url, labels, e !is RequestFailureException || e.retryable, failure, backoff)
+      if (e is RequestFailureException)
+        logRejection(PathSource.DISCOVERED, path, e, repeat, backoff?.wait)
       else if (repeat)
         logger.debug { "Still failing to register discovered path /$path: $failure" }
       else
@@ -401,13 +389,8 @@ internal class AgentPathManager(
     // eventually. No other cause does, including none (a proxy predating the field) and one this agent doesn't know.
     private val RETRYABLE_CAUSES = setOf(HELD_BY_ANOTHER_IDENTITY, CONSOLIDATION_MISMATCH)
 
-    // The longest a retry of a rejection that can clear ever waits. It bounds both the cost of a lasting conflict --
-    // a dozen round trips an hour per path rather than one per retry interval -- and how late a cleared one is picked
-    // up.
+    // The longest nextBackoff ever waits, which bounds how late a cleared conflict is noticed.
     private val MAX_RETRY_BACKOFF = 5.minutes
-
-    // Bounds the shift in nextBackoff so it cannot overflow; MAX_RETRY_BACKOFF is the cap that governs in practice.
-    private const val MAX_BACKOFF_DOUBLINGS = 16
 
     private val RequestFailureException.retryable: Boolean
       get() = rejectionCause in RETRYABLE_CAUSES
@@ -421,13 +404,12 @@ internal class AgentPathManager(
     val retryable: Boolean,
     val failure: String,
     // Null when the failure was not a rejection, which is not backed off; see registerDiscoveredPath.
-    val backoff: RetryBackoff? = null,
+    val backoff: RetryBackoff?,
   )
 
-  // When a path the proxy rejected for a cause that can clear may be retried: [attempts] counts the consecutive
-  // rejections behind the current [wait], and [dueAt] is when that wait is up.
+  // When a path the proxy rejected for a cause that can clear may be retried: [wait] is the current backoff, which
+  // nextBackoff doubles on the next rejection, and [dueAt] is when it is up.
   private data class RetryBackoff(
-    val attempts: Int,
     val wait: Duration,
     val dueAt: TimeMark,
   ) {
