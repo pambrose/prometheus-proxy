@@ -25,7 +25,11 @@ internal data class DiscoveredPath(
   val path: String,
   val url: String,
   val labels: String,
-)
+) {
+  // An entry missing either could never register -- AgentPathManager.doRegisterPath requires both -- so a source
+  // drops it rather than letting it fail on every reconcile.
+  val usable: Boolean get() = path.isNotBlank() && url.isNotBlank()
+}
 
 /**
  * A source of dynamically discovered target paths for the agent to reconcile against.

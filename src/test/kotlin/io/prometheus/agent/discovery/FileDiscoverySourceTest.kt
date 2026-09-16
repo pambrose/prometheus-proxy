@@ -24,6 +24,8 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import io.prometheus.common.captureLogs
 import java.io.File
 
@@ -119,8 +121,7 @@ class FileDiscoverySourceTest : StringSpec() {
     }
 
     "a change to which entries are bad should be reported again" {
-      val file = File.createTempFile("discovery", ".conf").apply { deleteOnExit() }
-      file.writeText("""paths = [ { path = "", url = "http://app1.local/metrics" } ]""")
+      val file = File(writeTemp("""paths = [ { path = "", url = "http://app1.local/metrics" } ]"""))
       val source = FileDiscoverySource(file.absolutePath)
 
       val events =
@@ -131,6 +132,33 @@ class FileDiscoverySourceTest : StringSpec() {
         }
 
       events.count { it.level == Level.WARN } shouldBe 2
+    }
+
+    // A credential in an entry's url must not reach the log, the way every other url the agent logs is redacted.
+    "a skipped entry's url is redacted" {
+      val path = writeTemp("""paths = [ { path = "", url = "http://user:hunter2@app1.local/metrics?token=s3cr3t" } ]""")
+
+      val events = captureLogs<FileDiscoverySource> { FileDiscoverySource(path).read() }
+
+      val message = events.single { it.level == Level.WARN }.formattedMessage
+      message shouldContain "http://***@app1.local/metrics?token=***"
+      message shouldNotContain "hunter2"
+      message shouldNotContain "s3cr3t"
+    }
+
+    // Silence after a warning is indistinguishable from the warning having stopped for some other reason.
+    "fixing every bad entry should be reported once" {
+      val file = File(writeTemp("""paths = [ { path = "", url = "http://app1.local/metrics" } ]"""))
+      val source = FileDiscoverySource(file.absolutePath)
+
+      val events =
+        captureLogs<FileDiscoverySource> {
+          source.read()
+          file.writeText("""paths = [ { path = "good_metrics", url = "http://good.local/metrics" } ]""")
+          repeat(3) { source.read() }
+        }
+
+      events.count { it.level == Level.INFO } shouldBe 1
     }
 
     "an empty file path is rejected" {

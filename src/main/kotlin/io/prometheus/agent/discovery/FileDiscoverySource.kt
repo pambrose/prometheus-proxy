@@ -19,6 +19,7 @@ package io.prometheus.agent.discovery
 import com.typesafe.config.ConfigFactory
 import com.typesafe.config.ConfigParseOptions
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
+import io.prometheus.common.Utils.sanitizeUrl
 import java.io.File
 
 /**
@@ -39,9 +40,9 @@ import java.io.File
 internal class FileDiscoverySource(
   private val filePath: String,
 ) : PathDiscoverySource {
-  // What the last read dropped, so the same bad file is reported once. Read and written only by the discovery
-  // coroutine, which polls this source one read at a time.
-  private var reportedUnusable = emptySet<String>()
+  // What the last read dropped, so the same bad file is reported once -- as AgentPathManager does for the paths a
+  // proxy rejects. Read and written only by the discovery coroutine, which polls this source one read at a time.
+  private var reportedUnusable = emptySet<DiscoveredPath>()
 
   init {
     require(filePath.isNotEmpty()) { "Discovery file path is empty" }
@@ -64,20 +65,24 @@ internal class FileDiscoverySource(
           labels = if (element.hasPath("labels")) element.getString("labels") else "{}",
         )
       }
-    val (usable, unusable) = entries.partition { it.path.isNotBlank() && it.url.isNotBlank() }
+    val (usable, unusable) = entries.partition { it.usable }
     reportUnusable(unusable)
     return usable
   }
 
-  // Reports the entries dropped from the last read, but only when that set changes: the file is re-read every
-  // reconcile, so a file left unfixed would otherwise repeat the same warning forever.
+  // Reports what this read dropped, but only when that set changes, since the file is re-read every reconcile.
   private fun reportUnusable(unusable: List<DiscoveredPath>) {
-    val descriptions = unusable.map { "${it.name.ifBlank { "unnamed" }} (path='${it.path}', url='${it.url}')" }
-    if (descriptions.toSet() == reportedUnusable)
+    val dropped = unusable.toSet()
+    if (dropped == reportedUnusable)
       return
-    reportedUnusable = descriptions.toSet()
-    if (descriptions.isNotEmpty())
-      logger.warn { "Skipping ${descriptions.size} discovery entries needing a path and a url: $descriptions" }
+    val fixed = reportedUnusable.isNotEmpty() && dropped.isEmpty()
+    reportedUnusable = dropped
+    if (fixed) {
+      logger.info { "Every discovery entry in $filePath has a path and a url again" }
+    } else if (dropped.isNotEmpty()) {
+      val described = dropped.map { "(path='${it.path}', url='${sanitizeUrl(it.url)}')" }
+      logger.warn { "Skipping ${dropped.size} discovery entries needing a path and a url: $described" }
+    }
   }
 
   companion object {
