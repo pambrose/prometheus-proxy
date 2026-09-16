@@ -20,6 +20,7 @@ package io.prometheus.harness
 
 import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.spi.ILoggingEvent
+import io.kotest.assertions.nondeterministic.continually
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
@@ -61,7 +62,8 @@ class AgentRejectedPathRetryTest : StringSpec() {
 
             val agentB = startAgentWithToken(TOKEN_B).also { agents += it }
             agentB.awaitInitialConnection(10.seconds).shouldBeTrue()
-            eventually(10.seconds) { ownerOf(proxy, B_PATH) shouldBe agentB.agentId }
+            val agentBId = agentB.agentId
+            eventually(10.seconds) { ownerOf(proxy, B_PATH) shouldBe agentBId }
             // team_b may register shared_metrics, but team_a's live agent serves it, so agent B's registration of
             // it was rejected.
             ownerOf(proxy, SHARED_PATH) shouldBe agentA.agentId
@@ -70,10 +72,13 @@ class AgentRejectedPathRetryTest : StringSpec() {
 
             // Patient enough for the retry backoff: each rejection doubles the wait from rejectedPathRetrySecs (1s
             // here), so by the time agent A stops, agent B's next retry can be tens of seconds out.
-            eventually(45.seconds) { ownerOf(proxy, SHARED_PATH) shouldBe agentB.agentId }
+            eventually(45.seconds) { ownerOf(proxy, SHARED_PATH) shouldBe agentBId }
             // a_metrics, which team_b may never register, was never kept for a retry. Eventually, since the proxy
             // records shared_metrics just before agent B drops it from its retries.
             eventually(5.seconds) { agentB.pathManager.hasRejectedStaticPaths.shouldBeFalse() }
+            // With nothing left to retry, the retry task must idle rather than end: a connection task ending ends the
+            // connection, which would drop the path and re-register it under a new agentId.
+            continually(3.seconds) { ownerOf(proxy, SHARED_PATH) shouldBe agentBId }
           } finally {
             stopAll(proxy, *agents.toTypedArray())
           }

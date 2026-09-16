@@ -59,6 +59,7 @@ import io.prometheus.common.Utils.sanitizeUrl
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -328,10 +329,11 @@ class Agent(
           if (pathManager.hasRejectedStaticPaths) {
             val retryInterval = agentConfigVals.internal.rejectedPathRetrySecs.seconds
             launchConnectionTask(connectionContext, "retryRejectedStaticPaths") {
-              while (isRunning && connectionContext.connected) {
-                delay(retryInterval)
-                pathManager.retryRejectedStaticPaths()
-              }
+              pathManager.retryRejectedStaticPathsWhile(retryInterval) { isRunning && connectionContext.connected }
+              // Every rejected path has registered. Returning would end the connection (see launchConnectionTask), so
+              // idle until the connection ends and cancels this task.
+              if (isRunning && connectionContext.connected)
+                awaitCancellation()
             }
           }
 

@@ -47,6 +47,7 @@ import io.prometheus.common.captureLogs
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.decrementAndFetch
@@ -1010,6 +1011,30 @@ class AgentPathManagerTest : StringSpec() {
 
       manager["metrics2"].shouldNotBeNull()
       manager.hasRejectedStaticPaths.shouldBeFalse()
+    }
+
+    // The connection's retry task ticked for the rest of the connection once a static path was rejected at connect,
+    // even after every one had registered. Only registerPaths adds to the set, and it runs only at connect.
+    "retryRejectedStaticPathsWhile should return once every rejected static path registers" {
+      val (manager, grpcService) = managerRejectingMetrics2()
+      manager.registerPaths()
+      acceptMetrics2(grpcService)
+
+      withTimeout(2.seconds) { manager.retryRejectedStaticPathsWhile(1.milliseconds) { true } }
+
+      manager["metrics2"].shouldNotBeNull()
+    }
+
+    "retryRejectedStaticPathsWhile should keep retrying while a static path is still rejected" {
+      val (manager, _) = managerRejectingMetrics2()
+      manager.registerPaths()
+      var checks = 0
+
+      manager.retryRejectedStaticPathsWhile(1.milliseconds) { ++checks <= 3 }
+
+      // Three passes, then the fourth check of the connection ends the loop.
+      checks shouldBe 4
+      manager.hasRejectedStaticPaths.shouldBeTrue()
     }
 
     "retryRejectedStaticPaths should keep a path the proxy still rejects" {

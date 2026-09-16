@@ -26,6 +26,7 @@ import io.prometheus.common.Utils.defaultEmptyJsonObject
 import io.prometheus.common.Utils.sanitizeUrl
 import io.prometheus.grpc.PathRejectionCause.CONSOLIDATION_MISMATCH
 import io.prometheus.grpc.PathRejectionCause.HELD_BY_ANOTHER_IDENTITY
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
@@ -177,6 +178,18 @@ internal class AgentPathManager(
           if (rejection == null)
             logger.info { "Registered static path /$path after the proxy had rejected it" }
         }.onFailure { e -> logger.warn(e) { "Failed to retry static path /$path" } }
+    }
+  }
+
+  // Runs retryRejectedStaticPaths every [interval] while [active] holds -- Agent.connectToProxy's retry task -- and
+  // returns once none is left to retry: only registerPaths adds one, and it runs only at connect.
+  suspend fun retryRejectedStaticPathsWhile(
+    interval: Duration,
+    active: () -> Boolean,
+  ) {
+    while (active() && hasRejectedStaticPaths) {
+      delay(interval)
+      retryRejectedStaticPaths()
     }
   }
 

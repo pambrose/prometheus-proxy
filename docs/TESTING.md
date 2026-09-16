@@ -220,9 +220,12 @@ something.
 
 Four support helpers also live here (not test classes themselves):
 
-- **TestPorts** — canonical port constants shared across the unit, harness, and container suites (mirrors the
-  proxy/agent config defaults and the fixed container ports), plus each harness spec's dedicated ports, so no test
-  hard-codes a port literal
+- **TestPorts** — canonical port constants shared across the unit, harness, and container suites, so no test
+  hard-codes a port literal. The ones that mirror the proxy/agent config defaults and the fixed container ports are
+  for asserting those defaults and for container-internal ports; anything a test binds on the host uses a dedicated
+  entry instead, since a proxy, agent, or Prometheus already running on the machine holds the defaults.
+  `TestUtils.startProxy` / `startAgent` bind the `HARNESS_*` gRPC, admin, and metrics ports unless a spec passes
+  its own
 - **TestOptions** — factories that build `ProxyOptions` / `AgentOptions` from a list, `ConfigVals` from a HOCON
   fragment merged with the reference config, and `ProxyOptions` from a temp config file
 - **EmbeddedTestServer** — `EmbeddedServer.startAndAwaitReady()`, which starts a Ktor server with `wait = false`

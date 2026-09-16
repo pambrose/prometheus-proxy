@@ -19,9 +19,11 @@ package io.prometheus.common
 /**
  * Canonical port numbers shared across the test suite (unit, harness, and Testcontainers specs).
  *
- * These mirror the proxy/agent config defaults and the fixed ports used by the container suite. They
- * live in a neutral test-support object so any test package can reference them without depending on
- * the Testcontainers support harness.
+ * The first group mirrors the proxy/agent config defaults and the fixed ports used by the container suite, for tests
+ * that assert those defaults or run inside a container. A spec that binds a port on this machine uses a dedicated one
+ * from the groups below instead: a proxy, agent or Prometheus already running here holds the defaults. They live in a
+ * neutral test-support object so any test package can reference them without depending on the Testcontainers support
+ * harness.
  */
 object TestPorts {
   const val PROXY_HTTP_PORT = 8080
@@ -45,6 +47,17 @@ object TestPorts {
 
   // The standard harness suite (HarnessSetup subclasses)
   const val HARNESS_PROXY_PORT = 9505
+
+  // What TestUtils.startProxy and startAgent bind unless a spec passes its own port: the proxy's gRPC listener (which
+  // the agent dials), and each side's admin and metrics servers when a spec enables them.
+  const val HARNESS_PROXY_AGENT_PORT = 9506
+  const val HARNESS_PROXY_ADMIN_PORT = 9507
+  const val HARNESS_PROXY_METRICS_PORT = 9508
+  const val HARNESS_AGENT_ADMIN_PORT = 9509
+  const val HARNESS_AGENT_METRICS_PORT = 9510
+
+  // HarnessHelpersTest
+  const val HARNESS_HELPERS_HTTP_PORT = 9511
 
   // TlsMutualAuthRejectionTest
   const val TLS_REJECTION_HTTP_PORT = 9512
