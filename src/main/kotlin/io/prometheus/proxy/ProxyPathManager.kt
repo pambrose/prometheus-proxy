@@ -57,8 +57,8 @@ internal class ProxyPathManager(
     // exactly as labels has always behaved. Empty when the agent predates the fields.
     val targetUrl: String = "",
     val pathSource: String = "",
-    // The auth identity a non-consolidated path's registrant connected as, empty when agent auth is disabled. Unused
-    // on consolidated paths, which agents join rather than take over.
+    // The auth identity the path's first registrant connected as, empty when agent auth is disabled. On a
+    // consolidated path it is the identity every later agent must also present to join.
     val identityName: String = "",
   ) {
     fun isNotValid() = agentContexts.all { it.isNotValid() }
@@ -140,21 +140,33 @@ internal class ProxyPathManager(
       val agentInfo = pathMap[path]
       if (agentContext.consolidated) {
         if (agentInfo == null) {
-          pathMap[path] = AgentContextInfo(true, labels, [agentContext], targetUrl, pathSource)
+          pathMap[path] = AgentContextInfo(true, labels, [agentContext], targetUrl, pathSource, identityName)
         } else {
           if (agentContext.consolidated != agentInfo.isConsolidated) {
             val reason = "Consolidated agent rejected for non-consolidated path /$path"
             return rejectPath(agentContext, path, reason, CONSOLIDATION_MISMATCH)
           }
+          val contexts = agentInfo.agentContexts
+          val others = contexts.filterNot { it.agentId == agentContext.agentId }
+          // An agent joining a consolidated path answers a share of every scrape of it, so the same-identity rule
+          // that protects a non-consolidated path applies here too: one identity must not merge its metrics into
+          // another's. A path whose agents are all gone is nobody's and can be taken on, which is how the conflict
+          // clears. With no agent auth, or only the legacy shared token, every agent has the same identity and
+          // nothing changes.
+          if (agentInfo.identityName != identityName && others.any { it.isValid() }) {
+            val reason =
+              "Consolidated path /$path is served by identity '${agentInfo.identityName}'; " +
+                "identity '$identityName' cannot join it"
+            return rejectPath(agentContext, path, reason, HELD_BY_ANOTHER_IDENTITY)
+          }
           // An agent re-registering a path it already backs (a path listed twice in its config) replaces its own
           // entry: a second copy would send it two requests per scrape, and Prometheus rejects the duplicate samples.
-          val contexts = agentInfo.agentContexts
           val updated =
-            if (contexts.any { it.agentId == agentContext.agentId })
+            if (others.size != contexts.size)
               contexts.map { if (it.agentId == agentContext.agentId) agentContext else it }
             else
               contexts + agentContext
-          pathMap[path] = agentInfo.copy(agentContexts = updated)
+          pathMap[path] = agentInfo.copy(agentContexts = updated, identityName = identityName)
         }
       } else {
         if (agentInfo != null && agentInfo.isConsolidated) {

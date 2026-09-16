@@ -424,8 +424,9 @@ class AgentOptions(
       }
       logger.info { "agent.internal.reconnectPauseSecs: ${internal.reconnectPauseSecs}" }
 
-      // rejectedPathRetrySecs paces the loop in Agent.connectToProxy that retries rejected static paths; a
-      // non-positive value would spin that loop for the connection's lifetime.
+      // rejectedPathRetrySecs paces the loop in Agent.connectToProxy that retries rejected static paths, and is the
+      // base of AgentPathManager's retry backoff; a non-positive value would spin that loop for the connection's
+      // lifetime.
       require(internal.rejectedPathRetrySecs > 0) {
         "agent.internal.rejectedPathRetrySecs must be > 0: ${internal.rejectedPathRetrySecs}"
       }

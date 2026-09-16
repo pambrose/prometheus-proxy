@@ -68,7 +68,9 @@ class AgentRejectedPathRetryTest : StringSpec() {
 
             agentA.stopSync(10.seconds)
 
-            eventually(15.seconds) { ownerOf(proxy, SHARED_PATH) shouldBe agentB.agentId }
+            // Patient enough for the retry backoff: each rejection doubles the wait from rejectedPathRetrySecs (1s
+            // here), so by the time agent A stops, agent B's next retry can be tens of seconds out.
+            eventually(45.seconds) { ownerOf(proxy, SHARED_PATH) shouldBe agentB.agentId }
             // a_metrics, which team_b may never register, was never kept for a retry. Eventually, since the proxy
             // records shared_metrics just before agent B drops it from its retries.
             eventually(5.seconds) { agentB.pathManager.hasRejectedStaticPaths.shouldBeFalse() }

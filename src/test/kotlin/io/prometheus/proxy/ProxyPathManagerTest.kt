@@ -353,6 +353,63 @@ class ProxyPathManagerTest : StringSpec() {
       info.agentContexts.shouldHaveSize(2)
     }
 
+    // The same-identity rule that protects a non-consolidated path applies here too. An agent joining a consolidated
+    // path answers a share of every scrape of it, so one identity merging its metrics into another's is the same
+    // integrity problem as taking the path over outright.
+    "another identity should not join a live agent's consolidated path" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val owner = createAgentContext(consolidated = true)
+      val intruder = createAgentContext(consolidated = true)
+
+      manager.addPath("/metrics", """{"job":"test"}""", owner, identityName = "team_a").shouldBeNull()
+      val rejection = manager.addPath("/metrics", """{"job":"test"}""", intruder, identityName = "team_b")
+
+      rejection.shouldNotBeNull().reason shouldContain "team_a"
+      rejection.cause shouldBe PathRejectionCause.HELD_BY_ANOTHER_IDENTITY
+      manager.getAgentContextInfo("/metrics")?.agentContexts?.map { it.agentId } shouldBe [owner.agentId]
+    }
+
+    // Consolidated mode's whole point: several agents of one identity backing the same path.
+    "an agent of the same identity should join a consolidated path" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val first = createAgentContext(consolidated = true)
+      val second = createAgentContext(consolidated = true)
+
+      manager.addPath("/metrics", """{"job":"test"}""", first, identityName = "team_a").shouldBeNull()
+      manager.addPath("/metrics", """{"job":"test"}""", second, identityName = "team_a").shouldBeNull()
+
+      manager.getAgentContextInfo("/metrics")?.agentContexts?.map { it.agentId } shouldBe
+        [first.agentId, second.agentId]
+    }
+
+    // With agent auth off, or every agent on the legacy shared token, all agents present the same identity, so
+    // consolidated paths work exactly as they always have.
+    "agents should join a consolidated path as before when agent auth is disabled" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val first = createAgentContext(consolidated = true)
+      val second = createAgentContext(consolidated = true)
+
+      manager.addPath("/metrics", """{"job":"test"}""", first).shouldBeNull()
+      manager.addPath("/metrics", """{"job":"test"}""", second).shouldBeNull()
+
+      manager.getAgentContextInfo("/metrics")?.agentContexts.shouldNotBeNull().shouldHaveSize(2)
+    }
+
+    // A path whose agents are all gone is nobody's, so another identity may take it on -- as for a non-consolidated
+    // path, and so a conflict clears once the agents holding it disconnect.
+    "another identity should join a consolidated path whose agents are no longer valid" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val owner = createAgentContext(consolidated = true)
+      val newcomer = createAgentContext(consolidated = true)
+
+      manager.addPath("/metrics", """{"job":"test"}""", owner, identityName = "team_a").shouldBeNull()
+      owner.invalidate()
+      manager.addPath("/metrics", """{"job":"test"}""", newcomer, identityName = "team_b").shouldBeNull()
+
+      // The path is team_b's now, so the next agent to join is measured against that.
+      manager.getAgentContextInfo("/metrics").shouldNotBeNull().identityName shouldBe "team_b"
+    }
+
     "removePath should remove path successfully" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
