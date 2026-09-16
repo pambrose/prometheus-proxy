@@ -20,10 +20,23 @@ package io.prometheus.harness.support
 
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.prometheus.Agent
+import io.prometheus.client.CollectorRegistry
+import io.prometheus.common.TestPorts.HARNESS_AGENT_ADMIN_PORT
+import io.prometheus.common.TestPorts.HARNESS_AGENT_METRICS_PORT
+import io.prometheus.common.TestPorts.HARNESS_HELPERS_HTTP_PORT
+import io.prometheus.common.TestPorts.HARNESS_PROXY_ADMIN_PORT
+import io.prometheus.common.TestPorts.HARNESS_PROXY_AGENT_PORT
+import io.prometheus.common.TestPorts.HARNESS_PROXY_METRICS_PORT
 import io.prometheus.harness.HarnessConstants
+import io.prometheus.harness.support.TestUtils.startAgent
+import io.prometheus.harness.support.TestUtils.startProxy
+import io.prometheus.harness.support.TestUtils.stopAll
 import java.net.ServerSocket
+import kotlin.time.Duration.Companion.seconds
 
 // The harness helpers used to warn and carry on: a port still held after the wait logged a warning and the spec went
 // on to fail at bind time, and a missing test config was silently fetched from GitHub master. Both now fail at once,
@@ -39,6 +52,28 @@ class HarnessHelpersTest : StringSpec() {
       ServerSocket(0).use { taken ->
         val e = shouldThrow<IllegalStateException> { awaitPortFree(taken.localPort, maxAttempts = 2, delayMs = 10) }
         e.message shouldContain "${taken.localPort}"
+      }
+    }
+
+    // The launchers left the proxy's gRPC port and both sides' admin and metrics servers on the product defaults, so
+    // a proxy or agent already running on the machine -- or another project's server on 8092 -- failed every spec
+    // that started one, at bind time.
+    "startProxy and startAgent should bind the harness ports, not the product defaults" {
+      CollectorRegistry.defaultRegistry.clear()
+      val proxy = startProxy(adminEnabled = true, metricsEnabled = true, proxyPort = HARNESS_HELPERS_HTTP_PORT)
+      val agents = mutableListOf<Agent>()
+      try {
+        val agent = startAgent(adminEnabled = true, metricsEnabled = true).also { agents += it }
+
+        proxy.options.proxyAgentPort shouldBe HARNESS_PROXY_AGENT_PORT
+        proxy.options.adminPort shouldBe HARNESS_PROXY_ADMIN_PORT
+        proxy.options.metricsPort shouldBe HARNESS_PROXY_METRICS_PORT
+        agent.options.adminPort shouldBe HARNESS_AGENT_ADMIN_PORT
+        agent.options.metricsPort shouldBe HARNESS_AGENT_METRICS_PORT
+        // Over Netty, so connecting shows the agent dials the proxy's harness gRPC port.
+        agent.awaitInitialConnection(10.seconds).shouldBeTrue()
+      } finally {
+        stopAll(proxy, *agents.toTypedArray())
       }
     }
 

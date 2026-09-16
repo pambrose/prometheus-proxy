@@ -24,6 +24,11 @@ import io.github.oshai.kotlinlogging.KLogger
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Agent
 import io.prometheus.Proxy
+import io.prometheus.common.TestPorts.HARNESS_AGENT_ADMIN_PORT
+import io.prometheus.common.TestPorts.HARNESS_AGENT_METRICS_PORT
+import io.prometheus.common.TestPorts.HARNESS_PROXY_ADMIN_PORT
+import io.prometheus.common.TestPorts.HARNESS_PROXY_AGENT_PORT
+import io.prometheus.common.TestPorts.HARNESS_PROXY_METRICS_PORT
 import io.prometheus.common.agentOptions
 import io.prometheus.harness.HarnessConstants.CONFIG_ARG
 import io.prometheus.harness.HarnessConstants.PROXY_PORT
@@ -98,6 +103,11 @@ object TestUtils {
     val proxyOptions = proxyOptions(
       buildList {
         addAll(configArgs)
+        // Off the product defaults, which a proxy already running on this machine holds (see TestPorts). Ahead of
+        // args, so a spec's own -D port wins: the last -D for a key is the one kept.
+        add("-Dproxy.agent.port=$HARNESS_PROXY_AGENT_PORT")
+        add("-Dproxy.admin.port=$HARNESS_PROXY_ADMIN_PORT")
+        add("-Dproxy.metrics.port=$HARNESS_PROXY_METRICS_PORT")
         addAll(args)
         add("-Dproxy.admin.enabled=$adminEnabled")
         add("-Dproxy.admin.debugEnabled=$debugEnabled")
@@ -131,6 +141,10 @@ object TestUtils {
     val agentOptions = agentOptions(
       args = buildList {
         addAll(configArgs)
+        // As in startProxy: the harness proxy's gRPC port, and admin and metrics ports off the product defaults.
+        add("-Dagent.proxy.port=$HARNESS_PROXY_AGENT_PORT")
+        add("-Dagent.admin.port=$HARNESS_AGENT_ADMIN_PORT")
+        add("-Dagent.metrics.port=$HARNESS_AGENT_METRICS_PORT")
         addAll(args)
         add("-Dagent.admin.enabled=$adminEnabled")
         add("-Dagent.admin.debugEnabled=$debugEnabled")

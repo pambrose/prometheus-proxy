@@ -27,8 +27,8 @@ import io.kotest.matchers.shouldBe
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.prometheus.common.TestPorts
-import io.prometheus.common.TestPorts.AGENT_ADMIN_PORT
-import io.prometheus.common.TestPorts.PROXY_ADMIN_PORT
+import io.prometheus.common.TestPorts.HARNESS_AGENT_ADMIN_PORT
+import io.prometheus.common.TestPorts.HARNESS_PROXY_ADMIN_PORT
 import io.prometheus.harness.HarnessConstants.DEFAULT_CHUNK_SIZE_BYTES
 import io.prometheus.harness.HarnessConstants.DEFAULT_SCRAPE_TIMEOUT_SECS
 import io.prometheus.harness.HarnessConstants.HARNESS_CONFIG
@@ -88,7 +88,7 @@ class NettyTestWithAdminMetricsTest :
 
     "should return debug info from admin endpoints" {
       withHttpClient {
-        get("$AGENT_ADMIN_PORT/debug".withPrefix()) { response ->
+        get("$HARNESS_AGENT_ADMIN_PORT/debug".withPrefix()) { response ->
           val body = response.bodyAsText()
           body.length shouldBeGreaterThan 100
           response.status shouldBe HttpStatusCode.OK
@@ -96,7 +96,7 @@ class NettyTestWithAdminMetricsTest :
       }
 
       withHttpClient {
-        get("$PROXY_ADMIN_PORT/debug".withPrefix()) { response ->
+        get("$HARNESS_PROXY_ADMIN_PORT/debug".withPrefix()) { response ->
           val body = response.bodyAsText()
           body.length shouldBeGreaterThan 100
           response.status shouldBe HttpStatusCode.OK
