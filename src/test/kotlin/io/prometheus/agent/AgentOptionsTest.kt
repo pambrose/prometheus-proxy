@@ -291,8 +291,6 @@ class AgentOptionsTest : StringSpec() {
       }
     }
 
-    // A zero cap would make every retry immediately due, so a rejected path would be retried on every tick without it
-    // being obvious that the backoff had been switched off.
     "rejectedPathRetryMaxSecs of 0 should throw IllegalArgumentException" {
       shouldThrow<IllegalArgumentException> {
         agentOptions(["--name", "test", "--proxy", "host", "-Dagent.internal.rejectedPathRetryMaxSecs=0"], false)

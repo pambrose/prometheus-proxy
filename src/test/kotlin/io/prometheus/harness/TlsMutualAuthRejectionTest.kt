@@ -98,7 +98,7 @@ class TlsMutualAuthRejectionTest : StringSpec() {
   companion object {
     private val logger = logger {}
 
-    // Dedicated ports to avoid clashing with the shared harness ports (9505 / 50051 / 50440).
+    // Dedicated ports, so this Netty spec never binds a port another harness spec uses.
     private const val HTTP_PORT = TestPorts.TLS_REJECTION_HTTP_PORT
     private const val AGENT_PORT = TestPorts.TLS_REJECTION_AGENT_PORT
   }

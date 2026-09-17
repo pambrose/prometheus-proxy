@@ -912,7 +912,6 @@ class AgentPathManagerTest : StringSpec() {
     // the agent's identity isn't authorized for it. That rejection must not abort registration of the
     // agent's other paths -- previously it ended the whole connection and the agent reconnected forever
     // with every path down.
-    // [retryMaxSecs] sets agent.internal.rejectedPathRetryMaxSecs; null keeps the default.
     fun agentWithStaticPaths(
       vararg paths: String,
       retryMaxSecs: Int? = null,
@@ -1054,15 +1053,20 @@ class AgentPathManagerTest : StringSpec() {
       manager.hasRejectedStaticPaths.shouldBeTrue()
     }
 
+    // Rejects metrics2 at connect, then runs ten ticks of the static retry loop, which runs every
+    // agent.internal.rejectedPathRetrySecs (10s by default), with the backoff capped at [retryMaxSecs].
+    suspend fun retriedOverTenTicks(retryMaxSecs: Int? = null): Pair<AgentPathManager, AgentGrpcService> {
+      val clock = TestTimeSource()
+      val (manager, grpcService) = managerRejectingMetrics2(clock = clock, retryMaxSecs = retryMaxSecs)
+      manager.registerPaths()
+      clock.tick(10, 10.seconds) { manager.retryRejectedStaticPaths() }
+      return manager to grpcService
+    }
+
     // A conflict that lasts used to cost the proxy a round trip for the path on every tick of the retry loop, for the
     // life of the connection. The first retry still comes one interval later; each further rejection doubles the wait.
     "retryRejectedStaticPaths should back off while the proxy keeps rejecting a static path" {
-      val clock = TestTimeSource()
-      val (manager, grpcService) = managerRejectingMetrics2(clock = clock)
-      manager.registerPaths()
-
-      // Ten ticks of the retry loop, which runs every agent.internal.rejectedPathRetrySecs, 10s by default.
-      clock.tick(10, 10.seconds) { manager.retryRejectedStaticPaths() }
+      val (manager, grpcService) = retriedOverTenTicks()
 
       // The connect attempt, then retries at 10s, 20s, 40s and 80s -- five round trips over ten ticks, not eleven.
       coVerify(exactly = 5) { grpcService.registerPathOnProxy("metrics2", any(), any(), any()) }
@@ -1083,26 +1087,16 @@ class AgentPathManagerTest : StringSpec() {
       coVerify(exactly = 21) { grpcService.registerPathOnProxy("metrics2", any(), any(), any()) }
     }
 
-    // The cap was a constant; operators can now trade proxy load against how soon a cleared conflict is noticed.
     "a static path's retry wait should stop doubling at agent.internal.rejectedPathRetryMaxSecs" {
-      val clock = TestTimeSource()
-      val (manager, grpcService) = managerRejectingMetrics2(clock = clock, retryMaxSecs = 20)
-      manager.registerPaths()
-
-      clock.tick(10, 10.seconds) { manager.retryRejectedStaticPaths() }
+      val (_, grpcService) = retriedOverTenTicks(retryMaxSecs = 20)
 
       // The connect attempt, then retries at 10s and 20s, and every 20s once the wait reaches the cap: seven round
       // trips over ten ticks, where the default cap allows five.
       coVerify(exactly = 7) { grpcService.registerPathOnProxy("metrics2", any(), any(), any()) }
     }
 
-    // A cap no longer than the loop's interval turns the backoff off.
     "a retry cap at or below the retry interval should retry a static path on every tick" {
-      val clock = TestTimeSource()
-      val (manager, grpcService) = managerRejectingMetrics2(clock = clock, retryMaxSecs = 10)
-      manager.registerPaths()
-
-      clock.tick(10, 10.seconds) { manager.retryRejectedStaticPaths() }
+      val (_, grpcService) = retriedOverTenTicks(retryMaxSecs = 10)
 
       coVerify(exactly = 11) { grpcService.registerPathOnProxy("metrics2", any(), any(), any()) }
     }

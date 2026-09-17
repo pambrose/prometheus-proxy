@@ -432,8 +432,7 @@ class AgentOptions(
       }
       logger.info { "agent.internal.rejectedPathRetrySecs: ${internal.rejectedPathRetrySecs}" }
 
-      // rejectedPathRetryMaxSecs caps that backoff; zero would make every retry due at once, switching the backoff
-      // off without saying so. A cap at or below rejectedPathRetrySecs is the explicit way to do that.
+      // rejectedPathRetryMaxSecs caps that backoff (see AgentPathManager); a cap of zero or less has no meaning.
       require(internal.rejectedPathRetryMaxSecs > 0) {
         "agent.internal.rejectedPathRetryMaxSecs must be > 0: ${internal.rejectedPathRetryMaxSecs}"
       }

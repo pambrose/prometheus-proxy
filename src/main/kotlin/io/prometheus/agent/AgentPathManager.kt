@@ -66,13 +66,12 @@ internal class AgentPathManager(
 ) {
   private val agentConfigVals = agent.configVals.agent
 
-  // The base of each kind of path's backoff: the tick of the loop that retries it -- Agent.connectToProxy's retry task
-  // for static paths, the discovery reconcile for discovered ones. See nextBackoff.
+  // The retry backoff (see nextBackoff): each kind of path's base is the tick of the loop that retries it --
+  // Agent.connectToProxy's retry task for static paths, the discovery reconcile for discovered ones -- and one cap
+  // bounds both. Both loops wait a full interval after each pass, so a cap at or below a loop's interval makes every
+  // tick due, which turns that loop's backoff off.
   private val staticRetryInterval = agentConfigVals.internal.rejectedPathRetrySecs.seconds
   private val discoveredRetryInterval = agentConfigVals.discovery.reconcileIntervalSecs.seconds
-
-  // The longest nextBackoff ever waits, which bounds how late a cleared conflict is noticed. At or below a loop's
-  // interval it turns that loop's backoff off: every tick is then due.
   private val maxRetryBackoff = agentConfigVals.internal.rejectedPathRetryMaxSecs.seconds
   private val pathContextMap = ConcurrentHashMap<String, PathContext>()
   private val pathMutex = Mutex()

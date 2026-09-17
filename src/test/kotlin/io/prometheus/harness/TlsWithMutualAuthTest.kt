@@ -30,6 +30,8 @@ import io.prometheus.harness.support.ProxyCallTestArgs
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
 
+// In-process, so the TLS flags exercise option parsing and certificate loading only: the in-process channel is
+// plaintext and ignores the proxy address and the authority override. ContainersTlsTest runs a real TLS channel.
 class TlsWithMutualAuthTest :
   AbstractHarnessTests(
     argsProvider = {
@@ -51,8 +53,6 @@ class TlsWithMutualAuthTest :
           startProxy(
             serverName = "withmutualauth",
             args = [
-              "--agent_port",
-              "${TestPorts.TLS_MUTUAL_AUTH_AGENT_PORT}",
               "--cert",
               "testing/certs/server1.pem",
               "--key",
@@ -69,8 +69,6 @@ class TlsWithMutualAuthTest :
             chunkContentSizeBytes = DEFAULT_CHUNK_SIZE_BYTES,
             maxConcurrentClients = HARNESS_CONFIG.concurrentClients,
             args = [
-              "--proxy",
-              "localhost:${TestPorts.TLS_MUTUAL_AUTH_AGENT_PORT}",
               "--cert",
               "testing/certs/client.pem",
               "--key",
