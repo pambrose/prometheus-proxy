@@ -46,6 +46,8 @@ class ConfigValsTest : StringSpec() {
         heartbeatCheckPauseMillis shouldBe 500
         heartbeatMaxInactivitySecs shouldBe 5
         reconnectPauseSecs shouldBe 3
+        rejectedPathRetrySecs shouldBe 10
+        rejectedPathRetryMaxSecs shouldBe 300
         scrapeRequestBacklogUnhealthySize shouldBe 25
       }
     }

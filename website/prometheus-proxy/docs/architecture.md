@@ -130,7 +130,8 @@ agent.internal {
 1. **Startup** -- Agent reads configuration and initializes services
 2. **Connection** -- Agent establishes outbound gRPC connection to proxy
 3. **Registration** -- Agent registers its identity and configured paths; a path rejected because a live
-   agent holds it is retried every `agent.internal.rejectedPathRetrySecs` while the agent stays connected
+   agent holds it is retried while the agent stays connected, first after `agent.internal.rejectedPathRetrySecs`
+   and then on a backoff that doubles up to `agent.internal.rejectedPathRetryMaxSecs`
 4. **Operation** -- Agent processes scrape requests and sends heartbeats
 5. **Reconnection** -- On disconnect, agent automatically reconnects with rate limiting
 6. **Shutdown** -- Graceful cleanup of connections and resources

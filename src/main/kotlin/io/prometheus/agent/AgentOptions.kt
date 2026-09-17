@@ -432,6 +432,12 @@ class AgentOptions(
       }
       logger.info { "agent.internal.rejectedPathRetrySecs: ${internal.rejectedPathRetrySecs}" }
 
+      // rejectedPathRetryMaxSecs caps that backoff (see AgentPathManager); a cap of zero or less has no meaning.
+      require(internal.rejectedPathRetryMaxSecs > 0) {
+        "agent.internal.rejectedPathRetryMaxSecs must be > 0: ${internal.rejectedPathRetryMaxSecs}"
+      }
+      logger.info { "agent.internal.rejectedPathRetryMaxSecs: ${internal.rejectedPathRetryMaxSecs}" }
+
       // scrapeRequestBacklogUnhealthySize * 2 is the AgentConnectionContext channel capacity: 0 makes it
       // a rendezvous channel (every send blocks). A negative value is worse than it looks -- -1 yields
       // Channel(-2), which kotlinx maps to BUFFERED, i.e. a silent 64-slot channel rather than an error,

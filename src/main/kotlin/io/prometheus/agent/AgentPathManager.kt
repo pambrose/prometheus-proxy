@@ -31,7 +31,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
@@ -67,10 +66,13 @@ internal class AgentPathManager(
 ) {
   private val agentConfigVals = agent.configVals.agent
 
-  // The base of each kind of path's backoff: the tick of the loop that retries it -- Agent.connectToProxy's retry task
-  // for static paths, the discovery reconcile for discovered ones. See nextBackoff.
+  // The retry backoff (see nextBackoff): each kind of path's base is the tick of the loop that retries it --
+  // Agent.connectToProxy's retry task for static paths, the discovery reconcile for discovered ones -- and one cap
+  // bounds both. Both loops wait a full interval after each pass, so a cap at or below a loop's interval makes every
+  // tick due, which turns that loop's backoff off.
   private val staticRetryInterval = agentConfigVals.internal.rejectedPathRetrySecs.seconds
   private val discoveredRetryInterval = agentConfigVals.discovery.reconcileIntervalSecs.seconds
+  private val maxRetryBackoff = agentConfigVals.internal.rejectedPathRetryMaxSecs.seconds
   private val pathContextMap = ConcurrentHashMap<String, PathContext>()
   private val pathMutex = Mutex()
 
@@ -215,14 +217,14 @@ internal class AgentPathManager(
 
   // The backoff for a path the proxy rejected for a cause that can clear, given its [prior] backoff (null on the first
   // rejection). The first retry waits only for the next tick of the loop that retries the path; after that the wait
-  // starts at [base] and doubles with each rejection, up to MAX_RETRY_BACKOFF. Retrying on every tick cost the proxy a
+  // starts at [base] and doubles with each rejection, up to maxRetryBackoff. Retrying on every tick cost the proxy a
   // round trip per rejected path per interval for as long as a conflict lasted; the price of pacing is that a cleared
   // conflict is noticed up to the current wait later.
   private fun nextBackoff(
     prior: RetryBackoff?,
     base: Duration,
   ): RetryBackoff {
-    val wait = if (prior == null) Duration.ZERO else minOf(maxOf(prior.wait * 2, base), MAX_RETRY_BACKOFF)
+    val wait = if (prior == null) Duration.ZERO else minOf(maxOf(prior.wait * 2, base), maxRetryBackoff)
     return RetryBackoff(wait, timeSource.markNow() + wait)
   }
 
@@ -401,9 +403,6 @@ internal class AgentPathManager(
     // The rejection causes that clear while the agent stays connected: a live agent holds the path, and it leaves
     // eventually. No other cause does, including none (a proxy predating the field) and one this agent doesn't know.
     private val RETRYABLE_CAUSES = setOf(HELD_BY_ANOTHER_IDENTITY, CONSOLIDATION_MISMATCH)
-
-    // The longest nextBackoff ever waits, which bounds how late a cleared conflict is noticed.
-    private val MAX_RETRY_BACKOFF = 5.minutes
 
     private val RequestFailureException.retryable: Boolean
       get() = rejectionCause in RETRYABLE_CAUSES
