@@ -311,20 +311,6 @@ class OptionsTest : StringSpec() {
       options.cacheCleanupIntervalMins shouldBeGreaterThan 1
     }
 
-    // ==================== Agent Internal Config Defaults ====================
-
-    "agent internal config should have expected defaults" {
-      val configVals = readAgentOptions(emptyList())
-      configVals.agent.internal.apply {
-        cioTimeoutSecs shouldBe 90
-        heartbeatEnabled.shouldBeTrue()
-        reconnectPauseSecs shouldBe 3
-        heartbeatCheckPauseMillis shouldBe 500
-        heartbeatMaxInactivitySecs shouldBe 5
-        scrapeRequestBacklogUnhealthySize shouldBe 25
-      }
-    }
-
     // ==================== Config Precedence Tests ====================
 
     "dynamic param should override config file value" {

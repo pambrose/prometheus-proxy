@@ -24,6 +24,7 @@ import io.grpc.StatusException
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
@@ -82,8 +83,13 @@ class AgentPathManagerTest : StringSpec() {
   }
 
   // [filtersHocon] is spliced into `agent.filters` (empty means no filters), which is what makes the
-  // path manager compile and attach a MetricFilter to a matching registered path.
-  private fun createMockAgent(filtersHocon: String = ""): Agent {
+  // path manager compile and attach a MetricFilter to a matching registered path; [pathConfigsHocon] into
+  // `agent.pathConfigs`; and [agentHocon] into the `agent` block as is, for any other setting.
+  private fun createMockAgent(
+    filtersHocon: String = "",
+    pathConfigsHocon: String = "",
+    agentHocon: String = "",
+  ): Agent {
     val mockGrpcService = mockk<AgentGrpcService>(relaxed = true)
 
     // Default happy-path stubs (valid=true, pathId=1); tests needing specific responses re-stub.
@@ -97,8 +103,9 @@ class AgentPathManagerTest : StringSpec() {
     val configVals = testConfigVals(
       """
       agent {
-        pathConfigs = []
+        pathConfigs = [$pathConfigsHocon]
         filters = [$filtersHocon]
+        $agentHocon
       }
       proxy { auth = [] }
       """,
@@ -111,6 +118,10 @@ class AgentPathManagerTest : StringSpec() {
 
     return mockAgent
   }
+
+  // The `agent` HOCON that sets agent.internal.rejectedPathRetryMaxSecs, or nothing to keep the default.
+  private fun retryMaxHocon(retryMaxSecs: Int?): String =
+    retryMaxSecs?.let { "internal.rejectedPathRetryMaxSecs = $it" }.orEmpty()
 
   init {
     "registerPath should register path with proxy" {
@@ -510,8 +521,9 @@ class AgentPathManagerTest : StringSpec() {
     fun managerRejectingDiscovered(
       cause: PathRejectionCause,
       clock: TimeSource = TimeSource.Monotonic,
+      retryMaxSecs: Int? = null,
     ): Pair<AgentPathManager, AgentGrpcService> {
-      val agent = createMockAgent()
+      val agent = createMockAgent(agentHocon = retryMaxHocon(retryMaxSecs))
       rejectPath(agent.grpcService, "d_metrics", cause)
       return AgentPathManager(agent, clock) to agent.grpcService
     }
@@ -556,6 +568,17 @@ class AgentPathManagerTest : StringSpec() {
 
       // Tried on the first three polls, then once more at 150s -- four times over six polls, not six.
       coVerify(exactly = 4) { grpc.registerPathOnProxy("d_metrics", any(), any(), any()) }
+    }
+
+    // As for static paths, a cap no longer than the loop's interval -- here the 30s reconcile -- turns the backoff off.
+    "a retry cap at or below the reconcile interval should retry a discovered path on every poll" {
+      val clock = TestTimeSource()
+      val (manager, grpc) =
+        managerRejectingDiscovered(PathRejectionCause.HELD_BY_ANOTHER_IDENTITY, clock, retryMaxSecs = 30)
+
+      clock.tick(6, 30.seconds) { manager.reconcileDiscoveredPaths(dMetrics) }
+
+      coVerify(exactly = 6) { grpc.registerPathOnProxy("d_metrics", any(), any(), any()) }
     }
 
     // A rejection is the proxy's answer, not a fault, so it is logged once and without a stack trace. A retryable one
@@ -914,42 +937,21 @@ class AgentPathManagerTest : StringSpec() {
     // with every path down.
     fun agentWithStaticPaths(
       vararg paths: String,
-      retryMaxSecs: Int? = null,
+      agentHocon: String = "",
     ): Pair<Agent, AgentGrpcService> {
       val pathConfigsHocon =
         paths.joinToString(",\n") { path ->
           """{ name = "$path", path = "$path", url = "http://localhost:9100/$path", labels = "{}" }"""
         }
-      val retryMaxHocon = retryMaxSecs?.let { "internal.rejectedPathRetryMaxSecs = $it" }.orEmpty()
-      val configVals = testConfigVals(
-        """
-        agent {
-          pathConfigs = [
-            $pathConfigsHocon
-          ]
-          filters = []
-          $retryMaxHocon
-        }
-        proxy { auth = [] }
-        """,
-      )
-      val mockGrpcService = mockk<AgentGrpcService>(relaxed = true)
-      val mockAgent = mockk<Agent>(relaxed = true)
-      every { mockAgent.grpcService } returns mockGrpcService
-      every { mockAgent.configVals } returns configVals
-      every { mockAgent.isTestMode } returns true
-      every { mockAgent.agentId } returns "test-agent"
-      return mockAgent to mockGrpcService
+      val agent = createMockAgent(pathConfigsHocon = pathConfigsHocon, agentHocon = agentHocon)
+      every { agent.agentId } returns "test-agent"
+      return agent to agent.grpcService
     }
 
     // A blank entry in static pathConfigs is dropped at load: registerPaths does not catch the require(), so letting
     // it through would fail the connect attempt and reconnect-loop the agent over one config typo.
     "a blank static pathConfigs entry should be dropped, and the rest still register" {
       val (mockAgent, mockGrpcService) = agentWithStaticPaths("   ", "metrics2")
-      coEvery { mockGrpcService.registerPathOnProxy(any(), any(), any(), any()) } returns registerPathResponse {
-        valid = true
-        pathId = 1L
-      }
       val manager = AgentPathManager(mockAgent)
 
       manager.registerPaths()
@@ -960,10 +962,6 @@ class AgentPathManagerTest : StringSpec() {
 
     "registerPaths should register the remaining paths when the proxy rejects one" {
       val (mockAgent, mockGrpcService) = agentWithStaticPaths("metrics1", "metrics2", "metrics3")
-      coEvery { mockGrpcService.registerPathOnProxy(any(), any(), any(), any()) } returns registerPathResponse {
-        valid = true
-        pathId = 1L
-      }
       coEvery { mockGrpcService.registerPathOnProxy("metrics2", any(), any(), any()) } throws
         RequestFailureException("registerPathOnProxy() - path /metrics2 not authorized")
 
@@ -982,11 +980,8 @@ class AgentPathManagerTest : StringSpec() {
       clock: TimeSource = TimeSource.Monotonic,
       retryMaxSecs: Int? = null,
     ): Pair<AgentPathManager, AgentGrpcService> {
-      val (mockAgent, mockGrpcService) = agentWithStaticPaths("metrics1", "metrics2", retryMaxSecs = retryMaxSecs)
-      coEvery { mockGrpcService.registerPathOnProxy(any(), any(), any(), any()) } returns registerPathResponse {
-        valid = true
-        pathId = 1L
-      }
+      val (mockAgent, mockGrpcService) =
+        agentWithStaticPaths("metrics1", "metrics2", agentHocon = retryMaxHocon(retryMaxSecs))
       rejectPath(mockGrpcService, "metrics2", cause)
       return AgentPathManager(mockAgent, clock) to mockGrpcService
     }
@@ -1099,6 +1094,29 @@ class AgentPathManagerTest : StringSpec() {
       val (_, grpcService) = retriedOverTenTicks(retryMaxSecs = 10)
 
       coVerify(exactly = 11) { grpcService.registerPathOnProxy("metrics2", any(), any(), any()) }
+    }
+
+    // The "Retry backoff is off" lines an AgentPathManager built on [agent] logs.
+    fun backoffOffLogs(agent: Agent): List<String> =
+      captureLogs<AgentPathManager>(Level.INFO) { AgentPathManager(agent) }
+        .map { it.formattedMessage }
+        .filter { it.startsWith("Retry backoff is off") }
+
+    // A cap at or below a loop's interval turns that loop's backoff off, which nothing else would show.
+    "a retry cap at or below rejectedPathRetrySecs should log that the static backoff is off" {
+      val (agent, _) = agentWithStaticPaths("metrics1", agentHocon = retryMaxHocon(10))
+      backoffOffLogs(agent).single() shouldContain "static"
+    }
+
+    "a retry cap at or below the reconcile interval should log that the discovered backoff is off" {
+      val agent = createMockAgent(agentHocon = "discovery.enabled = true\n${retryMaxHocon(30)}")
+      // No static paths, and the cap is above their 10s interval anyway, so only the discovered backoff is off.
+      backoffOffLogs(agent).single() shouldContain "discovered"
+    }
+
+    "the default retry cap should not log that a backoff is off" {
+      val (agent, _) = agentWithStaticPaths("metrics1", agentHocon = "discovery.enabled = true")
+      backoffOffLogs(agent).shouldBeEmpty()
     }
 
     // The wait belongs in the log: an operator reading a repeated rejection needs to know it is still coming back.

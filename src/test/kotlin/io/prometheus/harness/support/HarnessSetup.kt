@@ -24,6 +24,7 @@ import io.prometheus.client.CollectorRegistry
 import kotlinx.coroutines.runBlocking
 import java.net.ServerSocket
 import kotlin.properties.Delegates.notNull
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 open class HarnessSetup {
@@ -36,22 +37,33 @@ open class HarnessSetup {
     proxySetup: () -> Proxy,
     agentSetup: () -> Agent,
     actions: () -> Unit = {},
+    // How long the agent gets to connect, and then to register its initial paths.
+    startupTimeout: Duration = 10.seconds,
   ) {
     CollectorRegistry.defaultRegistry.clear()
 
     // Wait for the proxy port to be available (previous test may not have fully released it)
     awaitPortFree(proxyPort)
 
-    // Start the proxy first and then allow the agent to connect
+    // Start the proxy first and then allow the agent to connect. If any step fails, stop whatever started, so the next
+    // spec's ports are free.
     proxy = proxySetup.invoke()
-    agent = agentSetup.invoke().apply {
-      awaitInitialConnection(10.seconds)
-      // Wait for any config-driven paths (from harness.conf etc.) to finish registering before
-      // the test samples pathMapSize(); otherwise the registration races the test on slow CI.
-      awaitInitialPathsRegistered(10.seconds)
+    var startedAgent: Agent? = null
+    try {
+      agent = agentSetup.invoke().also { startedAgent = it }
+      // Fail fast, naming the cause -- a TLS or auth misconfiguration, say. Waiting for the config-driven paths (from
+      // harness.conf etc.) as well keeps their registration from racing the test's pathMapSize() on slow CI.
+      check(agent.awaitInitialConnection(startupTimeout)) {
+        "${agent.simpleClassName} did not connect to the proxy within $startupTimeout"
+      }
+      check(agent.awaitInitialPathsRegistered(startupTimeout)) {
+        "${agent.simpleClassName} did not register its initial paths within $startupTimeout"
+      }
+      actions.invoke()
+    } catch (e: Throwable) {
+      runBlocking { TestUtils.stopAll(proxy, *listOfNotNull(startedAgent).toTypedArray()) }
+      throw e
     }
-
-    actions.invoke()
 
     logger.info { "Started ${proxy.simpleClassName} and ${agent.simpleClassName}" }
   }

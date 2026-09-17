@@ -116,6 +116,15 @@ internal class AgentPathManager(
   // proxy and awaiting retryRejectedStaticPaths -- so a discovered entry never takes over a configured static path.
   private val configuredStaticPaths: Set<String> = pathConfigs.mapTo(HashSet()) { it.path.removePrefix("/") }
 
+  // A cap at or below a loop's interval makes every tick due (see nextBackoff), which turns that loop's backoff off.
+  // Nothing else would show it, so say so once, at startup. Only pathConfigs entries go through the static loop.
+  init {
+    if (pathConfigs.isNotEmpty() && maxRetryBackoff <= staticRetryInterval)
+      logger.info { "Retry backoff is off for static paths: rejectedPathRetryMaxSecs <= rejectedPathRetrySecs" }
+    if (agentConfigVals.discovery.enabled && maxRetryBackoff <= discoveredRetryInterval)
+      logger.info { "Retry backoff is off for discovered paths: rejectedPathRetryMaxSecs <= reconcileIntervalSecs" }
+  }
+
   // Compiled once at startup, never per scrape. Keyed by normalized path, so a filter applies to
   // that path regardless of whether it was registered statically or by discovery.
   private val filtersByPath: Map<String, MetricFilter> =

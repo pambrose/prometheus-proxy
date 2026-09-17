@@ -29,6 +29,7 @@ import com.typesafe.config.ConfigFactory
 import com.typesafe.config.ConfigParseOptions
 import com.typesafe.config.ConfigResolveOptions
 import com.typesafe.config.ConfigSyntax
+import io.github.oshai.kotlinlogging.KLogger
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.common.EnvVars.ADMIN_ENABLED
 import io.prometheus.common.EnvVars.ADMIN_PORT
@@ -45,6 +46,18 @@ import java.io.File
 import java.io.FileNotFoundException
 import java.net.URI
 import kotlin.system.exitProcess
+
+/**
+ * Requires [value] to be positive, then logs it as `name: value` on this logger, so each options class keeps its own
+ * log category.
+ */
+internal fun KLogger.requirePositive(
+  name: String,
+  value: Int,
+) {
+  require(value > 0) { "$name must be > 0: $value" }
+  info { "$name: $value" }
+}
 
 abstract class BaseOptions protected constructor(
   private val progName: String,

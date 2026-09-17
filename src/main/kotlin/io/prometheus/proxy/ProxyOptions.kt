@@ -43,6 +43,7 @@ import io.prometheus.common.EnvVars.DASHBOARD_ENABLED
 import io.prometheus.common.EnvVars.DASHBOARD_HOST
 import io.prometheus.common.EnvVars.DASHBOARD_PATH
 import io.prometheus.common.EnvVars.DASHBOARD_PORT
+import io.prometheus.common.requirePositive
 
 class ProxyOptions(
   args: Array<String>,
@@ -296,20 +297,9 @@ class ProxyOptions(
             trustCertCollectionFilePath = tls.trustCertCollectionFilePath,
           )
 
-          require(internal.scrapeRequestTimeoutSecs > 0) {
-            "internal.scrapeRequestTimeoutSecs must be > 0: ${internal.scrapeRequestTimeoutSecs}"
-          }
-          logger.info { "internal.scrapeRequestTimeoutSecs: ${internal.scrapeRequestTimeoutSecs}" }
-
-          require(internal.staleAgentCheckPauseSecs > 0) {
-            "internal.staleAgentCheckPauseSecs must be > 0: ${internal.staleAgentCheckPauseSecs}"
-          }
-          logger.info { "internal.staleAgentCheckPauseSecs: ${internal.staleAgentCheckPauseSecs}" }
-
-          require(internal.maxAgentInactivitySecs > 0) {
-            "internal.maxAgentInactivitySecs must be > 0: ${internal.maxAgentInactivitySecs}"
-          }
-          logger.info { "internal.maxAgentInactivitySecs: ${internal.maxAgentInactivitySecs}" }
+          logger.requirePositive("internal.scrapeRequestTimeoutSecs", internal.scrapeRequestTimeoutSecs)
+          logger.requirePositive("internal.staleAgentCheckPauseSecs", internal.staleAgentCheckPauseSecs)
+          logger.requirePositive("internal.maxAgentInactivitySecs", internal.maxAgentInactivitySecs)
 
           // 0 is a valid (degenerate) "reject all content" limit, so only negatives are invalid here.
           require(internal.maxUnzippedContentSizeMBytes >= 0) {
@@ -399,10 +389,8 @@ class ProxyOptions(
     require(http.host.isNotBlank()) { "proxy.http.host must not be blank" }
     logger.info { "http.host: ${http.host}" }
 
-    val maxInFlight = proxyConfigVals.internal.maxInFlightScrapeRequests
     // A non-positive limit would refuse every scrape.
-    require(maxInFlight > 0) { "internal.maxInFlightScrapeRequests must be > 0: $maxInFlight" }
-    logger.info { "internal.maxInFlightScrapeRequests: $maxInFlight" }
+    logger.requirePositive("internal.maxInFlightScrapeRequests", proxyConfigVals.internal.maxInFlightScrapeRequests)
   }
 
   internal companion object {

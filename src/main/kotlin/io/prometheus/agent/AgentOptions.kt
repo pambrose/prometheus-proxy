@@ -48,6 +48,7 @@ import io.prometheus.common.EnvVars.UNARY_DEADLINE_SECS
 import io.prometheus.common.Utils.parseEndpointList
 import io.prometheus.common.Utils.parseHostPort
 import io.prometheus.common.Utils.stripScheme
+import io.prometheus.common.requirePositive
 import kotlin.time.Duration.Companion.seconds
 
 class AgentOptions(
@@ -332,8 +333,7 @@ class AgentOptions(
 
     if (chunkContentSizeKbs == -1)
       chunkContentSizeKbs = CHUNK_CONTENT_SIZE_KBS.getEnv(agentConfigVals.chunkContentSizeKbs)
-    require(chunkContentSizeKbs > 0) { "chunkContentSizeKbs must be > 0: ($chunkContentSizeKbs)" }
-    logger.info { "chunkContentSizeKbs: $chunkContentSizeKbs" }
+    logger.requirePositive("chunkContentSizeKbs", chunkContentSizeKbs)
     // Derive the byte value once into the runtime field. A chunk travels as one gRPC message, so it must fit the
     // proxy's inbound limit; computed as a Long so a huge KB value cannot overflow past the check.
     val chunkSizeAsBytes = chunkContentSizeKbs.toLong() * 1024
@@ -409,44 +409,32 @@ class AgentOptions(
       // on both the heartbeat-enabled and heartbeat-disabled branches. delay() returns immediately for
       // a non-positive duration, and neither loop condition suspends, so 0 spins without ever reaching
       // a cancellation check and pins an IO thread for the connection's lifetime.
-      require(internal.heartbeatCheckPauseMillis > 0) {
-        "agent.internal.heartbeatCheckPauseMillis must be > 0: ${internal.heartbeatCheckPauseMillis}"
-      }
-      logger.info { "agent.internal.heartbeatCheckPauseMillis: ${internal.heartbeatCheckPauseMillis}" }
+      logger.requirePositive("agent.internal.heartbeatCheckPauseMillis", internal.heartbeatCheckPauseMillis)
 
       val inactivityVal = internal.heartbeatMaxInactivitySecs
       logger.info { "agent.internal.heartbeatMaxInactivitySecs: $inactivityVal" }
 
       // reconnectPauseSecs feeds RateLimiter.create(1.0 / reconnectPauseSecs) in Agent: 0 yields an
       // infinite rate (hot reconnect loop) and a negative value an opaque Guava IAE at startup (finding 11).
-      require(internal.reconnectPauseSecs > 0) {
-        "agent.internal.reconnectPauseSecs must be > 0: ${internal.reconnectPauseSecs}"
-      }
-      logger.info { "agent.internal.reconnectPauseSecs: ${internal.reconnectPauseSecs}" }
+      logger.requirePositive("agent.internal.reconnectPauseSecs", internal.reconnectPauseSecs)
 
       // rejectedPathRetrySecs paces the loop in Agent.connectToProxy that retries rejected static paths, and is the
       // base of AgentPathManager's retry backoff; a non-positive value would spin that loop for the connection's
       // lifetime.
-      require(internal.rejectedPathRetrySecs > 0) {
-        "agent.internal.rejectedPathRetrySecs must be > 0: ${internal.rejectedPathRetrySecs}"
-      }
-      logger.info { "agent.internal.rejectedPathRetrySecs: ${internal.rejectedPathRetrySecs}" }
+      logger.requirePositive("agent.internal.rejectedPathRetrySecs", internal.rejectedPathRetrySecs)
 
       // rejectedPathRetryMaxSecs caps that backoff (see AgentPathManager); a cap of zero or less has no meaning.
-      require(internal.rejectedPathRetryMaxSecs > 0) {
-        "agent.internal.rejectedPathRetryMaxSecs must be > 0: ${internal.rejectedPathRetryMaxSecs}"
-      }
-      logger.info { "agent.internal.rejectedPathRetryMaxSecs: ${internal.rejectedPathRetryMaxSecs}" }
+      logger.requirePositive("agent.internal.rejectedPathRetryMaxSecs", internal.rejectedPathRetryMaxSecs)
 
       // scrapeRequestBacklogUnhealthySize * 2 is the AgentConnectionContext channel capacity: 0 makes it
       // a rendezvous channel (every send blocks). A negative value is worse than it looks -- -1 yields
       // Channel(-2), which kotlinx maps to BUFFERED, i.e. a silent 64-slot channel rather than an error,
       // and the health check then compares the backlog against a negative threshold and reports
       // unhealthy from startup. Only values <= -2 actually throw at connect time (finding 11).
-      require(internal.scrapeRequestBacklogUnhealthySize > 0) {
-        "agent.internal.scrapeRequestBacklogUnhealthySize must be > 0: ${internal.scrapeRequestBacklogUnhealthySize}"
-      }
-      logger.info { "agent.internal.scrapeRequestBacklogUnhealthySize: ${internal.scrapeRequestBacklogUnhealthySize}" }
+      logger.requirePositive(
+        "agent.internal.scrapeRequestBacklogUnhealthySize",
+        internal.scrapeRequestBacklogUnhealthySize,
+      )
 
       // Discovery misconfig fails fast like the other config-only values: an empty file path would
       // silently discover nothing, and a non-positive interval would turn the reconcile loop into a hot spin.
@@ -454,11 +442,8 @@ class AgentOptions(
         require(discovery.file.path.isNotEmpty()) {
           "agent.discovery.file.path must be set when agent.discovery.enabled is true"
         }
-        require(discovery.reconcileIntervalSecs > 0) {
-          "agent.discovery.reconcileIntervalSecs must be > 0: ${discovery.reconcileIntervalSecs}"
-        }
         logger.info { "agent.discovery.file.path: ${discovery.file.path}" }
-        logger.info { "agent.discovery.reconcileIntervalSecs: ${discovery.reconcileIntervalSecs}" }
+        logger.requirePositive("agent.discovery.reconcileIntervalSecs", discovery.reconcileIntervalSecs)
       }
     }
 
@@ -495,40 +480,31 @@ class AgentOptions(
 
       if (maxConcurrentHttpClients == -1)
         maxConcurrentHttpClients = MAX_CONCURRENT_CLIENTS.getEnv(maxConcurrentClients)
-      require(maxConcurrentHttpClients > 0) { "http.maxConcurrentClients must be > 0" }
-      logger.info { "http.maxConcurrentClients: $maxConcurrentHttpClients" }
+      logger.requirePositive("http.maxConcurrentClients", maxConcurrentHttpClients)
 
       if (httpClientTimeoutSecs == -1)
         httpClientTimeoutSecs = CLIENT_TIMEOUT_SECS.getEnv(clientTimeoutSecs)
-      require(httpClientTimeoutSecs > 0) { "http.clientTimeoutSecs must be > 0" }
-      logger.info { "http.clientTimeoutSecs: $httpClientTimeoutSecs" }
+      logger.requirePositive("http.clientTimeoutSecs", httpClientTimeoutSecs)
 
       if (this@AgentOptions.maxContentLengthMBytes == -1)
         this@AgentOptions.maxContentLengthMBytes = agentConfigVals.http.maxContentLengthMBytes
-      require(this@AgentOptions.maxContentLengthMBytes > 0) { "http.maxContentLengthMBytes must be > 0" }
-      logger.info { "http.maxContentLengthMBytes: ${this@AgentOptions.maxContentLengthMBytes}" }
+      logger.requirePositive("http.maxContentLengthMBytes", this@AgentOptions.maxContentLengthMBytes)
 
       if (maxCacheSize == -1)
         maxCacheSize = MAX_CLIENT_CACHE_SIZE.getEnv(clientCache.maxSize)
-      require(maxCacheSize > 0) { "http.clientCache.maxSize must be > 0: ($maxCacheSize)" }
-      logger.info { "http.clientCache.maxSize: $maxCacheSize" }
+      logger.requirePositive("http.clientCache.maxSize", maxCacheSize)
 
       if (maxCacheAgeMins == -1)
         maxCacheAgeMins = MAX_CLIENT_CACHE_AGE_MINS.getEnv(clientCache.maxAgeMins)
-      require(maxCacheAgeMins > 0) { "http.clientCache.maxCacheAgeMins must be > 0: ($maxCacheAgeMins)" }
-      logger.info { "http.clientCache.maxCacheAgeMins: $maxCacheAgeMins" }
+      logger.requirePositive("http.clientCache.maxCacheAgeMins", maxCacheAgeMins)
 
       if (maxCacheIdleMins == -1)
         maxCacheIdleMins = MAX_CLIENT_CACHE_IDLE_MINS.getEnv(clientCache.maxIdleMins)
-      require(maxCacheIdleMins > 0) { "http.clientCache.maxCacheIdleMins must be > 0: ($maxCacheIdleMins)" }
-      logger.info { "http.clientCache.maxCacheIdleMins: $maxCacheIdleMins" }
+      logger.requirePositive("http.clientCache.maxCacheIdleMins", maxCacheIdleMins)
 
       if (cacheCleanupIntervalMins == -1)
         cacheCleanupIntervalMins = CLIENT_CACHE_CLEANUP_INTERVAL_MINS.getEnv(clientCache.cleanupIntervalMins)
-      require(cacheCleanupIntervalMins > 0) {
-        "http.clientCache.cleanupIntervalMins must be > 0: ($cacheCleanupIntervalMins)"
-      }
-      logger.info { "http.clientCache.cleanupIntervalMins: $cacheCleanupIntervalMins" }
+      logger.requirePositive("http.clientCache.cleanupIntervalMins", cacheCleanupIntervalMins)
     }
   }
 
