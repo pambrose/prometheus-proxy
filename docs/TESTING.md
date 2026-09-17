@@ -253,8 +253,9 @@ Integration tests exercise full proxy+agent workflows with real instances:
 - **InProcessTestWithAdminMetricsTest** — In-process gRPC tests with admin/metrics enabled
 - **NettyTestNoAdminMetricsTest** — Netty transport tests without admin/metrics
 - **NettyTestWithAdminMetricsTest** — Netty transport tests with admin/metrics enabled
-- **TlsNoMutualAuthTest** — TLS tests without mutual authentication
-- **TlsWithMutualAuthTest** — TLS tests with mutual authentication (client certs)
+- **TlsNoMutualAuthTest** — the standard harness suite over a real TLS channel (Netty), without mutual
+  authentication
+- **TlsWithMutualAuthTest** — the standard harness suite over a real mutual-TLS channel (Netty, client certs)
 
 Each integration test class runs a standard suite defined in `AbstractHarnessTests`:
 

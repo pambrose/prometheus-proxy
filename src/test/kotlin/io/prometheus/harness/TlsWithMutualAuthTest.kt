@@ -30,8 +30,11 @@ import io.prometheus.harness.support.ProxyCallTestArgs
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
 
-// In-process, so the TLS flags exercise option parsing and certificate loading only: the in-process channel is
-// plaintext and ignores the proxy address and the authority override. ContainersTlsTest runs a real TLS channel.
+private const val AGENT_PORT = TestPorts.TLS_MUTUAL_AUTH_AGENT_PORT
+
+// Over Netty, so every call in the suite crosses a real mutual-TLS channel: the agent verifies the proxy's certificate
+// against ca.pem, under the name the certificate was issued for (--override), and the proxy requires the agent's
+// client certificate. TlsMutualAuthRejectionTest covers an agent that presents none.
 class TlsWithMutualAuthTest :
   AbstractHarnessTests(
     argsProvider = {
@@ -51,8 +54,9 @@ class TlsWithMutualAuthTest :
         proxyPort = PROXY_PORT,
         proxySetup = {
           startProxy(
-            serverName = "withmutualauth",
             args = [
+              "--agent_port",
+              "$AGENT_PORT",
               "--cert",
               "testing/certs/server1.pem",
               "--key",
@@ -64,11 +68,12 @@ class TlsWithMutualAuthTest :
         },
         agentSetup = {
           startAgent(
-            serverName = "withmutualauth",
             scrapeTimeoutSecs = DEFAULT_SCRAPE_TIMEOUT_SECS,
             chunkContentSizeBytes = DEFAULT_CHUNK_SIZE_BYTES,
             maxConcurrentClients = HARNESS_CONFIG.concurrentClients,
             args = [
+              "--proxy",
+              "localhost:$AGENT_PORT",
               "--cert",
               "testing/certs/client.pem",
               "--key",

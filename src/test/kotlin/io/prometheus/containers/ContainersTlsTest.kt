@@ -36,7 +36,7 @@ import kotlin.time.Duration.Companion.seconds
 
 /**
  * Stretch: the agent↔proxy gRPC channel runs over TLS through the packaged JARs in containers, using the
- * project's `testing/certs` fixtures (the same ones the in-process [io.prometheus.harness.TlsNoMutualAuthTest]
+ * project's `testing/certs` fixtures (the same ones the Netty harness specs [io.prometheus.harness.TlsNoMutualAuthTest]
  * and [io.prometheus.harness.TlsWithMutualAuthTest] use; regenerate them with `make regen-certs`). The proxy
  * presents `server1.pem`, whose SAN `*.test.google.fr` is matched via the agent's `OVERRIDE_AUTHORITY`, and the
  * agent trusts the signing CA `ca.pem`. The second case adds mutual TLS with the `client.pem` client cert.

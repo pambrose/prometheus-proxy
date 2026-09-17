@@ -30,8 +30,11 @@ import io.prometheus.harness.support.ProxyCallTestArgs
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
 
-// In-process, so the TLS flags exercise option parsing and certificate loading only: the in-process channel is
-// plaintext and ignores the proxy address and the authority override. ContainersTlsTest runs a real TLS channel.
+private const val AGENT_PORT = TestPorts.TLS_NO_MUTUAL_AUTH_AGENT_PORT
+
+// Over Netty, so every call in the suite crosses a real TLS channel: the agent verifies the proxy's certificate
+// against ca.pem, under the name the certificate was issued for (--override). The test classpath carries
+// netty-tcnative's natives, so the handshake runs on BoringSSL where they load, as in the fat JARs.
 class TlsNoMutualAuthTest :
   AbstractHarnessTests(
     argsProvider = {
@@ -51,8 +54,9 @@ class TlsNoMutualAuthTest :
         proxyPort = PROXY_PORT,
         proxySetup = {
           startProxy(
-            serverName = "nomutualauth",
             args = [
+              "--agent_port",
+              "$AGENT_PORT",
               "--cert",
               "testing/certs/server1.pem",
               "--key",
@@ -62,11 +66,12 @@ class TlsNoMutualAuthTest :
         },
         agentSetup = {
           startAgent(
-            serverName = "nomutualauth",
             scrapeTimeoutSecs = DEFAULT_SCRAPE_TIMEOUT_SECS,
             chunkContentSizeBytes = DEFAULT_CHUNK_SIZE_BYTES,
             maxConcurrentClients = HARNESS_CONFIG.concurrentClients,
             args = [
+              "--proxy",
+              "localhost:$AGENT_PORT",
               "--trust",
               "testing/certs/ca.pem",
               "--override",
