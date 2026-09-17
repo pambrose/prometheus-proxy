@@ -633,7 +633,7 @@ class AgentPathManagerTest : StringSpec() {
       manager.reconcileDiscoveredPaths(paths.map { DiscoveredPath(it, it, "http://$it/m", "{}") })
       val failedOnce = AtomicBoolean(false)
       coEvery { grpc.unregisterPathOnProxy(any()) } answers {
-        if (failedOnce.compareAndSet(false, true)) throw StatusException(Status.UNAVAILABLE)
+        if (failedOnce.compareAndSet(expectedValue = false, newValue = true)) throw StatusException(Status.UNAVAILABLE)
         unregisterPathResponse { valid = true }
       }
 

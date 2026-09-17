@@ -19,7 +19,6 @@ package io.prometheus.agent.discovery
 import com.pambrose.common.util.runCatchingCancellable
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.agent.AgentPathManager
-import io.prometheus.agent.discovery.DiscoveredPath
 import kotlinx.coroutines.delay
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds

@@ -544,10 +544,8 @@ class ProxyHttpConfigTest : StringSpec() {
       val port = server.startAndAwaitReady()
       captureLogs<ProxyHttpConfig>(LogbackLevel.DEBUG) {
         val client = newHttpClient()
-        try {
+        client.use { client ->
           block(client, "http://localhost:$port")
-        } finally {
-          client.close()
         }
       }
     } finally {

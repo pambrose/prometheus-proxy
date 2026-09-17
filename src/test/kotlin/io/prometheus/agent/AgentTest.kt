@@ -673,7 +673,7 @@ class AgentTest : StringSpec() {
       val agent = createTestAgent()
 
       shouldNotThrow<Throwable> {
-        agent.handleConnectionFailure(java.io.IOException("connection reset"))
+        agent.handleConnectionFailure(IOException("connection reset"))
       }
     }
 

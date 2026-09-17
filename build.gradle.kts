@@ -459,7 +459,7 @@ fun Project.configureCoverage() {
         }
       }
 
-      // Every hand-written class must clear MIN_CLASS_LINE_COVERAGE_PCT on its own, so a new untested class fails the
+      // Every handwritten class must clear MIN_CLASS_LINE_COVERAGE_PCT on its own, so a new untested class fails the
       // build instead of disappearing into the totals.
       variant("perClass") {
         filtersAppend {
@@ -471,8 +471,8 @@ fun Project.configureCoverage() {
               "*$*$*",
               // JVM entry points (main, startSyncAgent) start a whole process and block, so tests use the embedded
               // entry point instead.
-              "$basePackage.Proxy\$Companion",
-              "$basePackage.Agent\$Companion",
+              $$"$$basePackage.Proxy$Companion",
+              $$"$$basePackage.Agent$Companion",
             )
           }
         }

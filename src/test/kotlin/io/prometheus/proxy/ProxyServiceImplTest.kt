@@ -19,7 +19,6 @@
 package io.prometheus.proxy
 
 import com.google.protobuf.ByteString
-import com.typesafe.config.ConfigFactory
 import io.grpc.Context
 import io.grpc.Status
 import io.grpc.StatusException
@@ -38,7 +37,6 @@ import io.mockk.slot
 import io.mockk.verify
 import io.prometheus.Proxy
 import io.prometheus.client.Counter
-import io.prometheus.common.ConfigVals
 import io.prometheus.common.testConfigVals
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
 import io.prometheus.grpc.ChunkedScrapeResponse
