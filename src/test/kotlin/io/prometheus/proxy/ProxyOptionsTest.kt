@@ -18,10 +18,12 @@
 
 package io.prometheus.proxy
 
+import ch.qos.logback.classic.Level
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.collections.shouldContain as shouldContainElement
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
@@ -29,6 +31,7 @@ import io.prometheus.common.TestPorts.PROMETHEUS_PORT
 import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
 import io.prometheus.common.TestPorts.PROXY_DASHBOARD_PORT
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
+import io.prometheus.common.captureLogs
 import io.prometheus.common.proxyOptions
 import io.prometheus.common.proxyOptionsFromConfig
 
@@ -271,6 +274,18 @@ class ProxyOptionsTest : StringSpec() {
       options.keepAliveTimeoutSecs shouldBe -1L
     }
 
+    // A gRPC timeout is logged as its value, or, left at the -1 sentinel, as the gRPC default it keeps. The keepalive
+    // settings are logged by BaseOptions, hence the capture of every io.prometheus logger.
+    "gRPC timeouts should be logged as their value, or as the default the -1 sentinel keeps" {
+      val lines =
+        captureLogs("io.prometheus", Level.INFO) { proxyOptions(["--handshake_timeout_secs", "60"]) }
+          .map { it.formattedMessage }
+
+      lines shouldContainElement "grpc.handshakeTimeoutSecs: 60"
+      lines shouldContainElement "grpc.maxConnectionIdleSecs: default (INT_MAX)"
+      lines shouldContainElement "grpc.keepAliveTimeSecs: default (gRPC default)"
+    }
+
     // These internal config values are positive durations/sizes; a 0/negative would otherwise
     // surface as silent misbehavior (busy-loop, immediate eviction, all-content-rejected) rather
     // than a clear startup error.
@@ -432,6 +447,11 @@ class ProxyOptionsTest : StringSpec() {
       val exception =
         shouldThrow<IllegalArgumentException> { proxyOptions(["--dashboard", "-Dproxy.dashboard.maxSessions=0"]) }
       exception.message shouldContain "maxSessions"
+    }
+
+    "the dashboard's maxSessions should be logged at startup when the dashboard is enabled" {
+      captureLogs<ProxyOptions>(Level.INFO) { proxyOptions(["--dashboard"]) }
+        .map { it.formattedMessage } shouldContainElement "dashboard.maxSessions: 50"
     }
 
     // The dashboard has no authentication, so listening on every interface earns a startup warning. Only a

@@ -59,6 +59,21 @@ internal fun KLogger.requirePositive(
   info { "$name: $value" }
 }
 
+/**
+ * Requires [value], a gRPC timeout or keepalive setting, to be -1 or positive, then logs it as `name: value`. -1 is the
+ * sentinel that leaves gRPC's built-in default in place (the `> -1L` guards in ProxyGrpcService rely on it) and is
+ * logged as `name: default ([default])`; any other non-positive value would surface as an opaque gRPC builder
+ * exception at startup.
+ */
+internal fun KLogger.requireGrpcTimeout(
+  name: String,
+  value: Long,
+  default: String,
+) {
+  require(value == -1L || value > 0L) { "$name must be -1 (default) or > 0: $value" }
+  info { "$name: ${if (value == -1L) "default ($default)" else value}" }
+}
+
 abstract class BaseOptions protected constructor(
   private val progName: String,
   private val args: Array<String>,
@@ -305,28 +320,16 @@ abstract class BaseOptions protected constructor(
     assignConfigVals()
   }
 
-  // Renders a gRPC timeout/keepalive field for logging: the resolved value, or "default (<descriptor>)"
-  // when the field is still at the -1L "leave the gRPC built-in default in place" sentinel.
-  protected fun Long.grpcDefaultLabel(default: String): Any = if (this == -1L) "default ($default)" else this
-
   protected fun assignKeepAliveTimeSecs(defaultVal: Long) {
     if (keepAliveTimeSecs == -1L)
       keepAliveTimeSecs = KEEPALIVE_TIME_SECS.getEnv(defaultVal)
-    // -1L keeps the gRPC built-in default; any other non-positive value would surface as an opaque
-    // gRPC builder exception at startup, so fail fast with a clear message instead.
-    require(keepAliveTimeSecs == -1L || keepAliveTimeSecs > 0L) {
-      "grpc.keepAliveTimeSecs must be -1 (default) or > 0: $keepAliveTimeSecs"
-    }
-    logger.info { "grpc.keepAliveTimeSecs: ${keepAliveTimeSecs.grpcDefaultLabel("gRPC default")}" }
+    logger.requireGrpcTimeout("grpc.keepAliveTimeSecs", keepAliveTimeSecs, "gRPC default")
   }
 
   protected fun assignKeepAliveTimeoutSecs(defaultVal: Long) {
     if (keepAliveTimeoutSecs == -1L)
       keepAliveTimeoutSecs = KEEPALIVE_TIMEOUT_SECS.getEnv(defaultVal)
-    require(keepAliveTimeoutSecs == -1L || keepAliveTimeoutSecs > 0L) {
-      "grpc.keepAliveTimeoutSecs must be -1 (default) or > 0: $keepAliveTimeoutSecs"
-    }
-    logger.info { "grpc.keepAliveTimeoutSecs: ${keepAliveTimeoutSecs.grpcDefaultLabel("gRPC default")}" }
+    logger.requireGrpcTimeout("grpc.keepAliveTimeoutSecs", keepAliveTimeoutSecs, "gRPC default")
   }
 
   protected fun assignAdminEnabled(defaultVal: Boolean) {
