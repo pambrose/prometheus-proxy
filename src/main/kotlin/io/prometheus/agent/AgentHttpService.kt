@@ -24,7 +24,6 @@ package io.prometheus.agent
 import com.google.common.net.HttpHeaders.ACCEPT
 import com.google.common.net.HttpHeaders.CONTENT_TYPE
 import com.pambrose.common.dsl.KtorDsl.get
-import com.pambrose.common.util.EMPTY_BYTE_ARRAY
 import com.pambrose.common.util.simpleClassName
 import com.pambrose.common.util.zip
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
@@ -44,12 +43,13 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.Url
 import io.ktor.http.isSuccess
-import io.ktor.utils.io.readRemaining
+import io.ktor.utils.io.readBuffer
 import io.prometheus.Agent
 import io.prometheus.agent.HttpClientCache.ClientKey
 import io.prometheus.agent.filter.MetricFilter
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.ScrapeResults.Companion.errorCode
+import io.prometheus.common.Utils.EMPTY_BYTE_ARRAY
 import io.prometheus.common.Utils.appendQueryParams
 import io.prometheus.common.Utils.sanitizeUrl
 import io.prometheus.common.Utils.sanitizeUrlsInText
@@ -225,10 +225,10 @@ internal class AgentHttpService(
       // Read at most maxContentLength + 1 bytes straight from the response channel. A response with
       // no Content-Length header (e.g. chunked transfer encoding) or an understated one bypasses the
       // header guard above, and bodyAsText() would buffer the entire body into the heap before the
-      // size check below — a memory-exhaustion vector. readRemaining caps the read, so the guard
+      // size check below — a memory-exhaustion vector. readBuffer caps the read, so the guard
       // runs against a bounded buffer. The bytes are reused for both the size check and gzip;
       // ByteArray.zip() avoids the second UTF-8 encode that String.zip() would do.
-      val contentBytes = response.bodyAsChannel().readRemaining(maxContentLength + 1).readByteArray()
+      val contentBytes = response.bodyAsChannel().readBuffer(maxContentLength + 1).readByteArray()
       val contentByteSize = contentBytes.size.toLong()
       if (contentByteSize > maxContentLength) {
         val msg = "Content size exceeds maximum allowed size of $maxContentLength bytes"
