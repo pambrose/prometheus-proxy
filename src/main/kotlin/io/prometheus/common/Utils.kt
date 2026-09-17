@@ -39,6 +39,8 @@ internal object Utils {
 
   internal fun getVersionDesc(asJson: Boolean = false): String = Proxy::class.versionDesc(asJson)
 
+  val EMPTY_BYTE_ARRAY = ByteArray(0)
+
   /**
    * Masks secrets in a URL before it is logged or echoed back to Prometheus.
    *

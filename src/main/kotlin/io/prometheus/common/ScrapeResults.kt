@@ -18,7 +18,6 @@
 
 package io.prometheus.common
 
-import com.pambrose.common.util.EMPTY_BYTE_ARRAY
 import com.pambrose.common.util.simpleClassName
 import io.prometheus.common.Utils.causeChain
 import com.google.protobuf.ByteString
@@ -28,6 +27,7 @@ import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.http.HttpStatusCode.Companion.RequestTimeout
 import io.ktor.http.HttpStatusCode.Companion.ServiceUnavailable
 import io.ktor.network.sockets.SocketTimeoutException
+import io.prometheus.common.Utils.EMPTY_BYTE_ARRAY
 import io.prometheus.common.Utils.sanitizeUrlsInText
 import io.prometheus.grpc.ScrapeResponse
 import io.prometheus.grpc.chunkedScrapeResponse
