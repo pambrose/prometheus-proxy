@@ -231,7 +231,7 @@ interval as their deadline, capped at the unary deadline.
   meant to be ignored is no longer tracked.
 - The test suite relies less on timing: expiry and cleanup tests use a test clock or wait for a real signal
   instead of sleeping, harness ports are checked for duplicates and kept off the ports a proxy, agent, or
-  Prometheus already running on the machine uses, and a missing test config fails the run instead of being
+  Prometheus already running on the machine uses, the TLS specs now run over a real TLS channel, and a missing test config fails the run instead of being
   fetched from GitHub.
 - `etc/compose/proxy.yml` is a working Compose file again: it starts a proxy, an agent, and a Prometheus
   server that scrapes through them. `.dockerignore` now admits only the two JARs the images copy, and the
@@ -256,8 +256,8 @@ interval as their deadline, capped at the unary deadline.
   itself.
 - The agent and proxy JARs now use OpenSSL (BoringSSL) for TLS instead of the JDK's implementation, on Linux and
   macOS (x86_64 and aarch64) and on Windows (x86_64), including in the Docker images; on any other platform they
-  fall back to the JDK's TLS. The natives come with common-utils 4.1.0 and add about 8 MB to each JAR (41 MB →
-  49 MB), and an application that embeds the agent now gets them whether it is built with Gradle or Maven.
+  fall back to the JDK's TLS. The natives come with common-utils 4.1.0 and add about 6 MB to each JAR, which,
+  with the modules Ktor 3.6.0's server now depends on, grows from 41 MB to 49 MB; an application that embeds the agent now gets them whether it is built with Gradle or Maven.
   Certificates and TLS settings are used as before, but anything that differs between the two providers, such
   as the default cipher suites, now follows BoringSSL.
 

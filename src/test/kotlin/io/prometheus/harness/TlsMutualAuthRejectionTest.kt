@@ -34,11 +34,10 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.seconds
 
-// Item 28: negative-path coverage for mutual TLS. The existing TlsWithMutualAuthTest /
-// TlsNoMutualAuthTest run over the in-process transport (a non-empty serverName selects in-process,
-// which ignores the TLS context), so they only verify TLS *config* parsing, never a real handshake.
+// Item 28: negative-path coverage for mutual TLS. TlsWithMutualAuthTest and TlsNoMutualAuthTest cover
+// handshakes that succeed; this one covers a client certificate that is missing.
 //
-// This test uses an empty serverName, which selects the Netty transport and performs an actual TLS
+// Like them, it uses an empty serverName, which selects the Netty transport and performs an actual TLS
 // handshake. The proxy requires a client certificate (--trust enables mutual auth); the agent is
 // started WITHOUT --cert/--key, so the handshake is rejected and the agent never registers. A
 // regression that silently stopped enforcing client-cert verification — a security boundary — would
