@@ -94,10 +94,10 @@ dependencies {
   implementation(libs.grpc.kotlin.stub)
 
   // BoringSSL bindings that let Netty use OpenSSL for TLS instead of the JDK. This artifact holds no native
-  // code: its POM pulls in per-platform classifier jars, which Maven resolves and Gradle does not. So the fat
-  // JARs, and Gradle builds that embed the agent, use the JDK's TLS, while Maven builds that embed the agent
-  // load OpenSSL. Declared to give those builds the tcnative version grpc is tested with (see libs.versions.toml);
-  // runtimeOnly because nothing references it at compile time.
+  // code; the natives come in per-platform classifier jars, which common-utils' grpc-utils declares for Linux
+  // (x86_64, aarch_64), macOS (x86_64, aarch_64), and Windows (x86_64). So the fat JARs, and builds that embed the
+  // agent, use OpenSSL on those platforms and fall back to the JDK's TLS elsewhere. Declared to pin the tcnative
+  // version grpc is tested with (see libs.versions.toml); runtimeOnly because nothing references it at compile time.
   runtimeOnly(libs.netty.tcnative)
 
   implementation(libs.jetty.servlet)

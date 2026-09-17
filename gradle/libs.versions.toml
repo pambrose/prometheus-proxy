@@ -27,7 +27,7 @@ gengrpc = "1.5.0"
 # Keep in sync with the protobuf-java version grpc-protobuf depends on (3.25.9 for grpc 1.84.0)
 protoc = "3.25.9"
 # Keep in sync with grpc: the netty-tcnative version grpc-java is built and tested with (2.0.81.Final for grpc 1.84.0,
-# per grpc-java's SECURITY.md). common-utils' grpc-utils also brings tcnative; this declaration sets the version.
+# per grpc-java's SECURITY.md). common-utils' grpc-utils also brings tcnative, with its per-platform natives; this declaration sets the version.
 tcnative = "2.0.81.Final"
 
 # Ktor
