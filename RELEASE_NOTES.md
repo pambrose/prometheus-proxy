@@ -83,8 +83,8 @@ consolidated agents under different identities, move them onto one identity befo
 
 If you are moving agents onto per-agent identities, or moving a path from one identity to another, stop the old
 agent before starting its replacement where you can. While the old agent is connected, the new agent's registration
-of its paths is rejected. The new agent retries a rejected static path every `agent.internal.rejectedPathRetrySecs`
-(default 10s) and registers it once the old agent is gone, and it retries discovered paths on each reconcile. Agents
+of its paths is rejected. The new agent keeps retrying those paths, on the backoff described under Agent
+registration and failover, and registers them once the old agent is gone. Agents
 from 4.0.1 or earlier instead treat any rejected path as a failed connection and retry with every path down until
 the old agent disconnects, so for them stopping the old agent first matters.
 
@@ -135,9 +135,11 @@ response" log is now WARN rather than INFO, since it now means something needs a
 
 A rejected static path is retried only when the rejection can clear, and on a backoff: the first retry comes one
 `agent.internal.rejectedPathRetrySecs` (default 10s) after the rejection, and each further rejection doubles the
-wait, capped at five minutes. A conflict that lasts an hour now costs the proxy about a dozen round trips for the
-path instead of 360, at the price of registering up to five minutes after it clears. Discovered paths are paced
-the same way, from `agent.discovery.reconcileIntervalSecs`. The proxy now says why it rejected a path, in a new `rejection_cause` field of its
+wait, up to the new `agent.internal.rejectedPathRetryMaxSecs` (default five minutes). A conflict that lasts an hour
+now costs the proxy about a dozen round trips for the path instead of 360, at the price of registering up to the
+cap after it clears; lower the cap to notice sooner, or set it at or below the retry interval to turn the backoff
+off. Discovered paths are paced the same way, from `agent.discovery.reconcileIntervalSecs`.
+The proxy now says why it rejected a path, in a new `rejection_cause` field of its
 registration response, and the agent retries only the causes that clear once a live agent holding the path
 leaves: another identity's agent serving it, or a consolidated/non-consolidated mismatch. A rejection for any
 other cause, such as a path the agent's identity isn't authorized for, is logged once and not retried, as is one

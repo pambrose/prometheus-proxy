@@ -124,8 +124,9 @@ active), so you can adopt per-agent identities incrementally:
    keep connecting with the shared token.
 2. Move each agent onto its own identity token, one at a time, stopping the old agent before starting
    its replacement. While the old agent still serves a path, the proxy rejects the new identity's
-   registration of it; the new agent retries a rejected static path every
-   `agent.internal.rejectedPathRetrySecs` and registers it once the old agent is gone.
+   registration of it; the new agent retries a rejected static path, first after
+   `agent.internal.rejectedPathRetrySecs` and then on a backoff of up to
+   `agent.internal.rejectedPathRetryMaxSecs`, and registers it once the old agent is gone.
 3. Once every agent presents an identity token, remove `proxy.agentToken` to close the shared
    allow-all path.
 

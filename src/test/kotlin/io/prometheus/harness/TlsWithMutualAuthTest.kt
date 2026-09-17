@@ -52,7 +52,7 @@ class TlsWithMutualAuthTest :
             serverName = "withmutualauth",
             args = [
               "--agent_port",
-              "50440",
+              "${TestPorts.TLS_MUTUAL_AUTH_AGENT_PORT}",
               "--cert",
               "testing/certs/server1.pem",
               "--key",
@@ -70,7 +70,7 @@ class TlsWithMutualAuthTest :
             maxConcurrentClients = HARNESS_CONFIG.concurrentClients,
             args = [
               "--proxy",
-              "localhost:50440",
+              "localhost:${TestPorts.TLS_MUTUAL_AUTH_AGENT_PORT}",
               "--cert",
               "testing/certs/client.pem",
               "--key",

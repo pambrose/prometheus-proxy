@@ -52,7 +52,7 @@ class TlsNoMutualAuthTest :
             serverName = "nomutualauth",
             args = [
               "--agent_port",
-              "50440",
+              "${TestPorts.TLS_NO_MUTUAL_AUTH_AGENT_PORT}",
               "--cert",
               "testing/certs/server1.pem",
               "--key",
@@ -68,7 +68,7 @@ class TlsNoMutualAuthTest :
             maxConcurrentClients = HARNESS_CONFIG.concurrentClients,
             args = [
               "--proxy",
-              "localhost:50440",
+              "localhost:${TestPorts.TLS_NO_MUTUAL_AUTH_AGENT_PORT}",
               "--trust",
               "testing/certs/ca.pem",
               "--override",

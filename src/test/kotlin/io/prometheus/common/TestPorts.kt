@@ -63,6 +63,11 @@ object TestPorts {
   const val TLS_REJECTION_HTTP_PORT = 9512
   const val TLS_REJECTION_AGENT_PORT = 50460
 
+  // TlsNoMutualAuthTest and TlsWithMutualAuthTest: the --agent_port each passes. Both run in-process, so neither
+  // actually binds it.
+  const val TLS_NO_MUTUAL_AUTH_AGENT_PORT = 50440
+  const val TLS_MUTUAL_AUTH_AGENT_PORT = 50441
+
   // AgentTokenAuthTest
   const val TOKEN_AUTH_HTTP_PORT_OK = 9513
   const val TOKEN_AUTH_AGENT_PORT_OK = 50461
