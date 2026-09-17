@@ -18,7 +18,6 @@
 
 package io.prometheus.agent
 
-import com.typesafe.config.ConfigFactory
 import io.kotest.assertions.fail
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
@@ -49,7 +48,6 @@ import io.mockk.spyk
 import io.prometheus.Agent
 import io.prometheus.agent.filter.MetricFilter
 import io.prometheus.client.CollectorRegistry
-import io.prometheus.common.ConfigVals
 import io.prometheus.common.testConfigVals
 import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.grpc.registerPathResponse
@@ -1593,7 +1591,7 @@ class AgentHttpServiceTest : StringSpec() {
     // corrupted rather than passed through untouched).
     "content-type gate: a text/html response with a filter configured is passed through unfiltered" {
       val mockAgent = createMockAgentWithPaths(
-        filterHocon = 
+        filterHocon =
         """{ path = "metrics", metricNameAllow = [], metricNameDeny = ["denied_metric"] }""",
       )
       // Content the deny rule would strip in its entirety if the gate let filtering run against it.
@@ -1653,7 +1651,7 @@ class AgentHttpServiceTest : StringSpec() {
       // empty string: if the guard were moved after filtering, or made to compare filteredBytes.size,
       // it would see ~0 bytes and never trip, even though the raw (capped) chunk is over the limit.
       val mockAgent = createMockAgentWithPaths(
-        filterHocon = 
+        filterHocon =
         """{ path = "metrics", metricNameAllow = [], metricNameDeny = [".*"] }""",
       )
       val options = mockAgent.options
@@ -1706,7 +1704,7 @@ class AgentHttpServiceTest : StringSpec() {
 
     "Fix pass: filtered path emits filtered content on the unzipped text path" {
       val mockAgent = createMockAgentWithPaths(
-        filterHocon = 
+        filterHocon =
         """{ path = "metrics", metricNameAllow = [], metricNameDeny = ["denied_metric"] }""",
       )
       // minGzipSizeBytes stays at the createMockAgentWithFilter default (1_000_000), so this small
@@ -1757,7 +1755,7 @@ class AgentHttpServiceTest : StringSpec() {
       // Distinct from the unzipped-path test above: zipped/srContentAsZipped is a separate
       // expression from srContentAsText, so it needs its own pin (see AgentHttpService.kt).
       val mockAgent = createMockAgentWithPaths(
-        filterHocon = 
+        filterHocon =
         """{ path = "metrics", metricNameAllow = [], metricNameDeny = ["denied_metric"] }""",
       )
       val options = mockAgent.options

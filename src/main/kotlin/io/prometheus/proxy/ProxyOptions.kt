@@ -43,6 +43,8 @@ import io.prometheus.common.EnvVars.DASHBOARD_ENABLED
 import io.prometheus.common.EnvVars.DASHBOARD_HOST
 import io.prometheus.common.EnvVars.DASHBOARD_PATH
 import io.prometheus.common.EnvVars.DASHBOARD_PORT
+import io.prometheus.common.requireGrpcTimeout
+import io.prometheus.common.requirePositive
 
 class ProxyOptions(
   args: Array<String>,
@@ -248,8 +250,7 @@ class ProxyOptions(
 
         if (handshakeTimeoutSecs == -1L)
           handshakeTimeoutSecs = HANDSHAKE_TIMEOUT_SECS.getEnv(proxyConfigVals.grpc.handshakeTimeoutSecs)
-        requireGrpcTimeout(handshakeTimeoutSecs, "grpc.handshakeTimeoutSecs")
-        logger.info { "grpc.handshakeTimeoutSecs: ${handshakeTimeoutSecs.grpcDefaultLabel("120")}" }
+        logger.requireGrpcTimeout("grpc.handshakeTimeoutSecs", handshakeTimeoutSecs, "120")
 
         permitKeepAliveWithoutCalls =
           resolveBooleanOption(
@@ -262,24 +263,20 @@ class ProxyOptions(
 
         if (permitKeepAliveTimeSecs == -1L)
           permitKeepAliveTimeSecs = PERMIT_KEEPALIVE_TIME_SECS.getEnv(proxyConfigVals.grpc.permitKeepAliveTimeSecs)
-        requireGrpcTimeout(permitKeepAliveTimeSecs, "grpc.permitKeepAliveTimeSecs")
-        logger.info { "grpc.permitKeepAliveTimeSecs: ${permitKeepAliveTimeSecs.grpcDefaultLabel("300")}" }
+        logger.requireGrpcTimeout("grpc.permitKeepAliveTimeSecs", permitKeepAliveTimeSecs, "300")
 
         if (maxConnectionIdleSecs == -1L)
           maxConnectionIdleSecs = MAX_CONNECTION_IDLE_SECS.getEnv(proxyConfigVals.grpc.maxConnectionIdleSecs)
-        requireGrpcTimeout(maxConnectionIdleSecs, "grpc.maxConnectionIdleSecs")
-        logger.info { "grpc.maxConnectionIdleSecs: ${maxConnectionIdleSecs.grpcDefaultLabel("INT_MAX")}" }
+        logger.requireGrpcTimeout("grpc.maxConnectionIdleSecs", maxConnectionIdleSecs, "INT_MAX")
 
         if (maxConnectionAgeSecs == -1L)
           maxConnectionAgeSecs = MAX_CONNECTION_AGE_SECS.getEnv(proxyConfigVals.grpc.maxConnectionAgeSecs)
-        requireGrpcTimeout(maxConnectionAgeSecs, "grpc.maxConnectionAgeSecs")
-        logger.info { "grpc.maxConnectionAgeSecs: ${maxConnectionAgeSecs.grpcDefaultLabel("INT_MAX")}" }
+        logger.requireGrpcTimeout("grpc.maxConnectionAgeSecs", maxConnectionAgeSecs, "INT_MAX")
 
         if (maxConnectionAgeGraceSecs == -1L)
           maxConnectionAgeGraceSecs =
             MAX_CONNECTION_AGE_GRACE_SECS.getEnv(proxyConfigVals.grpc.maxConnectionAgeGraceSecs)
-        requireGrpcTimeout(maxConnectionAgeGraceSecs, "grpc.maxConnectionAgeGraceSecs")
-        logger.info { "grpc.maxConnectionAgeGraceSecs: ${maxConnectionAgeGraceSecs.grpcDefaultLabel("INT_MAX")}" }
+        logger.requireGrpcTimeout("grpc.maxConnectionAgeGraceSecs", maxConnectionAgeGraceSecs, "INT_MAX")
 
         proxyConfigVals.apply {
           assignCommonOptions(
@@ -296,20 +293,9 @@ class ProxyOptions(
             trustCertCollectionFilePath = tls.trustCertCollectionFilePath,
           )
 
-          require(internal.scrapeRequestTimeoutSecs > 0) {
-            "internal.scrapeRequestTimeoutSecs must be > 0: ${internal.scrapeRequestTimeoutSecs}"
-          }
-          logger.info { "internal.scrapeRequestTimeoutSecs: ${internal.scrapeRequestTimeoutSecs}" }
-
-          require(internal.staleAgentCheckPauseSecs > 0) {
-            "internal.staleAgentCheckPauseSecs must be > 0: ${internal.staleAgentCheckPauseSecs}"
-          }
-          logger.info { "internal.staleAgentCheckPauseSecs: ${internal.staleAgentCheckPauseSecs}" }
-
-          require(internal.maxAgentInactivitySecs > 0) {
-            "internal.maxAgentInactivitySecs must be > 0: ${internal.maxAgentInactivitySecs}"
-          }
-          logger.info { "internal.maxAgentInactivitySecs: ${internal.maxAgentInactivitySecs}" }
+          logger.requirePositive("internal.scrapeRequestTimeoutSecs", internal.scrapeRequestTimeoutSecs)
+          logger.requirePositive("internal.staleAgentCheckPauseSecs", internal.staleAgentCheckPauseSecs)
+          logger.requirePositive("internal.maxAgentInactivitySecs", internal.maxAgentInactivitySecs)
 
           // 0 is a valid (degenerate) "reject all content" limit, so only negatives are invalid here.
           require(internal.maxUnzippedContentSizeMBytes >= 0) {
@@ -375,7 +361,7 @@ class ProxyOptions(
     if (dashboardEnabled) {
       require(dashboardPath.isNotEmpty()) { "dashboardPath is empty" }
       require(dashboardHost.isNotBlank()) { "dashboardHost is blank" }
-      require(dashboard.maxSessions > 0) { "dashboard.maxSessions must be > 0: ${dashboard.maxSessions}" }
+      logger.requirePositive("dashboard.maxSessions", dashboard.maxSessions)
       logger.info { "dashboardHost: $dashboardHost, dashboardPort: $dashboardPort, dashboardPath: $dashboardPath" }
       if (isWildcardAddress(dashboardHost)) {
         val rebindingHint =
@@ -399,10 +385,8 @@ class ProxyOptions(
     require(http.host.isNotBlank()) { "proxy.http.host must not be blank" }
     logger.info { "http.host: ${http.host}" }
 
-    val maxInFlight = proxyConfigVals.internal.maxInFlightScrapeRequests
     // A non-positive limit would refuse every scrape.
-    require(maxInFlight > 0) { "internal.maxInFlightScrapeRequests must be > 0: $maxInFlight" }
-    logger.info { "internal.maxInFlightScrapeRequests: $maxInFlight" }
+    logger.requirePositive("internal.maxInFlightScrapeRequests", proxyConfigVals.internal.maxInFlightScrapeRequests)
   }
 
   internal companion object {
@@ -449,13 +433,5 @@ class ProxyOptions(
       val literal = host.removeSurrounding("[", "]")
       return InetAddresses.isInetAddress(literal) && InetAddresses.forString(literal).isAnyLocalAddress
     }
-
-    // gRPC timeout fields use -1L as the "leave the gRPC default in place" sentinel (the
-    // `> -1L` guards in ProxyGrpcService rely on it). Any other non-positive value is invalid
-    // and would otherwise surface as an opaque gRPC builder exception at startup.
-    private fun requireGrpcTimeout(
-      value: Long,
-      name: String,
-    ) = require(value == -1L || value > 0L) { "$name must be -1 (default) or > 0: $value" }
   }
 }

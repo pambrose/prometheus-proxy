@@ -110,7 +110,6 @@ class PathDiscoveryServiceTest : StringSpec() {
       val reconciled = CompletableDeferred<Unit>()
       coEvery { pathManager.reconcileDiscoveredPaths(desired) } answers {
         reconciled.complete(Unit)
-        Unit
       }
       val reads = AtomicInt(0)
       val running = AtomicBoolean(true)

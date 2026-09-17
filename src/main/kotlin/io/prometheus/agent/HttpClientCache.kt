@@ -66,7 +66,7 @@ internal class HttpClientCache(
   private val maxIdleTime: Duration = 10.minutes,
   private val cleanupInterval: Duration = 5.minutes,
   // Where entry ages and idle times are measured; injectable so tests advance time instead of sleeping.
-  private val timeSource: TimeSource = TimeSource.Monotonic,
+  private val timeSource: TimeSource = Monotonic,
 ) {
   // A single access-ordered LinkedHashMap (accessOrder = true) is both the cache and the recency
   // tracker: get() moves an entry to the most-recently-used end, so the least-recently-used entry is

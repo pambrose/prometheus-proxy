@@ -138,7 +138,7 @@ A rejected static path is retried only when the rejection can clear, and on a ba
 wait, up to the new `agent.internal.rejectedPathRetryMaxSecs` (default five minutes). A conflict that lasts an hour
 now costs the proxy about a dozen round trips for the path instead of 360, at the price of registering up to the
 cap after it clears; lower the cap to notice sooner, or set it at or below the retry interval to turn the backoff
-off. Discovered paths are paced the same way, from `agent.discovery.reconcileIntervalSecs`.
+off, which the agent then logs at startup. Discovered paths are paced the same way, from `agent.discovery.reconcileIntervalSecs`.
 The proxy now says why it rejected a path, in a new `rejection_cause` field of its
 registration response, and the agent retries only the causes that clear once a live agent holding the path
 leaves: another identity's agent serving it, or a consolidated/non-consolidated mismatch. A rejection for any

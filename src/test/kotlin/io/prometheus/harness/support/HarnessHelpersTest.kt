@@ -77,6 +77,35 @@ class HarnessHelpersTest : StringSpec() {
       }
     }
 
+    // Setup fails at once when the agent never connects, naming the cause, and stops what it started.
+    "setupProxyAndAgent should fail, and stop both services, when the agent never connects" {
+      val unusedPort = ServerSocket(0).use { it.localPort }
+      val harness =
+        object : HarnessSetup() {
+          fun setUp() =
+            setupProxyAndAgent(
+              proxyPort = HARNESS_HELPERS_HTTP_PORT,
+              proxySetup = { startProxy(proxyPort = HARNESS_HELPERS_HTTP_PORT) },
+              // Nothing listens there, so the agent never connects. A 1s reconnect pause lets it stop without waiting
+              // out the 3s default.
+              agentSetup = {
+                startAgent(args = ["--proxy", "localhost:$unusedPort", "-Dagent.internal.reconnectPauseSecs=1"])
+              },
+              startupTimeout = 1.seconds,
+            )
+
+          fun tearDown() = takeDownProxyAndAgent()
+        }
+      try {
+        shouldThrow<IllegalStateException> { harness.setUp() }.message shouldContain "did not connect"
+        // Both were stopped, so their ports are free again.
+        awaitPortFree(HARNESS_HELPERS_HTTP_PORT, maxAttempts = 10, delayMs = 100)
+        awaitPortFree(HARNESS_PROXY_AGENT_PORT, maxAttempts = 10, delayMs = 100)
+      } finally {
+        runCatching { harness.tearDown() }
+      }
+    }
+
     "localConfigFile should return a test config that exists" {
       HarnessConstants.localConfigFile(EXISTING_CONFIG) shouldBe EXISTING_CONFIG
     }

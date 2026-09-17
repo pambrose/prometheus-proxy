@@ -82,7 +82,7 @@ class ProxyWebDashboardTest : StringSpec() {
      *
      * @param proxySpec overridable for the failover spec, which needs a dead endpoint ahead of the live one.
      */
-    suspend fun connectAgent(proxySpec: String = "$LOOPBACK_HOST:$grpcPort"): Agent =
+    fun connectAgent(proxySpec: String = "$LOOPBACK_HOST:$grpcPort"): Agent =
       startAgent(configArgs = ["--config", configFile], args = ["--proxy", proxySpec])
         .also {
           agent = it
