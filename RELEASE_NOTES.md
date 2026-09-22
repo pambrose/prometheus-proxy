@@ -119,8 +119,8 @@ What the agent does next now depends on how far the previous attempt got:
 |------------------|--------------|
 | Could not connect | Next endpoint |
 | Connected, but the proxy rejected the agent's registration | Next endpoint |
-| Connected, but the proxy rejected **every** static path | Next endpoint |
-| Registered, with **some** static paths rejected | Stays connected; each rejected path is logged at WARN, and retried if the rejection can clear |
+| Connected, but the proxy rejected **every** static path, none for a cause that can clear | Next endpoint |
+| Registered, with **some** static paths rejected, or every one with at least one rejection that can clear | Stays connected; each rejected path is logged at WARN, and retried if the rejection can clear |
 | Registered, then the connection dropped | Back to the head of the list |
 
 The last row is the failback that makes the endpoint list a priority order, and it still picks up a

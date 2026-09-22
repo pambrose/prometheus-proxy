@@ -608,6 +608,26 @@ class AgentPathManagerTest : StringSpec() {
       coVerify(exactly = 2) { grpc.registerPathOnProxy("d_metrics", any(), any(), any()) }
     }
 
+    // An edited entry is a different registration, so it doesn't wait out the backoff the old one earned.
+    "reconcile should try a discovered path waiting out its backoff at once when its entry changes" {
+      val clock = TestTimeSource()
+      val (manager, grpc) = managerRejectingDiscovered(PathRejectionCause.HELD_BY_ANOTHER_IDENTITY, clock)
+
+      // Three rejections in, the next retry waits 60s (see "reconcile should back off ...").
+      clock.tick(3, 30.seconds) { manager.reconcileDiscoveredPaths(dMetrics) }
+      coVerify(exactly = 3) { grpc.registerPathOnProxy("d_metrics", any(), any(), any()) }
+
+      clock += 30.seconds
+      manager.reconcileDiscoveredPaths(dMetrics)
+      coVerify(exactly = 3) { grpc.registerPathOnProxy("d_metrics", any(), any(), any()) }
+
+      manager.reconcileDiscoveredPaths([DiscoveredPath("d", "d_metrics", "http://d/v2", "{}")])
+      coVerify(exactly = 4) { grpc.registerPathOnProxy("d_metrics", any(), any(), any()) }
+
+      manager.reconcileDiscoveredPaths([DiscoveredPath("d", "d_metrics", "http://d/v2", """{"env":"prod"}""")])
+      coVerify(exactly = 5) { grpc.registerPathOnProxy("d_metrics", any(), any(), any()) }
+    }
+
     // Leaving the file and returning, or reconnecting -- which clears the path manager first -- starts afresh.
     "reconcile should retry a rejected discovered path that leaves the file and returns, or after a reconnect" {
       val (manager, grpc) = managerRejectingDiscovered(PathRejectionCause.NOT_AUTHORIZED)
@@ -1262,6 +1282,45 @@ class AgentPathManagerTest : StringSpec() {
       coEvery { mockGrpcService.registerPathOnProxy(any(), any(), any(), any()) } throws
         RequestFailureException("registerPathOnProxy() - not authorized")
 
+      val manager = AgentPathManager(mockAgent)
+
+      shouldThrow<RequestFailureException> { manager.registerPaths() }
+    }
+
+    // A rejection that can clear -- a live agent of another identity holds the path -- clears while the agent stays
+    // connected, which is what the retry task is for. Failing the attempt instead reconnected the agent every
+    // reconnectPauseSecs, and each reconnect cleared the backoff, so the path was retried without one and any
+    // discovered paths, registered only on a connection that stays up, never registered at all.
+    "registerPaths should stay connected when the proxy rejects every static path for a cause that can clear" {
+      for (cause in [PathRejectionCause.HELD_BY_ANOTHER_IDENTITY, PathRejectionCause.CONSOLIDATION_MISMATCH]) {
+        val (mockAgent, mockGrpcService) = agentWithStaticPaths("metrics1", "metrics2")
+        rejectPath(mockGrpcService, "metrics1", cause)
+        rejectPath(mockGrpcService, "metrics2", cause)
+        val manager = AgentPathManager(mockAgent)
+
+        withClue(cause) {
+          manager.registerPaths()
+          manager.hasRejectedStaticPaths.shouldBeTrue()
+        }
+      }
+    }
+
+    // One rejection that can clear is enough to stay connected for: the retry task registers that path once it does.
+    "registerPaths should stay connected when one of every rejected static path can clear" {
+      val (mockAgent, mockGrpcService) = agentWithStaticPaths("metrics1", "metrics2")
+      rejectPath(mockGrpcService, "metrics1", PathRejectionCause.NOT_AUTHORIZED)
+      rejectPath(mockGrpcService, "metrics2", PathRejectionCause.HELD_BY_ANOTHER_IDENTITY)
+      val manager = AgentPathManager(mockAgent)
+
+      manager.registerPaths()
+
+      manager.hasRejectedStaticPaths.shouldBeTrue()
+    }
+
+    "registerPaths should fail when the proxy rejects every static path for a cause that can't clear" {
+      val (mockAgent, mockGrpcService) = agentWithStaticPaths("metrics1", "metrics2")
+      rejectPath(mockGrpcService, "metrics1", PathRejectionCause.NOT_AUTHORIZED)
+      rejectPath(mockGrpcService, "metrics2", PathRejectionCause.INVALID_PATH)
       val manager = AgentPathManager(mockAgent)
 
       shouldThrow<RequestFailureException> { manager.registerPaths() }
