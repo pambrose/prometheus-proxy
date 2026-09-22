@@ -80,6 +80,11 @@ internal class AgentPathManager(
   // by pathMutex.
   private val discoveredRejections = HashMap<String, DiscoveredRejection>()
 
+  // The discovered paths last reported as colliding with a static path, and as duplicated in the discovery file; see
+  // reportDiscoveryConflicts. Guarded by pathMutex.
+  private var reportedCollisions: Set<String> = emptySet()
+  private var reportedDuplicates: Set<String> = emptySet()
+
   operator fun get(path: String): PathContext? = pathContextMap[path]
 
   // Routed through pathMutex so a dynamic registerPath racing a reconcile can't insert a stale
@@ -90,6 +95,8 @@ internal class AgentPathManager(
       pathContextMap.clear()
       rejectedStaticPaths.clear()
       discoveredRejections.clear()
+      reportedCollisions = emptySet()
+      reportedDuplicates = emptySet()
     }
 
   suspend fun pathMapSize(): Int = agent.grpcService.pathMapSize()
@@ -270,16 +277,19 @@ internal class AgentPathManager(
     pathMutex.withLock {
       // Build the desired discovered set keyed by normalized path; drop collisions with STATIC paths.
       val desiredByPath = LinkedHashMap<String, DiscoveredPath>()
+      val collisions = LinkedHashSet<String>()
+      val duplicates = LinkedHashSet<String>()
       for (entry in desired) {
         val path = entry.path.removePrefix("/")
         if (path in configuredStaticPaths || pathContextMap[path]?.source == PathSource.STATIC) {
-          logger.warn { "Discovered path /$path collides with a static path; keeping the static entry" }
+          collisions += path
           continue
         }
         if (path in desiredByPath)
-          logger.warn { "Duplicate discovered path /$path; using the last entry" }
+          duplicates += path
         desiredByPath[path] = entry
       }
+      reportDiscoveryConflicts(collisions, duplicates)
 
       // Unregister DISCOVERED paths that are no longer desired.
       val stale =
@@ -304,6 +314,46 @@ internal class AgentPathManager(
         registerDiscoveredPath(path, entry, labels, current)
       }
     }
+
+  // Reports the discovered paths that collide with a static path, and those the discovery file lists more than once.
+  // The file is re-read every reconcile, so each set is logged at WARN only when it changes -- as
+  // FileDiscoverySource.reportUnusable does for unusable entries -- and at DEBUG otherwise. Callers MUST hold
+  // pathMutex.
+  private fun reportDiscoveryConflicts(
+    collisions: Set<String>,
+    duplicates: Set<String>,
+  ) {
+    val collided = collisions.map { "/$it" }
+    val duplicated = duplicates.map { "/$it" }
+    when {
+      collisions == reportedCollisions -> {
+        if (collisions.isNotEmpty()) logger.debug { "Discovered paths still collide with static paths: $collided" }
+      }
+
+      collisions.isEmpty() -> {
+        logger.info { "No discovered path collides with a static path any more" }
+      }
+
+      else -> {
+        logger.warn { "Discovered paths $collided collide with static paths; keeping the static entries" }
+      }
+    }
+    when {
+      duplicates == reportedDuplicates -> {
+        if (duplicates.isNotEmpty()) logger.debug { "Discovered paths still duplicated: $duplicated" }
+      }
+
+      duplicates.isEmpty() -> {
+        logger.info { "No discovered path is duplicated any more" }
+      }
+
+      else -> {
+        logger.warn { "Duplicate discovered paths $duplicated; using the last entry for each" }
+      }
+    }
+    reportedCollisions = collisions
+    reportedDuplicates = duplicates
+  }
 
   // Registers, or re-registers, one discovered path; callers MUST hold pathMutex. The failure is recorded in
   // discoveredRejections, and a rejection whose cause can't clear (see RETRYABLE_CAUSES) isn't tried again until the

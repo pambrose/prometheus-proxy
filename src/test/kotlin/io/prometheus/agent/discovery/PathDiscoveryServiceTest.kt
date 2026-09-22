@@ -18,7 +18,11 @@
 
 package io.prometheus.agent.discovery
 
+import ch.qos.logback.classic.Level
 import io.kotest.core.spec.style.StringSpec
+import io.prometheus.common.captureLogs
+import io.kotest.matchers.nulls.shouldNotBeNull
+import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.ints.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.shouldBe
@@ -101,6 +105,49 @@ class PathDiscoveryServiceTest : StringSpec() {
       withTimeout(5.seconds) { job.join() }
 
       coVerify(exactly = 1) { pathManager.reconcileDiscoveredPaths(emptyList()) }
+    }
+
+    // A missing or malformed discovery file is re-read every reconcile, so its failure logged a WARN with a full stack
+    // trace every reconcileIntervalSecs -- about 2,880 a day at the default 30s -- for as long as it lasted.
+    "a repeating read failure should be warned about once, with its stack trace, then logged at DEBUG" {
+      val service = PathDiscoveryService(mockk(relaxed = true), { throw IOException("no such file") }, 30)
+
+      val events =
+        captureLogs<PathDiscoveryService>(Level.DEBUG) { repeat(3) { service.reconcileOnce() } }
+          .filter { "reconcile failed" in it.formattedMessage }
+
+      events.map { it.level } shouldBe listOf(Level.WARN, Level.DEBUG, Level.DEBUG)
+      events.first().throwableProxy.shouldNotBeNull()
+    }
+
+    "a different read failure should be warned about again" {
+      val failures = ArrayDeque(listOf("no such file", "no such file", "parse error at line 3"))
+      val service = PathDiscoveryService(mockk(relaxed = true), { throw IOException(failures.removeFirst()) }, 30)
+
+      val warnings =
+        captureLogs<PathDiscoveryService>(Level.WARN) { repeat(3) { service.reconcileOnce() } }
+          .filter { "reconcile failed" in it.formattedMessage }
+
+      warnings shouldHaveSize 2
+    }
+
+    // Recovery is reported, and a later failure -- even the same one -- is news again.
+    "a read that succeeds after failures should say so, and a later failure should be warned about again" {
+      val reads = AtomicInt(0)
+      val source = PathDiscoverySource {
+        if (reads.incrementAndFetch() ==
+        2
+        )
+        emptyList()
+        else
+        throw IOException("boom")
+      }
+      val service = PathDiscoveryService(mockk(relaxed = true), source, 30)
+
+      val events = captureLogs<PathDiscoveryService>(Level.INFO) { repeat(3) { service.reconcileOnce() } }
+
+      events.filter { "reconcile failed" in it.formattedMessage } shouldHaveSize 2
+      events.map { it.formattedMessage }.filter { "succeeded again" in it } shouldHaveSize 1
     }
 
     // A failed read skips only its own tick: the loop must still reconcile on the next one.
