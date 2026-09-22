@@ -263,8 +263,8 @@ interval as their deadline, capped at the unary deadline.
 - Point-in-time reviews, proposals, and design plans moved to `docs/archive/`, and IDE state that was already
   meant to be ignored is no longer tracked.
 - The test suite relies less on timing: expiry and cleanup tests use a test clock or wait for a real signal
-  instead of sleeping, harness ports are checked for duplicates and kept off the ports a proxy, agent, or
-  Prometheus already running on the machine uses, the TLS specs now run over a real TLS channel, and a missing test config fails the run instead of being
+  instead of sleeping, harness ports are checked for duplicates, kept off the ports a proxy, agent, or
+  Prometheus already running on the machine uses, and kept below the ephemeral port range, the TLS specs now run over a real TLS channel, and a missing test config fails the run instead of being
   fetched from GitHub.
 - `etc/compose/proxy.yml` is a working Compose file again: it starts a proxy, an agent, and a Prometheus
   server that scrapes through them. `.dockerignore` now admits only the two JARs the images copy, and the

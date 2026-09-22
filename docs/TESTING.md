@@ -214,7 +214,8 @@ something.
 - **ConstantsTest** — Constant values (EMPTY_AGENT_ID_MSG, EMPTY_PATH_MSG, EMPTY_INSTANCE)
 - **EnvVarsTest** — Environment variable mappings and fallback defaults
 - **ScrapeResultsTest** — ScrapeResults data class, error code mapping, timeout handling, protobuf conversion
-- **TestPortsTest** — every port in `TestPorts` is distinct, so no two specs can bind the same port
+- **TestPortsTest** — every port in `TestPorts` is distinct, so no two specs can bind the same port, and below 32768,
+  outside the ephemeral range the OS hands out to outgoing connections
 - **UtilsTest** — Utility functions: parseHostPort, sanitizeUrl, appendQueryParams, decodeParams, toJsonElement,
   setLogLevel, exceptionDetails
 

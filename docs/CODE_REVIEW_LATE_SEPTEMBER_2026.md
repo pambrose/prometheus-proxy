@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — Late September 2026 Findings
 
-**Status:** 31 issues — 12 fixed, 19 open (open: 0 high · 2 medium · 17 low) — fixed: #1, #5, #6, #9, #10–#13, #17, #18, #21, #30
+**Status:** 31 issues — 13 fixed, 18 open (open: 0 high · 2 medium · 16 low) — fixed: #1, #5, #6, #9, #10–#13, #17, #18, #21, #30, #31
 
 **Date:** 2026-09-22
 
@@ -60,7 +60,7 @@ gate (#17).
 | 28 | Test resource leaks: `proxyCallTest` servers and unstopped `Agent`s             | Tests    | low      | ⬜      |
 | 29 | `prom/prometheus:latest` unpinned in the container suite                        | Tests    | low      | ⬜      |
 | 30 | Untested: retryable discovered rejection in backoff retried on URL/label change | Tests    | low      | ✅      |
-| 31 | Harness binds test ports inside the Linux ephemeral range; CI bind flake        | Tests    | low      | ⬜      |
+| 31 | Harness binds test ports inside the Linux ephemeral range; CI bind flake        | Tests    | low      | ✅      |
 
 ---
 
@@ -80,7 +80,7 @@ then the items that change what operators see, then hardening, and leaves tidy-u
 | 7    | #7, #8, #4           | Config and input validation                                | Startup `require`s and path normalization; low risk, each with a unit test.                                                      |
 | 8    | #3                   | Log discovery warnings once                                | Follows the #267/#270 pattern already in the codebase.                                                                           |
 | 9    | #24, #25, #28        | Tests that test the product and clean up after themselves  | Removes false confidence before the next refactor.                                                                               |
-| 10   | #27, #31, #26, #29   | Deterministic, collision-free test infrastructure          | Flake prevention; `TestPortsTest` then guards the harness port.                                                                  |
+| 10   | #27, ~~#31~~, #26, #29 | Deterministic, collision-free test infrastructure          | Flake prevention; `TestPortsTest` then guards the harness port.                                                                  |
 | 11   | #14, #15             | Per-identity path caps; defer context creation until auth  | Needs new config keys and a design choice, so it follows the quick hardening in step 5.                                          |
 | 12   | #16, #19, #20        | Dependency and build hygiene                               | Remove Jetty 11 after the admin-servlet tests pass without it; extend Dependabot; tidy the Makefile and build.                   |
 | 13   | #22, #23             | Documentation drift                                        | No behavior change; can ride along with any earlier PR that touches the same file.                                               |
@@ -648,7 +648,7 @@ comparison in `registerDiscoveredPath` makes it fail.
 
 
 
-### 31. [ ] Harness binds test ports inside the Linux ephemeral range; CI bind flake
+### 31. [x] Harness binds test ports inside the Linux ephemeral range; CI bind flake
 
 **Severity:** low · **Confidence:** confirmed (observed on PR #280's first CI run; a rerun passed)
 
@@ -664,6 +664,13 @@ sits in the range but, as a product default, is never bound on the host.)
 
 **Fix:** move every harness port that is bound on the host below 32768, and have `TestPortsTest` fail on any bound
 port in the ephemeral range.
+
+**Resolution:** done ahead of step 10, after the same flake hit PR #283 on 50460. The eight ports moved to 9517–9524,
+and `TestPortsTest` has a new case that fails on any `TestPorts` constant of 32768 or above, with `PROXY_AGENT_PORT`
+(50051) the one exemption, since it is only asserted as a value and used inside containers. The case failed on
+exactly the eight constants before the move. Three specs hard-code 9525–9527 outside `TestPorts`
+(`InProcessIdleShutdownTest`, `InProcessHeartbeatDisabledTest`, `AgentMetricFilterTest`); those are below the range,
+and are left to #27.
 
 ---
 
