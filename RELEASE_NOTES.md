@@ -225,8 +225,9 @@ interval as their deadline, capped at the unary deadline.
   Java 17. Protobuf is aligned with grpc at 3.25.9, and the build no longer reports a Gradle 10 deprecation.
 - A path's per-path metric series are removed when its last registration goes away, so paths retired by
   discovery no longer accumulate on `/metrics`.
-- The GitHub Actions workflows pin every action to a commit SHA, cancel superseded pull-request runs, and
-  get weekly Dependabot updates along with the Gradle version catalog.
+- The GitHub Actions workflows pin every action to a commit SHA and get weekly Dependabot updates along with
+  the Gradle version catalog. CI and the container tests run on each push to `master` and on demand, no longer
+  on pull requests.
 - Point-in-time reviews, proposals, and design plans moved to `docs/archive/`, and IDE state that was already
   meant to be ignored is no longer tracked.
 - The test suite relies less on timing: expiry and cleanup tests use a test clock or wait for a real signal
@@ -266,9 +267,9 @@ interval as their deadline, capped at the unary deadline.
 Runtime: Kotlin 2.4.10 → 2.4.20, gRPC 1.83.1 → 1.84.0, Ktor 3.5.2 → 3.6.0, Logback 1.6.1 → 1.6.3,
 SLF4J 2.0.18 → 2.0.19, Dropwizard metrics 4.2.39 → 4.2.40, and common-utils 3.2.2 → 4.1.0;
 `grpc-netty-shaded` is removed. Build and test only: Gradle 9.6.1 → 9.7.1, detekt 2.0.0-alpha.5 → alpha.6,
-Kotest 6.2.3 → 6.2.5, the Gradle versions plugin 0.57.0 → 0.63.1, the BuildConfig plugin 6.0.10 → 6.1.0, and
+Kotest 6.2.3 → 6.2.5, the Gradle versions plugin 0.57.0 → 0.64.0, the BuildConfig plugin 6.0.10 → 6.1.1, and
 the shared convention plugins 1.1.1 → 1.1.5. The documentation site's Python lock picks up Zensical
-0.0.52 → 0.0.59.
+0.0.52 → 0.0.62 and pymdown-extensions 11.0.2 → 12.0.1, and its `mkdocs-material` pin moves 9.7.6 → 9.7.7.
 
 ---
 
