@@ -42,6 +42,8 @@ import io.prometheus.common.EnvVars.METRICS_PORT
 import io.prometheus.common.EnvVars.PRIVATE_KEY_FILE_PATH
 import io.prometheus.common.EnvVars.TRANSPORT_FILTER_DISABLED
 import io.prometheus.common.EnvVars.TRUST_CERT_COLLECTION_FILE_PATH
+import io.prometheus.common.Utils.sanitizeUrl
+import io.prometheus.common.Utils.sanitizeUrlsInText
 import java.io.File
 import java.io.FileNotFoundException
 import java.net.URI
@@ -474,6 +476,19 @@ abstract class BaseOptions protected constructor(
 
   private fun String.isPropertiesSuffix() = lowercase().endsWith(".properties") || lowercase().endsWith(".props")
 
+  // [e] itself when its message has nothing to redact, otherwise a stand-in with the redacted message and [e]'s stack
+  // trace, so the ConfigLoadException's cause can be logged without printing credentials from a config URL.
+  private fun redacted(e: Throwable): Throwable {
+    val message = e.message ?: return e
+    val safe = sanitizeUrlsInText(message)
+    return if (safe ==
+      message
+    )
+      e
+      else
+      ConfigLoadException("${e.simpleClassName}: $safe").also { it.stackTrace = e.stackTrace }
+  }
+
   private fun getConfigSyntax(configName: String) =
     when {
       configName.isJsonSuffix() -> ConfigSyntax.JSON
@@ -497,9 +512,11 @@ abstract class BaseOptions protected constructor(
     // it is embedded, and an unparseable --config should exit it cleanly instead of terminating on an
     // uncaught ConfigLoadException. Whether a *blank* config is fatal is a different question, so the
     // isBlank() branch below stays gated on exitOnMissingConfig.
+    // A config URL can carry credentials, and both the name and the cause's message (a FileNotFoundException's is the
+    // URL itself) reach an embedded host's logs, so both are redacted.
     fun fail(e: Throwable): Nothing =
       if (embedded)
-        throw ConfigLoadException("Unable to load configuration from '$configName'", e)
+        throw ConfigLoadException("Unable to load configuration from '${sanitizeUrl(configName)}'", redacted(e))
       else
         exitProcess(1)
 
@@ -519,10 +536,11 @@ abstract class BaseOptions protected constructor(
             .parseURL(URI(configName).toURL(), configParseOptions.setSyntax(configSyntax))
             .withFallback(fallback)
         }.getOrElse { e ->
+          // No stack trace: its first line is the exception's raw message, which can hold the URL.
           if (e.cause is FileNotFoundException)
-            logger.error { "Invalid config url: $configName" }
+            logger.error { "Invalid config url: ${sanitizeUrl(configName)}" }
           else
-            logger.error(e) { "Exception: ${e.simpleClassName} - ${e.message}" }
+            logger.error { "Exception: ${e.simpleClassName} - ${sanitizeUrlsInText(e.message.orEmpty())}" }
           fail(e)
         }
       }

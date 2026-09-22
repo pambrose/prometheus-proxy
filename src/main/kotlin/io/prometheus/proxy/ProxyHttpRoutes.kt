@@ -83,6 +83,14 @@ internal object ProxyHttpRoutes {
   // Prometheus hung up before the agent answered, usually because its scrape timeout is shorter than the proxy's.
   internal const val CLIENT_CANCELLED_LABEL = "client_cancelled"
 
+  // The content types a scrape response is served with; see parseContentType. Matched without parameters.
+  private val EXPOSITION_CONTENT_TYPES =
+    [
+      Text.Plain,
+      ContentType("application", "openmetrics-text"),
+      ContentType("application", "vnd.google.protobuf"),
+    ]
+
   // Prometheus's scrape timeout. The proxy forwards it to the agent, which stops a scrape no one is still waiting for.
   internal const val SCRAPE_TIMEOUT_HEADER = "X-Prometheus-Scrape-Timeout-Seconds"
 
@@ -411,7 +419,9 @@ internal object ProxyHttpRoutes {
   )
 
   // Parses the agent-reported Content-Type, falling back to text/plain (the correct default for the
-  // Prometheus exposition format) with a warning when it is malformed.
+  // Prometheus exposition format) with a warning when it is malformed. Only the exposition types pass through: the
+  // body is served from the proxy's own origin, so a target answering text/html could otherwise run a script there in
+  // an operator's browser. Any other type is served as text/plain, logged at DEBUG since it repeats every scrape.
   private fun parseContentType(
     rawContentType: String,
     path: String,
@@ -423,6 +433,13 @@ internal object ProxyHttpRoutes {
             "(${it.simpleClassName}); falling back to text/plain"
         }
         Text.Plain.withCharset(Charsets.UTF_8)
+      }.let { parsed ->
+        if (EXPOSITION_CONTENT_TYPES.any { parsed.match(it) }) {
+          parsed
+        } else {
+          logger.debug { "Serving /$path's content type '$rawContentType' as text/plain" }
+          Text.Plain.withCharset(Charsets.UTF_8)
+        }
       }
 
   // Decodes (and size-guards) a successful scrape body and assembles the response, returning a terminal

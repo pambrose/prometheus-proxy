@@ -162,6 +162,15 @@ header when fetching metrics from the target endpoint.
 --8<-- "TlsExamples.txt:auth-header-tls"
 ```
 
+## Redirects from Scrape Targets
+
+The agent follows a redirect only to the target's own origin — the same scheme, host, and port.
+A redirect to any other origin is not followed: the scrape reports the 3xx status and the agent logs
+a warning. This keeps a target, or an open redirect reached through forwarded query parameters, from
+sending the agent to another host that would receive the target's basic-auth credentials, or to an
+internal address whose response would come back through the proxy. Point the path's `url` at the
+final location if a target redirects elsewhere.
+
 ## Scraping HTTPS Endpoints
 
 For HTTPS scrape targets signed by a custom or private CA (e.g. an internal corporate CA),

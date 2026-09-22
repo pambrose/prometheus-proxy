@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — Late September 2026 Findings
 
-**Status:** 31 issues — 8 fixed, 23 open (open: 0 high · 3 medium · 20 low) — fixed: #1, #5, #6, #9, #17, #18, #21, #30
+**Status:** 31 issues — 12 fixed, 19 open (open: 0 high · 2 medium · 17 low) — fixed: #1, #5, #6, #9, #10–#13, #17, #18, #21, #30
 
 **Date:** 2026-09-22
 
@@ -39,10 +39,10 @@ gate (#17).
 | 7  | Unvalidated backlog size / dashboard refresh: 0 rejects every scrape or spins   | Proxy    | low      | ⬜      |
 | 8  | Path registered with a leading slash is advertised but unscrapable              | Proxy    | low      | ⬜      |
 | 9  | Latency buckets stop at 10s; in-flight cap is not a memory bound                | Proxy    | low      | ✅      |
-| 10 | Agent follows redirects and re-sends Basic credentials to any host              | Security | medium   | ⬜      |
-| 11 | Scrape port serves the target's Content-Type (HTML) with no `nosniff`           | Security | low      | ⬜      |
-| 12 | Agent labels can set `__*` meta labels and `job`/`instance`                     | Security | low      | ⬜      |
-| 13 | Raw target URL (credentials included) logged at DEBUG on every scrape           | Security | low      | ⬜      |
+| 10 | Agent follows redirects and re-sends Basic credentials to any host              | Security | medium   | ✅      |
+| 11 | Scrape port serves the target's Content-Type (HTML) with no `nosniff`           | Security | low      | ✅      |
+| 12 | Agent labels can set `__*` meta labels and `job`/`instance`                     | Security | low      | ✅      |
+| 13 | Raw target URL (credentials included) logged at DEBUG on every scrape           | Security | low      | ✅      |
 | 14 | No cap on paths per agent/identity, path length, or labels size                 | Security | low      | ⬜      |
 | 15 | Unauthenticated connections create agent contexts and dashboard events          | Security | low      | ⬜      |
 | 16 | Unused, out-of-support Jetty 11 `jetty-servlet` ships in the fat JARs           | Security | low      | ⬜      |
@@ -75,7 +75,7 @@ then the items that change what operators see, then hardening, and leaves tidy-u
 | 2 ✅  | #1, #30              | Keep the agent connected when every rejection can clear    | The only high: the #264/#271 retry and backoff are bypassed in their main use case, and discovery goes down with it.             |
 | 3 ✅  | #5, #21              | Accurate scrape outcome labels, and docs that match        | Label semantics and their docs must change together; alerts written from the docs never fire today.                              |
 | 4 ✅  | #6, #9               | Cheap, leak-free per-path series removal; better buckets   | Same file (`ProxyMetrics.kt`); scraping stalls under the path lock at scale.                                                     |
-| 5    | #10, #13, #11, #12   | Agent HTTP-client and scrape-port hardening                | Small, local changes that close a credential-leak path. #12 needs a decision on whether `job`/`instance` are reserved.           |
+| 5 ✅  | #10, #13, #11, #12   | Agent HTTP-client and scrape-port hardening                | Small, local changes that close a credential-leak path. #12 needs a decision on whether `job`/`instance` are reserved.           |
 | 6    | #2                   | Strip protobuf from the forwarded `Accept` header          | Silent data corruption for native-histogram users; a small agent change plus a documented limitation.                            |
 | 7    | #7, #8, #4           | Config and input validation                                | Startup `require`s and path normalization; low risk, each with a unit test.                                                      |
 | 8    | #3                   | Log discovery warnings once                                | Follows the #267/#270 pattern already in the codebase.                                                                           |
@@ -289,7 +289,7 @@ and says what each in-flight scrape can buffer. A byte budget was not added.
 
 ## 🔒 Security
 
-### 10. [ ] Agent follows redirects and re-sends Basic credentials to any host
+### 10. [x] Agent follows redirects and re-sends Basic credentials to any host
 
 **Severity:** medium · **Confidence:** plausible (traced in Ktor 3.6.0 sources, not exercised)
 
@@ -308,7 +308,15 @@ explicit `Authorization` header on cross-authority redirects, but that doesn't c
 the configured host (`sendWithoutRequest { it.url.host == originalHost }`, refusing other hosts' challenges).
 Add a test with a redirecting target.
 
-### 11. [ ] Scrape port serves the target's Content-Type (HTML) with no `nosniff`
+**Resolution:** the agent's client sets `followRedirects = false` and installs an `HttpSend` interceptor,
+`followSameOriginRedirects`, that follows up to five redirects only while each stays on the request's scheme, host,
+and port. Any other redirect is returned as its 3xx status and logged at WARN with both URLs redacted. With no other
+origin reachable, the Auth plugin only ever answers a challenge from the target itself, so its Basic provider needed
+no change. A test that redirects to a second server issuing a Basic challenge failed before the fix — the agent
+followed the redirect, sent the credentials, and scraped the second server's body with a 200 — and now sees the 302,
+with the second server never contacted. A same-origin redirect is still followed.
+
+### 11. [x] Scrape port serves the target's Content-Type (HTML) with no `nosniff`
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -322,7 +330,13 @@ the script on the proxy origin, which can read every other path and the SD JSON 
 **Fix:** allow only exposition content types (`text/plain`, `application/openmetrics-text`, protobuf) and fall
 back to `text/plain`; add `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox`.
 
-### 12. [ ] Agent labels can set `__*` meta labels and `job`/`instance`
+**Resolution:** `parseContentType` passes through only `text/plain`, `application/openmetrics-text`, and
+`application/vnd.google.protobuf` (matched without parameters) and serves anything else as `text/plain`, logging at
+DEBUG. `respondWith`, which writes every scrape-port response, adds `X-Content-Type-Options: nosniff` and
+`Content-Security-Policy: sandbox`. The dashboard, on its own port, is unchanged. Tests cover HTML, script, and SVG
+types becoming `text/plain`, the exposition types being kept with their parameters, and both headers.
+
+### 12. [x] Agent labels can set `__*` meta labels and `job`/`instance`
 
 **Severity:** low · **Confidence:** plausible (proxy side confirmed; Prometheus precedence read from
 `PopulateLabels`, not tested)
@@ -337,7 +351,15 @@ back to `text/plain`; add `X-Content-Type-Options: nosniff` and `Content-Securit
 **Fix:** reject every key starting with `__`; optionally let operators reserve `job` and `instance`, or give
 each identity a label allowlist.
 
-### 13. [ ] Raw target URL (credentials included) logged at DEBUG on every scrape
+**Resolution:** `Proxy.isReservedSdLabelKey` keeps the proxy's own keys and every `__`-prefixed key out of the
+service-discovery response, and `job` and `instance` too when the new
+`proxy.service.discovery.reserveJobAndInstanceLabels` is set. It defaults to `false`, since setting `job` from agent
+labels is a plausible legitimate use; `ConfigVals` was regenerated with `make tsconfig`. The labels are dropped
+rather than the registration rejected, as the three reserved keys were before. The warning moved from every
+service-discovery poll to once at `addPath`, naming the dropped keys. A per-identity label allowlist was not added.
+Documented on the service-discovery page, the agent `labels` row, and `security-agent-authentication.md`.
+
+### 13. [x] Raw target URL (credentials included) logged at DEBUG on every scrape
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -350,6 +372,12 @@ with userinfo and query secrets — a leftover of September #5.
 
 **Fix:** override `PathContext.toString()` to use `sanitizeUrl(url)` (or log only `path`); sanitize the config
 URL in `BaseOptions`.
+
+**Resolution:** `PathContext.toString()` redacts the URL. In `BaseOptions`, the invalid-config-URL error, the generic
+load-failure error (which no longer logs a stack trace, whose first line was the raw exception message), and the
+`ConfigLoadException` message are redacted. When the exception's cause carried a URL in its message, it is replaced by
+a stand-in with the redacted message and the original stack trace, since an embedded host logging the exception prints
+the cause too. Tests cover the `toString` and a config URL with credentials that gets a 404.
 
 ### 14. [ ] No cap on paths per agent/identity, path length, or labels size
 

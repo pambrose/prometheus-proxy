@@ -35,6 +35,10 @@ import io.kotest.matchers.types.shouldBeInstanceOf
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.engine.embeddedServer
+import kotlin.concurrent.atomics.plusAssign
+import io.ktor.http.HttpHeaders
+import io.ktor.server.response.header
+import io.ktor.server.response.respondRedirect
 import io.ktor.server.request.header
 import io.ktor.server.response.respondBytes
 import io.ktor.server.response.respondText
@@ -93,6 +97,17 @@ class AgentHttpServiceTest : StringSpec() {
    * [filterHocon] is spliced into `agent.filters` (empty means no filters), which is what makes the
    * path manager compile and attach a [io.prometheus.agent.filter.MetricFilter] to the path.
    */
+  private fun redirectScrapeRequest() =
+    scrapeRequest {
+      agentId = "agent-1"
+      scrapeId = 70L
+      path = "metrics"
+      accept = ""
+      debugEnabled = false
+      encodedQueryParams = ""
+      authHeader = ""
+    }
+
   private fun createMockAgentWithPaths(
     filterHocon: String = "",
     maxRetries: Int = 0,
@@ -362,6 +377,79 @@ class AgentHttpServiceTest : StringSpec() {
       results.srValidResponse.shouldBeFalse()
 
       service.close()
+    }
+
+    // A target that moved its metrics (/old -> /metrics) on the same origin still scrapes.
+    "fetchScrapeUrl should follow a redirect to the same origin" {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
+        routing {
+          get("/old") { call.respondRedirect("/metrics") }
+          get("/metrics") { call.respondText("moved_metric 1") }
+        }
+      }
+
+      try {
+        val port = server.startAndAwaitReady()
+        val mockAgent = createMockAgentWithPaths()
+        val service = AgentHttpService(mockAgent)
+        mockAgent.pathManager.registerPath("metrics", "http://$LOOPBACK_HOST:$port/old")
+
+        val results = service.fetchScrapeUrl(redirectScrapeRequest())
+
+        results.srStatusCode shouldBe 200
+        results.srContentAsText shouldContain "moved_metric 1"
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+    // Ktor's Basic auth answers a 401 challenge from whatever host sent it, and its redirect handling routes every hop
+    // back through the auth plugin. So a target -- or an open redirect reachable through query parameters any HTTP
+    // caller can forward -- could send the agent to another host that challenges for, and receives, the credentials
+    // configured for the real target. The same redirect could also point the agent at an internal address whose body
+    // came back through the proxy's scrape port. A redirect to another origin is no longer followed.
+    "fetchScrapeUrl should not follow a redirect to another origin, nor send it the target's credentials" {
+      val authorizationSeen = AtomicInt(0)
+      val requestsSeen = AtomicInt(0)
+      val other = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
+        routing {
+          get("/steal") {
+            requestsSeen += 1
+            if (call.request.headers[HttpHeaders.Authorization] != null) {
+              authorizationSeen += 1
+              call.respondText("stolen_metric 1")
+            } else {
+              call.response.header(HttpHeaders.WWWAuthenticate, "Basic realm=\"x\"")
+              call.respondText("", status = HttpStatusCode.Unauthorized)
+            }
+          }
+        }
+      }
+      try {
+        val otherPort = other.startAndAwaitReady()
+        val target = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
+          routing { get("/metrics") { call.respondRedirect("http://$LOOPBACK_HOST:$otherPort/steal") } }
+        }
+        try {
+          val port = target.startAndAwaitReady()
+          val mockAgent = createMockAgentWithPaths()
+          val service = AgentHttpService(mockAgent)
+          mockAgent.pathManager.registerPath("metrics", "http://admin:hunter2@$LOOPBACK_HOST:$port/metrics")
+
+          val results = service.fetchScrapeUrl(redirectScrapeRequest())
+
+          results.srStatusCode shouldBe HttpStatusCode.Found.value
+          results.srContentAsText shouldNotContain "stolen_metric"
+          requestsSeen.load() shouldBe 0
+          authorizationSeen.load() shouldBe 0
+          service.close()
+        } finally {
+          target.stop(0, 0)
+        }
+      } finally {
+        other.stop(0, 0)
+      }
     }
 
     "fetchScrapeUrl should handle 404 response" {

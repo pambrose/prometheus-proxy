@@ -26,6 +26,8 @@ import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.prometheus.common.captureLogs
+import ch.qos.logback.classic.Level
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.spyk
@@ -157,6 +159,80 @@ class ProxyTest : StringSpec() {
       labels["hostName"]!!.jsonPrimitive.content shouldBe "real-host"
       // Non-reserved custom labels are still applied.
       labels["env"]!!.jsonPrimitive.content shouldBe "prod"
+    }
+
+    // In HTTP service discovery a target's labels override the scrape config's __scheme__, __scrape_interval__,
+    // __scrape_timeout__, and __param_*, so an agent could change how Prometheus scrapes it. Every __-prefixed agent
+    // label is dropped; ordinary labels, job included by default, still apply.
+    "buildServiceDiscoveryJson should drop agent labels that set Prometheus meta labels" {
+      val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=proxy:$PROXY_HTTP_PORT")
+      val agentContext = createAgentContext()
+      proxy.agentContextManager.addAgentContext(agentContext)
+      proxy.pathManager.addPath(
+        "metrics",
+        """{"__scheme__":"https","__param_target":"x","__scrape_timeout__":"1s","env":"prod","job":"team-a"}""",
+        agentContext,
+      )
+
+      val labels = proxy.buildServiceDiscoveryJson()[0].jsonObject["labels"]!!.jsonObject
+
+      labels.keys.filter { it.startsWith("__") } shouldBe listOf("__metrics_path__")
+      labels["env"]!!.jsonPrimitive.content shouldBe "prod"
+      labels["job"]!!.jsonPrimitive.content shouldBe "team-a"
+    }
+
+    // With per-agent identities, a job or instance label lets one team's agent pass its targets off as another's.
+    // Deployments that separate teams can reserve both.
+    "with reserveJobAndInstanceLabels, agent job and instance labels should be dropped" {
+      val proxy =
+        createTestProxy(
+          "-Dproxy.service.discovery.targetPrefix=proxy:$PROXY_HTTP_PORT",
+          "-Dproxy.service.discovery.reserveJobAndInstanceLabels=true",
+        )
+      val agentContext = createAgentContext()
+      proxy.agentContextManager.addAgentContext(agentContext)
+      proxy.pathManager.addPath("metrics", """{"job":"team-b","instance":"other:9100","env":"prod"}""", agentContext)
+
+      val labels = proxy.buildServiceDiscoveryJson()[0].jsonObject["labels"]!!.jsonObject
+
+      labels.containsKey("job") shouldBe false
+      labels.containsKey("instance") shouldBe false
+      labels["env"]!!.jsonPrimitive.content shouldBe "prod"
+    }
+
+    // Prometheus polls service discovery every refresh interval, so a reserved label warned about on every build
+    // repeated for as long as the path was registered. It is reported once, when the path registers.
+    "a reserved agent label should be warned about once, at registration" {
+      val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=proxy:$PROXY_HTTP_PORT")
+      val agentContext = createAgentContext()
+      proxy.agentContextManager.addAgentContext(agentContext)
+
+      val registrationWarnings =
+        captureLogs<ProxyPathManager>(Level.WARN) {
+          proxy.pathManager.addPath(
+            "metrics",
+            """{"__scheme__":"https","hostName":"spoofed","env":"prod"}""",
+            agentContext,
+          )
+        }.map { it.formattedMessage }
+      val buildWarnings =
+        captureLogs<Proxy>(Level.WARN) {
+          repeat(3) { proxy.buildServiceDiscoveryJson() }
+        }
+
+      registrationWarnings.single() shouldContain "__scheme__"
+      registrationWarnings.single() shouldContain "hostName"
+      buildWarnings shouldBe emptyList()
+    }
+
+    "a path with no reserved agent labels should register without a warning" {
+      val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=proxy:$PROXY_HTTP_PORT")
+      val agentContext = createAgentContext()
+      proxy.agentContextManager.addAgentContext(agentContext)
+
+      captureLogs<ProxyPathManager>(Level.WARN) {
+        proxy.pathManager.addPath("metrics", """{"env":"prod","job":"team-a"}""", agentContext)
+      } shouldBe emptyList()
     }
 
     // Bug #10: __metrics_path__ must include a leading slash per Prometheus SD convention

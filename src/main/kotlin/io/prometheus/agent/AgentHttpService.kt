@@ -28,12 +28,16 @@ import com.pambrose.common.util.simpleClassName
 import com.pambrose.common.util.zip
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.client.HttpClient
+import io.ktor.client.call.HttpClientCall
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.HttpRequestRetry
+import io.ktor.client.plugins.HttpSend
+import io.ktor.client.plugins.Sender
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.auth.Auth
 import io.ktor.client.plugins.auth.providers.BasicAuthCredentials
 import io.ktor.client.plugins.auth.providers.basic
+import io.ktor.client.plugins.plugin
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.header
@@ -41,7 +45,9 @@ import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.URLBuilder
 import io.ktor.http.Url
+import io.ktor.http.takeFrom
 import io.ktor.http.isSuccess
 import io.ktor.utils.io.readBuffer
 import io.prometheus.Agent
@@ -288,6 +294,8 @@ internal class AgentHttpService(
   private fun newHttpClient(clientKey: ClientKey): HttpClient =
     HttpClient(CIO) {
       expectSuccess = false
+      // Redirects are followed by followSameOriginRedirects, installed below, rather than by Ktor.
+      followRedirects = false
       engine {
         val timeoutSecs =
           resolveTimeoutSecs(
@@ -330,7 +338,36 @@ internal class AgentHttpService(
           }
         }
       }
+    }.apply { plugin(HttpSend).intercept { request -> followSameOriginRedirects(request) } }
+
+  // Follows a redirect only to the request's own origin: the same scheme, host, and port. Ktor's HttpRedirect followed
+  // any redirect and sent every hop back through the Auth plugin, whose Basic provider answers a 401 challenge from
+  // whatever host sent it -- so a target, or an open redirect reached through query parameters any HTTP caller can
+  // forward, could collect the credentials configured for the target, or point the agent at an internal address
+  // whose body came back through the proxy's scrape port. With no other origin reachable, the Auth plugin only ever
+  // answers the target itself. A redirect elsewhere is returned as it is, so the scrape reports its 3xx status.
+  private suspend fun Sender.followSameOriginRedirects(request: HttpRequestBuilder): HttpClientCall {
+    var call = execute(request)
+    repeat(MAX_REDIRECTS) {
+      val location = call.response.headers[HttpHeaders.Location]
+      if (call.response.status !in REDIRECT_STATUSES || location == null)
+        return call
+      val from = call.request.url
+      val to = URLBuilder(from).apply { parameters.clear() }.takeFrom(location).build()
+      if (!from.hasSameOrigin(to)) {
+        logger.warn {
+          "Not following redirect from ${sanitizeUrl(from.toString())} to another origin: " +
+            sanitizeUrl(to.toString())
+        }
+        return call
+      }
+      call = execute(HttpRequestBuilder().takeFrom(request).apply { url.takeFrom(to) })
     }
+    return call
+  }
+
+  private fun Url.hasSameOrigin(other: Url) =
+    protocol == other.protocol && host.equals(other.host, ignoreCase = true) && port == other.port
 
   suspend fun close() {
     httpClientCache.close()
@@ -394,6 +431,18 @@ internal class AgentHttpService(
 
     // Cap on the retry backoff so total retry time stays bounded within the scrape timeout (finding 28).
     private const val MAX_RETRY_DELAY_MS = 5000L
+
+    // Ktor's own default is 20; a metrics endpoint needs a hop or two at most.
+    private const val MAX_REDIRECTS = 5
+
+    private val REDIRECT_STATUSES =
+      setOf(
+        HttpStatusCode.MovedPermanently,
+        HttpStatusCode.Found,
+        HttpStatusCode.SeeOther,
+        HttpStatusCode.TemporaryRedirect,
+        HttpStatusCode.PermanentRedirect,
+      )
 
     private fun handleInvalidPath(scrapeRequest: ScrapeRequest): ScrapeResults {
       logger.warn { "Invalid path in fetchScrapeUrl(): ${scrapeRequest.path}" }

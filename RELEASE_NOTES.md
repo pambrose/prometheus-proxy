@@ -111,6 +111,26 @@ dashboard through a reverse proxy that rewrites the Host header, list its public
 a client that stops reading or sends an oversized message is disconnected, and a browser message no longer
 takes the lock the scrape path uses. The Origin check does not stop DNS rebinding; a private bind address does.
 
+**Redirects from scrape targets.** The agent now follows a redirect only to the target's own scheme, host,
+and port. Ktor's redirect handling followed any redirect and answered a basic-auth challenge from whichever
+host sent it, so a target, or an open redirect reached through forwarded query parameters, could collect the
+credentials configured for the target, or point the agent at an internal address whose response came back
+through the proxy. A target that redirects to a different host or port now fails to scrape with its 3xx
+status; point the path's `url` at the final location.
+
+**Service-discovery labels.** Agent labels starting with `__` are dropped from the service-discovery response,
+since in HTTP service discovery they override how Prometheus scrapes the target. The new
+`proxy.service.discovery.reserveJobAndInstanceLabels` (off by default) also drops `job` and `instance`; turn it
+on when agents run under separate `proxy.auth` identities, so one team can't label its targets as another's.
+
+**Scrape-port responses.** Only the Prometheus exposition content types pass through; anything else, such as
+`text/html`, is served as `text/plain`, and every response carries `X-Content-Type-Options: nosniff` and
+`Content-Security-Policy: sandbox`. A compromised target could otherwise serve a page that ran on the proxy's
+origin in an operator's browser.
+
+**Credentials in logs.** The agent's per-scrape DEBUG line no longer prints the raw target URL, and a config URL
+that fails to load is redacted in the startup error and in the `ConfigLoadException` an embedded host catches.
+
 ### Agent registration and failover
 
 What the agent does next now depends on how far the previous attempt got:

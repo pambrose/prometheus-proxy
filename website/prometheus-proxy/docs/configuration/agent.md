@@ -37,7 +37,7 @@ Each path config entry has these fields:
 | `name`   | Yes      | Human-readable endpoint name (for logs and debugging)         |
 | `path`   | Yes      | Single URL segment on the proxy that Prometheus scrapes (no embedded `/`, not blank) |
 | `url`    | Yes      | Actual metrics endpoint the agent fetches from                |
-| `labels` | No       | JSON string of labels for service discovery (default: `"{}"`) |
+| `labels` | No       | JSON string of labels for service discovery (default: `"{}"`); keys starting with `__` are dropped |
 
 !!! note "Paths are a single segment"
 

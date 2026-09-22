@@ -197,6 +197,9 @@ In rough priority order:
 - **Consolidated paths bound to one identity** — a consolidated path records the identity that registered it, and an
   agent of another identity may join only once no valid agent still serves it, closing the last way one identity
   could put its metrics on another's path.
+- **Service-discovery labels limited** (finding #12 of `docs/CODE_REVIEW_LATE_SEPTEMBER_2026.md`) — agent labels can no
+  longer set `__`-prefixed keys, and `proxy.service.discovery.reserveJobAndInstanceLabels` keeps them from setting `job`
+  and `instance`, so an identity can't pass its targets off as another identity's.
 
 ## References
 

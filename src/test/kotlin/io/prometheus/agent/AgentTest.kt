@@ -43,6 +43,17 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import io.prometheus.Agent
+import io.ktor.server.cio.CIO as ServerCIO
+import io.prometheus.common.startAndAwaitReady
+import io.prometheus.common.captureLogs
+import io.prometheus.common.LOOPBACK_HOST
+import io.ktor.server.routing.routing
+import io.ktor.server.routing.get
+import io.ktor.server.response.respond
+import io.ktor.server.engine.embeddedServer
+import io.ktor.http.HttpStatusCode
+import io.kotest.matchers.collections.shouldNotBeEmpty
+import io.kotest.matchers.string.shouldNotContain
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.common.agentOptions
 import io.prometheus.common.ConfigLoadException
@@ -134,6 +145,40 @@ class AgentTest : StringSpec() {
           Agent.startAsyncAgent("nonexistent.conf", exitOnMissingConfig = false, logBanner = false)
         }
       exception.message shouldContain "nonexistent.conf"
+    }
+
+    // A config URL can carry credentials (http://user:pass@host/agent.conf). A failed load logged the raw URL at ERROR
+    // and put it in the ConfigLoadException an embedded host catches and, likely, logs.
+    "a config URL that fails to load should not reveal its credentials" {
+      val server =
+        embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
+          routing { get("/agent.conf") { call.respond(HttpStatusCode.NotFound) } }
+        }
+      try {
+        val port = server.startAndAwaitReady()
+        val configUrl = "http://admin:hunter2@$LOOPBACK_HOST:$port/agent.conf?token=s3cr3t"
+        var exception: ConfigLoadException? = null
+        val logs =
+          captureLogs("io.prometheus.common.BaseOptions") {
+            exception = runCatching {
+              Agent.startAsyncAgent(configUrl, exitOnMissingConfig = false, logBanner = false)
+            }.exceptionOrNull() as? ConfigLoadException
+          }.map { it.formattedMessage }
+
+        val message = exception.shouldNotBeNull().message.orEmpty()
+        message shouldContain "agent.conf"
+        message shouldNotContain "hunter2"
+        message shouldNotContain "s3cr3t"
+        // An embedded host that logs the exception prints its cause too, whose message was the raw URL.
+        exception.shouldNotBeNull().cause?.message.orEmpty() shouldNotContain "hunter2"
+        logs.shouldNotBeEmpty()
+        logs.forEach { line ->
+          line shouldNotContain "hunter2"
+          line shouldNotContain "s3cr3t"
+        }
+      } finally {
+        server.stop(0, 0)
+      }
     }
 
     // ==================== Failed startup Tests ====================
