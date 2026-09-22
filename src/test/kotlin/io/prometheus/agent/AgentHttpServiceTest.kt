@@ -91,12 +91,12 @@ class AgentHttpServiceTest : StringSpec() {
     return mockAgent
   }
 
-  /**
-   * A mock agent backed by a real [AgentPathManager], so a registered path gets a genuine PathContext.
-   *
-   * [filterHocon] is spliced into `agent.filters` (empty means no filters), which is what makes the
-   * path manager compile and attach a [io.prometheus.agent.filter.MetricFilter] to the path.
-   */
+  // The Accept header Prometheus sends with native histograms enabled: protobuf first, then the text formats.
+  private val prometheusNativeHistogramAccept =
+    "application/vnd.google.protobuf;proto=io.prometheus.client.MetricFamily;encoding=delimited;q=0.7," +
+      "text/plain;version=1.0.0;escaping=allow-utf-8;q=0.6," +
+      "application/openmetrics-text;version=1.0.0;q=0.5,text/plain;version=0.0.4;q=0.4,*/*;q=0.3"
+
   private fun redirectScrapeRequest() =
     scrapeRequest {
       agentId = "agent-1"
@@ -108,6 +108,12 @@ class AgentHttpServiceTest : StringSpec() {
       authHeader = ""
     }
 
+  /**
+   * A mock agent backed by a real [AgentPathManager], so a registered path gets a genuine PathContext.
+   *
+   * [filterHocon] is spliced into `agent.filters` (empty means no filters), which is what makes the
+   * path manager compile and attach a [io.prometheus.agent.filter.MetricFilter] to the path.
+   */
   private fun createMockAgentWithPaths(
     filterHocon: String = "",
     maxRetries: Int = 0,
@@ -449,6 +455,66 @@ class AgentHttpServiceTest : StringSpec() {
         }
       } finally {
         other.stop(0, 0)
+      }
+    }
+
+    // With native histograms enabled, Prometheus asks for protobuf first. The agent forwarded that Accept header, the
+    // target answered in binary protobuf, and the agent and proxy -- which carry a scrape as text -- decoded it as
+    // UTF-8, so Prometheus received a corrupted body and failed the scrape. The agent now asks only for text formats.
+    "textOnlyAccept should drop the protobuf media type and keep the text formats" {
+      AgentHttpService.textOnlyAccept(prometheusNativeHistogramAccept) shouldBe
+        "text/plain;version=1.0.0;escaping=allow-utf-8;q=0.6," +
+        "application/openmetrics-text;version=1.0.0;q=0.5,text/plain;version=0.0.4;q=0.4,*/*;q=0.3"
+    }
+
+    "textOnlyAccept should match the protobuf media type regardless of case and spacing" {
+      AgentHttpService.textOnlyAccept(" Application/Vnd.Google.Protobuf ; encoding=delimited , text/plain") shouldBe
+        "text/plain"
+    }
+
+    "textOnlyAccept should leave nothing when only protobuf was accepted, and keep a text-only header" {
+      AgentHttpService.textOnlyAccept("application/vnd.google.protobuf;encoding=delimited") shouldBe ""
+      AgentHttpService.textOnlyAccept("text/plain;version=0.0.4") shouldBe "text/plain;version=0.0.4"
+      AgentHttpService.textOnlyAccept("") shouldBe ""
+    }
+
+    "fetchScrapeUrl should not ask the target for protobuf" {
+      val acceptSeen = mutableListOf<String?>()
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
+        routing {
+          get("/metrics") {
+            synchronized(acceptSeen) { acceptSeen += call.request.headers[HttpHeaders.Accept] }
+            call.respondText("text_metric 1")
+          }
+        }
+      }
+
+      try {
+        val port = server.startAndAwaitReady()
+        val mockAgent = createMockAgentWithPaths()
+        val service = AgentHttpService(mockAgent)
+        mockAgent.pathManager.registerPath("metrics", "http://$LOOPBACK_HOST:$port/metrics")
+
+        val results =
+          service.fetchScrapeUrl(
+            scrapeRequest {
+              agentId = "agent-1"
+              scrapeId = 71L
+              path = "metrics"
+              accept = prometheusNativeHistogramAccept
+              debugEnabled = false
+              encodedQueryParams = ""
+              authHeader = ""
+            },
+          )
+
+        results.srStatusCode shouldBe 200
+        val accept = synchronized(acceptSeen) { acceptSeen.single() }.orEmpty()
+        accept shouldNotContain "protobuf"
+        accept shouldContain "text/plain"
+        service.close()
+      } finally {
+        server.stop(0, 0)
       }
     }
 

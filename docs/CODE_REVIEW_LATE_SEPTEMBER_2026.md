@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — Late September 2026 Findings
 
-**Status:** 31 issues — 13 fixed, 18 open (open: 0 high · 2 medium · 16 low) — fixed: #1, #5, #6, #9, #10–#13, #17, #18, #21, #30, #31
+**Status:** 31 issues — 14 fixed, 17 open (open: 0 high · 1 medium · 16 low) — fixed: #1, #2, #5, #6, #9, #10–#13, #17, #18, #21, #30, #31
 
 **Date:** 2026-09-22
 
@@ -31,7 +31,7 @@ gate (#17).
 | #  | Finding                                                                         | Area     | Severity | Status |
 |----|---------------------------------------------------------------------------------|----------|----------|--------|
 | 1  | All static paths rejected as retryable → reconnect loop; backoff never runs     | Agent    | high     | ✅      |
-| 2  | Protobuf-format scrapes are corrupted (Prometheus `Accept` passed through)      | Agent    | medium   | ⬜      |
+| 2  | Protobuf-format scrapes are corrupted (Prometheus `Accept` passed through)      | Agent    | medium   | ✅      |
 | 3  | Discovery still WARNs every reconcile for collisions, duplicates, bad file      | Agent    | low      | ⬜      |
 | 4  | Duplicate `agent.filters` entries for one path silently merged                  | Agent    | low      | ⬜      |
 | 5  | Proxy-made failures (disconnect, shutdown, drain) counted as `upstream_error`   | Proxy    | medium   | ✅      |
@@ -76,7 +76,7 @@ then the items that change what operators see, then hardening, and leaves tidy-u
 | 3 ✅  | #5, #21              | Accurate scrape outcome labels, and docs that match        | Label semantics and their docs must change together; alerts written from the docs never fire today.                              |
 | 4 ✅  | #6, #9               | Cheap, leak-free per-path series removal; better buckets   | Same file (`ProxyMetrics.kt`); scraping stalls under the path lock at scale.                                                     |
 | 5 ✅  | #10, #13, #11, #12   | Agent HTTP-client and scrape-port hardening                | Small, local changes that close a credential-leak path. #12 needs a decision on whether `job`/`instance` are reserved.           |
-| 6    | #2                   | Strip protobuf from the forwarded `Accept` header          | Silent data corruption for native-histogram users; a small agent change plus a documented limitation.                            |
+| 6 ✅  | #2                   | Strip protobuf from the forwarded `Accept` header          | Silent data corruption for native-histogram users; a small agent change plus a documented limitation.                            |
 | 7    | #7, #8, #4           | Config and input validation                                | Startup `require`s and path normalization; low risk, each with a unit test.                                                      |
 | 8    | #3                   | Log discovery warnings once                                | Follows the #267/#270 pattern already in the codebase.                                                                           |
 | 9    | #24, #25, #28        | Tests that test the product and clean up after themselves  | Removes false confidence before the next refactor.                                                                               |
@@ -127,7 +127,7 @@ retryable and non-retryable, and all-non-retryable rejections. The failover entr
 `RELEASE_NOTES.md` were corrected to match.
 
 
-### 2. [ ] Protobuf-format scrapes are corrupted (Prometheus `Accept` passed through)
+### 2. [x] Protobuf-format scrapes are corrupted (Prometheus `Accept` passed through)
 
 **Severity:** medium · **Confidence:** confirmed mechanism (needs native histograms or protobuf in
 `scrape_protocols`)
@@ -143,6 +143,14 @@ but the transport around it doesn't.
 
 **Fix:** remove protobuf media types from the forwarded `Accept` (or send a text-only `Accept`), so the target
 falls back to text. Document that the pipeline is text-only. Carrying bytes end to end is a larger follow-up.
+
+**Resolution:** `AgentHttpService.textOnlyAccept` drops every `Accept` entry whose media type is
+`application/vnd.google.protobuf` (case- and whitespace-insensitive), keeping the text, OpenMetrics, and `*/*` offers,
+and `prepareRequestHeaders` sends the result, or no `Accept` at all when nothing is left. Tests use Prometheus's
+native-histogram `Accept` string; an end-to-end test with an embedded target checks it receives no protobuf offer, and
+fails when the call site is reverted to forward the header unchanged. The README and the agent configuration page
+note that scrapes travel as text, so native histograms aren't available through the proxy. Carrying bytes end to end
+was not attempted.
 
 ### 3. [ ] Discovery still WARNs every reconcile for collisions, duplicates, and a bad file
 
