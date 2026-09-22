@@ -296,6 +296,11 @@ class ProxyOptions(
           logger.requirePositive("internal.scrapeRequestTimeoutSecs", internal.scrapeRequestTimeoutSecs)
           logger.requirePositive("internal.staleAgentCheckPauseSecs", internal.staleAgentCheckPauseSecs)
           logger.requirePositive("internal.maxAgentInactivitySecs", internal.maxAgentInactivitySecs)
+          // Each agent's queue is capped at twice this, so 0 would answer every scrape with 503 agent_backlog_full.
+          logger.requirePositive(
+            "internal.scrapeRequestBacklogUnhealthySize",
+            internal.scrapeRequestBacklogUnhealthySize,
+          )
 
           // 0 is a valid (degenerate) "reject all content" limit, so only negatives are invalid here.
           require(internal.maxUnzippedContentSizeMBytes >= 0) {
@@ -362,6 +367,8 @@ class ProxyOptions(
       require(dashboardPath.isNotEmpty()) { "dashboardPath is empty" }
       require(dashboardHost.isNotBlank()) { "dashboardHost is blank" }
       logger.requirePositive("dashboard.maxSessions", dashboard.maxSessions)
+      // The push loop waits this long between pushes; a wait of 0 returns at once, spinning a thread.
+      logger.requirePositive("dashboard.refreshIntervalSecs", dashboard.refreshIntervalSecs)
       logger.info { "dashboardHost: $dashboardHost, dashboardPort: $dashboardPort, dashboardPath: $dashboardPath" }
       if (isWildcardAddress(dashboardHost)) {
         val rebindingHint =

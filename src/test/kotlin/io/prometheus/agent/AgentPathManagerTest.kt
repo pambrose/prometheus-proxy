@@ -1355,6 +1355,22 @@ class AgentPathManagerTest : StringSpec() {
       AgentPathManager(mockAgent).registerPaths()
     }
 
+    // Filters are keyed by normalized path, so a second entry for the same path silently replaced the first -- an
+    // operator who split allow and deny rules across two entries lost one of them without a word.
+    "two agent.filters entries for the same path should fail at startup" {
+      val agent =
+        createMockAgent(
+          """
+          { path = "metrics", metricNameAllow = [], metricNameDeny = ["go_.*"] },
+          { path = "/metrics", metricNameAllow = ["http_.*"], metricNameDeny = [] }
+          """,
+        )
+
+      val exception = shouldThrow<IllegalArgumentException> { AgentPathManager(agent) }
+
+      exception.message shouldContain "metrics"
+    }
+
     "registerPath should attach a configured filter to the path context" {
       val agent = createMockAgent("""{ path = "metrics", metricNameAllow = [], metricNameDeny = ["go_.*"] }""")
       val manager = AgentPathManager(agent)

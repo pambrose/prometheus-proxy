@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — Late September 2026 Findings
 
-**Status:** 31 issues — 14 fixed, 17 open (open: 0 high · 1 medium · 16 low) — fixed: #1, #2, #5, #6, #9, #10–#13, #17, #18, #21, #30, #31
+**Status:** 31 issues — 17 fixed, 14 open (open: 0 high · 1 medium · 13 low) — fixed: #1, #2, #4–#13, #17, #18, #21, #30, #31
 
 **Date:** 2026-09-22
 
@@ -33,11 +33,11 @@ gate (#17).
 | 1  | All static paths rejected as retryable → reconnect loop; backoff never runs     | Agent    | high     | ✅      |
 | 2  | Protobuf-format scrapes are corrupted (Prometheus `Accept` passed through)      | Agent    | medium   | ✅      |
 | 3  | Discovery still WARNs every reconcile for collisions, duplicates, bad file      | Agent    | low      | ⬜      |
-| 4  | Duplicate `agent.filters` entries for one path silently merged                  | Agent    | low      | ⬜      |
+| 4  | Duplicate `agent.filters` entries for one path silently merged                  | Agent    | low      | ✅      |
 | 5  | Proxy-made failures (disconnect, shutdown, drain) counted as `upstream_error`   | Proxy    | medium   | ✅      |
 | 6  | Per-path series removal is O(all series) under the path lock, and leaks         | Proxy    | medium   | ✅      |
-| 7  | Unvalidated backlog size / dashboard refresh: 0 rejects every scrape or spins   | Proxy    | low      | ⬜      |
-| 8  | Path registered with a leading slash is advertised but unscrapable              | Proxy    | low      | ⬜      |
+| 7  | Unvalidated backlog size / dashboard refresh: 0 rejects every scrape or spins   | Proxy    | low      | ✅      |
+| 8  | Path registered with a leading slash is advertised but unscrapable              | Proxy    | low      | ✅      |
 | 9  | Latency buckets stop at 10s; in-flight cap is not a memory bound                | Proxy    | low      | ✅      |
 | 10 | Agent follows redirects and re-sends Basic credentials to any host              | Security | medium   | ✅      |
 | 11 | Scrape port serves the target's Content-Type (HTML) with no `nosniff`           | Security | low      | ✅      |
@@ -77,7 +77,7 @@ then the items that change what operators see, then hardening, and leaves tidy-u
 | 4 ✅  | #6, #9               | Cheap, leak-free per-path series removal; better buckets   | Same file (`ProxyMetrics.kt`); scraping stalls under the path lock at scale.                                                     |
 | 5 ✅  | #10, #13, #11, #12   | Agent HTTP-client and scrape-port hardening                | Small, local changes that close a credential-leak path. #12 needs a decision on whether `job`/`instance` are reserved.           |
 | 6 ✅  | #2                   | Strip protobuf from the forwarded `Accept` header          | Silent data corruption for native-histogram users; a small agent change plus a documented limitation.                            |
-| 7    | #7, #8, #4           | Config and input validation                                | Startup `require`s and path normalization; low risk, each with a unit test.                                                      |
+| 7 ✅  | #7, #8, #4           | Config and input validation                                | Startup `require`s and path normalization; low risk, each with a unit test.                                                      |
 | 8    | #3                   | Log discovery warnings once                                | Follows the #267/#270 pattern already in the codebase.                                                                           |
 | 9    | #24, #25, #28        | Tests that test the product and clean up after themselves  | Removes false confidence before the next refactor.                                                                               |
 | 10   | #27, ~~#31~~, #26, #29 | Deterministic, collision-free test infrastructure          | Flake prevention; `TestPortsTest` then guards the harness port.                                                                  |
@@ -166,7 +166,7 @@ logs about 2,880 times a day.
 **Fix:** remember what was reported last time, the way `FileDiscoverySource.reportUnusable` does; WARN only when
 the set (or the read error) changes, DEBUG otherwise.
 
-### 4. [ ] Duplicate `agent.filters` entries for one path silently merged
+### 4. [x] Duplicate `agent.filters` entries for one path silently merged
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -176,6 +176,10 @@ the set (or the read error) changes, DEBUG otherwise.
 for `/foo` across two entries silently loses the first.
 
 **Fix:** reject duplicate normalized paths at startup with a clear message (or merge their lists).
+
+**Resolution:** `AgentPathManager` rejects two `agent.filters` entries whose paths normalize to the same key, naming
+the path, when it is built at startup. Merging the lists was not chosen: an allow list in one entry and a deny list
+in another have no single obvious combination. Tested with `metrics` and `/metrics` entries.
 
 ---
 
@@ -248,7 +252,7 @@ registration's tracking. New tests cover: removal of only the recorded series (f
 a late scrape not re-creating series, re-registration recording again, and `addPath` registering (not on rejection).
 Each was checked against a mutation of the code it guards.
 
-### 7. [ ] Unvalidated backlog size / dashboard refresh: 0 rejects every scrape or spins
+### 7. [x] Unvalidated backlog size / dashboard refresh: 0 rejects every scrape or spins
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -262,7 +266,12 @@ its value. At `0`, every scrape returns 503 `agent_backlog_full`. The agent vali
 
 **Fix:** add `requirePositive(...)` for both next to the existing `internal.*` checks, with tests.
 
-### 8. [ ] Path registered with a leading slash is advertised but unscrapable
+**Resolution:** `ProxyOptions` requires `internal.scrapeRequestBacklogUnhealthySize` > 0, and
+`dashboard.refreshIntervalSecs` > 0 when the dashboard is enabled (next to `dashboard.maxSessions`, so a disabled
+dashboard's unused value can't stop the proxy starting). Tests cover both rejections and a 0 refresh interval
+accepted with the dashboard off.
+
+### 8. [x] Path registered with a leading slash is advertised but unscrapable
 
 **Severity:** low · **Confidence:** confirmed (the in-tree agent strips the slash; needs an older or custom agent)
 
@@ -276,6 +285,13 @@ path. `"/"` alone is accepted too.
 
 **Fix:** normalize (`removePrefix("/")`) once at the start of `addPath` / `removePath`, reject a blank result as
 `INVALID_PATH`, and return a `PathRejection` rather than letting a `require` surface as gRPC `UNKNOWN`.
+
+**Resolution:** `ProxyPathManager.pathKey` strips the leading slash, and `addPath`, `removePath`, and
+`getAgentContextInfo` all use it, so a path is stored and found under the key the scrape route looks up. `addPath`
+rejects `/` with `INVALID_PATH` through the usual `PathRejection`. Since the metric-series tracking from #6 is keyed
+by the stored path, a slash-registered path's series now also match what the scrape route observes. Tests cover the
+stored key, `/metrics` and `metrics` conflicting as one path, removal given either form, and `/`; two existing tests
+that pinned the slashed key were updated.
 
 ### 9. [x] Latency buckets stop at 10s; in-flight cap is not a memory bound
 

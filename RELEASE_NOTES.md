@@ -221,6 +221,12 @@ interval as their deadline, capped at the unary deadline.
 - **Scrapes Prometheus gave up on left no trace.** A target slower than Prometheus's timeout but faster than
   the proxy's, the most common real failure, was missing from the scrape metrics, `/debug`, and the
   dashboard. It now appears under the new outcome `client_cancelled`.
+- **A path registered with a leading slash was advertised but couldn't be scraped**: service discovery listed
+  it and every scrape answered 404. Paths are now stored without the slash, and `/` alone is rejected. The
+  in-tree agent already strips it, so only older or custom agents were affected.
+- **A few settings now fail at startup instead of misbehaving**: a `scrapeRequestBacklogUnhealthySize` of 0
+  refused every scrape, a dashboard `refreshIntervalSecs` of 0 spun a thread, and a second `agent.filters` entry
+  for a path silently replaced the first.
 - **Scrapes of a target that supports protobuf arrived corrupted.** With native histograms enabled, Prometheus
   asks for protobuf first, and the agent passed that request on, but the agent and proxy carry a scrape as text.
   The agent now asks targets only for the text formats, so those scrapes work; native histograms aren't available

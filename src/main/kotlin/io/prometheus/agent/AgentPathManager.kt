@@ -129,6 +129,14 @@ internal class AgentPathManager(
   // that path regardless of whether it was registered statically or by discovery.
   private val filtersByPath: Map<String, MetricFilter> =
     agentConfigVals.filters
+      .also { filters ->
+        // Keyed by normalized path, so a second entry for a path would silently replace the first -- and with it any
+        // allow or deny rules an operator split across the two.
+        val duplicates = filters.groupingBy { it.path.removePrefix("/") }.eachCount().filterValues { it > 1 }.keys
+        require(duplicates.isEmpty()) {
+          "agent.filters has more than one entry for path ${duplicates.joinToString { "/$it" }}; combine them into one"
+        }
+      }
       .mapNotNull { cfg ->
         val path = cfg.path.removePrefix("/")
         MetricFilter.createOrNull(cfg.metricNameAllow, cfg.metricNameDeny, path)?.let { path to it }
