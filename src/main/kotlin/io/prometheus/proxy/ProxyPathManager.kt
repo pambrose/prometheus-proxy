@@ -202,6 +202,7 @@ internal class ProxyPathManager(
       }
 
       agentContext.forgetRejection(path)
+      proxy.metrics { pathRegistered(path) }
       if (!isTestMode) logger.info { "Added path /$path for $agentContext" }
       // Inside synchronized(pathMap) on purpose: tryEmit never suspends or blocks, so publishing here
       // cannot stall a registration, and the event is emitted only once the map actually reflects it.

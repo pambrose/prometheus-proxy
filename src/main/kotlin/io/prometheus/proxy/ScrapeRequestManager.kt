@@ -118,8 +118,9 @@ internal class ScrapeRequestManager {
   /**
    * Adds [scrapeRequest] only while fewer than [maxInFlight] requests are in flight across all agents.
    *
-   * Bounds the proxy's memory when many agents are busy at once. Returns false, without tracking the request,
-   * when the limit is reached.
+   * Bounds how many scrapes the proxy works on at once across all agents. It is a concurrency limit, not a memory
+   * bound: each in-flight scrape can buffer a response up to `maxZippedContentSizeMBytes` zipped and
+   * `maxUnzippedContentSizeMBytes` unzipped. Returns false, without tracking the request, when the limit is reached.
    */
   fun tryAddToScrapeRequestMap(
     scrapeRequest: ScrapeRequestWrapper,

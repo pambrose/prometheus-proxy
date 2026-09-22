@@ -116,15 +116,16 @@ Several values come in proxy-side / agent-side pairs, and the distinction determ
 
 | Metric                                 | Labels             | Buckets  | Description                                                 |
 |----------------------------------------|--------------------|----------|-------------------------------------------------------------|
-| `proxy_scrape_request_latency_seconds` | `path`, `outcome`  | 5ms–10s  | End-to-end scrape latency from request creation to response |
+| `proxy_scrape_request_latency_seconds` | `path`, `outcome`  | 5ms–90s  | End-to-end scrape latency from request creation to response |
 | `proxy_scrape_response_bytes`          | `path`, `encoding` | 1KB–10MB | Response payload size after decompression                   |
 
-A path's series are removed when its last registration goes away, whether it is unregistered or its agent disconnects, so a retired path stops appearing on `/metrics`.
+A path's series are removed when its last registration goes away, whether it is unregistered or its agent disconnects, so a retired path stops appearing on `/metrics`. A scrape still in flight when that happens is not recorded, so it cannot bring the series back.
 
 The `outcome` label takes the `proxy_scrape_requests` `type` values above, so latency can be split by result.
 The `encoding` label is `gzipped` or `plain`.
 
-Latency buckets: `.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10` seconds.
+Latency buckets: `.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10, 15, 30, 60, 90` seconds. They reach the proxy's
+default `scrapeRequestTimeoutSecs` (90s), so a timed-out scrape lands in a bucket rather than `+Inf`.
 
 Response size buckets: `1KB, 10KB, 100KB, 500KB, 1MB, 5MB, 10MB`.
 

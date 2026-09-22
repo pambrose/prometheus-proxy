@@ -201,6 +201,11 @@ interval as their deadline, capped at the unary deadline.
 - **Scrapes Prometheus gave up on left no trace.** A target slower than Prometheus's timeout but faster than
   the proxy's, the most common real failure, was missing from the scrape metrics, `/debug`, and the
   dashboard. It now appears under the new outcome `client_cancelled`.
+- **Retired paths' latency and size series could come back**, when a scrape finished after its path was
+  removed, and then stay forever. Removing them also scanned every path's series while holding the lock every
+  scrape takes. A path's series are now recorded only while it is registered, and removed without the scan.
+- **The scrape latency histogram stopped at 10s**, so every timeout landed in `+Inf`. It now has 15s, 30s, 60s, and
+  90s buckets, reaching the proxy's default scrape timeout.
 - **A scrape the proxy failed itself was reported as a target error.** When an agent disconnected mid-scrape,
   the proxy shut down, or a chunked response failed validation, the scrape was recorded as `upstream_error`
   with a 502, the same as a target returning 5xx, so alerts pointed at the target instead of the agent. These

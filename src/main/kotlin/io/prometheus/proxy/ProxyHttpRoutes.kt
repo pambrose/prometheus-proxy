@@ -238,7 +238,7 @@ internal object ProxyHttpRoutes {
             // missed — since each branch yields a ScrapeRequestResponse with updateMsg + fetchDuration.
             proxy.metrics {
               val elapsedSecs = response.fetchDuration.toDouble(DurationUnit.SECONDS)
-              scrapeRequestLatency.labels(path, response.updateMsg).observe(elapsedSecs)
+              observeLatency(path, response.updateMsg, elapsedSecs)
             }
           }
       }
@@ -269,7 +269,7 @@ internal object ProxyHttpRoutes {
       recordScrapeOutcome(path, agentContext.agentId, agentContext.agentName, response, proxy)
       incrementScrapeRequestCount(proxy, CLIENT_CANCELLED_LABEL)
       proxy.metrics {
-        scrapeRequestLatency.labels(path, CLIENT_CANCELLED_LABEL).observe(elapsed.toDouble(DurationUnit.SECONDS))
+        observeLatency(path, CLIENT_CANCELLED_LABEL, elapsed.toDouble(DurationUnit.SECONDS))
       }
     }
   }
@@ -466,7 +466,7 @@ internal object ProxyHttpRoutes {
       // Observe the byte count already computed during unzip (gzipped) or the small plain payload's
       // length, instead of re-encoding the decoded text just to measure it.
       val encoding = if (scrapeResults.srZipped) ProxyMetrics.ENCODING_GZIPPED else ProxyMetrics.ENCODING_PLAIN
-      scrapeResponseBytes.labels(path, encoding).observe(decoded.byteCount.toDouble())
+      observeResponseBytes(path, encoding, decoded.byteCount.toDouble())
     }
 
     return ScrapeRequestResponse(

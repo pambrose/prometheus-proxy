@@ -23,6 +23,7 @@ import com.pambrose.common.dsl.PrometheusDsl.gauge
 import com.pambrose.common.metrics.SamplerGaugeCollector
 import io.prometheus.Proxy
 import io.prometheus.client.Histogram
+import java.util.concurrent.ConcurrentHashMap
 
 internal class ProxyMetrics(
   proxy: Proxy,
@@ -57,7 +58,9 @@ internal class ProxyMetrics(
       .name("proxy_scrape_request_latency_seconds")
       .help("Proxy scrape request latency in seconds")
       .labelNames("path", "outcome")
-      .buckets(.005, .01, .025, .05, .1, .25, .5, 1.0, 2.5, 5.0, 10.0)
+      // Up to the proxy's default scrapeRequestTimeoutSecs (90), past the agent's default scrapeTimeoutSecs (15), so
+      // a timeout lands in a bucket rather than +Inf.
+      .buckets(.005, .01, .025, .05, .1, .25, .5, 1.0, 2.5, 5.0, 10.0, 15.0, 30.0, 60.0, 90.0)
       .register()
 
   val scrapeResponseBytes: Histogram =
@@ -68,22 +71,56 @@ internal class ProxyMetrics(
       .buckets(1_024.0, 10_240.0, 102_400.0, 512_000.0, 1_048_576.0, 5_242_880.0, 10_485_760.0)
       .register()
 
+  // The per-path histogram series each registered path has recorded, as (histogram, second label value) pairs. A
+  // path is a key exactly while it is registered. Observing and removing both run inside the map's per-key compute, so
+  // a scrape that finishes after its path's removal finds no key and records nothing, instead of re-creating series
+  // that nothing would remove again.
+  private val pathSeries = ConcurrentHashMap<String, MutableSet<Pair<Histogram, String>>>()
+
+  /** Starts recording [path]'s per-path series; called when the path registers. A path already recording is kept. */
+  fun pathRegistered(path: String) {
+    pathSeries.putIfAbsent(path, ConcurrentHashMap.newKeySet())
+  }
+
+  /** Records a scrape of [path] with [outcome] taking [seconds], if [path] is still registered. */
+  fun observeLatency(
+    path: String,
+    outcome: String,
+    seconds: Double,
+  ) = observe(scrapeRequestLatency, path, outcome, seconds)
+
+  /** Records a [bytes]-byte response for [path] in [encoding], if [path] is still registered. */
+  fun observeResponseBytes(
+    path: String,
+    encoding: String,
+    bytes: Double,
+  ) = observe(scrapeResponseBytes, path, encoding, bytes)
+
+  private fun observe(
+    histogram: Histogram,
+    path: String,
+    label: String,
+    value: Double,
+  ) {
+    pathSeries.computeIfPresent(path) { _, series ->
+      series += histogram to label
+      histogram.labels(path, label).observe(value)
+      series
+    }
+  }
+
   /**
-   * Removes every series labelled with [path] from the per-path histograms.
+   * Removes every series labelled with [path] from the per-path histograms, and stops recording new ones.
    *
    * Called when a path's last registration goes away, so a retired path stops holding series in memory and on
-   * `/metrics`. Each histogram's second label (outcome or encoding) is open-ended, so the label sets to remove are
-   * read from the series the histogram currently holds rather than from a list of known values.
+   * `/metrics`. It removes only the series [path] recorded, which it tracks as they are created: reading them back
+   * with collect() materialized every sample of every path, and this runs inside the path map's lock, which every
+   * scrape takes.
    */
   fun removePathSeries(path: String) {
-    listOf(scrapeRequestLatency, scrapeResponseBytes).forEach { histogram ->
-      histogram.collect()
-        .flatMap { it.samples }
-        .filter { it.labelValues.firstOrNull() == path }
-        // A bucket sample carries an extra "le" label; the series itself is identified by the first two.
-        .map { it.labelValues.take(2) }
-        .distinct()
-        .forEach { histogram.remove(*it.toTypedArray()) }
+    pathSeries.compute(path) { _, series ->
+      series?.forEach { (histogram, label) -> histogram.remove(path, label) }
+      null
     }
   }
 

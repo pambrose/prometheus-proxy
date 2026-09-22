@@ -208,13 +208,15 @@ class ProxyPathManagerTest : StringSpec() {
     // displacement in proxy_agent_displacement_total that never happened.
     "a non-consolidated agent re-registering its own path should not count as a displacement" {
       val proxy = createMockProxy()
+      val metrics = mockk<ProxyMetrics>(relaxed = true)
+      routeMetrics(proxy, metrics)
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context = createMockAgentContext()
 
       manager.addPath("/metrics", """{"job":"test"}""", context)
       manager.addPath("/metrics", """{"job":"test"}""", context)
 
-      verify(exactly = 0) { proxy.metrics(any()) }
+      verify(exactly = 0) { metrics.agentDisplacementCount }
       verify(exactly = 0) { context.invalidate() }
       val info = manager.getAgentContextInfo("/metrics")
       info.shouldNotBeNull()
@@ -883,6 +885,30 @@ class ProxyPathManagerTest : StringSpec() {
 
       manager.removePath("metrics", context2.agentId)
       verify(exactly = 1) { metrics.removePathSeries("metrics") }
+    }
+
+    // ProxyMetrics records a path's series only while the path is registered, so a scrape finishing after its path
+    // is gone can't re-create them. Registration is what starts that.
+    "addPath should start recording the path's metric series" {
+      val proxy = createMockProxy()
+      val metrics = mockk<ProxyMetrics>(relaxed = true)
+      routeMetrics(proxy, metrics)
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+
+      manager.addPath("metrics", "{}", createMockAgentContext())
+
+      verify(exactly = 1) { metrics.pathRegistered("metrics") }
+    }
+
+    "a rejected addPath should not start recording metric series" {
+      val proxy = createMockProxy()
+      val metrics = mockk<ProxyMetrics>(relaxed = true)
+      routeMetrics(proxy, metrics)
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+
+      manager.addPath("app/metrics", "{}", createMockAgentContext()).shouldNotBeNull()
+
+      verify(exactly = 0) { metrics.pathRegistered(any()) }
     }
 
     // An agent disconnect retires every path it alone served, and only those.

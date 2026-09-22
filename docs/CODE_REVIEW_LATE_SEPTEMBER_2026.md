@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — Late September 2026 Findings
 
-**Status:** 31 issues — 6 fixed, 25 open (open: 0 high · 4 medium · 21 low) — fixed: #1, #5, #17, #18, #21, #30
+**Status:** 31 issues — 8 fixed, 23 open (open: 0 high · 3 medium · 20 low) — fixed: #1, #5, #6, #9, #17, #18, #21, #30
 
 **Date:** 2026-09-22
 
@@ -35,10 +35,10 @@ gate (#17).
 | 3  | Discovery still WARNs every reconcile for collisions, duplicates, bad file      | Agent    | low      | ⬜      |
 | 4  | Duplicate `agent.filters` entries for one path silently merged                  | Agent    | low      | ⬜      |
 | 5  | Proxy-made failures (disconnect, shutdown, drain) counted as `upstream_error`   | Proxy    | medium   | ✅      |
-| 6  | Per-path series removal is O(all series) under the path lock, and leaks         | Proxy    | medium   | ⬜      |
+| 6  | Per-path series removal is O(all series) under the path lock, and leaks         | Proxy    | medium   | ✅      |
 | 7  | Unvalidated backlog size / dashboard refresh: 0 rejects every scrape or spins   | Proxy    | low      | ⬜      |
 | 8  | Path registered with a leading slash is advertised but unscrapable              | Proxy    | low      | ⬜      |
-| 9  | Latency buckets stop at 10s; in-flight cap is not a memory bound                | Proxy    | low      | ⬜      |
+| 9  | Latency buckets stop at 10s; in-flight cap is not a memory bound                | Proxy    | low      | ✅      |
 | 10 | Agent follows redirects and re-sends Basic credentials to any host              | Security | medium   | ⬜      |
 | 11 | Scrape port serves the target's Content-Type (HTML) with no `nosniff`           | Security | low      | ⬜      |
 | 12 | Agent labels can set `__*` meta labels and `job`/`instance`                     | Security | low      | ⬜      |
@@ -74,7 +74,7 @@ then the items that change what operators see, then hardening, and leaves tidy-u
 | 1 ✅  | #17, #18             | Restore a PR build gate; record the SLF4J bump             | Every later PR benefits from a pre-merge build. #18 is a two-line fix already pending.                                           |
 | 2 ✅  | #1, #30              | Keep the agent connected when every rejection can clear    | The only high: the #264/#271 retry and backoff are bypassed in their main use case, and discovery goes down with it.             |
 | 3 ✅  | #5, #21              | Accurate scrape outcome labels, and docs that match        | Label semantics and their docs must change together; alerts written from the docs never fire today.                              |
-| 4    | #6, #9               | Cheap, leak-free per-path series removal; better buckets   | Same file (`ProxyMetrics.kt`); scraping stalls under the path lock at scale.                                                     |
+| 4 ✅  | #6, #9               | Cheap, leak-free per-path series removal; better buckets   | Same file (`ProxyMetrics.kt`); scraping stalls under the path lock at scale.                                                     |
 | 5    | #10, #13, #11, #12   | Agent HTTP-client and scrape-port hardening                | Small, local changes that close a credential-leak path. #12 needs a decision on whether `job`/`instance` are reserved.           |
 | 6    | #2                   | Strip protobuf from the forwarded `Accept` header          | Silent data corruption for native-histogram users; a small agent change plus a documented limitation.                            |
 | 7    | #7, #8, #4           | Config and input validation                                | Startup `require`s and path normalization; low risk, each with a unit test.                                                      |
@@ -207,7 +207,7 @@ requests — the reverse of `Proxy.shutDown()`'s order. New tests cover the fail
 `failAllScrapeRequests` scoping, the CAS keeping the first failure, and `invalid_response` end to end. The
 `readRequestsFromProxy` cancellation call site has no dedicated test; it is a one-line argument change.
 
-### 6. [ ] Per-path series removal is O(all series) under the path lock, and leaks
+### 6. [x] Per-path series removal is O(all series) under the path lock, and leaks
 
 **Severity:** medium · **Confidence:** confirmed (applies only with metrics enabled)
 
@@ -229,6 +229,16 @@ requests — the reverse of `Proxy.shutDown()`'s order. New tests cover the fail
 filled where metrics are observed) and remove exactly those, with no `collect()`. Gather removed paths inside
 the lock and remove series after releasing it. Skip observing (or re-run removal) when the path is no longer
 registered at completion.
+
+**Resolution:** `ProxyMetrics` keeps a map from each registered path to the (histogram, label) series it has
+recorded. `addPath` calls the new `pathRegistered`, the scrape route records through `observeLatency` /
+`observeResponseBytes`, and `removePathSeries` removes exactly the tracked series with no `collect()`. Observing uses
+`computeIfPresent` and removal `compute` on the same key, so they are atomic per path: a scrape finishing after its
+path's removal records nothing, closing the leak. Removal is now proportional to the path's own series, so it stays
+inside the path lock. Moving it outside would open a race with a re-registration, which would lose the new
+registration's tracking. New tests cover: removal of only the recorded series (fails under the old `collect()` scan),
+a late scrape not re-creating series, re-registration recording again, and `addPath` registering (not on rejection).
+Each was checked against a mutation of the code it guards.
 
 ### 7. [ ] Unvalidated backlog size / dashboard refresh: 0 rejects every scrape or spins
 
@@ -259,7 +269,7 @@ path. `"/"` alone is accepted too.
 **Fix:** normalize (`removePrefix("/")`) once at the start of `addPath` / `removePath`, reject a blank result as
 `INVALID_PATH`, and return a `PathRejection` rather than letting a `require` surface as gRPC `UNKNOWN`.
 
-### 9. [ ] Latency buckets stop at 10s; in-flight cap is not a memory bound
+### 9. [x] Latency buckets stop at 10s; in-flight cap is not a memory bound
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -270,6 +280,10 @@ the slow tail has no resolution. The comment on `maxInFlightScrapeRequests` says
 but 1,000 in flight × (chunk buffer + copy + unzipped bytes + `String`) is tens of GB at the defaults.
 
 **Fix:** add 15/30/60/90s buckets. Describe the cap as a concurrency limit, or add a separate byte budget.
+
+**Resolution:** the latency histogram gains 15, 30, 60, and 90s buckets, with a test and the bucket lists in both
+metrics pages updated. The `tryAddToScrapeRequestMap` KDoc now calls `maxInFlightScrapeRequests` a concurrency limit
+and says what each in-flight scrape can buffer. A byte budget was not added.
 
 ---
 
