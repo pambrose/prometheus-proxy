@@ -1000,6 +1000,64 @@ class AgentPathManagerTest : StringSpec() {
       coVerify(exactly = 1) { mockGrpcService.registerPathOnProxy(any(), any(), any(), any()) }
     }
 
+    // Reconcile runs every reconcileIntervalSecs, and each one re-found the same collision or duplicate in the file and
+    // warned again: about 2,880 WARN lines a day per problem at the default 30s interval.
+    fun reconcileWarnings(
+      manager: AgentPathManager,
+      vararg desiredPerReconcile: List<DiscoveredPath>,
+    ): suspend () -> List<String> =
+      {
+        captureLogs<AgentPathManager>(Level.WARN) {
+          desiredPerReconcile.forEach { manager.reconcileDiscoveredPaths(it) }
+        }.map { it.formattedMessage }
+      }
+
+    "a discovered path colliding with a static path should be warned about once" {
+      val (agent, _) = agentWithStaticPaths("metrics")
+      val manager = AgentPathManager(agent)
+      val colliding = [DiscoveredPath("d", "metrics", "http://d/m", "{}")]
+
+      val warnings = reconcileWarnings(manager, colliding, colliding, colliding)()
+
+      warnings.filter { "collide" in it } shouldHaveSize 1
+    }
+
+    "a duplicate discovered path should be warned about once" {
+      val manager = AgentPathManager(createMockAgent())
+      val duplicated =
+        [DiscoveredPath("a", "d_metrics", "http://a/m", "{}"), DiscoveredPath("b", "d_metrics", "http://b/m", "{}")]
+
+      val warnings = reconcileWarnings(manager, duplicated, duplicated, duplicated)()
+
+      warnings.filter { "Duplicate" in it } shouldHaveSize 1
+    }
+
+    // The warning names every current collision, so a new one is news -- and so is the file changing back after a fix.
+    "a change in the discovered paths that collide should be warned about again" {
+      val (agent, _) = agentWithStaticPaths("metrics", "health")
+      val manager = AgentPathManager(agent)
+      val one = [DiscoveredPath("d", "metrics", "http://d/m", "{}")]
+      val two = one + DiscoveredPath("e", "health", "http://e/h", "{}")
+
+      val warnings = reconcileWarnings(manager, one, one, two, two)()
+
+      warnings.filter { "collide" in it } shouldHaveSize 2
+      warnings.last { "collide" in it } shouldContain "/health"
+    }
+
+    // A reconnect clears the path manager, so the agent reports its discovery problems afresh on the new connection.
+    "a collision should be warned about again after a reconnect" {
+      val (agent, _) = agentWithStaticPaths("metrics")
+      val manager = AgentPathManager(agent)
+      val colliding = [DiscoveredPath("d", "metrics", "http://d/m", "{}")]
+
+      reconcileWarnings(manager, colliding)()
+      manager.clear()
+      val warnings = reconcileWarnings(manager, colliding)()
+
+      warnings.filter { "collide" in it } shouldHaveSize 1
+    }
+
     "registerPaths should register the remaining paths when the proxy rejects one" {
       val (mockAgent, mockGrpcService) = agentWithStaticPaths("metrics1", "metrics2", "metrics3")
       coEvery { mockGrpcService.registerPathOnProxy("metrics2", any(), any(), any()) } throws

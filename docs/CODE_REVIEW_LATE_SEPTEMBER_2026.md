@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — Late September 2026 Findings
 
-**Status:** 31 issues — 17 fixed, 14 open (open: 0 high · 1 medium · 13 low) — fixed: #1, #2, #4–#13, #17, #18, #21, #30, #31
+**Status:** 31 issues — 18 fixed, 13 open (open: 0 high · 1 medium · 12 low) — fixed: #1–#13, #17, #18, #21, #30, #31
 
 **Date:** 2026-09-22
 
@@ -32,7 +32,7 @@ gate (#17).
 |----|---------------------------------------------------------------------------------|----------|----------|--------|
 | 1  | All static paths rejected as retryable → reconnect loop; backoff never runs     | Agent    | high     | ✅      |
 | 2  | Protobuf-format scrapes are corrupted (Prometheus `Accept` passed through)      | Agent    | medium   | ✅      |
-| 3  | Discovery still WARNs every reconcile for collisions, duplicates, bad file      | Agent    | low      | ⬜      |
+| 3  | Discovery still WARNs every reconcile for collisions, duplicates, bad file      | Agent    | low      | ✅      |
 | 4  | Duplicate `agent.filters` entries for one path silently merged                  | Agent    | low      | ✅      |
 | 5  | Proxy-made failures (disconnect, shutdown, drain) counted as `upstream_error`   | Proxy    | medium   | ✅      |
 | 6  | Per-path series removal is O(all series) under the path lock, and leaks         | Proxy    | medium   | ✅      |
@@ -78,7 +78,7 @@ then the items that change what operators see, then hardening, and leaves tidy-u
 | 5 ✅  | #10, #13, #11, #12   | Agent HTTP-client and scrape-port hardening                | Small, local changes that close a credential-leak path. #12 needs a decision on whether `job`/`instance` are reserved.           |
 | 6 ✅  | #2                   | Strip protobuf from the forwarded `Accept` header          | Silent data corruption for native-histogram users; a small agent change plus a documented limitation.                            |
 | 7 ✅  | #7, #8, #4           | Config and input validation                                | Startup `require`s and path normalization; low risk, each with a unit test.                                                      |
-| 8    | #3                   | Log discovery warnings once                                | Follows the #267/#270 pattern already in the codebase.                                                                           |
+| 8 ✅  | #3                   | Log discovery warnings once                                | Follows the #267/#270 pattern already in the codebase.                                                                           |
 | 9    | #24, #25, #28        | Tests that test the product and clean up after themselves  | Removes false confidence before the next refactor.                                                                               |
 | 10   | #27, ~~#31~~, #26, #29 | Deterministic, collision-free test infrastructure          | Flake prevention; `TestPortsTest` then guards the harness port.                                                                  |
 | 11   | #14, #15             | Per-identity path caps; defer context creation until auth  | Needs new config keys and a design choice, so it follows the quick hardening in step 5.                                          |
@@ -152,7 +152,7 @@ fails when the call site is reverted to forward the header unchanged. The README
 note that scrapes travel as text, so native histograms aren't available through the proxy. Carrying bytes end to end
 was not attempted.
 
-### 3. [ ] Discovery still WARNs every reconcile for collisions, duplicates, and a bad file
+### 3. [x] Discovery still WARNs every reconcile for collisions, duplicates, and a bad file
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -165,6 +165,13 @@ logs about 2,880 times a day.
 
 **Fix:** remember what was reported last time, the way `FileDiscoverySource.reportUnusable` does; WARN only when
 the set (or the read error) changes, DEBUG otherwise.
+
+**Resolution:** `reconcileDiscoveredPaths` now collects each reconcile's collisions and duplicates, and
+`reportDiscoveryConflicts` logs each set at WARN only when it changes (naming every path), at DEBUG while it repeats,
+and at INFO once it empties. The last-reported sets are guarded by `pathMutex` and reset by `clear()`, so a reconnect
+reports them afresh. `PathDiscoveryService.reconcileOnce` remembers the last failure as type and message: a new one is
+logged at WARN with its stack trace, a repeat at DEBUG, and the next success at INFO. Tests cover each warning appearing
+once across repeated reconciles, a changed collision set or failure being reported again, recovery, and a reconnect.
 
 ### 4. [x] Duplicate `agent.filters` entries for one path silently merged
 

@@ -221,6 +221,9 @@ interval as their deadline, capped at the unary deadline.
 - **Scrapes Prometheus gave up on left no trace.** A target slower than Prometheus's timeout but faster than
   the proxy's, the most common real failure, was missing from the scrape metrics, `/debug`, and the
   dashboard. It now appears under the new outcome `client_cancelled`.
+- **Discovery repeated the same warning every 30 seconds** for a discovered path colliding with a static one, a
+  path listed twice in the discovery file, or an unreadable discovery file (with a stack trace each time). Each is
+  now logged once when it appears or changes, and again when it clears.
 - **A path registered with a leading slash was advertised but couldn't be scraped**: service discovery listed
   it and every scrape answered 404. Paths are now stored without the slash, and `/` alone is rejected. The
   in-tree agent already strips it, so only older or custom agents were affected.

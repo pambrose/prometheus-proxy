@@ -43,6 +43,9 @@ internal class PathDiscoveryService(
   private val source: PathDiscoverySource,
   private val intervalSecs: Int,
 ) {
+  // The last reconcile's failure, as "Type: message", or null after a success; see reconcileOnce.
+  private var lastFailure: String? = null
+
   // The entries the last read dropped as unusable, empty for a source that does not report them.
   val skippedEntries: List<DiscoveredPath>
     get() = (source as? SkippedEntryReporter)?.skippedEntries.orEmpty()
@@ -67,11 +70,24 @@ internal class PathDiscoveryService(
   // One poll-and-reconcile tick. runCatchingCancellable rethrows CancellationException (so
   // disconnect/shutdown ends the loop) but swallows a read/parse or per-reconcile failure, so a bad
   // tick logs and skips — leaving the live (last-known-good) set untouched — rather than killing discovery.
+  // A missing or malformed file fails every tick, so a failure is logged in full at WARN only when it differs from
+  // the last one, and at DEBUG while it repeats; the next success is logged at INFO.
   internal suspend fun reconcileOnce() {
     runCatchingCancellable {
       val desired = source.read()
       pathManager.reconcileDiscoveredPaths(desired)
-    }.onFailure { e -> logger.warn(e) { "Path discovery reconcile failed; keeping current paths" } }
+    }.onSuccess {
+      if (lastFailure != null)
+        logger.info { "Path discovery reconcile succeeded again" }
+      lastFailure = null
+    }.onFailure { e ->
+      val failure = "${e::class.simpleName}: ${e.message}"
+      if (failure == lastFailure)
+        logger.debug { "Path discovery reconcile failed again; keeping current paths: $failure" }
+      else
+        logger.warn(e) { "Path discovery reconcile failed; keeping current paths" }
+      lastFailure = failure
+    }
   }
 
   // Waits out one reconcile interval in short slices, bailing early once keepRunning() is false.
