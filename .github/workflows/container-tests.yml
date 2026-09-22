@@ -4,32 +4,15 @@ name: Container Tests
 # proxy/agent images from etc/docker/*.df and exercises the Prometheus -> proxy -> agent ->
 # endpoint scrape path across smoke, HTTP-surface, consolidated, large-payload, reconnect,
 # agent-token-auth, TLS/HTTPS, and parameter-driven scaling specs. The scaling spec runs its
-# small default table here (no SCALE_* overrides). Slow (several minutes) so this is gated
-# behind targeted triggers rather than running on every PR. No untrusted event payloads are
-# referenced.
+# small default table here (no SCALE_* overrides). Runs on push to master and on demand. No
+# untrusted event payloads are referenced.
 on:
   push:
     branches: [ master ]
-  pull_request:
-    branches: [ master ]
-    paths:
-      - 'etc/docker/**'
-      - 'build.gradle.kts'
-      - 'gradle/libs.versions.toml'
-      - 'src/shadow/**'
-      - 'src/test/kotlin/io/prometheus/containers/**'
-      - 'src/test/resources/containers/**'
-      - '.github/workflows/container-tests.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
-
-# A newer push to the same pull request supersedes a run still in progress. Runs on master are never cancelled, so
-# every merged commit keeps its own result.
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   container-tests:

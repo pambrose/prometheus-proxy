@@ -10,7 +10,7 @@ kotlin = "2.4.20"
 serialization = "1.11.0"
 
 # Build plugins
-config = "6.1.0"
+config = "6.1.1"
 detekt = "2.0.0-alpha.6"
 dokka = "2.2.0"
 gradle-plugins = "1.1.5"
@@ -19,7 +19,7 @@ maven-publish = "0.37.0"
 protobuf = "0.10.0"
 shadow = "9.6.1"
 taskinfo = "3.0.2"
-versions = "0.63.1"
+versions = "0.64.0"
 
 # gRPC / Protobuf
 grpc = "1.84.0"
@@ -54,7 +54,7 @@ zipkin = "6.3.1"
 # Logging
 logging = "8.0.4"
 logback = "1.6.3"
-slf4j = "2.0.19"
+slf4j = "2.0.20"
 
 # Config / CLI
 typesafe = "1.4.9"
