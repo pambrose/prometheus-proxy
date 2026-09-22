@@ -74,7 +74,8 @@ internal class ProxyPathManager(
 
   // AgentContextInfo is deeply immutable and mutations replace the pathMap entry (never mutate in
   // place), so returning the stored instance is already an effective snapshot — no defensive copy.
-  fun getAgentContextInfo(path: String): AgentContextInfo? = synchronized(pathMap) { pathMap[path] }
+  // Paths are keyed without a leading slash, the form the scrape route looks them up in; see pathKey.
+  fun getAgentContextInfo(path: String): AgentContextInfo? = synchronized(pathMap) { pathMap[pathKey(path)] }
 
   val pathMapSize: Int
     get() = synchronized(pathMap) { pathMap.size }
@@ -99,11 +100,20 @@ internal class ProxyPathManager(
     identityName: String = "",
   ): PathRejection? {
     require(path.isNotBlank()) { BLANK_PATH_MSG }
+    val key = pathKey(path)
+    // "/" passes the blank check but names no path the scrape route can reach.
+    if (key.isBlank())
+      return rejectPath(agentContext, path, "Invalid path: /$key (a path segment is required)", INVALID_PATH)
     // Redacted on the way in so the dashboard and /debug never show credentials, even from an agent that
     // predates agent-side redaction.
-    return multiSegmentPathError(path)?.let { PathRejection(it, INVALID_PATH) }
-      ?: addValidatedPath(path, labels, agentContext, sanitizeUrl(targetUrl), pathSource, identityName)
+    return multiSegmentPathError(key)?.let { PathRejection(it, INVALID_PATH) }
+      ?: addValidatedPath(key, labels, agentContext, sanitizeUrl(targetUrl), pathSource, identityName)
   }
+
+  // The key a path is stored and looked up under: without its leading slash, as the scrape route (get("/*") with the
+  // slash dropped) looks it up. Stored with the slash, a path was advertised in service discovery yet 404ed on every
+  // scrape, and "/foo" and "foo" were separate paths that the identity and consolidation checks never compared.
+  private fun pathKey(path: String) = path.removePrefix("/")
 
   // Logs why a path was refused and returns the rejection. The first time this connection is told a cause for a
   // path it is logged at WARN; an identical repeat -- an agent retrying a rejection that can clear -- at DEBUG, so
@@ -232,6 +242,7 @@ internal class ProxyPathManager(
   ): UnregisterPathResponse {
     require(path.isNotBlank()) { BLANK_PATH_MSG }
     require(agentId.isNotBlank()) { BLANK_AGENT_ID_MSG }
+    val path = pathKey(path)
 
     synchronized(pathMap) {
       val agentInfo = pathMap[path]

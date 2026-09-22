@@ -239,6 +239,52 @@ class ProxyPathManagerTest : StringSpec() {
       owner.isValid().shouldBeTrue()
     }
 
+    // The scrape route looks a path up without its leading slash, but a path registered as "/metrics" was stored under
+    // "/metrics": advertised in service discovery, yet every scrape of it answered 404 invalid_path. The in-tree agent
+    // strips the slash first, so this took an older or custom agent.
+    "a path registered with a leading slash should be stored under the key the scrape route looks up" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+
+      manager.addPath("/metrics", "{}", AgentContext("remote-1")).shouldBeNull()
+
+      manager.allPathContextInfos().keys shouldBe setOf("metrics")
+    }
+
+    // Stored under separate keys, "/metrics" and "metrics" never met, so neither the identity nor the consolidation
+    // check saw them conflict.
+    "a path with and without a leading slash should be the same path" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val owner = AgentContext("remote-owner")
+      val intruder = AgentContext("remote-intruder")
+
+      manager.addPath("/metrics", "{}", owner, identityName = "team_a").shouldBeNull()
+      val rejection = manager.addPath("metrics", "{}", intruder, identityName = "team_b")
+
+      rejection.shouldNotBeNull().cause shouldBe PathRejectionCause.HELD_BY_ANOTHER_IDENTITY
+      manager.pathMapSize shouldBe 1
+    }
+
+    "removePath should find a path whichever way its leading slash was given" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val context = AgentContext("remote-1")
+      manager.addPath("metrics", "{}", context).shouldBeNull()
+
+      manager.removePath("/metrics", context.agentId).valid.shouldBeTrue()
+
+      manager.pathMapSize shouldBe 0
+    }
+
+    // "/" is not blank, so it passed the blank check and registered a path no scrape could reach. It is now the
+    // rejection an agent gets for any other path it can't register, not an exception that surfaces as gRPC UNKNOWN.
+    "a path of only a slash should be rejected as an invalid path" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+
+      val rejection = manager.addPath("/", "{}", AgentContext("remote-1"))
+
+      rejection.shouldNotBeNull().cause shouldBe PathRejectionCause.INVALID_PATH
+      manager.pathMapSize shouldBe 0
+    }
+
     // A redeployed agent presents the same identity, so it reclaims its paths at once.
     "an agent of the same identity should take over a live agent's non-consolidated path" {
       val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
@@ -533,9 +579,9 @@ class ProxyPathManagerTest : StringSpec() {
       val paths = manager.allPaths
 
       paths.shouldHaveSize(3)
-      paths shouldContain "/metrics1"
-      paths shouldContain "/metrics2"
-      paths shouldContain "/metrics3"
+      paths shouldContain "metrics1"
+      paths shouldContain "metrics2"
+      paths shouldContain "metrics3"
     }
 
     "allPathContextInfos should atomically snapshot paths and their info" {
@@ -551,16 +597,16 @@ class ProxyPathManagerTest : StringSpec() {
 
       // Should contain all paths with their info
       snapshot.mapShouldHaveSize(2)
-      snapshot.keys shouldContain "/metrics1"
-      snapshot.keys shouldContain "/metrics2"
+      snapshot.keys shouldContain "metrics1"
+      snapshot.keys shouldContain "metrics2"
 
       // Info should match what was registered
-      val info1 = snapshot["/metrics1"]
+      val info1 = snapshot["metrics1"]
       info1.shouldNotBeNull()
       info1.agentContexts.shouldHaveSize(1)
       info1.agentContexts[0].agentId shouldBe context1.agentId
 
-      val info2 = snapshot["/metrics2"]
+      val info2 = snapshot["metrics2"]
       info2.shouldNotBeNull()
       info2.agentContexts.shouldHaveSize(1)
       info2.agentContexts[0].agentId shouldBe context2.agentId
@@ -568,13 +614,13 @@ class ProxyPathManagerTest : StringSpec() {
       // Removing a path after snapshot should not affect the snapshot
       manager.removePath("/metrics1", context1.agentId)
       snapshot.mapShouldHaveSize(2)
-      snapshot["/metrics1"].shouldNotBeNull()
+      snapshot["metrics1"].shouldNotBeNull()
 
       // New snapshot should reflect the removal
       val snapshot2 = manager.allPathContextInfos()
       snapshot2.mapShouldHaveSize(1)
-      snapshot2["/metrics1"].shouldBeNull()
-      snapshot2["/metrics2"].shouldNotBeNull()
+      snapshot2["metrics1"].shouldBeNull()
+      snapshot2["metrics2"].shouldNotBeNull()
     }
 
     "removeFromPathManager should remove all paths for agent" {

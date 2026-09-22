@@ -557,6 +557,27 @@ class ProxyOptionsTest : StringSpec() {
       exception.message shouldContain "maxInFlightScrapeRequests"
     }
 
+    // Each agent's queue is capped at twice this value, so 0 answered every scrape with 503 agent_backlog_full.
+    "scrapeRequestBacklogUnhealthySize of 0 should be rejected" {
+      val exception = shouldThrow<IllegalArgumentException> {
+        proxyOptions(["-Dproxy.internal.scrapeRequestBacklogUnhealthySize=0"])
+      }
+      exception.message shouldContain "scrapeRequestBacklogUnhealthySize"
+    }
+
+    // The dashboard's push loop waits refreshIntervalSecs between pushes; at 0 the wait returns at once, so the loop
+    // spun a thread at 100%.
+    "a non-positive dashboard refreshIntervalSecs should be rejected when the dashboard is enabled" {
+      val exception = shouldThrow<IllegalArgumentException> {
+        proxyOptions(["--dashboard", "-Dproxy.dashboard.refreshIntervalSecs=0"])
+      }
+      exception.message shouldContain "refreshIntervalSecs"
+    }
+
+    "a dashboard refreshIntervalSecs of 0 should be accepted while the dashboard is off" {
+      proxyOptions(["-Dproxy.dashboard.refreshIntervalSecs=0"]).dashboardEnabled.shouldBeFalse()
+    }
+
     // A blank bind address would fail only when the scrape server starts, with an opaque Ktor error.
     "a blank proxy.http.host should be rejected" {
       val exception = shouldThrow<IllegalArgumentException> { proxyOptions(["-Dproxy.http.host="]) }
