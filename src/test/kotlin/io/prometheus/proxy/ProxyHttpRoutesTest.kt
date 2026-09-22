@@ -91,7 +91,7 @@ class ProxyHttpRoutesTest : StringSpec() {
   init {
     afterTest {
       testProxies.forEach { proxy ->
-        proxy.scrapeRequestManager.failAllInFlightScrapeRequests("test cleanup")
+        proxy.scrapeRequestManager.failAllInFlightScrapeRequests("test cleanup", ProxyFailure.PROXY_STOPPED)
         proxy.agentContextManager.invalidateAllAgentContexts()
       }
       testProxies.clear()
@@ -566,7 +566,7 @@ class ProxyHttpRoutesTest : StringSpec() {
       queued.awaitAll()
     }
 
-    "submitScrapeRequest should report agent-disconnect (not timed_out) when the agent disconnects mid-scrape" {
+    "submitScrapeRequest should report agent_disconnected (not timed_out) when the agent disconnects mid-scrape" {
       val proxy = createSpyProxyForSubmit(timeoutSecs = 30)
       val agentContext = AgentContext("test-remote")
 
@@ -583,10 +583,10 @@ class ProxyHttpRoutesTest : StringSpec() {
         mockk<ApplicationRequest>(relaxed = true),
       )
 
-      // finding 15: invalidate() now fails the buffered wrapper with a 502 agent-disconnected result,
-      // so this is reported truthfully as an upstream error instead of being mislabeled timed_out.
-      response.statusCode shouldBe HttpStatusCode.BadGateway
-      response.updateMsg shouldBe "upstream_error"
+      // invalidate() fails the buffered wrapper as the proxy's own AGENT_DISCONNECTED failure. It was reported as a
+      // 502 upstream_error, which sent operators to the target instead of the agent connection.
+      response.statusCode shouldBe HttpStatusCode.ServiceUnavailable
+      response.updateMsg shouldBe "agent_disconnected"
     }
 
     "submitScrapeRequest should return timed_out when proxy stops during scrape" {
@@ -632,10 +632,10 @@ class ProxyHttpRoutesTest : StringSpec() {
         mockk<ApplicationRequest>(relaxed = true),
       )
 
-      // It should return 502 Bad Gateway because failScrapeRequest uses that code
-      response.statusCode shouldBe HttpStatusCode.BadGateway
-      // 502 maps to upstream_error (finding 10): a disconnect/bad-gateway is not a path-not-found.
-      response.updateMsg shouldBe "upstream_error"
+      // Proxy.removeAgentContext fails the agent's in-flight scrapes as AGENT_DISCONNECTED, the same outcome as a
+      // disconnect before the request was queued.
+      response.statusCode shouldBe HttpStatusCode.ServiceUnavailable
+      response.updateMsg shouldBe "agent_disconnected"
     }
 
     "submitScrapeRequest should unblock immediately when proxy is shut down" {
@@ -645,9 +645,37 @@ class ProxyHttpRoutesTest : StringSpec() {
 
       launch {
         delay(200.milliseconds)
-        // Simulate what Proxy.shutDown() does
+        // Simulate what Proxy.shutDown() does, in its order: fail in-flight requests, then invalidate the agents
+        proxy.scrapeRequestManager.failAllInFlightScrapeRequests("Proxy is shutting down", ProxyFailure.PROXY_STOPPED)
         proxy.agentContextManager.invalidateAllAgentContexts()
-        proxy.scrapeRequestManager.failAllInFlightScrapeRequests("Proxy is shutting down")
+      }
+
+      val response = ProxyHttpRoutes.submitScrapeRequest(
+        agentContext,
+        proxy,
+        "metrics",
+        "",
+        mockk<ApplicationRequest>(relaxed = true),
+      )
+
+      // The same outcome as a scrape that arrives once the proxy has stopped.
+      response.statusCode shouldBe HttpStatusCode.ServiceUnavailable
+      response.updateMsg shouldBe "proxy_stopped"
+    }
+
+    // A chunk or summary that fails validation, or a response the proxy can't process, is the proxy's finding about
+    // what the agent sent, not a status the target returned.
+    "submitScrapeRequest should label a response the proxy could not process invalid_response" {
+      val proxy = createSpyProxyForSubmit(timeoutSecs = 30)
+      val agentContext = AgentContext("test-remote")
+
+      launch {
+        val wrapper = agentContext.readScrapeRequest()!!
+        proxy.scrapeRequestManager.failScrapeRequest(
+          wrapper.scrapeId,
+          "Chunk validation failed: checksum mismatch",
+          ProxyFailure.INVALID_RESPONSE,
+        )
       }
 
       val response = ProxyHttpRoutes.submitScrapeRequest(
@@ -659,7 +687,8 @@ class ProxyHttpRoutesTest : StringSpec() {
       )
 
       response.statusCode shouldBe HttpStatusCode.BadGateway
-      response.updateMsg shouldBe "upstream_error"
+      response.updateMsg shouldBe "invalid_response"
+      response.failureReason shouldContain "checksum mismatch"
     }
 
     "submitScrapeRequest should return success for valid non-zipped response" {

@@ -118,9 +118,9 @@ class AgentContextTest : StringSpec() {
 
       context.isValid().shouldBeFalse()
       // All buffered wrappers should be failed with an agent-disconnected result (finding 15).
-      verify(exactly = 1) { wrapper1.complete(any()) }
-      verify(exactly = 1) { wrapper2.complete(any()) }
-      verify(exactly = 1) { wrapper3.complete(any()) }
+      verify(exactly = 1) { wrapper1.complete(any(), ProxyFailure.AGENT_DISCONNECTED) }
+      verify(exactly = 1) { wrapper2.complete(any(), ProxyFailure.AGENT_DISCONNECTED) }
+      verify(exactly = 1) { wrapper3.complete(any(), ProxyFailure.AGENT_DISCONNECTED) }
     }
 
     "invalidate should fail buffered wrappers with an agent-disconnected result (finding 15)" {
@@ -139,13 +139,14 @@ class AgentContextTest : StringSpec() {
 
       context.invalidate()
 
-      // awaitCompleted unblocks almost immediately, now returning TRUE with a 502 result so
+      // awaitCompleted unblocks almost immediately, now returning TRUE with a 503 result so
       // submitScrapeRequest reports the truthful agent-disconnect instead of mislabeling it timed_out.
       val completed = deferred.await()
       val elapsed = System.currentTimeMillis() - startTime
 
       completed.shouldBeTrue()
-      wrapper.scrapeResults?.srStatusCode shouldBe HttpStatusCode.BadGateway.value
+      wrapper.scrapeResults?.srStatusCode shouldBe HttpStatusCode.ServiceUnavailable.value
+      wrapper.proxyFailure shouldBe ProxyFailure.AGENT_DISCONNECTED
       // Should unblock in well under the 30-second timeout
       elapsed shouldBeLessThan 5000L
     }

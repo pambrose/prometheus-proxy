@@ -335,15 +335,16 @@ class AgentContextManagerTest : StringSpec() {
         wrapper.awaitCompleted(30.seconds)
       }
 
-      // invalidateAllAgentContexts drains each context, failing buffered wrappers with a 502 result.
+      // invalidateAllAgentContexts drains each context, failing buffered wrappers as agent_disconnected (503).
       manager.invalidateAllAgentContexts()
 
       val completed = deferred.await()
       val elapsed = System.currentTimeMillis() - startTime
 
-      // awaitCompleted returns true with a 502 result rather than a null that would read as timed_out.
+      // awaitCompleted returns true with a 503 result rather than a null that would read as timed_out.
       completed.shouldBeTrue()
-      wrapper.scrapeResults?.srStatusCode shouldBe HttpStatusCode.BadGateway.value
+      wrapper.scrapeResults?.srStatusCode shouldBe HttpStatusCode.ServiceUnavailable.value
+      wrapper.proxyFailure shouldBe ProxyFailure.AGENT_DISCONNECTED
       // Should unblock well under the 30-second timeout
       elapsed shouldBeLessThan 5000L
     }

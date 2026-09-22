@@ -299,12 +299,14 @@ class ProxyTest : StringSpec() {
       proxy.scrapeRequestManager.addToScrapeRequestMap(wrapper)
 
       // Fixed order: fail requests THEN invalidate agents
-      proxy.scrapeRequestManager.failAllInFlightScrapeRequests("Proxy is shutting down")
+      proxy.scrapeRequestManager.failAllInFlightScrapeRequests("Proxy is shutting down", ProxyFailure.PROXY_STOPPED)
       proxy.agentContextManager.invalidateAllAgentContexts()
 
-      // The wrapper should have the informative shutdown message
+      // The wrapper should have the informative shutdown message, and the shutdown's outcome rather than the
+      // agent-disconnected one invalidating the agents would give it
       wrapper.scrapeResults.shouldNotBeNull()
       wrapper.scrapeResults!!.srFailureReason shouldContain "Proxy is shutting down"
+      wrapper.proxyFailure shouldBe ProxyFailure.PROXY_STOPPED
     }
 
     // Verify the old (broken) order would lose the failure reason
@@ -328,7 +330,7 @@ class ProxyTest : StringSpec() {
       proxy.agentContextManager.invalidateAllAgentContexts()
       // This wrapper is only in the scrapeRequestMap (not an agent queue), so failAllInFlightScrapeRequests
       // completes it: ScrapeRequestWrapper.complete() publishes the result behind its CAS (finding 16).
-      proxy.scrapeRequestManager.failAllInFlightScrapeRequests("Proxy is shutting down")
+      proxy.scrapeRequestManager.failAllInFlightScrapeRequests("Proxy is shutting down", ProxyFailure.PROXY_STOPPED)
 
       // Results are set, but awaitCompleted() would have already returned false
       // (before the failure reason was set) in the old ordering

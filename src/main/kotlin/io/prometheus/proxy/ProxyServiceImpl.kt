@@ -328,7 +328,11 @@ internal class ProxyServiceImpl(
             // Cancelled after polling the wrapper out of the queue but before delivering it: fail the
             // wrapper so the waiting HTTP handler gets a prompt error instead of blocking the full
             // scrape-timeout window (finding 14).
-            proxy.scrapeRequestManager.failScrapeRequest(wrapper.scrapeId, "readRequestsFromProxy cancelled")
+            proxy.scrapeRequestManager.failScrapeRequest(
+              wrapper.scrapeId,
+              "readRequestsFromProxy cancelled",
+              ProxyFailure.AGENT_DISCONNECTED,
+            )
             throw e
           }
         }
@@ -392,6 +396,7 @@ internal class ProxyServiceImpl(
           proxy.scrapeRequestManager.failScrapeRequest(
             response.scrapeId,
             "Error processing scrape response: ${e.message}",
+            ProxyFailure.INVALID_RESPONSE,
           )
         }
       }
@@ -451,6 +456,7 @@ internal class ProxyServiceImpl(
                     proxy.scrapeRequestManager.failScrapeRequest(
                       chunkScrapeId,
                       "Chunk validation failed: ${e.message}",
+                      ProxyFailure.INVALID_RESPONSE,
                     )
                     proxy.metrics { chunkValidationFailures.labels(ProxyMetrics.STAGE_CHUNK).inc() }
                   }
@@ -481,6 +487,7 @@ internal class ProxyServiceImpl(
                     proxy.scrapeRequestManager.failScrapeRequest(
                       summaryScrapeId,
                       "Summary validation failed: ${e.message}",
+                      ProxyFailure.INVALID_RESPONSE,
                     )
                     proxy.metrics { chunkValidationFailures.labels(ProxyMetrics.STAGE_SUMMARY).inc() }
                   }
@@ -520,6 +527,7 @@ internal class ProxyServiceImpl(
             proxy.scrapeRequestManager.failScrapeRequest(
               scrapeId,
               "Chunked transfer abandoned: stream terminated before summary received",
+              ProxyFailure.AGENT_DISCONNECTED,
             )
             proxy.metrics { chunkedTransfersAbandoned.inc() }
           }

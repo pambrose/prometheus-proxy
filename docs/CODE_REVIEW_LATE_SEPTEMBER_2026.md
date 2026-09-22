@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — Late September 2026 Findings
 
-**Status:** 30 issues — 4 fixed, 26 open (open: 0 high · 6 medium · 20 low) — fixed: #1, #17, #18, #30
+**Status:** 31 issues — 6 fixed, 25 open (open: 0 high · 4 medium · 21 low) — fixed: #1, #5, #17, #18, #21, #30
 
 **Date:** 2026-09-22
 
@@ -34,7 +34,7 @@ gate (#17).
 | 2  | Protobuf-format scrapes are corrupted (Prometheus `Accept` passed through)      | Agent    | medium   | ⬜      |
 | 3  | Discovery still WARNs every reconcile for collisions, duplicates, bad file      | Agent    | low      | ⬜      |
 | 4  | Duplicate `agent.filters` entries for one path silently merged                  | Agent    | low      | ⬜      |
-| 5  | Proxy-made failures (disconnect, shutdown, drain) counted as `upstream_error`   | Proxy    | medium   | ⬜      |
+| 5  | Proxy-made failures (disconnect, shutdown, drain) counted as `upstream_error`   | Proxy    | medium   | ✅      |
 | 6  | Per-path series removal is O(all series) under the path lock, and leaks         | Proxy    | medium   | ⬜      |
 | 7  | Unvalidated backlog size / dashboard refresh: 0 rejects every scrape or spins   | Proxy    | low      | ⬜      |
 | 8  | Path registered with a leading slash is advertised but unscrapable              | Proxy    | low      | ⬜      |
@@ -50,7 +50,7 @@ gate (#17).
 | 18 | SLF4J 2.0.20 bump not recorded in CHANGELOG / RELEASE_NOTES                     | CI/build | low      | ✅      |
 | 19 | mkdocs-material unpinned locally; Dependabot misses uv and Docker images        | CI/build | low      | ⬜      |
 | 20 | Minor build tidy-ups                                                            | CI/build | low      | ⬜      |
-| 21 | Scrape outcome labels in the docs don't match the code                          | Docs     | medium   | ⬜      |
+| 21 | Scrape outcome labels in the docs don't match the code                          | Docs     | medium   | ✅      |
 | 22 | `KDOC_SUMMARY.md` Dokka section is stale                                        | Docs     | low      | ⬜      |
 | 23 | Smaller documentation drift                                                     | Docs     | low      | ⬜      |
 | 24 | `AgentBacklogDriftTest` tests its own copy of the logic, not the product        | Tests    | medium   | ⬜      |
@@ -60,6 +60,7 @@ gate (#17).
 | 28 | Test resource leaks: `proxyCallTest` servers and unstopped `Agent`s             | Tests    | low      | ⬜      |
 | 29 | `prom/prometheus:latest` unpinned in the container suite                        | Tests    | low      | ⬜      |
 | 30 | Untested: retryable discovered rejection in backoff retried on URL/label change | Tests    | low      | ✅      |
+| 31 | Harness binds test ports inside the Linux ephemeral range; CI bind flake        | Tests    | low      | ⬜      |
 
 ---
 
@@ -72,14 +73,14 @@ then the items that change what operators see, then hardening, and leaves tidy-u
 |------|----------------------|------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------|
 | 1 ✅  | #17, #18             | Restore a PR build gate; record the SLF4J bump             | Every later PR benefits from a pre-merge build. #18 is a two-line fix already pending.                                           |
 | 2 ✅  | #1, #30              | Keep the agent connected when every rejection can clear    | The only high: the #264/#271 retry and backoff are bypassed in their main use case, and discovery goes down with it.             |
-| 3    | #5, #21              | Accurate scrape outcome labels, and docs that match        | Label semantics and their docs must change together; alerts written from the docs never fire today.                              |
+| 3 ✅  | #5, #21              | Accurate scrape outcome labels, and docs that match        | Label semantics and their docs must change together; alerts written from the docs never fire today.                              |
 | 4    | #6, #9               | Cheap, leak-free per-path series removal; better buckets   | Same file (`ProxyMetrics.kt`); scraping stalls under the path lock at scale.                                                     |
 | 5    | #10, #13, #11, #12   | Agent HTTP-client and scrape-port hardening                | Small, local changes that close a credential-leak path. #12 needs a decision on whether `job`/`instance` are reserved.           |
 | 6    | #2                   | Strip protobuf from the forwarded `Accept` header          | Silent data corruption for native-histogram users; a small agent change plus a documented limitation.                            |
 | 7    | #7, #8, #4           | Config and input validation                                | Startup `require`s and path normalization; low risk, each with a unit test.                                                      |
 | 8    | #3                   | Log discovery warnings once                                | Follows the #267/#270 pattern already in the codebase.                                                                           |
 | 9    | #24, #25, #28        | Tests that test the product and clean up after themselves  | Removes false confidence before the next refactor.                                                                               |
-| 10   | #27, #26, #29        | Deterministic, collision-free test infrastructure          | Flake prevention; `TestPortsTest` then guards the harness port.                                                                  |
+| 10   | #27, #31, #26, #29   | Deterministic, collision-free test infrastructure          | Flake prevention; `TestPortsTest` then guards the harness port.                                                                  |
 | 11   | #14, #15             | Per-identity path caps; defer context creation until auth  | Needs new config keys and a design choice, so it follows the quick hardening in step 5.                                          |
 | 12   | #16, #19, #20        | Dependency and build hygiene                               | Remove Jetty 11 after the admin-servlet tests pass without it; extend Dependabot; tidy the Makefile and build.                   |
 | 13   | #22, #23             | Documentation drift                                        | No behavior change; can ride along with any earlier PR that touches the same file.                                               |
@@ -172,7 +173,7 @@ for `/foo` across two entries silently loses the first.
 
 ## 📡 Proxy
 
-### 5. [ ] Proxy-made failures (disconnect, shutdown, drain) counted as `upstream_error`
+### 5. [x] Proxy-made failures (disconnect, shutdown, drain) counted as `upstream_error`
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -192,6 +193,19 @@ target instead of the agent connection. `proxy/ProxyHttpRoutesTest.kt:569` pins 
 field next to the completion CAS) and use it in `submitScrapeRequest`: `agent_disconnected` for disconnect and
 drain, `proxy_stopped` for shutdown, a new `invalid_response` for validation failures. Fall back to
 `upstreamErrorLabel` only for results the agent sent. Update the tests and the docs together with #21.
+
+**Resolution:** a new `ProxyFailure` enum (`proxy/ProxyFailure.kt`) names each proxy-made failure with its label
+and status: `AGENT_DISCONNECTED` (`agent_disconnected`, 503), `PROXY_STOPPED` (`proxy_stopped`, 503), and
+`INVALID_RESPONSE` (new `invalid_response`, 502). `failScrapeRequest`, `failAllScrapeRequests`, and
+`failAllInFlightScrapeRequests` now require one, and `ScrapeRequestWrapper.complete` records it behind the same CAS
+as the result, so a losing racer can't relabel the published result. `AgentContext.invalidate` fails drained
+requests as `AGENT_DISCONNECTED`. `submitScrapeRequest` uses the recorded label and falls back to
+`upstreamErrorLabel` only for the agent's own results. Disconnects and shutdowns now return 503, matching the
+pre-queue `agent_disconnected` path and the troubleshooting guide. The tests that pinned `upstream_error` were
+updated, including `ProxyHttpRoutesTest`'s shutdown test, which invalidated the agents before failing the in-flight
+requests — the reverse of `Proxy.shutDown()`'s order. New tests cover the failure's status per kind,
+`failAllScrapeRequests` scoping, the CAS keeping the first failure, and `invalid_response` end to end. The
+`readRequestsFromProxy` cancellation call site has no dedicated test; it is a one-line argument change.
 
 ### 6. [ ] Per-path series removal is O(all series) under the path lock, and leaks
 
@@ -437,7 +451,7 @@ add `docker` entries for `/etc/docker` and `/nginx/docker`, and a `uv` entry for
 
 ## 📚 Documentation
 
-### 21. [ ] Scrape outcome labels in the docs don't match the code
+### 21. [x] Scrape outcome labels in the docs don't match the code
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -457,6 +471,12 @@ add `docker` entries for `/etc/docker` and `/nginx/docker`, and a `uv` entry for
 Alerts and dashboards written from the docs never match.
 
 **Fix:** correct all three pages in the same PR as #5, so the descriptions match the corrected labels.
+
+**Resolution:** `docs/metrics-and-grafana.md` and the site's `monitoring.md` now list `proxy_stopped`,
+`missing_path`, and `invalid_response`, describe `invalid_path`, `no_agents`, and `agent_disconnected` as the code
+counts them, explain that `upstream_error` is always the target's own status, and list the latency histogram's
+`outcome` label. `troubleshooting.md` names `proxy_stopped` and `agent_disconnected` correctly under 503 and gains a
+502 section for `upstream_error` and `invalid_response`.
 
 ### 22. [ ] `KDOC_SUMMARY.md` Dokka section is stale
 
@@ -509,7 +529,8 @@ and assert the backlog returns to its prior value.
 - `proxy/AgentContextTest.kt:474` "...should keep both timestamps consistent" — never reads
   `lastRequestDuration`; `:437` never checks request time; `:377` `durationAfter shouldNotBe durationBefore` is
   true by construction; `:392` "equals should be based on agentId" passes under identity equality.
-- `proxy/ProxyHttpRoutesTest.kt:569` "should report agent-disconnect" asserts `upstream_error` (fix with #5).
+- ~~`proxy/ProxyHttpRoutesTest.kt:569` "should report agent-disconnect" asserts `upstream_error` (fix with #5).~~
+  Fixed with #5: it now asserts `agent_disconnected`.
 - `agent/AgentPathManagerTest.kt:1029` "should keep retrying while...rejected" counts loop checks, not register
   calls — under the backoff only one real retry happens.
 
@@ -583,6 +604,24 @@ changes" to `agent/AgentPathManagerTest.kt`. It builds up a 60s backoff, checks 
 then checks a changed URL and then changed labels are each tried at once. Temporarily removing the URL/labels
 comparison in `registerDiscoveredPath` makes it fail.
 
+
+
+### 31. [ ] Harness binds test ports inside the Linux ephemeral range; CI bind flake
+
+**Severity:** low · **Confidence:** confirmed (observed on PR #280's first CI run; a rerun passed)
+
+**Where:** `common/TestPorts.kt:64-86` — `TLS_NO_MUTUAL_AUTH_AGENT_PORT` (50440), `TLS_MUTUAL_AUTH_AGENT_PORT`
+(50441), and 50460–50465 (`TLS_REJECTION_AGENT_PORT`, `TOKEN_AUTH_AGENT_PORT_OK` / `_BAD`, `PATH_AUTH_AGENT_PORT`,
+`DISCOVERY_AGENT_PORT`, `REJECTED_PATH_RETRY_AGENT_PORT`).
+
+**Problem:** Linux assigns outgoing connections a local port from 32768–60999, so any connection another test opens
+can briefly hold one of these ports. On PR #280, `TlsNoMutualAuthTest`'s proxy failed to start with
+`BindException: Address already in use` on `0.0.0.0:50440`; no test binds that port, and `TlsWithMutualAuthTest`
+on 50441 passed in the same run. `TestPortsTest` guards against duplicates, not against this range. (`50051` also
+sits in the range but, as a product default, is never bound on the host.)
+
+**Fix:** move every harness port that is bound on the host below 32768, and have `TestPortsTest` fail on any bound
+port in the ephemeral range.
 
 ---
 

@@ -61,6 +61,12 @@ internal class ScrapeRequestWrapper(
   @Volatile
   var scrapeResults: ScrapeResults? = null
 
+  // Why the proxy failed this request itself, or null when the results came from the agent. Written with the results
+  // behind the completion CAS, so it always describes the published results.
+  @Volatile
+  var proxyFailure: ProxyFailure? = null
+    private set
+
   val scrapeId: Long
     get() = scrapeRequest.scrapeId
 
@@ -70,9 +76,15 @@ internal class ScrapeRequestWrapper(
   // the result write and the completion flag together means a losing racer (e.g. failScrapeRequest racing
   // a real assignScrapeResults) can't clobber the winning result before the HTTP handler reads it
   // (finding 16). The volatile scrapeResults write happens-before closeChannel(), which unblocks
-  // awaitCompleted(). Returns true if this call completed the request.
-  fun complete(results: ScrapeResults): Boolean =
+  // awaitCompleted(). [failure] says why the proxy failed the request itself; it is null for the agent's own results.
+  // Returns true if this call completed the request.
+  fun complete(
+    results: ScrapeResults,
+    failure: ProxyFailure? = null,
+  ): Boolean =
     if (completed.compareAndSet(expectedValue = false, newValue = true)) {
+      // Before the volatile scrapeResults write, which publishes it to a reader that sees the results.
+      proxyFailure = failure
       scrapeResults = results
       closeChannel()
       true

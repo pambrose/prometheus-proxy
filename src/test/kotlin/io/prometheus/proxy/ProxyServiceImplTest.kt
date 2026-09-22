@@ -1271,7 +1271,15 @@ class ProxyServiceImplTest : StringSpec() {
       // Verify the orphaned context was cleaned up
       verify { contextManager.removeChunkedContext(scrapeId) }
       // Bug #4: Verify the waiting HTTP handler is notified via failScrapeRequest
-      verify { scrapeRequestManager.failScrapeRequest(scrapeId, match { it.contains("abandoned") }) }
+      verify {
+        scrapeRequestManager.failScrapeRequest(
+          scrapeId,
+          match {
+          it.contains("abandoned")
+        },
+          ProxyFailure.AGENT_DISCONNECTED,
+        )
+      }
       // Counted as an abandoned transfer, not as a validation failure at either stage.
       verify(exactly = 1) { counters.abandoned.inc() }
       verify(exactly = 0) { counters.chunkStage.inc() }
@@ -1326,8 +1334,24 @@ class ProxyServiceImplTest : StringSpec() {
       verify { contextManager.removeChunkedContext(scrapeId1) }
       verify { contextManager.removeChunkedContext(scrapeId2) }
       // Bug #4: Both orphaned scrape requests should be failed
-      verify { scrapeRequestManager.failScrapeRequest(scrapeId1, match { it.contains("abandoned") }) }
-      verify { scrapeRequestManager.failScrapeRequest(scrapeId2, match { it.contains("abandoned") }) }
+      verify {
+        scrapeRequestManager.failScrapeRequest(
+          scrapeId1,
+          match {
+          it.contains("abandoned")
+        },
+          ProxyFailure.AGENT_DISCONNECTED,
+        )
+      }
+      verify {
+        scrapeRequestManager.failScrapeRequest(
+          scrapeId2,
+          match {
+          it.contains("abandoned")
+        },
+          ProxyFailure.AGENT_DISCONNECTED,
+        )
+      }
     }
 
     "writeChunkedResponsesToProxy should not clean up completed contexts on stream failure" {
@@ -1420,8 +1444,16 @@ class ProxyServiceImplTest : StringSpec() {
       // Orphaned context should be cleaned up and failed during cleanup phase
       verify { contextManager.removeChunkedContext(orphanedScrapeId) }
       // Bug #4: Only the orphaned scrape should be failed, not the completed one
-      verify { scrapeRequestManager.failScrapeRequest(orphanedScrapeId, match { it.contains("abandoned") }) }
-      verify(exactly = 0) { scrapeRequestManager.failScrapeRequest(eq(completedScrapeId), any()) }
+      verify {
+        scrapeRequestManager.failScrapeRequest(
+          orphanedScrapeId,
+          match {
+          it.contains("abandoned")
+        },
+          ProxyFailure.AGENT_DISCONNECTED,
+        )
+      }
+      verify(exactly = 0) { scrapeRequestManager.failScrapeRequest(eq(completedScrapeId), any(), any()) }
     }
 
     // Bug #2: Chunk validation failure left the HTTP handler waiting until timeout.
@@ -1468,7 +1500,9 @@ class ProxyServiceImplTest : StringSpec() {
       result shouldBe EMPTY_INSTANCE
 
       // The waiting HTTP handler should have been notified via failScrapeRequest
-      verify { scrapeRequestManager.failScrapeRequest(scrapeId, match { it.contains("Chunk") }) }
+      verify {
+        scrapeRequestManager.failScrapeRequest(scrapeId, match { it.contains("Chunk") }, ProxyFailure.INVALID_RESPONSE)
+      }
       // Context should have been cleaned up
       verify { contextManager.removeChunkedContext(scrapeId) }
       // Counted at the chunk stage only: the failed transfer is not also counted as abandoned at stream end.
@@ -1532,7 +1566,15 @@ class ProxyServiceImplTest : StringSpec() {
       result shouldBe EMPTY_INSTANCE
 
       // The waiting HTTP handler should have been notified via failScrapeRequest
-      verify { scrapeRequestManager.failScrapeRequest(scrapeId, match { it.contains("Summary") }) }
+      verify {
+        scrapeRequestManager.failScrapeRequest(
+          scrapeId,
+          match {
+          it.contains("Summary")
+        },
+          ProxyFailure.INVALID_RESPONSE,
+        )
+      }
       // Counted at the summary stage only.
       verify(exactly = 1) { counters.summaryStage.inc() }
       verify(exactly = 0) { counters.chunkStage.inc() }
@@ -1629,7 +1671,15 @@ class ProxyServiceImplTest : StringSpec() {
 
       result shouldBe EMPTY_INSTANCE
       // The waiting HTTP handler is notified via failScrapeRequest for the failed scrapeId.
-      verify { scrapeRequestManager.failScrapeRequest(700L, match { it.contains("Error processing") }) }
+      verify {
+        scrapeRequestManager.failScrapeRequest(
+          700L,
+          match {
+          it.contains("Error processing")
+        },
+          ProxyFailure.INVALID_RESPONSE,
+        )
+      }
     }
 
     // Item 30: a chunked HEADER for an unknown/stale scrapeId must be dropped, not turned into a
@@ -1735,7 +1785,7 @@ class ProxyServiceImplTest : StringSpec() {
         ProxyServiceImpl(proxy).writeResponsesToProxy(flowOf(malformed))
       }
 
-      verify(exactly = 0) { scrapeRequestManager.failScrapeRequest(902L, any()) }
+      verify(exactly = 0) { scrapeRequestManager.failScrapeRequest(902L, any(), any()) }
     }
 
     "writeChunkedResponsesToProxy should not open a transfer for a scrape sent to another agent" {
@@ -1821,7 +1871,7 @@ class ProxyServiceImplTest : StringSpec() {
       }
 
       verify(exactly = 0) { contextManager.removeChunkedContext(904L) }
-      verify(exactly = 0) { scrapeRequestManager.failScrapeRequest(904L, any()) }
+      verify(exactly = 0) { scrapeRequestManager.failScrapeRequest(904L, any(), any()) }
     }
 
     "writeChunkedResponsesToProxy should not apply a summary to a transfer for another agent's scrape" {

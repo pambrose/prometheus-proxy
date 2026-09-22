@@ -201,6 +201,13 @@ interval as their deadline, capped at the unary deadline.
 - **Scrapes Prometheus gave up on left no trace.** A target slower than Prometheus's timeout but faster than
   the proxy's, the most common real failure, was missing from the scrape metrics, `/debug`, and the
   dashboard. It now appears under the new outcome `client_cancelled`.
+- **A scrape the proxy failed itself was reported as a target error.** When an agent disconnected mid-scrape,
+  the proxy shut down, or a chunked response failed validation, the scrape was recorded as `upstream_error`
+  with a 502, the same as a target returning 5xx, so alerts pointed at the target instead of the agent. These
+  now record `agent_disconnected` or `proxy_stopped` with a 503, matching a scrape that finds the agent or
+  proxy already gone, or the new `invalid_response` with a 502. Alerts on `upstream_error` no longer count
+  them. The metrics docs also named labels that don't exist (`proxy_not_running` is `proxy_stopped`, and the
+  latency histogram's `outcome` label was missing); both are corrected.
 - **Every scrape Prometheus gave up on also logged a WARN with a stack trace.** The cancellation is now logged at
   DEBUG.
 - **A client disconnecting while its response was being written logged a WARN with a stack trace**, from the

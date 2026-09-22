@@ -82,19 +82,21 @@ The same options are available under `agent.metrics`.
 | `success`               | Scrape completed successfully                                                |
 | `timed_out`             | Agent did not answer within the proxy's `scrapeRequestTimeoutSecs`           |
 | `upstream_timed_out`    | Agent answered, but its fetch exceeded `agent.scrapeTimeoutSecs`, or Prometheus's shorter scrape timeout (408/504) |
-| `no_agents`             | No agents registered for the requested path                                  |
-| `invalid_path`          | Requested path is empty or unrecognized                                      |
-| `agent_disconnected`    | Agent stream closed before response was received                             |
+| `no_agents`             | The path's registration had no agents left to send the scrape to             |
+| `invalid_path`          | No agent has registered the requested path                                   |
+| `missing_path`          | The request had no path (a scrape of `/`)                                    |
+| `agent_disconnected`    | Agent disconnected, was evicted, or was displaced before it answered (503)   |
 | `agent_backlog_full`    | Agent's queue was full (2 × `scrapeRequestBacklogUnhealthySize`)             |
 | `proxy_in_flight_limit` | In-flight scrapes across agents hit `maxInFlightScrapeRequests`              |
 | `client_cancelled`      | Prometheus hung up before the agent answered                                 |
 | `missing_results`       | Internal error: results object was null                                      |
 | `path_not_found`        | Agent has no registration for the target path (404)                          |
 | `upstream_error`        | Target returned a non-2xx status not covered above, e.g. 5xx                 |
+| `invalid_response`      | Agent answered, but a chunk or summary failed validation (502)               |
 | `content_too_large`     | Target response exceeded `agent.http.maxContentLengthMBytes` (413)           |
 | `payload_too_large`     | Unzipped content exceeded `maxUnzippedContentSizeMBytes`                     |
 | `invalid_gzip`          | Gzip decompression failed                                                    |
-| `proxy_not_running`     | Proxy is shutting down                                                       |
+| `proxy_stopped`         | Proxy is shutting down (503)                                                 |
 | `invalid_agent_context` | All agents for the path are in an invalid state                              |
 
 Several values come in proxy-side / agent-side pairs, and the distinction determines where to look:
@@ -106,16 +108,20 @@ Several values come in proxy-side / agent-side pairs, and the distinction determ
   rather than touching the proxy timeout.
 - `content_too_large` is the agent's own `maxContentLengthMBytes` limit rejecting the target
   response; `payload_too_large` is the proxy's unzip limit. Both surface as HTTP 413.
+- `upstream_error` is always the target's own status. When the proxy fails a scrape itself it says why:
+  `agent_disconnected` (the agent went away mid-scrape — look at the agent's connection, not the target),
+  `proxy_stopped`, or `invalid_response`.
 
 ### Histograms
 
 | Metric                                 | Labels             | Buckets  | Description                                                 |
 |----------------------------------------|--------------------|----------|-------------------------------------------------------------|
-| `proxy_scrape_request_latency_seconds` | `path`             | 5ms–10s  | End-to-end scrape latency from request creation to response |
+| `proxy_scrape_request_latency_seconds` | `path`, `outcome`  | 5ms–10s  | End-to-end scrape latency from request creation to response |
 | `proxy_scrape_response_bytes`          | `path`, `encoding` | 1KB–10MB | Response payload size after decompression                   |
 
 A path's series are removed when its last registration goes away, whether it is unregistered or its agent disconnects, so a retired path stops appearing on `/metrics`.
 
+The `outcome` label takes the `proxy_scrape_requests` `type` values above, so latency can be split by result.
 The `encoding` label is `gzipped` or `plain`.
 
 Latency buckets: `.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10` seconds.

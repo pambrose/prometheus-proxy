@@ -19,6 +19,7 @@
 package io.prometheus.proxy
 
 import ch.qos.logback.classic.Level
+import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
@@ -230,12 +231,12 @@ class ScrapeRequestManagerTest : StringSpec() {
       val resultsSlot = slot<ScrapeResults>()
       val wrapper = createMockWrapper(300L)
       every { wrapper.agentContext.agentId } returns "agent-99"
-      every { wrapper.complete(capture(resultsSlot)) } returns true
+      every { wrapper.complete(capture(resultsSlot), any()) } returns true
 
       manager.addToScrapeRequestMap(wrapper)
-      manager.failScrapeRequest(300L, "Chunk checksum mismatch")
+      manager.failScrapeRequest(300L, "Chunk checksum mismatch", ProxyFailure.INVALID_RESPONSE)
 
-      verify { wrapper.complete(any()) }
+      verify { wrapper.complete(any(), ProxyFailure.INVALID_RESPONSE) }
       verify { wrapper.agentContext.markActivityTime(true) }
 
       val captured = resultsSlot.captured
@@ -246,11 +247,45 @@ class ScrapeRequestManagerTest : StringSpec() {
       captured.srValidResponse shouldBe false
     }
 
+    // Each proxy-made failure carries its own status, so a disconnect or a shutdown reads as the proxy being unable
+    // to serve the scrape (503), not as a bad gateway response from the target (502).
+    "failScrapeRequest should give the failure the status of its kind" {
+      for (failure in ProxyFailure.entries) {
+        val manager = ScrapeRequestManager()
+        val resultsSlot = slot<ScrapeResults>()
+        val wrapper = createMockWrapper(301L)
+        every { wrapper.complete(capture(resultsSlot), any()) } returns true
+
+        manager.addToScrapeRequestMap(wrapper)
+        manager.failScrapeRequest(301L, "reason", failure)
+
+        withClue(failure) { resultsSlot.captured.srStatusCode shouldBe failure.statusCode.value }
+      }
+      ProxyFailure.AGENT_DISCONNECTED.statusCode shouldBe HttpStatusCode.ServiceUnavailable
+      ProxyFailure.PROXY_STOPPED.statusCode shouldBe HttpStatusCode.ServiceUnavailable
+      ProxyFailure.INVALID_RESPONSE.statusCode shouldBe HttpStatusCode.BadGateway
+    }
+
+    "failAllScrapeRequests should fail only the agent's requests, with the given failure" {
+      val manager = ScrapeRequestManager()
+      val mine = createMockWrapper(302L)
+      val theirs = createMockWrapper(303L)
+      every { mine.agentContext.agentId } returns "agent-a"
+      every { theirs.agentContext.agentId } returns "agent-b"
+
+      manager.addToScrapeRequestMap(mine)
+      manager.addToScrapeRequestMap(theirs)
+      manager.failAllScrapeRequests("agent-a", "Agent disconnected", ProxyFailure.AGENT_DISCONNECTED)
+
+      verify { mine.complete(any(), ProxyFailure.AGENT_DISCONNECTED) }
+      verify(exactly = 0) { theirs.complete(any(), any()) }
+    }
+
     "failScrapeRequest should handle missing scrapeId gracefully" {
       val manager = ScrapeRequestManager()
 
       // Should not throw
-      manager.failScrapeRequest(999L, "no such request")
+      manager.failScrapeRequest(999L, "no such request", ProxyFailure.INVALID_RESPONSE)
 
       manager.scrapeMapSize shouldBe 0
     }
@@ -320,12 +355,12 @@ class ScrapeRequestManagerTest : StringSpec() {
       manager.addToScrapeRequestMap(wrapper)
 
       // Call fail twice for the same scrapeId
-      manager.failScrapeRequest(600L, "first failure")
-      manager.failScrapeRequest(600L, "second failure")
+      manager.failScrapeRequest(600L, "first failure", ProxyFailure.AGENT_DISCONNECTED)
+      manager.failScrapeRequest(600L, "second failure", ProxyFailure.AGENT_DISCONNECTED)
 
       // Both calls should succeed without exceptions; the real complete()
       // CAS ensures only the first publishes.
-      verify(exactly = 2) { wrapper.complete(any()) }
+      verify(exactly = 2) { wrapper.complete(any(), ProxyFailure.AGENT_DISCONNECTED) }
     }
 
     // ==================== Bug #5: Log level for missing scrape request ====================
