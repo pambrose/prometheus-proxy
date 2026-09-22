@@ -274,5 +274,46 @@ class ScrapeRequestWrapperTest : StringSpec() {
       wrapper.complete(ScrapeResults(srAgentId = "agent-1", srScrapeId = wrapper.scrapeId)).shouldBeFalse()
       wrapper.complete(ScrapeResults(srAgentId = "agent-1", srScrapeId = wrapper.scrapeId)).shouldBeFalse()
     }
+
+    // ==================== proxyFailure Tests ====================
+
+    "a result from the agent should carry no proxy failure" {
+      val wrapper = createWrapper()
+
+      wrapper.complete(ScrapeResults(srAgentId = "agent-1", srScrapeId = wrapper.scrapeId))
+
+      wrapper.proxyFailure.shouldBeNull()
+    }
+
+    "a proxy-made failure should be recorded with its result" {
+      val wrapper = createWrapper()
+
+      wrapper.complete(
+        ScrapeResults(srAgentId = "agent-1", srScrapeId = wrapper.scrapeId, srStatusCode = 503),
+        ProxyFailure.PROXY_STOPPED,
+      )
+
+      wrapper.proxyFailure shouldBe ProxyFailure.PROXY_STOPPED
+    }
+
+    // The failure travels behind the same CAS as the result, so the label always describes the published result:
+    // a disconnect racing the agent's real answer can't relabel it, nor can a second, different failure.
+    "a losing racer should not change the recorded proxy failure" {
+      val answered = createWrapper()
+      answered.complete(ScrapeResults(srAgentId = "agent-1", srScrapeId = answered.scrapeId, srStatusCode = 200))
+      answered.complete(
+        ScrapeResults(srAgentId = "agent-1", srScrapeId = answered.scrapeId),
+        ProxyFailure.AGENT_DISCONNECTED,
+      ).shouldBeFalse()
+      answered.proxyFailure.shouldBeNull()
+
+      val stopped = createWrapper()
+      stopped.complete(ScrapeResults(srAgentId = "agent-1", srScrapeId = stopped.scrapeId), ProxyFailure.PROXY_STOPPED)
+      stopped.complete(
+        ScrapeResults(srAgentId = "agent-1", srScrapeId = stopped.scrapeId),
+        ProxyFailure.AGENT_DISCONNECTED,
+      ).shouldBeFalse()
+      stopped.proxyFailure shouldBe ProxyFailure.PROXY_STOPPED
+    }
   }
 }

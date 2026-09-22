@@ -17,7 +17,6 @@
 package io.prometheus.proxy
 
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
-import io.ktor.http.HttpStatusCode
 import io.prometheus.common.ScrapeResults
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.concurrent.atomics.AtomicInt
@@ -77,9 +76,12 @@ internal class ScrapeRequestManager {
       } ?: logger.warn { "Missing ScrapeRequestWrapper for scrape_id: $scrapeId (likely timed out)" }
   }
 
+  // Completes a request the proxy fails itself, rather than the agent answering it; [failure] gives its outcome label
+  // and status.
   fun failScrapeRequest(
     scrapeId: Long,
     failureReason: String,
+    failure: ProxyFailure,
   ) {
     scrapeRequestMapView[scrapeId]
       ?.also { wrapper ->
@@ -87,9 +89,10 @@ internal class ScrapeRequestManager {
           ScrapeResults(
             srAgentId = wrapper.agentContext.agentId,
             srScrapeId = scrapeId,
-            srStatusCode = HttpStatusCode.BadGateway.value,
+            srStatusCode = failure.statusCode.value,
             srFailureReason = failureReason,
           ),
+          failure,
         )
         wrapper.agentContext.markActivityTime(true)
       } ?: logger.warn { "failScrapeRequest() missing ScrapeRequestWrapper for scrape_id: $scrapeId" }
@@ -98,14 +101,18 @@ internal class ScrapeRequestManager {
   fun failAllScrapeRequests(
     agentId: String,
     failureReason: String,
+    failure: ProxyFailure,
   ) {
     scrapeRequestMapView.values
       .filter { it.agentContext.agentId == agentId }
-      .forEach { failScrapeRequest(it.scrapeId, failureReason) }
+      .forEach { failScrapeRequest(it.scrapeId, failureReason, failure) }
   }
 
-  fun failAllInFlightScrapeRequests(failureReason: String) {
-    scrapeRequestMapView.values.forEach { failScrapeRequest(it.scrapeId, failureReason) }
+  fun failAllInFlightScrapeRequests(
+    failureReason: String,
+    failure: ProxyFailure,
+  ) {
+    scrapeRequestMapView.values.forEach { failScrapeRequest(it.scrapeId, failureReason, failure) }
   }
 
   /**

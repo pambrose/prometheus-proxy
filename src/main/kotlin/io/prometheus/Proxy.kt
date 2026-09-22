@@ -46,6 +46,7 @@ import io.prometheus.proxy.ProxyHttpService
 import io.prometheus.proxy.ProxyMetrics
 import io.prometheus.proxy.ProxyEvent
 import io.prometheus.proxy.ProxyEventBus
+import io.prometheus.proxy.ProxyFailure
 import io.prometheus.proxy.ProxyOptions
 import io.prometheus.proxy.ProxyPathManager
 import io.prometheus.proxy.ScrapeRecord
@@ -307,7 +308,7 @@ class Proxy(
     // Fail in-flight scrape requests BEFORE invalidating agent contexts so that
     // HTTP handlers waiting on awaitCompleted() receive the informative "Proxy is shutting down"
     // error message rather than a generic "missing_results" from the agent context drain.
-    scrapeRequestManager.failAllInFlightScrapeRequests("Proxy is shutting down")
+    scrapeRequestManager.failAllInFlightScrapeRequests("Proxy is shutting down", ProxyFailure.PROXY_STOPPED)
     agentContextManager.invalidateAllAgentContexts()
     grpcService.stopSync()
     dashboardService?.stopSync()
@@ -400,7 +401,7 @@ class Proxy(
     // snapshot a path map that still listed the departed agent.
     if (agentContext != null)
       eventBus.emit(ProxyEvent.AgentDisconnected(agentId, reason))
-    scrapeRequestManager.failAllScrapeRequests(agentId, "Agent disconnected: $reason")
+    scrapeRequestManager.failAllScrapeRequests(agentId, "Agent disconnected: $reason", ProxyFailure.AGENT_DISCONNECTED)
     // Proactively reclaim any in-flight chunked-transfer buffers for this agent (the requests
     // themselves were just failed above) rather than waiting for each stream's orphan sweep.
     agentContextManager.removeChunkedContextsForAgent(agentId)

@@ -21,7 +21,6 @@ package io.prometheus.proxy
 import com.pambrose.common.delegate.AtomicDelegates.atomicBoolean
 import com.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.pambrose.common.dsl.GuavaDsl.toStringElements
-import io.ktor.http.HttpStatusCode
 import io.prometheus.common.ScrapeResults
 import io.prometheus.grpc.PathRejectionCause
 import io.prometheus.grpc.RegisterAgentRequest
@@ -189,16 +188,18 @@ internal class AgentContext(
     valid = false
     scrapeRequestNotifier.close()
     // Drain any buffered scrape requests and FAIL them with an agent-disconnected result (not a bare
-    // channel close) so a waiting HTTP handler's awaitCompleted() sees a truthful 502 instead of a null
-    // result that submitScrapeRequest would mislabel as timed_out (finding 15).
+    // channel close) so a waiting HTTP handler's awaitCompleted() sees a truthful agent_disconnected instead of a
+    // null result that submitScrapeRequest would mislabel as timed_out (finding 15).
+    val failure = ProxyFailure.AGENT_DISCONNECTED
     generateSequence { scrapeRequestQueue.poll()?.also { queuedCount -= 1 } }.forEach { wrapper ->
       wrapper.complete(
         ScrapeResults(
           srAgentId = agentId,
           srScrapeId = wrapper.scrapeId,
-          srStatusCode = HttpStatusCode.BadGateway.value,
+          srStatusCode = failure.statusCode.value,
           srFailureReason = "Agent disconnected",
         ),
+        failure,
       )
     }
   }

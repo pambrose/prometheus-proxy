@@ -26,7 +26,7 @@ Before diving into a specific symptom, gather signal:
    `curl -i http://<proxy-host>:8080/<path>` — the HTTP status code tells you a lot (see
    below).
 4. **Watch the outcome metric**: `proxy_scrape_requests` is labeled by `type`
-   (`success`, `timed_out`, `upstream_timed_out`, `no_agents`, `path_not_found`, `upstream_error`,
+   (`success`, `timed_out`, `upstream_timed_out`, `agent_disconnected`, `path_not_found`, `upstream_error`,
    `content_too_large`, `payload_too_large`, …). Whichever `type` is incrementing names the failure
    mode; see [Monitoring](monitoring.md) for the full table.
 5. **Read the logs.** The proxy and agent log the reason for most rejections at WARN/INFO.
@@ -85,11 +85,18 @@ The proxy has no usable mapping for that path.
 
 The path is known but cannot be served right now.
 
-- **Proxy shutting down** (`proxy_not_running`).
-- **No agent for the path** (`no_agents`) — the owning agent disconnected. Check
+- **Proxy shutting down** (`proxy_stopped`).
+- **No agent for the path** (`no_agents`) — the path's last agent left as the scrape arrived. Check
   `proxy_agent_map_size` and whether the agent is up.
-- **Agent disconnected mid-scrape** (`agent_disconnected`). Transient during agent restarts;
-  for redundancy use [consolidated mode](advanced.md#consolidated-mode).
+- **Agent disconnected** (`agent_disconnected`) — before or during the scrape, including an eviction
+  or another agent taking over the path. Transient during agent restarts; for redundancy use
+  [consolidated mode](advanced.md#consolidated-mode).
+
+### `502 Bad Gateway`
+
+- **Target error** (`upstream_error`) — the target itself returned the status; check the target.
+- **Unusable response** (`invalid_response`) — the agent answered, but a chunk or summary failed
+  validation. Check `proxy_chunk_validation_failures_total` and the proxy log.
 
 ### `413 Payload Too Large`
 

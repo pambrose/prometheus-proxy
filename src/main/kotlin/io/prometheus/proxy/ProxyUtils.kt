@@ -109,7 +109,7 @@ internal object ProxyUtils {
     logger.info { "Proxy stopped" }
     return ResponseResults(
       statusCode = HttpStatusCode.ServiceUnavailable,
-      updateMsgs = ["proxy_stopped"],
+      updateMsgs = [ProxyFailure.PROXY_STOPPED.label],
     )
   }
 

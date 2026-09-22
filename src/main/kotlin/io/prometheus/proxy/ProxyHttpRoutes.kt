@@ -347,7 +347,8 @@ internal object ProxyHttpRoutes {
         contentType = contentType,
         failureReason = scrapeResults.srFailureReason,
         url = scrapeResults.srUrl,
-        updateMsg = upstreamErrorLabel(statusCode),
+        // A failure the proxy made itself names its own cause; only the agent's own results describe the target.
+        updateMsg = scrapeRequest.proxyFailure?.label ?: upstreamErrorLabel(statusCode),
         fetchDuration = scrapeRequest.ageDuration(),
       )
     else
@@ -390,7 +391,7 @@ internal object ProxyHttpRoutes {
       try {
         agentContext.writeScrapeRequest(scrapeRequest, maxBacklog)
       } catch (_: ClosedSendChannelException) {
-        return unavailable(scrapeRequest, "agent_disconnected")
+        return unavailable(scrapeRequest, ProxyFailure.AGENT_DISCONNECTED.label)
       }
     // awaitCompleted suspends until the request completes, the agent disconnects, or the timeout expires.
     return when {

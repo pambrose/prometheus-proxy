@@ -33,6 +33,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import io.prometheus.grpc.registerAgentRequest
 import io.prometheus.proxy.AgentContext
+import io.prometheus.proxy.ProxyFailure
 import io.prometheus.proxy.ScrapeRequestWrapper
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.milliseconds
@@ -218,7 +219,7 @@ class AgentContextTest : StringSpec() {
       context.isValid().shouldBeFalse()
 
       // The drained wrapper is failed with an agent-disconnected result via complete() (finding 15).
-      verify(exactly = 1) { mockRequest.complete(any()) }
+      verify(exactly = 1) { mockRequest.complete(any(), ProxyFailure.AGENT_DISCONNECTED) }
     }
 
     "markActivityTime should reset inactivity duration" {
