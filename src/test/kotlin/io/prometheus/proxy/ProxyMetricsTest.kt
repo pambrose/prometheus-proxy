@@ -25,6 +25,7 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
+import io.kotest.matchers.collections.shouldContainAll
 import io.prometheus.Proxy
 import io.prometheus.client.CollectorRegistry
 
@@ -113,15 +114,76 @@ class ProxyMetricsTest : StringSpec() {
     // path, whatever its outcome or encoding, and leave other paths alone.
     "removePathSeries should drop every series for the path and keep other paths" {
       val metrics = ProxyMetrics(createMockProxy())
-      metrics.scrapeRequestLatency.labels("retired", "success").observe(0.1)
-      metrics.scrapeRequestLatency.labels("retired", "timed_out").observe(0.2)
-      metrics.scrapeRequestLatency.labels("kept", "success").observe(0.1)
-      metrics.scrapeResponseBytes.labels("retired", "gzipped").observe(1_000.0)
-      metrics.scrapeResponseBytes.labels("kept", "plain").observe(1_000.0)
+      metrics.pathRegistered("retired")
+      metrics.pathRegistered("kept")
+      metrics.observeLatency("retired", "success", 0.1)
+      metrics.observeLatency("retired", "timed_out", 0.2)
+      metrics.observeLatency("kept", "success", 0.1)
+      metrics.observeResponseBytes("retired", "gzipped", 1_000.0)
+      metrics.observeResponseBytes("kept", "plain", 1_000.0)
 
       metrics.removePathSeries("retired")
 
       seriesPaths(metrics) shouldBe setOf("kept")
+    }
+
+    // Removing a path's series ran collect() on both histograms, materializing every sample of every path, once per
+    // removed path and inside the path map's lock that every scrape takes. Removal now works from the series the path
+    // recorded, so a series created some other way -- which a scan of the histogram would have found -- is untouched.
+    "removePathSeries should remove only the series the path recorded, without scanning the histograms" {
+      val metrics = ProxyMetrics(createMockProxy())
+      metrics.pathRegistered("retired")
+      metrics.observeLatency("retired", "success", 0.1)
+      metrics.scrapeRequestLatency.labels("retired", "unrecorded").observe(0.1)
+
+      metrics.removePathSeries("retired")
+
+      metrics.scrapeRequestLatency.collect()
+        .flatMap { it.samples }
+        .map { it.labelValues.take(2) }
+        .toSet() shouldBe setOf(listOf("retired", "unrecorded"))
+    }
+
+    // A disconnect removes a path's series before it wakes the scrapes waiting on the agent, and an unregister can
+    // land while a scrape is in flight. Either scrape then finished by observing the path again, re-creating the
+    // series of a path that was gone, and nothing removed them again.
+    "a scrape finishing after its path is removed should not bring the path's series back" {
+      val metrics = ProxyMetrics(createMockProxy())
+      metrics.pathRegistered("retired")
+      metrics.observeLatency("retired", "success", 0.1)
+
+      metrics.removePathSeries("retired")
+      metrics.observeLatency("retired", "agent_disconnected", 0.2)
+      metrics.observeResponseBytes("retired", "plain", 1_000.0)
+
+      seriesPaths(metrics) shouldBe emptySet()
+    }
+
+    "a path registered again after removal should record its series again" {
+      val metrics = ProxyMetrics(createMockProxy())
+      metrics.pathRegistered("returning")
+      metrics.removePathSeries("returning")
+
+      metrics.pathRegistered("returning")
+      metrics.observeLatency("returning", "success", 0.1)
+
+      seriesPaths(metrics) shouldBe setOf("returning")
+    }
+
+    // The agent's default scrape timeout is 15s and the proxy's 90s, so with buckets ending at 10s every timeout
+    // landed in +Inf and the slow tail had no resolution.
+    "latency buckets should reach the proxy's default scrape request timeout" {
+      val metrics = ProxyMetrics(createMockProxy())
+      metrics.pathRegistered("slow")
+      metrics.observeLatency("slow", "timed_out", 90.0)
+
+      val bounds =
+        metrics.scrapeRequestLatency.collect()
+          .flatMap { it.samples }
+          .filter { it.name.endsWith("_bucket") }
+          .map { it.labelValues.last() }
+          .toSet()
+      bounds shouldContainAll setOf("10.0", "15.0", "30.0", "60.0", "90.0")
     }
 
     // ==================== New Counter Initialization Tests ====================
