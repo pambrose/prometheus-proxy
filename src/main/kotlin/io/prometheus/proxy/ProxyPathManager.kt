@@ -203,6 +203,10 @@ internal class ProxyPathManager(
 
       agentContext.forgetRejection(path)
       proxy.metrics { pathRegistered(path) }
+      // Said once here rather than on every service-discovery poll, which is where the labels are dropped.
+      val reserved = Proxy.reservedSdLabelKeys(labels, proxy.reserveJobAndInstanceLabels)
+      if (reserved.isNotEmpty())
+        logger.warn { "Agent labels $reserved for path /$path are reserved and won't appear in service discovery" }
       if (!isTestMode) logger.info { "Added path /$path for $agentContext" }
       // Inside synchronized(pathMap) on purpose: tryEmit never suspends or blocks, so publishing here
       // cannot stall a registration, and the event is emitted only once the map actually reflects it.

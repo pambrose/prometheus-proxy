@@ -24,6 +24,8 @@ import com.pambrose.common.util.zip
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
+import kotlinx.coroutines.coroutineScope
+import io.kotest.assertions.withClue
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
@@ -197,6 +199,27 @@ class ProxyHttpRoutesTest : StringSpec() {
     }
     error("Embedded server on port $port did not start accepting requests within 5s")
   }
+
+  // Runs one successful scrape whose target answered with Content-Type [contentType], and returns the proxy's response.
+  private suspend fun submitWithContentType(contentType: String): ScrapeRequestResponse =
+    coroutineScope {
+      val proxy = createSpyProxyForSubmit(timeoutSecs = 30)
+      val agentContext = AgentContext("test-remote")
+      launch {
+        val wrapper = agentContext.readScrapeRequest()!!
+        proxy.scrapeRequestManager.assignScrapeResults(
+          ScrapeResults(
+            srAgentId = agentContext.agentId,
+            srScrapeId = wrapper.scrapeId,
+            srValidResponse = true,
+            srStatusCode = 200,
+            srContentType = contentType,
+            srContentAsText = "metric_value 1.0",
+          ),
+        )
+      }
+      ProxyHttpRoutes.submitScrapeRequest(agentContext, proxy, "metrics", "", mockk<ApplicationRequest>(relaxed = true))
+    }
 
   init {
     "ensureLeadingSlash should add slash when missing" {
@@ -855,6 +878,59 @@ class ProxyHttpRoutesTest : StringSpec() {
       response.statusCode shouldBe HttpStatusCode.OK
       response.updateMsg shouldBe "success"
       response.contentType shouldBe ContentType.Text.Plain.withCharset(Charsets.UTF_8)
+    }
+
+    // The proxy served whatever Content-Type the target sent from its own origin, so a compromised target (or an agent
+    // limited to its own paths) could return text/html with a script that ran on the proxy's origin in an operator's
+    // browser, able to read every other path. Only the Prometheus exposition types pass through.
+    "submitScrapeRequest should serve a non-exposition content type as text/plain" {
+      for (served in ["text/html; charset=utf-8", "application/javascript", "image/svg+xml"]) {
+        val response = submitWithContentType(served)
+
+        withClue(served) {
+          response.statusCode shouldBe HttpStatusCode.OK
+          response.contentType shouldBe ContentType.Text.Plain.withCharset(Charsets.UTF_8)
+        }
+      }
+    }
+
+    "submitScrapeRequest should keep the Prometheus exposition content types" {
+      for (served in [
+        "text/plain; version=0.0.4; charset=utf-8",
+        "application/openmetrics-text; version=1.0.0; charset=utf-8",
+        "application/vnd.google.protobuf; proto=io.prometheus.client.MetricFamily; encoding=delimited",
+      ]) {
+        withClue(served) { submitWithContentType(served).contentType shouldBe ContentType.parse(served) }
+      }
+    }
+
+    // Defense in depth for the scrape port: a browser mustn't sniff a response into a runnable type, and a response
+    // opened directly runs in a sandbox with no access to the proxy's origin.
+    "scrape port responses should forbid content sniffing and sandbox the page" {
+      val proxy = createSpyProxyForRoutes()
+      val agentContext = AgentContext("test-remote")
+      proxy.pathManager.addPath("test-metrics", "", agentContext)
+      agentContext.invalidate()
+
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
+        routing {
+          val r = this
+          with(ProxyHttpRoutes) { r.handleRequests(proxy) }
+        }
+      }
+
+      try {
+        val port = startServerAndGetPort(server)
+        val client = newHttpClient()
+
+        val response = client.get("http://localhost:$port/test-metrics")
+        response.headers["X-Content-Type-Options"] shouldBe "nosniff"
+        response.headers["Content-Security-Policy"] shouldBe "sandbox"
+
+        client.close()
+      } finally {
+        server.stop(0, 0)
+      }
     }
 
     // Finding 10: a non-2xx upstream status must map to a label that reflects the cause, so operators

@@ -460,5 +460,11 @@ internal class AgentPathManager(
     val labels: String,
     val source: PathSource,
     val filter: MetricFilter? = null,
-  )
+  ) {
+    // Logged at DEBUG on every scrape, so the target URL's userinfo and query values are redacted here rather than
+    // at each log site.
+    override fun toString() =
+      "PathContext(pathId=$pathId, path=$path, url=${sanitizeUrl(url)}, labels=$labels, source=$source, " +
+        "filter=$filter)"
+  }
 }

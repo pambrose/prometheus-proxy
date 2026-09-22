@@ -229,6 +229,10 @@ class Proxy(
   // internal: the generated ConfigVals type is not part of the documented public API (finding 26).
   internal val proxyConfigVals: ConfigVals.Proxy2 get() = configVals.proxy
 
+  // Whether agent-supplied job and instance labels are kept out of service discovery; see isReservedSdLabelKey.
+  internal val reserveJobAndInstanceLabels: Boolean
+    get() = proxyConfigVals.service.discovery.reserveJobAndInstanceLabels
+
   // The stale-agent cleanup service runs when explicitly enabled, or is forced on when the transport
   // filter is disabled (there's then no per-connection disconnect detection, so it's the only cleanup
   // mechanism). Computed once so startUp() and shutDown() can't drift (finding 32).
@@ -520,11 +524,11 @@ class Proxy(
             val labels = agentContextInfo.labels
             runCatching {
               val json = labels.toJsonElement()
-              // Apply agent-supplied labels, but never let them clobber the proxy-computed reserved
-              // keys above (a colliding key could redirect the scrape target or spoof identity).
+              // Apply agent-supplied labels, except the reserved keys (see isReservedSdLabelKey). ProxyPathManager
+              // warned about them once when the path registered; this runs on every service-discovery poll.
               json.jsonObject.forEach { (k, v) ->
-                if (k in RESERVED_SD_LABEL_KEYS)
-                  logger.warn { "Ignoring agent label '$k' that collides with a reserved key for path $pathWithSlash" }
+                if (isReservedSdLabelKey(k, reserveJobAndInstanceLabels))
+                  logger.debug { "Ignoring reserved agent label '$k' for path $pathWithSlash" }
                 else
                   put(k, v)
               }
@@ -551,6 +555,32 @@ class Proxy(
 
     // Service-discovery label keys computed by the proxy; agent-supplied labels must not overwrite them.
     private val RESERVED_SD_LABEL_KEYS: Set<String> = ["__metrics_path__", "agentName", "hostName"]
+
+    // The labels Prometheus fills from the scrape config unless a target sets them, which an operator can reserve.
+    private val JOB_AND_INSTANCE: Set<String> = ["job", "instance"]
+
+    /**
+     * Whether an agent-supplied service-discovery label [key] is kept out of the service-discovery response.
+     *
+     * The proxy's own keys, so an agent can't redirect its scrape or spoof its identity. Every `__`-prefixed key: in
+     * HTTP service discovery a target's labels override the scrape config's `__scheme__`, `__scrape_interval__`,
+     * `__scrape_timeout__`, and `__param_*`, which would let an agent change how Prometheus scrapes it. And, when
+     * [reserveJobAndInstance] is set, `job` and `instance`, which let one identity's targets pass as another's.
+     */
+    internal fun isReservedSdLabelKey(
+      key: String,
+      reserveJobAndInstance: Boolean,
+    ): Boolean =
+      key in RESERVED_SD_LABEL_KEYS || key.startsWith("__") || (reserveJobAndInstance && key in JOB_AND_INSTANCE)
+
+    /** The keys of [labels], a JSON object, that [isReservedSdLabelKey] keeps out of service discovery. */
+    internal fun reservedSdLabelKeys(
+      labels: String,
+      reserveJobAndInstance: Boolean,
+    ): List<String> =
+      runCatching { labels.toJsonElement().jsonObject.keys }
+        .getOrDefault(emptySet())
+        .filter { isReservedSdLabelKey(it, reserveJobAndInstance) }
 
     /**
      * JVM entry point for the standalone Proxy process.

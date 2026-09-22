@@ -102,6 +102,13 @@ The labels appear in the discovery response and can be used in Prometheus relabe
 
 !!! note "Reserved label keys"
 
-    The proxy computes `__metrics_path__`, `agentName`, and `hostName` itself. Any agent-supplied
-    label whose key collides with one of these is ignored (the proxy logs a warning), so a custom
-    label can't override the scrape target or the reported agent identity.
+    The proxy computes `__metrics_path__`, `agentName`, and `hostName` itself, and it also drops every
+    agent-supplied label whose key starts with `__`. In HTTP service discovery a target's labels override
+    the scrape config's `__scheme__`, `__scrape_interval__`, `__scrape_timeout__`, and `__param_*`, so
+    these would let an agent change how Prometheus scrapes it. The proxy logs a warning naming the dropped
+    keys when the path registers.
+
+    Agent labels can set `job` and `instance` by default. When agents run under separate
+    [per-agent identities](security/index.md#per-agent-identities-and-path-authorization), set
+    `proxy.service.discovery.reserveJobAndInstanceLabels = true` so one team's agent can't label its
+    targets as another team's job or instance.

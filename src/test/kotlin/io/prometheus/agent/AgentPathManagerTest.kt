@@ -761,6 +761,26 @@ class AgentPathManagerTest : StringSpec() {
       text.shouldNotBeEmpty()
     }
 
+    // AgentHttpService logs "Fetching $pathContext" at DEBUG on every scrape, next to an already-redacted URL, so the
+    // data class's generated toString printed the raw target URL -- userinfo and query secrets included.
+    "PathContext toString should redact credentials in the target URL" {
+      val context =
+        AgentPathManager.PathContext(
+          pathId = 1L,
+          path = "metrics",
+          url = "http://admin:hunter2@target:9100/metrics?token=s3cr3t",
+          labels = "{}",
+          source = PathSource.STATIC,
+        )
+
+      val text = context.toString()
+
+      text shouldNotContain "hunter2"
+      text shouldNotContain "s3cr3t"
+      text shouldContain "target:9100/metrics"
+      text shouldContain "metrics"
+    }
+
     // Path registration logs name the target URL at INFO, so its credentials must be redacted there too.
     "path registration logs should redact credentials in the target URL" {
       val agent = createMockAgent()

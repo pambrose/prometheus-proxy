@@ -126,6 +126,10 @@ internal object ProxyUtils {
     status: HttpStatusCode = HttpStatusCode.OK,
   ) {
     response.header(HttpHeaders.CacheControl, CACHE_CONTROL_VALUE)
+    // The scrape port serves agent-supplied bodies from the proxy's origin: a browser must not sniff one into a
+    // runnable type, and one opened directly runs sandboxed, without access to that origin.
+    response.header("X-Content-Type-Options", "nosniff")
+    response.header("Content-Security-Policy", "sandbox")
     respondText(text, contentType, status)
   }
 }
