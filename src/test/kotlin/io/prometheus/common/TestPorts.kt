@@ -39,7 +39,8 @@ object TestPorts {
   const val NGINX_PORT = 80
 
   // Dedicated ports for the harness specs. Each spec owns its own, so no two specs -- or two cases within one --
-  // bind the same port; TestPortsTest fails the build when two of these collide.
+  // bind the same port; TestPortsTest fails the build when two of these collide, or when one is 32768 or above, in
+  // the range the OS hands out to outgoing connections.
 
   // Admin endpoints on non-default ports (misc/Admin*PathTest)
   const val ADMIN_EMPTY_PATH_ADMIN_PORT = 8098
@@ -61,29 +62,29 @@ object TestPorts {
 
   // TlsMutualAuthRejectionTest
   const val TLS_REJECTION_HTTP_PORT = 9512
-  const val TLS_REJECTION_AGENT_PORT = 50460
+  const val TLS_REJECTION_AGENT_PORT = 9517
 
   // TlsNoMutualAuthTest and TlsWithMutualAuthTest: the proxy's gRPC port each runs its TLS channel on
-  const val TLS_NO_MUTUAL_AUTH_AGENT_PORT = 50440
-  const val TLS_MUTUAL_AUTH_AGENT_PORT = 50441
+  const val TLS_NO_MUTUAL_AUTH_AGENT_PORT = 9518
+  const val TLS_MUTUAL_AUTH_AGENT_PORT = 9519
 
   // AgentTokenAuthTest
   const val TOKEN_AUTH_HTTP_PORT_OK = 9513
-  const val TOKEN_AUTH_AGENT_PORT_OK = 50461
+  const val TOKEN_AUTH_AGENT_PORT_OK = 9520
   const val TOKEN_AUTH_HTTP_PORT_BAD = 9514
-  const val TOKEN_AUTH_AGENT_PORT_BAD = 50462
+  const val TOKEN_AUTH_AGENT_PORT_BAD = 9521
 
   // AgentPathAuthTest
   const val PATH_AUTH_HTTP_PORT = 9515
-  const val PATH_AUTH_AGENT_PORT = 50463
+  const val PATH_AUTH_AGENT_PORT = 9522
 
   // AgentDiscoveryTest
   const val DISCOVERY_HTTP_PORT = 9516
-  const val DISCOVERY_AGENT_PORT = 50464
+  const val DISCOVERY_AGENT_PORT = 9523
 
   // AgentRejectedPathRetryTest
   const val REJECTED_PATH_RETRY_HTTP_PORT = 9594
-  const val REJECTED_PATH_RETRY_AGENT_PORT = 50465
+  const val REJECTED_PATH_RETRY_AGENT_PORT = 9524
 
   // AgentProxyFailoverTest
   const val FAILOVER_PROXY_A_HTTP_PORT = 9530
