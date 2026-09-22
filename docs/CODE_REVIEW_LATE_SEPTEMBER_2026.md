@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — Late September 2026 Findings
 
-**Status:** 30 issues — 2 fixed, 28 open (open: 1 high · 6 medium · 21 low) — fixed: #17, #18
+**Status:** 30 issues — 4 fixed, 26 open (open: 0 high · 6 medium · 20 low) — fixed: #1, #17, #18, #30
 
 **Date:** 2026-09-22
 
@@ -30,7 +30,7 @@ gate (#17).
 
 | #  | Finding                                                                         | Area     | Severity | Status |
 |----|---------------------------------------------------------------------------------|----------|----------|--------|
-| 1  | All static paths rejected as retryable → reconnect loop; backoff never runs     | Agent    | high     | ⬜      |
+| 1  | All static paths rejected as retryable → reconnect loop; backoff never runs     | Agent    | high     | ✅      |
 | 2  | Protobuf-format scrapes are corrupted (Prometheus `Accept` passed through)      | Agent    | medium   | ⬜      |
 | 3  | Discovery still WARNs every reconcile for collisions, duplicates, bad file      | Agent    | low      | ⬜      |
 | 4  | Duplicate `agent.filters` entries for one path silently merged                  | Agent    | low      | ⬜      |
@@ -59,7 +59,7 @@ gate (#17).
 | 27 | Harness binds hard-coded port 9900 outside `TestPorts`; `awaitPortReady` warns  | Tests    | low      | ⬜      |
 | 28 | Test resource leaks: `proxyCallTest` servers and unstopped `Agent`s             | Tests    | low      | ⬜      |
 | 29 | `prom/prometheus:latest` unpinned in the container suite                        | Tests    | low      | ⬜      |
-| 30 | Untested: retryable discovered rejection in backoff retried on URL/label change | Tests    | low      | ⬜      |
+| 30 | Untested: retryable discovered rejection in backoff retried on URL/label change | Tests    | low      | ✅      |
 
 ---
 
@@ -71,7 +71,7 @@ then the items that change what operators see, then hardening, and leaves tidy-u
 | Step | Issues               | PR theme                                                   | Why here                                                                                                                         |
 |------|----------------------|------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------|
 | 1 ✅  | #17, #18             | Restore a PR build gate; record the SLF4J bump             | Every later PR benefits from a pre-merge build. #18 is a two-line fix already pending.                                           |
-| 2    | #1, #30              | Keep the agent connected when every rejection can clear    | The only high: the #264/#271 retry and backoff are bypassed in their main use case, and discovery goes down with it.             |
+| 2 ✅  | #1, #30              | Keep the agent connected when every rejection can clear    | The only high: the #264/#271 retry and backoff are bypassed in their main use case, and discovery goes down with it.             |
 | 3    | #5, #21              | Accurate scrape outcome labels, and docs that match        | Label semantics and their docs must change together; alerts written from the docs never fire today.                              |
 | 4    | #6, #9               | Cheap, leak-free per-path series removal; better buckets   | Same file (`ProxyMetrics.kt`); scraping stalls under the path lock at scale.                                                     |
 | 5    | #10, #13, #11, #12   | Agent HTTP-client and scrape-port hardening                | Small, local changes that close a credential-leak path. #12 needs a decision on whether `job`/`instance` are reserved.           |
@@ -88,7 +88,7 @@ then the items that change what operators see, then hardening, and leaves tidy-u
 
 ## 🛰️ Agent
 
-### 1. [ ] All static paths rejected as retryable → reconnect loop; backoff never runs
+### 1. [x] All static paths rejected as retryable → reconnect loop; backoff never runs
 
 **Severity:** high · **Confidence:** confirmed
 
@@ -115,6 +115,15 @@ The existing unit test (`agent/AgentPathManagerTest.kt:1260`) covers only a non-
 **Fix:** count only non-retryable rejections toward "all rejected"; stay connected and hand retryable ones to
 the retry task. Optionally still fail over when there is another endpoint and discovery is off. Add tests for
 all-retryable rejections and for a static-plus-discovery agent.
+
+**Resolution:** `registerPaths()` now fails the attempt only when every static path is rejected and none of the
+rejections can clear (`!hasRejectedStaticPaths`). One retryable rejection keeps the connection, so
+`connectToProxy` reaches its `coroutineScope`, launches the retry task with its backoff intact, and starts
+discovery. A proxy rejecting every path for causes that can't clear still triggers failover. The optional
+"fail over anyway when another endpoint exists" was not taken: the conflicting agent is on this proxy, and the
+conflict clears there. New tests in `agent/AgentPathManagerTest.kt` cover all-retryable (both causes), mixed
+retryable and non-retryable, and all-non-retryable rejections. The failover entries in `CHANGELOG.md` and
+`RELEASE_NOTES.md` were corrected to match.
 
 
 ### 2. [ ] Protobuf-format scrapes are corrupted (Prometheus `Accept` passed through)
@@ -557,7 +566,7 @@ leaves them bound for the rest of the JVM. Each unstopped `Agent` leaks a `Manag
 
 **Fix:** pin a tag in a shared constant (and add it to Dependabot's Docker coverage with #19 if practical).
 
-### 30. [ ] Untested: retryable discovered rejection in backoff retried on URL/label change
+### 30. [x] Untested: retryable discovered rejection in backoff retried on URL/label change
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -568,6 +577,11 @@ non-retryable case).
 when its URL or labels change has no test.
 
 **Fix:** add the test (fits naturally in the #1 PR).
+
+**Resolution:** added "reconcile should try a discovered path waiting out its backoff at once when its entry
+changes" to `agent/AgentPathManagerTest.kt`. It builds up a 60s backoff, checks a poll inside it doesn't retry,
+then checks a changed URL and then changed labels are each tried at once. Temporarily removing the URL/labels
+comparison in `registerDiscoveredPath` makes it fail.
 
 
 ---
