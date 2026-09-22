@@ -197,7 +197,8 @@ internal class AgentHttpService(
       timeout { requestTimeoutMillis = limit.inWholeMilliseconds }
 
       // Set non-default headers
-      if (request.accept.isNotEmpty()) header(ACCEPT, request.accept)
+      // The scrape travels to Prometheus as text, so the target is asked only for a text format; see textOnlyAccept.
+      textOnlyAccept(request.accept).takeIf { it.isNotEmpty() }?.let { header(ACCEPT, it) }
       val authHeader = request.authHeader.ifBlank { null }
       authHeader?.also { header(HttpHeaders.Authorization, it) }
     }
@@ -431,6 +432,22 @@ internal class AgentHttpService(
 
     // Cap on the retry backoff so total retry time stays bounded within the scrape timeout (finding 28).
     private const val MAX_RETRY_DELAY_MS = 5000L
+
+    private const val PROTOBUF_MEDIA_TYPE = "application/vnd.google.protobuf"
+
+    /**
+     * [accept], Prometheus's `Accept` header, without the protobuf media type.
+     *
+     * The agent and proxy carry a scrape body as text: the agent decodes a small body with `decodeToString()`, and the
+     * proxy turns every body into a `String`. A target answering in binary protobuf -- which Prometheus asks for first
+     * when native histograms are enabled -- was therefore delivered corrupted, and Prometheus failed the scrape.
+     * Dropping protobuf leaves the text and OpenMetrics offers, so the target answers in one of those. Returns an empty
+     * string when nothing else was offered, in which case no `Accept` header is sent and the target uses its default.
+     */
+    internal fun textOnlyAccept(accept: String): String =
+      accept.split(',')
+        .filterNot { it.substringBefore(';').trim().equals(PROTOBUF_MEDIA_TYPE, ignoreCase = true) }
+        .joinToString(",") { it.trim() }
 
     // Ktor's own default is 20; a metrics endpoint needs a hop or two at most.
     private const val MAX_REDIRECTS = 5

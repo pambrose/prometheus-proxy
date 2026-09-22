@@ -227,6 +227,13 @@ trust store, and `--trust_all_x509` (which disables verification entirely) takes
 | `chunkContentSizeKbs` | 32      | Chunked above this; at most 4032                  |
 | `minGzipSizeBytes`    | 512     | Gzip-compressed above this; at most 4128768       |
 
+!!! note "Text exposition formats only"
+
+    The agent and proxy carry a scrape as text, so the agent asks targets only for the text and
+    OpenMetrics formats: it drops the protobuf entry from the `Accept` header Prometheus sends. With
+    native histograms enabled, Prometheus asks for protobuf first; through the proxy it receives the
+    text format instead, and native histograms aren't available. Classic histograms are unaffected.
+
 ## Metric Filtering
 
 The agent-to-proxy hop is usually the expensive one — a WAN link, metered egress, a constrained

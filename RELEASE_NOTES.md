@@ -221,6 +221,10 @@ interval as their deadline, capped at the unary deadline.
 - **Scrapes Prometheus gave up on left no trace.** A target slower than Prometheus's timeout but faster than
   the proxy's, the most common real failure, was missing from the scrape metrics, `/debug`, and the
   dashboard. It now appears under the new outcome `client_cancelled`.
+- **Scrapes of a target that supports protobuf arrived corrupted.** With native histograms enabled, Prometheus
+  asks for protobuf first, and the agent passed that request on, but the agent and proxy carry a scrape as text.
+  The agent now asks targets only for the text formats, so those scrapes work; native histograms aren't available
+  through the proxy.
 - **Retired paths' latency and size series could come back**, when a scrape finished after its path was
   removed, and then stay forever. Removing them also scanned every path's series while holding the lock every
   scrape takes. A path's series are now recorded only while it is registered, and removed without the scan.

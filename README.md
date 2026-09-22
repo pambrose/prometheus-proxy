@@ -584,6 +584,7 @@ Typesafe Config highlights include:
 * **Dynamic Props:** Use `-Dproperty.name=value` for any scalar configuration key (parsed as Java properties, so list/object values like `proxy.auth` must be set in a config file).
 * **Per-Agent Auth:** `proxy.auth` (per-agent identities with path authorization) is a list of objects, so it is config-file-only — see [Per-Agent Identities and Path Authorization](#per-agent-identities-and-path-authorization).
 * **Keepalives:** See the [gRPC keepalive guide](https://grpc.io/docs/guides/keepalive/) for tuning details.
+* **Exposition formats:** Scrapes are carried as text, so the agent asks targets only for the text and OpenMetrics formats. Native histograms, which Prometheus receives only in the protobuf format, aren't available through the proxy.
 
 ---
 
