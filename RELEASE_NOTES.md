@@ -226,8 +226,8 @@ interval as their deadline, capped at the unary deadline.
 - A path's per-path metric series are removed when its last registration goes away, so paths retired by
   discovery no longer accumulate on `/metrics`.
 - The GitHub Actions workflows pin every action to a commit SHA and get weekly Dependabot updates along with
-  the Gradle version catalog. CI and the container tests run on each push to `master` and on demand, no longer
-  on pull requests.
+  the Gradle version catalog. CI runs on every pull request and push to `master`, and cancels a superseded
+  pull-request run; the container tests run on each push to `master` and on demand, no longer on pull requests.
 - Point-in-time reviews, proposals, and design plans moved to `docs/archive/`, and IDE state that was already
   meant to be ignored is no longer tracked.
 - The test suite relies less on timing: expiry and cleanup tests use a test clock or wait for a real signal
@@ -265,7 +265,7 @@ interval as their deadline, capped at the unary deadline.
 ### Dependency updates
 
 Runtime: Kotlin 2.4.10 → 2.4.20, gRPC 1.83.1 → 1.84.0, Ktor 3.5.2 → 3.6.0, Logback 1.6.1 → 1.6.3,
-SLF4J 2.0.18 → 2.0.19, Dropwizard metrics 4.2.39 → 4.2.40, and common-utils 3.2.2 → 4.1.0;
+SLF4J 2.0.18 → 2.0.20, Dropwizard metrics 4.2.39 → 4.2.40, and common-utils 3.2.2 → 4.1.0;
 `grpc-netty-shaded` is removed. Build and test only: Gradle 9.6.1 → 9.7.1, detekt 2.0.0-alpha.5 → alpha.6,
 Kotest 6.2.3 → 6.2.5, the Gradle versions plugin 0.57.0 → 0.64.0, the BuildConfig plugin 6.0.10 → 6.1.1, and
 the shared convention plugins 1.1.1 → 1.1.5. The documentation site's Python lock picks up Zensical
