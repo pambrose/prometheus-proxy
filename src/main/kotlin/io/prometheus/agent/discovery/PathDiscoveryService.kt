@@ -60,6 +60,8 @@ internal class PathDiscoveryService(
    */
   suspend fun run(keepRunning: () -> Boolean) {
     logger.info { "Path discovery reconciling every ${intervalSecs.seconds}" }
+    // Each connection starts with no discovered paths, so a failure left over from the last one is news again.
+    lastFailure = null
     while (keepRunning()) {
       reconcileOnce()
       sleepInterval(keepRunning)

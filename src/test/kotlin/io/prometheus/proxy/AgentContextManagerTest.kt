@@ -54,6 +54,20 @@ class AgentContextManagerTest : StringSpec() {
       manager.agentContextEntries.map { it.key } shouldBe listOf(context.agentId)
     }
 
+    // connectAgent can announce a context in the moment after transportTerminated invalidated it, which logged a
+    // "Registering" line and emitted AgentConnected for a connection that was already gone.
+    "an invalidated pending context should not be announced" {
+      val manager = AgentContextManager(isTestMode = true)
+      val context = AgentContext("10.0.1.14:1234")
+      manager.addAgentContext(context, announce = false)
+      context.invalidate()
+
+      manager.announceAgentContext(context.agentId)
+
+      context.announced shouldBe false
+      manager.agentContextSize shouldBe 0
+    }
+
     // ==================== Initial State Tests ====================
 
     "should start with empty agent context map" {

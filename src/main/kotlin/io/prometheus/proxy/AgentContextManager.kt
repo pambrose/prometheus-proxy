@@ -86,8 +86,10 @@ internal class AgentContextManager(
     agentContextMap[agentId]?.also { announce(it) }
   }
 
+  // Skips a context already invalidated: connectAgent can announce in the moment after transportTerminated removed it,
+  // which would report a connection that is already gone.
   private fun announce(agentContext: AgentContext) {
-    if (agentContext.markAnnounced()) {
+    if (agentContext.isValid() && agentContext.markAnnounced()) {
       logger.info { "Registering agentId: ${agentContext.agentId}" }
       eventBus.emit(ProxyEvent.AgentConnected(agentContext.agentId))
     }
