@@ -42,13 +42,17 @@ internal class AgentContextManager(
 ) {
   // Map agent_id to AgentContext
   private val agentContextMap = ConcurrentHashMap<String, AgentContext>()
-  val agentContextSize: Int get() = agentContextMap.size
+
+  // Connected agents only: a pending context (see addAgentContext) isn't one yet.
+  val agentContextSize: Int get() = agentContextMap.values.count { it.announced }
 
   val chunkedContextSize: Int get() = chunkedContextMapView.size
 
   val totalAgentScrapeRequestBacklogSize: Int get() = agentContextMap.values.sumOf { it.scrapeRequestBacklogSize }
 
-  val agentContextEntries: Set<Map.Entry<String, AgentContext>> get() = agentContextMap.entries
+  // The connected agents the dashboard and health checks read; pending contexts are left out, as in agentContextSize.
+  val agentContextEntries: Set<Map.Entry<String, AgentContext>>
+    get() = agentContextMap.entries.filterTo(LinkedHashSet()) { it.value.announced }
 
   // Map scrape_id to ChunkedContext.
   //
@@ -59,10 +63,34 @@ internal class AgentContextManager(
   val chunkedContextMapView: Map<Long, ChunkedContext>
     field = ConcurrentHashMap<Long, ChunkedContext>()
 
-  fun addAgentContext(agentContext: AgentContext): AgentContext? {
-    logger.info { "Registering agentId: ${agentContext.agentId}" }
-    return agentContextMap.put(agentContext.agentId, agentContext)
-      .also { eventBus.emit(ProxyEvent.AgentConnected(agentContext.agentId)) }
+  /**
+   * Adds [agentContext], announcing it as a connected agent unless [announce] is false.
+   *
+   * The transport filter adds every connection's context before any call on it is authenticated, so it passes false:
+   * the context is findable by its agentId, but isn't logged at INFO, counted, listed, or emitted as AgentConnected
+   * until [announceAgentContext]. Otherwise anyone who could reach the agent port showed up as a connected agent.
+   */
+  fun addAgentContext(
+    agentContext: AgentContext,
+    announce: Boolean = true,
+  ): AgentContext? =
+    agentContextMap.put(agentContext.agentId, agentContext).also {
+      if (announce)
+        announce(agentContext)
+      else
+        logger.debug { "Pending agentId: ${agentContext.agentId} until its first authenticated call" }
+    }
+
+  /** Announces a pending context as a connected agent; called on its first authenticated call. Idempotent. */
+  fun announceAgentContext(agentId: String) {
+    agentContextMap[agentId]?.also { announce(it) }
+  }
+
+  private fun announce(agentContext: AgentContext) {
+    if (agentContext.markAnnounced()) {
+      logger.info { "Registering agentId: ${agentContext.agentId}" }
+      eventBus.emit(ProxyEvent.AgentConnected(agentContext.agentId))
+    }
   }
 
   fun getAgentContext(agentId: String) = agentContextMap[agentId]

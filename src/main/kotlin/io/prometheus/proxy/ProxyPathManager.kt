@@ -26,6 +26,7 @@ import io.prometheus.grpc.PathRejectionCause.CONSOLIDATION_MISMATCH
 import io.prometheus.grpc.PathRejectionCause.HELD_BY_ANOTHER_IDENTITY
 import io.prometheus.grpc.PathRejectionCause.INVALID_AGENT
 import io.prometheus.grpc.PathRejectionCause.INVALID_PATH
+import io.prometheus.grpc.PathRejectionCause.PATH_LIMIT_REACHED
 import io.prometheus.grpc.UnregisterPathResponse
 import io.prometheus.grpc.unregisterPathResponse
 
@@ -72,6 +73,22 @@ internal class ProxyPathManager(
 
   private val pathMap = HashMap<String, AgentContextInfo>()
 
+  // How many paths each agent serves, by agentId; guarded by pathMap. Kept in step with every change to pathMap, so
+  // enforcing proxy.internal.maxPathsPerAgent -- and finding an agent left with no paths -- needs no scan of the map.
+  private val pathCounts = HashMap<String, Int>()
+
+  // Callers MUST hold pathMap.
+  private fun countPaths(
+    agentId: String,
+    delta: Int,
+  ) {
+    val count = (pathCounts[agentId] ?: 0) + delta
+    if (count > 0) pathCounts[agentId] = count else pathCounts.remove(agentId)
+  }
+
+  // The number of paths [agentId] serves.
+  internal fun pathCountFor(agentId: String): Int = synchronized(pathMap) { pathCounts[agentId] ?: 0 }
+
   // AgentContextInfo is deeply immutable and mutations replace the pathMap entry (never mutate in
   // place), so returning the stored instance is already an effective snapshot — no defensive copy.
   // Paths are keyed without a leading slash, the form the scrape route looks them up in; see pathKey.
@@ -104,10 +121,62 @@ internal class ProxyPathManager(
     // "/" passes the blank check but names no path the scrape route can reach.
     if (key.isBlank())
       return rejectPath(agentContext, path, "Invalid path: /$key (a path segment is required)", INVALID_PATH)
+    sizeRejection(key, labels, agentContext)?.let { return it }
     // Redacted on the way in so the dashboard and /debug never show credentials, even from an agent that
     // predates agent-side redaction.
     return multiSegmentPathError(key)?.let { PathRejection(it, INVALID_PATH) }
       ?: addValidatedPath(key, labels, agentContext, sanitizeUrl(targetUrl), pathSource, identityName)
+  }
+
+  // Rejects a path longer than proxy.internal.maxPathLength, or labels larger than maxLabelsSizeBytes; 0 turns either
+  // check off. Without them a path and its labels were bounded only by gRPC's 4 MiB message limit. A long path is
+  // truncated in the reason, and in the rejection this connection remembers, so it isn't kept whole.
+  private fun sizeRejection(
+    key: String,
+    labels: String,
+    agentContext: AgentContext,
+  ): PathRejection? {
+    val shown = if (key.length > SHOWN_PATH_CHARS) key.take(SHOWN_PATH_CHARS) + "..." else key
+    val maxLength = proxy.maxPathLength
+    if (maxLength > 0 && key.length > maxLength) {
+      val reason = "Path /$shown is ${key.length} characters, over proxy.internal.maxPathLength ($maxLength)"
+      return rejectPath(agentContext, shown, reason, INVALID_PATH)
+    }
+    val maxLabels = proxy.maxLabelsSizeBytes
+    val labelsSize = labels.encodeToByteArray().size
+    if (maxLabels > 0 && labelsSize > maxLabels) {
+      val reason = "Labels for path /$shown are $labelsSize bytes, over proxy.internal.maxLabelsSizeBytes ($maxLabels)"
+      return rejectPath(agentContext, shown, reason, INVALID_PATH)
+    }
+    return null
+  }
+
+  // Rejects a path the agent doesn't serve yet once it serves proxy.internal.maxPathsPerAgent (0 = unlimited): an
+  // identity limited to team-a-* could otherwise register unlimited matching paths, each adding a path-map entry, a
+  // service-discovery target, and per-path metric series. Callers MUST hold pathMap.
+  private fun pathLimitRejection(
+    agentContext: AgentContext,
+    path: String,
+  ): PathRejection? {
+    val max = proxy.maxPathsPerAgent
+    val count = pathCounts[agentContext.agentId] ?: 0
+    if (max <= 0 || count < max)
+      return null
+    val reason =
+      "Agent ${agentContext.agentId} already serves $count paths, the proxy.internal.maxPathsPerAgent limit ($max); " +
+        "path /$path refused"
+    return rejectPath(agentContext, path, reason, PATH_LIMIT_REACHED)
+  }
+
+  // Warns once as an agent's path count reaches 80% of maxPathsPerAgent, so an operator hears about it before its
+  // registrations start failing. Callers MUST hold pathMap.
+  private fun warnNearPathLimit(agentContext: AgentContext) {
+    val max = proxy.maxPathsPerAgent
+    val count = pathCounts[agentContext.agentId] ?: 0
+    if (max > 0 && count == (max * 4 + 4) / 5)
+      logger.warn {
+        "Agent ${agentContext.agentId} serves $count of $max paths allowed by proxy.internal.maxPathsPerAgent"
+      }
   }
 
   // The key a path is stored and looked up under: without its leading slash, as the scrape route (get("/*") with the
@@ -172,6 +241,11 @@ internal class ProxyPathManager(
         return rejectPath(agentContext, path, reason, HELD_BY_ANOTHER_IDENTITY)
       }
 
+      // A path the agent already serves is a re-registration, which neither counts against its limit nor adds to it.
+      val alreadyServes = others.size != agentInfo?.agentContexts.orEmpty().size
+      if (!alreadyServes)
+        pathLimitRejection(agentContext, path)?.let { return it }
+
       if (agentContext.consolidated) {
         if (agentInfo == null) {
           pathMap[path] = AgentContextInfo(true, labels, [agentContext], targetUrl, pathSource, identityName)
@@ -201,16 +275,18 @@ internal class ProxyPathManager(
         // would otherwise stay alive indefinitely via heartbeats, consuming resources.
         // The agent will reconnect and re-register its paths if needed.
         displacedContexts.forEach { displacedContext ->
-          val hasOtherPaths = pathMap.any { (_, v) ->
-            v.agentContexts.any { it.agentId == displacedContext.agentId }
-          }
-          if (!hasOtherPaths) {
+          countPaths(displacedContext.agentId, -1)
+          if ((pathCounts[displacedContext.agentId] ?: 0) == 0) {
             logger.info { "Invalidating orphaned $displacedContext after path /$path was overwritten" }
             displacedContext.invalidate()
           }
         }
       }
 
+      if (!alreadyServes) {
+        countPaths(agentContext.agentId, 1)
+        warnNearPathLimit(agentContext)
+      }
       agentContext.forgetRejection(path)
       proxy.metrics { pathRegistered(path) }
       // Said once here rather than on every service-discovery poll, which is where the labels are dropped.
@@ -266,6 +342,7 @@ internal class ProxyPathManager(
         }
       }
 
+      countPaths(agentId, -1)
       if (agentInfo.isConsolidated && agentInfo.agentContexts.size > 1) {
         val updated = agentInfo.copy(agentContexts = agentInfo.agentContexts.filterNot { it.agentId == agentId })
         pathMap[path] = updated
@@ -338,6 +415,8 @@ internal class ProxyPathManager(
             proxy.eventBus.emit(ProxyEvent.PathUnregistered(k, agentId))
           } ?: logger.warn { "Missing path /$k for agentId: $agentId" }
       }
+      // The sweep took every path the agent served.
+      pathCounts.remove(agentId)
     }
 
     if (removedPathCount == 0)
@@ -362,5 +441,8 @@ internal class ProxyPathManager(
 
   companion object {
     private val logger = logger {}
+
+    // How much of an over-long path a rejection shows.
+    private const val SHOWN_PATH_CHARS = 64
   }
 }

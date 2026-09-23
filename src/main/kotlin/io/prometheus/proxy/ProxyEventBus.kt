@@ -30,13 +30,13 @@ import kotlinx.coroutines.flow.asSharedFlow
  */
 internal sealed interface ProxyEvent {
   /**
-   * A transport was established and an [AgentContext] now exists.
+   * An agent connected: its first call, `connectAgent`, got past agent authentication.
    *
-   * Emitted from the gRPC transport filter, which runs **before** per-call auth and before
-   * `registerAgent`, so at this point the context's identity fields are still `"Unassigned"` and the
-   * peer may yet be rejected. Anything that completes an HTTP/2 handshake reaches here, including a
-   * health probe or a client with a bad token. Consumers wanting a named, serving agent should wait
-   * for [AgentRegistered].
+   * Emitted when the connection's [AgentContext] is announced. The transport filter creates that context
+   * for every HTTP/2 connection, before any call is authenticated, but keeps it pending -- a health
+   * probe or a client with a bad token never produces this event. It still precedes `registerAgent`,
+   * so the context's identity fields are `"Unassigned"`; consumers wanting a named, serving agent should
+   * wait for [AgentRegistered].
    */
   data class AgentConnected(
     val agentId: String,

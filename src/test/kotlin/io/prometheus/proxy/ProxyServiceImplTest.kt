@@ -133,6 +133,24 @@ class ProxyServiceImplTest : StringSpec() {
       verify { proxy.metrics(any<ProxyMetrics.() -> Unit>()) }
     }
 
+    // connectAgent is an agent's first call, and with agent auth configured the interceptor has let it through, so it
+    // is where the connection's context becomes a connected agent: logged, counted, and shown on the dashboard.
+    "connectAgent should announce the connection's agent context" {
+      val proxy = createMockProxy(transportFilterDisabled = false)
+      val manager = proxy.agentContextManager
+      val service = ProxyServiceImpl(proxy)
+
+      val context = Context.current().withValue(ProxyServerInterceptor.CONNECTION_AGENT_ID_KEY, "conn-agent")
+      val previous = context.attach()
+      try {
+        service.connectAgent(EMPTY_INSTANCE)
+      } finally {
+        context.detach(previous)
+      }
+
+      verify { manager.announceAgentContext("conn-agent") }
+    }
+
     "connectAgent should throw StatusException with FAILED_PRECONDITION when transportFilterDisabled mismatch" {
       val proxy = createMockProxy(transportFilterDisabled = true)
       val service = ProxyServiceImpl(proxy)

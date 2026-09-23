@@ -20,6 +20,7 @@ package io.prometheus.proxy
 
 import io.grpc.Attributes
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.mockk.every
@@ -27,6 +28,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import io.prometheus.Proxy
 import io.prometheus.proxy.ProxyServerTransportFilter.Companion.AGENT_ID_KEY
+import io.prometheus.proxy.ProxyServiceImpl.Companion.UNKNOWN_ADDRESS
 
 class ProxyServerTransportFilterTest : StringSpec() {
   private fun createMockProxy(): Pair<Proxy, AgentContextManager> {
@@ -44,9 +46,21 @@ class ProxyServerTransportFilterTest : StringSpec() {
       val filter = ProxyServerTransportFilter(mockProxy)
 
       val inputAttrs = Attributes.newBuilder().build()
-      filter.transportReady(inputAttrs)
+      val agentId = filter.transportReady(inputAttrs).get(AGENT_ID_KEY)
 
-      agentContextManager.agentContextSize shouldBe 1
+      agentContextManager.getAgentContext(agentId.shouldNotBeNull()).shouldNotBeNull()
+    }
+
+    // No call on this connection has been authenticated yet, so it isn't announced as a connected agent: that waits
+    // for connectAgent.
+    "transportReady should not count or announce the context before the agent connects" {
+      val (mockProxy, agentContextManager) = createMockProxy()
+      val filter = ProxyServerTransportFilter(mockProxy)
+
+      val agentId = filter.transportReady(Attributes.newBuilder().build()).get(AGENT_ID_KEY).shouldNotBeNull()
+
+      agentContextManager.agentContextSize shouldBe 0
+      agentContextManager.getAgentContext(agentId).shouldNotBeNull().announced shouldBe false
     }
 
     "transportReady should add AGENT_ID_KEY to returned attributes" {
@@ -64,10 +78,10 @@ class ProxyServerTransportFilterTest : StringSpec() {
       val filter = ProxyServerTransportFilter(mockProxy)
 
       val inputAttrs = Attributes.newBuilder().build()
-      filter.transportReady(inputAttrs)
+      val agentId = filter.transportReady(inputAttrs).get(AGENT_ID_KEY).shouldNotBeNull()
 
-      // The AgentContext was created — verify it exists in the map
-      agentContextManager.agentContextSize shouldBe 1
+      // The AgentContext was created with the placeholder address
+      agentContextManager.getAgentContext(agentId).shouldNotBeNull().remoteAddr shouldBe UNKNOWN_ADDRESS
     }
 
     "transportReady should preserve original attributes" {
@@ -89,11 +103,11 @@ class ProxyServerTransportFilterTest : StringSpec() {
       val (mockProxy, agentContextManager) = createMockProxy()
       val filter = ProxyServerTransportFilter(mockProxy)
 
-      repeat(5) {
-        filter.transportReady(Attributes.newBuilder().build())
-      }
+      val agentIds =
+        List(5) { filter.transportReady(Attributes.newBuilder().build()).get(AGENT_ID_KEY).shouldNotBeNull() }
 
-      agentContextManager.agentContextSize shouldBe 5
+      agentIds.toSet().size shouldBe 5
+      agentIds.forEach { agentContextManager.getAgentContext(it).shouldNotBeNull() }
     }
 
     // ==================== transportTerminated Tests ====================
@@ -105,7 +119,7 @@ class ProxyServerTransportFilterTest : StringSpec() {
       // First, create a context via transportReady
       val resultAttrs = filter.transportReady(Attributes.newBuilder().build())
       val agentId = resultAttrs.get(AGENT_ID_KEY)!!
-      agentContextManager.agentContextSize shouldBe 1
+      agentContextManager.getAgentContext(agentId).shouldNotBeNull()
 
       // Set up proxy.removeAgentContext to delegate to the manager
       every { mockProxy.removeAgentContext(any(), any()) } answers {
@@ -142,8 +156,8 @@ class ProxyServerTransportFilterTest : StringSpec() {
 
       val resultAttrs = filter.transportReady(inputAttrs)
 
-      resultAttrs.get(AGENT_ID_KEY).shouldNotBeNull()
-      agentContextManager.agentContextSize shouldBe 1
+      val agentId = resultAttrs.get(AGENT_ID_KEY).shouldNotBeNull()
+      agentContextManager.getAgentContext(agentId).shouldNotBeNull()
     }
 
     // Bug #9: When the cleanup service already removed the agent, transport
@@ -155,11 +169,11 @@ class ProxyServerTransportFilterTest : StringSpec() {
       // Create a context via transportReady
       val resultAttrs = filter.transportReady(Attributes.newBuilder().build())
       val agentId = resultAttrs.get(AGENT_ID_KEY)!!
-      agentContextManager.agentContextSize shouldBe 1
+      agentContextManager.getAgentContext(agentId).shouldNotBeNull()
 
       // Simulate cleanup service removing the agent first
       agentContextManager.removeFromContextManager(agentId, "Eviction")
-      agentContextManager.agentContextSize shouldBe 0
+      agentContextManager.getAgentContext(agentId).shouldBeNull()
 
       // removeAgentContext returns null for already-removed agents
       every { mockProxy.removeAgentContext(any(), any()) } returns null

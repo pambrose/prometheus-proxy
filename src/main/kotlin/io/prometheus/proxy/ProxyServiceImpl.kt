@@ -79,6 +79,9 @@ internal class ProxyServiceImpl(
     }
 
     proxy.metrics { connectCount.inc() }
+    // An agent's first call, which the auth interceptor has already let through, so this is where the connection's
+    // context becomes a connected agent (see AgentContextManager.addAgentContext).
+    ProxyServerInterceptor.CONNECTION_AGENT_ID_KEY.get()?.also { proxy.agentContextManager.announceAgentContext(it) }
     return EMPTY_INSTANCE
   }
 
@@ -169,8 +172,8 @@ internal class ProxyServiceImpl(
             agentContext.assignProperties(request)
             agentContext.markActivityTime(false)
             logger.info { "Connected to $agentContext" }
-            // Identity is only populated here; AgentConnected fired at transport-ready, before the agent
-            // had told us who it is.
+            // Identity is only populated here; AgentConnected fired at connectAgent, before the agent had told us
+            // who it is.
             proxy.eventBus.emit(ProxyEvent.AgentRegistered(request.agentId))
             null
           }

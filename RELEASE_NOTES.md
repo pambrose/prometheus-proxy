@@ -128,6 +128,13 @@ on when agents run under separate `proxy.auth` identities, so one team can't lab
 `Content-Security-Policy: sandbox`. A compromised target could otherwise serve a page that ran on the proxy's
 origin in an operator's browser.
 
+**Path limits.** One agent connection can now register at most 10,000 paths, each at most 512 characters with at most
+8 KiB of labels, set by `proxy.internal.maxPathsPerAgent`, `maxPathLength`, and `maxLabelsSizeBytes` (`0` turns one
+off). They are safety nets set far above normal use; the proxy warns when an agent reaches 80% of the path limit.
+
+**Unauthenticated connections.** A connection to the agent port no longer shows up as a connected agent — in the
+logs, the agent count, the dashboard, or the health checks — until its first authenticated call.
+
 **Credentials in logs.** The agent's per-scrape DEBUG line no longer prints the raw target URL, and a config URL
 that fails to load is redacted in the startup error and in the `ConfigLoadException` an embedded host catches.
 
@@ -320,7 +327,7 @@ SLF4J 2.0.18 → 2.0.20, Dropwizard metrics 4.2.39 → 4.2.40, and common-utils 
 `grpc-netty-shaded` and an unused Jetty 11 `jetty-servlet` are removed. Build and test only: Gradle 9.6.1 → 9.7.1, detekt 2.0.0-alpha.5 → alpha.6,
 Kotest 6.2.3 → 6.2.5, the Gradle versions plugin 0.57.0 → 0.64.0, the BuildConfig plugin 6.0.10 → 6.1.1, and
 the shared convention plugins 1.1.1 → 1.1.5. The documentation site's Python lock picks up Zensical
-0.0.52 → 0.0.62 and pymdown-extensions 11.0.2 → 12.0.1, and its `mkdocs-material` pin moves 9.7.6 → 9.7.7.
+0.0.52 → 0.0.63 and pymdown-extensions 11.0.2 → 12.0.1, and its `mkdocs-material` pin moves 9.7.6 → 9.7.7.
 
 ---
 

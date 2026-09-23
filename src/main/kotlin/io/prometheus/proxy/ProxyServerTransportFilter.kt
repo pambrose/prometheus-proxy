@@ -32,7 +32,8 @@ internal class ProxyServerTransportFilter(
   override fun transportReady(attributes: Attributes): Attributes {
     val remoteAddress = attributes.get(REMOTE_ADDR_KEY) ?: UNKNOWN_ADDRESS
     val agentContext = AgentContext(remoteAddress)
-    proxy.agentContextManager.addAgentContext(agentContext)
+    // Pending until connectAgent: no call on this connection has been authenticated yet.
+    proxy.agentContextManager.addAgentContext(agentContext, announce = false)
 
     return attributes {
       set(AGENT_ID_KEY, agentContext.agentId)
@@ -43,10 +44,14 @@ internal class ProxyServerTransportFilter(
   override fun transportTerminated(attributes: Attributes) {
     attributes.get(AGENT_ID_KEY)?.also { agentId ->
       val context = proxy.removeAgentContext(agentId, "Termination")
-      if (context != null)
-        logger.info { "Disconnected from $context" }
-      else
-        logger.info { "Agent $agentId already removed before transport terminated" }
+      when {
+        context == null -> logger.info { "Agent $agentId already removed before transport terminated" }
+
+        // A connection that never made an authenticated call was never reported as connected.
+        !context.announced -> logger.debug { "Closed unannounced connection $context" }
+
+        else -> logger.info { "Disconnected from $context" }
+      }
     } ?: logger.error { "Missing agentId in transportTerminated()" }
     super.transportTerminated(attributes)
   }
