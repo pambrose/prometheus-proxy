@@ -127,9 +127,10 @@ internal object HarnessTests {
     logger.info { "Starting httpServer" }
     httpServer.start()
 
-    awaitPortReady(agentPort)
-
+    // Inside the try: awaitPortReady fails when the server never answers, and the finally must still stop it, or it
+    // holds the port for the rest of the JVM.
     try {
+      awaitPortReady(agentPort)
       pathManager.registerPath("/$proxyPath", "$agentPort/$agentPath".withPrefix())
 
       KtorDsl.blockingGet("$proxyPort/$proxyPath".withPrefix()) { response ->
@@ -284,7 +285,10 @@ internal object HarnessTests {
         httpServers.forEach { httpServer ->
           launch(Dispatchers.IO + exceptionHandler(logger)) {
             logger.info { "Shutting down httpServer listening on ${httpServer.port}" }
-            httpServer.server.stop(SERVER_STOP_GRACE_MS, SERVER_STOP_TIMEOUT_MS)
+            // A failed stop is logged, not thrown: thrown from this finally it would replace the failure that brought
+            // the test here.
+            runCatching { httpServer.server.stop(SERVER_STOP_GRACE_MS, SERVER_STOP_TIMEOUT_MS) }
+              .onFailure { e -> logger.warn(e) { "Failed to stop httpServer on ${httpServer.port}" } }
           }
         }
       }

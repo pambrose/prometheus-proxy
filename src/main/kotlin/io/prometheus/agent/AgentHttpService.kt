@@ -49,6 +49,7 @@ import io.ktor.http.URLBuilder
 import io.ktor.http.Url
 import io.ktor.http.takeFrom
 import io.ktor.http.isSuccess
+import io.ktor.utils.io.InternalAPI
 import io.ktor.utils.io.readBuffer
 import io.prometheus.Agent
 import io.prometheus.agent.HttpClientCache.ClientKey
@@ -347,6 +348,9 @@ internal class AgentHttpService(
   // forward, could collect the credentials configured for the target, or point the agent at an internal address
   // whose body came back through the proxy's scrape port. With no other origin reachable, the Auth plugin only ever
   // answers the target itself. A redirect elsewhere is returned as it is, so the scrape reports its 3xx status.
+  // Opts in to Ktor's internal takeFromWithExecutionContext, which Ktor's own HttpRedirect uses to build each hop; if
+  // Ktor changes it, the upgrade fails to compile here rather than silently losing the request timeout.
+  @OptIn(InternalAPI::class)
   private suspend fun Sender.followSameOriginRedirects(request: HttpRequestBuilder): HttpClientCall {
     var call = execute(request)
     repeat(MAX_REDIRECTS) {
@@ -362,7 +366,9 @@ internal class AgentHttpService(
         }
         return call
       }
-      call = execute(HttpRequestBuilder().takeFrom(request).apply { url.takeFrom(to) })
+      // WithExecutionContext: HttpTimeout arms its request timeout on the original request's execution context, and
+      // closing the client cancels through it; a plain takeFrom gave each hop a fresh one that neither reached.
+      call = execute(HttpRequestBuilder().takeFromWithExecutionContext(request).apply { url.takeFrom(to) })
     }
     return call
   }

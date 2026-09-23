@@ -22,6 +22,7 @@ import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.spi.ILoggingEvent
 import com.google.protobuf.LazyStringArrayList
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
@@ -967,6 +968,20 @@ class ProxyPathManagerTest : StringSpec() {
       manager.addPath("app/metrics", "{}", createMockAgentContext()).shouldNotBeNull()
 
       verify(exactly = 0) { metrics.pathRegistered(any()) }
+    }
+
+    // addPath strips one leading slash and multiSegmentPathError then stripped another, so "//foo" passed as "foo" and
+    // was stored under "/foo", a key no scrape can look up -- the bug stored-key normalization fixed, back again.
+    "a path with two leading slashes should be rejected as an invalid path" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+
+      for (path in ["//foo", "//"]) {
+        withClue(path) {
+          manager.addPath(path, "{}", AgentContext("remote-1")).shouldNotBeNull().cause shouldBe
+            PathRejectionCause.INVALID_PATH
+        }
+      }
+      manager.pathMapSize shouldBe 0
     }
 
     // ==================== Path limits ====================

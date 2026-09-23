@@ -170,6 +170,12 @@ internal class AgentPathManager(
   val hasRejectedStaticPaths: Boolean
     get() = rejectedStaticPaths.isNotEmpty()
 
+  // True when static paths are configured and none is registered: every one was rejected, whether at connect or on a
+  // later retry that found its rejection could no longer clear. Agent ends such a connection rather than idle on it.
+  fun servesNoStaticPath(): Boolean =
+    pathConfigs.isNotEmpty() &&
+      pathConfigs.none { pathContextMap[it.path.removePrefix("/")]?.source == PathSource.STATIC }
+
   // Registers a static path, keeping rejectedStaticPaths in step, and returns the proxy's rejection, or null once
   // registered. Only a rejection whose cause is in RETRYABLE_CAUSES stays for retrying; any other can't clear before a
   // reconnect. repeat says whether a retryable rejection was already logged. A transport failure propagates.

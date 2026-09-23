@@ -150,6 +150,22 @@ class PathDiscoveryServiceTest : StringSpec() {
       events.map { it.formattedMessage }.filter { "succeeded again" in it } shouldHaveSize 1
     }
 
+    // run() starts again on every connection, and a reconnect clears the discovered paths. A failure that carried over
+    // from the last connection was logged only at DEBUG -- and as "keeping current paths", when there were none.
+    "a repeating read failure should be warned about again on a new connection" {
+      val service = PathDiscoveryService(mockk(relaxed = true), { throw IOException("no such file") }, 30)
+
+      val warnings =
+        captureLogs<PathDiscoveryService>(Level.WARN) {
+          repeat(2) {
+            var ticks = 0
+            service.run { ticks++ < 1 }
+          }
+        }.filter { "reconcile failed" in it.formattedMessage }
+
+      warnings shouldHaveSize 2
+    }
+
     // A failed read skips only its own tick: the loop must still reconcile on the next one.
     "run should keep reconciling on later ticks after a read fails" {
       val desired = [DiscoveredPath("a", "a_metrics", "http://a/m", "{}")]

@@ -1402,6 +1402,31 @@ class AgentPathManagerTest : StringSpec() {
       manager.hasRejectedStaticPaths.shouldBeTrue()
     }
 
+    // An agent kept connected for a rejection that can clear (above) can be told on a later retry that it can't -- the
+    // owner left and the proxy now finds the path unauthorized, say. The retry task then stops with no static path
+    // registered, and Agent ends the connection rather than idle on a proxy that serves none of them.
+    "servesNoStaticPath should report when retries end with every static path still unregistered" {
+      val (mockAgent, mockGrpcService) = agentWithStaticPaths("metrics1")
+      rejectPath(mockGrpcService, "metrics1", PathRejectionCause.HELD_BY_ANOTHER_IDENTITY)
+      val manager = AgentPathManager(mockAgent)
+      manager.registerPaths()
+      manager.servesNoStaticPath().shouldBeTrue()
+
+      rejectPath(mockGrpcService, "metrics1", PathRejectionCause.NOT_AUTHORIZED)
+      manager.retryRejectedStaticPaths()
+
+      manager.hasRejectedStaticPaths.shouldBeFalse()
+      manager.servesNoStaticPath().shouldBeTrue()
+    }
+
+    "servesNoStaticPath should be false once a static path registers, and for an agent with none configured" {
+      val (mockAgent, _) = agentWithStaticPaths("metrics1")
+      AgentPathManager(mockAgent).also { it.registerPaths() }.servesNoStaticPath().shouldBeFalse()
+
+      val (noStatic, _) = agentWithStaticPaths()
+      AgentPathManager(noStatic).servesNoStaticPath().shouldBeFalse()
+    }
+
     "registerPaths should fail when the proxy rejects every static path for a cause that can't clear" {
       val (mockAgent, mockGrpcService) = agentWithStaticPaths("metrics1", "metrics2")
       rejectPath(mockGrpcService, "metrics1", PathRejectionCause.NOT_AUTHORIZED)

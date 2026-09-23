@@ -305,10 +305,12 @@ internal class ProxyPathManager(
   // an embedded slash (e.g. "app/metrics") would be advertised in service discovery yet 404 at scrape
   // time, so reject it at registration. A single leading slash is tolerated because the agent may or
   // may not have stripped it. Returns a failure reason, or null when the path is a single segment.
-  private fun multiSegmentPathError(path: String): String? {
-    val normalized = path.removePrefix("/")
-    if ('/' !in normalized) return null
-    return "Multi-segment path not supported (use a single path segment): /$normalized"
+  // [key] is already stripped of its leading slash by pathKey, so any slash left -- including a second leading one, as
+  // in "//foo" -- makes it a path the scrape route can't reach. Stripping again here let "//foo" through as "foo" and
+  // stored it under "/foo".
+  private fun multiSegmentPathError(key: String): String? {
+    if ('/' !in key) return null
+    return "Multi-segment path not supported (use a single path segment): /$key"
       .also { logger.error { it } }
   }
 

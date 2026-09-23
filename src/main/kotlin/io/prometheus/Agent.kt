@@ -330,10 +330,16 @@ class Agent(
             val retryInterval = agentConfigVals.internal.rejectedPathRetrySecs.seconds
             launchConnectionTask(connectionContext, "retryRejectedStaticPaths") {
               pathManager.retryRejectedStaticPathsWhile(retryInterval) { isRunning && connectionContext.connected }
-              // Every rejected path has registered. Returning would end the connection (see launchConnectionTask), so
-              // idle until the connection ends and cancels this task.
-              if (isRunning && connectionContext.connected)
-                awaitCancellation()
+              if (isRunning && connectionContext.connected) {
+                // Retrying ended with no static path registered -- each rejection turned out not to clear -- and no
+                // discovery to serve anything else, so this proxy serves nothing for the agent. Returning ends the
+                // connection (see launchConnectionTask), as registerPaths does at connect, so the agent reconnects or
+                // fails over. Otherwise every rejected path registered: idle until the connection ends.
+                if (pathManager.servesNoStaticPath() && pathDiscoveryService == null)
+                  logger.warn { "Proxy rejected every static path for a cause that can't clear; ending the connection" }
+                else
+                  awaitCancellation()
+              }
             }
           }
 

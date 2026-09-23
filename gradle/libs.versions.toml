@@ -41,8 +41,6 @@ ktor = "3.6.0"
 htmx = "2.0.10"
 htmxWs = "2.0.4"
 
-# Jetty
-
 # Metrics
 prometheus = "0.16.0"
 dropwizard = "4.2.40"
@@ -99,8 +97,6 @@ ktor-server-websockets = { module = "io.ktor:ktor-server-websockets", version.re
 # WebJars
 webjar-htmx = { module = "org.webjars.npm:htmx.org", version.ref = "htmx" }
 webjar-htmx-ws = { module = "org.webjars.npm:htmx-ext-ws", version.ref = "htmxWs" }
-
-# Jetty
 
 # Metrics
 prometheus-simpleclient = { module = "io.prometheus:simpleclient", version.ref = "prometheus" }
