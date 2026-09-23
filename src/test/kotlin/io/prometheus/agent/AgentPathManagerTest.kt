@@ -1124,15 +1124,22 @@ class AgentPathManagerTest : StringSpec() {
       manager["metrics2"].shouldNotBeNull()
     }
 
+    // With the backoff off (a cap at or below rejectedPathRetrySecs), every pass is due, so the loop's passes are real
+    // retries. With the backoff on, only the first would reach the proxy, so counting passes proved nothing. Each pass
+    // advances the clock by the 10s interval the real loop waits, which the test's 1ms delay stands in for.
     "retryRejectedStaticPathsWhile should keep retrying while a static path is still rejected" {
-      val (manager, _) = managerRejectingMetrics2()
+      val clock = TestTimeSource()
+      val (manager, grpcService) = managerRejectingMetrics2(clock = clock, retryMaxSecs = 1)
       manager.registerPaths()
       var checks = 0
 
-      manager.retryRejectedStaticPathsWhile(1.milliseconds) { ++checks <= 3 }
+      manager.retryRejectedStaticPathsWhile(1.milliseconds) {
+        clock += 10.seconds
+        ++checks <= 3
+      }
 
-      // Three passes, then the fourth check of the connection ends the loop.
-      checks shouldBe 4
+      // The connect-time registration, then one retry on each of the three passes.
+      coVerify(exactly = 4) { grpcService.registerPathOnProxy("metrics2", any(), any(), any()) }
       manager.hasRejectedStaticPaths.shouldBeTrue()
     }
 

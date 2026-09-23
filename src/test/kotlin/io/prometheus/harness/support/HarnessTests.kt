@@ -50,6 +50,8 @@ import io.prometheus.harness.HarnessConstants.MAX_DELAY_MILLIS
 import io.prometheus.harness.HarnessConstants.MIN_DELAY_MILLIS
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.newFixedThreadPoolContext
@@ -182,105 +184,110 @@ internal object HarnessTests {
 
     logger.debug { "Starting ${args.httpServerCount} httpServers" }
 
-    coroutineScope {
-      httpServers.forEach { wrapper ->
-        launch(Dispatchers.IO + exceptionHandler(logger)) {
-          logger.info { "Starting httpServer listening on ${wrapper.port}" }
-          wrapper.server.start()
-          awaitPortReady(wrapper.port)
-        }
-      }
-    }
-
-    logger.debug { "Finished starting ${args.httpServerCount} httpServers" }
-
-    // Create the paths
-    logger.debug { "Registering paths" }
-    repeat(args.pathCount) { i ->
-      val index = httpServers.size.random()
-      args.agent.pathManager.registerPath("proxy-$i", "${args.startPort + index}/agent-$index".withPrefix())
-      pathMap[i] = index
-    }
-
-    args.agent.grpcService.pathMapSize() shouldBe originalSize + args.pathCount
-
-    val proxyCallTimeout = args.proxyCallTimeoutSecs.seconds
-
-    // Call the proxy sequentially
-    logger.info { "Calling proxy sequentially ${args.sequentialQueryCount} times (timeout=$proxyCallTimeout)" }
-    newSingleThreadContext("test-single")
-      .use { dispatcher ->
-        withTimeout(proxyCallTimeout) {
-          httpClient { client ->
-            val counter = AtomicInt(0)
-            repeat(args.sequentialQueryCount) { cnt ->
-              val job =
-                this@withTimeout.launch(dispatcher + exceptionHandler(logger)) {
-                  callRandomProxyPath(client, args.proxyPort, pathMap, "Sequential $cnt")
-                  counter += 1
-                }
-
-              job.join()
-              job.getCancellationException().cause.shouldBeNull()
-            }
-
-            counter.load() shouldBe args.sequentialQueryCount
+    // The servers are stopped in a finally: a failed assertion or a timeout below used to skip the shutdown, leaving
+    // every server bound for the rest of the JVM and its ports taken from the specs that follow.
+    try {
+      coroutineScope {
+        httpServers.forEach { wrapper ->
+          launch(Dispatchers.IO + exceptionHandler(logger)) {
+            logger.info { "Starting httpServer listening on ${wrapper.port}" }
+            wrapper.server.start()
+            awaitPortReady(wrapper.port)
           }
         }
       }
 
-    // Call the proxy in parallel
-    logger.info { "Calling proxy in parallel ${args.parallelQueryCount} times (timeout=$proxyCallTimeout)" }
-    newFixedThreadPoolContext(5, "test-multi")
-      .use { dispatcher ->
-        withTimeout(proxyCallTimeout) {
-          httpClient { client ->
-            val counter = AtomicInt(0)
-            val jobs =
-              List(args.parallelQueryCount) { cnt ->
-                this@withTimeout.launch(dispatcher + exceptionHandler(logger)) {
-                  delay((MIN_DELAY_MILLIS..MAX_DELAY_MILLIS).random().milliseconds)
-                  callRandomProxyPath(client, args.proxyPort, pathMap, "Parallel $cnt")
-                  counter += 1
-                }
+      logger.debug { "Finished starting ${args.httpServerCount} httpServers" }
+
+      // Create the paths
+      logger.debug { "Registering paths" }
+      repeat(args.pathCount) { i ->
+        val index = httpServers.size.random()
+        args.agent.pathManager.registerPath("proxy-$i", "${args.startPort + index}/agent-$index".withPrefix())
+        pathMap[i] = index
+      }
+
+      args.agent.grpcService.pathMapSize() shouldBe originalSize + args.pathCount
+
+      val proxyCallTimeout = args.proxyCallTimeoutSecs.seconds
+
+      // Call the proxy sequentially
+      logger.info { "Calling proxy sequentially ${args.sequentialQueryCount} times (timeout=$proxyCallTimeout)" }
+      newSingleThreadContext("test-single")
+        .use { dispatcher ->
+          withTimeout(proxyCallTimeout) {
+            httpClient { client ->
+              val counter = AtomicInt(0)
+              repeat(args.sequentialQueryCount) { cnt ->
+                val job =
+                  this@withTimeout.launch(dispatcher + exceptionHandler(logger)) {
+                    callRandomProxyPath(client, args.proxyPort, pathMap, "Sequential $cnt")
+                    counter += 1
+                  }
+
+                job.join()
+                job.getCancellationException().cause.shouldBeNull()
               }
 
-            jobs.forEach { job ->
-              job.join()
-              job.getCancellationException().cause.shouldBeNull()
+              counter.load() shouldBe args.sequentialQueryCount
             }
+          }
+        }
 
-            counter.load() shouldBe args.parallelQueryCount
+      // Call the proxy in parallel
+      logger.info { "Calling proxy in parallel ${args.parallelQueryCount} times (timeout=$proxyCallTimeout)" }
+      newFixedThreadPoolContext(5, "test-multi")
+        .use { dispatcher ->
+          withTimeout(proxyCallTimeout) {
+            httpClient { client ->
+              val counter = AtomicInt(0)
+              val jobs =
+                List(args.parallelQueryCount) { cnt ->
+                  this@withTimeout.launch(dispatcher + exceptionHandler(logger)) {
+                    delay((MIN_DELAY_MILLIS..MAX_DELAY_MILLIS).random().milliseconds)
+                    callRandomProxyPath(client, args.proxyPort, pathMap, "Parallel $cnt")
+                    counter += 1
+                  }
+                }
+
+              jobs.forEach { job ->
+                job.join()
+                job.getCancellationException().cause.shouldBeNull()
+              }
+
+              counter.load() shouldBe args.parallelQueryCount
+            }
+          }
+        }
+
+      logger.debug { "Unregistering paths" }
+      val counter = AtomicInt(0)
+      val errorCnt = AtomicInt(0)
+      pathMap.forEach { path ->
+        try {
+          args.agent.pathManager.unregisterPath("proxy-${path.key}")
+          counter += 1
+        } catch (_: RequestFailureException) {
+          errorCnt += 1
+        }
+      }
+
+      counter.load() shouldBe pathMap.size
+      errorCnt.load() shouldBe 0
+      args.agent.grpcService.pathMapSize() shouldBe originalSize
+    } finally {
+      logger.info { "Shutting down ${httpServers.size} httpServers" }
+      // NonCancellable: a withTimeout expiry is one of the failures this cleanup has to survive.
+      withContext(NonCancellable) {
+        httpServers.forEach { httpServer ->
+          launch(Dispatchers.IO + exceptionHandler(logger)) {
+            logger.info { "Shutting down httpServer listening on ${httpServer.port}" }
+            httpServer.server.stop(SERVER_STOP_GRACE_MS, SERVER_STOP_TIMEOUT_MS)
           }
         }
       }
-
-    logger.debug { "Unregistering paths" }
-    val counter = AtomicInt(0)
-    val errorCnt = AtomicInt(0)
-    pathMap.forEach { path ->
-      try {
-        args.agent.pathManager.unregisterPath("proxy-${path.key}")
-        counter += 1
-      } catch (_: RequestFailureException) {
-        errorCnt += 1
-      }
+      logger.info { "Finished shutting down ${httpServers.size} httpServers" }
     }
-
-    counter.load() shouldBe pathMap.size
-    errorCnt.load() shouldBe 0
-    args.agent.grpcService.pathMapSize() shouldBe originalSize
-
-    logger.info { "Shutting down ${httpServers.size} httpServers" }
-    coroutineScope {
-      httpServers.forEach { httpServer ->
-        launch(Dispatchers.IO + exceptionHandler(logger)) {
-          logger.info { "Shutting down httpServer listening on ${httpServer.port}" }
-          httpServer.server.stop(SERVER_STOP_GRACE_MS, SERVER_STOP_TIMEOUT_MS)
-        }
-      }
-    }
-    logger.info { "Finished shutting down ${httpServers.size} httpServers" }
   }
 
   private suspend fun callRandomProxyPath(

@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — Late September 2026 Findings
 
-**Status:** 31 issues — 18 fixed, 13 open (open: 0 high · 1 medium · 12 low) — fixed: #1–#13, #17, #18, #21, #30, #31
+**Status:** 31 issues — 21 fixed, 10 open (open: 0 high · 0 medium · 10 low) — fixed: #1–#13, #17, #18, #21, #24, #25, #28, #30, #31
 
 **Date:** 2026-09-22
 
@@ -53,11 +53,11 @@ gate (#17).
 | 21 | Scrape outcome labels in the docs don't match the code                          | Docs     | medium   | ✅      |
 | 22 | `KDOC_SUMMARY.md` Dokka section is stale                                        | Docs     | low      | ⬜      |
 | 23 | Smaller documentation drift                                                     | Docs     | low      | ⬜      |
-| 24 | `AgentBacklogDriftTest` tests its own copy of the logic, not the product        | Tests    | medium   | ⬜      |
-| 25 | Tests whose assertions don't match their names                                  | Tests    | low      | ⬜      |
+| 24 | `AgentBacklogDriftTest` tests its own copy of the logic, not the product        | Tests    | medium   | ✅      |
+| 25 | Tests whose assertions don't match their names                                  | Tests    | low      | ✅      |
 | 26 | Real-clock waits remain in `HttpClientCacheTest` and `AgentContextTest`         | Tests    | low      | ⬜      |
 | 27 | Harness binds hard-coded port 9900 outside `TestPorts`; `awaitPortReady` warns  | Tests    | low      | ⬜      |
-| 28 | Test resource leaks: `proxyCallTest` servers and unstopped `Agent`s             | Tests    | low      | ⬜      |
+| 28 | Test resource leaks: `proxyCallTest` servers and unstopped `Agent`s             | Tests    | low      | ✅      |
 | 29 | `prom/prometheus:latest` unpinned in the container suite                        | Tests    | low      | ⬜      |
 | 30 | Untested: retryable discovered rejection in backoff retried on URL/label change | Tests    | low      | ✅      |
 | 31 | Harness binds test ports inside the Linux ephemeral range; CI bind flake        | Tests    | low      | ✅      |
@@ -79,7 +79,7 @@ then the items that change what operators see, then hardening, and leaves tidy-u
 | 6 ✅  | #2                   | Strip protobuf from the forwarded `Accept` header          | Silent data corruption for native-histogram users; a small agent change plus a documented limitation.                            |
 | 7 ✅  | #7, #8, #4           | Config and input validation                                | Startup `require`s and path normalization; low risk, each with a unit test.                                                      |
 | 8 ✅  | #3                   | Log discovery warnings once                                | Follows the #267/#270 pattern already in the codebase.                                                                           |
-| 9    | #24, #25, #28        | Tests that test the product and clean up after themselves  | Removes false confidence before the next refactor.                                                                               |
+| 9 ✅  | #24, #25, #28        | Tests that test the product and clean up after themselves  | Removes false confidence before the next refactor.                                                                               |
 | 10   | #27, ~~#31~~, #26, #29 | Deterministic, collision-free test infrastructure          | Flake prevention; `TestPortsTest` then guards the harness port.                                                                  |
 | 11   | #14, #15             | Per-identity path caps; defer context creation until auth  | Needs new config keys and a design choice, so it follows the quick hardening in step 5.                                          |
 | 12   | #16, #19, #20        | Dependency and build hygiene                               | Remove Jetty 11 after the admin-servlet tests pass without it; extend Dependabot; tidy the Makefile and build.                   |
@@ -579,7 +579,7 @@ counts them, explain that `upstream_error` is always the target's own status, an
 
 ## 🧪 Tests
 
-### 24. [ ] `AgentBacklogDriftTest` tests its own copy of the logic, not the product
+### 24. [x] `AgentBacklogDriftTest` tests its own copy of the logic, not the product
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -594,7 +594,13 @@ agent-side `readRequestsFromProxy` has no other test, so deleting the production
 **Fix:** drive the real `readRequestsFromProxy` with a mocked stub flow and a closed `AgentConnectionContext`,
 and assert the backlog returns to its prior value.
 
-### 25. [ ] Tests whose assertions don't match their names
+**Resolution:** `AgentBacklogDriftTest` was rewritten to drive the real `readRequestsFromProxy` on a real `Agent`,
+with only `grpcService.grpcStub` replaced by a mock streaming the requests. One test checks each forwarded request is
+counted; the other forwards onto a closed `AgentConnectionContext` and checks the `ClosedSendChannelException`
+propagates and the backlog returns to 0. Deleting the production `decrementBacklog(1)` makes the second fail. The
+agents it builds are released after each test.
+
+### 25. [x] Tests whose assertions don't match their names
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -609,6 +615,18 @@ and assert the backlog returns to its prior value.
 
 **Fix:** assert what each name claims, or rename.
 
+**Resolution:** each now asserts what its name claims.
+- The close test checks the cache refuses a new client with "closed".
+- `AgentContext` gained an injectable `clock` (default `Monotonic`) and an `internal` `lastRequestDuration`, so its three
+  activity tests assert exact durations on a `TestTimeSource`. The "isRequest false" test fails if a mark also resets
+  the request time, which the old version didn't check.
+- The `equals` test gives a second context the first's `agentId` by reflection (a spy fails the `javaClass` check), since
+  no two real contexts share one.
+- The retry-loop test turns the backoff off, advances a test clock by the loop's interval each pass, and counts register
+  calls.
+
+The `ProxyHttpRoutesTest` item was fixed with #5.
+
 ### 26. [ ] Real-clock waits remain in `HttpClientCacheTest` and `AgentContextTest`
 
 **Severity:** low · **Confidence:** confirmed (flakiness suspected, not observed)
@@ -621,6 +639,9 @@ and assert a real 50–100 ms sweeper ran. `AgentContextTest.kt:486` asserts `in
 `Thread.sleep(100)`, which a GC or CI stall fails.
 
 **Fix:** inject `TestTimeSource` into the rest; replace sweep sleeps with `eventually` or a signal.
+
+**Progress:** the `AgentContextTest` half is done with #25: `AgentContext` takes an injectable clock and its activity
+tests no longer sleep. The `HttpClientCacheTest` sleeps remain.
 
 ### 27. [ ] Harness binds hard-coded port 9900 outside `TestPorts`; `awaitPortReady` warns
 
@@ -637,7 +658,7 @@ specs. `awaitPortReady` only logs on timeout, while its sibling `awaitPortFree` 
 **Fix:** move 9900 into `TestPorts` (or per spec), make `awaitPortReady` throw, and point the web-ui config at a
 reserved constant or `http://unserved.invalid/metrics`.
 
-### 28. [ ] Test resource leaks: `proxyCallTest` servers and unstopped `Agent`s
+### 28. [x] Test resource leaks: `proxyCallTest` servers and unstopped `Agent`s
 
 **Severity:** low · **Confidence:** confirmed (servers); likely (agent channels)
 
@@ -649,6 +670,12 @@ leaves them bound for the rest of the JVM. Each unstopped `Agent` leaks a `Manag
 
 **Fix:** wrap `proxyCallTest`'s body in `try/finally`; have `createTestAgent` register instances for a shared
 `afterTest` cleanup.
+
+**Resolution:** `proxyCallTest` now starts, exercises, and checks inside `try` and stops its servers in a `finally`
+under `NonCancellable`, since a `withTimeout` expiry is one of the failures it must survive. This was checked by review
+and by the harness specs passing, not by injecting a failure. `AgentTest.createTestAgent` records each agent, and an
+`afterTest` releases its gRPC channel and HTTP client cache (in `runCatching`, since some tests stop their agent
+themselves). `AgentBacklogDriftTest`'s agents are released the same way (#24).
 
 ### 29. [ ] `prom/prometheus:latest` unpinned in the container suite
 

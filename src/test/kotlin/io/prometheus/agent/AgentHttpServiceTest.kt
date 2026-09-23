@@ -19,6 +19,7 @@
 package io.prometheus.agent
 
 import io.kotest.assertions.fail
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
@@ -299,12 +300,16 @@ class AgentHttpServiceTest : StringSpec() {
 
     // ==================== Close Tests ====================
 
+    // A closed cache refuses new clients, which is how an agent stopped mid-scrape avoids opening one it would leak.
     "close should close httpClientCache" {
       val mockAgent = createMockAgent()
       val service = AgentHttpService(mockAgent)
 
-      // Should not throw
       service.close()
+
+      shouldThrow<IllegalStateException> {
+        service.httpClientCache.getOrCreateClient(HttpClientCache.ClientKey(null, null)) { mockk(relaxed = true) }
+      }.message shouldContain "closed"
     }
 
     // ==================== HttpClientCache Tests ====================

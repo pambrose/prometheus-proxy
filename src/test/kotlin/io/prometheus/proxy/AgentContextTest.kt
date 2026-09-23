@@ -30,12 +30,14 @@ import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
 import io.ktor.http.HttpStatusCode
 import io.mockk.every
+import kotlin.time.TestTimeSource
 import io.mockk.mockk
 import io.mockk.verify
 import io.prometheus.grpc.RegisterAgentRequest
 import java.time.Instant
 import kotlinx.coroutines.async
 import kotlin.concurrent.atomics.AtomicBoolean
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 class AgentContextTest : StringSpec() {
@@ -374,26 +376,35 @@ class AgentContextTest : StringSpec() {
 
     // ==================== Activity Time Tests ====================
 
-    "markActivityTime should update inactivity duration" {
-      val context = AgentContext("remote-addr")
+    // A test clock rather than sleeps: the inactivity duration is exactly what the clock has advanced, so these assert
+    // values instead of "different from before", which a real clock satisfies by construction.
+    "markActivityTime should reset the inactivity duration" {
+      val clock = TestTimeSource()
+      val context = AgentContext("remote-addr", clock = clock)
 
-      Thread.sleep(50)
-      val durationBefore = context.inactivityDuration
+      clock += 10.seconds
+      context.inactivityDuration shouldBe 10.seconds
 
       context.markActivityTime(true)
-      val durationAfter = context.inactivityDuration
-
-      durationAfter shouldNotBe durationBefore
+      context.inactivityDuration shouldBe Duration.ZERO
     }
 
     // ==================== Equality Tests ====================
 
+    // Two distinct contexts never share an agentId, so giving a second context the first's id is the only way to show
+    // equality follows the id rather than identity.
     "equals should be based on agentId" {
       val context1 = AgentContext("remote1")
-      val context2 = AgentContext("remote2")
+      val sameId =
+        AgentContext("remote2").also { context ->
+          AgentContext::class.java.getDeclaredField("agentId").apply {
+            isAccessible = true
+          }.set(context, context1.agentId)
+        }
 
-      context1 shouldNotBe context2
-      context1 shouldBe context1
+      (context1 == sameId) shouldBe true
+      context1.hashCode() shouldBe sameId.hashCode()
+      context1 shouldNotBe AgentContext("remote3")
     }
 
     "hashCode should be based on agentId" {
@@ -436,17 +447,15 @@ class AgentContextTest : StringSpec() {
 
     // ==================== markActivityTime Branch Tests ====================
 
-    "markActivityTime with isRequest false should update inactivity but not request time" {
-      val context = AgentContext("remote-addr")
-
-      Thread.sleep(50)
-      val inactivityBefore = context.inactivityDuration
+    "markActivityTime with isRequest false should reset inactivity but not the request time" {
+      val clock = TestTimeSource()
+      val context = AgentContext("remote-addr", clock = clock)
+      clock += 10.seconds
 
       context.markActivityTime(false)
-      val inactivityAfter = context.inactivityDuration
 
-      // Inactivity duration should have reset (become shorter)
-      (inactivityAfter < inactivityBefore) shouldBe true
+      context.inactivityDuration shouldBe Duration.ZERO
+      context.lastRequestDuration shouldBe 10.seconds
     }
 
     // ==================== Equality Edge Case Tests ====================
@@ -474,17 +483,15 @@ class AgentContextTest : StringSpec() {
     // L6: markActivityTime should use a single clock.markNow() so both timestamps
     // are consistent. Before the fix, two separate markNow() calls could drift.
     "markActivityTime with isRequest true should keep both timestamps consistent" {
-      val context = AgentContext("remote-addr")
+      val clock = TestTimeSource()
+      val context = AgentContext("remote-addr", clock = clock)
+      clock += 10.seconds
 
-      Thread.sleep(100)
       context.markActivityTime(true)
+      clock += 3.seconds
 
-      // Both inactivityDuration and lastRequestDuration (accessed via toString)
-      // should be very close to zero since we just marked activity.
-      // The key invariant: inactivityDuration should not be significantly different
-      // from what lastRequestDuration would be, since both were set from the same markNow().
-      val inactivity = context.inactivityDuration
-      inactivity.inWholeMilliseconds shouldBeLessThan 50L
+      context.inactivityDuration shouldBe 3.seconds
+      context.lastRequestDuration shouldBe 3.seconds
     }
 
     // ==================== Fields the operational dashboard reads ====================

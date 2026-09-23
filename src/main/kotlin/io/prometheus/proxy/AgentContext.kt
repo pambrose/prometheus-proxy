@@ -34,6 +34,7 @@ import kotlin.concurrent.atomics.AtomicLong
 import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.concurrent.atomics.minusAssign
 import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 import kotlin.time.TimeSource.Monotonic
 
 /**
@@ -58,6 +59,9 @@ internal class AgentContext(
   // where there is no transport-assigned agentId to bind later calls to. Empty when unbound -- auth disabled,
   // or a context created by the transport filter. Identity names are never empty, so "" can't collide.
   val authIdentityName: String = "",
+  // Where activity and request times are measured; injectable so tests advance time instead of sleeping, as
+  // HttpClientCache and AgentPathManager do.
+  private val clock: TimeSource = Monotonic,
 ) {
   val agentId = AGENT_ID_GENERATOR.incrementAndFetch().toString()
 
@@ -71,8 +75,6 @@ internal class AgentContext(
   // The rejection cause this connection was last told for each path; see ProxyPathManager.rejectPath. Dies with
   // the connection, so a reconnect is told afresh.
   private val loggedPathRejections = ConcurrentHashMap<String, PathRejectionCause>()
-
-  private val clock = Monotonic
 
   /**
    * Wall-clock instant this context was created, i.e. when the agent connected.
@@ -112,7 +114,7 @@ internal class AgentContext(
   internal val desc: String
     get() = if (consolidated) "consolidated " else ""
 
-  private val lastRequestDuration
+  internal val lastRequestDuration
     get() = lastRequestTimeMark.elapsedNow()
 
   val inactivityDuration
