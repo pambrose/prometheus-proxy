@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file.
 
 ---
 
-## [4.1.0] - 2026-09-22
+## [4.1.0] - 2026-09-23
 
 ### Security
 

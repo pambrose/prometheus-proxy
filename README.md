@@ -36,7 +36,7 @@ behind a firewall and preserves the native pull-based model architecture.
 
 ## ✨ New Features
 
-Version 4.1.0 (released 2026-09-22) is a security and reliability release: agents can no longer answer,
+Version 4.1.0 (released 2026-09-23) is a security and reliability release: agents can no longer answer,
 read, or take over each other's scrapes and paths, a rejected path no longer takes an agent offline and a
 rejecting proxy is now failed over, and the proxy bounds what clients and agents can ask of it (scrape backlogs,
 in-flight scrapes, paths per agent, redirects, and service-discovery labels). It changes some defaults, scrape
