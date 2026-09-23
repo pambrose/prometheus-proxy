@@ -100,7 +100,6 @@ dependencies {
   // version grpc is tested with (see libs.versions.toml); runtimeOnly because nothing references it at compile time.
   runtimeOnly(libs.netty.tcnative)
 
-  implementation(libs.jetty.servlet)
   implementation(libs.annotation.api)
   implementation(libs.jcommander)
   implementation(libs.typesafe.config)

@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — Late September 2026 Findings
 
-**Status:** 31 issues — 24 fixed, 7 open (open: 0 high · 0 medium · 7 low) — fixed: #1–#13, #17, #18, #21, #24–#31
+**Status:** 31 issues — 27 fixed, 4 open (open: 0 high · 0 medium · 4 low) — fixed: #1–#13, #16–#21, #24–#31
 
 **Date:** 2026-09-22
 
@@ -45,11 +45,11 @@ gate (#17).
 | 13 | Raw target URL (credentials included) logged at DEBUG on every scrape           | Security | low      | ✅      |
 | 14 | No cap on paths per agent/identity, path length, or labels size                 | Security | low      | ⬜      |
 | 15 | Unauthenticated connections create agent contexts and dashboard events          | Security | low      | ⬜      |
-| 16 | Unused, out-of-support Jetty 11 `jetty-servlet` ships in the fat JARs           | Security | low      | ⬜      |
+| 16 | Unused, out-of-support Jetty 11 `jetty-servlet` ships in the fat JARs           | Security | low      | ✅      |
 | 17 | PRs (incl. Dependabot) merge with no build or tests                             | CI/build | medium   | ✅      |
 | 18 | SLF4J 2.0.20 bump not recorded in CHANGELOG / RELEASE_NOTES                     | CI/build | low      | ✅      |
-| 19 | mkdocs-material unpinned locally; Dependabot misses uv and Docker images        | CI/build | low      | ⬜      |
-| 20 | Minor build tidy-ups                                                            | CI/build | low      | ⬜      |
+| 19 | mkdocs-material unpinned locally; Dependabot misses uv and Docker images        | CI/build | low      | ✅      |
+| 20 | Minor build tidy-ups                                                            | CI/build | low      | ✅      |
 | 21 | Scrape outcome labels in the docs don't match the code                          | Docs     | medium   | ✅      |
 | 22 | `KDOC_SUMMARY.md` Dokka section is stale                                        | Docs     | low      | ⬜      |
 | 23 | Smaller documentation drift                                                     | Docs     | low      | ⬜      |
@@ -82,7 +82,7 @@ then the items that change what operators see, then hardening, and leaves tidy-u
 | 9 ✅  | #24, #25, #28        | Tests that test the product and clean up after themselves  | Removes false confidence before the next refactor.                                                                               |
 | 10 ✅ | #27, ~~#31~~, #26, #29 | Deterministic, collision-free test infrastructure          | Flake prevention; `TestPortsTest` then guards the harness port.                                                                  |
 | 11   | #14, #15             | Per-identity path caps; defer context creation until auth  | Needs new config keys and a design choice, so it follows the quick hardening in step 5.                                          |
-| 12   | #16, #19, #20        | Dependency and build hygiene                               | Remove Jetty 11 after the admin-servlet tests pass without it; extend Dependabot; tidy the Makefile and build.                   |
+| 12 ✅ | #16, #19, #20        | Dependency and build hygiene                               | Remove Jetty 11 after the admin-servlet tests pass without it; extend Dependabot; tidy the Makefile and build.                   |
 | 13   | #22, #23             | Documentation drift                                        | No behavior change; can ride along with any earlier PR that touches the same file.                                               |
 
 ---
@@ -439,7 +439,7 @@ default.
 **Fix:** create the context (or at least emit the event and count it) on the first authenticated call; consider
 a default `maxConnectionIdle` or a connection cap; document the remaining gap.
 
-### 16. [ ] Unused, out-of-support Jetty 11 `jetty-servlet` ships in the fat JARs
+### 16. [x] Unused, out-of-support Jetty 11 `jetty-servlet` ships in the fat JARs
 
 **Severity:** low · **Confidence:** confirmed that `src/` has no Jetty import; removal still needs a build and the
 admin-servlet tests to confirm nothing transitive depends on it
@@ -452,6 +452,10 @@ community security releases and will be flagged by scanners. Separately, `io.pro
 the final release of the legacy client — worth tracking.
 
 **Fix:** remove the dependency and version entry, then run the admin/metrics tests and a fat-JAR smoke run.
+
+**Resolution:** removed from `build.gradle.kts` and the version catalog. The runtime classpath now holds only Jetty
+12.1.13, the admin, metrics, and health-check specs (34 tests) pass, and the fat JARs no longer contain
+`org/eclipse/jetty/servlet/`. `simpleclient` 0.16.0 is noted, not replaced.
 
 ---
 
@@ -491,7 +495,7 @@ gating a PR is accurate again and is unchanged. `CHANGELOG.md` and `RELEASE_NOTE
 
 **Resolution:** both logs now read SLF4J 2.0.18 → 2.0.20.
 
-### 19. [ ] mkdocs-material unpinned locally; Dependabot misses uv and Docker images
+### 19. [x] mkdocs-material unpinned locally; Dependabot misses uv and Docker images
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -506,7 +510,15 @@ gating a PR is accurate again and is unchanged. `CHANGELOG.md` and `RELEASE_NOTE
 **Fix:** add `mkdocs-material` to `website/pyproject.toml` so `uv.lock` pins it and drop `--with` in both places;
 add `docker` entries for `/etc/docker` and `/nginx/docker`, and a `uv` entry for `/website`.
 
-### 20. [ ] Minor build tidy-ups
+**Resolution:** `mkdocs-material==9.7.7` is in `website/pyproject.toml`'s dev group and `uv.lock` (re-locked without
+`--upgrade`, so only it and its dependencies were added). `make site` and `docs.yml` dropped `--with`, and the site
+builds cleanly from the lock. `mkdocs-material` is needed for `zensical.toml`'s `material.extensions.emoji`. Dependabot
+gains a `uv` entry for `/website` and a `docker` entry for `/nginx/docker`. `/etc/docker` was not added: Dependabot only
+recognizes files named `Dockerfile`, `*.Dockerfile`, or `Dockerfile.*`, so `agent.df` and `proxy.df` would need
+renaming, which touches the Makefile, container tests, scripts, and docs. Their digest-pinned bases stay manual, as
+the comment in each file already says.
+
+### 20. [x] Minor build tidy-ups
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -519,6 +531,18 @@ add `docker` entries for `/etc/docker` and `/nginx/docker`, and a `uv` entry for
 - `website/pyproject.toml` — placeholder `description` and a `readme` that doesn't exist.
 - `config/jars/tscfg-1.2.5.jar` — 9 MB, the largest tracked file; could be fetched on demand by `make tsconfig`
   (optional).
+
+**Resolution:**
+- `make build`, `tibuild`, and `jars` no longer run `generateProto`; `make stubs` still does.
+- `testing/start-prometheus.sh` quotes the mount and pins `prom/prometheus:v3.14.0`.
+- `website/pyproject.toml` has a real description and no nonexistent readme.
+
+Two items were left as they are, since neither was wrong:
+- **Detekt baseline:** its path is where `make detekt-baseline` writes one, so the missing file is expected.
+- **`koverLog` on `check`:** `CLAUDE.md` documents it as a console summary of every check run, and `build -x test`
+  printing a stale line is the lesser cost.
+
+The tscfg JAR stays tracked, so `make tsconfig` keeps working offline.
 
 ---
 

@@ -1,4 +1,5 @@
-# Keeps the workflow actions and the Gradle version catalog current. Actions are pinned to commit SHAs with the
+# Keeps the workflow actions, the Gradle version catalog, the docs site's Python lock, and the nginx example image
+# current. Actions are pinned to commit SHAs with the
 # version in a trailing comment; Dependabot updates the SHA and the comment together. Updates are grouped per
 # ecosystem so a routine week produces one PR each rather than one per dependency.
 version: 2
@@ -33,3 +34,20 @@ updates:
       # netty-tcnative follows grpc-java, not tcnative's own releases: it stays at the version grpc is built and tested
       # with, and is updated together with grpc.
       - dependency-name: "io.netty:netty-tcnative*"
+
+  # The docs site's Python dependencies (website/pyproject.toml and uv.lock), including the mkdocs-material pin.
+  - package-ecosystem: uv
+    directory: /website
+    schedule:
+      interval: weekly
+    groups:
+      docs-site:
+        patterns: ["*"]
+
+  # The nginx reverse-proxy example. The proxy and agent images (etc/docker/*.df) aren't covered: Dependabot only
+  # recognizes files named Dockerfile, *.Dockerfile, or Dockerfile.*, so their digest-pinned base is bumped by hand,
+  # as the comment in each file describes.
+  - package-ecosystem: docker
+    directory: /nginx/docker
+    schedule:
+      interval: weekly
