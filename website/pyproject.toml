@@ -7,7 +7,7 @@ dependencies = []
 
 [dependency-groups]
 dev = [
-    "zensical>=0.0.31",
+    "zensical>=0.0.63",
     # zensical.toml's pymdownx.emoji uses material.extensions.emoji, which ships in mkdocs-material. Pinned here, so
     # uv.lock holds it for both `make site` and CI's docs build, and Dependabot's uv updates move it.
     "mkdocs-material==9.7.7",
