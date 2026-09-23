@@ -242,8 +242,8 @@ docker-push: _require-version jars  ## Build and push multi-arch agent/proxy ima
 	esac
 	# prepare multiarch
 	docker buildx use buildx 2>/dev/null || docker buildx create --use --name=buildx
-	docker buildx build --platform $(PLATFORMS) -f ./etc/docker/proxy.df --push -t $(IMAGE_PREFIX)-proxy:latest -t $(IMAGE_PREFIX)-proxy:$(VERSION) .
-	docker buildx build --platform $(PLATFORMS) -f ./etc/docker/agent.df --push -t $(IMAGE_PREFIX)-agent:latest -t $(IMAGE_PREFIX)-agent:$(VERSION) .
+	docker buildx build --platform $(PLATFORMS) -f ./etc/docker/proxy.Dockerfile --push -t $(IMAGE_PREFIX)-proxy:latest -t $(IMAGE_PREFIX)-proxy:$(VERSION) .
+	docker buildx build --platform $(PLATFORMS) -f ./etc/docker/agent.Dockerfile --push -t $(IMAGE_PREFIX)-agent:latest -t $(IMAGE_PREFIX)-agent:$(VERSION) .
 
 release: distro docker-push  ## Build distro and push docker images
 
