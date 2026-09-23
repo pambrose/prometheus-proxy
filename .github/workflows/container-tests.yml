@@ -1,7 +1,7 @@
 name: Container Tests
 
 # Runs the full Testcontainers end-to-end suite (io.prometheus.containers.*): builds the
-# proxy/agent images from etc/docker/*.df and exercises the Prometheus -> proxy -> agent ->
+# proxy/agent images from etc/docker/*.Dockerfile and exercises the Prometheus -> proxy -> agent ->
 # endpoint scrape path across smoke, HTTP-surface, consolidated, large-payload, reconnect,
 # agent-token-auth, TLS/HTTPS, and parameter-driven scaling specs. The scaling spec runs its
 # small default table here (no SCALE_* overrides). Runs on push to master and on demand. No

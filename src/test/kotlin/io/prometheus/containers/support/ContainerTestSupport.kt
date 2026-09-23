@@ -101,13 +101,13 @@ object ContainerTestSupport {
   // them on the rare occasion a cold rebuild is wanted.
   val proxyImage: ImageFromDockerfile by lazy {
     ImageFromDockerfile(PROXY_TEST_IMAGE, false)
-      .withFileFromPath("Dockerfile", Path.of("etc/docker/proxy.df"))
+      .withFileFromPath("Dockerfile", Path.of("etc/docker/proxy.Dockerfile"))
       .withFileFromPath("build/libs/prometheus-proxy.jar", Path.of("build/libs/prometheus-proxy.jar"))
   }
 
   val agentImage: ImageFromDockerfile by lazy {
     ImageFromDockerfile(AGENT_TEST_IMAGE, false)
-      .withFileFromPath("Dockerfile", Path.of("etc/docker/agent.df"))
+      .withFileFromPath("Dockerfile", Path.of("etc/docker/agent.Dockerfile"))
       .withFileFromPath("build/libs/prometheus-agent.jar", Path.of("build/libs/prometheus-agent.jar"))
   }
 

@@ -1,5 +1,5 @@
-# Pinned by digest for reproducible builds (tag kept for readability). Bump the digest periodically
-# to pick up base-image security patches: docker buildx imagetools inspect eclipse-temurin:25-jre
+# Pinned by digest for reproducible builds (tag kept for readability). Dependabot bumps the digest to pick up
+# base-image security patches; to check it by hand: docker buildx imagetools inspect eclipse-temurin:25-jre
 # eclipse-temurin (Ubuntu-based) publishes amd64, arm64, s390x, and ppc64le manifests, so the full
 # multi-arch `make docker-push` platform set resolves; Alpine JRE images cover only amd64/arm64.
 # Java 25 (LTS) runtime; the fat JAR is Java 17 bytecode, which runs unchanged on the newer JRE.

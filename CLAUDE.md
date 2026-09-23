@@ -109,7 +109,7 @@ Integration tests in `src/test/kotlin/io/prometheus/harness/`:
 - `TlsNoMutualAuthTest` / `TlsWithMutualAuthTest` — TLS communication tests
 - `support/HarnessSetup.kt` — base class that sets up proxy+agent in test mode
 
-Container tests in `src/test/kotlin/io/prometheus/containers/` — a full Testcontainers suite that builds the proxy and agent images from `etc/docker/*.df`, stands them up alongside an `nginx:1.29-alpine` metrics stub and a `prom/prometheus:v3.14.0` container, and verifies the full Prometheus → proxy → agent → endpoint scrape path. Shared container/network/HTTP/PromQL factories live in `support/ContainerTestSupport.kt`; `ls` that directory
+Container tests in `src/test/kotlin/io/prometheus/containers/` — a full Testcontainers suite that builds the proxy and agent images from `etc/docker/*.Dockerfile`, stands them up alongside an `nginx:1.29-alpine` metrics stub and a `prom/prometheus:v3.14.0` container, and verifies the full Prometheus → proxy → agent → endpoint scrape path. Shared container/network/HTTP/PromQL factories live in `support/ContainerTestSupport.kt`; `ls` that directory
 for the current spec list.
 
 All container specs require Docker and are gated on `RUN_CONTAINER_TESTS=true` (set automatically by `make container-tests` / `make scaling-tests`). Default `./gradlew test` registers placeholders marked SKIPPED.

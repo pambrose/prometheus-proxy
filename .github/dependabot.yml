@@ -1,4 +1,4 @@
-# Keeps the workflow actions, the Gradle version catalog, the docs site's Python lock, and the nginx example image
+# Keeps the workflow actions, the Gradle version catalog, the docs site's Python lock, and the Docker base images
 # current. Actions are pinned to commit SHAs with the
 # version in a trailing comment; Dependabot updates the SHA and the comment together. Updates are grouped per
 # ecosystem so a routine week produces one PR each rather than one per dependency.
@@ -44,9 +44,18 @@ updates:
       docs-site:
         patterns: ["*"]
 
-  # The nginx reverse-proxy example. The proxy and agent images (etc/docker/*.df) aren't covered: Dependabot only
-  # recognizes files named Dockerfile, *.Dockerfile, or Dockerfile.*, so their digest-pinned base is bumped by hand,
-  # as the comment in each file describes.
+  # The proxy and agent images' digest-pinned eclipse-temurin base. Dependabot bumps the digest (and the tag, within
+  # the Java 25 line) so base-image security patches arrive as a PR.
+  - package-ecosystem: docker
+    directory: /etc/docker
+    schedule:
+      interval: weekly
+    ignore:
+      # The images ship Java 25, the LTS the tests run on; moving to another Java line is a deliberate change.
+      - dependency-name: "eclipse-temurin"
+        update-types: ["version-update:semver-major"]
+
+  # The nginx reverse-proxy example.
   - package-ecosystem: docker
     directory: /nginx/docker
     schedule:
