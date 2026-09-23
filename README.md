@@ -36,6 +36,13 @@ behind a firewall and preserves the native pull-based model architecture.
 
 ## ✨ New Features
 
+Version 4.1.0 (released 2026-09-23) is a security and reliability release: agents can no longer answer,
+read, or take over each other's scrapes and paths, a rejected path no longer takes an agent offline and a
+rejecting proxy is now failed over, and the proxy bounds what clients and agents can ask of it (scrape backlogs,
+in-flight scrapes, paths per agent, redirects, and service-discovery labels). It changes some defaults, scrape
+outcome labels, and startup checks, so read **Before you upgrade** in the
+[release notes](RELEASE_NOTES.md) first; the [changelog](CHANGELOG.md) has the full list.
+
 Version 4.0.1 (released 2026-07-31) is a dashboard patch release: agents are now identified by name
 rather than internal id in the path layout, 29 WCAG AA contrast failures are fixed (measured floor
 4.59:1), and the page is usable with a screen reader — see the
@@ -175,12 +182,12 @@ If you prefer to build the project from source:
 
 ```bash
 # Start proxy
-docker run --rm -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.0.1
+docker run --rm -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.1.0
 
 # Start agent
 docker run --rm \
   --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-  pambrose/prometheus-agent:4.0.1
+  pambrose/prometheus-agent:4.1.0
 ```
 
 ## 📋 Configuration Examples
@@ -262,8 +269,8 @@ scrape_configs:
 The docker images support multiple architectures (amd64, arm64, s390x, ppc64le):
 
 ```bash
-docker pull pambrose/prometheus-proxy:4.0.1
-docker pull pambrose/prometheus-agent:4.0.1
+docker pull pambrose/prometheus-proxy:4.1.0
+docker pull pambrose/prometheus-agent:4.1.0
 ```
 
 ### Production Docker Setup
@@ -276,7 +283,7 @@ docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
         --env ADMIN_ENABLED=true \
         --env METRICS_ENABLED=true \
         --restart unless-stopped \
-        pambrose/prometheus-proxy:4.0.1
+        pambrose/prometheus-proxy:4.1.0
 ```
 
 Start an agent container with:
@@ -286,7 +293,7 @@ Start an agent container with:
 docker run --rm -p 8083:8083 -p 8093:8093 \
         --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
         --restart unless-stopped \
-        pambrose/prometheus-agent:4.0.1
+        pambrose/prometheus-agent:4.1.0
 ```
 
 Or use Docker Compose: [`etc/compose/proxy.yml`](etc/compose/proxy.yml) runs a proxy, an agent, and a Prometheus server
@@ -308,7 +315,7 @@ is in your current directory, run an agent container with:
 docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/prom-agent.conf,target=/app/prom-agent.conf \
     --env AGENT_CONFIG=prom-agent.conf \
-    pambrose/prometheus-agent:4.0.1
+    pambrose/prometheus-agent:4.1.0
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
@@ -738,7 +745,7 @@ docker run --rm -p 8082:8082 -p 8092:8092 -p 50440:50440 -p 8080:8080 \
     --env PROXY_CONFIG=tls-no-mutual-auth.conf \
     --env ADMIN_ENABLED=true \
     --env METRICS_ENABLED=true \
-    pambrose/prometheus-proxy:4.0.1
+    pambrose/prometheus-proxy:4.1.0
 
 docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
@@ -746,7 +753,7 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
     --env AGENT_CONFIG=tls-no-mutual-auth.conf \
     --env PROXY_HOSTNAME=mymachine.lan:50440 \
     --name docker-agent \
-    pambrose/prometheus-agent:4.0.1
+    pambrose/prometheus-agent:4.1.0
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
@@ -923,7 +930,7 @@ repositories {
 }
 
 dependencies {
-  implementation("com.pambrose:prometheus-proxy:4.0.1")
+  implementation("com.pambrose:prometheus-proxy:4.1.0")
 }
 ```
 

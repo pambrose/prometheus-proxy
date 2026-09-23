@@ -8,7 +8,7 @@
 
 services:
   proxy:
-    image: pambrose/prometheus-proxy:4.0.1
+    image: pambrose/prometheus-proxy:4.1.0
     ports:
       - "8080:8080"    # Scrape port, for Prometheus
       - "50051:50051"  # gRPC port, for agents
@@ -20,7 +20,7 @@ services:
     restart: unless-stopped
 
   agent:
-    image: pambrose/prometheus-agent:4.0.1
+    image: pambrose/prometheus-agent:4.1.0
     ports:
       - "8083:8083"    # Agent metrics
       - "8093:8093"    # Admin endpoints

@@ -15,7 +15,7 @@ Snapshot and Maven Central release Make targets (`publish-snapshot`, `publish-ma
 
 ## Bumping the version
 
-When bumping the version, update `version` in `gradle.properties` and every hard-coded `4.0.1` literal (`git grep -n` for the outgoing version):
+When bumping the version, update `version` in `gradle.properties` and every hard-coded `4.1.0` literal (`git grep -n` for the outgoing version):
 
 - `README.md` and `llms.txt` — Docker tag examples + Maven Central dependency block (README also gets a new release-summary paragraph at the top of **New Features**)
 - `etc/compose/proxy.yml` — proxy and agent image tags
