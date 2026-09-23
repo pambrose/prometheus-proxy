@@ -79,16 +79,29 @@ import kotlin.time.Duration.Companion.seconds
 import ch.qos.logback.classic.Logger as LogbackLogger
 
 class AgentTest : StringSpec() {
+  // Every agent createTestAgent builds, released after each test: an Agent opens a gRPC channel and an HTTP client
+  // cache on construction, and most of these tests never start or stop it, so each would otherwise leak both.
+  private val createdAgents = mutableListOf<Agent>()
+
   private fun createTestAgent(vararg extraArgs: String): Agent {
     val args = ["--proxy", "localhost:$PROXY_AGENT_PORT"] + extraArgs
     return Agent(
       options = agentOptions(args, exitOnMissingConfig = false),
       inProcessServerName = "agent-test-${System.nanoTime()}",
       testMode = true,
-    )
+    ).also { createdAgents += it }
   }
 
   init {
+    afterTest {
+      // runCatching: a test that started and stopped its agent has already released these.
+      createdAgents.forEach { agent ->
+        runCatching { agent.grpcService.shutDown() }
+        runCatching { agent.agentHttpService.close() }
+      }
+      createdAgents.clear()
+    }
+
     // ==================== Connection Task Tests ====================
 
     // A connection's tasks end together, or an idle readRequestsFromProxy collect holds a dead connection open. See

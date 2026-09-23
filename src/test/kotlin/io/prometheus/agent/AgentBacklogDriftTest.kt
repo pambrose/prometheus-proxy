@@ -14,73 +14,77 @@
  * limitations under the License.
  */
 
-@file:Suppress("TooGenericExceptionCaught", "SwallowedException")
+@file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
 
 package io.prometheus.agent
 
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
+import io.mockk.every
+import io.mockk.mockk
 import io.prometheus.Agent
 import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
-import kotlin.concurrent.atomics.minusAssign
-import kotlin.concurrent.atomics.plusAssign
 import io.prometheus.common.agentOptions
+import io.prometheus.grpc.ProxyServiceGrpcKt
+import io.prometheus.grpc.ScrapeRequest
+import io.prometheus.grpc.scrapeRequest
+import kotlinx.coroutines.channels.ClosedSendChannelException
+import kotlinx.coroutines.flow.flowOf
 
+// AgentGrpcService.readRequestsFromProxy counts each scrape request it forwards in the agent's backlog, and must give
+// the slot back when forwarding fails -- otherwise every request that arrives as the connection closes leaves the
+// backlog permanently higher, and the agent eventually reports itself unhealthy. These drive the real method on a real
+// Agent, so they count with the real scrapeRequestBacklogSize and decrementBacklog; only the gRPC stub is replaced.
 class AgentBacklogDriftTest : StringSpec() {
-  private fun createTestAgent(): Agent =
+  private val agents = mutableListOf<Agent>()
+
+  // A real Agent whose proxy stream delivers [requests].
+  private fun agentStreaming(vararg requests: ScrapeRequest): Agent =
     Agent(
       options = agentOptions(["--proxy", "localhost:$PROXY_AGENT_PORT"], exitOnMissingConfig = false),
       inProcessServerName = "backlog-drift-test",
       testMode = true,
-    )
+    ).also { agent ->
+      agents += agent
+      agent.agentId = "backlog-agent"
+      agent.grpcService.grpcStub =
+        mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true).also { stub ->
+          every { stub.readRequestsFromProxy(any(), any()) } returns flowOf(*requests)
+        }
+    }
+
+  private fun request(id: Long) =
+    scrapeRequest {
+      agentId = "backlog-agent"
+      scrapeId = id
+      path = "metrics"
+    }
 
   init {
-    "scrapeRequestBacklogSize should drift if sendScrapeRequestAction fails" {
-      val agent = createTestAgent()
-      val connectionContext = AgentConnectionContext(1)
+    afterTest {
+      agents.forEach { it.grpcService.shutDown() }
+      agents.clear()
+    }
 
-      agent.scrapeRequestBacklogSize.load() shouldBe 0
+    "readRequestsFromProxy should count each forwarded request in the backlog" {
+      val agent = agentStreaming(request(1), request(2))
 
-      // First one succeeds
-      agent.scrapeRequestBacklogSize += 1
-      connectionContext.sendScrapeRequestAction {
-        io.prometheus.common.ScrapeResults(
-          srScrapeId = 0,
-          srAgentId = "",
-          srStatusCode = 200,
-        )
-      }
-      agent.scrapeRequestBacklogSize.load() shouldBe 1
+      agent.grpcService.readRequestsFromProxy(mockk(relaxed = true), AgentConnectionContext(2))
 
-      // Close the channel to simulate disconnect
-      connectionContext.close()
+      agent.scrapeRequestBacklogSize.load() shouldBe 2
+    }
 
-      // Second one fails
-      try {
-        agent.scrapeRequestBacklogSize += 1
-        try {
-          connectionContext.sendScrapeRequestAction {
-            io.prometheus.common.ScrapeResults(
-              srScrapeId = 0,
-              srAgentId = "",
-              srStatusCode = 200,
-            )
-          }
-        } catch (e: Exception) {
-          agent.scrapeRequestBacklogSize -= 1
-          throw e
-        }
-      } catch (e: Exception) {
-        // Expected (ClosedSendChannelException or similar)
+    // The connection is closing, so the request can't be handed on: the failure propagates, ending the stream, and
+    // the backlog returns to where it was.
+    "readRequestsFromProxy should give back the backlog slot of a request it can't forward" {
+      val agent = agentStreaming(request(1))
+      val closed = AgentConnectionContext(1).also { it.close() }
+
+      shouldThrow<ClosedSendChannelException> {
+        agent.grpcService.readRequestsFromProxy(mockk(relaxed = true), closed)
       }
 
-      // Backlog should now be 1 (only the first one is "in flight")
-      agent.scrapeRequestBacklogSize.load() shouldBe 1
-
-      // Now simulate a coroutine processing the first one finishing
-      agent.scrapeRequestBacklogSize -= 1
-
-      // Backlog is now 0
       agent.scrapeRequestBacklogSize.load() shouldBe 0
     }
   }
