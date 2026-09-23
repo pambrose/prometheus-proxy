@@ -6,11 +6,12 @@
 
 _Not yet released_
 
-A security and reliability release. It closes three ways an authenticated agent could interfere with
-another agent on the same proxy, and fixes agent failover for a proxy that accepts connections but
-rejects registration. It also bounds scrape requests and hardens the dashboard, which adds a few settings.
-The wire protocol gains one optional field, which older agents and proxies ignore, and agents using failover or
-path authorization behave differently when a proxy rejects them — see below.
+A security and reliability release. It closes several ways an authenticated agent could interfere with
+another agent on the same proxy, and fixes agent failover for a proxy that accepts connections but rejects
+registration. It also bounds what clients and agents can ask of the proxy and hardens the dashboard, which adds
+a few settings. The wire protocol gains two optional fields and a new enum, which older agents and proxies
+ignore, and agents using failover or path authorization behave differently when a proxy rejects them. It also
+changes some defaults, metric labels, and startup checks: read **Before you upgrade** first.
 
 ### Highlights
 
@@ -18,16 +19,40 @@ path authorization behave differently when a proxy rejects them — see below.
   result to its waiting request by scrape ID alone, and scrape IDs come from one counter shared by every
   agent. An agent holding a valid token could therefore answer, fail, or break the chunked transfer of a
   scrape that was sent to someone else. Results are now accepted only from the agent the scrape went to.
-
 - **Deployments behind a reverse proxy get the same protection, as far as their identities allow.** With
   `transportFilterDisabled`, the proxy had nothing to tie a call to a connection, so any authenticated
   agent could read another agent's scrape requests, unregister its paths, or remove it outright. Calls
   are now bound to the auth identity the agent connected with. Read the limit below before relying on it.
-
 - **A rejected path no longer takes the whole agent offline, and a proxy that rejects an agent is now
   failed over.** Previously one unauthorized path disconnected the agent and it reconnected forever with
   every path down; and a proxy that accepted the connection but refused registration kept the agent
   pinned to it, never reaching the standby.
+
+### Before you upgrade
+
+- **gRPC reflection is off by default.** A `grpcurl` or other reflection client needs
+  `proxy.reflectionDisabled = false`, and a token in the `agent-token` header when the proxy requires one.
+- **Scrape outcome labels changed.** A scrape the proxy fails itself is no longer `upstream_error` with a 502: an
+  agent that disconnects mid-scrape is `agent_disconnected` and a shutdown is `proxy_stopped`, both with a 503,
+  and an unusable chunked response is the new `invalid_response` with a 502. `client_cancelled` (499) is new too.
+  Update alerts and dashboards that count `upstream_error`.
+- **Redirects to another origin are no longer followed.** A target that redirects to a different host or port,
+  or from `http` to `https` on the same host, fails to scrape with its 3xx status; point its `url` at the final
+  location.
+- **Consolidated agents under different `proxy.auth` identities can no longer share a path.** Put them on one
+  identity.
+- **A consolidated/non-consolidated rejection now logs at WARN, not ERROR.** Check alerting that keys on those
+  ERROR lines.
+- **Some settings that were accepted now fail at startup:** `proxy.internal.scrapeRequestBacklogUnhealthySize`
+  of 0, `proxy.dashboard.refreshIntervalSecs` of 0 with the dashboard on, two `agent.filters` entries for one
+  path, or an `agent.chunkContentSizeKbs` above 4032 or `agent.minGzipSizeBytes` above 4128768.
+- **TLS now uses BoringSSL** on the common platforms, so defaults such as cipher suites follow it, and each fat
+  JAR is about 8 MB larger (41 MB to 49 MB).
+- **Embedders:** `grpc-netty-shaded` is no longer brought in; `Agent.startAsyncAgent` now waits for startup and
+  throws if it fails; and when a config URL's error needs redacting, the `ConfigLoadException`'s cause is a
+  stand-in exception with the redacted message, not Typesafe's `ConfigException`.
+- **Native histograms aren't available through the proxy.** The agent no longer asks targets for the protobuf
+  format, which the proxy can't carry.
 
 ### Security
 
@@ -61,13 +86,15 @@ trust store was configured, even though TLS was off and nothing checked client c
 now counts only when TLS is actually enabled. The proxy and the agent also now warn at startup when agent
 tokens are configured without TLS, because those tokens are sent in cleartext.
 
-**Credentials in target URLs.** A scrape target such as `http://user:pass@host/metrics?api_key=…` used to
-leave the agent in full: the proxy's dashboard and `/debug` page showed it, agent logs printed it, and HTTP
-client error messages carried it into WARN logs and into the failure reason sent to the proxy. Target URLs
-are now redacted everywhere they are sent, logged, or shown, and the proxy also redacts URLs from older
-agents. The per-scrape DEBUG trace no longer dumps the request, which included Prometheus's
-`Authorization` header, and a failed scrape no longer logs its stack trace, whose exception message carried the
-unredacted URL.
+**Credentials in target and config URLs.** A scrape target such as `http://user:pass@host/metrics?api_key=…`
+used to leave the agent in full: the proxy's dashboard and `/debug` page showed it, agent logs printed it at
+INFO and on every scrape at DEBUG, and HTTP client error messages carried it into WARN logs and into the
+failure reason sent to the proxy. Target URLs are now redacted everywhere they are sent, logged, or shown, and
+the proxy also redacts URLs from older agents. The per-scrape DEBUG trace no longer dumps the request, which
+included Prometheus's `Authorization` header, and a failed scrape no longer logs its stack trace, whose
+exception message carried the unredacted URL. A config URL that fails to load is redacted in the startup error
+and in the `ConfigLoadException` an embedded host catches, including its cause, which becomes a stand-in with
+the redacted message when the original's message held the URL.
 
 **gRPC reflection.** Reflection is now off by default. It let anyone who could reach the agent port list and
 describe the proxy's API, and it ignored agent tokens. If you point `grpcurl` or another reflection client at the
@@ -115,8 +142,8 @@ takes the lock the scrape path uses. The Origin check does not stop DNS rebindin
 and port. Ktor's redirect handling followed any redirect and answered a basic-auth challenge from whichever
 host sent it, so a target, or an open redirect reached through forwarded query parameters, could collect the
 credentials configured for the target, or point the agent at an internal address whose response came back
-through the proxy. A target that redirects to a different host or port now fails to scrape with its 3xx
-status; point the path's `url` at the final location.
+through the proxy. A target that redirects to a different host or port, or from `http` to `https` on the same
+host, now fails to scrape with its 3xx status; point the path's `url` at the final location.
 
 **Service-discovery labels.** Agent labels starting with `__` are dropped from the service-discovery response,
 since in HTTP service discovery they override how Prometheus scrapes the target. The new
@@ -128,15 +155,14 @@ on when agents run under separate `proxy.auth` identities, so one team can't lab
 `Content-Security-Policy: sandbox`. A compromised target could otherwise serve a page that ran on the proxy's
 origin in an operator's browser.
 
-**Path limits.** One agent connection can now register at most 10,000 paths, each at most 512 characters with at most
-8 KiB of labels, set by `proxy.internal.maxPathsPerAgent`, `maxPathLength`, and `maxLabelsSizeBytes` (`0` turns one
-off). They are safety nets set far above normal use; the proxy warns when an agent reaches 80% of the path limit.
+**Path limits.** One agent connection can now register at most 10,000 paths, each at most 512 characters with
+at most 8 KiB of labels, set by `proxy.internal.maxPathsPerAgent`, `maxPathLength`, and `maxLabelsSizeBytes`
+(`0` turns one off). They are safety nets set far above normal use; the proxy warns when an agent reaches 80% of
+the path limit. A path over the count limit is rejected with the new `PATH_LIMIT_REACHED` cause, and one that is
+too long or has too many labels with `INVALID_PATH`; agents log either once and don't retry it.
 
 **Unauthenticated connections.** A connection to the agent port no longer shows up as a connected agent — in the
 logs, the agent count, the dashboard, or the health checks — until its first authenticated call.
-
-**Credentials in logs.** The agent's per-scrape DEBUG line no longer prints the raw target URL, and a config URL
-that fails to load is redacted in the startup error and in the `ConfigLoadException` an embedded host catches.
 
 ### Agent registration and failover
 
@@ -157,7 +183,9 @@ registration — so a primary that accepted connections but refused the agent se
 primary on every retry.
 
 An agent with no static paths (discovery-only) is not failed over for path rejections, and a
-single-endpoint agent keeps retrying its one proxy. The "Disconnected from proxy … after invalid
+single-endpoint agent keeps retrying its one proxy. An agent kept connected for rejections that can clear ends
+the connection, and reconnects or fails over, if a later retry finds none of them can clear after all and it
+has no static path registered and no discovery. The "Disconnected from proxy … after invalid
 response" log is now WARN rather than INFO, since it now means something needs attention.
 
 A rejected static path is retried only when the rejection can clear, and on a backoff: the first retry comes one
@@ -165,10 +193,10 @@ A rejected static path is retried only when the rejection can clear, and on a ba
 wait, up to the new `agent.internal.rejectedPathRetryMaxSecs` (default five minutes). A conflict that lasts an hour
 now costs the proxy about a dozen round trips for the path instead of 360, at the price of registering up to the
 cap after it clears; lower the cap to notice sooner, or set it at or below the retry interval to turn the backoff
-off, which the agent then logs at startup. Discovered paths are paced the same way, from `agent.discovery.reconcileIntervalSecs`.
-The proxy now says why it rejected a path, in a new `rejection_cause` field of its
-registration response, and the agent retries only the causes that clear once a live agent holding the path
-leaves: another identity's agent serving it, or a consolidated/non-consolidated mismatch. A rejection for any
+off, which the agent then logs at startup. Discovered paths are paced the same way, from
+`agent.discovery.reconcileIntervalSecs`. The proxy now says why it rejected a path, in a new `rejection_cause`
+field of its registration response, and the agent retries only the causes that clear once a live agent holding
+the path leaves: another identity's agent serving it, or a consolidated/non-consolidated mismatch. A rejection for any
 other cause, such as a path the agent's identity isn't authorized for, is logged once and not retried, as is one
 from an older proxy, which sends no cause. Discovered paths follow the same rule: discovery tries an entry
 rejected for a cause that can't clear again only when its URL or labels change, when it leaves the file and
@@ -232,8 +260,9 @@ interval as their deadline, capped at the unary deadline.
   path listed twice in the discovery file, or an unreadable discovery file (with a stack trace each time). Each is
   now logged once when it appears or changes, and again when it clears.
 - **A path registered with a leading slash was advertised but couldn't be scraped**: service discovery listed
-  it and every scrape answered 404. Paths are now stored without the slash, and `/` alone is rejected. The
-  in-tree agent already strips it, so only older or custom agents were affected.
+  it and every scrape answered 404. Paths are now stored without the slash, and `/` alone, `//`, or a path with
+  two leading slashes such as `//foo` is rejected. The in-tree agent already strips the slash, so only older or
+  custom agents were affected.
 - **A few settings now fail at startup instead of misbehaving**: a `scrapeRequestBacklogUnhealthySize` of 0
   refused every scrape, a dashboard `refreshIntervalSecs` of 0 spun a thread, and a second `agent.filters` entry
   for a path silently replaced the first.
@@ -241,9 +270,10 @@ interval as their deadline, capped at the unary deadline.
   asks for protobuf first, and the agent passed that request on, but the agent and proxy carry a scrape as text.
   The agent now asks targets only for the text formats, so those scrapes work; native histograms aren't available
   through the proxy.
-- **Retired paths' latency and size series could come back**, when a scrape finished after its path was
-  removed, and then stay forever. Removing them also scanned every path's series while holding the lock every
-  scrape takes. A path's series are now recorded only while it is registered, and removed without the scan.
+- **A retired path's latency and size series stayed on `/metrics` forever.** Nothing removed them, so every path
+  discovery ever retired accumulated, and once removal existed a scrape finishing after its path was removed
+  re-created them. A path's series are now removed when its last registration goes away, recorded only while it
+  is registered, and removed without scanning every path's series under the lock every scrape takes.
 - **The scrape latency histogram stopped at 10s**, so every timeout landed in `+Inf`. It now has 15s, 30s, 60s, and
   90s buckets, reaching the proxy's default scrape timeout.
 - **A scrape the proxy failed itself was reported as a target error.** When an agent disconnected mid-scrape,
@@ -275,23 +305,25 @@ interval as their deadline, capped at the unary deadline.
   hand-written class must now meet a per-class line coverage floor.
 - The tests now run on Java 25, the JVM the Docker images use, while the published artifact still targets
   Java 17. Protobuf is aligned with grpc at 3.25.9, and the build no longer reports a Gradle 10 deprecation.
-- A path's per-path metric series are removed when its last registration goes away, so paths retired by
-  discovery no longer accumulate on `/metrics`.
-- The GitHub Actions workflows pin every action to a commit SHA and get weekly Dependabot updates along with
-  the Gradle version catalog. CI runs on every pull request and push to `master`, and cancels a superseded
-  pull-request run; the container tests run on each push to `master` and on demand, no longer on pull requests.
+- The GitHub Actions workflows pin every action to a commit SHA. Dependabot now updates the actions, the Gradle
+  version catalog, the documentation site's Python lock, and the Docker base images weekly; the proxy and agent
+  Dockerfiles are renamed `etc/docker/{agent,proxy}.Dockerfile` so it recognizes them, and it stays on Java 25.
+  CI runs on every pull request and push to `master`, and cancels a superseded pull-request run; the container
+  tests run on each push to `master` and on demand, no longer on pull requests.
 - Point-in-time reviews, proposals, and design plans moved to `docs/archive/`, and IDE state that was already
   meant to be ignored is no longer tracked.
 - Several docs that had drifted from the build are corrected: the KDoc summary's Dokka details, the discovery
   backoff on the agent configuration page, the testing guide's spec list and coverage gates, and the README badge.
-- Every port a test binds is now in one checked list, the cache expiry tests no longer depend on sleep timing,
-  and the container tests pin their Prometheus image.
+  The metric-filter counters are now in `docs/metrics-and-grafana.md`, `testing/start-prometheus.sh` pins the
+  Prometheus version the container tests use, and the Makefile's build targets no longer regenerate protobuf
+  stubs the build already generates.
 - Several tests now check what their names say — one had asserted its own copy of the logic under test — and
   tests no longer leave HTTP servers or gRPC channels open after they finish or fail.
-- The test suite relies less on timing: expiry and cleanup tests use a test clock or wait for a real signal
-  instead of sleeping, harness ports are checked for duplicates, kept off the ports a proxy, agent, or
-  Prometheus already running on the machine uses, and kept below the ephemeral port range, the TLS specs now run over a real TLS channel, and a missing test config fails the run instead of being
-  fetched from GitHub.
+- The test suite relies less on timing and luck. Expiry and cleanup tests use a test clock or wait for a real
+  signal instead of sleeping. Every port a test binds is in one checked list, kept off the ports a proxy, agent,
+  or Prometheus already running on the machine uses and below the ephemeral port range. The TLS specs run over a
+  real TLS channel, the container tests pin their Prometheus image, and a missing test config fails the run
+  instead of being fetched from GitHub.
 - `etc/compose/proxy.yml` is a working Compose file again: it starts a proxy, an agent, and a Prometheus
   server that scrapes through them. `.dockerignore` now admits only the two JARs the images copy, and the
   proxy image exposes the dashboard port instead of the nginx example's.
@@ -316,18 +348,21 @@ interval as their deadline, capped at the unary deadline.
 - The agent and proxy JARs now use OpenSSL (BoringSSL) for TLS instead of the JDK's implementation, on Linux and
   macOS (x86_64 and aarch64) and on Windows (x86_64), including in the Docker images; on any other platform they
   fall back to the JDK's TLS. The natives come with common-utils 4.1.0 and add about 6 MB to each JAR, which,
-  with the modules Ktor 3.6.0's server now depends on, grows from 41 MB to 49 MB; an application that embeds the agent now gets them whether it is built with Gradle or Maven.
+  with the modules Ktor 3.6.0's server now depends on, grows from 41 MB to 49 MB; an application that embeds
+  the agent now gets them whether it is built with Gradle or Maven.
   Certificates and TLS settings are used as before, but anything that differs between the two providers, such
   as the default cipher suites, now follows BoringSSL.
 
 ### Dependency updates
 
 Runtime: Kotlin 2.4.10 → 2.4.20, gRPC 1.83.1 → 1.84.0, Ktor 3.5.2 → 3.6.0, Logback 1.6.1 → 1.6.3,
-SLF4J 2.0.18 → 2.0.20, Dropwizard metrics 4.2.39 → 4.2.40, and common-utils 3.2.2 → 4.1.0;
-`grpc-netty-shaded` and an unused Jetty 11 `jetty-servlet` are removed. Build and test only: Gradle 9.6.1 → 9.7.1, detekt 2.0.0-alpha.5 → alpha.6,
-Kotest 6.2.3 → 6.2.5, the Gradle versions plugin 0.57.0 → 0.64.0, the BuildConfig plugin 6.0.10 → 6.1.1, and
-the shared convention plugins 1.1.1 → 1.1.5. The documentation site's Python lock picks up Zensical
-0.0.52 → 0.0.63 and pymdown-extensions 11.0.2 → 12.0.1, and its `mkdocs-material` pin moves 9.7.6 → 9.7.7.
+SLF4J 2.0.18 → 2.0.20, Dropwizard metrics 4.2.39 → 4.2.40, common-utils 3.2.2 → 4.1.0, protobuf-java
+3.25.3 → 3.25.9, and netty-tcnative-boringssl-static 2.0.75.Final → 2.0.81.Final; `grpc-netty-shaded` and an
+unused Jetty 11 `jetty-servlet` are removed. Build and test only: Gradle 9.6.1 → 9.7.1, detekt 2.0.0-alpha.5 →
+alpha.6, Kotest 6.2.3 → 6.2.5, the Gradle versions plugin 0.57.0 → 0.64.0, the BuildConfig plugin 6.0.10 →
+6.1.1, and the shared convention plugins 1.1.1 → 1.1.5. The documentation site's Python lock picks up Zensical
+0.0.52 → 0.0.63 and pymdown-extensions 11.0.1 → 12.0.1, and `mkdocs-material` 9.7.6 → 9.7.7, now pinned in the
+site's `pyproject.toml` and held in the lock.
 
 ---
 
