@@ -36,6 +36,7 @@ import io.mockk.verify
 import io.prometheus.grpc.RegisterAgentRequest
 import java.time.Instant
 import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
@@ -227,6 +228,32 @@ class AgentContextTest : StringSpec() {
       context.readScrapeRequest()
 
       context.writeScrapeRequest(mockk(relaxed = true), maxBacklog = 1).shouldBeTrue()
+    }
+
+    // Writers failing on a closed context each hold a backlog slot until their send throws, so a concurrent writer can
+    // find the cap reached on a context with nothing queued. It must report the disconnect, not a full backlog: the
+    // HTTP handler labels the two differently (agent_disconnected vs backlog_full). A cap of 0 puts a single writer
+    // over it deterministically.
+    "writeScrapeRequest over the cap on a closed context should report the disconnect, not a full backlog" {
+      val context = AgentContext("remote-addr")
+      context.invalidate()
+
+      val outcome =
+        try {
+          if (context.writeScrapeRequest(mockk(relaxed = true), maxBacklog = 0)) "queued" else "full"
+        } catch (_: ClosedSendChannelException) {
+          "closed"
+        }
+
+      outcome shouldBe "closed"
+      context.scrapeRequestBacklogSize shouldBe 0
+    }
+
+    "writeScrapeRequest over the cap on a live context should still report a full backlog" {
+      val context = AgentContext("remote-addr")
+
+      context.writeScrapeRequest(mockk(relaxed = true), maxBacklog = 0).shouldBeFalse()
+      context.scrapeRequestBacklogSize shouldBe 0
     }
 
     // ==================== Backlog Counter Consistency Tests ====================

@@ -578,11 +578,11 @@ class ProxyOptionsTest : StringSpec() {
       proxyOptions(["-Dproxy.dashboard.refreshIntervalSecs=0"]).dashboardEnabled.shouldBeFalse()
     }
 
-    // Generous safety nets, not quotas: about 40x the largest path count the harness registers per agent, a path far
+    // Generous safety nets, not quotas: about 80x the largest path count the harness registers per agent, a path far
     // longer than a single URL segment needs, and more label JSON than a target's labels plausibly take.
-    "path limits should default to 10000 paths per agent, 512-character paths, and 8 KiB of labels" {
+    "path limits should default to 20000 paths per agent, 512-character paths, and 8 KiB of labels" {
       val internal = proxyOptions([]).configVals.proxy.internal
-      internal.maxPathsPerAgent shouldBe 10_000
+      internal.maxPathsPerAgent shouldBe 20_000
       internal.maxPathLength shouldBe 512
       internal.maxLabelsSizeBytes shouldBe 8_192
     }

@@ -198,7 +198,7 @@ In rough priority order:
   agent of another identity may join only once no valid agent still serves it, closing the last way one identity
   could put its metrics on another's path.
 - **Per-agent path limits** (finding #14 of `docs/archive/CODE_REVIEW_LATE_SEPTEMBER_2026.md`) — `proxy.internal.maxPathsPerAgent`
-  (10,000), `maxPathLength` (512), and `maxLabelsSizeBytes` (8 KiB) bound what one agent connection can register, so
+  (20,000), `maxPathLength` (512), and `maxLabelsSizeBytes` (8 KiB) bound what one agent connection can register, so
   an identity limited to a few path patterns can no longer add unlimited paths, service-discovery targets, and metric
   series.
 - **No pre-auth agents** (finding #15) — the transport filter still assigns every connection an `agentId`, but its

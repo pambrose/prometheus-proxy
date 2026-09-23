@@ -27,6 +27,7 @@ import io.prometheus.grpc.RegisterAgentRequest
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
+import kotlinx.coroutines.channels.ClosedSendChannelException
 import java.time.Instant
 import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.concurrent.atomics.AtomicBoolean
@@ -151,7 +152,7 @@ internal class AgentContext(
    * Queues [scrapeRequest] for this agent unless [maxBacklog] requests are already queued.
    *
    * Returns false, without queueing, when the cap is reached, so one slow agent cannot pile up requests without
-   * bound.
+   * bound. Throws [ClosedSendChannelException] once the agent has disconnected, even when the cap is reached.
    */
   suspend fun writeScrapeRequest(
     scrapeRequest: ScrapeRequestWrapper,
@@ -159,6 +160,10 @@ internal class AgentContext(
   ): Boolean {
     if (queuedCount.incrementAndFetch() > maxBacklog) {
       queuedCount -= 1
+      // Writers failing on a closed channel hold a slot until their send throws, so on a disconnected agent the cap
+      // can be reached with nothing queued. Report the disconnect rather than a full backlog, as the send would.
+      if (scrapeRequestNotifier.isClosedForSend)
+        throw ClosedSendChannelException("Agent $agentId disconnected")
       return false
     }
     scrapeRequestQueue.add(scrapeRequest)

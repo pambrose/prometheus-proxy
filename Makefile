@@ -1,5 +1,5 @@
 .PHONY: default help stop clean clean-all stubs build tibuild refresh jars \
-        tests mini-tests nh-tests ip-tests netty-tests tls-tests container-tests scaling-tests all-tests regen-certs \
+        tests mini-tests nh-tests ip-tests netty-tests tls-tests lincheck-tests tla-checks container-tests scaling-tests all-tests regen-certs \
         docker-clean docker-clean-dry \
         all-scaling scaling-paths scaling-agents scaling-payload scaling-consolidated scaling-concurrency scaling-soak \
         coverage coverage-html coverage-xml coverage-log coverage-verify \
@@ -17,6 +17,13 @@ PLATFORMS := linux/amd64,linux/arm64,linux/s390x,linux/ppc64le
 IMAGE_PREFIX := pambrose/prometheus
 WEBSITE_DIR := website
 SITE_DIR := $(WEBSITE_DIR)/prometheus-proxy
+
+# TLA+ model checking (specs/tla). The tools jar is downloaded on first use and git-ignored; TLC's working
+# states go under build/.
+TLA_VERSION := 1.7.4
+TLA_DIR := specs/tla
+TLA_JAR := $(TLA_DIR)/tla2tools.jar
+TLC = cd $(TLA_DIR) && java -XX:+UseParallelGC -cp tla2tools.jar tlc2.TLC -workers auto -deadlock -cleanup
 
 # Banner printed at the start of every scaling target, so a long `all-scaling` run makes it obvious
 # which preset is executing at any moment (they look alike in Gradle's output otherwise).
@@ -94,6 +101,16 @@ netty-tests:  ## Run Netty harness tests
 tls-tests:  ## Run TLS harness tests
 	$(GRADLE) test --tests "io.prometheus.harness.Tls*"
 
+lincheck-tests:  ## Run the Lincheck concurrency tests (excluded from the default test run)
+	$(GRADLE) test -PkotestTags=Lincheck --tests "*LincheckTest"
+
+$(TLA_JAR):
+	curl -fsSL -o $@ https://github.com/tlaplus/tlaplus/releases/download/v$(TLA_VERSION)/tla2tools.jar
+
+tla-checks: $(TLA_JAR)  ## Model-check the TLA+ specs in specs/tla (the quick configs; downloads the TLA+ tools once)
+	$(TLC) -metadir $(CURDIR)/build/tla/AgentFailover -config AgentFailover.cfg AgentFailover.tla
+	$(TLC) -metadir $(CURDIR)/build/tla/ProxyRegistry -config ProxyRegistry.cfg ProxyRegistry.tla
+
 container-tests: jars  ## Run the Testcontainers tests (needs Docker)
 	@DOCKER_HOST="$$(docker context inspect --format '{{.Endpoints.docker.Host}}' 2>/dev/null)"; \
 	if [ -z "$$DOCKER_HOST" ]; then \
@@ -102,7 +119,7 @@ container-tests: jars  ## Run the Testcontainers tests (needs Docker)
 	echo "Using DOCKER_HOST=$$DOCKER_HOST"; \
 	DOCKER_HOST="$$DOCKER_HOST" RUN_CONTAINER_TESTS=true $(GRADLE) test --tests "io.prometheus.containers.*"
 
-all-tests: tests container-tests  ## Run the full suite: all tests + the container tests
+all-tests: tests lincheck-tests container-tests  ## Run the full suite: all tests + the container tests
 
 docker-clean-dry:  ## Preview what `make docker-clean` would reclaim (removes nothing)
 	@./bin/docker-clean-tests.sh --dry-run --cache

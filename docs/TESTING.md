@@ -32,6 +32,8 @@ make nh-tests         # Unit tests only (agent, proxy, common, misc — no harne
 make ip-tests         # In-process integration tests only
 make netty-tests      # Netty integration tests only
 make tls-tests        # TLS integration tests only
+make lincheck-tests   # Lincheck concurrency tests only (left out of every other target)
+make tla-checks       # Model-check the TLA+ specs in specs/tla (downloads the TLA+ tools once)
 make container-tests  # Full Testcontainers end-to-end suite (needs Docker)
 make scaling-tests    # Parameter-driven scaling container test only (needs Docker)
 make all-tests        # Full suite: `make tests` + `make container-tests`
@@ -78,6 +80,12 @@ need Docker, so a plain `make tests` / `./gradlew check` registers each spec as 
 `make container-tests` to run the whole suite on its own, `make scaling-tests` for just the scaling spec, or
 `make all-tests` to run everything in one shot.
 
+The Lincheck specs (`*LincheckTest`) explore thread interleavings and take over a minute, so they carry the
+Kotest `Lincheck` tag (`common/Lincheck.kt`), and the `Test` task's default tag expression, `!Lincheck`, leaves them
+out of `./gradlew test`, `make tests`, `make all-tests`, and CI. `make lincheck-tests` runs them
+(`-PkotestTags=Lincheck`); tag any new Lincheck spec the same way. The TLA+ specs are not tests but models of the
+design, checked by `make tla-checks`; `specs/tla/README.md` describes them.
+
 The `make scaling-tests` target forwards any `SCALE_*` environment variables to the test, so the scaling
 inputs can be tuned without recompiling — for example:
 
@@ -100,6 +108,7 @@ make scaling-tests SCALE_AGENTS=100 SCALE_ENDPOINTS_PER_AGENT=200 SCALE_SERIES_P
 - **Kotest** (StringSpec style) — primary test framework with JUnit 5 runner
 - **Kotest matchers** — assertions (`shouldBe`, `shouldNotBeNull`, `shouldContain`, etc.)
 - **MockK** — mocking library (`mockk`, `every`, `verify`)
+- **Lincheck** — concurrency testing by model checking and stress (`*LincheckTest`, run by `make lincheck-tests`)
 - **Kotlin Coroutines** — async and concurrency testing (suspending test bodies)
 - **Ktor** (client & server) — HTTP testing utilities
 - **gRPC in-process transport** — integration tests without network I/O
@@ -143,6 +152,10 @@ something.
 - **AgentContextTest** — Agent context unique ID generation, validity, invalidation, ScrapeRequestWrapper management
 - **AgentContextManagerTest** — Context management: add/remove, concurrent access, chunked contexts
 - **AgentConnectionContextTest** — Connection state, close/drain behavior, concurrent scrape request handling
+- **AgentConnectionContextLincheckTest** — Lincheck (tagged `Lincheck`, run by `make lincheck-tests`): the agent's
+  scrape-request backlog count, kept as `AgentGrpcService` and the scrape loop keep it, never goes negative and returns
+  to zero once the connection closes -- including a queued request `close()` drains and a sender blocked on a full
+  channel as it closes -- and no accepted scrape result is lost by the close
 - **AgentPathManagerTest** — Path registration/unregistration, path lookup, concurrent access
 - **AgentOptionsTest** — CLI parsing, defaults, validation, SSL settings, gRPC options
 - **AgentClientInterceptorTest** — gRPC client interceptor that adds agent-id metadata to outbound calls
@@ -152,6 +165,11 @@ something.
 - **AgentMetricsTest** — Prometheus metrics registration and gauge/counter updates
 - **AgentBacklogDriftTest** — scrapeRequestBacklogSize drift when sendScrapeRequestAction fails
 - **HttpClientCacheTest** — HTTP client caching with TTL/idle eviction, keyed by auth credentials
+- **HttpClientCacheCancellationTest** — a scrape cancelled while the client cache is busy still releases its client,
+  so eviction or shutdown closes it
+- **HttpClientCacheLincheckTest** — Lincheck, stress only (tagged `Lincheck`): scrapes under two credentials race LRU
+  eviction and `close()` in a one-client cache; no scrape is handed a closed client or has its client closed under it,
+  no client is closed twice, and the only open clients are the cached ones, or none after `close()`
 - **EmbeddedAgentInfoTest** — EmbeddedAgentInfo data class (launchId, agentName storage)
 - **RequestFailureExceptionTest** — RequestFailureException custom exception class
 - **SslSettingsTest** — SSL keystore/truststore loading for TLS configuration
@@ -179,6 +197,9 @@ something.
   a live agent's path is taken over only by the same auth identity
 - **AgentContextTest** — Proxy's AgentContext: unique ID generation, validity, path registration, ScrapeRequestWrapper
   queue
+- **AgentContextLincheckTest** — Lincheck (tagged `Lincheck`, run by `make lincheck-tests`): the scrape-request
+  hand-off -- write, read, invalidate -- from three threads under model checking and stress; each write's outcome
+  must fit a sequential order, and no accepted request may be stranded after invalidate
 - **AgentContextManagerTest** — Proxy's AgentContextManager: add/remove contexts, chunked context management, concurrent
   access
 - **AgentContextCleanupServiceTest** — Stale agent eviction (removes agents inactive beyond maxAgentInactivitySecs)
@@ -194,6 +215,10 @@ something.
 - **RecentReqsSynchronizationTest** — Synchronized access to recentReqs EvictingQueue (prevents
   ConcurrentModificationException)
 - **ScrapeRequestManagerTest** — Add/remove scrape requests, timeout handling, concurrent access
+- **ScrapeRequestManagerLincheckTest** — Lincheck (tagged `Lincheck`): handlers admitting and untracking requests under
+  the in-flight limit race an agent's answer, a single failure, and `failAllScrapeRequests`; the limit holds and its
+  counter matches the map, each request keeps one completer's result and matching `proxyFailure`, and a disconnect fails
+  only its own agent's requests
 - **ScrapeRequestWrapperTest** — Scrape request lifecycle, timeout behavior, response delivery
 - **AgentAuthManagerTest** — Per-agent auth: path-glob matching, token resolution (including the legacy allow-all
   token), `isEnabled`, and fail-fast rejection of empty, duplicate or colliding identities
