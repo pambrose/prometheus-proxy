@@ -426,7 +426,7 @@ the cause too. Tests cover the `toString` and a config URL with credentials that
 `loggedPathRejections`.
 
 **Resolution:** the three limits are new `proxy.internal` settings, and `0` turns each off:
-- `maxPathsPerAgent` defaults to 10,000, about 40× the largest harness profile. It is per agent connection, not per
+- `maxPathsPerAgent` defaults to 20,000, about 80× the largest harness profile. It is per agent connection, not per
   identity, because every legacy-token agent shares one identity, so a per-identity cap would limit the whole fleet.
 - `maxPathLength` defaults to 512 characters.
 - `maxLabelsSizeBytes` defaults to 8 KiB.

@@ -112,6 +112,7 @@ dependencies {
   runtimeOnly(libs.slf4j.jul) // jul-to-slf4j bridge: installed at runtime, no compile-time references
 
   testImplementation(libs.kotest)
+  testImplementation(libs.lincheck)
   testImplementation(libs.mockk)
   testImplementation(libs.testcontainers)
 }
@@ -221,6 +222,10 @@ fun Project.configureTesting() {
           "LARGE" -> "2g"
           else -> "1g"
         }
+
+    // Kotest tag expression. The default leaves out the slow Lincheck specs; `make lincheck-tests` passes
+    // -PkotestTags=Lincheck to run only them.
+    systemProperty("kotest.tags", providers.gradleProperty("kotestTags").getOrElse("!Lincheck"))
 
     testLogging {
       showStandardStreams = false

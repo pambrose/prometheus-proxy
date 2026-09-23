@@ -161,7 +161,7 @@ Configure agent cleanup and scrape request management:
 | `scrapeRequestTimeoutSecs`          | 90      | Timeout for individual scrape requests                                             |
 | `scrapeRequestBacklogUnhealthySize` | 25      | Backlog that marks the proxy unhealthy; each agent's queue is capped at twice this |
 | `maxInFlightScrapeRequests`         | 1000    | Max scrapes in flight across all agents; more get a 503                            |
-| `maxPathsPerAgent`                  | 10000   | Max paths one agent connection may register; more are refused (0 = unlimited)     |
+| `maxPathsPerAgent`                  | 20000   | Max paths one agent connection may register; more are refused (0 = unlimited)     |
 | `maxPathLength`                     | 512     | Max characters in a registered path (0 = unlimited)                                |
 | `maxLabelsSizeBytes`                | 8192    | Max size of a path's labels JSON, in bytes (0 = unlimited)                         |
 

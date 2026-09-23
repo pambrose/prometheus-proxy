@@ -65,6 +65,7 @@ annotation = "1.3.2"
 
 # Testing
 kotest = "6.2.5"
+lincheck = "3.7"
 mockk = "1.14.11"
 testcontainers = "2.0.5"
 
@@ -130,6 +131,7 @@ annotation-api = { module = "javax.annotation:javax.annotation-api", version.ref
 
 # Testing
 kotest = { module = "io.kotest:kotest-runner-junit5", version.ref = "kotest" }
+lincheck = { module = "org.jetbrains.lincheck:lincheck", version.ref = "lincheck" }
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 testcontainers = { module = "org.testcontainers:testcontainers", version.ref = "testcontainers" }
 

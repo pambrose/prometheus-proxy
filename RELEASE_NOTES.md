@@ -155,7 +155,7 @@ on when agents run under separate `proxy.auth` identities, so one team can't lab
 `Content-Security-Policy: sandbox`. A compromised target could otherwise serve a page that ran on the proxy's
 origin in an operator's browser.
 
-**Path limits.** One agent connection can now register at most 10,000 paths, each at most 512 characters with
+**Path limits.** One agent connection can now register at most 20,000 paths, each at most 512 characters with
 at most 8 KiB of labels, set by `proxy.internal.maxPathsPerAgent`, `maxPathLength`, and `maxLabelsSizeBytes`
 (`0` turns one off). They are safety nets set far above normal use; the proxy warns when an agent reaches 80% of
 the path limit. A path over the count limit is rejected with the new `PATH_LIMIT_REACHED` cause, and one that is
@@ -295,6 +295,14 @@ interval as their deadline, capped at the unary deadline.
   `agent.chunkContentSizeKbs` is now limited to 4032 and `agent.minGzipSizeBytes` to 4128768, checked at
   startup.
 
+- **A scrape for an agent that had just disconnected could be counted as `agent_backlog_full`** in
+  `proxy_scrape_requests` instead of `agent_disconnected`, pointing at a slow agent rather than a lost
+  connection. It happened when several scrapes arrived as the agent disconnected. The response was a 503 either
+  way; only the label was wrong.
+- **The agent could leak an HTTP client when a scrape was cancelled** -- by its timeout or a dropped connection --
+  while another scrape was using the client cache. The client stayed marked in use and was never closed, even at
+  shutdown.
+
 ### Also in this release
 
 - The agent now stops a scrape at Prometheus's own scrape timeout. The proxy forwards
@@ -352,6 +360,14 @@ interval as their deadline, capped at the unary deadline.
   the agent now gets them whether it is built with Gradle or Maven.
   Certificates and TLS settings are used as before, but anything that differs between the two providers, such
   as the default cipher suites, now follows BoringSSL.
+
+- The proxy's and agent's concurrency now has formal checks alongside its tests. Lincheck tests explore the thread
+  interleavings of how scrape requests are handed to an agent and taken back when it disconnects, the proxy's
+  in-flight scrape tracking, the agent's backlog count across a disconnect, and its HTTP client cache. They found
+  the `agent_backlog_full` mislabel and the HTTP client leak above. They run with `make lincheck-tests` rather than in the default
+  test run.
+  TLA+ specs in `specs/tla/` model the proxy's agent and path registry and the agent's endpoint failover, and
+  `make tla-checks` model-checks them in about 15 seconds.
 
 ### Dependency updates
 

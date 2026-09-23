@@ -23,6 +23,7 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -31,6 +32,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import java.security.SecureRandom
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
@@ -243,10 +245,18 @@ internal class HttpClientCache(
   // When an agent is done with client for a given scrape, the entry is marked as not in use.
   // If the entry is no longer in use and marked for close, the client is closed outside the
   // mutex to avoid blocking other cache operations during a potentially slow I/O close.
+  //
+  // NonCancellable: callers release from a finally, which runs in an already-cancelled coroutine when the scrape
+  // was cancelled -- by its timeout, or the connection dropping. A cancelled withLock throws instead of waiting
+  // whenever the lock is held, which left the entry marked in use forever, so neither eviction nor close() ever
+  // closed its client.
   suspend fun onFinishedWithClient(entry: CacheEntry) {
-    val shouldClose = accessMutex.withLock {
-      entry.onDoneWithClient()
-    }
+    val shouldClose =
+      withContext(NonCancellable) {
+        accessMutex.withLock {
+          entry.onDoneWithClient()
+        }
+      }
     if (shouldClose) {
       closeQuietly(entry.client)
     }
