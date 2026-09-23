@@ -275,6 +275,8 @@ interval as their deadline, capped at the unary deadline.
   pull-request run; the container tests run on each push to `master` and on demand, no longer on pull requests.
 - Point-in-time reviews, proposals, and design plans moved to `docs/archive/`, and IDE state that was already
   meant to be ignored is no longer tracked.
+- Several docs that had drifted from the build are corrected: the KDoc summary's Dokka details, the discovery
+  backoff on the agent configuration page, the testing guide's spec list and coverage gates, and the README badge.
 - Every port a test binds is now in one checked list, the cache expiry tests no longer depend on sleep timing,
   and the container tests pin their Prometheus image.
 - Several tests now check what their names say — one had asserted its own copy of the logic under test — and
