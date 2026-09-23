@@ -51,13 +51,15 @@ clean-all: clean clean-site  ## clean + remove .gradle cache and docs site
 stubs:  ## Regenerate gRPC/protobuf stubs
 	$(GRADLE) generateProto
 
+# The protobuf plugin runs generateProto before compiling, so the build targets don't name it; `make stubs` still
+# regenerates the stubs on their own.
 build:  ## Clean build without tests
-	$(GRADLE) clean generateProto build -x test
+	$(GRADLE) clean build -x test
 
 # `ti*` tasks are contributed by the org.barfuin.gradle.taskinfo plugin;
 # `tiTree` prints the task graph for the requested build invocation.
 tibuild:  ## Build with taskinfo task tree
-	$(GRADLE) clean generateProto tiTree build -x test
+	$(GRADLE) clean tiTree build -x test
 
 lint:  ## Run kotlinter and detekt
 	$(GRADLE) lintKotlin detekt
@@ -71,7 +73,7 @@ detekt-baseline:  ## Refresh detekt baseline
 refresh:  ## Refresh dependencies
 	$(GRADLE) --refresh-dependencies
 
-jars: stubs  ## Build the prometheus-{agent,proxy} fat jars
+jars:  ## Build the prometheus-{agent,proxy} fat jars
 	$(GRADLE) agentJar proxyJar
 
 tests:  ## Run all tests (forces re-execution)
@@ -268,7 +270,7 @@ clean-site:  ## Remove generated zensical site and cache
 	rm -rf $(SITE_DIR)/.cache
 
 site: clean-site  ## Serve the docs site locally with zensical
-	cd $(SITE_DIR) && uv run --with mkdocs-material zensical serve
+	cd $(SITE_DIR) && uv run zensical serve
 
 publish-local: _require-version  ## Publish artifacts to the local Maven repository
 	$(GRADLE) publishToMavenLocal

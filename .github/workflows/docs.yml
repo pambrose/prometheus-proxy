@@ -31,8 +31,8 @@ jobs:
       # Build the Zensical documentation site from website/uv.lock, the same resolution `make site`
       # uses locally. uv reads website/.python-version and installs that Python itself.
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
-      # mkdocs-material is not in uv.lock (make site adds it with --with), so it stays pinned here.
-      - run: uv run --locked --with mkdocs-material==9.7.7 zensical build --clean
+      # mkdocs-material, which the emoji extension needs, is pinned in website/pyproject.toml and so in uv.lock.
+      - run: uv run --locked zensical build --clean
         working-directory: website/prometheus-proxy
 
       # Build KDoc API documentation

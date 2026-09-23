@@ -42,7 +42,6 @@ htmx = "2.0.10"
 htmxWs = "2.0.4"
 
 # Jetty
-jetty = "11.0.26"
 
 # Metrics
 prometheus = "0.16.0"
@@ -102,7 +101,6 @@ webjar-htmx = { module = "org.webjars.npm:htmx.org", version.ref = "htmx" }
 webjar-htmx-ws = { module = "org.webjars.npm:htmx-ext-ws", version.ref = "htmxWs" }
 
 # Jetty
-jetty-servlet = { module = "org.eclipse.jetty:jetty-servlet", version.ref = "jetty" }
 
 # Metrics
 prometheus-simpleclient = { module = "io.prometheus:simpleclient", version.ref = "prometheus" }
