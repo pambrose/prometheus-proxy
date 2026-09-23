@@ -281,7 +281,7 @@ class ProxyWebDashboardTest : StringSpec() {
 
           table shouldContain "/ui_path_metrics"
           // The target URL exists nowhere on the proxy except via the registration RPC.
-          table shouldContain "http://localhost:9558/metrics"
+          table shouldContain "http://ui-path-target.invalid/metrics"
           // STATIC renders as "cfg" -- proving path_source crossed the wire, not just target_url.
           table shouldContain "cfg"
         }

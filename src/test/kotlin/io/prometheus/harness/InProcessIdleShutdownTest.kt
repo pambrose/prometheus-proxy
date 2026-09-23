@@ -22,6 +22,7 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.comparables.shouldBeLessThan
+import io.prometheus.common.TestPorts.IDLE_SHUTDOWN_HTTP_PORT
 import io.prometheus.Agent
 import io.prometheus.Proxy
 import io.prometheus.common.agentOptions
@@ -47,7 +48,7 @@ class InProcessIdleShutdownTest : StringSpec() {
       CollectorRegistry.defaultRegistry.clear()
 
       val serverName = "idle-shutdown-${System.nanoTime()}"
-      val httpPort = 9525
+      val httpPort = IDLE_SHUTDOWN_HTTP_PORT
 
       val proxyArgs = ["-Dproxy.admin.enabled=false", "-Dproxy.metrics.enabled=false"]
       val proxy =

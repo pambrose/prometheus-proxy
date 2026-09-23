@@ -41,6 +41,7 @@ import io.ktor.server.engine.embeddedServer
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
+import io.prometheus.common.TestPorts.HARNESS_TIMEOUT_TARGET_PORT
 import io.prometheus.Agent
 import io.prometheus.agent.AgentPathManager
 import io.prometheus.agent.RequestFailureException
@@ -82,8 +83,9 @@ internal object HarnessTests {
   private val SERVER_STOP_TIMEOUT_MS = 1.seconds.inWholeMilliseconds
 
   // Poll the loopback port until it accepts a TCP connection. CIO's embeddedServer.start()
-  // returns before the listener is bound; without this probe the first scrape can race startup.
-  private suspend fun awaitPortReady(
+  // returns before the listener is bound; without this probe the first scrape can race startup. Fails when the port
+  // never answers, as awaitPortFree does, rather than letting the test fail later on a refused scrape.
+  internal suspend fun awaitPortReady(
     port: Int,
     timeout: kotlin.time.Duration = 5.seconds,
   ) {
@@ -98,14 +100,14 @@ internal object HarnessTests {
         delay(25.milliseconds)
       }
     }
-    logger.warn { "Port $port not ready after $timeout" }
+    error("Port $port not ready after $timeout")
   }
 
   suspend fun timeoutTest(
     pathManager: AgentPathManager,
     caller: String,
     proxyPort: Int,
-    agentPort: Int = 9900,
+    agentPort: Int = HARNESS_TIMEOUT_TARGET_PORT,
     agentPath: String = "agent-timeout",
     proxyPath: String = "proxy-timeout",
   ) {

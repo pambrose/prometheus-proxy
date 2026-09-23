@@ -62,6 +62,13 @@ object ContainerTestSupport {
    */
   const val NGINX_IMAGE = "nginx:1.29-alpine"
 
+  /**
+   * The Prometheus image the end-to-end specs scrape through. Pinned for the same reason as [NGINX_IMAGE]: the floating
+   * `latest` changed what the suite tested without any change here. Bump it deliberately, since the specs check PromQL
+   * results and the HTTP service-discovery contract.
+   */
+  const val PROMETHEUS_IMAGE = "prom/prometheus:v3.14.0"
+
   /** True only when `RUN_CONTAINER_TESTS=true`; otherwise every spec registers a single disabled placeholder. */
   fun containerTestsEnabled(): Boolean = System.getenv("RUN_CONTAINER_TESTS") == "true"
 
@@ -196,7 +203,7 @@ object ContainerTestSupport {
     network: Network,
     ymlResource: String = "containers/prometheus.yml",
   ): GenericContainer<*> =
-    GenericContainer<Nothing>("prom/prometheus:latest").apply {
+    GenericContainer<Nothing>(PROMETHEUS_IMAGE).apply {
       withNetwork(network)
       withNetworkAliases(PROMETHEUS_ALIAS)
       withClasspathResourceMapping(ymlResource, "/etc/prometheus/prometheus.yml", BindMode.READ_ONLY)

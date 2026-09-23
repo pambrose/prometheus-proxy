@@ -34,6 +34,7 @@ import io.ktor.server.engine.embeddedServer
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
+import io.prometheus.common.TestPorts.HEARTBEAT_DISABLED_HTTP_PORT
 import io.prometheus.Agent
 import io.prometheus.Proxy
 import io.prometheus.common.LOOPBACK_HOST
@@ -58,7 +59,7 @@ class InProcessHeartbeatDisabledTest : StringSpec() {
       CollectorRegistry.defaultRegistry.clear()
 
       val serverName = "hb-disabled-${System.nanoTime()}"
-      val httpPort = 9526
+      val httpPort = HEARTBEAT_DISABLED_HTTP_PORT
 
       // The metrics endpoint the agent will scrape.
       val stub =

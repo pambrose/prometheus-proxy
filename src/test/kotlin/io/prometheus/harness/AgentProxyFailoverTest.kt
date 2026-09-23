@@ -152,8 +152,7 @@ class AgentProxyFailoverTest : StringSpec() {
   companion object {
     private const val FAILOVER_CONFIG_FILE = "config/test-configs/proxy-failover.conf"
 
-    // Dedicated ports, following the one-off convention used by the other standalone harness specs
-    // (9512, 9525, 9526, 9527) rather than TestPorts.kt, which mirrors real default config values.
+    // This spec's own ports, from TestPorts, where TestPortsTest checks them against every other spec's.
     private const val PROXY_A_HTTP_PORT = TestPorts.FAILOVER_PROXY_A_HTTP_PORT
     private const val PROXY_A_GRPC_PORT = TestPorts.FAILOVER_PROXY_A_GRPC_PORT
     private const val PROXY_B_HTTP_PORT = TestPorts.FAILOVER_PROXY_B_HTTP_PORT

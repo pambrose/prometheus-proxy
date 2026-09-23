@@ -33,6 +33,7 @@ import io.ktor.server.engine.embeddedServer
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
+import io.prometheus.common.TestPorts.METRIC_FILTER_HTTP_PORT
 import io.prometheus.Agent
 import io.prometheus.Proxy
 import io.prometheus.client.CollectorRegistry
@@ -53,12 +54,8 @@ class AgentMetricFilterTest : StringSpec() {
       CollectorRegistry.defaultRegistry.clear()
 
       val serverName = "metric-filter-${System.nanoTime()}"
-      // Dedicated port, not TestPorts.kt: avoids clashing with the shared harness port (9505) and the
-      // other standalone in-process specs' own dedicated ports (9512, 9525, 9526 -- see
-      // TlsMutualAuthRejectionTest/InProcessIdleShutdownTest/InProcessHeartbeatDisabledTest for the
-      // same pattern). TestPorts.kt holds ports that mirror real default config values shared broadly
-      // across the unit/container suites, not one-off ports owned by a single harness spec.
-      val httpPort = 9527
+      // This spec's own port, in TestPorts with every other spec's, so TestPortsTest catches a collision.
+      val httpPort = METRIC_FILTER_HTTP_PORT
 
       // Two families: go_goroutines is denied by harness.conf, app_requests is not.
       val body =

@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — Late September 2026 Findings
 
-**Status:** 31 issues — 21 fixed, 10 open (open: 0 high · 0 medium · 10 low) — fixed: #1–#13, #17, #18, #21, #24, #25, #28, #30, #31
+**Status:** 31 issues — 24 fixed, 7 open (open: 0 high · 0 medium · 7 low) — fixed: #1–#13, #17, #18, #21, #24–#31
 
 **Date:** 2026-09-22
 
@@ -55,10 +55,10 @@ gate (#17).
 | 23 | Smaller documentation drift                                                     | Docs     | low      | ⬜      |
 | 24 | `AgentBacklogDriftTest` tests its own copy of the logic, not the product        | Tests    | medium   | ✅      |
 | 25 | Tests whose assertions don't match their names                                  | Tests    | low      | ✅      |
-| 26 | Real-clock waits remain in `HttpClientCacheTest` and `AgentContextTest`         | Tests    | low      | ⬜      |
-| 27 | Harness binds hard-coded port 9900 outside `TestPorts`; `awaitPortReady` warns  | Tests    | low      | ⬜      |
+| 26 | Real-clock waits remain in `HttpClientCacheTest` and `AgentContextTest`         | Tests    | low      | ✅      |
+| 27 | Harness binds hard-coded port 9900 outside `TestPorts`; `awaitPortReady` warns  | Tests    | low      | ✅      |
 | 28 | Test resource leaks: `proxyCallTest` servers and unstopped `Agent`s             | Tests    | low      | ✅      |
-| 29 | `prom/prometheus:latest` unpinned in the container suite                        | Tests    | low      | ⬜      |
+| 29 | `prom/prometheus:latest` unpinned in the container suite                        | Tests    | low      | ✅      |
 | 30 | Untested: retryable discovered rejection in backoff retried on URL/label change | Tests    | low      | ✅      |
 | 31 | Harness binds test ports inside the Linux ephemeral range; CI bind flake        | Tests    | low      | ✅      |
 
@@ -80,7 +80,7 @@ then the items that change what operators see, then hardening, and leaves tidy-u
 | 7 ✅  | #7, #8, #4           | Config and input validation                                | Startup `require`s and path normalization; low risk, each with a unit test.                                                      |
 | 8 ✅  | #3                   | Log discovery warnings once                                | Follows the #267/#270 pattern already in the codebase.                                                                           |
 | 9 ✅  | #24, #25, #28        | Tests that test the product and clean up after themselves  | Removes false confidence before the next refactor.                                                                               |
-| 10   | #27, ~~#31~~, #26, #29 | Deterministic, collision-free test infrastructure          | Flake prevention; `TestPortsTest` then guards the harness port.                                                                  |
+| 10 ✅ | #27, ~~#31~~, #26, #29 | Deterministic, collision-free test infrastructure          | Flake prevention; `TestPortsTest` then guards the harness port.                                                                  |
 | 11   | #14, #15             | Per-identity path caps; defer context creation until auth  | Needs new config keys and a design choice, so it follows the quick hardening in step 5.                                          |
 | 12   | #16, #19, #20        | Dependency and build hygiene                               | Remove Jetty 11 after the admin-servlet tests pass without it; extend Dependabot; tidy the Makefile and build.                   |
 | 13   | #22, #23             | Documentation drift                                        | No behavior change; can ride along with any earlier PR that touches the same file.                                               |
@@ -627,7 +627,7 @@ agents it builds are released after each test.
 
 The `ProxyHttpRoutesTest` item was fixed with #5.
 
-### 26. [ ] Real-clock waits remain in `HttpClientCacheTest` and `AgentContextTest`
+### 26. [x] Real-clock waits remain in `HttpClientCacheTest` and `AgentContextTest`
 
 **Severity:** low · **Confidence:** confirmed (flakiness suspected, not observed)
 
@@ -643,7 +643,13 @@ and assert a real 50–100 ms sweeper ran. `AgentContextTest.kt:486` asserts `in
 **Progress:** the `AgentContextTest` half is done with #25: `AgentContext` takes an injectable clock and its activity
 tests no longer sleep. The `HttpClientCacheTest` sleeps remain.
 
-### 27. [ ] Harness binds hard-coded port 9900 outside `TestPorts`; `awaitPortReady` warns
+**Resolution:** four `HttpClientCacheTest` expiry tests (expired-client close, replacement on access, background
+removal, removal of all expired entries) now pass the spec's `TestTimeSource` to their caches, advance it past expiry,
+and wait for the sweeper with `eventually` (5s ceiling, 10ms sweep interval) instead of sleeping and then asserting.
+Replacement on access needs no wait at all. The two close-under-load tests keep a short sleep: it only gives the
+sweeper work, and their assertions have 1–5s of headroom, so they aren't timing-sensitive in the same way.
+
+### 27. [x] Harness binds hard-coded port 9900 outside `TestPorts`; `awaitPortReady` warns
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -657,6 +663,15 @@ specs. `awaitPortReady` only logs on timeout, while its sibling `awaitPortFree` 
 
 **Fix:** move 9900 into `TestPorts` (or per spec), make `awaitPortReady` throw, and point the web-ui config at a
 reserved constant or `http://unserved.invalid/metrics`.
+
+**Resolution:**
+- `timeoutTest`'s target moved from 9900 to `TestPorts.HARNESS_TIMEOUT_TARGET_PORT` (9528).
+- The three literal ports (9525–9527) are now `IDLE_SHUTDOWN_HTTP_PORT`, `HEARTBEAT_DISABLED_HTTP_PORT`, and
+  `METRIC_FILTER_HTTP_PORT`. The comments claiming `TestPorts` was only for default values were corrected, in
+  `AgentProxyFailoverTest` too.
+- `awaitPortReady` is `internal` and fails with the port number when nothing answers. Two new `HarnessHelpersTest`
+  cases cover it.
+- `web-ui-paths.conf` points at `http://ui-path-target.invalid/metrics`.
 
 ### 28. [x] Test resource leaks: `proxyCallTest` servers and unstopped `Agent`s
 
@@ -677,7 +692,7 @@ and by the harness specs passing, not by injecting a failure. `AgentTest.createT
 `afterTest` releases its gRPC channel and HTTP client cache (in `runCatching`, since some tests stop their agent
 themselves). `AgentBacklogDriftTest`'s agents are released the same way (#24).
 
-### 29. [ ] `prom/prometheus:latest` unpinned in the container suite
+### 29. [x] `prom/prometheus:latest` unpinned in the container suite
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -686,6 +701,10 @@ themselves). `AgentBacklogDriftTest`'s agents are released the same way (#24).
 **Problem:** the image floats — the same reproducibility gap September #29 closed for nginx.
 
 **Fix:** pin a tag in a shared constant (and add it to Dependabot's Docker coverage with #19 if practical).
+
+**Resolution:** `ContainerTestSupport.PROMETHEUS_IMAGE` pins `prom/prometheus:v3.14.0`, the newest release on Docker
+Hub today, next to `NGINX_IMAGE`; `CLAUDE.md` and `docs/TESTING.md` name the version. Dependabot can't see a tag in
+Kotlin source, so bumping it stays manual.
 
 ### 30. [x] Untested: retryable discovered rejection in backoff retried on URL/label change
 

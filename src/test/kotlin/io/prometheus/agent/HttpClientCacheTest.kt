@@ -19,6 +19,7 @@
 package io.prometheus.agent
 
 import com.pambrose.common.concurrent.await
+import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.assertions.throwables.shouldNotThrow
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
@@ -53,6 +54,12 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TestTimeSource
 
 class HttpClientCacheTest : StringSpec() {
+  companion object {
+    // A ceiling, not a wait: expiry is on the test clock, and the sweeper, which runs on real time, removes an expired
+    // entry within a few of its 10ms intervals. Generous so a CI stall can't fail the test, which a fixed sleep could.
+    private val SWEEP_TIMEOUT = 5.seconds
+  }
+
   private lateinit var cache: HttpClientCache
 
   // Entry ages and idle times are measured on this clock, so expiry tests advance it instead of sleeping against
@@ -813,7 +820,8 @@ class HttpClientCacheTest : StringSpec() {
         maxCacheSize = 10,
         maxAge = 200.milliseconds,
         maxIdleTime = 100.milliseconds,
-        cleanupInterval = 100.milliseconds,
+        cleanupInterval = 10.milliseconds,
+        timeSource = clock,
       )
 
       try {
@@ -824,11 +832,10 @@ class HttpClientCacheTest : StringSpec() {
         // Not closed yet
         verify(exactly = 0) { mockClient.close() }
 
-        // Wait for expiry + multiple cleanup cycles
-        delay(600.milliseconds)
+        // Expire the entry on the test clock, then wait for the sweeper, which runs on real time, to close it.
+        clock += 300.milliseconds
 
-        // The expired idle client should have been closed by the cleanup coroutine
-        verify(exactly = 1) { mockClient.close() }
+        eventually(SWEEP_TIMEOUT) { verify(exactly = 1) { mockClient.close() } }
       } finally {
         cleanupCache.close()
       }
@@ -840,6 +847,7 @@ class HttpClientCacheTest : StringSpec() {
         maxAge = 200.milliseconds,
         maxIdleTime = 100.milliseconds,
         cleanupInterval = 30.seconds, // Long interval -- replacement happens on access, not cleanup
+        timeSource = clock,
       )
 
       try {
@@ -851,8 +859,8 @@ class HttpClientCacheTest : StringSpec() {
 
         verify(exactly = 0) { oldClient.close() }
 
-        // Wait for the entry to expire
-        delay(300.milliseconds)
+        // Expire the entry
+        clock += 300.milliseconds
 
         // Access the same key -- expired entry is replaced with a new one
         val newEntry = replaceCache.getOrCreateClient(key) { mockk<HttpClient>(relaxed = true) }
@@ -917,7 +925,8 @@ class HttpClientCacheTest : StringSpec() {
         maxCacheSize = 10,
         maxAge = 100.milliseconds,
         maxIdleTime = 50.milliseconds,
-        cleanupInterval = 50.milliseconds,
+        cleanupInterval = 10.milliseconds,
+        timeSource = clock,
       )
 
       try {
@@ -928,23 +937,22 @@ class HttpClientCacheTest : StringSpec() {
 
         cleanupCache.currentCacheSize() shouldBe 1
 
-        // Wait for expiry + cleanup to run
-        delay(400.milliseconds)
+        // Expire the entry on the test clock, then wait for the sweeper to remove it
+        clock += 200.milliseconds
 
-        // Cleanup should have removed the expired entry despite any transient issues
-        cleanupCache.currentCacheSize() shouldBe 0
+        eventually(SWEEP_TIMEOUT) { cleanupCache.currentCacheSize() shouldBe 0 }
       } finally {
         cleanupCache.close()
       }
     }
 
     "cleanupExpiredEntries should remove all expired entries" {
-      // Create a cache with short expiry but long cleanup interval (manual cleanup)
       val testCache = HttpClientCache(
         maxCacheSize = 10,
         maxAge = 200.milliseconds,
         maxIdleTime = 100.milliseconds,
-        cleanupInterval = 100.milliseconds,
+        cleanupInterval = 10.milliseconds,
+        timeSource = clock,
       )
 
       try {
@@ -959,14 +967,10 @@ class HttpClientCacheTest : StringSpec() {
 
         testCache.currentCacheSize() shouldBe 3
 
-        // Wait for entries to expire
-        delay(300.milliseconds)
+        // Expire every entry on the test clock, then wait for the sweeper to remove them
+        clock += 300.milliseconds
 
-        // Wait for cleanup to run
-        delay(200.milliseconds)
-
-        // All expired entries should be removed by cleanup
-        testCache.currentCacheSize() shouldBe 0
+        eventually(SWEEP_TIMEOUT) { testCache.currentCacheSize() shouldBe 0 }
       } finally {
         testCache.close()
       }
