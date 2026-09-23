@@ -275,6 +275,8 @@ interval as their deadline, capped at the unary deadline.
   pull-request run; the container tests run on each push to `master` and on demand, no longer on pull requests.
 - Point-in-time reviews, proposals, and design plans moved to `docs/archive/`, and IDE state that was already
   meant to be ignored is no longer tracked.
+- Every port a test binds is now in one checked list, the cache expiry tests no longer depend on sleep timing,
+  and the container tests pin their Prometheus image.
 - Several tests now check what their names say — one had asserted its own copy of the logic under test — and
   tests no longer leave HTTP servers or gRPC channels open after they finish or fail.
 - The test suite relies less on timing: expiry and cleanup tests use a test clock or wait for a real signal

@@ -36,6 +36,7 @@ import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.harness.support.TestUtils.stopAll
 import java.net.ServerSocket
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 // The harness helpers used to warn and carry on: a port still held after the wait logged a warning and the spec went
@@ -53,6 +54,18 @@ class HarnessHelpersTest : StringSpec() {
         val e = shouldThrow<IllegalStateException> { awaitPortFree(taken.localPort, maxAttempts = 2, delayMs = 10) }
         e.message shouldContain "${taken.localPort}"
       }
+    }
+
+    // awaitPortReady only logged a warning when a server never came up, so the test went on to fail later on a
+    // symptom -- a refused scrape -- far from the cause. It now fails at once, like awaitPortFree, naming the port.
+    "awaitPortReady should return once the port accepts connections" {
+      ServerSocket(0).use { listening -> HarnessTests.awaitPortReady(listening.localPort, 2.seconds) }
+    }
+
+    "awaitPortReady should fail when nothing listens on the port" {
+      val port = ServerSocket(0).use { it.localPort }
+      val e = shouldThrow<IllegalStateException> { HarnessTests.awaitPortReady(port, 300.milliseconds) }
+      e.message shouldContain "$port"
     }
 
     // The launchers left the proxy's gRPC port and both sides' admin and metrics servers on the product defaults, so

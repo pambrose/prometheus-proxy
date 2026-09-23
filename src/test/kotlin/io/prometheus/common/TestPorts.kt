@@ -60,6 +60,14 @@ object TestPorts {
   // HarnessHelpersTest
   const val HARNESS_HELPERS_HTTP_PORT = 9511
 
+  // The scrape target HarnessTests.timeoutTest serves, which every standard harness suite runs
+  const val HARNESS_TIMEOUT_TARGET_PORT = 9528
+
+  // InProcessIdleShutdownTest, InProcessHeartbeatDisabledTest, and AgentMetricFilterTest
+  const val IDLE_SHUTDOWN_HTTP_PORT = 9525
+  const val HEARTBEAT_DISABLED_HTTP_PORT = 9526
+  const val METRIC_FILTER_HTTP_PORT = 9527
+
   // TlsMutualAuthRejectionTest
   const val TLS_REJECTION_HTTP_PORT = 9512
   const val TLS_REJECTION_AGENT_PORT = 9517
