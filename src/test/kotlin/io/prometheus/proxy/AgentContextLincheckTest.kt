@@ -21,7 +21,6 @@ package io.prometheus.proxy
 import io.kotest.core.spec.style.StringSpec
 import io.prometheus.common.Lincheck
 import kotlinx.coroutines.channels.ClosedSendChannelException
-import org.jetbrains.kotlinx.lincheck.check
 import org.jetbrains.lincheck.datastructures.ModelCheckingOptions
 import org.jetbrains.lincheck.datastructures.Operation
 import org.jetbrains.lincheck.datastructures.StressOptions

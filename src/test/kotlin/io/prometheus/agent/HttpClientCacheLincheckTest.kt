@@ -25,7 +25,6 @@ import io.prometheus.common.Lincheck
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
-import org.jetbrains.kotlinx.lincheck.check
 import org.jetbrains.lincheck.datastructures.Operation
 import org.jetbrains.lincheck.datastructures.StressOptions
 import org.jetbrains.lincheck.datastructures.Validate

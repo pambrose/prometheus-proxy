@@ -21,7 +21,6 @@ package io.prometheus.agent
 import io.kotest.core.spec.style.StringSpec
 import io.prometheus.common.Lincheck
 import io.prometheus.common.ScrapeResults
-import org.jetbrains.kotlinx.lincheck.check
 import org.jetbrains.lincheck.datastructures.ModelCheckingOptions
 import org.jetbrains.lincheck.datastructures.Operation
 import org.jetbrains.lincheck.datastructures.Options

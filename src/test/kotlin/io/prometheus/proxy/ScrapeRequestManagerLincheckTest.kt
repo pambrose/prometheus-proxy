@@ -24,8 +24,7 @@ import io.kotest.core.spec.style.StringSpec
 import io.ktor.http.HttpStatusCode
 import io.prometheus.common.Lincheck
 import io.prometheus.common.ScrapeResults
-import org.jetbrains.kotlinx.lincheck.check
-import org.jetbrains.kotlinx.lincheck.paramgen.IntGen
+import org.jetbrains.lincheck.datastructures.IntGen
 import org.jetbrains.lincheck.datastructures.ModelCheckingOptions
 import org.jetbrains.lincheck.datastructures.Operation
 import org.jetbrains.lincheck.datastructures.Param
