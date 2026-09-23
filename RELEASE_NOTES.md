@@ -2,9 +2,9 @@
 
 ---
 
-## Unreleased
+## 4.1.0
 
-_Not yet released_
+_Released 2026-09-22_
 
 A security and reliability release. It closes several ways an authenticated agent could interfere with
 another agent on the same proxy, and fixes agent failover for a proxy that accepts connections but rejects
