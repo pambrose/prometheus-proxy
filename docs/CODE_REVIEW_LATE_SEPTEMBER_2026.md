@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — Late September 2026 Findings
 
-**Status:** 31 issues — 27 fixed, 4 open (open: 0 high · 0 medium · 4 low) — fixed: #1–#13, #16–#21, #24–#31
+**Status:** 31 issues — 29 fixed, 2 open (open: 0 high · 0 medium · 2 low) — fixed: #1–#13, #16–#31; open: #14, #15
 
 **Date:** 2026-09-22
 
@@ -51,8 +51,8 @@ gate (#17).
 | 19 | mkdocs-material unpinned locally; Dependabot misses uv and Docker images        | CI/build | low      | ✅      |
 | 20 | Minor build tidy-ups                                                            | CI/build | low      | ✅      |
 | 21 | Scrape outcome labels in the docs don't match the code                          | Docs     | medium   | ✅      |
-| 22 | `KDOC_SUMMARY.md` Dokka section is stale                                        | Docs     | low      | ⬜      |
-| 23 | Smaller documentation drift                                                     | Docs     | low      | ⬜      |
+| 22 | `KDOC_SUMMARY.md` Dokka section is stale                                        | Docs     | low      | ✅      |
+| 23 | Smaller documentation drift                                                     | Docs     | low      | ✅      |
 | 24 | `AgentBacklogDriftTest` tests its own copy of the logic, not the product        | Tests    | medium   | ✅      |
 | 25 | Tests whose assertions don't match their names                                  | Tests    | low      | ✅      |
 | 26 | Real-clock waits remain in `HttpClientCacheTest` and `AgentContextTest`         | Tests    | low      | ✅      |
@@ -83,7 +83,7 @@ then the items that change what operators see, then hardening, and leaves tidy-u
 | 10 ✅ | #27, ~~#31~~, #26, #29 | Deterministic, collision-free test infrastructure          | Flake prevention; `TestPortsTest` then guards the harness port.                                                                  |
 | 11   | #14, #15             | Per-identity path caps; defer context creation until auth  | Needs new config keys and a design choice, so it follows the quick hardening in step 5.                                          |
 | 12 ✅ | #16, #19, #20        | Dependency and build hygiene                               | Remove Jetty 11 after the admin-servlet tests pass without it; extend Dependabot; tidy the Makefile and build.                   |
-| 13   | #22, #23             | Documentation drift                                        | No behavior change; can ride along with any earlier PR that touches the same file.                                               |
+| 13 ✅ | #22, #23             | Documentation drift                                        | No behavior change; can ride along with any earlier PR that touches the same file.                                               |
 
 ---
 
@@ -575,7 +575,7 @@ counts them, explain that `upstream_error` is always the target's own status, an
 `outcome` label. `troubleshooting.md` names `proxy_stopped` and `agent_disconnected` correctly under 503 and gains a
 502 section for `upstream_error` and `invalid_response`.
 
-### 22. [ ] `KDOC_SUMMARY.md` Dokka section is stale
+### 22. [x] `KDOC_SUMMARY.md` Dokka section is stale
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -586,7 +586,10 @@ counts them, explain that `upstream_error` is always the target's own status, an
 
 **Fix:** correct each item.
 
-### 23. [ ] Smaller documentation drift
+**Resolution:** corrected: `make kdocs`, Dokka 2.2.0, `public` visibility only (with why the `internal` KDoc still
+matters), and "10 classes".
+
+### 23. [x] Smaller documentation drift
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -598,6 +601,18 @@ counts them, explain that `upstream_error` is always the target's own status, an
 - `.claude/skills/publishing-release/SKILL.md:14` — `make check-gpg-env`; the target is `_check-gpg-env`.
 - `llms.txt:181` — cites shadow 9.4.2; the build uses 9.6.1.
 - `README.md:5` — Kotlin badge says 2.4.0; the catalog has 2.4.20. Add the badge to the release checklist.
+
+**Resolution:**
+- The agent page's discovery table describes the backoff: the next poll, one interval, then doubling to the cap.
+- `TESTING.md` lists `ConfigLoadExceptionTest` and `ProxyDashboardServiceTest`; a check of every `*Test.kt` against it
+  now finds nothing missing. Its coverage section documents both Kover gates, the 80% per-class floor, and the
+  separate-invocation rule.
+- The release skill names `_check-gpg-env`.
+- `llms.txt` qualifies the shadow version as the one the finding was made on.
+- The README badge says 2.4.20.
+
+The badge was not added to the release checklist. It tracks Kotlin upgrades, not releases, so a release checklist
+would check it at the wrong time.
 
 ---
 
