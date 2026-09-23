@@ -1,6 +1,7 @@
 # Prometheus-Proxy Code Review — Late September 2026 Findings
 
-**Status:** 31 issues — 31 fixed, 0 open — all findings addressed
+**Status:** 31 issues — 31 fixed, 0 open — all findings addressed. Archived to `docs/archive/` once the last finding
+merged (PR #293); line numbers and names describe the code as of the review.
 
 **Date:** 2026-09-22
 

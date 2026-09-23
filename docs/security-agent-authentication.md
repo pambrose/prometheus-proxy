@@ -197,14 +197,14 @@ In rough priority order:
 - **Consolidated paths bound to one identity** — a consolidated path records the identity that registered it, and an
   agent of another identity may join only once no valid agent still serves it, closing the last way one identity
   could put its metrics on another's path.
-- **Per-agent path limits** (finding #14 of `docs/CODE_REVIEW_LATE_SEPTEMBER_2026.md`) — `proxy.internal.maxPathsPerAgent`
+- **Per-agent path limits** (finding #14 of `docs/archive/CODE_REVIEW_LATE_SEPTEMBER_2026.md`) — `proxy.internal.maxPathsPerAgent`
   (10,000), `maxPathLength` (512), and `maxLabelsSizeBytes` (8 KiB) bound what one agent connection can register, so
   an identity limited to a few path patterns can no longer add unlimited paths, service-discovery targets, and metric
   series.
 - **No pre-auth agents** (finding #15) — the transport filter still assigns every connection an `agentId`, but its
   context stays pending until the connection's first authenticated call: until then it isn't logged at INFO,
   counted in `proxy_agent_map_size`, listed on the dashboard or health checks, or announced as `AgentConnected`.
-- **Service-discovery labels limited** (finding #12 of `docs/CODE_REVIEW_LATE_SEPTEMBER_2026.md`) — agent labels can no
+- **Service-discovery labels limited** (finding #12 of `docs/archive/CODE_REVIEW_LATE_SEPTEMBER_2026.md`) — agent labels can no
   longer set `__`-prefixed keys, and `proxy.service.discovery.reserveJobAndInstanceLabels` keeps them from setting `job`
   and `instance`, so an identity can't pass its targets off as another identity's.
 
