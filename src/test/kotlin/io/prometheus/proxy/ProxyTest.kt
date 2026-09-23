@@ -37,6 +37,12 @@ import io.prometheus.grpc.registerAgentRequest
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.onSubscription
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.CompletableDeferred
 
 class ProxyTest : StringSpec() {
   private fun createTestProxy(vararg extraArgs: String) =
@@ -350,6 +356,25 @@ class ProxyTest : StringSpec() {
       mockProxy.metrics { invoked = true }
 
       invoked.shouldBeTrue()
+    }
+
+    // A connection that closed before it authenticated was never shown as connected, so it mustn't be shown leaving.
+    "removing a context that was never announced should not emit AgentDisconnected" {
+      val proxy = createTestProxy()
+      val pending = createAgentContext().also { proxy.agentContextManager.addAgentContext(it, announce = false) }
+      val marker = ProxyEvent.PathRegistered("marker", "none")
+
+      val seen =
+        coroutineScope {
+          val subscribed = CompletableDeferred<Unit>()
+          val collected = async { proxy.eventBus.flow.onSubscription { subscribed.complete(Unit) }.take(1).toList() }
+          subscribed.await()
+          proxy.removeAgentContext(pending.agentId, "Termination")
+          proxy.eventBus.emit(marker)
+          collected.await()
+        }
+
+      seen shouldBe listOf(marker)
     }
 
     // ==================== Bug #20: shutDown ordering Tests ====================

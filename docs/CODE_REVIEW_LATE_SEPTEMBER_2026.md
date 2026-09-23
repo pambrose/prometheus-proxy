@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — Late September 2026 Findings
 
-**Status:** 31 issues — 29 fixed, 2 open (open: 0 high · 0 medium · 2 low) — fixed: #1–#13, #16–#31; open: #14, #15
+**Status:** 31 issues — 31 fixed, 0 open — all findings addressed
 
 **Date:** 2026-09-22
 
@@ -43,8 +43,8 @@ gate (#17).
 | 11 | Scrape port serves the target's Content-Type (HTML) with no `nosniff`           | Security | low      | ✅      |
 | 12 | Agent labels can set `__*` meta labels and `job`/`instance`                     | Security | low      | ✅      |
 | 13 | Raw target URL (credentials included) logged at DEBUG on every scrape           | Security | low      | ✅      |
-| 14 | No cap on paths per agent/identity, path length, or labels size                 | Security | low      | ⬜      |
-| 15 | Unauthenticated connections create agent contexts and dashboard events          | Security | low      | ⬜      |
+| 14 | No cap on paths per agent/identity, path length, or labels size                 | Security | low      | ✅      |
+| 15 | Unauthenticated connections create agent contexts and dashboard events          | Security | low      | ✅      |
 | 16 | Unused, out-of-support Jetty 11 `jetty-servlet` ships in the fat JARs           | Security | low      | ✅      |
 | 17 | PRs (incl. Dependabot) merge with no build or tests                             | CI/build | medium   | ✅      |
 | 18 | SLF4J 2.0.20 bump not recorded in CHANGELOG / RELEASE_NOTES                     | CI/build | low      | ✅      |
@@ -81,7 +81,7 @@ then the items that change what operators see, then hardening, and leaves tidy-u
 | 8 ✅  | #3                   | Log discovery warnings once                                | Follows the #267/#270 pattern already in the codebase.                                                                           |
 | 9 ✅  | #24, #25, #28        | Tests that test the product and clean up after themselves  | Removes false confidence before the next refactor.                                                                               |
 | 10 ✅ | #27, ~~#31~~, #26, #29 | Deterministic, collision-free test infrastructure          | Flake prevention; `TestPortsTest` then guards the harness port.                                                                  |
-| 11   | #14, #15             | Per-identity path caps; defer context creation until auth  | Needs new config keys and a design choice, so it follows the quick hardening in step 5.                                          |
+| 11 ✅ | #14, #15             | Per-identity path caps; defer context creation until auth  | Needs new config keys and a design choice, so it follows the quick hardening in step 5.                                          |
 | 12 ✅ | #16, #19, #20        | Dependency and build hygiene                               | Remove Jetty 11 after the admin-servlet tests pass without it; extend Dependabot; tidy the Makefile and build.                   |
 | 13 ✅ | #22, #23             | Documentation drift                                        | No behavior change; can ride along with any earlier PR that touches the same file.                                               |
 
@@ -410,7 +410,7 @@ load-failure error (which no longer logs a stack trace, whose first line was the
 a stand-in with the redacted message and the original stack trace, since an embedded host logging the exception prints
 the cause too. Tests cover the `toString` and a config URL with credentials that gets a 404.
 
-### 14. [ ] No cap on paths per agent/identity, path length, or labels size
+### 14. [x] No cap on paths per agent/identity, path length, or labels size
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -424,7 +424,27 @@ the cause too. Tests cover the `toString` and a config URL with credentials that
 **Fix:** add `maxPathsPerAgent` (or per identity), a maximum path length and labels size, and bound
 `loggedPathRejections`.
 
-### 15. [ ] Unauthenticated connections create agent contexts and dashboard events
+**Resolution:** the three limits are new `proxy.internal` settings, and `0` turns each off:
+- `maxPathsPerAgent` defaults to 10,000, about 40× the largest harness profile. It is per agent connection, not per
+  identity, because every legacy-token agent shares one identity, so a per-identity cap would limit the whole fleet.
+- `maxPathLength` defaults to 512 characters.
+- `maxLabelsSizeBytes` defaults to 8 KiB.
+
+How they're enforced:
+- A path past the count limit is refused with the new `PathRejectionCause.PATH_LIMIT_REACHED` (proto value 7, an
+  additive change). An over-long path or over-large labels are refused with `INVALID_PATH`. The agent treats both
+  as non-retryable.
+- `ProxyPathManager` keeps a per-agent path count under the `pathMap` lock, updated on add, re-registration (not
+  counted), displacement, consolidated join and leave, unregister, and the disconnect sweep. Enforcement needs no
+  scan, and the displacement orphan check now reads the count instead of scanning the map.
+- The proxy WARNs once when an agent reaches 80% of the cap.
+- A too-long path is truncated in the reason and in the connection's rejection record. `loggedPathRejections`, one
+  entry per path, is now bounded by the cap.
+
+Tests cover each limit, re-registration, room freed by each way a path leaves, other agents' paths, 0 meaning
+unlimited, the warning, and option validation. Mutating each of the three count decrements fails a test.
+
+### 15. [x] Unauthenticated connections create agent contexts and dashboard events
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -438,6 +458,22 @@ default.
 
 **Fix:** create the context (or at least emit the event and count it) on the first authenticated call; consider
 a default `maxConnectionIdle` or a connection cap; document the remaining gap.
+
+**Resolution:** the transport filter still creates the context in `transportReady`, since it must stamp the
+connection's `agentId`, but adds it pending (`addAgentContext(context, announce = false)`). A pending context is
+findable by `agentId` but logged only at DEBUG, and left out of `agentContextSize` (the `proxy_agent_map_size`
+gauge) and `agentContextEntries` (the dashboard and health checks), with no `AgentConnected`.
+
+`connectAgent` — the agent's first call, which the auth interceptor has already let through — announces it: INFO
+log, `AgentConnected`, and counted from then on. `removeAgentContext` emits `AgentDisconnected` only for an announced
+context. Stale-context eviction still reaches pending contexts, since it reads the full map.
+
+Filter-disabled mode creates its context in `connectAgentWithTransportFilterDisabled`, already after auth, so it
+announces at once. Neither a connection cap nor a default `maxConnectionIdle` was added.
+
+Tests cover pending vs announced counting and listing, the event firing once at announcement, the transport filter
+not announcing, `connectAgent` announcing, and no `AgentDisconnected` for a never-announced context. Reverting the
+filter to announce immediately fails the filter test.
 
 ### 16. [x] Unused, out-of-support Jetty 11 `jetty-servlet` ships in the fat JARs
 

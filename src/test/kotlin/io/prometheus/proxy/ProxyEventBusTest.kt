@@ -122,5 +122,25 @@ class ProxyEventBusTest : StringSpec() {
 
       seen shouldContainExactly [ProxyEvent.AgentConnected(context.agentId)]
     }
+
+    // The transport filter registers every connection's context before any call is authenticated, so anyone who could
+    // reach the agent port appeared on the dashboard as a connected agent. A pending context is announced only when
+    // announceAgentContext is called -- by connectAgent, which the auth interceptor lets through -- and only once.
+    "a pending context should announce AgentConnected when announced, not when added, and only once" {
+      val bus = ProxyEventBus()
+      val manager = AgentContextManager(isTestMode = true, eventBus = bus)
+      val context = AgentContext("10.0.1.14:1234")
+      val marker = ProxyEvent.PathRegistered("marker", "none")
+
+      val seen =
+        collect(bus, 2) {
+          manager.addAgentContext(context, announce = false)
+          manager.announceAgentContext(context.agentId)
+          manager.announceAgentContext(context.agentId)
+          bus.emit(marker)
+        }
+
+      seen shouldContainExactly [ProxyEvent.AgentConnected(context.agentId), marker]
+    }
   }
 }

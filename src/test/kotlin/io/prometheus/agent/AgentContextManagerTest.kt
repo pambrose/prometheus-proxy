@@ -54,6 +54,8 @@ class AgentContextManagerTest : StringSpec() {
       // Use putAgentContext to simulate replacement
       val agentId = context1.agentId
       manager.putAgentContext(agentId, context2)
+      // putAgentContext stores without announcing; the replacement counts once announced.
+      manager.announceAgentContext(agentId)
 
       manager.agentContextSize shouldBe 1
       manager.getAgentContext(agentId) shouldBe context2

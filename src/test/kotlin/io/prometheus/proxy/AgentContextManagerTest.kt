@@ -19,6 +19,7 @@
 package io.prometheus.proxy
 
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.longs.shouldBeLessThan
@@ -34,6 +35,25 @@ import kotlin.time.Duration.Companion.seconds
 
 class AgentContextManagerTest : StringSpec() {
   init {
+    // A pending context -- a connection that hasn't made an authenticated call yet -- is found by its agentId, so the
+    // transport and interceptor can still use it, but it isn't a connected agent: it's left out of the agent count
+    // and the entries the dashboard and health checks read until it's announced.
+    "a pending context should be found but not counted or listed until it is announced" {
+      val manager = AgentContextManager(isTestMode = true)
+      val context = AgentContext("10.0.1.14:1234")
+
+      manager.addAgentContext(context, announce = false)
+
+      manager.getAgentContext(context.agentId) shouldBe context
+      manager.agentContextSize shouldBe 0
+      manager.agentContextEntries.shouldBeEmpty()
+
+      manager.announceAgentContext(context.agentId)
+
+      manager.agentContextSize shouldBe 1
+      manager.agentContextEntries.map { it.key } shouldBe listOf(context.agentId)
+    }
+
     // ==================== Initial State Tests ====================
 
     "should start with empty agent context map" {
@@ -75,6 +95,8 @@ class AgentContextManagerTest : StringSpec() {
       // Use putAgentContext to replace with a second context using the same agentId
       val context2 = AgentContext("remote-addr-2")
       manager.putAgentContext(context1.agentId, context2)
+      // putAgentContext stores without announcing; the replacement counts once announced.
+      manager.announceAgentContext(context1.agentId)
 
       // Verify replacement occurred
       val retrieved = manager.getAgentContext(context1.agentId)

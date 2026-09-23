@@ -29,6 +29,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
 import java.time.Instant
 import java.util.concurrent.ConcurrentLinkedQueue
+import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.AtomicLong
 import kotlin.concurrent.atomics.incrementAndFetch
@@ -87,6 +88,16 @@ internal class AgentContext(
   private var lastActivityTimeMark: TimeMark by nonNullableReference(clock.markNow())
   private var lastRequestTimeMark: TimeMark by nonNullableReference(clock.markNow())
   private var valid by atomicBoolean(true)
+
+  // Whether this context has been announced as a connected agent; see AgentContextManager.announceAgentContext.
+  private val announcedFlag = AtomicBoolean(false)
+
+  /** True once the agent made its first authenticated call; until then the context is a pending connection. */
+  val announced: Boolean
+    get() = announcedFlag.load()
+
+  // Marks the context announced, returning true only for the call that did it.
+  internal fun markAnnounced(): Boolean = announcedFlag.compareAndSet(expectedValue = false, newValue = true)
 
   // Readable rather than private: the dashboard displays it to distinguish two runs of the same agent name.
   var launchId: String by nonNullableReference("Unassigned")

@@ -394,6 +394,18 @@ class ProxyOptions(
 
     // A non-positive limit would refuse every scrape.
     logger.requirePositive("internal.maxInFlightScrapeRequests", proxyConfigVals.internal.maxInFlightScrapeRequests)
+
+    // Path-registration limits: 0 turns one off, and only a negative value is meaningless.
+    with(proxyConfigVals.internal) {
+      listOf(
+        "maxPathsPerAgent" to maxPathsPerAgent,
+        "maxPathLength" to maxPathLength,
+        "maxLabelsSizeBytes" to maxLabelsSizeBytes,
+      ).forEach { (name, value) ->
+        require(value >= 0) { "internal.$name must be >= 0 (0 = unlimited): $value" }
+        logger.info { "internal.$name: ${if (value == 0) "unlimited" else value}" }
+      }
+    }
   }
 
   internal companion object {

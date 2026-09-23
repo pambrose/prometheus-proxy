@@ -229,6 +229,11 @@ class Proxy(
   // internal: the generated ConfigVals type is not part of the documented public API (finding 26).
   internal val proxyConfigVals: ConfigVals.Proxy2 get() = configVals.proxy
 
+  // Limits on what one agent connection may register; 0 means unlimited. See ProxyPathManager.addPath.
+  internal val maxPathsPerAgent: Int get() = proxyConfigVals.internal.maxPathsPerAgent
+  internal val maxPathLength: Int get() = proxyConfigVals.internal.maxPathLength
+  internal val maxLabelsSizeBytes: Int get() = proxyConfigVals.internal.maxLabelsSizeBytes
+
   // Whether agent-supplied job and instance labels are kept out of service discovery; see isReservedSdLabelKey.
   internal val reserveJobAndInstanceLabels: Boolean
     get() = proxyConfigVals.service.discovery.reserveJobAndInstanceLabels
@@ -403,7 +408,8 @@ class Proxy(
     // Emitted here rather than inside removeFromContextManager so the event's happens-before edge
     // covers BOTH managers. Emitting at removal time let a consumer wake between the two calls and
     // snapshot a path map that still listed the departed agent.
-    if (agentContext != null)
+    // A context that was never announced was never shown as connected, so it isn't shown leaving either.
+    if (agentContext?.announced == true)
       eventBus.emit(ProxyEvent.AgentDisconnected(agentId, reason))
     scrapeRequestManager.failAllScrapeRequests(agentId, "Agent disconnected: $reason", ProxyFailure.AGENT_DISCONNECTED)
     // Proactively reclaim any in-flight chunked-transfer buffers for this agent (the requests

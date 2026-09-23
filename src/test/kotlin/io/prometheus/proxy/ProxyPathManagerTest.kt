@@ -52,6 +52,18 @@ class ProxyPathManagerTest : StringSpec() {
     return proxy
   }
 
+  // A proxy with the given path limits; 0, the relaxed mock's default for every other test, means unlimited.
+  private fun createLimitedProxy(
+    maxPathsPerAgent: Int = 0,
+    maxPathLength: Int = 0,
+    maxLabelsSizeBytes: Int = 0,
+  ): Proxy =
+    createMockProxy().also { proxy ->
+      every { proxy.maxPathsPerAgent } returns maxPathsPerAgent
+      every { proxy.maxPathLength } returns maxPathLength
+      every { proxy.maxLabelsSizeBytes } returns maxLabelsSizeBytes
+    }
+
   // Counter-based like AgentContext.AGENT_ID_GENERATOR; a timestamp+random id can collide
   // when two mocks are created in the same millisecond, and duplicate agentIds make
   // removeFromPathManager() drop every agent's registrations instead of one agent's.
@@ -955,6 +967,112 @@ class ProxyPathManagerTest : StringSpec() {
       manager.addPath("app/metrics", "{}", createMockAgentContext()).shouldNotBeNull()
 
       verify(exactly = 0) { metrics.pathRegistered(any()) }
+    }
+
+    // ==================== Path limits ====================
+
+    // An identity limited to team-a-* could still register unlimited matching paths, each adding a path-map entry, a
+    // service-discovery target, and per-path metric series. The cap bounds what one agent connection can add.
+    "an agent at maxPathsPerAgent should be refused another path, as PATH_LIMIT_REACHED" {
+      val manager = ProxyPathManager(createLimitedProxy(maxPathsPerAgent = 3), isTestMode = true)
+      val context = createMockAgentContext()
+      listOf("a", "b", "c").forEach { manager.addPath(it, "{}", context).shouldBeNull() }
+
+      val rejection = manager.addPath("d", "{}", context)
+
+      rejection.shouldNotBeNull().cause shouldBe PathRejectionCause.PATH_LIMIT_REACHED
+      rejection.reason shouldContain "3"
+      manager.pathMapSize shouldBe 3
+    }
+
+    "re-registering a path the agent already serves should not count against its cap" {
+      val manager = ProxyPathManager(createLimitedProxy(maxPathsPerAgent = 2), isTestMode = true)
+      val context = createMockAgentContext()
+      manager.addPath("a", "{}", context).shouldBeNull()
+      manager.addPath("b", "{}", context).shouldBeNull()
+
+      manager.addPath("a", "{}", context).shouldBeNull()
+    }
+
+    "other agents' paths should not count toward an agent's cap" {
+      val manager = ProxyPathManager(createLimitedProxy(maxPathsPerAgent = 1), isTestMode = true)
+      manager.addPath("a", "{}", createMockAgentContext()).shouldBeNull()
+
+      manager.addPath("b", "{}", createMockAgentContext()).shouldBeNull()
+    }
+
+    // The count follows every way a path leaves an agent, or a full agent could never register again.
+    "a path that leaves an agent by unregister, displacement, or disconnect should make room again" {
+      val manager = ProxyPathManager(createLimitedProxy(maxPathsPerAgent = 2), isTestMode = true)
+      val agent = createMockAgentContext()
+      manager.addPath("a", "{}", agent).shouldBeNull()
+      manager.addPath("b", "{}", agent).shouldBeNull()
+
+      manager.removePath("a", agent.agentId)
+      manager.addPath("c", "{}", agent).shouldBeNull()
+
+      // Another agent of the same (empty) identity takes path b over.
+      manager.addPath("b", "{}", createMockAgentContext()).shouldBeNull()
+      manager.addPath("d", "{}", agent).shouldBeNull()
+
+      manager.removeFromPathManager(agent.agentId, "disconnect")
+      manager.addPath("e", "{}", agent).shouldBeNull()
+      manager.addPath("f", "{}", agent).shouldBeNull()
+    }
+
+    "leaving a consolidated path should make room again" {
+      val manager = ProxyPathManager(createLimitedProxy(maxPathsPerAgent = 1), isTestMode = true)
+      val agent = createMockAgentContext(consolidated = true)
+      manager.addPath("shared", "{}", createMockAgentContext(consolidated = true)).shouldBeNull()
+      manager.addPath("shared", "{}", agent).shouldBeNull()
+
+      manager.removePath("shared", agent.agentId)
+
+      manager.addPath("other", "{}", agent).shouldBeNull()
+    }
+
+    "a maxPathsPerAgent of 0 should mean no limit" {
+      val manager = ProxyPathManager(createLimitedProxy(maxPathsPerAgent = 0), isTestMode = true)
+      val context = createMockAgentContext()
+
+      repeat(50) { manager.addPath("p$it", "{}", context).shouldBeNull() }
+    }
+
+    // So an operator hears about an agent nearing the cap before its registrations start failing.
+    "an agent reaching 80% of maxPathsPerAgent should be warned about once" {
+      val manager = ProxyPathManager(createLimitedProxy(maxPathsPerAgent = 5), isTestMode = true)
+      val context = createMockAgentContext()
+
+      val warnings =
+        captureLogs<ProxyPathManager>(Level.WARN) {
+          repeat(5) { manager.addPath("p$it", "{}", context) }
+        }.map { it.formattedMessage }.filter { "maxPathsPerAgent" in it }
+
+      warnings shouldHaveSize 1
+      warnings.single() shouldContain "4 of 5"
+    }
+
+    "a path longer than maxPathLength should be rejected as an invalid path" {
+      val manager = ProxyPathManager(createLimitedProxy(maxPathLength = 8), isTestMode = true)
+      val context = createMockAgentContext()
+
+      manager.addPath("/12345678", "{}", context).shouldBeNull()
+      val rejection = manager.addPath("123456789", "{}", context)
+
+      rejection.shouldNotBeNull().cause shouldBe PathRejectionCause.INVALID_PATH
+      rejection.reason shouldContain "maxPathLength"
+    }
+
+    "labels larger than maxLabelsSizeBytes should be rejected as an invalid path" {
+      val manager = ProxyPathManager(createLimitedProxy(maxLabelsSizeBytes = 16), isTestMode = true)
+      val context = createMockAgentContext()
+
+      manager.addPath("small", """{"a":"b"}""", context).shouldBeNull()
+      val rejection = manager.addPath("large", """{"team":"abcdefghijklmnop"}""", context)
+
+      rejection.shouldNotBeNull().cause shouldBe PathRejectionCause.INVALID_PATH
+      rejection.reason shouldContain "maxLabelsSizeBytes"
+      manager.pathMapSize shouldBe 1
     }
 
     // An agent disconnect retires every path it alone served, and only those.

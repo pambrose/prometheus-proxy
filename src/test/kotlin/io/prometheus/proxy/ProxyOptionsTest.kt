@@ -578,6 +578,24 @@ class ProxyOptionsTest : StringSpec() {
       proxyOptions(["-Dproxy.dashboard.refreshIntervalSecs=0"]).dashboardEnabled.shouldBeFalse()
     }
 
+    // Generous safety nets, not quotas: about 40x the largest path count the harness registers per agent, a path far
+    // longer than a single URL segment needs, and more label JSON than a target's labels plausibly take.
+    "path limits should default to 10000 paths per agent, 512-character paths, and 8 KiB of labels" {
+      val internal = proxyOptions([]).configVals.proxy.internal
+      internal.maxPathsPerAgent shouldBe 10_000
+      internal.maxPathLength shouldBe 512
+      internal.maxLabelsSizeBytes shouldBe 8_192
+    }
+
+    // 0 turns a limit off; only a negative value is meaningless.
+    "a negative path limit should be rejected" {
+      for (key in ["maxPathsPerAgent", "maxPathLength", "maxLabelsSizeBytes"]) {
+        val exception = shouldThrow<IllegalArgumentException> { proxyOptions(["-Dproxy.internal.$key=-1"]) }
+        exception.message shouldContain key
+      }
+      proxyOptions(["-Dproxy.internal.maxPathsPerAgent=0"]).configVals.proxy.internal.maxPathsPerAgent shouldBe 0
+    }
+
     // A blank bind address would fail only when the scrape server starts, with an opaque Ktor error.
     "a blank proxy.http.host should be rejected" {
       val exception = shouldThrow<IllegalArgumentException> { proxyOptions(["-Dproxy.http.host="]) }
