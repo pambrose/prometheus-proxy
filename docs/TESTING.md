@@ -204,12 +204,15 @@ something.
 - **ProxyDashboardHtmlTest** (`dashboard/`) — Dashboard renderer: top-level out-of-band push regions, agent- and
   path-centric layouts, tolerant selection and layout parsing, departed paths, failover markers, accessibility, and
   the WebSocket connection indicator
+- **ProxyDashboardServiceTest** (`dashboard/`) — Dashboard request guards: the WebSocket Origin check (own host,
+  `allowedOrigins`, foreign or malformed origins refused) and the opt-in `allowedHosts` Host check against DNS rebinding
 - **ProxySnapshotTest** (`dashboard/`) — Dashboard view models: eviction countdown, health thresholds, failover
   position, and `buildPathViews` joining registered paths to their latest scrape and surfacing departed ones
 
 ### Unit Tests — Common (`common/`)
 
 - **BaseOptionsTest** — Shared CLI argument parsing, config loading, boolean resolution
+- **ConfigLoadExceptionTest** — The public exception embedded hosts catch: message-only and with-cause constructors
 - **ConfigWrappersTest** — Factory methods for AdminConfig, MetricsConfig, ZipkinConfig
 - **ConstantsTest** — Constant values (EMPTY_AGENT_ID_MSG, EMPTY_PATH_MSG, EMPTY_INSTANCE)
 - **EnvVarsTest** — Environment variable mappings and fallback defaults
@@ -450,6 +453,18 @@ Generate coverage report:
 Coverage excludes generated code, as configured in `configureCoverage()` in `build.gradle.kts`: the gRPC stubs
 (`io.prometheus.grpc.*`), `io.prometheus.BuildConfig` (buildconfig plugin), and `io.prometheus.common.ConfigVals`
 with its nested classes (tscfg).
+
+Two gates enforce it, and CI runs both:
+
+```bash
+./gradlew koverVerify           # total floors: line and branch coverage across the project
+./gradlew koverVerifyPerClass   # every hand-written class at 80% line coverage on its own
+```
+
+Run `koverVerifyPerClass` in its own Gradle invocation, never alongside `koverVerify`, `koverXmlReport`, or
+`koverLog`: Kover 0.9.9 applies one report variant's filters to every Kover report in the same run, which corrupts
+the total report, so the build fails fast if both are requested together. The per-class floor skips
+compiler-generated lambda classes and the `Proxy`/`Agent` entry points, so a new class needs its own tests.
 
 ## Writing New Tests
 

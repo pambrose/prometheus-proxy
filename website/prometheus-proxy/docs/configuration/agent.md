@@ -99,7 +99,7 @@ and is shown verbatim on the [Example Configs](../examples.md) page.
 | Entry with a blank `path` or `url`      | Skipped when the file is read, reported once until the set of skipped entries changes; the file's other entries still apply |
 | Seeing what discovery did               | The agent's `/debug` page lists the discovered paths it registered and the entries it skipped |
 | `pathConfigs` empty                     | Discovery-only — every path comes from the file             |
-| Proxy rejects a discovered path         | Logged once; retried each poll only if the rejection can clear, otherwise tried again when the entry changes or the agent reconnects |
+| Proxy rejects a discovered path         | Logged once. A rejection that can clear is retried with a backoff: on the next poll, then after one `reconcileIntervalSecs`, then after waits that double up to `agent.internal.rejectedPathRetryMaxSecs` (5 min). Any other rejection is tried again only when the entry changes or the agent reconnects |
 
 !!! note "Polling, not file-watching"
 

@@ -42,7 +42,7 @@ Comprehensive KDoc (~85 lines) covering:
 All 15 internal service/manager classes have concise KDoc (5–15 lines each) covering purpose,
 responsibilities, constructor parameters, and cross-references:
 
-#### Proxy-side (9 classes)
+#### Proxy-side (10 classes)
 
 | Class                        | Summary                                                                  |
 |:-----------------------------|:-------------------------------------------------------------------------|
@@ -162,11 +162,11 @@ Package-level documentation is provided in [`docs/packages.md`](packages.md) usi
 
 ## Dokka Integration
 
-HTML API documentation is generated via the [Dokka](https://github.com/Kotlin/dokka) Gradle plugin (v2.1.0).
+HTML API documentation is generated via the [Dokka](https://github.com/Kotlin/dokka) Gradle plugin (v2.2.0).
 
 ```bash
 # Generate HTML docs
-make dokka
+make kdocs
 # Or directly:
 ./gradlew :dokkaGeneratePublicationHtml
 
@@ -177,6 +177,7 @@ Configuration (in `build.gradle.kts` via `configureDokka()`):
 
 - Module name: "Prometheus Proxy"
 - Includes package docs from `docs/packages.md`
-- Documents both `public` and `internal` visibility
+- Documents `public` visibility only (`documentedVisibilities(VisibilityModifier.Public)`), so the `internal` classes
+  above carry KDoc for readers of the source but don't appear in the generated site
 - Suppresses generated gRPC classes (`io.prometheus.grpc.*`)
 - Source links point to the GitHub repository

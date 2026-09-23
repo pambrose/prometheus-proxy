@@ -11,7 +11,7 @@ Repository declarations are centralized in `settings.gradle.kts` via `dependency
 
 ## Publish targets
 
-Snapshot and Maven Central release Make targets (`publish-snapshot`, `publish-maven-central`) require GPG environment variables and a keychain password entry; `make check-gpg-env` validates them up-front.
+Snapshot and Maven Central release Make targets (`publish-snapshot`, `publish-maven-central`) require GPG environment variables and a keychain password entry; `make _check-gpg-env` validates them up-front.
 
 ## Bumping the version
 
