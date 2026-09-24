@@ -56,6 +56,6 @@ by hand.
    them, and writes `Formula/prometheus-proxy.rb` and `Formula/prometheus-agent.rb` into a clone of
    [pambrose/homebrew-tap](https://github.com/pambrose/homebrew-tap) at `../homebrew-tap` (set `HOMEBREW_TAP_DIR`
    to use another path). The formulae's sources are in `etc/homebrew/` in this repository; change them there, not
-   in the tap. After pushing, `brew update`, then `brew install` and `brew test` each of
-   `pambrose/tap/prometheus-proxy` and `pambrose/tap/prometheus-agent`, confirms the new version installs and runs
-   (Homebrew only installs formulae from a tap, not from a file path).
+   in the tap. The push starts the tap's CI, which audits both formulae, installs and tests them on macOS and Linux,
+   and scrapes a metrics endpoint through the installed proxy and agent; check that it passes at
+   https://github.com/pambrose/homebrew-tap/actions.
