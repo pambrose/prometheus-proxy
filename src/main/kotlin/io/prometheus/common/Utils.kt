@@ -23,6 +23,7 @@ import ch.qos.logback.classic.Logger
 import com.pambrose.common.util.Version.Companion.versionDesc
 import com.pambrose.common.util.simpleClassName
 import io.github.oshai.kotlinlogging.KLogger
+import io.github.oshai.kotlinlogging.KotlinLoggingConfiguration
 import io.grpc.Status
 import io.prometheus.Proxy
 import kotlinx.serialization.json.Json
@@ -36,6 +37,8 @@ internal object Utils {
   // A URL inside free text: a scheme, "://", then everything up to the next whitespace.
   private val URL_IN_TEXT_REGEX = Regex("""[A-Za-z][A-Za-z0-9+.-]*://\S+""")
   private const val TRAILING_PUNCTUATION = ",.;:)]}>'\""
+  private const val KOTLIN_LOGGING_STARTUP_PROPERTY = "kotlin-logging.logStartupMessage"
+  private const val KOTLIN_LOGGING_STARTUP_ENV_VAR = "KOTLIN_LOGGING_STARTUP_MESSAGE"
 
   internal fun getVersionDesc(asJson: Boolean = false): String = Proxy::class.versionDesc(asJson)
 
@@ -140,6 +143,21 @@ internal object Utils {
         return
       }
     rootLogger.level = level
+  }
+
+  /**
+   * Turns off the `kotlin-logging: initializing...` line that kotlin-logging prints to stdout when the first
+   * logger is created, ahead of the process's own output. It has to run before that first logger, so the fat JARs'
+   * launchers (`AgentLauncher`, `ProxyLauncher`) call it before loading Agent or Proxy. An explicit
+   * `-Dkotlin-logging.logStartupMessage` or `KOTLIN_LOGGING_STARTUP_MESSAGE` is left in charge; both are
+   * parameters so tests can supply them.
+   */
+  fun suppressKotlinLoggingStartupMessage(
+    property: String? = System.getProperty(KOTLIN_LOGGING_STARTUP_PROPERTY),
+    envVar: String? = System.getenv(KOTLIN_LOGGING_STARTUP_ENV_VAR),
+  ) {
+    if (property == null && envVar == null)
+      KotlinLoggingConfiguration.logStartupMessage = false
   }
 
   fun Status.exceptionDetails(e: Throwable) = "$code $description ${e.simpleClassName} - ${e.message}"

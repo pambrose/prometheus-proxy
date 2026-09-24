@@ -18,7 +18,7 @@ icon: lucide/play
     ```bash
     git clone https://github.com/pambrose/prometheus-proxy.git
     cd prometheus-proxy
-    ./gradlew shadowJar
+    ./gradlew agentJar proxyJar
     ```
 
     JARs are generated in `build/libs/`:
@@ -38,7 +38,7 @@ icon: lucide/play
 
 === "Docker"
 
-    Multi-platform images (amd64, arm64, s390x) are available on Docker Hub:
+    Multi-platform images (amd64, arm64, s390x, ppc64le) are available on Docker Hub:
 
     ```bash
     docker pull pambrose/prometheus-proxy:4.1.0

@@ -6,6 +6,18 @@
 
 _Not yet released_
 
+### Bug Fixes
+
+- **The proxy and agent no longer print logback's internal status at startup.** Every start printed about
+  30 `|-INFO in ch.qos.logback...` lines before the application's own output, which ended up in Docker
+  container logs and service logs. The bundled logging config asked logback to watch itself for changes,
+  which it can't do from inside a JAR. It never reloaded anything, and the request is gone. To reload a
+  logging config without a restart, pass a file on disk with `-Dlogback.configurationFile` and set
+  `scan="true"` in it, as `logback/docker-logback.xml` does.
+- **The `kotlin-logging: initializing...` line is gone from startup too.** The JARs now start through a
+  small launcher that turns it off before the first logger is created. Set
+  `-Dkotlin-logging.logStartupMessage=true` or `KOTLIN_LOGGING_STARTUP_MESSAGE=true` to see it again.
+
 ### Build and tooling
 
 - CI now model-checks the TLA+ specs on every pull request, and a manual **Lincheck** workflow runs the concurrency

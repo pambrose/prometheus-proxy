@@ -19,9 +19,11 @@
 package io.prometheus.common
 
 import ch.qos.logback.classic.Level
+import io.github.oshai.kotlinlogging.KotlinLoggingConfiguration
 import io.grpc.Status
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -35,6 +37,7 @@ import io.prometheus.common.Utils.parseHostPort
 import io.prometheus.common.Utils.sanitizeQueryParams
 import io.prometheus.common.Utils.sanitizeUrl
 import io.prometheus.common.Utils.setLogLevel
+import io.prometheus.common.Utils.suppressKotlinLoggingStartupMessage
 import io.prometheus.common.Utils.toJsonElement
 import io.prometheus.common.Utils.sanitizeUrlsInText
 import io.prometheus.common.TestPorts.PROMETHEUS_PORT
@@ -52,6 +55,20 @@ class UtilsTest : StringSpec() {
   }
 
   private val originalLogLevel = Level.INFO // (LoggerFactory.getLogger(ROOT_LOGGER_NAME) as Logger).level
+
+  // Runs block with kotlin-logging's process-wide startup-message flag set to value, then restores it.
+  private inline fun withStartupMessage(
+    value: Boolean,
+    block: () -> Unit,
+  ) {
+    val previous = KotlinLoggingConfiguration.logStartupMessage
+    KotlinLoggingConfiguration.logStartupMessage = value
+    try {
+      block()
+    } finally {
+      KotlinLoggingConfiguration.logStartupMessage = previous
+    }
+  }
 
   init {
     afterTest {
@@ -178,6 +195,29 @@ class UtilsTest : StringSpec() {
 
       exception.message shouldContain "Invalid"
       exception.message shouldContain "log level"
+    }
+
+    // ==================== suppressKotlinLoggingStartupMessage Tests ====================
+
+    "suppressKotlinLoggingStartupMessage should turn the startup message off when nothing configures it" {
+      withStartupMessage(true) {
+        suppressKotlinLoggingStartupMessage(property = null, envVar = null)
+        KotlinLoggingConfiguration.logStartupMessage.shouldBeFalse()
+      }
+    }
+
+    "suppressKotlinLoggingStartupMessage should leave an explicit system property in charge" {
+      withStartupMessage(true) {
+        suppressKotlinLoggingStartupMessage(property = "true", envVar = null)
+        KotlinLoggingConfiguration.logStartupMessage.shouldBeTrue()
+      }
+    }
+
+    "suppressKotlinLoggingStartupMessage should leave an explicit env var in charge" {
+      withStartupMessage(true) {
+        suppressKotlinLoggingStartupMessage(property = null, envVar = "true")
+        KotlinLoggingConfiguration.logStartupMessage.shouldBeTrue()
+      }
     }
 
     // ==================== getVersionDesc Tests ====================
