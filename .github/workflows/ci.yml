@@ -70,3 +70,19 @@ jobs:
           flags: unittests
           name: prometheus-proxy
           fail_ci_if_error: false
+
+  # Model-checks the TLA+ specs in specs/tla (ProxyRegistry and AgentFailover) with their quick configs, alongside the
+  # build. The specs model the design rather than test the code, so this catches a spec edit that breaks one of their
+  # properties; keeping each spec in step with the classes it models is up to the change that touches them (see
+  # specs/tla/README.md). make downloads the pinned TLA+ tools and checks their SHA-256 before running them.
+  tla:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: 25
+      - name: Model-check the TLA+ specs
+        run: make tla-checks
