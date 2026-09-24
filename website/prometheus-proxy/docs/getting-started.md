@@ -94,9 +94,27 @@ The proxy runs outside the firewall alongside your Prometheus server.
 
 === "Docker"
 
+    **In the foreground**, the container runs attached to your terminal and logs there until you stop
+    it with Ctrl+C; `--rm` then removes it:
+
     ```bash
     docker run --rm -p 8080:8080 -p 50051:50051 \
       pambrose/prometheus-proxy:4.1.0
+    ```
+
+    **In the background**, `--detach` starts the container and returns, and
+    `--restart unless-stopped` starts it again if it exits or Docker restarts, until you stop it.
+    Docker doesn't allow `--rm` with `--restart`, so the stopped container stays until you remove it:
+
+    ```bash
+    docker run --detach --name prometheus-proxy --restart unless-stopped \
+      -p 8080:8080 -p 50051:50051 \
+      pambrose/prometheus-proxy:4.1.0
+
+    docker logs --follow prometheus-proxy   # follow its log
+    docker restart prometheus-proxy         # restart it
+    docker stop prometheus-proxy            # stop it, and no longer restart it
+    docker rm prometheus-proxy              # remove the stopped container
     ```
 
 ## Start the Agent
@@ -180,12 +198,32 @@ Each entry in `pathConfigs` maps:
 
 === "Docker"
 
+    **In the foreground**, the container runs attached to your terminal and logs there until you stop
+    it with Ctrl+C; `--rm` then removes it:
+
     ```bash
     docker run --rm \
       --mount type=bind,source="$(pwd)"/agent.conf,target=/app/agent.conf \
       --env AGENT_CONFIG=agent.conf \
       --env PROXY_HOSTNAME=proxy-host.example.com \
       pambrose/prometheus-agent:4.1.0
+    ```
+
+    **In the background**, `--detach` starts the container and returns, and
+    `--restart unless-stopped` starts it again if it exits or Docker restarts, until you stop it.
+    Docker doesn't allow `--rm` with `--restart`, so the stopped container stays until you remove it:
+
+    ```bash
+    docker run --detach --name prometheus-agent --restart unless-stopped \
+      --mount type=bind,source="$(pwd)"/agent.conf,target=/app/agent.conf \
+      --env AGENT_CONFIG=agent.conf \
+      --env PROXY_HOSTNAME=proxy-host.example.com \
+      pambrose/prometheus-agent:4.1.0
+
+    docker logs --follow prometheus-agent   # follow its log
+    docker restart prometheus-agent         # pick up an edited agent.conf
+    docker stop prometheus-agent            # stop it, and no longer restart it
+    docker rm prometheus-agent              # remove the stopped container
     ```
 
 === "Remote Config"
