@@ -101,6 +101,9 @@ object TestPorts {
   const val FAILOVER_PROXY_B_GRPC_PORT = 9533
   const val FAILOVER_STUB_PORT = 9534
 
+  // AgentPathManagerLincheckTest: gRPC runs in-process, so only the proxy's HTTP port binds
+  const val PATH_MANAGER_LINCHECK_HTTP_PORT = 9535
+
   // EmbeddedAgentApiTest
   const val EMBEDDED_API_HTTP_PORT = 9560
   const val EMBEDDED_API_GRPC_PORT = 9561

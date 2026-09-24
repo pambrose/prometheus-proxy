@@ -481,11 +481,12 @@ java -jar prometheus-agent.jar --proxy proxy-a.example.com:50051,proxy-b.example
 # or: PROXY_HOSTNAME=proxy-a.example.com:50051,proxy-b.example.com:50051
 ```
 
-The agent connects to the first endpoint that answers. A **failed connect** moves it to the next; a
-connection that came up and then **dropped** sends it back to the head of the list, so a recovered
-primary is picked up on the next reconnect with no health prober and no manual step. Only one
-connection is active at a time, and a single value behaves exactly as before — existing configs need
-no change.
+The agent uses the first endpoint that accepts it. A **failed connect** moves it to the next, and so
+does a proxy that accepts the connection but **rejects the agent's registration**, or rejects every one
+of its static paths for a reason that can't clear. A connection that **registered** and later
+**dropped** sends it back to the head of the list, so a recovered primary is picked up on the next
+reconnect with no health prober and no manual step. Only one connection is active at a time, and a
+single value behaves exactly as before — existing configs need no change.
 
 Two things to know before deploying a pair:
 

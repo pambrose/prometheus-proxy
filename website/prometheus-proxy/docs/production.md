@@ -34,10 +34,10 @@ security, reliability, and tuning knobs documented elsewhere into one operationa
 
 ## High availability
 
-- For **proxy** redundancy, give the agent an ordered list of proxy endpoints. It connects to the
-  first that answers, and on a failed connect moves to the next; when a working connection drops it
-  returns to the head of the list, so a recovered primary is picked up on the next reconnect without
-  any manual step.
+- For **proxy** redundancy, give the agent an ordered list of proxy endpoints. It uses the first that
+  accepts it, and moves to the next on a failed connect or when a proxy rejects its registration (or
+  every one of its static paths); when a registered connection drops it returns to the head of the
+  list, so a recovered primary is picked up on the next reconnect without any manual step.
 
     ```hocon
     agent {

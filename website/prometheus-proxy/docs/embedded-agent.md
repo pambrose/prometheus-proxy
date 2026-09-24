@@ -90,3 +90,13 @@ Your application code runs normally while the agent handles metrics scraping in 
 
     The config file path is relative to your application's working directory.
     Use an absolute path if needed.
+
+## Upgrading from 4.0.x
+
+- `grpc-netty-shaded` no longer arrives through the agent, which uses the unshaded `grpc-netty` transport.
+  If your application relied on getting it that way, declare it yourself.
+- `startAsyncAgent()` now waits for the agent to start and throws if it fails, where it used to return a
+  handle to an agent that had failed (see [`Agent.startAsyncAgent()`](#agentstartasyncagent)).
+- When a config URL's error message has to be redacted, the `ConfigLoadException`'s cause is a stand-in
+  exception with the redacted message and the original stack trace, not Typesafe's `ConfigException`, so
+  code that checks `cause is ConfigException` no longer matches it.
