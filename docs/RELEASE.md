@@ -50,3 +50,11 @@ by hand.
 
 8) Build and push the multi-arch Docker images: `make docker-push`. This tags both `:latest` and
    `:<version>`; it refuses to push pre-release versions (`-SNAPSHOT`/`-rc`/`-beta`/`-alpha`) as `:latest`.
+
+9) Update the agent's Homebrew formula once the GitHub release is published: `make homebrew-formula`, then
+   commit and push the tap. The target downloads the release's `prometheus-agent.jar`, hashes it, and writes
+   `Formula/prometheus-agent.rb` into a clone of [pambrose/homebrew-tap](https://github.com/pambrose/homebrew-tap)
+   at `../homebrew-tap` (set `HOMEBREW_TAP_DIR` to use another path). The formula's source is
+   `etc/homebrew/prometheus-agent.rb` in this repository; change it there, not in the tap. After pushing,
+   `brew update && brew install pambrose/tap/prometheus-agent && brew test pambrose/tap/prometheus-agent`
+   confirms the new version installs and runs (Homebrew only installs formulae from a tap, not from a file path).

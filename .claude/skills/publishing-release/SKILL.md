@@ -23,4 +23,6 @@ When bumping the version, update `version` in `gradle.properties` and every hard
 - `src/test/kotlin/website/{DockerExamples,EmbeddedAgentExamples,KubernetesExamples}.txt` — snippet sources the website's Docker, Embedded Agent, and Kubernetes pages include
 - this line, and step 2 of `docs/RELEASE.md`
 
+The Homebrew formula needs no edit for a bump: `etc/homebrew/prometheus-agent.rb` holds `@VERSION@` / `@SHA256@` placeholders that `make homebrew-formula` fills in from the published GitHub release (step 9 of `docs/RELEASE.md`).
+
 Leave historical mentions alone (`CHANGELOG.md`, `RELEASE_NOTES.md`, `docs/archive/`, the per-feature release annotations in `llms.txt`). The release flow itself is documented in `docs/RELEASE.md`.

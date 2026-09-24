@@ -23,6 +23,7 @@ behind a firewall and preserves the native pull-based model architecture.
 - [New Features](#-new-features)
 - [Architecture](#-architecture)
 - [Quick Start](#-quick-start)
+- [Homebrew (Agent)](#-homebrew-agent)
 - [Building from Source](#-building-from-source)
 - [Configuration Examples](#-configuration-examples)
 - [Docker Usage](#-docker-usage)
@@ -156,6 +157,25 @@ agents.
    # or, if SD is enabled
    curl -s http://mymachine.local:8080/discovery | jq '.'
    ```
+
+### 🍺 Homebrew (Agent)
+
+On macOS and Linux, the agent is also available from Homebrew. The formula installs the Java it runs on
+(`openjdk@25`), so there is no JAR to download:
+
+```bash
+brew install pambrose/tap/prometheus-agent
+
+prometheus-agent --proxy mymachine.local --config myapps.conf
+```
+
+To keep the agent running in the background, set the proxy and paths in
+`$(brew --prefix)/etc/prometheus-agent.conf` and start it with `brew services`. It logs to
+`$(brew --prefix)/var/log/prometheus-agent.log`.
+
+```bash
+brew services start prometheus-agent
+```
 
 ### 🛠️ Building from Source
 

@@ -6,6 +6,10 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### New Features
+
+- The agent is available from Homebrew: `brew install pambrose/tap/prometheus-agent` installs a `prometheus-agent` command that runs the release JAR on `openjdk@25`, the runtime the Docker images ship, and a `brew services` definition that runs it with `$(brew --prefix)/etc/prometheus-agent.conf`. The formula's source is `etc/homebrew/prometheus-agent.rb`; `make homebrew-formula` renders it for a published release into a clone of `pambrose/homebrew-tap` (step 9 of `docs/RELEASE.md`)
+
 ### Build & Tooling
 
 - CI now model-checks the TLA+ specs: a `tla` job in `ci.yml` runs `make tla-checks` beside the build on every pull request and push to `master`
