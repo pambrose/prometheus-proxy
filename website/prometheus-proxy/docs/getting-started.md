@@ -51,6 +51,9 @@ The proxy runs outside the firewall alongside your Prometheus server.
 
 === "CLI"
 
+    **In the foreground**, the proxy runs in your terminal and logs there until you stop it with
+    Ctrl+C:
+
     ```bash
     java -jar prometheus-proxy.jar
     ```
@@ -59,6 +62,20 @@ The proxy runs outside the firewall alongside your Prometheus server.
 
     - HTTP scrape port: **8080**
     - gRPC agent port: **50051**
+
+    **In the background**, `nohup` keeps the proxy running after you close the terminal. Send its
+    output to a log file and save its process ID so you can stop it later:
+
+    ```bash
+    nohup java -jar prometheus-proxy.jar > proxy.log 2>&1 &
+    echo $! > proxy.pid
+
+    tail -f proxy.log            # follow its log
+    kill "$(cat proxy.pid)"      # stop it
+    ```
+
+    Nothing restarts it if it exits or the machine reboots. For that, use the Homebrew or Docker
+    tab, or run it under your system's service manager.
 
 === "Homebrew"
 
@@ -149,6 +166,9 @@ Each entry in `pathConfigs` maps:
 
 === "CLI"
 
+    **In the foreground**, the agent runs in your terminal and logs there until you stop it with
+    Ctrl+C:
+
     ```bash
     java -jar prometheus-agent.jar --config agent.conf
     ```
@@ -160,6 +180,21 @@ Each entry in `pathConfigs` maps:
       --proxy proxy-host.example.com \
       --config agent.conf
     ```
+
+    **In the background**, `nohup` keeps the agent running after you close the terminal. Send its
+    output to a log file and save its process ID so you can stop it later:
+
+    ```bash
+    nohup java -jar prometheus-agent.jar --config agent.conf > agent.log 2>&1 &
+    echo $! > agent.pid
+
+    tail -f agent.log            # follow its log
+    kill "$(cat agent.pid)"      # stop it
+    ```
+
+    To pick up an edited `agent.conf`, stop the agent and start it again. Nothing restarts it if it
+    exits or the machine reboots. For that, use the Homebrew or Docker tab, or run it under your
+    system's service manager.
 
 === "Homebrew"
 
