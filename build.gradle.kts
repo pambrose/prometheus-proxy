@@ -294,11 +294,11 @@ fun Project.configureJars() {
   }
 
   val agentJar = tasks.register<ShadowJar>("agentJar") {
-    configureFatJar("prometheus-agent.jar", "io.prometheus.Agent")
+    configureFatJar("prometheus-agent.jar", "io.prometheus.agent.AgentLauncher")
   }
 
   val proxyJar = tasks.register<ShadowJar>("proxyJar") {
-    configureFatJar("prometheus-proxy.jar", "io.prometheus.Proxy")
+    configureFatJar("prometheus-proxy.jar", "io.prometheus.proxy.ProxyLauncher")
   }
 
   tasks.named("assemble") {
@@ -474,9 +474,11 @@ fun Project.configureCoverage() {
               // enclosing class is fully tested. Their lines still count toward the total floors above.
               "*$*$*",
               // JVM entry points (main, startSyncAgent) start a whole process and block, so tests use the embedded
-              // entry point instead.
+              // entry point instead. The fat JARs' launchers only run in the forked JVMs of BaseOptionsTest.
               $$"$$basePackage.Proxy$Companion",
               $$"$$basePackage.Agent$Companion",
+              "$basePackage.agent.AgentLauncher",
+              "$basePackage.proxy.ProxyLauncher",
             )
           }
         }
