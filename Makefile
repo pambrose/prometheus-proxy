@@ -1,11 +1,13 @@
 .PHONY: default help stop clean clean-all stubs build tibuild refresh jars \
-        tests mini-tests nh-tests ip-tests netty-tests tls-tests lincheck-tests tla-checks container-tests scaling-tests all-tests regen-certs \
+        tests mini-tests xxl-tests nh-tests ip-tests netty-tests tls-tests lincheck-tests tla-checks \
+        container-tests scaling-tests all-tests regen-certs \
         docker-clean docker-clean-dry \
         all-scaling scaling-paths scaling-agents scaling-payload scaling-consolidated scaling-concurrency scaling-soak \
         coverage coverage-html coverage-xml coverage-log coverage-verify \
         coverage-open coverage-packages coverage-clean reports gh-docs \
         gh-status tsconfig distro docker-push release tree depends lint detekt detekt-baseline \
-        versions kdocs clean-site check-site upgrade-site site publish-local publish-local-snapshot publish-snapshot publish-maven-central \
+        versions kdocs clean-site check-site upgrade-site site \
+        publish-local publish-local-snapshot publish-snapshot publish-maven-central \
         upgrade-wrapper _check-gpg-env _require-version _require-gradle-version
 
 VERSION := $(shell sed -n 's/^version=\(.*\)/\1/p' gradle.properties)
@@ -88,6 +90,9 @@ tests:  ## Run all tests (forces re-execution)
 
 mini-tests:  ## Run all tests with the MINI harness profile
 	$(GRADLE) --rerun-tasks check -PharnessConfig=MINI
+
+xxl-tests:  ## Run all tests with the XXLARGE harness profile
+	$(GRADLE) --rerun-tasks check -PharnessConfig=XXLARGE
 
 nh-tests:  ## Run only the non-harness unit tests
 	$(GRADLE) test --tests "io.prometheus.agent.*" --tests "io.prometheus.proxy.*" --tests "io.prometheus.common.*" --tests "io.prometheus.misc.*"

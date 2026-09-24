@@ -140,9 +140,10 @@ java -jar prometheus-agent.jar --proxy proxy-host.example.com:50051 --config age
 ### Proxy failover
 
 For redundancy, give the agent an ordered list of proxy endpoints instead of a single hostname. It
-connects to the first that answers and moves to the next on a failed connect; when a working
-connection drops it returns to the head of the list, so a recovered primary is picked up on the next
-reconnect. Only one connection is active at a time.
+uses the first that accepts it, and moves to the next on a failed connect or when a proxy rejects its
+registration (or every one of its static paths); when a registered connection drops it returns to the
+head of the list, so a recovered primary is picked up on the next reconnect. Only one connection is
+active at a time.
 
 ```hocon
 agent {

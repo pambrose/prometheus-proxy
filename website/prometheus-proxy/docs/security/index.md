@@ -107,6 +107,12 @@ agent's identity permits the shared path. A consolidated path belongs to the ide
 it, though: another identity whose patterns match is refused while agents still serve the path, and
 joins only once they are gone.
 
+A non-consolidated path is protected the same way. While a live agent serves it, only an agent of the
+same identity may take it over, which keeps redeploys working; an agent of another identity is refused
+with a reason, logged at WARN, until the serving agent is gone. With no agent authentication, or only
+the legacy shared token, every agent has the same identity, so takeovers behave as they always have. The
+legacy token and a `proxy.auth` identity cannot take over each other's live paths.
+
 !!! note "Config-file only"
 
     `proxy.auth` is a list of objects, so it can only be set in a config file — there is no
@@ -139,6 +145,46 @@ it still has allow-all access — the per-agent entries constrain only the agent
     reload. Identity derives from the presented token, not from an mTLS client certificate, and
     tokens live in the proxy's config file (no env-var or file-based token source). Compare tokens'
     operational weight against [mutual TLS](tls.md) when choosing a posture; the two can be combined.
+
+## Isolation Between Agents
+
+Authenticated agents share one proxy, so the proxy keeps each agent to its own traffic:
+
+- **Scrape results come only from the agent the scrape was sent to.** Scrape IDs come from one
+  counter shared by every agent, so the proxy checks each result, failure, and chunked-transfer message
+  against the agent that owns the scrape. A message for another agent's scrape is dropped and logged
+  at WARN, and the rest of the stream is still processed.
+- **Heartbeats are bound to their connection.** A heartbeat naming another agent is refused and does
+  not keep that agent from being evicted as stale.
+- **Behind a reverse proxy, calls are bound to an identity.** With
+  [`transportFilterDisabled`](../configuration/proxy.md#transport-filter) there is no connection to tie a
+  call to, so the proxy records the auth identity an agent connected with and refuses a call naming that
+  agent under a different identity.
+
+!!! warning "Identity binding is only as fine-grained as the identities"
+
+    Calls are bound only when agent authentication is configured (`proxy.auth` or `proxy.agentToken`).
+    Agents that share one identity cannot be told apart when the transport filter is disabled, and
+    that includes every agent on the legacy `proxy.agentToken`, which is a single allow-all identity.
+    Behind a reverse proxy, give each agent its own `proxy.auth` token. With the transport filter
+    enabled, calls are bound by connection and this limit does not apply.
+
+## Credentials in URLs
+
+A target URL can carry credentials, such as `http://user:pass@host/metrics?api_key=...`. The agent
+redacts the user info and query values everywhere a target URL is sent, logged, or displayed: in its
+logs, in what it sends the proxy, and so on the dashboard and `/debug` pages. It also redacts them
+inside HTTP client error messages, which embed the request URL. The proxy redacts target URLs from
+older agents as well. A config URL that fails to load (`--config http://user:pass@host/agent.conf`) is
+redacted in the error log and in the `ConfigLoadException` an embedding application catches.
+
+## Scrape Port Responses
+
+The proxy passes a target's `Content-Type` through only for the Prometheus exposition formats
+(`text/plain`, `application/openmetrics-text`, and the protobuf format); anything else is served as
+`text/plain`. Every scrape-port response also carries `X-Content-Type-Options: nosniff` and
+`Content-Security-Policy: sandbox`. A compromised target therefore can't serve a page that runs as
+script on the proxy's origin in an operator's browser.
 
 ## Auth Header Forwarding
 

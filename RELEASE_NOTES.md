@@ -363,9 +363,9 @@ interval as their deadline, capped at the unary deadline.
 
 - The proxy's and agent's concurrency now has formal checks alongside its tests. Lincheck tests explore the thread
   interleavings of how scrape requests are handed to an agent and taken back when it disconnects, the proxy's
-  in-flight scrape tracking, the agent's backlog count across a disconnect, and its HTTP client cache. They found
-  the `agent_backlog_full` mislabel and the HTTP client leak above. They run with `make lincheck-tests` rather than in the default
-  test run.
+  in-flight scrape tracking, path registration, and per-path metrics, and the agent's backlog count across a
+  disconnect, its path registrations, and its HTTP client cache. They found the `agent_backlog_full` mislabel and the HTTP client leak above. They run with
+  `make lincheck-tests` rather than in the default test run.
   TLA+ specs in `specs/tla/` model the proxy's agent and path registry and the agent's endpoint failover, and
   `make tla-checks` model-checks them in about 15 seconds.
 

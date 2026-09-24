@@ -193,6 +193,13 @@ proxy.transportFilterDisabled = true
     Agent contexts on the proxy are removed after the inactivity timeout
     (default: 60 seconds).
 
+!!! note "Give each agent its own identity"
+
+    With the filter disabled, the proxy can't tie a call to a connection, so it binds each agent's calls
+    to the auth identity the agent connected with. Agents that share an identity, including every agent
+    on the legacy `proxy.agentToken`, can't be told apart, so give each agent its own `proxy.auth` token.
+    See [Isolation Between Agents](../security/index.md#isolation-between-agents).
+
 ## gRPC Reflection
 
 [gRPC Reflection](https://grpc.io/docs/guides/reflection/) is disabled by default, because it lets anyone who

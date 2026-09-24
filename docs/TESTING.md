@@ -28,6 +28,8 @@ This document describes the test suite structure and how to run tests for the pr
 
 ```bash
 make tests            # Rerun all checks (lint + tests); the container tests are SKIPPED
+make mini-tests       # `make tests` with the MINI harness profile (fastest)
+make xxl-tests        # `make tests` with the XXLARGE harness profile (heaviest; 8g test heap)
 make nh-tests         # Unit tests only (agent, proxy, common, misc — no harness)
 make ip-tests         # In-process integration tests only
 make netty-tests      # Netty integration tests only
@@ -80,11 +82,26 @@ need Docker, so a plain `make tests` / `./gradlew check` registers each spec as 
 `make container-tests` to run the whole suite on its own, `make scaling-tests` for just the scaling spec, or
 `make all-tests` to run everything in one shot.
 
-The Lincheck specs (`*LincheckTest`) explore thread interleavings and take over a minute, so they carry the
-Kotest `Lincheck` tag (`common/Lincheck.kt`), and the `Test` task's default tag expression, `!Lincheck`, leaves them
-out of `./gradlew test`, `make tests`, `make all-tests`, and CI. `make lincheck-tests` runs them
+The Lincheck specs (`*LincheckTest`) explore thread interleavings and together take several minutes, so they
+carry the Kotest `Lincheck` tag (`common/Lincheck.kt`), and the `Test` task's default tag expression, `!Lincheck`,
+leaves them out of `./gradlew test`, `make tests`, `make all-tests`, and CI. `make lincheck-tests` runs them
 (`-PkotestTags=Lincheck`); tag any new Lincheck spec the same way. The TLA+ specs are not tests but models of the
 design, checked by `make tla-checks`; `specs/tla/README.md` describes them.
+
+Keep MockK out of the Lincheck specs. To mock a final class, MockK rewrites the bytecode of that class and its
+superclasses, `Object`'s methods included, for the rest of the JVM, and routes every `equals()` and exception
+constructor through a lookup keyed by identity hash code. Every spec that runs after it in the same JVM then behaves
+differently when Lincheck replays an interleaving to record its trace, and Lincheck fails with
+`IllegalStateException: Non-determinism found` instead of a result. That is how `AgentContextLincheckTest` failed
+now and then under `make lincheck-tests` while passing on its own, until `HttpClientCacheLincheckTest`, which ran
+before it, swapped its MockK clients for real ones on a recording engine. If "Non-determinism found" comes back,
+look in the trace for something the replay can't reproduce -- MockK's `JvmMockKProxyAdvice` was the tell -- rather
+than rerunning. Treat any other Lincheck failure -- `Validation function ... has failed`, `Invalid execution
+results`, or `The execution has hung` on its own -- as a finding: read the reported interleaving before rerunning
+anything. Two were real bugs, the `agent_backlog_full` mislabel and the HTTP client leak fixed in 4.1.0; others were
+the harness itself, such as a log statement or a suspending `Mutex` wait that Lincheck mistook for a hang, and the
+comments in the specs record each of those. Don't make the specs retry on failure, which could one day hide a real
+one.
 
 The `make scaling-tests` target forwards any `SCALE_*` environment variables to the test, so the scaling
 inputs can be tuned without recompiling — for example:
@@ -157,6 +174,9 @@ something.
   to zero once the connection closes -- including a queued request `close()` drains and a sender blocked on a full
   channel as it closes -- and no accepted scrape result is lost by the close
 - **AgentPathManagerTest** — Path registration/unregistration, path lookup, concurrent access
+- **AgentPathManagerLincheckTest** — Lincheck, stress only (tagged `Lincheck`): static registration, unregistration, and
+  discovery reconciles race over a real in-process gRPC connection; once they finish, the agent's local path map and
+  the proxy's registrations for it agree exactly
 - **AgentOptionsTest** — CLI parsing, defaults, validation, SSL settings, gRPC options
 - **AgentClientInterceptorTest** — gRPC client interceptor that adds agent-id metadata to outbound calls
 - **AgentTokenClientInterceptorTest** — gRPC client interceptor that attaches the agent token header to outbound calls
@@ -167,9 +187,9 @@ something.
 - **HttpClientCacheTest** — HTTP client caching with TTL/idle eviction, keyed by auth credentials
 - **HttpClientCacheCancellationTest** — a scrape cancelled while the client cache is busy still releases its client,
   so eviction or shutdown closes it
-- **HttpClientCacheLincheckTest** — Lincheck, stress only (tagged `Lincheck`): scrapes under two credentials race LRU
-  eviction and `close()` in a one-client cache; no scrape is handed a closed client or has its client closed under it,
-  no client is closed twice, and the only open clients are the cached ones, or none after `close()`
+- **HttpClientCacheLincheckTest** — Lincheck, stress only (tagged `Lincheck`): scrapes under three credentials race LRU
+  eviction, expiry, and `close()` in a two-client cache; no scrape is handed a closed client or has its client closed
+  under it, and the only open clients are the cached ones, or none after `close()`
 - **EmbeddedAgentInfoTest** — EmbeddedAgentInfo data class (launchId, agentName storage)
 - **RequestFailureExceptionTest** — RequestFailureException custom exception class
 - **SslSettingsTest** — SSL keystore/truststore loading for TLS configuration
@@ -195,6 +215,10 @@ something.
   ensureLeadingSlash
 - **ProxyPathManagerTest** — Path registration/unregistration, consolidated mode, agent selection, concurrent access;
   a live agent's path is taken over only by the same auth identity
+- **ProxyPathManagerLincheckTest** — Lincheck, stress only (tagged `Lincheck`): path registration, unregistration,
+  and agent removal race on the real code the TLA+ `ProxyRegistry` spec models; no path is left on a removed agent,
+  `pathCountFor` matches the path map and the limit, exclusive paths have one agent, modes never mix, and a
+  consolidated path never takes an agent of another identity
 - **AgentContextTest** — Proxy's AgentContext: unique ID generation, validity, path registration, ScrapeRequestWrapper
   queue
 - **AgentContextLincheckTest** — Lincheck (tagged `Lincheck`, run by `make lincheck-tests`): the scrape-request
@@ -212,6 +236,8 @@ something.
   disconnect
 - **ProxyUtilsTest** — Helper functions: invalidAgentContextResponse, respondWith
 - **ProxyMetricsTest** — Prometheus metrics registration and gauge/counter updates
+- **ProxyMetricsLincheckTest** — Lincheck, stress only (tagged `Lincheck`): a path registering, scrapes recording its
+  latency and response size, and its removal race; no per-path histogram series outlives the path's removal
 - **RecentReqsSynchronizationTest** — Synchronized access to recentReqs EvictingQueue (prevents
   ConcurrentModificationException)
 - **ScrapeRequestManagerTest** — Add/remove scrape requests, timeout handling, concurrent access

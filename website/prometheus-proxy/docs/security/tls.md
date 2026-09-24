@@ -24,6 +24,13 @@ Both sides authenticate each other:
 | **Proxy** | `certChainFilePath`, `privateKeyFilePath`, `trustCertCollectionFilePath` |
 | **Agent** | `certChainFilePath`, `privateKeyFilePath`, `trustCertCollectionFilePath` |
 
+!!! note "TLS provider"
+
+    Since 4.1.0 the fat JARs and the Docker images use OpenSSL (BoringSSL) for TLS on Linux (x86_64,
+    aarch_64), macOS (x86_64, aarch_64), and Windows (x86_64), and fall back to the JDK's TLS elsewhere.
+    Certificates, keys, and the TLS options are used as before, but anything that differs between the two
+    providers, such as the default cipher suites, now follows BoringSSL.
+
 ## Configuration
 
 === "CLI (No Mutual Auth)"
