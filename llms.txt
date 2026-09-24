@@ -92,6 +92,12 @@ java -jar prometheus-proxy.jar
 
 # Start agent (pointing to proxy)
 java -jar prometheus-agent.jar --proxy mymachine.local --config myapps.conf
+
+# Both run in the foreground until Ctrl+C. To run one in the background with a log and a PID file
+# (nothing restarts it after an exit or a reboot):
+nohup java -jar prometheus-proxy.jar > proxy.log 2>&1 &
+echo $! > proxy.pid
+kill "$(cat proxy.pid)"   # stop it
 ```
 
 ### Homebrew
@@ -104,9 +110,12 @@ prometheus-proxy
 brew install pambrose/tap/prometheus-agent
 prometheus-agent --proxy mymachine.local --config myapps.conf
 
-# Or run them as services, configured in $(brew --prefix)/etc/prometheus-{proxy,agent}.conf
+# Or run them in the background as services, started again at every login, configured in
+# $(brew --prefix)/etc/prometheus-{proxy,agent}.conf and logging to $(brew --prefix)/var/log/<name>.log
 brew services start prometheus-proxy
 brew services start prometheus-agent
+brew services restart prometheus-agent   # pick up an edited config
+brew services stop prometheus-agent      # stop, and no longer start at login
 ```
 
 ### Docker
@@ -119,6 +128,13 @@ docker run --rm -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.1.0
 docker run --rm \
   --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
   pambrose/prometheus-agent:4.1.0
+
+# Both run in the foreground until Ctrl+C. To run one in the background, restarted if it exits or
+# Docker restarts (Docker doesn't allow --rm with --restart):
+docker run --detach --name prometheus-proxy --restart unless-stopped \
+  -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.1.0
+docker logs --follow prometheus-proxy                          # follow its log
+docker stop prometheus-proxy && docker rm prometheus-proxy     # stop and remove it
 ```
 
 ## Configuration
