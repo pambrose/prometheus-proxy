@@ -62,16 +62,34 @@ The proxy runs outside the firewall alongside your Prometheus server.
 
 === "Homebrew"
 
+    **In the foreground**, the proxy runs in your terminal and logs there until you stop it with
+    Ctrl+C. With no arguments it uses the default ports above:
+
     ```bash
     prometheus-proxy
     ```
 
-    To run the proxy in the background, set its ports and agent authentication in
-    `$(brew --prefix)/etc/prometheus-proxy.conf`, which the formula installs as a starting point, and
-    start it with `brew services`. It logs to `$(brew --prefix)/var/log/prometheus-proxy.log`.
+    To try the config the background service uses, pass it with `--config`:
 
     ```bash
-    brew services start prometheus-proxy
+    prometheus-proxy --config "$(brew --prefix)/etc/prometheus-proxy.conf"
+    ```
+
+    **In the background**, `brew services` runs the proxy with
+    `$(brew --prefix)/etc/prometheus-proxy.conf`, which the formula installs as a starting point, and
+    starts it again at login. Set the ports and agent authentication there before starting it:
+
+    ```bash
+    brew services start prometheus-proxy     # start now and at every login
+    brew services info prometheus-proxy      # check that it is running
+    brew services restart prometheus-proxy   # pick up an edited config
+    brew services stop prometheus-proxy      # stop, and no longer start at login
+    ```
+
+    The service logs to `$(brew --prefix)/var/log/prometheus-proxy.log`:
+
+    ```bash
+    tail -f "$(brew --prefix)/var/log/prometheus-proxy.log"
     ```
 
 === "Docker"
@@ -127,16 +145,37 @@ Each entry in `pathConfigs` maps:
 
 === "Homebrew"
 
+    **In the foreground**, the agent runs in your terminal and logs there until you stop it with
+    Ctrl+C:
+
+    ```bash
+    prometheus-agent --config agent.conf
+    ```
+
+    Or specify the proxy hostname on the command line:
+
     ```bash
     prometheus-agent --proxy proxy-host.example.com --config agent.conf
     ```
 
-    To run the agent in the background, put your settings in
-    `$(brew --prefix)/etc/prometheus-agent.conf`, which the formula installs as a starting point, and
-    start it with `brew services`. It logs to `$(brew --prefix)/var/log/prometheus-agent.log`.
+    **In the background**, `brew services` runs the agent with
+    `$(brew --prefix)/etc/prometheus-agent.conf` and starts it again at login. The formula installs
+    a starting point there with no paths, so copy your `agent.conf` over it first. The service passes
+    no `--proxy`, so the file's `proxy.hostname` decides which proxy the agent connects to:
 
     ```bash
-    brew services start prometheus-agent
+    cp agent.conf "$(brew --prefix)/etc/prometheus-agent.conf"
+
+    brew services start prometheus-agent     # start now and at every login
+    brew services info prometheus-agent      # check that it is running
+    brew services restart prometheus-agent   # pick up an edited config
+    brew services stop prometheus-agent      # stop, and no longer start at login
+    ```
+
+    The service logs to `$(brew --prefix)/var/log/prometheus-agent.log`:
+
+    ```bash
+    tail -f "$(brew --prefix)/var/log/prometheus-agent.log"
     ```
 
 === "Docker"
