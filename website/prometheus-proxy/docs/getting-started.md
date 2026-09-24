@@ -75,7 +75,8 @@ The proxy runs outside the firewall alongside your Prometheus server.
     ```
 
     Nothing restarts it if it exits or the machine reboots. For that, use the Homebrew or Docker
-    tab, or run it under your system's service manager.
+    tab, or run it under your system's service manager, as in
+    [Running as a service](production.md#running-as-a-service).
 
 === "Homebrew"
 
@@ -194,7 +195,7 @@ Each entry in `pathConfigs` maps:
 
     To pick up an edited `agent.conf`, stop the agent and start it again. Nothing restarts it if it
     exits or the machine reboots. For that, use the Homebrew or Docker tab, or run it under your
-    system's service manager.
+    system's service manager, as in [Running as a service](production.md#running-as-a-service).
 
 === "Homebrew"
 

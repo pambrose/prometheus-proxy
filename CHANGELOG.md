@@ -12,7 +12,7 @@ All notable changes to this project are documented in this file.
 
 ### Documentation
 
-- The website's Quick Start, the README, and `llms.txt` now show how to run the proxy and agent in the background for each way of running them: `nohup` with a log and a PID file for the JARs, `brew services` for Homebrew, and `docker run --detach --restart unless-stopped` for Docker. The Docker page gains a Running in the Background section, including how to manage and upgrade a detached container, and background commands for Docker Compose
+- The website's Quick Start, the README, and `llms.txt` now show how to run the proxy and agent in the background for each way of running them: `nohup` with a log and a PID file for the JARs, `brew services` for Homebrew, and `docker run --detach --restart unless-stopped` for Docker. The Docker page gains a Running in the Background section, including how to manage and upgrade a detached container, and background commands for Docker Compose. The production page gains a Running as a service section: which supervisor to use for each way of running them, and a systemd unit for the JARs (with `SuccessExitStatus=143`, since the JVM exits with 143 on SIGTERM)
 - The Docker page's production proxy example combined `--rm` with `--restart unless-stopped`, which Docker rejects. It and the production agent example now run detached under a restart policy
 
 ### Build & Tooling
