@@ -14,7 +14,12 @@
   ~ limitations under the License.
   -->
 
-<configuration scan="true" scanPeriod="30 seconds">
+<!--
+  No scan attribute: logback can't watch a config loaded from inside the JAR, and asking it to records
+  WARN statuses that make it print its whole internal status list at startup. For live reload, point
+  -Dlogback.configurationFile at a file on disk with scan="true" (see logback/docker-logback.xml).
+  -->
+<configuration>
 
     <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>

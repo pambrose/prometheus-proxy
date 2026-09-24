@@ -382,6 +382,23 @@ class BaseOptionsTest : StringSpec() {
       result.output shouldContain "Version"
     }
 
+    // kotlin-logging prints this line to stdout when the first logger is created, which for Proxy and Agent
+    // happens in their GenericService superclass's static initializer, before main() runs. The fat JARs'
+    // Main-Class launchers turn it off first, and only a fresh JVM shows whether they do it in time.
+    "Proxy fat JAR launcher prints the version without the kotlin-logging startup message" {
+      val result = runCliMain("io.prometheus.proxy.ProxyLauncher", "--version")
+      result.exitCode shouldBe 0
+      result.output shouldContain "Version"
+      result.output shouldNotContain KOTLIN_LOGGING_STARTUP_LINE
+    }
+
+    "Agent fat JAR launcher prints the version without the kotlin-logging startup message" {
+      val result = runCliMain("io.prometheus.agent.AgentLauncher", "--version")
+      result.exitCode shouldBe 0
+      result.output shouldContain "Version"
+      result.output shouldNotContain KOTLIN_LOGGING_STARTUP_LINE
+    }
+
     // Same conflation as above, in readConfig's parse-failure path: a standalone CLI given a config file
     // it cannot parse should log the reason and exit non-zero, not terminate on an uncaught
     // ConfigLoadException. The blank-config branch is a separate question and correctly stays gated on
@@ -633,5 +650,7 @@ class BaseOptionsTest : StringSpec() {
     // Generous: the fork pays JVM startup on a cold CI machine, but --version exits before any config
     // load or port binding, so a healthy run finishes in well under a second.
     private const val CLI_TIMEOUT_SECS = 60L
+
+    private const val KOTLIN_LOGGING_STARTUP_LINE = "kotlin-logging: initializing"
   }
 }

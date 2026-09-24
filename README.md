@@ -588,7 +588,7 @@ Typesafe Config highlights include:
 ### Configuration Notes
 
 * **Formats:** Supports HOCON (`.conf`), JSON (`.json`), and Java Properties (`.properties`).
-* **Logging:** Customize with `-Dlogback.configurationFile=/path/to/logback.xml`.
+* **Logging:** Customize with `-Dlogback.configurationFile=/path/to/logback.xml`. To pick up edits without a restart, set `scan="true"` on that file's `<configuration>` element, as [`logback/docker-logback.xml`](logback/docker-logback.xml) does; the config bundled in the JARs can't be watched.
 * **Dynamic Props:** Use `-Dproperty.name=value` for any scalar configuration key (parsed as Java properties, so list/object values like `proxy.auth` must be set in a config file).
 * **Per-Agent Auth:** `proxy.auth` (per-agent identities with path authorization) is a list of objects, so it is config-file-only — see [Per-Agent Identities and Path Authorization](#per-agent-identities-and-path-authorization).
 * **Keepalives:** See the [gRPC keepalive guide](https://grpc.io/docs/guides/keepalive/) for tuning details.

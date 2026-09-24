@@ -595,9 +595,9 @@ class Proxy(
      * and immediately calls `startSync()` from the constructor's `initBlock`. Control returns to the JVM only
      * after the Proxy terminates (e.g. process signal, fatal error, or explicit shutdown).
      *
-     * Used as the `Main-Class` of `prometheus-proxy.jar`. Unlike [Agent.main], the Proxy always loads its
-     * built-in reference config when no `--config`/`PROXY_CONFIG` is supplied, so there is no
-     * `exitOnMissingConfig` flag to plumb through here.
+     * `prometheus-proxy.jar` starts here, through a launcher that first turns off kotlin-logging's startup
+     * message. Unlike [Agent.main], the Proxy always loads its built-in reference config when no
+     * `--config`/`PROXY_CONFIG` is supplied, so there is no `exitOnMissingConfig` flag to plumb through here.
      *
      * For embedded use inside another JVM (mirroring [Agent.startAsyncAgent]), construct a [Proxy] directly
      * and call `startAsync()` rather than using this method.

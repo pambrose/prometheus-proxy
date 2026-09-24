@@ -710,7 +710,8 @@ class Agent(
      *
      * Equivalent to calling [startSyncAgent] with `exitOnMissingConfig = true`, meaning the process
      * terminates with a non-zero exit code if no config file or URL is provided via `--config`/`-c` or
-     * the `AGENT_CONFIG` environment variable. Used as the `Main-Class` of `prometheus-agent.jar`.
+     * the `AGENT_CONFIG` environment variable. `prometheus-agent.jar` starts here, through a launcher that
+     * first turns off kotlin-logging's startup message.
      *
      * @param args Raw command-line arguments forwarded to [AgentOptions] for parsing.
      */

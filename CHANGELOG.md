@@ -6,6 +6,11 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Bug Fixes
+
+- Fix the proxy and agent JARs printing about 30 lines of logback internal status (`|-INFO in ch.qos.logback...`) before their own output on every start, which landed in Docker and service logs. The bundled `logback.xml` set `scan="true"`, which logback can't honor for a config inside a JAR, so it recorded two WARNs, and a WARN makes logback print its whole status list. The bundled config no longer sets `scan`; it never reloaded anything. A config supplied with `-Dlogback.configurationFile` is a file on disk and can still set `scan="true"` to reload edits, as `logback/docker-logback.xml` does
+- Fix the proxy and agent JARs printing `kotlin-logging: initializing... active logger factory: Slf4jLoggerFactory` to stdout ahead of their own output. kotlin-logging prints it when the first logger is created, which for `Agent` and `Proxy` happens in their `GenericService` superclass's static initializer, before `main` can run. Each JAR's `Main-Class` is now a small launcher (`io.prometheus.agent.AgentLauncher`, `io.prometheus.proxy.ProxyLauncher`) that turns the line off and then calls `Agent.main` or `Proxy.main`. An explicit `-Dkotlin-logging.logStartupMessage` or `KOTLIN_LOGGING_STARTUP_MESSAGE` still decides. Launching `io.prometheus.Agent` or `io.prometheus.Proxy` directly, and the embedded agent, are unchanged
+
 ### Build & Tooling
 
 - CI now model-checks the TLA+ specs: a `tla` job in `ci.yml` runs `make tla-checks` beside the build on every pull request and push to `master`
