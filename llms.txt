@@ -94,13 +94,18 @@ java -jar prometheus-proxy.jar
 java -jar prometheus-agent.jar --proxy mymachine.local --config myapps.conf
 ```
 
-### Homebrew (agent only)
+### Homebrew
 
 ```bash
-brew install pambrose/tap/prometheus-agent   # installs openjdk@25 as a dependency
+# Each formula installs openjdk@25 as a dependency
+brew install pambrose/tap/prometheus-proxy
+prometheus-proxy
+
+brew install pambrose/tap/prometheus-agent
 prometheus-agent --proxy mymachine.local --config myapps.conf
 
-# Or run it as a service with the config in $(brew --prefix)/etc/prometheus-agent.conf
+# Or run them as services, configured in $(brew --prefix)/etc/prometheus-{proxy,agent}.conf
+brew services start prometheus-proxy
 brew services start prometheus-agent
 ```
 

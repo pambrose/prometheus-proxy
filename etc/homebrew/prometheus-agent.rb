@@ -1,7 +1,7 @@
-# Homebrew formula for the prometheus-proxy agent, published in the pambrose/homebrew-tap repository.
+# Homebrew formula for the agent (prometheus-agent.jar), published in the pambrose/homebrew-tap repository.
 #
 # The source is etc/homebrew/prometheus-agent.rb in pambrose/prometheus-proxy, where the version and checksum are
-# placeholders. `make homebrew-formula` fills them in from a published GitHub release and writes the result to the
+# placeholders. `make homebrew-formulae` fills them in from a published GitHub release and writes the result to the
 # tap's Formula/ directory, so make changes in that source file rather than in the tap's copy.
 class PrometheusAgent < Formula
   desc "Firewall-side agent that relays Prometheus scrapes through prometheus-proxy"

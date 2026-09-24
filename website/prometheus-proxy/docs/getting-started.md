@@ -26,16 +26,15 @@ icon: lucide/play
     - `build/libs/prometheus-proxy.jar`
     - `build/libs/prometheus-agent.jar`
 
-=== "Homebrew (agent)"
+=== "Homebrew"
 
-    On macOS and Linux, the agent is available from Homebrew. The formula installs the Java it
-    runs on (`openjdk@25`) and puts `prometheus-agent` on your `PATH`:
+    On macOS and Linux, the proxy and the agent are available from Homebrew. Each formula installs
+    the Java it runs on (`openjdk@25`) and puts its command on your `PATH`:
 
     ```bash
+    brew install pambrose/tap/prometheus-proxy
     brew install pambrose/tap/prometheus-agent
     ```
-
-    The proxy has no formula; install it from a JAR or Docker image.
 
 === "Docker"
 
@@ -60,6 +59,20 @@ The proxy runs outside the firewall alongside your Prometheus server.
 
     - HTTP scrape port: **8080**
     - gRPC agent port: **50051**
+
+=== "Homebrew"
+
+    ```bash
+    prometheus-proxy
+    ```
+
+    To run the proxy in the background, set its ports and agent authentication in
+    `$(brew --prefix)/etc/prometheus-proxy.conf`, which the formula installs as a starting point, and
+    start it with `brew services`. It logs to `$(brew --prefix)/var/log/prometheus-proxy.log`.
+
+    ```bash
+    brew services start prometheus-proxy
+    ```
 
 === "Docker"
 
