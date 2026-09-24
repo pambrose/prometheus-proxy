@@ -21,7 +21,7 @@ java -jar prometheus-agent.jar \
 # Clone and build the fat JARs:
 git clone https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy
-./gradlew shadowJar
+./gradlew agentJar proxyJar
 
 # JARs are generated in build/libs/:
 #   build/libs/prometheus-proxy.jar
