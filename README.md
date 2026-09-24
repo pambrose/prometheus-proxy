@@ -23,6 +23,7 @@ behind a firewall and preserves the native pull-based model architecture.
 - [New Features](#-new-features)
 - [Architecture](#-architecture)
 - [Quick Start](#-quick-start)
+- [Homebrew](#-homebrew)
 - [Building from Source](#-building-from-source)
 - [Configuration Examples](#-configuration-examples)
 - [Docker Usage](#-docker-usage)
@@ -157,6 +158,52 @@ agents.
    curl -s http://mymachine.local:8080/discovery | jq '.'
    ```
 
+6. Steps 2 and 3 run in the foreground until Ctrl+C. To keep the proxy and agent running after you close the
+   terminal, start each with `nohup`, sending its output to a log file and saving its process ID:
+   ```bash
+   # On the proxy's machine
+   nohup java -jar prometheus-proxy.jar > proxy.log 2>&1 &
+   echo $! > proxy.pid
+
+   # On the agent's machine
+   nohup java -jar prometheus-agent.jar --proxy mymachine.local --config myapps.conf > agent.log 2>&1 &
+   echo $! > agent.pid
+
+   # Later, to follow a log or stop a process
+   tail -f proxy.log
+   kill "$(cat proxy.pid)"
+   ```
+
+   Nothing restarts them if they exit or the machine reboots; `brew services` and Docker's `--restart`, below, do.
+
+### 🍺 Homebrew
+
+On macOS and Linux, the proxy and the agent are also available from Homebrew. Each formula installs the
+Java it runs on (`openjdk@25`), so there is no JAR to download:
+
+```bash
+# On the proxy's machine, outside the firewall
+brew install pambrose/tap/prometheus-proxy
+prometheus-proxy
+
+# On the agent's machine, inside the firewall
+brew install pambrose/tap/prometheus-agent
+prometheus-agent --proxy mymachine.local --config myapps.conf
+```
+
+To keep either one running in the background, edit its config in `$(brew --prefix)/etc/` and start it with
+`brew services`, which also starts it again at every login: `prometheus-proxy.conf` sets the proxy's ports and
+agent authentication, and `prometheus-agent.conf` sets the proxy the agent connects to and the paths it serves.
+Each logs to `$(brew --prefix)/var/log/<name>.log`.
+
+```bash
+brew services start prometheus-proxy     # start now and at every login
+brew services start prometheus-agent
+
+brew services restart prometheus-agent   # pick up an edited config
+brew services stop prometheus-agent      # stop, and no longer start at login
+```
+
 ### 🛠️ Building from Source
 
 If you prefer to build the project from source:
@@ -188,6 +235,19 @@ docker run --rm -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.1.0
 docker run --rm \
   --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
   pambrose/prometheus-agent:4.1.0
+```
+
+These run in the foreground until Ctrl+C. To run a container in the background instead, and have it start again
+if it exits or Docker restarts, replace `--rm` with `--detach --name <name> --restart unless-stopped` (Docker
+doesn't allow `--rm` with `--restart`):
+
+```bash
+docker run --detach --name prometheus-proxy --restart unless-stopped \
+  -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.1.0
+
+docker logs --follow prometheus-proxy   # follow its log
+docker stop prometheus-proxy            # stop it, and no longer restart it
+docker rm prometheus-proxy              # remove the stopped container
 ```
 
 ## 📋 Configuration Examples

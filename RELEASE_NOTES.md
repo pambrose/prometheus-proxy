@@ -6,6 +6,20 @@
 
 _Not yet released_
 
+### New Feature — Homebrew
+
+**The proxy and the agent can be installed with Homebrew**, on macOS and Linux:
+
+```bash
+brew install pambrose/tap/prometheus-proxy
+brew install pambrose/tap/prometheus-agent
+```
+
+Each formula installs a `prometheus-proxy` or `prometheus-agent` command that runs the release JAR on
+`openjdk@25`, the Java the Docker images use, which Homebrew installs as a dependency. `brew services start`
+runs either one in the background with a starter config in `$(brew --prefix)/etc/`; an upgrade leaves a config
+you have edited alone.
+
 ### Bug Fixes
 
 - **The proxy and agent no longer print logback's internal status at startup.** Every start printed about
@@ -17,6 +31,16 @@ _Not yet released_
 - **The `kotlin-logging: initializing...` line is gone from startup too.** The JARs now start through a
   small launcher that turns it off before the first logger is created. Set
   `-Dkotlin-logging.logStartupMessage=true` or `KOTLIN_LOGGING_STARTUP_MESSAGE=true` to see it again.
+
+### Documentation
+
+- **Every way of running the proxy and agent now says how to run it in the background.** The Quick Start, the
+  README, and `llms.txt` cover `nohup` for the JARs, `brew services` for Homebrew, and
+  `docker run --detach --restart unless-stopped` for Docker. The Docker page has a Running in the Background
+  section, and the production page's new Running as a service section recommends a supervisor and gives a
+  systemd unit for the JARs.
+- **The Docker page's production proxy example now runs.** It combined `--rm` with `--restart unless-stopped`,
+  which Docker rejects.
 
 ### Build and tooling
 

@@ -25,7 +25,30 @@ docker pull pambrose/prometheus-agent:4.1.0
 --8<-- "DockerExamples.txt:docker-agent-basic"
 ```
 
+## Running in the Background
+
+The examples above run in the foreground: the container stays attached to your terminal and logs there
+until you stop it with Ctrl+C, and `--rm` then removes it. To keep a container running in the background,
+start it with `--detach` and give it a `--name` to manage it by. `--restart unless-stopped` also starts it
+again if it exits or Docker restarts, until you stop it. Docker doesn't allow `--rm` with `--restart`, so
+leave `--rm` out:
+
+```bash
+--8<-- "DockerExamples.txt:docker-background"
+```
+
+Manage a background container by its name:
+
+```bash
+--8<-- "DockerExamples.txt:docker-manage"
+```
+
+To move a container to a new release, stop and remove it, then run it again with the new version's tag.
+
 ## Production Setup
+
+These run in the background under a restart policy, as described in
+[Running in the Background](#running-in-the-background).
 
 ### Proxy with Admin and Metrics
 
@@ -59,6 +82,15 @@ docker compose -f etc/compose/proxy.yml up
 ```
 
 Prometheus is then at `http://localhost:9090`, with both targets up on its **Targets** page.
+
+That runs the stack in the foreground until Ctrl+C. To run it in the background instead, add `--detach`;
+each service's `restart: unless-stopped` starts it again if it exits or Docker restarts:
+
+```bash
+docker compose -f etc/compose/proxy.yml up --detach
+docker compose -f etc/compose/proxy.yml logs --follow   # follow the stack's logs
+docker compose -f etc/compose/proxy.yml down            # stop and remove the stack
+```
 
 ## TLS with Docker
 

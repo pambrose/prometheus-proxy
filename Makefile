@@ -5,7 +5,7 @@
         all-scaling scaling-paths scaling-agents scaling-payload scaling-consolidated scaling-concurrency scaling-soak \
         coverage coverage-html coverage-xml coverage-log coverage-verify \
         coverage-open coverage-packages coverage-clean reports gh-docs \
-        gh-status tsconfig distro docker-push release tree depends lint detekt detekt-baseline \
+        gh-status tsconfig distro docker-push homebrew-formulae release tree depends lint detekt detekt-baseline \
         versions kdocs clean-site check-site upgrade-site site \
         publish-local publish-local-snapshot publish-snapshot publish-maven-central \
         upgrade-wrapper _check-gpg-env _require-version _require-gradle-version
@@ -17,6 +17,10 @@ GRADLE := ./gradlew
 TSCFG_VERSION := 1.2.5
 PLATFORMS := linux/amd64,linux/arm64,linux/s390x,linux/ppc64le
 IMAGE_PREFIX := pambrose/prometheus
+# A local clone of pambrose/homebrew-tap, which `make homebrew-formulae` writes the formulae into. Each formula's
+# source is etc/homebrew/<name>.rb and installs the release jar of the same name.
+HOMEBREW_TAP_DIR ?= ../homebrew-tap
+HOMEBREW_FORMULAE := prometheus-agent prometheus-proxy
 WEBSITE_DIR := website
 SITE_DIR := $(WEBSITE_DIR)/prometheus-proxy
 
@@ -272,6 +276,26 @@ docker-push: _require-version jars  ## Build and push multi-arch agent/proxy ima
 	docker buildx use buildx 2>/dev/null || docker buildx create --use --name=buildx
 	docker buildx build --platform $(PLATFORMS) -f ./etc/docker/proxy.Dockerfile --push -t $(IMAGE_PREFIX)-proxy:latest -t $(IMAGE_PREFIX)-proxy:$(VERSION) .
 	docker buildx build --platform $(PLATFORMS) -f ./etc/docker/agent.Dockerfile --push -t $(IMAGE_PREFIX)-agent:latest -t $(IMAGE_PREFIX)-agent:$(VERSION) .
+
+# Hashes the jars attached to the GitHub release rather than build/libs, since those are the files brew downloads.
+# Both jars are downloaded before any formula is written, so a missing jar leaves the tap untouched.
+homebrew-formulae: _require-version  ## Write the agent and proxy Homebrew formulae for the published release into HOMEBREW_TAP_DIR
+	@[ -e "$(HOMEBREW_TAP_DIR)/.git" ] || { \
+		echo "ERROR: $(HOMEBREW_TAP_DIR) is not a clone of pambrose/homebrew-tap; clone it there or set HOMEBREW_TAP_DIR" >&2; \
+		exit 1; }
+	@tmp="$$(mktemp -d)"; trap 'rm -rf "$$tmp"' EXIT; \
+	for name in $(HOMEBREW_FORMULAE); do \
+		url="https://github.com/pambrose/prometheus-proxy/releases/download/$(VERSION)/$$name.jar"; \
+		curl -fsSL -o "$$tmp/$$name.jar" "$$url" \
+			|| { echo "ERROR: could not download $$url; publish the $(VERSION) release first" >&2; exit 1; }; \
+	done; \
+	mkdir -p "$(HOMEBREW_TAP_DIR)/Formula"; \
+	for name in $(HOMEBREW_FORMULAE); do \
+		sha="$$(shasum -a 256 "$$tmp/$$name.jar" | cut -d' ' -f1)"; \
+		sed -e 's/@VERSION@/$(VERSION)/g' -e "s/@SHA256@/$$sha/g" "etc/homebrew/$$name.rb" \
+			> "$(HOMEBREW_TAP_DIR)/Formula/$$name.rb"; \
+		echo "Wrote $(HOMEBREW_TAP_DIR)/Formula/$$name.rb for $(VERSION) (sha256 $$sha)"; \
+	done
 
 release: distro docker-push  ## Build distro and push docker images
 

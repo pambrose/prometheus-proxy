@@ -32,6 +32,53 @@ security, reliability, and tuning knobs documented elsewhere into one operationa
   plaintext between proxy and agent. See
   [Auth Header Forwarding](security/index.md#auth-header-forwarding).
 
+## Running as a service
+
+In production, run the proxy and agents under a supervisor that starts them at boot and restarts them if
+they exit. `nohup` keeps a process running after you log out, but nothing restarts it, so don't rely on it
+here.
+
+- **Kubernetes** restarts a failed container and reschedules its pod. See [Kubernetes](kubernetes.md).
+- **Docker** does it with `--restart unless-stopped`, or `restart: unless-stopped` in Compose. See
+  [Running in the Background](docker.md#running-in-the-background).
+- **Homebrew**'s `brew services start` runs it under launchd on macOS or systemd on Linux and starts it
+  at login; `sudo brew services start` starts it at boot instead. See the
+  [Quick Start](getting-started.md).
+- **systemd**, for the JARs on a Linux host: a unit like this one for the proxy, installed as
+  `/etc/systemd/system/prometheus-proxy.service`. It assumes the JAR is in `/opt/prometheus-proxy`, the
+  config is in `/etc/prometheus-proxy`, and an unprivileged `prometheus` user exists (create it with
+  `sudo useradd --system --no-create-home prometheus`):
+
+    ```ini
+    [Unit]
+    Description=Prometheus Proxy
+    Wants=network-online.target
+    After=network-online.target
+
+    [Service]
+    User=prometheus
+    ExecStart=/usr/bin/java -jar /opt/prometheus-proxy/prometheus-proxy.jar --config /etc/prometheus-proxy/proxy.conf
+    Restart=on-failure
+    RestartSec=5
+    # The JVM exits with 143 when systemd stops it with SIGTERM; count that as a clean stop.
+    SuccessExitStatus=143
+
+    [Install]
+    WantedBy=multi-user.target
+    ```
+
+    For an agent, use `prometheus-agent.jar` and its config, and name the unit
+    `prometheus-agent.service`. Then:
+
+    ```bash
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now prometheus-proxy   # start now and at every boot
+    systemctl status prometheus-proxy              # check that it is running
+    journalctl -u prometheus-proxy -f              # follow its log
+    sudo systemctl restart prometheus-proxy        # pick up an edited config
+    sudo systemctl disable --now prometheus-proxy  # stop, and no longer start at boot
+    ```
+
 ## High availability
 
 - For **proxy** redundancy, give the agent an ordered list of proxy endpoints. It uses the first that
@@ -135,6 +182,8 @@ backlog means agents can't keep up. See [Performance Tuning](advanced.md#perform
 
 ## Pre-flight checklist
 
+- [ ] Proxy and agents run under a supervisor that restarts them (systemd, Kubernetes, Docker's
+      `--restart`, or `brew services`)
 - [ ] TLS (ideally mutual) enabled on the gRPC channel
 - [ ] Agent token set (per-agent identities where teams share a proxy), or mutual TLS in place
 - [ ] gRPC port reachable by agents; admin and dashboard ports **not** publicly exposed

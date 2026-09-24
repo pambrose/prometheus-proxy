@@ -11,9 +11,31 @@ docker run --rm \
   pambrose/prometheus-agent:4.1.0
 ; --8<-- [end:docker-agent-basic]
 
+; --8<-- [start:docker-background]
+# Run the proxy in the background:
+docker run --detach --name prometheus-proxy --restart unless-stopped \
+  -p 8080:8080 -p 50051:50051 \
+  pambrose/prometheus-proxy:4.1.0
+
+# Run an agent in the background with a local config file:
+docker run --detach --name prometheus-agent --restart unless-stopped \
+  --mount type=bind,source="$(pwd)"/agent.conf,target=/app/agent.conf \
+  --env AGENT_CONFIG=agent.conf \
+  --env PROXY_HOSTNAME=proxy-host.example.com \
+  pambrose/prometheus-agent:4.1.0
+; --8<-- [end:docker-background]
+
+; --8<-- [start:docker-manage]
+docker ps --filter name=prometheus-          # check that they are running
+docker logs --follow prometheus-proxy        # follow a container's log
+docker restart prometheus-agent              # restart it, e.g. to pick up an edited agent.conf
+docker stop prometheus-agent                 # stop it; it stays stopped when Docker restarts
+docker rm prometheus-agent                   # remove the stopped container
+; --8<-- [end:docker-manage]
+
 ; --8<-- [start:docker-proxy-production]
-# Production proxy with admin and metrics enabled:
-docker run --rm \
+# Production proxy with admin and metrics enabled, in the background:
+docker run --detach --name prometheus-proxy \
   -p 8080:8080 \
   -p 50051:50051 \
   -p 8082:8082 \
@@ -25,12 +47,13 @@ docker run --rm \
 ; --8<-- [end:docker-proxy-production]
 
 ; --8<-- [start:docker-agent-local-config]
-# Agent with a local config file (bind mount):
-docker run --rm \
+# Agent with a local config file (bind mount), in the background:
+docker run --detach --name prometheus-agent \
   -p 8083:8083 \
   -p 8093:8093 \
   --mount type=bind,source="$(pwd)"/prom-agent.conf,target=/app/prom-agent.conf \
   --env AGENT_CONFIG=prom-agent.conf \
+  --restart unless-stopped \
   pambrose/prometheus-agent:4.1.0
 ; --8<-- [end:docker-agent-local-config]
 
