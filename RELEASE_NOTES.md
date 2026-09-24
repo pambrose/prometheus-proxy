@@ -2,6 +2,17 @@
 
 ---
 
+## Unreleased
+
+_Not yet released_
+
+### Build and tooling
+
+- CI now model-checks the TLA+ specs on every pull request, and a manual **Lincheck** workflow runs the concurrency
+  specs on demand. The TLA+ tools the checks download are now verified against a pinned SHA-256.
+
+---
+
 ## 4.1.0
 
 _Released 2026-09-23_

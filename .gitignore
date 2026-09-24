@@ -3,7 +3,7 @@ build/
 .superset
 
 # TLA+ tools (downloaded by `make tla-checks`) and TLC's working files
-specs/tla/tla2tools.jar
+specs/tla/tla2tools.jar*
 specs/tla/states/
 
 !gradle/wrapper/gradle-wrapper.jar

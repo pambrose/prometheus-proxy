@@ -23,6 +23,9 @@ SITE_DIR := $(WEBSITE_DIR)/prometheus-proxy
 # TLA+ model checking (specs/tla). The tools jar is downloaded on first use and git-ignored; TLC's working
 # states go under build/.
 TLA_VERSION := 1.7.4
+# SHA-256 of that release's tla2tools.jar, recorded when it was pinned (GitHub publishes no digest for the asset); a
+# download that doesn't match is refused. Update it together with TLA_VERSION.
+TLA_SHA256 := 936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88
 TLA_DIR := specs/tla
 TLA_JAR := $(TLA_DIR)/tla2tools.jar
 TLC = cd $(TLA_DIR) && java -XX:+UseParallelGC -cp tla2tools.jar tlc2.TLC -workers auto -deadlock -cleanup
@@ -110,7 +113,10 @@ lincheck-tests:  ## Run the Lincheck concurrency tests (excluded from the defaul
 	$(GRADLE) test -PkotestTags=Lincheck --tests "*LincheckTest"
 
 $(TLA_JAR):
-	curl -fsSL -o $@ https://github.com/tlaplus/tlaplus/releases/download/v$(TLA_VERSION)/tla2tools.jar
+	curl -fsSL -o $@.tmp https://github.com/tlaplus/tlaplus/releases/download/v$(TLA_VERSION)/tla2tools.jar
+	@echo "$(TLA_SHA256)  $@.tmp" | shasum -a 256 -c - >/dev/null \
+		|| { rm -f $@.tmp; echo "Error: $@ checksum mismatch; expected $(TLA_SHA256)" >&2; exit 1; }
+	mv $@.tmp $@
 
 tla-checks: $(TLA_JAR)  ## Model-check the TLA+ specs in specs/tla (the quick configs; downloads the TLA+ tools once)
 	$(TLC) -metadir $(CURDIR)/build/tla/AgentFailover -config AgentFailover.cfg AgentFailover.tla

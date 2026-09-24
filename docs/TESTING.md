@@ -82,11 +82,12 @@ need Docker, so a plain `make tests` / `./gradlew check` registers each spec as 
 `make container-tests` to run the whole suite on its own, `make scaling-tests` for just the scaling spec, or
 `make all-tests` to run everything in one shot.
 
-The Lincheck specs (`*LincheckTest`) explore thread interleavings and together take several minutes, so they
-carry the Kotest `Lincheck` tag (`common/Lincheck.kt`), and the `Test` task's default tag expression, `!Lincheck`,
-leaves them out of `./gradlew test`, `make tests`, `make all-tests`, and CI. `make lincheck-tests` runs them
-(`-PkotestTags=Lincheck`); tag any new Lincheck spec the same way. The TLA+ specs are not tests but models of the
-design, checked by `make tla-checks`; `specs/tla/README.md` describes them.
+The Lincheck specs (`*LincheckTest`) explore thread interleavings and together take several minutes, so they carry
+the Kotest `Lincheck` tag (`common/Lincheck.kt`), and the `Test` task's default tag expression, `!Lincheck`, leaves
+them out of `./gradlew test`, `make tests`, `make all-tests`, and the CI build. `make lincheck-tests` runs them
+(`-PkotestTags=Lincheck`), as does the manual **Lincheck** workflow in GitHub Actions; tag any new Lincheck spec the
+same way. The TLA+ specs are not tests but models of the design, checked by `make tla-checks`, which CI runs on
+every pull request; `specs/tla/README.md` describes them.
 
 Keep MockK out of the Lincheck specs. To mock a final class, MockK rewrites the bytecode of that class and its
 superclasses, `Object`'s methods included, for the rest of the JVM, and routes every `equals()` and exception

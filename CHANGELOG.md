@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [Unreleased]
+
+### Build & Tooling
+
+- CI now model-checks the TLA+ specs: a `tla` job in `ci.yml` runs `make tla-checks` beside the build on every pull request and push to `master`
+- Add a `Lincheck` workflow (`.github/workflows/lincheck.yml`) that runs `make lincheck-tests` on demand. The specs take several minutes, so they stay out of the CI build
+- `make tla-checks` now checks the downloaded `tla2tools.jar` against a pinned SHA-256 (`TLA_SHA256` in the Makefile) and refuses a download that doesn't match, since CI now runs it
+
 ## [4.1.0] - 2026-09-23
 
 ### Security
