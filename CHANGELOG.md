@@ -10,6 +10,11 @@ All notable changes to this project are documented in this file.
 
 - The proxy and the agent are available from Homebrew: `brew install pambrose/tap/prometheus-proxy` and `brew install pambrose/tap/prometheus-agent` install `prometheus-proxy` and `prometheus-agent` commands that run the release JARs on `openjdk@25`, the runtime the Docker images ship, and `brew services` definitions that run them with a starter config in `$(brew --prefix)/etc/`. The formulae's sources are in `etc/homebrew/`; `make homebrew-formulae` renders them for a published release into a clone of `pambrose/homebrew-tap` (step 9 of `docs/RELEASE.md`)
 
+### Documentation
+
+- The website's Quick Start, the README, and `llms.txt` now show how to run the proxy and agent in the background for each way of running them: `nohup` with a log and a PID file for the JARs, `brew services` for Homebrew, and `docker run --detach --restart unless-stopped` for Docker. The Docker page gains a Running in the Background section, including how to manage and upgrade a detached container, and background commands for Docker Compose
+- The Docker page's production proxy example combined `--rm` with `--restart unless-stopped`, which Docker rejects. It and the production agent example now run detached under a restart policy
+
 ### Build & Tooling
 
 - CI now model-checks the TLA+ specs: a `tla` job in `ci.yml` runs `make tla-checks` beside the build on every pull request and push to `master`
