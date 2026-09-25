@@ -21,6 +21,7 @@ package io.prometheus.harness
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.collections.shouldBeIn
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -412,6 +413,13 @@ class ProxyWebDashboardTest : StringSpec() {
 
     // Ktor accepts frames of any size by default and buffers each one whole. A browser message is a few dozen bytes,
     // so a frame past the cap closes the session rather than costing the proxy memory.
+    //
+    // The close code the client sees is a race in TCP, not the proxy. Ktor rejects the frame on reading its header,
+    // sends a TOO_BIG close frame, and closes the socket with the rest of the frame still unread, so the kernel resets
+    // the connection; a reset that reaches the client before it reads the close frame surfaces as CLOSED_ABNORMALLY.
+    // That happened in CI, so either code passes, and a fresh session afterwards must still render, which a proxy
+    // that had died rather than closing the session would fail. Small messages keeping the session open is the next
+    // spec's to check.
     "an oversized message should close the session" {
       withDashboard(
         FRAME_HTTP_PORT,
@@ -422,7 +430,11 @@ class ProxyWebDashboardTest : StringSpec() {
         client.webSocket(socketUrl) {
           nextText() shouldContain "hx-swap-oob"
           send(Frame.Text("x".repeat(OVERSIZED_MESSAGE_CHARS)))
-          withTimeout(10.seconds) { closeReason.await() }?.knownReason shouldBe CloseReason.Codes.TOO_BIG
+          val code = withTimeout(10.seconds) { closeReason.await() }?.code
+          code shouldBeIn listOf(CloseReason.Codes.TOO_BIG.code, ABNORMAL_CLOSURE_CODE)
+        }
+        client.webSocket(socketUrl) {
+          nextText() shouldContain "hx-swap-oob"
         }
       }
     }
@@ -533,6 +545,10 @@ class ProxyWebDashboardTest : StringSpec() {
 
     // Far past the incoming frame cap, and far past any message the dashboard page sends.
     private const val OVERSIZED_MESSAGE_CHARS = 1_000_000
+
+    // RFC 6455's code for a connection that ended without a close frame; Ktor's CloseReason.Codes.CLOSED_ABNORMALLY
+    // is internal API.
+    private const val ABNORMAL_CLOSURE_CODE: Short = 1006
 
     private const val CACHE_HTTP_PORT = TestPorts.DASHBOARD_UI_CACHE_HTTP_PORT
     private const val CACHE_GRPC_PORT = TestPorts.DASHBOARD_UI_CACHE_GRPC_PORT
