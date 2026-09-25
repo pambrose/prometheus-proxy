@@ -25,6 +25,7 @@ All notable changes to this project are documented in this file.
 - CI now model-checks the TLA+ specs: a `tla` job in `ci.yml` runs `make tla-checks` beside the build on every pull request and push to `master`
 - Add a `Lincheck` workflow (`.github/workflows/lincheck.yml`) that runs `make lincheck-tests` on demand. The specs take several minutes, so they stay out of the CI build
 - `make tla-checks` now checks the downloaded `tla2tools.jar` against a pinned SHA-256 (`TLA_SHA256` in the Makefile) and refuses a download that doesn't match, since CI now runs it
+- Fix a flaky `ProxyWebDashboardTest` spec, "an oversized message should close the session", which failed a CI run with `expected:<TOO_BIG> but was:<CLOSED_ABNORMALLY>`. Ktor rejects an oversized frame on reading its header and closes the socket with the rest of the frame unread, so the kernel resets the connection, and a reset that beats the TOO_BIG close frame to the client surfaces as an abnormal close. The spec now accepts either code and then checks that a fresh session still renders; with the frame cap removed it still fails
 
 ## [4.1.0] - 2026-09-23
 

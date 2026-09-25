@@ -44,6 +44,8 @@ you have edited alone.
 
 ### Build and tooling
 
+- A dashboard test that failed now and then in CI, when a TCP reset beat the WebSocket close frame to the client,
+  now accepts either outcome and checks that the dashboard keeps serving.
 - CI now model-checks the TLA+ specs on every pull request, and a manual **Lincheck** workflow runs the concurrency
   specs on demand. The TLA+ tools the checks download are now verified against a pinned SHA-256.
 
