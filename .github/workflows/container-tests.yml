@@ -4,19 +4,28 @@ name: Container Tests
 # proxy/agent images from etc/docker/*.Dockerfile and exercises the Prometheus -> proxy -> agent ->
 # endpoint scrape path across smoke, HTTP-surface, consolidated, large-payload, reconnect,
 # agent-token-auth, TLS/HTTPS, and parameter-driven scaling specs. The scaling spec runs its
-# small default table here (no SCALE_* overrides). Runs on push to master and on demand. No
-# untrusted event payloads are referenced.
+# small default table here (no SCALE_* overrides). Runs on pull requests, so a change that breaks the fat JARs,
+# the images, or the scrape path shows up before it merges, and on push to master and on demand. No untrusted
+# event payloads are referenced.
 on:
   push:
+    branches: [ master ]
+  pull_request:
     branches: [ master ]
   workflow_dispatch:
 
 permissions:
   contents: read
 
+# As in ci.yml: a newer push to a pull request supersedes a run still in progress; runs on master are never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   container-tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

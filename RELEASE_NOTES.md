@@ -73,6 +73,8 @@ you have edited alone.
   now accepts either outcome and checks that the dashboard keeps serving.
 - CI now model-checks the TLA+ specs on every pull request, and a manual **Lincheck** workflow runs the concurrency
   specs on demand. The TLA+ tools the checks download are now verified against a pinned SHA-256.
+- The container tests, which run the fat JARs in Docker against a real Prometheus, now run on every pull request
+  rather than only after a merge.
 
 ---
 

@@ -38,6 +38,7 @@ All notable changes to this project are documented in this file.
 - `make tla-checks` now checks the downloaded `tla2tools.jar` against a pinned SHA-256 (`TLA_SHA256` in the Makefile) and refuses a download that doesn't match, since CI now runs it
 - Fix a flaky `ProxyWebDashboardTest` spec, "an oversized message should close the session", which failed a CI run with `expected:<TOO_BIG> but was:<CLOSED_ABNORMALLY>`. Ktor rejects an oversized frame on reading its header and closes the socket with the rest of the frame unread, so the kernel resets the connection, and a reset that beats the TOO_BIG close frame to the client surfaces as an abnormal close. The spec now accepts either code and then checks that a fresh session still renders; with the frame cap removed it still fails
 - Add a `Security` workflow (`.github/workflows/security.yml`). Trivy scans the proxy and agent images on every pull request, on pushes to `master`, and weekly, and fails on a HIGH or CRITICAL vulnerability that has a fix; CodeQL analyzes the Kotlin code. Findings from `master` and the weekly run go to code scanning
+- The container tests run on pull requests too, not only after a merge, so a change that breaks the fat JARs, the images, or the scrape path shows up before it merges
 
 ### Dependencies
 
