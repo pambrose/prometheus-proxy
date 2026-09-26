@@ -46,7 +46,8 @@ by hand.
    - **Title**: the version with a `v` prefix (e.g. `v4.0.1`).
    - **Description**: summarize the changes and include a full-changelog link
      (e.g. `**Full Changelog**: https://github.com/pambrose/prometheus-proxy/compare/<prev>...<new>`).
-   - Attach `build/libs/prometheus-agent.jar` and `build/libs/prometheus-proxy.jar`.
+   - Attach `build/libs/prometheus-agent.jar`, `build/libs/prometheus-proxy.jar`, and
+     `build/libs/prometheus-proxy-<version>-sources.jar`.
 
 8) Build and push the multi-arch Docker images: `make docker-push`. This tags both `:latest` and
    `:<version>`; it refuses to push pre-release versions (`-SNAPSHOT`/`-rc`/`-beta`/`-alpha`) as `:latest`.
