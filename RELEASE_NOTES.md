@@ -111,6 +111,9 @@ proxy or agent exposes.
   systemd unit for the JARs.
 - **The Docker page's production proxy example now runs.** It combined `--rm` with `--restart unless-stopped`,
   which Docker rejects.
+- **The embedded-agent page has an Upgrading from 4.1.x section.** It covers the move to the Prometheus Java
+  client 1.x, including how a host still on the 0.x client can serve its metrics and the agent's from one
+  endpoint with `prometheus-metrics-simpleclient-bridge`.
 
 ### Build and tooling
 
