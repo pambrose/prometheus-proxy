@@ -943,6 +943,12 @@ java -jar prometheus-agent.jar --trust_all_x509 --config myconfig.conf
 process-global and all-or-nothing: it disables certificate validation for **every** HTTPS target the agent
 scrapes, and it takes precedence over `--https_truststore`. Prefer a custom trust store whenever possible.
 
+### Reporting a Vulnerability
+
+Report a security problem privately, not in a public issue, pull request, or discussion: use GitHub's
+[private vulnerability reporting](https://github.com/pambrose/prometheus-proxy/security/advisories/new).
+[SECURITY.md](SECURITY.md) lists what a useful report includes and which documented behavior is by design.
+
 ## 🔧 Troubleshooting
 
 > 📖 **Docs site:** [Troubleshooting guide](https://pambrose.github.io/prometheus-proxy/troubleshooting/) is a symptom-driven reference covering more failure modes and fixes.

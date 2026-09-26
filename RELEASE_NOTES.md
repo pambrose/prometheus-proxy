@@ -2,6 +2,22 @@
 
 ---
 
+## Unreleased
+
+_Not yet released_
+
+### Documentation
+
+- **How to report a vulnerability is in the README and `llms.txt` too**, which now point to `SECURITY.md` and
+  GitHub's private vulnerability reporting, as the website's Security page does.
+
+### Build and tooling
+
+- The nginx reverse-proxy example no longer logs a deprecation warning at startup: it enables HTTP/2 with
+  `http2 on;` instead of the deprecated `listen ... http2`.
+
+---
+
 ## 4.2.0
 
 _Released 2026-09-26_
