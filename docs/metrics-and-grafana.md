@@ -59,23 +59,30 @@ proxy.metrics {
 
 The same options are available under `agent.metrics`.
 
+The JVM metrics come from the Prometheus Java client 1.x. Since the move to it, the memory metrics put the unit
+last (`jvm_memory_used_bytes`, not `jvm_memory_bytes_used`; `jvm_memory_pool_used_bytes`, not
+`jvm_memory_pool_bytes_used`; the same for `committed`, `max` and `init`), `jvm_info` is `jvm_runtime_info`, and
+`memoryPoolsExportsEnabled` also adds `jvm_memory_pool_allocated_bytes_total`.
+
 ---
 
 ## Proxy Metrics
 
 ### Counters
 
+Counters are exposed with a `_total` suffix; query them by that name.
+
 | Metric                                    | Labels  | Description                                      |
 |-------------------------------------------|---------|--------------------------------------------------|
-| `proxy_scrape_requests`                   | `type`  | Scrape request outcomes. See label values below. |
-| `proxy_connect_count`                     | —       | Agent connection count                           |
-| `proxy_eviction_count`                    | —       | Stale agent evictions                            |
-| `proxy_heartbeat_count`                   | —       | Heartbeats received from agents                  |
+| `proxy_scrape_requests_total`             | `type`  | Scrape request outcomes. See label values below. |
+| `proxy_connect_count_total`               | —       | Agent connection count                           |
+| `proxy_eviction_count_total`              | —       | Stale agent evictions                            |
+| `proxy_heartbeat_count_total`             | —       | Heartbeats received from agents                  |
 | `proxy_chunk_validation_failures_total`   | `stage` | Chunk integrity failures (`chunk` or `summary`)  |
 | `proxy_chunked_transfers_abandoned_total` | —       | Chunked transfers abandoned mid-stream           |
 | `proxy_agent_displacement_total`          | —       | Path registrations that displaced another agent  |
 
-**`proxy_scrape_requests` type labels:**
+**`proxy_scrape_requests_total` type labels:**
 
 | Value                   | Meaning                                                                      |
 |-------------------------|------------------------------------------------------------------------------|
@@ -121,7 +128,7 @@ Several values come in proxy-side / agent-side pairs, and the distinction determ
 
 A path's series are removed when its last registration goes away, whether it is unregistered or its agent disconnects, so a retired path stops appearing on `/metrics`. A scrape still in flight when that happens is not recorded, so it cannot bring the series back.
 
-The `outcome` label takes the `proxy_scrape_requests` `type` values above, so latency can be split by result.
+The `outcome` label takes the `proxy_scrape_requests_total` `type` values above, so latency can be split by result.
 The `encoding` label is `gzipped` or `plain`.
 
 Latency buckets: `.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10, 15, 30, 60, 90` seconds. They reach the proxy's
@@ -149,17 +156,19 @@ live data structures on each Prometheus scrape, not pushed on every state change
 
 ### Counters
 
-| Metric                       | Labels              | Description                                  |
-|------------------------------|---------------------|----------------------------------------------|
-| `agent_scrape_request_count` | `launch_id`, `type` | Scrape requests processed by this agent      |
-| `agent_scrape_result_count`  | `launch_id`, `type` | Scrape results sent to proxy                 |
-| `agent_connect_count`        | `launch_id`, `type` | Connection attempts to the proxy             |
-| `agent_filter_lines_dropped` | `launch_id`, `path` | Lines removed by the path's metric filter    |
-| `agent_filter_bytes_saved`   | `launch_id`, `path` | Bytes saved before gzip by the metric filter |
+Counters are exposed with a `_total` suffix; query them by that name.
 
-**`agent_scrape_result_count` type labels:** `non-gzipped`, `gzipped`, `chunked`
+| Metric                             | Labels              | Description                                  |
+|------------------------------------|---------------------|----------------------------------------------|
+| `agent_scrape_request_count_total` | `launch_id`, `type` | Scrape requests processed by this agent      |
+| `agent_scrape_result_count_total`  | `launch_id`, `type` | Scrape results sent to proxy                 |
+| `agent_connect_count_total`        | `launch_id`, `type` | Connection attempts to the proxy             |
+| `agent_filter_lines_dropped_total` | `launch_id`, `path` | Lines removed by the path's metric filter    |
+| `agent_filter_bytes_saved_total`   | `launch_id`, `path` | Bytes saved before gzip by the metric filter |
 
-**`agent_connect_count` type labels:** `success`, `failure`
+**`agent_scrape_result_count_total` type labels:** `non-gzipped`, `gzipped`, `chunked`
+
+**`agent_connect_count_total` type labels:** `success`, `failure`
 
 The `launch_id` label uniquely identifies each agent process lifetime, allowing
 you to distinguish metrics from agent restarts.
@@ -325,8 +334,8 @@ Adjust hostnames and ports to match your deployment.
 **Scrape success rate (last 5 minutes):**
 
 ```promql
-sum(rate(proxy_scrape_requests{type="success"}[5m]))
-  / sum(rate(proxy_scrape_requests[5m])) * 100
+sum(rate(proxy_scrape_requests_total{type="success"}[5m]))
+  / sum(rate(proxy_scrape_requests_total[5m])) * 100
 ```
 
 **P99 scrape latency:**
@@ -356,7 +365,7 @@ histogram_quantile(0.5,
 **Error rate by type:**
 
 ```promql
-sum by (type) (rate(proxy_scrape_requests{type!="success"}[5m]))
+sum by (type) (rate(proxy_scrape_requests_total{type!="success"}[5m]))
 ```
 
 **Agent scrape latency by agent name:**

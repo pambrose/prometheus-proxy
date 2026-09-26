@@ -20,9 +20,11 @@ package io.prometheus.proxy
 
 import com.pambrose.common.dsl.PrometheusDsl.counter
 import com.pambrose.common.dsl.PrometheusDsl.gauge
+import com.pambrose.common.dsl.PrometheusDsl.histogram
 import com.pambrose.common.metrics.SamplerGaugeCollector
 import io.prometheus.Proxy
-import io.prometheus.client.Histogram
+import io.prometheus.common.Utils.setToCurrentTime
+import io.prometheus.metrics.core.metrics.Histogram
 import java.util.concurrent.ConcurrentHashMap
 
 internal class ProxyMetrics(
@@ -53,23 +55,30 @@ internal class ProxyMetrics(
       help("Proxy heartbeat count")
     }
 
+  // Classic buckets only and no exemplars: a 1.x histogram otherwise also keeps a native histogram and an exemplar
+  // sampler per series, which the per-path series would multiply by every registered path. The proxy traces with
+  // Brave, not OpenTelemetry, so it has no exemplars to record.
   val scrapeRequestLatency: Histogram =
-    Histogram.build()
-      .name("proxy_scrape_request_latency_seconds")
-      .help("Proxy scrape request latency in seconds")
-      .labelNames("path", "outcome")
+    histogram {
+      name("proxy_scrape_request_latency_seconds")
+      help("Proxy scrape request latency in seconds")
+      labelNames("path", "outcome")
+      classicOnly()
+      withoutExemplars()
       // Up to the proxy's default scrapeRequestTimeoutSecs (90), past the agent's default scrapeTimeoutSecs (15), so
       // a timeout lands in a bucket rather than +Inf.
-      .buckets(.005, .01, .025, .05, .1, .25, .5, 1.0, 2.5, 5.0, 10.0, 15.0, 30.0, 60.0, 90.0)
-      .register()
+      classicUpperBounds(.005, .01, .025, .05, .1, .25, .5, 1.0, 2.5, 5.0, 10.0, 15.0, 30.0, 60.0, 90.0)
+    }
 
   val scrapeResponseBytes: Histogram =
-    Histogram.build()
-      .name("proxy_scrape_response_bytes")
-      .help("Proxy scrape response size in bytes")
-      .labelNames("path", "encoding")
-      .buckets(1_024.0, 10_240.0, 102_400.0, 512_000.0, 1_048_576.0, 5_242_880.0, 10_485_760.0)
-      .register()
+    histogram {
+      name("proxy_scrape_response_bytes")
+      help("Proxy scrape response size in bytes")
+      labelNames("path", "encoding")
+      classicOnly()
+      withoutExemplars()
+      classicUpperBounds(1_024.0, 10_240.0, 102_400.0, 512_000.0, 1_048_576.0, 5_242_880.0, 10_485_760.0)
+    }
 
   // The per-path histogram series each registered path has recorded, as (histogram, second label value) pairs. A
   // path is a key exactly while it is registered. Observing and removing both run inside the map's per-key compute, so
@@ -104,7 +113,7 @@ internal class ProxyMetrics(
   ) {
     pathSeries.computeIfPresent(path) { _, series ->
       series += histogram to label
-      histogram.labels(path, label).observe(value)
+      histogram.labelValues(path, label).observe(value)
       series
     }
   }
@@ -148,7 +157,7 @@ internal class ProxyMetrics(
       name("proxy_start_time_seconds")
       labelNames(LAUNCH_ID)
       help("Proxy start time in seconds")
-    }.labels(proxy.launchId).setToCurrentTime()
+    }.labelValues(proxy.launchId).setToCurrentTime()
 
     SamplerGaugeCollector(
       name = "proxy_agent_map_size",

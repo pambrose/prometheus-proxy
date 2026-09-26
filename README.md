@@ -513,7 +513,7 @@ worth knowing:
   a corrupted payload.
 - **Applies to discovered paths too.** Filters are matched by path, so they cover both
   `pathConfigs` entries and paths added by [Dynamic Target Discovery](#dynamic-target-discovery-agent).
-- **Observable.** `agent_filter_lines_dropped` and `agent_filter_bytes_saved`, labeled by
+- **Observable.** `agent_filter_lines_dropped_total` and `agent_filter_bytes_saved_total`, labeled by
   `launch_id` and `path`, report what each filter is actually removing.
 - **Config-file only.** `filters` is a list, so there is no CLI/env equivalent.
 

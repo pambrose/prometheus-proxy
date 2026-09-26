@@ -39,7 +39,7 @@ import io.prometheus.Agent
 import io.prometheus.Proxy
 import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.common.agentOptions
-import io.prometheus.client.CollectorRegistry
+import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.common.startAndAwaitReady
 import io.prometheus.harness.HarnessConstants.CONFIG_ARG
 import io.prometheus.common.proxyOptions
@@ -56,7 +56,7 @@ import io.ktor.server.cio.CIO as ServerCIO
 class InProcessHeartbeatDisabledTest : StringSpec() {
   init {
     "Finding 6: with heartbeat disabled a scrape through the proxy still succeeds" {
-      CollectorRegistry.defaultRegistry.clear()
+      PrometheusRegistry.defaultRegistry.clear()
 
       val serverName = "hb-disabled-${System.nanoTime()}"
       val httpPort = HEARTBEAT_DISABLED_HTTP_PORT

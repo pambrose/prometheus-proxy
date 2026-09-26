@@ -26,6 +26,7 @@ import io.github.oshai.kotlinlogging.KLogger
 import io.github.oshai.kotlinlogging.KotlinLoggingConfiguration
 import io.grpc.Status
 import io.prometheus.Proxy
+import io.prometheus.metrics.core.datapoints.GaugeDataPoint
 import kotlinx.serialization.json.Json
 import org.slf4j.Logger.ROOT_LOGGER_NAME
 import org.slf4j.LoggerFactory
@@ -39,6 +40,7 @@ internal object Utils {
   private const val TRAILING_PUNCTUATION = ",.;:)]}>'\""
   private const val KOTLIN_LOGGING_STARTUP_PROPERTY = "kotlin-logging.logStartupMessage"
   private const val KOTLIN_LOGGING_STARTUP_ENV_VAR = "KOTLIN_LOGGING_STARTUP_MESSAGE"
+  private const val MILLIS_PER_SECOND = 1_000.0
 
   internal fun getVersionDesc(asJson: Boolean = false): String = Proxy::class.versionDesc(asJson)
 
@@ -114,6 +116,9 @@ internal object Utils {
   internal fun String.defaultEmptyJsonObject() = ifEmpty { "{}" }
 
   fun String.toJsonElement() = Json.parseToJsonElement(this)
+
+  /** Sets this gauge to the current Unix time in seconds, as the 0.x client's `setToCurrentTime()` did. */
+  fun GaugeDataPoint.setToCurrentTime() = set(System.currentTimeMillis() / MILLIS_PER_SECOND)
 
   fun setLogLevel(
     context: String,

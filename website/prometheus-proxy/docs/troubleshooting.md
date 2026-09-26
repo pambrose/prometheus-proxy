@@ -25,7 +25,7 @@ Before diving into a specific symptom, gather signal:
 3. **Scrape the path directly**, bypassing Prometheus:
    `curl -i http://<proxy-host>:8080/<path>` — the HTTP status code tells you a lot (see
    below).
-4. **Watch the outcome metric**: `proxy_scrape_requests` is labeled by `type`
+4. **Watch the outcome metric**: `proxy_scrape_requests_total` is labeled by `type`
    (`success`, `timed_out`, `upstream_timed_out`, `agent_disconnected`, `path_not_found`, `upstream_error`,
    `content_too_large`, `payload_too_large`, …). Whichever `type` is incrementing names the failure
    mode; see [Monitoring](monitoring.md) for the full table.

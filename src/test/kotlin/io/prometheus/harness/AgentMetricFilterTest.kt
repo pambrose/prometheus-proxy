@@ -36,7 +36,7 @@ import io.ktor.server.routing.routing
 import io.prometheus.common.TestPorts.METRIC_FILTER_HTTP_PORT
 import io.prometheus.Agent
 import io.prometheus.Proxy
-import io.prometheus.client.CollectorRegistry
+import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.common.agentOptions
 import io.prometheus.common.proxyOptions
@@ -51,7 +51,7 @@ import io.ktor.server.cio.CIO as ServerCIO
 class AgentMetricFilterTest : StringSpec() {
   init {
     "a filtered path returns a reduced payload end to end" {
-      CollectorRegistry.defaultRegistry.clear()
+      PrometheusRegistry.defaultRegistry.clear()
 
       val serverName = "metric-filter-${System.nanoTime()}"
       // This spec's own port, in TestPorts with every other spec's, so TestPortsTest catches a collision.

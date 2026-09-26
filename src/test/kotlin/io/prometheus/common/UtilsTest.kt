@@ -25,6 +25,8 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.doubles.shouldBeGreaterThanOrEqual
+import io.kotest.matchers.doubles.shouldBeLessThanOrEqual
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeEmpty
@@ -37,12 +39,14 @@ import io.prometheus.common.Utils.parseHostPort
 import io.prometheus.common.Utils.sanitizeQueryParams
 import io.prometheus.common.Utils.sanitizeUrl
 import io.prometheus.common.Utils.setLogLevel
+import io.prometheus.common.Utils.setToCurrentTime
 import io.prometheus.common.Utils.suppressKotlinLoggingStartupMessage
 import io.prometheus.common.Utils.toJsonElement
 import io.prometheus.common.Utils.sanitizeUrlsInText
 import io.prometheus.common.TestPorts.PROMETHEUS_PORT
 import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
+import io.prometheus.metrics.core.metrics.Gauge
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -157,6 +161,27 @@ class UtilsTest : StringSpec() {
       shouldThrow<Exception> {
         "not valid json".toJsonElement()
       }
+    }
+
+    // ==================== setToCurrentTime Tests ====================
+
+    // The 1.x client has no setToCurrentTime(). The start-time gauges feed `time() - *_start_time_seconds` on the
+    // dashboards, so the value must be Unix seconds, not milliseconds.
+    "setToCurrentTime should set the gauge to the current Unix time in seconds" {
+      val gauge =
+        Gauge.builder()
+          .name("utils_test_start_time_seconds")
+          .help("Utils test start time")
+          .labelNames("id")
+          .build()
+
+      val before = System.currentTimeMillis() / 1_000.0
+      gauge.labelValues("a").setToCurrentTime()
+      val after = System.currentTimeMillis() / 1_000.0
+
+      val value = gauge.labelValues("a").get()
+      value shouldBeGreaterThanOrEqual before
+      value shouldBeLessThanOrEqual after
     }
 
     // ==================== setLogLevel Tests ====================

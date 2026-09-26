@@ -42,7 +42,8 @@ htmx = "2.0.10"
 htmxWs = "2.0.4"
 
 # Metrics
-prometheus = "0.16.0"
+# Keep in sync with common-utils: 1.9.0 is the Prometheus Java client common-utils 5.0.0 is built against
+prometheus = "1.9.0"
 dropwizard = "4.2.40"
 
 # Tracing
@@ -58,7 +59,7 @@ typesafe = "1.4.9"
 jcommander = "3.0"
 
 # Common Utils
-utils = "4.1.0"
+utils = "5.0.0"
 
 # Misc
 annotation = "1.3.2"
@@ -100,7 +101,7 @@ webjar-htmx = { module = "org.webjars.npm:htmx.org", version.ref = "htmx" }
 webjar-htmx-ws = { module = "org.webjars.npm:htmx-ext-ws", version.ref = "htmxWs" }
 
 # Metrics
-prometheus-simpleclient = { module = "io.prometheus:simpleclient", version.ref = "prometheus" }
+prometheus-metrics-core = { module = "io.prometheus:prometheus-metrics-core", version.ref = "prometheus" }
 dropwizard-metrics = { module = "io.dropwizard.metrics:metrics-healthchecks", version.ref = "dropwizard" }
 
 # Tracing

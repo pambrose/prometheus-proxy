@@ -342,10 +342,10 @@ scrape time.
 Two counters, both labeled by `launch_id` and `path`, track filtering and are only created for paths
 that actually have a filter configured:
 
-| Metric                        | Labels              | Description                                   |
-|:-------------------------------|:--------------------|:-----------------------------------------------|
-| `agent_filter_lines_dropped`  | `launch_id`, `path` | Exposition lines dropped by the filter        |
-| `agent_filter_bytes_saved`    | `launch_id`, `path` | Bytes removed from the payload by the filter  |
+| Metric                             | Labels              | Description                                  |
+|:-----------------------------------|:--------------------|:---------------------------------------------|
+| `agent_filter_lines_dropped_total` | `launch_id`, `path` | Exposition lines dropped by the filter       |
+| `agent_filter_bytes_saved_total`   | `launch_id`, `path` | Bytes removed from the payload by the filter |
 
 Not implemented: `dropLabels`, metric renaming/relabeling, and an agent-global filter -- every filter
 is per-path.

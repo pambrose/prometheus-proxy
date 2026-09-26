@@ -24,7 +24,7 @@ import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.prometheus.Agent
-import io.prometheus.client.CollectorRegistry
+import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.common.TestPorts.HARNESS_AGENT_ADMIN_PORT
 import io.prometheus.common.TestPorts.HARNESS_AGENT_METRICS_PORT
 import io.prometheus.common.TestPorts.HARNESS_HELPERS_HTTP_PORT
@@ -72,7 +72,7 @@ class HarnessHelpersTest : StringSpec() {
     // a proxy or agent already running on the machine -- or another project's server on 8092 -- failed every spec
     // that started one, at bind time.
     "startProxy and startAgent should bind the harness ports, not the product defaults" {
-      CollectorRegistry.defaultRegistry.clear()
+      PrometheusRegistry.defaultRegistry.clear()
       val proxy = startProxy(adminEnabled = true, metricsEnabled = true, proxyPort = HARNESS_HELPERS_HTTP_PORT)
       val agents = mutableListOf<Agent>()
       try {

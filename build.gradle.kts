@@ -103,7 +103,7 @@ dependencies {
   implementation(libs.annotation.api)
   implementation(libs.jcommander)
   implementation(libs.typesafe.config)
-  implementation(libs.prometheus.simpleclient)
+  implementation(libs.prometheus.metrics.core)
   implementation(libs.dropwizard.metrics)
   implementation(libs.zipkin.brave)
 

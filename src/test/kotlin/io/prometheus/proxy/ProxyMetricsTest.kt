@@ -19,15 +19,19 @@
 package io.prometheus.proxy
 
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.inspectors.forAll
+import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.doubles.shouldBeGreaterThanOrEqual
+import io.kotest.matchers.doubles.shouldBeLessThanOrEqual
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
-import io.kotest.matchers.collections.shouldContainAll
 import io.prometheus.Proxy
-import io.prometheus.client.CollectorRegistry
+import io.prometheus.metrics.model.registry.PrometheusRegistry
+import io.prometheus.metrics.model.snapshots.GaugeSnapshot
+import io.prometheus.metrics.model.snapshots.Labels
 
 // Tests for ProxyMetrics which manages Prometheus metrics for the proxy component.
 // Metrics include counters for scrape requests, connects, evictions, heartbeats,
@@ -51,15 +55,14 @@ class ProxyMetricsTest : StringSpec() {
   // Every path label value across the per-path histograms' series.
   private fun seriesPaths(metrics: ProxyMetrics): Set<String> =
     listOf(metrics.scrapeRequestLatency, metrics.scrapeResponseBytes)
-      .flatMap { it.collect() }
-      .flatMap { it.samples }
-      .map { it.labelValues.first() }
+      .flatMap { it.collect().dataPoints }
+      .mapNotNull { it.labels.get("path") }
       .toSet()
 
   init {
     beforeEach {
       // Clear the default Prometheus registry to avoid "already registered" errors
-      CollectorRegistry.defaultRegistry.clear()
+      PrometheusRegistry.defaultRegistry.clear()
     }
 
     // ==================== Counter Initialization Tests ====================
@@ -134,13 +137,12 @@ class ProxyMetricsTest : StringSpec() {
       val metrics = ProxyMetrics(createMockProxy())
       metrics.pathRegistered("retired")
       metrics.observeLatency("retired", "success", 0.1)
-      metrics.scrapeRequestLatency.labels("retired", "unrecorded").observe(0.1)
+      metrics.scrapeRequestLatency.labelValues("retired", "unrecorded").observe(0.1)
 
       metrics.removePathSeries("retired")
 
-      metrics.scrapeRequestLatency.collect()
-        .flatMap { it.samples }
-        .map { it.labelValues.take(2) }
+      metrics.scrapeRequestLatency.collect().dataPoints
+        .map { listOf(it.labels.get("path"), it.labels.get("outcome")) }
         .toSet() shouldBe setOf(listOf("retired", "unrecorded"))
     }
 
@@ -177,13 +179,73 @@ class ProxyMetricsTest : StringSpec() {
       metrics.pathRegistered("slow")
       metrics.observeLatency("slow", "timed_out", 90.0)
 
-      val bounds =
-        metrics.scrapeRequestLatency.collect()
-          .flatMap { it.samples }
-          .filter { it.name.endsWith("_bucket") }
-          .map { it.labelValues.last() }
-          .toSet()
-      bounds shouldContainAll setOf("10.0", "15.0", "30.0", "60.0", "90.0")
+      val buckets = metrics.scrapeRequestLatency.collect().dataPoints.single().classicBuckets
+      List(buckets.size()) { buckets.getUpperBound(it) } shouldBe
+        listOf(.005, .01, .025, .05, .1, .25, .5, 1.0, 2.5, 5.0, 10.0, 15.0, 30.0, 60.0, 90.0, Double.POSITIVE_INFINITY)
+    }
+
+    "scrapeResponseBytes should keep its bucket layout" {
+      val metrics = ProxyMetrics(createMockProxy())
+      metrics.pathRegistered("p")
+      metrics.observeResponseBytes("p", ProxyMetrics.ENCODING_PLAIN, 1_024.0)
+
+      val buckets = metrics.scrapeResponseBytes.collect().dataPoints.single().classicBuckets
+      List(buckets.size()) { buckets.getUpperBound(it) } shouldBe
+        listOf(
+          1_024.0,
+          10_240.0,
+          102_400.0,
+          512_000.0,
+          1_048_576.0,
+          5_242_880.0,
+          10_485_760.0,
+          Double.POSITIVE_INFINITY,
+        )
+    }
+
+    // A 1.x histogram also keeps a native histogram (up to 160 buckets per series) unless it is built classicOnly().
+    // The proxy holds two histograms per registered path, and a Prometheus scraping with protobuf would ingest the
+    // native data, so both stay classic-only, as they were under the 0.x client.
+    "per-path histograms should keep classic buckets only" {
+      val metrics = ProxyMetrics(createMockProxy())
+      metrics.pathRegistered("p")
+      metrics.observeLatency("p", "success", 0.1)
+      metrics.observeResponseBytes("p", ProxyMetrics.ENCODING_PLAIN, 1_024.0)
+
+      listOf(metrics.scrapeRequestLatency, metrics.scrapeResponseBytes)
+        .flatMap { it.collect().dataPoints }
+        .forAll { it.hasNativeHistogramData().shouldBeFalse() }
+    }
+
+    // A 1.x histogram samples exemplars by default: each series carries an exemplar sampler sized to its buckets and
+    // schedules a task as it observes. The proxy traces with Brave, not OpenTelemetry, so it never has an exemplar to
+    // record, and the per-path series would multiply that cost by every registered path.
+    "per-path histograms should keep no exemplars" {
+      val metrics = ProxyMetrics(createMockProxy())
+      metrics.scrapeRequestLatency.labelValues("p", "success").observeWithExemplar(0.1, Labels.of("trace_id", "t"))
+      metrics.scrapeResponseBytes
+        .labelValues("p", ProxyMetrics.ENCODING_PLAIN)
+        .observeWithExemplar(1_024.0, Labels.of("trace_id", "t"))
+
+      listOf(metrics.scrapeRequestLatency, metrics.scrapeResponseBytes)
+        .flatMap { it.collect().dataPoints }
+        .forAll { it.exemplars.size() shouldBe 0 }
+    }
+
+    // ==================== Gauge Tests ====================
+
+    "proxy start time gauge should hold the start time in Unix seconds" {
+      val before = System.currentTimeMillis() / 1_000.0
+      ProxyMetrics(createMockProxy())
+      val after = System.currentTimeMillis() / 1_000.0
+
+      val gauge =
+        PrometheusRegistry.defaultRegistry.scrape()
+          .filterIsInstance<GaugeSnapshot>()
+          .single { it.metadata.name == "proxy_start_time_seconds" }
+      val value = gauge.dataPoints.single().value
+      value shouldBeGreaterThanOrEqual before
+      value shouldBeLessThanOrEqual after
     }
 
     // ==================== New Counter Initialization Tests ====================
@@ -215,10 +277,10 @@ class ProxyMetricsTest : StringSpec() {
       val proxy = createMockProxy()
       val metrics = ProxyMetrics(proxy)
 
-      val initialValue = metrics.scrapeRequestCount.labels("test-type").get()
-      metrics.scrapeRequestCount.labels("test-type").inc()
+      val initialValue = metrics.scrapeRequestCount.labelValues("test-type").get()
+      metrics.scrapeRequestCount.labelValues("test-type").inc()
 
-      metrics.scrapeRequestCount.labels("test-type").get() shouldBe initialValue + 1
+      metrics.scrapeRequestCount.labelValues("test-type").get() shouldBe initialValue + 1
     }
 
     "connectCount should increment" {
@@ -258,14 +320,14 @@ class ProxyMetricsTest : StringSpec() {
       val metrics = ProxyMetrics(proxy)
 
       // The histogram is labeled by (path, outcome) so latency can be broken down by result.
-      metrics.scrapeRequestLatency.labels("test-path", "success").observe(0.1)
-      metrics.scrapeRequestLatency.labels("test-path", "success").observe(0.2)
-      metrics.scrapeRequestLatency.labels("test-path", "timed_out").observe(0.3)
+      metrics.scrapeRequestLatency.labelValues("test-path", "success").observe(0.1)
+      metrics.scrapeRequestLatency.labelValues("test-path", "success").observe(0.2)
+      metrics.scrapeRequestLatency.labelValues("test-path", "timed_out").observe(0.3)
 
-      val samples = CollectorRegistry.defaultRegistry.metricFamilySamples().toList()
-      val latencyMetric = samples.find { it.name == "proxy_scrape_request_latency_seconds" }
+      val latencyMetric =
+        PrometheusRegistry.defaultRegistry.scrape().find { it.metadata.name == "proxy_scrape_request_latency_seconds" }
       latencyMetric.shouldNotBeNull()
-      val outcomes = latencyMetric.samples.mapNotNull { it.labelValues.getOrNull(1) }.toSet()
+      val outcomes = latencyMetric.dataPoints.mapNotNull { it.labels.get("outcome") }.toSet()
       outcomes shouldContain "success"
       outcomes shouldContain "timed_out"
     }
@@ -274,11 +336,11 @@ class ProxyMetricsTest : StringSpec() {
       val proxy = createMockProxy()
       val metrics = ProxyMetrics(proxy)
 
-      metrics.scrapeResponseBytes.labels("test-path", "plain").observe(1024.0)
-      metrics.scrapeResponseBytes.labels("test-path", "gzipped").observe(512.0)
+      metrics.scrapeResponseBytes.labelValues("test-path", "plain").observe(1024.0)
+      metrics.scrapeResponseBytes.labelValues("test-path", "gzipped").observe(512.0)
 
-      val samples = CollectorRegistry.defaultRegistry.metricFamilySamples().toList()
-      val bytesMetric = samples.find { it.name == "proxy_scrape_response_bytes" }
+      val bytesMetric =
+        PrometheusRegistry.defaultRegistry.scrape().find { it.metadata.name == "proxy_scrape_response_bytes" }
       bytesMetric.shouldNotBeNull()
     }
 
@@ -286,12 +348,12 @@ class ProxyMetricsTest : StringSpec() {
       val proxy = createMockProxy()
       val metrics = ProxyMetrics(proxy)
 
-      metrics.chunkValidationFailures.labels(ProxyMetrics.STAGE_CHUNK).inc()
-      metrics.chunkValidationFailures.labels(ProxyMetrics.STAGE_SUMMARY).inc()
-      metrics.chunkValidationFailures.labels(ProxyMetrics.STAGE_SUMMARY).inc()
+      metrics.chunkValidationFailures.labelValues(ProxyMetrics.STAGE_CHUNK).inc()
+      metrics.chunkValidationFailures.labelValues(ProxyMetrics.STAGE_SUMMARY).inc()
+      metrics.chunkValidationFailures.labelValues(ProxyMetrics.STAGE_SUMMARY).inc()
 
-      metrics.chunkValidationFailures.labels(ProxyMetrics.STAGE_CHUNK).get() shouldBe 1.0
-      metrics.chunkValidationFailures.labels(ProxyMetrics.STAGE_SUMMARY).get() shouldBe 2.0
+      metrics.chunkValidationFailures.labelValues(ProxyMetrics.STAGE_CHUNK).get() shouldBe 1.0
+      metrics.chunkValidationFailures.labelValues(ProxyMetrics.STAGE_SUMMARY).get() shouldBe 2.0
     }
 
     "chunkedTransfersAbandoned should increment" {
@@ -320,13 +382,13 @@ class ProxyMetricsTest : StringSpec() {
       val proxy = createMockProxy()
       val metrics = ProxyMetrics(proxy)
 
-      metrics.scrapeRequestCount.labels("type-a").inc()
-      metrics.scrapeRequestCount.labels("type-a").inc()
-      metrics.scrapeRequestCount.labels("type-b").inc()
+      metrics.scrapeRequestCount.labelValues("type-a").inc()
+      metrics.scrapeRequestCount.labelValues("type-a").inc()
+      metrics.scrapeRequestCount.labelValues("type-b").inc()
 
       // Different labels should be tracked separately
-      metrics.scrapeRequestCount.labels("type-a").get() shouldBeGreaterThanOrEqual 2.0
-      metrics.scrapeRequestCount.labels("type-b").get() shouldBeGreaterThanOrEqual 1.0
+      metrics.scrapeRequestCount.labelValues("type-a").get() shouldBeGreaterThanOrEqual 2.0
+      metrics.scrapeRequestCount.labelValues("type-b").get() shouldBeGreaterThanOrEqual 1.0
     }
   }
 }

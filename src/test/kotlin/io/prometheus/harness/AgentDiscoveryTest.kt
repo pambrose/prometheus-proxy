@@ -27,7 +27,7 @@ import io.kotest.matchers.shouldBe
 import io.prometheus.Proxy
 import io.prometheus.agent.PathSource
 import io.prometheus.agent.discovery.DiscoveryTestSupport.discoveryPathsHocon
-import io.prometheus.client.CollectorRegistry
+import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.common.TestPorts
 import io.prometheus.harness.HarnessConstants.CONFIG_ARG
 import io.prometheus.harness.support.TestUtils
@@ -42,7 +42,7 @@ import kotlin.time.Duration.Companion.seconds
 class AgentDiscoveryTest : StringSpec() {
   init {
     "agent adds, updates, and removes discovered paths from a watched file without restart" {
-      CollectorRegistry.defaultRegistry.clear()
+      PrometheusRegistry.defaultRegistry.clear()
 
       val discoveryFile = File.createTempFile("discovery", ".conf").apply { deleteOnExit() }
       discoveryFile.writeText(discoveryPathsHocon("disc_a", "http://localhost:9100/a"))

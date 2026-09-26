@@ -24,11 +24,19 @@ import com.pambrose.common.util.simpleClassName
 import com.pambrose.common.util.sleep
 import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldEndWith
+import io.kotest.matchers.string.shouldNotContain
+import io.kotest.matchers.string.shouldStartWith
+import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.prometheus.common.TestPorts
 import io.prometheus.common.TestPorts.HARNESS_AGENT_ADMIN_PORT
+import io.prometheus.common.TestPorts.HARNESS_AGENT_METRICS_PORT
 import io.prometheus.common.TestPorts.HARNESS_PROXY_ADMIN_PORT
+import io.prometheus.common.TestPorts.HARNESS_PROXY_METRICS_PORT
 import io.prometheus.harness.HarnessConstants.DEFAULT_CHUNK_SIZE_BYTES
 import io.prometheus.harness.HarnessConstants.DEFAULT_SCRAPE_TIMEOUT_SECS
 import io.prometheus.harness.HarnessConstants.HARNESS_CONFIG
@@ -100,6 +108,44 @@ class NettyTestWithAdminMetricsTest :
           val body = response.bodyAsText()
           body.length shouldBeGreaterThan 100
           response.status shouldBe HttpStatusCode.OK
+        }
+      }
+    }
+
+    // The proxy and agent run in this JVM and share Prometheus' default registry, so each metrics endpoint serves
+    // both components' families. Under the 1.x client a name collision between them fails every scrape with a 500
+    // rather than serving duplicates, so both endpoints are scraped.
+    "metrics endpoints should serve both components' series in the text format" {
+      listOf(HARNESS_PROXY_METRICS_PORT, HARNESS_AGENT_METRICS_PORT).forEach { port ->
+        withHttpClient {
+          get("$port/metrics".withPrefix()) { response ->
+            val body = response.bodyAsText()
+            response.status shouldBe HttpStatusCode.OK
+            response.headers[HttpHeaders.ContentType].orEmpty() shouldStartWith "text/plain; version=0.0.4"
+            body shouldContain "\nproxy_connect_count_total "
+            body shouldContain "\nproxy_agent_map_size "
+            body shouldContain "\nproxy_start_time_seconds{launch_id=\""
+            body shouldContain "\nagent_start_time_seconds{launch_id=\""
+            body shouldContain "\nagent_scrape_backlog_size{launch_id=\""
+            // The 1.x client no longer exposes the counters' and histograms' _created series by default.
+            body shouldNotContain "_created"
+          }
+        }
+      }
+    }
+
+    // Prometheus 3 asks for OpenMetrics first.
+    "metrics endpoint should serve OpenMetrics when the Accept header asks for it" {
+      withHttpClient {
+        get(
+          "$HARNESS_PROXY_METRICS_PORT/metrics".withPrefix(),
+          setUp = { header(HttpHeaders.Accept, "application/openmetrics-text; version=1.0.0") },
+        ) { response ->
+          val body = response.bodyAsText()
+          response.status shouldBe HttpStatusCode.OK
+          response.headers[HttpHeaders.ContentType].orEmpty() shouldStartWith "application/openmetrics-text"
+          body shouldContain "# TYPE proxy_connect_count counter"
+          body.trimEnd() shouldEndWith "# EOF"
         }
       }
     }

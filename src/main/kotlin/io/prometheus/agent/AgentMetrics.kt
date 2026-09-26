@@ -20,9 +20,11 @@ package io.prometheus.agent
 
 import com.pambrose.common.dsl.PrometheusDsl.counter
 import com.pambrose.common.dsl.PrometheusDsl.gauge
+import com.pambrose.common.dsl.PrometheusDsl.histogram
 import com.pambrose.common.metrics.SamplerGaugeCollector
 import io.prometheus.Agent
-import io.prometheus.client.Histogram
+import io.prometheus.common.Utils.setToCurrentTime
+import io.prometheus.metrics.core.metrics.Histogram
 
 internal class AgentMetrics(
   agent: Agent,
@@ -49,12 +51,14 @@ internal class AgentMetrics(
     }
 
   val scrapeRequestLatency: Histogram =
-    Histogram.build()
-      .name("agent_scrape_request_latency_seconds")
-      .help("Agent scrape request latency in seconds")
-      .labelNames(LAUNCH_ID, AGENT_NAME)
-      .buckets(.005, .01, .025, .05, .1, .25, .5, 1.0, 2.5, 5.0, 10.0)
-      .register()
+    histogram {
+      name("agent_scrape_request_latency_seconds")
+      help("Agent scrape request latency in seconds")
+      labelNames(LAUNCH_ID, AGENT_NAME)
+      classicOnly()
+      withoutExemplars()
+      classicUpperBounds(.005, .01, .025, .05, .1, .25, .5, 1.0, 2.5, 5.0, 10.0)
+    }
 
   val filterLinesDropped =
     counter {
@@ -75,7 +79,7 @@ internal class AgentMetrics(
       name("agent_start_time_seconds")
       labelNames(LAUNCH_ID)
       help("Agent start time in seconds")
-    }.labels(agent.launchId).setToCurrentTime()
+    }.labelValues(agent.launchId).setToCurrentTime()
 
     SamplerGaugeCollector(
       "agent_scrape_backlog_size",

@@ -86,6 +86,11 @@ When you call `startAsyncAgent()`:
 
 Your application code runs normally while the agent handles metrics scraping in the background.
 
+The embedded agent's metrics register in the Prometheus Java client 1.x default registry
+(`io.prometheus.metrics.model.registry.PrometheusRegistry.defaultRegistry`). A host that serves its own metrics
+from that registry exposes the agent's too; a host still on the 0.x client (`io.prometheus:simpleclient`) does
+not see them.
+
 !!! tip "Config file location"
 
     The config file path is relative to your application's working directory.

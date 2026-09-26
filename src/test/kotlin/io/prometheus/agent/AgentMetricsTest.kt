@@ -19,13 +19,18 @@
 package io.prometheus.agent
 
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.booleans.shouldBeFalse
+import io.kotest.matchers.collections.shouldContainAll
 import io.kotest.matchers.doubles.shouldBeGreaterThanOrEqual
+import io.kotest.matchers.doubles.shouldBeLessThanOrEqual
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
 import io.prometheus.Agent
-import io.prometheus.client.CollectorRegistry
+import io.prometheus.metrics.model.registry.PrometheusRegistry
+import io.prometheus.metrics.model.snapshots.GaugeSnapshot
+import io.prometheus.metrics.model.snapshots.Labels
 import kotlin.concurrent.atomics.AtomicInt
 
 // Tests for AgentMetrics which manages Prometheus metrics for the agent component.
@@ -50,7 +55,7 @@ class AgentMetricsTest : StringSpec() {
   init {
     beforeEach {
       // Clear the default Prometheus registry to avoid "already registered" errors
-      CollectorRegistry.defaultRegistry.clear()
+      PrometheusRegistry.defaultRegistry.clear()
     }
 
     // ==================== Counter Initialization Tests ====================
@@ -94,10 +99,10 @@ class AgentMetricsTest : StringSpec() {
       val launchId = "test-launch-id"
       val type = "scrape"
 
-      val initialValue = metrics.scrapeRequestCount.labels(launchId, type).get()
-      metrics.scrapeRequestCount.labels(launchId, type).inc()
+      val initialValue = metrics.scrapeRequestCount.labelValues(launchId, type).get()
+      metrics.scrapeRequestCount.labelValues(launchId, type).inc()
 
-      metrics.scrapeRequestCount.labels(launchId, type).get() shouldBe initialValue + 1
+      metrics.scrapeRequestCount.labelValues(launchId, type).get() shouldBe initialValue + 1
     }
 
     "scrapeResultCount should increment with labels" {
@@ -107,10 +112,10 @@ class AgentMetricsTest : StringSpec() {
       val launchId = "test-launch-id"
       val type = "success"
 
-      val initialValue = metrics.scrapeResultCount.labels(launchId, type).get()
-      metrics.scrapeResultCount.labels(launchId, type).inc()
+      val initialValue = metrics.scrapeResultCount.labelValues(launchId, type).get()
+      metrics.scrapeResultCount.labelValues(launchId, type).inc()
 
-      metrics.scrapeResultCount.labels(launchId, type).get() shouldBe initialValue + 1
+      metrics.scrapeResultCount.labelValues(launchId, type).get() shouldBe initialValue + 1
     }
 
     "connectCount should increment with labels" {
@@ -120,10 +125,10 @@ class AgentMetricsTest : StringSpec() {
       val launchId = "test-launch-id"
       val type = "grpc"
 
-      val initialValue = metrics.connectCount.labels(launchId, type).get()
-      metrics.connectCount.labels(launchId, type).inc()
+      val initialValue = metrics.connectCount.labelValues(launchId, type).get()
+      metrics.connectCount.labelValues(launchId, type).inc()
 
-      metrics.connectCount.labels(launchId, type).get() shouldBe initialValue + 1
+      metrics.connectCount.labelValues(launchId, type).get() shouldBe initialValue + 1
     }
 
     // ==================== Histogram Operations Tests ====================
@@ -135,12 +140,12 @@ class AgentMetricsTest : StringSpec() {
       val launchId = "test-launch-id"
       val agentName = "test-agent"
 
-      metrics.scrapeRequestLatency.labels(launchId, agentName).observe(0.05)
-      metrics.scrapeRequestLatency.labels(launchId, agentName).observe(0.10)
-      metrics.scrapeRequestLatency.labels(launchId, agentName).observe(0.15)
+      metrics.scrapeRequestLatency.labelValues(launchId, agentName).observe(0.05)
+      metrics.scrapeRequestLatency.labelValues(launchId, agentName).observe(0.10)
+      metrics.scrapeRequestLatency.labelValues(launchId, agentName).observe(0.15)
 
-      val samples = CollectorRegistry.defaultRegistry.metricFamilySamples().toList()
-      val latencyMetric = samples.find { it.name == "agent_scrape_request_latency_seconds" }
+      val latencyMetric =
+        PrometheusRegistry.defaultRegistry.scrape().find { it.metadata.name == "agent_scrape_request_latency_seconds" }
       latencyMetric.shouldNotBeNull()
     }
 
@@ -153,13 +158,13 @@ class AgentMetricsTest : StringSpec() {
       val launchId = "test-launch-id"
 
       // Increment different type labels
-      metrics.scrapeRequestCount.labels(launchId, "type-a").inc()
-      metrics.scrapeRequestCount.labels(launchId, "type-a").inc()
-      metrics.scrapeRequestCount.labels(launchId, "type-b").inc()
+      metrics.scrapeRequestCount.labelValues(launchId, "type-a").inc()
+      metrics.scrapeRequestCount.labelValues(launchId, "type-a").inc()
+      metrics.scrapeRequestCount.labelValues(launchId, "type-b").inc()
 
       // Different labels should be tracked separately
-      metrics.scrapeRequestCount.labels(launchId, "type-a").get() shouldBeGreaterThanOrEqual 2.0
-      metrics.scrapeRequestCount.labels(launchId, "type-b").get() shouldBeGreaterThanOrEqual 1.0
+      metrics.scrapeRequestCount.labelValues(launchId, "type-a").get() shouldBeGreaterThanOrEqual 2.0
+      metrics.scrapeRequestCount.labelValues(launchId, "type-b").get() shouldBeGreaterThanOrEqual 1.0
     }
 
     "multiple counters can be incremented independently" {
@@ -170,58 +175,72 @@ class AgentMetricsTest : StringSpec() {
       val type = "test"
 
       // Increment different counters
-      metrics.scrapeRequestCount.labels(launchId, type).inc()
-      metrics.scrapeResultCount.labels(launchId, type).inc()
-      metrics.scrapeResultCount.labels(launchId, type).inc()
-      metrics.connectCount.labels(launchId, type).inc()
+      metrics.scrapeRequestCount.labelValues(launchId, type).inc()
+      metrics.scrapeResultCount.labelValues(launchId, type).inc()
+      metrics.scrapeResultCount.labelValues(launchId, type).inc()
+      metrics.connectCount.labelValues(launchId, type).inc()
 
       // Each counter should track independently
-      metrics.scrapeRequestCount.labels(launchId, type).get() shouldBeGreaterThanOrEqual 1.0
-      metrics.scrapeResultCount.labels(launchId, type).get() shouldBeGreaterThanOrEqual 2.0
-      metrics.connectCount.labels(launchId, type).get() shouldBeGreaterThanOrEqual 1.0
+      metrics.scrapeRequestCount.labelValues(launchId, type).get() shouldBeGreaterThanOrEqual 1.0
+      metrics.scrapeResultCount.labelValues(launchId, type).get() shouldBeGreaterThanOrEqual 2.0
+      metrics.connectCount.labelValues(launchId, type).get() shouldBeGreaterThanOrEqual 1.0
     }
 
     // ==================== Gauge Tests ====================
 
-    "start time gauge should be registered and set" {
-      val agent = createMockAgent()
-      val metrics = AgentMetrics(agent)
+    "start time gauge should hold the start time in Unix seconds" {
+      val before = System.currentTimeMillis() / 1_000.0
+      AgentMetrics(createMockAgent())
+      val after = System.currentTimeMillis() / 1_000.0
 
-      // The agent_start_time_seconds gauge is created and set in the init block
-      // Verify it was registered by checking the default registry
-      val samples = CollectorRegistry.defaultRegistry.metricFamilySamples().toList()
-      val startTimeMetric = samples.find { it.name == "agent_start_time_seconds" }
-      startTimeMetric.shouldNotBeNull()
-
-      // The gauge value should be a positive timestamp
-      val sample = startTimeMetric.samples.firstOrNull()
-      sample.shouldNotBeNull()
-      sample.value shouldBeGreaterThanOrEqual 0.0
+      val gauge =
+        PrometheusRegistry.defaultRegistry.scrape()
+          .filterIsInstance<GaugeSnapshot>()
+          .single { it.metadata.name == "agent_start_time_seconds" }
+      val value = gauge.dataPoints.single().value
+      value shouldBeGreaterThanOrEqual before
+      value shouldBeLessThanOrEqual after
     }
 
     "SamplerGaugeCollector should be constructable with agent metrics" {
-      val agent = createMockAgent()
-
       // Creating AgentMetrics should register SamplerGaugeCollectors without exception
-      val metrics = AgentMetrics(agent)
+      AgentMetrics(createMockAgent())
 
       // Verify the backlog and cache size gauges are registered
-      val samples = CollectorRegistry.defaultRegistry.metricFamilySamples().toList()
-      val backlogMetric = samples.find { it.name == "agent_scrape_backlog_size" }
-      backlogMetric.shouldNotBeNull()
+      val names = PrometheusRegistry.defaultRegistry.scrape().map { it.metadata.name }
+      names shouldContainAll listOf("agent_scrape_backlog_size", "agent_client_cache_size")
+    }
 
-      val cacheMetric = samples.find { it.name == "agent_client_cache_size" }
-      cacheMetric.shouldNotBeNull()
+    // A 1.x histogram also keeps a native histogram unless it is built classicOnly(); the agent's stays classic, as it
+    // was under the 0.x client, with the same buckets.
+    "scrapeRequestLatency should keep classic buckets only, with its bucket layout" {
+      val metrics = AgentMetrics(createMockAgent())
+      metrics.scrapeRequestLatency.labelValues("test-launch-id", "test-agent").observe(0.1)
+
+      val point = metrics.scrapeRequestLatency.collect().dataPoints.single()
+      point.hasNativeHistogramData().shouldBeFalse()
+      List(point.classicBuckets.size()) { point.classicBuckets.getUpperBound(it) } shouldBe
+        listOf(.005, .01, .025, .05, .1, .25, .5, 1.0, 2.5, 5.0, 10.0, Double.POSITIVE_INFINITY)
+    }
+
+    // A 1.x histogram samples exemplars by default; the agent never has one to record, so it keeps no sampler.
+    "scrapeRequestLatency should keep no exemplars" {
+      val metrics = AgentMetrics(createMockAgent())
+      metrics.scrapeRequestLatency
+        .labelValues("test-launch-id", "test-agent")
+        .observeWithExemplar(0.1, Labels.of("trace_id", "t"))
+
+      metrics.scrapeRequestLatency.collect().dataPoints.single().exemplars.size() shouldBe 0
     }
 
     "filter counters should be registered with launch_id and path labels" {
       val metrics = AgentMetrics(createMockAgent())
 
-      metrics.filterLinesDropped.labels("test-launch-id", "metrics").inc(3.0)
-      metrics.filterBytesSaved.labels("test-launch-id", "metrics").inc(128.0)
+      metrics.filterLinesDropped.labelValues("test-launch-id", "metrics").inc(3.0)
+      metrics.filterBytesSaved.labelValues("test-launch-id", "metrics").inc(128.0)
 
-      metrics.filterLinesDropped.labels("test-launch-id", "metrics").get() shouldBe 3.0
-      metrics.filterBytesSaved.labels("test-launch-id", "metrics").get() shouldBe 128.0
+      metrics.filterLinesDropped.labelValues("test-launch-id", "metrics").get() shouldBe 3.0
+      metrics.filterBytesSaved.labelValues("test-launch-id", "metrics").get() shouldBe 128.0
     }
   }
 }

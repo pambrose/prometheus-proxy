@@ -461,7 +461,7 @@ internal class ProxyServiceImpl(
                       "Chunk validation failed: ${e.message}",
                       ProxyFailure.INVALID_RESPONSE,
                     )
-                    proxy.metrics { chunkValidationFailures.labels(ProxyMetrics.STAGE_CHUNK).inc() }
+                    proxy.metrics { chunkValidationFailures.labelValues(ProxyMetrics.STAGE_CHUNK).inc() }
                   }
                 }
               }
@@ -492,7 +492,7 @@ internal class ProxyServiceImpl(
                       "Summary validation failed: ${e.message}",
                       ProxyFailure.INVALID_RESPONSE,
                     )
-                    proxy.metrics { chunkValidationFailures.labels(ProxyMetrics.STAGE_SUMMARY).inc() }
+                    proxy.metrics { chunkValidationFailures.labelValues(ProxyMetrics.STAGE_SUMMARY).inc() }
                   }
                 }
               }

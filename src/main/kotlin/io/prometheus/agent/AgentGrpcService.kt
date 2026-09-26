@@ -328,7 +328,7 @@ internal class AgentGrpcService(
         unaryStub().connectAgent(EMPTY_INSTANCE)
 
       logger.info { "Connected to proxy at ${agent.proxyHost} using ${tlsContext.desc()}" }
-      agent.metrics { connectCount.labels(agent.launchId, "success").inc() }
+      agent.metrics { connectCount.labelValues(agent.launchId, "success").inc() }
       true
     }.getOrElse { e ->
       // Re-throw JVM Errors (OutOfMemoryError, StackOverflowError, etc.) so they propagate to
@@ -336,7 +336,7 @@ internal class AgentGrpcService(
       // routine "couldn't connect, will retry". Only transient connection failures return false.
       if (e is Error)
         throw e
-      agent.metrics { connectCount.labels(agent.launchId, "failure").inc() }
+      agent.metrics { connectCount.labelValues(agent.launchId, "failure").inc() }
       // Pass the throwable so a stack trace is captured for diagnosis.
       logger.error(e) {
         "Cannot connect to proxy at ${agent.proxyHost} using ${tlsContext.desc()} - ${e.simpleClassName}: ${e.message}"
@@ -491,7 +491,7 @@ internal class AgentGrpcService(
         // triggered closeAll()). The fully-computed result can no longer be delivered on this
         // connection, so count it as dropped -- mirroring AgentConnectionContext.sendScrapeResults()
         // -- rather than losing it silently, then propagate so the producer stops.
-        agent.metrics { scrapeResultCount.labels(agent.launchId, "dropped").inc() }
+        agent.metrics { scrapeResultCount.labelValues(agent.launchId, "dropped").inc() }
         throw e
       }
       agent.markMsgSent()
@@ -509,7 +509,7 @@ internal class AgentGrpcService(
     if (!scrapeResults.srZipped) {
       logger.debug { "Writing non-chunked msg scrapeId: $scrapeId length: ${scrapeResults.srContentAsText.length}" }
       nonChunkedChannel.send(scrapeResults.toScrapeResponse())
-      agent.metrics { scrapeResultCount.labels(agent.launchId, "non-gzipped").inc() }
+      agent.metrics { scrapeResultCount.labelValues(agent.launchId, "non-gzipped").inc() }
     } else {
       val zipped = scrapeResults.srContentAsZipped
       val chunkContentSize = options.chunkContentSizeBytes
@@ -519,7 +519,7 @@ internal class AgentGrpcService(
       if (zipped.size < chunkContentSize) {
         logger.debug { "Writing zipped non-chunked msg scrapeId: $scrapeId length: ${zipped.size}" }
         nonChunkedChannel.send(scrapeResults.toScrapeResponse())
-        agent.metrics { scrapeResultCount.labels(agent.launchId, "gzipped").inc() }
+        agent.metrics { scrapeResultCount.labelValues(agent.launchId, "gzipped").inc() }
       } else {
         scrapeResults.toScrapeResponseHeader()
           .also {
@@ -565,7 +565,7 @@ internal class AgentGrpcService(
         }.also {
           logger.debug { "Writing summary totalChunkCount: $totalChunkCount for scrapeID: $scrapeId" }
           chunkedChannel.send(it)
-          agent.metrics { scrapeResultCount.labels(agent.launchId, "chunked").inc() }
+          agent.metrics { scrapeResultCount.labelValues(agent.launchId, "chunked").inc() }
         }
       }
     }

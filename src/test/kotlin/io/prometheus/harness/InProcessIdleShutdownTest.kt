@@ -26,7 +26,7 @@ import io.prometheus.common.TestPorts.IDLE_SHUTDOWN_HTTP_PORT
 import io.prometheus.Agent
 import io.prometheus.Proxy
 import io.prometheus.common.agentOptions
-import io.prometheus.client.CollectorRegistry
+import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.harness.HarnessConstants.CONFIG_ARG
 import io.prometheus.common.proxyOptions
 import kotlinx.coroutines.delay
@@ -45,7 +45,7 @@ import kotlin.time.measureTime
 class InProcessIdleShutdownTest : StringSpec() {
   init {
     "Finding 1: stopping an idle connected agent alone must not deadlock" {
-      CollectorRegistry.defaultRegistry.clear()
+      PrometheusRegistry.defaultRegistry.clear()
 
       val serverName = "idle-shutdown-${System.nanoTime()}"
       val httpPort = IDLE_SHUTDOWN_HTTP_PORT

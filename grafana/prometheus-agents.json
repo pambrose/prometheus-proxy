@@ -74,7 +74,7 @@
       "gridPos": { "h": 4, "w": 6, "x": 6, "y": 1 },
       "targets": [
         {
-          "expr": "sum(rate(agent_scrape_request_count{job=~\"$agent\"}[$__rate_interval]))",
+          "expr": "sum(rate(agent_scrape_request_count_total{job=~\"$agent\"}[$__rate_interval]))",
           "legendFormat": "",
           "refId": "A"
         }
@@ -169,7 +169,7 @@
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
       "targets": [
         {
-          "expr": "sum by (job) (rate(agent_connect_count{type=\"success\", job=~\"$agent\"}[$__rate_interval]))",
+          "expr": "sum by (job) (rate(agent_connect_count_total{type=\"success\", job=~\"$agent\"}[$__rate_interval]))",
           "legendFormat": "{{job}}",
           "refId": "A"
         }
@@ -217,7 +217,7 @@
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
       "targets": [
         {
-          "expr": "sum by (job) (rate(agent_connect_count{type=\"failure\", job=~\"$agent\"}[$__rate_interval]))",
+          "expr": "sum by (job) (rate(agent_connect_count_total{type=\"failure\", job=~\"$agent\"}[$__rate_interval]))",
           "legendFormat": "{{job}}",
           "refId": "A"
         }
@@ -272,7 +272,7 @@
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 15 },
       "targets": [
         {
-          "expr": "sum by (job) (rate(agent_scrape_request_count{job=~\"$agent\"}[$__rate_interval]))",
+          "expr": "sum by (job) (rate(agent_scrape_request_count_total{job=~\"$agent\"}[$__rate_interval]))",
           "legendFormat": "{{job}}",
           "refId": "A"
         }
@@ -320,7 +320,7 @@
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 15 },
       "targets": [
         {
-          "expr": "sum by (type) (rate(agent_scrape_result_count{job=~\"$agent\"}[$__rate_interval]))",
+          "expr": "sum by (type) (rate(agent_scrape_result_count_total{job=~\"$agent\"}[$__rate_interval]))",
           "legendFormat": "{{type}}",
           "refId": "A"
         }

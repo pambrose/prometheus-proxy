@@ -50,8 +50,8 @@ proxy.metrics {
 
 ; --8<-- [start:promql-success-rate]
 # Scrape success rate (last 5 minutes):
-sum(rate(proxy_scrape_requests{type="success"}[5m]))
-  / sum(rate(proxy_scrape_requests[5m])) * 100
+sum(rate(proxy_scrape_requests_total{type="success"}[5m]))
+  / sum(rate(proxy_scrape_requests_total[5m])) * 100
 ; --8<-- [end:promql-success-rate]
 
 ; --8<-- [start:promql-p99-latency]
@@ -70,7 +70,7 @@ histogram_quantile(0.99,
 
 ; --8<-- [start:promql-error-rate]
 # Error rate by type:
-sum by (type) (rate(proxy_scrape_requests{type!="success"}[5m]))
+sum by (type) (rate(proxy_scrape_requests_total{type!="success"}[5m]))
 ; --8<-- [end:promql-error-rate]
 
 ; --8<-- [start:promql-agent-latency]

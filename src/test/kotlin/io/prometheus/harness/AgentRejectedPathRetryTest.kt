@@ -30,7 +30,7 @@ import io.kotest.matchers.shouldBe
 import io.prometheus.Agent
 import io.prometheus.Proxy
 import io.prometheus.agent.discovery.DiscoveryTestSupport.discoveryPathsHocon
-import io.prometheus.client.CollectorRegistry
+import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.common.TestPorts
 import io.prometheus.common.captureLogs
 import io.prometheus.harness.support.TestUtils.startAgent
@@ -47,7 +47,7 @@ import kotlin.time.Duration.Companion.seconds
 class AgentRejectedPathRetryTest : StringSpec() {
   init {
     "a rejected static path should register once the agent of another identity that held it disconnects" {
-      CollectorRegistry.defaultRegistry.clear()
+      PrometheusRegistry.defaultRegistry.clear()
 
       val proxy = startProxy(args = ["--agent_port", "$AGENT_PORT"], proxyPort = HTTP_PORT, configArgs = CONFIG_ARG)
       val agents = mutableListOf<Agent>()
@@ -90,7 +90,7 @@ class AgentRejectedPathRetryTest : StringSpec() {
     }
 
     "a discovered path the agent's identity may never register should reach the proxy once" {
-      CollectorRegistry.defaultRegistry.clear()
+      PrometheusRegistry.defaultRegistry.clear()
 
       val discoveryFile = File.createTempFile("discovery", ".conf").apply { deleteOnExit() }
       discoveryFile.writeText(discoveryPathsHocon(DISCOVERED_DENIED_PATH to TARGET_URL))

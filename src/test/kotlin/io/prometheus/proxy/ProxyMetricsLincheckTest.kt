@@ -20,8 +20,8 @@ package io.prometheus.proxy
 
 import io.kotest.core.spec.style.StringSpec
 import io.prometheus.Proxy
-import io.prometheus.client.CollectorRegistry
-import io.prometheus.client.Histogram
+import io.prometheus.metrics.model.registry.PrometheusRegistry
+import io.prometheus.metrics.core.metrics.Histogram
 import io.prometheus.common.Lincheck
 import org.jetbrains.lincheck.datastructures.IntGen
 import org.jetbrains.lincheck.datastructures.Operation
@@ -95,16 +95,10 @@ class ProxyMetricsOps {
   }
 
   // The label sets of this run's paths that histogram still holds.
-  private fun seriesFor(histogram: Histogram): Set<List<String>> =
-    histogram.collect()
-      .flatMap { it.samples }
-      .filter { sample ->
-        sample.labelNames.zip(sample.labelValues).any { (name, value) ->
-          name == "path" &&
-        value in paths
-        }
-      }
-      .map { it.labelValues.take(2) }
+  private fun seriesFor(histogram: Histogram): Set<String> =
+    histogram.collect().dataPoints
+      .filter { it.labels.get("path") in paths }
+      .map { it.labels.toString() }
       .toSet()
 
   companion object {
@@ -113,7 +107,7 @@ class ProxyMetricsOps {
 
     // One ProxyMetrics for every run: its histograms register in the default registry, which accepts each name once.
     private val METRICS: ProxyMetrics by lazy {
-      CollectorRegistry.defaultRegistry.clear()
+      PrometheusRegistry.defaultRegistry.clear()
       Proxy(
         options = ProxyOptions(listOf()),
         inProcessServerName = "proxy-metrics-lincheck",
