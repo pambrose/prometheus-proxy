@@ -21,8 +21,8 @@ import io.ktor.http.HttpStatusCode
 /**
  * Why the proxy itself failed a scrape it had already sent toward an agent, rather than the agent answering it.
  *
- * Each kind carries the outcome [label] recorded in `proxy_scrape_requests`, the latency histogram, `/debug`, and the
- * dashboard, and the [statusCode] Prometheus receives. Without it a proxy-made failure was indistinguishable from a
+ * Each kind carries the outcome [label] recorded in `proxy_scrape_requests_total`, the latency histogram, `/debug`, and
+ * the dashboard, and the [statusCode] Prometheus receives. Without it a proxy-made failure was indistinguishable from a
  * 502 the target returned and was labelled `upstream_error`, which pointed operators at the target instead of the
  * agent connection or the proxy.
  */

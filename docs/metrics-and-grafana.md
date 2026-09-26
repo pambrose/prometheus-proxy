@@ -70,8 +70,6 @@ last (`jvm_memory_used_bytes`, not `jvm_memory_bytes_used`; `jvm_memory_pool_use
 
 ### Counters
 
-Counters are exposed with a `_total` suffix; query them by that name.
-
 | Metric                                    | Labels  | Description                                      |
 |-------------------------------------------|---------|--------------------------------------------------|
 | `proxy_scrape_requests_total`             | `type`  | Scrape request outcomes. See label values below. |
@@ -155,8 +153,6 @@ live data structures on each Prometheus scrape, not pushed on every state change
 ## Agent Metrics
 
 ### Counters
-
-Counters are exposed with a `_total` suffix; query them by that name.
 
 | Metric                             | Labels              | Description                                  |
 |------------------------------------|---------------------|----------------------------------------------|

@@ -18,12 +18,12 @@
 
 package io.prometheus.agent
 
-import com.pambrose.common.dsl.PrometheusDsl.counter
-import com.pambrose.common.dsl.PrometheusDsl.gauge
-import com.pambrose.common.dsl.PrometheusDsl.histogram
 import com.pambrose.common.metrics.SamplerGaugeCollector
 import io.prometheus.Agent
-import io.prometheus.common.Utils.setToCurrentTime
+import io.prometheus.common.MetricBuilders.counter
+import io.prometheus.common.MetricBuilders.gauge
+import io.prometheus.common.MetricBuilders.histogram
+import io.prometheus.common.MetricBuilders.setToCurrentTime
 import io.prometheus.metrics.core.metrics.Histogram
 
 internal class AgentMetrics(
@@ -31,21 +31,21 @@ internal class AgentMetrics(
 ) {
   val scrapeRequestCount =
     counter {
-      name("agent_scrape_request_count")
+      name("agent_scrape_request_count_total")
       help("Agent scrape request count")
       labelNames(LAUNCH_ID, TYPE)
     }
 
   val scrapeResultCount =
     counter {
-      name("agent_scrape_result_count")
+      name("agent_scrape_result_count_total")
       help("Agent scrape result count")
       labelNames(LAUNCH_ID, TYPE)
     }
 
   val connectCount =
     counter {
-      name("agent_connect_count")
+      name("agent_connect_count_total")
       help("Agent connect count")
       labelNames(LAUNCH_ID, TYPE)
     }
@@ -55,21 +55,19 @@ internal class AgentMetrics(
       name("agent_scrape_request_latency_seconds")
       help("Agent scrape request latency in seconds")
       labelNames(LAUNCH_ID, AGENT_NAME)
-      classicOnly()
-      withoutExemplars()
       classicUpperBounds(.005, .01, .025, .05, .1, .25, .5, 1.0, 2.5, 5.0, 10.0)
     }
 
   val filterLinesDropped =
     counter {
-      name("agent_filter_lines_dropped")
+      name("agent_filter_lines_dropped_total")
       help("Agent metric filter lines dropped")
       labelNames(LAUNCH_ID, PATH)
     }
 
   val filterBytesSaved =
     counter {
-      name("agent_filter_bytes_saved")
+      name("agent_filter_bytes_saved_total")
       help("Agent metric filter bytes saved")
       labelNames(LAUNCH_ID, PATH)
     }

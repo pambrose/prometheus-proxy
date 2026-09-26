@@ -36,7 +36,7 @@ import java.time.Instant
  * @param statusCode the status for this agent's leg of the scrape. On a consolidated path each
  *   participating agent yields its own record, so this is not necessarily the merged status
  *   Prometheus saw
- * @param outcome the scrape-request outcome label, matching the `proxy_scrape_requests{type}` values
+ * @param outcome the scrape-request outcome label, matching the `proxy_scrape_requests_total{type}` values
  * @param durationMillis how long the agent took to fetch the target
  * @param contentLength size of the returned body, in characters
  */

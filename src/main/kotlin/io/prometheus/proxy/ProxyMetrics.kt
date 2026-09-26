@@ -18,12 +18,12 @@
 
 package io.prometheus.proxy
 
-import com.pambrose.common.dsl.PrometheusDsl.counter
-import com.pambrose.common.dsl.PrometheusDsl.gauge
-import com.pambrose.common.dsl.PrometheusDsl.histogram
 import com.pambrose.common.metrics.SamplerGaugeCollector
 import io.prometheus.Proxy
-import io.prometheus.common.Utils.setToCurrentTime
+import io.prometheus.common.MetricBuilders.counter
+import io.prometheus.common.MetricBuilders.gauge
+import io.prometheus.common.MetricBuilders.histogram
+import io.prometheus.common.MetricBuilders.setToCurrentTime
 import io.prometheus.metrics.core.metrics.Histogram
 import java.util.concurrent.ConcurrentHashMap
 
@@ -32,39 +32,34 @@ internal class ProxyMetrics(
 ) {
   val scrapeRequestCount =
     counter {
-      name("proxy_scrape_requests")
+      name("proxy_scrape_requests_total")
       help("Proxy scrape requests")
       labelNames("type")
     }
 
   val connectCount =
     counter {
-      name("proxy_connect_count")
+      name("proxy_connect_count_total")
       help("Proxy connect count")
     }
 
   val agentEvictionCount =
     counter {
-      name("proxy_eviction_count")
+      name("proxy_eviction_count_total")
       help("Proxy eviction count")
     }
 
   val heartbeatCount =
     counter {
-      name("proxy_heartbeat_count")
+      name("proxy_heartbeat_count_total")
       help("Proxy heartbeat count")
     }
 
-  // Classic buckets only and no exemplars: a 1.x histogram otherwise also keeps a native histogram and an exemplar
-  // sampler per series, which the per-path series would multiply by every registered path. The proxy traces with
-  // Brave, not OpenTelemetry, so it has no exemplars to record.
   val scrapeRequestLatency: Histogram =
     histogram {
       name("proxy_scrape_request_latency_seconds")
       help("Proxy scrape request latency in seconds")
       labelNames("path", "outcome")
-      classicOnly()
-      withoutExemplars()
       // Up to the proxy's default scrapeRequestTimeoutSecs (90), past the agent's default scrapeTimeoutSecs (15), so
       // a timeout lands in a bucket rather than +Inf.
       classicUpperBounds(.005, .01, .025, .05, .1, .25, .5, 1.0, 2.5, 5.0, 10.0, 15.0, 30.0, 60.0, 90.0)
@@ -75,8 +70,6 @@ internal class ProxyMetrics(
       name("proxy_scrape_response_bytes")
       help("Proxy scrape response size in bytes")
       labelNames("path", "encoding")
-      classicOnly()
-      withoutExemplars()
       classicUpperBounds(1_024.0, 10_240.0, 102_400.0, 512_000.0, 1_048_576.0, 5_242_880.0, 10_485_760.0)
     }
 

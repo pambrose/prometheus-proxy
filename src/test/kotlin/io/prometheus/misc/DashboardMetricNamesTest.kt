@@ -22,37 +22,35 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.collections.shouldNotBeEmpty
-import io.mockk.every
-import io.mockk.mockk
-import io.prometheus.Agent
-import io.prometheus.Proxy
-import io.prometheus.agent.AgentHttpService
 import io.prometheus.agent.AgentMetrics
-import io.prometheus.agent.HttpClientCache
+import io.prometheus.common.Utils.toJsonElement
+import io.prometheus.common.mockAgentForMetrics
+import io.prometheus.common.mockProxyForMetrics
 import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.metrics.model.snapshots.CounterSnapshot
 import io.prometheus.metrics.model.snapshots.HistogramSnapshot
-import io.prometheus.proxy.AgentContextManager
 import io.prometheus.proxy.ProxyMetrics
-import io.prometheus.proxy.ProxyPathManager
-import io.prometheus.proxy.ScrapeRequestManager
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import java.io.File
-import kotlin.concurrent.atomics.AtomicInt
 
 // The Grafana dashboards, the alert rules and the PromQL in the docs must query series the proxy and agent expose.
-// A counter is exposed only with a _total suffix, whatever name it is built with, so a query for the bare name
-// matches nothing and a panel or alert silently shows no data.
+// A counter is exposed only with a _total suffix, so a query for the bare name matches nothing and a panel or alert
+// silently shows no data.
 class DashboardMetricNamesTest : StringSpec() {
-  private fun exposedNames(): Set<String> {
+  // The proxy's and agent's metrics, as a scrape of the default registry reports them.
+  private val snapshots by lazy {
     PrometheusRegistry.defaultRegistry.clear()
-    ProxyMetrics(mockProxy())
-    AgentMetrics(mockAgent())
-    return PrometheusRegistry.defaultRegistry.scrape()
+    ProxyMetrics(mockProxyForMetrics())
+    AgentMetrics(mockAgentForMetrics())
+    PrometheusRegistry.defaultRegistry.scrape().toList()
+  }
+
+  // The series names those metrics expose.
+  private val exposed by lazy {
+    snapshots
       .flatMap { snapshot ->
         val name = snapshot.metadata.name
         when (snapshot) {
@@ -63,49 +61,25 @@ class DashboardMetricNamesTest : StringSpec() {
       }.toSet()
   }
 
-  private fun mockProxy(): Proxy {
-    val pathManager = mockk<ProxyPathManager>(relaxed = true)
-    every { pathManager.pathMapSize } returns 0
-    return mockk<Proxy>(relaxed = true).also {
-      every { it.agentContextManager } returns AgentContextManager(isTestMode = true)
-      every { it.pathManager } returns pathManager
-      every { it.scrapeRequestManager } returns ScrapeRequestManager()
-    }
-  }
-
-  private fun mockAgent(): Agent {
-    val cache = mockk<HttpClientCache>(relaxed = true)
-    every { cache.currentCacheSize() } returns 0
-    val httpService = mockk<AgentHttpService>(relaxed = true)
-    every { httpService.httpClientCache } returns cache
-    return mockk<Agent>(relaxed = true).also {
-      every { it.launchId } returns "test-launch-id"
-      every { it.scrapeRequestBacklogSize } returns AtomicInt(0)
-      every { it.agentHttpService } returns httpService
-    }
-  }
-
-  private fun read(path: String) = File(path).readText()
-
   // Every "expr" value in a Grafana dashboard.
-  private fun dashboardExprs(element: JsonElement): List<String> =
+  private fun dashboardExprs(json: String): List<String> = exprs(json.toJsonElement())
+
+  private fun exprs(element: JsonElement): List<String> =
     when (element) {
       is JsonObject -> {
         element.flatMap { (key, value) ->
-          if (key == "expr" && value is JsonPrimitive) listOf(value.content) else dashboardExprs(value)
+          if (key == "expr" && value is JsonPrimitive) listOf(value.content) else exprs(value)
         }
       }
 
       is JsonArray -> {
-        element.flatMap { dashboardExprs(it) }
+        element.flatMap { exprs(it) }
       }
 
       else -> {
         emptyList()
       }
     }
-
-  private fun dashboard(path: String) = dashboardExprs(Json.parseToJsonElement(read(path)))
 
   // The metric names a PromQL expression selects. Label names appear only inside {...} matchers and grouping
   // clauses, so both are removed first; agent_name, for one, is a label, not a metric.
@@ -115,48 +89,41 @@ class DashboardMetricNamesTest : StringSpec() {
       .replace(GROUPING, "")
       .let { stripped -> METRIC_NAME.findAll(stripped).map { it.value }.toSet() }
 
-  // The "expr" of every alert rule in a YAML block. A block scalar (`expr: |`) is the more-indented lines below it.
-  private fun alertExprs(text: String): List<String> {
-    val lines = text.lines()
-    return lines.mapIndexedNotNull { i, line ->
-      YAML_EXPR.matchEntire(line)?.let { match ->
-        val (indent, value) = match.destructured
-        if (!BLOCK_SCALAR.matches(value.trim())) {
-          value
-        } else {
-          lines
-            .drop(i + 1)
-            .takeWhile { it.isBlank() || it.indexOfFirst { c -> !c.isWhitespace() } > indent.length }
-            .joinToString("\n")
-        }
-      }
-    }
-  }
-
-  private val sources: Map<String, () -> List<String>> =
+  // Each file with the queries it holds, extracted from its text.
+  private val sources: Map<String, (String) -> List<String>> =
     mapOf(
-      PROXY_DASHBOARD to { dashboard(PROXY_DASHBOARD) },
-      AGENTS_DASHBOARD to { dashboard(AGENTS_DASHBOARD) },
-      MONITORING_SNIPPETS to { SNIPPET.findAll(read(MONITORING_SNIPPETS)).map { it.groupValues[1] }.toList() },
-      METRICS_DOC to { PROMQL_BLOCK.findAll(read(METRICS_DOC)).map { it.groupValues[1] }.toList() },
-      GRAFANA_PAGE to { alertExprs(read(GRAFANA_PAGE)) },
+      PROXY_DASHBOARD to ::dashboardExprs,
+      AGENTS_DASHBOARD to ::dashboardExprs,
+      MONITORING_SNIPPETS to SNIPPET::captures,
+      METRICS_DOC to PROMQL_BLOCK::captures,
+      GRAFANA_PAGE to ALERT_EXPR::captures,
     )
 
   init {
-    sources.forEach { (file, queries) ->
+    sources.forEach { (file, extract) ->
       "every proxy and agent series queried in $file should be exposed" {
-        val exposed = exposedNames()
-        val queried = queries()
-        queried.shouldNotBeEmpty()
+        val queries = extract(File(file).readText())
+        queries.shouldNotBeEmpty()
+        val names = queries.associateWith(::metricNames)
         // Every query names a proxy or agent series, so a query the extractor mangled (a YAML block scalar read as
         // just "|", say) fails here instead of passing as a query with nothing to check.
-        queried.filter { metricNames(it).isEmpty() }.shouldBeEmpty()
-        queried.flatMap { metricNames(it) }.filterNot { it in exposed }.distinct().shouldBeEmpty()
+        names.filterValues { it.isEmpty() }.keys.shouldBeEmpty()
+        names.values.flatten().filterNot { it in exposed }.distinct().shouldBeEmpty()
       }
     }
 
     "every alert rule on the Grafana page should have its expression checked" {
-      alertExprs(read(GRAFANA_PAGE)) shouldHaveSize ALERT.findAll(read(GRAFANA_PAGE)).count()
+      val page = File(GRAFANA_PAGE).readText()
+      ALERT_EXPR.captures(page) shouldHaveSize ALERT.findAll(page).count()
+    }
+
+    // The exposed name is what dashboards and docs copy, so the source declares it too.
+    "every counter should be declared with the _total name it is exposed as" {
+      snapshots
+        .filterIsInstance<CounterSnapshot>()
+        .map { it.metadata.originalName }
+        .filterNot { it.endsWith("_total") }
+        .shouldBeEmpty()
     }
   }
 
@@ -173,7 +140,11 @@ class DashboardMetricNamesTest : StringSpec() {
       Regex("""; --8<-- \[start:promql-[^\]]+]\n(.*?)\n; --8<-- \[end:""", RegexOption.DOT_MATCHES_ALL)
     private val PROMQL_BLOCK = Regex("""```promql\n(.*?)```""", RegexOption.DOT_MATCHES_ALL)
     private val ALERT = Regex("""^\s*- alert:""", RegexOption.MULTILINE)
-    private val YAML_EXPR = Regex("""(\s*)expr:\s*(.+)""")
-    private val BLOCK_SCALAR = Regex("""[|>][-+]?""")
+
+    // An alert rule's expr, one line or a `|` block, up to the rule's next key.
+    private val ALERT_EXPR = Regex("""expr:\s*(?:\|\n)?(.*?)\n\s*\w+:""", RegexOption.DOT_MATCHES_ALL)
   }
 }
+
+// The first group of every match of this regex in [text].
+private fun Regex.captures(text: String): List<String> = findAll(text).map { it.groupValues[1] }.toList()

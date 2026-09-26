@@ -59,8 +59,6 @@ last (`jvm_memory_used_bytes`, not `jvm_memory_bytes_used`; `jvm_memory_pool_use
 
 ### Counters
 
-Counters are exposed with a `_total` suffix; query them by that name.
-
 | Metric                                    | Labels  | Description                                     |
 |:------------------------------------------|:--------|:------------------------------------------------|
 | `proxy_scrape_requests_total`             | `type`  | Scrape request outcomes (see below)             |
@@ -142,8 +140,6 @@ Response size buckets: 1KB, 10KB, 100KB, 500KB, 1MB, 5MB, 10MB
 ## Agent Metrics
 
 ### Counters
-
-Counters are exposed with a `_total` suffix; query them by that name.
 
 | Metric                             | Labels              | Description                                        |
 |:-----------------------------------|:--------------------|:---------------------------------------------------|

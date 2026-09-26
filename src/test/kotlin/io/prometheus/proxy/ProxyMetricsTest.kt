@@ -23,12 +23,13 @@ import io.kotest.inspectors.forAll
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.doubles.shouldBeGreaterThanOrEqual
-import io.kotest.matchers.doubles.shouldBeLessThanOrEqual
 import io.kotest.matchers.nulls.shouldNotBeNull
+import io.kotest.matchers.ranges.shouldBeIn
 import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.mockk.mockk
 import io.prometheus.Proxy
+import io.prometheus.common.mockProxyForMetrics
 import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.metrics.model.snapshots.GaugeSnapshot
 import io.prometheus.metrics.model.snapshots.Labels
@@ -37,21 +38,6 @@ import io.prometheus.metrics.model.snapshots.Labels
 // Metrics include counters for scrape requests, connects, evictions, heartbeats,
 // and gauges for various map sizes.
 class ProxyMetricsTest : StringSpec() {
-  private fun createMockProxy(): Proxy {
-    val mockAgentContextManager = AgentContextManager(isTestMode = true)
-    val mockPathManager = mockk<ProxyPathManager>(relaxed = true)
-    val mockScrapeRequestManager = ScrapeRequestManager()
-
-    every { mockPathManager.pathMapSize } returns 0
-
-    val mockProxy = mockk<Proxy>(relaxed = true)
-    every { mockProxy.agentContextManager } returns mockAgentContextManager
-    every { mockProxy.pathManager } returns mockPathManager
-    every { mockProxy.scrapeRequestManager } returns mockScrapeRequestManager
-
-    return mockProxy
-  }
-
   // Every path label value across the per-path histograms' series.
   private fun seriesPaths(metrics: ProxyMetrics): Set<String> =
     listOf(metrics.scrapeRequestLatency, metrics.scrapeResponseBytes)
@@ -68,28 +54,28 @@ class ProxyMetricsTest : StringSpec() {
     // ==================== Counter Initialization Tests ====================
 
     "scrapeRequestCount counter should be initialized" {
-      val proxy = createMockProxy()
+      val proxy = mockProxyForMetrics()
       val metrics = ProxyMetrics(proxy)
 
       metrics.scrapeRequestCount.shouldNotBeNull()
     }
 
     "connectCount counter should be initialized" {
-      val proxy = createMockProxy()
+      val proxy = mockProxyForMetrics()
       val metrics = ProxyMetrics(proxy)
 
       metrics.connectCount.shouldNotBeNull()
     }
 
     "agentEvictionCount counter should be initialized" {
-      val proxy = createMockProxy()
+      val proxy = mockProxyForMetrics()
       val metrics = ProxyMetrics(proxy)
 
       metrics.agentEvictionCount.shouldNotBeNull()
     }
 
     "heartbeatCount counter should be initialized" {
-      val proxy = createMockProxy()
+      val proxy = mockProxyForMetrics()
       val metrics = ProxyMetrics(proxy)
 
       metrics.heartbeatCount.shouldNotBeNull()
@@ -98,14 +84,14 @@ class ProxyMetricsTest : StringSpec() {
     // ==================== Histogram Initialization Tests ====================
 
     "scrapeRequestLatency histogram should be initialized" {
-      val proxy = createMockProxy()
+      val proxy = mockProxyForMetrics()
       val metrics = ProxyMetrics(proxy)
 
       metrics.scrapeRequestLatency.shouldNotBeNull()
     }
 
     "scrapeResponseBytes histogram should be initialized" {
-      val proxy = createMockProxy()
+      val proxy = mockProxyForMetrics()
       val metrics = ProxyMetrics(proxy)
 
       metrics.scrapeResponseBytes.shouldNotBeNull()
@@ -116,7 +102,7 @@ class ProxyMetricsTest : StringSpec() {
     // A retired path's series used to stay in memory and on /metrics forever. Removal must take every series for the
     // path, whatever its outcome or encoding, and leave other paths alone.
     "removePathSeries should drop every series for the path and keep other paths" {
-      val metrics = ProxyMetrics(createMockProxy())
+      val metrics = ProxyMetrics(mockProxyForMetrics())
       metrics.pathRegistered("retired")
       metrics.pathRegistered("kept")
       metrics.observeLatency("retired", "success", 0.1)
@@ -134,7 +120,7 @@ class ProxyMetricsTest : StringSpec() {
     // removed path and inside the path map's lock that every scrape takes. Removal now works from the series the path
     // recorded, so a series created some other way -- which a scan of the histogram would have found -- is untouched.
     "removePathSeries should remove only the series the path recorded, without scanning the histograms" {
-      val metrics = ProxyMetrics(createMockProxy())
+      val metrics = ProxyMetrics(mockProxyForMetrics())
       metrics.pathRegistered("retired")
       metrics.observeLatency("retired", "success", 0.1)
       metrics.scrapeRequestLatency.labelValues("retired", "unrecorded").observe(0.1)
@@ -150,7 +136,7 @@ class ProxyMetricsTest : StringSpec() {
     // land while a scrape is in flight. Either scrape then finished by observing the path again, re-creating the
     // series of a path that was gone, and nothing removed them again.
     "a scrape finishing after its path is removed should not bring the path's series back" {
-      val metrics = ProxyMetrics(createMockProxy())
+      val metrics = ProxyMetrics(mockProxyForMetrics())
       metrics.pathRegistered("retired")
       metrics.observeLatency("retired", "success", 0.1)
 
@@ -162,7 +148,7 @@ class ProxyMetricsTest : StringSpec() {
     }
 
     "a path registered again after removal should record its series again" {
-      val metrics = ProxyMetrics(createMockProxy())
+      val metrics = ProxyMetrics(mockProxyForMetrics())
       metrics.pathRegistered("returning")
       metrics.removePathSeries("returning")
 
@@ -175,22 +161,22 @@ class ProxyMetricsTest : StringSpec() {
     // The agent's default scrape timeout is 15s and the proxy's 90s, so with buckets ending at 10s every timeout
     // landed in +Inf and the slow tail had no resolution.
     "latency buckets should reach the proxy's default scrape request timeout" {
-      val metrics = ProxyMetrics(createMockProxy())
+      val metrics = ProxyMetrics(mockProxyForMetrics())
       metrics.pathRegistered("slow")
       metrics.observeLatency("slow", "timed_out", 90.0)
 
       val buckets = metrics.scrapeRequestLatency.collect().dataPoints.single().classicBuckets
-      List(buckets.size()) { buckets.getUpperBound(it) } shouldBe
+      buckets.map { it.upperBound } shouldBe
         listOf(.005, .01, .025, .05, .1, .25, .5, 1.0, 2.5, 5.0, 10.0, 15.0, 30.0, 60.0, 90.0, Double.POSITIVE_INFINITY)
     }
 
     "scrapeResponseBytes should keep its bucket layout" {
-      val metrics = ProxyMetrics(createMockProxy())
+      val metrics = ProxyMetrics(mockProxyForMetrics())
       metrics.pathRegistered("p")
       metrics.observeResponseBytes("p", ProxyMetrics.ENCODING_PLAIN, 1_024.0)
 
       val buckets = metrics.scrapeResponseBytes.collect().dataPoints.single().classicBuckets
-      List(buckets.size()) { buckets.getUpperBound(it) } shouldBe
+      buckets.map { it.upperBound } shouldBe
         listOf(
           1_024.0,
           10_240.0,
@@ -203,11 +189,9 @@ class ProxyMetricsTest : StringSpec() {
         )
     }
 
-    // A 1.x histogram also keeps a native histogram (up to 160 buckets per series) unless it is built classicOnly().
-    // The proxy holds two histograms per registered path, and a Prometheus scraping with protobuf would ingest the
-    // native data, so both stay classic-only, as they were under the 0.x client.
+    // Built through MetricBuilders, which keeps histograms classic-only (see its KDoc for why).
     "per-path histograms should keep classic buckets only" {
-      val metrics = ProxyMetrics(createMockProxy())
+      val metrics = ProxyMetrics(mockProxyForMetrics())
       metrics.pathRegistered("p")
       metrics.observeLatency("p", "success", 0.1)
       metrics.observeResponseBytes("p", ProxyMetrics.ENCODING_PLAIN, 1_024.0)
@@ -217,11 +201,9 @@ class ProxyMetricsTest : StringSpec() {
         .forAll { it.hasNativeHistogramData().shouldBeFalse() }
     }
 
-    // A 1.x histogram samples exemplars by default: each series carries an exemplar sampler sized to its buckets and
-    // schedules a task as it observes. The proxy traces with Brave, not OpenTelemetry, so it never has an exemplar to
-    // record, and the per-path series would multiply that cost by every registered path.
+    // Built through MetricBuilders, which keeps no exemplars (see its KDoc for why).
     "per-path histograms should keep no exemplars" {
-      val metrics = ProxyMetrics(createMockProxy())
+      val metrics = ProxyMetrics(mockProxyForMetrics())
       metrics.scrapeRequestLatency.labelValues("p", "success").observeWithExemplar(0.1, Labels.of("trace_id", "t"))
       metrics.scrapeResponseBytes
         .labelValues("p", ProxyMetrics.ENCODING_PLAIN)
@@ -236,7 +218,7 @@ class ProxyMetricsTest : StringSpec() {
 
     "proxy start time gauge should hold the start time in Unix seconds" {
       val before = System.currentTimeMillis() / 1_000.0
-      ProxyMetrics(createMockProxy())
+      ProxyMetrics(mockProxyForMetrics())
       val after = System.currentTimeMillis() / 1_000.0
 
       val gauge =
@@ -244,28 +226,27 @@ class ProxyMetricsTest : StringSpec() {
           .filterIsInstance<GaugeSnapshot>()
           .single { it.metadata.name == "proxy_start_time_seconds" }
       val value = gauge.dataPoints.single().value
-      value shouldBeGreaterThanOrEqual before
-      value shouldBeLessThanOrEqual after
+      value shouldBeIn before..after
     }
 
     // ==================== New Counter Initialization Tests ====================
 
     "chunkValidationFailures counter should be initialized" {
-      val proxy = createMockProxy()
+      val proxy = mockProxyForMetrics()
       val metrics = ProxyMetrics(proxy)
 
       metrics.chunkValidationFailures.shouldNotBeNull()
     }
 
     "chunkedTransfersAbandoned counter should be initialized" {
-      val proxy = createMockProxy()
+      val proxy = mockProxyForMetrics()
       val metrics = ProxyMetrics(proxy)
 
       metrics.chunkedTransfersAbandoned.shouldNotBeNull()
     }
 
     "agentDisplacementCount counter should be initialized" {
-      val proxy = createMockProxy()
+      val proxy = mockProxyForMetrics()
       val metrics = ProxyMetrics(proxy)
 
       metrics.agentDisplacementCount.shouldNotBeNull()
@@ -274,7 +255,7 @@ class ProxyMetricsTest : StringSpec() {
     // ==================== Counter Operations Tests ====================
 
     "scrapeRequestCount should increment with labels" {
-      val proxy = createMockProxy()
+      val proxy = mockProxyForMetrics()
       val metrics = ProxyMetrics(proxy)
 
       val initialValue = metrics.scrapeRequestCount.labelValues("test-type").get()
@@ -284,7 +265,7 @@ class ProxyMetricsTest : StringSpec() {
     }
 
     "connectCount should increment" {
-      val proxy = createMockProxy()
+      val proxy = mockProxyForMetrics()
       val metrics = ProxyMetrics(proxy)
 
       val initialValue = metrics.connectCount.get()
@@ -294,7 +275,7 @@ class ProxyMetricsTest : StringSpec() {
     }
 
     "agentEvictionCount should increment" {
-      val proxy = createMockProxy()
+      val proxy = mockProxyForMetrics()
       val metrics = ProxyMetrics(proxy)
 
       val initialValue = metrics.agentEvictionCount.get()
@@ -304,7 +285,7 @@ class ProxyMetricsTest : StringSpec() {
     }
 
     "heartbeatCount should increment" {
-      val proxy = createMockProxy()
+      val proxy = mockProxyForMetrics()
       val metrics = ProxyMetrics(proxy)
 
       val initialValue = metrics.heartbeatCount.get()
@@ -316,7 +297,7 @@ class ProxyMetricsTest : StringSpec() {
     // ==================== Histogram Operations Tests ====================
 
     "scrapeRequestLatency should record observations with path and outcome labels" {
-      val proxy = createMockProxy()
+      val proxy = mockProxyForMetrics()
       val metrics = ProxyMetrics(proxy)
 
       // The histogram is labeled by (path, outcome) so latency can be broken down by result.
@@ -333,7 +314,7 @@ class ProxyMetricsTest : StringSpec() {
     }
 
     "scrapeResponseBytes should record observations with labels" {
-      val proxy = createMockProxy()
+      val proxy = mockProxyForMetrics()
       val metrics = ProxyMetrics(proxy)
 
       metrics.scrapeResponseBytes.labelValues("test-path", "plain").observe(1024.0)
@@ -345,7 +326,7 @@ class ProxyMetricsTest : StringSpec() {
     }
 
     "chunkValidationFailures should increment with stage labels" {
-      val proxy = createMockProxy()
+      val proxy = mockProxyForMetrics()
       val metrics = ProxyMetrics(proxy)
 
       metrics.chunkValidationFailures.labelValues(ProxyMetrics.STAGE_CHUNK).inc()
@@ -357,7 +338,7 @@ class ProxyMetricsTest : StringSpec() {
     }
 
     "chunkedTransfersAbandoned should increment" {
-      val proxy = createMockProxy()
+      val proxy = mockProxyForMetrics()
       val metrics = ProxyMetrics(proxy)
 
       val initialValue = metrics.chunkedTransfersAbandoned.get()
@@ -367,7 +348,7 @@ class ProxyMetricsTest : StringSpec() {
     }
 
     "agentDisplacementCount should increment" {
-      val proxy = createMockProxy()
+      val proxy = mockProxyForMetrics()
       val metrics = ProxyMetrics(proxy)
 
       val initialValue = metrics.agentDisplacementCount.get()
@@ -379,7 +360,7 @@ class ProxyMetricsTest : StringSpec() {
     // ==================== Label Tests ====================
 
     "scrapeRequestCount should support different label values" {
-      val proxy = createMockProxy()
+      val proxy = mockProxyForMetrics()
       val metrics = ProxyMetrics(proxy)
 
       metrics.scrapeRequestCount.labelValues("type-a").inc()
