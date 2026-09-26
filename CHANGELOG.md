@@ -30,6 +30,7 @@ All notable changes to this project are documented in this file.
 - Remove the `proxy.metrics.grpc` and `agent.metrics.grpc` settings (`metricsEnabled` and `allMetricsReported`). The config reference and the monitoring docs listed them as optional gRPC metrics, but nothing ever read them. A config that still sets them loads as before, and the keys stay ignored
 - Fix the agents dashboard's Agent Count, which its thresholds colored red for every count, and which showed no data rather than 0 when no agent reported
 - Fix `-u`/`--usage` printing nothing when the proxy or agent JAR ran in a terminal on Java 17. JCommander wrote the usage with `print`, which the console's writer doesn't flush, so the process exited before the text appeared; it is now written with `println`. `-u` and `-v` also print only the usage or the version now: `Proxy.main` and `Agent.startSyncAgent` handle both flags before the startup banner, so neither flag logs the banner or anything else first, and an invalid option is reported before the banner too
+- Fix the proxy logging at every start that `AgentContextCleanupService` "was added after Proxy was initialized". The stale-agent cleanup service registered itself only when the proxy started, after the proxy's service manager had been built, so the manager's failure logging and the admin `all_services_healthy` health check left it out. It is now registered while the proxy is built, and only when it will run: a registered cleanup service that never started would hold `all_services_healthy` unhealthy
 
 ### Documentation
 

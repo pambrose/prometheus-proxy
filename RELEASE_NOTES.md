@@ -98,6 +98,9 @@ proxy or agent exposes.
 - **`-u` now prints the usage when run in a terminal on Java 17.** The usage text wasn't flushed, so the process
   exited before it appeared. `-u` and `-v` now print only the usage or the version, without the startup banner or
   any log lines ahead of it.
+- **The proxy no longer warns at startup that its stale-agent cleanup "was added after Proxy was initialized".**
+  The cleanup service now registers with the proxy's other services, so the admin `/healthcheck`'s
+  `all_services_healthy` check covers it, and a failure in it is logged like any other service's.
 
 ### Documentation
 
