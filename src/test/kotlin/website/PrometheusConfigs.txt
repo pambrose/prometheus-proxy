@@ -65,9 +65,10 @@ scrape_configs:
     static_configs:
       - targets: ['proxy-host.example.com:8082']
 
-  # Scrape agent internal metrics
-  - job_name: 'prometheus-agent'
-    metrics_path: /metrics
+  # Scrape each agent's internal metrics through the proxy, one job per agent. The agent
+  # registers its own /metrics as a path (cluster_a_agent_metrics here).
+  - job_name: 'agent-cluster-a'
+    metrics_path: /cluster_a_agent_metrics
     static_configs:
-      - targets: ['agent-host.example.com:8083']
+      - targets: ['proxy-host.example.com:8080']
 ; --8<-- [end:metrics-scrape-config]

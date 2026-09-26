@@ -157,7 +157,12 @@ live data structures on each Prometheus scrape, not pushed on every state change
 | `agent_filter_lines_dropped_total` | `launch_id`, `path` | Lines removed by the path's metric filter    |
 | `agent_filter_bytes_saved_total`   | `launch_id`, `path` | Bytes saved before gzip by the metric filter |
 
-**`agent_scrape_result_count_total` type labels:** `non-gzipped`, `gzipped`, `chunked`
+**`agent_scrape_request_count_total` type labels:** `success`, `unsuccessful` (the target answered with a non-2xx
+status or a response over `agent.http.maxContentLengthMBytes`), `invalid_path` (the proxy asked for a path this agent
+doesn't serve)
+
+**`agent_scrape_result_count_total` type labels:** `non-gzipped`, `gzipped`, `chunked`, `dropped` (a result lost
+because the connection to the proxy closed before it was sent)
 
 **`agent_connect_count_total` type labels:** `success`, `failure`
 
@@ -204,7 +209,7 @@ Metrics are incremented at specific points in the request lifecycle:
 ```
 Prometheus ─── HTTP GET ──→ Proxy                        Agent
                              │                             │
-                 scrapeRequestLatency.startTimer()          │
+                 records the request's start time          │
                              │                             │
                  writeScrapeRequest() ── gRPC stream ──→ fetchScrapeUrl()
                              │                     agentLatency.startTimer()
@@ -212,13 +217,14 @@ Prometheus ─── HTTP GET ──→ Proxy                        Agent
                              │                     HTTP GET to target
                              │                             │
                              │                     agentLatency.observeDuration()
-                             │                     scrapeResultCount.inc()
+                             │                     scrapeRequestCount.labelValues(type).inc()
+                             │                     scrapeResultCount.labelValues(type).inc()
                              │                             │
                  assignScrapeResults() ←── gRPC ───────────┘
                              │
                  scrapeResponseBytes.observe()
-                 scrapeRequestLatency.observeDuration()
-                 scrapeRequestCount.labels(outcome).inc()
+                 scrapeRequestLatency.observe(elapsed)
+                 scrapeRequestCount.labelValues(outcome).inc()
                              │
                ←── HTTP response ───
 ```
@@ -255,72 +261,88 @@ Two dashboards are included in `grafana/`:
 | `prometheus-agents.json` | Prometheus Agents | Agent health, scrape activity, per-agent latency |
 
 `grafana/alerts.yml` holds Prometheus alerting rules for the same metrics (success rate, P99 latency, connected
-agents, backlogs, oversized payloads, evictions, and agent connect failures). Add it to Prometheus' `rule_files`
+agents, backlogs, oversized payloads, evictions, agent connect failures, and the proxy itself being down). Add it to Prometheus' `rule_files`
 and tune the thresholds; `make check-rules` validates it with `promtool`.
 
 ### Requirements
 
 - Grafana 10.0 or later
-- A Prometheus datasource scraping both proxy and agent metrics endpoints
+- A Prometheus datasource scraping the proxy's and the agents' metrics endpoints, with each agent in its own job (see
+  [Prometheus Scrape Configuration](#prometheus-scrape-configuration))
 
 ### Import
 
 1. In Grafana, go to **Dashboards > Import**
 2. Upload the JSON file or paste its contents
-3. Select your Prometheus datasource when prompted
+3. Open the dashboard and pick your Prometheus datasource in its **Datasource** drop-down; it starts on Grafana's
+   default datasource
 
 ### Dashboard Variables
 
 Both dashboards use template variables:
 
-| Variable     | Dashboard | Purpose                                 |
-|--------------|-----------|-----------------------------------------|
-| `datasource` | Both      | Prometheus datasource selector          |
-| `path`       | Proxy     | Filter panels by registered scrape path |
-| `agent`      | Agents    | Filter panels by agent job name         |
+| Variable     | Dashboard | Purpose                                                                                  |
+|--------------|-----------|------------------------------------------------------------------------------------------|
+| `datasource` | Both      | Prometheus datasource selector                                                           |
+| `job`        | Proxy     | The job or jobs the proxy's metrics are scraped under                                    |
+| `instance`   | Proxy     | One proxy, when a job scrapes more than one (a high-availability pair)                   |
+| `path`       | Proxy     | The paths shown in the Per-Path P99 Latency panel                                        |
+| `agent`      | Agents    | The agents shown, by job: every agent panel keys on `job`, so scrape each in its own job |
 
 ### Proxy Dashboard Panels
 
-| Section            | Panels                                                                | What to Watch                                                                             |
-|--------------------|-----------------------------------------------------------------------|-------------------------------------------------------------------------------------------|
-| **Overview**       | Uptime, Connected Agents, Registered Paths, Success Rate, Error Count | Success rate dropping below 99% or error count spiking                                    |
-| **Throughput**     | Requests/sec by outcome (stacked), Success vs Error rate              | Sudden changes in request volume or error ratio                                           |
-| **Latency**        | P50/P90/P99 percentiles, Per-path P99                                 | P99 creeping up indicates a slow target or network issue                                  |
-| **Payload**        | Response size percentiles, Encoding distribution                      | Unexpectedly large responses; shift between gzip and plain                                |
-| **Internal State** | Backlog, Scrape map, Chunk context map, Heartbeat rate                | Growing backlog means agents can't keep up; zero heartbeats means agents are disconnected |
-| **Errors**         | Error breakdown by type, Agent events (connect/evict/displace)        | Which error types dominate; frequent evictions indicate connectivity problems             |
-| **Chunk Health**   | Chunk validation failures, Abandoned transfers                        | Any non-zero value warrants investigation                                                 |
+| Section             | Panels                                                                | What to Watch                                                                                             |
+|---------------------|-----------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------|
+| **Overview**        | Uptime, Connected Agents, Registered Paths, Success Rate, Error Count | Success rate dropping below 99% or error count spiking                                                    |
+| **Throughput**      | Requests/sec by outcome (stacked), Success vs Error rate              | Sudden changes in request volume or error ratio                                                           |
+| **Latency**         | P50/P90/P99 percentiles, Per-path P99                                 | P99 creeping up indicates a slow target or network issue                                                  |
+| **Payload**         | Response size percentiles, Encoding distribution                      | Unexpectedly large responses; shift between gzip and plain                                                |
+| **Internal State**  | Backlog, Scrape map, Chunk context map, Heartbeat rate                | Growing backlog means agents can't keep up; agents heartbeat only when idle, so zero is normal under load |
+| **Errors & Events** | Error breakdown by type, Agent events (connect/evict/displace)        | Which error types dominate; frequent evictions indicate connectivity problems                             |
+| **Chunk Health**    | Chunk validation failures, Abandoned transfers                        | Any non-zero value warrants investigation                                                                 |
 
 ### Agents Dashboard Panels
 
-| Section             | Panels                                                   | What to Watch                                      |
-|---------------------|----------------------------------------------------------|----------------------------------------------------|
-| **Overview**        | Agent count, Total scrape rate, Uptime table             | Unexpected agent count changes                     |
-| **Connections**     | Connection success/failure rate per agent                | Failure spikes indicate proxy or network issues    |
-| **Scrape Activity** | Request rate by agent, Result types (gzip/plain/chunked) | Imbalanced load across agents; unexpected chunking |
-| **Latency**         | P50/P90/P99 overall, P99 per agent                       | Per-agent latency outliers point to slow targets   |
-| **Internals**       | Backlog size, HTTP client cache size                     | Growing backlog means the agent is falling behind  |
+| Section             | Panels                                                             | What to Watch                                                                                                                 |
+|---------------------|--------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------|
+| **Overview**        | Agent count, Total scrape rate, Uptime table                       | Unexpected agent count changes                                                                                                |
+| **Connections**     | Successful connections and failures per second, per agent          | Failure spikes indicate proxy or network issues                                                                               |
+| **Scrape Activity** | Request rate by agent, Unsuccessful scrapes by agent, Result types | Imbalanced load; unsuccessful scrapes point at a failing target; any `dropped` result is a scrape lost to a closed connection |
+| **Latency**         | P50/P90/P99 overall, P99 per agent                                 | Per-agent latency outliers point to slow targets                                                                              |
+| **Agent Internals** | Backlog size, HTTP client cache size                               | Growing backlog means the agent is falling behind                                                                             |
 
 ---
 
 ## Prometheus Scrape Configuration
 
-Add scrape jobs for the proxy and agent metrics endpoints:
+The proxy runs next to Prometheus, so Prometheus scrapes its metrics port directly. The agents sit behind firewalls,
+so scrape each agent's metrics the same way as any other target: give the agent a path for its own `/metrics`, and
+scrape that path through the proxy.
+
+```hocon
+agent {
+  pathConfigs: [
+    # ... the agent's targets, plus its own metrics:
+    { name: "Agent metrics", path: cluster_a_agent_metrics, url: "http://localhost:8083/metrics" }
+  ]
+}
+```
 
 ```yaml
 scrape_configs:
   - job_name: 'prometheus-proxy'
-    metrics_path: /metrics
     static_configs:
       - targets: [ 'proxy-host:8082' ]
 
-  - job_name: 'prometheus-agent'
-    metrics_path: /metrics
+  # One job per agent, each scraping that agent's metrics path through the proxy
+  - job_name: 'agent-cluster-a'
+    metrics_path: /cluster_a_agent_metrics
     static_configs:
-      - targets: [ 'agent-host:8083' ]
+      - targets: [ 'proxy-host:8080' ]
 ```
 
-Adjust hostnames and ports to match your deployment.
+Give each agent its own job: the Agents dashboard tells agents apart by `job`. `grafana/alerts.yml`'s `ProxyDown` rule
+expects the proxy's job to be named `prometheus-proxy`. Adjust hostnames and ports to match your deployment.
 
 ---
 

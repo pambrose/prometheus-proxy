@@ -52,7 +52,7 @@ class DashboardMetricNamesTest : StringSpec() {
     PrometheusRegistry.defaultRegistry.scrape().toList()
   }
 
-  // The series names those metrics expose.
+  // The series names those metrics expose, plus the up series Prometheus records for every scrape target.
   private val exposed by lazy {
     snapshots
       .flatMap { snapshot ->
@@ -62,11 +62,20 @@ class DashboardMetricNamesTest : StringSpec() {
           is HistogramSnapshot -> listOf("${name}_bucket", "${name}_count", "${name}_sum")
           else -> listOf(name)
         }
-      }.toSet()
+      }.toSet() + "up"
   }
 
   // Every "expr" value in a Grafana dashboard.
   private fun dashboardExprs(json: String): List<String> = exprs(json.toJsonElement())
+
+  // Every selector (a metric name and its label matchers) in a dashboard's queries, for metrics named with prefix.
+  private fun selectors(
+    dashboard: String,
+    prefix: String,
+  ): List<String> =
+    dashboardExprs(File(dashboard).readText())
+      .map { it.replace(GROUPING, "") }
+      .flatMap { expr -> SELECTOR.findAll(expr).map { it.value }.filter { it.startsWith(prefix) }.toList() }
 
   private fun exprs(element: JsonElement): List<String> =
     when (element) {
@@ -127,6 +136,19 @@ class DashboardMetricNamesTest : StringSpec() {
       }
     }
 
+    // With two proxies (or two environments) in one Prometheus, a proxy panel that ignores the pickers mixes them.
+    "every proxy dashboard query should filter by the job and instance pickers" {
+      selectors(PROXY_DASHBOARD, "proxy_")
+        .filterNot { "job=~\"\$job\"" in it && "instance=~\"\$instance\"" in it }
+        .shouldBeEmpty()
+    }
+
+    "every agents dashboard query should filter by the agent picker" {
+      selectors(AGENTS_DASHBOARD, "agent_")
+        .filterNot { "job=~\"\$agent\"" in it }
+        .shouldBeEmpty()
+    }
+
     // The exposed name is what dashboards and docs copy, so the source declares it too.
     "every counter should be declared with the _total name it is exposed as" {
       snapshots
@@ -145,7 +167,10 @@ class DashboardMetricNamesTest : StringSpec() {
     private const val ALERT_RULES = "grafana/alerts.yml"
     private val MATCHERS = Regex("""\{[^}]*}""")
     private val GROUPING = Regex("""\b(?:by|without|on|ignoring|group_left|group_right)\s*\([^)]*\)""")
-    private val METRIC_NAME = Regex("""\b(?:proxy|agent)_[a-z_]+\b""")
+    private val METRIC_NAME = Regex("""\b(?:(?:proxy|agent)_[a-z_]+|up)\b""")
+
+    // A metric name with its label matchers, if it has any.
+    private val SELECTOR = Regex("""\b(?:proxy|agent)_[a-z_]+(?:\{[^}]*})?""")
     private val SNIPPET =
       Regex("""; --8<-- \[start:promql-[^\]]+]\n(.*?)\n; --8<-- \[end:""", RegexOption.DOT_MATCHES_ALL)
     private val PROMQL_BLOCK = Regex("""```promql\n(.*?)```""", RegexOption.DOT_MATCHES_ALL)

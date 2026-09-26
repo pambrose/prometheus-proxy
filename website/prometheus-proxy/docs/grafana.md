@@ -11,8 +11,8 @@ metrics. For the full metric reference and what each panel watches, see
 !!! info "Prerequisite"
 
     Metrics must be enabled (`--metrics` / `METRICS_ENABLED=true`) and a Prometheus datasource
-    must be scraping both the proxy's and the agents' internal `/metrics` endpoints. See
-    [Scraping Internal Metrics](monitoring.md#scraping-internal-metrics).
+    must be scraping the proxy's and the agents' internal `/metrics` endpoints, each agent in its
+    own job and through the proxy. See [Scraping Internal Metrics](monitoring.md#scraping-internal-metrics).
 
 ## Dashboards
 
@@ -26,7 +26,8 @@ Two dashboards ship in the repository:
 ### Importing
 
 In Grafana (10.0+): **Dashboards → Import**, then either upload the JSON file or paste the raw
-contents and pick your Prometheus datasource:
+contents. Then open the dashboard and pick your Prometheus datasource in its **Datasource**
+drop-down; it starts on Grafana's default datasource:
 
 ```bash
 # Proxy dashboard
@@ -36,7 +37,7 @@ curl -O https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/grafa
 curl -O https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/grafana/prometheus-agents.json
 ```
 
-The per-panel breakdown of each dashboard is documented under
+What each dashboard section watches is described under
 [Grafana Dashboards](monitoring.md#grafana-dashboards).
 
 ## Alerting rules
@@ -44,7 +45,8 @@ The per-panel breakdown of each dashboard is documented under
 The rules below ship as [`grafana/alerts.yml`](https://github.com/pambrose/prometheus-proxy/blob/master/grafana/alerts.yml)
 in the repository: add that file to Prometheus' `rule_files`. The thresholds are starting points —
 tune them to your environment. Each rule is grounded in a metric documented in
-[Monitoring](monitoring.md).
+[Monitoring](monitoring.md), except `ProxyDown`, which uses Prometheus' own `up` series and expects
+the proxy's scrape job to be named `prometheus-proxy`.
 
 ```yaml
 --8<-- "grafana/alerts.yml"

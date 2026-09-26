@@ -32,7 +32,20 @@ Metrics are disabled by default. Enable them via CLI, environment variables, or 
 
 ### Scraping Internal Metrics
 
-Add these scrape jobs to your `prometheus.yml`:
+The proxy runs next to Prometheus, so Prometheus scrapes its metrics port directly. The agents sit behind firewalls,
+so give each agent a path for its own `/metrics` and scrape that path through the proxy, one job per agent (the
+Agents dashboard tells agents apart by `job`):
+
+```hocon
+agent {
+  pathConfigs: [
+    # ... the agent's targets, plus its own metrics:
+    { name: "Agent metrics", path: cluster_a_agent_metrics, url: "http://localhost:8083/metrics" }
+  ]
+}
+```
+
+Then add the scrape jobs to your `prometheus.yml`:
 
 ```yaml
 --8<-- "PrometheusConfigs.txt:metrics-scrape-config"
@@ -141,15 +154,18 @@ Response size buckets: 1KB, 10KB, 100KB, 500KB, 1MB, 5MB, 10MB
 
 ### Counters
 
-| Metric                             | Labels              | Description                                        |
-|:-----------------------------------|:--------------------|:---------------------------------------------------|
-| `agent_scrape_request_count_total` | `launch_id`, `type` | Scrape requests processed                          |
-| `agent_scrape_result_count_total`  | `launch_id`, `type` | Results sent (`non-gzipped`, `gzipped`, `chunked`) |
-| `agent_connect_count_total`        | `launch_id`, `type` | Connection attempts (`success`, `failure`)         |
-| `agent_filter_lines_dropped_total` | `launch_id`, `path` | Lines removed by the path's metric filter          |
-| `agent_filter_bytes_saved_total`   | `launch_id`, `path` | Bytes saved before gzip by the metric filter       |
+| Metric                             | Labels              | Description                                                           |
+|:-----------------------------------|:--------------------|:----------------------------------------------------------------------|
+| `agent_scrape_request_count_total` | `launch_id`, `type` | Scrape requests processed (`success`, `unsuccessful`, `invalid_path`) |
+| `agent_scrape_result_count_total`  | `launch_id`, `type` | Results sent (`non-gzipped`, `gzipped`, `chunked`, `dropped`)         |
+| `agent_connect_count_total`        | `launch_id`, `type` | Connection attempts (`success`, `failure`)                            |
+| `agent_filter_lines_dropped_total` | `launch_id`, `path` | Lines removed by the path's metric filter                             |
+| `agent_filter_bytes_saved_total`   | `launch_id`, `path` | Bytes saved before gzip by the metric filter                          |
 
-The `launch_id` label uniquely identifies each agent process lifetime.
+The `launch_id` label uniquely identifies each agent process lifetime. `unsuccessful` means the target answered with
+a non-2xx status or a response over `agent.http.maxContentLengthMBytes`; `invalid_path` means the proxy asked for a
+path the agent doesn't serve; `dropped` is a result lost because the connection to the proxy closed before it was
+sent.
 
 The two `agent_filter_*` counters only create series for paths that have a filter configured, so
 they are absent entirely unless [metric filtering](configuration/agent.md#metric-filtering) is in
@@ -176,7 +192,7 @@ use. See that section for what the filter does and does not drop.
 ```text
 Prometheus --- HTTP GET ---> Proxy                        Agent
                               |                             |
-                  latency.startTimer()                      |
+                  records the start time                    |
                               |                             |
                   writeScrapeRequest() -- gRPC stream --> fetchScrapeUrl()
                               |                     agentLatency.startTimer()
@@ -184,13 +200,14 @@ Prometheus --- HTTP GET ---> Proxy                        Agent
                               |                     HTTP GET to target
                               |                             |
                               |                     agentLatency.observeDuration()
+                              |                     scrapeRequestCount.inc()
                               |                     scrapeResultCount.inc()
                               |                             |
                   assignScrapeResults() <-- gRPC -----------+
                               |
                   responseBytes.observe()
-                  latency.observeDuration()
-                  scrapeRequestCount.labels(outcome).inc()
+                  latency.observe(elapsed)
+                  scrapeRequestCount.labelValues(outcome).inc()
                               |
                 <-- HTTP response ---
 ```
@@ -256,23 +273,30 @@ java -jar prometheus-agent.jar --admin
 
 Key panels to monitor:
 
-| Section            | What to Watch                                            |
-|:-------------------|:---------------------------------------------------------|
-| **Overview**       | Success rate dropping below 99%, error count spikes      |
-| **Throughput**     | Sudden changes in request volume or error ratio          |
-| **Latency**        | P99 creeping up indicates slow targets or network issues |
-| **Payload**        | Unexpectedly large responses, gzip vs plain distribution |
-| **Internal State** | Growing backlog means agents can't keep up               |
-| **Errors**         | Which error types dominate, frequent evictions           |
+| Section             | What to Watch                                                                                                        |
+|:--------------------|:---------------------------------------------------------------------------------------------------------------------|
+| **Overview**        | Success rate dropping below 99%, error count spikes                                                                  |
+| **Throughput**      | Sudden changes in request volume or error ratio                                                                      |
+| **Latency**         | P99 creeping up indicates slow targets or network issues                                                             |
+| **Payload**         | Unexpectedly large responses, gzip vs plain distribution                                                             |
+| **Internal State**  | Growing backlog means agents can't keep up; agents heartbeat only when idle, so zero heartbeats is normal under load |
+| **Errors & Events** | Which error types dominate, frequent evictions                                                                       |
+| **Chunk Health**    | Any chunk validation failure or abandoned transfer                                                                   |
+
+The **Job** and **Instance** pickers pick out one proxy when Prometheus scrapes more than one, such as a
+high-availability pair.
 
 ### Agents Dashboard
 
 Key panels to monitor:
 
-| Section             | What to Watch                                     |
-|:--------------------|:--------------------------------------------------|
-| **Overview**        | Unexpected agent count changes                    |
-| **Connections**     | Failure spikes indicate proxy or network issues   |
-| **Scrape Activity** | Imbalanced load across agents                     |
-| **Latency**         | Per-agent latency outliers point to slow targets  |
-| **Internals**       | Growing backlog means the agent is falling behind |
+| Section             | What to Watch                                                                         |
+|:--------------------|:--------------------------------------------------------------------------------------|
+| **Overview**        | Unexpected agent count changes                                                        |
+| **Connections**     | Failure spikes indicate proxy or network issues                                       |
+| **Scrape Activity** | Imbalanced load; unsuccessful scrapes point at a failing target; any `dropped` result |
+| **Latency**         | Per-agent latency outliers point to slow targets                                      |
+| **Agent Internals** | Growing backlog means the agent is falling behind                                     |
+
+Every agent panel keys on `job`, so scrape each agent in its own job, as in
+[Scraping Internal Metrics](#scraping-internal-metrics).

@@ -617,8 +617,9 @@ announced to screen readers rather than signalled by colour alone.
 
 Both proxy and agent expose their own metrics:
 
-- **Proxy metrics:** `http://proxy-host:8082/proxy_metrics`
-- **Agent metrics:** `http://agent-host:8083/agent_metrics`
+- **Proxy metrics:** `http://proxy-host:8082/metrics`
+- **Agent metrics:** `http://agent-host:8083/metrics`. The agent sits behind the firewall, so give it a path for its own
+  metrics and let Prometheus scrape them through the proxy, like any other target
 - **Admin endpoints:** `http://host:admin-port/ping`, `/healthcheck`, `/version`
 
 ## 🔧 Configuration Options

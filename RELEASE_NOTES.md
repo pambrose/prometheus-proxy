@@ -44,6 +44,18 @@ The alerting rules on the Grafana page now ship as `grafana/alerts.yml`: add it 
 copying the rules out of the page. CI checks it with `promtool`, and checks that every series it queries is one the
 proxy or agent exposes.
 
+### Grafana dashboards
+
+- **The proxy dashboard has Job and Instance pickers**, so a high-availability pair of proxies, or two environments in
+  one Prometheus, no longer add up in every panel.
+- **The agents dashboard tells agents apart by `job`**, so scrape each agent in its own job. The monitoring docs now
+  show how: give the agent a path for its own `/metrics` and scrape it through the proxy, which works through the
+  firewall, unlike the direct scrape of `agent-host:8083` they showed before. The dashboard also gains an Unsuccessful
+  Scrapes by Agent panel, and its Agent Count, which was red for every count, is red only at zero.
+- **`grafana/alerts.yml` adds `ProxyDown`**, which fires when Prometheus can't scrape the proxy's job
+  (`prometheus-proxy`); the other rules need the proxy's metrics to fire at all.
+- Both dashboards refresh every 30 seconds instead of every 5. Re-import them to pick up these changes.
+
 ### Security
 
 - **Vulnerable dependencies in the JARs and images are updated.** The Netty that gRPC brings (4.2.16, with a critical

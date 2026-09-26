@@ -36,7 +36,7 @@
       "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 },
       "targets": [
         {
-          "expr": "count(agent_start_time_seconds{job=~\"$agent\"})",
+          "expr": "count(agent_start_time_seconds{job=~\"$agent\"}) or vector(0)",
           "legendFormat": "",
           "refId": "A"
         }
@@ -47,8 +47,8 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "red", "value": 0 }
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
             ]
           }
         },
@@ -163,7 +163,7 @@
     },
     {
       "id": 4,
-      "title": "Connection Success Rate",
+      "title": "Successful Connections/sec",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
@@ -200,7 +200,8 @@
             "steps": [
               { "color": "green", "value": null }
             ]
-          }
+          },
+          "unit": "ops"
         },
         "overrides": []
       },
@@ -248,7 +249,8 @@
             "steps": [
               { "color": "green", "value": null }
             ]
-          }
+          },
+          "unit": "ops"
         },
         "overrides": []
       },
@@ -269,7 +271,7 @@
       "title": "Scrape Request Rate by Agent",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 15 },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 15 },
       "targets": [
         {
           "expr": "sum by (job) (rate(agent_scrape_request_count_total{job=~\"$agent\"}[$__rate_interval]))",
@@ -303,7 +305,57 @@
             "steps": [
               { "color": "green", "value": null }
             ]
-          }
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "calcs": [], "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "single", "sort": "none" }
+      }
+    },
+    {
+      "id": 25,
+      "title": "Unsuccessful Scrapes by Agent",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 15 },
+      "targets": [
+        {
+          "expr": "sum by (job, type) (rate(agent_scrape_request_count_total{type!=\"success\", job=~\"$agent\"}[$__rate_interval]))",
+          "legendFormat": "{{job}} {{type}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "off" }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null }
+            ]
+          },
+          "unit": "reqps"
         },
         "overrides": []
       },
@@ -317,7 +369,7 @@
       "title": "Scrape Result Types",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 15 },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 15 },
       "targets": [
         {
           "expr": "sum by (type) (rate(agent_scrape_result_count_total{job=~\"$agent\"}[$__rate_interval]))",
@@ -351,7 +403,8 @@
             "steps": [
               { "color": "green", "value": null }
             ]
-          }
+          },
+          "unit": "ops"
         },
         "overrides": []
       },
@@ -579,7 +632,7 @@
       }
     }
   ],
-  "refresh": "5s",
+  "refresh": "30s",
   "schemaVersion": 39,
   "tags": ["prometheus", "agent"],
   "templating": {

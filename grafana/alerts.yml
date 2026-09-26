@@ -1,9 +1,19 @@
 # Prometheus alerting rules for the proxy and agent. Load this file from Prometheus' rule_files and tune the
-# thresholds to your environment. Each rule is built on a metric documented on the website's Monitoring page;
+# thresholds to your environment. Each rule is built on a metric documented on the website's Monitoring page, except
+# ProxyDown, which uses Prometheus' own up series;
 # `promtool check rules grafana/alerts.yml` validates it, and CI runs that check.
 groups:
   - name: prometheus-proxy
     rules:
+      # The rules below need the proxy's metrics, so this one covers the proxy itself going away. The job name is the
+      # one in the documented scrape config; change it if yours differs.
+      - alert: ProxyDown
+        expr: up{job="prometheus-proxy"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "Prometheus cannot scrape the proxy at {{ $labels.instance }}"
+
       - alert: ProxyScrapeSuccessRateLow
         expr: |
           sum(rate(proxy_scrape_requests_total{type="success"}[5m]))
@@ -59,11 +69,11 @@ groups:
         for: 10m
         labels: { severity: warning }
         annotations:
-          summary: "Agent {{ $labels.launch_id }} is failing to connect to the proxy"
+          summary: "Agent {{ $labels.job }} is failing to connect to the proxy"
 
       - alert: AgentBacklogGrowing
         expr: agent_scrape_backlog_size > 50
         for: 10m
         labels: { severity: warning }
         annotations:
-          summary: "Agent {{ $labels.launch_id }} scrape backlog is large"
+          summary: "Agent {{ $labels.job }} scrape backlog is large"
