@@ -10,6 +10,11 @@ All notable changes to this project are documented in this file.
 
 - Move to common-utils 5.0.0 and the Prometheus Java client 1.9.0 (`io.prometheus:prometheus-metrics-*`), replacing `io.prometheus:simpleclient` 0.16.0, which gets no further releases. Every `proxy_*` and `agent_*` series keeps its name, label names and histogram buckets. Differences on `/metrics`: the counters' and histograms' `_created` series are gone (set `IO_PROMETHEUS_EXPORTER_INCLUDE_CREATED_TIMESTAMPS=true` to bring them back); with the JVM exports on, the memory metrics put the unit last (`jvm_memory_bytes_used` → `jvm_memory_used_bytes`, `jvm_memory_pool_bytes_used` → `jvm_memory_pool_used_bytes`, and the same for `committed`, `max` and `init`), `jvm_info` is `jvm_runtime_info`, and `memoryPoolsExportsEnabled` adds `jvm_memory_pool_allocated_bytes_total`. In the text itself, labels are listed in name order and a labelled family prints no `# HELP`/`# TYPE` lines until its first series exists. The endpoint can now also answer protobuf when a scraper asks for it; the proxy's and agent's histograms stay classic-only, so no native histograms appear. Embedders get `prometheus-metrics-core` 1.9.0 instead of `simpleclient`, and the embedded agent's metrics register in the 1.x `PrometheusRegistry.defaultRegistry`
 
+### Security
+
+- Raise the Netty that grpc-netty 1.84.0 brings, 4.2.16.Final (CVE-2026-75595, critical), to 4.2.18.Final, and the Jackson that Dropwizard's `metrics-json` brings, 2.12.7 (CVE-2025-52999 and CVE-2026-54512/54513, high), to 2.22.3. Both were in the proxy and agent fat JARs and Docker images. `netty-tcnative` stays at the version grpc is tested with, since its classes must match its natives
+- Add `SECURITY.md`: report vulnerabilities privately through GitHub's private vulnerability reporting, and check the documented defaults (the open agent port without a token or mutual TLS, the unauthenticated admin, metrics, and dashboard ports) first
+
 ### New Features
 
 - The proxy and the agent are available from Homebrew: `brew install pambrose/tap/prometheus-proxy` and `brew install pambrose/tap/prometheus-agent` install `prometheus-proxy` and `prometheus-agent` commands that run the release JARs on `openjdk@25`, the runtime the Docker images ship, and `brew services` definitions that run them with a starter config in `$(brew --prefix)/etc/`. The formulae's sources are in `etc/homebrew/`; `make homebrew-formulae` renders them for a published release into a clone of `pambrose/homebrew-tap` (step 9 of `docs/RELEASE.md`)
@@ -32,10 +37,12 @@ All notable changes to this project are documented in this file.
 - Add a `Lincheck` workflow (`.github/workflows/lincheck.yml`) that runs `make lincheck-tests` on demand. The specs take several minutes, so they stay out of the CI build
 - `make tla-checks` now checks the downloaded `tla2tools.jar` against a pinned SHA-256 (`TLA_SHA256` in the Makefile) and refuses a download that doesn't match, since CI now runs it
 - Fix a flaky `ProxyWebDashboardTest` spec, "an oversized message should close the session", which failed a CI run with `expected:<TOO_BIG> but was:<CLOSED_ABNORMALLY>`. Ktor rejects an oversized frame on reading its header and closes the socket with the rest of the frame unread, so the kernel resets the connection, and a reset that beats the TOO_BIG close frame to the client surfaces as an abnormal close. The spec now accepts either code and then checks that a fresh session still renders; with the frame cap removed it still fails
+- Add a `Security` workflow (`.github/workflows/security.yml`). Trivy scans the proxy and agent images on every pull request, on pushes to `master`, and weekly, and fails on a HIGH or CRITICAL vulnerability that has a fix; CodeQL analyzes the Kotlin code. Findings from `master` and the weekly run go to code scanning
 
 ### Dependencies
 
 - Update common-utils 4.1.0 → 5.0.0 and the Prometheus Java client `simpleclient` 0.16.0 → `prometheus-metrics-core` 1.9.0
+- Netty 4.2.16.Final → 4.2.18.Final and Jackson 2.12.7 → 2.22.3, overriding what grpc-netty and Dropwizard `metrics-json` bring (see Security)
 
 ## [4.1.0] - 2026-09-23
 

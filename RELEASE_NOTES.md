@@ -20,6 +20,14 @@ Each formula installs a `prometheus-proxy` or `prometheus-agent` command that ru
 runs either one in the background with a starter config in `$(brew --prefix)/etc/`; an upgrade leaves a config
 you have edited alone.
 
+### Security
+
+- **Vulnerable dependencies in the JARs and images are updated.** The Netty that gRPC brings (4.2.16, with a critical
+  CVE) is raised to 4.2.18, and the Jackson that the Dropwizard metrics servlets bring (2.12.7, with high CVEs) to
+  2.22.3. A new security workflow scans both images on every pull request and weekly, and fails on a high or critical
+  vulnerability that has a fix.
+- **Reporting a vulnerability:** `SECURITY.md` explains how to report one privately through GitHub.
+
 ### Before you upgrade
 
 - **The Prometheus client underneath moved to 1.x.** The proxy and agent now use the Prometheus Java client
