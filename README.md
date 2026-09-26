@@ -37,13 +37,14 @@ behind a firewall and preserves the native pull-based model architecture.
 
 ## ✨ New Features
 
-Version 4.2.0 moves the proxy and agent to the Prometheus Java client 1.x, replacing the unmaintained 0.x
-client. Every `proxy_*` and `agent_*` metric keeps its name, labels, and buckets, but the `_created` series
-are gone and, with the JVM exports on, the JVM memory metrics are renamed, so read **Before you upgrade** in the
-[release notes](RELEASE_NOTES.md) first. The proxy and agent can now be installed with Homebrew, the bundled
-Grafana dashboards' connection, eviction, heartbeat, and scrape-count panels show data again, and the JARs no
-longer print logback and kotlin-logging lines at startup. It also adds Helm charts for the proxy and the agent,
-and ships the alerting rules as `grafana/alerts.yml`; the [changelog](CHANGELOG.md) has the full list.
+Version 4.2.0 (released 2026-09-26) moves the proxy and agent to the Prometheus Java client 1.x, replacing the
+unmaintained 0.x client. Every `proxy_*` and `agent_*` metric keeps its name, labels, and buckets, but the
+`_created` series are gone and, with the JVM exports on, the JVM memory metrics are renamed, so read
+**Before you upgrade** in the [release notes](RELEASE_NOTES.md) first. The proxy and agent can now be installed
+with Homebrew, the bundled Grafana dashboards' connection, eviction, heartbeat, and scrape-count panels show data
+again, and the JARs no longer print logback and kotlin-logging lines at startup. It also adds Helm charts for the
+proxy and the agent, and ships the alerting rules as `grafana/alerts.yml`; the [changelog](CHANGELOG.md) has the
+full list.
 
 Version 4.1.0 (released 2026-09-23) is a security and reliability release: agents can no longer answer,
 read, or take over each other's scrapes and paths, a rejected path no longer takes an agent offline and a

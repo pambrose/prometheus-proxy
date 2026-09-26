@@ -2,9 +2,17 @@
 
 ---
 
-## Unreleased
+## 4.2.0
 
-_Not yet released_
+_Released 2026-09-26_
+
+A release that moves the proxy and agent to the Prometheus Java client 1.x, replacing the unmaintained 0.x client,
+and adds new ways to install and monitor them. Every `proxy_*` and `agent_*` metric keeps its name, labels and
+buckets, but the `_created` series are gone and, with the JVM exports on, the JVM memory metrics are renamed: read
+**Before you upgrade** first. The proxy and agent can now be installed with Homebrew or Helm, the alerting rules
+ship as `grafana/alerts.yml`, and the bundled Grafana dashboards show data again in the panels that had none. It
+also raises the Netty and Jackson that gRPC and the Dropwizard metrics servlets bring, to clear critical and high
+CVEs, and quiets startup.
 
 ### New Feature — Homebrew
 
