@@ -60,7 +60,7 @@ object ContainerTestSupport {
    * The image every nginx stub runs. Pinned rather than the floating `nginx:alpine`, so container runs are
    * reproducible; the same version as the reverse-proxy example in `nginx/docker/Dockerfile`.
    */
-  const val NGINX_IMAGE = "nginx:1.29-alpine"
+  const val NGINX_IMAGE = "nginx:1.31-alpine"
 
   /**
    * The Prometheus image the end-to-end specs scrape through. Pinned for the same reason as [NGINX_IMAGE]: the floating
