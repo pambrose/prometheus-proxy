@@ -119,6 +119,15 @@ proxy or agent exposes.
   rather than only after a merge.
 - CI lints the Helm charts and installs them into a kind cluster.
 
+### Dependency updates
+
+Runtime: common-utils 4.1.0 → 5.0.0 and the Prometheus Java client `simpleclient` 0.16.0 →
+`prometheus-metrics-core` 1.9.0 (see Before you upgrade), Netty 4.2.16.Final → 4.2.18.Final and Jackson 2.12.7 →
+2.22.3 (see Security), Logback 1.6.3 → 1.6.4, and the dashboard's htmx 2.0.10 → 2.0.11. Build and test only:
+Gradle 9.7.1 → 9.8.0, the shared convention plugins 1.1.5 → 1.1.6, and `kaml` 0.104.0, added to read
+`grafana/alerts.yml` in a test. The documentation site's Python lock picks up Zensical 0.0.63 → 0.0.65, Markdown
+3.10.3 → 3.11, and pymdown-extensions 12.0.1 → 12.1.
+
 ---
 
 ## 4.1.0

@@ -53,7 +53,10 @@ All notable changes to this project are documented in this file.
 
 - Update common-utils 4.1.0 → 5.0.0 and the Prometheus Java client `simpleclient` 0.16.0 → `prometheus-metrics-core` 1.9.0
 - Netty 4.2.16.Final → 4.2.18.Final and Jackson 2.12.7 → 2.22.3, overriding what grpc-netty and Dropwizard `metrics-json` bring (see Security)
-- Add `kaml` 0.79.0 as a test dependency, to read `grafana/alerts.yml` (it was already on the test classpath through another dependency)
+- Update Logback 1.6.3 → 1.6.4 and the dashboard's htmx 2.0.10 → 2.0.11
+- Update build tooling: Gradle wrapper 9.7.1 → 9.8.0 and the `pambrose-gradle-plugins` convention plugins 1.1.5 → 1.1.6
+- Add `kaml` 0.104.0 as a test dependency, to read `grafana/alerts.yml`; the fat JARs keep the 0.79.0 that Ktor's OpenAPI module brings
+- Update the documentation site's Python dependency lock (`website/uv.lock`): Zensical 0.0.63 → 0.0.65, which adds the `pathspec` transitive dependency, plus Markdown 3.10.3 → 3.11, pymdown-extensions 12.0.1 → 12.1, and platformdirs 4.11.12 → 4.12.0
 
 ## [4.1.0] - 2026-09-23
 

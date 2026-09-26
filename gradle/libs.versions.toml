@@ -1,6 +1,6 @@
 [versions]
 # Toolchain
-gradle-wrapper = "9.7.1"
+gradle-wrapper = "9.8.0"
 jvm = "17"
 # The JVM the tests run on: the runtime the Docker images ship (main code still compiles for `jvm`)
 testJvm = "25"
@@ -13,7 +13,7 @@ serialization = "1.11.0"
 config = "6.1.1"
 detekt = "2.0.0-alpha.6"
 dokka = "2.2.0"
-gradle-plugins = "1.1.5"
+gradle-plugins = "1.1.6"
 kover = "0.9.9"
 maven-publish = "0.37.0"
 protobuf = "0.10.0"
@@ -41,7 +41,7 @@ ktor = "3.6.0"
 # htmx:wsOpen/wsClose/wsError events, neither of which survives the htmx 4 rewrite. Bumping the major
 # means porting ProxyDashboardHtml's connection indicator and reconnect backoff, not just the version.
 # ProxyDashboardService reads these through BuildConfig, so the served asset paths follow them.
-htmx = "2.0.10"
+htmx = "2.0.11"
 htmxWs = "2.0.4"
 
 # Metrics
@@ -57,7 +57,7 @@ zipkin = "6.3.1"
 
 # Logging
 logging = "8.0.4"
-logback = "1.6.3"
+logback = "1.6.4"
 slf4j = "2.0.20"
 
 # Config / CLI
@@ -71,8 +71,9 @@ utils = "5.0.0"
 annotation = "1.3.2"
 
 # Testing
-# YAML parser for tests (grafana/alerts.yml); 0.79.0 is the version the test classpath already resolves
-kaml = "0.79.0"
+# YAML parser for tests (grafana/alerts.yml). Only the tests use this version: the fat JARs keep the 0.79.0 that
+# Ktor's OpenAPI module brings.
+kaml = "0.104.0"
 kotest = "6.2.5"
 lincheck = "3.7"
 mockk = "1.14.11"
