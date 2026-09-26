@@ -18,6 +18,7 @@ All notable changes to this project are documented in this file.
 ### New Features
 
 - The proxy and the agent are available from Homebrew: `brew install pambrose/tap/prometheus-proxy` and `brew install pambrose/tap/prometheus-agent` install `prometheus-proxy` and `prometheus-agent` commands that run the release JARs on `openjdk@25`, the runtime the Docker images ship, and `brew services` definitions that run them with a starter config in `$(brew --prefix)/etc/`. The formulae's sources are in `etc/homebrew/`; `make homebrew-formulae` renders them for a published release into a clone of `pambrose/homebrew-tap` (step 9 of `docs/RELEASE.md`)
+- Helm charts for the proxy and the agent, in `charts/prometheus-proxy` and `charts/prometheus-agent`. They wire the admin-endpoint probes, run as a non-root user with a read-only root filesystem, and optionally add a gRPC LoadBalancer Service for agents in other clusters, a Prometheus Operator ServiceMonitor, an agent token from a Secret, TLS from a Secret, and, for the agent, a discovery ConfigMap it re-reads without restarting. The website's Kubernetes page has a Helm section
 - The Prometheus alerting rules from the Grafana page ship as `grafana/alerts.yml`, for Prometheus' `rule_files`; the page includes the file, so the two can't drift
 
 ### Bug Fixes
@@ -41,6 +42,7 @@ All notable changes to this project are documented in this file.
 - Add a `Security` workflow (`.github/workflows/security.yml`). Trivy scans the proxy and agent images on every pull request, on pushes to `master`, and weekly, and fails on a HIGH or CRITICAL vulnerability that has a fix; CodeQL analyzes the Kotlin code. Findings from `master` and the weekly run go to code scanning
 - The container tests run on pull requests too, not only after a merge, so a change that breaks the fat JARs, the images, or the scrape path shows up before it merges
 - CI checks `grafana/alerts.yml` with `promtool` (`make check-rules`), and `DashboardMetricNamesTest` reads the alerting rules from that file instead of extracting them from the Grafana page
+- CI lints the Helm charts and validates their rendered manifests (`make helm-lint`), and installs both charts into a kind cluster with the commit's images and scrapes through them (`scripts/helm-smoke-test.sh`, in the container-tests workflow)
 
 ### Dependencies
 

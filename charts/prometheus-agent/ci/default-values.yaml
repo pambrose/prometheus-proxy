@@ -1,0 +1,3 @@
+# The chart's defaults, plus the one required value.
+proxy:
+  hostname: prometheus-proxy.monitoring.svc:50051

@@ -94,6 +94,19 @@ Get running in under a minute:
       pambrose/prometheus-agent:4.2.0
     ```
 
+=== "Helm"
+
+    ```bash
+    # From a clone of https://github.com/pambrose/prometheus-proxy
+    # Start the proxy, in the cluster where Prometheus runs
+    helm install prometheus-proxy ./charts/prometheus-proxy --namespace monitoring --create-namespace
+
+    # Start the agent, in the cluster whose services it scrapes
+    helm install prometheus-agent ./charts/prometheus-agent \
+      --set proxy.hostname=proxy-host.example.com:50051 \
+      --set-file config=myapps.conf
+    ```
+
 See the [Quick Start Guide](getting-started.md) for detailed instructions.
 
 ## Common Use Cases

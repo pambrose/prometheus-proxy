@@ -97,3 +97,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Check the alerting rules
         run: make check-rules
+
+  # Lints the Helm charts in charts/ with each of their ci/ values files and validates the rendered manifests against
+  # the Kubernetes schemas. container-tests.yml installs them into a kind cluster.
+  helm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Lint the charts and validate their manifests
+        run: make helm-lint

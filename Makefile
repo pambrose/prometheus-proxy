@@ -1,5 +1,5 @@
 .PHONY: default help stop clean clean-all stubs build tibuild refresh jars \
-        tests mini-tests xxl-tests nh-tests ip-tests netty-tests tls-tests lincheck-tests tla-checks check-rules \
+        tests mini-tests xxl-tests nh-tests ip-tests netty-tests tls-tests lincheck-tests tla-checks check-rules helm-lint \
         container-tests scaling-tests all-tests regen-certs \
         docker-clean docker-clean-dry \
         all-scaling scaling-paths scaling-agents scaling-payload scaling-consolidated scaling-concurrency scaling-soak \
@@ -37,6 +37,14 @@ TLC = cd $(TLA_DIR) && java -XX:+UseParallelGC -cp tla2tools.jar tlc2.TLC -worke
 # The Prometheus image whose promtool checks grafana/alerts.yml. Keep in step with
 # ContainerTestSupport.PROMETHEUS_IMAGE, the Prometheus the container suite scrapes through.
 PROMETHEUS_IMAGE := prom/prometheus:v3.14.0
+
+# Helm chart checks (charts/): lint each chart with every values file in its ci/ directory, then validate the rendered
+# manifests against the Kubernetes schemas and, for the ServiceMonitor, the Prometheus Operator CRD's.
+HELM_IMAGE := alpine/helm:3.22.0
+KUBECONFORM_IMAGE := ghcr.io/yannh/kubeconform:v0.8.0
+KUBERNETES_VERSION := 1.30.0
+CRD_SCHEMAS := https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json
+CHARTS := prometheus-proxy prometheus-agent
 
 # Banner printed at the start of every scaling target, so a long `all-scaling` run makes it obvious
 # which preset is executing at any moment (they look alike in Gradle's output otherwise).
@@ -132,6 +140,15 @@ tla-checks: $(TLA_JAR)  ## Model-check the TLA+ specs in specs/tla (the quick co
 
 check-rules:  ## Validate the alerting rules in grafana/alerts.yml with promtool (needs Docker)
 	docker run --rm -v "$(CURDIR)/grafana:/rules:ro" --entrypoint promtool $(PROMETHEUS_IMAGE) check rules /rules/alerts.yml
+
+helm-lint:  ## Lint the Helm charts and validate their rendered manifests (needs Docker)
+	@set -e; for chart in $(CHARTS); do for values in charts/$$chart/ci/*-values.yaml; do \
+		echo "==> $$chart with $$(basename $$values)"; \
+		docker run --rm -v "$(CURDIR)/charts:/charts:ro" $(HELM_IMAGE) lint --strict /charts/$$chart -f /$$values; \
+		manifests=$$(docker run --rm -v "$(CURDIR)/charts:/charts:ro" $(HELM_IMAGE) template ci /charts/$$chart -f /$$values); \
+		printf '%s\n' "$$manifests" | docker run --rm -i $(KUBECONFORM_IMAGE) -strict -summary \
+			-kubernetes-version $(KUBERNETES_VERSION) -schema-location default -schema-location '$(CRD_SCHEMAS)' -; \
+	done; done
 
 container-tests: jars  ## Run the Testcontainers tests (needs Docker)
 	@DOCKER_HOST="$$(docker context inspect --format '{{.Endpoints.docker.Host}}' 2>/dev/null)"; \

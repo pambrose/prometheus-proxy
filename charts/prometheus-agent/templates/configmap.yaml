@@ -1,0 +1,29 @@
+{{- if not (or .Values.config .Values.existingConfigMap) }}
+{{- fail "the agent needs a config: set config (HOCON with its pathConfigs) or existingConfigMap" }}
+{{- end }}
+{{- if not .Values.existingConfigMap }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "prometheus-agent.fullname" . }}
+  labels:
+    {{- include "prometheus-agent.labels" . | nindent 4 }}
+data:
+  agent.conf: |
+    {{- .Values.config | nindent 4 }}
+{{- end }}
+{{- if and .Values.discovery.enabled (not .Values.discovery.existingConfigMap) }}
+{{- if not .Values.discovery.targets }}
+{{- fail "discovery.enabled needs discovery.targets (a HOCON paths list) or discovery.existingConfigMap" }}
+{{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "prometheus-agent.discoveryConfigMapName" . }}
+  labels:
+    {{- include "prometheus-agent.labels" . | nindent 4 }}
+data:
+  targets.conf: |
+    {{- .Values.discovery.targets | nindent 4 }}
+{{- end }}

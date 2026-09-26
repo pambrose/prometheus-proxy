@@ -20,6 +20,24 @@ Each formula installs a `prometheus-proxy` or `prometheus-agent` command that ru
 runs either one in the background with a starter config in `$(brew --prefix)/etc/`; an upgrade leaves a config
 you have edited alone.
 
+### New Feature — Helm charts
+
+**The proxy and the agent can be installed with Helm**, from the charts in `charts/`:
+
+```bash
+# In the monitoring cluster, next to Prometheus
+helm install prometheus-proxy ./charts/prometheus-proxy --namespace monitoring --create-namespace \
+  --set agentService.enabled=true
+
+# In each target cluster, with proxy.hostname and the agent's config in agent-values.yaml
+helm install prometheus-agent ./charts/prometheus-agent -f agent-values.yaml
+```
+
+The charts run the proxy and agent as a non-root user with a read-only root filesystem and wire the health probes.
+Optional values add a LoadBalancer Service for agents in other clusters, a Prometheus Operator ServiceMonitor, an agent
+token or TLS certificates from Secrets, and, for the agent, a discovery ConfigMap it re-reads without restarting.
+The website's Kubernetes page has the details, and each chart's README lists its values.
+
 ### Alerting rules as a file
 
 The alerting rules on the Grafana page now ship as `grafana/alerts.yml`: add it to Prometheus' `rule_files` instead of
@@ -81,6 +99,7 @@ proxy or agent exposes.
   specs on demand. The TLA+ tools the checks download are now verified against a pinned SHA-256.
 - The container tests, which run the fat JARs in Docker against a real Prometheus, now run on every pull request
   rather than only after a merge.
+- CI lints the Helm charts and installs them into a kind cluster.
 
 ---
 

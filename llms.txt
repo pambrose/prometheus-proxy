@@ -137,6 +137,17 @@ docker logs --follow prometheus-proxy                          # follow its log
 docker stop prometheus-proxy && docker rm prometheus-proxy     # stop and remove it
 ```
 
+### Kubernetes (Helm)
+
+Charts for each side of the firewall are in `charts/` (install from a clone of the repository):
+
+```bash
+# Monitoring cluster, next to Prometheus (agentService adds a LoadBalancer for agents in other clusters)
+helm install prometheus-proxy ./charts/prometheus-proxy -n monitoring --create-namespace --set agentService.enabled=true
+# Each target cluster: proxy.hostname and the agent's pathConfigs (config, HOCON) in agent-values.yaml
+helm install prometheus-agent ./charts/prometheus-agent -f agent-values.yaml
+```
+
 ## Configuration
 
 Uses Typesafe Config (HOCON). Precedence: CLI args > environment variables > config file values.

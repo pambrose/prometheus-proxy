@@ -45,6 +45,17 @@ icon: lucide/play
     docker pull pambrose/prometheus-agent:4.2.0
     ```
 
+=== "Helm"
+
+    On Kubernetes, install the proxy and the agent with the Helm charts in the repository's
+    [`charts/`](https://github.com/pambrose/prometheus-proxy/tree/master/charts) directory. They run the
+    Docker Hub images; clone the repository to use them:
+
+    ```bash
+    git clone https://github.com/pambrose/prometheus-proxy.git
+    cd prometheus-proxy
+    ```
+
 ## Start the Proxy
 
 The proxy runs outside the firewall alongside your Prometheus server.
@@ -134,6 +145,18 @@ The proxy runs outside the firewall alongside your Prometheus server.
     docker stop prometheus-proxy            # stop it, and no longer restart it
     docker rm prometheus-proxy              # remove the stopped container
     ```
+
+=== "Helm"
+
+    Install the proxy in the cluster where Prometheus runs; Kubernetes keeps it running:
+
+    ```bash
+    helm install prometheus-proxy ./charts/prometheus-proxy --namespace monitoring --create-namespace
+    ```
+
+    Prometheus scrapes it at `prometheus-proxy.monitoring.svc:8080`, and agents in the same cluster
+    connect to `prometheus-proxy.monitoring.svc:50051`. For agents in other clusters, add
+    `--set agentService.enabled=true`, which exposes the gRPC port through a LoadBalancer Service.
 
 ## Start the Agent
 
@@ -261,6 +284,21 @@ Each entry in `pathConfigs` maps:
     docker stop prometheus-agent            # stop it, and no longer restart it
     docker rm prometheus-agent              # remove the stopped container
     ```
+
+=== "Helm"
+
+    Install the agent in the cluster whose services it scrapes, with the `agent.conf` above. In a pod,
+    `localhost` is the agent itself, so point each `url` at the service's cluster DNS name (for example
+    `http://my-app.default.svc.cluster.local:9100/metrics`):
+
+    ```bash
+    helm install prometheus-agent ./charts/prometheus-agent \
+      --set proxy.hostname=proxy-host.example.com:50051 \
+      --set-file config=agent.conf
+    ```
+
+    `proxy.hostname` is required, and takes precedence over the one in `agent.conf`. See
+    [Kubernetes](kubernetes.md#installing-with-helm) for TLS, agent tokens, and discovery.
 
 === "Remote Config"
 

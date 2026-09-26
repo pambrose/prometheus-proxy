@@ -57,3 +57,42 @@ jobs:
             build/reports/tests/
             build/test-results/
           retention-days: 7
+
+  # Installs the Helm charts into a kind cluster with this commit's images, and checks that a scrape of the proxy's
+  # Service goes through the agent (scripts/helm-smoke-test.sh).
+  helm-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: |
+            17
+            25
+
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
+      - name: Build the fat JARs and images
+        run: |
+          ./gradlew agentJar proxyJar
+          docker build -f etc/docker/proxy.Dockerfile -t pambrose/prometheus-proxy:smoke .
+          docker build -f etc/docker/agent.Dockerfile -t pambrose/prometheus-agent:smoke .
+
+      - uses: helm/kind-action@06c1ae10762d3b9c1644e7fe69596ae519e015a2 # v1.15.0
+        with:
+          cluster_name: helm-smoke
+
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v3.22.0
+
+      - name: Load the images into kind
+        run: kind load docker-image pambrose/prometheus-proxy:smoke pambrose/prometheus-agent:smoke --name helm-smoke
+
+      - name: Install the charts and scrape through them
+        env:
+          IMAGE_TAG: smoke
+        run: scripts/helm-smoke-test.sh
