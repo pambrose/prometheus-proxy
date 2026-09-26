@@ -46,13 +46,19 @@ import io.prometheus.common.EnvVars.SD_TARGET_PREFIX
 import io.prometheus.common.requireGrpcTimeout
 import io.prometheus.common.requirePositive
 
-class ProxyOptions(
+// The primary constructor is internal so parseOnly stays out of the public API, and the public constructor below keeps
+// the (args) signature that code compiled against earlier releases calls.
+class ProxyOptions internal constructor(
   args: Array<String>,
+  // Parse the command line and handle -u/-v only, without loading the config (Proxy.main).
+  parseOnly: Boolean,
 ) : BaseOptions(
   progName = Proxy::class.java.simpleName,
   args = args,
   envConfig = PROXY_CONFIG.name,
 ) {
+  constructor(args: Array<String>) : this(args, parseOnly = false)
+
   constructor(args: List<String>) : this(args.toTypedArray())
 
   /**
@@ -207,7 +213,7 @@ class ProxyOptions(
     private set
 
   init {
-    parseOptions()
+    parseOptions(parseOnly)
   }
 
   override fun assignConfigVals() {

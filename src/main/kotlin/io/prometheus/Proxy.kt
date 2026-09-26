@@ -41,12 +41,12 @@ import io.prometheus.proxy.AgentAuthManager
 import io.prometheus.proxy.AgentContext
 import io.prometheus.proxy.AgentContextCleanupService
 import io.prometheus.proxy.AgentContextManager
-import io.prometheus.proxy.ProxyGrpcService
-import io.prometheus.proxy.ProxyHttpService
-import io.prometheus.proxy.ProxyMetrics
 import io.prometheus.proxy.ProxyEvent
 import io.prometheus.proxy.ProxyEventBus
 import io.prometheus.proxy.ProxyFailure
+import io.prometheus.proxy.ProxyGrpcService
+import io.prometheus.proxy.ProxyHttpService
+import io.prometheus.proxy.ProxyMetrics
 import io.prometheus.proxy.ProxyOptions
 import io.prometheus.proxy.ProxyPathManager
 import io.prometheus.proxy.ScrapeRecord
@@ -606,6 +606,8 @@ class Proxy(
      */
     @JvmStatic
     fun main(args: Array<String>) {
+      // Check for version and usage flags and exit before the banner is logged
+      ProxyOptions(args, parseOnly = true)
       logger.apply {
         info { getBanner("banners/proxy.txt", logger) }
         info { getVersionDesc(false) }

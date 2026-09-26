@@ -95,6 +95,9 @@ proxy or agent exposes.
 - **The `metrics.grpc` settings are gone from the docs and the config reference.** `metricsEnabled` and
   `allMetricsReported` were listed as optional gRPC metrics but never did anything. A config that still sets them
   keeps loading.
+- **`-u` now prints the usage when run in a terminal on Java 17.** The usage text wasn't flushed, so the process
+  exited before it appeared. `-u` and `-v` now print only the usage or the version, without the startup banner or
+  any log lines ahead of it.
 
 ### Documentation
 

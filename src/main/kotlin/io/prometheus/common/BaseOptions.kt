@@ -270,7 +270,7 @@ abstract class BaseOptions protected constructor(
 
   protected abstract fun assignConfigVals()
 
-  protected fun parseOptions() {
+  protected fun parseOptions(parseOnly: Boolean) {
     cliArgs = args
 
     // exitProcess() would kill an embedding host's JVM, so embedded callers get a catchable
@@ -302,7 +302,11 @@ abstract class BaseOptions protected constructor(
             }
 
         if (usage) {
-          jcom.usage()
+          // Not jcom.usage(): it writes with print, which the console's writer doesn't flush, so on JDK 17 with a
+          // terminal the text was lost when exitOrThrow() ended the process. println flushes it.
+          val sb = StringBuilder()
+          jcom.usageFormatter.usage(sb)
+          jcom.console.println(sb.toString().trimEnd())
           exitOrThrow(0, "Usage requested via -u/--usage")
         }
 
@@ -317,9 +321,12 @@ abstract class BaseOptions protected constructor(
     }
 
     parseArgs()
-    readConfig(envConfig, exitOnMissingConfig)
-    configVals = ConfigVals(config)
-    assignConfigVals()
+
+    if (!parseOnly) {
+      readConfig(envConfig, exitOnMissingConfig)
+      configVals = ConfigVals(config)
+      assignConfigVals()
+    }
   }
 
   protected fun assignKeepAliveTimeSecs(defaultVal: Long) {
@@ -481,11 +488,9 @@ abstract class BaseOptions protected constructor(
   private fun redacted(e: Throwable): Throwable {
     val message = e.message ?: return e
     val safe = sanitizeUrlsInText(message)
-    return if (safe ==
-      message
-    )
+    return if (safe == message)
       e
-      else
+    else
       ConfigLoadException("${e.simpleClassName}: $safe").also { it.stackTrace = e.stackTrace }
   }
 

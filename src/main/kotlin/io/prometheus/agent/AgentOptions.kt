@@ -51,9 +51,13 @@ import io.prometheus.common.Utils.stripScheme
 import io.prometheus.common.requirePositive
 import kotlin.time.Duration.Companion.seconds
 
-class AgentOptions(
+// The primary constructor is internal so parseOnly stays out of the public API, and the public constructor below keeps
+// the (args, exitOnMissingConfig) signature that code compiled against earlier releases calls.
+class AgentOptions internal constructor(
   args: Array<String>,
   exitOnMissingConfig: Boolean,
+  // Parse the command line and handle -u/-v only, without loading the config (Agent.startSyncAgent).
+  parseOnly: Boolean,
 ) : BaseOptions(
   progName = Agent::class.java.name,
   args = args,
@@ -63,6 +67,9 @@ class AgentOptions(
   // startSyncAgent() pass true, while embedded hosts pass false so startup failures stay catchable.
   embedded = !exitOnMissingConfig,
 ) {
+  constructor(args: Array<String>, exitOnMissingConfig: Boolean) :
+    this(args, exitOnMissingConfig, parseOnly = false)
+
   constructor(args: List<String>, exitOnMissingConfig: Boolean) :
     this(args.toTypedArray(), exitOnMissingConfig)
 
@@ -282,7 +289,7 @@ class AgentOptions(
     private set
 
   init {
-    parseOptions()
+    parseOptions(parseOnly)
   }
 
   override fun assignConfigVals() {

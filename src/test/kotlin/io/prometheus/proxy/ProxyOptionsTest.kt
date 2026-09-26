@@ -19,6 +19,7 @@
 package io.prometheus.proxy
 
 import ch.qos.logback.classic.Level
+import io.kotest.assertions.throwables.shouldNotThrowAny
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
@@ -600,6 +601,18 @@ class ProxyOptionsTest : StringSpec() {
     "a blank proxy.http.host should be rejected" {
       val exception = shouldThrow<IllegalArgumentException> { proxyOptions(["-Dproxy.http.host="]) }
       exception.message shouldContain "http.host"
+    }
+
+    // ==================== Parse-only Options ====================
+
+    // Proxy.main first builds parse-only options, just to handle -u and -v before the banner is logged. That pass must
+    // not load or check the config: the options built next do, and assignConfigVals() logs every setting, so doing it
+    // here too would log them all twice, the first time ahead of the banner.
+    "parse-only options should not validate the settings" {
+      val args = arrayOf("--port", "0")
+
+      shouldThrow<IllegalArgumentException> { ProxyOptions(args) }
+      shouldNotThrowAny { ProxyOptions(args, parseOnly = true) }
     }
   }
 }
