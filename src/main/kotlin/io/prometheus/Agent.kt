@@ -647,17 +647,14 @@ class Agent(
       .getOrThrow()
   }
 
-  // Each step runs whether or not the others succeed: the service whose start failed is itself FAILED, and a FAILED
-  // service rejects stopSync(). The JMX reporter startUp() may also have started is left alone: it holds no thread or
-  // port, and its class is not on this module's compile classpath.
+  // super.startUp() stops the admin, metrics and Zipkin services it started when it fails (common-utils 5.0.0), but
+  // not the gRPC channel and HTTP client cache this class's constructor built. Each step runs whether or not the
+  // other succeeds.
   private fun releaseAfterFailedStartUp() {
     val steps: List<() -> Unit> =
       [
         { grpcService.shutDown() },
         { runBlocking { agentHttpService.close() } },
-        { if (isAdminEnabled) servletService.stopSync() },
-        { if (isMetricsEnabled) metricsService.stopSync() },
-        { if (isZipkinEnabled) zipkinReporterService.stopSync() },
       ]
     steps.forEach { step ->
       runCatching(step).onFailure { e -> logger.debug(e) { "Releasing after a failed startup: ${e.message}" } }
