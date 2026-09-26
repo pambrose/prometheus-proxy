@@ -20,7 +20,7 @@ import com.pambrose.common.util.simpleClassName
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Agent
 import io.prometheus.Proxy
-import io.prometheus.client.CollectorRegistry
+import io.prometheus.metrics.model.registry.PrometheusRegistry
 import kotlinx.coroutines.runBlocking
 import java.net.ServerSocket
 import kotlin.properties.Delegates.notNull
@@ -40,7 +40,7 @@ open class HarnessSetup {
     // How long the agent gets to connect, and then to register its initial paths.
     startupTimeout: Duration = 10.seconds,
   ) {
-    CollectorRegistry.defaultRegistry.clear()
+    PrometheusRegistry.defaultRegistry.clear()
 
     // Wait for the proxy port to be available (previous test may not have fully released it)
     awaitPortFree(proxyPort)

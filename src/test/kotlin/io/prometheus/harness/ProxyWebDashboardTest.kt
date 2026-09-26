@@ -43,7 +43,7 @@ import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import io.mockk.verify
 import io.prometheus.Agent
-import io.prometheus.client.CollectorRegistry
+import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.common.TestPorts
 import io.prometheus.harness.support.TestUtils.startAgent
@@ -110,7 +110,7 @@ class ProxyWebDashboardTest : StringSpec() {
     newClient: () -> HttpClient = { HttpClient(CIO) },
     block: suspend DashboardEnv.() -> Unit,
   ) {
-    CollectorRegistry.defaultRegistry.clear()
+    PrometheusRegistry.defaultRegistry.clear()
 
     val t0 = System.nanoTime()
     val proxy =

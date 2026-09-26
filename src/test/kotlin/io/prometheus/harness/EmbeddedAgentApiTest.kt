@@ -24,7 +24,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldHaveLength
 import io.prometheus.Agent
 import io.prometheus.agent.EmbeddedAgentInfo
-import io.prometheus.client.CollectorRegistry
+import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.common.TestPorts
 import io.prometheus.harness.support.TestUtils.startProxy
@@ -39,7 +39,7 @@ import kotlin.time.Duration.Companion.seconds
 class EmbeddedAgentApiTest : StringSpec() {
   init {
     "startAsyncAgent should connect the agent from a config file and shutdown() should disconnect it" {
-      CollectorRegistry.defaultRegistry.clear()
+      PrometheusRegistry.defaultRegistry.clear()
 
       val proxy = startProxy(args = ["--agent_port", "$GRPC_PORT"], proxyPort = HTTP_PORT)
       val configFile =

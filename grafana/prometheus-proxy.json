@@ -185,7 +185,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum(rate(proxy_scrape_requests{type=\"success\"}[$__rate_interval])) / sum(rate(proxy_scrape_requests[$__rate_interval])) * 100",
+          "expr": "sum(rate(proxy_scrape_requests_total{type=\"success\"}[$__rate_interval])) / sum(rate(proxy_scrape_requests_total[$__rate_interval])) * 100",
           "legendFormat": "",
           "refId": "A"
         }
@@ -227,7 +227,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum(increase(proxy_scrape_requests{type!=\"success\"}[1h]))",
+          "expr": "sum(increase(proxy_scrape_requests_total{type!=\"success\"}[1h]))",
           "legendFormat": "",
           "refId": "A"
         }
@@ -286,7 +286,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (type) (rate(proxy_scrape_requests[$__rate_interval]))",
+          "expr": "sum by (type) (rate(proxy_scrape_requests_total[$__rate_interval]))",
           "legendFormat": "{{type}}",
           "refId": "A"
         }
@@ -338,13 +338,13 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum(rate(proxy_scrape_requests{type=\"success\"}[$__rate_interval]))",
+          "expr": "sum(rate(proxy_scrape_requests_total{type=\"success\"}[$__rate_interval]))",
           "legendFormat": "Success",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum(rate(proxy_scrape_requests{type!=\"success\"}[$__rate_interval]))",
+          "expr": "sum(rate(proxy_scrape_requests_total{type!=\"success\"}[$__rate_interval]))",
           "legendFormat": "Errors",
           "refId": "B"
         }
@@ -791,7 +791,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "rate(proxy_heartbeat_count[$__rate_interval])",
+          "expr": "rate(proxy_heartbeat_count_total[$__rate_interval])",
           "legendFormat": "",
           "refId": "A"
         }
@@ -850,7 +850,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (type) (rate(proxy_scrape_requests{type!=\"success\"}[$__rate_interval]))",
+          "expr": "sum by (type) (rate(proxy_scrape_requests_total{type!=\"success\"}[$__rate_interval]))",
           "legendFormat": "{{type}}",
           "refId": "A"
         }
@@ -902,13 +902,13 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "rate(proxy_connect_count[$__rate_interval])",
+          "expr": "rate(proxy_connect_count_total[$__rate_interval])",
           "legendFormat": "Connections",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "rate(proxy_eviction_count[$__rate_interval])",
+          "expr": "rate(proxy_eviction_count_total[$__rate_interval])",
           "legendFormat": "Evictions",
           "refId": "B"
         },

@@ -54,7 +54,7 @@ import io.ktor.server.engine.embeddedServer
 import io.ktor.http.HttpStatusCode
 import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.string.shouldNotContain
-import io.prometheus.client.CollectorRegistry
+import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.common.agentOptions
 import io.prometheus.common.ConfigLoadException
 import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
@@ -200,7 +200,7 @@ class AgentTest : StringSpec() {
     // taken -- nothing released the gRPC channel and HTTP client cache the constructor built, or the metrics server
     // startUp() had already started, and stop() (what EmbeddedAgentInfo.shutdown() calls) threw on the FAILED service.
     "a failed startup should release what the agent holds and leave stop() safe to call" {
-      CollectorRegistry.defaultRegistry.clear()
+      PrometheusRegistry.defaultRegistry.clear()
       val metricsPort = ServerSocket(0).use { it.localPort }
       ServerSocket(0).use { takenAdminPort ->
         val agent =
@@ -238,7 +238,7 @@ class AgentTest : StringSpec() {
     // The embedded entry point returned its handle right after startAsync(), so a startup failure left the host
     // holding what looked like a live agent. It now waits for startup and throws the failure.
     "startAsyncAgent should throw when the agent fails to start" {
-      CollectorRegistry.defaultRegistry.clear()
+      PrometheusRegistry.defaultRegistry.clear()
       ServerSocket(0).use { takenAdminPort ->
         val config =
           createTempFile("failed-start", ".conf").toFile().apply {

@@ -6,6 +6,10 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- Move to common-utils 5.0.0 and the Prometheus Java client 1.9.0 (`io.prometheus:prometheus-metrics-*`), replacing `io.prometheus:simpleclient` 0.16.0, which gets no further releases. Every `proxy_*` and `agent_*` series keeps its name, label names and histogram buckets. Differences on `/metrics`: the counters' and histograms' `_created` series are gone (set `IO_PROMETHEUS_EXPORTER_INCLUDE_CREATED_TIMESTAMPS=true` to bring them back); with the JVM exports on, the memory metrics put the unit last (`jvm_memory_bytes_used` → `jvm_memory_used_bytes`, `jvm_memory_pool_bytes_used` → `jvm_memory_pool_used_bytes`, and the same for `committed`, `max` and `init`), `jvm_info` is `jvm_runtime_info`, and `memoryPoolsExportsEnabled` adds `jvm_memory_pool_allocated_bytes_total`. In the text itself, labels are listed in name order and a labelled family prints no `# HELP`/`# TYPE` lines until its first series exists. The endpoint can now also answer protobuf when a scraper asks for it; the proxy's and agent's histograms stay classic-only, so no native histograms appear. Embedders get `prometheus-metrics-core` 1.9.0 instead of `simpleclient`, and the embedded agent's metrics register in the 1.x `PrometheusRegistry.defaultRegistry`
+
 ### New Features
 
 - The proxy and the agent are available from Homebrew: `brew install pambrose/tap/prometheus-proxy` and `brew install pambrose/tap/prometheus-agent` install `prometheus-proxy` and `prometheus-agent` commands that run the release JARs on `openjdk@25`, the runtime the Docker images ship, and `brew services` definitions that run them with a starter config in `$(brew --prefix)/etc/`. The formulae's sources are in `etc/homebrew/`; `make homebrew-formulae` renders them for a published release into a clone of `pambrose/homebrew-tap` (step 9 of `docs/RELEASE.md`)
@@ -14,11 +18,13 @@ All notable changes to this project are documented in this file.
 
 - Fix the proxy and agent JARs printing about 30 lines of logback internal status (`|-INFO in ch.qos.logback...`) before their own output on every start, which landed in Docker and service logs. The bundled `logback.xml` set `scan="true"`, which logback can't honor for a config inside a JAR, so it recorded two WARNs, and a WARN makes logback print its whole status list. The bundled config no longer sets `scan`; it never reloaded anything. A config supplied with `-Dlogback.configurationFile` is a file on disk and can still set `scan="true"` to reload edits, as `logback/docker-logback.xml` does
 - Fix the proxy and agent JARs printing `kotlin-logging: initializing... active logger factory: Slf4jLoggerFactory` to stdout ahead of their own output. kotlin-logging prints it when the first logger is created, which for `Agent` and `Proxy` happens in their `GenericService` superclass's static initializer, before `main` can run. Each JAR's `Main-Class` is now a small launcher (`io.prometheus.agent.AgentLauncher`, `io.prometheus.proxy.ProxyLauncher`) that turns the line off and then calls `Agent.main` or `Proxy.main`. An explicit `-Dkotlin-logging.logStartupMessage` or `KOTLIN_LOGGING_STARTUP_MESSAGE` still decides. Launching `io.prometheus.Agent` or `io.prometheus.Proxy` directly, and the embedded agent, are unchanged
+- Fix the Grafana dashboards, the alert rules on the Grafana page, and the PromQL examples, which queried seven counters by their bare names (`proxy_connect_count`, `proxy_eviction_count`, `proxy_heartbeat_count`, `proxy_scrape_requests`, `agent_scrape_request_count`, `agent_scrape_result_count`, `agent_connect_count`). A counter is exposed only as `<name>_total`, so those panels and alerts showed no data. They now use the `_total` names, which the metrics tables and the counters' declarations in the source use too, and `DashboardMetricNamesTest` checks every query against the series the proxy and agent expose and that every counter is declared with its `_total` name
 
 ### Documentation
 
 - The website's Quick Start, the README, and `llms.txt` now show how to run the proxy and agent in the background for each way of running them: `nohup` with a log and a PID file for the JARs, `brew services` for Homebrew, and `docker run --detach --restart unless-stopped` for Docker. The Docker page gains a Running in the Background section, including how to manage and upgrade a detached container, and background commands for Docker Compose. The production page gains a Running as a service section: which supervisor to use for each way of running them, and a systemd unit for the JARs (with `SuccessExitStatus=143`, since the JVM exits with 143 on SIGTERM)
 - The Docker page's production proxy example combined `--rm` with `--restart unless-stopped`, which Docker rejects. It and the production agent example now run detached under a restart policy
+- The monitoring pages give the JVM metric names under the Prometheus Java client 1.x, and the embedded-agent page says which registry the embedded agent's metrics register in
 
 ### Build & Tooling
 
@@ -26,6 +32,10 @@ All notable changes to this project are documented in this file.
 - Add a `Lincheck` workflow (`.github/workflows/lincheck.yml`) that runs `make lincheck-tests` on demand. The specs take several minutes, so they stay out of the CI build
 - `make tla-checks` now checks the downloaded `tla2tools.jar` against a pinned SHA-256 (`TLA_SHA256` in the Makefile) and refuses a download that doesn't match, since CI now runs it
 - Fix a flaky `ProxyWebDashboardTest` spec, "an oversized message should close the session", which failed a CI run with `expected:<TOO_BIG> but was:<CLOSED_ABNORMALLY>`. Ktor rejects an oversized frame on reading its header and closes the socket with the rest of the frame unread, so the kernel resets the connection, and a reset that beats the TOO_BIG close frame to the client surfaces as an abnormal close. The spec now accepts either code and then checks that a fresh session still renders; with the frame cap removed it still fails
+
+### Dependencies
+
+- Update common-utils 4.1.0 → 5.0.0 and the Prometheus Java client `simpleclient` 0.16.0 → `prometheus-metrics-core` 1.9.0
 
 ## [4.1.0] - 2026-09-23
 

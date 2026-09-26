@@ -117,7 +117,7 @@ internal object ProxyUtils {
     proxy: Proxy,
     type: String,
   ) {
-    if (type.isNotEmpty()) proxy.metrics { scrapeRequestCount.labels(type).inc() }
+    if (type.isNotEmpty()) proxy.metrics { scrapeRequestCount.labelValues(type).inc() }
   }
 
   suspend fun ApplicationCall.respondWith(

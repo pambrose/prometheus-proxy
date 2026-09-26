@@ -34,7 +34,7 @@ import io.ktor.server.engine.embeddedServer
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
-import io.prometheus.client.CollectorRegistry
+import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.common.TestPorts
 import io.prometheus.common.startAndAwaitReady
@@ -51,7 +51,7 @@ import io.ktor.server.cio.CIO as ServerCIO
 class InProcessTransportFilterDisabledTest : StringSpec() {
   init {
     "with the transport filter disabled on both sides a scrape succeeds and a disconnect still cleans up" {
-      CollectorRegistry.defaultRegistry.clear()
+      PrometheusRegistry.defaultRegistry.clear()
 
       val serverName = "tf-disabled-${System.nanoTime()}"
 

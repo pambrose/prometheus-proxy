@@ -52,7 +52,7 @@ import io.mockk.mockk
 import io.mockk.spyk
 import io.prometheus.Agent
 import io.prometheus.agent.filter.MetricFilter
-import io.prometheus.client.CollectorRegistry
+import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.common.testConfigVals
 import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.grpc.registerPathResponse
@@ -176,7 +176,7 @@ class AgentHttpServiceTest : StringSpec() {
     val mockAgent = createMockAgentWithPaths(filterHocon = filterHocon)
     every { mockAgent.launchId } returns "test-launch-id"
 
-    CollectorRegistry.defaultRegistry.clear()
+    PrometheusRegistry.defaultRegistry.clear()
     val realMetrics = AgentMetrics(mockAgent)
     every { mockAgent.metrics(any<AgentMetrics.() -> Unit>()) } answers {
       firstArg<AgentMetrics.() -> Unit>().invoke(realMetrics)
@@ -2073,8 +2073,8 @@ class AgentHttpServiceTest : StringSpec() {
         results.srZipped.shouldBeFalse()
         results.srContentAsText shouldBe expectedFilteredContent
 
-        metrics.filterLinesDropped.labels("test-launch-id", "metrics").get() shouldBe expectedLinesDropped
-        metrics.filterBytesSaved.labels("test-launch-id", "metrics").get() shouldBe expectedBytesSaved
+        metrics.filterLinesDropped.labelValues("test-launch-id", "metrics").get() shouldBe expectedLinesDropped
+        metrics.filterBytesSaved.labelValues("test-launch-id", "metrics").get() shouldBe expectedBytesSaved
 
         service.close()
       } finally {
@@ -2191,8 +2191,8 @@ class AgentHttpServiceTest : StringSpec() {
         results.srStatusCode shouldBe 200
         // The filter never ran (strict decode failed first), so nothing should be recorded --
         // the label combination stays at its lazily-initialized zero rather than drifting.
-        metrics.filterLinesDropped.labels("test-launch-id", "metrics").get() shouldBe 0.0
-        metrics.filterBytesSaved.labels("test-launch-id", "metrics").get() shouldBe 0.0
+        metrics.filterLinesDropped.labelValues("test-launch-id", "metrics").get() shouldBe 0.0
+        metrics.filterBytesSaved.labelValues("test-launch-id", "metrics").get() shouldBe 0.0
 
         service.close()
       } finally {

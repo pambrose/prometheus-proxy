@@ -24,7 +24,7 @@ import io.kotest.matchers.booleans.shouldBeTrue
 import io.prometheus.Agent
 import io.prometheus.Proxy
 import io.prometheus.agent.AgentOptions
-import io.prometheus.client.CollectorRegistry
+import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.common.TestPorts
 import io.prometheus.harness.HarnessConstants.CONFIG_ARG
 import io.prometheus.harness.support.TestUtils.stopAll
@@ -39,7 +39,7 @@ import kotlin.time.Duration.Companion.seconds
 class AgentTokenAuthTest : StringSpec() {
   init {
     "agent presenting the matching token connects to a token-protected proxy" {
-      CollectorRegistry.defaultRegistry.clear()
+      PrometheusRegistry.defaultRegistry.clear()
 
       val proxy = startTokenProxy(HTTP_PORT_OK, AGENT_PORT_OK, token = TOKEN)
       val agent = startAgent(AGENT_PORT_OK, token = TOKEN)
@@ -53,7 +53,7 @@ class AgentTokenAuthTest : StringSpec() {
     }
 
     "agent presenting the wrong token is rejected by a token-protected proxy" {
-      CollectorRegistry.defaultRegistry.clear()
+      PrometheusRegistry.defaultRegistry.clear()
 
       val proxy = startTokenProxy(HTTP_PORT_BAD, AGENT_PORT_BAD, token = TOKEN)
       val agent = startAgent(AGENT_PORT_BAD, token = "wrong-token")

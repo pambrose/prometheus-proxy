@@ -36,7 +36,8 @@ import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
 import io.prometheus.Proxy
-import io.prometheus.client.Counter
+import io.prometheus.metrics.core.datapoints.CounterDataPoint
+import io.prometheus.metrics.core.metrics.Counter
 import io.prometheus.common.testConfigVals
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
 import io.prometheus.grpc.ChunkedScrapeResponse
@@ -65,15 +66,15 @@ class ProxyServiceImplTest : StringSpec() {
   // The chunk-failure counters, stubbed individually so a test can tell which counter and stage label moved.
   private class ChunkFailureCounters {
     val metrics = mockk<ProxyMetrics>(relaxed = true)
-    val chunkStage = mockk<Counter.Child>(relaxed = true)
-    val summaryStage = mockk<Counter.Child>(relaxed = true)
+    val chunkStage = mockk<CounterDataPoint>(relaxed = true)
+    val summaryStage = mockk<CounterDataPoint>(relaxed = true)
     val abandoned = mockk<Counter>(relaxed = true)
 
     init {
       val validationFailures = mockk<Counter>(relaxed = true)
       every { metrics.chunkValidationFailures } returns validationFailures
-      every { validationFailures.labels(ProxyMetrics.STAGE_CHUNK) } returns chunkStage
-      every { validationFailures.labels(ProxyMetrics.STAGE_SUMMARY) } returns summaryStage
+      every { validationFailures.labelValues(ProxyMetrics.STAGE_CHUNK) } returns chunkStage
+      every { validationFailures.labelValues(ProxyMetrics.STAGE_SUMMARY) } returns summaryStage
       every { metrics.chunkedTransfersAbandoned } returns abandoned
     }
   }

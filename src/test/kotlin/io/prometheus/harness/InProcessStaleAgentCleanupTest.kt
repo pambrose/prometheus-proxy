@@ -22,7 +22,7 @@ import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
-import io.prometheus.client.CollectorRegistry
+import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.common.TestPorts
 import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.proxy.AgentContext
@@ -39,7 +39,7 @@ class InProcessStaleAgentCleanupTest : StringSpec() {
     // elapsed. Asserting the other proxy still holds its context at that moment is stronger evidence than
     // any fixed sleep, and costs no wall clock: the two run concurrently rather than one after the other.
     "stale-agent cleanup should run only when enabled, or when the transport filter forces it on" {
-      CollectorRegistry.defaultRegistry.clear()
+      PrometheusRegistry.defaultRegistry.clear()
 
       // Short enough that a running eviction thread fires well inside a test's patience.
       val staleCheckArgs = [

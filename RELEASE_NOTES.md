@@ -20,6 +20,20 @@ Each formula installs a `prometheus-proxy` or `prometheus-agent` command that ru
 runs either one in the background with a starter config in `$(brew --prefix)/etc/`; an upgrade leaves a config
 you have edited alone.
 
+### Before you upgrade
+
+- **The Prometheus client underneath moved to 1.x.** The proxy and agent now use the Prometheus Java client
+  1.9.0 instead of the unmaintained 0.16.0. Every `proxy_*` and `agent_*` metric keeps its name, labels and
+  buckets. What changes on `/metrics`:
+  - The `_created` series of every counter and histogram are gone. Set
+    `IO_PROMETHEUS_EXPORTER_INCLUDE_CREATED_TIMESTAMPS=true` to bring them back.
+  - With the JVM exports on, the memory metrics put the unit last: `jvm_memory_bytes_used` is now
+    `jvm_memory_used_bytes`, `jvm_memory_pool_bytes_used` is `jvm_memory_pool_used_bytes`, and the same for
+    `committed`, `max` and `init`. `jvm_info` is `jvm_runtime_info`. Update dashboards and alerts that use them.
+- **Embedders:** the agent brings `io.prometheus:prometheus-metrics-core` 1.9.0 instead of
+  `io.prometheus:simpleclient`, and registers its metrics in the 1.x default registry. A host that serves the 0.x
+  registry no longer sees the agent's metrics.
+
 ### Bug Fixes
 
 - **The proxy and agent no longer print logback's internal status at startup.** Every start printed about
@@ -31,6 +45,9 @@ you have edited alone.
 - **The `kotlin-logging: initializing...` line is gone from startup too.** The JARs now start through a
   small launcher that turns it off before the first logger is created. Set
   `-Dkotlin-logging.logStartupMessage=true` or `KOTLIN_LOGGING_STARTUP_MESSAGE=true` to see it again.
+- **The bundled Grafana dashboards show connection, eviction, heartbeat and scrape counts again.** Their panels
+  (and the alert rules on the Grafana page) queried counters without the `_total` suffix they are exposed with,
+  so they showed no data. Re-import `grafana/prometheus-proxy.json` and `grafana/prometheus-agents.json`.
 
 ### Documentation
 

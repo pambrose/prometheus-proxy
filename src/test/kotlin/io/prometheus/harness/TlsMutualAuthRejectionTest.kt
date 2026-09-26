@@ -24,7 +24,7 @@ import io.kotest.matchers.booleans.shouldBeFalse
 import io.prometheus.Agent
 import io.prometheus.Proxy
 import io.prometheus.agent.AgentOptions
-import io.prometheus.client.CollectorRegistry
+import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.common.TestPorts
 import io.prometheus.harness.HarnessConstants.CONFIG_ARG
 import io.prometheus.harness.support.exceptionHandler
@@ -45,7 +45,7 @@ import kotlin.time.Duration.Companion.seconds
 class TlsMutualAuthRejectionTest : StringSpec() {
   init {
     "agent without a client certificate is rejected by a mutual-auth proxy" {
-      CollectorRegistry.defaultRegistry.clear()
+      PrometheusRegistry.defaultRegistry.clear()
 
       val proxyOptions =
         ProxyOptions(

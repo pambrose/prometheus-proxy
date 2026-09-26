@@ -151,7 +151,7 @@ class ContainersProxyHttpTest : StringSpec() {
       "proxy exposes its own Prometheus metrics" {
         eventually(20.seconds) {
           val body = httpClient.bodyOf(proxyMetrics("/metrics"))
-          body shouldContain "proxy_scrape_requests"
+          body shouldContain "proxy_scrape_requests_total{"
         }
       }
 
@@ -182,7 +182,7 @@ class ContainersProxyHttpTest : StringSpec() {
 
       "agent exposes its own Prometheus metrics" {
         eventually(20.seconds) {
-          httpClient.bodyOf(agentMetrics("/metrics")) shouldContain "agent_scrape_request_count"
+          httpClient.bodyOf(agentMetrics("/metrics")) shouldContain "agent_scrape_request_count_total{"
         }
       }
 

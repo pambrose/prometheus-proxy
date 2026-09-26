@@ -35,7 +35,7 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.prometheus.Agent
 import io.prometheus.Proxy
-import io.prometheus.client.CollectorRegistry
+import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.common.TestPorts
 import io.prometheus.harness.support.TestUtils.startAgent
@@ -60,7 +60,7 @@ import io.ktor.server.cio.CIO as ServerCIO
 class AgentProxyFailoverTest : StringSpec() {
   init {
     "an agent fails over to the second proxy endpoint when the first stops" {
-      CollectorRegistry.defaultRegistry.clear()
+      PrometheusRegistry.defaultRegistry.clear()
 
       val stub =
         embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = STUB_PORT) {

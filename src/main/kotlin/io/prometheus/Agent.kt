@@ -47,7 +47,7 @@ import io.prometheus.agent.HeartBeatResult
 import io.prometheus.agent.RequestFailureException
 import io.prometheus.agent.discovery.FileDiscoverySource
 import io.prometheus.agent.discovery.PathDiscoveryService
-import io.prometheus.client.Histogram
+import io.prometheus.metrics.core.datapoints.Timer
 import io.prometheus.common.BaseOptions.Companion.DEBUG
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.ConfigWrappers.newAdminConfig
@@ -365,7 +365,7 @@ class Agent(
                   // A false return means the result was dropped because the connection closed
                   // mid-scrape; surface it as a metric so the loss is observable, not silent.
                   if (!connectionContext.sendScrapeResults(scrapeResponse))
-                    metrics { scrapeResultCount.labels(launchId, "dropped").inc() }
+                    metrics { scrapeResultCount.labelValues(launchId, "dropped").inc() }
                 } finally {
                   semaphore.release()
                   decrementBacklog(1)
@@ -470,7 +470,7 @@ class Agent(
 
   internal val proxyHost get() = grpcService.currentEndpoint.spec
 
-  internal fun startTimer(): Histogram.Timer? = metrics.scrapeRequestLatency.labels(launchId, agentName).startTimer()
+  internal fun startTimer(): Timer? = metrics.scrapeRequestLatency.labelValues(launchId, agentName).startTimer()
 
   override fun serviceName() = "$simpleClassName $agentName"
 
@@ -579,7 +579,7 @@ class Agent(
    */
   internal fun updateScrapeCounter(type: String) {
     if (type.isNotEmpty())
-      metrics { scrapeRequestCount.labels(launchId, type).inc() }
+      metrics { scrapeRequestCount.labelValues(launchId, type).inc() }
   }
 
   /**

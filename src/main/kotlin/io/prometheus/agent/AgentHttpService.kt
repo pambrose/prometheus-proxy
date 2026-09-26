@@ -261,8 +261,8 @@ internal class AgentHttpService(
         // Only paths whose filter actually ran ever create series here, so cardinality stays bounded.
         agent.metrics {
           val path = scrapeRequest.path
-          filterLinesDropped.labels(agent.launchId, path).inc(it.linesDropped.toDouble())
-          filterBytesSaved.labels(agent.launchId, path).inc(it.bytesSaved.toDouble())
+          filterLinesDropped.labelValues(agent.launchId, path).inc(it.linesDropped.toDouble())
+          filterBytesSaved.labelValues(agent.launchId, path).inc(it.bytesSaved.toDouble())
         }
       }
       val filteredBytes = outcome?.bytes ?: contentBytes

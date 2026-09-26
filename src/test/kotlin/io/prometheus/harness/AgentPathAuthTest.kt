@@ -25,7 +25,7 @@ import io.prometheus.Agent
 import io.prometheus.Proxy
 import io.prometheus.agent.AgentOptions
 import io.prometheus.agent.RequestFailureException
-import io.prometheus.client.CollectorRegistry
+import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.common.TestPorts
 import io.prometheus.harness.support.TestUtils.stopAll
 import io.prometheus.proxy.ProxyOptions
@@ -40,7 +40,7 @@ import kotlin.time.Duration.Companion.seconds
 class AgentPathAuthTest : StringSpec() {
   init {
     "an agent may register a path its identity is authorized for and is denied others" {
-      CollectorRegistry.defaultRegistry.clear()
+      PrometheusRegistry.defaultRegistry.clear()
 
       val proxy = startAuthProxy(HTTP_PORT, AGENT_PORT)
       // The agent presents team_a's token; auto-registration is suppressed so paths are driven below.
