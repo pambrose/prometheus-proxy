@@ -499,5 +499,38 @@ class ProxyTest : StringSpec() {
       error shouldContain "was invalidated during registration"
       proxy.pathManager.pathMapSize shouldBe 0
     }
+
+    // ==================== Service Registration ====================
+
+    // The ServiceManager, its failure listener and the all_services_healthy check see only the services registered
+    // before the constructor's initServletService() builds it. The cleanup service used to register when startUp()
+    // first touched it, too late, so common-utils logged that it "was added after Proxy was initialized".
+    "the stale-agent cleanup service should be registered while the proxy is built" {
+      cleanupServiceRegistrations { createTestProxy() } shouldBe 1
+    }
+
+    // Registered but never started, it would hold the all_services_healthy check unhealthy.
+    "the stale-agent cleanup service should not be registered when stale-agent checks are off" {
+      cleanupServiceRegistrations {
+        createTestProxy("-Dproxy.internal.staleAgentCheckEnabled=false")
+      } shouldBe 0
+    }
+
+    "the stale-agent cleanup service should be registered when a disabled transport filter forces it on" {
+      cleanupServiceRegistrations {
+        createTestProxy("-Dproxy.internal.staleAgentCheckEnabled=false", "--tf_disabled")
+      } shouldBe 1
+    }
+  }
+
+  // How many times common-utils logged registering the cleanup service with the proxy while [block] ran.
+  private fun cleanupServiceRegistrations(block: () -> Unit): Int =
+    captureLogs(SERVICE_LOGGER) { block() }
+      .map { it.formattedMessage }
+      .count { it.startsWith("Adding service") && "AgentContextCleanupService" in it }
+
+  companion object {
+    // The logger common-utils' GenericService logs service registrations with.
+    private const val SERVICE_LOGGER = "com.pambrose.common.service"
   }
 }

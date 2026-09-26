@@ -1,0 +1,22 @@
+{{- if .Values.serviceMonitor.enabled }}
+{{- if not (and .Values.service.enabled .Values.metrics.enabled) }}
+{{- fail "serviceMonitor.enabled needs service.enabled and metrics.enabled" }}
+{{- end }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "prometheus-agent.fullname" . }}
+  labels:
+    {{- include "prometheus-agent.labels" . | nindent 4 }}
+    {{- with .Values.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "prometheus-agent.selectorLabels" . | nindent 6 }}
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: {{ .Values.serviceMonitor.interval }}
+{{- end }}

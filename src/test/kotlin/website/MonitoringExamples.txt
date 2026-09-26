@@ -39,12 +39,6 @@ proxy.metrics {
   threadExportsEnabled = true
   classLoadingExportsEnabled = false
   versionInfoExportsEnabled = false
-
-  // Optional gRPC metrics
-  grpc {
-    metricsEnabled = true
-    allMetricsReported = false    // true = include expensive metrics
-  }
 }
 ; --8<-- [end:jvm-metrics-config]
 
@@ -85,7 +79,7 @@ Importing Grafana dashboards:
 
 1. In Grafana, go to Dashboards > Import
 2. Upload the JSON file or paste its contents
-3. Select your Prometheus datasource when prompted
+3. Open the dashboard and pick your Prometheus datasource in its Datasource drop-down
 
 Dashboard files in the repository:
   grafana/prometheus-proxy.json   - Proxy health, throughput, latency, errors
@@ -93,7 +87,8 @@ Dashboard files in the repository:
 
 Requirements:
   - Grafana 10.0 or later
-  - A Prometheus datasource scraping both proxy and agent metrics endpoints
+  - A Prometheus datasource scraping the proxy's and the agents' metrics endpoints,
+    with each agent in its own job
 ; --8<-- [end:grafana-import]
 
 ; --8<-- [start:admin-endpoints]

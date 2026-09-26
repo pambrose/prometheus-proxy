@@ -37,6 +37,15 @@ behind a firewall and preserves the native pull-based model architecture.
 
 ## ✨ New Features
 
+Version 4.2.0 (released 2026-09-26) moves the proxy and agent to the Prometheus Java client 1.x, replacing the
+unmaintained 0.x client. Every `proxy_*` and `agent_*` metric keeps its name, labels, and buckets, but the
+`_created` series are gone and, with the JVM exports on, the JVM memory metrics are renamed, so read
+**Before you upgrade** in the [release notes](RELEASE_NOTES.md) first. The proxy and agent can now be installed
+with Homebrew, the bundled Grafana dashboards' connection, eviction, heartbeat, and scrape-count panels show data
+again, and the JARs no longer print logback and kotlin-logging lines at startup. It also adds Helm charts for the
+proxy and the agent, and ships the alerting rules as `grafana/alerts.yml`; the [changelog](CHANGELOG.md) has the
+full list.
+
 Version 4.1.0 (released 2026-09-23) is a security and reliability release: agents can no longer answer,
 read, or take over each other's scrapes and paths, a rejected path no longer takes an agent offline and a
 rejecting proxy is now failed over, and the proxy bounds what clients and agents can ask of it (scrape backlogs,
@@ -229,12 +238,12 @@ If you prefer to build the project from source:
 
 ```bash
 # Start proxy
-docker run --rm -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.1.0
+docker run --rm -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.2.0
 
 # Start agent
 docker run --rm \
   --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-  pambrose/prometheus-agent:4.1.0
+  pambrose/prometheus-agent:4.2.0
 ```
 
 These run in the foreground until Ctrl+C. To run a container in the background instead, and have it start again
@@ -243,7 +252,7 @@ doesn't allow `--rm` with `--restart`):
 
 ```bash
 docker run --detach --name prometheus-proxy --restart unless-stopped \
-  -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.1.0
+  -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.2.0
 
 docker logs --follow prometheus-proxy   # follow its log
 docker stop prometheus-proxy            # stop it, and no longer restart it
@@ -329,8 +338,8 @@ scrape_configs:
 The docker images support multiple architectures (amd64, arm64, s390x, ppc64le):
 
 ```bash
-docker pull pambrose/prometheus-proxy:4.1.0
-docker pull pambrose/prometheus-agent:4.1.0
+docker pull pambrose/prometheus-proxy:4.2.0
+docker pull pambrose/prometheus-agent:4.2.0
 ```
 
 ### Production Docker Setup
@@ -343,7 +352,7 @@ docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
         --env ADMIN_ENABLED=true \
         --env METRICS_ENABLED=true \
         --restart unless-stopped \
-        pambrose/prometheus-proxy:4.1.0
+        pambrose/prometheus-proxy:4.2.0
 ```
 
 Start an agent container with:
@@ -353,7 +362,7 @@ Start an agent container with:
 docker run --rm -p 8083:8083 -p 8093:8093 \
         --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
         --restart unless-stopped \
-        pambrose/prometheus-agent:4.1.0
+        pambrose/prometheus-agent:4.2.0
 ```
 
 Or use Docker Compose: [`etc/compose/proxy.yml`](etc/compose/proxy.yml) runs a proxy, an agent, and a Prometheus server
@@ -375,7 +384,7 @@ is in your current directory, run an agent container with:
 docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/prom-agent.conf,target=/app/prom-agent.conf \
     --env AGENT_CONFIG=prom-agent.conf \
-    pambrose/prometheus-agent:4.1.0
+    pambrose/prometheus-agent:4.2.0
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
@@ -609,8 +618,9 @@ announced to screen readers rather than signalled by colour alone.
 
 Both proxy and agent expose their own metrics:
 
-- **Proxy metrics:** `http://proxy-host:8082/proxy_metrics`
-- **Agent metrics:** `http://agent-host:8083/agent_metrics`
+- **Proxy metrics:** `http://proxy-host:8082/metrics`
+- **Agent metrics:** `http://agent-host:8083/metrics`. The agent sits behind the firewall, so give it a path for its own
+  metrics and let Prometheus scrape them through the proxy, like any other target
 - **Admin endpoints:** `http://host:admin-port/ping`, `/healthcheck`, `/version`
 
 ## 🔧 Configuration Options
@@ -806,7 +816,7 @@ docker run --rm -p 8082:8082 -p 8092:8092 -p 50440:50440 -p 8080:8080 \
     --env PROXY_CONFIG=tls-no-mutual-auth.conf \
     --env ADMIN_ENABLED=true \
     --env METRICS_ENABLED=true \
-    pambrose/prometheus-proxy:4.1.0
+    pambrose/prometheus-proxy:4.2.0
 
 docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
@@ -814,7 +824,7 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
     --env AGENT_CONFIG=tls-no-mutual-auth.conf \
     --env PROXY_HOSTNAME=mymachine.lan:50440 \
     --name docker-agent \
-    pambrose/prometheus-agent:4.1.0
+    pambrose/prometheus-agent:4.2.0
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
@@ -971,8 +981,8 @@ Full documentation is available at the [Prometheus Proxy Documentation](https://
 KDoc API documentation is published
 at [pambrose.github.io/prometheus-proxy/kdocs](https://pambrose.github.io/prometheus-proxy/kdocs/).
 
-**Note:** Running on Kubernetes? See the
-[Kubernetes deployment guide](https://pambrose.github.io/prometheus-proxy/kubernetes/) for ready-to-use proxy and
+**Note:** Running on Kubernetes? Helm charts for the proxy and the agent are in [`charts/`](charts/), and the
+[Kubernetes deployment guide](https://pambrose.github.io/prometheus-proxy/kubernetes/) covers them along with ready-to-use proxy and
 agent manifests, standalone and sidecar agent patterns, gRPC exposure for remote agents, and Prometheus Operator
 (`ServiceMonitor`) integration.
 
@@ -991,7 +1001,7 @@ repositories {
 }
 
 dependencies {
-  implementation("com.pambrose:prometheus-proxy:4.1.0")
+  implementation("com.pambrose:prometheus-proxy:4.2.0")
 }
 ```
 

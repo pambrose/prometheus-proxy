@@ -4,27 +4,41 @@ All notable changes to this project are documented in this file.
 
 ---
 
-## [Unreleased]
+## [4.2.0] - 2026-09-26
 
 ### Breaking Changes
 
 - Move to common-utils 5.0.0 and the Prometheus Java client 1.9.0 (`io.prometheus:prometheus-metrics-*`), replacing `io.prometheus:simpleclient` 0.16.0, which gets no further releases. Every `proxy_*` and `agent_*` series keeps its name, label names and histogram buckets. Differences on `/metrics`: the counters' and histograms' `_created` series are gone (set `IO_PROMETHEUS_EXPORTER_INCLUDE_CREATED_TIMESTAMPS=true` to bring them back); with the JVM exports on, the memory metrics put the unit last (`jvm_memory_bytes_used` → `jvm_memory_used_bytes`, `jvm_memory_pool_bytes_used` → `jvm_memory_pool_used_bytes`, and the same for `committed`, `max` and `init`), `jvm_info` is `jvm_runtime_info`, and `memoryPoolsExportsEnabled` adds `jvm_memory_pool_allocated_bytes_total`. In the text itself, labels are listed in name order and a labelled family prints no `# HELP`/`# TYPE` lines until its first series exists. The endpoint can now also answer protobuf when a scraper asks for it; the proxy's and agent's histograms stay classic-only, so no native histograms appear. Embedders get `prometheus-metrics-core` 1.9.0 instead of `simpleclient`, and the embedded agent's metrics register in the 1.x `PrometheusRegistry.defaultRegistry`
 
+### Security
+
+- Raise the Netty that grpc-netty 1.84.0 brings, 4.2.16.Final (CVE-2026-75595, critical), to 4.2.18.Final, and the Jackson that Dropwizard's `metrics-json` brings, 2.12.7 (CVE-2025-52999 and CVE-2026-54512/54513, high), to 2.22.3. Both were in the proxy and agent fat JARs and Docker images. `netty-tcnative` stays at the version grpc is tested with, since its classes must match its natives
+- Add `SECURITY.md`: report vulnerabilities privately through GitHub's private vulnerability reporting, and check the documented defaults (the open agent port without a token or mutual TLS, the unauthenticated admin, metrics, and dashboard ports) first
+
 ### New Features
 
 - The proxy and the agent are available from Homebrew: `brew install pambrose/tap/prometheus-proxy` and `brew install pambrose/tap/prometheus-agent` install `prometheus-proxy` and `prometheus-agent` commands that run the release JARs on `openjdk@25`, the runtime the Docker images ship, and `brew services` definitions that run them with a starter config in `$(brew --prefix)/etc/`. The formulae's sources are in `etc/homebrew/`; `make homebrew-formulae` renders them for a published release into a clone of `pambrose/homebrew-tap` (step 9 of `docs/RELEASE.md`)
+- Helm charts for the proxy and the agent, in `charts/prometheus-proxy` and `charts/prometheus-agent`. They wire the admin-endpoint probes, run as a non-root user with a read-only root filesystem, and optionally add a gRPC LoadBalancer Service for agents in other clusters, a Prometheus Operator ServiceMonitor, an agent token from a Secret, TLS from a Secret, and, for the agent, a discovery ConfigMap it re-reads without restarting. The website's Kubernetes page has a Helm section
+- The Prometheus alerting rules from the Grafana page ship as `grafana/alerts.yml`, for Prometheus' `rule_files`; the page includes the file, so the two can't drift
+- The Grafana dashboards: the proxy dashboard has Job and Instance pickers, so two proxies (a high-availability pair, or two environments) no longer add up in every panel; the agents dashboard has an Unsuccessful Scrapes by Agent panel and units on its rate panels; both refresh every 30s instead of 5s. `grafana/alerts.yml` adds `ProxyDown` (`up{job="prometheus-proxy"} == 0`), since every other rule needs the proxy's metrics to fire, and its agent rules name the agent by `job` rather than `launch_id`. `DashboardMetricNamesTest` checks that every dashboard query uses its pickers
 
 ### Bug Fixes
 
 - Fix the proxy and agent JARs printing about 30 lines of logback internal status (`|-INFO in ch.qos.logback...`) before their own output on every start, which landed in Docker and service logs. The bundled `logback.xml` set `scan="true"`, which logback can't honor for a config inside a JAR, so it recorded two WARNs, and a WARN makes logback print its whole status list. The bundled config no longer sets `scan`; it never reloaded anything. A config supplied with `-Dlogback.configurationFile` is a file on disk and can still set `scan="true"` to reload edits, as `logback/docker-logback.xml` does
 - Fix the proxy and agent JARs printing `kotlin-logging: initializing... active logger factory: Slf4jLoggerFactory` to stdout ahead of their own output. kotlin-logging prints it when the first logger is created, which for `Agent` and `Proxy` happens in their `GenericService` superclass's static initializer, before `main` can run. Each JAR's `Main-Class` is now a small launcher (`io.prometheus.agent.AgentLauncher`, `io.prometheus.proxy.ProxyLauncher`) that turns the line off and then calls `Agent.main` or `Proxy.main`. An explicit `-Dkotlin-logging.logStartupMessage` or `KOTLIN_LOGGING_STARTUP_MESSAGE` still decides. Launching `io.prometheus.Agent` or `io.prometheus.Proxy` directly, and the embedded agent, are unchanged
 - Fix the Grafana dashboards, the alert rules on the Grafana page, and the PromQL examples, which queried seven counters by their bare names (`proxy_connect_count`, `proxy_eviction_count`, `proxy_heartbeat_count`, `proxy_scrape_requests`, `agent_scrape_request_count`, `agent_scrape_result_count`, `agent_connect_count`). A counter is exposed only as `<name>_total`, so those panels and alerts showed no data. They now use the `_total` names, which the metrics tables and the counters' declarations in the source use too, and `DashboardMetricNamesTest` checks every query against the series the proxy and agent expose and that every counter is declared with its `_total` name
+- Remove the `proxy.metrics.grpc` and `agent.metrics.grpc` settings (`metricsEnabled` and `allMetricsReported`). The config reference and the monitoring docs listed them as optional gRPC metrics, but nothing ever read them. A config that still sets them loads as before, and the keys stay ignored
+- Fix the agents dashboard's Agent Count, which its thresholds colored red for every count, and which showed no data rather than 0 when no agent reported
+- Fix `-u`/`--usage` printing nothing when the proxy or agent JAR ran in a terminal on Java 17. JCommander wrote the usage with `print`, which the console's writer doesn't flush, so the process exited before the text appeared; it is now written with `println`. `-u` and `-v` also print only the usage or the version now: `Proxy.main` and `Agent.startSyncAgent` handle both flags before the startup banner, so neither flag logs the banner or anything else first, and an invalid option is reported before the banner too
+- Fix the proxy logging at every start that `AgentContextCleanupService` "was added after Proxy was initialized". The stale-agent cleanup service registered itself only when the proxy started, after the proxy's service manager had been built, so the manager's failure logging and the admin `all_services_healthy` health check left it out. It is now registered while the proxy is built, and only when it will run: a registered cleanup service that never started would hold `all_services_healthy` unhealthy
 
 ### Documentation
 
 - The website's Quick Start, the README, and `llms.txt` now show how to run the proxy and agent in the background for each way of running them: `nohup` with a log and a PID file for the JARs, `brew services` for Homebrew, and `docker run --detach --restart unless-stopped` for Docker. The Docker page gains a Running in the Background section, including how to manage and upgrade a detached container, and background commands for Docker Compose. The production page gains a Running as a service section: which supervisor to use for each way of running them, and a systemd unit for the JARs (with `SuccessExitStatus=143`, since the JVM exits with 143 on SIGTERM)
 - The Docker page's production proxy example combined `--rm` with `--restart unless-stopped`, which Docker rejects. It and the production agent example now run detached under a restart policy
 - The monitoring pages give the JVM metric names under the Prometheus Java client 1.x, and the embedded-agent page says which registry the embedded agent's metrics register in
+- The embedded-agent page has an Upgrading from 4.1.x section: the move to the Prometheus Java client 1.x, bridging a host's 0.x metrics into the 1.x registry with `prometheus-metrics-simpleclient-bridge`, `simpleclient` no longer arriving through the agent, and the `/metrics` changes
+- The monitoring docs scrape each agent's own metrics through the proxy, one job per agent, instead of directly at `agent-host:8083`, which the firewall between them blocks; the agents dashboard tells agents apart by `job`. They also correct the Grafana import steps (the dashboards have no datasource prompt; pick it in the dashboard), the claim that zero heartbeats means agents are disconnected (agents heartbeat only when idle), the `path` variable's reach, the agent counters' `type` values (adding `unsuccessful`, `invalid_path`, and `dropped`), and the metric-flow diagram. The README lists the metrics endpoints at `/metrics`, not `/proxy_metrics` and `/agent_metrics`
 
 ### Build & Tooling
 
@@ -32,10 +46,19 @@ All notable changes to this project are documented in this file.
 - Add a `Lincheck` workflow (`.github/workflows/lincheck.yml`) that runs `make lincheck-tests` on demand. The specs take several minutes, so they stay out of the CI build
 - `make tla-checks` now checks the downloaded `tla2tools.jar` against a pinned SHA-256 (`TLA_SHA256` in the Makefile) and refuses a download that doesn't match, since CI now runs it
 - Fix a flaky `ProxyWebDashboardTest` spec, "an oversized message should close the session", which failed a CI run with `expected:<TOO_BIG> but was:<CLOSED_ABNORMALLY>`. Ktor rejects an oversized frame on reading its header and closes the socket with the rest of the frame unread, so the kernel resets the connection, and a reset that beats the TOO_BIG close frame to the client surfaces as an abnormal close. The spec now accepts either code and then checks that a fresh session still renders; with the frame cap removed it still fails
+- Add a `Security` workflow (`.github/workflows/security.yml`). Trivy scans the proxy and agent images on every pull request, on pushes to `master`, and weekly, and fails on a HIGH or CRITICAL vulnerability that has a fix; CodeQL analyzes the Kotlin code. Findings from `master` and the weekly run go to code scanning
+- The container tests run on pull requests too, not only after a merge, so a change that breaks the fat JARs, the images, or the scrape path shows up before it merges
+- CI checks `grafana/alerts.yml` with `promtool` (`make check-rules`), and `DashboardMetricNamesTest` reads the alerting rules from that file instead of extracting them from the Grafana page
+- CI lints the Helm charts and validates their rendered manifests (`make helm-lint`), and installs both charts into a kind cluster with the commit's images and scrapes through them (`scripts/helm-smoke-test.sh`, in the container-tests workflow)
 
 ### Dependencies
 
 - Update common-utils 4.1.0 → 5.0.0 and the Prometheus Java client `simpleclient` 0.16.0 → `prometheus-metrics-core` 1.9.0
+- Netty 4.2.16.Final → 4.2.18.Final and Jackson 2.12.7 → 2.22.3, overriding what grpc-netty and Dropwizard `metrics-json` bring (see Security)
+- Update Logback 1.6.3 → 1.6.4 and the dashboard's htmx 2.0.10 → 2.0.11
+- Update build tooling: Gradle wrapper 9.7.1 → 9.8.0 and the `pambrose-gradle-plugins` convention plugins 1.1.5 → 1.1.6
+- Add `kaml` 0.104.0 as a test dependency, to read `grafana/alerts.yml`; the fat JARs keep the 0.79.0 that Ktor's OpenAPI module brings
+- Update the documentation site's Python dependency lock (`website/uv.lock`): Zensical 0.0.63 → 0.0.65, which adds the `pathspec` transitive dependency, plus Markdown 3.10.3 → 3.11, pymdown-extensions 12.0.1 → 12.1, and platformdirs 4.11.12 → 4.12.0
 
 ## [4.1.0] - 2026-09-23
 

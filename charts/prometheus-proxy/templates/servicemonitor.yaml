@@ -1,0 +1,30 @@
+{{- if .Values.serviceMonitor.enabled }}
+{{- $selfMetrics := and .Values.serviceMonitor.selfMetrics .Values.metrics.enabled }}
+{{- if not (or $selfMetrics .Values.serviceMonitor.paths) }}
+{{- fail "serviceMonitor.enabled needs selfMetrics (with metrics.enabled) or at least one entry in serviceMonitor.paths" }}
+{{- end }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "prometheus-proxy.fullname" . }}
+  labels:
+    {{- include "prometheus-proxy.labels" . | nindent 4 }}
+    {{- with .Values.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "prometheus-proxy.selectorLabels" . | nindent 6 }}
+  endpoints:
+    {{- if $selfMetrics }}
+    - port: metrics
+      path: /metrics
+      interval: {{ .Values.serviceMonitor.interval }}
+    {{- end }}
+    {{- range .Values.serviceMonitor.paths }}
+    - port: http
+      path: /{{ trimPrefix "/" . }}
+      interval: {{ $.Values.serviceMonitor.interval }}
+    {{- end }}
+{{- end }}

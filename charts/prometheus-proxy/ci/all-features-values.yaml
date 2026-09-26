@@ -1,0 +1,24 @@
+# Every optional feature on, so CI renders and validates each template path.
+config: |
+  proxy {
+    internal.scrapeRequestTimeoutSecs = 60
+  }
+agentToken:
+  existingSecret: prometheus-proxy-token
+tls:
+  secretName: prometheus-proxy-tls
+  caFile: ca.pem
+dashboard:
+  enabled: true
+agentService:
+  enabled: true
+  loadBalancerSourceRanges: [ 10.0.0.0/8 ]
+serviceMonitor:
+  enabled: true
+  labels:
+    release: kube-prometheus-stack
+  paths: [ my_app_metrics ]
+extraArgs: [ -Dproxy.internal.maxAgentInactivitySecs=90 ]
+env:
+  - name: SD_ENABLED
+    value: "true"

@@ -740,6 +740,8 @@ class Agent(
       args: Array<String>,
       exitOnMissingConfig: Boolean,
     ) {
+      // Check for version and usage flags and exit before the banner is logged
+      AgentOptions(args, exitOnMissingConfig, parseOnly = true)
       logger.apply {
         info { getBanner("banners/agent.txt", this) }
         info { getVersionDesc() }

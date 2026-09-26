@@ -1,0 +1,128 @@
+# Default values for the prometheus-proxy chart.
+
+image:
+  repository: pambrose/prometheus-proxy
+  # Defaults to the chart's appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# The port Prometheus scrapes (PROXY_PORT), and the gRPC port agents connect to (AGENT_PORT).
+httpPort: 8080
+agentPort: 50051
+
+# Proxy configuration in HOCON, mounted as the proxy's config file (PROXY_CONFIG). Settings not given here, in env, or
+# in extraArgs take their defaults. See https://pambrose.github.io/prometheus-proxy/configuration/proxy/
+config: ""
+#  proxy {
+#    auth {
+#      identities: [ ... ]
+#    }
+#  }
+
+# The name of an existing ConfigMap with a proxy.conf key, used instead of config.
+existingConfigMap: ""
+
+# The shared agent token (AGENT_TOKEN), read from an existing Secret. Agents must present the same token. For
+# per-agent identities, configure proxy.auth in config instead.
+agentToken:
+  existingSecret: ""
+  key: token
+
+# TLS for the gRPC port agents connect to, from an existing Secret mounted at /app/certs. With caFile set, the proxy
+# also requires a client certificate signed by that CA (mutual TLS).
+tls:
+  secretName: ""
+  certFile: cert.pem
+  keyFile: key.pem
+  caFile: ""
+
+# The admin endpoints (/ping, /healthcheck, /version, /threaddump). The probes use them, so leave them on unless you
+# replace the probes. Unauthenticated: the port is not added to the Service.
+admin:
+  enabled: true
+  port: 8092
+
+# The proxy's own metrics, on the Service's metrics port.
+metrics:
+  enabled: true
+  port: 8082
+
+# The read-only operational dashboard. Unauthenticated: the port is not added to the Service; reach it with
+# kubectl port-forward.
+dashboard:
+  enabled: false
+  port: 8094
+
+service:
+  type: ClusterIP
+  annotations: {}
+
+# A second Service for agents outside the cluster, exposing only the gRPC port (a LoadBalancer by default). gRPC needs
+# HTTP/2 end to end, so use a layer-4 load balancer or an ingress that proxies gRPC.
+agentService:
+  enabled: false
+  type: LoadBalancer
+  annotations: {}
+  loadBalancerSourceRanges: []
+
+# A Prometheus Operator ServiceMonitor that scrapes the proxy.
+serviceMonitor:
+  enabled: false
+  labels: {}
+  interval: 30s
+  # Scrape the proxy's own metrics.
+  selfMetrics: true
+  # The paths agents register, each scraped through the proxy's HTTP port.
+  paths: []
+  #  - my_app_metrics
+
+# Added to the JVM's options. The default sizes the heap from the container's memory limit.
+javaToolOptions: "-XX:MaxRAMPercentage=75.0"
+
+# Extra command-line arguments, for example -Dproxy.internal.scrapeRequestTimeoutSecs=60.
+extraArgs: []
+
+# Extra environment variables, for example SD_ENABLED=true for Prometheus HTTP service discovery.
+env: []
+envFrom: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 512Mi
+
+livenessProbe:
+  initialDelaySeconds: 10
+  periodSeconds: 15
+readinessProbe:
+  initialDelaySeconds: 10
+  periodSeconds: 15
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1001
+  runAsGroup: 1001
+  fsGroup: 1001
+  seccompProfile:
+    type: RuntimeDefault
+
+# The root filesystem is read-only; /tmp is an emptyDir, where the JVM and Netty write their temporary files.
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ ALL ]
+
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+extraVolumes: []
+extraVolumeMounts: []

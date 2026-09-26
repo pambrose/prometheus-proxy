@@ -41,12 +41,12 @@ import io.prometheus.proxy.AgentAuthManager
 import io.prometheus.proxy.AgentContext
 import io.prometheus.proxy.AgentContextCleanupService
 import io.prometheus.proxy.AgentContextManager
-import io.prometheus.proxy.ProxyGrpcService
-import io.prometheus.proxy.ProxyHttpService
-import io.prometheus.proxy.ProxyMetrics
 import io.prometheus.proxy.ProxyEvent
 import io.prometheus.proxy.ProxyEventBus
 import io.prometheus.proxy.ProxyFailure
+import io.prometheus.proxy.ProxyGrpcService
+import io.prometheus.proxy.ProxyHttpService
+import io.prometheus.proxy.ProxyMetrics
 import io.prometheus.proxy.ProxyOptions
 import io.prometheus.proxy.ProxyPathManager
 import io.prometheus.proxy.ScrapeRecord
@@ -205,9 +205,14 @@ class Proxy(
     else
       ProxyGrpcService(proxy = this, inProcessName = inProcessServerName)
 
-  private val agentCleanupService by lazy {
-    AgentContextCleanupService(this, proxyConfigVals.internal) { addServices(this) }
-  }
+  // Null unless the stale-agent cleanup runs: when explicitly enabled, or forced on when the transport filter is
+  // disabled (there's then no per-connection disconnect detection, so it's the only cleanup mechanism). Built here,
+  // not on first use in startUp(), so init can register it before initServletService builds the ServiceManager.
+  private val agentCleanupService =
+    if (proxyConfigVals.internal.staleAgentCheckEnabled || options.transportFilterDisabled)
+      AgentContextCleanupService(this, proxyConfigVals.internal)
+    else
+      null
 
   internal val metrics by lazy { ProxyMetrics(this) }
 
@@ -238,12 +243,6 @@ class Proxy(
   internal val reserveJobAndInstanceLabels: Boolean
     get() = proxyConfigVals.service.discovery.reserveJobAndInstanceLabels
 
-  // The stale-agent cleanup service runs when explicitly enabled, or is forced on when the transport
-  // filter is disabled (there's then no per-connection disconnect detection, so it's the only cleanup
-  // mechanism). Computed once so startUp() and shutDown() can't drift (finding 32).
-  private val agentCleanupServiceEnabled: Boolean
-    get() = proxyConfigVals.internal.staleAgentCheckEnabled || options.transportFilterDisabled
-
   init {
     fun toPlainText() =
       """
@@ -264,6 +263,7 @@ class Proxy(
     // registered afterwards is invisible to it and to the all_services_healthy check.
     addServices(grpcService, httpService)
     dashboardService?.also { addServices(it) }
+    agentCleanupService?.also { addServices(it) }
 
     initServletService {
       if (options.debugEnabled) {
@@ -304,7 +304,7 @@ class Proxy(
     // agent disconnects. The stale agent cleanup service is the only mechanism to clean up
     // leaked AgentContexts (e.g., agents that called connectAgentWithTransportFilterDisabled
     // but crashed before opening a readRequestsFromProxy stream). Force-enable it.
-    if (agentCleanupServiceEnabled) {
+    if (agentCleanupService != null) {
       if (!proxyConfigVals.internal.staleAgentCheckEnabled)
         logger.warn { "Forcing agent eviction thread on: transportFilterDisabled requires stale agent cleanup" }
       agentCleanupService.startSync()
@@ -322,8 +322,7 @@ class Proxy(
     grpcService.stopSync()
     dashboardService?.stopSync()
     httpService.stopSync()
-    if (agentCleanupServiceEnabled)
-      agentCleanupService.stopSync()
+    agentCleanupService?.stopSync()
     super.shutDown()
   }
 
@@ -606,6 +605,8 @@ class Proxy(
      */
     @JvmStatic
     fun main(args: Array<String>) {
+      // Check for version and usage flags and exit before the banner is logged
+      ProxyOptions(args, parseOnly = true)
       logger.apply {
         info { getBanner("banners/proxy.txt", logger) }
         info { getVersionDesc(false) }

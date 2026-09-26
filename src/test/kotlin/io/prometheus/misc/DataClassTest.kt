@@ -29,7 +29,6 @@ import io.prometheus.common.ConfigVals
 import io.prometheus.common.ConfigWrappers.newAdminConfig
 import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
-import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 
 class DataClassTest : StringSpec() {
   private fun configVals(str: String): ConfigVals {
@@ -228,43 +227,21 @@ class DataClassTest : StringSpec() {
         }
     }
 
-    // ==================== gRPC Metrics Config Tests ====================
+    // ==================== Removed Settings ====================
 
-    "gRPC metrics config should parse all fields correctly" {
-      // Agent gRPC metrics
-      configVals("agent.metrics.grpc.metricsEnabled=true").agent.metrics.grpc
-        .also {
-          it.metricsEnabled.shouldBeTrue()
-        }
+    // metrics.grpc.metricsEnabled and metrics.grpc.allMetricsReported were removed because nothing read them. A
+    // config written before then may still set them, and it must keep loading, with the rest of its metrics settings.
+    "a config that still sets the removed metrics.grpc keys should load" {
+      val config =
+        configVals(
+          """
+          proxy.metrics { enabled = true, grpc { metricsEnabled = true, allMetricsReported = true } }
+          agent.metrics { port = 9999, grpc { metricsEnabled = true, allMetricsReported = true } }
+          """.trimIndent(),
+        )
 
-      configVals("agent.metrics.grpc.allMetricsReported=true").agent.metrics.grpc
-        .also {
-          it.allMetricsReported.shouldBeTrue()
-        }
-
-      // Proxy gRPC metrics
-      configVals("proxy.metrics.grpc.metricsEnabled=true").proxy.metrics.grpc
-        .also {
-          it.metricsEnabled.shouldBeTrue()
-        }
-
-      configVals("proxy.metrics.grpc.allMetricsReported=true").proxy.metrics.grpc
-        .also {
-          it.allMetricsReported.shouldBeTrue()
-        }
-
-      // Defaults should be false
-      configVals("agent.name=test").agent.metrics.grpc
-        .also {
-          it.metricsEnabled.shouldBeFalse()
-          it.allMetricsReported.shouldBeFalse()
-        }
-
-      configVals("proxy.http.port=$PROXY_HTTP_PORT").proxy.metrics.grpc
-        .also {
-          it.metricsEnabled.shouldBeFalse()
-          it.allMetricsReported.shouldBeFalse()
-        }
+      config.proxy.metrics.enabled.shouldBeTrue()
+      config.agent.metrics.port shouldBe 9999
     }
   }
 }

@@ -96,6 +96,19 @@ not see them.
     The config file path is relative to your application's working directory.
     Use an absolute path if needed.
 
+## Upgrading from 4.1.x
+
+- The agent moved from the Prometheus Java client 0.x (`io.prometheus:simpleclient` 0.16.0) to 1.x
+  (`io.prometheus:prometheus-metrics-core` 1.9.0), and its metrics now register in the 1.x default registry. A
+  host that serves the 0.x `CollectorRegistry` no longer exposes them. To serve both from one endpoint, serve the
+  1.x registry and bridge your 0.x metrics into it: add `io.prometheus:prometheus-metrics-simpleclient-bridge`
+  1.9.0 and call `SimpleclientCollector.builder().register()` once at startup.
+- `simpleclient` no longer arrives through the agent. If your application relied on getting it that way,
+  declare it yourself.
+- With the agent's metrics endpoint on, the `_created` series of its counters and histograms are gone (set
+  `IO_PROMETHEUS_EXPORTER_INCLUDE_CREATED_TIMESTAMPS=true` to bring them back), and with the JVM exports on, the
+  JVM memory metrics are renamed (see [JVM Metrics](monitoring.md#jvm-metrics)).
+
 ## Upgrading from 4.0.x
 
 - `grpc-netty-shaded` no longer arrives through the agent, which uses the unshaded `grpc-netty` transport.

@@ -1,0 +1,21 @@
+The Prometheus Proxy is running as {{ include "prometheus-proxy.fullname" . }} in namespace {{ .Release.Namespace }}.
+
+Agents connect to its gRPC port:
+  in this cluster:  {{ include "prometheus-proxy.fullname" . }}.{{ .Release.Namespace }}.svc:{{ .Values.agentPort }}
+{{- if .Values.agentService.enabled }}
+  from outside it:  the {{ include "prometheus-proxy.fullname" . }}-agents Service ({{ .Values.agentService.type }}), port {{ .Values.agentPort }}
+{{- end }}
+
+Prometheus scrapes each path an agent registers through the HTTP port:
+  http://{{ include "prometheus-proxy.fullname" . }}.{{ .Release.Namespace }}.svc:{{ .Values.httpPort }}/<path>
+{{- if .Values.dashboard.enabled }}
+
+The dashboard is not on the Service (it is unauthenticated). Reach it with:
+  kubectl -n {{ .Release.Namespace }} port-forward deploy/{{ include "prometheus-proxy.fullname" . }} {{ .Values.dashboard.port }}
+{{- end }}
+{{- if not (or .Values.agentToken.existingSecret .Values.tls.caFile) }}
+
+WARNING: unless your config sets per-agent identities (proxy.auth), any process that can reach the gRPC port can
+register as an agent. Set agentToken.existingSecret, require mutual TLS (tls.caFile), or configure proxy.auth. See
+https://pambrose.github.io/prometheus-proxy/security/
+{{- end }}

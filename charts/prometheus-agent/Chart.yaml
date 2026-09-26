@@ -1,0 +1,22 @@
+apiVersion: v2
+name: prometheus-agent
+description: >-
+  The Prometheus Proxy agent: runs inside a firewall next to the services it scrapes, opens an outbound gRPC
+  connection to the proxy, and answers the scrapes the proxy forwards for the paths it registers.
+type: application
+# The chart version follows the release it deploys; bump both with the project version (docs/RELEASE.md, step 2).
+version: 4.2.0
+appVersion: "4.2.0"
+kubeVersion: ">=1.25.0-0"
+home: https://pambrose.github.io/prometheus-proxy/
+sources:
+  - https://github.com/pambrose/prometheus-proxy
+keywords:
+  - prometheus
+  - proxy
+  - agent
+  - firewall
+  - monitoring
+maintainers:
+  - name: Paul Ambrose
+    url: https://github.com/pambrose

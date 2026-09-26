@@ -1,0 +1,11 @@
+{{- if and .Values.config (not .Values.existingConfigMap) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "prometheus-proxy.fullname" . }}
+  labels:
+    {{- include "prometheus-proxy.labels" . | nindent 4 }}
+data:
+  proxy.conf: |
+    {{- .Values.config | nindent 4 }}
+{{- end }}

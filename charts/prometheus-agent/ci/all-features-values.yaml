@@ -1,0 +1,30 @@
+# Every optional feature on, so CI renders and validates each template path.
+proxy:
+  hostname: proxy-a.example.com:50051,proxy-b.example.com:50051
+config: |
+  agent {
+    consolidated = true
+    pathConfigs: [
+      { name: "My app", path: my_app_metrics, url: "http://my-app.default.svc.cluster.local:8080/metrics" }
+    ]
+  }
+replicaCount: 2
+discovery:
+  enabled: true
+  targets: |
+    paths = [
+      { name = "app1", path = "app1_metrics", url = "http://app1.default.svc.cluster.local:9090/metrics" }
+    ]
+agentToken:
+  existingSecret: prometheus-agent-token
+tls:
+  secretName: prometheus-agent-tls
+  certFile: cert.pem
+  keyFile: key.pem
+  overrideAuthority: proxy.example.com
+serviceMonitor:
+  enabled: true
+extraArgs: [ -Dagent.scrapeTimeoutSecs=30 ]
+env:
+  - name: AGENT_NAME
+    value: cluster-a

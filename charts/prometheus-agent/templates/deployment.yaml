@@ -1,0 +1,180 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "prometheus-agent.fullname" . }}
+  labels:
+    {{- include "prometheus-agent.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  # The replacement pod registers the same paths, so the old one stops first.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "prometheus-agent.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        # Restart the agent when its main config changes. Discovery targets are re-read in place, so they don't.
+        {{- if not .Values.existingConfigMap }}
+        checksum/config: {{ .Values.config | sha256sum }}
+        {{- end }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "prometheus-agent.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: agent
+          image: {{ include "prometheus-agent.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if or .Values.discovery.enabled .Values.extraArgs }}
+          args:
+            {{- if .Values.discovery.enabled }}
+            - -Dagent.discovery.enabled=true
+            - -Dagent.discovery.file.path=/app/discovery/targets.conf
+            - -Dagent.discovery.reconcileIntervalSecs={{ .Values.discovery.reconcileIntervalSecs }}
+            {{- end }}
+            {{- with .Values.extraArgs }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- end }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          {{- if or .Values.metrics.enabled .Values.admin.enabled }}
+          ports:
+            {{- if .Values.metrics.enabled }}
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+            {{- end }}
+            {{- if .Values.admin.enabled }}
+            - name: admin
+              containerPort: {{ .Values.admin.port }}
+            {{- end }}
+          {{- end }}
+          env:
+            - name: PROXY_HOSTNAME
+              value: {{ required "proxy.hostname is required: the proxy's gRPC address as host:port" .Values.proxy.hostname | quote }}
+            - name: AGENT_CONFIG
+              value: /app/config/agent.conf
+            - name: ADMIN_ENABLED
+              value: {{ .Values.admin.enabled | quote }}
+            - name: ADMIN_PORT
+              value: {{ .Values.admin.port | quote }}
+            - name: METRICS_ENABLED
+              value: {{ .Values.metrics.enabled | quote }}
+            - name: METRICS_PORT
+              value: {{ .Values.metrics.port | quote }}
+            {{- with .Values.agentToken.existingSecret }}
+            - name: AGENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ . }}
+                  key: {{ $.Values.agentToken.key }}
+            {{- end }}
+            {{- if .Values.tls.secretName }}
+            {{- with .Values.tls.caFile }}
+            - name: TRUST_CERT_COLLECTION_FILE_PATH
+              value: /app/certs/{{ . }}
+            {{- end }}
+            {{- if and .Values.tls.certFile .Values.tls.keyFile }}
+            - name: CERT_CHAIN_FILE_PATH
+              value: /app/certs/{{ .Values.tls.certFile }}
+            - name: PRIVATE_KEY_FILE_PATH
+              value: /app/certs/{{ .Values.tls.keyFile }}
+            {{- end }}
+            {{- with .Values.tls.overrideAuthority }}
+            - name: OVERRIDE_AUTHORITY
+              value: {{ . | quote }}
+            {{- end }}
+            {{- end }}
+            {{- with .Values.javaToolOptions }}
+            - name: JAVA_TOOL_OPTIONS
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.env }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if .Values.admin.enabled }}
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: admin
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /healthcheck
+              port: admin
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          {{- else if .Values.metrics.enabled }}
+          livenessProbe:
+            tcpSocket:
+              port: metrics
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: config
+              mountPath: /app/config
+              readOnly: true
+            {{- if .Values.discovery.enabled }}
+            - name: discovery
+              mountPath: /app/discovery
+              readOnly: true
+            {{- end }}
+            {{- if .Values.tls.secretName }}
+            - name: certs
+              mountPath: /app/certs
+              readOnly: true
+            {{- end }}
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: config
+          configMap:
+            name: {{ include "prometheus-agent.configMapName" . }}
+        {{- if .Values.discovery.enabled }}
+        - name: discovery
+          configMap:
+            name: {{ include "prometheus-agent.discoveryConfigMapName" . }}
+        {{- end }}
+        {{- with .Values.tls.secretName }}
+        - name: certs
+          secret:
+            secretName: {{ . }}
+        {{- end }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
