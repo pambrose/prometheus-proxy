@@ -37,6 +37,8 @@ All notable changes to this project are documented in this file.
 - The website's Quick Start, the README, and `llms.txt` now show how to run the proxy and agent in the background for each way of running them: `nohup` with a log and a PID file for the JARs, `brew services` for Homebrew, and `docker run --detach --restart unless-stopped` for Docker. The Docker page gains a Running in the Background section, including how to manage and upgrade a detached container, and background commands for Docker Compose. The production page gains a Running as a service section: which supervisor to use for each way of running them, and a systemd unit for the JARs (with `SuccessExitStatus=143`, since the JVM exits with 143 on SIGTERM)
 - The Docker page's production proxy example combined `--rm` with `--restart unless-stopped`, which Docker rejects. It and the production agent example now run detached under a restart policy
 - The monitoring pages give the JVM metric names under the Prometheus Java client 1.x, and the embedded-agent page says which registry the embedded agent's metrics register in
+- Fix the website Quick Start's Build from Source tab, which ran `./gradlew shadowJar`, a disabled task, so it built no JARs; it now runs `./gradlew agentJar proxyJar`. The Docker tab's platform list adds `ppc64le`, which the images are built for
+- The website's Security page has a Reporting a Vulnerability section, pointing to GitHub's private vulnerability reporting and `SECURITY.md`
 - The embedded-agent page has an Upgrading from 4.1.x section: the move to the Prometheus Java client 1.x, bridging a host's 0.x metrics into the 1.x registry with `prometheus-metrics-simpleclient-bridge`, `simpleclient` no longer arriving through the agent, and the `/metrics` changes
 - The monitoring docs scrape each agent's own metrics through the proxy, one job per agent, instead of directly at `agent-host:8083`, which the firewall between them blocks; the agents dashboard tells agents apart by `job`. They also correct the Grafana import steps (the dashboards have no datasource prompt; pick it in the dashboard), the claim that zero heartbeats means agents are disconnected (agents heartbeat only when idle), the `path` variable's reach, the agent counters' `type` values (adding `unsuccessful`, `invalid_path`, and `dropped`), and the metric-flow diagram. The README lists the metrics endpoints at `/metrics`, not `/proxy_metrics` and `/agent_metrics`
 
@@ -49,6 +51,7 @@ All notable changes to this project are documented in this file.
 - Add a `Security` workflow (`.github/workflows/security.yml`). Trivy scans the proxy and agent images on every pull request, on pushes to `master`, and weekly, and fails on a HIGH or CRITICAL vulnerability that has a fix; CodeQL analyzes the Kotlin code. Findings from `master` and the weekly run go to code scanning
 - The container tests run on pull requests too, not only after a merge, so a change that breaks the fat JARs, the images, or the scrape path shows up before it merges
 - CI checks `grafana/alerts.yml` with `promtool` (`make check-rules`), and `DashboardMetricNamesTest` reads the alerting rules from that file instead of extracting them from the Grafana page
+- The GitHub release carries the sources JAR (`prometheus-proxy-<version>-sources.jar`) as well as the two fat JARs
 - CI lints the Helm charts and validates their rendered manifests (`make helm-lint`), and installs both charts into a kind cluster with the commit's images and scrapes through them (`scripts/helm-smoke-test.sh`, in the container-tests workflow)
 
 ### Dependencies
@@ -56,6 +59,7 @@ All notable changes to this project are documented in this file.
 - Update common-utils 4.1.0 → 5.0.0 and the Prometheus Java client `simpleclient` 0.16.0 → `prometheus-metrics-core` 1.9.0
 - Netty 4.2.16.Final → 4.2.18.Final and Jackson 2.12.7 → 2.22.3, overriding what grpc-netty and Dropwizard `metrics-json` bring (see Security)
 - Update Logback 1.6.3 → 1.6.4 and the dashboard's htmx 2.0.10 → 2.0.11
+- Update the nginx reverse-proxy example image (`nginx/docker/Dockerfile`) and the container tests' nginx stub from `nginx:1.29-alpine` to `nginx:1.31-alpine`
 - Update build tooling: Gradle wrapper 9.7.1 → 9.8.0 and the `pambrose-gradle-plugins` convention plugins 1.1.5 → 1.1.6
 - Add `kaml` 0.104.0 as a test dependency, to read `grafana/alerts.yml`; the fat JARs keep the 0.79.0 that Ktor's OpenAPI module brings
 - Update the documentation site's Python dependency lock (`website/uv.lock`): Zensical 0.0.63 → 0.0.65, which adds the `pathspec` transitive dependency, plus Markdown 3.10.3 → 3.11, pymdown-extensions 12.0.1 → 12.1, and platformdirs 4.11.12 → 4.12.0

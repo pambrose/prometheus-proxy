@@ -70,7 +70,8 @@ proxy or agent exposes.
   CVE) is raised to 4.2.18, and the Jackson that the Dropwizard metrics servlets bring (2.12.7, with high CVEs) to
   2.22.3. A new security workflow scans both images on every pull request and weekly, and fails on a high or critical
   vulnerability that has a fix.
-- **Reporting a vulnerability:** `SECURITY.md` explains how to report one privately through GitHub.
+- **Reporting a vulnerability:** `SECURITY.md`, and a new section on the website's Security page, explain how to
+  report one privately through GitHub.
 
 ### Before you upgrade
 
@@ -119,6 +120,8 @@ proxy or agent exposes.
   systemd unit for the JARs.
 - **The Docker page's production proxy example now runs.** It combined `--rm` with `--restart unless-stopped`,
   which Docker rejects.
+- **The Quick Start's Build from Source tab builds the JARs.** It ran `./gradlew shadowJar`, a disabled task; it now
+  runs `./gradlew agentJar proxyJar`. Its Docker tab also lists `ppc64le`, which the images are built for.
 - **The embedded-agent page has an Upgrading from 4.1.x section.** It covers the move to the Prometheus Java
   client 1.x, including how a host still on the 0.x client can serve its metrics and the agent's from one
   endpoint with `prometheus-metrics-simpleclient-bridge`.
@@ -132,6 +135,7 @@ proxy or agent exposes.
 - The container tests, which run the fat JARs in Docker against a real Prometheus, now run on every pull request
   rather than only after a merge.
 - CI lints the Helm charts and installs them into a kind cluster.
+- The GitHub release includes the sources JAR as well as the two fat JARs.
 
 ### Dependency updates
 
@@ -140,7 +144,8 @@ Runtime: common-utils 4.1.0 → 5.0.0 and the Prometheus Java client `simpleclie
 2.22.3 (see Security), Logback 1.6.3 → 1.6.4, and the dashboard's htmx 2.0.10 → 2.0.11. Build and test only:
 Gradle 9.7.1 → 9.8.0, the shared convention plugins 1.1.5 → 1.1.6, and `kaml` 0.104.0, added to read
 `grafana/alerts.yml` in a test. The documentation site's Python lock picks up Zensical 0.0.63 → 0.0.65, Markdown
-3.10.3 → 3.11, and pymdown-extensions 12.0.1 → 12.1.
+3.10.3 → 3.11, and pymdown-extensions 12.0.1 → 12.1. The nginx reverse-proxy example image and the container
+tests' nginx stub move from `nginx:1.29-alpine` to `nginx:1.31-alpine`.
 
 ---
 

@@ -241,3 +241,15 @@ As a last resort, you can disable SSL verification entirely:
     validation for **every** HTTPS target and takes precedence over the trust store. In
     production, configure a trust store (or properly trusted certificates) for your metrics
     endpoints instead.
+
+## Reporting a Vulnerability
+
+Report a security problem privately, not in a public issue, pull request, or discussion: use GitHub's
+[private vulnerability reporting](https://github.com/pambrose/prometheus-proxy/security/advisories/new). The report
+stays visible only to you and the maintainer until an advisory is published with the fix. Security fixes go into
+the latest release only, so upgrade to receive them.
+
+[`SECURITY.md`](https://github.com/pambrose/prometheus-proxy/blob/master/SECURITY.md) lists what a useful report
+includes, and which documented behavior is by design rather than a vulnerability: the agent port accepting any
+agent without a token, identities, or mutual TLS, and the admin, metrics, and dashboard ports having no
+authentication.
