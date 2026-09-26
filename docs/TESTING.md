@@ -387,7 +387,7 @@ Two more live one level up, in `harness/` itself:
 ### Container Tests (`containers/`)
 
 End-to-end Testcontainers specs that build the proxy and agent images from `etc/docker/*.Dockerfile`, stand them up
-alongside `nginx:1.29-alpine` metrics stubs (and `prom/prometheus:v3.14.0` where needed), and exercise the full
+alongside `nginx:1.31-alpine` metrics stubs (and `prom/prometheus:v3.14.0` where needed), and exercise the full
 Prometheus → proxy → agent → endpoint scrape path over real network transport. Every spec is gated on
 `RUN_CONTAINER_TESTS=true`; shared factories live in `containers/support/ContainerTestSupport.kt`.
 
