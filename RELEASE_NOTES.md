@@ -2,6 +2,30 @@
 
 ---
 
+## Unreleased
+
+_Not yet released_
+
+### Bug Fixes
+
+- **The dashboard shows each agent's real address.** It showed `Unknown` for every agent; it now shows the address
+  and port the agent connected from. With the transport filter disabled, as behind an nginx reverse proxy, it still
+  shows `Unknown`, since the connection there comes from the reverse proxy.
+- **A proxy that fails to start now exits.** With a port already taken, it logged the error but kept running,
+  holding its admin and metrics ports, so a service manager's restart policy never fired.
+
+### Documentation
+
+- **How to report a vulnerability is in the README and `llms.txt` too**, which now point to `SECURITY.md` and
+  GitHub's private vulnerability reporting, as the website's Security page does.
+
+### Build and tooling
+
+- The nginx reverse-proxy example no longer logs a deprecation warning at startup: it enables HTTP/2 with
+  `http2 on;` instead of the deprecated `listen ... http2`.
+
+---
+
 ## 4.2.0
 
 _Released 2026-09-26_

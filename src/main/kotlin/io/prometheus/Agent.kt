@@ -639,25 +639,22 @@ class Agent(
   }
 
   // Guava calls shutDown() only after startUp() succeeds: when startUp() throws -- an admin or metrics port already in
-  // use -- the service goes straight to FAILED. Without this, the gRPC channel and HTTP client cache built in the
-  // constructor, and any server startUp() had already started, would stay open for the life of the JVM.
+  // use -- the service goes straight to FAILED. super.startUp() stops the servers it had already started, but without
+  // this the gRPC channel and HTTP client cache built in the constructor would stay open for the life of the JVM.
   override fun startUp() {
     runCatching { super.startUp() }
       .onFailure { releaseAfterFailedStartUp() }
       .getOrThrow()
   }
 
-  // Each step runs whether or not the others succeed: the service whose start failed is itself FAILED, and a FAILED
-  // service rejects stopSync(). The JMX reporter startUp() may also have started is left alone: it holds no thread or
-  // port, and its class is not on this module's compile classpath.
+  // super.startUp() stops the admin, metrics and Zipkin services it started when it fails (common-utils 5.0.0), but
+  // not the gRPC channel and HTTP client cache this class's constructor built. Each step runs whether or not the
+  // other succeeds.
   private fun releaseAfterFailedStartUp() {
     val steps: List<() -> Unit> =
       [
         { grpcService.shutDown() },
         { runBlocking { agentHttpService.close() } },
-        { if (isAdminEnabled) servletService.stopSync() },
-        { if (isMetricsEnabled) metricsService.stopSync() },
-        { if (isZipkinEnabled) zipkinReporterService.stopSync() },
       ]
     steps.forEach { step ->
       runCatching(step).onFailure { e -> logger.debug(e) { "Releasing after a failed startup: ${e.message}" } }
@@ -678,7 +675,7 @@ class Agent(
   // channel/servlets but leave isRunning true, so the run loop would reconnect forever.
   fun stop() {
     // A FAILED service rejects stopSync(), and has nothing left to stop: a failure in run() already went through
-    // shutDown(), and a failure in startUp() through releaseAfterFailedStartUp().
+    // shutDown(), and a failure in startUp() through super.startUp()'s own rollback and releaseAfterFailedStartUp().
     if (state() == Service.State.FAILED)
       return
     stopSync()

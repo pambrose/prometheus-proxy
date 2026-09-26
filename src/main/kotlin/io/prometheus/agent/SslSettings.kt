@@ -18,7 +18,6 @@ package io.prometheus.agent
 
 import java.io.FileInputStream
 import java.security.KeyStore
-import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManagerFactory
 import javax.net.ssl.X509TrustManager
 
@@ -56,15 +55,6 @@ internal object SslSettings {
     TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
       .apply {
         init(getKeyStore(fileName, password))
-      }
-
-  fun getSslContext(
-    fileName: String,
-    password: String,
-  ): SSLContext =
-    SSLContext.getInstance("TLS")
-      .apply {
-        init(null, getTrustManagerFactory(fileName, password).trustManagers, null)
       }
 
   fun getTrustManager(

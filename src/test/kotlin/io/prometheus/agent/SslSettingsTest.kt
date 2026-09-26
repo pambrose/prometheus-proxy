@@ -78,14 +78,6 @@ class SslSettingsTest : StringSpec() {
       }
     }
 
-    // ==================== getSslContext Tests ====================
-
-    "getSslContext should throw for non-existent keystore" {
-      shouldThrow<FileNotFoundException> {
-        SslSettings.getSslContext("non-existent-keystore.jks", "password")
-      }
-    }
-
     // ==================== getTrustManager Tests ====================
 
     "getTrustManager should throw for non-existent keystore" {
@@ -95,8 +87,8 @@ class SslSettingsTest : StringSpec() {
     }
 
     // ==================== Success Path Tests ====================
-    // These exercise the success branches of getTrustManagerFactory/getSslContext/
-    // getTrustManager against a real (empty) keystore. The prior tests only covered the
+    // These exercise the success branches of getTrustManagerFactory and getTrustManager
+    // against a real (empty) keystore. The prior tests only covered the
     // FileNotFoundException paths, leaving the success bodies uncovered.
 
     "getTrustManagerFactory should return initialized factory for valid keystore" {
@@ -104,13 +96,6 @@ class SslSettingsTest : StringSpec() {
       val factory = SslSettings.getTrustManagerFactory(path, password)
       factory.shouldNotBeNull()
       factory.trustManagers.isNotEmpty() shouldBe true
-    }
-
-    "getSslContext should return a TLS context for valid keystore" {
-      val (path, password) = createTempKeyStore()
-      val sslContext = SslSettings.getSslContext(path, password)
-      sslContext.shouldNotBeNull()
-      sslContext.protocol shouldBe "TLS"
     }
 
     "getTrustManager should return an X509TrustManager for valid keystore" {

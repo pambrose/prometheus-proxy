@@ -4,6 +4,21 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [Unreleased]
+
+### Bug Fixes
+
+- Fix every agent's remote address reading `Unknown` on the dashboard and in the proxy's logs. `ProxyServerTransportFilter` read the address with an attribute key it created itself, which gRPC never set; it now reads gRPC's `TRANSPORT_ATTR_REMOTE_ADDR` and records `host:port`. With the transport filter disabled the address is still `Unknown`, since the peer there is the reverse proxy
+- Fix a proxy that failed to start (for example, on a taken agent or HTTP port) hanging instead of exiting. `Proxy.startUp()` started its gRPC, HTTP, dashboard and cleanup services after the admin and metrics servers with no rollback, and Guava doesn't call `shutDown()` after a failed start, so those servers' threads kept the JVM alive. A failed start now stops everything it started, most recent first, and removes the shutdown hook
+
+### Documentation
+
+- The README's Security & TLS section and `llms.txt` point to `SECURITY.md` and GitHub's private vulnerability reporting, as the website's Security page does
+
+### Build & Tooling
+
+- The nginx reverse-proxy example (`nginx/docker/nginx.conf`) enables HTTP/2 with `http2 on;` instead of the `listen ... http2` parameter, which nginx has deprecated since 1.25.1 and warned about at every start
+
 ## [4.2.0] - 2026-09-26
 
 ### Breaking Changes
