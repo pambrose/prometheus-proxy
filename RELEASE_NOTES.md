@@ -10,6 +10,8 @@ _Not yet released_
 
 - **The dashboard shows each agent's real address.** It showed `Unknown` for every agent; it now shows the address
   and port the agent connected from.
+- **A proxy that fails to start now exits.** With a port already taken, it logged the error but kept running,
+  holding its admin and metrics ports, so a service manager's restart policy never fired.
 
 ### Documentation
 

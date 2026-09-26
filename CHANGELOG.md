@@ -9,6 +9,7 @@ All notable changes to this project are documented in this file.
 ### Bug Fixes
 
 - Fix every agent's remote address reading `Unknown` on the dashboard and in the proxy's logs. `ProxyServerTransportFilter` read the address with an attribute key it created itself, which gRPC never set; it now reads gRPC's `TRANSPORT_ATTR_REMOTE_ADDR` and records `host:port`. With the transport filter disabled the address is still `Unknown`, since the peer there is the reverse proxy
+- Fix a proxy that failed to start (for example, on a taken agent or HTTP port) hanging instead of exiting. `Proxy.startUp()` started its gRPC, HTTP, dashboard and cleanup services after the admin and metrics servers with no rollback, and Guava doesn't call `shutDown()` after a failed start, so those servers' threads kept the JVM alive. A failed start now stops everything it started, most recent first, and removes the shutdown hook
 
 ### Documentation
 

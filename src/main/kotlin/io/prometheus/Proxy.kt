@@ -296,20 +296,36 @@ class Proxy(
   override fun startUp() {
     super.startUp()
 
-    grpcService.startSync()
-    httpService.startSync()
-    dashboardService?.startSync()
+    // Guava calls shutDown() only after startUp() succeeds, so when a sub-service fails to start, stop the ones that
+    // started, most recent first, then what super.startUp() started; super.shutDown() also removes its shutdown hook.
+    // Left running, the admin server's threads kept a standalone proxy's JVM alive after main() threw.
+    val stopActions = ArrayDeque<() -> Unit>()
+    runCatching {
+      grpcService.startSync()
+      stopActions.addFirst { grpcService.stopSync() }
+      httpService.startSync()
+      stopActions.addFirst { httpService.stopSync() }
+      dashboardService?.also { dashboard ->
+        dashboard.startSync()
+        stopActions.addFirst { dashboard.stopSync() }
+      }
 
-    // When transportFilterDisabled is true, there is no ProxyServerTransportFilter to detect
-    // agent disconnects. The stale agent cleanup service is the only mechanism to clean up
-    // leaked AgentContexts (e.g., agents that called connectAgentWithTransportFilterDisabled
-    // but crashed before opening a readRequestsFromProxy stream). Force-enable it.
-    if (agentCleanupService != null) {
-      if (!proxyConfigVals.internal.staleAgentCheckEnabled)
-        logger.warn { "Forcing agent eviction thread on: transportFilterDisabled requires stale agent cleanup" }
-      agentCleanupService.startSync()
-    } else {
-      logger.info { "Agent eviction thread not started" }
+      // When transportFilterDisabled is true, there is no ProxyServerTransportFilter to detect
+      // agent disconnects. The stale agent cleanup service is the only mechanism to clean up
+      // leaked AgentContexts (e.g., agents that called connectAgentWithTransportFilterDisabled
+      // but crashed before opening a readRequestsFromProxy stream). Force-enable it.
+      if (agentCleanupService != null) {
+        if (!proxyConfigVals.internal.staleAgentCheckEnabled)
+          logger.warn { "Forcing agent eviction thread on: transportFilterDisabled requires stale agent cleanup" }
+        agentCleanupService.startSync()
+        stopActions.addFirst { agentCleanupService.stopSync() }
+      } else {
+        logger.info { "Agent eviction thread not started" }
+      }
+    }.exceptionOrNull()?.let { e ->
+      stopActions.forEach { stop -> runCatching(stop).exceptionOrNull()?.let(e::addSuppressed) }
+      runCatching { super.shutDown() }.exceptionOrNull()?.let(e::addSuppressed)
+      throw e
     }
   }
 

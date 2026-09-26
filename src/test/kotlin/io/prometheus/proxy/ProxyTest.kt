@@ -43,6 +43,10 @@ import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.CompletableDeferred
+import com.google.common.util.concurrent.Service
+import io.kotest.assertions.assertSoftly
+import io.prometheus.metrics.model.registry.PrometheusRegistry
+import java.net.ServerSocket
 
 class ProxyTest : StringSpec() {
   private fun createTestProxy(vararg extraArgs: String) =
@@ -520,6 +524,50 @@ class ProxyTest : StringSpec() {
       cleanupServiceRegistrations {
         createTestProxy("-Dproxy.internal.staleAgentCheckEnabled=false", "--tf_disabled")
       } shouldBe 1
+    }
+
+    // ==================== Failed startup ====================
+
+    // Guava calls shutDown() only after startUp() succeeds. When a sub-service failed to start, the admin and metrics
+    // servers super.startUp() had started and the sub-services already running were left up: a standalone proxy with
+    // a taken port logged the failure but never exited, its admin server's threads keeping the JVM alive.
+    "a failed startup should stop what the proxy started" {
+      PrometheusRegistry.defaultRegistry.clear()
+      val adminPort = ServerSocket(0).use { it.localPort }
+      val metricsPort = ServerSocket(0).use { it.localPort }
+      ServerSocket(0).use { takenHttpPort ->
+        val proxy =
+          Proxy(
+            options =
+              ProxyOptions(
+                listOf(
+                  "--port",
+                  "${takenHttpPort.localPort}",
+                  "--admin",
+                  "--admin_port",
+                  "$adminPort",
+                  "--metrics",
+                  "--metrics_port",
+                  "$metricsPort",
+                ),
+              ),
+            inProcessServerName = "failed-start-${System.nanoTime()}",
+            testMode = true,
+          )
+
+        shouldThrow<IllegalStateException> { proxy.startSync() }
+
+        // Captured as values first, so each check reports on its own inside assertSoftly.
+        val state = proxy.state()
+        val adminPortFree = runCatching { ServerSocket(adminPort).close() }.isSuccess
+        val metricsRunning = proxy.metricsService.isRunning
+
+        assertSoftly {
+          state shouldBe Service.State.FAILED
+          adminPortFree.shouldBeTrue()
+          metricsRunning.shouldBeFalse()
+        }
+      }
     }
   }
 
