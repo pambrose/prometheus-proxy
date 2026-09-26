@@ -37,9 +37,9 @@ proxy.metrics {
 
 Default endpoint: `http://agent-host:8083/metrics`
 
-### JVM and gRPC Metrics
+### JVM Metrics
 
-Both components support optional JVM and gRPC metrics exports:
+Both components support optional JVM metrics exports:
 
 ```hocon
 proxy.metrics {
@@ -49,11 +49,6 @@ proxy.metrics {
   threadExportsEnabled = false
   classLoadingExportsEnabled = false
   versionInfoExportsEnabled = false
-
-  grpc {
-    metricsEnabled = false
-    allMetricsReported = false
-  }
 }
 ```
 

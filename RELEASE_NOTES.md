@@ -80,6 +80,9 @@ proxy or agent exposes.
 - **The bundled Grafana dashboards show connection, eviction, heartbeat and scrape counts again.** Their panels
   (and the alert rules on the Grafana page) queried counters without the `_total` suffix they are exposed with,
   so they showed no data. Re-import `grafana/prometheus-proxy.json` and `grafana/prometheus-agents.json`.
+- **The `metrics.grpc` settings are gone from the docs and the config reference.** `metricsEnabled` and
+  `allMetricsReported` were listed as optional gRPC metrics but never did anything. A config that still sets them
+  keeps loading.
 
 ### Documentation
 

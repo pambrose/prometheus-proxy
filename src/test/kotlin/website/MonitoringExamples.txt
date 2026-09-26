@@ -39,12 +39,6 @@ proxy.metrics {
   threadExportsEnabled = true
   classLoadingExportsEnabled = false
   versionInfoExportsEnabled = false
-
-  // Optional gRPC metrics
-  grpc {
-    metricsEnabled = true
-    allMetricsReported = false    // true = include expensive metrics
-  }
 }
 ; --8<-- [end:jvm-metrics-config]
 

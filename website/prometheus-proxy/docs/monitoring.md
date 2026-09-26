@@ -38,9 +38,9 @@ Add these scrape jobs to your `prometheus.yml`:
 --8<-- "PrometheusConfigs.txt:metrics-scrape-config"
 ```
 
-### JVM and gRPC Metrics
+### JVM Metrics
 
-Both components support optional JVM and gRPC metrics:
+Both components support optional JVM metrics:
 
 ```hocon
 --8<-- "MonitoringExamples.txt:jvm-metrics-config"
