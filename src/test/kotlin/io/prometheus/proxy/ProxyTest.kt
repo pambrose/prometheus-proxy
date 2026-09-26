@@ -47,6 +47,7 @@ import com.google.common.util.concurrent.Service
 import io.kotest.assertions.assertSoftly
 import io.prometheus.metrics.model.registry.PrometheusRegistry
 import java.net.ServerSocket
+import io.kotest.matchers.collections.shouldBeEmpty
 
 class ProxyTest : StringSpec() {
   private fun createTestProxy(vararg extraArgs: String) =
@@ -567,6 +568,41 @@ class ProxyTest : StringSpec() {
           adminPortFree.shouldBeTrue()
           metricsRunning.shouldBeFalse()
         }
+      }
+    }
+
+    // The case above fails at the second sub-service, over an in-process gRPC server that holds no port, so it passes
+    // even if only super.shutDown() runs. Here the dashboard, started after gRPC and HTTP, fails: both must be stopped
+    // too, or their threads and ports outlive the failed start just as the admin server's did.
+    "a failed startup should also stop the sub-services that started before the failure" {
+      PrometheusRegistry.defaultRegistry.clear()
+      val (agentPort, httpPort, adminPort) = List(3) { ServerSocket(0) }.map { socket -> socket.use { it.localPort } }
+      ServerSocket(0).use { takenDashboardPort ->
+        val proxy =
+          Proxy(
+            options =
+              ProxyOptions(
+                listOf(
+                  "--agent_port",
+                  "$agentPort",
+                  "--port",
+                  "$httpPort",
+                  "--admin",
+                  "--admin_port",
+                  "$adminPort",
+                  "--dashboard",
+                  "--dashboard_port",
+                  "${takenDashboardPort.localPort}",
+                ),
+              ),
+            testMode = true,
+          )
+
+        shouldThrow<IllegalStateException> { proxy.startSync() }
+
+        listOf(agentPort, httpPort, adminPort)
+          .filterNot { port -> runCatching { ServerSocket(port).close() }.isSuccess }
+          .shouldBeEmpty()
       }
     }
   }
