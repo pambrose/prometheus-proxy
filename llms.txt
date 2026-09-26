@@ -253,6 +253,11 @@ dependencies {
 - TLS (with mutual auth): `examples/tls-with-mutual-auth.conf`
 - Prometheus federation: `examples/federate.conf`
 
+## Monitoring Assets
+
+- Grafana dashboards: `grafana/prometheus-proxy.json`, `grafana/prometheus-agents.json`
+- Prometheus alerting rules: `grafana/alerts.yml` (load via `rule_files`; `make check-rules` validates it with promtool)
+
 ## License
 
 Apache License 2.0

@@ -18,9 +18,13 @@
 
 package io.prometheus.misc
 
+import com.charleskorn.kaml.Yaml
+import com.charleskorn.kaml.YamlList
+import com.charleskorn.kaml.YamlMap
+import com.charleskorn.kaml.YamlNode
+import com.charleskorn.kaml.YamlScalar
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldBeEmpty
-import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.prometheus.agent.AgentMetrics
 import io.prometheus.common.Utils.toJsonElement
@@ -81,6 +85,17 @@ class DashboardMetricNamesTest : StringSpec() {
       }
     }
 
+  // The "expr" of every rule in a Prometheus rule file.
+  private fun ruleExprs(yaml: String): List<String> =
+    Yaml.default.parseToYamlNode(yaml)
+      .field<YamlList>("groups")
+      .items
+      .flatMap { group -> group.field<YamlList>("rules").items }
+      .map { rule -> rule.field<YamlScalar>("expr").content }
+
+  private inline fun <reified T : YamlNode> YamlNode.field(key: String): T =
+    requireNotNull((this as YamlMap).get<T>(key)) { "missing $key in $this" }
+
   // The metric names a PromQL expression selects. Label names appear only inside {...} matchers and grouping
   // clauses, so both are removed first; agent_name, for one, is a label, not a metric.
   private fun metricNames(promql: String): Set<String> =
@@ -96,7 +111,7 @@ class DashboardMetricNamesTest : StringSpec() {
       AGENTS_DASHBOARD to ::dashboardExprs,
       MONITORING_SNIPPETS to SNIPPET::captures,
       METRICS_DOC to PROMQL_BLOCK::captures,
-      GRAFANA_PAGE to ALERT_EXPR::captures,
+      ALERT_RULES to ::ruleExprs,
     )
 
   init {
@@ -105,16 +120,11 @@ class DashboardMetricNamesTest : StringSpec() {
         val queries = extract(File(file).readText())
         queries.shouldNotBeEmpty()
         val names = queries.associateWith(::metricNames)
-        // Every query names a proxy or agent series, so a query the extractor mangled (a YAML block scalar read as
-        // just "|", say) fails here instead of passing as a query with nothing to check.
+        // Every query names a proxy or agent series, so a query the extractor mangled fails here instead of passing
+        // as a query with nothing to check.
         names.filterValues { it.isEmpty() }.keys.shouldBeEmpty()
         names.values.flatten().filterNot { it in exposed }.distinct().shouldBeEmpty()
       }
-    }
-
-    "every alert rule on the Grafana page should have its expression checked" {
-      val page = File(GRAFANA_PAGE).readText()
-      ALERT_EXPR.captures(page) shouldHaveSize ALERT.findAll(page).count()
     }
 
     // The exposed name is what dashboards and docs copy, so the source declares it too.
@@ -132,17 +142,13 @@ class DashboardMetricNamesTest : StringSpec() {
     private const val AGENTS_DASHBOARD = "grafana/prometheus-agents.json"
     private const val MONITORING_SNIPPETS = "src/test/kotlin/website/MonitoringExamples.txt"
     private const val METRICS_DOC = "docs/metrics-and-grafana.md"
-    private const val GRAFANA_PAGE = "website/prometheus-proxy/docs/grafana.md"
+    private const val ALERT_RULES = "grafana/alerts.yml"
     private val MATCHERS = Regex("""\{[^}]*}""")
     private val GROUPING = Regex("""\b(?:by|without|on|ignoring|group_left|group_right)\s*\([^)]*\)""")
     private val METRIC_NAME = Regex("""\b(?:proxy|agent)_[a-z_]+\b""")
     private val SNIPPET =
       Regex("""; --8<-- \[start:promql-[^\]]+]\n(.*?)\n; --8<-- \[end:""", RegexOption.DOT_MATCHES_ALL)
     private val PROMQL_BLOCK = Regex("""```promql\n(.*?)```""", RegexOption.DOT_MATCHES_ALL)
-    private val ALERT = Regex("""^\s*- alert:""", RegexOption.MULTILINE)
-
-    // An alert rule's expr, one line or a `|` block, up to the rule's next key.
-    private val ALERT_EXPR = Regex("""expr:\s*(?:\|\n)?(.*?)\n\s*\w+:""", RegexOption.DOT_MATCHES_ALL)
   }
 }
 

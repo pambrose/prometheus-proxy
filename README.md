@@ -42,7 +42,8 @@ client. Every `proxy_*` and `agent_*` metric keeps its name, labels, and buckets
 are gone and, with the JVM exports on, the JVM memory metrics are renamed, so read **Before you upgrade** in the
 [release notes](RELEASE_NOTES.md) first. The proxy and agent can now be installed with Homebrew, the bundled
 Grafana dashboards' connection, eviction, heartbeat, and scrape-count panels show data again, and the JARs no
-longer print logback and kotlin-logging lines at startup; the [changelog](CHANGELOG.md) has the full list.
+longer print logback and kotlin-logging lines at startup. It also ships the alerting rules as
+`grafana/alerts.yml`; the [changelog](CHANGELOG.md) has the full list.
 
 Version 4.1.0 (released 2026-09-23) is a security and reliability release: agents can no longer answer,
 read, or take over each other's scrapes and paths, a rejected path no longer takes an agent offline and a

@@ -86,3 +86,14 @@ jobs:
           java-version: 25
       - name: Model-check the TLA+ specs
         run: make tla-checks
+
+  # Validates the alerting rules users load into Prometheus (grafana/alerts.yml) with promtool, from the Prometheus
+  # image the container suite runs. DashboardMetricNamesTest separately checks that every series the rules query is
+  # one the proxy or agent exposes.
+  rules:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check the alerting rules
+        run: make check-rules

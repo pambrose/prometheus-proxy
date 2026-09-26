@@ -20,6 +20,12 @@ Each formula installs a `prometheus-proxy` or `prometheus-agent` command that ru
 runs either one in the background with a starter config in `$(brew --prefix)/etc/`; an upgrade leaves a config
 you have edited alone.
 
+### Alerting rules as a file
+
+The alerting rules on the Grafana page now ship as `grafana/alerts.yml`: add it to Prometheus' `rule_files` instead of
+copying the rules out of the page. CI checks it with `promtool`, and checks that every series it queries is one the
+proxy or agent exposes.
+
 ### Security
 
 - **Vulnerable dependencies in the JARs and images are updated.** The Netty that gRPC brings (4.2.16, with a critical

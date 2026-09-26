@@ -113,6 +113,7 @@ dependencies {
   implementation(libs.logback.classic) // compile-time: Utils.setLogLevel uses Logback's Level/Logger
   runtimeOnly(libs.slf4j.jul) // jul-to-slf4j bridge: installed at runtime, no compile-time references
 
+  testImplementation(libs.kaml)
   testImplementation(libs.kotest)
   testImplementation(libs.lincheck)
   testImplementation(libs.mockk)

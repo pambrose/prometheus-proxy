@@ -1,5 +1,5 @@
 .PHONY: default help stop clean clean-all stubs build tibuild refresh jars \
-        tests mini-tests xxl-tests nh-tests ip-tests netty-tests tls-tests lincheck-tests tla-checks \
+        tests mini-tests xxl-tests nh-tests ip-tests netty-tests tls-tests lincheck-tests tla-checks check-rules \
         container-tests scaling-tests all-tests regen-certs \
         docker-clean docker-clean-dry \
         all-scaling scaling-paths scaling-agents scaling-payload scaling-consolidated scaling-concurrency scaling-soak \
@@ -33,6 +33,10 @@ TLA_SHA256 := 936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88
 TLA_DIR := specs/tla
 TLA_JAR := $(TLA_DIR)/tla2tools.jar
 TLC = cd $(TLA_DIR) && java -XX:+UseParallelGC -cp tla2tools.jar tlc2.TLC -workers auto -deadlock -cleanup
+
+# The Prometheus image whose promtool checks grafana/alerts.yml. Keep in step with
+# ContainerTestSupport.PROMETHEUS_IMAGE, the Prometheus the container suite scrapes through.
+PROMETHEUS_IMAGE := prom/prometheus:v3.14.0
 
 # Banner printed at the start of every scaling target, so a long `all-scaling` run makes it obvious
 # which preset is executing at any moment (they look alike in Gradle's output otherwise).
@@ -125,6 +129,9 @@ $(TLA_JAR):
 tla-checks: $(TLA_JAR)  ## Model-check the TLA+ specs in specs/tla (the quick configs; downloads the TLA+ tools once)
 	$(TLC) -metadir $(CURDIR)/build/tla/AgentFailover -config AgentFailover.cfg AgentFailover.tla
 	$(TLC) -metadir $(CURDIR)/build/tla/ProxyRegistry -config ProxyRegistry.cfg ProxyRegistry.tla
+
+check-rules:  ## Validate the alerting rules in grafana/alerts.yml with promtool (needs Docker)
+	docker run --rm -v "$(CURDIR)/grafana:/rules:ro" --entrypoint promtool $(PROMETHEUS_IMAGE) check rules /rules/alerts.yml
 
 container-tests: jars  ## Run the Testcontainers tests (needs Docker)
 	@DOCKER_HOST="$$(docker context inspect --format '{{.Endpoints.docker.Host}}' 2>/dev/null)"; \

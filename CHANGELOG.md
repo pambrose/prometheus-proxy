@@ -18,6 +18,7 @@ All notable changes to this project are documented in this file.
 ### New Features
 
 - The proxy and the agent are available from Homebrew: `brew install pambrose/tap/prometheus-proxy` and `brew install pambrose/tap/prometheus-agent` install `prometheus-proxy` and `prometheus-agent` commands that run the release JARs on `openjdk@25`, the runtime the Docker images ship, and `brew services` definitions that run them with a starter config in `$(brew --prefix)/etc/`. The formulae's sources are in `etc/homebrew/`; `make homebrew-formulae` renders them for a published release into a clone of `pambrose/homebrew-tap` (step 9 of `docs/RELEASE.md`)
+- The Prometheus alerting rules from the Grafana page ship as `grafana/alerts.yml`, for Prometheus' `rule_files`; the page includes the file, so the two can't drift
 
 ### Bug Fixes
 
@@ -39,11 +40,13 @@ All notable changes to this project are documented in this file.
 - Fix a flaky `ProxyWebDashboardTest` spec, "an oversized message should close the session", which failed a CI run with `expected:<TOO_BIG> but was:<CLOSED_ABNORMALLY>`. Ktor rejects an oversized frame on reading its header and closes the socket with the rest of the frame unread, so the kernel resets the connection, and a reset that beats the TOO_BIG close frame to the client surfaces as an abnormal close. The spec now accepts either code and then checks that a fresh session still renders; with the frame cap removed it still fails
 - Add a `Security` workflow (`.github/workflows/security.yml`). Trivy scans the proxy and agent images on every pull request, on pushes to `master`, and weekly, and fails on a HIGH or CRITICAL vulnerability that has a fix; CodeQL analyzes the Kotlin code. Findings from `master` and the weekly run go to code scanning
 - The container tests run on pull requests too, not only after a merge, so a change that breaks the fat JARs, the images, or the scrape path shows up before it merges
+- CI checks `grafana/alerts.yml` with `promtool` (`make check-rules`), and `DashboardMetricNamesTest` reads the alerting rules from that file instead of extracting them from the Grafana page
 
 ### Dependencies
 
 - Update common-utils 4.1.0 → 5.0.0 and the Prometheus Java client `simpleclient` 0.16.0 → `prometheus-metrics-core` 1.9.0
 - Netty 4.2.16.Final → 4.2.18.Final and Jackson 2.12.7 → 2.22.3, overriding what grpc-netty and Dropwizard `metrics-json` bring (see Security)
+- Add `kaml` 0.79.0 as a test dependency, to read `grafana/alerts.yml` (it was already on the test classpath through another dependency)
 
 ## [4.1.0] - 2026-09-23
 

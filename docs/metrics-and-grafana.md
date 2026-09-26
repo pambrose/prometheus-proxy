@@ -259,6 +259,10 @@ Two dashboards are included in `grafana/`:
 | `prometheus-proxy.json`  | Prometheus Proxy  | Proxy health, throughput, latency, errors        |
 | `prometheus-agents.json` | Prometheus Agents | Agent health, scrape activity, per-agent latency |
 
+`grafana/alerts.yml` holds Prometheus alerting rules for the same metrics (success rate, P99 latency, connected
+agents, backlogs, oversized payloads, evictions, and agent connect failures). Add it to Prometheus' `rule_files`
+and tune the thresholds; `make check-rules` validates it with `promtool`.
+
 ### Requirements
 
 - Grafana 10.0 or later
