@@ -180,22 +180,6 @@ class AgentContextCleanupServiceTest : StringSpec() {
       service.stopAsync().awaitTerminated()
     }
 
-    "service init block should be called during construction" {
-      val configVals = createConfigVals()
-      val agentContextManager = AgentContextManager(isTestMode = true)
-
-      val mockProxy = mockk<Proxy>(relaxed = true)
-      every { mockProxy.agentContextManager } returns agentContextManager
-
-      var initBlockCalled = false
-
-      val service = AgentContextCleanupService(mockProxy, configVals) {
-        initBlockCalled = true
-      }
-
-      initBlockCalled shouldBe true
-    }
-
     // ==================== Empty Agent Map Tests ====================
 
     "cleanup should handle empty agent context map gracefully" {

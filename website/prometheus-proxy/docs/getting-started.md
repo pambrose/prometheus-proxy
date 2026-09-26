@@ -41,8 +41,19 @@ icon: lucide/play
     Multi-platform images (amd64, arm64, s390x, ppc64le) are available on Docker Hub:
 
     ```bash
-    docker pull pambrose/prometheus-proxy:4.1.0
-    docker pull pambrose/prometheus-agent:4.1.0
+    docker pull pambrose/prometheus-proxy:4.2.0
+    docker pull pambrose/prometheus-agent:4.2.0
+    ```
+
+=== "Helm"
+
+    On Kubernetes, install the proxy and the agent with the Helm charts in the repository's
+    [`charts/`](https://github.com/pambrose/prometheus-proxy/tree/master/charts) directory. They run the
+    Docker Hub images; clone the repository to use them:
+
+    ```bash
+    git clone https://github.com/pambrose/prometheus-proxy.git
+    cd prometheus-proxy
     ```
 
 ## Start the Proxy
@@ -117,7 +128,7 @@ The proxy runs outside the firewall alongside your Prometheus server.
 
     ```bash
     docker run --rm -p 8080:8080 -p 50051:50051 \
-      pambrose/prometheus-proxy:4.1.0
+      pambrose/prometheus-proxy:4.2.0
     ```
 
     **In the background**, `--detach` starts the container and returns, and
@@ -127,13 +138,25 @@ The proxy runs outside the firewall alongside your Prometheus server.
     ```bash
     docker run --detach --name prometheus-proxy --restart unless-stopped \
       -p 8080:8080 -p 50051:50051 \
-      pambrose/prometheus-proxy:4.1.0
+      pambrose/prometheus-proxy:4.2.0
 
     docker logs --follow prometheus-proxy   # follow its log
     docker restart prometheus-proxy         # restart it
     docker stop prometheus-proxy            # stop it, and no longer restart it
     docker rm prometheus-proxy              # remove the stopped container
     ```
+
+=== "Helm"
+
+    Install the proxy in the cluster where Prometheus runs; Kubernetes keeps it running:
+
+    ```bash
+    helm install prometheus-proxy ./charts/prometheus-proxy --namespace monitoring --create-namespace
+    ```
+
+    Prometheus scrapes it at `prometheus-proxy.monitoring.svc:8080`, and agents in the same cluster
+    connect to `prometheus-proxy.monitoring.svc:50051`. For agents in other clusters, add
+    `--set agentService.enabled=true`, which exposes the gRPC port through a LoadBalancer Service.
 
 ## Start the Agent
 
@@ -242,7 +265,7 @@ Each entry in `pathConfigs` maps:
       --mount type=bind,source="$(pwd)"/agent.conf,target=/app/agent.conf \
       --env AGENT_CONFIG=agent.conf \
       --env PROXY_HOSTNAME=proxy-host.example.com \
-      pambrose/prometheus-agent:4.1.0
+      pambrose/prometheus-agent:4.2.0
     ```
 
     **In the background**, `--detach` starts the container and returns, and
@@ -254,13 +277,28 @@ Each entry in `pathConfigs` maps:
       --mount type=bind,source="$(pwd)"/agent.conf,target=/app/agent.conf \
       --env AGENT_CONFIG=agent.conf \
       --env PROXY_HOSTNAME=proxy-host.example.com \
-      pambrose/prometheus-agent:4.1.0
+      pambrose/prometheus-agent:4.2.0
 
     docker logs --follow prometheus-agent   # follow its log
     docker restart prometheus-agent         # pick up an edited agent.conf
     docker stop prometheus-agent            # stop it, and no longer restart it
     docker rm prometheus-agent              # remove the stopped container
     ```
+
+=== "Helm"
+
+    Install the agent in the cluster whose services it scrapes, with the `agent.conf` above. In a pod,
+    `localhost` is the agent itself, so point each `url` at the service's cluster DNS name (for example
+    `http://my-app.default.svc.cluster.local:9100/metrics`):
+
+    ```bash
+    helm install prometheus-agent ./charts/prometheus-agent \
+      --set proxy.hostname=proxy-host.example.com:50051 \
+      --set-file config=agent.conf
+    ```
+
+    `proxy.hostname` is required, and takes precedence over the one in `agent.conf`. See
+    [Kubernetes](kubernetes.md#installing-with-helm) for TLS, agent tokens, and discovery.
 
 === "Remote Config"
 

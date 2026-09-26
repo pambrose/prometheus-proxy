@@ -1,0 +1,21 @@
+apiVersion: v2
+name: prometheus-proxy
+description: >-
+  The Prometheus Proxy server: Prometheus scrapes it, and it forwards each scrape to the agent that registered the
+  path, over the gRPC connection the agent opened from inside its firewall.
+type: application
+# The chart version follows the release it deploys; bump both with the project version (docs/RELEASE.md, step 2).
+version: 4.2.0
+appVersion: "4.2.0"
+kubeVersion: ">=1.25.0-0"
+home: https://pambrose.github.io/prometheus-proxy/
+sources:
+  - https://github.com/pambrose/prometheus-proxy
+keywords:
+  - prometheus
+  - proxy
+  - firewall
+  - monitoring
+maintainers:
+  - name: Paul Ambrose
+    url: https://github.com/pambrose

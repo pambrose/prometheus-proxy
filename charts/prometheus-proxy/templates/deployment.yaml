@@ -1,0 +1,180 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "prometheus-proxy.fullname" . }}
+  labels:
+    {{- include "prometheus-proxy.labels" . | nindent 4 }}
+spec:
+  # One proxy per release. Agents register their paths with the proxy they connect to, so a second replica behind the
+  # same Service would receive scrapes for paths it doesn't hold. For high availability, install a second release and
+  # give the agents both proxies (a comma-separated proxy.hostname in the agent chart).
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "prometheus-proxy.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        {{- if and .Values.config (not .Values.existingConfigMap) }}
+        checksum/config: {{ .Values.config | sha256sum }}
+        {{- end }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "prometheus-proxy.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: proxy
+          image: {{ include "prometheus-proxy.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.extraArgs }}
+          args:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.httpPort }}
+            - name: grpc
+              containerPort: {{ .Values.agentPort }}
+            {{- if .Values.metrics.enabled }}
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+            {{- end }}
+            {{- if .Values.admin.enabled }}
+            - name: admin
+              containerPort: {{ .Values.admin.port }}
+            {{- end }}
+            {{- if .Values.dashboard.enabled }}
+            - name: dashboard
+              containerPort: {{ .Values.dashboard.port }}
+            {{- end }}
+          env:
+            - name: PROXY_PORT
+              value: {{ .Values.httpPort | quote }}
+            - name: AGENT_PORT
+              value: {{ .Values.agentPort | quote }}
+            - name: ADMIN_ENABLED
+              value: {{ .Values.admin.enabled | quote }}
+            - name: ADMIN_PORT
+              value: {{ .Values.admin.port | quote }}
+            - name: METRICS_ENABLED
+              value: {{ .Values.metrics.enabled | quote }}
+            - name: METRICS_PORT
+              value: {{ .Values.metrics.port | quote }}
+            - name: DASHBOARD_ENABLED
+              value: {{ .Values.dashboard.enabled | quote }}
+            - name: DASHBOARD_PORT
+              value: {{ .Values.dashboard.port | quote }}
+            {{- if include "prometheus-proxy.hasConfig" . }}
+            - name: PROXY_CONFIG
+              value: /app/config/proxy.conf
+            {{- end }}
+            {{- with .Values.agentToken.existingSecret }}
+            - name: AGENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ . }}
+                  key: {{ $.Values.agentToken.key }}
+            {{- end }}
+            {{- with .Values.tls.secretName }}
+            - name: CERT_CHAIN_FILE_PATH
+              value: /app/certs/{{ $.Values.tls.certFile }}
+            - name: PRIVATE_KEY_FILE_PATH
+              value: /app/certs/{{ $.Values.tls.keyFile }}
+            {{- with $.Values.tls.caFile }}
+            - name: TRUST_CERT_COLLECTION_FILE_PATH
+              value: /app/certs/{{ . }}
+            {{- end }}
+            {{- end }}
+            {{- with .Values.javaToolOptions }}
+            - name: JAVA_TOOL_OPTIONS
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.env }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if .Values.admin.enabled }}
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: admin
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /healthcheck
+              port: admin
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          {{- else }}
+          livenessProbe:
+            tcpSocket:
+              port: http
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            tcpSocket:
+              port: grpc
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- if include "prometheus-proxy.hasConfig" . }}
+            - name: config
+              mountPath: /app/config
+              readOnly: true
+            {{- end }}
+            {{- if .Values.tls.secretName }}
+            - name: certs
+              mountPath: /app/certs
+              readOnly: true
+            {{- end }}
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- if include "prometheus-proxy.hasConfig" . }}
+        - name: config
+          configMap:
+            name: {{ include "prometheus-proxy.configMapName" . }}
+        {{- end }}
+        {{- with .Values.tls.secretName }}
+        - name: certs
+          secret:
+            secretName: {{ . }}
+        {{- end }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

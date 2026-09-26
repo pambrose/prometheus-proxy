@@ -18,6 +18,7 @@
 
 package io.prometheus.agent
 
+import io.kotest.assertions.throwables.shouldNotThrowAny
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
@@ -27,6 +28,7 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.prometheus.agent.AgentOptions.Companion.DEFAULT_GRPC_PORT
+import io.prometheus.common.ConfigLoadException
 import io.prometheus.common.Utils.HostPort
 import io.prometheus.common.Utils.parseEndpointList
 import io.prometheus.common.agentOptions
@@ -645,6 +647,24 @@ class AgentOptionsTest : StringSpec() {
         isTlsEnabled = false,
         trustCertCollectionFilePath = "",
       ).shouldBeFalse()
+    }
+
+    // ==================== Parse-only Options ====================
+
+    // Agent.startSyncAgent first builds parse-only options, just to handle -u and -v before the banner is logged. That
+    // pass must not load the config: the options built next load it, and assignConfigVals() logs every setting, so
+    // loading it here too would log them all twice, the first time ahead of the banner (and fetch a config URL twice).
+    "parse-only options should not load the config" {
+      val args = arrayOf("--name", "test", "--proxy", "host", "--config", "no-such-dir/missing-agent.conf")
+
+      shouldThrow<ConfigLoadException> { AgentOptions(args, false) }
+      shouldNotThrowAny { AgentOptions(args, false, parseOnly = true) }
+    }
+
+    // Embedded (exitOnMissingConfig false), a -v that would exit a standalone agent throws instead.
+    "parse-only options should still handle -v" {
+      val exception = shouldThrow<ConfigLoadException> { AgentOptions(arrayOf("-v"), false, parseOnly = true) }
+      exception.message shouldContain "Version requested"
     }
   }
 

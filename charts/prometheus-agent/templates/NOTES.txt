@@ -1,0 +1,17 @@
+The Prometheus agent is running as {{ include "prometheus-agent.fullname" . }} in namespace {{ .Release.Namespace }},
+connecting to the proxy at {{ .Values.proxy.hostname }}.
+
+Each path in the agent's config is scraped through the proxy's HTTP port: http://<proxy>:8080/<path>
+{{- if .Values.discovery.enabled }}
+
+Discovery is on: edit the {{ include "prometheus-agent.discoveryConfigMapName" . }} ConfigMap to add or remove targets.
+The agent re-reads it every {{ .Values.discovery.reconcileIntervalSecs }}s, after the kubelet updates the mounted file.
+{{- end }}
+
+Check that it connected and registered its paths:
+  kubectl -n {{ .Release.Namespace }} logs deploy/{{ include "prometheus-agent.fullname" . }}
+{{- if not (or .Values.agentToken.existingSecret .Values.tls.secretName) }}
+
+The connection to the proxy is plaintext and presents no token. If the proxy requires either, set
+agentToken.existingSecret or tls.secretName.
+{{- end }}

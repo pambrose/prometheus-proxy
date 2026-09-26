@@ -105,16 +105,32 @@ dependencies {
   implementation(libs.typesafe.config)
   implementation(libs.prometheus.metrics.core)
   implementation(libs.dropwizard.metrics)
+  // Raises the Jackson that Dropwizard metrics-json brings (2.12.7) past its CVEs; see libs.versions.toml.
+  implementation(platform(libs.jackson.bom))
   implementation(libs.zipkin.brave)
 
   implementation(libs.kotlin.logging)
   implementation(libs.logback.classic) // compile-time: Utils.setLogLevel uses Logback's Level/Logger
   runtimeOnly(libs.slf4j.jul) // jul-to-slf4j bridge: installed at runtime, no compile-time references
 
+  testImplementation(libs.kaml)
   testImplementation(libs.kotest)
   testImplementation(libs.lincheck)
   testImplementation(libs.mockk)
   testImplementation(libs.testcontainers)
+}
+
+// Raises every Netty module grpc-netty brings (4.2.16.Final) to the patched release in libs.versions.toml. netty-tcnative
+// keeps the version grpc is tested with: its classes and the per-platform natives must match, which a Netty BOM would
+// break by raising only some of them.
+val nettyVersion = libs.versions.netty.get()
+configurations.configureEach {
+  resolutionStrategy.eachDependency {
+    if (requested.group == "io.netty" && !requested.name.startsWith("netty-tcnative")) {
+      useVersion(nettyVersion)
+      because("grpc-netty 1.84.0's Netty 4.2.16.Final has CVE-2026-75595")
+    }
+  }
 }
 
 configureKotlin()

@@ -62,8 +62,8 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "time() - proxy_start_time_seconds",
-          "legendFormat": "",
+          "expr": "time() - proxy_start_time_seconds{job=~\"$job\", instance=~\"$instance\"}",
+          "legendFormat": "{{instance}}",
           "refId": "A"
         }
       ]
@@ -102,8 +102,8 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "proxy_agent_map_size",
-          "legendFormat": "",
+          "expr": "proxy_agent_map_size{job=~\"$job\", instance=~\"$instance\"}",
+          "legendFormat": "{{instance}}",
           "refId": "A"
         }
       ]
@@ -142,8 +142,8 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "proxy_path_map_size",
-          "legendFormat": "",
+          "expr": "proxy_path_map_size{job=~\"$job\", instance=~\"$instance\"}",
+          "legendFormat": "{{instance}}",
           "refId": "A"
         }
       ]
@@ -185,7 +185,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum(rate(proxy_scrape_requests_total{type=\"success\"}[$__rate_interval])) / sum(rate(proxy_scrape_requests_total[$__rate_interval])) * 100",
+          "expr": "sum(rate(proxy_scrape_requests_total{job=~\"$job\", instance=~\"$instance\", type=\"success\"}[$__rate_interval])) / sum(rate(proxy_scrape_requests_total{job=~\"$job\", instance=~\"$instance\"}[$__rate_interval])) * 100",
           "legendFormat": "",
           "refId": "A"
         }
@@ -227,7 +227,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum(increase(proxy_scrape_requests_total{type!=\"success\"}[1h]))",
+          "expr": "sum(increase(proxy_scrape_requests_total{job=~\"$job\", instance=~\"$instance\", type!=\"success\"}[1h]))",
           "legendFormat": "",
           "refId": "A"
         }
@@ -286,7 +286,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (type) (rate(proxy_scrape_requests_total[$__rate_interval]))",
+          "expr": "sum by (type) (rate(proxy_scrape_requests_total{job=~\"$job\", instance=~\"$instance\"}[$__rate_interval]))",
           "legendFormat": "{{type}}",
           "refId": "A"
         }
@@ -338,13 +338,13 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum(rate(proxy_scrape_requests_total{type=\"success\"}[$__rate_interval]))",
+          "expr": "sum(rate(proxy_scrape_requests_total{job=~\"$job\", instance=~\"$instance\", type=\"success\"}[$__rate_interval]))",
           "legendFormat": "Success",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum(rate(proxy_scrape_requests_total{type!=\"success\"}[$__rate_interval]))",
+          "expr": "sum(rate(proxy_scrape_requests_total{job=~\"$job\", instance=~\"$instance\", type!=\"success\"}[$__rate_interval]))",
           "legendFormat": "Errors",
           "refId": "B"
         }
@@ -403,19 +403,19 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "histogram_quantile(0.5, sum by (le) (rate(proxy_scrape_request_latency_seconds_bucket[$__rate_interval])))",
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(proxy_scrape_request_latency_seconds_bucket{job=~\"$job\", instance=~\"$instance\"}[$__rate_interval])))",
           "legendFormat": "P50",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "histogram_quantile(0.9, sum by (le) (rate(proxy_scrape_request_latency_seconds_bucket[$__rate_interval])))",
+          "expr": "histogram_quantile(0.9, sum by (le) (rate(proxy_scrape_request_latency_seconds_bucket{job=~\"$job\", instance=~\"$instance\"}[$__rate_interval])))",
           "legendFormat": "P90",
           "refId": "B"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(proxy_scrape_request_latency_seconds_bucket[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(proxy_scrape_request_latency_seconds_bucket{job=~\"$job\", instance=~\"$instance\"}[$__rate_interval])))",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -467,7 +467,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "histogram_quantile(0.99, sum by (le, path) (rate(proxy_scrape_request_latency_seconds_bucket{path=~\"$path\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by (le, path) (rate(proxy_scrape_request_latency_seconds_bucket{job=~\"$job\", instance=~\"$instance\", path=~\"$path\"}[$__rate_interval])))",
           "legendFormat": "{{path}}",
           "refId": "A"
         }
@@ -526,19 +526,19 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "histogram_quantile(0.5, sum by (le) (rate(proxy_scrape_response_bytes_bucket[$__rate_interval])))",
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(proxy_scrape_response_bytes_bucket{job=~\"$job\", instance=~\"$instance\"}[$__rate_interval])))",
           "legendFormat": "P50",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "histogram_quantile(0.9, sum by (le) (rate(proxy_scrape_response_bytes_bucket[$__rate_interval])))",
+          "expr": "histogram_quantile(0.9, sum by (le) (rate(proxy_scrape_response_bytes_bucket{job=~\"$job\", instance=~\"$instance\"}[$__rate_interval])))",
           "legendFormat": "P90",
           "refId": "B"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(proxy_scrape_response_bytes_bucket[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(proxy_scrape_response_bytes_bucket{job=~\"$job\", instance=~\"$instance\"}[$__rate_interval])))",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -590,7 +590,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (encoding) (rate(proxy_scrape_response_bytes_count[$__rate_interval]))",
+          "expr": "sum by (encoding) (rate(proxy_scrape_response_bytes_count{job=~\"$job\", instance=~\"$instance\"}[$__rate_interval]))",
           "legendFormat": "{{encoding}}",
           "refId": "A"
         }
@@ -648,8 +648,8 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "proxy_cumulative_agent_backlog_size",
-          "legendFormat": "Backlog",
+          "expr": "proxy_cumulative_agent_backlog_size{job=~\"$job\", instance=~\"$instance\"}",
+          "legendFormat": "{{instance}}",
           "refId": "A"
         }
       ]
@@ -699,8 +699,8 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "proxy_scrape_map_size",
-          "legendFormat": "Active Scrapes",
+          "expr": "proxy_scrape_map_size{job=~\"$job\", instance=~\"$instance\"}",
+          "legendFormat": "{{instance}}",
           "refId": "A"
         }
       ]
@@ -750,8 +750,8 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "proxy_chunk_context_map_size",
-          "legendFormat": "Chunk Contexts",
+          "expr": "proxy_chunk_context_map_size{job=~\"$job\", instance=~\"$instance\"}",
+          "legendFormat": "{{instance}}",
           "refId": "A"
         }
       ]
@@ -791,7 +791,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "rate(proxy_heartbeat_count_total[$__rate_interval])",
+          "expr": "sum(rate(proxy_heartbeat_count_total{job=~\"$job\", instance=~\"$instance\"}[$__rate_interval]))",
           "legendFormat": "",
           "refId": "A"
         }
@@ -850,7 +850,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (type) (rate(proxy_scrape_requests_total{type!=\"success\"}[$__rate_interval]))",
+          "expr": "sum by (type) (rate(proxy_scrape_requests_total{job=~\"$job\", instance=~\"$instance\", type!=\"success\"}[$__rate_interval]))",
           "legendFormat": "{{type}}",
           "refId": "A"
         }
@@ -902,19 +902,19 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "rate(proxy_connect_count_total[$__rate_interval])",
+          "expr": "sum(rate(proxy_connect_count_total{job=~\"$job\", instance=~\"$instance\"}[$__rate_interval]))",
           "legendFormat": "Connections",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "rate(proxy_eviction_count_total[$__rate_interval])",
+          "expr": "sum(rate(proxy_eviction_count_total{job=~\"$job\", instance=~\"$instance\"}[$__rate_interval]))",
           "legendFormat": "Evictions",
           "refId": "B"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "rate(proxy_agent_displacement_total[$__rate_interval])",
+          "expr": "sum(rate(proxy_agent_displacement_total{job=~\"$job\", instance=~\"$instance\"}[$__rate_interval]))",
           "legendFormat": "Displacements",
           "refId": "C"
         }
@@ -973,7 +973,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (stage) (rate(proxy_chunk_validation_failures_total[$__rate_interval]))",
+          "expr": "sum by (stage) (rate(proxy_chunk_validation_failures_total{job=~\"$job\", instance=~\"$instance\"}[$__rate_interval]))",
           "legendFormat": "{{stage}}",
           "refId": "A"
         }
@@ -1025,14 +1025,14 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "rate(proxy_chunked_transfers_abandoned_total[$__rate_interval])",
+          "expr": "sum(rate(proxy_chunked_transfers_abandoned_total{job=~\"$job\", instance=~\"$instance\"}[$__rate_interval]))",
           "legendFormat": "Abandoned",
           "refId": "A"
         }
       ]
     }
   ],
-  "refresh": "5s",
+  "refresh": "30s",
   "schemaVersion": 39,
   "tags": ["prometheus", "proxy"],
   "templating": {
@@ -1055,7 +1055,49 @@
       {
         "current": {},
         "datasource": { "type": "prometheus", "uid": "${datasource}" },
-        "definition": "label_values(proxy_scrape_request_latency_seconds_bucket, path)",
+        "definition": "label_values(proxy_start_time_seconds, job)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Job",
+        "multi": true,
+        "name": "job",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(proxy_start_time_seconds, job)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {},
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "definition": "label_values(proxy_start_time_seconds{job=~\"$job\"}, instance)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Instance",
+        "multi": true,
+        "name": "instance",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(proxy_start_time_seconds{job=~\"$job\"}, instance)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {},
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "definition": "label_values(proxy_scrape_request_latency_seconds_bucket{job=~\"$job\", instance=~\"$instance\"}, path)",
         "hide": 0,
         "includeAll": true,
         "label": "Path",
@@ -1064,7 +1106,7 @@
         "options": [],
         "query": {
           "qryType": 1,
-          "query": "label_values(proxy_scrape_request_latency_seconds_bucket, path)",
+          "query": "label_values(proxy_scrape_request_latency_seconds_bucket{job=~\"$job\", instance=~\"$instance\"}, path)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 2,

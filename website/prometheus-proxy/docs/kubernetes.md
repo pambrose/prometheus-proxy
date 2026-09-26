@@ -43,6 +43,39 @@ proxy's gRPC endpoint — no inbound ports are exposed.
     Adjust the `namespace` fields and the in-cluster DNS names (e.g.
     `prometheus-proxy.monitoring.svc.cluster.local`) to match your own layout.
 
+## Installing with Helm
+
+The repository ships a Helm chart for each side of the firewall, in
+[`charts/`](https://github.com/pambrose/prometheus-proxy/tree/master/charts): `prometheus-proxy` for the
+monitoring cluster and `prometheus-agent` for each target cluster. Install them from a clone of the repository:
+
+```bash
+# In the monitoring cluster, next to Prometheus. agentService adds a LoadBalancer for agents in other clusters.
+helm install prometheus-proxy ./charts/prometheus-proxy --namespace monitoring --create-namespace \
+  --set agentService.enabled=true
+
+# In each target cluster
+helm install prometheus-agent ./charts/prometheus-agent -f agent-values.yaml
+```
+
+```yaml
+# agent-values.yaml
+proxy:
+  hostname: proxy.example.com:50051   # the proxy's externally reachable gRPC address
+config: |
+  agent {
+    pathConfigs: [
+      { name: "My app", path: my_app_metrics, url: "http://my-app.default.svc.cluster.local:8080/metrics" }
+    ]
+  }
+```
+
+The charts set up what the manifests below do by hand: the admin-endpoint probes, resource requests, a non-root pod
+with a read-only root filesystem, and optionally a ServiceMonitor (`serviceMonitor.enabled`), an agent token from a
+Secret (`agentToken.existingSecret`), TLS (`tls.secretName`), and, for the agent, a discovery ConfigMap
+(`discovery.enabled`). Each chart's README lists its values. The rest of this page builds the same deployment from
+plain manifests.
+
 ## Deploying the Proxy
 
 Deploy the proxy as a `Deployment` plus a `Service`. Admin and metrics endpoints are enabled
@@ -227,12 +260,6 @@ The proxy and agent Deployments above wire Kubernetes probes to the admin endpoi
 Both endpoints are served on the **admin** port (`8092` for the proxy, `8093` for the agent),
 which requires `ADMIN_ENABLED=true`. The manifests also set conservative CPU/memory
 `requests` and `limits` — tune them to your scrape volume and payload sizes.
-
-!!! info "No official Helm chart"
-
-    Prometheus Proxy does not currently publish a Helm chart. The raw manifests on this page
-    are the supported way to deploy on Kubernetes; adapt them to Kustomize or your own chart
-    as needed.
 
 ## Next Steps
 

@@ -2,9 +2,17 @@
 
 ---
 
-## Unreleased
+## 4.2.0
 
-_Not yet released_
+_Released 2026-09-26_
+
+A release that moves the proxy and agent to the Prometheus Java client 1.x, replacing the unmaintained 0.x client,
+and adds new ways to install and monitor them. Every `proxy_*` and `agent_*` metric keeps its name, labels and
+buckets, but the `_created` series are gone and, with the JVM exports on, the JVM memory metrics are renamed: read
+**Before you upgrade** first. The proxy and agent can now be installed with Homebrew or Helm, the alerting rules
+ship as `grafana/alerts.yml`, and the bundled Grafana dashboards show data again in the panels that had none. It
+also raises the Netty and Jackson that gRPC and the Dropwizard metrics servlets bring, to clear critical and high
+CVEs, and quiets startup.
 
 ### New Feature — Homebrew
 
@@ -19,6 +27,50 @@ Each formula installs a `prometheus-proxy` or `prometheus-agent` command that ru
 `openjdk@25`, the Java the Docker images use, which Homebrew installs as a dependency. `brew services start`
 runs either one in the background with a starter config in `$(brew --prefix)/etc/`; an upgrade leaves a config
 you have edited alone.
+
+### New Feature — Helm charts
+
+**The proxy and the agent can be installed with Helm**, from the charts in `charts/`:
+
+```bash
+# In the monitoring cluster, next to Prometheus
+helm install prometheus-proxy ./charts/prometheus-proxy --namespace monitoring --create-namespace \
+  --set agentService.enabled=true
+
+# In each target cluster, with proxy.hostname and the agent's config in agent-values.yaml
+helm install prometheus-agent ./charts/prometheus-agent -f agent-values.yaml
+```
+
+The charts run the proxy and agent as a non-root user with a read-only root filesystem and wire the health probes.
+Optional values add a LoadBalancer Service for agents in other clusters, a Prometheus Operator ServiceMonitor, an agent
+token or TLS certificates from Secrets, and, for the agent, a discovery ConfigMap it re-reads without restarting.
+The website's Kubernetes page has the details, and each chart's README lists its values.
+
+### Alerting rules as a file
+
+The alerting rules on the Grafana page now ship as `grafana/alerts.yml`: add it to Prometheus' `rule_files` instead of
+copying the rules out of the page. CI checks it with `promtool`, and checks that every series it queries is one the
+proxy or agent exposes.
+
+### Grafana dashboards
+
+- **The proxy dashboard has Job and Instance pickers**, so a high-availability pair of proxies, or two environments in
+  one Prometheus, no longer add up in every panel.
+- **The agents dashboard tells agents apart by `job`**, so scrape each agent in its own job. The monitoring docs now
+  show how: give the agent a path for its own `/metrics` and scrape it through the proxy, which works through the
+  firewall, unlike the direct scrape of `agent-host:8083` they showed before. The dashboard also gains an Unsuccessful
+  Scrapes by Agent panel, and its Agent Count, which was red for every count, is red only at zero.
+- **`grafana/alerts.yml` adds `ProxyDown`**, which fires when Prometheus can't scrape the proxy's job
+  (`prometheus-proxy`); the other rules need the proxy's metrics to fire at all.
+- Both dashboards refresh every 30 seconds instead of every 5. Re-import them to pick up these changes.
+
+### Security
+
+- **Vulnerable dependencies in the JARs and images are updated.** The Netty that gRPC brings (4.2.16, with a critical
+  CVE) is raised to 4.2.18, and the Jackson that the Dropwizard metrics servlets bring (2.12.7, with high CVEs) to
+  2.22.3. A new security workflow scans both images on every pull request and weekly, and fails on a high or critical
+  vulnerability that has a fix.
+- **Reporting a vulnerability:** `SECURITY.md` explains how to report one privately through GitHub.
 
 ### Before you upgrade
 
@@ -48,6 +100,15 @@ you have edited alone.
 - **The bundled Grafana dashboards show connection, eviction, heartbeat and scrape counts again.** Their panels
   (and the alert rules on the Grafana page) queried counters without the `_total` suffix they are exposed with,
   so they showed no data. Re-import `grafana/prometheus-proxy.json` and `grafana/prometheus-agents.json`.
+- **The `metrics.grpc` settings are gone from the docs and the config reference.** `metricsEnabled` and
+  `allMetricsReported` were listed as optional gRPC metrics but never did anything. A config that still sets them
+  keeps loading.
+- **`-u` now prints the usage when run in a terminal on Java 17.** The usage text wasn't flushed, so the process
+  exited before it appeared. `-u` and `-v` now print only the usage or the version, without the startup banner or
+  any log lines ahead of it.
+- **The proxy no longer warns at startup that its stale-agent cleanup "was added after Proxy was initialized".**
+  The cleanup service now registers with the proxy's other services, so the admin `/healthcheck`'s
+  `all_services_healthy` check covers it, and a failure in it is logged like any other service's.
 
 ### Documentation
 
@@ -58,6 +119,9 @@ you have edited alone.
   systemd unit for the JARs.
 - **The Docker page's production proxy example now runs.** It combined `--rm` with `--restart unless-stopped`,
   which Docker rejects.
+- **The embedded-agent page has an Upgrading from 4.1.x section.** It covers the move to the Prometheus Java
+  client 1.x, including how a host still on the 0.x client can serve its metrics and the agent's from one
+  endpoint with `prometheus-metrics-simpleclient-bridge`.
 
 ### Build and tooling
 
@@ -65,6 +129,18 @@ you have edited alone.
   now accepts either outcome and checks that the dashboard keeps serving.
 - CI now model-checks the TLA+ specs on every pull request, and a manual **Lincheck** workflow runs the concurrency
   specs on demand. The TLA+ tools the checks download are now verified against a pinned SHA-256.
+- The container tests, which run the fat JARs in Docker against a real Prometheus, now run on every pull request
+  rather than only after a merge.
+- CI lints the Helm charts and installs them into a kind cluster.
+
+### Dependency updates
+
+Runtime: common-utils 4.1.0 → 5.0.0 and the Prometheus Java client `simpleclient` 0.16.0 →
+`prometheus-metrics-core` 1.9.0 (see Before you upgrade), Netty 4.2.16.Final → 4.2.18.Final and Jackson 2.12.7 →
+2.22.3 (see Security), Logback 1.6.3 → 1.6.4, and the dashboard's htmx 2.0.10 → 2.0.11. Build and test only:
+Gradle 9.7.1 → 9.8.0, the shared convention plugins 1.1.5 → 1.1.6, and `kaml` 0.104.0, added to read
+`grafana/alerts.yml` in a test. The documentation site's Python lock picks up Zensical 0.0.63 → 0.0.65, Markdown
+3.10.3 → 3.11, and pymdown-extensions 12.0.1 → 12.1.
 
 ---
 

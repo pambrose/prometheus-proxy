@@ -160,8 +160,8 @@ backlog means agents can't keep up. See [Performance Tuning](advanced.md#perform
 - **Enable metrics** on proxy and agent and scrape their internal `/metrics`. See
   [Monitoring](monitoring.md#scraping-internal-metrics).
 - **Import the dashboards and alert rules** from [Grafana & Alerting](grafana.md).
-- Alert on success rate, P99 latency, agent count, and backlog growth — the rules on that page
-  cover each.
+- Alert on success rate, P99 latency, agent count, and backlog growth — `grafana/alerts.yml`, shown on
+  that page, covers each.
 - **Enable the [operational dashboard](web-dashboard.md)** (`--dashboard`) on an internal
   network. Grafana tells you *that* a target is failing; the dashboard shows *why* — which
   agent backs the path, whether that agent is still connected, and how its recent scrapes

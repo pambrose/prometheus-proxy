@@ -122,19 +122,30 @@ brew services stop prometheus-agent      # stop, and no longer start at login
 
 ```bash
 # Start proxy
-docker run --rm -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.1.0
+docker run --rm -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.2.0
 
 # Start agent
 docker run --rm \
   --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-  pambrose/prometheus-agent:4.1.0
+  pambrose/prometheus-agent:4.2.0
 
 # Both run in the foreground until Ctrl+C. To run one in the background, restarted if it exits or
 # Docker restarts (Docker doesn't allow --rm with --restart):
 docker run --detach --name prometheus-proxy --restart unless-stopped \
-  -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.1.0
+  -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.2.0
 docker logs --follow prometheus-proxy                          # follow its log
 docker stop prometheus-proxy && docker rm prometheus-proxy     # stop and remove it
+```
+
+### Kubernetes (Helm)
+
+Charts for each side of the firewall are in `charts/` (install from a clone of the repository):
+
+```bash
+# Monitoring cluster, next to Prometheus (agentService adds a LoadBalancer for agents in other clusters)
+helm install prometheus-proxy ./charts/prometheus-proxy -n monitoring --create-namespace --set agentService.enabled=true
+# Each target cluster: proxy.hostname and the agent's pathConfigs (config, HOCON) in agent-values.yaml
+helm install prometheus-agent ./charts/prometheus-agent -f agent-values.yaml
 ```
 
 ## Configuration
@@ -239,7 +250,7 @@ repositories {
 }
 
 dependencies {
-  implementation("com.pambrose:prometheus-proxy:4.1.0")
+  implementation("com.pambrose:prometheus-proxy:4.2.0")
 }
 ```
 
@@ -252,6 +263,11 @@ dependencies {
 - TLS (no mutual auth): `examples/tls-no-mutual-auth.conf`
 - TLS (with mutual auth): `examples/tls-with-mutual-auth.conf`
 - Prometheus federation: `examples/federate.conf`
+
+## Monitoring Assets
+
+- Grafana dashboards: `grafana/prometheus-proxy.json`, `grafana/prometheus-agents.json`
+- Prometheus alerting rules: `grafana/alerts.yml` (load via `rule_files`; `make check-rules` validates it with promtool)
 
 ## License
 

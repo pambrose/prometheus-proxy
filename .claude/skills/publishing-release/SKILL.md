@@ -15,10 +15,11 @@ Snapshot and Maven Central release Make targets (`publish-snapshot`, `publish-ma
 
 ## Bumping the version
 
-When bumping the version, update `version` in `gradle.properties` and every hard-coded `4.1.0` literal (`git grep -n` for the outgoing version):
+When bumping the version, update `version` in `gradle.properties` and every hard-coded `4.2.0` literal (`git grep -n` for the outgoing version):
 
 - `README.md` and `llms.txt` — Docker tag examples + Maven Central dependency block (README also gets a new release-summary paragraph at the top of **New Features**)
 - `etc/compose/proxy.yml` — proxy and agent image tags
+- `charts/prometheus-{proxy,agent}/Chart.yaml` — `version` and `appVersion` (the image tag the charts deploy)
 - `website/prometheus-proxy/docs/{getting-started,index,docker}.md` — Docker pull/run examples
 - `src/test/kotlin/website/{DockerExamples,EmbeddedAgentExamples,KubernetesExamples}.txt` — snippet sources the website's Docker, Embedded Agent, and Kubernetes pages include
 - this line, and step 2 of `docs/RELEASE.md`

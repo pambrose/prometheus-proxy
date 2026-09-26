@@ -7,13 +7,15 @@ by hand.
 
 1) Bump `version` in `gradle.properties` (the single source of truth).
 
-2) Update the `4.1.0` literals to the new version everywhere they are hard-coded
+2) Update the `4.2.0` literals to the new version everywhere they are hard-coded
    (`git grep -n` for the outgoing version finds them all):
    - `README.md` — the Docker tag examples and the Maven Central dependency block. Also add a summary
      paragraph for the new version at the top of the **New Features** section; the earlier releases'
      paragraphs stay as they are.
    - `llms.txt` — the Docker tag examples and the Maven Central dependency block.
    - `etc/compose/proxy.yml` — the proxy and agent image tags.
+   - `charts/prometheus-proxy/Chart.yaml` and `charts/prometheus-agent/Chart.yaml` — `version` and `appVersion`
+     (the image tag the charts deploy by default).
    - `website/prometheus-proxy/docs/getting-started.md`, `index.md`, and `docker.md` — the Docker pull
      and run examples, plus the explicit-version-tag tip in `docker.md`.
    - `src/test/kotlin/website/DockerExamples.txt`, `EmbeddedAgentExamples.txt` (Gradle and Maven), and
@@ -46,7 +48,8 @@ by hand.
    - **Title**: the version with a `v` prefix (e.g. `v4.0.1`).
    - **Description**: summarize the changes and include a full-changelog link
      (e.g. `**Full Changelog**: https://github.com/pambrose/prometheus-proxy/compare/<prev>...<new>`).
-   - Attach `build/libs/prometheus-agent.jar` and `build/libs/prometheus-proxy.jar`.
+   - Attach `build/libs/prometheus-agent.jar`, `build/libs/prometheus-proxy.jar`, and
+     `build/libs/prometheus-proxy-<version>-sources.jar`.
 
 8) Build and push the multi-arch Docker images: `make docker-push`. This tags both `:latest` and
    `:<version>`; it refuses to push pre-release versions (`-SNAPSHOT`/`-rc`/`-beta`/`-alpha`) as `:latest`.

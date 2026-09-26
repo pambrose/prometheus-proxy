@@ -1,0 +1,119 @@
+name: Security
+
+# Scans for known vulnerabilities. Trivy scans the proxy and agent images (the Temurin base layer and every library in
+# the fat JARs) and fails on a HIGH or CRITICAL vulnerability that has a fix; CodeQL analyzes the Kotlin code. Runs on
+# pull requests, on push to master, and weekly, since a newly published CVE can affect code that hasn't changed.
+# Findings from master and the weekly run go to the repository's code scanning alerts. No untrusted event payloads are
+# referenced.
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  schedule:
+    - cron: '23 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# As in ci.yml: a newer push to a pull request supersedes a run still in progress; other runs are never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  image-scan:
+    name: image-scan (${{ matrix.component }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        component: [ proxy, agent ]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          # JDK 25 (the last, so the default) runs Gradle; JDK 17 is the toolchain the main code compiles with.
+          java-version: |
+            17
+            25
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
+      - name: Build the fat JAR and the image
+        id: image
+        run: |
+          ./gradlew ${{ matrix.component }}Jar
+          docker build -f etc/docker/${{ matrix.component }}.Dockerfile -t prometheus-${{ matrix.component }}:scan .
+
+      - name: Fail on a fixable HIGH or CRITICAL vulnerability
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: prometheus-${{ matrix.component }}:scan
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          format: table
+
+      # Pull requests only print the table above: uploading needs a token that fork and Dependabot pull requests lack.
+      # The upload keeps HIGH and CRITICAL findings that have no fix yet, so they stay visible.
+      - name: Write the findings as SARIF
+        if: always() && steps.image.outcome == 'success' && github.event_name != 'pull_request'
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: prometheus-${{ matrix.component }}:scan
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          format: sarif
+          output: trivy-${{ matrix.component }}.sarif
+
+      - name: Upload the findings to code scanning
+        if: always() && steps.image.outcome == 'success' && github.event_name != 'pull_request'
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          sarif_file: trivy-${{ matrix.component }}.sarif
+          category: trivy-${{ matrix.component }}
+
+  codeql:
+    # Uploading results needs a token that fork and Dependabot pull requests lack; Dependabot changes only
+    # dependencies, which the image scan covers.
+    if: >-
+      github.event_name != 'pull_request' ||
+      (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: |
+            17
+            25
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
+      - uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          languages: java-kotlin
+          build-mode: manual
+
+      # CodeQL reads the code as the compiler sees it, so the compile skips Gradle's caches and daemon and runs the
+      # Kotlin compiler in-process rather than in its own daemon.
+      - name: Compile
+        run: >-
+          ./gradlew --no-daemon --no-build-cache --no-configuration-cache
+          -Pkotlin.compiler.execution.strategy=in-process
+          clean compileKotlin compileTestKotlin
+
+      - uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          category: /language:java-kotlin
