@@ -22,7 +22,7 @@
 - Never bind a product-default port (8080, 8082, 8092, 50051, …) in a test. Use `ServerSocket(0)` for a throwaway port, or a new `TestPorts` entry below 32768.
 - Record user-visible changes in **both** `CHANGELOG.md` (`## [Unreleased]`) and `RELEASE_NOTES.md` (`## Unreleased`), each in its own style.
 - Gates before the PR: `./gradlew detekt && ./gradlew lintKotlinMain lintKotlinTest && ./gradlew build -x test`, the full `./gradlew test`, and `./gradlew koverVerifyPerClass` in its own invocation.
-- Commit only when the maintainer says to. Start from `master` once the pending `small-cleanups` branch is merged or set aside.
+- Commit only when the maintainer says to. The work is stacked on the `small-cleanups` branch, after its first two commits.
 
 ## Review Focus
 
@@ -221,34 +221,35 @@ Replace the body of `Proxy.startUp()` after `super.startUp()`:
     // Guava calls shutDown() only after startUp() succeeds, so when a sub-service fails to start, stop the ones that
     // started, most recent first, then what super.startUp() started; super.shutDown() also removes its shutdown hook.
     // Left running, the admin server's threads kept a standalone proxy's JVM alive after main() threw.
-    val started = ArrayDeque<Service>()
-    fun startTracked(service: Service) {
-      service.startSync()
-      started.addFirst(service)
-    }
-
+    val stopActions = ArrayDeque<() -> Unit>()
     runCatching {
-      startTracked(grpcService)
-      startTracked(httpService)
-      dashboardService?.also { startTracked(it) }
+      grpcService.startSync()
+      stopActions.addFirst { grpcService.stopSync() }
+      httpService.startSync()
+      stopActions.addFirst { httpService.stopSync() }
+      dashboardService?.also { dashboard ->
+        dashboard.startSync()
+        stopActions.addFirst { dashboard.stopSync() }
+      }
 
       // (keep the existing transportFilterDisabled comment here)
       if (agentCleanupService != null) {
         if (!proxyConfigVals.internal.staleAgentCheckEnabled)
           logger.warn { "Forcing agent eviction thread on: transportFilterDisabled requires stale agent cleanup" }
-        startTracked(agentCleanupService)
+        agentCleanupService.startSync()
+        stopActions.addFirst { agentCleanupService.stopSync() }
       } else {
         logger.info { "Agent eviction thread not started" }
       }
     }.exceptionOrNull()?.let { e ->
-      started.forEach { service -> runCatching { service.stopSync() }.exceptionOrNull()?.let(e::addSuppressed) }
+      stopActions.forEach { stop -> runCatching(stop).exceptionOrNull()?.let(e::addSuppressed) }
       runCatching { super.shutDown() }.exceptionOrNull()?.let(e::addSuppressed)
       throw e
     }
   }
 ```
 
-Import `com.google.common.util.concurrent.Service`. common-utils' own `runEach` helper is private, so the loop stays local, as `Agent.releaseAfterFailedStartUp()` does.
+The stop steps are recorded as functions, as common-utils' own `AbstractGenericService.startUp()` does: `startSync()` and `stopSync()` are members of common-utils' `GenericIdleService` and `GenericExecutionThreadService`, which share no type, so a `Service`-typed helper (this plan's first draft) doesn't compile. common-utils' `runEach` helper is private, so the loop stays local.
 
 - [ ] **Step 4: Run the tests and watch them pass**
 
@@ -352,3 +353,8 @@ Expected: PASS.
 
 - [ ] Gates: `./gradlew detekt && ./gradlew lintKotlinMain lintKotlinTest && ./gradlew build -x test`, the full `./gradlew test`, then `./gradlew koverVerifyPerClass` on its own.
 - [ ] Open one PR for the five commits (no `(#N)` in the title), and merge after CI is green.
+
+### As built
+
+- **Task 2** uses the stop-function list shown in Step 3 (the first draft's `Service`-typed helper didn't compile), and gained a second test from the final review, "a failed startup should also stop the sub-services that started before the failure". It fails at the dashboard, after a Netty gRPC server and the HTTP service have started, because the first test passes even with the sub-service stops removed.
+- **Task 5** also renamed `HarnessSupport.kt` to `TestUtils.kt`: with the scratch classes gone, `TestUtils` is the file's only top-level class, and detekt's `MatchingDeclarationName` rule failed the final gates.

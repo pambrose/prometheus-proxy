@@ -57,11 +57,6 @@ object TestUtils {
     proxyPort: Int = PROXY_PORT,
     configArgs: List<String> = CONFIG_ARG,
   ): Proxy {
-//    logger.apply {
-//      info { getBanner("banners/proxy.txt", logger) }
-//      info { getVersionDesc(false) }
-//    }
-
     val proxyOptions = proxyOptions(
       buildList {
         addAll(configArgs)
@@ -95,11 +90,6 @@ object TestUtils {
     args: List<String> = emptyList(),
     configArgs: List<String> = CONFIG_ARG,
   ): Agent {
-//    logger.apply {
-//      info { getBanner("banners/agent.txt", logger) }
-//      info { getVersionDesc(false) }
-//    }
-
     val agentOptions = agentOptions(
       args = buildList {
         addAll(configArgs)

@@ -9,7 +9,8 @@ _Not yet released_
 ### Bug Fixes
 
 - **The dashboard shows each agent's real address.** It showed `Unknown` for every agent; it now shows the address
-  and port the agent connected from.
+  and port the agent connected from. With the transport filter disabled, as behind an nginx reverse proxy, it still
+  shows `Unknown`, since the connection there comes from the reverse proxy.
 - **A proxy that fails to start now exits.** With a port already taken, it logged the error but kept running,
   holding its admin and metrics ports, so a service manager's restart policy never fired.
 

@@ -31,6 +31,7 @@ import io.prometheus.Proxy
 import io.prometheus.proxy.ProxyServerTransportFilter.Companion.AGENT_ID_KEY
 import io.prometheus.proxy.ProxyServiceImpl.Companion.UNKNOWN_ADDRESS
 import java.net.InetSocketAddress
+import java.net.SocketAddress
 
 class ProxyServerTransportFilterTest : StringSpec() {
   private fun createMockProxy(): Pair<Proxy, AgentContextManager> {
@@ -151,6 +152,10 @@ class ProxyServerTransportFilterTest : StringSpec() {
       listOf(
         InetSocketAddress("192.168.1.100", 50000) to "192.168.1.100:50000",
         InetSocketAddress("::1", 50000) to "[0:0:0:0:0:0:0:1]:50000",
+        // Any other address type, like the in-process transport's, which prints its server name.
+        object : SocketAddress() {
+          override fun toString() = "in-process-proxy"
+        } to "in-process-proxy",
       ).forEach { (address, expected) ->
         val (mockProxy, agentContextManager) = createMockProxy()
         val attrs = Attributes.newBuilder().set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, address).build()

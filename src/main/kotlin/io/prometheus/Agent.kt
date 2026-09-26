@@ -639,8 +639,8 @@ class Agent(
   }
 
   // Guava calls shutDown() only after startUp() succeeds: when startUp() throws -- an admin or metrics port already in
-  // use -- the service goes straight to FAILED. Without this, the gRPC channel and HTTP client cache built in the
-  // constructor, and any server startUp() had already started, would stay open for the life of the JVM.
+  // use -- the service goes straight to FAILED. super.startUp() stops the servers it had already started, but without
+  // this the gRPC channel and HTTP client cache built in the constructor would stay open for the life of the JVM.
   override fun startUp() {
     runCatching { super.startUp() }
       .onFailure { releaseAfterFailedStartUp() }
@@ -675,7 +675,7 @@ class Agent(
   // channel/servlets but leave isRunning true, so the run loop would reconnect forever.
   fun stop() {
     // A FAILED service rejects stopSync(), and has nothing left to stop: a failure in run() already went through
-    // shutDown(), and a failure in startUp() through releaseAfterFailedStartUp().
+    // shutDown(), and a failure in startUp() through super.startUp()'s own rollback and releaseAfterFailedStartUp().
     if (state() == Service.State.FAILED)
       return
     stopSync()

@@ -538,22 +538,15 @@ class ProxyTest : StringSpec() {
       val metricsPort = ServerSocket(0).use { it.localPort }
       ServerSocket(0).use { takenHttpPort ->
         val proxy =
-          Proxy(
-            options =
-              ProxyOptions(
-                listOf(
-                  "--port",
-                  "${takenHttpPort.localPort}",
-                  "--admin",
-                  "--admin_port",
-                  "$adminPort",
-                  "--metrics",
-                  "--metrics_port",
-                  "$metricsPort",
-                ),
-              ),
-            inProcessServerName = "failed-start-${System.nanoTime()}",
-            testMode = true,
+          createTestProxy(
+            "--port",
+            "${takenHttpPort.localPort}",
+            "--admin",
+            "--admin_port",
+            "$adminPort",
+            "--metrics",
+            "--metrics_port",
+            "$metricsPort",
           )
 
         shouldThrow<IllegalStateException> { proxy.startSync() }
