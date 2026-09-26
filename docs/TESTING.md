@@ -372,7 +372,7 @@ mechanism that the standard suite cannot reach:
 - **HarnessSetup** — Base class providing `setupProxyAndAgent()` / `takeDownProxyAndAgent()` lifecycle
 - **HarnessHelpersTest** — `awaitPortFree()` fails when a port stays taken, and `HarnessConstants.localConfigFile()`
   fails for a missing test config rather than fetching one from GitHub
-- **HarnessSupport** — Utility functions: `startProxy()`, `startAgent()`, `exceptionHandler()`
+- **TestUtils** — Utility functions: `startProxy()`, `startAgent()`, `exceptionHandler()`
 - **AbstractHarnessTests** — Abstract base defining the standard 7-test suite
 - **BasicHarnessTests** — Reusable test implementations (missing path, invalid path, add/remove paths, etc.)
 - **HarnessTests** — Core integration logic: `proxyCallTest()` (sequential, parallel, concurrent queries) and
