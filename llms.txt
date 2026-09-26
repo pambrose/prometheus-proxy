@@ -122,17 +122,17 @@ brew services stop prometheus-agent      # stop, and no longer start at login
 
 ```bash
 # Start proxy
-docker run --rm -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.1.0
+docker run --rm -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.2.0
 
 # Start agent
 docker run --rm \
   --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-  pambrose/prometheus-agent:4.1.0
+  pambrose/prometheus-agent:4.2.0
 
 # Both run in the foreground until Ctrl+C. To run one in the background, restarted if it exits or
 # Docker restarts (Docker doesn't allow --rm with --restart):
 docker run --detach --name prometheus-proxy --restart unless-stopped \
-  -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.1.0
+  -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.2.0
 docker logs --follow prometheus-proxy                          # follow its log
 docker stop prometheus-proxy && docker rm prometheus-proxy     # stop and remove it
 ```
@@ -239,7 +239,7 @@ repositories {
 }
 
 dependencies {
-  implementation("com.pambrose:prometheus-proxy:4.1.0")
+  implementation("com.pambrose:prometheus-proxy:4.2.0")
 }
 ```
 

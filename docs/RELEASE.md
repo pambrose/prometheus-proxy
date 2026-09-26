@@ -7,7 +7,7 @@ by hand.
 
 1) Bump `version` in `gradle.properties` (the single source of truth).
 
-2) Update the `4.1.0` literals to the new version everywhere they are hard-coded
+2) Update the `4.2.0` literals to the new version everywhere they are hard-coded
    (`git grep -n` for the outgoing version finds them all):
    - `README.md` — the Docker tag examples and the Maven Central dependency block. Also add a summary
      paragraph for the new version at the top of the **New Features** section; the earlier releases'

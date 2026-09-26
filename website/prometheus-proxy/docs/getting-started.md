@@ -41,8 +41,8 @@ icon: lucide/play
     Multi-platform images (amd64, arm64, s390x, ppc64le) are available on Docker Hub:
 
     ```bash
-    docker pull pambrose/prometheus-proxy:4.1.0
-    docker pull pambrose/prometheus-agent:4.1.0
+    docker pull pambrose/prometheus-proxy:4.2.0
+    docker pull pambrose/prometheus-agent:4.2.0
     ```
 
 ## Start the Proxy
@@ -117,7 +117,7 @@ The proxy runs outside the firewall alongside your Prometheus server.
 
     ```bash
     docker run --rm -p 8080:8080 -p 50051:50051 \
-      pambrose/prometheus-proxy:4.1.0
+      pambrose/prometheus-proxy:4.2.0
     ```
 
     **In the background**, `--detach` starts the container and returns, and
@@ -127,7 +127,7 @@ The proxy runs outside the firewall alongside your Prometheus server.
     ```bash
     docker run --detach --name prometheus-proxy --restart unless-stopped \
       -p 8080:8080 -p 50051:50051 \
-      pambrose/prometheus-proxy:4.1.0
+      pambrose/prometheus-proxy:4.2.0
 
     docker logs --follow prometheus-proxy   # follow its log
     docker restart prometheus-proxy         # restart it
@@ -242,7 +242,7 @@ Each entry in `pathConfigs` maps:
       --mount type=bind,source="$(pwd)"/agent.conf,target=/app/agent.conf \
       --env AGENT_CONFIG=agent.conf \
       --env PROXY_HOSTNAME=proxy-host.example.com \
-      pambrose/prometheus-agent:4.1.0
+      pambrose/prometheus-agent:4.2.0
     ```
 
     **In the background**, `--detach` starts the container and returns, and
@@ -254,7 +254,7 @@ Each entry in `pathConfigs` maps:
       --mount type=bind,source="$(pwd)"/agent.conf,target=/app/agent.conf \
       --env AGENT_CONFIG=agent.conf \
       --env PROXY_HOSTNAME=proxy-host.example.com \
-      pambrose/prometheus-agent:4.1.0
+      pambrose/prometheus-agent:4.2.0
 
     docker logs --follow prometheus-agent   # follow its log
     docker restart prometheus-agent         # pick up an edited agent.conf
