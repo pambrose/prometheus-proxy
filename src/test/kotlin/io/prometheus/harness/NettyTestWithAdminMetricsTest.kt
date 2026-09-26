@@ -22,10 +22,12 @@ import com.pambrose.common.dsl.KtorDsl.get
 import com.pambrose.common.dsl.KtorDsl.withHttpClient
 import com.pambrose.common.util.simpleClassName
 import com.pambrose.common.util.sleep
+import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldEndWith
+import io.kotest.matchers.string.shouldMatch
 import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.string.shouldStartWith
 import io.ktor.client.request.header
@@ -148,6 +150,15 @@ class NettyTestWithAdminMetricsTest :
           body.trimEnd() shouldEndWith "# EOF"
         }
       }
+    }
+
+    // Netty puts the peer address in the transport attributes before transportReady(); the in-process tests can't
+    // show that the filter reads the key Netty actually sets.
+    "the proxy should record the connected agent's remote address" {
+      val addresses = proxy.agentContextManager.agentContextEntries.map { it.value.remoteAddr }
+
+      addresses.shouldNotBeEmpty()
+      addresses.forEach { it shouldMatch Regex("""(127\.0\.0\.1|\[0:0:0:0:0:0:0:1]):\d+""") }
     }
   }
 }

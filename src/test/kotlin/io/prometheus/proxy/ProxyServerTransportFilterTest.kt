@@ -19,6 +19,7 @@
 package io.prometheus.proxy
 
 import io.grpc.Attributes
+import io.grpc.Grpc
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
@@ -29,6 +30,7 @@ import io.mockk.verify
 import io.prometheus.Proxy
 import io.prometheus.proxy.ProxyServerTransportFilter.Companion.AGENT_ID_KEY
 import io.prometheus.proxy.ProxyServiceImpl.Companion.UNKNOWN_ADDRESS
+import java.net.InetSocketAddress
 
 class ProxyServerTransportFilterTest : StringSpec() {
   private fun createMockProxy(): Pair<Proxy, AgentContextManager> {
@@ -143,21 +145,29 @@ class ProxyServerTransportFilterTest : StringSpec() {
 
     // ==================== Remote Address Tests ====================
 
-    "transportReady should use remote addr from REMOTE_ADDR_KEY when available" {
+    // gRPC keys attributes by instance, so the filter must read gRPC's own key: a key the filter created itself
+    // (as it did since 1.3.8) was never set, and every agent's address read "Unknown".
+    "transportReady should record the transport's remote address" {
+      listOf(
+        InetSocketAddress("192.168.1.100", 50000) to "192.168.1.100:50000",
+        InetSocketAddress("::1", 50000) to "[0:0:0:0:0:0:0:1]:50000",
+      ).forEach { (address, expected) ->
+        val (mockProxy, agentContextManager) = createMockProxy()
+        val attrs = Attributes.newBuilder().set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, address).build()
+
+        val agentId = ProxyServerTransportFilter(mockProxy).transportReady(attrs).get(AGENT_ID_KEY).shouldNotBeNull()
+
+        agentContextManager.getAgentContext(agentId).shouldNotBeNull().remoteAddr shouldBe expected
+      }
+    }
+
+    "transportReady should record Unknown when the transport has no remote address" {
       val (mockProxy, agentContextManager) = createMockProxy()
-      val filter = ProxyServerTransportFilter(mockProxy)
 
-      // Create attributes with a remote address
-      val remoteAddrKey = Attributes.Key.create<java.net.SocketAddress>("remote-addr")
-      val socketAddr = java.net.InetSocketAddress("192.168.1.100", 50000)
-      val inputAttrs = Attributes.newBuilder()
-        .set(remoteAddrKey, socketAddr)
-        .build()
+      val agentId =
+        ProxyServerTransportFilter(mockProxy).transportReady(Attributes.EMPTY).get(AGENT_ID_KEY).shouldNotBeNull()
 
-      val resultAttrs = filter.transportReady(inputAttrs)
-
-      val agentId = resultAttrs.get(AGENT_ID_KEY).shouldNotBeNull()
-      agentContextManager.getAgentContext(agentId).shouldNotBeNull()
+      agentContextManager.getAgentContext(agentId).shouldNotBeNull().remoteAddr shouldBe UNKNOWN_ADDRESS
     }
 
     // Bug #9: When the cleanup service already removed the agent, transport

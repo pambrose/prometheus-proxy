@@ -6,6 +6,11 @@
 
 _Not yet released_
 
+### Bug Fixes
+
+- **The dashboard shows each agent's real address.** It showed `Unknown` for every agent; it now shows the address
+  and port the agent connected from.
+
 ### Documentation
 
 - **How to report a vulnerability is in the README and `llms.txt` too**, which now point to `SECURITY.md` and

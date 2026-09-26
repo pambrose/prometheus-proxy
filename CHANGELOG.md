@@ -6,6 +6,10 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Bug Fixes
+
+- Fix every agent's remote address reading `Unknown` on the dashboard and in the proxy's logs. `ProxyServerTransportFilter` read the address with an attribute key it created itself, which gRPC never set; it now reads gRPC's `TRANSPORT_ATTR_REMOTE_ADDR` and records `host:port`. With the transport filter disabled the address is still `Unknown`, since the peer there is the reverse proxy
+
 ### Documentation
 
 - The README's Security & TLS section and `llms.txt` point to `SECURITY.md` and GitHub's private vulnerability reporting, as the website's Security page does

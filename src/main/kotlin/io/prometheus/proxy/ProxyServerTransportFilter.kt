@@ -21,16 +21,19 @@ package io.prometheus.proxy
 import com.pambrose.common.dsl.GrpcDsl.attributes
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.grpc.Attributes
+import io.grpc.Grpc
 import io.grpc.ServerTransportFilter
 import io.prometheus.Proxy
 import io.prometheus.common.GrpcConstants.AGENT_ID
 import io.prometheus.proxy.ProxyServiceImpl.Companion.UNKNOWN_ADDRESS
+import java.net.InetSocketAddress
+import java.net.SocketAddress
 
 internal class ProxyServerTransportFilter(
   private val proxy: Proxy,
 ) : ServerTransportFilter() {
   override fun transportReady(attributes: Attributes): Attributes {
-    val remoteAddress = attributes.get(REMOTE_ADDR_KEY) ?: UNKNOWN_ADDRESS
+    val remoteAddress = attributes.get(Grpc.TRANSPORT_ATTR_REMOTE_ADDR)?.let(::displayAddress) ?: UNKNOWN_ADDRESS
     val agentContext = AgentContext(remoteAddress)
     // Pending until connectAgent: no call on this connection has been authenticated yet.
     proxy.agentContextManager.addAgentContext(agentContext, announce = false)
@@ -58,8 +61,16 @@ internal class ProxyServerTransportFilter(
 
   companion object {
     private val logger = logger {}
-    private const val REMOTE_ADDR = "remote-addr"
     internal val AGENT_ID_KEY: Attributes.Key<String> = Attributes.Key.create(AGENT_ID)
-    private val REMOTE_ADDR_KEY: Attributes.Key<String> = Attributes.Key.create(REMOTE_ADDR)
+
+    // host:port without a reverse DNS lookup (hostString, not hostName), an IPv6 host in brackets, and any other
+    // address type (the in-process transport's) as it prints itself.
+    private fun displayAddress(address: SocketAddress): String =
+      if (address is InetSocketAddress) {
+        val host = address.hostString
+        if (':' in host) "[$host]:${address.port}" else "$host:${address.port}"
+      } else {
+        address.toString()
+      }
   }
 }
