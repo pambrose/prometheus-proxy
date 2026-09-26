@@ -26,6 +26,10 @@ import io.prometheus.common.BaseOptions
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.EnvVars.AGENT_PORT
 import io.prometheus.common.EnvVars.AGENT_TOKEN
+import io.prometheus.common.EnvVars.DASHBOARD_ENABLED
+import io.prometheus.common.EnvVars.DASHBOARD_HOST
+import io.prometheus.common.EnvVars.DASHBOARD_PATH
+import io.prometheus.common.EnvVars.DASHBOARD_PORT
 import io.prometheus.common.EnvVars.HANDSHAKE_TIMEOUT_SECS
 import io.prometheus.common.EnvVars.MAX_CONNECTION_AGE_GRACE_SECS
 import io.prometheus.common.EnvVars.MAX_CONNECTION_AGE_SECS
@@ -39,16 +43,16 @@ import io.prometheus.common.EnvVars.REFLECTION_DISABLED
 import io.prometheus.common.EnvVars.SD_ENABLED
 import io.prometheus.common.EnvVars.SD_PATH
 import io.prometheus.common.EnvVars.SD_TARGET_PREFIX
-import io.prometheus.common.EnvVars.DASHBOARD_ENABLED
-import io.prometheus.common.EnvVars.DASHBOARD_HOST
-import io.prometheus.common.EnvVars.DASHBOARD_PATH
-import io.prometheus.common.EnvVars.DASHBOARD_PORT
 import io.prometheus.common.requireGrpcTimeout
 import io.prometheus.common.requirePositive
 
 class ProxyOptions(
   args: Array<String>,
-) : BaseOptions(Proxy::class.java.simpleName, args, PROXY_CONFIG.name) {
+) : BaseOptions(
+  progName = Proxy::class.java.simpleName,
+  args = args,
+  envConfig = PROXY_CONFIG.name,
+) {
   constructor(args: List<String>) : this(args.toTypedArray())
 
   /**

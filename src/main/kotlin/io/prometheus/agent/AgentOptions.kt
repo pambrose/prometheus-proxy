@@ -55,14 +55,14 @@ class AgentOptions(
   args: Array<String>,
   exitOnMissingConfig: Boolean,
 ) : BaseOptions(
-    Agent::class.java.name,
-    args,
-    AGENT_CONFIG.name,
-    exitOnMissingConfig,
-    // For the Agent, exitOnMissingConfig doubles as the standalone/embedded switch: main() and
-    // startSyncAgent() pass true, while embedded hosts pass false so startup failures stay catchable.
-    embedded = !exitOnMissingConfig,
-  ) {
+  progName = Agent::class.java.name,
+  args = args,
+  envConfig = AGENT_CONFIG.name,
+  exitOnMissingConfig = exitOnMissingConfig,
+  // For the Agent, exitOnMissingConfig doubles as the standalone/embedded switch: main() and
+  // startSyncAgent() pass true, while embedded hosts pass false so startup failures stay catchable.
+  embedded = !exitOnMissingConfig,
+) {
   constructor(args: List<String>, exitOnMissingConfig: Boolean) :
     this(args.toTypedArray(), exitOnMissingConfig)
 
