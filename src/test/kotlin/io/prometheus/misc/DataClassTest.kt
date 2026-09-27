@@ -117,6 +117,21 @@ class DataClassTest : StringSpec() {
         .also {
           it.versionInfoExportsEnabled.shouldBeTrue()
         }
+
+      newMetricsConfig(true, 555, configVals("agent.metrics.bufferPoolExportsEnabled=true").agent.metrics)
+        .also {
+          it.bufferPoolExportsEnabled.shouldBeTrue()
+        }
+
+      newMetricsConfig(true, 555, configVals("agent.metrics.compilationExportsEnabled=true").agent.metrics)
+        .also {
+          it.compilationExportsEnabled.shouldBeTrue()
+        }
+
+      newMetricsConfig(true, 555, configVals("agent.metrics.nativeMemoryExportsEnabled=true").agent.metrics)
+        .also {
+          it.nativeMemoryExportsEnabled.shouldBeTrue()
+        }
     }
 
     "zipkin config should parse all fields correctly" {
@@ -224,6 +239,21 @@ class DataClassTest : StringSpec() {
       newMetricsConfig(true, 666, configVals("proxy.metrics.versionInfoExportsEnabled=true").proxy.metrics)
         .also {
           it.versionInfoExportsEnabled.shouldBeTrue()
+        }
+
+      newMetricsConfig(true, 666, configVals("proxy.metrics.bufferPoolExportsEnabled=true").proxy.metrics)
+        .also {
+          it.bufferPoolExportsEnabled.shouldBeTrue()
+        }
+
+      newMetricsConfig(true, 666, configVals("proxy.metrics.compilationExportsEnabled=true").proxy.metrics)
+        .also {
+          it.compilationExportsEnabled.shouldBeTrue()
+        }
+
+      newMetricsConfig(true, 666, configVals("proxy.metrics.nativeMemoryExportsEnabled=true").proxy.metrics)
+        .also {
+          it.nativeMemoryExportsEnabled.shouldBeTrue()
         }
     }
 

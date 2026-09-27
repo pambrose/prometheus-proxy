@@ -66,6 +66,17 @@ last (`jvm_memory_used_bytes`, not `jvm_memory_bytes_used`; `jvm_memory_pool_use
 `jvm_memory_pool_bytes_used`; the same for `committed`, `max` and `init`), `jvm_info` is `jvm_runtime_info`, and
 `memoryPoolsExportsEnabled` also adds `jvm_memory_pool_allocated_bytes_total`.
 
+Three more groups are off by default:
+
+- `bufferPoolExportsEnabled` adds `jvm_buffer_pool_used_bytes`, `jvm_buffer_pool_capacity_bytes` and
+  `jvm_buffer_pool_used_buffers`, by `pool` (`direct` and `mapped`): the memory the JVM's NIO buffer pools hold
+  outside the heap.
+- `compilationExportsEnabled` adds `jvm_compilation_time_seconds_total`, the time the JIT compiler has spent.
+- `nativeMemoryExportsEnabled` adds `jvm_native_memory_reserved_bytes` and `jvm_native_memory_committed_bytes`, by
+  `pool`. It reads the JVM's Native Memory Tracking, which is off unless the JVM starts with
+  `-XX:NativeMemoryTracking=summary` (for the Docker images, set `JAVA_TOOL_OPTIONS=-XX:NativeMemoryTracking=summary`).
+  Without it the flag exports nothing, and tracking adds some overhead of its own.
+
 ---
 
 ## Proxy Metrics
