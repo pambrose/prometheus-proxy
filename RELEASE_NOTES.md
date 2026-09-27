@@ -6,6 +6,15 @@
 
 _Not yet released_
 
+### More JVM metrics
+
+Three more JVM metric groups can be turned on under `proxy.metrics` and `agent.metrics`, all off by default:
+
+- `bufferPoolExportsEnabled`: memory in the JVM's direct and mapped buffer pools (`jvm_buffer_pool_*`).
+- `compilationExportsEnabled`: time spent in JIT compilation (`jvm_compilation_time_seconds_total`).
+- `nativeMemoryExportsEnabled`: the JVM's native memory by area (`jvm_native_memory_*`). It needs the JVM started
+  with `-XX:NativeMemoryTracking=summary`; without it, nothing is exported.
+
 ### Bug Fixes
 
 - **The dashboard shows each agent's real address.** It showed `Unknown` for every agent; it now shows the address
@@ -23,6 +32,10 @@ _Not yet released_
 
 - The nginx reverse-proxy example no longer logs a deprecation warning at startup: it enables HTTP/2 with
   `http2 on;` instead of the deprecated `listen ... http2`.
+
+### Dependency updates
+
+common-utils 5.0.0 → 5.1.0. Build only: the BuildConfig plugin 6.1.1 → 6.1.2.
 
 ---
 

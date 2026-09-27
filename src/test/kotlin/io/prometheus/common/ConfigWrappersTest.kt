@@ -189,6 +189,9 @@ class ConfigWrappersTest : StringSpec() {
       metricsConfig.threadExportsEnabled.shouldBeFalse()
       metricsConfig.classLoadingExportsEnabled.shouldBeFalse()
       metricsConfig.versionInfoExportsEnabled.shouldBeFalse()
+      metricsConfig.bufferPoolExportsEnabled.shouldBeFalse()
+      metricsConfig.compilationExportsEnabled.shouldBeFalse()
+      metricsConfig.nativeMemoryExportsEnabled.shouldBeFalse()
     }
 
     "agent MetricsConfig should have all export flags accessible" {
@@ -206,6 +209,9 @@ class ConfigWrappersTest : StringSpec() {
       metricsConfig.threadExportsEnabled.shouldBeFalse()
       metricsConfig.classLoadingExportsEnabled.shouldBeFalse()
       metricsConfig.versionInfoExportsEnabled.shouldBeFalse()
+      metricsConfig.bufferPoolExportsEnabled.shouldBeFalse()
+      metricsConfig.compilationExportsEnabled.shouldBeFalse()
+      metricsConfig.nativeMemoryExportsEnabled.shouldBeFalse()
     }
 
     // ==================== ZipkinConfig Field Value Tests ====================

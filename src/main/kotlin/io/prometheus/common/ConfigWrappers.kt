@@ -55,6 +55,9 @@ internal object ConfigWrappers {
     metrics.threadExportsEnabled,
     metrics.classLoadingExportsEnabled,
     metrics.versionInfoExportsEnabled,
+    metrics.bufferPoolExportsEnabled,
+    metrics.compilationExportsEnabled,
+    metrics.nativeMemoryExportsEnabled,
   )
 
   fun newMetricsConfig(
@@ -71,6 +74,9 @@ internal object ConfigWrappers {
     metrics.threadExportsEnabled,
     metrics.classLoadingExportsEnabled,
     metrics.versionInfoExportsEnabled,
+    metrics.bufferPoolExportsEnabled,
+    metrics.compilationExportsEnabled,
+    metrics.nativeMemoryExportsEnabled,
   )
 
   fun newZipkinConfig(zipkin: ConfigVals.Proxy2.Internal2.Zipkin2) =
@@ -106,6 +112,9 @@ internal object ConfigWrappers {
     threadExportsEnabled: Boolean,
     classLoadingExportsEnabled: Boolean,
     versionInfoExportsEnabled: Boolean,
+    bufferPoolExportsEnabled: Boolean,
+    compilationExportsEnabled: Boolean,
+    nativeMemoryExportsEnabled: Boolean,
   ) = MetricsConfig(
     enabled = enabled,
     port = port,
@@ -116,6 +125,9 @@ internal object ConfigWrappers {
     threadExportsEnabled = threadExportsEnabled,
     classLoadingExportsEnabled = classLoadingExportsEnabled,
     versionInfoExportsEnabled = versionInfoExportsEnabled,
+    bufferPoolExportsEnabled = bufferPoolExportsEnabled,
+    compilationExportsEnabled = compilationExportsEnabled,
+    nativeMemoryExportsEnabled = nativeMemoryExportsEnabled,
   )
 
   private fun zipkinConfig(

@@ -6,6 +6,10 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### New Features
+
+- Three more optional JVM metric groups under `proxy.metrics` and `agent.metrics`, off by default: `bufferPoolExportsEnabled` (`jvm_buffer_pool_used_bytes`, `jvm_buffer_pool_capacity_bytes`, `jvm_buffer_pool_used_buffers`), `compilationExportsEnabled` (`jvm_compilation_time_seconds_total`), and `nativeMemoryExportsEnabled` (`jvm_native_memory_reserved_bytes`, `jvm_native_memory_committed_bytes`), which exports nothing unless the JVM runs with `-XX:NativeMemoryTracking=summary`
+
 ### Bug Fixes
 
 - Fix every agent's remote address reading `Unknown` on the dashboard and in the proxy's logs. `ProxyServerTransportFilter` read the address with an attribute key it created itself, which gRPC never set; it now reads gRPC's `TRANSPORT_ATTR_REMOTE_ADDR` and records `host:port`. With the transport filter disabled the address is still `Unknown`, since the peer there is the reverse proxy
@@ -18,6 +22,11 @@ All notable changes to this project are documented in this file.
 ### Build & Tooling
 
 - The nginx reverse-proxy example (`nginx/docker/nginx.conf`) enables HTTP/2 with `http2 on;` instead of the `listen ... http2` parameter, which nginx has deprecated since 1.25.1 and warned about at every start
+
+### Dependencies
+
+- Update common-utils 5.0.0 → 5.1.0, whose `MetricsConfig` carries the three new JVM metric flags
+- Update the BuildConfig plugin 6.1.1 → 6.1.2
 
 ## [4.2.0] - 2026-09-26
 

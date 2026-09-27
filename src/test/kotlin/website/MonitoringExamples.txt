@@ -39,6 +39,9 @@ proxy.metrics {
   threadExportsEnabled = true
   classLoadingExportsEnabled = false
   versionInfoExportsEnabled = false
+  bufferPoolExportsEnabled = true
+  compilationExportsEnabled = true
+  nativeMemoryExportsEnabled = false  // Needs the JVM's Native Memory Tracking; see below
 }
 ; --8<-- [end:jvm-metrics-config]
 
