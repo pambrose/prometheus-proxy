@@ -35,7 +35,7 @@ Three more JVM metric groups can be turned on under `proxy.metrics` and `agent.m
 
 ### Dependency updates
 
-common-utils 5.0.0 → 5.1.0.
+common-utils 5.0.0 → 5.1.0. Build only: the BuildConfig plugin 6.1.1 → 6.1.2.
 
 ---
 
