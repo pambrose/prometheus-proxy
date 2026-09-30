@@ -22,6 +22,7 @@ All notable changes to this project are documented in this file.
 ### Build & Tooling
 
 - The nginx reverse-proxy example (`nginx/docker/nginx.conf`) enables HTTP/2 with `http2 on;` instead of the `listen ... http2` parameter, which nginx has deprecated since 1.25.1 and warned about at every start
+- The container tests no longer leave a dangling ~591MB proxy and agent image behind on every run. The fat jars are never byte-identical (`BuildConfig.BUILD_TIME` changes each build), so each run rebuilt the images and moved their stable `prometheus-proxy-test/*` tags, orphaning the previous build. `ContainerTestSupport` now removes the replaced image and its untagged classic-builder parents once the tag has moved
 
 ### Dependencies
 

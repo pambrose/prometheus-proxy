@@ -18,6 +18,7 @@
 
 package io.prometheus.containers.support
 
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.request.get
@@ -26,6 +27,7 @@ import io.prometheus.common.TestPorts.NGINX_PORT
 import io.prometheus.common.TestPorts.PROMETHEUS_PORT
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import org.slf4j.LoggerFactory
+import org.testcontainers.DockerClientFactory
 import org.testcontainers.containers.BindMode
 import org.testcontainers.containers.GenericContainer
 import org.testcontainers.containers.Network
@@ -52,6 +54,8 @@ object ContainerTestSupport {
   private const val AGENT_ALIAS = "agent"
   private const val PROMETHEUS_ALIAS = "prometheus"
   const val METRICS_STUB_ALIAS = "metrics-stub"
+
+  private val logger = logger {}
 
   /** The default nginx document root path the metrics stub serves its exposition file from. */
   const val NGINX_METRICS_DEST = "/usr/share/nginx/html/metrics"
@@ -92,9 +96,13 @@ object ContainerTestSupport {
   // tag and registers a shutdown hook to delete it. The hook *working* is the problem: dropping the tag
   // strands its content as a dangling ~591MB image that nothing prunes, so every clean run leaked one
   // per image (21 of them, 4.16GB, measured before this change). A stable tag plus deleteOnExit=false
-  // inverts that. The jar travels in the build context, so an unchanged jar is a cache hit that resolves
-  // to the same image ID and the tag never moves -- nothing goes dangling, and the build is skipped.
-  // Only a real jar change orphans the previous image, which is one per change instead of one per run.
+  // inverts that: the tag outlives the run, so the image it names is never stranded by its own run.
+  //
+  // A third leak outlived that fix. The build cache only helps when the jar is unchanged, and it never
+  // is: BuildConfig.BUILD_TIME is regenerated on every Gradle build, so each run misses the COPY cache,
+  // moves the tag to a new image, and strands the previous one (with its classic-builder intermediates).
+  // That was one ~591MB dangling image per image per run. [buildReplacingPrevious] removes the image
+  // the tag used to name once the new build has taken the tag.
   //
   // Keeping the tags also puts them outside bin/docker-clean-tests.sh's localhost/testcontainers/
   // selector by construction, so routine cleanup cannot undo the reuse; `docker-clean --built` removes
@@ -103,12 +111,45 @@ object ContainerTestSupport {
     ImageFromDockerfile(PROXY_TEST_IMAGE, false)
       .withFileFromPath("Dockerfile", Path.of("etc/docker/proxy.Dockerfile"))
       .withFileFromPath("build/libs/prometheus-proxy.jar", Path.of("build/libs/prometheus-proxy.jar"))
+      .buildReplacingPrevious(PROXY_TEST_IMAGE)
   }
 
   val agentImage: ImageFromDockerfile by lazy {
     ImageFromDockerfile(AGENT_TEST_IMAGE, false)
       .withFileFromPath("Dockerfile", Path.of("etc/docker/agent.Dockerfile"))
       .withFileFromPath("build/libs/prometheus-agent.jar", Path.of("build/libs/prometheus-agent.jar"))
+      .buildReplacingPrevious(AGENT_TEST_IMAGE)
+  }
+
+  /**
+   * Builds the image now and removes the image [tag] named before the build, if the build moved the tag.
+   *
+   * The build resolves the Future, so every container that later uses this instance reuses the result
+   * without building again.
+   *
+   * Testcontainers builds with the classic builder, which commits an untagged intermediate image per
+   * Dockerfile step. On the containerd image store, removing the old top image does not cascade to them:
+   * its parent just turns dangling. So the old image's untagged ancestors are removed one by one, top down.
+   * Every removal is a plain `rmi` without force, so the walk stops at the first image Docker refuses: the
+   * cached steps the new build shares, or an image still backing a container (a concurrent run), which
+   * is left for `make docker-clean`. It also stops at the first tagged ancestor, the base image.
+   */
+  private fun ImageFromDockerfile.buildReplacingPrevious(tag: String): ImageFromDockerfile {
+    val client = DockerClientFactory.instance().client()
+
+    fun inspect(image: String) = runCatching { client.inspectImageCmd(image).exec() }.getOrNull()
+
+    val previousId = inspect(tag)?.id
+    get()
+    if (previousId != null && previousId != inspect(tag)?.id) {
+      val removed =
+        generateSequence(inspect(previousId)) { image -> image.parent?.takeIf { it.isNotEmpty() }?.let(::inspect) }
+          .takeWhile { image -> image.id == previousId || image.repoTags.isNullOrEmpty() }
+          .takeWhile { image -> runCatching { client.removeImageCmd(checkNotNull(image.id)).exec() }.isSuccess }
+          .count()
+      logger.info { "Removed $removed image(s) left by the previous $tag build $previousId" }
+    }
+    return this
   }
 
   fun logConsumer(name: String): Slf4jLogConsumer =
