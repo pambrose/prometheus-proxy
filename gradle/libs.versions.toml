@@ -1,6 +1,6 @@
 [versions]
 # Toolchain
-gradle-wrapper = "9.8.0"
+gradle-wrapper = "9.8.1"
 jvm = "17"
 # The JVM the tests run on: the runtime the Docker images ship (main code still compiles for `jvm`)
 testJvm = "25"
@@ -19,17 +19,19 @@ maven-publish = "0.37.0"
 protobuf = "0.10.0"
 shadow = "9.6.1"
 taskinfo = "3.0.2"
-versions = "0.64.0"
+versions = "0.65.0"
 
 # gRPC / Protobuf
-grpc = "1.84.0"
+grpc = "1.84.1"
 gengrpc = "1.5.0"
-# Keep in sync with the protobuf-java version grpc-protobuf depends on (3.25.9 for grpc 1.84.0)
+# Keep in sync with the protobuf-java version grpc-protobuf depends on (3.25.9 for grpc 1.84.1)
 protoc = "3.25.9"
-# Keep in sync with grpc: the netty-tcnative version grpc-java is built and tested with (2.0.81.Final for grpc 1.84.0,
-# per grpc-java's SECURITY.md). common-utils' grpc-utils also brings tcnative, with its per-platform natives; this declaration sets the version.
-tcnative = "2.0.81.Final"
-# grpc-netty 1.84.0 brings Netty 4.2.16.Final, which has CVE-2026-75595 (critical). build.gradle.kts raises every Netty
+# Ahead of the netty-tcnative grpc-java is built and tested with (2.0.81.Final for grpc 1.81.x-1.84.1, per its
+# SECURITY.md) for the native fixes in 2.0.82-2.0.84, among them a use-after-free on session-key rotation and NUL bytes
+# accepted in SNI names. tcnative 2.0.x keeps its API stable, so grpc and Netty work with it unchanged. Go back to
+# tracking grpc's version once it reaches 2.0.84.Final or later. common-utils' grpc-utils also brings tcnative, with its per-platform natives; this declaration sets the version.
+tcnative = "2.0.84.Final"
+# grpc-netty 1.84.1 brings Netty 4.2.16.Final, which has CVE-2026-75595 (critical). build.gradle.kts raises every Netty
 # module except netty-tcnative (pinned above) to this release. Drop the override once grpc brings 4.2.17.Final or later.
 netty = "4.2.18.Final"
 
@@ -57,7 +59,7 @@ zipkin = "6.3.1"
 
 # Logging
 logging = "8.0.4"
-logback = "1.6.4"
+logback = "1.6.5"
 slf4j = "2.0.20"
 
 # Config / CLI
