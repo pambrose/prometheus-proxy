@@ -29,6 +29,7 @@ import io.prometheus.grpc.PathRejectionCause.HELD_BY_ANOTHER_IDENTITY
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.util.EnumMap
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
@@ -80,10 +81,8 @@ internal class AgentPathManager(
   // by pathMutex.
   private val discoveredRejections = HashMap<String, DiscoveredRejection>()
 
-  // The discovered paths last reported as colliding with a static path, and as duplicated in the discovery file; see
-  // reportDiscoveryConflicts. Guarded by pathMutex.
-  private var reportedCollisions: Set<String> = emptySet()
-  private var reportedDuplicates: Set<String> = emptySet()
+  // The discovered paths last reported for each kind of conflict; see reportConflict. Guarded by pathMutex.
+  private val reportedConflicts = EnumMap<DiscoveryConflict, Set<String>>(DiscoveryConflict::class.java)
 
   operator fun get(path: String): PathContext? = pathContextMap[path]
 
@@ -95,8 +94,7 @@ internal class AgentPathManager(
       pathContextMap.clear()
       rejectedStaticPaths.clear()
       discoveredRejections.clear()
-      reportedCollisions = emptySet()
-      reportedDuplicates = emptySet()
+      reportedConflicts.clear()
     }
 
   suspend fun pathMapSize(): Int = agent.grpcService.pathMapSize()
@@ -163,7 +161,8 @@ internal class AgentPathManager(
   // is gone.
   suspend fun registerPaths() {
     val rejectedCount = pathConfigs.count { registerStaticPath(it, repeat = false) != null }
-    if (pathConfigs.isNotEmpty() && rejectedCount == pathConfigs.size && !hasRejectedStaticPaths)
+    val allRejected = pathConfigs.isNotEmpty() && rejectedCount == pathConfigs.size
+    if (allRejected && !hasRejectedStaticPaths)
       throw RequestFailureException("Proxy rejected all ${pathConfigs.size} static paths")
   }
 
@@ -281,31 +280,8 @@ internal class AgentPathManager(
    */
   suspend fun reconcileDiscoveredPaths(desired: List<DiscoveredPath>) =
     pathMutex.withLock {
-      // Build the desired discovered set keyed by normalized path; drop collisions with STATIC paths.
-      val desiredByPath = LinkedHashMap<String, DiscoveredPath>()
-      val collisions = LinkedHashSet<String>()
-      val duplicates = LinkedHashSet<String>()
-      for (entry in desired) {
-        val path = entry.path.removePrefix("/")
-        if (path in configuredStaticPaths || pathContextMap[path]?.source == PathSource.STATIC) {
-          collisions += path
-          continue
-        }
-        if (path in desiredByPath)
-          duplicates += path
-        desiredByPath[path] = entry
-      }
-      reportDiscoveryConflicts(collisions, duplicates)
-
-      // Unregister DISCOVERED paths that are no longer desired.
-      val stale =
-        pathContextMap.mapNotNull { (path, ctx) ->
-          path.takeIf { ctx.source == PathSource.DISCOVERED && path !in desiredByPath }
-        }
-      for (path in stale) {
-        runCatchingCancellable { doUnregisterPath(path) }
-          .onFailure { logger.warn(it) { "Failed to unregister discovered path /$path" } }
-      }
+      val desiredByPath = desiredDiscoveredPaths(desired)
+      unregisterStaleDiscoveredPaths(desiredByPath.keys)
 
       // Forget the rejections of paths no longer desired.
       discoveredRejections.keys.retainAll(desiredByPath.keys)
@@ -315,50 +291,64 @@ internal class AgentPathManager(
       for ((path, entry) in desiredByPath) {
         val current = pathContextMap[path]
         val labels = entry.labels.defaultEmptyJsonObject()
-        if (current != null && current.url == entry.url && current.labels == labels)
+        if (current?.matches(entry.url, labels) == true)
           continue // Unchanged discovered path.
         registerDiscoveredPath(path, entry, labels, current)
       }
     }
 
-  // Reports the discovered paths that collide with a static path, and those the discovery file lists more than once.
-  // The file is re-read every reconcile, so each set is logged at WARN only when it changes -- as
-  // FileDiscoverySource.reportUnusable does for unusable entries -- and at DEBUG otherwise. Callers MUST hold
-  // pathMutex.
-  private fun reportDiscoveryConflicts(
-    collisions: Set<String>,
-    duplicates: Set<String>,
+  // The desired discovered entries keyed by normalized path, the last one winning for a path listed twice. An entry
+  // colliding with a static path is dropped (static wins). Callers MUST hold pathMutex.
+  private fun desiredDiscoveredPaths(desired: List<DiscoveredPath>): Map<String, DiscoveredPath> {
+    val desiredByPath = LinkedHashMap<String, DiscoveredPath>()
+    val collisions = LinkedHashSet<String>()
+    val duplicates = LinkedHashSet<String>()
+    for (entry in desired) {
+      val path = entry.path.removePrefix("/")
+      if (isStaticPath(path)) {
+        collisions += path
+        continue
+      }
+      if (path in desiredByPath)
+        duplicates += path
+      desiredByPath[path] = entry
+    }
+    reportConflict(DiscoveryConflict.COLLISION, collisions)
+    reportConflict(DiscoveryConflict.DUPLICATE, duplicates)
+    return desiredByPath
+  }
+
+  // Whether [path] belongs to the static baseline: configured in pathConfigs, registered or not (see
+  // configuredStaticPaths), or registered at runtime. Callers MUST hold pathMutex.
+  private fun isStaticPath(path: String): Boolean =
+    path in configuredStaticPaths || pathContextMap[path]?.source == PathSource.STATIC
+
+  // Unregisters the DISCOVERED paths no longer [desired]. Callers MUST hold pathMutex.
+  private suspend fun unregisterStaleDiscoveredPaths(desired: Set<String>) {
+    val stale =
+      pathContextMap.mapNotNull { (path, ctx) ->
+        path.takeIf { ctx.source == PathSource.DISCOVERED && path !in desired }
+      }
+    for (path in stale) {
+      runCatchingCancellable { doUnregisterPath(path) }
+        .onFailure { logger.warn(it) { "Failed to unregister discovered path /$path" } }
+    }
+  }
+
+  // Reports the discovered [paths] in [conflict]. The discovery file is re-read every reconcile, so the set is logged
+  // at WARN only when it changes -- as FileDiscoverySource.reportUnusable does for unusable entries -- and at DEBUG
+  // otherwise. Callers MUST hold pathMutex.
+  private fun reportConflict(
+    conflict: DiscoveryConflict,
+    paths: Set<String>,
   ) {
-    val collided = collisions.map { "/$it" }
-    val duplicated = duplicates.map { "/$it" }
+    val reported = reportedConflicts.put(conflict, paths).orEmpty()
+    val shown = paths.map { "/$it" }
     when {
-      collisions == reportedCollisions -> {
-        if (collisions.isNotEmpty()) logger.debug { "Discovered paths still collide with static paths: $collided" }
-      }
-
-      collisions.isEmpty() -> {
-        logger.info { "No discovered path collides with a static path any more" }
-      }
-
-      else -> {
-        logger.warn { "Discovered paths $collided collide with static paths; keeping the static entries" }
-      }
+      paths == reported -> if (paths.isNotEmpty()) logger.debug { conflict.unchanged(shown) }
+      paths.isEmpty() -> logger.info { conflict.cleared }
+      else -> logger.warn { conflict.changed(shown) }
     }
-    when {
-      duplicates == reportedDuplicates -> {
-        if (duplicates.isNotEmpty()) logger.debug { "Discovered paths still duplicated: $duplicated" }
-      }
-
-      duplicates.isEmpty() -> {
-        logger.info { "No discovered path is duplicated any more" }
-      }
-
-      else -> {
-        logger.warn { "Duplicate discovered paths $duplicated; using the last entry for each" }
-      }
-    }
-    reportedCollisions = collisions
-    reportedDuplicates = duplicates
   }
 
   // Registers, or re-registers, one discovered path; callers MUST hold pathMutex. The failure is recorded in
@@ -371,12 +361,9 @@ internal class AgentPathManager(
     labels: String,
     current: PathContext?,
   ) {
-    val prior = discoveredRejections[path]?.takeIf { it.url == entry.url && it.labels == labels }
-    if (prior?.retryable == false)
-      return
-    // Still waiting out its backoff (see nextBackoff). A changed URL or labels leaves prior null, so an edited entry is
-    // tried at once.
-    if (prior?.backoff?.isDue == false)
+    // A changed URL or labels leaves prior null, so an edited entry is tried at once.
+    val prior = discoveredRejections[path]?.takeIf { it.matches(entry.url, labels) }
+    if (prior?.mayRetryNow == false)
       return
     runCatchingCancellable {
       if (current != null)
@@ -385,20 +372,32 @@ internal class AgentPathManager(
     }.onSuccess {
       discoveredRejections -= path
     }.onFailure { e ->
-      val failure = "${e::class.simpleName}: ${e.message}"
-      val repeat = prior?.failure == failure
-      // Only a rejection is backed off: any other failure never reached the proxy, so it keeps the reconcile's pace.
-      val backoff =
-        if (e is RequestFailureException && e.retryable) nextBackoff(prior?.backoff, discoveredRetryInterval) else null
-      discoveredRejections[path] =
-        DiscoveredRejection(entry.url, labels, e !is RequestFailureException || e.retryable, failure, backoff)
+      val record = discoveredRejection(entry.url, labels, e, prior?.backoff)
+      discoveredRejections[path] = record
+      val repeat = prior?.failure == record.failure
       if (e is RequestFailureException)
-        logRejection(PathSource.DISCOVERED, path, e, repeat, backoff?.wait)
+        logRejection(PathSource.DISCOVERED, path, e, repeat, record.backoff?.wait)
       else if (repeat)
-        logger.debug { "Still failing to register discovered path /$path: $failure" }
+        logger.debug { "Still failing to register discovered path /$path: ${record.failure}" }
       else
         logger.warn(e) { "Failed to register discovered path /$path" }
     }
+  }
+
+  // The record of [e], the latest failure to register a discovered entry with [url] and [labels], given the backoff
+  // of the failure before it. Only a rejection is backed off: any other failure never reached the proxy, so it keeps
+  // the reconcile's pace.
+  private fun discoveredRejection(
+    url: String,
+    labels: String,
+    e: Throwable,
+    priorBackoff: RetryBackoff?,
+  ): DiscoveredRejection {
+    val rejection = e as? RequestFailureException
+    // Every failure but a rejection that can't clear is retried.
+    val retryable = rejection?.retryable != false
+    val backoff = if (rejection?.retryable == true) nextBackoff(priorBackoff, discoveredRetryInterval) else null
+    return DiscoveredRejection(url, labels, retryable, "${e::class.simpleName}: ${e.message}", backoff)
   }
 
   // Lock-free registration body; callers MUST hold pathMutex. Kotlin's Mutex is not reentrant, so
@@ -490,9 +489,40 @@ internal class AgentPathManager(
     val labels: String,
     val retryable: Boolean,
     val failure: String,
-    // Null when the failure was not a rejection, which is not backed off; see registerDiscoveredPath.
+    // Null when the failure was not a rejection, which is not backed off; see discoveredRejection.
     val backoff: RetryBackoff?,
-  )
+  ) {
+    // Whether this failure was for an entry with [url] and [labels]; an edited entry starts over.
+    fun matches(
+      url: String,
+      labels: String,
+    ) = this.url == url && this.labels == labels
+
+    // Whether the entry may be tried again now: never after a rejection that can't clear, and after one that can only
+    // once its backoff is up (see nextBackoff). A failure that wasn't a rejection has no backoff to wait out.
+    val mayRetryNow: Boolean get() = retryable && backoff?.isDue != false
+  }
+
+  // The two ways a discovered entry can conflict, each with how reportConflict words it.
+  private enum class DiscoveryConflict(
+    val changed: (List<String>) -> String,
+    val unchanged: (List<String>) -> String,
+    val cleared: String,
+  ) {
+    // An entry for a static path, which keeps it.
+    COLLISION(
+      changed = { "Discovered paths $it collide with static paths; keeping the static entries" },
+      unchanged = { "Discovered paths still collide with static paths: $it" },
+      cleared = "No discovered path collides with a static path any more",
+    ),
+
+    // A path the discovery file lists more than once.
+    DUPLICATE(
+      changed = { "Duplicate discovered paths $it; using the last entry for each" },
+      unchanged = { "Discovered paths still duplicated: $it" },
+      cleared = "No discovered path is duplicated any more",
+    ),
+  }
 
   // When a path the proxy rejected for a cause that can clear may be retried: [wait] is the current backoff, which
   // nextBackoff doubles on the next rejection, and [dueAt] is when it is up.
@@ -525,6 +555,12 @@ internal class AgentPathManager(
     val source: PathSource,
     val filter: MetricFilter? = null,
   ) {
+    // Whether this path still points at [url] with [labels]; reconcileDiscoveredPaths re-registers it when not.
+    fun matches(
+      url: String,
+      labels: String,
+    ) = this.url == url && this.labels == labels
+
     // Logged at DEBUG on every scrape, so the target URL's userinfo and query values are redacted here rather than
     // at each log site.
     override fun toString() =

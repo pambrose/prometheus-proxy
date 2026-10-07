@@ -47,6 +47,7 @@ import io.prometheus.grpc.pathMapSizeResponse
 import io.prometheus.grpc.registerAgentResponse
 import io.prometheus.grpc.registerPathResponse
 import io.prometheus.grpc.unregisterPathResponse
+import io.prometheus.proxy.ProxyPathManager.PathMetadata
 import io.prometheus.proxy.ProxyPathManager.PathRejection
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
@@ -218,10 +219,12 @@ internal class ProxyServiceImpl(
                   request.path,
                   request.labels,
                   agentContext,
-                  request.targetUrl,
-                  request.pathSource,
-                  // Only the same identity may take over a path a live agent already serves.
-                  identity?.name.orEmpty(),
+                  PathMetadata(
+                    targetUrl = request.targetUrl,
+                    pathSource = request.pathSource,
+                    // Only the same identity may take over a path a live agent already serves.
+                    identityName = identity?.name.orEmpty(),
+                  ),
                 )
               }
             result.also { agentContext.markActivityTime(false) }

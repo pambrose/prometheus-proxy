@@ -97,7 +97,7 @@ dependencies {
   // code; the natives come in per-platform classifier jars, which common-utils' grpc-utils declares for Linux
   // (x86_64, aarch_64), macOS (x86_64, aarch_64), and Windows (x86_64). So the fat JARs, and builds that embed the
   // agent, use OpenSSL on those platforms and fall back to the JDK's TLS elsewhere. Declared to pin the tcnative
-  // version grpc is tested with (see libs.versions.toml); runtimeOnly because nothing references it at compile time.
+  // version (see libs.versions.toml); runtimeOnly because nothing references it at compile time.
   runtimeOnly(libs.netty.tcnative)
 
   implementation(libs.annotation.api)
@@ -121,14 +121,14 @@ dependencies {
 }
 
 // Raises every Netty module grpc-netty brings (4.2.16.Final) to the patched release in libs.versions.toml. netty-tcnative
-// keeps the version grpc is tested with: its classes and the per-platform natives must match, which a Netty BOM would
-// break by raising only some of them.
+// keeps its own pin there: its classes and the per-platform natives must match, which a Netty BOM would break by
+// raising only some of them.
 val nettyVersion = libs.versions.netty.get()
 configurations.configureEach {
   resolutionStrategy.eachDependency {
     if (requested.group == "io.netty" && !requested.name.startsWith("netty-tcnative")) {
       useVersion(nettyVersion)
-      because("grpc-netty 1.84.0's Netty 4.2.16.Final has CVE-2026-75595")
+      because("grpc-netty 1.84.1's Netty 4.2.16.Final has CVE-2026-75595")
     }
   }
 }
@@ -191,21 +191,20 @@ fun Project.configureKotlin() {
     }
   }
 
-  // Collection literals are a language-wide opt-in, so enable them for every
-  // Kotlin source set (main + test) rather than per-task.
   tasks.withType<KotlinCompile>().configureEach {
+    val isMainCompile = name == "compileKotlin"
     compilerOptions {
-      freeCompilerArgs.add("-Xcollection-literals")
-    }
-  }
+      // Collection literals and name-based destructuring are language-wide opt-ins,
+      // so enable them for every Kotlin source set (main + test) rather than per-task.
+      // name-mismatch only warns where `complete` would change a short-form `(a, b)`
+      // destructuring's meaning; move to `complete` once those sites use `[a, b]`.
+      freeCompilerArgs.addAll("-Xcollection-literals")
 
-  // Run the unused-return-value checker over production code only. Kotest's
-  // assertion DSL (e.g. shouldBe) returns its receiver, and tests intentionally
-  // discard that result, so applying the checker to the test source set would
-  // emit only false-positive warnings.
-  tasks.named<KotlinCompile>("compileKotlin") {
-    compilerOptions {
-      freeCompilerArgs.add("-Xreturn-value-checker=check")
+      // Run the unused-return-value checker over production code only. Kotest's
+      // assertion DSL (e.g. shouldBe) returns its receiver, and tests intentionally
+      // discard that result, so applying the checker to the test source set would
+      // emit only false-positive warnings.
+      if (isMainCompile) freeCompilerArgs.addAll("-Xreturn-value-checker=check")
     }
   }
 }

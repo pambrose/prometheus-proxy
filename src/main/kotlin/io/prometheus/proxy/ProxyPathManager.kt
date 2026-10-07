@@ -71,6 +71,13 @@ internal class ProxyPathManager(
     val cause: PathRejectionCause,
   )
 
+  // What a registration says about a path besides its labels; see the AgentContextInfo fields of the same names.
+  data class PathMetadata(
+    val targetUrl: String = "",
+    val pathSource: String = "",
+    val identityName: String = "",
+  )
+
   private val pathMap = HashMap<String, AgentContextInfo>()
 
   // How many paths each agent serves, by agentId; guarded by pathMap. Kept in step with every change to pathMap, so
@@ -112,9 +119,7 @@ internal class ProxyPathManager(
     path: String,
     labels: String,
     agentContext: AgentContext,
-    targetUrl: String = "",
-    pathSource: String = "",
-    identityName: String = "",
+    metadata: PathMetadata = PathMetadata(),
   ): PathRejection? {
     require(path.isNotBlank()) { BLANK_PATH_MSG }
     val key = pathKey(path)
@@ -122,10 +127,19 @@ internal class ProxyPathManager(
     if (key.isBlank())
       return rejectPath(agentContext, path, "Invalid path: /$key (a path segment is required)", INVALID_PATH)
     sizeRejection(key, labels, agentContext)?.let { return it }
-    // Redacted on the way in so the dashboard and /debug never show credentials, even from an agent that
-    // predates agent-side redaction.
+    // The target URL is redacted on the way in so the dashboard and /debug never show credentials, even from an agent
+    // that predates agent-side redaction.
+    val entry =
+      AgentContextInfo(
+        isConsolidated = agentContext.consolidated,
+        labels = labels,
+        agentContexts = [agentContext],
+        targetUrl = sanitizeUrl(metadata.targetUrl),
+        pathSource = metadata.pathSource,
+        identityName = metadata.identityName,
+      )
     return multiSegmentPathError(key)?.let { PathRejection(it, INVALID_PATH) }
-      ?: addValidatedPath(key, labels, agentContext, sanitizeUrl(targetUrl), pathSource, identityName)
+      ?: addValidatedPath(key, agentContext, entry)
   }
 
   // Rejects a path longer than proxy.internal.maxPathLength, or labels larger than maxLabelsSizeBytes; 0 turns either
@@ -197,108 +211,143 @@ internal class ProxyPathManager(
     return PathRejection(reason, cause)
   }
 
-  @Suppress("ReturnCount")
+  // Registers [path] for [agentContext] unless a check made under the lock refuses it. [entry] is what addPath built
+  // from the registration: the path's entry when the agent is its only one.
   private fun addValidatedPath(
     path: String,
-    labels: String,
     agentContext: AgentContext,
-    targetUrl: String,
-    pathSource: String,
-    identityName: String,
-  ): PathRejection? {
+    entry: AgentContextInfo,
+  ): PathRejection? =
     synchronized(pathMap) {
-      // Re-check validity inside the lock: agent removal (transportTerminated / cleanup eviction) can
-      // interleave between the caller's out-of-lock getAgentContext() check and here, invalidating the
-      // context. Inserting a path for an invalidated context creates a permanently-dead path that no
-      // cleanup sweeps, so reject it and let the agent re-register on reconnect (finding 7).
-      if (agentContext.isNotValid()) {
-        val reason = "Agent context ${agentContext.agentId} was invalidated during registration of /$path"
-        return rejectPath(agentContext, path, reason, INVALID_AGENT)
-      }
-
       val agentInfo = pathMap[path]
-      if (agentInfo != null && agentInfo.isConsolidated != agentContext.consolidated) {
-        val reason =
-          if (agentContext.consolidated)
-            "Consolidated agent rejected for non-consolidated path /$path"
-          else
-            "Non-consolidated agent rejected for consolidated path /$path"
-        return rejectPath(agentContext, path, reason, CONSOLIDATION_MISMATCH)
-      }
-
-      // The path's agents other than this one. An agent re-registering a path it already backs neither conflicts with
-      // nor displaces itself.
-      val others = agentInfo?.agentContexts.orEmpty().filterNot { it.agentId == agentContext.agentId }
-      // While a live agent serves a path, only an agent of the same auth identity may take it over or, on a
-      // consolidated path, join it: a redeploy reclaims its paths at once, but one identity can neither replace
-      // another's metrics nor merge its own into them. With no agent auth, or only the legacy shared token, every agent
-      // has the same identity, so nothing changes there. A path whose agents are no longer valid is nobody's, which is
-      // how such a conflict clears.
-      if (agentInfo != null && agentInfo.identityName != identityName && others.any { it.isValid() }) {
-        val action = if (agentContext.consolidated) "join it" else "take it over"
-        val reason =
-          "Path /$path is served by identity '${agentInfo.identityName}'; identity '$identityName' cannot $action"
-        return rejectPath(agentContext, path, reason, HELD_BY_ANOTHER_IDENTITY)
-      }
-
       // A path the agent already serves is a re-registration, which neither counts against its limit nor adds to it.
-      val alreadyServes = others.size != agentInfo?.agentContexts.orEmpty().size
-      if (!alreadyServes)
-        pathLimitRejection(agentContext, path)?.let { return it }
-
-      if (agentContext.consolidated) {
-        if (agentInfo == null) {
-          pathMap[path] = AgentContextInfo(true, labels, [agentContext], targetUrl, pathSource, identityName)
-        } else {
-          // An agent re-registering a path it already backs (a path listed twice in its config) replaces its own
-          // entry: a second copy would send it two requests per scrape, and Prometheus rejects the duplicate samples.
-          val contexts = agentInfo.agentContexts
-          val updated =
-            if (contexts.any { it.agentId == agentContext.agentId })
-              contexts.map { if (it.agentId == agentContext.agentId) agentContext else it }
-            else
-              contexts + agentContext
-          // The path takes this agent's identity, which differs only when every earlier agent is gone.
-          pathMap[path] = agentInfo.copy(agentContexts = updated, identityName = identityName)
-        }
-      } else {
-        // Every other agent on the path is displaced; re-registering its own path is neither logged nor counted.
-        val displacedContexts = others
-        if (displacedContexts.isNotEmpty()) {
-          logger.info { "Overwriting path /$path for ${displacedContexts.first()}" }
-          proxy.metrics { agentDisplacementCount.inc() }
-        }
-        pathMap[path] = AgentContextInfo(false, labels, [agentContext], targetUrl, pathSource, identityName)
-
-        // Invalidate displaced agent contexts that have no other registered paths.
-        // Even live agents are invalidated here — a displaced agent with zero paths
-        // would otherwise stay alive indefinitely via heartbeats, consuming resources.
-        // The agent will reconnect and re-register its paths if needed.
-        displacedContexts.forEach { displacedContext ->
-          countPaths(displacedContext.agentId, -1)
-          if ((pathCounts[displacedContext.agentId] ?: 0) == 0) {
-            logger.info { "Invalidating orphaned $displacedContext after path /$path was overwritten" }
-            displacedContext.invalidate()
-          }
-        }
+      val alreadyServes = agentInfo?.agentContexts.orEmpty().any { it.agentId == agentContext.agentId }
+      val rejection =
+        invalidatedRejection(agentContext, path)
+          ?: agentInfo?.let { conflictRejection(path, agentContext, it, entry) }
+          ?: if (alreadyServes) null else pathLimitRejection(agentContext, path)
+      if (rejection == null) {
+        if (entry.isConsolidated)
+          pathMap[path] = agentInfo?.joinedBy(agentContext, entry.identityName) ?: entry
+        else
+          takeOverPath(path, agentContext, agentInfo, entry)
+        recordRegistration(path, agentContext, entry.labels, alreadyServes)
       }
+      rejection
+    }
 
-      if (!alreadyServes) {
-        countPaths(agentContext.agentId, 1)
-        warnNearPathLimit(agentContext)
-      }
-      agentContext.forgetRejection(path)
-      proxy.metrics { pathRegistered(path) }
-      // Said once here rather than on every service-discovery poll, which is where the labels are dropped.
-      val reserved = Proxy.reservedSdLabelKeys(labels, proxy.reserveJobAndInstanceLabels)
-      if (reserved.isNotEmpty())
-        logger.warn { "Agent labels $reserved for path /$path are reserved and won't appear in service discovery" }
-      if (!isTestMode) logger.info { "Added path /$path for $agentContext" }
-      // Inside synchronized(pathMap) on purpose: tryEmit never suspends or blocks, so publishing here
-      // cannot stall a registration, and the event is emitted only once the map actually reflects it.
-      proxy.eventBus.emit(ProxyEvent.PathRegistered(path, agentContext.agentId))
+  // Re-checks validity inside the lock: agent removal (transportTerminated / cleanup eviction) can
+  // interleave between the caller's out-of-lock getAgentContext() check and here, invalidating the
+  // context. Inserting a path for an invalidated context creates a permanently-dead path that no
+  // cleanup sweeps, so reject it and let the agent re-register on reconnect (finding 7). Callers MUST hold pathMap.
+  private fun invalidatedRejection(
+    agentContext: AgentContext,
+    path: String,
+  ): PathRejection? {
+    if (agentContext.isNotValid()) {
+      val reason = "Agent context ${agentContext.agentId} was invalidated during registration of /$path"
+      return rejectPath(agentContext, path, reason, INVALID_AGENT)
     }
     return null
+  }
+
+  // Rejects [entry]'s registration of [path], which [agentInfo] already holds, when the two disagree on consolidation,
+  // or when another identity's live agent serves the path. Callers MUST hold pathMap.
+  private fun conflictRejection(
+    path: String,
+    agentContext: AgentContext,
+    agentInfo: AgentContextInfo,
+    entry: AgentContextInfo,
+  ): PathRejection? {
+    if (agentInfo.isConsolidated != entry.isConsolidated) {
+      val reason =
+        if (entry.isConsolidated)
+          "Consolidated agent rejected for non-consolidated path /$path"
+        else
+          "Non-consolidated agent rejected for consolidated path /$path"
+      return rejectPath(agentContext, path, reason, CONSOLIDATION_MISMATCH)
+    }
+
+    // While a live agent serves a path, only an agent of the same auth identity may take it over or, on a
+    // consolidated path, join it: a redeploy reclaims its paths at once, but one identity can neither replace
+    // another's metrics nor merge its own into them. With no agent auth, or only the legacy shared token, every agent
+    // has the same identity, so nothing changes there. A path whose agents are no longer valid is nobody's, which is
+    // how such a conflict clears. An agent re-registering a path it already backs never conflicts with itself.
+    val otherAgentLive = agentInfo.agentContexts.any { it.agentId != agentContext.agentId && it.isValid() }
+    if (agentInfo.identityName == entry.identityName || !otherAgentLive)
+      return null
+    val action = if (entry.isConsolidated) "join it" else "take it over"
+    val reason =
+      "Path /$path is served by identity '${agentInfo.identityName}'; identity '${entry.identityName}' cannot $action"
+    return rejectPath(agentContext, path, reason, HELD_BY_ANOTHER_IDENTITY)
+  }
+
+  // This consolidated path's entry with [agentContext] among its agents. The path takes the agent's identity, which
+  // differs only when every earlier agent is gone. An agent re-registering a path it already backs (a path listed twice
+  // in its config) replaces its own context: a second copy would send it two requests per scrape, and Prometheus
+  // rejects the duplicate samples.
+  private fun AgentContextInfo.joinedBy(
+    agentContext: AgentContext,
+    identityName: String,
+  ): AgentContextInfo {
+    val updated =
+      if (agentContexts.any { it.agentId == agentContext.agentId })
+        agentContexts.map { if (it.agentId == agentContext.agentId) agentContext else it }
+      else
+        agentContexts + agentContext
+    return copy(agentContexts = updated, identityName = identityName)
+  }
+
+  // Gives the exclusive [path], which [agentInfo] held, to [agentContext] alone as [entry]. Every other agent on the
+  // path is displaced; re-registering its own path is neither logged nor counted. Callers MUST hold pathMap.
+  private fun takeOverPath(
+    path: String,
+    agentContext: AgentContext,
+    agentInfo: AgentContextInfo?,
+    entry: AgentContextInfo,
+  ) {
+    val displacedContexts = agentInfo?.agentContexts.orEmpty().filterNot { it.agentId == agentContext.agentId }
+    if (displacedContexts.isNotEmpty()) {
+      logger.info { "Overwriting path /$path for ${displacedContexts.first()}" }
+      proxy.metrics { agentDisplacementCount.inc() }
+    }
+    pathMap[path] = entry
+
+    // Invalidate displaced agent contexts that have no other registered paths.
+    // Even live agents are invalidated here — a displaced agent with zero paths
+    // would otherwise stay alive indefinitely via heartbeats, consuming resources.
+    // The agent will reconnect and re-register its paths if needed.
+    displacedContexts.forEach { displacedContext ->
+      countPaths(displacedContext.agentId, -1)
+      if ((pathCounts[displacedContext.agentId] ?: 0) == 0) {
+        logger.info { "Invalidating orphaned $displacedContext after path /$path was overwritten" }
+        displacedContext.invalidate()
+      }
+    }
+  }
+
+  // Counts, reports, and announces [agentContext]'s registration of [path] with [labels], once pathMap holds it.
+  // Callers MUST hold pathMap.
+  private fun recordRegistration(
+    path: String,
+    agentContext: AgentContext,
+    labels: String,
+    alreadyServes: Boolean,
+  ) {
+    if (!alreadyServes) {
+      countPaths(agentContext.agentId, 1)
+      warnNearPathLimit(agentContext)
+    }
+    agentContext.forgetRejection(path)
+    proxy.metrics { pathRegistered(path) }
+    // Said once here rather than on every service-discovery poll, which is where the labels are dropped.
+    val reserved = Proxy.reservedSdLabelKeys(labels, proxy.reserveJobAndInstanceLabels)
+    if (reserved.isNotEmpty())
+      logger.warn { "Agent labels $reserved for path /$path are reserved and won't appear in service discovery" }
+    if (!isTestMode) logger.info { "Added path /$path for $agentContext" }
+    // Inside synchronized(pathMap) on purpose: tryEmit never suspends or blocks, so publishing here
+    // cannot stall a registration, and the event is emitted only once the map actually reflects it.
+    proxy.eventBus.emit(ProxyEvent.PathRegistered(path, agentContext.agentId))
   }
 
   // The scrape route is registered as get("/*"), which matches exactly one path segment. A path with
@@ -320,48 +369,34 @@ internal class ProxyPathManager(
   ): UnregisterPathResponse {
     require(path.isNotBlank()) { BLANK_PATH_MSG }
     require(agentId.isNotBlank()) { BLANK_AGENT_ID_MSG }
-    val path = pathKey(path)
+    val key = pathKey(path)
 
-    synchronized(pathMap) {
-      val agentInfo = pathMap[path]
-      if (agentInfo == null) {
-        val msg = "Unable to remove path /$path - path not found"
-        logger.error { msg }
-        return unregisterPathResponse {
-          valid = false
-          reason = msg
+    // Null once the path is removed, otherwise why it couldn't be.
+    val failure =
+      synchronized(pathMap) {
+        val agentInfo = pathMap[key]
+        when {
+          agentInfo == null -> {
+            "Unable to remove path /$key - path not found"
+          }
+
+          agentInfo.agentContexts.none { it.agentId == agentId } -> {
+            val agentIds = agentInfo.agentContexts.joinToString(", ") { it.agentId }
+            "Unable to remove path /$key - invalid agentId: $agentId -- [$agentIds]"
+          }
+
+          else -> {
+            countPaths(agentId, -1)
+            dropAgentFromPath(key, agentInfo, agentId)
+            null
+          }
         }
       }
 
-      val agentContext = agentInfo.agentContexts.firstOrNull { it.agentId == agentId }
-      if (agentContext == null) {
-        val agentIds = agentInfo.agentContexts.joinToString(", ") { it.agentId }
-        val msg = "Unable to remove path /$path - invalid agentId: $agentId -- [$agentIds]"
-        logger.error { msg }
-        return unregisterPathResponse {
-          valid = false
-          reason = msg
-        }
-      }
-
-      countPaths(agentId, -1)
-      if (agentInfo.isConsolidated && agentInfo.agentContexts.size > 1) {
-        val updated = agentInfo.copy(agentContexts = agentInfo.agentContexts.filterNot { it.agentId == agentId })
-        pathMap[path] = updated
-        if (!isTestMode)
-          logger.info { "Removed element of path /$path for $updated" }
-      } else {
-        pathMap.remove(path)
-        // The path's last registration is gone, so its per-path metric series go with it.
-        proxy.metrics { removePathSeries(path) }
-        if (!isTestMode)
-          logger.info { "Removed path /$path for $agentInfo" }
-      }
-      proxy.eventBus.emit(ProxyEvent.PathUnregistered(path, agentId))
-      return unregisterPathResponse {
-        valid = true
-        reason = ""
-      }
+    failure?.let { msg -> logger.error { msg } }
+    return unregisterPathResponse {
+      valid = failure == null
+      reason = failure.orEmpty()
     }
   }
 
@@ -378,53 +413,45 @@ internal class ProxyPathManager(
     // context before calling this, so the context is normally already absent from the manager here —
     // report on what the sweep actually removed rather than on a manager lookup that no longer
     // distinguishes a live disconnect from a repeat call.
-    var removedPathCount = 0
-    synchronized(pathMap) {
-      // Collect map mutations in a first pass to avoid modifying the map during iteration.
-      val keysToRemove: MutableList<String> = []
-      val keysToUpdate: MutableMap<String, AgentContextInfo> = mutableMapOf()
-      pathMap.forEach { (k, v) ->
-        if (v.agentContexts.size == 1) {
-          if (v.agentContexts[0].agentId == agentId)
-            keysToRemove += k
-        } else {
-          val filtered = v.agentContexts.filterNot { it.agentId == agentId }
-          if (filtered.size != v.agentContexts.size) {
-            logger.info { "Removed agentId $agentId from consolidated path /$k" }
-            if (filtered.isEmpty())
-              keysToRemove += k
-            else
-              keysToUpdate[k] = v.copy(agentContexts = filtered)
-          }
-        }
+    val removedPathCount =
+      synchronized(pathMap) {
+        // Snapshot the agent's entries first, since dropping it from a path changes pathMap.
+        val served = pathMap.filterValues { info -> info.agentContexts.any { it.agentId == agentId } }
+        served.forEach { dropAgentFromPath(it.key, it.value, agentId) }
+        // The sweep took every path the agent served.
+        pathCounts.remove(agentId)
+        // The paths no agent is left on.
+        served.keys.count { it !in pathMap }
       }
-
-      keysToUpdate.forEach { (k, v) ->
-        pathMap[k] = v
-        // A consolidated path surviving the loss of one agent is still a topology change. Without this
-        // the dashboard would never be woken for it, and unlike the removal case below there is no later
-        // event to self-correct from.
-        proxy.eventBus.emit(ProxyEvent.PathUnregistered(k, agentId))
-      }
-
-      keysToRemove.forEach { k ->
-        pathMap.remove(k)
-          ?.also {
-            removedPathCount++
-            proxy.metrics { removePathSeries(k) }
-            if (!isTestMode)
-              logger.info { "Removed path /$k for $it" }
-            proxy.eventBus.emit(ProxyEvent.PathUnregistered(k, agentId))
-          } ?: logger.warn { "Missing path /$k for agentId: $agentId" }
-      }
-      // The sweep took every path the agent served.
-      pathCounts.remove(agentId)
-    }
 
     if (removedPathCount == 0)
       logger.debug { "No paths registered for agentId: $agentId ($reason)" }
     else
       logger.info { "Removed $removedPathCount path(s) for agentId: $agentId ($reason)" }
+  }
+
+  // Takes [agentId] off [path], whose entry is [agentInfo], removing the path once no agent is left on it. Leaves
+  // pathCounts to the caller. Callers MUST hold pathMap.
+  private fun dropAgentFromPath(
+    path: String,
+    agentInfo: AgentContextInfo,
+    agentId: String,
+  ) {
+    val remaining = agentInfo.agentContexts.filterNot { it.agentId == agentId }
+    if (remaining.isEmpty()) {
+      pathMap.remove(path)
+      // The path's last registration is gone, so its per-path metric series go with it.
+      proxy.metrics { removePathSeries(path) }
+      if (!isTestMode)
+        logger.info { "Removed path /$path for $agentInfo" }
+    } else {
+      pathMap[path] = agentInfo.copy(agentContexts = remaining)
+      if (!isTestMode)
+        logger.info { "Removed agentId $agentId from consolidated path /$path" }
+    }
+    // A consolidated path surviving the loss of one agent is still a topology change: without the event the dashboard
+    // would never be woken for it.
+    proxy.eventBus.emit(ProxyEvent.PathUnregistered(path, agentId))
   }
 
   fun toPlainText(): String =
