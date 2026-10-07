@@ -5,6 +5,7 @@
 [![Kotlin version](https://img.shields.io/badge/kotlin-2.4.20-red?logo=kotlin)](http://kotlinlang.org)
 [![codecov](https://codecov.io/gh/pambrose/prometheus-proxy/branch/master/graph/badge.svg)](https://codecov.io/gh/pambrose/prometheus-proxy)
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/422df508473443df9fbd8ea00fdee973)](https://app.codacy.com/gh/pambrose/prometheus-proxy/dashboard)
+[![CodeScene Average Code Health](https://codescene.io/projects/85750/status-badges/average-code-health)](https://codescene.io/projects/85750)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
 ![prometheus-agent Stats](https://dockerhub-readme-stats.vercel.app/api?image=pambrose/prometheus-agent&label=Docker%20Stats&hide=stars)
