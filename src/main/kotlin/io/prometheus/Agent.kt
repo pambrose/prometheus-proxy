@@ -55,6 +55,7 @@ import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import io.prometheus.common.Utils.getVersionDesc
 import io.prometheus.common.Utils.logStreamFailure
+import io.prometheus.common.ScrapeRequestAction
 import io.prometheus.common.Utils.sanitizeUrl
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -273,116 +274,11 @@ class Agent(
 
   override fun run() {
     val endpointFailover = EndpointFailover(grpcService)
-
-    suspend fun connectToProxy() {
-      // A non-empty agentId means the previous attempt connected. EndpointFailover combines that with whether
-      // the attempt also registered to choose between failing back to the primary and failing forward.
-      val previousAttemptConnected = agentId.isNotEmpty()
-      endpointFailover.beforeAttempt(previousAttemptConnected)
-      if (previousAttemptConnected) {
-        logger.info { "Resetting agentId" }
-        agentId = ""
-      }
-
-      // Reset values for each connection attempt
-      pathManager.clear()
-      // Note: scrapeRequestBacklogSize is reset here to ensure a clean state for the new connection.
-      // It is safe because the coroutineScope below (and in previous calls) guarantees that all
-      // child scrape coroutines from any previous connection have completed before we reach this point.
-      scrapeRequestBacklogSize.store(0)
-      lastMsgSentMark = clock.markNow()
-
-      if (grpcService.connectAgent()) {
-        grpcService.registerAgent(initialConnectionLatch)
-        pathManager.registerPaths()
-        endpointFailover.registrationSucceeded()
-        // Signal that any config-driven paths have been registered. CountDownLatch(1) ignores
-        // subsequent countDowns, so only the first successful connect cycle matters.
-        initialPathsRegisteredLatch.countDown()
-
-        // Close connectionContext when disconnected from the server or the service is shutdown and isRunning is false
-        val connectionContext =
-          AgentConnectionContext(
-            agentConfigVals.internal.scrapeRequestBacklogUnhealthySize * BACKLOG_CAPACITY_MULTIPLIER,
-          )
-
-        coroutineScope {
-          // Each task runs for the connection's lifetime; on completion launchConnectionTask closes
-          // the shared connectionContext and adjusts the backlog. Ends on disconnect/shutdown.
-          launchConnectionTask(connectionContext, "readRequestsFromProxy") {
-            grpcService.readRequestsFromProxy(agentHttpService, connectionContext)
-          }
-
-          launchConnectionTask(connectionContext, "startHeartBeat") {
-            startHeartBeat(connectionContext)
-          }
-
-          // Dynamic target discovery: reconcile discovered paths for the connection's lifetime.
-          // Polls isRunning/connected so the task ends on disconnect or shutdown (like startHeartBeat).
-          pathDiscoveryService?.let { service ->
-            launchConnectionTask(connectionContext, "reconcilePaths") {
-              service.run { isRunning && connectionContext.connected }
-            }
-          }
-
-          // Retries the static paths the proxy rejected at connect; see AgentPathManager.retryRejectedStaticPaths.
-          if (pathManager.hasRejectedStaticPaths) {
-            val retryInterval = agentConfigVals.internal.rejectedPathRetrySecs.seconds
-            launchConnectionTask(connectionContext, "retryRejectedStaticPaths") {
-              pathManager.retryRejectedStaticPathsWhile(retryInterval) { isRunning && connectionContext.connected }
-              if (isRunning && connectionContext.connected) {
-                // Retrying ended with no static path registered -- each rejection turned out not to clear -- and no
-                // discovery to serve anything else, so this proxy serves nothing for the agent. Returning ends the
-                // connection (see launchConnectionTask), as registerPaths does at connect, so the agent reconnects or
-                // fails over. Otherwise every rejected path registered: idle until the connection ends.
-                if (pathManager.servesNoStaticPath() && pathDiscoveryService == null)
-                  logger.warn { "Proxy rejected every static path for a cause that can't clear; ending the connection" }
-                else
-                  awaitCancellation()
-              }
-            }
-          }
-
-          launchConnectionTask(connectionContext, "writeResponsesToProxyUntilDisconnected") {
-            grpcService.writeResponsesToProxyUntilDisconnected(this@Agent, connectionContext)
-            logger.info { "writeResponsesToProxyUntilDisconnected() completed" }
-          }
-
-          launchConnectionTask(connectionContext, "scrapeResultsChannel.send") {
-            val max = options.maxConcurrentHttpClients
-            logger.info { "Starting scrape request processing with maxConcurrentClients: $max" }
-            // Limits the number of concurrent scrapes below
-            val semaphore = Semaphore(max)
-
-            for (scrapeRequestAction in connectionContext.scrapeRequestActions()) {
-              // Acquisition must happen before launch to provide backpressure to the channel
-              // and avoid creating unbounded waiting coroutines (Bug #1).
-              semaphore.acquire()
-              launch {
-                try {
-                  // The url fetch occurs here during scrapeRequestAction.invoke()
-                  val scrapeResponse = scrapeRequestAction.invoke()
-                  // A false return means the result was dropped because the connection closed
-                  // mid-scrape; surface it as a metric so the loss is observable, not silent.
-                  if (!connectionContext.sendScrapeResults(scrapeResponse))
-                    metrics { scrapeResultCount.labelValues(launchId, "dropped").inc() }
-                } finally {
-                  semaphore.release()
-                  decrementBacklog(1)
-                }
-              }
-            }
-          }
-        }
-        logger.info { "connectToProxy() completed" }
-      }
-    }
-
     while (isRunning) {
       try {
         runCatchingCancellable {
           runBlocking {
-            connectToProxy()
+            connectToProxy(endpointFailover)
             logger.info { "Disconnected from proxy at $proxyHost" }
           }
         }.onFailure { e -> handleConnectionFailure(e) }
@@ -394,6 +290,131 @@ class Agent(
           reconnectPause()
       }
     }
+  }
+
+  // One connection attempt: connect and register, then run the connection's tasks until it ends.
+  private suspend fun connectToProxy(endpointFailover: EndpointFailover) {
+    // A non-empty agentId means the previous attempt connected. EndpointFailover combines that with whether
+    // the attempt also registered to choose between failing back to the primary and failing forward.
+    val previousAttemptConnected = agentId.isNotEmpty()
+    endpointFailover.beforeAttempt(previousAttemptConnected)
+    if (previousAttemptConnected) {
+      logger.info { "Resetting agentId" }
+      agentId = ""
+    }
+
+    // Reset values for each connection attempt
+    pathManager.clear()
+    // Note: scrapeRequestBacklogSize is reset here to ensure a clean state for the new connection.
+    // It is safe because the coroutineScope below (and in previous calls) guarantees that all
+    // child scrape coroutines from any previous connection have completed before we reach this point.
+    scrapeRequestBacklogSize.store(0)
+    lastMsgSentMark = clock.markNow()
+
+    if (!grpcService.connectAgent())
+      return
+
+    grpcService.registerAgent(initialConnectionLatch)
+    pathManager.registerPaths()
+    endpointFailover.registrationSucceeded()
+    // Signal that any config-driven paths have been registered. CountDownLatch(1) ignores
+    // subsequent countDowns, so only the first successful connect cycle matters.
+    initialPathsRegisteredLatch.countDown()
+
+    // Close connectionContext when disconnected from the server or the service is shutdown and isRunning is false
+    val connectionContext =
+      AgentConnectionContext(agentConfigVals.internal.scrapeRequestBacklogUnhealthySize * BACKLOG_CAPACITY_MULTIPLIER)
+    coroutineScope { launchConnectionTasks(connectionContext) }
+    logger.info { "connectToProxy() completed" }
+  }
+
+  // Each task runs for the connection's lifetime; on completion launchConnectionTask closes the shared
+  // connectionContext and adjusts the backlog. Ends on disconnect/shutdown.
+  private fun CoroutineScope.launchConnectionTasks(connectionContext: AgentConnectionContext) {
+    launchConnectionTask(connectionContext, "readRequestsFromProxy") {
+      grpcService.readRequestsFromProxy(agentHttpService, connectionContext)
+    }
+
+    launchConnectionTask(connectionContext, "startHeartBeat") {
+      startHeartBeat(connectionContext)
+    }
+
+    // Dynamic target discovery: reconcile discovered paths for the connection's lifetime.
+    // Polls isRunning/connected so the task ends on disconnect or shutdown (like startHeartBeat).
+    pathDiscoveryService?.let { service ->
+      launchConnectionTask(connectionContext, "reconcilePaths") {
+        service.run { isConnectionLive(connectionContext) }
+      }
+    }
+
+    if (pathManager.hasRejectedStaticPaths)
+      launchConnectionTask(connectionContext, "retryRejectedStaticPaths") {
+        retryRejectedStaticPathsForConnection(connectionContext)
+      }
+
+    launchConnectionTask(connectionContext, "writeResponsesToProxyUntilDisconnected") {
+      grpcService.writeResponsesToProxyUntilDisconnected(this@Agent, connectionContext)
+      logger.info { "writeResponsesToProxyUntilDisconnected() completed" }
+    }
+
+    launchConnectionTask(connectionContext, "scrapeResultsChannel.send") {
+      processScrapeRequests(connectionContext)
+    }
+  }
+
+  // Whether a connection task should keep going: the agent is running and the connection is still open.
+  private fun isConnectionLive(connectionContext: AgentConnectionContext) = isRunning && connectionContext.connected
+
+  // Retries the static paths the proxy rejected at connect; see AgentPathManager.retryRejectedStaticPaths.
+  private suspend fun retryRejectedStaticPathsForConnection(connectionContext: AgentConnectionContext) {
+    val retryInterval = agentConfigVals.internal.rejectedPathRetrySecs.seconds
+    pathManager.retryRejectedStaticPathsWhile(retryInterval) { isConnectionLive(connectionContext) }
+    if (!isConnectionLive(connectionContext))
+      return
+    // Retrying ended with no static path registered -- each rejection turned out not to clear -- and no discovery to
+    // serve anything else, so this proxy serves nothing for the agent. Returning ends the connection (see
+    // launchConnectionTask), as registerPaths does at connect, so the agent reconnects or fails over. Otherwise every
+    // rejected path registered: idle until the connection ends.
+    if (pathManager.servesNoStaticPath() && pathDiscoveryService == null)
+      logger.warn { "Proxy rejected every static path for a cause that can't clear; ending the connection" }
+    else
+      awaitCancellation()
+  }
+
+  // Runs the scrape requests the proxy sends for the connection's lifetime, at most maxConcurrentHttpClients at once.
+  // A CoroutineScope extension so each scrape is a child of the task's scope.
+  private suspend fun CoroutineScope.processScrapeRequests(connectionContext: AgentConnectionContext) {
+    val max = options.maxConcurrentHttpClients
+    logger.info { "Starting scrape request processing with maxConcurrentClients: $max" }
+    // Limits the number of concurrent scrapes below
+    val semaphore = Semaphore(max)
+
+    for (scrapeRequestAction in connectionContext.scrapeRequestActions()) {
+      // Acquisition must happen before launch to provide backpressure to the channel
+      // and avoid creating unbounded waiting coroutines (Bug #1).
+      semaphore.acquire()
+      launch {
+        try {
+          scrape(scrapeRequestAction, connectionContext)
+        } finally {
+          semaphore.release()
+          decrementBacklog(1)
+        }
+      }
+    }
+  }
+
+  // Runs one scrape request and sends its result to the proxy.
+  private suspend fun scrape(
+    scrapeRequestAction: ScrapeRequestAction,
+    connectionContext: AgentConnectionContext,
+  ) {
+    // The url fetch occurs here during scrapeRequestAction.invoke()
+    val scrapeResponse = scrapeRequestAction.invoke()
+    // A false return means the result was dropped because the connection closed
+    // mid-scrape; surface it as a metric so the loss is observable, not silent.
+    if (!connectionContext.sendScrapeResults(scrapeResponse))
+      metrics { scrapeResultCount.labelValues(launchId, "dropped").inc() }
   }
 
   // Blocks on the reconnect rate limiter to pace reconnect attempts, then logs the wait.
@@ -494,46 +515,58 @@ class Agent(
   }
 
   private suspend fun startHeartBeat(connectionContext: AgentConnectionContext) {
+    if (agentConfigVals.internal.heartbeatEnabled)
+      sendHeartBeats(connectionContext)
+    else
+      awaitDisconnectWithoutHeartBeat(connectionContext)
+  }
+
+  // Stays alive for the connection's lifetime instead of returning: launchConnectionTask treats any
+  // task's completion as a disconnect and closes the shared connectionContext, so returning at once would
+  // close the context right after connect -- the first scrape then hits a ClosedSendChannelException
+  // and the agent flaps, dropping its paths (finding 6). Polls connected so the task ends promptly once the
+  // connection closes; a sibling task ending also cancels it (see launchConnectionTask).
+  private suspend fun awaitDisconnectWithoutHeartBeat(connectionContext: AgentConnectionContext) {
+    logger.info { "Heartbeat disabled" }
+    val heartbeatPauseTime = agentConfigVals.internal.heartbeatCheckPauseMillis.milliseconds
+    while (isConnectionLive(connectionContext)) {
+      delay(heartbeatPauseTime)
+    }
+    logger.info { "Heartbeat (disabled) completed" }
+  }
+
+  // Sends a heartbeat whenever the connection has been idle for heartbeatMaxInactivitySecs, until the connection ends
+  // or a heartbeat says to tear it down.
+  private suspend fun sendHeartBeats(connectionContext: AgentConnectionContext) {
     val cfg = agentConfigVals.internal
     val heartbeatPauseTime = cfg.heartbeatCheckPauseMillis.milliseconds
-
-    if (!cfg.heartbeatEnabled) {
-      logger.info { "Heartbeat disabled" }
-      // Stay alive for the connection's lifetime instead of returning: launchConnectionTask treats any
-      // task's completion as a disconnect and closes the shared connectionContext, so returning here would
-      // close the context right after connect -- the first scrape then hits a ClosedSendChannelException
-      // and the agent flaps, dropping its paths (finding 6). Poll connected so the task ends promptly once the
-      // connection closes; a sibling task ending also cancels it (see launchConnectionTask).
-      while (isRunning && connectionContext.connected) {
-        delay(heartbeatPauseTime)
-      }
-      logger.info { "Heartbeat (disabled) completed" }
-      return
-    }
-
     val maxInactivityTime = cfg.heartbeatMaxInactivitySecs.seconds
     logger.info { "Heartbeat scheduled to fire after $maxInactivityTime of inactivity" }
 
     var consecutiveFailures = 0
-    while (isRunning && connectionContext.connected) {
-      if (lastMsgSentMark.elapsedNow() > maxInactivityTime) {
-        logger.debug { "Sending heartbeat" }
-        // Evaluated per heartbeat so a change to the unary deadline takes effect on the next one.
-        val deadlineSecs = heartbeatDeadlineSecs(cfg.heartbeatMaxInactivitySecs, grpcService.unaryDeadlineSecs)
-        val result = grpcService.sendHeartBeat(deadlineSecs)
-        val nextCount = nextHeartbeatFailureCount(result, consecutiveFailures, MAX_HEARTBEAT_FAILURES)
-        if (nextCount == null) {
-          // EVICTED, or MAX_HEARTBEAT_FAILURES consecutive failures on a half-open transport. Ending this task
-          // ends the connection (findings 1 & 2): launchConnectionTask cancels the sibling tasks, including the
-          // idle readRequestsFromProxy collect, and the next attempt replaces the channel.
-          logger.warn { "Heartbeat signalled disconnect ($result); tearing down connection to reconnect" }
-          break
-        }
-        consecutiveFailures = nextCount
-      }
+    while (isConnectionLive(connectionContext)) {
+      if (lastMsgSentMark.elapsedNow() > maxInactivityTime)
+        consecutiveFailures = sendHeartBeat(consecutiveFailures) ?: break
       delay(heartbeatPauseTime)
     }
     logger.info { "Heartbeat completed" }
+  }
+
+  // Sends one heartbeat and returns the updated count of consecutive failures, or null when the connection should be
+  // torn down; see nextHeartbeatFailureCount.
+  private suspend fun sendHeartBeat(consecutiveFailures: Int): Int? {
+    logger.debug { "Sending heartbeat" }
+    // Evaluated per heartbeat so a change to the unary deadline takes effect on the next one.
+    val deadlineSecs =
+      heartbeatDeadlineSecs(agentConfigVals.internal.heartbeatMaxInactivitySecs, grpcService.unaryDeadlineSecs)
+    val result = grpcService.sendHeartBeat(deadlineSecs)
+    val nextCount = nextHeartbeatFailureCount(result, consecutiveFailures, MAX_HEARTBEAT_FAILURES)
+    // EVICTED, or MAX_HEARTBEAT_FAILURES consecutive failures on a half-open transport. Ending the heartbeat task
+    // ends the connection (findings 1 & 2): launchConnectionTask cancels the sibling tasks, including the
+    // idle readRequestsFromProxy collect, and the next attempt replaces the channel.
+    if (nextCount == null)
+      logger.warn { "Heartbeat signalled disconnect ($result); tearing down connection to reconnect" }
+    return nextCount
   }
 
   /**
