@@ -40,6 +40,7 @@ import io.prometheus.common.captureLogs
 import io.prometheus.grpc.PathRejectionCause
 import io.prometheus.grpc.RegisterAgentRequest
 import io.prometheus.grpc.registerAgentRequest
+import io.prometheus.proxy.ProxyPathManager.PathMetadata
 import kotlin.concurrent.atomics.AtomicLong
 import kotlin.concurrent.atomics.incrementAndFetch
 import io.kotest.matchers.maps.shouldHaveSize as mapShouldHaveSize
@@ -124,7 +125,12 @@ class ProxyPathManagerTest : StringSpec() {
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context = createMockAgentContext()
 
-      manager.addPath("metrics", "{}", context, "http://admin:hunter2@target:9100/metrics?token=s3cr3t")
+      manager.addPath(
+        "metrics",
+        "{}",
+        context,
+        PathMetadata(targetUrl = "http://admin:hunter2@target:9100/metrics?token=s3cr3t"),
+      )
 
       manager.getAgentContextInfo("metrics").shouldNotBeNull().targetUrl shouldBe
         "http://***@target:9100/metrics?token=***"
@@ -243,8 +249,8 @@ class ProxyPathManagerTest : StringSpec() {
       val owner = AgentContext("remote-owner")
       val intruder = AgentContext("remote-intruder")
 
-      manager.addPath("/metrics", """{"job":"test"}""", owner, identityName = "team_a").shouldBeNull()
-      val rejection = manager.addPath("/metrics", """{"job":"test"}""", intruder, identityName = "team_b")
+      manager.addPath("/metrics", """{"job":"test"}""", owner, PathMetadata(identityName = "team_a")).shouldBeNull()
+      val rejection = manager.addPath("/metrics", """{"job":"test"}""", intruder, PathMetadata(identityName = "team_b"))
 
       rejection.shouldNotBeNull().reason shouldContain "team_a"
       rejection.cause shouldBe PathRejectionCause.HELD_BY_ANOTHER_IDENTITY
@@ -270,8 +276,8 @@ class ProxyPathManagerTest : StringSpec() {
       val owner = AgentContext("remote-owner")
       val intruder = AgentContext("remote-intruder")
 
-      manager.addPath("/metrics", "{}", owner, identityName = "team_a").shouldBeNull()
-      val rejection = manager.addPath("metrics", "{}", intruder, identityName = "team_b")
+      manager.addPath("/metrics", "{}", owner, PathMetadata(identityName = "team_a")).shouldBeNull()
+      val rejection = manager.addPath("metrics", "{}", intruder, PathMetadata(identityName = "team_b"))
 
       rejection.shouldNotBeNull().cause shouldBe PathRejectionCause.HELD_BY_ANOTHER_IDENTITY
       manager.pathMapSize shouldBe 1
@@ -304,8 +310,13 @@ class ProxyPathManagerTest : StringSpec() {
       val owner = AgentContext("remote-owner")
       val redeployed = AgentContext("remote-redeployed")
 
-      manager.addPath("/metrics", """{"job":"test"}""", owner, identityName = "team_a").shouldBeNull()
-      manager.addPath("/metrics", """{"job":"test"}""", redeployed, identityName = "team_a").shouldBeNull()
+      manager.addPath("/metrics", """{"job":"test"}""", owner, PathMetadata(identityName = "team_a")).shouldBeNull()
+      manager.addPath(
+        "/metrics",
+        """{"job":"test"}""",
+        redeployed,
+        PathMetadata(identityName = "team_a"),
+      ).shouldBeNull()
 
       manager.getAgentContextInfo("/metrics")?.agentContexts?.map { it.agentId } shouldBe [redeployed.agentId]
     }
@@ -316,9 +327,9 @@ class ProxyPathManagerTest : StringSpec() {
       val owner = AgentContext("remote-owner")
       val newcomer = AgentContext("remote-newcomer")
 
-      manager.addPath("/metrics", """{"job":"test"}""", owner, identityName = "team_a").shouldBeNull()
+      manager.addPath("/metrics", """{"job":"test"}""", owner, PathMetadata(identityName = "team_a")).shouldBeNull()
       owner.invalidate()
-      manager.addPath("/metrics", """{"job":"test"}""", newcomer, identityName = "team_b").shouldBeNull()
+      manager.addPath("/metrics", """{"job":"test"}""", newcomer, PathMetadata(identityName = "team_b")).shouldBeNull()
 
       manager.getAgentContextInfo("/metrics")?.agentContexts?.map { it.agentId } shouldBe [newcomer.agentId]
     }
@@ -329,11 +340,13 @@ class ProxyPathManagerTest : StringSpec() {
       val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
       val owner = AgentContext("remote-owner")
       val intruder = AgentContext("remote-intruder")
-      manager.addPath("/metrics", """{"job":"test"}""", owner, identityName = "team_a").shouldBeNull()
+      manager.addPath("/metrics", """{"job":"test"}""", owner, PathMetadata(identityName = "team_a")).shouldBeNull()
 
       val events =
         rejectionLogs("cannot take it over") {
-          repeat(3) { manager.addPath("/metrics", """{"job":"test"}""", intruder, identityName = "team_b") }
+          repeat(3) {
+            manager.addPath("/metrics", """{"job":"test"}""", intruder, PathMetadata(identityName = "team_b"))
+          }
         }
 
       events.count { it.level == Level.WARN } shouldBe 1
@@ -345,12 +358,22 @@ class ProxyPathManagerTest : StringSpec() {
     "a rejection of the same path by another agent should be logged again" {
       val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
       val owner = AgentContext("remote-owner")
-      manager.addPath("/metrics", """{"job":"test"}""", owner, identityName = "team_a").shouldBeNull()
+      manager.addPath("/metrics", """{"job":"test"}""", owner, PathMetadata(identityName = "team_a")).shouldBeNull()
 
       val events =
         rejectionLogs("cannot take it over") {
-          manager.addPath("/metrics", """{"job":"test"}""", AgentContext("remote-1"), identityName = "team_b")
-          manager.addPath("/metrics", """{"job":"test"}""", AgentContext("remote-2"), identityName = "team_b")
+          manager.addPath(
+            "/metrics",
+            """{"job":"test"}""",
+            AgentContext("remote-1"),
+            PathMetadata(identityName = "team_b"),
+          )
+          manager.addPath(
+            "/metrics",
+            """{"job":"test"}""",
+            AgentContext("remote-2"),
+            PathMetadata(identityName = "team_b"),
+          )
         }
 
       events.count { it.level == Level.WARN } shouldBe 2
@@ -361,17 +384,27 @@ class ProxyPathManagerTest : StringSpec() {
       val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
       val owner = AgentContext("remote-owner")
       val intruder = AgentContext("remote-intruder")
-      manager.addPath("/metrics", """{"job":"test"}""", owner, identityName = "team_a").shouldBeNull()
+      manager.addPath("/metrics", """{"job":"test"}""", owner, PathMetadata(identityName = "team_a")).shouldBeNull()
 
       val events =
         rejectionLogs("cannot take it over") {
-          manager.addPath("/metrics", """{"job":"test"}""", intruder, identityName = "team_b")
+          manager.addPath("/metrics", """{"job":"test"}""", intruder, PathMetadata(identityName = "team_b"))
           manager.removePath("/metrics", owner.agentId)
-          manager.addPath("/metrics", """{"job":"test"}""", intruder, identityName = "team_b").shouldBeNull()
+          manager.addPath(
+            "/metrics",
+            """{"job":"test"}""",
+            intruder,
+            PathMetadata(identityName = "team_b"),
+          ).shouldBeNull()
           manager.removePath("/metrics", intruder.agentId)
-          manager.addPath("/metrics", """{"job":"test"}""", AgentContext("remote-next"), identityName = "team_a")
+          manager.addPath(
+            "/metrics",
+            """{"job":"test"}""",
+            AgentContext("remote-next"),
+            PathMetadata(identityName = "team_a"),
+          )
             .shouldBeNull()
-          manager.addPath("/metrics", """{"job":"test"}""", intruder, identityName = "team_b")
+          manager.addPath("/metrics", """{"job":"test"}""", intruder, PathMetadata(identityName = "team_b"))
         }
 
       events.count { it.level == Level.WARN } shouldBe 2
@@ -422,8 +455,8 @@ class ProxyPathManagerTest : StringSpec() {
       val owner = createAgentContext(consolidated = true)
       val intruder = createAgentContext(consolidated = true)
 
-      manager.addPath("/metrics", """{"job":"test"}""", owner, identityName = "team_a").shouldBeNull()
-      val rejection = manager.addPath("/metrics", """{"job":"test"}""", intruder, identityName = "team_b")
+      manager.addPath("/metrics", """{"job":"test"}""", owner, PathMetadata(identityName = "team_a")).shouldBeNull()
+      val rejection = manager.addPath("/metrics", """{"job":"test"}""", intruder, PathMetadata(identityName = "team_b"))
 
       rejection.shouldNotBeNull().reason shouldContain "team_a"
       rejection.cause shouldBe PathRejectionCause.HELD_BY_ANOTHER_IDENTITY
@@ -436,8 +469,8 @@ class ProxyPathManagerTest : StringSpec() {
       val first = createAgentContext(consolidated = true)
       val second = createAgentContext(consolidated = true)
 
-      manager.addPath("/metrics", """{"job":"test"}""", first, identityName = "team_a").shouldBeNull()
-      manager.addPath("/metrics", """{"job":"test"}""", second, identityName = "team_a").shouldBeNull()
+      manager.addPath("/metrics", """{"job":"test"}""", first, PathMetadata(identityName = "team_a")).shouldBeNull()
+      manager.addPath("/metrics", """{"job":"test"}""", second, PathMetadata(identityName = "team_a")).shouldBeNull()
 
       manager.getAgentContextInfo("/metrics")?.agentContexts?.map { it.agentId } shouldBe
         [first.agentId, second.agentId]
@@ -463,9 +496,9 @@ class ProxyPathManagerTest : StringSpec() {
       val owner = createAgentContext(consolidated = true)
       val newcomer = createAgentContext(consolidated = true)
 
-      manager.addPath("/metrics", """{"job":"test"}""", owner, identityName = "team_a").shouldBeNull()
+      manager.addPath("/metrics", """{"job":"test"}""", owner, PathMetadata(identityName = "team_a")).shouldBeNull()
       owner.invalidate()
-      manager.addPath("/metrics", """{"job":"test"}""", newcomer, identityName = "team_b").shouldBeNull()
+      manager.addPath("/metrics", """{"job":"test"}""", newcomer, PathMetadata(identityName = "team_b")).shouldBeNull()
 
       // The path is team_b's now, so the next agent to join is measured against that.
       manager.getAgentContextInfo("/metrics").shouldNotBeNull().identityName shouldBe "team_b"

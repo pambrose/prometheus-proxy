@@ -24,6 +24,7 @@ import io.kotest.core.spec.style.StringSpec
 import io.prometheus.Proxy
 import io.prometheus.common.Lincheck
 import io.prometheus.grpc.registerAgentRequest
+import io.prometheus.proxy.ProxyPathManager.PathMetadata
 import org.jetbrains.lincheck.datastructures.IntGen
 import org.jetbrains.lincheck.datastructures.Operation
 import org.jetbrains.lincheck.datastructures.Param
@@ -112,7 +113,7 @@ class ProxyPathManagerOps {
     @Param(name = "path") path: Int,
   ) {
     val context = contextManager.getAgentContext(agents[agent].agentId) ?: return
-    pathManager.addPath(PATHS[path], "{}", context, identityName = context.authIdentityName)
+    pathManager.addPath(PATHS[path], "{}", context, PathMetadata(identityName = context.authIdentityName))
   }
 
   @Operation

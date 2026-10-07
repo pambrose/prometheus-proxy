@@ -182,12 +182,12 @@ RegisterLocked(c, p) ==
                /\ UNCHANGED <<phase, inMgr, queue, tokens, reading, agentHas>>
     /\ UNCHANGED <<ident, consol, scrapeVars>>
 
-\* unregisterPath from a connected agent (ProxyPathManager.removePath).
+\* unregisterPath from a connected agent (ProxyPathManager.removePath). It drops the agent from the path the way
+\* SweepPaths does (dropAgentFromPath), so an exclusive path, which only ever holds one context, goes with it.
 Unregister(c, p) ==
     /\ phase[c] = "live"
     /\ c \in pathMap[p].ctxs
-    /\ pathMap' = [pathMap EXCEPT ![p] =
-                     IF @.consolidated /\ Cardinality(@.ctxs) > 1 THEN [@ EXCEPT !.ctxs = @ \ {c}] ELSE Absent]
+    /\ pathMap' = [pathMap EXCEPT ![p] = IF @.ctxs = {c} THEN Absent ELSE [@ EXCEPT !.ctxs = @ \ {c}]]
     /\ pathCount' = [pathCount EXCEPT ![c] = @ - 1]
     /\ UNCHANGED <<ident, consol, connVars, regPending, scrapeVars>>
 

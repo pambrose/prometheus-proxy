@@ -396,7 +396,9 @@ class ProxyServiceImplTest : StringSpec() {
 
       every { mockAgentContext.agentId } returns testAgentId
       every { proxy.agentContextManager.getAgentContext(testAgentId) } returns mockAgentContext
-      every { proxy.pathManager.addPath(allowedPath, any(), mockAgentContext, any(), any(), "team_a") } returns null
+      every {
+        proxy.pathManager.addPath(allowedPath, any(), mockAgentContext, match { it.identityName == "team_a" })
+      } returns null
       every { proxy.pathManager.pathMapSize } returns 1
 
       val identity = AgentIdentity("team_a", ByteArray(0), [AgentAuthManager.globToRegex("team_a_*")])
@@ -417,7 +419,7 @@ class ProxyServiceImplTest : StringSpec() {
 
       response.valid.shouldBeTrue()
       // The caller's identity reaches addPath, which lets only the same identity take over a live agent's path.
-      verify { proxy.pathManager.addPath(allowedPath, any(), mockAgentContext, any(), any(), "team_a") }
+      verify { proxy.pathManager.addPath(allowedPath, any(), mockAgentContext, match { it.identityName == "team_a" }) }
     }
 
     // ==================== agentId / connection binding ====================
@@ -1994,7 +1996,7 @@ class ProxyServiceImplTest : StringSpec() {
       val victimContext = AgentContext("victim-host", authIdentityName = "team-a")
       every { agentContextManager.getAgentContext(victimContext.agentId) } returns victimContext
       // Stubbed to succeed so a rejection can only come from the identity check.
-      every { pathManager.addPath(any(), any(), any(), any(), any()) } returns null
+      every { pathManager.addPath(any(), any(), any(), any()) } returns null
 
       val response =
         asIdentity("team-b") {
@@ -2009,7 +2011,7 @@ class ProxyServiceImplTest : StringSpec() {
       response.valid.shouldBeFalse()
       response.reason shouldContain "identity"
       response.rejectionCause shouldBe PathRejectionCause.BINDING_MISMATCH
-      verify(exactly = 0) { pathManager.addPath(any(), any(), any(), any(), any()) }
+      verify(exactly = 0) { pathManager.addPath(any(), any(), any(), any()) }
     }
 
     "registerPath should allow an agentId whose context is bound to the caller's identity" {
@@ -2018,7 +2020,7 @@ class ProxyServiceImplTest : StringSpec() {
       val pathManager = proxy.pathManager
       val ownContext = AgentContext("own-host", authIdentityName = "team-a")
       every { agentContextManager.getAgentContext(ownContext.agentId) } returns ownContext
-      every { pathManager.addPath(any(), any(), any(), any(), any(), "team-a") } returns null
+      every { pathManager.addPath(any(), any(), any(), match { it.identityName == "team-a" }) } returns null
 
       val response =
         asIdentity("team-a") {
@@ -2031,7 +2033,7 @@ class ProxyServiceImplTest : StringSpec() {
         }
 
       response.valid.shouldBeTrue()
-      verify { pathManager.addPath("any_metrics", any(), ownContext, any(), any(), "team-a") }
+      verify { pathManager.addPath("any_metrics", any(), ownContext, match { it.identityName == "team-a" }) }
     }
 
     // Contexts the transport filter creates, and contexts created without auth, record no identity. Binding
@@ -2042,7 +2044,7 @@ class ProxyServiceImplTest : StringSpec() {
       val pathManager = proxy.pathManager
       val unboundContext = AgentContext("some-host")
       every { agentContextManager.getAgentContext(unboundContext.agentId) } returns unboundContext
-      every { pathManager.addPath(any(), any(), any(), any(), any(), "team-a") } returns null
+      every { pathManager.addPath(any(), any(), any(), match { it.identityName == "team-a" }) } returns null
 
       val response =
         asIdentity("team-a") {
