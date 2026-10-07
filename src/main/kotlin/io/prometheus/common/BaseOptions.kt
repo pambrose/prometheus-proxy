@@ -257,6 +257,30 @@ abstract class BaseOptions protected constructor(
     return resolveBoolean(cliValue, cliExplicitlySet, envVar.name, System.getenv(envVar.name), configDefault)
   }
 
+  // An Int option's value: [cliValue] when given on the command line (-1 marks it unset), else [envVar], else
+  // [configDefault].
+  internal fun resolveIntOption(
+    cliValue: Int,
+    envVar: EnvVars,
+    configDefault: Int,
+  ): Int = if (cliValue == -1) envVar.getEnv(configDefault) else cliValue
+
+  // A Long option's value: [cliValue] when given on the command line (-1 marks it unset), else [envVar], else
+  // [configDefault].
+  internal fun resolveLongOption(
+    cliValue: Long,
+    envVar: EnvVars,
+    configDefault: Long,
+  ): Long = if (cliValue == -1L) envVar.getEnv(configDefault) else cliValue
+
+  // A String option's value: [cliValue] when given on the command line (empty marks it unset), else [envVar], else
+  // [configDefault].
+  internal fun resolveStringOption(
+    cliValue: String,
+    envVar: EnvVars,
+    configDefault: String,
+  ): String = cliValue.ifEmpty { envVar.getEnv(configDefault) }
+
   protected fun validateTlsConfig() {
     val hasCert = certChainFilePath.isNotEmpty()
     val hasKey = privateKeyFilePath.isNotEmpty()
@@ -330,14 +354,12 @@ abstract class BaseOptions protected constructor(
   }
 
   protected fun assignKeepAliveTimeSecs(defaultVal: Long) {
-    if (keepAliveTimeSecs == -1L)
-      keepAliveTimeSecs = KEEPALIVE_TIME_SECS.getEnv(defaultVal)
+    keepAliveTimeSecs = resolveLongOption(keepAliveTimeSecs, KEEPALIVE_TIME_SECS, defaultVal)
     logger.requireGrpcTimeout("grpc.keepAliveTimeSecs", keepAliveTimeSecs, "gRPC default")
   }
 
   protected fun assignKeepAliveTimeoutSecs(defaultVal: Long) {
-    if (keepAliveTimeoutSecs == -1L)
-      keepAliveTimeoutSecs = KEEPALIVE_TIMEOUT_SECS.getEnv(defaultVal)
+    keepAliveTimeoutSecs = resolveLongOption(keepAliveTimeoutSecs, KEEPALIVE_TIMEOUT_SECS, defaultVal)
     logger.requireGrpcTimeout("grpc.keepAliveTimeoutSecs", keepAliveTimeoutSecs, "gRPC default")
   }
 
@@ -347,8 +369,7 @@ abstract class BaseOptions protected constructor(
   }
 
   protected fun assignAdminPort(defaultVal: Int) {
-    if (adminPort == -1)
-      adminPort = ADMIN_PORT.getEnv(defaultVal)
+    adminPort = resolveIntOption(adminPort, ADMIN_PORT, defaultVal)
     require(adminPort in 1..65535) { "adminPort must be in 1..65535: $adminPort" }
     logger.info { "adminPort: $adminPort" }
   }
@@ -364,8 +385,7 @@ abstract class BaseOptions protected constructor(
   }
 
   protected fun assignMetricsPort(defaultVal: Int) {
-    if (metricsPort == -1)
-      metricsPort = METRICS_PORT.getEnv(defaultVal)
+    metricsPort = resolveIntOption(metricsPort, METRICS_PORT, defaultVal)
     require(metricsPort in 1..65535) { "metricsPort must be in 1..65535: $metricsPort" }
     logger.info { "metricsPort: $metricsPort" }
   }
@@ -383,20 +403,18 @@ abstract class BaseOptions protected constructor(
   }
 
   protected fun assignCertChainFilePath(defaultVal: String) {
-    if (certChainFilePath.isEmpty())
-      certChainFilePath = CERT_CHAIN_FILE_PATH.getEnv(defaultVal)
+    certChainFilePath = resolveStringOption(certChainFilePath, CERT_CHAIN_FILE_PATH, defaultVal)
     logger.info { "certChainFilePath: $certChainFilePath" }
   }
 
   protected fun assignPrivateKeyFilePath(defaultVal: String) {
-    if (privateKeyFilePath.isEmpty())
-      privateKeyFilePath = PRIVATE_KEY_FILE_PATH.getEnv(defaultVal)
+    privateKeyFilePath = resolveStringOption(privateKeyFilePath, PRIVATE_KEY_FILE_PATH, defaultVal)
     logger.info { "privateKeyFilePath: $privateKeyFilePath" }
   }
 
   protected fun assignTrustCertCollectionFilePath(defaultVal: String) {
-    if (trustCertCollectionFilePath.isEmpty())
-      trustCertCollectionFilePath = TRUST_CERT_COLLECTION_FILE_PATH.getEnv(defaultVal)
+    trustCertCollectionFilePath =
+      resolveStringOption(trustCertCollectionFilePath, TRUST_CERT_COLLECTION_FILE_PATH, defaultVal)
     logger.info { "trustCertCollectionFilePath: $trustCertCollectionFilePath" }
   }
 
@@ -443,8 +461,7 @@ abstract class BaseOptions protected constructor(
     envVar: EnvVars,
     configDefault: String,
   ) {
-    if (logLevel.isEmpty())
-      logLevel = envVar.getEnv(configDefault)
+    logLevel = resolveStringOption(logLevel, envVar, configDefault)
     if (logLevel.isNotEmpty()) {
       logger.info { "$role.logLevel: $logLevel" }
       Utils.setLogLevel(role, logLevel)

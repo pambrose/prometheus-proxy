@@ -25,6 +25,7 @@ import io.prometheus.Proxy
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
 import io.prometheus.common.ScrapeResults.Companion.toScrapeResults
 import io.prometheus.grpc.AgentInfo
+import io.prometheus.grpc.ChunkData
 import io.prometheus.grpc.ChunkedScrapeResponse
 import io.prometheus.grpc.ChunkedScrapeResponse.ChunkOneOfCase
 import io.prometheus.grpc.HeartBeatRequest
@@ -39,6 +40,7 @@ import io.prometheus.grpc.RegisterPathRequest
 import io.prometheus.grpc.RegisterPathResponse
 import io.prometheus.grpc.ScrapeRequest
 import io.prometheus.grpc.ScrapeResponse
+import io.prometheus.grpc.SummaryData
 import io.prometheus.grpc.UnregisterPathRequest
 import io.prometheus.grpc.UnregisterPathResponse
 import io.prometheus.grpc.agentInfo
@@ -51,6 +53,7 @@ import io.prometheus.proxy.ProxyPathManager.PathMetadata
 import io.prometheus.proxy.ProxyPathManager.PathRejection
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.flow
 import kotlin.concurrent.atomics.AtomicLong
 import kotlin.concurrent.atomics.fetchAndIncrement
@@ -311,37 +314,15 @@ internal class ProxyServiceImpl(
   override fun readRequestsFromProxy(request: AgentInfo): Flow<ScrapeRequest> =
     flow {
       val agentId = request.agentId
-      connectionMismatchReason(agentId, "readRequestsFromProxy")?.also { reason ->
+      readRequestsDenial(agentId)?.also { reason ->
         // Thrown before the try/finally so the mismatched agentId never reaches the cleanup branch —
         // a spoofed id must not be able to evict another agent's context.
         throw StatusException(Status.PERMISSION_DENIED.withDescription(reason))
       }
-      proxy.agentContextManager.getAgentContext(agentId)
-        ?.let { identityMismatchReason(it, "readRequestsFromProxy") }
-        ?.also { reason -> throw StatusException(Status.PERMISSION_DENIED.withDescription(reason)) }
       try {
         val agentContext = proxy.agentContextManager.getAgentContext(agentId)
-          ?: throw StatusException(
-            Status.NOT_FOUND.withDescription(
-              "No AgentContext found for agentId: $agentId",
-            ),
-          )
-        while (proxy.isRunning && agentContext.isValid()) {
-          val wrapper = agentContext.readScrapeRequest()?.takeIf { isStillAwaited(it) } ?: continue
-          try {
-            emit(wrapper.scrapeRequest)
-          } catch (e: CancellationException) {
-            // Cancelled after polling the wrapper out of the queue but before delivering it: fail the
-            // wrapper so the waiting HTTP handler gets a prompt error instead of blocking the full
-            // scrape-timeout window (finding 14).
-            proxy.scrapeRequestManager.failScrapeRequest(
-              wrapper.scrapeId,
-              "readRequestsFromProxy cancelled",
-              ProxyFailure.AGENT_DISCONNECTED,
-            )
-            throw e
-          }
-        }
+          ?: throw StatusException(Status.NOT_FOUND.withDescription("No AgentContext found for agentId: $agentId"))
+        emitScrapeRequests(agentContext)
       } finally {
         // When transportFilterDisabled is true, there is no ProxyServerTransportFilter to
         // detect agent disconnect and clean up. Handle cleanup here on stream termination.
@@ -350,6 +331,33 @@ internal class ProxyServiceImpl(
         }
       }
     }
+
+  // Why this connection may not read [agentId]'s scrape requests: the transport belongs to another agentId, or the
+  // caller's auth identity isn't the one the agent's context is bound to. Null when it may.
+  private fun readRequestsDenial(agentId: String): String? =
+    connectionMismatchReason(agentId, "readRequestsFromProxy")
+      ?: proxy.agentContextManager.getAgentContext(agentId)?.let { identityMismatchReason(it, "readRequestsFromProxy") }
+
+  // Delivers [agentContext]'s queued scrape requests until the proxy stops or the context is invalidated, skipping
+  // the ones no longer awaited.
+  private suspend fun FlowCollector<ScrapeRequest>.emitScrapeRequests(agentContext: AgentContext) {
+    while (proxy.isRunning && agentContext.isValid()) {
+      val wrapper = agentContext.readScrapeRequest()?.takeIf { isStillAwaited(it) } ?: continue
+      try {
+        emit(wrapper.scrapeRequest)
+      } catch (e: CancellationException) {
+        // Cancelled after polling the wrapper out of the queue but before delivering it: fail the
+        // wrapper so the waiting HTTP handler gets a prompt error instead of blocking the full
+        // scrape-timeout window (finding 14).
+        proxy.scrapeRequestManager.failScrapeRequest(
+          wrapper.scrapeId,
+          "readRequestsFromProxy cancelled",
+          ProxyFailure.AGENT_DISCONNECTED,
+        )
+        throw e
+      }
+    }
+  }
 
   /**
    * Returns whether this connection may act on [scrapeId]'s result.
@@ -406,117 +414,134 @@ internal class ProxyServiceImpl(
           )
         }
       }
-    }.onFailure { throwable ->
-      if (proxy.isRunning)
-        Status.fromThrowable(throwable)
-          .also { arg ->
-            if (arg.code != Status.Code.CANCELLED && arg.cause !is CancellationException)
-              logger.error(throwable) { "Error in writeResponsesToProxy(): $arg" }
-          }
-    }
+    }.onFailure { logResponseStreamFailure("writeResponsesToProxy", it) }
     return EMPTY_INSTANCE
   }
 
+  // Logs why a response stream failed, unless the proxy is stopping or the stream was just cancelled.
+  private fun logResponseStreamFailure(
+    rpcName: String,
+    throwable: Throwable,
+  ) {
+    if (!proxy.isRunning)
+      return
+    val status = Status.fromThrowable(throwable)
+    if (status.code != Status.Code.CANCELLED && status.cause !is CancellationException)
+      logger.error(throwable) { "Error in $rpcName(): $status" }
+  }
+
   override suspend fun writeChunkedResponsesToProxy(requests: Flow<ChunkedScrapeResponse>): Empty {
-    // activeScrapeIds is a plain (non-thread-safe) set, which is safe ONLY because grpc-kotlin
-    // confines a client-streaming RPC's collect{} and the post-collect cleanup to a single
-    // coroutine — there is no launch/async/flowOn here that would fan the body across threads.
-    // The genuinely shared chunkedContextMap is a ConcurrentHashMap. If this RPC is ever
-    // refactored to process chunks concurrently, switch this to a thread-safe/synchronized set.
-    val activeScrapeIds = mutableSetOf<Long>()
-    val connectionAgentId = ProxyServerInterceptor.CONNECTION_AGENT_ID_KEY.get()
-    runCatchingCancellable {
-      requests.collect { response ->
-        val contextManager = proxy.agentContextManager
-        when (response.chunkOneOfCase) {
-          ChunkOneOfCase.HEADER -> {
-            val scrapeId = response.header.headerScrapeId
-            if (!isScrapeOwnedByConnection(connectionAgentId, scrapeId, "writeChunkedResponsesToProxy"))
-              return@collect
-            if (proxy.scrapeRequestManager.containsScrapeRequest(scrapeId)) {
-              logger.debug { "Reading header for scrapeId: $scrapeId" }
-              val maxZippedSize = proxy.proxyConfigVals.internal.maxZippedContentSizeMBytes * 1024L * 1024L
-              contextManager.putChunkedContext(scrapeId, ChunkedContext(response, maxZippedSize))
-              activeScrapeIds += scrapeId
-            } else {
-              logger.warn { "Received chunked header for unknown scrapeId: $scrapeId" }
-            }
-          }
+    val reader = ChunkedResponseReader(ProxyServerInterceptor.CONNECTION_AGENT_ID_KEY.get())
+    runCatchingCancellable { requests.collect { reader.read(it) } }
+      .onFailure { logResponseStreamFailure("writeChunkedResponsesToProxy", it) }
+    reader.abandonUnfinished()
+    return EMPTY_INSTANCE
+  }
 
-          ChunkOneOfCase.CHUNK -> {
-            // with(...) rather than apply { }: this block consumes the chunk, it doesn't configure it (finding 36).
-            with(response.chunk) {
-              logger.debug { "Reading chunk $chunkCount for scrapeId: $chunkScrapeId" }
-              if (!isScrapeOwnedByConnection(connectionAgentId, chunkScrapeId, "writeChunkedResponsesToProxy"))
-                return@collect
-                val context = contextManager.getChunkedContext(chunkScrapeId)
-                if (context == null) {
-                  logger.warn { "Missing chunked context for chunk with scrapeId: $chunkScrapeId, skipping" }
-                } else {
-                  try {
-                    context.applyChunk(chunkBytes.toByteArray(), chunkByteCount, chunkCount, chunkChecksum)
-                  } catch (e: ChunkValidationException) {
-                    logger.error(e) { "Chunk validation failed for scrapeId: $chunkScrapeId, discarding context" }
-                    contextManager.removeChunkedContext(chunkScrapeId)
-                    activeScrapeIds -= chunkScrapeId
-                    proxy.scrapeRequestManager.failScrapeRequest(
-                      chunkScrapeId,
-                      "Chunk validation failed: ${e.message}",
-                      ProxyFailure.INVALID_RESPONSE,
-                    )
-                    proxy.metrics { chunkValidationFailures.labelValues(ProxyMetrics.STAGE_CHUNK).inc() }
-                  }
-                }
-              }
-          }
+  // One writeChunkedResponsesToProxy stream: reassembles each chunked scrape result from its header, chunks, and
+  // summary, and fails the transfers the stream leaves unfinished.
+  private inner class ChunkedResponseReader(
+    private val connectionAgentId: String?,
+  ) {
+    // The scrapes with a transfer under way on this stream. A plain (non-thread-safe) set, which is safe ONLY because
+    // grpc-kotlin confines a client-streaming RPC's collect{} and the post-collect cleanup to a single coroutine --
+    // there is no launch/async/flowOn here that would fan the body across threads. The genuinely shared
+    // chunkedContextMap is a ConcurrentHashMap. If this RPC is ever refactored to process chunks concurrently, switch
+    // this to a thread-safe/synchronized set.
+    private val activeScrapeIds = mutableSetOf<Long>()
+    private val contextManager get() = proxy.agentContextManager
 
-          ChunkOneOfCase.SUMMARY -> {
-            // with(...) rather than apply { }: this block consumes the summary (finding 36).
-            with(response.summary) {
-              if (!isScrapeOwnedByConnection(connectionAgentId, summaryScrapeId, "writeChunkedResponsesToProxy"))
-                return@collect
-              val context = contextManager.removeChunkedContext(summaryScrapeId)
-                activeScrapeIds -= summaryScrapeId
-                if (context == null) {
-                  logger.warn { "Missing chunked context for summary with scrapeId: $summaryScrapeId, skipping" }
-                } else {
-                  logger.debug {
-                    val ccnt = context.totalChunkCount
-                    val bcnt = context.totalByteCount
-                    "Reading summary chunkCount: $ccnt byteCount: $bcnt for scrapeId: $summaryScrapeId"
-                  }
-                  try {
-                    val scrapeResults = context.applySummary(summaryChunkCount, summaryByteCount, summaryChecksum)
-                    proxy.scrapeRequestManager.assignScrapeResults(scrapeResults)
-                  } catch (e: ChunkValidationException) {
-                    logger.error(e) { "Summary validation failed for scrapeId: $summaryScrapeId" }
-                    proxy.scrapeRequestManager.failScrapeRequest(
-                      summaryScrapeId,
-                      "Summary validation failed: ${e.message}",
-                      ProxyFailure.INVALID_RESPONSE,
-                    )
-                    proxy.metrics { chunkValidationFailures.labelValues(ProxyMetrics.STAGE_SUMMARY).inc() }
-                  }
-                }
-              }
-          }
+    fun read(response: ChunkedScrapeResponse) {
+      when (response.chunkOneOfCase) {
+        ChunkOneOfCase.HEADER -> readHeader(response)
 
-          ChunkOneOfCase.CHUNKONEOF_NOT_SET, null -> {
-            logger.warn { "Received chunked response with no field set, skipping" }
-          }
+        ChunkOneOfCase.CHUNK -> readChunk(response.chunk)
+
+        ChunkOneOfCase.SUMMARY -> readSummary(response.summary)
+
+        ChunkOneOfCase.CHUNKONEOF_NOT_SET, null -> logger.warn {
+          "Received chunked response with no field set, skipping"
         }
       }
-    }.onFailure { throwable ->
-      if (proxy.isRunning)
-        Status.fromThrowable(throwable)
-          .also { arg ->
-            if (arg.code != Status.Code.CANCELLED && arg.cause !is CancellationException)
-              logger.error(throwable) { "Error in writeChunkedResponsesToProxy(): $arg" }
-          }
     }
 
-    // Clean up any in-progress chunked contexts that were not completed with a summary
-    // (e.g., due to stream cancellation or agent disconnect mid-transfer).
+    private fun isOwned(scrapeId: Long) =
+      isScrapeOwnedByConnection(connectionAgentId, scrapeId, "writeChunkedResponsesToProxy")
+
+    private fun readHeader(response: ChunkedScrapeResponse) {
+      val scrapeId = response.header.headerScrapeId
+      if (!isOwned(scrapeId))
+        return
+      if (proxy.scrapeRequestManager.containsScrapeRequest(scrapeId)) {
+        logger.debug { "Reading header for scrapeId: $scrapeId" }
+        val maxZippedSize = proxy.proxyConfigVals.internal.maxZippedContentSizeMBytes * 1024L * 1024L
+        contextManager.putChunkedContext(scrapeId, ChunkedContext(response, maxZippedSize))
+        activeScrapeIds += scrapeId
+      } else {
+        logger.warn { "Received chunked header for unknown scrapeId: $scrapeId" }
+      }
+    }
+
+    // with(...) rather than apply { }: this block consumes the chunk, it doesn't configure it (finding 36).
+    private fun readChunk(chunk: ChunkData) {
+      with(chunk) {
+        logger.debug { "Reading chunk $chunkCount for scrapeId: $chunkScrapeId" }
+        if (!isOwned(chunkScrapeId))
+          return
+        val context = contextManager.getChunkedContext(chunkScrapeId)
+        if (context == null) {
+          logger.warn { "Missing chunked context for chunk with scrapeId: $chunkScrapeId, skipping" }
+          return
+        }
+        try {
+          context.applyChunk(chunkBytes.toByteArray(), chunkByteCount, chunkCount, chunkChecksum)
+        } catch (e: ChunkValidationException) {
+          logger.error(e) { "Chunk validation failed for scrapeId: $chunkScrapeId, discarding context" }
+          contextManager.removeChunkedContext(chunkScrapeId)
+          activeScrapeIds -= chunkScrapeId
+          proxy.scrapeRequestManager.failScrapeRequest(
+            chunkScrapeId,
+            "Chunk validation failed: ${e.message}",
+            ProxyFailure.INVALID_RESPONSE,
+          )
+          proxy.metrics { chunkValidationFailures.labelValues(ProxyMetrics.STAGE_CHUNK).inc() }
+        }
+      }
+    }
+
+    // with(...) rather than apply { }: this block consumes the summary (finding 36).
+    private fun readSummary(summary: SummaryData) {
+      with(summary) {
+        if (!isOwned(summaryScrapeId))
+          return
+        val context = contextManager.removeChunkedContext(summaryScrapeId)
+        activeScrapeIds -= summaryScrapeId
+        if (context == null) {
+          logger.warn { "Missing chunked context for summary with scrapeId: $summaryScrapeId, skipping" }
+          return
+        }
+        logger.debug {
+          val ccnt = context.totalChunkCount
+          val bcnt = context.totalByteCount
+          "Reading summary chunkCount: $ccnt byteCount: $bcnt for scrapeId: $summaryScrapeId"
+        }
+        try {
+          val scrapeResults = context.applySummary(summaryChunkCount, summaryByteCount, summaryChecksum)
+          proxy.scrapeRequestManager.assignScrapeResults(scrapeResults)
+        } catch (e: ChunkValidationException) {
+          logger.error(e) { "Summary validation failed for scrapeId: $summaryScrapeId" }
+          proxy.scrapeRequestManager.failScrapeRequest(
+            summaryScrapeId,
+            "Summary validation failed: ${e.message}",
+            ProxyFailure.INVALID_RESPONSE,
+          )
+          proxy.metrics { chunkValidationFailures.labelValues(ProxyMetrics.STAGE_SUMMARY).inc() }
+        }
+      }
+    }
+
+    // Cleans up the chunked contexts the stream left without a summary (e.g., due to stream cancellation or agent
+    // disconnect mid-transfer).
     //
     // This sweep can race Proxy.removeAgentContext() (from the transport-terminated or cleanup-service
     // thread) for the same scrapeId. Double-handling is prevented by two invariants that future edits
@@ -524,8 +549,7 @@ internal class ProxyServiceImpl(
     // one caller gets the non-null context and the ?.also block (warn + failScrapeRequest + metric)
     // runs at most once; and (b) failScrapeRequest() -> ScrapeRequestWrapper.complete() is idempotent
     // via an AtomicBoolean compareAndSet, so even a double-fail has no observable effect.
-    if (activeScrapeIds.isNotEmpty()) {
-      val contextManager = proxy.agentContextManager
+    fun abandonUnfinished() {
       activeScrapeIds.forEach { scrapeId ->
         contextManager.removeChunkedContext(scrapeId)
           ?.also {
@@ -539,8 +563,6 @@ internal class ProxyServiceImpl(
           }
       }
     }
-
-    return EMPTY_INSTANCE
   }
 
   companion object {

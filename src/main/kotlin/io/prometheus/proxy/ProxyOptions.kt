@@ -216,162 +216,87 @@ class ProxyOptions internal constructor(
     parseOptions(parseOnly)
   }
 
+  // Resolves each option from the CLI, then its env var, then the config file, and validates and logs it.
   override fun assignConfigVals() {
-    configVals.proxy
-      .also { proxyConfigVals ->
-        if (proxyPort == -1)
-          proxyPort = PROXY_PORT.getEnv(proxyConfigVals.http.port)
-        require(proxyPort in 1..65535) { "proxyPort must be in 1..65535: $proxyPort" }
-        logger.info { "proxyPort: $proxyPort" }
-        validateHttpHostAndInFlightLimit(proxyConfigVals)
+    val proxyConfigVals = configVals.proxy
 
-        if (proxyAgentPort == -1)
-          proxyAgentPort = AGENT_PORT.getEnv(proxyConfigVals.agent.port)
-        require(proxyAgentPort in 1..65535) { "proxyAgentPort must be in 1..65535: $proxyAgentPort" }
-        logger.info { "proxyAgentPort: $proxyAgentPort" }
+    proxyPort = resolveIntOption(proxyPort, PROXY_PORT, proxyConfigVals.http.port)
+    require(proxyPort in 1..65535) { "proxyPort must be in 1..65535: $proxyPort" }
+    logger.info { "proxyPort: $proxyPort" }
+    validateHttpHostAndInFlightLimit(proxyConfigVals)
 
-        sdEnabled =
-          resolveBooleanOption(sdEnabled, SD_ENABLED, proxyConfigVals.service.discovery.enabled, "--sd_enabled")
-        logger.info { "sdEnabled: $sdEnabled" }
+    proxyAgentPort = resolveIntOption(proxyAgentPort, AGENT_PORT, proxyConfigVals.agent.port)
+    require(proxyAgentPort in 1..65535) { "proxyAgentPort must be in 1..65535: $proxyAgentPort" }
+    logger.info { "proxyAgentPort: $proxyAgentPort" }
 
-        if (sdPath.isEmpty())
-          sdPath = SD_PATH.getEnv(proxyConfigVals.service.discovery.path)
-        if (sdEnabled)
-          require(sdPath.isNotEmpty()) { "sdPath is empty" }
-        logger.info { "sdPath: $sdPath" }
+    assignServiceDiscoveryOptions(proxyConfigVals.service.discovery)
+    assignDashboardOptions(proxyConfigVals.dashboard)
+    assignGrpcConfigVals(proxyConfigVals)
 
-        if (sdTargetPrefix.isEmpty())
-          sdTargetPrefix = SD_TARGET_PREFIX.getEnv(proxyConfigVals.service.discovery.targetPrefix)
-        if (sdEnabled)
-          require(sdTargetPrefix.isNotEmpty()) { "sdTargetPrefix is empty" }
-        logger.info { "sdTargetPrefix: $sdTargetPrefix" }
+    with(proxyConfigVals) {
+      assignCommonOptions(
+        keepAliveTimeSecs = grpc.keepAliveTimeSecs,
+        keepAliveTimeoutSecs = grpc.keepAliveTimeoutSecs,
+        adminEnabled = admin.enabled,
+        adminPort = admin.port,
+        metricsEnabled = metrics.enabled,
+        metricsPort = metrics.port,
+        transportFilterDisabled = transportFilterDisabled,
+        debugEnabled = admin.debugEnabled,
+        certChainFilePath = tls.certChainFilePath,
+        privateKeyFilePath = tls.privateKeyFilePath,
+        trustCertCollectionFilePath = tls.trustCertCollectionFilePath,
+      )
+    }
 
-        assignDashboardOptions(proxyConfigVals.dashboard)
+    validateInternalConfigVals(proxyConfigVals.internal)
 
-        reflectionDisabled =
-          resolveBooleanOption(
-            reflectionDisabled,
-            REFLECTION_DISABLED,
-            proxyConfigVals.reflectionDisabled,
-            "--ref-disabled",
-            "--ref_disabled",
-          )
-        logger.info { "reflectionDisabled: $reflectionDisabled" }
-
-        if (handshakeTimeoutSecs == -1L)
-          handshakeTimeoutSecs = HANDSHAKE_TIMEOUT_SECS.getEnv(proxyConfigVals.grpc.handshakeTimeoutSecs)
-        logger.requireGrpcTimeout("grpc.handshakeTimeoutSecs", handshakeTimeoutSecs, "120")
-
-        permitKeepAliveWithoutCalls =
-          resolveBooleanOption(
-            permitKeepAliveWithoutCalls,
-            PERMIT_KEEPALIVE_WITHOUT_CALLS,
-            proxyConfigVals.grpc.permitKeepAliveWithoutCalls,
-            "--permit_keepalive_without_calls",
-          )
-        logger.info { "grpc.permitKeepAliveWithoutCalls: $permitKeepAliveWithoutCalls" }
-
-        if (permitKeepAliveTimeSecs == -1L)
-          permitKeepAliveTimeSecs = PERMIT_KEEPALIVE_TIME_SECS.getEnv(proxyConfigVals.grpc.permitKeepAliveTimeSecs)
-        logger.requireGrpcTimeout("grpc.permitKeepAliveTimeSecs", permitKeepAliveTimeSecs, "300")
-
-        if (maxConnectionIdleSecs == -1L)
-          maxConnectionIdleSecs = MAX_CONNECTION_IDLE_SECS.getEnv(proxyConfigVals.grpc.maxConnectionIdleSecs)
-        logger.requireGrpcTimeout("grpc.maxConnectionIdleSecs", maxConnectionIdleSecs, "INT_MAX")
-
-        if (maxConnectionAgeSecs == -1L)
-          maxConnectionAgeSecs = MAX_CONNECTION_AGE_SECS.getEnv(proxyConfigVals.grpc.maxConnectionAgeSecs)
-        logger.requireGrpcTimeout("grpc.maxConnectionAgeSecs", maxConnectionAgeSecs, "INT_MAX")
-
-        if (maxConnectionAgeGraceSecs == -1L)
-          maxConnectionAgeGraceSecs =
-            MAX_CONNECTION_AGE_GRACE_SECS.getEnv(proxyConfigVals.grpc.maxConnectionAgeGraceSecs)
-        logger.requireGrpcTimeout("grpc.maxConnectionAgeGraceSecs", maxConnectionAgeGraceSecs, "INT_MAX")
-
-        proxyConfigVals.apply {
-          assignCommonOptions(
-            keepAliveTimeSecs = grpc.keepAliveTimeSecs,
-            keepAliveTimeoutSecs = grpc.keepAliveTimeoutSecs,
-            adminEnabled = admin.enabled,
-            adminPort = admin.port,
-            metricsEnabled = metrics.enabled,
-            metricsPort = metrics.port,
-            transportFilterDisabled = transportFilterDisabled,
-            debugEnabled = admin.debugEnabled,
-            certChainFilePath = tls.certChainFilePath,
-            privateKeyFilePath = tls.privateKeyFilePath,
-            trustCertCollectionFilePath = tls.trustCertCollectionFilePath,
-          )
-
-          logger.requirePositive("internal.scrapeRequestTimeoutSecs", internal.scrapeRequestTimeoutSecs)
-          logger.requirePositive("internal.staleAgentCheckPauseSecs", internal.staleAgentCheckPauseSecs)
-          logger.requirePositive("internal.maxAgentInactivitySecs", internal.maxAgentInactivitySecs)
-          // Each agent's queue is capped at twice this, so 0 would answer every scrape with 503 agent_backlog_full.
-          logger.requirePositive(
-            "internal.scrapeRequestBacklogUnhealthySize",
-            internal.scrapeRequestBacklogUnhealthySize,
-          )
-
-          // 0 is a valid (degenerate) "reject all content" limit, so only negatives are invalid here.
-          require(internal.maxUnzippedContentSizeMBytes >= 0) {
-            "internal.maxUnzippedContentSizeMBytes must be >= 0: ${internal.maxUnzippedContentSizeMBytes}"
-          }
-          logger.info { "internal.maxUnzippedContentSizeMBytes: ${internal.maxUnzippedContentSizeMBytes}" }
-
-          // maxZippedContentSizeMBytes is used in chunked-transfer size math; mirror its sibling above
-          // (0 is a valid reject-all limit, negatives are invalid) so a bad value fails fast at startup
-          // instead of surfacing as a confusing ChunkValidationException per transfer (finding 11).
-          require(internal.maxZippedContentSizeMBytes >= 0) {
-            "internal.maxZippedContentSizeMBytes must be >= 0: ${internal.maxZippedContentSizeMBytes}"
-          }
-          logger.info { "internal.maxZippedContentSizeMBytes: ${internal.maxZippedContentSizeMBytes}" }
-        }
-
-        // Resolved after assignCommonOptions so trustCertCollectionFilePath reflects the CLI/env/config value.
-        if (agentToken.isEmpty())
-          agentToken = AGENT_TOKEN.getEnv(proxyConfigVals.agentToken)
-        // Never log the token value -- only whether one is configured.
-        logger.info { "agentToken: ${if (agentToken.isEmpty()) "(none)" else "***"}" }
-        // Warn only when the agent port is genuinely open to any reachable peer.
-        if (
-          isAgentPortUnauthenticated(
-            agentToken = agentToken,
-            authIdentityCount = proxyConfigVals.auth.size,
-            isTlsEnabled = isTlsEnabled,
-            trustCertCollectionFilePath = trustCertCollectionFilePath,
-          )
-        ) {
-          logger.warn {
-            "Agent gRPC port is unauthenticated -- no agent token, per-agent identity (proxy.auth), or mutual TLS " +
-              "is configured. Any reachable peer can register as an agent. Do not expose this port in production."
-          }
-        }
-        if (areAgentTokensSentInCleartext(agentToken, proxyConfigVals.auth.size, isTlsEnabled)) {
-          logger.warn {
-            "Agent tokens are configured but TLS is not enabled on the agent gRPC port -- tokens are sent in " +
-              "cleartext and can be captured by anyone who can observe the traffic. Set certChainFilePath and " +
-              "privateKeyFilePath to enable TLS."
-          }
-        }
-
-        assignLogLevel("proxy", PROXY_LOG_LEVEL, proxyConfigVals.logLevel)
+    // Resolved after assignCommonOptions so trustCertCollectionFilePath reflects the CLI/env/config value.
+    agentToken = resolveStringOption(agentToken, AGENT_TOKEN, proxyConfigVals.agentToken)
+    // Never log the token value -- only whether one is configured.
+    logger.info { "agentToken: ${if (agentToken.isEmpty()) "(none)" else "***"}" }
+    // Warn only when the agent port is genuinely open to any reachable peer.
+    if (isAgentPortUnauthenticated(agentToken, proxyConfigVals.auth.size, isTlsEnabled, trustCertCollectionFilePath)) {
+      logger.warn {
+        "Agent gRPC port is unauthenticated -- no agent token, per-agent identity (proxy.auth), or mutual TLS " +
+          "is configured. Any reachable peer can register as an agent. Do not expose this port in production."
       }
+    }
+    if (areAgentTokensSentInCleartext(agentToken, proxyConfigVals.auth.size, isTlsEnabled)) {
+      logger.warn {
+        "Agent tokens are configured but TLS is not enabled on the agent gRPC port -- tokens are sent in " +
+          "cleartext and can be captured by anyone who can observe the traffic. Set certChainFilePath and " +
+          "privateKeyFilePath to enable TLS."
+      }
+    }
+
+    assignLogLevel("proxy", PROXY_LOG_LEVEL, proxyConfigVals.logLevel)
   }
 
-  // Resolves and validates the dashboard options, kept out of assignConfigVals so that function stays within
-  // detekt's length limit.
+  private fun assignServiceDiscoveryOptions(discovery: ConfigVals.Proxy2.Service.Discovery2) {
+    sdEnabled = resolveBooleanOption(sdEnabled, SD_ENABLED, discovery.enabled, "--sd_enabled")
+    logger.info { "sdEnabled: $sdEnabled" }
+
+    sdPath = resolveStringOption(sdPath, SD_PATH, discovery.path)
+    if (sdEnabled)
+      require(sdPath.isNotEmpty()) { "sdPath is empty" }
+    logger.info { "sdPath: $sdPath" }
+
+    sdTargetPrefix = resolveStringOption(sdTargetPrefix, SD_TARGET_PREFIX, discovery.targetPrefix)
+    if (sdEnabled)
+      require(sdTargetPrefix.isNotEmpty()) { "sdTargetPrefix is empty" }
+    logger.info { "sdTargetPrefix: $sdTargetPrefix" }
+  }
+
   private fun assignDashboardOptions(dashboard: ConfigVals.Proxy2.Dashboard) {
     dashboardEnabled = resolveBooleanOption(dashboardEnabled, DASHBOARD_ENABLED, dashboard.enabled, "--dashboard")
     logger.info { "dashboardEnabled: $dashboardEnabled" }
 
-    if (dashboardPort == -1)
-      dashboardPort = DASHBOARD_PORT.getEnv(dashboard.port)
+    dashboardPort = resolveIntOption(dashboardPort, DASHBOARD_PORT, dashboard.port)
     require(dashboardPort in 1..65535) { "dashboardPort must be in 1..65535: $dashboardPort" }
 
-    if (dashboardPath.isEmpty())
-      dashboardPath = DASHBOARD_PATH.getEnv(dashboard.path)
-    if (dashboardHost.isEmpty())
-      dashboardHost = DASHBOARD_HOST.getEnv(dashboard.host)
+    dashboardPath = resolveStringOption(dashboardPath, DASHBOARD_PATH, dashboard.path)
+    dashboardHost = resolveStringOption(dashboardHost, DASHBOARD_HOST, dashboard.host)
 
     if (dashboardEnabled) {
       require(dashboardPath.isNotEmpty()) { "dashboardPath is empty" }
@@ -394,8 +319,73 @@ class ProxyOptions internal constructor(
     }
   }
 
-  // Checks for the scrape-port bind address and the in-flight limit, kept out of assignConfigVals so that function
-  // stays within detekt's length limit.
+  private fun assignGrpcConfigVals(proxyConfigVals: ConfigVals.Proxy2) {
+    val grpc = proxyConfigVals.grpc
+    reflectionDisabled =
+      resolveBooleanOption(
+        reflectionDisabled,
+        REFLECTION_DISABLED,
+        proxyConfigVals.reflectionDisabled,
+        "--ref-disabled",
+        "--ref_disabled",
+      )
+    logger.info { "reflectionDisabled: $reflectionDisabled" }
+
+    handshakeTimeoutSecs = resolveLongOption(handshakeTimeoutSecs, HANDSHAKE_TIMEOUT_SECS, grpc.handshakeTimeoutSecs)
+    logger.requireGrpcTimeout("grpc.handshakeTimeoutSecs", handshakeTimeoutSecs, "120")
+
+    permitKeepAliveWithoutCalls =
+      resolveBooleanOption(
+        permitKeepAliveWithoutCalls,
+        PERMIT_KEEPALIVE_WITHOUT_CALLS,
+        grpc.permitKeepAliveWithoutCalls,
+        "--permit_keepalive_without_calls",
+      )
+    logger.info { "grpc.permitKeepAliveWithoutCalls: $permitKeepAliveWithoutCalls" }
+
+    permitKeepAliveTimeSecs =
+      resolveLongOption(permitKeepAliveTimeSecs, PERMIT_KEEPALIVE_TIME_SECS, grpc.permitKeepAliveTimeSecs)
+    logger.requireGrpcTimeout("grpc.permitKeepAliveTimeSecs", permitKeepAliveTimeSecs, "300")
+
+    maxConnectionIdleSecs =
+      resolveLongOption(maxConnectionIdleSecs, MAX_CONNECTION_IDLE_SECS, grpc.maxConnectionIdleSecs)
+    logger.requireGrpcTimeout("grpc.maxConnectionIdleSecs", maxConnectionIdleSecs, "INT_MAX")
+
+    maxConnectionAgeSecs = resolveLongOption(maxConnectionAgeSecs, MAX_CONNECTION_AGE_SECS, grpc.maxConnectionAgeSecs)
+    logger.requireGrpcTimeout("grpc.maxConnectionAgeSecs", maxConnectionAgeSecs, "INT_MAX")
+
+    maxConnectionAgeGraceSecs =
+      resolveLongOption(maxConnectionAgeGraceSecs, MAX_CONNECTION_AGE_GRACE_SECS, grpc.maxConnectionAgeGraceSecs)
+    logger.requireGrpcTimeout("grpc.maxConnectionAgeGraceSecs", maxConnectionAgeGraceSecs, "INT_MAX")
+  }
+
+  // Config-only values (no CLI flag or env var), checked to fail fast at startup.
+  private fun validateInternalConfigVals(internal: ConfigVals.Proxy2.Internal2) {
+    logger.requirePositive("internal.scrapeRequestTimeoutSecs", internal.scrapeRequestTimeoutSecs)
+    logger.requirePositive("internal.staleAgentCheckPauseSecs", internal.staleAgentCheckPauseSecs)
+    logger.requirePositive("internal.maxAgentInactivitySecs", internal.maxAgentInactivitySecs)
+    // Each agent's queue is capped at twice this, so 0 would answer every scrape with 503 agent_backlog_full.
+    logger.requirePositive(
+      "internal.scrapeRequestBacklogUnhealthySize",
+      internal.scrapeRequestBacklogUnhealthySize,
+    )
+
+    // 0 is a valid (degenerate) "reject all content" limit, so only negatives are invalid here.
+    require(internal.maxUnzippedContentSizeMBytes >= 0) {
+      "internal.maxUnzippedContentSizeMBytes must be >= 0: ${internal.maxUnzippedContentSizeMBytes}"
+    }
+    logger.info { "internal.maxUnzippedContentSizeMBytes: ${internal.maxUnzippedContentSizeMBytes}" }
+
+    // maxZippedContentSizeMBytes is used in chunked-transfer size math; mirror its sibling above
+    // (0 is a valid reject-all limit, negatives are invalid) so a bad value fails fast at startup
+    // instead of surfacing as a confusing ChunkValidationException per transfer (finding 11).
+    require(internal.maxZippedContentSizeMBytes >= 0) {
+      "internal.maxZippedContentSizeMBytes must be >= 0: ${internal.maxZippedContentSizeMBytes}"
+    }
+    logger.info { "internal.maxZippedContentSizeMBytes: ${internal.maxZippedContentSizeMBytes}" }
+  }
+
+  // Checks for the scrape-port bind address, the in-flight limit, and the path-registration limits.
   private fun validateHttpHostAndInFlightLimit(proxyConfigVals: ConfigVals.Proxy2) {
     val http = proxyConfigVals.http
     // A blank bind address would otherwise fail only when the scrape server starts, with an opaque Ktor error.

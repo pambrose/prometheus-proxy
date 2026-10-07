@@ -748,7 +748,7 @@ class AgentTest : StringSpec() {
         // until we explicitly release it — no reliance on delay() timing windows.
         val gate = CompletableDeferred<Unit>()
 
-        // Mirrors the loop in Agent.connectToProxy: acquire the semaphore BEFORE
+        // Mirrors the loop in Agent.processScrapeRequests: acquire the semaphore BEFORE
         // launching the child coroutine to provide backpressure to the channel.
         val job = launch(Dispatchers.Default) {
           for (action in waitingActions) {

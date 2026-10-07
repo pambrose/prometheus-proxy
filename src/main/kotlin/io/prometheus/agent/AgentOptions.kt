@@ -292,94 +292,33 @@ class AgentOptions internal constructor(
     parseOptions(parseOnly)
   }
 
+  // Resolves each option from the CLI, then its env var, then the config file, and validates and logs it.
   override fun assignConfigVals() {
     val agentConfigVals = configVals.agent
 
-    if (proxyHostname.isEmpty()) {
-      val defaultPort = agentConfigVals.proxy.port
-      // agent.proxy.endpoints wins over the legacy hostname/port pair when set. They are deliberately NOT
-      // merged: silently prepending hostname would strand anyone who set it and expected endpoints alone
-      // to apply. The single hostname is promoted to a one-element list so both shapes normalize through
-      // one expression -- agent.proxy.port becomes the per-entry default, and once this string reaches
-      // AgentGrpcService the only default left is 50051.
-      val entries = agentConfigVals.proxy.endpoints.ifEmpty { [agentConfigVals.proxy.hostname] }
-      val fallback = entries.joinToString(",") { parseHostPort(stripScheme(it.trim()), defaultPort).spec }
-      proxyHostname = PROXY_HOSTNAME.getEnv(fallback)
-    }
-    // Parse eagerly so a malformed endpoint fails at startup with a clear message rather than surfacing
-    // later as a connect failure that rotation would paper over by moving to the next endpoint. Written back with
-    // agent.proxy.port as the default, so a host-only entry from --proxy or PROXY_HOSTNAME gets the configured port
-    // rather than the 50051 AgentGrpcService would otherwise apply.
-    val endpoints = parseEndpointList(proxyHostname, agentConfigVals.proxy.port)
-    proxyHostname = endpoints.joinToString(",") { it.spec }
-    val failoverSuffix =
-      if (endpoints.size == 1) "" else " (${endpoints.size} failover endpoints, tried in order)"
-    logger.info { "proxyHostname: $proxyHostname$failoverSuffix" }
+    assignProxyHostname(agentConfigVals.proxy)
 
-    if (agentName.isEmpty())
-      agentName = AGENT_NAME.getEnv(agentConfigVals.name)
+    agentName = resolveStringOption(agentName, AGENT_NAME, agentConfigVals.name)
     logger.info { "agentName: $agentName" }
 
     consolidated =
       resolveBooleanOption(consolidated, CONSOLIDATED, agentConfigVals.consolidated, "-o", "--consolidated")
     logger.info { "consolidated: $consolidated" }
 
-    if (agentToken.isEmpty())
-      agentToken = AGENT_TOKEN.getEnv(agentConfigVals.agentToken)
+    agentToken = resolveStringOption(agentToken, AGENT_TOKEN, agentConfigVals.agentToken)
     // Never log the token value -- only whether one is configured.
     logger.info { "agentToken: ${if (agentToken.isEmpty()) "(none)" else "***"}" }
 
-    if (scrapeTimeoutSecs == -1)
-      scrapeTimeoutSecs = SCRAPE_TIMEOUT_SECS.getEnv(agentConfigVals.scrapeTimeoutSecs)
-    require(scrapeTimeoutSecs > 0) { "scrapeTimeoutSecs must be > 0: $scrapeTimeoutSecs" }
-    logger.info { "scrapeTimeoutSecs: ${scrapeTimeoutSecs.seconds}" }
+    assignScrapeConfigVals(agentConfigVals)
 
-    if (scrapeMaxRetries == -1)
-      scrapeMaxRetries = SCRAPE_MAX_RETRIES.getEnv(agentConfigVals.scrapeMaxRetries)
-    logger.info { "scrapeMaxRetries: $scrapeMaxRetries" }
-
-    if (chunkContentSizeKbs == -1)
-      chunkContentSizeKbs = CHUNK_CONTENT_SIZE_KBS.getEnv(agentConfigVals.chunkContentSizeKbs)
-    logger.requirePositive("chunkContentSizeKbs", chunkContentSizeKbs)
-    // Derive the byte value once into the runtime field. A chunk travels as one gRPC message, so it must fit the
-    // proxy's inbound limit; computed as a Long so a huge KB value cannot overflow past the check.
-    val chunkSizeAsBytes = chunkContentSizeKbs.toLong() * 1024
-    require(chunkSizeAsBytes <= MAX_GRPC_PAYLOAD_BYTES) {
-      "chunkContentSizeKbs value $chunkContentSizeKbs is too large (max: ${MAX_GRPC_PAYLOAD_BYTES / 1024})"
-    }
-    chunkContentSizeBytes = chunkSizeAsBytes.toInt()
-    logger.info { "chunkContentSizeBytes: $chunkContentSizeBytes" }
-
-    if (minGzipSizeBytes == -1)
-      minGzipSizeBytes = MIN_GZIP_SIZE_BYTES.getEnv(agentConfigVals.minGzipSizeBytes)
-    // 0 is valid (gzip every non-empty payload); a negative threshold would gzip everything (finding 11).
-    require(minGzipSizeBytes >= 0) { "minGzipSizeBytes must be >= 0: $minGzipSizeBytes" }
-    // A scrape at or below this size is sent unzipped as one message, so it has the same bound as a chunk.
-    require(minGzipSizeBytes <= MAX_GRPC_PAYLOAD_BYTES) {
-      "minGzipSizeBytes value $minGzipSizeBytes is too large (max: $MAX_GRPC_PAYLOAD_BYTES)"
-    }
-    logger.info { "minGzipSizeBytes: $minGzipSizeBytes" }
-
-    if (overrideAuthority.isEmpty())
-      overrideAuthority = OVERRIDE_AUTHORITY.getEnv(agentConfigVals.tls.overrideAuthority)
+    overrideAuthority =
+      resolveStringOption(overrideAuthority, OVERRIDE_AUTHORITY, agentConfigVals.tls.overrideAuthority)
     logger.info { "overrideAuthority: $overrideAuthority" }
 
-    assignHttpClientConfigVals(agentConfigVals)
+    assignHttpClientConfigVals(agentConfigVals.http)
+    assignGrpcConfigVals(agentConfigVals.grpc)
 
-    keepAliveWithoutCalls =
-      resolveBooleanOption(
-        keepAliveWithoutCalls,
-        KEEPALIVE_WITHOUT_CALLS,
-        agentConfigVals.grpc.keepAliveWithoutCalls,
-        "--keepalive_without_calls",
-      )
-    logger.info { "grpc.keepAliveWithoutCalls: $keepAliveWithoutCalls" }
-
-    if (unaryDeadlineSecs == -1)
-      unaryDeadlineSecs = UNARY_DEADLINE_SECS.getEnv(agentConfigVals.grpc.unaryDeadlineSecs)
-    logger.info { "grpc.unaryDeadlineSecs: $unaryDeadlineSecs" }
-
-    agentConfigVals.apply {
+    with(agentConfigVals) {
       assignCommonOptions(
         keepAliveTimeSecs = grpc.keepAliveTimeSecs,
         keepAliveTimeoutSecs = grpc.keepAliveTimeoutSecs,
@@ -393,126 +332,195 @@ class AgentOptions internal constructor(
         privateKeyFilePath = tls.privateKeyFilePath,
         trustCertCollectionFilePath = tls.trustCertCollectionFilePath,
       )
+    }
 
-      // Checked here, after assignCommonOptions resolves the TLS paths. Qualified with this@AgentOptions because
-      // agentConfigVals is the receiver in this block and has its own config-file agentToken.
-      if (
-        isAgentTokenSentInCleartext(
-          agentToken = this@AgentOptions.agentToken,
-          isTlsEnabled = this@AgentOptions.isTlsEnabled,
-          trustCertCollectionFilePath = this@AgentOptions.trustCertCollectionFilePath,
-        )
-      ) {
-        logger.warn {
-          "agentToken is configured but TLS is not -- the token is sent to the proxy in cleartext and can be " +
-            "captured by anyone who can observe the traffic. Set trustCertCollectionFilePath to use TLS."
-        }
-      }
-
-      logger.info { "scrapeTimeoutSecs: ${scrapeTimeoutSecs.seconds}" }
-      logger.info { "agent.internal.cioTimeoutSecs: ${internal.cioTimeoutSecs.seconds}" }
-
-      // heartbeatCheckPauseMillis is the poll interval of the keepalive loop in Agent.connectToProxy,
-      // on both the heartbeat-enabled and heartbeat-disabled branches. delay() returns immediately for
-      // a non-positive duration, and neither loop condition suspends, so 0 spins without ever reaching
-      // a cancellation check and pins an IO thread for the connection's lifetime.
-      logger.requirePositive("agent.internal.heartbeatCheckPauseMillis", internal.heartbeatCheckPauseMillis)
-
-      val inactivityVal = internal.heartbeatMaxInactivitySecs
-      logger.info { "agent.internal.heartbeatMaxInactivitySecs: $inactivityVal" }
-
-      // reconnectPauseSecs feeds RateLimiter.create(1.0 / reconnectPauseSecs) in Agent: 0 yields an
-      // infinite rate (hot reconnect loop) and a negative value an opaque Guava IAE at startup (finding 11).
-      logger.requirePositive("agent.internal.reconnectPauseSecs", internal.reconnectPauseSecs)
-
-      // rejectedPathRetrySecs paces the loop in Agent.connectToProxy that retries rejected static paths, and is the
-      // base of AgentPathManager's retry backoff; a non-positive value would spin that loop for the connection's
-      // lifetime.
-      logger.requirePositive("agent.internal.rejectedPathRetrySecs", internal.rejectedPathRetrySecs)
-
-      // rejectedPathRetryMaxSecs caps that backoff (see AgentPathManager); a cap of zero or less has no meaning.
-      logger.requirePositive("agent.internal.rejectedPathRetryMaxSecs", internal.rejectedPathRetryMaxSecs)
-
-      // scrapeRequestBacklogUnhealthySize * 2 is the AgentConnectionContext channel capacity: 0 makes it
-      // a rendezvous channel (every send blocks). A negative value is worse than it looks -- -1 yields
-      // Channel(-2), which kotlinx maps to BUFFERED, i.e. a silent 64-slot channel rather than an error,
-      // and the health check then compares the backlog against a negative threshold and reports
-      // unhealthy from startup. Only values <= -2 actually throw at connect time (finding 11).
-      logger.requirePositive(
-        "agent.internal.scrapeRequestBacklogUnhealthySize",
-        internal.scrapeRequestBacklogUnhealthySize,
-      )
-
-      // Discovery misconfig fails fast like the other config-only values: an empty file path would
-      // silently discover nothing, and a non-positive interval would turn the reconcile loop into a hot spin.
-      if (discovery.enabled) {
-        require(discovery.file.path.isNotEmpty()) {
-          "agent.discovery.file.path must be set when agent.discovery.enabled is true"
-        }
-        logger.info { "agent.discovery.file.path: ${discovery.file.path}" }
-        logger.requirePositive("agent.discovery.reconcileIntervalSecs", discovery.reconcileIntervalSecs)
+    // Checked here, after assignCommonOptions resolves the TLS paths.
+    if (isAgentTokenSentInCleartext(agentToken, isTlsEnabled, trustCertCollectionFilePath)) {
+      logger.warn {
+        "agentToken is configured but TLS is not -- the token is sent to the proxy in cleartext and can be " +
+          "captured by anyone who can observe the traffic. Set trustCertCollectionFilePath to use TLS."
       }
     }
+
+    validateInternalConfigVals(agentConfigVals.internal)
+    validateDiscoveryConfigVals(agentConfigVals.discovery)
 
     assignLogLevel("agent", AGENT_LOG_LEVEL, agentConfigVals.logLevel)
   }
 
-  private fun assignHttpClientConfigVals(agentConfigVals: ConfigVals.Agent) {
-    agentConfigVals.http.apply {
-      trustAllX509Certificates =
-        resolveBooleanOption(
-          trustAllX509Certificates,
-          TRUST_ALL_X509_CERTIFICATES,
-          enableTrustAllX509Certificates,
-          "--trust_all_x509",
-        )
-      logger.info { "http.trustAllX509Certificates: $trustAllX509Certificates" }
-      if (trustAllX509Certificates) {
-        logger.warn {
-          "X.509 certificate verification is disabled -- ALL certificates will be trusted. " +
-            "Do not use this in production."
-        }
+  private fun assignProxyHostname(proxy: ConfigVals.Agent.Proxy) {
+    // agent.proxy.endpoints wins over the legacy hostname/port pair when set. They are deliberately NOT
+    // merged: silently prepending hostname would strand anyone who set it and expected endpoints alone
+    // to apply. The single hostname is promoted to a one-element list so both shapes normalize through
+    // one expression -- agent.proxy.port becomes the per-entry default, and once this string reaches
+    // AgentGrpcService the only default left is 50051. Built only when needed, so a malformed config entry
+    // doesn't fail an agent given --proxy.
+    proxyHostname =
+      proxyHostname.ifEmpty {
+        val entries = proxy.endpoints.ifEmpty { [proxy.hostname] }
+        PROXY_HOSTNAME.getEnv(entries.joinToString(",") { parseHostPort(stripScheme(it.trim()), proxy.port).spec })
       }
+    // Parse eagerly so a malformed endpoint fails at startup with a clear message rather than surfacing
+    // later as a connect failure that rotation would paper over by moving to the next endpoint. Written back with
+    // agent.proxy.port as the default, so a host-only entry from --proxy or PROXY_HOSTNAME gets the configured port
+    // rather than the 50051 AgentGrpcService would otherwise apply.
+    val endpoints = parseEndpointList(proxyHostname, proxy.port)
+    proxyHostname = endpoints.joinToString(",") { it.spec }
+    val failoverSuffix =
+      if (endpoints.size == 1) "" else " (${endpoints.size} failover endpoints, tried in order)"
+    logger.info { "proxyHostname: $proxyHostname$failoverSuffix" }
+  }
 
-      if (httpsTrustStorePath.isEmpty())
-        httpsTrustStorePath = HTTPS_TRUST_STORE_PATH.getEnv(trustStorePath)
-      if (httpsTrustStorePassword.isEmpty())
-        httpsTrustStorePassword = HTTPS_TRUST_STORE_PASSWORD.getEnv(trustStorePassword)
-      // The path is safe to log; the password must never be logged.
-      logger.info { "http.trustStorePath: ${httpsTrustStorePath.ifEmpty { "(JDK default)" }}" }
-      // The trust-all-shadows-trust-store precedence is enforced in
-      // AgentHttpService.resolveHttpsTrustManager; this only warns that the store won't take effect.
-      if (trustAllX509Certificates && httpsTrustStorePath.isNotEmpty())
-        logger.warn { "http.trustStorePath is ignored because trustAllX509Certificates is enabled" }
+  private fun assignScrapeConfigVals(agentConfigVals: ConfigVals.Agent) {
+    scrapeTimeoutSecs = resolveIntOption(scrapeTimeoutSecs, SCRAPE_TIMEOUT_SECS, agentConfigVals.scrapeTimeoutSecs)
+    require(scrapeTimeoutSecs > 0) { "scrapeTimeoutSecs must be > 0: $scrapeTimeoutSecs" }
+    logger.info { "scrapeTimeoutSecs: ${scrapeTimeoutSecs.seconds}" }
 
-      if (maxConcurrentHttpClients == -1)
-        maxConcurrentHttpClients = MAX_CONCURRENT_CLIENTS.getEnv(maxConcurrentClients)
-      logger.requirePositive("http.maxConcurrentClients", maxConcurrentHttpClients)
+    scrapeMaxRetries = resolveIntOption(scrapeMaxRetries, SCRAPE_MAX_RETRIES, agentConfigVals.scrapeMaxRetries)
+    logger.info { "scrapeMaxRetries: $scrapeMaxRetries" }
 
-      if (httpClientTimeoutSecs == -1)
-        httpClientTimeoutSecs = CLIENT_TIMEOUT_SECS.getEnv(clientTimeoutSecs)
-      logger.requirePositive("http.clientTimeoutSecs", httpClientTimeoutSecs)
-
-      if (this@AgentOptions.maxContentLengthMBytes == -1)
-        this@AgentOptions.maxContentLengthMBytes = agentConfigVals.http.maxContentLengthMBytes
-      logger.requirePositive("http.maxContentLengthMBytes", this@AgentOptions.maxContentLengthMBytes)
-
-      if (maxCacheSize == -1)
-        maxCacheSize = MAX_CLIENT_CACHE_SIZE.getEnv(clientCache.maxSize)
-      logger.requirePositive("http.clientCache.maxSize", maxCacheSize)
-
-      if (maxCacheAgeMins == -1)
-        maxCacheAgeMins = MAX_CLIENT_CACHE_AGE_MINS.getEnv(clientCache.maxAgeMins)
-      logger.requirePositive("http.clientCache.maxCacheAgeMins", maxCacheAgeMins)
-
-      if (maxCacheIdleMins == -1)
-        maxCacheIdleMins = MAX_CLIENT_CACHE_IDLE_MINS.getEnv(clientCache.maxIdleMins)
-      logger.requirePositive("http.clientCache.maxCacheIdleMins", maxCacheIdleMins)
-
-      if (cacheCleanupIntervalMins == -1)
-        cacheCleanupIntervalMins = CLIENT_CACHE_CLEANUP_INTERVAL_MINS.getEnv(clientCache.cleanupIntervalMins)
-      logger.requirePositive("http.clientCache.cleanupIntervalMins", cacheCleanupIntervalMins)
+    chunkContentSizeKbs =
+      resolveIntOption(chunkContentSizeKbs, CHUNK_CONTENT_SIZE_KBS, agentConfigVals.chunkContentSizeKbs)
+    logger.requirePositive("chunkContentSizeKbs", chunkContentSizeKbs)
+    // Derive the byte value once into the runtime field. A chunk travels as one gRPC message, so it must fit the
+    // proxy's inbound limit; computed as a Long so a huge KB value cannot overflow past the check.
+    val chunkSizeAsBytes = chunkContentSizeKbs.toLong() * 1024
+    require(chunkSizeAsBytes <= MAX_GRPC_PAYLOAD_BYTES) {
+      "chunkContentSizeKbs value $chunkContentSizeKbs is too large (max: ${MAX_GRPC_PAYLOAD_BYTES / 1024})"
     }
+    chunkContentSizeBytes = chunkSizeAsBytes.toInt()
+    logger.info { "chunkContentSizeBytes: $chunkContentSizeBytes" }
+
+    minGzipSizeBytes = resolveIntOption(minGzipSizeBytes, MIN_GZIP_SIZE_BYTES, agentConfigVals.minGzipSizeBytes)
+    // 0 is valid (gzip every non-empty payload); a negative threshold would gzip everything (finding 11).
+    require(minGzipSizeBytes >= 0) { "minGzipSizeBytes must be >= 0: $minGzipSizeBytes" }
+    // A scrape at or below this size is sent unzipped as one message, so it has the same bound as a chunk.
+    require(minGzipSizeBytes <= MAX_GRPC_PAYLOAD_BYTES) {
+      "minGzipSizeBytes value $minGzipSizeBytes is too large (max: $MAX_GRPC_PAYLOAD_BYTES)"
+    }
+    logger.info { "minGzipSizeBytes: $minGzipSizeBytes" }
+  }
+
+  private fun assignHttpClientConfigVals(http: ConfigVals.Agent.Http) {
+    assignHttpsTrustConfigVals(http)
+
+    maxConcurrentHttpClients =
+      resolveIntOption(maxConcurrentHttpClients, MAX_CONCURRENT_CLIENTS, http.maxConcurrentClients)
+    logger.requirePositive("http.maxConcurrentClients", maxConcurrentHttpClients)
+
+    httpClientTimeoutSecs = resolveIntOption(httpClientTimeoutSecs, CLIENT_TIMEOUT_SECS, http.clientTimeoutSecs)
+    logger.requirePositive("http.clientTimeoutSecs", httpClientTimeoutSecs)
+
+    // No env var for this one: --max_content_length_mbytes, else the config value.
+    if (maxContentLengthMBytes == -1)
+      maxContentLengthMBytes = http.maxContentLengthMBytes
+    logger.requirePositive("http.maxContentLengthMBytes", maxContentLengthMBytes)
+
+    maxCacheSize = resolveIntOption(maxCacheSize, MAX_CLIENT_CACHE_SIZE, http.clientCache.maxSize)
+    logger.requirePositive("http.clientCache.maxSize", maxCacheSize)
+
+    maxCacheAgeMins = resolveIntOption(maxCacheAgeMins, MAX_CLIENT_CACHE_AGE_MINS, http.clientCache.maxAgeMins)
+    logger.requirePositive("http.clientCache.maxCacheAgeMins", maxCacheAgeMins)
+
+    maxCacheIdleMins = resolveIntOption(maxCacheIdleMins, MAX_CLIENT_CACHE_IDLE_MINS, http.clientCache.maxIdleMins)
+    logger.requirePositive("http.clientCache.maxCacheIdleMins", maxCacheIdleMins)
+
+    cacheCleanupIntervalMins =
+      resolveIntOption(
+        cacheCleanupIntervalMins,
+        CLIENT_CACHE_CLEANUP_INTERVAL_MINS,
+        http.clientCache.cleanupIntervalMins,
+      )
+    logger.requirePositive("http.clientCache.cleanupIntervalMins", cacheCleanupIntervalMins)
+  }
+
+  private fun assignHttpsTrustConfigVals(http: ConfigVals.Agent.Http) {
+    trustAllX509Certificates =
+      resolveBooleanOption(
+        trustAllX509Certificates,
+        TRUST_ALL_X509_CERTIFICATES,
+        http.enableTrustAllX509Certificates,
+        "--trust_all_x509",
+      )
+    logger.info { "http.trustAllX509Certificates: $trustAllX509Certificates" }
+    if (trustAllX509Certificates) {
+      logger.warn {
+        "X.509 certificate verification is disabled -- ALL certificates will be trusted. " +
+          "Do not use this in production."
+      }
+    }
+
+    httpsTrustStorePath = resolveStringOption(httpsTrustStorePath, HTTPS_TRUST_STORE_PATH, http.trustStorePath)
+    httpsTrustStorePassword =
+      resolveStringOption(httpsTrustStorePassword, HTTPS_TRUST_STORE_PASSWORD, http.trustStorePassword)
+    // The path is safe to log; the password must never be logged.
+    logger.info { "http.trustStorePath: ${httpsTrustStorePath.ifEmpty { "(JDK default)" }}" }
+    // The trust-all-shadows-trust-store precedence is enforced in
+    // AgentHttpService.resolveHttpsTrustManager; this only warns that the store won't take effect.
+    if (trustAllX509Certificates && httpsTrustStorePath.isNotEmpty())
+      logger.warn { "http.trustStorePath is ignored because trustAllX509Certificates is enabled" }
+  }
+
+  private fun assignGrpcConfigVals(grpc: ConfigVals.Agent.Grpc) {
+    keepAliveWithoutCalls =
+      resolveBooleanOption(
+        keepAliveWithoutCalls,
+        KEEPALIVE_WITHOUT_CALLS,
+        grpc.keepAliveWithoutCalls,
+        "--keepalive_without_calls",
+      )
+    logger.info { "grpc.keepAliveWithoutCalls: $keepAliveWithoutCalls" }
+
+    unaryDeadlineSecs = resolveIntOption(unaryDeadlineSecs, UNARY_DEADLINE_SECS, grpc.unaryDeadlineSecs)
+    logger.info { "grpc.unaryDeadlineSecs: $unaryDeadlineSecs" }
+  }
+
+  // Config-only values (no CLI flag or env var), checked to fail fast at startup.
+  private fun validateInternalConfigVals(internal: ConfigVals.Agent.Internal) {
+    logger.info { "agent.internal.cioTimeoutSecs: ${internal.cioTimeoutSecs.seconds}" }
+
+    // heartbeatCheckPauseMillis is the poll interval of the keepalive loops in Agent.sendHeartBeats and
+    // Agent.awaitDisconnectWithoutHeartBeat (heartbeat enabled and disabled). delay() returns immediately for
+    // a non-positive duration, and neither loop condition suspends, so 0 spins without ever reaching
+    // a cancellation check and pins an IO thread for the connection's lifetime.
+    logger.requirePositive("agent.internal.heartbeatCheckPauseMillis", internal.heartbeatCheckPauseMillis)
+
+    val inactivityVal = internal.heartbeatMaxInactivitySecs
+    logger.info { "agent.internal.heartbeatMaxInactivitySecs: $inactivityVal" }
+
+    // reconnectPauseSecs feeds RateLimiter.create(1.0 / reconnectPauseSecs) in Agent: 0 yields an
+    // infinite rate (hot reconnect loop) and a negative value an opaque Guava IAE at startup (finding 11).
+    logger.requirePositive("agent.internal.reconnectPauseSecs", internal.reconnectPauseSecs)
+
+    // rejectedPathRetrySecs paces Agent.retryRejectedStaticPathsForConnection's retry loop, and is the
+    // base of AgentPathManager's retry backoff; a non-positive value would spin that loop for the connection's
+    // lifetime.
+    logger.requirePositive("agent.internal.rejectedPathRetrySecs", internal.rejectedPathRetrySecs)
+
+    // rejectedPathRetryMaxSecs caps that backoff (see AgentPathManager); a cap of zero or less has no meaning.
+    logger.requirePositive("agent.internal.rejectedPathRetryMaxSecs", internal.rejectedPathRetryMaxSecs)
+
+    // scrapeRequestBacklogUnhealthySize * 2 is the AgentConnectionContext channel capacity: 0 makes it
+    // a rendezvous channel (every send blocks). A negative value is worse than it looks -- -1 yields
+    // Channel(-2), which kotlinx maps to BUFFERED, i.e. a silent 64-slot channel rather than an error,
+    // and the health check then compares the backlog against a negative threshold and reports
+    // unhealthy from startup. Only values <= -2 actually throw at connect time (finding 11).
+    logger.requirePositive(
+      "agent.internal.scrapeRequestBacklogUnhealthySize",
+      internal.scrapeRequestBacklogUnhealthySize,
+    )
+  }
+
+  // Discovery misconfig fails fast like the other config-only values: an empty file path would
+  // silently discover nothing, and a non-positive interval would turn the reconcile loop into a hot spin.
+  private fun validateDiscoveryConfigVals(discovery: ConfigVals.Agent.Discovery) {
+    if (!discovery.enabled)
+      return
+    require(discovery.file.path.isNotEmpty()) {
+      "agent.discovery.file.path must be set when agent.discovery.enabled is true"
+    }
+    logger.info { "agent.discovery.file.path: ${discovery.file.path}" }
+    logger.requirePositive("agent.discovery.reconcileIntervalSecs", discovery.reconcileIntervalSecs)
   }
 
   internal companion object {
