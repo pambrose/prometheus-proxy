@@ -18,7 +18,13 @@ All commands from project root.
 ./gradlew lintKotlinMain lintKotlinTest  # Run kotlinter linter
 ./gradlew detekt                         # Run detekt static analysis
 ./gradlew formatKotlin                   # Auto-format code
+make zizmor                              # Audit .github/ workflows and dependabot.yml (needs Docker)
 ```
+
+The `zizmor` check fails a pull request on any finding, so a workflow change must keep the conventions it enforces:
+actions pinned to a commit SHA with the version in a trailing comment, `persist-credentials: false` on every
+`actions/checkout`, least-privilege `permissions`, and a `cooldown` on every Dependabot entry. The Makefile and the
+workflow pin the same zizmor version; update them together.
 
 Always run lint and build before completing tasks:
 `./gradlew detekt && ./gradlew lintKotlinMain && ./gradlew build -x test`
@@ -84,6 +90,11 @@ Uses Typesafe Config (HOCON). Precedence: CLI args → env vars → config file 
 
 The `ConfigVals` class is auto-generated from the HOCON schema using tscfg (`make tsconfig`).
 
+`AgentOptions` and `ProxyOptions` resolve each option through `BaseOptions`' `resolveIntOption` /
+`resolveLongOption` / `resolveStringOption` (where -1 or an empty string marks a CLI value as unset) and
+`resolveBooleanOption` (which checks whether the flag was given); resolve a new option the same way, inside the
+per-section `assign*` function it belongs to.
+
 ## Build Version
 
 `group` and `version` live in `gradle.properties` (single source of truth). The version can be overridden on the command line for CI snapshot publishing:
@@ -95,6 +106,11 @@ The `ConfigVals` class is auto-generated from the HOCON schema using tscfg (`mak
 `-PoverrideVersion` keeps its `override` prefix because it intentionally only applies when supplied (so the `gradle.properties` default is never accidentally cleared).
 
 `BuildConfig.APP_RELEASE_DATE` and `BuildConfig.BUILD_TIME` are populated each build via `ValueSource`, so they reflect the actual build time and are not overridable. As a side effect, the configuration cache invalidates and `BuildConfig` regenerates on every build; release artifacts are therefore not byte-for-byte reproducible.
+
+Releases follow `docs/RELEASE.md`: after the version bump and changelogs are merged, `make release` publishes to Maven
+Central and Docker Hub, gated by `make release-check` (clean, up-to-date `master` whose CI passed; the version named
+in both changelogs and every bumped file; not already published). `RELEASE_VERSION_FILES` in the `Makefile` mirrors
+step 2's list of hard-coded version literals; keep the two in step.
 
 ## Testing
 

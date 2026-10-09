@@ -625,6 +625,11 @@ Both proxy and agent expose their own metrics:
 - **Agent metrics:** `http://agent-host:8083/metrics`. The agent sits behind the firewall, so give it a path for its own
   metrics and let Prometheus scrape them through the proxy, like any other target
 - **Admin endpoints:** `http://host:admin-port/ping`, `/healthcheck`, `/version`
+- **JVM metrics:** off by default; each group is turned on under `proxy.metrics` or `agent.metrics` in the config
+  file (`memoryPoolsExportsEnabled`, `garbageCollectorExportsEnabled`, and so on). Version 4.3.0 adds buffer pools
+  (`bufferPoolExportsEnabled`), JIT compilation (`compilationExportsEnabled`), and native memory
+  (`nativeMemoryExportsEnabled`, which needs the JVM started with `-XX:NativeMemoryTracking=summary`); the
+  [Monitoring guide](https://pambrose.github.io/prometheus-proxy/monitoring/) lists every metric
 
 ## 🔧 Configuration Options
 

@@ -112,6 +112,10 @@ Agents are listed on the left. Selecting one shows, on the right:
 | **Paths** | every path this agent has registered, and whether a path is shared with other agents |
 | **Recent scrapes** | this agent's own scrapes, with status, duration and payload size |
 
+The remote address is the `host:port` the agent's connection came from, without a reverse DNS lookup. With the
+transport filter disabled, as behind an nginx reverse proxy, it reads `Unknown`: the connection there comes from the
+reverse proxy, not the agent. Before 4.3.0 it read `Unknown` for every agent.
+
 Selection lives in the URL, so a view of one agent is a link you can bookmark or share.
 
 The page updates **live over a WebSocket** — an agent connecting, disconnecting, or registering a path

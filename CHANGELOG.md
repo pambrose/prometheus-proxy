@@ -18,6 +18,9 @@ All notable changes to this project are documented in this file.
 ### Documentation
 
 - The README's Security & TLS section and `llms.txt` point to `SECURITY.md` and GitHub's private vulnerability reporting, as the website's Security page does
+- The README's Built-in Metrics section and `llms.txt` describe the opt-in JVM metric groups, including the three new ones
+- `docs/TESTING.md` names `TestUtils`, where the harness's `startProxy()` and `startAgent()` helpers live, instead of a `HarnessSupport` file that doesn't exist
+- The website covers this release's fixes: the Dashboard page says what an agent's remote address shows (`host:port`, or `Unknown` with the transport filter disabled), Running in Production notes that a proxy that can't start now exits with status 1 for its supervisor to restart, and Troubleshooting gains a section for the `BindException` behind that. The Monitoring page dates the three new JVM metric groups
 
 ### Build & Tooling
 
@@ -25,6 +28,7 @@ All notable changes to this project are documented in this file.
 - The container tests no longer leave a dangling ~591MB proxy and agent image behind on every run. The fat jars are never byte-identical (`BuildConfig.BUILD_TIME` changes each build), so each run rebuilt the images and moved their stable `prometheus-proxy-test/*` tags, orphaning the previous build. `ContainerTestSupport` now removes the replaced image and its untagged classic-builder parents once the tag has moved
 - Audit the GitHub Actions workflows and `.github/dependabot.yml` with zizmor 1.30.1: a new `zizmor` workflow fails a pull request on any finding and annotates it on the diff, and uploads the findings from `master`, a weekly run, and manual runs to code scanning; `make zizmor` runs the same digest-pinned image locally, with the online audits when `GH_TOKEN` or a `gh` login supplies a token. Fix the 16 findings it raised: every `actions/checkout` sets `persist-credentials: false`, so the job's token isn't left in `.git/config` for later steps or uploaded artifacts, and each Dependabot update waits a 7-day `cooldown` after its release (Dependabot security updates aren't delayed)
 - `make release` gates a release before publishing anything: `make release-check` fails unless the checkout is a clean, up-to-date `master` whose GitHub CI checks have all passed, both changelogs have a section for the version and every file step 2 of `docs/RELEASE.md` bumps names it, the version isn't a pre-release, tagged elsewhere, or already on Maven Central or Docker Hub, and the GPG setup and Docker are ready. `release` then runs `make all-tests` and `make distro`, asks once, publishes to Maven Central and Docker Hub, and checks with the new `make docker-verify` that both images carry every platform and `:latest` matches the version. It used to build and push the images with no checks. The GitHub release and Homebrew tap stay manual; `release` prints both steps
+- `CLAUDE.md` documents the conventions the `zizmor` check enforces, the release flow, and the `BaseOptions` resolve helpers new options should use
 
 ### Dependencies
 
@@ -35,6 +39,11 @@ All notable changes to this project are documented in this file.
 - Update the proxy and agent images' digest-pinned `eclipse-temurin:25-jre` base to its 2026-10-02 rebuild (JDK 25.0.4.1+1), which carries Ubuntu's OpenSSL fix for CVE-2026-84782 (HIGH)
 - Update build tooling: Gradle wrapper 9.8.0 → 9.8.1, the `pambrose-gradle-plugins` convention plugins 1.1.6 → 1.1.7, the BuildConfig plugin 6.1.1 → 6.1.2, Kover 0.9.9 → 0.9.11, and the versions plugin 0.64.0 → 0.65.0
 - Update the documentation site's Python dependency lock (`website/uv.lock`): Zensical 0.0.65 → 0.0.68, plus charset-normalizer 3.5.1 → 3.5.2, MarkupSafe 3.0.3 → 3.0.4, platformdirs 4.12.0 → 4.12.3, and tomli 2.4.1 → 2.5.0
+
+### Internal
+
+- Split the functions CodeScene rated hardest to maintain into focused helpers, with no behavior change: path registration and removal in `ProxyPathManager` (whose `addPath` takes `targetUrl`, `pathSource` and `identityName` as a `PathMetadata`, and whose `removePath` and disconnect sweep share one `dropAgentFromPath`), the discovery reconcile in `AgentPathManager`, the connection loop and heartbeat in `Agent`, the scrape-request and chunked-response streams in `ProxyServiceImpl`, and option resolution in `AgentOptions` and `ProxyOptions`, which now go through internal `resolveIntOption` / `resolveLongOption` / `resolveStringOption` helpers in `BaseOptions`. `ProxyRegistry.tla`'s `Unregister` action uses the removal rule `removePath` now shares with the sweep, and `make tla-checks` still passes. The agent's startup log no longer prints `scrapeTimeoutSecs` twice
+- Remove the unused `SslSettings.getSslContext`
 
 ## [4.2.0] - 2026-09-26
 

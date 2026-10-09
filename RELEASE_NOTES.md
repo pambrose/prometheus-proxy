@@ -32,6 +32,9 @@ Three more JVM metric groups can be turned on under `proxy.metrics` and `agent.m
 
 - **How to report a vulnerability is in the README and `llms.txt` too**, which now point to `SECURITY.md` and
   GitHub's private vulnerability reporting, as the website's Security page does.
+- **The README and `llms.txt` describe the JVM metric groups**, including the three new ones.
+- **The website explains both fixes**: what the dashboard's agent address shows, and that a proxy that can't start
+  now exits for its supervisor to restart, with a Troubleshooting entry for the port conflict behind it.
 
 ### Build and tooling
 
