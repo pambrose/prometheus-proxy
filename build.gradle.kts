@@ -128,7 +128,7 @@ configurations.configureEach {
   resolutionStrategy.eachDependency {
     if (requested.group == "io.netty" && !requested.name.startsWith("netty-tcnative")) {
       useVersion(nettyVersion)
-      because("grpc-netty 1.84.1's Netty 4.2.16.Final has CVE-2026-75595")
+      because("grpc-netty 1.84.2's Netty 4.2.16.Final has CVE-2026-75595")
     }
   }
 }
