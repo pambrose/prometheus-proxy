@@ -37,6 +37,9 @@ Three more JVM metric groups can be turned on under `proxy.metrics` and `agent.m
 - The GitHub Actions workflows are audited with zizmor on every pull request, and `make zizmor` runs the same
   audit locally. Following its findings, checkouts no longer leave the job's token in the repository's git config,
   and Dependabot waits seven days after a release before proposing it.
+- `make release` checks that a release is ready before publishing anything (a clean, up-to-date `master` with
+  passing CI, the version bumped everywhere, and not already published), runs the full test suite, asks once,
+  then publishes to Maven Central and Docker Hub and verifies the images.
 
 ### Dependency updates
 

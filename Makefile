@@ -5,7 +5,8 @@
         all-scaling scaling-paths scaling-agents scaling-payload scaling-consolidated scaling-concurrency scaling-soak \
         coverage coverage-html coverage-xml coverage-log coverage-verify \
         coverage-open coverage-packages coverage-clean reports gh-docs \
-        gh-status tsconfig distro docker-push homebrew-formulae release tree depends lint detekt detekt-baseline \
+        gh-status tsconfig distro docker-push docker-verify homebrew-formulae release release-check _confirm-release \
+        tree depends lint detekt detekt-baseline \
         versions kdocs clean-site check-site upgrade-site site \
         publish-local publish-local-snapshot publish-snapshot publish-maven-central \
         upgrade-wrapper _check-gpg-env _require-version _require-gradle-version
@@ -21,6 +22,16 @@ IMAGE_PREFIX := pambrose/prometheus
 # source is etc/homebrew/<name>.rb and installs the release jar of the same name.
 HOMEBREW_TAP_DIR ?= ../homebrew-tap
 HOMEBREW_FORMULAE := prometheus-agent prometheus-proxy
+# `make release` publishes only from a clean, up-to-date checkout of this branch whose GitHub CI has passed.
+RELEASE_BRANCH ?= master
+MAVEN_CENTRAL_URL := https://repo1.maven.org/maven2/com/pambrose/prometheus-proxy
+# The files step 2 of docs/RELEASE.md bumps to the new version; release-check fails if one doesn't mention VERSION.
+# Keep this list in step with that step.
+RELEASE_VERSION_FILES := README.md llms.txt etc/compose/proxy.yml \
+	charts/prometheus-proxy/Chart.yaml charts/prometheus-agent/Chart.yaml \
+	website/prometheus-proxy/docs/getting-started.md website/prometheus-proxy/docs/index.md \
+	website/prometheus-proxy/docs/docker.md src/test/kotlin/website/DockerExamples.txt \
+	src/test/kotlin/website/EmbeddedAgentExamples.txt src/test/kotlin/website/KubernetesExamples.txt
 WEBSITE_DIR := website
 SITE_DIR := $(WEBSITE_DIR)/prometheus-proxy
 
@@ -332,7 +343,84 @@ homebrew-formulae: _require-version  ## Write the agent and proxy Homebrew formu
 		echo "Wrote $(HOMEBREW_TAP_DIR)/Formula/$$name.rb for $(VERSION) (sha256 $$sha)"; \
 	done
 
-release: distro docker-push  ## Build distro and push docker images
+docker-verify: _require-version  ## Check both published VERSION images carry every platform in PLATFORMS, and latest matches
+	@for c in proxy agent; do \
+		image=$(IMAGE_PREFIX)-$$c; \
+		out=$$(docker buildx imagetools inspect $$image:$(VERSION)) || exit 1; \
+		for platform in $$(echo $(PLATFORMS) | tr ',' ' '); do \
+			echo "$$out" | grep -q "Platform: *$$platform" \
+				|| { echo "ERROR: $$image:$(VERSION) is missing $$platform" >&2; exit 1; }; \
+		done; \
+		latest=$$(docker buildx imagetools inspect $$image:latest | grep -m1 '^Digest:'); \
+		[ "$$latest" = "$$(echo "$$out" | grep -m1 '^Digest:')" ] \
+			|| { echo "ERROR: $$image:latest is not $$image:$(VERSION)" >&2; exit 1; }; \
+		echo "$$image:$(VERSION) (and :latest) published for $(PLATFORMS)"; \
+	done
+
+# Publishes nothing: it fails unless this checkout is fit to publish VERSION. The local checks run first, then the
+# network ones (GitHub's CI checks for HEAD, Maven Central, Docker Hub).
+release-check: _require-version _check-gpg-env  ## Fail unless this checkout is fit to publish VERSION
+	@case "$(VERSION)" in *SNAPSHOT*|*-rc*|*-beta*|*-alpha*) \
+		echo "ERROR: $(VERSION) is a pre-release; make release publishes final versions" >&2; exit 1;; esac
+	@test -z "$$(git status --porcelain)" \
+		|| { echo "ERROR: the working tree is dirty; commit or stash first" >&2; exit 1; }
+	@branch=$$(git rev-parse --abbrev-ref HEAD); [ "$$branch" = "$(RELEASE_BRANCH)" ] \
+		|| { echo "ERROR: releases are cut from $(RELEASE_BRANCH), not $$branch" >&2; exit 1; }
+	@git fetch -q origin $(RELEASE_BRANCH) \
+		&& [ "$$(git rev-parse HEAD)" = "$$(git rev-parse origin/$(RELEASE_BRANCH))" ] \
+		|| { echo "ERROR: HEAD is not origin/$(RELEASE_BRANCH); pull or push first" >&2; exit 1; }
+	@grep -q '^## \[$(VERSION)\]' CHANGELOG.md \
+		|| { echo "ERROR: CHANGELOG.md has no [$(VERSION)] section (step 3 of docs/RELEASE.md)" >&2; exit 1; }
+	@grep -qx '## $(VERSION)' RELEASE_NOTES.md \
+		|| { echo "ERROR: RELEASE_NOTES.md has no $(VERSION) section (step 3 of docs/RELEASE.md)" >&2; exit 1; }
+	@missing=$$(for f in $(RELEASE_VERSION_FILES); do grep -qF '$(VERSION)' "$$f" || echo "  $$f"; done); \
+	[ -z "$$missing" ] || { printf 'ERROR: not bumped to $(VERSION) (step 2 of docs/RELEASE.md):\n%s\n' "$$missing" >&2; exit 1; }
+	@tagged=$$(git rev-parse -q --verify "refs/tags/$(VERSION)^{commit}"); \
+	[ -z "$$tagged" ] || [ "$$tagged" = "$$(git rev-parse HEAD)" ] \
+		|| { echo "ERROR: tag $(VERSION) points at another commit" >&2; exit 1; }
+	@docker info >/dev/null 2>&1 \
+		|| { echo "ERROR: Docker isn't running; the container tests and docker-push need it" >&2; exit 1; }
+	@runs=$$(gh api "repos/{owner}/{repo}/commits/$$(git rev-parse HEAD)/check-runs" --paginate \
+		--jq '.check_runs[] | "\(.status) \(.conclusion) \(.name)"') \
+		|| { echo "ERROR: could not read HEAD's CI checks from GitHub; is gh logged in?" >&2; exit 1; }; \
+	[ -n "$$runs" ] || { echo "ERROR: no CI checks have run for HEAD" >&2; exit 1; }; \
+	failed=$$(echo "$$runs" | grep -Ev '^completed (success|skipped|neutral) ' | sed 's/^/  /'); \
+	[ -z "$$failed" ] || { printf 'ERROR: CI has not passed for HEAD:\n%s\n' "$$failed" >&2; exit 1; }
+	@! curl -fsI "$(MAVEN_CENTRAL_URL)/$(VERSION)/prometheus-proxy-$(VERSION).pom" >/dev/null 2>&1 \
+		|| { echo "ERROR: com.pambrose:prometheus-proxy:$(VERSION) is already on Maven Central; bump the version" >&2; exit 1; }
+	@for c in proxy agent; do \
+		! docker buildx imagetools inspect $(IMAGE_PREFIX)-$$c:$(VERSION) >/dev/null 2>&1 \
+			|| { echo "ERROR: $(IMAGE_PREFIX)-$$c:$(VERSION) is already published; bump the version" >&2; exit 1; }; \
+	done
+	@echo "Ready to release $(VERSION) from $$(git rev-parse --short HEAD)"
+
+_confirm-release:
+	@echo "About to publish $(VERSION). A Maven Central release can't be removed."
+	@echo "  Maven Central: com.pambrose:prometheus-proxy:$(VERSION)"
+	@echo "  Docker Hub:    $(IMAGE_PREFIX)-proxy and $(IMAGE_PREFIX)-agent, tagged $(VERSION) and latest"
+	@echo "                 for $(PLATFORMS)"
+	@printf 'Continue? [y/N] ' && read ans && [ "$$ans" = "y" ] || { echo "Nothing published."; exit 1; }
+
+# Each step runs only if the one before it passed, so nothing is published until the checkout passes release-check,
+# the full test suite (whose container tests build the images and scrape through them), and the release build.
+# Steps 4-6 and 8 of docs/RELEASE.md; the GitHub release (step 7) and the Homebrew tap (step 9) are printed as next
+# steps. After a partial release, finish with the remaining targets: release-check refuses a version already published.
+release:  ## Gate, test, build, then publish VERSION to Maven Central and Docker Hub (asks first)
+	$(MAKE) release-check
+	$(MAKE) all-tests
+	$(MAKE) distro
+	@$(MAKE) --no-print-directory _confirm-release
+	$(MAKE) publish-maven-central
+	$(MAKE) docker-push
+	$(MAKE) docker-verify
+	@prev=$$(git describe --tags --abbrev=0 2>/dev/null); \
+	echo; \
+	echo "Published $(VERSION) to Maven Central and Docker Hub. Next (steps 7 and 9 of docs/RELEASE.md):"; \
+	echo "  1. Create the GitHub release (tag $(VERSION), title v$(VERSION)) with a summary that ends with"; \
+	echo "     **Full Changelog**: https://github.com/pambrose/prometheus-proxy/compare/$$prev...$(VERSION)"; \
+	echo "     gh release create $(VERSION) --target $$(git rev-parse HEAD) --title v$(VERSION) --notes-file <notes> \\"; \
+	echo "       build/libs/prometheus-agent.jar build/libs/prometheus-proxy.jar build/libs/prometheus-proxy-$(VERSION)-sources.jar"; \
+	echo "  2. make homebrew-formulae, then commit and push the tap"
 
 tree:  ## Print Gradle dependency tree (quiet)
 	$(GRADLE) -q dependencies
