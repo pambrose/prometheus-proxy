@@ -2,12 +2,16 @@
 # current. Actions are pinned to commit SHAs with the
 # version in a trailing comment; Dependabot updates the SHA and the comment together. Updates are grouped per
 # ecosystem so a routine week produces one PR each rather than one per dependency.
+# Each update waits 7 days after its release (zizmor's dependabot-cooldown audit), so a compromised release is usually
+# pulled before it reaches a PR; Dependabot security updates aren't held back.
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       github-actions:
         patterns: ["*"]
@@ -16,6 +20,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       gradle-minor-and-patch:
         patterns: ["*"]
@@ -31,8 +37,8 @@ updates:
       # major changes that API and needs a planned upgrade, not a routine bump.
       - dependency-name: "org.webjars.npm:htmx*"
         update-types: ["version-update:semver-major"]
-      # netty-tcnative follows grpc-java, not tcnative's own releases: it stays at the version grpc is built and tested
-      # with, and is updated together with grpc.
+      # netty-tcnative is updated by hand, not on tcnative's own releases. libs.versions.toml pins it, currently ahead of
+      # the version grpc-java is built and tested with for BoringSSL fixes, and says when to return to grpc's version.
       - dependency-name: "io.netty:netty-tcnative*"
 
   # The docs site's Python dependencies (website/pyproject.toml and uv.lock), including the mkdocs-material pin.
@@ -40,6 +46,8 @@ updates:
     directory: /website
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       docs-site:
         patterns: ["*"]
@@ -50,6 +58,8 @@ updates:
     directory: /etc/docker
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     ignore:
       # The images ship Java 25, the LTS the tests run on; moving to another Java line is a deliberate change.
       - dependency-name: "eclipse-temurin"
@@ -60,3 +70,5 @@ updates:
     directory: /nginx/docker
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7

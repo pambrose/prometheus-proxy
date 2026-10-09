@@ -1,5 +1,5 @@
 .PHONY: default help stop clean clean-all stubs build tibuild refresh jars \
-        tests mini-tests xxl-tests nh-tests ip-tests netty-tests tls-tests lincheck-tests tla-checks check-rules helm-lint \
+        tests mini-tests xxl-tests nh-tests ip-tests netty-tests tls-tests lincheck-tests tla-checks check-rules helm-lint zizmor \
         container-tests scaling-tests all-tests regen-certs \
         docker-clean docker-clean-dry \
         all-scaling scaling-paths scaling-agents scaling-payload scaling-consolidated scaling-concurrency scaling-soak \
@@ -45,6 +45,10 @@ KUBECONFORM_IMAGE := ghcr.io/yannh/kubeconform:v0.8.0
 KUBERNETES_VERSION := 1.30.0
 CRD_SCHEMAS := https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json
 CHARTS := prometheus-proxy prometheus-agent
+
+# zizmor audits the GitHub Actions workflows and dependabot.yml. The same version as .github/workflows/zizmor.yml, with
+# the digest zizmor-action pins for it (its support/versions file); update the two together.
+ZIZMOR_IMAGE := ghcr.io/zizmorcore/zizmor:1.30.1@sha256:a2eb396d886c053073405c7a980f2139ba2248ec172243cfa3841e57196e8101
 
 # Banner printed at the start of every scaling target, so a long `all-scaling` run makes it obvious
 # which preset is executing at any moment (they look alike in Gradle's output otherwise).
@@ -149,6 +153,13 @@ helm-lint:  ## Lint the Helm charts and validate their rendered manifests (needs
 		printf '%s\n' "$$manifests" | docker run --rm -i $(KUBECONFORM_IMAGE) -strict -summary \
 			-kubernetes-version $(KUBERNETES_VERSION) -schema-location default -schema-location '$(CRD_SCHEMAS)' -; \
 	done; done
+
+# The online audits (known-vulnerable and impostor actions) need a GitHub token: GH_TOKEN, else gh's login, else they're
+# skipped. The token is passed to the container by name, so it never appears on the command line; an empty GH_TOKEN
+# would make zizmor exit with a usage error, so none is passed when there's no token.
+zizmor:  ## Audit the GitHub Actions workflows and dependabot.yml with zizmor (needs Docker)
+	@GH_TOKEN="$${GH_TOKEN:-$$(gh auth token 2>/dev/null)}"; export GH_TOKEN; \
+	docker run --rm -v "$(CURDIR):/workspace:ro" -w /workspace $${GH_TOKEN:+-e GH_TOKEN} $(ZIZMOR_IMAGE) .
 
 container-tests: jars  ## Run the Testcontainers tests (needs Docker)
 	@DOCKER_HOST="$$(docker context inspect --format '{{.Endpoints.docker.Host}}' 2>/dev/null)"; \

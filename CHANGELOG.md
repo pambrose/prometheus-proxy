@@ -23,6 +23,7 @@ All notable changes to this project are documented in this file.
 
 - The nginx reverse-proxy example (`nginx/docker/nginx.conf`) enables HTTP/2 with `http2 on;` instead of the `listen ... http2` parameter, which nginx has deprecated since 1.25.1 and warned about at every start
 - The container tests no longer leave a dangling ~591MB proxy and agent image behind on every run. The fat jars are never byte-identical (`BuildConfig.BUILD_TIME` changes each build), so each run rebuilt the images and moved their stable `prometheus-proxy-test/*` tags, orphaning the previous build. `ContainerTestSupport` now removes the replaced image and its untagged classic-builder parents once the tag has moved
+- Audit the GitHub Actions workflows and `.github/dependabot.yml` with zizmor 1.30.1: a new `zizmor` workflow fails a pull request on any finding and annotates it on the diff, and uploads the findings from `master`, a weekly run, and manual runs to code scanning; `make zizmor` runs the same digest-pinned image locally, with the online audits when `GH_TOKEN` or a `gh` login supplies a token. Fix the 16 findings it raised: every `actions/checkout` sets `persist-credentials: false`, so the job's token isn't left in `.git/config` for later steps or uploaded artifacts, and each Dependabot update waits a 7-day `cooldown` after its release (Dependabot security updates aren't delayed)
 
 ### Dependencies
 

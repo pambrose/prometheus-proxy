@@ -34,6 +34,9 @@ Three more JVM metric groups can be turned on under `proxy.metrics` and `agent.m
   `http2 on;` instead of the deprecated `listen ... http2`.
 - The container tests no longer leave a ~591MB proxy and agent image behind on every run; each run now
   removes the images its rebuild replaced.
+- The GitHub Actions workflows are audited with zizmor on every pull request, and `make zizmor` runs the same
+  audit locally. Following its findings, checkouts no longer leave the job's token in the repository's git config,
+  and Dependabot waits seven days after a release before proposing it.
 
 ### Dependency updates
 
