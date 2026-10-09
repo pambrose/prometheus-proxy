@@ -48,6 +48,8 @@ Three more JVM metric groups can be turned on under `proxy.metrics` and `agent.m
 - `make release` checks that a release is ready before publishing anything (a clean, up-to-date `master` with
   passing CI, the version bumped everywhere, and not already published), runs the full test suite, asks once,
   then publishes to Maven Central and Docker Hub and verifies the images.
+- CI checks both coverage floors in one step, which saves a full test run per build now that Kover no longer mixes
+  up the two coverage reports when they're built together.
 
 ### Dependency updates
 

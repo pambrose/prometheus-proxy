@@ -506,17 +506,15 @@ Coverage excludes generated code, as configured in `configureCoverage()` in `bui
 (`io.prometheus.grpc.*`), `io.prometheus.BuildConfig` (buildconfig plugin), and `io.prometheus.common.ConfigVals`
 with its nested classes (tscfg).
 
-Two gates enforce it, and CI runs both:
+Two gates enforce it, and CI runs both in one invocation, as `make coverage-verify` does:
 
 ```bash
-./gradlew koverVerify           # total floors: line and branch coverage across the project
-./gradlew koverVerifyPerClass   # every hand-written class at 80% line coverage on its own
+./gradlew koverVerify koverVerifyPerClass
 ```
 
-Run `koverVerifyPerClass` in its own Gradle invocation, never alongside `koverVerify`, `koverXmlReport`, or
-`koverLog`: Kover 0.9.9 applies one report variant's filters to every Kover report in the same run, which corrupts
-the total report, so the build fails fast if both are requested together. The per-class floor skips
-compiler-generated lambda classes and the `Proxy`/`Agent` entry points, so a new class needs its own tests.
+`koverVerify` checks the total floors (line and branch coverage across the project); `koverVerifyPerClass` checks
+every hand-written class at 80% line coverage on its own. The per-class floor skips compiler-generated lambda
+classes and the `Proxy`/`Agent` entry points, so a new class needs its own tests.
 
 ## Writing New Tests
 

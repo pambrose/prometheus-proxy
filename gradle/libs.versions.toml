@@ -14,6 +14,8 @@ config = "6.1.2"
 detekt = "2.0.0-alpha.6"
 dokka = "2.2.0"
 gradle-plugins = "1.1.7"
+# 0.9.10 or later: 0.9.9 gave a report variant built in the same Gradle run as another the other's filters, so the
+# per-class check (koverVerifyPerClass) had to run in its own invocation.
 kover = "0.9.11"
 maven-publish = "0.37.0"
 protobuf = "0.10.0"
