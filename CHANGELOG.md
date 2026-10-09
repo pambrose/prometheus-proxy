@@ -28,8 +28,13 @@ All notable changes to this project are documented in this file.
 
 ### Dependencies
 
-- Update common-utils 5.0.0 → 5.1.0, whose `MetricsConfig` carries the three new JVM metric flags
-- Update the BuildConfig plugin 6.1.1 → 6.1.2
+- Update common-utils 5.0.0 → 5.1.1, whose `MetricsConfig` carries the three new JVM metric flags
+- Update grpc 1.84.0 → 1.84.2. It still brings Netty 4.2.16.Final, so the Netty 4.2.18.Final override stays
+- Update `netty-tcnative-boringssl-static` 2.0.81.Final → 2.0.84.Final, ahead of the 2.0.81.Final that grpc-java is built and tested with, for BoringSSL native fixes that include a use-after-free on session-key rotation and NUL bytes accepted in SNI names. tcnative 2.0.x keeps its API, so grpc and Netty use it unchanged
+- Update Kotlin 2.4.20 → 2.4.21 and Logback 1.6.4 → 1.6.5
+- Update the proxy and agent images' digest-pinned `eclipse-temurin:25-jre` base to its 2026-10-02 rebuild (JDK 25.0.4.1+1), which carries Ubuntu's OpenSSL fix for CVE-2026-84782 (HIGH)
+- Update build tooling: Gradle wrapper 9.8.0 → 9.8.1, the `pambrose-gradle-plugins` convention plugins 1.1.6 → 1.1.7, the BuildConfig plugin 6.1.1 → 6.1.2, Kover 0.9.9 → 0.9.11, and the versions plugin 0.64.0 → 0.65.0
+- Update the documentation site's Python dependency lock (`website/uv.lock`): Zensical 0.0.65 → 0.0.68, plus charset-normalizer 3.5.1 → 3.5.2, MarkupSafe 3.0.3 → 3.0.4, platformdirs 4.12.0 → 4.12.3, and tomli 2.4.1 → 2.5.0
 
 ## [4.2.0] - 2026-09-26
 

@@ -43,7 +43,12 @@ Three more JVM metric groups can be turned on under `proxy.metrics` and `agent.m
 
 ### Dependency updates
 
-common-utils 5.0.0 → 5.1.0. Build only: the BuildConfig plugin 6.1.1 → 6.1.2.
+Runtime: common-utils 5.0.0 → 5.1.1, grpc 1.84.0 → 1.84.2, netty-tcnative 2.0.81.Final → 2.0.84.Final (ahead
+of the version grpc is tested with, for BoringSSL fixes), Kotlin 2.4.20 → 2.4.21, and Logback 1.6.4 → 1.6.5. The
+proxy and agent images move to a rebuilt `eclipse-temurin:25-jre` base that fixes an OpenSSL vulnerability
+(CVE-2026-84782). Build only: Gradle 9.8.0 → 9.8.1, the shared convention plugins 1.1.6 → 1.1.7, the BuildConfig
+plugin 6.1.1 → 6.1.2, Kover 0.9.9 → 0.9.11, and the versions plugin 0.64.0 → 0.65.0. The documentation site's
+Python lock picks up Zensical 0.0.65 → 0.0.68.
 
 ---
 
