@@ -5,8 +5,8 @@ description: >-
   connection to the proxy, and answers the scrapes the proxy forwards for the paths it registers.
 type: application
 # The chart version follows the release it deploys; bump both with the project version (docs/RELEASE.md, step 2).
-version: 4.2.0
-appVersion: "4.2.0"
+version: 4.3.0
+appVersion: "4.3.0"
 kubeVersion: ">=1.25.0-0"
 home: https://pambrose.github.io/prometheus-proxy/
 sources:

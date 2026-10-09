@@ -2,9 +2,14 @@
 
 ---
 
-## Unreleased
+## 4.3.0
 
-_Not yet released_
+_Released 2026-10-08_
+
+A smaller release that adds three opt-in JVM metric groups, fixes two bugs, and updates dependencies. The dashboard
+now shows each agent's real address, and a proxy that fails to start now exits instead of hanging. The proxy and
+agent images pick up an OpenSSL fix in their base image. Nothing needs to change to upgrade: the new metric groups
+are off by default.
 
 ### More JVM metrics
 

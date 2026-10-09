@@ -35,6 +35,11 @@ behind a firewall and preserves the native pull-based model architecture.
 
 ## ✨ New Features
 
+Version 4.3.0 (released 2026-10-08) adds three opt-in JVM metric groups (buffer pools, JIT compilation, and native
+memory), shows each agent's real address on the dashboard instead of `Unknown`, and makes a proxy that fails to
+start exit instead of hanging. The images pick up an OpenSSL fix in their `eclipse-temurin` base, and gRPC,
+netty-tcnative, and Kotlin are updated; the [changelog](CHANGELOG.md) has the full list.
+
 Version 4.2.0 (released 2026-09-26) moves the proxy and agent to the Prometheus Java client 1.x, replacing the
 unmaintained 0.x client. Every `proxy_*` and `agent_*` metric keeps its name, labels, and buckets, but the
 `_created` series are gone and, with the JVM exports on, the JVM memory metrics are renamed, so read
@@ -236,12 +241,12 @@ If you prefer to build the project from source:
 
 ```bash
 # Start proxy
-docker run --rm -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.2.0
+docker run --rm -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.3.0
 
 # Start agent
 docker run --rm \
   --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-  pambrose/prometheus-agent:4.2.0
+  pambrose/prometheus-agent:4.3.0
 ```
 
 These run in the foreground until Ctrl+C. To run a container in the background instead, and have it start again
@@ -250,7 +255,7 @@ doesn't allow `--rm` with `--restart`):
 
 ```bash
 docker run --detach --name prometheus-proxy --restart unless-stopped \
-  -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.2.0
+  -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.3.0
 
 docker logs --follow prometheus-proxy   # follow its log
 docker stop prometheus-proxy            # stop it, and no longer restart it
@@ -336,8 +341,8 @@ scrape_configs:
 The docker images support multiple architectures (amd64, arm64, s390x, ppc64le):
 
 ```bash
-docker pull pambrose/prometheus-proxy:4.2.0
-docker pull pambrose/prometheus-agent:4.2.0
+docker pull pambrose/prometheus-proxy:4.3.0
+docker pull pambrose/prometheus-agent:4.3.0
 ```
 
 ### Production Docker Setup
@@ -350,7 +355,7 @@ docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
         --env ADMIN_ENABLED=true \
         --env METRICS_ENABLED=true \
         --restart unless-stopped \
-        pambrose/prometheus-proxy:4.2.0
+        pambrose/prometheus-proxy:4.3.0
 ```
 
 Start an agent container with:
@@ -360,7 +365,7 @@ Start an agent container with:
 docker run --rm -p 8083:8083 -p 8093:8093 \
         --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
         --restart unless-stopped \
-        pambrose/prometheus-agent:4.2.0
+        pambrose/prometheus-agent:4.3.0
 ```
 
 Or use Docker Compose: [`etc/compose/proxy.yml`](etc/compose/proxy.yml) runs a proxy, an agent, and a Prometheus server
@@ -382,7 +387,7 @@ is in your current directory, run an agent container with:
 docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/prom-agent.conf,target=/app/prom-agent.conf \
     --env AGENT_CONFIG=prom-agent.conf \
-    pambrose/prometheus-agent:4.2.0
+    pambrose/prometheus-agent:4.3.0
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
@@ -814,7 +819,7 @@ docker run --rm -p 8082:8082 -p 8092:8092 -p 50440:50440 -p 8080:8080 \
     --env PROXY_CONFIG=tls-no-mutual-auth.conf \
     --env ADMIN_ENABLED=true \
     --env METRICS_ENABLED=true \
-    pambrose/prometheus-proxy:4.2.0
+    pambrose/prometheus-proxy:4.3.0
 
 docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
@@ -822,7 +827,7 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
     --env AGENT_CONFIG=tls-no-mutual-auth.conf \
     --env PROXY_HOSTNAME=mymachine.lan:50440 \
     --name docker-agent \
-    pambrose/prometheus-agent:4.2.0
+    pambrose/prometheus-agent:4.3.0
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
@@ -1005,7 +1010,7 @@ repositories {
 }
 
 dependencies {
-  implementation("com.pambrose:prometheus-proxy:4.2.0")
+  implementation("com.pambrose:prometheus-proxy:4.3.0")
 }
 ```
 
