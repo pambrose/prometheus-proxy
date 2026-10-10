@@ -37,8 +37,9 @@ behind a firewall and preserves the native pull-based model architecture.
 
 Version 4.3.0 (released 2026-10-08) adds three opt-in JVM metric groups (buffer pools, JIT compilation, and native
 memory), shows each agent's real address on the dashboard instead of `Unknown`, and makes a proxy that fails to
-start exit instead of hanging. The images pick up an OpenSSL fix in their `eclipse-temurin` base, and gRPC,
-netty-tcnative, and Kotlin are updated; the [changelog](CHANGELOG.md) has the full list.
+start exit instead of hanging. The images move to the Ubuntu 24.04 variant of their `eclipse-temurin` base, which
+is clear of an OpenSSL vulnerability, and gRPC, netty-tcnative, and Kotlin are updated; the [changelog](CHANGELOG.md)
+has the full list.
 
 Version 4.2.0 (released 2026-09-26) moves the proxy and agent to the Prometheus Java client 1.x, replacing the
 unmaintained 0.x client. Every `proxy_*` and `agent_*` metric keeps its name, labels, and buckets, but the

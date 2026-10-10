@@ -8,8 +8,9 @@ _Released 2026-10-08_
 
 A smaller release that adds three opt-in JVM metric groups, fixes two bugs, and updates dependencies. The dashboard
 now shows each agent's real address, and a proxy that fails to start now exits instead of hanging. The proxy and
-agent images pick up an OpenSSL fix in their base image. Nothing needs to change to upgrade: the new metric groups
-are off by default.
+agent images move to the Ubuntu 24.04 variant of their base image, which is clear of an OpenSSL vulnerability and
+of a bundled binary that vulnerability scanners flag. Nothing needs to change to upgrade: the new metric groups are
+off by default.
 
 ### More JVM metrics
 
@@ -50,14 +51,19 @@ Three more JVM metric groups can be turned on under `proxy.metrics` and `agent.m
   then publishes to Maven Central and Docker Hub and verifies the images.
 - CI checks both coverage floors in one step, which saves a full test run per build now that Kover no longer mixes
   up the two coverage reports when they're built together.
+- A weekly workflow deletes the GitHub Actions caches no run can use again (old Trivy vulnerability databases and
+  the caches of closed pull requests), so the repository stays under GitHub's 10 GB cache limit without losing the
+  Gradle caches CI builds from.
 
 ### Dependency updates
 
 Runtime: common-utils 5.0.0 → 5.1.1, grpc 1.84.0 → 1.84.2, netty-tcnative 2.0.81.Final → 2.0.84.Final (ahead
 of the version grpc is tested with, for BoringSSL fixes), Kotlin 2.4.20 → 2.4.21, and Logback 1.6.4 → 1.6.5. The
-proxy and agent images move to a rebuilt `eclipse-temurin:25-jre` base that fixes an OpenSSL vulnerability
-(CVE-2026-84782). Build only: Gradle 9.8.0 → 9.8.1, the shared convention plugins 1.1.6 → 1.1.7, the BuildConfig
-plugin 6.1.1 → 6.1.2, Kover 0.9.9 → 0.9.11, and the versions plugin 0.64.0 → 0.65.0. The documentation site's
+proxy and agent images move from the `eclipse-temurin:25-jre` base to `25-jre-noble`, the same JDK on Ubuntu 24.04
+LTS instead of 26.04: it's clear of an OpenSSL vulnerability (CVE-2026-84782), and it doesn't include the `pebble`
+binary that Ubuntu 26.04 bundles, whose Go standard library vulnerability scanners flag. Build only: Gradle
+9.8.0 → 9.8.1, the shared convention plugins 1.1.6 → 1.1.7, the BuildConfig plugin 6.1.1 → 6.1.2,
+Kover 0.9.9 → 0.9.11, and the versions plugin 0.64.0 → 0.65.0. The documentation site's
 Python lock picks up Zensical 0.0.65 → 0.0.68.
 
 ---
