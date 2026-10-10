@@ -1,9 +1,12 @@
 # Pinned by digest for reproducible builds (tag kept for readability). Dependabot bumps the digest to pick up
-# base-image security patches; to check it by hand: docker buildx imagetools inspect eclipse-temurin:25-jre
+# base-image security patches; to check it by hand: docker buildx imagetools inspect eclipse-temurin:25-jre-noble
+# The -noble (Ubuntu 24.04 LTS) variant, not the default 25-jre tag: Ubuntu 26.04 bundles Canonical's pebble, a Go
+# binary the images never run but whose Go stdlib CVEs fail the Trivy scan, and Adoptium won't remove it
+# (adoptium/containers#1064). The JRE is the same Temurin build in both.
 # eclipse-temurin (Ubuntu-based) publishes amd64, arm64, s390x, and ppc64le manifests, so the full
 # multi-arch `make docker-push` platform set resolves; Alpine JRE images cover only amd64/arm64.
 # Java 25 (LTS) runtime; the fat JAR is Java 17 bytecode, which runs unchanged on the newer JRE.
-FROM eclipse-temurin:25-jre@sha256:fcd7fd7b387f94bb2ac461478a7436ad8e349924c374ea8313919624dceae636
+FROM eclipse-temurin:25-jre-noble@sha256:d9a39a23634650173f1e2bbc176227af9728587ecf0f4b62d53e9355cd7a19ab
 LABEL maintainer="Paul Ambrose <pambrose@mac.com>"
 
 # Define the user to use in this instance to prevent using root that even in a container, can be a security risk.
