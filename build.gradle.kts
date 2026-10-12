@@ -519,13 +519,18 @@ fun Project.configureVersions() {
 
   fun isNonStable(version: String): Boolean = preReleaseQualifier.containsMatchIn(version)
 
+  // A full Git commit hash. grpc-kotlin published one to Maven Central as a version
+  // (6f774052…), which the plugin ranks above every numbered release.
+  val commitHash = Regex("""[0-9a-f]{40}""", RegexOption.IGNORE_CASE)
+
   tasks.withType<DependencyUpdatesTask>().configureEach {
     notCompatibleWithConfigurationCache("the dependency updates plugin is not compatible with the configuration cache")
-    // Reject a pre-release candidate only when the current version is stable. For
-    // dependencies we intentionally track on a pre-release line (e.g. a detekt
-    // alpha), newer pre-releases are still surfaced as available updates.
+    // Reject a commit-hash candidate always, and a pre-release candidate only when the
+    // current version is stable. For dependencies we intentionally track on a pre-release
+    // line (e.g. a detekt alpha), newer pre-releases are still surfaced as available updates.
     rejectVersionIf {
-      isNonStable(candidate.version) && !isNonStable(currentVersion)
+      commitHash.matches(candidate.version) ||
+        (isNonStable(candidate.version) && !isNonStable(currentVersion))
     }
 
     // Prints only what is behind, and what could not be checked. The plugin's own report, which `make versions-all`
