@@ -54,6 +54,8 @@ Three more JVM metric groups can be turned on under `proxy.metrics` and `agent.m
 - A weekly workflow deletes the GitHub Actions caches no run can use again (old Trivy vulnerability databases and
   the caches of closed pull requests), so the repository stays under GitHub's 10 GB cache limit without losing the
   Gradle caches CI builds from.
+- The image scan uploads only HIGH and CRITICAL findings to the repository's code scanning alerts, as intended; it
+  had been uploading every LOW and MEDIUM finding in the base image too.
 
 ### Dependency updates
 
