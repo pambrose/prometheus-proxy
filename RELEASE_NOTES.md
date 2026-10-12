@@ -66,7 +66,7 @@ LTS instead of 26.04: it's clear of an OpenSSL vulnerability (CVE-2026-84782), a
 binary that Ubuntu 26.04 bundles, whose Go standard library vulnerability scanners flag. Build only: Gradle
 9.8.0 → 9.8.1, the shared convention plugins 1.1.6 → 1.1.7, the BuildConfig plugin 6.1.1 → 6.1.2,
 Kover 0.9.9 → 0.9.11, the taskinfo plugin 3.0.2 → 3.1.0, and the versions plugin 0.64.0 → 0.66.0. The
-documentation site's Python lock picks up Zensical 0.0.65 → 0.0.68, and the workflows' pinned GitHub Actions are
+documentation site's Python lock picks up Zensical 0.0.65 → 0.0.70, and the workflows' pinned GitHub Actions are
 updated (setup-gradle 6.4.0, upload-artifact 7.0.2, kind-action 1.15.1).
 
 ---
