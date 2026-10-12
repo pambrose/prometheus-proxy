@@ -115,7 +115,7 @@ step 2's list of hard-coded version literals; keep the two in step.
 ## Testing
 
 - **Coverage**: kotlinx-kover. HTML report: `./gradlew koverHtmlReport`. XML report (CI): `./gradlew koverXmlReport`. Console summary: `./gradlew koverLog` (also runs after `koverXmlReport` / `koverVerify` via `onCheck = true`). Generated gRPC stubs, `BuildConfig`, and `ConfigVals` are excluded from report statistics (configured in `build.gradle.kts` `configureCoverage()`). `koverVerify` enforces the total line and branch floors; `koverVerifyPerClass` (the `perClass` report variant) enforces a per-class line floor that skips compiler-generated lambda classes and the `Proxy`/`Agent` entry points, so a new class needs its own tests. Both floors run in one invocation (`./gradlew koverVerify koverVerifyPerClass`, as in CI and `make coverage-verify`); keep Kover at 0.9.10 or later, since 0.9.9 leaked one report variant's filters into another built in the same run.
-- **JVMs**: main code compiles for Java 17 (`jvm` in `libs.versions.toml`), the floor the published artifact supports; the `Test` tasks run on a Java 25 launcher (`testJvm`), the runtime the Docker images ship. The foojay resolver provisions either toolchain when it isn't installed.
+- **JVMs**: main code compiles for Java 17 (`jvm` in `libs.versions.toml`), the floor the published artifact supports; the `Test` tasks run on a Java 25 launcher (`testJvm`), the runtime the Docker images ship. The images build on `eclipse-temurin:25-jre-noble`; keep the `-noble` tag, since the default `25-jre` is Ubuntu 26.04, which bundles Canonical's `pebble`, a Go binary whose CVEs fail the required `image-scan` check. The foojay resolver provisions either toolchain when it isn't installed.
 
 ### Test Structure
 

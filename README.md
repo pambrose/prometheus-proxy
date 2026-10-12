@@ -36,7 +36,7 @@ behind a firewall and preserves the native pull-based model architecture.
 
 ## ✨ New Features
 
-Version 4.3.0 (released 2026-10-08) adds three opt-in JVM metric groups (buffer pools, JIT compilation, and native
+Version 4.3.0 (released 2026-10-12) adds three opt-in JVM metric groups (buffer pools, JIT compilation, and native
 memory), shows each agent's real address on the dashboard instead of `Unknown`, and makes a proxy that fails to
 start exit instead of hanging. The images move to the Ubuntu 24.04 variant of their `eclipse-temurin` base, which
 is clear of an OpenSSL vulnerability, and gRPC, netty-tcnative, and Kotlin are updated; the [changelog](CHANGELOG.md)
