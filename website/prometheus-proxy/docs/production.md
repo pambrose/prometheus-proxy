@@ -38,6 +38,11 @@ In production, run the proxy and agents under a supervisor that starts them at b
 they exit. `nohup` keeps a process running after you log out, but nothing restarts it, so don't rely on it
 here.
 
+A proxy that can't start, for example because one of its ports is already taken, logs the reason and exits with
+status 1, so the supervisor's restart policy retries it. Before 4.3.0 it logged the error but kept running, holding
+its admin and metrics ports, so no restart policy ever fired. See
+[The proxy exits at startup](troubleshooting.md#the-proxy-exits-at-startup).
+
 - **Kubernetes** restarts a failed container and reschedules its pod. See [Kubernetes](kubernetes.md).
 - **Docker** does it with `--restart unless-stopped`, or `restart: unless-stopped` in Compose. See
   [Running in the Background](docker.md#running-in-the-background).

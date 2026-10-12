@@ -5,9 +5,25 @@ The version is defined once in `gradle.properties` (`version=…`) and read from
 `BuildConfig.BUILD_TIME` are generated automatically on each build, so there is no release date to edit
 by hand.
 
+Steps 1-3 are edits to merge to `master`. After that, `make release` runs steps 4-6 and 8 from a clean, up-to-date
+`master` checkout. It first runs `make release-check`, which publishes nothing and fails unless:
+
+- the working tree is clean, on `master`, and matches `origin/master`;
+- every GitHub CI check for that commit has passed;
+- both changelogs have a section for the version, and every file step 2 lists mentions it;
+- the version isn't a pre-release, its tag (if one exists) points at this commit, and it isn't already on Maven
+  Central or Docker Hub;
+- the GPG setup `publish-maven-central` needs is in place, and Docker is running.
+
+It then runs `make all-tests` and `make distro`, asks once, publishes to Maven Central and Docker Hub, and checks the
+published images with `make docker-verify`. It ends by printing the GitHub release (step 7) and Homebrew (step 9)
+steps, which stay manual. Run `make release-check` on its own to see what's still missing. If a release stops after
+publishing somewhere, finish it with the remaining targets, since `release-check` refuses a version that is already
+published.
+
 1) Bump `version` in `gradle.properties` (the single source of truth).
 
-2) Update the `4.2.0` literals to the new version everywhere they are hard-coded
+2) Update the `4.3.0` literals to the new version everywhere they are hard-coded
    (`git grep -n` for the outgoing version finds them all):
    - `README.md` — the Docker tag examples and the Maven Central dependency block. Also add a summary
      paragraph for the new version at the top of the **New Features** section; the earlier releases'
@@ -22,6 +38,9 @@ by hand.
      `KubernetesExamples.txt` — snippet sources included by the website's Docker, Embedded Agent, and
      Kubernetes pages, so the published site shows whatever version is here.
    - This step, and the matching line in `.claude/skills/publishing-release/SKILL.md`.
+
+   `RELEASE_VERSION_FILES` in the `Makefile` lists these files for `make release-check`; keep it in step with this
+   list.
 
    Leave historical and illustrative mentions alone: `CHANGELOG.md`, `RELEASE_NOTES.md`,
    `docs/archive/`, the per-feature release annotations in `llms.txt`, the release reference in

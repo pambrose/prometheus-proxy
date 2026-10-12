@@ -33,6 +33,22 @@ Before diving into a specific symptom, gather signal:
 
 ---
 
+## The proxy exits at startup
+
+### `java.net.BindException: Address already in use`
+
+Another process already listens on one of the proxy's ports: the HTTP port Prometheus scrapes (default `8080`),
+the agent gRPC port (`50051`), or, when they're enabled, the admin (`8092`), metrics (`8082`), or dashboard
+(`8094`) port. The proxy logs the exception and exits with status 1, so a supervisor's restart policy retries it;
+before 4.3.0 it kept running instead.
+
+- Find what holds the port: `lsof -nP -iTCP:8080 -sTCP:LISTEN` (macOS, Linux) or `ss -ltnp 'sport = :8080'`
+  (Linux).
+- Stop that process, or move the proxy to a free port with the matching option in the
+  [CLI Reference](cli-reference.md).
+
+---
+
 ## Agent can't connect to the proxy
 
 ### `Address types of NameResolver 'unix' ... not supported by transport`

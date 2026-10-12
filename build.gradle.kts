@@ -128,7 +128,7 @@ configurations.configureEach {
   resolutionStrategy.eachDependency {
     if (requested.group == "io.netty" && !requested.name.startsWith("netty-tcnative")) {
       useVersion(nettyVersion)
-      because("grpc-netty 1.84.1's Netty 4.2.16.Final has CVE-2026-75595")
+      because("grpc-netty 1.84.2's Netty 4.2.16.Final has CVE-2026-75595")
     }
   }
 }
@@ -505,24 +505,6 @@ fun Project.configureCoverage() {
           }
         }
       }
-    }
-  }
-
-  // Kover 0.9.9 applies one report variant's filters to every Kover report built in the same Gradle invocation, so
-  // running the perClass tasks alongside the total ones silently corrupts the total report -- and with it the total
-  // floors and the Codecov upload. The per-class check therefore runs as its own invocation (a separate ci.yml step and
-  // a second `make coverage-verify` command), and this guard fails fast if the two are ever requested together.
-  val totalKoverTasks =
-    setOf("koverXmlReport", "koverHtmlReport", "koverBinaryReport", "koverVerify", "koverCachedVerify", "koverLog")
-  gradle.taskGraph.whenReady {
-    val names = allTasks.map { it.name }
-    val perClass = names.filter { it.startsWith("kover") && it.endsWith("PerClass") }
-    val total = names.filter { it in totalKoverTasks }
-    if (perClass.isNotEmpty() && total.isNotEmpty()) {
-      throw GradleException(
-        "Run ${perClass.joinToString()} in a separate Gradle invocation from ${total.joinToString()}: Kover 0.9.9 " +
-          "applies one report variant's filters to every report built in the same run, corrupting the total report.",
-      )
     }
   }
 }

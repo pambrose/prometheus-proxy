@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file.
 
 ---
 
-## [Unreleased]
+## [4.3.0] - 2026-10-12
 
 ### New Features
 
@@ -18,16 +18,36 @@ All notable changes to this project are documented in this file.
 ### Documentation
 
 - The README's Security & TLS section and `llms.txt` point to `SECURITY.md` and GitHub's private vulnerability reporting, as the website's Security page does
+- The README's Built-in Metrics section and `llms.txt` describe the opt-in JVM metric groups, including the three new ones
+- `docs/TESTING.md` names `TestUtils`, where the harness's `startProxy()` and `startAgent()` helpers live, instead of a `HarnessSupport` file that doesn't exist
+- The website covers this release's fixes: the Dashboard page says what an agent's remote address shows (`host:port`, or `Unknown` with the transport filter disabled), Running in Production notes that a proxy that can't start now exits with status 1 for its supervisor to restart, and Troubleshooting gains a section for the `BindException` behind that. The Monitoring page dates the three new JVM metric groups
 
 ### Build & Tooling
 
 - The nginx reverse-proxy example (`nginx/docker/nginx.conf`) enables HTTP/2 with `http2 on;` instead of the `listen ... http2` parameter, which nginx has deprecated since 1.25.1 and warned about at every start
 - The container tests no longer leave a dangling ~591MB proxy and agent image behind on every run. The fat jars are never byte-identical (`BuildConfig.BUILD_TIME` changes each build), so each run rebuilt the images and moved their stable `prometheus-proxy-test/*` tags, orphaning the previous build. `ContainerTestSupport` now removes the replaced image and its untagged classic-builder parents once the tag has moved
+- Audit the GitHub Actions workflows and `.github/dependabot.yml` with zizmor 1.30.1: a new `zizmor` workflow fails a pull request on any finding and annotates it on the diff, and uploads the findings from `master`, a weekly run, and manual runs to code scanning; `make zizmor` runs the same digest-pinned image locally, with the online audits when `GH_TOKEN` or a `gh` login supplies a token. Fix the 16 findings it raised: every `actions/checkout` sets `persist-credentials: false`, so the job's token isn't left in `.git/config` for later steps or uploaded artifacts, and each Dependabot update waits a 7-day `cooldown` after its release (Dependabot security updates aren't delayed)
+- `make release` gates a release before publishing anything: `make release-check` fails unless the checkout is a clean, up-to-date `master` whose GitHub CI checks have all passed, both changelogs have a section for the version and every file step 2 of `docs/RELEASE.md` bumps names it, the version isn't a pre-release, tagged elsewhere, or already on Maven Central or Docker Hub, and the GPG setup and Docker are ready. `release` then runs `make all-tests` and `make distro`, asks once, publishes to Maven Central and Docker Hub, and checks with the new `make docker-verify` that both images carry every platform and `:latest` matches the version. It used to build and push the images with no checks. The GitHub release and Homebrew tap stay manual; `release` prints both steps
+- `CLAUDE.md` documents the conventions the `zizmor` check enforces, the release flow, and the `BaseOptions` resolve helpers new options should use
+- Run both coverage floors in one Gradle invocation. Kover 0.9.9 gave a report variant built in the same run as another the other's filters, so `koverVerifyPerClass` ran on its own: a second CI step, which also re-ran the whole test suite, a second `make coverage-verify` command, and a build guard that refused the combination. With Kover 0.9.11 the reports come out the same either way (checked against 0.9.9, which reproduces the leak), so the guard is gone, CI runs `koverVerify koverVerifyPerClass` in its main test step, and `libs.versions.toml` notes not to go below 0.9.10
+- Add a weekly `Cache Cleanup` workflow (`.github/workflows/cache-cleanup.yml`) that deletes the GitHub Actions caches no run can use again: every dated Trivy vulnerability database on `master` but the newest (about 1 GB each, a new one each day the scan runs), and the caches of closed pull requests. The caches had grown past GitHub's 10 GB limit, where its least-recently-used eviction can reach the Gradle caches on `master`, which the workflow leaves alone. It treats cache keys as untrusted, since a fork's pull request can save a cache under any key, and runs with only `actions: write` and `pull-requests: read`
+- The Security workflow uploads only HIGH and CRITICAL image findings to code scanning, as its comment always said. trivy-action drops the `severity` filter for SARIF output unless `limit-severities-for-sarif` is set, so every scan from `master` and the weekly run also uploaded the base image's LOW and MEDIUM findings, most of them with no fix: 99 open Trivy alerts by 2026-10-12. The step that fails a pull request was always filtered
 
 ### Dependencies
 
-- Update common-utils 5.0.0 → 5.1.0, whose `MetricsConfig` carries the three new JVM metric flags
-- Update the BuildConfig plugin 6.1.1 → 6.1.2
+- Update common-utils 5.0.0 → 5.1.1, whose `MetricsConfig` carries the three new JVM metric flags
+- Update grpc 1.84.0 → 1.84.2. It still brings Netty 4.2.16.Final, so the Netty 4.2.18.Final override stays
+- Update `netty-tcnative-boringssl-static` 2.0.81.Final → 2.0.84.Final, ahead of the 2.0.81.Final that grpc-java is built and tested with, for BoringSSL native fixes that include a use-after-free on session-key rotation and NUL bytes accepted in SNI names. tcnative 2.0.x keeps its API, so grpc and Netty use it unchanged
+- Update Kotlin 2.4.20 → 2.4.21 and Logback 1.6.4 → 1.6.5
+- Move the proxy and agent images' digest-pinned base from `eclipse-temurin:25-jre` to `eclipse-temurin:25-jre-noble`: the same JDK 25.0.4.1+1 on Ubuntu 24.04 LTS instead of 26.04. It is clear of the OpenSSL CVE-2026-84782 (HIGH) that the 4.2.0 images carried, as is the 2026-10-02 rebuild of `25-jre`, but Ubuntu 26.04 bundles Canonical's `pebble`, a Go binary the images never run, whose Go 1.26.7 standard library Trivy flags for three HIGH CVEs (CVE-2026-78667, CVE-2026-78669, CVE-2026-97031). Adoptium won't remove it (adoptium/containers#1064), so a digest bump couldn't clear them; the noble base doesn't include it. The images still run as the `prometheus` user (UID 1001) and publish the same four platforms
+- Update build tooling: Gradle wrapper 9.8.0 → 9.8.1, the `pambrose-gradle-plugins` convention plugins 1.1.6 → 1.1.7, the BuildConfig plugin 6.1.1 → 6.1.2, Kover 0.9.9 → 0.9.11, the taskinfo plugin 3.0.2 → 3.1.0, and the versions plugin 0.64.0 → 0.66.0
+- Update the GitHub Actions the workflows pin by commit SHA: `gradle/actions/setup-gradle` 6.3.0 → 6.4.0, `actions/upload-artifact` 7.0.1 → 7.0.2, `helm/kind-action` 1.15.0 → 1.15.1, and `anthropics/claude-code-action` 1.0.233 → 1.0.245
+- Update the documentation site's Python dependency lock (`website/uv.lock`): Zensical 0.0.65 → 0.0.68, plus charset-normalizer 3.5.1 → 3.5.2, MarkupSafe 3.0.3 → 3.0.4, platformdirs 4.12.0 → 4.12.3, and tomli 2.4.1 → 2.5.0
+
+### Internal
+
+- Split the functions CodeScene rated hardest to maintain into focused helpers, with no behavior change: path registration and removal in `ProxyPathManager` (whose `addPath` takes `targetUrl`, `pathSource` and `identityName` as a `PathMetadata`, and whose `removePath` and disconnect sweep share one `dropAgentFromPath`), the discovery reconcile in `AgentPathManager`, the connection loop and heartbeat in `Agent`, the scrape-request and chunked-response streams in `ProxyServiceImpl`, and option resolution in `AgentOptions` and `ProxyOptions`, which now go through internal `resolveIntOption` / `resolveLongOption` / `resolveStringOption` helpers in `BaseOptions`. `ProxyRegistry.tla`'s `Unregister` action uses the removal rule `removePath` now shares with the sweep, and `make tla-checks` still passes. The agent's startup log no longer prints `scrapeTimeoutSecs` twice
+- Remove the unused `SslSettings.getSslContext`
 
 ## [4.2.0] - 2026-09-26
 

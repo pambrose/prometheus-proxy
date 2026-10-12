@@ -70,6 +70,7 @@ Key RPCs:
 - **Rejected paths** (4.1.0): A proxy rejecting one static path no longer disconnects the agent: the path is skipped and the rest register, and a rejection that can clear (a path another identity's live agent holds) is retried with backoff. The `PathRejectionCause` enum tells the agent which is which
 - **Scrape hardening** (4.1.0): The agent follows a redirect only within the target's own origin, redacts credentials from target URLs everywhere, and stops a scrape at Prometheus's own timeout (forwarded from `X-Prometheus-Scrape-Timeout-Seconds`). Service discovery drops `__`-prefixed agent labels (and `job` / `instance` with `reserveJobAndInstanceLabels`), and the scrape port serves only exposition content types, with `nosniff` and a sandbox CSP. gRPC reflection is off by default (`proxy.reflectionDisabled`)
 - **Scrape outcomes** (4.1.0): A scrape the proxy fails itself is `agent_disconnected` or `proxy_stopped` (503), `invalid_response` (502), or `client_cancelled` (499) when Prometheus gives up first, no longer `upstream_error`; see "Before you upgrade" in the release notes
+- **More JVM metric groups** (4.3.0): Three more opt-in groups under `proxy.metrics` / `agent.metrics`, off by default like the other JVM exports: `bufferPoolExportsEnabled` (`jvm_buffer_pool_*`, direct and mapped NIO buffers), `compilationExportsEnabled` (`jvm_compilation_time_seconds_total`), and `nativeMemoryExportsEnabled` (`jvm_native_memory_*`), which exports nothing unless the JVM runs with `-XX:NativeMemoryTracking=summary`
 
 ### Public API Surface
 
@@ -123,17 +124,17 @@ brew services stop prometheus-agent      # stop, and no longer start at login
 
 ```bash
 # Start proxy
-docker run --rm -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.2.0
+docker run --rm -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.3.0
 
 # Start agent
 docker run --rm \
   --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-  pambrose/prometheus-agent:4.2.0
+  pambrose/prometheus-agent:4.3.0
 
 # Both run in the foreground until Ctrl+C. To run one in the background, restarted if it exits or
 # Docker restarts (Docker doesn't allow --rm with --restart):
 docker run --detach --name prometheus-proxy --restart unless-stopped \
-  -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.2.0
+  -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.3.0
 docker logs --follow prometheus-proxy                          # follow its log
 docker stop prometheus-proxy && docker rm prometheus-proxy     # stop and remove it
 ```
@@ -238,7 +239,7 @@ The fat JARs include `src/shadow/resources/META-INF/services/io.grpc.NameResolve
 - **Configuration**: Typesafe Config (HOCON)
 - **Metrics**: Prometheus Java client 1.x (`io.prometheus:prometheus-metrics-*`), through common-utils' `prometheus-utils`
 - **Testing**: Kotest + JUnit 5 + MockK; a Testcontainers suite that runs Prometheus → proxy → agent → endpoint from the Docker images (`make container-tests`); Lincheck concurrency specs (`make lincheck-tests`); and TLA+ models of the proxy's registry and the agent's failover (`make tla-checks`)
-- **Code Quality**: kotlinter + detekt
+- **Code Quality**: kotlinter + detekt; zizmor audits the GitHub Actions workflows (`make zizmor`)
 
 ## Maven Central
 
@@ -251,7 +252,7 @@ repositories {
 }
 
 dependencies {
-  implementation("com.pambrose:prometheus-proxy:4.2.0")
+  implementation("com.pambrose:prometheus-proxy:4.3.0")
 }
 ```
 

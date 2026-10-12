@@ -27,6 +27,8 @@ jobs:
       HARNESS_CONFIG: MINI
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
@@ -43,13 +45,8 @@ jobs:
 
       # --continue lets the kover report tasks run even if some tests fail, preserving the
       # prior behavior where coverage was still uploaded on test failure.
-      - name: Run tests and generate coverage report
-        run: ./gradlew --continue test koverVerify koverXmlReport koverLog
-
-      # A separate Gradle invocation on purpose: Kover 0.9.9 applies one report variant's filters to every report built
-      # in the same run, which would corrupt the total report above (see configureCoverage() in build.gradle.kts).
-      - name: Verify per-class coverage
-        run: ./gradlew koverVerifyPerClass
+      - name: Run tests, verify coverage, and generate the coverage report
+        run: ./gradlew --continue test koverVerify koverVerifyPerClass koverXmlReport koverLog
 
       - name: Upload test reports on failure
         if: failure()
@@ -80,6 +77,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
@@ -95,6 +94,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Check the alerting rules
         run: make check-rules
 
@@ -105,5 +106,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Lint the charts and validate their manifests
         run: make helm-lint

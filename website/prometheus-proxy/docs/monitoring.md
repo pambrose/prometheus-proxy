@@ -66,7 +66,7 @@ last (`jvm_memory_used_bytes`, not `jvm_memory_bytes_used`; `jvm_memory_pool_use
 `jvm_memory_pool_bytes_used`; the same for `committed`, `max` and `init`), `jvm_info` is `jvm_runtime_info`, and
 `memoryPoolsExportsEnabled` also adds `jvm_memory_pool_allocated_bytes_total`.
 
-Three more groups are off by default:
+Since 4.3.0, three more groups are available, also off by default:
 
 - `bufferPoolExportsEnabled` adds `jvm_buffer_pool_used_bytes`, `jvm_buffer_pool_capacity_bytes` and
   `jvm_buffer_pool_used_buffers`, by `pool` (`direct` and `mapped`): the memory the JVM's NIO buffer pools hold
