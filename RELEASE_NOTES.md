@@ -2,6 +2,17 @@
 
 ---
 
+## Unreleased
+
+_Not yet released_
+
+### Build and tooling
+
+- The weekly cleanup workflow also deletes GitHub Actions runs older than 90 days, whose logs have already expired,
+  and runs that were skipped, so the Actions page lists only recent runs.
+
+---
+
 ## 4.3.0
 
 _Released 2026-10-12_

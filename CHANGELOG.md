@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [Unreleased]
+
+### Build & Tooling
+
+- The weekly cache cleanup workflow (`.github/workflows/cache-cleanup.yml`), renamed `Actions Cleanup`, also deletes the workflow runs older than the repository's 90-day log retention, which stayed listed with no logs, and the skipped runs (a Claude Code comment trigger that didn't mention `@claude` never runs a job). It lists only completed runs, so a run in progress is never deleted, and reads the whole list before deleting anything. A one-off pass with the same script deleted 498 of the repository's 663 runs
+
 ## [4.3.0] - 2026-10-12
 
 ### New Features

@@ -1,4 +1,4 @@
-name: Cache Cleanup
+name: Actions Cleanup
 
 # Deletes the GitHub Actions caches that no run can use again, so the repository stays under GitHub's 10 GB cache limit
 # without its least-recently-used eviction reaching master's Gradle caches: every dated Trivy vulnerability database
@@ -7,8 +7,10 @@ name: Cache Cleanup
 # pull request). Master's Gradle caches are left to setup-gradle and GitHub's 7-day eviction, since deleting them would
 # make the next builds start cold. Runs weekly after the Monday Security and zizmor runs, so the database kept is the
 # one that week's scan saved. A schedule rather than a pull request's closed event: pull_request gives Dependabot pull
-# requests a read-only token, and pull_request_target is a trigger zizmor flags. No untrusted event payloads are
-# referenced.
+# requests a read-only token, and pull_request_target is a trigger zizmor flags. It also deletes the workflow runs older
+# than the repository's 90-day log retention, which leaves them listed with no logs, and the runs that were skipped
+# (a Claude Code comment trigger that didn't mention @claude never runs a job). The file keeps its cache-cleanup.yml
+# name, since GitHub identifies a workflow by its path. No untrusted event payloads are referenced.
 on:
   schedule:
     - cron: '17 6 * * 1'
@@ -26,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      actions: write # to list and delete caches
+      actions: write # to list and delete caches and workflow runs
       pull-requests: read # to list the open pull requests
     # gh reads the repository from GH_REPO, so no checkout is needed.
     env:
@@ -66,3 +68,21 @@ jobs:
               echo "Deleting $key ($id) of closed pull request #$pr"
               gh cache delete "$id" || echo "::warning::Could not delete $key ($id)"
             done
+
+      # Only completed runs are listed, so this run and any run still in progress are never deleted. The whole list is
+      # read before the first delete, since deleting while paging would shift later runs onto pages already read. A run's
+      # name can come from a fork's workflow file, so it is read from the same kind of @tsv record, after its id.
+      - name: Delete the runs older than 90 days and the skipped runs
+        run: |
+          # shellcheck disable=SC2016 # $cutoff is a jq variable inside the --jq program, not a shell one
+          runs=$(gh api --paginate "repos/$GH_REPO/actions/runs?status=completed&per_page=100" --jq '
+            (now - 90 * 86400 | todate) as $cutoff
+            | .workflow_runs[]
+            | select(.created_at < $cutoff or .conclusion == "skipped")
+            | [.id, .created_at, .conclusion, .name] | @tsv')
+          echo "Deleting $(grep -c . <<< "$runs") runs"
+          while IFS=$'\t' read -r id created conclusion name; do
+            [[ -n $id ]] || continue
+            echo "Deleting run $id: $name ($created, $conclusion)"
+            gh api -X DELETE "repos/$GH_REPO/actions/runs/$id" || echo "::warning::Could not delete run $id"
+          done <<< "$runs"
