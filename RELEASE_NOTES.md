@@ -65,8 +65,8 @@ proxy and agent images move from the `eclipse-temurin:25-jre` base to `25-jre-no
 LTS instead of 26.04: it's clear of an OpenSSL vulnerability (CVE-2026-84782), and it doesn't include the `pebble`
 binary that Ubuntu 26.04 bundles, whose Go standard library vulnerability scanners flag. Build only: Gradle
 9.8.0 → 9.8.1, the shared convention plugins 1.1.6 → 1.1.7, the BuildConfig plugin 6.1.1 → 6.1.2,
-Kover 0.9.9 → 0.9.11, and the versions plugin 0.64.0 → 0.65.0. The documentation site's
-Python lock picks up Zensical 0.0.65 → 0.0.68.
+Kover 0.9.9 → 0.9.11, the taskinfo plugin 3.0.2 → 3.1.0, and the versions plugin 0.64.0 → 0.66.0. The
+documentation site's Python lock picks up Zensical 0.0.65 → 0.0.68.
 
 ---
 
