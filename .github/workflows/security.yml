@@ -64,7 +64,9 @@ jobs:
           format: table
 
       # Pull requests only print the table above: uploading needs a token that fork and Dependabot pull requests lack.
-      # The upload keeps HIGH and CRITICAL findings that have no fix yet, so they stay visible.
+      # The upload keeps HIGH and CRITICAL findings that have no fix yet, so they stay visible. trivy-action drops the
+      # severity filter for SARIF output unless limit-severities-for-sarif is set, which uploaded every LOW and MEDIUM
+      # finding in the base image too.
       - name: Write the findings as SARIF
         if: always() && steps.image.outcome == 'success' && github.event_name != 'pull_request'
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -72,6 +74,7 @@ jobs:
           image-ref: prometheus-${{ matrix.component }}:scan
           scanners: vuln
           severity: HIGH,CRITICAL
+          limit-severities-for-sarif: true
           format: sarif
           output: trivy-${{ matrix.component }}.sarif
 
