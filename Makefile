@@ -7,7 +7,7 @@
         coverage-open coverage-packages coverage-clean reports gh-docs \
         gh-status tsconfig distro docker-push docker-verify homebrew-formulae release release-check _confirm-release \
         tree depends lint detekt detekt-baseline \
-        versions kdocs clean-site check-site upgrade-site site \
+        versions versions-all kdocs clean-site check-site upgrade-site site \
         publish-local publish-local-snapshot publish-snapshot publish-maven-central \
         upgrade-wrapper _check-gpg-env _require-version _require-gradle-version
 
@@ -426,8 +426,15 @@ tree:  ## Print Gradle dependency tree (quiet)
 depends:  ## Print Gradle dependency report
 	$(GRADLE) dependencies
 
-versions:  ## Check for newer dependency versions
+# dependencyUpdates is marked incompatible with the configuration cache (build.gradle.kts), so a run with the cache on
+# builds an entry only to discard it, and says so. --no-configuration-cache skips the cache for this run instead.
+# build.gradle.kts gives the task a formatter that lists only what is behind; versions-all names the plugin's own plain
+# report, which also lists everything up to date.
+versions:  ## List the dependencies with newer versions, and any that could not be checked
 	$(GRADLE) dependencyUpdates --no-configuration-cache --no-parallel
+
+versions-all:  ## The plugin's full dependency report, up-to-date dependencies included
+	$(GRADLE) dependencyUpdates --no-configuration-cache --no-parallel --output-formatter=plain
 
 kdocs:  ## Generate Dokka HTML site
 	$(GRADLE) dokkaGeneratePublicationHtml
