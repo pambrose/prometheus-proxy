@@ -8,8 +8,8 @@
 [![CodeScene Average Code Health](https://codescene.io/projects/85750/status-badges/average-code-health)](https://codescene.io/projects/85750)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
-![prometheus-agent Stats](https://dockerhub-readme-stats.vercel.app/api?image=pambrose/prometheus-agent&label=Docker%20Stats&hide=stars)
-![prometheus-proxy Stats](https://dockerhub-readme-stats.vercel.app/api?image=pambrose/prometheus-proxy&label=Docker%20Stats&hide=stars)
+[![prometheus-agent Stats](https://dockerhub-readme-stats.vercel.app/api?image=pambrose/prometheus-agent&label=Docker%20Stats&hide=stars)](https://hub.docker.com/r/pambrose/prometheus-agent)
+[![prometheus-proxy Stats](https://dockerhub-readme-stats.vercel.app/api?image=pambrose/prometheus-proxy&label=Docker%20Stats&hide=stars)](https://hub.docker.com/r/pambrose/prometheus-proxy)
 
 [Prometheus](https://prometheus.io) is an excellent systems monitoring and alerting toolkit, which uses a pull model for
 collecting metrics. The pull model is problematic when a firewall separates a Prometheus server and its metrics
