@@ -217,7 +217,8 @@ internal class AgentHttpService(
       val contentLength = response.headers[HttpHeaders.ContentLength]?.toLongOrNull()
       if (contentLength != null && contentLength > maxContentLength) {
         val msg = "Content length $contentLength exceeds maximum allowed size $maxContentLength"
-        logger.warn { msg }
+        // Only the log line names the target and scrape; msg is also the failure reason returned to the proxy.
+        logger.warn { "$msg for $safeUrl (scrapeId: ${scrapeRequest.scrapeId})" }
         return ScrapeResults(
           srAgentId = scrapeRequest.agentId,
           srScrapeId = scrapeRequest.scrapeId,
@@ -240,7 +241,7 @@ internal class AgentHttpService(
       val contentByteSize = contentBytes.size.toLong()
       if (contentByteSize > maxContentLength) {
         val msg = "Content size exceeds maximum allowed size of $maxContentLength bytes"
-        logger.warn { msg }
+        logger.warn { "$msg for $safeUrl (scrapeId: ${scrapeRequest.scrapeId})" }
         return ScrapeResults(
           srAgentId = scrapeRequest.agentId,
           srScrapeId = scrapeRequest.scrapeId,

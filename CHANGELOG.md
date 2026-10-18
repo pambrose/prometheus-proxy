@@ -6,6 +6,10 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Bug Fixes
+
+- The agent's two warnings for an oversized scrape (`Content length … exceeds maximum allowed size …` from the `Content-Length` header and `Content size exceeds …` from the body read) name the target URL, sanitized as in the agent's other logs, and the request's `scrapeId`, so an agent serving several paths shows which one failed. The failure reason returned to the proxy when `debugEnabled` is set is unchanged. The proxy's two `Missing ScrapeRequestWrapper` warnings in `ScrapeRequestManager` write `scrapeId:` instead of `scrape_id:`, as its other scrape logs do
+
 ### Build & Tooling
 
 - The weekly cache cleanup workflow (`.github/workflows/cache-cleanup.yml`), renamed `Actions Cleanup`, also deletes the workflow runs older than the repository's 90-day log retention, which stayed listed with no logs, and the skipped runs (a Claude Code comment trigger that didn't mention `@claude` never runs a job). It lists only completed runs, so a run in progress is never deleted, and reads the whole list before deleting anything. A one-off pass with the same script deleted 498 of the repository's 663 runs

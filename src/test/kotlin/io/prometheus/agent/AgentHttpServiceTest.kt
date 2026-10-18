@@ -18,6 +18,7 @@
 
 package io.prometheus.agent
 
+import ch.qos.logback.classic.Level
 import io.kotest.assertions.fail
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
@@ -55,6 +56,7 @@ import io.prometheus.agent.filter.MetricFilter
 import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.common.testConfigVals
 import io.prometheus.common.LOOPBACK_HOST
+import io.prometheus.common.captureLogs
 import io.prometheus.grpc.registerPathResponse
 import io.prometheus.grpc.scrapeRequest
 import io.prometheus.common.startAndAwaitReady
@@ -1537,6 +1539,100 @@ class AgentHttpServiceTest : StringSpec() {
         results.srStatusCode shouldBe HttpStatusCode.PayloadTooLarge.value
         results.srUrl shouldBe ""
         results.srFailureReason shouldBe ""
+
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+    // The 413 warnings must say which target and scrape they are about: an agent serving many paths otherwise
+    // logs a size failure that can't be traced to one. The URL carries a query secret to show it is sanitized.
+    "fetchScrapeUrl Content-Length 413 warning names the sanitized URL and scrapeId" {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
+        routing {
+          get("/metrics") {
+            call.respondText("ok")
+          }
+        }
+      }
+
+      try {
+        val port = server.startAndAwaitReady()
+
+        val mockAgent = createMockAgentWithPaths()
+        val options = mockAgent.options
+        every { options.maxContentLengthMBytes } returns 0
+        val service = AgentHttpService(mockAgent)
+
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics?token=s3cret")
+
+        val request = scrapeRequest {
+          agentId = "agent-1"
+          scrapeId = 204L
+          path = "metrics"
+          accept = ""
+          debugEnabled = false
+          encodedQueryParams = ""
+          authHeader = ""
+        }
+
+        val warning =
+          captureLogs<AgentHttpService> { service.fetchScrapeUrl(request) }
+            .single { it.level == Level.WARN }
+            .formattedMessage
+
+        warning shouldContain "Content length"
+        warning shouldContain "localhost:$port/metrics"
+        warning shouldContain "scrapeId: 204"
+        warning shouldNotContain "s3cret"
+
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+    "fetchScrapeUrl chunked-body 413 warning names the sanitized URL and scrapeId" {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
+        routing {
+          get("/metrics") {
+            call.respondTextWriter {
+              write("a".repeat(2048))
+            }
+          }
+        }
+      }
+
+      try {
+        val port = server.startAndAwaitReady()
+
+        val mockAgent = createMockAgentWithPaths()
+        val options = mockAgent.options
+        every { options.maxContentLengthMBytes } returns 0
+        val service = AgentHttpService(mockAgent)
+
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics?token=s3cret")
+
+        val request = scrapeRequest {
+          agentId = "agent-1"
+          scrapeId = 205L
+          path = "metrics"
+          accept = ""
+          debugEnabled = false
+          encodedQueryParams = ""
+          authHeader = ""
+        }
+
+        val warning =
+          captureLogs<AgentHttpService> { service.fetchScrapeUrl(request) }
+            .single { it.level == Level.WARN }
+            .formattedMessage
+
+        warning shouldContain "Content size"
+        warning shouldContain "localhost:$port/metrics"
+        warning shouldContain "scrapeId: 205"
+        warning shouldNotContain "s3cret"
 
         service.close()
       } finally {

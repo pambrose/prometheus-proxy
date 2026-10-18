@@ -6,6 +6,13 @@
 
 _Not yet released_
 
+### Bug Fixes
+
+- **The agent's warnings about an oversized scrape say which target it was.** They now include the target's URL,
+  with credentials and query values masked, and the scrape's ID, so an agent serving several paths shows which one
+  sent too much data. The proxy's warnings about a scrape it no longer tracks write that ID as `scrapeId:`, as its
+  other log lines do.
+
 ### Build and tooling
 
 - The weekly cleanup workflow also deletes GitHub Actions runs older than 90 days, whose logs have already expired,
