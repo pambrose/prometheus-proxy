@@ -73,7 +73,7 @@ internal class ScrapeRequestManager {
       ?.also { wrapper ->
         wrapper.complete(scrapeResults)
         wrapper.agentContext.markActivityTime(true)
-      } ?: logger.warn { "Missing ScrapeRequestWrapper for scrape_id: $scrapeId (likely timed out)" }
+      } ?: logger.warn { "Missing ScrapeRequestWrapper for scrapeId: $scrapeId (likely timed out)" }
   }
 
   // Completes a request the proxy fails itself, rather than the agent answering it; [failure] gives its outcome label
@@ -95,7 +95,7 @@ internal class ScrapeRequestManager {
           failure,
         )
         wrapper.agentContext.markActivityTime(true)
-      } ?: logger.warn { "failScrapeRequest() missing ScrapeRequestWrapper for scrape_id: $scrapeId" }
+      } ?: logger.warn { "failScrapeRequest() missing ScrapeRequestWrapper for scrapeId: $scrapeId" }
   }
 
   fun failAllScrapeRequests(

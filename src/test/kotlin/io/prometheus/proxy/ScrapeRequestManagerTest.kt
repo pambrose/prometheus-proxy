@@ -290,6 +290,17 @@ class ScrapeRequestManagerTest : StringSpec() {
       manager.scrapeMapSize shouldBe 0
     }
 
+    "failScrapeRequest log message for a missing scrapeId should include it" {
+      val manager = ScrapeRequestManager()
+
+      val relevantLogs =
+        captureLogs<ScrapeRequestManager> {
+          manager.failScrapeRequest(998L, "no such request", ProxyFailure.INVALID_RESPONSE)
+        }.filter { it.message.contains("missing ScrapeRequestWrapper") }
+      relevantLogs shouldHaveSize 1
+      relevantLogs[0].formattedMessage shouldContain "scrapeId: 998"
+    }
+
     // ==================== Bug #15: Double-assignment protection Tests ====================
 
     // Bug #15: If assignScrapeResults is called twice with the same scrapeId (e.g., due
@@ -402,7 +413,7 @@ class ScrapeRequestManagerTest : StringSpec() {
         captureLogs<ScrapeRequestManager> { manager.assignScrapeResults(mockResults) }
           .filter { it.message.contains("Missing ScrapeRequestWrapper") }
       relevantLogs shouldHaveSize 1
-      relevantLogs[0].formattedMessage shouldContain "777"
+      relevantLogs[0].formattedMessage shouldContain "scrapeId: 777"
     }
 
     // ==================== ownerAgentId ====================
