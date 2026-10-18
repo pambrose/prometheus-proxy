@@ -16,6 +16,10 @@ All notable changes to this project are documented in this file.
 - `make versions` lists only the dependencies that are behind (`group:name current -> latest`), any it could not check, and a newer Gradle when there is one, in place of the versions plugin's full report, which listed every up-to-date dependency first: 137 lines for five updates. `build.gradle.kts` gives `dependencyUpdates` an `outputFormatter` for this, since every built-in format prints the full report to the console; `rejectVersionIf` still applies. The new `make versions-all` prints the full report (`--output-formatter=plain`)
 - `make versions` no longer offers grpc-kotlin `1.5.0 -> 6f774052d1d6923f8af2e0023886d69949b695ee`: `rejectVersionIf` drops a candidate that is a full commit hash, which grpc-kotlin published to Maven Central as a version and the plugin ranked above every release
 
+### Dependencies
+
+- Update the GitHub Actions the workflows pin by commit SHA: `github/codeql-action` (`init`, `analyze` and `upload-sarif`) 4.38.2 → 4.38.3, `astral-sh/setup-uv` 10.2.0 → 10.3.0, and `anthropics/claude-code-action` 1.0.245 → 1.0.248
+
 ## [4.3.0] - 2026-10-12
 
 ### New Features

@@ -20,6 +20,11 @@ _Not yet released_
 - `make versions` lists only the dependencies with newer versions, and any it could not check, instead of a report
   that listed every up-to-date dependency first. `make versions-all` prints the full report.
 
+### Dependency updates
+
+Build only: the workflows' pinned GitHub Actions are updated (CodeQL 4.38.3, setup-uv 10.3.0, and
+claude-code-action 1.0.248).
+
 ---
 
 ## 4.3.0
