@@ -23,8 +23,13 @@ _Not yet released_
 
 ### Dependency updates
 
-Build only: the workflows' pinned GitHub Actions are updated (CodeQL 4.38.3, setup-uv 10.3.0, and
-claude-code-action 1.0.248).
+Runtime: grpc 1.84.2 → 1.85.1, with every grpc module now held to the same version (the agent and proxy
+previously ran grpc's Netty transport from 1.84.1, the version common-utils brings), the Prometheus Java client
+1.9.0 → 1.10.0 (`prometheus-metrics-core`, which embedders also get), kotlinx-serialization 1.11.0 → 1.12.0, and
+Jackson 2.22.3 → 2.22.4. Netty stays at 4.2.18.Final, ahead of the 4.2.17.Final grpc 1.85.1
+brings, which has an HTTP/2 denial-of-service vulnerability (CVE-2026-93492). Build only: Gradle 9.8.1 → 9.8.2 and
+Kotest 6.2.5 → 6.2.6. The documentation site's Python lock picks up Zensical 0.0.70 → 0.0.71, and the workflows'
+pinned GitHub Actions are updated (CodeQL 4.38.3, setup-uv 10.3.0, and claude-code-action 1.0.248).
 
 ---
 

@@ -19,6 +19,11 @@ All notable changes to this project are documented in this file.
 
 ### Dependencies
 
+- Update grpc 1.84.2 → 1.85.1, and import the grpc BOM so every grpc-java module resolves to that version. Without it, common-utils' grpc-utils held `grpc-netty` and `grpc-inprocess` at the 1.84.1 it was built with while `grpc-core` moved on, though grpc-java's modules must all match. grpc-netty 1.85.1 brings Netty 4.2.17.Final, which has CVE-2026-93492 (an HTTP/2 HPACK encoder DoS) among the advisories 4.2.18.Final fixes, so the Netty 4.2.18.Final override stays. grpc 1.85 still uses protobuf-java 3.25.9 and is tested with netty-tcnative 2.0.81.Final, so `protoc` and the tcnative 2.0.84.Final pin are unchanged
+- Update the Prometheus Java client (`prometheus-metrics-core`) 1.9.0 → 1.10.0, and import its BOM so the client modules common-utils 5.1.1 brings at 1.9.0 (`prometheus-metrics-instrumentation-jvm`, the exposition formats, and the exporters) resolve to 1.10.0 too
+- Update kotlinx-serialization 1.11.0 → 1.12.0 and Jackson 2.22.3 → 2.22.4
+- Update build tooling: Gradle wrapper 9.8.1 → 9.8.2 and Kotest 6.2.5 → 6.2.6
+- Update the documentation site's Python dependency lock (`website/uv.lock`): Zensical 0.0.70 → 0.0.71, plus certifi 2026.7.22 → 2026.10.18, Markdown 3.11 → 3.11.2, platformdirs 4.13.0 → 4.13.5, and pymdown-extensions 12.2 → 12.3
 - Update the GitHub Actions the workflows pin by commit SHA: `github/codeql-action` (`init`, `analyze` and `upload-sarif`) 4.38.2 → 4.38.3, `astral-sh/setup-uv` 10.2.0 → 10.3.0, and `anthropics/claude-code-action` 1.0.245 → 1.0.248
 
 ## [4.3.0] - 2026-10-12
