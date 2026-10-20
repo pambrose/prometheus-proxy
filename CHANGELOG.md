@@ -14,6 +14,7 @@ All notable changes to this project are documented in this file.
 
 - The weekly cache cleanup workflow (`.github/workflows/cache-cleanup.yml`), renamed `Actions Cleanup`, also deletes the workflow runs older than the repository's 90-day log retention, which stayed listed with no logs, and the skipped runs (a Claude Code comment trigger that didn't mention `@claude` never runs a job). It lists only completed runs, so a run in progress is never deleted, and reads the whole list before deleting anything. A one-off pass with the same script deleted 498 of the repository's 663 runs
 - `make versions` lists only the dependencies that are behind (`group:name current -> latest`), any it could not check, and a newer Gradle when there is one, in place of the versions plugin's full report, which listed every up-to-date dependency first: 137 lines for five updates. `build.gradle.kts` gives `dependencyUpdates` an `outputFormatter` for this, since every built-in format prints the full report to the console; `rejectVersionIf` still applies. The new `make versions-all` prints the full report (`--output-formatter=plain`)
+- Rename `CLAUDE.md` to `AGENTS.md`, the agent-neutral name most coding agents read
 - `make versions` no longer offers grpc-kotlin `1.5.0 -> 6f774052d1d6923f8af2e0023886d69949b695ee`: `rejectVersionIf` drops a candidate that is a full commit hash, which grpc-kotlin published to Maven Central as a version and the plugin ranked above every release
 
 ### Dependencies

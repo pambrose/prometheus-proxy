@@ -19,6 +19,7 @@ _Not yet released_
   and runs that were skipped, so the Actions page lists only recent runs.
 - `make versions` lists only the dependencies with newer versions, and any it could not check, instead of a report
   that listed every up-to-date dependency first. `make versions-all` prints the full report.
+- The instructions for AI coding agents move from `CLAUDE.md` to `AGENTS.md`, which most agents read.
 
 ### Dependency updates
 

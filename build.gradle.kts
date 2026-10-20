@@ -465,7 +465,7 @@ fun Project.configureCoverage() {
         verify {
           // Deliberately NOT onCheck. koverVerify has no way to tell "coverage genuinely regressed" from
           // "no tests ran", so wiring it into `check` fails at 0% for every legitimate test-less
-          // invocation -- `./gradlew build -x test` in CLAUDE.md and `clean build -x test` in ci.yml among
+          // invocation -- `./gradlew build -x test` in AGENTS.md and `clean build -x test` in ci.yml among
           // them. Each would need its own -x koverVerify, which is four places to forget. CI runs this
           // task explicitly alongside the suite (see ci.yml), and `make coverage-verify` runs it locally.
           onCheck = false
