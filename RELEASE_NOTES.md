@@ -20,6 +20,9 @@ _Not yet released_
 - `make versions` lists only the dependencies with newer versions, and any it could not check, instead of a report
   that listed every up-to-date dependency first. `make versions-all` prints the full report.
 - The instructions for AI coding agents move from `CLAUDE.md` to `AGENTS.md`, which most agents read.
+- The Claude Code workflow starts a job only for an `@claude` mention written by the repository owner, an
+  organization member, or a collaborator, and the workflows are audited with zizmor 1.31.1, which flags the
+  comment trigger that workflow uses.
 
 ### Dependency updates
 

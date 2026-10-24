@@ -16,6 +16,7 @@ All notable changes to this project are documented in this file.
 - `make versions` lists only the dependencies that are behind (`group:name current -> latest`), any it could not check, and a newer Gradle when there is one, in place of the versions plugin's full report, which listed every up-to-date dependency first: 137 lines for five updates. `build.gradle.kts` gives `dependencyUpdates` an `outputFormatter` for this, since every built-in format prints the full report to the console; `rejectVersionIf` still applies. The new `make versions-all` prints the full report (`--output-formatter=plain`)
 - Rename `CLAUDE.md` to `AGENTS.md`, the agent-neutral name most coding agents read
 - `make versions` no longer offers grpc-kotlin `1.5.0 -> 6f774052d1d6923f8af2e0023886d69949b695ee`: `rejectVersionIf` drops a candidate that is a full commit hash, which grpc-kotlin published to Maven Central as a version and the plugin ranked above every release
+- Update zizmor 1.30.1 → 1.31.1 (`ZIZMOR_IMAGE` in the `Makefile` and both jobs of the `zizmor` workflow). Its `dangerous-triggers` audit now flags `issue_comment`, which the Claude Code workflow (`.github/workflows/claude.yml`) uses: the trigger stays, with an inline `zizmor: ignore`, and the job now starts only when the comment, review, or issue that mentions `@claude` was written by the repository owner, an organization member, or a collaborator (its `author_association`). Before, anyone's mention started a job, which claude-code-action's write-access check then stopped
 
 ### Dependencies
 
@@ -24,7 +25,7 @@ All notable changes to this project are documented in this file.
 - Update kotlinx-serialization 1.11.0 → 1.12.0 and Jackson 2.22.3 → 2.22.4
 - Update build tooling: Gradle wrapper 9.8.1 → 9.8.2 and Kotest 6.2.5 → 6.2.6
 - Update the documentation site's Python dependency lock (`website/uv.lock`): Zensical 0.0.70 → 0.0.71, plus certifi 2026.7.22 → 2026.10.18, Markdown 3.11 → 3.11.2, platformdirs 4.13.0 → 4.13.5, and pymdown-extensions 12.2 → 12.3
-- Update the GitHub Actions the workflows pin by commit SHA: `github/codeql-action` (`init`, `analyze` and `upload-sarif`) 4.38.2 → 4.39.0, `actions/setup-java` 6.0.1 → 6.1.0, `astral-sh/setup-uv` 10.2.0 → 10.3.0, `zizmorcore/zizmor-action` 0.6.4 → 0.7.1 (still running zizmor 1.30.1, the version the Makefile pins), and `anthropics/claude-code-action` 1.0.245 → 1.0.252
+- Update the GitHub Actions the workflows pin by commit SHA: `github/codeql-action` (`init`, `analyze` and `upload-sarif`) 4.38.2 → 4.39.0, `actions/setup-java` 6.0.1 → 6.1.0, `astral-sh/setup-uv` 10.2.0 → 10.3.0, `zizmorcore/zizmor-action` 0.6.4 → 0.7.1, and `anthropics/claude-code-action` 1.0.245 → 1.0.252
 
 ## [4.3.0] - 2026-10-12
 

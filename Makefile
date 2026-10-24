@@ -59,7 +59,7 @@ CHARTS := prometheus-proxy prometheus-agent
 
 # zizmor audits the GitHub Actions workflows and dependabot.yml. The same version as .github/workflows/zizmor.yml, with
 # the digest zizmor-action pins for it (its support/versions file); update the two together.
-ZIZMOR_IMAGE := ghcr.io/zizmorcore/zizmor:1.30.1@sha256:a2eb396d886c053073405c7a980f2139ba2248ec172243cfa3841e57196e8101
+ZIZMOR_IMAGE := ghcr.io/zizmorcore/zizmor:1.31.1@sha256:42d409dbb851d4c5d35a058cf042b828bea1e3f2884378c526eb0974780e18d9
 
 # Banner printed at the start of every scaling target, so a long `all-scaling` run makes it obvious
 # which preset is executing at any moment (they look alike in Gradle's output otherwise).
