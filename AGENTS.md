@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to AI coding agents when working with code in this repository.
 
 ## Build System and Common Commands
 
@@ -82,7 +82,7 @@ aren't in the proto: chunked responses kick in above 32KB, and the heartbeat fir
 - **Metric filtering**: `MetricFilter` (per-path `agent.filters`) drops whole metric families in `AgentHttpService` before gzip/chunking; fails open on non-text or non-UTF-8 payloads.
 - **Dashboard**: Ktor + htmx (WebJar, no CDN) on its own port, fed by the `ProxyEvent` bus; see `proxy/dashboard/`.
 
-Two load-bearing constraint sets live in `.claude/rules/` and load when you touch the matching files: `dashboard-constraints.md` (dashboard live-region, contrast, and agent-label invariants) and `shadow-jar.md` (fat-JAR service-file merging).
+Two load-bearing constraint sets live in `.claude/rules/` (Claude Code loads them when you touch the matching files; other agents should read them first): `dashboard-constraints.md` (dashboard live-region, contrast, and agent-label invariants) and `shadow-jar.md` (fat-JAR service-file merging).
 
 ## Configuration
 

@@ -1,13 +1,13 @@
 [versions]
 # Toolchain
-gradle-wrapper = "9.8.1"
+gradle-wrapper = "9.8.2"
 jvm = "17"
 # The JVM the tests run on: the runtime the Docker images ship (main code still compiles for `jvm`)
 testJvm = "25"
 
 # Kotlin
 kotlin = "2.4.21"
-serialization = "1.11.0"
+serialization = "1.12.0"
 
 # Build plugins
 config = "6.1.2"
@@ -24,17 +24,18 @@ taskinfo = "3.1.0"
 versions = "0.66.0"
 
 # gRPC / Protobuf
-grpc = "1.84.2"
+grpc = "1.85.1"
 gengrpc = "1.5.0"
-# Keep in sync with the protobuf-java version grpc-protobuf depends on (3.25.9 for grpc 1.84.2)
+# Keep in sync with the protobuf-java version grpc-protobuf depends on (3.25.9 for grpc 1.85.1)
 protoc = "3.25.9"
-# Ahead of the netty-tcnative grpc-java is built and tested with (2.0.81.Final for grpc 1.81.x-1.84.2, per its
+# Ahead of the netty-tcnative grpc-java is built and tested with (2.0.81.Final for grpc 1.84.x and 1.85.x, per its
 # SECURITY.md) for the native fixes in 2.0.82-2.0.84, among them a use-after-free on session-key rotation and NUL bytes
 # accepted in SNI names. tcnative 2.0.x keeps its API stable, so grpc and Netty work with it unchanged. Go back to
 # tracking grpc's version once it reaches 2.0.84.Final or later. common-utils' grpc-utils also brings tcnative, with its per-platform natives; this declaration sets the version.
 tcnative = "2.0.84.Final"
-# grpc-netty 1.84.2 brings Netty 4.2.16.Final, which has CVE-2026-75595 (critical). build.gradle.kts raises every Netty
-# module except netty-tcnative (pinned above) to this release. Drop the override once grpc brings 4.2.17.Final or later.
+# grpc-netty 1.85.1 brings Netty 4.2.17.Final, which has CVE-2026-93492 (HTTP/2 HPACK encoder DoS) and the other
+# advisories 4.2.18.Final fixes. build.gradle.kts raises every Netty module except netty-tcnative (pinned above) to this
+# release. Drop the override once grpc brings 4.2.18.Final or later.
 netty = "4.2.18.Final"
 
 # Ktor
@@ -49,12 +50,14 @@ htmx = "2.0.11"
 htmxWs = "2.0.4"
 
 # Metrics
-# Keep in sync with common-utils: 1.9.0 is the Prometheus Java client common-utils 5.1.1 is built against
-prometheus = "1.9.0"
+# Ahead of common-utils 5.1.1, which is built against the Prometheus Java client 1.9.0; its next release moves to 1.10.0.
+# build.gradle.kts imports this BOM so the Prometheus modules common-utils brings (JVM instrumentation, exposition
+# formats, exporters) resolve to the same version as prometheus-metrics-core. Keep in sync with common-utils after that.
+prometheus = "1.10.0"
 dropwizard = "4.2.40"
 # Dropwizard metrics-json (common-utils' service-utils) brings Jackson 2.12.7, which has CVE-2025-52999 and
 # CVE-2026-54512/54513 (high). build.gradle.kts imports this BOM to raise it.
-jackson = "2.22.3"
+jackson = "2.22.4"
 
 # Tracing
 zipkin = "6.3.1"
@@ -78,7 +81,7 @@ annotation = "1.3.2"
 # YAML parser for tests (grafana/alerts.yml). Only the tests use this version: the fat JARs keep the 0.79.0 that
 # Ktor's OpenAPI module brings.
 kaml = "0.104.0"
-kotest = "6.2.5"
+kotest = "6.2.6"
 lincheck = "3.7"
 mockk = "1.14.11"
 testcontainers = "2.0.5"
@@ -89,6 +92,7 @@ kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect", version.ref =
 kotlinx-serialization = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 
 # gRPC / Protobuf
+grpc-bom = { module = "io.grpc:grpc-bom", version.ref = "grpc" }
 grpc-protobuf = { module = "io.grpc:grpc-protobuf", version.ref = "grpc" }
 grpc-stub = { module = "io.grpc:grpc-stub", version.ref = "grpc" }
 grpc-services = { module = "io.grpc:grpc-services", version.ref = "grpc" }
@@ -114,6 +118,7 @@ webjar-htmx = { module = "org.webjars.npm:htmx.org", version.ref = "htmx" }
 webjar-htmx-ws = { module = "org.webjars.npm:htmx-ext-ws", version.ref = "htmxWs" }
 
 # Metrics
+prometheus-metrics-bom = { module = "io.prometheus:prometheus-metrics-bom", version.ref = "prometheus" }
 prometheus-metrics-core = { module = "io.prometheus:prometheus-metrics-core", version.ref = "prometheus" }
 dropwizard-metrics = { module = "io.dropwizard.metrics:metrics-healthchecks", version.ref = "dropwizard" }
 jackson-bom = { module = "com.fasterxml.jackson:jackson-bom", version.ref = "jackson" }

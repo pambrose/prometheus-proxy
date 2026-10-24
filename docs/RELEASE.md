@@ -44,7 +44,7 @@ published.
 
    Leave historical and illustrative mentions alone: `CHANGELOG.md`, `RELEASE_NOTES.md`,
    `docs/archive/`, the per-feature release annotations in `llms.txt`, the release reference in
-   `.claude/rules/dashboard-constraints.md`, the `-PoverrideVersion` snapshot example in `CLAUDE.md`, and
+   `.claude/rules/dashboard-constraints.md`, the `-PoverrideVersion` snapshot example in `AGENTS.md`, and
    the tag and title examples in step 7. `docs/PRODUCT.md` names the latest GitHub release as a product
    signal; refresh it if it should stay current.
 

@@ -87,6 +87,9 @@ dependencies {
   implementation(libs.kotlinx.serialization)
 
   implementation(libs.bundles.grpc)
+  // Aligns every grpc-java module on libs.versions.toml's grpc. common-utils' grpc-utils brings grpc-netty and
+  // grpc-inprocess at the grpc it was built with, and grpc-java's modules must all be the same version.
+  implementation(platform(libs.grpc.bom))
   implementation(libs.bundles.ktor)
   implementation(libs.bundles.webjars)
   implementation(libs.bundles.common.utils)
@@ -104,6 +107,8 @@ dependencies {
   implementation(libs.jcommander)
   implementation(libs.typesafe.config)
   implementation(libs.prometheus.metrics.core)
+  // Aligns the Prometheus Java client modules common-utils brings with prometheus-metrics-core; see libs.versions.toml.
+  implementation(platform(libs.prometheus.metrics.bom))
   implementation(libs.dropwizard.metrics)
   // Raises the Jackson that Dropwizard metrics-json brings (2.12.7) past its CVEs; see libs.versions.toml.
   implementation(platform(libs.jackson.bom))
@@ -120,7 +125,7 @@ dependencies {
   testImplementation(libs.testcontainers)
 }
 
-// Raises every Netty module grpc-netty brings (4.2.16.Final) to the patched release in libs.versions.toml. netty-tcnative
+// Raises every Netty module grpc-netty brings (4.2.17.Final) to the patched release in libs.versions.toml. netty-tcnative
 // keeps its own pin there: its classes and the per-platform natives must match, which a Netty BOM would break by
 // raising only some of them.
 val nettyVersion = libs.versions.netty.get()
@@ -128,7 +133,7 @@ configurations.configureEach {
   resolutionStrategy.eachDependency {
     if (requested.group == "io.netty" && !requested.name.startsWith("netty-tcnative")) {
       useVersion(nettyVersion)
-      because("grpc-netty 1.84.2's Netty 4.2.16.Final has CVE-2026-75595")
+      because("grpc-netty 1.85.1's Netty 4.2.17.Final has CVE-2026-93492")
     }
   }
 }
@@ -465,7 +470,7 @@ fun Project.configureCoverage() {
         verify {
           // Deliberately NOT onCheck. koverVerify has no way to tell "coverage genuinely regressed" from
           // "no tests ran", so wiring it into `check` fails at 0% for every legitimate test-less
-          // invocation -- `./gradlew build -x test` in CLAUDE.md and `clean build -x test` in ci.yml among
+          // invocation -- `./gradlew build -x test` in AGENTS.md and `clean build -x test` in ci.yml among
           // them. Each would need its own -x koverVerify, which is four places to forget. CI runs this
           // task explicitly alongside the suite (see ci.yml), and `make coverage-verify` runs it locally.
           onCheck = false
