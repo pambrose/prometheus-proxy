@@ -24,7 +24,7 @@ All notable changes to this project are documented in this file.
 - Update kotlinx-serialization 1.11.0 → 1.12.0 and Jackson 2.22.3 → 2.22.4
 - Update build tooling: Gradle wrapper 9.8.1 → 9.8.2 and Kotest 6.2.5 → 6.2.6
 - Update the documentation site's Python dependency lock (`website/uv.lock`): Zensical 0.0.70 → 0.0.71, plus certifi 2026.7.22 → 2026.10.18, Markdown 3.11 → 3.11.2, platformdirs 4.13.0 → 4.13.5, and pymdown-extensions 12.2 → 12.3
-- Update the GitHub Actions the workflows pin by commit SHA: `github/codeql-action` (`init`, `analyze` and `upload-sarif`) 4.38.2 → 4.38.3, `astral-sh/setup-uv` 10.2.0 → 10.3.0, and `anthropics/claude-code-action` 1.0.245 → 1.0.248
+- Update the GitHub Actions the workflows pin by commit SHA: `github/codeql-action` (`init`, `analyze` and `upload-sarif`) 4.38.2 → 4.39.0, `actions/setup-java` 6.0.1 → 6.1.0, `astral-sh/setup-uv` 10.2.0 → 10.3.0, `zizmorcore/zizmor-action` 0.6.4 → 0.7.1 (still running zizmor 1.30.1, the version the Makefile pins), and `anthropics/claude-code-action` 1.0.245 → 1.0.252
 
 ## [4.3.0] - 2026-10-12
 
