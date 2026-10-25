@@ -10,6 +10,7 @@ All commands from project root.
 ./gradlew --rerun-tasks check            # Force rerun all checks (lint + tests)
 ./gradlew agentJar proxyJar              # Generate standalone JARs
 ./gradlew generateProto                  # Regenerate protobuf stubs
+make ci                                  # Run the CI workflow's jobs locally (needs Docker)
 ```
 
 ### Code Quality

@@ -16,6 +16,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# `make ci` runs these jobs locally (CI_JOBS and the ci-build target in the Makefile); keep it in step with them.
 jobs:
   build:
     runs-on: ubuntu-latest
