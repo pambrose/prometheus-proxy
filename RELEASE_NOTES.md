@@ -90,6 +90,11 @@ among them gRPC, which now runs at one version across all its modules.
 - The Claude Code workflow starts a job only for an `@claude` mention written by the repository owner, an
   organization member, or a collaborator, and the workflows are audited with zizmor 1.31.1, which flags the
   comment trigger that workflow uses.
+- The documentation site is built for every pull request, so a change that breaks it fails before it merges. It's
+  deployed when a release is published rather than when its version bump merges, so it no longer gives a Docker tag
+  and Maven coordinate that don't exist yet. Between releases, docs changes still deploy as they merge.
+- `make upgrade-site` takes only docs-site dependency versions that are at least 7 days old, the cooldown Dependabot
+  already applies.
 
 ### Dependency updates
 

@@ -111,3 +111,19 @@ jobs:
           persist-credentials: false
       - name: Lint the charts and validate their manifests
         run: make helm-lint
+
+  # Builds the docs site (website/prometheus-proxy) from website/uv.lock, as docs.yml does before it adds the KDocs and
+  # deploys, so a change that breaks the build fails its pull request instead of master's deploy: a moved snippet
+  # source (zensical.toml checks snippet paths), or a Zensical update in Dependabot's weekly docs-site group. Named
+  # docs-site, not build, since the branch protection requires a check named build, which this must not be taken for.
+  docs-site:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # uv reads website/.python-version and installs that Python itself.
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - name: Build the docs site
+        run: make build-site

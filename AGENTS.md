@@ -114,6 +114,12 @@ job `RELEASE_REQUIRED_JOBS` lists, passed; a dated section for the version in bo
 the previous one, in every bumped file; not already published). `RELEASE_VERSION_FILES` in the `Makefile` mirrors
 step 2's list of hard-coded version literals; keep the two in step.
 
+`make release` ends by deploying the docs site (`make gh-docs`, a `workflow_dispatch` of `docs.yml`), because a push
+to `master` deploys only once the `gradle.properties` version is on Maven Central and Docker Hub: the site shows that
+version as its image tag and Maven coordinate, so a merged version bump doesn't deploy. CI's `docs-site` job
+(`make build-site`) builds the site on every pull request; it's named so as not to share a name with the `build`
+check the branch protection requires.
+
 ## Testing
 
 - **Coverage**: kotlinx-kover. HTML report: `./gradlew koverHtmlReport`. XML report (CI): `./gradlew koverXmlReport`. Console summary: `./gradlew koverLog` (also runs after `koverXmlReport` / `koverVerify` via `onCheck = true`). Generated gRPC stubs, `BuildConfig`, and `ConfigVals` are excluded from report statistics (configured in `build.gradle.kts` `configureCoverage()`). `koverVerify` enforces the total line and branch floors; `koverVerifyPerClass` (the `perClass` report variant) enforces a per-class line floor that skips compiler-generated lambda classes and the `Proxy`/`Agent` entry points, so a new class needs its own tests. Both floors run in one invocation (`./gradlew koverVerify koverVerifyPerClass`, as in CI and `make coverage-verify`); keep Kover at 0.9.10 or later, since 0.9.9 leaked one report variant's filters into another built in the same run.

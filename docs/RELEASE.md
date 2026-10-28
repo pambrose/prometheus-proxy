@@ -20,11 +20,17 @@ Steps 1-3 are edits to merge to `master`. After that, `make release` runs steps 
   Central or Docker Hub;
 - the GPG setup `publish-maven-central` needs is in place, and Docker is running.
 
-It then runs `make all-tests` and `make distro`, asks once, publishes to Maven Central and Docker Hub, and checks the
-published images with `make docker-verify`. It ends by printing the GitHub release (step 7) and Homebrew (step 9)
-steps, which stay manual. Run `make release-check` on its own to see what's still missing. If a release stops after
-publishing somewhere, finish it with the remaining targets, since `release-check` refuses a version that is already
-published.
+It then runs `make all-tests` and `make distro`, asks once, publishes to Maven Central and Docker Hub, checks the
+published images with `make docker-verify`, and deploys the docs site with `make gh-docs`. It ends by printing the
+GitHub release (step 7) and Homebrew (step 9) steps, which stay manual. Run `make release-check` on its own to see
+what's still missing. If a release stops after publishing somewhere, finish it with the remaining targets, since
+`release-check` refuses a version that is already published.
+
+Merging steps 1-3 doesn't deploy the site. The site shows the `gradle.properties` version as its Docker tag and Maven
+coordinate, so the docs workflow (`.github/workflows/docs.yml`) deploys a push to `master` only once that version is
+on Maven Central and both its images are on Docker Hub. Until `make release` deploys it, the site stays at the
+previous release, and docs changes merged in the meantime wait with it. Outside a release, the version on `master` is
+already published, so a docs change deploys as it merges. `make gh-docs` deploys whatever the version.
 
 1) Bump `version` in `gradle.properties` (the single source of truth).
 
@@ -77,6 +83,8 @@ published.
 
 8) Build and push the multi-arch Docker images: `make docker-push`. This tags both `:latest` and
    `:<version>`; it refuses to push pre-release versions (`-SNAPSHOT`/`-rc`/`-beta`/`-alpha`) as `:latest`.
+   Once `make docker-verify` passes, deploy the docs site with `make gh-docs`, so it shows the new version;
+   `make gh-status` lists the docs workflow's runs.
 
 9) Update the Homebrew formulae once the GitHub release is published: `make homebrew-formulae`, then commit and
    push the tap. The target downloads the release's `prometheus-proxy.jar` and `prometheus-agent.jar`, hashes
