@@ -83,9 +83,8 @@ internal class ProxyServiceImpl(
     }
 
     proxy.metrics { connectCount.inc() }
-    // An agent's first call, which the auth interceptor has already let through, so this is where the connection's
-    // context becomes a connected agent (see AgentContextManager.addAgentContext).
-    ProxyServerInterceptor.CONNECTION_AGENT_ID_KEY.get()?.also { proxy.agentContextManager.announceAgentContext(it) }
+    // The connection's context is already announced: ProxyServerInterceptor announces it on every authenticated call,
+    // this one included, so a client can't stay unannounced by skipping this call (October #26).
     return EMPTY_INSTANCE
   }
 
@@ -173,11 +172,11 @@ internal class ProxyServiceImpl(
           "Invalid agentId: ${request.agentId} (registerAgent)"
         } else {
           identityMismatchReason(agentContext, "registerAgent") ?: run {
-            agentContext.assignProperties(request)
+            agentContext.assignProperties(boundedRegistration(request, agentContext.agentId))
             agentContext.markActivityTime(false)
             logger.info { "Connected to $agentContext" }
-            // Identity is only populated here; AgentConnected fired at connectAgent, before the agent had told us
-            // who it is.
+            // Identity is only populated here; AgentConnected fired at the connection's first authenticated call
+            // (connectAgent, for the stock agent), before the agent had told us who it is.
             proxy.eventBus.emit(ProxyEvent.AgentRegistered(request.agentId))
             null
           }
@@ -195,6 +194,67 @@ internal class ProxyServiceImpl(
     }
   }
 
+  /**
+   * [request] with its agent name, host name, launch ID, and each proxy endpoint cut to
+   * `proxy.internal.maxAgentFieldLength` characters, and its endpoint list to `maxAgentProxyEndpoints` entries;
+   * 0 leaves either whole. Logs one warning naming what was cut, and how long it was, when anything was.
+   *
+   * The proxy only shows these fields, but it repeats them for every path the agent serves: in logs, service
+   * discovery, the dashboard, and `/debug`. Bounded only by gRPC's 4 MiB message limit, one agent's fields times
+   * `maxPathsPerAgent` paths could exhaust the heap or the log volume (October #23). They are cut rather than
+   * rejected, so an agent with an unusually long host name keeps serving its paths.
+   */
+  private fun boundedRegistration(
+    request: RegisterAgentRequest,
+    agentId: String,
+  ): RegisterAgentRequest {
+    val maxLength = proxy.maxAgentFieldLength
+    val maxEndpoints = proxy.maxAgentProxyEndpoints
+    // What was cut, for the warning: field names and sizes, never the values.
+    val cut = mutableListOf<String>()
+
+    fun isLong(value: String) = maxLength in 1..<value.length
+
+    fun bounded(
+      field: String,
+      value: String,
+    ): String =
+      if (isLong(value)) {
+        cut += "$field (${value.length} characters)"
+        truncate(value, maxLength)
+      } else {
+        value
+      }
+
+    val endpoints =
+      request.proxyEndpointsList.let { all ->
+        if (maxEndpoints in 1..<all.size) {
+          cut += "proxyEndpoints (${all.size} entries)"
+          all.take(maxEndpoints)
+        } else {
+          all
+        }
+      }
+    val longEndpoints = endpoints.count { isLong(it) }
+    if (longEndpoints > 0)
+      cut += "$longEndpoints proxy endpoints (up to ${endpoints.maxOf { it.length }} characters)"
+
+    val bounded =
+      request.toBuilder()
+        .setAgentName(bounded("agentName", request.agentName))
+        .setHostName(bounded("hostName", request.hostName))
+        .setLaunchId(bounded("launchId", request.launchId))
+        .clearProxyEndpoints()
+        .addAllProxyEndpoints(endpoints.map { if (isLong(it)) truncate(it, maxLength) else it })
+        .build()
+    if (cut.isNotEmpty())
+      logger.warn {
+        "Agent $agentId registered with ${cut.joinToString()}, over proxy.internal.maxAgentFieldLength ($maxLength) " +
+          "or maxAgentProxyEndpoints ($maxEndpoints); keeping the start of each"
+      }
+    return bounded
+  }
+
   override suspend fun registerPath(request: RegisterPathRequest): RegisterPathResponse {
     // addPath() and the binding and authorization checks below return null on success or the rejection; rejection
     // is null iff valid.
@@ -209,16 +269,12 @@ internal class ProxyServiceImpl(
             // AGENT_IDENTITY_KEY is null when per-agent auth is disabled (no interceptor); an identity
             // with no path patterns authorizes everything, so legacy single-token behavior is unchanged.
             val identity = AgentAuthManager.AGENT_IDENTITY_KEY.get()
+            // The path's form and size are checked first, so the identity's globs, and the denial's log line, only
+            // ever see a path of bounded length (October #22).
             val result =
-              if (identity != null && !identity.isAuthorized(request.path)) {
-                val normalizedPath = request.path.removePrefix("/")
-                logger.warn { "Agent identity '${identity.name}' denied registration of path /$normalizedPath" }
-                PathRejection(
-                  "Agent identity '${identity.name}' is not authorized to register path /$normalizedPath",
-                  NOT_AUTHORIZED,
-                )
-              } else {
-                proxy.pathManager.addPath(
+              proxy.pathManager.formRejection(request.path, request.labels, agentContext)
+                ?: authorizationRejection(identity, request.path)
+                ?: proxy.pathManager.addPath(
                   request.path,
                   request.labels,
                   agentContext,
@@ -229,7 +285,6 @@ internal class ProxyServiceImpl(
                     identityName = identity?.name.orEmpty(),
                   ),
                 )
-              }
             result.also { agentContext.markActivityTime(false) }
           }
         }
@@ -244,6 +299,19 @@ internal class ProxyServiceImpl(
       }
       pathCount = proxy.pathManager.pathMapSize
     }
+  }
+
+  // Why [identity] may not register [path], or null when it may, or when per-agent auth is off (no identity). The log
+  // line and the reason show the path as ProxyPathManager's rejections do, cut to its first characters.
+  private fun authorizationRejection(
+    identity: AgentIdentity?,
+    path: String,
+  ): PathRejection? {
+    if (identity == null || identity.isAuthorized(path))
+      return null
+    val shown = ProxyPathManager.shownPath(path.removePrefix("/"))
+    logger.warn { "Agent identity '${identity.name}' denied registration of path /$shown" }
+    return PathRejection("Agent identity '${identity.name}' is not authorized to register path /$shown", NOT_AUTHORIZED)
   }
 
   override suspend fun unregisterPath(request: UnregisterPathRequest): UnregisterPathResponse {
@@ -594,5 +662,12 @@ internal class ProxyServiceImpl(
     private val PATH_ID_GENERATOR = AtomicLong(0L)
     private const val RPC_NAME = "writeChunkedResponsesToProxy"
     internal const val UNKNOWN_ADDRESS = "Unknown"
+
+    // The first [max] characters of [value], which is longer, or one fewer when the last would be the first half of a
+    // surrogate pair: an unpaired surrogate can't be encoded as UTF-8, in the logs or service discovery.
+    private fun truncate(
+      value: String,
+      max: Int,
+    ): String = value.substring(0, if (value[max - 1].isHighSurrogate()) max - 1 else max)
   }
 }

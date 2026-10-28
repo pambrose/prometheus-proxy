@@ -139,6 +139,8 @@ internal class AgentContext(
     markActivityTime(true)
   }
 
+  // Copies the fields as given: ProxyServiceImpl.registerAgent first cuts them to the proxy.internal limits, since each
+  // is repeated for every path the agent serves (October #23).
   fun assignProperties(request: RegisterAgentRequest) {
     launchId = request.launchId
     agentName = request.agentName

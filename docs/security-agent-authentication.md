@@ -204,6 +204,21 @@ In rough priority order:
 - **No pre-auth agents** (finding #15) — the transport filter still assigns every connection an `agentId`, but its
   context stays pending until the connection's first authenticated call: until then it isn't logged at INFO,
   counted in `proxy_agent_map_size`, listed on the dashboard or health checks, or announced as `AgentConnected`.
+  That first call can be any RPC on the agent service, not only `connectAgent` (finding #26 of
+  `docs/CODE_REVIEW_OCTOBER_27_2026.md`): `ProxyServerInterceptor` announces the connection on every call that
+  reaches it, and with agent auth configured a call reaches it only after `AgentAuthServerInterceptor`, which runs
+  first as a server-wide interceptor, has accepted its token. Before, only `connectAgent` announced, so a client that
+  skipped it, learning its `agentId` from the `agent-id` header of any response, could register paths and serve
+  scrapes while missing from the agent views. The stock agent calls `connectAgent` first, so it is announced as
+  before.
+- **Paths bounded before they are authorized** (finding #22 of `docs/CODE_REVIEW_OCTOBER_27_2026.md`) —
+  `registerPath` checks a path's length, segment, and labels size before it matches the path against the caller's
+  globs, and the globs are matched by a linear two-pointer matcher instead of a backtracking regex, which took
+  seconds on a 512-character path for a glob with four stars. A denied path is logged and returned truncated.
+- **Agent-reported fields bounded** (finding #23 of `docs/CODE_REVIEW_OCTOBER_27_2026.md`) —
+  `proxy.internal.maxAgentFieldLength` (256) and `maxAgentProxyEndpoints` (16) cut the name, host name, launch ID,
+  and endpoint list an agent reports at `registerAgent`, which are repeated for every path it serves in logs,
+  service discovery, the dashboard, and `/debug`. The per-path log lines name the `agentId` instead.
 - **Service-discovery labels limited** (finding #12 of `docs/archive/CODE_REVIEW_LATE_SEPTEMBER_2026.md`) — agent labels can no
   longer set `__`-prefixed keys, and `proxy.service.discovery.reserveJobAndInstanceLabels` keeps them from setting `job`
   and `instance`, so an identity can't pass its targets off as another identity's.
