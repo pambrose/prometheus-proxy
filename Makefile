@@ -7,7 +7,7 @@
         coverage-open coverage-packages coverage-clean reports gh-docs \
         gh-status tsconfig distro docker-push docker-verify homebrew-formulae release release-check _confirm-release \
         tree depends lint detekt detekt-baseline \
-        versions versions-all kdocs clean-site check-site upgrade-site site \
+        versions versions-all kdocs clean-site check-site upgrade-site build-site site \
         publish-local publish-local-snapshot publish-snapshot publish-maven-central \
         upgrade-wrapper _check-gpg-env _require-version _require-gradle-version
 
@@ -35,12 +35,14 @@ RELEASE_VERSION_FILES := README.md llms.txt etc/compose/proxy.yml \
 	docs/RELEASE.md .claude/skills/publishing-release/SKILL.md
 # The CI jobs that must have passed for the release commit, as workflow-file/job-name, separated by semicolons since
 # job names can hold spaces. make release itself runs only the tests and the distro build, so these are what cover
-# the coverage floors, TLA+, the alerting rules, the Helm charts, the container suite, and the image and workflow
-# scans. The workflow file tells apart jobs with the same name, such as ci.yml's and docs.yml's build. Renaming one
-# of these jobs, or adding a check a release should wait for, means updating this list.
-RELEASE_REQUIRED_JOBS := ci.yml/build;ci.yml/tla;ci.yml/rules;ci.yml/helm;container-tests.yml/container-tests;\
-	container-tests.yml/helm-smoke;security.yml/image-scan (proxy);security.yml/image-scan (agent);\
-	security.yml/codeql;zizmor.yml/code-scanning
+# the coverage floors, TLA+, the alerting rules, the Helm charts, the docs site build, the container suite, and the
+# image and workflow scans. The site build is here because make release ends by deploying the site, so a commit whose
+# site doesn't build stops before anything is published. The workflow file tells apart jobs with the same name, such
+# as ci.yml's and docs.yml's build. Renaming one of these jobs, or adding a check a release should wait for, means
+# updating this list.
+RELEASE_REQUIRED_JOBS := ci.yml/build;ci.yml/tla;ci.yml/rules;ci.yml/helm;ci.yml/docs-site;\
+	container-tests.yml/container-tests;container-tests.yml/helm-smoke;security.yml/image-scan (proxy);\
+	security.yml/image-scan (agent);security.yml/codeql;zizmor.yml/code-scanning
 WEBSITE_DIR := website
 SITE_DIR := $(WEBSITE_DIR)/prometheus-proxy
 
@@ -66,9 +68,9 @@ KUBERNETES_VERSION := 1.30.0
 CRD_SCHEMAS := https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json
 CHARTS := prometheus-proxy prometheus-agent
 
-# The jobs of the CI workflow (.github/workflows/ci.yml) that `make ci` runs, quickest first; ci-build is its build job.
-# Keep the list, and ci-build's steps, in step with that workflow.
-CI_JOBS := tla-checks check-rules helm-lint ci-build
+# The jobs of the CI workflow (.github/workflows/ci.yml) that `make ci` runs, quickest first; build-site is its docs-site
+# job, and ci-build its build job. Keep the list, and ci-build's steps, in step with that workflow.
+CI_JOBS := tla-checks check-rules helm-lint build-site ci-build
 
 # zizmor audits the GitHub Actions workflows and dependabot.yml. The same version as .github/workflows/zizmor.yml, with
 # the digest zizmor-action pins for it (its support/versions file); update the two together.
@@ -198,7 +200,7 @@ all-tests: tests lincheck-tests container-tests  ## Run the full suite: all test
 # Runs CI's jobs one after another on the working tree, uncommitted changes included. A failed job doesn't stop the
 # rest, as in CI, where they run in parallel; the failed ones are listed at the end. The Codecov upload is left out, and
 # so are the pull request's other workflows: `make container-tests` and `make zizmor` run two of them.
-ci:  ## Run the CI workflow's jobs locally: TLA+, alerting rules, Helm charts, and the build (needs Docker)
+ci:  ## Run the CI workflow's jobs locally: TLA+, alerting rules, Helm charts, the docs site, and the build (needs Docker)
 	@failed=; for job in $(CI_JOBS); do \
 		printf '\n\033[1;36m==> make %s\033[0m\n\n' $$job; \
 		$(MAKE) --no-print-directory $$job || failed="$$failed $$job"; \
@@ -331,7 +333,9 @@ coverage-clean:  ## Remove coverage reports and test outputs
 # Backwards-compatible alias for the previous `make reports` invocation.
 reports: coverage  ## Alias for `coverage`
 
-gh-docs:  ## Trigger the docs.yml GitHub Actions workflow
+# A push to master deploys the docs site only once the version it advertises is published (see docs.yml); a run started
+# here, as make release does once it has published, deploys whatever the version.
+gh-docs:  ## Build and deploy the docs site from master now (runs the docs.yml workflow)
 	gh workflow run docs.yml
 
 gh-status:  ## Show recent docs.yml workflow runs
@@ -455,9 +459,12 @@ _confirm-release:
 
 # Each step runs only if the one before it passed, so nothing is published until the checkout passes release-check,
 # the full test suite (whose container tests build the images and scrape through them), and the release build.
-# Steps 4-6 and 8 of docs/RELEASE.md; the GitHub release (step 7) and the Homebrew tap (step 9) are printed as next
-# steps. After a partial release, finish with the remaining targets: release-check refuses a version already published.
-release:  ## Gate, test, build, then publish VERSION to Maven Central and Docker Hub (asks first)
+# Steps 4-6 and 8 of docs/RELEASE.md. Step 8 ends with gh-docs, once the images check out: docs.yml deploys a push only
+# once the version it advertises is published, so the merge of the bump left the site at the previous release, and
+# this deploys the new one. Everything is published by then, so a failure to start that deploy is reported without
+# hiding the next steps. The GitHub release (step 7) and the Homebrew tap (step 9) are printed as next steps. After a
+# partial release, finish with the remaining targets: release-check refuses a version already published.
+release:  ## Gate, test, build, publish VERSION to Maven Central and Docker Hub (asks first), then deploy the docs
 	$(MAKE) release-check
 	$(MAKE) all-tests
 	$(MAKE) distro
@@ -465,9 +472,15 @@ release:  ## Gate, test, build, then publish VERSION to Maven Central and Docker
 	$(MAKE) publish-maven-central
 	$(MAKE) docker-push
 	$(MAKE) docker-verify
-	@prev=$$(git describe --tags --abbrev=0 2>/dev/null); \
+	@if $(MAKE) --no-print-directory gh-docs; then \
+		docs="Started the docs site deploy; make gh-status shows the run."; \
+	else \
+		docs="WARNING: could not start the docs site deploy; run make gh-docs."; \
+	fi; \
+	prev=$$(git describe --tags --abbrev=0 2>/dev/null); \
 	echo; \
-	echo "Published $(VERSION) to Maven Central and Docker Hub. Next (steps 7 and 9 of docs/RELEASE.md):"; \
+	echo "Published $(VERSION) to Maven Central and Docker Hub. $$docs"; \
+	echo "Next (steps 7 and 9 of docs/RELEASE.md):"; \
 	echo "  1. Create the GitHub release (tag $(VERSION), title v$(VERSION)) with a summary that ends with"; \
 	echo "     **Full Changelog**: https://github.com/pambrose/prometheus-proxy/compare/$$prev...$(VERSION)"; \
 	echo "     gh release create $(VERSION) --target $$(git rev-parse HEAD) --title v$(VERSION) --notes-file <notes> \\"; \
@@ -493,11 +506,25 @@ versions-all:  ## The plugin's full dependency report, up-to-date dependencies i
 kdocs:  ## Generate Dokka HTML site
 	$(GRADLE) dokkaGeneratePublicationHtml
 
-check-site:  ## Check for outdated website dependencies
-	cd $(WEBSITE_DIR) && env -u VIRTUAL_ENV uv lock --upgrade --dry-run
+# Hand upgrades of the docs site's lock wait out the 7 days Dependabot's cooldown does (.github/dependabot.yml): uv
+# considers no file uploaded less than SITE_COOLDOWN ago. A cutoff given to uv lock is recorded in uv.lock, and a later
+# `uv run --locked` without one, such as CI's docs build, rejects that lock; so a second, plain uv lock drops it,
+# keeping the versions the first chose, since uv prefers the locked ones. A locked version uploaded less than
+# SITE_COOLDOWN ago, such as a Dependabot security update's, goes back to the newest one before the cutoff; uv lists
+# every change.
+SITE_COOLDOWN := 7 days
 
-upgrade-site:  ## Upgrade the website dependencies
-	cd $(WEBSITE_DIR) && env -u VIRTUAL_ENV uv lock --upgrade
+check-site:  ## List what upgrade-site would change in the website dependencies (changes nothing)
+	cd $(WEBSITE_DIR) && env -u VIRTUAL_ENV uv lock --upgrade --exclude-newer "$(SITE_COOLDOWN)" --dry-run
+
+upgrade-site:  ## Upgrade the website dependencies, to versions at least 7 days old
+	cd $(WEBSITE_DIR) && env -u VIRTUAL_ENV uv lock --upgrade --exclude-newer "$(SITE_COOLDOWN)" \
+		&& env -u VIRTUAL_ENV uv lock
+
+# CI's docs-site job, and docs.yml's site build before it adds the KDocs. zensical.toml checks snippet paths, so a
+# moved snippet source fails the build.
+build-site: clean-site  ## Build the docs site as CI does, from the locked dependencies
+	cd $(SITE_DIR) && uv run --locked zensical build --clean
 
 clean-site:  ## Remove generated zensical site and cache
 	rm -rf $(SITE_DIR)/site

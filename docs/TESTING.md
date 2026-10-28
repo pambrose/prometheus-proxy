@@ -40,8 +40,9 @@ make container-tests  # Full Testcontainers end-to-end suite (needs Docker)
 make scaling-tests    # Parameter-driven scaling container test only (needs Docker)
 make all-tests        # Full suite: `make tests` + `make container-tests`
                       #   (container-tests already includes ContainersScalingTest's default table)
-make ci               # The CI workflow's jobs, run in turn: TLA+, alerting rules, Helm charts, and the
-                      #   build job (`make ci-build`: MINI tests + coverage floors); needs Docker
+make ci               # The CI workflow's jobs, run in turn: TLA+, alerting rules, Helm charts, the docs
+                      #   site (`make build-site`), and the build job (`make ci-build`: MINI tests +
+                      #   coverage floors); needs Docker
 ```
 
 The suite builds its proxy and agent images under stable tags, so runs reuse them and a clean run now
