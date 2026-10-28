@@ -51,6 +51,8 @@ among them gRPC, which now runs at one version across all its modules.
 
 ### Bug Fixes
 
+- **Metric filters match quoted metric names.** A target that writes a name such as `a.b` quoted, as
+  Prometheus 3 allows, had that family dropped by an allow list that named it, and kept by a deny list.
 - **Discovered targets survive a reconnect while the discovery file is bad.** The agent keeps the last list it
   read and registers it again after a reconnect; before, every discovered target returned 404 until the file
   was fixed.

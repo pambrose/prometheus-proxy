@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — October 2026 Findings
 
-**Status:** 47 issues — 26 fixed, 21 open (16 medium, 31 low, no high).
+**Status:** 47 issues — 27 fixed, 20 open (16 medium, 31 low, no high).
 
 **Date:** 2026-10-27
 
@@ -91,7 +91,7 @@ Six earlier fixes turn out to be incomplete:
 | 16 | An embedded agent's `logLevel` changes the host JVM's root logger                       | Agent    | low      | ✅      |
 | 17 | A routine proxy outage logs an ERROR stack trace on every reconnect                     | Agent    | low      | ⬜      |
 | 18 | A bad `agent.http.trustStorePath` isn't caught at startup and fails every scrape        | Agent    | low      | ✅      |
-| 19 | `MetricFilter` misjudges quoted UTF-8 metric names                                      | Agent    | low      | ⬜      |
+| 19 | `MetricFilter` misjudges quoted UTF-8 metric names                                      | Agent    | low      | ✅      |
 | 20 | Agent dead code, stale KDoc, and a `shutDown()` that isn't failure-isolated             | Agent    | low      | ⬜      |
 | 21 | Scrape-result ownership checked on one lookup, applied on another (September #1 gap)    | Security | medium   | ✅      |
 | 22 | Path authorization runs a backtracking regex before the length cap applies             | Security | medium   | ✅      |
@@ -151,7 +151,7 @@ The **Touches** column shows which steps edit the same files and so need to land
 | 10   | ✅      | #11, #13        | Agent metrics that count every scrape                                       | `AgentHttpService.kt`, `AgentMetrics.kt`, metrics docs, Grafana JSON                              | Do it after steps 4 and 9, which share these files. The dashboards and docs change with the counter.                                                                             |
 | 11   | ✅      | #10, #12, #18   | Agent config and discovery robustness                                       | `PathDiscoveryService.kt`, `AgentPathManager.kt`, `PathDiscoverySource.kt`, `AgentOptions.kt`, trust-manager init | Startup validation, plus a last-known-good list that outlives the connection. Independent of the proxy steps.                                                                    |
 | 12   | ⬜      | #4, #17         | Quiet logs for unauthenticated connections and routine outages              | `AgentContextManager.kt`, `AgentContextCleanupService.kt`, `AgentGrpcService.kt`, `Utils.kt`      | Changes only log levels and one counter, each covered by a `ListAppender` test. Do it after step 5, which shares `AgentContextManager.kt`.                                        |
-| 13   | ⬜      | #19             | `MetricFilter` handles quoted UTF-8 names                                   | `agent/filter/MetricFilter.kt`                                                                    | Self-contained, so it can go any time.                                                                                                                                           |
+| 13   | ✅      | #19             | `MetricFilter` handles quoted UTF-8 names                                   | `agent/filter/MetricFilter.kt`                                                                    | Self-contained, so it can go any time.                                                                                                                                           |
 | 14   | ✅      | #31, #36, #34   | Docs site: build on PRs, cool down hand upgrades, deploy after publishing   | `docs.yml`, `ci.yml`, `Makefile`                                                                  | Keeps a broken site build off `master`, and keeps the site from advertising a version that isn't published yet. Workflow-only, so it can run in parallel with code steps.        |
 | 15   | ⬜      | #27, #39, #40   | Helm and image packaging                                                    | `charts/*`, `etc/docker/*.Dockerfile`, `build.gradle.kts` shadow config                           | A Secret-backed auth config, an explicit UID, and NOTICE merging. Needs a `helm-smoke` run and the container tests.                                                              |
 | 16   | ⬜      | #42, #44, #28   | Documentation drift                                                         | website pages, `llms.txt`, `docs/TESTING.md`, `SECURITY.md`                                       | No behavior change. Each item can ride along with any earlier PR that touches the same page.                                                                                     |
@@ -761,7 +761,7 @@ missing trust store and expects that error; before the fix, construction succeed
 says the trust store is loaded at startup, and RELEASE_NOTES has a "Before you upgrade" note covering this and #12's
 duplicate check.
 
-### 19. [ ] `MetricFilter` misjudges quoted UTF-8 metric names
+### 19. [x] `MetricFilter` misjudges quoted UTF-8 metric names
 
 **Severity:** low · **Confidence:** plausible. It needs a target that emits Prometheus 3 quoted names;
 `textOnlyAccept` passes Prometheus's `escaping=allow-utf-8` offer through.
@@ -782,6 +782,13 @@ duplicate check.
 whitespace.
 
 **Test:** filter a payload with quoted names using an allow list, then a deny list.
+
+**Resolution:** `parseCommentFamily` unquotes a quoted family name, and a sample line that starts with `{"` is judged
+by the quoted name inside the braces. Both are unescaped (`\\`, `\"`, `\n`) before matching, and a quoted
+histogram's `_bucket`, `_sum`, and `_count` samples still belong to its family. The optional part is done too: a
+line's blanks before its first token are skipped, as the text format allows, so an indented comment or sample is
+judged by its name. Five `MetricFilterTest` cases cover an allow list, a deny list, a quoted histogram, an escaped
+quote, and leading blanks; each failed before the fix. The agent configuration page describes quoted names.
 
 ### 20. [ ] Agent dead code, stale KDoc, and a `shutDown()` that isn't failure-isolated
 
