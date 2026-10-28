@@ -58,7 +58,6 @@ import io.mockk.mockk
 import io.mockk.spyk
 import io.prometheus.Agent
 import io.prometheus.agent.filter.MetricFilter
-import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.common.testConfigVals
 import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.common.captureLogs
@@ -179,14 +178,13 @@ class AgentHttpServiceTest : StringSpec() {
   // instead of invoking it, so without this wiring the filterLinesDropped/filterBytesSaved recording
   // block in buildScrapeResults's filtering branch is never exercised -- see AgentTest's "metrics
   // should invoke lambda when metrics enabled" and ProxyServiceImplTest's createMockProxy for the
-  // same pattern. Clears the default registry first: AgentMetrics registers its collectors on
-  // construction, and re-registering a same-named collector in one JVM throws.
+  // same pattern. Every agent's metrics are shared in the JVM, so each test's AgentMetrics is closed
+  // after it, which removes the series it recorded.
   private fun createMockAgentWithFilterAndMetrics(filterHocon: String): Pair<Agent, AgentMetrics> {
     val mockAgent = createMockAgentWithPaths(filterHocon = filterHocon)
     every { mockAgent.launchId } returns "test-launch-id"
 
-    PrometheusRegistry.defaultRegistry.clear()
-    val realMetrics = AgentMetrics(mockAgent)
+    val realMetrics = AgentMetrics(mockAgent).also { openMetrics += it }
     every { mockAgent.metrics(any<AgentMetrics.() -> Unit>()) } answers {
       firstArg<AgentMetrics.() -> Unit>().invoke(realMetrics)
     }
@@ -201,7 +199,14 @@ class AgentHttpServiceTest : StringSpec() {
   // test's own verification step.
   private fun gunzipToBytes(zipped: ByteArray): ByteArray = GZIPInputStream(zipped.inputStream()).use { it.readBytes() }
 
+  private val openMetrics = mutableListOf<AgentMetrics>()
+
   init {
+    afterEach {
+      openMetrics.forEach { it.close() }
+      openMetrics.clear()
+    }
+
     // ==================== Invalid Path Tests ====================
 
     // The proxy forwards the scraping client's timeout, so the agent stops a scrape nobody is still waiting for.

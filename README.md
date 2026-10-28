@@ -407,8 +407,8 @@ agent. This approach eliminates the need for a separate agent process when your 
 > 📖 **Docs site:** [Embedded Agent guide](https://pambrose.github.io/prometheus-proxy/embedded-agent/) for the full API surface and lifecycle details.
 
   ```Java
-  // Start embedded agent
-  EmbeddedAgentInfo agentInfo = startAsyncAgent("configFile.conf", true);
+  // Start embedded agent; false (exitOnMissingConfig) makes config errors throw instead of exiting the JVM
+  EmbeddedAgentInfo agentInfo = startAsyncAgent("configFile.conf", false);
 
   // Your application code runs here
   // The agent runs in the background and does not block your application
