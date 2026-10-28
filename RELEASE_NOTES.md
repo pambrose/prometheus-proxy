@@ -105,6 +105,17 @@ among them gRPC, which now runs at one version across all its modules.
   failed fetch of a config URL, exited the host application.
 - The README's Kotlin badge follows the version the build uses, and its Docker stats badges link to the proxy's
   and agent's Docker Hub pages.
+- The security docs say the scrape port has no authentication: anyone who can reach it can have the agents
+  scrape their targets with their own query string and `Authorization` header, which an exporter that takes its
+  target as a query parameter turns into a way to probe any host it can reach. Bind `proxy.http.host` to a
+  private address and firewall the port so only Prometheus reaches it; see Scrape Port Access on the Security
+  page.
+- The website's tuning table named `agent.maxConcurrentClients`, which doesn't exist, so setting it did nothing;
+  the key is `agent.http.maxConcurrentClients`. It also gave no default for
+  `proxy.internal.maxUnzippedContentSizeMBytes`, which is 10, and Troubleshooting named a `proxy_connected_agents`
+  gauge, which is `proxy_agent_map_size`. A test now checks the metric names, config keys, and defaults the
+  website gives.
+- The testing guide names every spec and helper, and a test keeps it that way.
 
 ### Build and tooling
 

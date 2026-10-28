@@ -85,7 +85,7 @@ Key HOCON features:
 - Comments with `#` or `//`
 - Unquoted strings for simple values
 - Environment variable substitution with `${?VAR_NAME}`
-- Dot notation for nested paths (`proxy.hostname`)
+- Dot notation for nested paths (`agent.proxy.hostname`)
 - Merging and includes (`include "other.conf"`)
 
 ## Configuration Reference

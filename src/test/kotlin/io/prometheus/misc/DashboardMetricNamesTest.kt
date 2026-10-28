@@ -26,6 +26,7 @@ import com.charleskorn.kaml.YamlScalar
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldNotBeEmpty
+import io.kotest.matchers.shouldBe
 import io.prometheus.agent.AgentMetrics
 import io.prometheus.common.Utils.toJsonElement
 import io.prometheus.common.mockAgentForMetrics
@@ -33,6 +34,8 @@ import io.prometheus.common.mockProxyForMetrics
 import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.metrics.model.snapshots.CounterSnapshot
 import io.prometheus.metrics.model.snapshots.HistogramSnapshot
+import io.prometheus.proxy.ProxyFailure
+import io.prometheus.proxy.ProxyHttpRoutes
 import io.prometheus.proxy.ProxyMetrics
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -40,9 +43,9 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import java.io.File
 
-// The Grafana dashboards, the alert rules and the PromQL in the docs must query series the proxy and agent expose.
-// A counter is exposed only with a _total suffix, so a query for the bare name matches nothing and a panel or alert
-// silently shows no data.
+// The Grafana dashboards, the alert rules and the PromQL in the docs must query series the proxy and agent expose, and
+// the website must name them. A counter is exposed only with a _total suffix, so a query for the bare name matches
+// nothing and a panel or alert silently shows no data.
 class DashboardMetricNamesTest : StringSpec() {
   // The proxy's and agent's metrics, as a scrape of the default registry reports them.
   private val snapshots by lazy {
@@ -64,6 +67,21 @@ class DashboardMetricNamesTest : StringSpec() {
         }
       }.toSet() + "up"
   }
+
+  // The series a page's prose may name: every exposed series, and a histogram's family name, which the pages use for
+  // the histogram as a whole. A counter's bare name is not one, since it is exposed only with _total.
+  private val documented by lazy {
+    exposed + snapshots.filterIsInstance<HistogramSnapshot>().map { it.metadata.name }
+  }
+
+  // A name ending in * stands for the series that start with the rest of it, and must match at least one.
+  private fun isDocumented(name: String) =
+    if (name.endsWith("*")) documented.any { it.startsWith(name.removeSuffix("*")) } else name in documented
+
+  // The proxy and agent series an inline code span names. Label matchers are removed first, so a type="..." value is
+  // not read as a series.
+  private fun seriesNamedIn(code: String): List<String> =
+    PROSE_SERIES.findAll(code.replace(MATCHERS, "")).map { it.value }.filterNot { it in NOT_SERIES }.toList()
 
   // Every "expr" value in a Grafana dashboard.
   private fun dashboardExprs(json: String): List<String> = exprs(json.toJsonElement())
@@ -136,6 +154,16 @@ class DashboardMetricNamesTest : StringSpec() {
       }
     }
 
+    // The website names series in its tables and in the troubleshooting steps an operator turns into a query or an
+    // alert, where a name that isn't exposed matches nothing, as silently as in a dashboard.
+    "every proxy and agent series named on the website should be exposed" {
+      val named = WebsitePages.inlineCode.mapValues { (_, code) -> code.flatMap(::seriesNamedIn) }
+      named.values.flatten().shouldNotBeEmpty()
+      named
+        .mapValues { (_, names) -> names.filterNot(::isDocumented).distinct() }
+        .filterValues { it.isNotEmpty() } shouldBe emptyMap()
+    }
+
     // With two proxies (or two environments) in one Prometheus, a proxy panel that ignores the pickers mixes them.
     "every proxy dashboard query should filter by the job and instance pickers" {
       selectors(PROXY_DASHBOARD, "proxy_")
@@ -171,6 +199,20 @@ class DashboardMetricNamesTest : StringSpec() {
 
     // A metric name with its label matchers, if it has any.
     private val SELECTOR = Regex("""\b(?:proxy|agent)_[a-z_]+(?:\{[^}]*})?""")
+
+    // A proxy or agent series name in prose, or a prefix of names ending in *. A word that only contains one, such as
+    // the --agent_port flag or the proxy_service.proto file, is not a series.
+    private val PROSE_SERIES = Regex("""(?<![\w./-])(?:proxy|agent)_[a-z0-9_]+\*?(?![\w.])""")
+
+    // The words with a series' prefix that the pages give as label values and label names, not series: the scrape
+    // outcomes the proxy records in proxy_scrape_requests_total's type label, taken from the code that records them,
+    // and the label agent_scrape_request_latency_seconds carries the agent's name in.
+    private val NOT_SERIES =
+      ProxyFailure.entries.map { it.label }.toSet() +
+        ProxyHttpRoutes.IN_FLIGHT_LIMIT_LABEL +
+        ProxyHttpRoutes.BACKLOG_FULL_LABEL +
+        "agent_name"
+
     private val SNIPPET =
       Regex("""; --8<-- \[start:promql-[^\]]+]\n(.*?)\n; --8<-- \[end:""", RegexOption.DOT_MATCHES_ALL)
     private val PROMQL_BLOCK = Regex("""```promql\n(.*?)```""", RegexOption.DOT_MATCHES_ALL)

@@ -14,6 +14,8 @@ Prometheus Proxy is designed to be firewall-friendly:
   [pre-shared token](#agent-authentication-pre-shared-token) — optionally scoped to
   [per-agent identities](#per-agent-identities-and-path-authorization) — and/or [mutual TLS](tls.md)
 - Stale agent connections are automatically cleaned up
+- The proxy's scrape port, which Prometheus scrapes, has no authentication, so keep it where only Prometheus
+  can reach it (see [Scrape Port Access](#scrape-port-access))
 
 !!! warning "The agent gRPC port is unauthenticated by default"
 
@@ -185,6 +187,47 @@ The agent sends a URL's credentials as HTTP Basic auth with the first request to
 redirect only within the target's own origin, so they reach only that host. An `Authorization` header that
 Prometheus sends with the scrape takes precedence; the URL's credentials then answer only a 401 challenge.
 
+## Scrape Port Access
+
+!!! warning "The scrape port is unauthenticated"
+
+    The proxy's HTTP port (default `8080`) answers any client, with no authentication, and it listens on
+    every interface by default (`proxy.http.host = "0.0.0.0"`). Anyone who can reach it can do what
+    Prometheus does, and what Prometheus does reaches inside the agents' networks.
+
+A client of the scrape port can:
+
+- **Have the agents scrape their targets.** A `GET` of a registered path sends a scrape to the agent
+  serving it, or to every agent serving it in [consolidated mode](../advanced.md#consolidated-mode). The
+  agent fetches the path's `url` from inside its own network and the proxy returns what the target
+  answered.
+- **Choose the query string.** The request's query parameters are appended to the path's `url`, after any
+  it already has. The agent doesn't filter them, so every parameter reaches the target.
+- **Choose the `Authorization` header.** The proxy forwards it to the agent, which sends it to the target
+  ahead of any credentials in the path's `url` (see [Credentials in URLs](#credentials-in-urls)).
+- **List the paths.** With [service discovery](../service-discovery.md) enabled, its endpoint on this port
+  lists every registered path, with the names and host names of the agents serving it.
+
+For most exporters that is a read of metrics Prometheus already collects. An exporter that takes its target
+as a query parameter is different: blackbox_exporter's and snmp_exporter's `/probe?target=…`, for example,
+turn the query string into a choice of host, so a client of the scrape port can have the exporter probe any
+address it can reach, from inside the agent's network, and read the result. Don't rely on the `target` in
+the path's `url` to prevent that, since which of two values for a repeated parameter an exporter uses is up
+to the exporter.
+
+To keep the port to Prometheus:
+
+- **Bind it to a private address** with `proxy.http.host`, one Prometheus can reach and the wider network
+  can't (`-Dproxy.http.host=10.0.0.5` sets it from the command line). In a container, which listens on all
+  of its interfaces, publish the port on a private address instead (`-p 10.0.0.5:8080:8080`). The proxy's
+  Helm chart makes its Service a `ClusterIP`, and its `agentService` exposes only the gRPC port, so in
+  Kubernetes the scrape port stays inside the cluster unless you expose it; a `NetworkPolicy` keeps it from
+  the cluster's other pods as well.
+- **Firewall it** so that only Prometheus can connect.
+- **Take care with exporters that take a target parameter.** Serve them only through a proxy whose scrape
+  port nothing but Prometheus can reach, and limit what the exporter can reach, with its own settings or
+  the network around it, to the hosts it should probe.
+
 ## Scrape Port Responses
 
 The proxy passes a target's `Content-Type` through only for the Prometheus exposition formats
@@ -258,5 +301,6 @@ the latest release only, so upgrade to receive them.
 
 [`SECURITY.md`](https://github.com/pambrose/prometheus-proxy/blob/master/SECURITY.md) lists what a useful report
 includes, and which documented behavior is by design rather than a vulnerability: the agent port accepting any
-agent without a token, identities, or mutual TLS, and the admin, metrics, and dashboard ports having no
-authentication.
+agent without a token, identities, or mutual TLS; the scrape port having no authentication, so that whoever can
+reach it can trigger scrapes with their own query string and `Authorization` header; and the admin, metrics, and
+dashboard ports having no authentication.
