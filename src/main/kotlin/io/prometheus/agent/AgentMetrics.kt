@@ -19,6 +19,7 @@
 package io.prometheus.agent
 
 import io.prometheus.Agent
+import io.prometheus.common.MetricBuilders.SCRAPE_LATENCY_BUCKETS
 import io.prometheus.common.MetricBuilders.counter
 import io.prometheus.common.MetricBuilders.gauge
 import io.prometheus.common.MetricBuilders.histogram
@@ -88,7 +89,7 @@ internal class AgentMetrics(
         name("agent_scrape_request_latency_seconds")
         help("Agent scrape request latency in seconds")
         labelNames(LAUNCH_ID, AGENT_NAME)
-        classicUpperBounds(.005, .01, .025, .05, .1, .25, .5, 1.0, 2.5, 5.0, 10.0)
+        classicUpperBounds(*SCRAPE_LATENCY_BUCKETS)
       }
 
     private val FILTER_LINES_DROPPED =

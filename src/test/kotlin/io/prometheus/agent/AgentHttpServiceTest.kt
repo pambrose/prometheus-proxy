@@ -56,6 +56,7 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.spyk
+import io.mockk.verify
 import io.prometheus.Agent
 import io.prometheus.agent.filter.MetricFilter
 import io.prometheus.common.testConfigVals
@@ -70,6 +71,7 @@ import io.prometheus.common.ScrapeResults
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
+import java.net.ServerSocket
 import java.util.zip.GZIPInputStream
 import javax.net.ssl.X509TrustManager
 import kotlin.concurrent.atomics.AtomicInt
@@ -977,6 +979,58 @@ class AgentHttpServiceTest : StringSpec() {
 
         results.srValidResponse.shouldBeTrue()
         authorizationsSeen shouldBe listOf("Bearer prometheus-token")
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+    // agent_scrape_request_count_total counted only the scrapes whose target answered. A path the agent doesn't serve
+    // returned before the count, and a fetch that failed -- a timeout, a refused connection -- left the type empty,
+    // which isn't counted, so with a target down the dashboards' unsuccessful-scrapes panel stayed empty.
+    "fetchScrapeUrl should count a scrape of a path the agent doesn't serve as invalid_path" {
+      val mockAgent = createMockAgent()
+      every { mockAgent.pathManager[any()] } returns null
+      val service = AgentHttpService(mockAgent)
+
+      service.fetchScrapeUrl(scrapeRequest { path = "unknown" })
+
+      verify(exactly = 1) { mockAgent.updateScrapeCounter("invalid_path") }
+      service.close()
+    }
+
+    "fetchScrapeUrl should count a refused connection as a failure" {
+      val closedPort = ServerSocket(0).use { it.localPort }
+      val mockAgent = createMockAgentWithPaths()
+      val service = AgentHttpService(mockAgent)
+      mockAgent.pathManager.registerPath("metrics", "http://localhost:$closedPort/metrics")
+
+      service.fetchScrapeUrl(scrapeRequest { path = "metrics" })
+
+      verify(exactly = 1) { mockAgent.updateScrapeCounter("failure") }
+      service.close()
+    }
+
+    "fetchScrapeUrl should count a scrape that times out as timed_out" {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
+        routing {
+          get("/metrics") {
+            delay(5.seconds)
+            call.respondText("late")
+          }
+        }
+      }
+
+      try {
+        val port = server.startAndAwaitReady()
+        val mockAgent = createMockAgentWithPaths()
+        every { mockAgent.options.scrapeTimeoutSecs } returns 1
+        val service = AgentHttpService(mockAgent)
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
+
+        service.fetchScrapeUrl(scrapeRequest { path = "metrics" })
+
+        verify(exactly = 1) { mockAgent.updateScrapeCounter("timed_out") }
         service.close()
       } finally {
         server.stop(0, 0)

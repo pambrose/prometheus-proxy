@@ -112,10 +112,14 @@ internal class AgentHttpService(
 
   suspend fun fetchScrapeUrl(scrapeRequest: ScrapeRequest): ScrapeResults {
     val pathContext = agent.pathManager[scrapeRequest.path]
-    return if (pathContext != null)
-      fetchContentFromUrl(scrapeRequest, pathContext)
-    else
-      handleInvalidPath(scrapeRequest)
+    val results =
+      if (pathContext != null)
+        fetchContentFromUrl(scrapeRequest, pathContext)
+      else
+        handleInvalidPath(scrapeRequest)
+    // Counted here, so every scrape the proxy asks for is counted under its type, however it ends.
+    agent.updateScrapeCounter(results.scrapeCounterMsg)
+    return results
   }
 
   private suspend fun fetchContentFromUrl(
@@ -153,11 +157,12 @@ internal class AgentHttpService(
           srStatusCode = errorCode(e, logUrl),
           srFailureReason = scrapeFailureReason(e, req.debugEnabled),
           srUrl = if (req.debugEnabled) logUrl else "",
+          // A fetch that got no answer: the agent's own timeout, or a refused connection, DNS failure, and the like.
+          scrapeCounterMsg = if (e.hasTimeoutCause()) TIMED_OUT_MSG else FAILURE_MSG,
         )
       } finally {
         requestTimer?.observeDuration()
       }
-    agent.updateScrapeCounter(results.scrapeCounterMsg)
     return results
   }
 
@@ -446,6 +451,8 @@ internal class AgentHttpService(
     private const val INVALID_PATH_MSG = "invalid_path"
     private const val SUCCESS_MSG = "success"
     private const val UNSUCCESSFUL_MSG = "unsuccessful"
+    private const val TIMED_OUT_MSG = "timed_out"
+    private const val FAILURE_MSG = "failure"
 
     // Cap on the retry backoff so total retry time stays bounded within the scrape timeout (finding 28).
     private const val MAX_RETRY_DELAY_MS = 5000L

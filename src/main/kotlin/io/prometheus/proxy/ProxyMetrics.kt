@@ -19,6 +19,7 @@
 package io.prometheus.proxy
 
 import io.prometheus.Proxy
+import io.prometheus.common.MetricBuilders.SCRAPE_LATENCY_BUCKETS
 import io.prometheus.common.MetricBuilders.counter
 import io.prometheus.common.MetricBuilders.gauge
 import io.prometheus.common.MetricBuilders.histogram
@@ -152,9 +153,7 @@ internal class ProxyMetrics(
         name("proxy_scrape_request_latency_seconds")
         help("Proxy scrape request latency in seconds")
         labelNames("path", "outcome")
-        // Up to the proxy's default scrapeRequestTimeoutSecs (90), past the agent's default scrapeTimeoutSecs (15), so
-        // a timeout lands in a bucket rather than +Inf.
-        classicUpperBounds(.005, .01, .025, .05, .1, .25, .5, 1.0, 2.5, 5.0, 10.0, 15.0, 30.0, 60.0, 90.0)
+        classicUpperBounds(*SCRAPE_LATENCY_BUCKETS)
       }
 
     private val SCRAPE_RESPONSE_BYTES: Histogram =
