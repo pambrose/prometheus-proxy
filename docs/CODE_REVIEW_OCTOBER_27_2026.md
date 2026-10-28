@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — October 2026 Findings
 
-**Status:** 47 issues — 20 fixed, 27 open (16 medium, 31 low, no high).
+**Status:** 47 issues — 23 fixed, 24 open (16 medium, 31 low, no high).
 
 **Date:** 2026-10-27
 
@@ -94,11 +94,11 @@ Six earlier fixes turn out to be incomplete:
 | 19 | `MetricFilter` misjudges quoted UTF-8 metric names                                      | Agent    | low      | ⬜      |
 | 20 | Agent dead code, stale KDoc, and a `shutDown()` that isn't failure-isolated             | Agent    | low      | ⬜      |
 | 21 | Scrape-result ownership checked on one lookup, applied on another (September #1 gap)    | Security | medium   | ✅      |
-| 22 | Path authorization runs a backtracking regex before the length cap applies             | Security | medium   | ⬜      |
-| 23 | Agent-reported names have no size limit and are repeated per path everywhere            | Security | medium   | ⬜      |
+| 22 | Path authorization runs a backtracking regex before the length cap applies             | Security | medium   | ✅      |
+| 23 | Agent-reported names have no size limit and are repeated per path everywhere            | Security | medium   | ✅      |
 | 24 | SD labels aren't type- or name-checked; one agent can invalidate the whole SD document  | Security | medium   | ⬜      |
 | 25 | The Netty CVE override isn't in the published POM; embedders get vulnerable Netty       | Security | medium   | ✅      |
-| 26 | A connection that skips `connectAgent` works as an agent without being announced        | Security | low      | ⬜      |
+| 26 | A connection that skips `connectAgent` works as an agent without being announced        | Security | low      | ✅      |
 | 27 | Helm proxy chart takes `proxy.auth` tokens only via a ConfigMap; example schema wrong   | Security | low      | ⬜      |
 | 28 | Security docs don't say the scrape port is unauthenticated, or what it forwards         | Security | low      | ⬜      |
 | 29 | `release-check` accepts any all-green check set without requiring the CI jobs           | CI/build | medium   | ✅      |
@@ -144,7 +144,7 @@ The **Touches** column shows which steps edit the same files and so need to land
 | 3    | ✅      | #29, #30        | `release-check` requires the named CI checks and complete bumps             | `Makefile`, `docs/RELEASE.md`, release skill                                                      | Protects every later release. Makefile-only, so it can run in parallel with any code step.                                                                                       |
 | 4    | ✅      | #8, #14, #15    | Stream the agent's fetch with a real size bound; forward the timeout; preemptive Basic | `agent/AgentHttpService.kt`                                                            | One bad target can take the agent's heap, and every path with it. The other two change the same request setup.                                                                   |
 | 5    | ✅      | #21, #3         | Check and complete scrape results on one wrapper; sweep transfers on cancel | `ProxyServiceImpl.kt`, `ScrapeRequestManager.kt`, `AgentContextManager.kt`, `ChunkedContext.kt`, `specs/tla/ProxyRegistry.tla` | Both concern the ownership and lifetime of in-flight results. The change touches `ScrapeRequestManager`, so update the TLA+ action and add a Lincheck spec in the same PR.        |
-| 6    | ⬜      | #22, #23, #26   | Bound and authorize agent input before using it                             | `ProxyServiceImpl.kt` (`registerAgent`/`registerPath`), `AgentAuthManager.kt`, `ProxyOptions.kt`, `config.conf` | The three tenant-against-tenant availability issues. The new `proxy.internal` limits need config, validation, and docs. Do it after step 5, which edits the same file.            |
+| 6    | ✅      | #22, #23, #26   | Bound and authorize agent input before using it                             | `ProxyServiceImpl.kt` (`registerAgent`/`registerPath`), `AgentAuthManager.kt`, `ProxyOptions.kt`, `config.conf` | The three tenant-against-tenant availability issues. The new `proxy.internal` limits need config, validation, and docs. Do it after step 5, which edits the same file.            |
 | 7    | ⬜      | #1, #24, #6     | Service discovery that Prometheus accepts                                   | `Proxy.kt` (`buildServiceDiscoveryJson`), `ProxyOptions.kt`, `ProxyPathManager.addPath`, SD docs, a new container spec | SD as documented yields no targets today. One container spec using `http_sd_configs` guards all three. Do it after step 6, since both edit `addPath`'s validation.               |
 | 8    | ⬜      | #2              | Readiness that doesn't flap under load                                      | `config/config.conf`, `ProxyOptions.kt`, `Proxy.kt` health checks, `charts/prometheus-proxy`, k8s docs | A default and a chart change, so it needs a "Before you upgrade" note.                                                                                                       |
 | 9    | ✅      | #9, #16, #5, #41 | Safe to embed: register metrics once, leave the root logger and shutdown hooks alone, fix the examples | `AgentMetrics.kt`, `ProxyMetrics.kt`, `Agent.kt`, `BaseOptions.kt`, `Utils.kt`, `ProxyGrpcService.kt`, README, website, KDoc | All four are about running inside another JVM, so one embedded-host spec (restart, two agents, log level) covers them. Do it after step 4 and before step 10, which shares `AgentMetrics.kt`. |
@@ -325,6 +325,12 @@ a second INFO line and counts as an agent eviction.
 
 - removing an unannounced context emits no INFO line;
 - evicting one leaves `agentEvictionCount` unchanged.
+
+**Found while fixing #23, for the same step:** some log lines still write agent-supplied values whole. An
+unvalidated `request.agentId`, up to about 4 MiB, is logged in `connectionMismatchReason` at WARN and in the "missing
+AgentContext" lines at ERROR, across `registerAgent`, `registerPath`, `unregisterPath`, and `sendHeartBeat`.
+`removePath` logs `unregisterPath`'s path whole at ERROR. `AgentContext.loggedPathRejections` keeps one entry per
+distinct rejected path per connection, unbounded in count though each entry is now at most about 67 characters.
 
 ### 5. [x] Each `Proxy` adds a JVM shutdown hook for its gRPC server that is never removed
 
@@ -860,7 +866,7 @@ add the victim's scrape just before and just after the single lookup, and failed
 `ScrapeResultOwnershipLincheckTest` that replayed the old logic found `Scrape 1257, sent to 2515, was completed by
 2516`; it passes against the new API.
 
-### 22. [ ] Path authorization runs a backtracking regex on the full path before the length cap applies
+### 22. [x] Path authorization runs a backtracking regex on the full path before the length cap applies
 
 **Severity:** medium · **Confidence:** confirmed. The same regex construction was timed on JDK 25.
 
@@ -899,7 +905,17 @@ whole at WARN on every call.
 - An identity with `*_*_*_*_metrics` and a 4,096-character path gets a prompt `INVALID_PATH`, under a Kotest timeout.
 - The matcher passes adversarial input under a timeout, alongside the existing glob tests.
 
-### 23. [ ] Agent-reported registration fields have no size limit and are copied per path into logs, SD, the dashboard, and `/debug`
+**Resolution:** the length, blank, `/`, multi-segment, and labels-size checks move from `addPath` into a lock-free
+`ProxyPathManager.formRejection`. `registerPath` runs it before `isAuthorized`, and `addPath` still does too. A
+blank path now gets `INVALID_PATH` rather than failing the call with `UNKNOWN`. `AgentAuthManager.globMatches`, a
+two-pointer matcher that backs up to the last `*`, replaces the regex; its cost is at most path length times glob
+length. A seeded check of 20,000 random globs against the old regex agrees, except that `*` and `?` now also match
+line terminators, as documented. Denied paths are logged and echoed cut to 64 characters (`shownPath`). The
+finding's test (`*_*_*_*_metrics` and a 4,096-character path) timed out under 10 seconds before the fix. A
+`DaemonAwait` test helper makes that timeout able to stop a `Regex.matches` that ignores interruption. The
+adversarial matcher test now runs in about 4 ms.
+
+### 23. [x] Agent-reported registration fields have no size limit and are copied per path into logs, SD, the dashboard, and `/debug`
 
 **Severity:** medium · **Confidence:** confirmed. The proxy side is traced.
 
@@ -932,6 +948,15 @@ size times path count. Against the Helm chart's 512 Mi memory limit, that can ex
 
 - A `proxy/ProxyServiceImplTest.kt` case where `registerAgent` with an oversized name is rejected or truncated.
 - Option-validation tests for the new limits.
+
+**Resolution:** two new limits, `proxy.internal.maxAgentFieldLength` (256: name, host name, launch ID, and each
+endpoint) and `maxAgentProxyEndpoints` (16), each 0 for unlimited and validated in `ProxyOptions`. Oversized fields
+are truncated, never inside a surrogate pair, with one WARN naming the fields and their sizes but not their values.
+Truncating rather than rejecting keeps an agent with a long host name connected, since the fields are display-only
+on the proxy. Per-path INFO lines (added, overwritten, orphaned, removed) name the agentId. `maxInboundMessageSize`
+stays at 4 MiB: agents accept `chunkContentSizeKbs` up to 4,032 KB, so a smaller proxy limit could break a valid
+agent, and once fields are cut before storage, a large message is a one-off allocation, not repeated per path.
+RELEASE_NOTES' "Before you upgrade" covers the series change a cut name causes.
 
 ### 24. [ ] SD labels aren't checked for type or name, so one agent's labels can invalidate the whole discovery document
 
@@ -1000,7 +1025,7 @@ declared as `runtimeOnly` dependencies through a new `netty` bundle in `gradle/l
 turns up, so a grpc update that adds one can't reopen this; with `netty-codec-socks` dropped from the bundle,
 `agentJar` failed with that message. Both changelogs have a Security entry.
 
-### 26. [ ] A connection that never calls `connectAgent` works as a full agent without being announced
+### 26. [x] A connection that never calls `connectAgent` works as a full agent without being announced
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -1030,6 +1055,15 @@ passed), or make `registerAgent`, `registerPath`, and `readRequestsFromProxy` re
 doc with whichever you choose.
 
 **Test:** `registerPath` on a pending context is rejected (or announces it), and `agentContextSize` reflects that.
+
+**Resolution:** of the two options, announce on the first authenticated call. `ProxyServerInterceptor` announces the
+connection's pending context on every call it sees. With auth configured, a call reaches it only after the
+server-wide `AgentAuthServerInterceptor` accepted it, and announcing is idempotent and skips an invalidated context.
+`connectAgent` no longer announces itself. One place covers every RPC, including future ones, rejects no client,
+and makes `docs/security-agent-authentication.md`'s "pending until the first authenticated call" true. The stock
+agent always calls `connectAgent` first. A `ProxyGrpcServiceTest` client that skips `connectAgent`, learns its
+agentId from the `agent-id` header, and registers a path found `agentContextSize` 0 before the fix. An auth-gated
+variant failed the same way, and a mutation that runs auth after the interceptor fails it.
 
 ### 27. [ ] The Helm proxy chart can take `proxy.auth` tokens only through a ConfigMap, and its example shows the wrong schema
 

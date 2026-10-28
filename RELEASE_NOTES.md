@@ -44,9 +44,6 @@ among them gRPC, which now runs at one version across all its modules.
     `proxy.internal.maxAgentFieldLength`, or set it to `0`, to keep such values whole.
   - A custom client that never called `connectAgent` now shows up on the dashboard and in
     `proxy_agent_map_size`.
-
-### Before you upgrade
-
 - **Some agent configs that start today will fail at startup.** Two `pathConfigs` entries for the same path
   (`metrics` and `/metrics`) are now rejected; before, the second silently replaced the first's URL. And an
   `agent.http.trustStorePath` that can't be loaded, from a missing file or a wrong password, now fails startup
