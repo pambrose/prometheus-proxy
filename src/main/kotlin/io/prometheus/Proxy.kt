@@ -214,7 +214,8 @@ class Proxy(
     else
       null
 
-  internal val metrics by lazy { ProxyMetrics(this) }
+  private val metricsHolder = lazy { ProxyMetrics(this) }
+  internal val metrics by metricsHolder
 
   /**
    * Fan-out bus for topology changes. Declared before the managers because they publish to it.
@@ -294,7 +295,13 @@ class Proxy(
   }
 
   override fun startUp() {
-    super.startUp()
+    // Built here, so a registry that rejects them fails startup visibly rather than the first request that counts.
+    if (isMetricsEnabled) {
+      val _ = metrics
+    }
+    runCatching { super.startUp() }
+      .onFailure { closeMetrics() }
+      .getOrThrow()
 
     // Guava calls shutDown() only after startUp() succeeds, so when a sub-service fails to start, stop the ones that
     // started, most recent first, then what super.startUp() started; super.shutDown() also removes its shutdown hook.
@@ -325,6 +332,7 @@ class Proxy(
     }.exceptionOrNull()?.let { e ->
       stopActions.forEach { stop -> runCatching(stop).exceptionOrNull()?.let(e::addSuppressed) }
       runCatching { super.shutDown() }.exceptionOrNull()?.let(e::addSuppressed)
+      runCatching { closeMetrics() }.exceptionOrNull()?.let(e::addSuppressed)
       throw e
     }
   }
@@ -339,7 +347,14 @@ class Proxy(
     dashboardService?.stopSync()
     httpService.stopSync()
     agentCleanupService?.stopSync()
+    closeMetrics()
     super.shutDown()
+  }
+
+  // Removes this proxy from the proxy metrics every proxy in the JVM shares, if it built them.
+  private fun closeMetrics() {
+    if (metricsHolder.isInitialized())
+      metrics.close()
   }
 
   override fun run() {

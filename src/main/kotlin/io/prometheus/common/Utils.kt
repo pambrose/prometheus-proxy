@@ -115,9 +115,14 @@ internal object Utils {
 
   fun String.toJsonElement() = Json.parseToJsonElement(this)
 
+  // The parent of every proxy and agent logger.
+  internal const val PROJECT_LOGGER_NAME = "io.prometheus"
+
+  /** Sets the level of [loggerName], the root logger unless given. */
   fun setLogLevel(
     context: String,
     logLevel: String,
+    loggerName: String = ROOT_LOGGER_NAME,
   ) {
     val level =
       when (logLevel.lowercase()) {
@@ -136,13 +141,13 @@ internal object Utils {
 
         else -> throw IllegalArgumentException("Invalid $context log level: $logLevel")
       }
-    val rootLogger = LoggerFactory.getLogger(ROOT_LOGGER_NAME) as? Logger
+    val logger = LoggerFactory.getLogger(loggerName) as? Logger
       ?: run {
-        LoggerFactory.getLogger(ROOT_LOGGER_NAME)
+        LoggerFactory.getLogger(loggerName)
           .warn("Cannot set log level: SLF4J binding is not Logback")
         return
       }
-    rootLogger.level = level
+    logger.level = level
   }
 
   /**

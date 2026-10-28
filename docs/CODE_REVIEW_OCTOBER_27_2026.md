@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — October 2026 Findings
 
-**Status:** 47 issues — 9 fixed, 38 open (16 medium, 31 low, no high).
+**Status:** 47 issues — 13 fixed, 34 open (16 medium, 31 low, no high).
 
 **Date:** 2026-10-27
 
@@ -77,18 +77,18 @@ Six earlier fixes turn out to be incomplete:
 | 2  | Health thresholds (25) far below the caps; `/healthcheck` readiness flaps under load    | Proxy    | medium   | ⬜      |
 | 3  | Chunked-transfer sweep skipped on cancel; reclaim trusts the agent's `headerAgentId`    | Proxy    | low      | ⬜      |
 | 4  | Unauthenticated connections still log INFO on removal and count as evictions           | Proxy    | low      | ⬜      |
-| 5  | Each `Proxy` leaks a JVM shutdown hook that keeps it reachable                          | Proxy    | low      | ⬜      |
+| 5  | Each `Proxy` leaks a JVM shutdown hook that keeps it reachable                          | Proxy    | low      | ✅      |
 | 6  | A path equal to the SD path, blitz path, or `favicon.ico` registers but can't be scraped | Proxy   | low      | ⬜      |
 | 7  | Dead or test-only proxy code, including an unreachable `no_agents` branch               | Proxy    | low      | ⬜      |
 | 8  | `maxContentLengthMBytes` doesn't bound memory; Ktor buffers the whole body first        | Agent    | medium   | ✅      |
-| 9  | A second agent in one JVM with metrics on never connects (duplicate registration)       | Agent    | medium   | ⬜      |
+| 9  | A second agent in one JVM with metrics on never connects (duplicate registration)       | Agent    | medium   | ✅      |
 | 10 | Discovered paths vanish on any reconnect while the discovery file is unreadable         | Agent    | medium   | ⬜      |
 | 11 | `agent_scrape_request_count_total` misses failed fetches and `invalid_path`             | Agent    | medium   | ⬜      |
 | 12 | `pathConfigs`: `path = "/"` fails every connect; duplicates silently keep the last URL  | Agent    | low      | ⬜      |
 | 13 | Agent latency histogram stops at 10s, below its own 15s scrape timeout                  | Agent    | low      | ⬜      |
 | 14 | `X-Prometheus-Scrape-Timeout-Seconds` isn't forwarded to the target                     | Agent    | low      | ✅      |
 | 15 | Basic credentials from the target URL are sent only after a 401                         | Agent    | low      | ✅      |
-| 16 | An embedded agent's `logLevel` changes the host JVM's root logger                       | Agent    | low      | ⬜      |
+| 16 | An embedded agent's `logLevel` changes the host JVM's root logger                       | Agent    | low      | ✅      |
 | 17 | A routine proxy outage logs an ERROR stack trace on every reconnect                     | Agent    | low      | ⬜      |
 | 18 | A bad `agent.http.trustStorePath` isn't caught at startup and fails every scrape        | Agent    | low      | ⬜      |
 | 19 | `MetricFilter` misjudges quoted UTF-8 metric names                                      | Agent    | low      | ⬜      |
@@ -113,7 +113,7 @@ Six earlier fixes turn out to be incomplete:
 | 38 | CI hygiene: `build` job has no timeout; tool images pinned by tag only                  | CI/build | low      | ⬜      |
 | 39 | The image's UID is implicit, but the charts hard-code it                                | CI/build | low      | ⬜      |
 | 40 | The fat JARs keep only one dependency's `NOTICE`                                        | CI/build | low      | ⬜      |
-| 41 | Every embedded-agent example passes `exitOnMissingConfig = true` and exits the host     | Docs     | medium   | ⬜      |
+| 41 | Every embedded-agent example passes `exitOnMissingConfig = true` and exits the host     | Docs     | medium   | ✅      |
 | 42 | Website tuning table names a nonexistent key; Troubleshooting a nonexistent metric      | Docs     | medium   | ⬜      |
 | 43 | 4.4.0 changelogs miss the common-utils and gradle-plugins bumps                         | Docs     | low      | ✅      |
 | 44 | `docs/TESTING.md` omits three specs and misstates `all-tests`                           | Docs     | low      | ⬜      |
@@ -147,7 +147,7 @@ The **Touches** column shows which steps edit the same files and so need to land
 | 6    | ⬜      | #22, #23, #26   | Bound and authorize agent input before using it                             | `ProxyServiceImpl.kt` (`registerAgent`/`registerPath`), `AgentAuthManager.kt`, `ProxyOptions.kt`, `config.conf` | The three tenant-against-tenant availability issues. The new `proxy.internal` limits need config, validation, and docs. Do it after step 5, which edits the same file.            |
 | 7    | ⬜      | #1, #24, #6     | Service discovery that Prometheus accepts                                   | `Proxy.kt` (`buildServiceDiscoveryJson`), `ProxyOptions.kt`, `ProxyPathManager.addPath`, SD docs, a new container spec | SD as documented yields no targets today. One container spec using `http_sd_configs` guards all three. Do it after step 6, since both edit `addPath`'s validation.               |
 | 8    | ⬜      | #2              | Readiness that doesn't flap under load                                      | `config/config.conf`, `ProxyOptions.kt`, `Proxy.kt` health checks, `charts/prometheus-proxy`, k8s docs | A default and a chart change, so it needs a "Before you upgrade" note.                                                                                                       |
-| 9    | ⬜      | #9, #16, #5, #41 | Safe to embed: register metrics once, leave the root logger and shutdown hooks alone, fix the examples | `AgentMetrics.kt`, `ProxyMetrics.kt`, `Agent.kt`, `BaseOptions.kt`, `Utils.kt`, `ProxyGrpcService.kt`, README, website, KDoc | All four are about running inside another JVM, so one embedded-host spec (restart, two agents, log level) covers them. Do it after step 4 and before step 10, which shares `AgentMetrics.kt`. |
+| 9    | ✅      | #9, #16, #5, #41 | Safe to embed: register metrics once, leave the root logger and shutdown hooks alone, fix the examples | `AgentMetrics.kt`, `ProxyMetrics.kt`, `Agent.kt`, `BaseOptions.kt`, `Utils.kt`, `ProxyGrpcService.kt`, README, website, KDoc | All four are about running inside another JVM, so one embedded-host spec (restart, two agents, log level) covers them. Do it after step 4 and before step 10, which shares `AgentMetrics.kt`. |
 | 10   | ⬜      | #11, #13        | Agent metrics that count every scrape                                       | `AgentHttpService.kt`, `AgentMetrics.kt`, metrics docs, Grafana JSON                              | Do it after steps 4 and 9, which share these files. The dashboards and docs change with the counter.                                                                             |
 | 11   | ⬜      | #10, #12, #18   | Agent config and discovery robustness                                       | `PathDiscoveryService.kt`, `AgentPathManager.kt`, `PathDiscoverySource.kt`, `AgentOptions.kt`, trust-manager init | Startup validation, plus a last-known-good list that outlives the connection. Independent of the proxy steps.                                                                    |
 | 12   | ⬜      | #4, #17         | Quiet logs for unauthenticated connections and routine outages              | `AgentContextManager.kt`, `AgentContextCleanupService.kt`, `AgentGrpcService.kt`, `Utils.kt`      | Changes only log levels and one counter, each covered by a `ListAppender` test. Do it after step 5, which shares `AgentContextManager.kt`.                                        |
@@ -321,7 +321,7 @@ a second INFO line and counts as an agent eviction.
 - removing an unannounced context emits no INFO line;
 - evicting one leaves `agentEvictionCount` unchanged.
 
-### 5. [ ] Each `Proxy` adds a JVM shutdown hook for its gRPC server that is never removed
+### 5. [x] Each `Proxy` adds a JVM shutdown hook for its gRPC server that is never removed
 
 **Severity:** low · **Confidence:** confirmed. common-utils' `shutdownWithJvm` calls `Runtime.addShutdownHook`.
 
@@ -337,6 +337,10 @@ The hook is also redundant. `GenericService`'s own hook already runs `Proxy.shut
 **Fix:** drop `shutdownWithJvm`, or register the hook in `startUp()` and remove it in `shutDown()`.
 
 **Test:** after a start and stop, GC clears a `WeakReference` to the `Proxy`.
+
+**Resolution:** `shutdownWithJvm` is dropped from `ProxyGrpcService`, since the proxy's own hook, which
+`GenericService` adds in `startUp()` and removes in `shutDown()`, already stops the server. A `ProxyTest` case checks
+that a `WeakReference` to a started and stopped proxy clears after GC. It didn't before the fix.
 
 ### 6. [ ] A path equal to the SD path, the blitz path, or `favicon.ico` registers but can never be scraped
 
@@ -448,7 +452,7 @@ alike; both were tried. Both tests the finding asks for are in `agent/AgentHttpS
 body, and a 64 MB Content-Length that stalls after 1 KB). Before the fix, each returned 408 at the 5s timeout; after
 it, 413 in about 0.16s and at once.
 
-### 9. [ ] A second agent in one JVM with metrics enabled never connects
+### 9. [x] A second agent in one JVM with metrics enabled never connects
 
 **Severity:** medium · **Confidence:** confirmed. common-utils' `PrometheusDsl` registers in
 `PrometheusRegistry.defaultRegistry`, and the 1.10.0 registry rejects a duplicate name.
@@ -485,6 +489,18 @@ it, 413 in about 0.16s and at once.
 
 **Test:** start and stop an agent with metrics on, then start a second one without clearing the registry.
 `awaitInitialConnection` succeeds, and the second agent's `connect_count{type="success"}` is 1.
+
+**Resolution:** a new `common/SharedCollectors` holds one set of collectors for every agent in the JVM. It
+registers them when the first agent starts, registers them again if the registry was cleared (it checks a sentinel
+metric), unregisters and clears them when the last one stops, and registers all or nothing. The fix departs from the
+suggested one for the samplers: the registry rejects a second `SamplerGaugeCollector` with the same name and labels,
+so registering them per instance would have fixed restarts but not two agents at once. `agent_scrape_backlog_size` and
+`agent_client_cache_size` are now callback gauges that report one series per running agent. On close, an agent removes
+every series with its `launch_id`. `ProxyMetrics` shares its collectors the same way. Its counters carry no
+`launch_id`, so they add up across proxies, as do its sampled gauges. A closing proxy removes its start time and the
+per-path series it recorded. Both build their metrics in `startUp()`, so a host metric with one of their names fails
+startup. `EmbeddedAgentMetricsTest` covers a restart and two agents at once, both without a registry clear, plus the
+startup clash. The metrics unit tests now close what they create, instead of clearing the registry.
 
 ### 10. [ ] Discovered paths vanish on any reconnect while the discovery file is unreadable
 
@@ -639,7 +655,7 @@ overridden a header Prometheus forwards from its scrape config. That header stil
 credentials still answer a 401 to it. The finding's test (a target that returns 403 without credentials answers 200
 to a single request) failed with 403 before the fix. A second test pins the forwarded header's precedence.
 
-### 16. [ ] An embedded agent's `logLevel` changes the host JVM's root logger
+### 16. [x] An embedded agent's `logLevel` changes the host JVM's root logger
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -652,6 +668,11 @@ application's own INFO logs. No doc mentions this.
 **Fix:** set the level on the `io.prometheus` logger instead (or skip it when `embedded`), and document the behavior.
 
 **Test:** embedded options with `logLevel = warn` leave the root logger's level unchanged.
+
+**Resolution:** `Utils.setLogLevel` takes a logger name, and `BaseOptions.assignLogLevel` passes `io.prometheus`
+when `embedded`, so a standalone agent and the proxy still set the root logger. The embedded-agent page documents
+it. `AgentOptionsTest` checks that embedded options with `--log_level warn` leave the root logger at INFO and set
+`io.prometheus` to WARN; before the fix, the root logger became WARN.
 
 ### 17. [ ] A routine proxy outage logs an ERROR stack trace on every reconnect
 
@@ -1274,7 +1295,7 @@ Keep `.claude/rules/shadow-jar.md`'s service-file rules intact.
 
 ## 📚 Documentation
 
-### 41. [ ] Every embedded-agent example passes `exitOnMissingConfig = true`, which exits the host JVM on a config error
+### 41. [x] Every embedded-agent example passes `exitOnMissingConfig = true`, which exits the host JVM on a config error
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -1314,6 +1335,12 @@ Two smaller problems:
 - Make the KDoc example `AgentOptions(args, exitOnMissingConfig = true)`.
 - Reword the website parameter row and the `startSyncAgent` KDoc: `false` means every startup failure throws
   `ConfigLoadException`; `true` means standalone exit behavior.
+
+**Resolution:** the README, both website snippets, and the `Agent` KDoc pass `exitOnMissingConfig = false`, and
+the KDoc's standalone example is `AgentOptions(args, exitOnMissingConfig = true)`. The website's parameter row and the
+`startSyncAgent` and `startAsyncAgent` KDoc now say what each value does: `false` throws `ConfigLoadException` on a
+config or option error and uses the built-in config when none is given; `true` requires a config and exits the
+process.
 
 ### 42. [ ] The website's tuning table names a config key that doesn't exist, and Troubleshooting a metric that doesn't
 

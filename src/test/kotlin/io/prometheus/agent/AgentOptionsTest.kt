@@ -18,6 +18,8 @@
 
 package io.prometheus.agent
 
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.Logger
 import io.kotest.assertions.throwables.shouldNotThrowAny
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
@@ -32,9 +34,30 @@ import io.prometheus.common.ConfigLoadException
 import io.prometheus.common.Utils.HostPort
 import io.prometheus.common.Utils.parseEndpointList
 import io.prometheus.common.agentOptions
+import org.slf4j.LoggerFactory
 
 class AgentOptionsTest : StringSpec() {
   init {
+    // An embedded agent shares the host application's logging, so its logLevel sets only the io.prometheus loggers.
+    // It set the root logger's level, so agent.logLevel = "warn" also silenced the host's own INFO logs.
+    "an embedded agent's logLevel should set the io.prometheus loggers and leave the root logger alone" {
+      val root = LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME) as Logger
+      val project = LoggerFactory.getLogger("io.prometheus") as Logger
+      val (rootLevel, projectLevel) = root.level to project.level
+      try {
+        root.level = Level.INFO
+        project.level = null
+
+        agentOptions(listOf("--log_level", "warn"), exitOnMissingConfig = false)
+
+        root.level shouldBe Level.INFO
+        project.level shouldBe Level.WARN
+      } finally {
+        root.level = rootLevel
+        project.level = projectLevel
+      }
+    }
+
     // ==================== Default Value Tests ====================
 
     "default proxyHostname should be set from config" {

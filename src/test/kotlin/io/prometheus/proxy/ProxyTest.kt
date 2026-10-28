@@ -46,7 +46,10 @@ import kotlinx.coroutines.CompletableDeferred
 import com.google.common.util.concurrent.Service
 import io.kotest.assertions.assertSoftly
 import io.prometheus.metrics.model.registry.PrometheusRegistry
+import java.lang.ref.WeakReference
 import java.net.ServerSocket
+import io.kotest.assertions.nondeterministic.eventually
+import kotlin.time.Duration.Companion.seconds
 import io.kotest.matchers.collections.shouldBeEmpty
 
 class ProxyTest : StringSpec() {
@@ -525,6 +528,22 @@ class ProxyTest : StringSpec() {
       cleanupServiceRegistrations {
         createTestProxy("-Dproxy.internal.staleAgentCheckEnabled=false", "--tf_disabled")
       } shouldBe 1
+    }
+
+    // ProxyGrpcService added a JVM shutdown hook for its gRPC server and never removed it. The hook held the server,
+    // and through it the whole Proxy, so every Proxy built in a JVM stayed reachable until the JVM exited.
+    "a stopped proxy should become garbage collectable" {
+      val httpPort = ServerSocket(0).use { it.localPort }
+      var proxy: Proxy? = createTestProxy("--port", "$httpPort")
+      proxy!!.startSync()
+      proxy.stopSync()
+      val ref = WeakReference(proxy)
+      proxy = null
+
+      eventually(10.seconds) {
+        System.gc()
+        ref.get().shouldBeNull()
+      }
     }
 
     // ==================== Failed startup ====================

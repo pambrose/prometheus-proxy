@@ -55,11 +55,11 @@ The embedded agent uses the same HOCON configuration as the standalone agent:
 
 Starts the agent in background threads/coroutines.
 
-| Parameter             | Type      | Description                              |
-|:----------------------|:----------|:-----------------------------------------|
-| `configFilename`      | `String`  | Path to the HOCON config file            |
-| `exitOnMissingConfig` | `Boolean` | Exit the JVM if config file is not found |
-| `logBanner`           | `Boolean` | Log the startup banner (default: `true`) |
+| Parameter             | Type      | Description                                                                                                                              |
+|:----------------------|:----------|:-----------------------------------------------------------------------------------------------------------------------------------------|
+| `configFilename`      | `String`  | Path to the HOCON config file                                                                                                            |
+| `exitOnMissingConfig` | `Boolean` | Pass `false` to embed: a config error or invalid option throws `ConfigLoadException`. `true` exits the JVM, as the standalone agent does |
+| `logBanner`           | `Boolean` | Log the startup banner (default: `true`)                                                                                                 |
 
 **Returns:** `EmbeddedAgentInfo`
 
@@ -89,7 +89,12 @@ Your application code runs normally while the agent handles metrics scraping in 
 The embedded agent's metrics register in the Prometheus Java client 1.x default registry
 (`io.prometheus.metrics.model.registry.PrometheusRegistry.defaultRegistry`). A host that serves its own metrics
 from that registry exposes the agent's too; a host still on the 0.x client (`io.prometheus:simpleclient`) does
-not see them.
+not see them. Every agent in the JVM, two at once or one started again after `shutdown()`, shares one set of agent
+metrics, and each series carries the agent's `launch_id`. An agent's series go when it shuts down. A host metric
+with one of the agent metrics' names makes `startAsyncAgent()` throw.
+
+The agent's `logLevel` (`agent.logLevel`, `AGENT_LOG_LEVEL`, or `--log_level`) sets the level of the `io.prometheus`
+loggers only, so it doesn't change your application's own logging. A standalone agent sets the root logger's level.
 
 !!! tip "Config file location"
 

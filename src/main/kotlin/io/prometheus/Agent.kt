@@ -108,13 +108,13 @@ import kotlin.time.TimeSource.Monotonic
  *
  * ### Basic Usage
  * ```kotlin
- * val agent = Agent(AgentOptions(args))
+ * val agent = Agent(AgentOptions(args, exitOnMissingConfig = true))
  * agent.startSync()
  * ```
  *
  * ### Embedded Usage
  * ```kotlin
- * val agentInfo = Agent.startAsyncAgent("config.conf", true)
+ * val agentInfo = Agent.startAsyncAgent("config.conf", exitOnMissingConfig = false)
  * println("Started agent: ${agentInfo.agentName}")
  * ```
  *
@@ -205,7 +205,8 @@ class Agent(
   internal val grpcService = AgentGrpcService(this, options, inProcessServerName)
   internal var agentId: String by nonNullableReference("")
   internal val launchId = randomId(15)
-  internal val metrics by lazy { AgentMetrics(this) }
+  private val metricsHolder = lazy { AgentMetrics(this) }
+  internal val metrics by metricsHolder
 
   internal val agentConfigVals: ConfigVals.Agent get() = configVals.agent
 
@@ -675,8 +676,13 @@ class Agent(
   // use -- the service goes straight to FAILED. super.startUp() stops the servers it had already started, but without
   // this the gRPC channel and HTTP client cache built in the constructor would stay open for the life of the JVM.
   override fun startUp() {
-    runCatching { super.startUp() }
-      .onFailure { releaseAfterFailedStartUp() }
+    runCatching {
+      // Built here, so a registry that rejects them fails startup visibly instead of every connect, forever.
+      if (isMetricsEnabled) {
+        val _ = metrics
+      }
+      super.startUp()
+    }.onFailure { releaseAfterFailedStartUp() }
       .getOrThrow()
   }
 
@@ -688,6 +694,7 @@ class Agent(
       [
         { grpcService.shutDown() },
         { runBlocking { agentHttpService.close() } },
+        { closeMetrics() },
       ]
     steps.forEach { step ->
       runCatching(step).onFailure { e -> logger.debug(e) { "Releasing after a failed startup: ${e.message}" } }
@@ -697,7 +704,14 @@ class Agent(
   override fun shutDown() {
     grpcService.shutDown()
     runBlocking { agentHttpService.close() }
+    closeMetrics()
     super.shutDown()
+  }
+
+  // Removes this agent from the agent metrics every agent in the JVM shares, if it built them.
+  private fun closeMetrics() {
+    if (metricsHolder.isInitialized())
+      metrics.close()
   }
 
   // Called from EmbeddedAgentInfo to let external callers shut the agent down without access to the
@@ -761,9 +775,10 @@ class Agent(
      * usage inside another running JVM, use [startAsyncAgent] instead.
      *
      * @param args Raw command-line arguments forwarded to [AgentOptions] for parsing.
-     * @param exitOnMissingConfig When `true`, the process exits with a non-zero status if no config file/URL
-     *   is supplied. When `false`, the Agent falls back to the built-in reference config (mostly useful in
-     *   tests where defaults are sufficient).
+     * @param exitOnMissingConfig When `true`, the Agent behaves as the standalone CLI does: it requires a config
+     *   file or URL, and exits the process when the config can't be loaded, an option is invalid, or `-v`/`-u` is
+     *   given. When `false`, as when embedding, it falls back to the built-in reference config when none is given,
+     *   and throws [io.prometheus.common.ConfigLoadException] in those cases instead.
      */
     @JvmStatic
     fun startSyncAgent(
@@ -791,8 +806,9 @@ class Agent(
      * @param configFilename Path or URL to the HOCON config file. Forwarded to the
      *   [AgentOptions] config-filename constructor so it follows the same resolution rules as the
      *   `--config` CLI flag.
-     * @param exitOnMissingConfig When `true`, terminates the calling process if the config cannot be located.
-     *   For embedded usage where the host application should handle config errors itself, pass `false`.
+     * @param exitOnMissingConfig Pass `false` when embedding: a config that can't be loaded, an invalid option, or
+     *   `-v`/`-u` then throws [io.prometheus.common.ConfigLoadException] for the host to catch. `true` gives the
+     *   standalone CLI's behavior, which requires a config and exits the process on any of these, host and all.
      * @param logBanner When `true` (default), logs the Agent ASCII banner and version on startup. Pass `false`
      *   to suppress banner output when embedding inside an app that owns its own logging surface.
      * @return An [EmbeddedAgentInfo] handle for inspecting and shutting down the launched Agent.
