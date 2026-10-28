@@ -104,22 +104,30 @@ internal class AgentContextManager(
     agentContextMap[agentId] = context
   }
 
+  // Opens a transfer for [scrapeId] unless one is already under way, which a second header must not replace. Returns
+  // whether [context] was stored.
   fun putChunkedContext(
     scrapeId: Long,
     context: ChunkedContext,
-  ) {
-    chunkedContextMapView[scrapeId] = context
-  }
+  ): Boolean = chunkedContextMapView.putIfAbsent(scrapeId, context) == null
 
   fun getChunkedContext(scrapeId: Long): ChunkedContext? = chunkedContextMapView[scrapeId]
 
   fun removeChunkedContext(scrapeId: Long): ChunkedContext? = chunkedContextMapView.remove(scrapeId)
 
+  // Removes [context] only if it is still the transfer for [scrapeId], so a caller that checked a context acts on that
+  // one. Returns whether it was removed.
+  fun removeChunkedContext(
+    scrapeId: Long,
+    context: ChunkedContext,
+  ): Boolean = chunkedContextMapView.remove(scrapeId, context)
+
   /**
    * Removes every in-flight [ChunkedContext] owned by [agentId] (e.g. when the agent disconnects or is
    * evicted), reclaiming their buffered output streams immediately instead of waiting for each chunked
    * stream's own orphan sweep. The corresponding scrape requests are failed separately by
-   * [ScrapeRequestManager.failAllScrapeRequests]; this only frees the chunk buffers.
+   * [ScrapeRequestManager.failAllScrapeRequests]; this only frees the chunk buffers. A context's owner is
+   * the agent its scrape was sent to ([ChunkedContext.owner]), not the agentId its header claims.
    *
    * @return the scrape IDs that were removed
    */
@@ -128,8 +136,8 @@ internal class AgentContextManager(
     // complete (and remove) a matching context between the filter and the remove, so returning the
     // pre-removal snapshot would over-count what was reclaimed in the caller's log.
     chunkedContextMapView.entries
-      .filter { (_, context) -> context.agentId == agentId }
-      .mapNotNull { (scrapeId, _) -> if (chunkedContextMapView.remove(scrapeId) != null) scrapeId else null }
+      .filter { (_, context) -> context.owner.agentId == agentId }
+      .mapNotNull { (scrapeId, context) -> if (chunkedContextMapView.remove(scrapeId, context)) scrapeId else null }
 
   fun findStaleAgents(maxInactivity: Duration): List<Pair<String, AgentContext>> =
     agentContextMap

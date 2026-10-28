@@ -159,7 +159,8 @@ Discovery **polls** the file rather than using inotify precisely because of how 
 `ConfigMap` updates (atomic symlink swaps that file watchers often miss). Note that a kubelet can
 take up to a minute to propagate a `ConfigMap` change to the mounted volume — that delay is
 Kubernetes's, and comes on top of the reconcile interval. A malformed or half-propagated file is
-skipped, keeping the last-known-good target set, so a bad edit never tears down working targets.
+skipped, keeping the last-known-good target set, so a bad edit never tears down working targets, even when the
+agent reconnects to the proxy while the file is still bad.
 Keep discovery targets in their **own** `ConfigMap`, separate from the agent's main config: whatever
 automation writes the target list then can't touch ports, TLS, or the proxy address.
 

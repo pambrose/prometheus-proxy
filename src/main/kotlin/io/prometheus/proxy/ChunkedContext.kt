@@ -31,19 +31,20 @@ import java.util.zip.CRC32
  *
  * @param response the initial chunked response containing the header
  * @param maxZippedContentSize maximum allowed total zipped content size in bytes
+ * @param owner the agent the scrape was sent to, taken from its tracked request when the header arrived. It decides
+ *   who may send the transfer's chunks and summary, and reclaims the transfer when that agent is removed. The header's
+ *   `headerAgentId` is the agent's own claim, so it is never used for either.
  * @see AgentContextManager
  * @see ProxyServiceImpl
  */
 internal class ChunkedContext(
   response: ChunkedScrapeResponse,
   private val maxZippedContentSize: Long,
+  val owner: AgentContext,
 ) {
   private val checksum = CRC32()
   private val baos = ByteArrayOutputStream()
   private val header = response.header
-
-  /** The agent that owns this in-flight transfer; used to reclaim contexts when that agent is removed. */
-  val agentId: String get() = header.headerAgentId
 
   var totalChunkCount = 0
     private set

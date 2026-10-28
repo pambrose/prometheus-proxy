@@ -248,6 +248,9 @@ something.
   the in-flight limit race an agent's answer, a single failure, and `failAllScrapeRequests`; the limit holds and its
   counter matches the map, each request keeps one completer's result and matching `proxyFailure`, and a disconnect fails
   only its own agent's requests
+- **ScrapeResultOwnershipLincheckTest** — Lincheck (tagged `Lincheck`): a handler tracking and untracking a scrape races
+  answers for its scrapeId from its owner and from another agent, which can name it before it is tracked; only the
+  owner ever completes it
 - **ScrapeRequestWrapperTest** — Scrape request lifecycle, timeout behavior, response delivery
 - **AgentAuthManagerTest** — Per-agent auth: path-glob matching, token resolution (including the legacy allow-all
   token), `isEnabled`, and fail-fast rejection of empty, duplicate or colliding identities
@@ -343,6 +346,9 @@ mechanism that the standard suite cannot reach:
   to its own identity
 - **EmbeddedAgentApiTest** — the public `startAsyncAgent()` handle connects from a config file, reports its
   identity, and disconnects on `shutdown()`
+- **EmbeddedAgentMetricsTest** — with metrics on, an agent started again after `shutdown()` and two agents at
+  once each connect and count their own connects without a registry clear in between; a stopped agent's series go
+  with it; and a host metric with an agent metric's name fails `startAsyncAgent()`
 - **AgentTokenAuthTest** — the legacy pre-shared agent token, over Netty so the header crosses the wire: a
   matching token registers, and a wrong one is rejected with UNAUTHENTICATED and never registers; a security
   boundary

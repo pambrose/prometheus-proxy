@@ -33,10 +33,13 @@ import io.mockk.mockk
 import io.mockk.spyk
 import io.prometheus.Proxy
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
+import io.prometheus.grpc.chunkedScrapeResponse
+import io.prometheus.grpc.headerData
 import io.prometheus.grpc.registerAgentRequest
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.onSubscription
@@ -46,8 +49,12 @@ import kotlinx.coroutines.CompletableDeferred
 import com.google.common.util.concurrent.Service
 import io.kotest.assertions.assertSoftly
 import io.prometheus.metrics.model.registry.PrometheusRegistry
+import java.lang.ref.WeakReference
 import java.net.ServerSocket
+import io.kotest.assertions.nondeterministic.eventually
+import kotlin.time.Duration.Companion.seconds
 import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.maps.shouldBeEmpty
 
 class ProxyTest : StringSpec() {
   private fun createTestProxy(vararg extraArgs: String) =
@@ -302,6 +309,50 @@ class ProxyTest : StringSpec() {
       proxy.agentContextManager.getAgentContext(agentContext.agentId).shouldBeNull()
     }
 
+    // A transfer was recorded as owned by the header's headerAgentId, which the agent sends, so a buggy agent (or any
+    // peer, with auth off) that put another agentId there left a buffer of up to maxZippedContentSizeMBytes that
+    // removing its agent never reclaimed. The owner is now the agent the scrape was sent to.
+    "removeAgentContext should reclaim a chunked transfer whose header names another agent" {
+      val proxy = createTestProxy()
+      val owner = createAgentContext()
+      proxy.agentContextManager.addAgentContext(owner)
+      val scrape = ScrapeRequestWrapper(owner, "metrics", "", "", null, false)
+      proxy.scrapeRequestManager.addToScrapeRequestMap(scrape)
+
+      val header = chunkedScrapeResponse {
+        header = headerData {
+          headerValidResponse = true
+          headerScrapeId = scrape.scrapeId
+          headerAgentId = "some-other-agent"
+          headerStatusCode = 200
+          headerContentType = "text/plain"
+        }
+      }
+      val headerRead = CompletableDeferred<Unit>()
+      val agentRemoved = CompletableDeferred<Unit>()
+
+      coroutineScope {
+        // The stream stays open across the removal, so only removeAgentContext can reclaim the transfer.
+        val stream = async {
+          ProxyServiceImpl(proxy).writeChunkedResponsesToProxy(
+            flow {
+              emit(header)
+              headerRead.complete(Unit)
+              agentRemoved.await()
+            },
+          )
+        }
+        headerRead.await()
+        proxy.agentContextManager.chunkedContextSize shouldBe 1
+
+        proxy.removeAgentContext(owner.agentId, "disconnect")
+
+        proxy.agentContextManager.chunkedContextMapView.shouldBeEmpty()
+        agentRemoved.complete(Unit)
+        stream.await()
+      }
+    }
+
     "removeAgentContext should return null for unknown agentId" {
       val proxy = createTestProxy()
 
@@ -525,6 +576,22 @@ class ProxyTest : StringSpec() {
       cleanupServiceRegistrations {
         createTestProxy("-Dproxy.internal.staleAgentCheckEnabled=false", "--tf_disabled")
       } shouldBe 1
+    }
+
+    // ProxyGrpcService added a JVM shutdown hook for its gRPC server and never removed it. The hook held the server,
+    // and through it the whole Proxy, so every Proxy built in a JVM stayed reachable until the JVM exited.
+    "a stopped proxy should become garbage collectable" {
+      val httpPort = ServerSocket(0).use { it.localPort }
+      var proxy: Proxy? = createTestProxy("--port", "$httpPort")
+      proxy!!.startSync()
+      proxy.stopSync()
+      val ref = WeakReference(proxy)
+      proxy = null
+
+      eventually(10.seconds) {
+        System.gc()
+        ref.get().shouldBeNull()
+      }
     }
 
     // ==================== Failed startup ====================

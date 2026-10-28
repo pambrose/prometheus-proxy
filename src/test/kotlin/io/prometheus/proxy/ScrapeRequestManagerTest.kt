@@ -26,6 +26,7 @@ import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.types.shouldBeSameInstanceAs
 import io.ktor.http.HttpStatusCode
 import io.mockk.every
 import io.mockk.mockk
@@ -95,7 +96,7 @@ class ScrapeRequestManagerTest : StringSpec() {
       every { mockResults.srScrapeId } returns 999L
 
       // Should not throw exception
-      manager.assignScrapeResults(mockResults)
+      manager.assignScrapeResults(mockResults) { true }
 
       manager.scrapeMapSize shouldBe 0
     }
@@ -184,8 +185,8 @@ class ScrapeRequestManagerTest : StringSpec() {
       every { results1.srScrapeId } returns 123L
       every { results2.srScrapeId } returns 456L
 
-      manager.assignScrapeResults(results1)
-      manager.assignScrapeResults(results2)
+      manager.assignScrapeResults(results1) { true }
+      manager.assignScrapeResults(results2) { true }
 
       verify { wrapper1.complete(results1) }
       verify { wrapper2.complete(results2) }
@@ -201,7 +202,7 @@ class ScrapeRequestManagerTest : StringSpec() {
       every { results.srScrapeId } returns 100L
 
       manager.addToScrapeRequestMap(wrapper)
-      manager.assignScrapeResults(results)
+      manager.assignScrapeResults(results) { true }
 
       // Result publication is now folded behind the completion CAS (finding 16).
       verify { wrapper.complete(results) }
@@ -216,7 +217,7 @@ class ScrapeRequestManagerTest : StringSpec() {
       every { results.srScrapeId } returns 200L
 
       manager.addToScrapeRequestMap(wrapper)
-      manager.assignScrapeResults(results)
+      manager.assignScrapeResults(results) { true }
 
       verify { agentContext.markActivityTime(true) }
     }
@@ -328,8 +329,8 @@ class ScrapeRequestManagerTest : StringSpec() {
       val results2 = mockk<ScrapeResults>(relaxed = true)
       every { results2.srScrapeId } returns 400L
 
-      manager.assignScrapeResults(results1)
-      manager.assignScrapeResults(results2)
+      manager.assignScrapeResults(results1) { true }
+      manager.assignScrapeResults(results2) { true }
 
       // Both calls go through the manager (since wrapper is still in the map). The real
       // ScrapeRequestWrapper.complete() CAS makes only the first publish, but the manager itself
@@ -350,8 +351,8 @@ class ScrapeRequestManagerTest : StringSpec() {
       every { results2.srScrapeId } returns 500L
 
       // Neither call should throw
-      manager.assignScrapeResults(results1)
-      manager.assignScrapeResults(results2)
+      manager.assignScrapeResults(results1) { true }
+      manager.assignScrapeResults(results2) { true }
 
       // The manager calls complete() each time, but the real ScrapeRequestWrapper's CAS
       // ensures only the first call publishes.
@@ -387,7 +388,7 @@ class ScrapeRequestManagerTest : StringSpec() {
       every { mockResults.srScrapeId } returns 999L
 
       val relevantLogs =
-        captureLogs<ScrapeRequestManager> { manager.assignScrapeResults(mockResults) }
+        captureLogs<ScrapeRequestManager> { manager.assignScrapeResults(mockResults) { true } }
           .filter { it.message.contains("Missing ScrapeRequestWrapper") }
       relevantLogs shouldHaveSize 1
       relevantLogs[0].level shouldBe Level.WARN
@@ -399,7 +400,7 @@ class ScrapeRequestManagerTest : StringSpec() {
       every { mockResults.srScrapeId } returns 888L
 
       val errorLogs =
-        captureLogs<ScrapeRequestManager> { manager.assignScrapeResults(mockResults) }
+        captureLogs<ScrapeRequestManager> { manager.assignScrapeResults(mockResults) { true } }
           .filter { it.level == Level.ERROR && it.message.contains("Missing ScrapeRequestWrapper") }
       errorLogs shouldHaveSize 0
     }
@@ -410,28 +411,97 @@ class ScrapeRequestManagerTest : StringSpec() {
       every { mockResults.srScrapeId } returns 777L
 
       val relevantLogs =
-        captureLogs<ScrapeRequestManager> { manager.assignScrapeResults(mockResults) }
+        captureLogs<ScrapeRequestManager> { manager.assignScrapeResults(mockResults) { true } }
           .filter { it.message.contains("Missing ScrapeRequestWrapper") }
       relevantLogs shouldHaveSize 1
       relevantLogs[0].formattedMessage shouldContain "scrapeId: 777"
     }
 
-    // ==================== ownerAgentId ====================
+    // ==================== getScrapeRequest ====================
 
-    // The response RPCs use this to confirm a result comes from the agent the scrape was sent to.
-
-    "ownerAgentId should return the agentId of the agent a tracked scrape was sent to" {
+    "getScrapeRequest should return the tracked request for a scrapeId" {
       val manager = ScrapeRequestManager()
       val wrapper = createMockWrapper(1000L)
-      every { wrapper.agentContext.agentId } returns "agent-7"
 
       manager.addToScrapeRequestMap(wrapper)
 
-      manager.ownerAgentId(1000L) shouldBe "agent-7"
+      manager.getScrapeRequest(1000L) shouldBeSameInstanceAs wrapper
     }
 
-    "ownerAgentId should return null for a scrape that is not tracked" {
-      ScrapeRequestManager().ownerAgentId(1001L).shouldBeNull()
+    "getScrapeRequest should return null for a scrape that is not tracked" {
+      ScrapeRequestManager().getScrapeRequest(1001L).shouldBeNull()
+    }
+
+    // ==================== ownership checked on the wrapper completed ====================
+
+    // The response RPCs pass the connection's owner check, which assignScrapeResults applies to the wrapper it is about
+    // to complete, so no other lookup sits between the check and the completion.
+
+    "assignScrapeResults should give the owner check the wrapper it completes" {
+      val manager = ScrapeRequestManager()
+      val wrapper = createMockWrapper(1100L)
+      val results = mockk<ScrapeResults>(relaxed = true)
+      every { results.srScrapeId } returns 1100L
+      val checked = mutableListOf<ScrapeRequestWrapper>()
+
+      manager.addToScrapeRequestMap(wrapper)
+      manager.assignScrapeResults(results) {
+        checked += it
+        true
+      }
+
+      checked.single() shouldBeSameInstanceAs wrapper
+      verify { wrapper.complete(results) }
+    }
+
+    "assignScrapeResults should not complete a wrapper the owner check rejects" {
+      val manager = ScrapeRequestManager()
+      val wrapper = createMockWrapper(1101L)
+      val agentContext = wrapper.agentContext
+      val results = mockk<ScrapeResults>(relaxed = true)
+      every { results.srScrapeId } returns 1101L
+
+      manager.addToScrapeRequestMap(wrapper)
+      manager.assignScrapeResults(results) { false }
+
+      verify(exactly = 0) { wrapper.complete(any(), any()) }
+      verify(exactly = 0) { agentContext.markActivityTime(any()) }
+      manager.containsScrapeRequest(1101L) shouldBe true
+    }
+
+    // An untracked scrapeId has no owner, so its result is dropped without asking.
+    "assignScrapeResults should drop a result for an untracked scrapeId without running the owner check" {
+      val manager = ScrapeRequestManager()
+      val results = mockk<ScrapeResults>(relaxed = true)
+      every { results.srScrapeId } returns 1102L
+      var asked = false
+
+      manager.assignScrapeResults(results) {
+        asked = true
+        true
+      }
+
+      asked shouldBe false
+    }
+
+    "failScrapeRequest should not fail a wrapper the owner check rejects" {
+      val manager = ScrapeRequestManager()
+      val wrapper = createMockWrapper(1103L)
+
+      manager.addToScrapeRequestMap(wrapper)
+      manager.failScrapeRequest(1103L, "bad response", ProxyFailure.INVALID_RESPONSE) { false }
+
+      verify(exactly = 0) { wrapper.complete(any(), any()) }
+    }
+
+    "failScrapeRequest should fail a wrapper the owner check accepts" {
+      val manager = ScrapeRequestManager()
+      val wrapper = createMockWrapper(1104L)
+
+      manager.addToScrapeRequestMap(wrapper)
+      manager.failScrapeRequest(1104L, "bad response", ProxyFailure.INVALID_RESPONSE) { it === wrapper }
+
+      verify { wrapper.complete(any(), ProxyFailure.INVALID_RESPONSE) }
     }
 
     // ==================== in-flight limit ====================

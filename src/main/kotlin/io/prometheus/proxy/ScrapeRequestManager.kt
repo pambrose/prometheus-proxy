@@ -47,9 +47,8 @@ internal class ScrapeRequestManager {
 
   fun containsScrapeRequest(scrapeId: Long): Boolean = scrapeRequestMapView.containsKey(scrapeId)
 
-  // The agent the scrape was sent to, or null when the scrape is no longer tracked. The response RPCs
-  // compare this with the connection's agent so one agent can't answer another agent's scrapes.
-  fun ownerAgentId(scrapeId: Long): String? = scrapeRequestMapView[scrapeId]?.agentContext?.agentId
+  // The tracked request for [scrapeId], or null when it is not (or no longer) tracked.
+  fun getScrapeRequest(scrapeId: Long): ScrapeRequestWrapper? = scrapeRequestMapView[scrapeId]
 
   val scrapeMapSize: Int
     get() = scrapeRequestMapView.size
@@ -67,34 +66,50 @@ internal class ScrapeRequestManager {
     }
   }
 
-  fun assignScrapeResults(scrapeResults: ScrapeResults) {
+  /**
+   * Completes the tracked request [scrapeResults] answers, if [isOwner] accepts it.
+   *
+   * [isOwner] is given the wrapper this call completes, so the ownership check and the completion read one lookup.
+   * Checking on a lookup of its own first let a scrapeId the HTTP handler started tracking for another agent in
+   * between take the non-owner's result. A scrapeId that isn't tracked has no owner, so its result is dropped.
+   */
+  fun assignScrapeResults(
+    scrapeResults: ScrapeResults,
+    isOwner: (ScrapeRequestWrapper) -> Boolean,
+  ) {
     val scrapeId = scrapeResults.srScrapeId
     scrapeRequestMapView[scrapeId]
       ?.also { wrapper ->
-        wrapper.complete(scrapeResults)
-        wrapper.agentContext.markActivityTime(true)
+        if (isOwner(wrapper)) {
+          wrapper.complete(scrapeResults)
+          wrapper.agentContext.markActivityTime(true)
+        }
       } ?: logger.warn { "Missing ScrapeRequestWrapper for scrapeId: $scrapeId (likely timed out)" }
   }
 
   // Completes a request the proxy fails itself, rather than the agent answering it; [failure] gives its outcome label
-  // and status.
+  // and status. A failure an agent's data caused passes [isOwner], checked on the wrapper it fails as in
+  // assignScrapeResults; one the proxy decides on its own needs no owner.
   fun failScrapeRequest(
     scrapeId: Long,
     failureReason: String,
     failure: ProxyFailure,
+    isOwner: (ScrapeRequestWrapper) -> Boolean = { true },
   ) {
     scrapeRequestMapView[scrapeId]
       ?.also { wrapper ->
-        wrapper.complete(
-          ScrapeResults(
-            srAgentId = wrapper.agentContext.agentId,
-            srScrapeId = scrapeId,
-            srStatusCode = failure.statusCode.value,
-            srFailureReason = failureReason,
-          ),
-          failure,
-        )
-        wrapper.agentContext.markActivityTime(true)
+        if (isOwner(wrapper)) {
+          wrapper.complete(
+            ScrapeResults(
+              srAgentId = wrapper.agentContext.agentId,
+              srScrapeId = scrapeId,
+              srStatusCode = failure.statusCode.value,
+              srFailureReason = failureReason,
+            ),
+            failure,
+          )
+          wrapper.agentContext.markActivityTime(true)
+        }
       } ?: logger.warn { "failScrapeRequest() missing ScrapeRequestWrapper for scrapeId: $scrapeId" }
   }
 

@@ -38,31 +38,36 @@ import kotlin.concurrent.atomics.AtomicInt
 // Metrics include counters for scrape requests and results, connect counts,
 // and gauges for backlog and cache sizes.
 class AgentMetricsTest : StringSpec() {
+  private val openMetrics = mutableListOf<AgentMetrics>()
+
+  private fun opened(metrics: AgentMetrics): AgentMetrics = metrics.also { openMetrics += it }
+
   init {
-    beforeEach {
-      // Clear the default Prometheus registry to avoid "already registered" errors
-      PrometheusRegistry.defaultRegistry.clear()
+    // Every agent's metrics are shared in the JVM; closing each test's AgentMetrics removes the series it recorded.
+    afterEach {
+      openMetrics.forEach { it.close() }
+      openMetrics.clear()
     }
 
     // ==================== Counter Initialization Tests ====================
 
     "scrapeRequestCount counter should be initialized" {
       val agent = mockAgentForMetrics()
-      val metrics = AgentMetrics(agent)
+      val metrics = opened(AgentMetrics(agent))
 
       metrics.scrapeRequestCount.shouldNotBeNull()
     }
 
     "scrapeResultCount counter should be initialized" {
       val agent = mockAgentForMetrics()
-      val metrics = AgentMetrics(agent)
+      val metrics = opened(AgentMetrics(agent))
 
       metrics.scrapeResultCount.shouldNotBeNull()
     }
 
     "connectCount counter should be initialized" {
       val agent = mockAgentForMetrics()
-      val metrics = AgentMetrics(agent)
+      val metrics = opened(AgentMetrics(agent))
 
       metrics.connectCount.shouldNotBeNull()
     }
@@ -71,7 +76,7 @@ class AgentMetricsTest : StringSpec() {
 
     "scrapeRequestLatency histogram should be initialized" {
       val agent = mockAgentForMetrics()
-      val metrics = AgentMetrics(agent)
+      val metrics = opened(AgentMetrics(agent))
 
       metrics.scrapeRequestLatency.shouldNotBeNull()
     }
@@ -80,7 +85,7 @@ class AgentMetricsTest : StringSpec() {
 
     "scrapeRequestCount should increment with labels" {
       val agent = mockAgentForMetrics()
-      val metrics = AgentMetrics(agent)
+      val metrics = opened(AgentMetrics(agent))
 
       val launchId = "test-launch-id"
       val type = "scrape"
@@ -93,7 +98,7 @@ class AgentMetricsTest : StringSpec() {
 
     "scrapeResultCount should increment with labels" {
       val agent = mockAgentForMetrics()
-      val metrics = AgentMetrics(agent)
+      val metrics = opened(AgentMetrics(agent))
 
       val launchId = "test-launch-id"
       val type = "success"
@@ -106,7 +111,7 @@ class AgentMetricsTest : StringSpec() {
 
     "connectCount should increment with labels" {
       val agent = mockAgentForMetrics()
-      val metrics = AgentMetrics(agent)
+      val metrics = opened(AgentMetrics(agent))
 
       val launchId = "test-launch-id"
       val type = "grpc"
@@ -121,7 +126,7 @@ class AgentMetricsTest : StringSpec() {
 
     "scrapeRequestLatency should record observations with labels" {
       val agent = mockAgentForMetrics()
-      val metrics = AgentMetrics(agent)
+      val metrics = opened(AgentMetrics(agent))
 
       val launchId = "test-launch-id"
       val agentName = "test-agent"
@@ -135,11 +140,22 @@ class AgentMetricsTest : StringSpec() {
       latencyMetric.shouldNotBeNull()
     }
 
+    // The agent's default scrape timeout is 15s, so with buckets ending at 10s every agent-side timeout and slow scrape
+    // landed in +Inf. The agent's histogram now has the proxy's buckets, which reach the proxy's 90s timeout.
+    "scrapeRequestLatency buckets should reach past the agent's scrape timeout" {
+      val metrics = opened(AgentMetrics(mockAgentForMetrics()))
+      metrics.scrapeRequestLatency.labelValues("test-launch-id", "test-agent").observe(15.0)
+
+      val buckets = metrics.scrapeRequestLatency.collect().dataPoints.single().classicBuckets
+      buckets.map { it.upperBound } shouldBe
+        listOf(.005, .01, .025, .05, .1, .25, .5, 1.0, 2.5, 5.0, 10.0, 15.0, 30.0, 60.0, 90.0, Double.POSITIVE_INFINITY)
+    }
+
     // ==================== Label Differentiation Tests ====================
 
     "counters should track different label combinations separately" {
       val agent = mockAgentForMetrics()
-      val metrics = AgentMetrics(agent)
+      val metrics = opened(AgentMetrics(agent))
 
       val launchId = "test-launch-id"
 
@@ -155,7 +171,7 @@ class AgentMetricsTest : StringSpec() {
 
     "multiple counters can be incremented independently" {
       val agent = mockAgentForMetrics()
-      val metrics = AgentMetrics(agent)
+      val metrics = opened(AgentMetrics(agent))
 
       val launchId = "test-launch-id"
       val type = "test"
@@ -176,7 +192,7 @@ class AgentMetricsTest : StringSpec() {
 
     "start time gauge should hold the start time in Unix seconds" {
       val before = System.currentTimeMillis() / 1_000.0
-      AgentMetrics(mockAgentForMetrics())
+      opened(AgentMetrics(mockAgentForMetrics()))
       val after = System.currentTimeMillis() / 1_000.0
 
       val gauge =
@@ -189,7 +205,7 @@ class AgentMetricsTest : StringSpec() {
 
     "SamplerGaugeCollector should be constructable with agent metrics" {
       // Creating AgentMetrics should register SamplerGaugeCollectors without exception
-      AgentMetrics(mockAgentForMetrics())
+      opened(AgentMetrics(mockAgentForMetrics()))
 
       // Verify the backlog and cache size gauges are registered
       val names = PrometheusRegistry.defaultRegistry.scrape().map { it.metadata.name }
@@ -197,19 +213,17 @@ class AgentMetricsTest : StringSpec() {
     }
 
     // Built through MetricBuilders, which keeps histograms classic-only (see its KDoc for why).
-    "scrapeRequestLatency should keep classic buckets only, with its bucket layout" {
-      val metrics = AgentMetrics(mockAgentForMetrics())
+    // The bucket layout is checked by the "should reach past the agent's scrape timeout" test above.
+    "scrapeRequestLatency should keep classic buckets only" {
+      val metrics = opened(AgentMetrics(mockAgentForMetrics()))
       metrics.scrapeRequestLatency.labelValues("test-launch-id", "test-agent").observe(0.1)
 
-      val point = metrics.scrapeRequestLatency.collect().dataPoints.single()
-      point.hasNativeHistogramData().shouldBeFalse()
-      point.classicBuckets.map { it.upperBound } shouldBe
-        listOf(.005, .01, .025, .05, .1, .25, .5, 1.0, 2.5, 5.0, 10.0, Double.POSITIVE_INFINITY)
+      metrics.scrapeRequestLatency.collect().dataPoints.single().hasNativeHistogramData().shouldBeFalse()
     }
 
     // Built through MetricBuilders, which keeps no exemplars (see its KDoc for why).
     "scrapeRequestLatency should keep no exemplars" {
-      val metrics = AgentMetrics(mockAgentForMetrics())
+      val metrics = opened(AgentMetrics(mockAgentForMetrics()))
       metrics.scrapeRequestLatency
         .labelValues("test-launch-id", "test-agent")
         .observeWithExemplar(0.1, Labels.of("trace_id", "t"))
@@ -218,7 +232,7 @@ class AgentMetricsTest : StringSpec() {
     }
 
     "filter counters should be registered with launch_id and path labels" {
-      val metrics = AgentMetrics(mockAgentForMetrics())
+      val metrics = opened(AgentMetrics(mockAgentForMetrics()))
 
       metrics.filterLinesDropped.labelValues("test-launch-id", "metrics").inc(3.0)
       metrics.filterBytesSaved.labelValues("test-launch-id", "metrics").inc(128.0)

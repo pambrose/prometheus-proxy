@@ -23,7 +23,7 @@ fun main() {
   // Start the agent in the background
   val agentInfo = Agent.startAsyncAgent(
     configFilename = "agent-config.conf",
-    exitOnMissingConfig = true,
+    exitOnMissingConfig = false,
   )
 
   println("Agent started: ${agentInfo.agentName}")

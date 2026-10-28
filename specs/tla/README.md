@@ -26,7 +26,7 @@ It is a model of the code, not the code: when you change one of those classes, u
 | `NoStrandedPath` | Every agent on a path is valid or about to be swept (finding 7) |
 | `PathCountsAgree` | `pathCounts` agrees with the path map |
 | `IdentityIsolation` | No identity takes over or joins a path another identity's live agent serves |
-| `AnswerFromOwner` | Only the agent a scrape was sent to can answer it |
+| `AnswerFromOwner` | Only the agent a scrape was sent to can answer it, even when another agent names it before it is tracked |
 | `ModesNeverMix` | Consolidated and non-consolidated agents never share a path |
 | `EveryScrapeFinishes` | With the handler timeout off, every started scrape still finishes |
 
@@ -47,6 +47,12 @@ java -cp tla2tools.jar tlc2.TLC -workers auto -deadlock -config ProxyRegistrySaf
 
 To see a property fail, set `CheckOwnership = FALSE` in a config: TLC then finds an agent answering another agent's
 scrape and reports `AnswerFromOwner` violated with the trace.
+
+`SameLookup = FALSE` keeps the owner check but restores how it ran before October #21's fix: on a lookup of its own,
+before `assignScrapeResults` looked the scrape up again, with an untracked scrape id let through. TLC then reports
+`AnswerFromOwner` violated by an agent answering a scrape id before it is tracked, the HTTP handler tracking that id for
+another agent, and the answer completing it. The configs set `SameLookup = TRUE`, where the check runs on the wrapper
+`assignScrapeResults` completes.
 
 ## AgentFailover
 

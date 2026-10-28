@@ -26,6 +26,7 @@ import io.kotest.matchers.longs.shouldBeLessThan
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeSameInstanceAs
 import io.ktor.http.HttpStatusCode
 import io.mockk.mockk
 import io.prometheus.grpc.chunkedScrapeResponse
@@ -251,33 +252,71 @@ class AgentContextManagerTest : StringSpec() {
       manager.chunkedContextSize shouldBe 1
     }
 
+    // A second header for a scrapeId replaced the transfer under way, discarding the chunks already received.
+    "putChunkedContext should not replace a transfer already under way" {
+      val manager = AgentContextManager(isTestMode = true)
+      val first = mockk<ChunkedContext>(relaxed = true)
+      val second = mockk<ChunkedContext>(relaxed = true)
+
+      manager.putChunkedContext(1L, first)
+      manager.putChunkedContext(1L, second)
+
+      manager.getChunkedContext(1L) shouldBeSameInstanceAs first
+      manager.chunkedContextSize shouldBe 1
+    }
+
+    "putChunkedContext should report whether it opened the transfer" {
+      val manager = AgentContextManager(isTestMode = true)
+
+      manager.putChunkedContext(1L, mockk(relaxed = true)).shouldBeTrue()
+      manager.putChunkedContext(1L, mockk(relaxed = true)).shouldBeFalse()
+    }
+
+    // A caller removes the context it checked, not whatever is under the scrapeId by then.
+    "removeChunkedContext with a context should remove only that context" {
+      val manager = AgentContextManager(isTestMode = true)
+      val stored = mockk<ChunkedContext>(relaxed = true)
+      manager.putChunkedContext(1L, stored)
+
+      manager.removeChunkedContext(1L, mockk(relaxed = true)).shouldBeFalse()
+      manager.getChunkedContext(1L) shouldBeSameInstanceAs stored
+
+      manager.removeChunkedContext(1L, stored).shouldBeTrue()
+      manager.getChunkedContext(1L).shouldBeNull()
+    }
+
     // ==================== Item 6: per-agent chunked-context reclamation ====================
 
+    // Matched on each context's owner, the agent its scrape was sent to. Every header here names agent B, so a match on
+    // the agent-supplied headerAgentId would reclaim the wrong transfers.
     "removeChunkedContextsForAgent should remove only the given agent's chunked contexts" {
       val manager = AgentContextManager(isTestMode = true)
+      val agentA = AgentContext("agent-a-host")
+      val agentB = AgentContext("agent-b-host")
 
       fun chunkedContext(
         scrapeIdVal: Long,
-        agentIdVal: String,
+        owner: AgentContext,
       ) = ChunkedContext(
         chunkedScrapeResponse {
           header = headerData {
             headerScrapeId = scrapeIdVal
-            headerAgentId = agentIdVal
+            headerAgentId = agentB.agentId
             headerValidResponse = true
             headerStatusCode = 200
             headerContentType = "text/plain"
           }
         },
         1_000_000,
+        owner,
       )
 
-      manager.putChunkedContext(1L, chunkedContext(1L, "agent-A"))
-      manager.putChunkedContext(2L, chunkedContext(2L, "agent-A"))
-      manager.putChunkedContext(3L, chunkedContext(3L, "agent-B"))
+      manager.putChunkedContext(1L, chunkedContext(1L, agentA))
+      manager.putChunkedContext(2L, chunkedContext(2L, agentA))
+      manager.putChunkedContext(3L, chunkedContext(3L, agentB))
       manager.chunkedContextSize shouldBe 3
 
-      val removed = manager.removeChunkedContextsForAgent("agent-A")
+      val removed = manager.removeChunkedContextsForAgent(agentA.agentId)
 
       removed.sorted() shouldBe [1L, 2L]
       manager.chunkedContextSize shouldBe 1

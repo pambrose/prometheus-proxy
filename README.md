@@ -309,7 +309,8 @@ then the *prometheus.yml* scrape_config would target the three apps with:
 
 If the endpoints were restricted with basic auth/bearer authentication, you could either include the basic-auth
 credentials in the URL with: `http://user:pass@hostname/metrics` or they could be configured with `basic_auth`/
-`bearer_token` in the scrape-config.
+`bearer_token` in the scrape-config. The agent sends credentials from the URL with each request, unless the
+scrape-config supplies an `Authorization` header, which is sent instead.
 
 ### Corresponding Prometheus Configuration
 
@@ -406,8 +407,8 @@ agent. This approach eliminates the need for a separate agent process when your 
 > 📖 **Docs site:** [Embedded Agent guide](https://pambrose.github.io/prometheus-proxy/embedded-agent/) for the full API surface and lifecycle details.
 
   ```Java
-  // Start embedded agent
-  EmbeddedAgentInfo agentInfo = startAsyncAgent("configFile.conf", true);
+  // Start embedded agent; false (exitOnMissingConfig) makes config errors throw instead of exiting the JVM
+  EmbeddedAgentInfo agentInfo = startAsyncAgent("configFile.conf", false);
 
   // Your application code runs here
   // The agent runs in the background and does not block your application
