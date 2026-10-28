@@ -102,6 +102,9 @@ dependencies {
   // agent, use OpenSSL on those platforms and fall back to the JDK's TLS elsewhere. Declared to pin the tcnative
   // version (see libs.versions.toml); runtimeOnly because nothing references it at compile time.
   runtimeOnly(libs.netty.tcnative)
+  // Declares the Netty modules grpc-netty brings at the patched release, so the published POM and Gradle module pin it
+  // for builds that embed the agent; the resolution override below changes only this build's own classpaths.
+  runtimeOnly(libs.bundles.netty)
 
   implementation(libs.annotation.api)
   implementation(libs.jcommander)
@@ -127,11 +130,17 @@ dependencies {
 
 // Raises every Netty module grpc-netty brings (4.2.17.Final) to the patched release in libs.versions.toml. netty-tcnative
 // keeps its own pin there: its classes and the per-platform natives must match, which a Netty BOM would break by
-// raising only some of them.
+// raising only some of them. Only the `netty` bundle reaches the published POM, so a Netty module on the runtime
+// classpath that the bundle doesn't list fails the build instead of reaching embedders unpatched.
 val nettyVersion = libs.versions.netty.get()
+val pinnedNettyModules = libs.bundles.netty.get().map { it.module.name }.toSet()
 configurations.configureEach {
+  val isRuntimeClasspath = name == "runtimeClasspath"
   resolutionStrategy.eachDependency {
     if (requested.group == "io.netty" && !requested.name.startsWith("netty-tcnative")) {
+      check(!isRuntimeClasspath || requested.name in pinnedNettyModules) {
+        "${requested.module} is on the runtime classpath but not in the netty bundle in libs.versions.toml"
+      }
       useVersion(nettyVersion)
       because("grpc-netty 1.85.1's Netty 4.2.17.Final has CVE-2026-93492")
     }

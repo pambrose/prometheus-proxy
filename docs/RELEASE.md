@@ -10,7 +10,8 @@ Steps 1-3 are edits to merge to `master`. After that, `make release` runs steps 
 
 - the working tree is clean, on `master`, and matches `origin/master`;
 - every GitHub CI check for that commit has passed;
-- both changelogs have a section for the version, and every file step 2 lists mentions it;
+- both changelogs have a dated section for the version (`## [VERSION] - YYYY-MM-DD` in `CHANGELOG.md`, and
+  `_Released YYYY-MM-DD_` under `## VERSION` in `RELEASE_NOTES.md`), and every file step 2 lists mentions it;
 - the version isn't a pre-release, its tag (if one exists) points at this commit, and it isn't already on Maven
   Central or Docker Hub;
 - the GPG setup `publish-maven-central` needs is in place, and Docker is running.
@@ -23,7 +24,7 @@ published.
 
 1) Bump `version` in `gradle.properties` (the single source of truth).
 
-2) Update the `4.3.1` literals to the new version everywhere they are hard-coded
+2) Update the `4.3.0` literals to the new version everywhere they are hard-coded
    (`git grep -n` for the outgoing version finds them all):
    - `README.md` — the Docker tag examples and the Maven Central dependency block. Also add a summary
      paragraph for the new version at the top of the **New Features** section; the earlier releases'

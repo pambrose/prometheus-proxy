@@ -198,7 +198,8 @@ ci:  ## Run the CI workflow's jobs locally: TLA+, alerting rules, Helm charts, a
 	echo "CI jobs passed: $(CI_JOBS)"
 
 # ci.yml sets HARNESS_CONFIG=MINI for the whole job, so both Gradle runs see it; were it to differ, the test task would
-# be out of date and koverXmlReport would rerun the tests. --continue still writes the coverage report when a test fails.
+# be out of date and koverXmlReport would rerun the tests. --continue still writes the coverage report when a coverage
+# floor fails, but not when a test fails: the kover tasks depend on the test task, so Gradle skips them.
 ci-build:  ## The CI workflow's build job: compile, lint, and detekt, then the tests and coverage floors (MINI harness)
 	HARNESS_CONFIG=MINI $(GRADLE) clean build -x test
 	HARNESS_CONFIG=MINI $(GRADLE) --continue test koverVerify koverVerifyPerClass koverXmlReport koverLog
@@ -388,10 +389,10 @@ release-check: _require-version _check-gpg-env  ## Fail unless this checkout is 
 	@git fetch -q origin $(RELEASE_BRANCH) \
 		&& [ "$$(git rev-parse HEAD)" = "$$(git rev-parse origin/$(RELEASE_BRANCH))" ] \
 		|| { echo "ERROR: HEAD is not origin/$(RELEASE_BRANCH); pull or push first" >&2; exit 1; }
-	@grep -q '^## \[$(VERSION)\]' CHANGELOG.md \
-		|| { echo "ERROR: CHANGELOG.md has no [$(VERSION)] section (step 3 of docs/RELEASE.md)" >&2; exit 1; }
-	@grep -qx '## $(VERSION)' RELEASE_NOTES.md \
-		|| { echo "ERROR: RELEASE_NOTES.md has no $(VERSION) section (step 3 of docs/RELEASE.md)" >&2; exit 1; }
+	@grep -qE '^## \[$(VERSION)\] - [0-9]{4}-[0-9]{2}-[0-9]{2}$$' CHANGELOG.md \
+		|| { echo "ERROR: CHANGELOG.md has no dated '## [$(VERSION)] - YYYY-MM-DD' section (step 3 of docs/RELEASE.md)" >&2; exit 1; }
+	@awk -v h='## $(VERSION)' '$$0 == h { f = 1; next } f && NF { ok = /^_Released [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_$$/; exit } END { exit !ok }' RELEASE_NOTES.md \
+		|| { echo "ERROR: RELEASE_NOTES.md has no '## $(VERSION)' section starting '_Released YYYY-MM-DD_' (step 3 of docs/RELEASE.md)" >&2; exit 1; }
 	@missing=$$(for f in $(RELEASE_VERSION_FILES); do grep -qF '$(VERSION)' "$$f" || echo "  $$f"; done); \
 	[ -z "$$missing" ] || { printf 'ERROR: not bumped to $(VERSION) (step 2 of docs/RELEASE.md):\n%s\n' "$$missing" >&2; exit 1; }
 	@tagged=$$(git rev-parse -q --verify "refs/tags/$(VERSION)^{commit}"); \
