@@ -381,14 +381,14 @@ class Proxy(
           "chunking_map_check",
           newMapHealthCheck(
             agentContextManager.chunkedContextMapView,
-            proxyConfigVals.internal.chunkContextMapUnhealthySize,
+            options.chunkContextMapUnhealthySize,
           ),
         )
         register(
           "scrape_response_map_check",
           newMapHealthCheck(
             scrapeRequestManager.scrapeRequestMapView,
-            proxyConfigVals.internal.scrapeRequestMapUnhealthySize,
+            options.scrapeRequestMapUnhealthySize,
           ),
         )
         register(

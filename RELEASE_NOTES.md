@@ -53,6 +53,12 @@ among them gRPC, which now runs at one version across all its modules.
   (`metrics` and `/metrics`) are now rejected; before, the second silently replaced the first's URL. And an
   `agent.http.trustStorePath` that can't be loaded, from a missing file or a wrong password, now fails startup
   instead of every scrape. Both errors name the setting to fix.
+- **The proxy chart's readiness probe is now `/ping`, and the proxy's `/healthcheck` reports load later.**
+  `/healthcheck` turned unhealthy at 25 scrapes or chunked transfers in flight; those thresholds now default to
+  80% of `maxInFlightScrapeRequests` (800 by default). A `scrapeRequestMapUnhealthySize` or
+  `chunkContextMapUnhealthySize` you set is kept, but one above `maxInFlightScrapeRequests` now fails startup. If
+  you wrote your own manifests from the docs, point the proxy's readiness probe at `/ping` too, and alert on
+  `/healthcheck` instead.
 
 ### Bug Fixes
 
@@ -98,6 +104,11 @@ among them gRPC, which now runs at one version across all its modules.
   through sending a result in chunks, the proxy skipped the cleanup it runs when the stream ends, and could keep up
   to `maxZippedContentSizeMBytes` of buffered data for good. The cleanup now always runs, and the buffer belongs to
   the agent the scrape was sent to, not to whichever agent the result's first message names.
+- **A busy proxy stays in its Service.** The chart's and the docs' readiness probe was `/healthcheck`, which
+  reported unhealthy at 25 scrapes in flight, a fortieth of the 1000 the proxy admits, or when one agent had 25
+  queued. Kubernetes then took the pod out of the Service, which failed the scrapes for its agents' targets until
+  the load dropped, and the cycle repeated. The probe is now `/ping`, and the in-flight thresholds default to 80%
+  of `maxInFlightScrapeRequests`.
 
 ### Documentation
 

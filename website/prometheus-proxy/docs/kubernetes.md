@@ -253,10 +253,19 @@ The mounted config (`tls.conf`) references the certificate paths under `/app/cer
 
 The proxy and agent Deployments above wire Kubernetes probes to the admin endpoints:
 
-| Probe        | Endpoint       | Meaning                                  |
-|:-------------|:---------------|:-----------------------------------------|
-| `livenessProbe`  | `GET /ping`        | Returns `pong` while the process is up   |
-| `readinessProbe` | `GET /healthcheck` | Returns health status; non-200 if unhealthy |
+| Probe            | Proxy       | Agent              |
+|:-----------------|:------------|:-------------------|
+| `livenessProbe`  | `GET /ping` | `GET /ping`        |
+| `readinessProbe` | `GET /ping` | `GET /healthcheck` |
+
+`/ping` returns `pong` while the process is up. `/healthcheck` returns each health check's status, and a
+non-200 when any is unhealthy.
+
+The proxy's readiness probe is `/ping` because its `/healthcheck` measures load. Each agent stays connected to
+one proxy pod, so taking a busy pod out of the Service doesn't move its load elsewhere: the scrapes for its
+agents' targets fail until it's ready again. Alert on the proxy's `/healthcheck` instead. It turns unhealthy
+when the scrapes or chunked transfers in flight reach 80% of `maxInFlightScrapeRequests`, or one agent's
+queue reaches `scrapeRequestBacklogUnhealthySize`.
 
 Both endpoints are served on the **admin** port (`8092` for the proxy, `8093` for the agent),
 which requires `ADMIN_ENABLED=true`. The manifests also set conservative CPU/memory

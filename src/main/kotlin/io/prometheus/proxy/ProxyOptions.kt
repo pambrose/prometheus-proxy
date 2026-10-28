@@ -117,6 +117,12 @@ class ProxyOptions internal constructor(
   internal var sdTarget: SdTarget? = null
     private set
 
+  // The scrape and chunk map health checks' thresholds, with 0 resolved to 80% of maxInFlightScrapeRequests.
+  internal var scrapeRequestMapUnhealthySize = 0
+    private set
+  internal var chunkContextMapUnhealthySize = 0
+    private set
+
   /**
    * Enables the Proxy's read-only operational dashboard, served from its **own** port ([dashboardPort]) rather
    * than the admin or scrape port. Off by default, matching the admin and metrics posture.
@@ -393,18 +399,28 @@ class ProxyOptions internal constructor(
     logger.info { "internal.maxZippedContentSizeMBytes: ${internal.maxZippedContentSizeMBytes}" }
   }
 
-  // Checks for the scrape-port bind address, the in-flight limit, and the path- and agent-registration limits.
+  // Checks for the scrape-port bind address, the in-flight limit and the map health checks' thresholds under it, and
+  // the path- and agent-registration limits.
   private fun validateHttpHostAndInFlightLimit(proxyConfigVals: ConfigVals.Proxy2) {
     val http = proxyConfigVals.http
     // A blank bind address would otherwise fail only when the scrape server starts, with an opaque Ktor error.
     require(http.host.isNotBlank()) { "proxy.http.host must not be blank" }
     logger.info { "http.host: ${http.host}" }
 
+    val internal = proxyConfigVals.internal
     // A non-positive limit would refuse every scrape.
-    logger.requirePositive("internal.maxInFlightScrapeRequests", proxyConfigVals.internal.maxInFlightScrapeRequests)
+    logger.requirePositive("internal.maxInFlightScrapeRequests", internal.maxInFlightScrapeRequests)
+
+    // A fixed 25 turned /healthcheck unhealthy at a fraction of the load the proxy admits, so a readiness probe on it
+    // flapped (October #2). The scrape map never holds more than maxInFlightScrapeRequests, so a threshold above that
+    // could never trip.
+    scrapeRequestMapUnhealthySize =
+      resolveMapThreshold("scrapeRequestMapUnhealthySize", internal.scrapeRequestMapUnhealthySize, internal)
+    chunkContextMapUnhealthySize =
+      resolveMapThreshold("chunkContextMapUnhealthySize", internal.chunkContextMapUnhealthySize, internal)
 
     // Path- and agent-registration limits: 0 turns one off, and only a negative value is meaningless.
-    with(proxyConfigVals.internal) {
+    with(internal) {
       listOf(
         "maxPathsPerAgent" to maxPathsPerAgent,
         "maxPathLength" to maxPathLength,
@@ -416,6 +432,20 @@ class ProxyOptions internal constructor(
         logger.info { "internal.$name: ${if (value == 0) "unlimited" else value}" }
       }
     }
+  }
+
+  // A map health check's threshold: as configured, or 80% of maxInFlightScrapeRequests when 0.
+  private fun resolveMapThreshold(
+    name: String,
+    value: Int,
+    internal: ConfigVals.Proxy2.Internal2,
+  ): Int {
+    val maxInFlight = internal.maxInFlightScrapeRequests
+    require(value in 0..maxInFlight) {
+      "internal.$name must be in 0..maxInFlightScrapeRequests ($maxInFlight), 0 for 80% of it: $value"
+    }
+    return (if (value == 0) maxInFlight - maxInFlight / 5 else value)
+      .also { logger.info { "internal.$name: $it" } }
   }
 
   internal companion object {

@@ -576,6 +576,42 @@ class ProxyOptionsTest : StringSpec() {
       exception.message shouldContain "scrapeRequestBacklogUnhealthySize"
     }
 
+    // A fixed 25 sat far below the in-flight limit, so readiness flapped under ordinary load (October #2).
+    "the scrape and chunk map thresholds should default to 80% of maxInFlightScrapeRequests" {
+      proxyOptions([]).apply {
+        scrapeRequestMapUnhealthySize shouldBe 800
+        chunkContextMapUnhealthySize shouldBe 800
+      }
+      proxyOptions(["-Dproxy.internal.maxInFlightScrapeRequests=101"]).apply {
+        scrapeRequestMapUnhealthySize shouldBe 81
+        chunkContextMapUnhealthySize shouldBe 81
+      }
+      proxyOptions(["-Dproxy.internal.maxInFlightScrapeRequests=1"]).scrapeRequestMapUnhealthySize shouldBe 1
+    }
+
+    "a configured scrape or chunk map threshold should be kept" {
+      proxyOptions(
+        [
+          "-Dproxy.internal.scrapeRequestMapUnhealthySize=25",
+          "-Dproxy.internal.chunkContextMapUnhealthySize=1000",
+        ],
+      ).apply {
+        scrapeRequestMapUnhealthySize shouldBe 25
+        chunkContextMapUnhealthySize shouldBe 1000
+      }
+    }
+
+    // The scrape map never holds more than maxInFlightScrapeRequests, so a threshold above it could never trip.
+    "a scrape or chunk map threshold above maxInFlightScrapeRequests, or negative, should be rejected" {
+      listOf("scrapeRequestMapUnhealthySize", "chunkContextMapUnhealthySize").forEach { name ->
+        listOf(1001, -1).forEach { value ->
+          shouldThrow<IllegalArgumentException> {
+            proxyOptions(["-Dproxy.internal.$name=$value"])
+          }.message shouldContain name
+        }
+      }
+    }
+
     // The dashboard's push loop waits refreshIntervalSecs between pushes; at 0 the wait returns at once, so the loop
     // spun a thread at 100%.
     "a non-positive dashboard refreshIntervalSecs should be rejected when the dashboard is enabled" {

@@ -243,9 +243,9 @@ internal data class ProxySnapshot(
             // proxy is currently serving, so counting it here would overstate the proxy's state.
             pathCount = registered.size,
             chunkContextSize = proxy.agentContextManager.chunkedContextSize,
-            chunkContextThreshold = internal.chunkContextMapUnhealthySize,
+            chunkContextThreshold = proxy.options.chunkContextMapUnhealthySize,
             scrapeMapSize = proxy.scrapeRequestManager.scrapeMapSize,
-            scrapeMapThreshold = internal.scrapeRequestMapUnhealthySize,
+            scrapeMapThreshold = proxy.options.scrapeRequestMapUnhealthySize,
           ),
         maxAgentInactivitySecs = internal.maxAgentInactivitySecs.toLong(),
       )

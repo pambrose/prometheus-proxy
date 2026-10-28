@@ -117,9 +117,11 @@ spec:
               path: /ping
               port: admin
             {{- toYaml .Values.livenessProbe | nindent 12 }}
+          # Not /healthcheck: that measures load, and each agent stays connected to one pod, so taking a busy pod out
+          # of the Service would only fail its agents' scrapes.
           readinessProbe:
             httpGet:
-              path: /healthcheck
+              path: /ping
               port: admin
             {{- toYaml .Values.readinessProbe | nindent 12 }}
           {{- else }}
