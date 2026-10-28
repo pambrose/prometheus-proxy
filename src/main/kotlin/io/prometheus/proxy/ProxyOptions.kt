@@ -385,7 +385,7 @@ class ProxyOptions internal constructor(
     logger.info { "internal.maxZippedContentSizeMBytes: ${internal.maxZippedContentSizeMBytes}" }
   }
 
-  // Checks for the scrape-port bind address, the in-flight limit, and the path-registration limits.
+  // Checks for the scrape-port bind address, the in-flight limit, and the path- and agent-registration limits.
   private fun validateHttpHostAndInFlightLimit(proxyConfigVals: ConfigVals.Proxy2) {
     val http = proxyConfigVals.http
     // A blank bind address would otherwise fail only when the scrape server starts, with an opaque Ktor error.
@@ -395,12 +395,14 @@ class ProxyOptions internal constructor(
     // A non-positive limit would refuse every scrape.
     logger.requirePositive("internal.maxInFlightScrapeRequests", proxyConfigVals.internal.maxInFlightScrapeRequests)
 
-    // Path-registration limits: 0 turns one off, and only a negative value is meaningless.
+    // Path- and agent-registration limits: 0 turns one off, and only a negative value is meaningless.
     with(proxyConfigVals.internal) {
       listOf(
         "maxPathsPerAgent" to maxPathsPerAgent,
         "maxPathLength" to maxPathLength,
         "maxLabelsSizeBytes" to maxLabelsSizeBytes,
+        "maxAgentFieldLength" to maxAgentFieldLength,
+        "maxAgentProxyEndpoints" to maxAgentProxyEndpoints,
       ).forEach { (name, value) ->
         require(value >= 0) { "internal.$name must be >= 0 (0 = unlimited): $value" }
         logger.info { "internal.$name: ${if (value == 0) "unlimited" else value}" }

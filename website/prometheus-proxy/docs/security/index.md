@@ -101,7 +101,10 @@ enforces, on every path registration, that the requested path matches one of the
 | Empty `paths` list       | Identity may register **any** path (allow-all)     |
 
 Patterns are single-segment globs: `*` matches any run of characters and `?` matches exactly one
-(e.g. `team_a_*`). Because authorization is per-identity-per-path,
+(e.g. `team_a_*`). A path is checked against the patterns only once it has passed the path limits
+(`proxy.internal.maxPathLength` and the rest; see
+[Proxy configuration](../configuration/proxy.md#internal-settings)), so a path that is too long or has more
+than one segment is refused as invalid, whatever the patterns. Because authorization is per-identity-per-path,
 [consolidated mode](../advanced.md#consolidated-mode) still works as long as each participating
 agent's identity permits the shared path. A consolidated path belongs to the identity that registered
 it, though: another identity whose patterns match is refused while agents still serve the path, and

@@ -20,6 +20,30 @@ among them gRPC, which now runs at one version across all its modules.
   agent that sent a result for the next scrape ID before the proxy started tracking it could complete another
   agent's scrape with its own data. The check and the result now use the same lookup, and a result for a scrape the
   proxy isn't tracking is dropped.
+- **A path can't stall the proxy on its way to authorization.** The proxy compared a registered path with the
+  agent identity's path patterns before checking its length. A pattern with several `*`s could take seconds per
+  path it didn't match, and a path could be millions of characters long, so one authenticated agent could tie up
+  the proxy for every other agent. A path over `maxPathLength`, or with more than one segment, is now refused
+  before the patterns see it, and matching a pattern takes time in proportion to the path's length. A denied path
+  is logged with only its first characters.
+- **Long agent names and host names are cut.** The proxy stored the name, host name, launch ID, and failover list
+  an agent reports, at any size, and repeated them for every path the agent serves, in logs, service discovery,
+  the dashboard, and `/debug`. It now keeps the first 256 characters of each and the first 16 failover endpoints,
+  set by the new `proxy.internal.maxAgentFieldLength` and `maxAgentProxyEndpoints`, and warns when it cuts one.
+  The log line for each registered path names the agent's ID instead.
+- **Every authenticated connection appears as a connected agent.** A client that skipped the `connectAgent` call
+  could register paths and serve scrapes while missing from the dashboard's agent list, the agent count, and the
+  health checks. The first call that passes authentication now counts, whichever call it is.
+
+### Before you upgrade
+
+- **The new checks on what agents send refuse no agent**, and the stock agent behaves as before. Two things can
+  look different:
+  - An agent whose name or host name is longer than 256 characters has it cut to 256, so its `agentName` or
+    `hostName` service discovery label changes, and with it the labels on that target's series. Raise
+    `proxy.internal.maxAgentFieldLength`, or set it to `0`, to keep such values whole.
+  - A custom client that never called `connectAgent` now shows up on the dashboard and in
+    `proxy_agent_map_size`.
 
 ### Bug Fixes
 

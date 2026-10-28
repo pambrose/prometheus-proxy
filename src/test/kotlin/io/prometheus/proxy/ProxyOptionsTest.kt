@@ -597,6 +597,28 @@ class ProxyOptionsTest : StringSpec() {
       proxyOptions(["-Dproxy.internal.maxPathsPerAgent=0"]).configVals.proxy.internal.maxPathsPerAgent shouldBe 0
     }
 
+    // October #23: an agent's name, host name, and launch ID are shown, not used, but repeated for every path it
+    // serves. 256 characters is more than a DNS host name (253) and far more than a launch ID (15); real failover lists
+    // have a handful of entries.
+    "agent field limits should default to 256 characters and 16 proxy endpoints" {
+      val internal = proxyOptions([]).configVals.proxy.internal
+      internal.maxAgentFieldLength shouldBe 256
+      internal.maxAgentProxyEndpoints shouldBe 16
+    }
+
+    // 0 turns a limit off, as for the path limits; only a negative value is meaningless.
+    "a negative agent field limit should be rejected" {
+      for (key in ["maxAgentFieldLength", "maxAgentProxyEndpoints"]) {
+        val exception = shouldThrow<IllegalArgumentException> { proxyOptions(["-Dproxy.internal.$key=-1"]) }
+        exception.message shouldContain key
+      }
+      val unlimited =
+        proxyOptions(["-Dproxy.internal.maxAgentFieldLength=0", "-Dproxy.internal.maxAgentProxyEndpoints=0"])
+          .configVals.proxy.internal
+      unlimited.maxAgentFieldLength shouldBe 0
+      unlimited.maxAgentProxyEndpoints shouldBe 0
+    }
+
     // A blank bind address would fail only when the scrape server starts, with an opaque Ktor error.
     "a blank proxy.http.host should be rejected" {
       val exception = shouldThrow<IllegalArgumentException> { proxyOptions(["-Dproxy.http.host="]) }

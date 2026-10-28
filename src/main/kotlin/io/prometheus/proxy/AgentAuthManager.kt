@@ -30,17 +30,19 @@ import java.security.MessageDigest
  *
  * @param name identity name, used only for logging and failure messages
  * @param tokenDigest SHA-256 digest of the identity's pre-shared token
- * @param pathMatchers compiled glob patterns; an empty list authorizes every path
+ * @param pathGlobs glob patterns, matched by [AgentAuthManager.globMatches]; an empty list authorizes every path
  * @see AgentAuthManager
  */
 internal class AgentIdentity(
   val name: String,
   val tokenDigest: ByteArray,
-  private val pathMatchers: List<Regex>,
+  private val pathGlobs: List<String>,
 ) {
   /** Returns true when this identity may register [path]. An identity with no patterns allows all paths. */
-  fun isAuthorized(path: String): Boolean =
-    pathMatchers.isEmpty() || pathMatchers.any { it.matches(path.removePrefix("/")) }
+  fun isAuthorized(path: String): Boolean {
+    val key = path.removePrefix("/")
+    return pathGlobs.isEmpty() || pathGlobs.any { AgentAuthManager.globMatches(it, key) }
+  }
 }
 
 /**
@@ -108,7 +110,7 @@ internal class AgentAuthManager private constructor(
         authEntries.map { entry ->
           require(entry.name.isNotEmpty()) { "proxy.auth entry has an empty name" }
           require(entry.token.isNotEmpty()) { "proxy.auth identity '${entry.name}' has an empty token" }
-          AgentIdentity(entry.name, sha256(entry.token), entry.paths.map { globToRegex(it) })
+          AgentIdentity(entry.name, sha256(entry.token), entry.paths.toList())
         }
 
       val legacyIdentity =
@@ -149,25 +151,52 @@ internal class AgentAuthManager private constructor(
     }
 
     /**
-     * Compiles a single-segment glob into an anchored, case-sensitive [Regex]: `*` matches any run of
-     * characters and `?` matches one. All other characters match literally. Paths are single-segment
-     * because [ProxyPathManager] rejects multi-segment registrations.
+     * Returns whether the single-segment [glob] matches all of [text], case-sensitively: `*` matches any run of
+     * characters, `?` matches one, and every other character matches itself. Paths are single-segment because
+     * [ProxyPathManager] rejects multi-segment registrations.
+     *
+     * Two pointers, not a regex. On a mismatch the glob backs up to just after its last `*`, which takes one more
+     * character of the text, and nothing before that star is revisited: the star can absorb whatever an earlier one
+     * did. So the work is at most the text's length times the glob's. The regex this replaced (`*` as `.*`)
+     * backtracked through every placement of every star, so `*_*_*_*_metrics` took about 9 seconds on a 512-character
+     * path it didn't match (October #22).
      */
-    internal fun globToRegex(glob: String): Regex {
-      val pattern =
-        buildString {
-          append('^')
-          for (ch in glob) {
-            when {
-              ch == '*' -> append(".*")
-              ch == '?' -> append('.')
-              ch.isLetterOrDigit() || ch == '_' -> append(ch)
-              else -> append('\\').append(ch)
-            }
+    internal fun globMatches(
+      glob: String,
+      text: String,
+    ): Boolean {
+      var g = 0
+      var t = 0
+      // The glob index of the last `*` passed, or -1, and the text index that star's run currently ends at.
+      var star = -1
+      var starEnd = 0
+      while (t < text.length) {
+        when {
+          g < glob.length && glob[g] == '*' -> {
+            star = g++
+            starEnd = t
           }
-          append('$')
+
+          g < glob.length && (glob[g] == '?' || glob[g] == text[t]) -> {
+            g++
+            t++
+          }
+
+          star >= 0 -> {
+            g = star + 1
+            t = ++starEnd
+          }
+
+          else -> {
+            return false
+          }
         }
-      return Regex(pattern)
+      }
+      // The text is used up: only stars, which match nothing, may remain of the glob.
+      while (g < glob.length && glob[g] == '*') {
+        g++
+      }
+      return g == glob.length
     }
 
     private fun sha256(value: String): ByteArray = MessageDigest.getInstance("SHA-256").digest(value.toByteArray())
