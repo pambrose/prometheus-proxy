@@ -248,6 +248,9 @@ something.
   the in-flight limit race an agent's answer, a single failure, and `failAllScrapeRequests`; the limit holds and its
   counter matches the map, each request keeps one completer's result and matching `proxyFailure`, and a disconnect fails
   only its own agent's requests
+- **ScrapeResultOwnershipLincheckTest** — Lincheck (tagged `Lincheck`): a handler tracking and untracking a scrape races
+  answers for its scrapeId from its owner and from another agent, which can name it before it is tracked; only the
+  owner ever completes it
 - **ScrapeRequestWrapperTest** — Scrape request lifecycle, timeout behavior, response delivery
 - **AgentAuthManagerTest** — Per-agent auth: path-glob matching, token resolution (including the legacy allow-all
   token), `isEnabled`, and fail-fast rejection of empty, duplicate or colliding identities

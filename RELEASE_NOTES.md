@@ -15,6 +15,11 @@ among them gRPC, which now runs at one version across all its modules.
   one gRPC brings reached only the fat JARs and Docker images. A host that depended on
   `com.pambrose:prometheus-proxy` got gRPC's Netty instead, which in 4.3.0 was 4.2.16.Final, with the critical
   CVE-2026-75595. The published dependency list now pins Netty 4.2.18.Final.
+- **A scrape result is checked against the scrape it completes.** 4.1.0 made the proxy accept a result only from
+  the agent the scrape was sent to, but it checked one lookup and applied the result on another. An authenticated
+  agent that sent a result for the next scrape ID before the proxy started tracking it could complete another
+  agent's scrape with its own data. The check and the result now use the same lookup, and a result for a scrape the
+  proxy isn't tracking is dropped.
 
 ### Bug Fixes
 
@@ -22,6 +27,10 @@ among them gRPC, which now runs at one version across all its modules.
   with credentials and query values masked, and the scrape's ID, so an agent serving several paths shows which one
   sent too much data. The proxy's warnings about a scrape it no longer tracks write that ID as `scrapeId:`, as its
   other log lines do.
+- **A large scrape result cut off by a disconnect is always cleaned up.** When an agent disconnected partway
+  through sending a result in chunks, the proxy skipped the cleanup it runs when the stream ends, and could keep up
+  to `maxZippedContentSizeMBytes` of buffered data for good. The cleanup now always runs, and the buffer belongs to
+  the agent the scrape was sent to, not to whichever agent the result's first message names.
 
 ### Documentation
 

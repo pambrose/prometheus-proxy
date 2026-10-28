@@ -360,46 +360,50 @@ internal class ProxyServiceImpl(
   }
 
   /**
-   * Returns whether this connection may act on [scrapeId]'s result.
+   * Returns whether this connection may act on [scrapeId]'s result, whose scrape was sent to [owner].
    *
    * Scrape IDs come from one process-wide counter, so without this check any authenticated agent could
    * answer, fail, or disrupt the chunked transfer of a scrape that was sent to a different agent. Compares the
    * connection's transport-assigned agentId when there is one, and otherwise the owner's bound auth identity
-   * (see [identityMismatchReason]). Allows the call when the scrape is no longer tracked, where the existing
-   * missing-request handling applies.
+   * (see [identityMismatchReason]).
+   *
+   * [owner] must come from the object the caller then acts on: the tracked wrapper it completes, or the chunked
+   * transfer it extends. Checking on a separate lookup first let a scrapeId that was untracked at the check, and
+   * tracked for another agent before the act, take this connection's data (October #21).
    */
   private fun isScrapeOwnedByConnection(
     connectionAgentId: String?,
+    owner: AgentContext,
     scrapeId: Long,
     rpcName: String,
-  ): Boolean {
-    val ownerAgentId = proxy.scrapeRequestManager.ownerAgentId(scrapeId) ?: return true
-    return if (connectionAgentId == null) {
+  ): Boolean =
+    if (connectionAgentId == null) {
       // No transport-assigned agentId (transportFilterDisabled): fall back to the owner's bound auth identity.
-      proxy.agentContextManager.getAgentContext(ownerAgentId)
-        ?.let { owner -> identityMismatchReason(owner, rpcName) == null }
-        ?: true
+      identityMismatchReason(owner, rpcName) == null
     } else {
-      (ownerAgentId == connectionAgentId).also { owned ->
+      (owner.agentId == connectionAgentId).also { owned ->
         if (!owned)
           logger.warn {
             "Agent on connection $connectionAgentId sent $rpcName() data for scrapeId $scrapeId, " +
-              "which was sent to agent $ownerAgentId; ignoring"
+              "which was sent to agent ${owner.agentId}; ignoring"
           }
       }
     }
-  }
+
+  // The owner check ScrapeRequestManager applies to the wrapper it completes or fails for this connection.
+  private fun ownedByConnection(
+    connectionAgentId: String?,
+    rpcName: String,
+  ): (ScrapeRequestWrapper) -> Boolean =
+    { wrapper -> isScrapeOwnedByConnection(connectionAgentId, wrapper.agentContext, wrapper.scrapeId, rpcName) }
 
   @Suppress("TooGenericExceptionCaught")
   override suspend fun writeResponsesToProxy(requests: Flow<ScrapeResponse>): Empty {
-    val connectionAgentId = ProxyServerInterceptor.CONNECTION_AGENT_ID_KEY.get()
+    val isOwner = ownedByConnection(ProxyServerInterceptor.CONNECTION_AGENT_ID_KEY.get(), "writeResponsesToProxy")
     runCatchingCancellable {
       requests.collect { response ->
-        if (!isScrapeOwnedByConnection(connectionAgentId, response.scrapeId, "writeResponsesToProxy"))
-          return@collect
         try {
-          val scrapeResults = response.toScrapeResults()
-          proxy.scrapeRequestManager.assignScrapeResults(scrapeResults)
+          proxy.scrapeRequestManager.assignScrapeResults(response.toScrapeResults(), isOwner)
         } catch (e: CancellationException) {
           throw e
         } catch (e: Exception) {
@@ -411,6 +415,7 @@ internal class ProxyServiceImpl(
             response.scrapeId,
             "Error processing scrape response: ${e.message}",
             ProxyFailure.INVALID_RESPONSE,
+            isOwner,
           )
         }
       }
@@ -432,9 +437,15 @@ internal class ProxyServiceImpl(
 
   override suspend fun writeChunkedResponsesToProxy(requests: Flow<ChunkedScrapeResponse>): Empty {
     val reader = ChunkedResponseReader(ProxyServerInterceptor.CONNECTION_AGENT_ID_KEY.get())
-    runCatchingCancellable { requests.collect { reader.read(it) } }
-      .onFailure { logResponseStreamFailure("writeChunkedResponsesToProxy", it) }
-    reader.abandonUnfinished()
+    try {
+      runCatchingCancellable { requests.collect { reader.read(it) } }
+        .onFailure { logResponseStreamFailure("writeChunkedResponsesToProxy", it) }
+    } finally {
+      // In a finally because runCatchingCancellable rethrows CancellationException, and grpc-kotlin cancels the RPC
+      // when the agent disconnects mid-transfer: the most common way a stream ends. The sweep doesn't suspend, so it
+      // is safe to run while cancelled.
+      reader.abandonUnfinished()
+    }
     return EMPTY_INSTANCE
   }
 
@@ -443,13 +454,14 @@ internal class ProxyServiceImpl(
   private inner class ChunkedResponseReader(
     private val connectionAgentId: String?,
   ) {
-    // The scrapes with a transfer under way on this stream. A plain (non-thread-safe) set, which is safe ONLY because
-    // grpc-kotlin confines a client-streaming RPC's collect{} and the post-collect cleanup to a single coroutine --
-    // there is no launch/async/flowOn here that would fan the body across threads. The genuinely shared
+    // The scrapes with a transfer this stream opened and hasn't finished. A plain (non-thread-safe) set, which is safe
+    // ONLY because grpc-kotlin confines a client-streaming RPC's collect{} and the cleanup in its finally to a single
+    // coroutine -- there is no launch/async/flowOn here that would fan the body across threads. The genuinely shared
     // chunkedContextMap is a ConcurrentHashMap. If this RPC is ever refactored to process chunks concurrently, switch
     // this to a thread-safe/synchronized set.
     private val activeScrapeIds = mutableSetOf<Long>()
     private val contextManager get() = proxy.agentContextManager
+    private val isOwner = ownedByConnection(connectionAgentId, RPC_NAME)
 
     fun read(response: ChunkedScrapeResponse) {
       when (response.chunkOneOfCase) {
@@ -465,39 +477,48 @@ internal class ProxyServiceImpl(
       }
     }
 
-    private fun isOwned(scrapeId: Long) =
-      isScrapeOwnedByConnection(connectionAgentId, scrapeId, "writeChunkedResponsesToProxy")
+    // Whether this connection may extend [context], the transfer for [scrapeId]: checked on the owner the transfer
+    // recorded when it was opened, not on a fresh lookup of the scrape.
+    private fun owns(
+      context: ChunkedContext,
+      scrapeId: Long,
+    ) = isScrapeOwnedByConnection(connectionAgentId, context.owner, scrapeId, RPC_NAME)
 
+    // The scrape is looked up once: that wrapper is both what the owner check reads and the owner the transfer records,
+    // so a scrapeId that isn't tracked yet can't pass the check and then be opened for the agent that tracks it next.
     private fun readHeader(response: ChunkedScrapeResponse) {
       val scrapeId = response.header.headerScrapeId
-      if (!isOwned(scrapeId))
-        return
-      if (proxy.scrapeRequestManager.containsScrapeRequest(scrapeId)) {
-        logger.debug { "Reading header for scrapeId: $scrapeId" }
-        val maxZippedSize = proxy.proxyConfigVals.internal.maxZippedContentSizeMBytes * 1024L * 1024L
-        contextManager.putChunkedContext(scrapeId, ChunkedContext(response, maxZippedSize))
-        activeScrapeIds += scrapeId
-      } else {
+      val wrapper = proxy.scrapeRequestManager.getScrapeRequest(scrapeId)
+      if (wrapper == null) {
         logger.warn { "Received chunked header for unknown scrapeId: $scrapeId" }
+        return
       }
+      if (!isOwner(wrapper))
+        return
+      logger.debug { "Reading header for scrapeId: $scrapeId" }
+      val maxZippedSize = proxy.proxyConfigVals.internal.maxZippedContentSizeMBytes * 1024L * 1024L
+      if (contextManager.putChunkedContext(scrapeId, ChunkedContext(response, maxZippedSize, wrapper.agentContext)))
+        activeScrapeIds += scrapeId
+      else
+        logger.warn { "Received a second chunked header for scrapeId: $scrapeId, keeping the transfer under way" }
     }
 
     // with(...) rather than apply { }: this block consumes the chunk, it doesn't configure it (finding 36).
     private fun readChunk(chunk: ChunkData) {
       with(chunk) {
         logger.debug { "Reading chunk $chunkCount for scrapeId: $chunkScrapeId" }
-        if (!isOwned(chunkScrapeId))
-          return
         val context = contextManager.getChunkedContext(chunkScrapeId)
         if (context == null) {
           logger.warn { "Missing chunked context for chunk with scrapeId: $chunkScrapeId, skipping" }
           return
         }
+        if (!owns(context, chunkScrapeId))
+          return
         try {
           context.applyChunk(chunkBytes.toByteArray(), chunkByteCount, chunkCount, chunkChecksum)
         } catch (e: ChunkValidationException) {
           logger.error(e) { "Chunk validation failed for scrapeId: $chunkScrapeId, discarding context" }
-          contextManager.removeChunkedContext(chunkScrapeId)
+          contextManager.removeChunkedContext(chunkScrapeId, context)
           activeScrapeIds -= chunkScrapeId
           proxy.scrapeRequestManager.failScrapeRequest(
             chunkScrapeId,
@@ -512,11 +533,12 @@ internal class ProxyServiceImpl(
     // with(...) rather than apply { }: this block consumes the summary (finding 36).
     private fun readSummary(summary: SummaryData) {
       with(summary) {
-        if (!isOwned(summaryScrapeId))
+        val context = contextManager.getChunkedContext(summaryScrapeId)
+        if (context != null && !owns(context, summaryScrapeId))
           return
-        val context = contextManager.removeChunkedContext(summaryScrapeId)
         activeScrapeIds -= summaryScrapeId
-        if (context == null) {
+        // Removes only the transfer just checked, which a concurrent removeAgentContext may already have reclaimed.
+        if (context == null || !contextManager.removeChunkedContext(summaryScrapeId, context)) {
           logger.warn { "Missing chunked context for summary with scrapeId: $summaryScrapeId, skipping" }
           return
         }
@@ -527,7 +549,7 @@ internal class ProxyServiceImpl(
         }
         try {
           val scrapeResults = context.applySummary(summaryChunkCount, summaryByteCount, summaryChecksum)
-          proxy.scrapeRequestManager.assignScrapeResults(scrapeResults)
+          proxy.scrapeRequestManager.assignScrapeResults(scrapeResults, isOwner)
         } catch (e: ChunkValidationException) {
           logger.error(e) { "Summary validation failed for scrapeId: $summaryScrapeId" }
           proxy.scrapeRequestManager.failScrapeRequest(
@@ -541,7 +563,9 @@ internal class ProxyServiceImpl(
     }
 
     // Cleans up the chunked contexts the stream left without a summary (e.g., due to stream cancellation or agent
-    // disconnect mid-transfer).
+    // disconnect mid-transfer). Runs in writeChunkedResponsesToProxy's finally, so it must not suspend. A transfer is
+    // opened only by the agent its scrape was sent to, and scrapeIds are never reused, so removing by scrapeId never
+    // removes another agent's transfer.
     //
     // This sweep can race Proxy.removeAgentContext() (from the transport-terminated or cleanup-service
     // thread) for the same scrapeId. Double-handling is prevented by two invariants that future edits
@@ -568,6 +592,7 @@ internal class ProxyServiceImpl(
   companion object {
     private val logger = logger {}
     private val PATH_ID_GENERATOR = AtomicLong(0L)
+    private const val RPC_NAME = "writeChunkedResponsesToProxy"
     internal const val UNKNOWN_ADDRESS = "Unknown"
   }
 }

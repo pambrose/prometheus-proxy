@@ -128,7 +128,7 @@ class ScrapeRequestManagerOps {
     checkLimit()
   }
 
-  // The agent's answer arriving through writeResponsesToProxy.
+  // The agent's answer arriving through writeResponsesToProxy, on the connection of the agent it was sent to.
   @Operation
   fun answer(
     @Param(name = "request") index: Int,
@@ -141,7 +141,7 @@ class ScrapeRequestManagerOps {
         srValidResponse = true,
         srStatusCode = HttpStatusCode.OK.value,
       ),
-    )
+    ) { it.agentContext === wrapper.agentContext }
   }
 
   // One request failed by the proxy, as a cancelled readRequestsFromProxy does.

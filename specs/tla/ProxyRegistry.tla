@@ -9,8 +9,8 @@
 (*   ProxyPathManager     -- addPath (out-of-lock lookup, then the         *)
 (*                           synchronized(pathMap) block), removePath,     *)
 (*                           removeFromPathManager                         *)
-(*   ScrapeRequestManager -- tracked scrapes, ownership check, CAS         *)
-(*                           completion                                   *)
+(*   ScrapeRequestManager -- tracked scrapes, the ownership check on the   *)
+(*                           lookup that completes, CAS completion        *)
 (*   Proxy.removeAgentContext -- the three-step teardown                   *)
 (*   ProxyHttpRoutes      -- one HTTP handler per scrape                   *)
 (*   ProxyServiceImpl.readRequestsFromProxy -- the per-agent reader loop   *)
@@ -28,9 +28,11 @@ CONSTANTS
     Scrapes,        \* scrape requests; one HTTP handler each
     NoConn,         \* model value: "no connection"
     UseTimeout,     \* FALSE disables the HTTP handler's timeout, so liveness proves no scrape is stranded
-    CheckOwnership  \* FALSE removes isScrapeOwnedByConnection, to see TLC catch the cross-agent answer
+    CheckOwnership, \* FALSE removes isScrapeOwnedByConnection, to see TLC catch the cross-agent answer
+    SameLookup      \* FALSE checks ownership on a lookup of its own before assignScrapeResults, as before
+                    \* October #21's fix, to see TLC catch an answer for a scrape tracked between the two
 
-ASSUME UseTimeout \in BOOLEAN /\ CheckOwnership \in BOOLEAN
+ASSUME UseTimeout \in BOOLEAN /\ CheckOwnership \in BOOLEAN /\ SameLookup \in BOOLEAN
 
 VARIABLES
     \* Fixed per connection at Init, so TLC explores every mix of identities and modes.
@@ -57,11 +59,12 @@ VARIABLES
     target,         \* [Scrapes -> Conns \cup {NoConn}]
     tracked,        \* SUBSET Scrapes: keys of scrapeRequestMap
     result,         \* [Scrapes -> {"none","agent","disconnected","cancelled"}]
-    completedBy     \* [Scrapes -> Conns \cup {NoConn}]: the agent whose answer won the CAS
+    completedBy,    \* [Scrapes -> Conns \cup {NoConn}]: the agent whose answer won the CAS
+    checked         \* SUBSET (Conns \X Scrapes): answers past a separate owner check, not yet applied (~SameLookup)
 
 connVars  == <<phase, inMgr, valid, draining, queue, tokens, reading, agentHas>>
 pathVars  == <<regPending, pathMap, pathCount>>
-scrapeVars == <<hstate, target, tracked, result, completedBy>>
+scrapeVars == <<hstate, target, tracked, result, completedBy, checked>>
 vars == <<ident, consol, connVars, pathVars, scrapeVars>>
 
 Absent == [consolidated |-> FALSE, identity |-> CHOOSE i \in Identities : TRUE, ctxs |-> {}]
@@ -83,7 +86,8 @@ FailAll(S, r) ==
 
 Remove(seq, s) == SelectSeq(seq, LAMBDA x : x # s)
 
-\* The owner check on a response RPC (isScrapeOwnedByConnection).
+\* The owner check on a response RPC (isScrapeOwnedByConnection), which assignScrapeResults applies to the wrapper it
+\* completes.
 OwnedBy(s, c) == ~CheckOwnership \/ target[s] = c
 
 -----------------------------------------------------------------------------
@@ -126,7 +130,7 @@ FailScrapes(c) ==
     /\ phase' = [phase EXCEPT ![c] = "gone"]
     /\ FailAll({s \in tracked : target[s] = c}, "disconnected")
     /\ UNCHANGED <<ident, consol, inMgr, valid, draining, queue, tokens, reading, agentHas, pathVars,
-                   hstate, target, tracked>>
+                   hstate, target, tracked, checked>>
 
 \* invalidate()'s drain loop: poll a queued request and fail it with agent-disconnected.
 Drain(c) ==
@@ -135,7 +139,7 @@ Drain(c) ==
     /\ queue' = [queue EXCEPT ![c] = Tail(@)]
     /\ Complete(Head(queue[c]), "disconnected", NoConn)
     /\ UNCHANGED <<ident, consol, phase, inMgr, valid, draining, tokens, reading, agentHas, pathVars,
-                   hstate, target, tracked>>
+                   hstate, target, tracked, checked>>
 
 DrainEnd(c) ==
     /\ draining[c]
@@ -202,14 +206,14 @@ HttpStart(s) ==
         /\ \E c \in pathMap[p].ctxs :
             /\ target' = [target EXCEPT ![s] = c]
             /\ hstate' = [hstate EXCEPT ![s] = "picked"]
-    /\ UNCHANGED <<ident, consol, connVars, pathVars, tracked, result, completedBy>>
+    /\ UNCHANGED <<ident, consol, connVars, pathVars, tracked, result, completedBy, checked>>
 
 \* tryAddToScrapeRequestMap (the in-flight limit is not modeled).
 HttpTrack(s) ==
     /\ hstate[s] = "picked"
     /\ hstate' = [hstate EXCEPT ![s] = "tracked"]
     /\ tracked' = tracked \cup {s}
-    /\ UNCHANGED <<ident, consol, connVars, pathVars, target, result, completedBy>>
+    /\ UNCHANGED <<ident, consol, connVars, pathVars, target, result, completedBy, checked>>
 
 \* writeScrapeRequest part 1: scrapeRequestQueue.add (the backlog cap is not modeled).
 HttpEnqueue(s) ==
@@ -217,7 +221,7 @@ HttpEnqueue(s) ==
     /\ queue' = [queue EXCEPT ![target[s]] = Append(@, s)]
     /\ hstate' = [hstate EXCEPT ![s] = "enqueued"]
     /\ UNCHANGED <<ident, consol, phase, inMgr, valid, draining, tokens, reading, agentHas, pathVars,
-                   target, tracked, result, completedBy>>
+                   target, tracked, result, completedBy, checked>>
 
 \* writeScrapeRequest part 2: notifier.send. On a closed channel it takes the request back out of the queue (if the
 \* drain hasn't already) and the handler answers agent-disconnected; its finally untracks the scrape.
@@ -233,7 +237,7 @@ HttpSend(s) ==
               /\ tracked' = tracked \ {s}
               /\ UNCHANGED tokens
     /\ UNCHANGED <<ident, consol, phase, inMgr, valid, draining, reading, agentHas, pathVars,
-                   target, result, completedBy>>
+                   target, result, completedBy, checked>>
 
 \* awaitCompleted returns because the request completed; the finally untracks it.
 HttpFinish(s) ==
@@ -241,7 +245,7 @@ HttpFinish(s) ==
     /\ result[s] # "none"
     /\ hstate' = [hstate EXCEPT ![s] = "done"]
     /\ tracked' = tracked \ {s}
-    /\ UNCHANGED <<ident, consol, connVars, pathVars, target, result, completedBy>>
+    /\ UNCHANGED <<ident, consol, connVars, pathVars, target, result, completedBy, checked>>
 
 \* awaitCompleted times out.
 HttpTimeout(s) ==
@@ -250,7 +254,7 @@ HttpTimeout(s) ==
     /\ result[s] = "none"
     /\ hstate' = [hstate EXCEPT ![s] = "done"]
     /\ tracked' = tracked \ {s}
-    /\ UNCHANGED <<ident, consol, connVars, pathVars, target, result, completedBy>>
+    /\ UNCHANGED <<ident, consol, connVars, pathVars, target, result, completedBy, checked>>
 
 -----------------------------------------------------------------------------
 (* readRequestsFromProxy and the agent *)
@@ -283,24 +287,45 @@ EmitCancelled(c, s) ==
     /\ reading' = [reading EXCEPT ![c] = @ \ {s}]
     /\ IF s \in tracked THEN Complete(s, "cancelled", NoConn) ELSE UNCHANGED <<result, completedBy>>
     /\ UNCHANGED <<ident, consol, phase, inMgr, valid, draining, queue, tokens, agentHas, pathVars,
-                   hstate, target, tracked>>
+                   hstate, target, tracked, checked>>
 
-\* The agent answers a scrape it was sent (writeResponsesToProxy -> assignScrapeResults).
+\* The agent answers a scrape it was sent (writeResponsesToProxy -> assignScrapeResults, which checks the owner on the
+\* wrapper it completes).
 Respond(c, s) ==
     /\ phase[c] = "live"
     /\ s \in agentHas[c]
     /\ agentHas' = [agentHas EXCEPT ![c] = @ \ {s}]
     /\ IF s \in tracked /\ OwnedBy(s, c) THEN Complete(s, "agent", c) ELSE UNCHANGED <<result, completedBy>>
     /\ UNCHANGED <<ident, consol, phase, inMgr, valid, draining, queue, tokens, reading, pathVars,
-                   hstate, target, tracked>>
+                   hstate, target, tracked, checked>>
 
 \* A connected agent answers a scrape id it was never sent. Scrape ids come from one process-wide counter, so any
-\* agent can name any in-flight scrape.
+\* agent can name any scrape, one not yet tracked included. assignScrapeResults checks the owner on the wrapper it
+\* completes, in one step: an id that isn't tracked has no owner, so its answer is dropped (a no-op, left out here).
 Forge(c, s) ==
+    /\ SameLookup
     /\ phase[c] = "live"
     /\ s \in tracked
     /\ s \notin agentHas[c]
     /\ IF OwnedBy(s, c) THEN Complete(s, "agent", c) ELSE UNCHANGED <<result, completedBy>>
+    /\ UNCHANGED <<ident, consol, connVars, pathVars, hstate, target, tracked, checked>>
+
+\* Before October #21's fix, the check and the completion were two lookups. The check read the scrape map on its own,
+\* and let an id it didn't find through...
+ForgeCheck(c, s) ==
+    /\ ~SameLookup
+    /\ phase[c] = "live"
+    /\ s \notin agentHas[c]
+    /\ <<c, s>> \notin checked
+    /\ s \notin tracked \/ OwnedBy(s, c)
+    /\ checked' = checked \cup {<<c, s>>}
+    /\ UNCHANGED <<ident, consol, connVars, pathVars, hstate, target, tracked, result, completedBy>>
+
+\* ...and assignScrapeResults looked the id up again, completing whatever scrape was tracked under it by then.
+ForgeApply(c, s) ==
+    /\ <<c, s>> \in checked
+    /\ checked' = checked \ {<<c, s>>}
+    /\ IF s \in tracked THEN Complete(s, "agent", c) ELSE UNCHANGED <<result, completedBy>>
     /\ UNCHANGED <<ident, consol, connVars, pathVars, hstate, target, tracked>>
 
 -----------------------------------------------------------------------------
@@ -324,13 +349,14 @@ Init ==
     /\ tracked = {}
     /\ result = [s \in Scrapes |-> "none"]
     /\ completedBy = [s \in Scrapes |-> NoConn]
+    /\ checked = {}
 
 \* Steps the environment may or may not take: connections, registrations, requests, misbehaving agents.
 Environment ==
     \/ \E c \in Conns : Connect(c) \/ Disconnect(c)
     \/ \E c \in Conns, p \in Paths : RegisterStart(c, p) \/ Unregister(c, p)
     \/ \E s \in Scrapes : HttpStart(s) \/ HttpTimeout(s)
-    \/ \E c \in Conns, s \in Scrapes : EmitCancelled(c, s) \/ Forge(c, s)
+    \/ \E c \in Conns, s \in Scrapes : EmitCancelled(c, s) \/ Forge(c, s) \/ ForgeCheck(c, s) \/ ForgeApply(c, s)
 
 \* Steps the system promises to finish once started.
 System ==
@@ -369,6 +395,7 @@ TypeOK ==
     /\ tracked \subseteq Scrapes
     /\ result \in [Scrapes -> {"none", "agent", "disconnected", "cancelled"}]
     /\ completedBy \in [Scrapes -> Conns \cup {NoConn}]
+    /\ checked \subseteq Conns \X Scrapes
 
 \* A non-consolidated path has exactly one agent.
 ExclusivePathHasOneAgent ==
