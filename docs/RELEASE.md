@@ -10,7 +10,8 @@ Steps 1-3 are edits to merge to `master`. After that, `make release` runs steps 
 
 - the working tree is clean, on `master`, and matches `origin/master`;
 - every GitHub CI check for that commit has passed;
-- both changelogs have a section for the version, and every file step 2 lists mentions it;
+- both changelogs have a dated section for the version (`## [VERSION] - YYYY-MM-DD` in `CHANGELOG.md`, and
+  `_Released YYYY-MM-DD_` under `## VERSION` in `RELEASE_NOTES.md`), and every file step 2 lists mentions it;
 - the version isn't a pre-release, its tag (if one exists) points at this commit, and it isn't already on Maven
   Central or Docker Hub;
 - the GPG setup `publish-maven-central` needs is in place, and Docker is running.

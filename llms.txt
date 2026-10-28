@@ -238,7 +238,7 @@ The fat JARs include `src/shadow/resources/META-INF/services/io.grpc.NameResolve
 - **HTTP Client**: Ktor CIO client
 - **Configuration**: Typesafe Config (HOCON)
 - **Metrics**: Prometheus Java client 1.x (`io.prometheus:prometheus-metrics-*`), through common-utils' `prometheus-utils`
-- **Testing**: Kotest + JUnit 5 + MockK; a Testcontainers suite that runs Prometheus → proxy → agent → endpoint from the Docker images (`make container-tests`); Lincheck concurrency specs (`make lincheck-tests`); and TLA+ models of the proxy's registry and the agent's failover (`make tla-checks`)
+- **Testing**: Kotest + JUnit 5 + MockK; a Testcontainers suite that runs Prometheus → proxy → agent → endpoint from the Docker images (`make container-tests`); Lincheck concurrency specs (`make lincheck-tests`); and TLA+ models of the proxy's registry and the agent's failover (`make tla-checks`). `make ci` runs the CI workflow's jobs locally
 - **Code Quality**: kotlinter + detekt; zizmor audits the GitHub Actions workflows (`make zizmor`)
 
 ## Maven Central

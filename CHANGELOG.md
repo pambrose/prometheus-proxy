@@ -4,27 +4,38 @@ All notable changes to this project are documented in this file.
 
 ---
 
-## [Unreleased]
+## [4.4.0] - Unreleased
+
+### Security
+
+- Builds that embed the agent now get the patched Netty. Since 4.2.0, the override that raises the Netty grpc-netty brings (4.2.17.Final with grpc 1.85.1, which has CVE-2026-93492; 4.2.16.Final in 4.3.0, which has the critical CVE-2026-75595) to 4.2.18.Final was a `resolutionStrategy` rule, which changes only this build's own resolution: it reached the fat JARs and Docker images, but the only Netty entry in the published POM was `netty-tcnative-boringssl-static`, so a host depending on `com.pambrose:prometheus-proxy` resolved the vulnerable Netty. The Netty modules grpc-netty brings are now declared as runtime dependencies at 4.2.18.Final (the `netty` bundle in `libs.versions.toml`), so the POM and the Gradle module pin them, and a Netty module on the runtime classpath that the bundle doesn't list fails the build
 
 ### Bug Fixes
 
 - The agent's two warnings for an oversized scrape (`Content length … exceeds maximum allowed size …` from the `Content-Length` header and `Content size exceeds …` from the body read) name the target URL, sanitized as in the agent's other logs, and the request's `scrapeId`, so an agent serving several paths shows which one failed. The failure reason returned to the proxy when `debugEnabled` is set is unchanged. The proxy's two `Missing ScrapeRequestWrapper` warnings in `ScrapeRequestManager` write `scrapeId:` instead of `scrape_id:`, as its other scrape logs do
+
+### Documentation
+
+- The README's Kotlin badge reads `versions.kotlin` from `gradle/libs.versions.toml` on `master` (a shields.io dynamic TOML badge), so it follows each Kotlin update; the hard-coded badge had fallen behind the catalog twice. The Docker stats images link to the proxy's and agent's Docker Hub pages
 
 ### Build & Tooling
 
 - The weekly cache cleanup workflow (`.github/workflows/cache-cleanup.yml`), renamed `Actions Cleanup`, also deletes the workflow runs older than the repository's 90-day log retention, which stayed listed with no logs, and the skipped runs (a Claude Code comment trigger that didn't mention `@claude` never runs a job). It lists only completed runs, so a run in progress is never deleted, and reads the whole list before deleting anything. A one-off pass with the same script deleted 498 of the repository's 663 runs
 - `make versions` lists only the dependencies that are behind (`group:name current -> latest`), any it could not check, and a newer Gradle when there is one, in place of the versions plugin's full report, which listed every up-to-date dependency first: 137 lines for five updates. `build.gradle.kts` gives `dependencyUpdates` an `outputFormatter` for this, since every built-in format prints the full report to the console; `rejectVersionIf` still applies. The new `make versions-all` prints the full report (`--output-formatter=plain`)
 - Rename `CLAUDE.md` to `AGENTS.md`, the agent-neutral name most coding agents read
+- `make ci` runs the CI workflow's jobs (`.github/workflows/ci.yml`) locally on the working tree, quickest first: `tla-checks`, `check-rules`, `helm-lint`, and the new `ci-build`, which runs the build job's two Gradle steps with `HARNESS_CONFIG=MINI`. A failed job doesn't stop the rest, as in CI, and the failed ones are listed at the end. The Codecov upload and the pull request's other workflows (container tests, image scan, zizmor, CodeQL) are not included
+- `make release-check` requires a release date in both changelogs: a `## [VERSION] - YYYY-MM-DD` heading in `CHANGELOG.md`, and `_Released YYYY-MM-DD_` as the first line under `## VERSION` in `RELEASE_NOTES.md`. It matched only the heading, so a release could publish with both logs still saying it was unreleased
 - `make versions` no longer offers grpc-kotlin `1.5.0 -> 6f774052d1d6923f8af2e0023886d69949b695ee`: `rejectVersionIf` drops a candidate that is a full commit hash, which grpc-kotlin published to Maven Central as a version and the plugin ranked above every release
 - Update zizmor 1.30.1 → 1.31.1 (`ZIZMOR_IMAGE` in the `Makefile` and both jobs of the `zizmor` workflow). Its `dangerous-triggers` audit now flags `issue_comment`, which the Claude Code workflow (`.github/workflows/claude.yml`) uses: the trigger stays, with an inline `zizmor: ignore`, and the job now starts only when the comment, review, or issue that mentions `@claude` was written by the repository owner, an organization member, or a collaborator (its `author_association`). Before, anyone's mention started a job, which claude-code-action's write-access check then stopped
 
 ### Dependencies
 
-- Update grpc 1.84.2 → 1.85.1, and import the grpc BOM so every grpc-java module resolves to that version. Without it, common-utils' grpc-utils held `grpc-netty` and `grpc-inprocess` at the 1.84.1 it was built with while `grpc-core` moved on, though grpc-java's modules must all match. grpc-netty 1.85.1 brings Netty 4.2.17.Final, which has CVE-2026-93492 (an HTTP/2 HPACK encoder DoS) among the advisories 4.2.18.Final fixes, so the Netty 4.2.18.Final override stays. grpc 1.85 still uses protobuf-java 3.25.9 and is tested with netty-tcnative 2.0.81.Final, so `protoc` and the tcnative 2.0.84.Final pin are unchanged
-- Update the Prometheus Java client (`prometheus-metrics-core`) 1.9.0 → 1.10.0, and import its BOM so the client modules common-utils 5.1.1 brings at 1.9.0 (`prometheus-metrics-instrumentation-jvm`, the exposition formats, and the exporters) resolve to 1.10.0 too
-- Update kotlinx-serialization 1.11.0 → 1.12.0 and Jackson 2.22.3 → 2.22.4
-- Update build tooling: Gradle wrapper 9.8.1 → 9.8.2 and Kotest 6.2.5 → 6.2.6
-- Update the documentation site's Python dependency lock (`website/uv.lock`): Zensical 0.0.70 → 0.0.71, plus certifi 2026.7.22 → 2026.10.18, Markdown 3.11 → 3.11.2, platformdirs 4.13.0 → 4.13.5, and pymdown-extensions 12.2 → 12.3
+- Update common-utils 5.1.1 → 5.1.2, which embedders get transitively. It is built against grpc 1.85.1 and the Prometheus Java client 1.10.0, the versions below
+- Update grpc 1.84.2 → 1.85.1, and import the grpc BOM so every grpc-java module resolves to that version. In 4.3.0, common-utils 5.1.1's grpc-utils held `grpc-netty` and `grpc-inprocess` at the 1.84.1 it was built with while `grpc-core` moved on, though grpc-java's modules must all match; common-utils 5.1.2 brings 1.85.1, and the BOM keeps the modules matched whenever the two differ. grpc-netty 1.85.1 brings Netty 4.2.17.Final, which has CVE-2026-93492 (an HTTP/2 HPACK encoder DoS) among the advisories 4.2.18.Final fixes, so the Netty 4.2.18.Final override stays. grpc 1.85 still uses protobuf-java 3.25.9 and is tested with netty-tcnative 2.0.81.Final, so `protoc` and the tcnative 2.0.84.Final pin are unchanged
+- Update the Prometheus Java client (`prometheus-metrics-core`) 1.9.0 → 1.10.0, the version common-utils 5.1.2 is built against, and import its BOM so the client modules common-utils brings (`prometheus-metrics-instrumentation-jvm`, the exposition formats, and the exporters) resolve to the same version as `prometheus-metrics-core` whenever the two differ
+- Update kotlinx-serialization 1.11.0 → 1.12.0, Jackson 2.22.3 → 2.22.4, and Logback 1.6.5 → 1.6.6
+- Update build tooling: Gradle wrapper 9.8.1 → 9.8.2, Kotest 6.2.5 → 6.2.6, and the `com.pambrose` Gradle plugins (`envvar`, `kotlinter`, and `testing`) 1.1.7 → 1.1.8
+- Update the documentation site's Python dependency lock (`website/uv.lock`): Zensical 0.0.70 → 0.0.72, plus certifi 2026.7.22 → 2026.10.23, Markdown 3.11 → 3.11.2, platformdirs 4.13.0 → 4.13.5, pymdown-extensions 12.2 → 12.3, and python-dateutil 2.9.0.post0 → 3.0.0, which adds tzdata 2026.5
 - Update the GitHub Actions the workflows pin by commit SHA: `github/codeql-action` (`init`, `analyze` and `upload-sarif`) 4.38.2 → 4.39.0, `actions/setup-java` 6.0.1 → 6.1.0, `astral-sh/setup-uv` 10.2.0 → 10.3.0, `zizmorcore/zizmor-action` 0.6.4 → 0.7.1, and `anthropics/claude-code-action` 1.0.245 → 1.0.252
 
 ## [4.3.0] - 2026-10-12

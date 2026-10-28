@@ -101,8 +101,9 @@ not see them.
 - The agent moved from the Prometheus Java client 0.x (`io.prometheus:simpleclient` 0.16.0) to 1.x
   (`io.prometheus:prometheus-metrics-core` 1.9.0), and its metrics now register in the 1.x default registry. A
   host that serves the 0.x `CollectorRegistry` no longer exposes them. To serve both from one endpoint, serve the
-  1.x registry and bridge your 0.x metrics into it: add `io.prometheus:prometheus-metrics-simpleclient-bridge`
-  1.9.0 and call `SimpleclientCollector.builder().register()` once at startup.
+  1.x registry and bridge your 0.x metrics into it: add `io.prometheus:prometheus-metrics-simpleclient-bridge`,
+  at the same version as the `prometheus-metrics-core` the agent brings, and call
+  `SimpleclientCollector.builder().register()` once at startup.
 - `simpleclient` no longer arrives through the agent. If your application relied on getting it that way,
   declare it yourself.
 - With the agent's metrics endpoint on, the `_created` series of its counters and histograms are gone (set

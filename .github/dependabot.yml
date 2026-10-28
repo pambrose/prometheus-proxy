@@ -27,7 +27,7 @@ updates:
         patterns: ["*"]
         update-types: [minor, patch]
     ignore:
-      # grpc-java pins protobuf 3.x (grpc 1.84 depends on protobuf-java 3.25.9), and protobuf-generated code does not
+      # grpc-java pins protobuf 3.x (grpc 1.85 depends on protobuf-java 3.25.9), and protobuf-generated code does not
       # carry across a protobuf major, so a protobuf major waits for a grpc release that supports it.
       - dependency-name: "com.google.protobuf:protobuf-*"
         update-types: ["version-update:semver-major"]

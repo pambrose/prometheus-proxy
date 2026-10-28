@@ -13,7 +13,7 @@ Repository declarations are centralized in `settings.gradle.kts` via `dependency
 
 Snapshot and Maven Central release Make targets (`publish-snapshot`, `publish-maven-central`) require GPG environment variables and a keychain password entry; `make _check-gpg-env` validates them up-front.
 
-`make release` cuts a release once the version bump and changelogs are merged: it gates with `make release-check` (clean, up-to-date `master` whose GitHub CI passed; changelogs and bumped files name the version; not already on Maven Central or Docker Hub; GPG and Docker ready), runs `make all-tests` and `make distro`, asks once, then publishes to Maven Central and Docker Hub and runs `make docker-verify`. The GitHub release and Homebrew tap stay manual; it prints both. See `docs/RELEASE.md`.
+`make release` cuts a release once the version bump and changelogs are merged: it gates with `make release-check` (clean, up-to-date `master` whose GitHub CI passed; both changelogs have a dated section for the version and the bumped files name it; not already on Maven Central or Docker Hub; GPG and Docker ready), runs `make all-tests` and `make distro`, asks once, then publishes to Maven Central and Docker Hub and runs `make docker-verify`. The GitHub release and Homebrew tap stay manual; it prints both. See `docs/RELEASE.md`.
 
 ## Bumping the version
 

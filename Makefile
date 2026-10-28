@@ -1,6 +1,6 @@
 .PHONY: default help stop clean clean-all stubs build tibuild refresh jars \
         tests mini-tests xxl-tests nh-tests ip-tests netty-tests tls-tests lincheck-tests tla-checks check-rules helm-lint zizmor \
-        container-tests scaling-tests all-tests regen-certs \
+        container-tests scaling-tests all-tests ci ci-build regen-certs \
         docker-clean docker-clean-dry \
         all-scaling scaling-paths scaling-agents scaling-payload scaling-consolidated scaling-concurrency scaling-soak \
         coverage coverage-html coverage-xml coverage-log coverage-verify \
@@ -56,6 +56,10 @@ KUBECONFORM_IMAGE := ghcr.io/yannh/kubeconform:v0.8.0
 KUBERNETES_VERSION := 1.30.0
 CRD_SCHEMAS := https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json
 CHARTS := prometheus-proxy prometheus-agent
+
+# The jobs of the CI workflow (.github/workflows/ci.yml) that `make ci` runs, quickest first; ci-build is its build job.
+# Keep the list, and ci-build's steps, in step with that workflow.
+CI_JOBS := tla-checks check-rules helm-lint ci-build
 
 # zizmor audits the GitHub Actions workflows and dependabot.yml. The same version as .github/workflows/zizmor.yml, with
 # the digest zizmor-action pins for it (its support/versions file); update the two together.
@@ -181,6 +185,24 @@ container-tests: jars  ## Run the Testcontainers tests (needs Docker)
 	DOCKER_HOST="$$DOCKER_HOST" RUN_CONTAINER_TESTS=true $(GRADLE) test --tests "io.prometheus.containers.*"
 
 all-tests: tests lincheck-tests container-tests  ## Run the full suite: all tests + the container tests
+
+# Runs CI's jobs one after another on the working tree, uncommitted changes included. A failed job doesn't stop the
+# rest, as in CI, where they run in parallel; the failed ones are listed at the end. The Codecov upload is left out, and
+# so are the pull request's other workflows: `make container-tests` and `make zizmor` run two of them.
+ci:  ## Run the CI workflow's jobs locally: TLA+, alerting rules, Helm charts, and the build (needs Docker)
+	@failed=; for job in $(CI_JOBS); do \
+		printf '\n\033[1;36m==> make %s\033[0m\n\n' $$job; \
+		$(MAKE) --no-print-directory $$job || failed="$$failed $$job"; \
+	done; \
+	[ -z "$$failed" ] || { echo "ERROR: CI jobs failed:$$failed" >&2; exit 1; }; \
+	echo "CI jobs passed: $(CI_JOBS)"
+
+# ci.yml sets HARNESS_CONFIG=MINI for the whole job, so both Gradle runs see it; were it to differ, the test task would
+# be out of date and koverXmlReport would rerun the tests. --continue still writes the coverage report when a coverage
+# floor fails, but not when a test fails: the kover tasks depend on the test task, so Gradle skips them.
+ci-build:  ## The CI workflow's build job: compile, lint, and detekt, then the tests and coverage floors (MINI harness)
+	HARNESS_CONFIG=MINI $(GRADLE) clean build -x test
+	HARNESS_CONFIG=MINI $(GRADLE) --continue test koverVerify koverVerifyPerClass koverXmlReport koverLog
 
 docker-clean-dry:  ## Preview what `make docker-clean` would reclaim (removes nothing)
 	@./bin/docker-clean-tests.sh --dry-run --cache
@@ -367,10 +389,10 @@ release-check: _require-version _check-gpg-env  ## Fail unless this checkout is 
 	@git fetch -q origin $(RELEASE_BRANCH) \
 		&& [ "$$(git rev-parse HEAD)" = "$$(git rev-parse origin/$(RELEASE_BRANCH))" ] \
 		|| { echo "ERROR: HEAD is not origin/$(RELEASE_BRANCH); pull or push first" >&2; exit 1; }
-	@grep -q '^## \[$(VERSION)\]' CHANGELOG.md \
-		|| { echo "ERROR: CHANGELOG.md has no [$(VERSION)] section (step 3 of docs/RELEASE.md)" >&2; exit 1; }
-	@grep -qx '## $(VERSION)' RELEASE_NOTES.md \
-		|| { echo "ERROR: RELEASE_NOTES.md has no $(VERSION) section (step 3 of docs/RELEASE.md)" >&2; exit 1; }
+	@grep -qE '^## \[$(VERSION)\] - [0-9]{4}-[0-9]{2}-[0-9]{2}$$' CHANGELOG.md \
+		|| { echo "ERROR: CHANGELOG.md has no dated '## [$(VERSION)] - YYYY-MM-DD' section (step 3 of docs/RELEASE.md)" >&2; exit 1; }
+	@awk -v h='## $(VERSION)' '$$0 == h { f = 1; next } f && NF { ok = /^_Released [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_$$/; exit } END { exit !ok }' RELEASE_NOTES.md \
+		|| { echo "ERROR: RELEASE_NOTES.md has no '## $(VERSION)' section starting '_Released YYYY-MM-DD_' (step 3 of docs/RELEASE.md)" >&2; exit 1; }
 	@missing=$$(for f in $(RELEASE_VERSION_FILES); do grep -qF '$(VERSION)' "$$f" || echo "  $$f"; done); \
 	[ -z "$$missing" ] || { printf 'ERROR: not bumped to $(VERSION) (step 2 of docs/RELEASE.md):\n%s\n' "$$missing" >&2; exit 1; }
 	@tagged=$$(git rev-parse -q --verify "refs/tags/$(VERSION)^{commit}"); \
