@@ -172,8 +172,9 @@ live data structures on each Prometheus scrape, not pushed on every state change
 | `agent_filter_bytes_saved_total`   | `launch_id`, `path` | Bytes saved before gzip by the metric filter |
 
 **`agent_scrape_request_count_total` type labels:** `success`, `unsuccessful` (the target answered with a non-2xx
-status or a response over `agent.http.maxContentLengthMBytes`), `invalid_path` (the proxy asked for a path this agent
-doesn't serve)
+status or a response over `agent.http.maxContentLengthMBytes`), `timed_out` (the target didn't answer within the
+agent's scrape timeout), `failure` (the fetch failed without an answer, such as a refused connection or a DNS
+failure), `invalid_path` (the proxy asked for a path this agent doesn't serve)
 
 **`agent_scrape_result_count_total` type labels:** `non-gzipped`, `gzipped`, `chunked`, `dropped` (a result lost
 because the connection to the proxy closed before it was sent)

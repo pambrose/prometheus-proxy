@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — October 2026 Findings
 
-**Status:** 47 issues — 15 fixed, 32 open (16 medium, 31 low, no high).
+**Status:** 47 issues — 17 fixed, 30 open (16 medium, 31 low, no high).
 
 **Date:** 2026-10-27
 
@@ -83,9 +83,9 @@ Six earlier fixes turn out to be incomplete:
 | 8  | `maxContentLengthMBytes` doesn't bound memory; Ktor buffers the whole body first        | Agent    | medium   | ✅      |
 | 9  | A second agent in one JVM with metrics on never connects (duplicate registration)       | Agent    | medium   | ✅      |
 | 10 | Discovered paths vanish on any reconnect while the discovery file is unreadable         | Agent    | medium   | ⬜      |
-| 11 | `agent_scrape_request_count_total` misses failed fetches and `invalid_path`             | Agent    | medium   | ⬜      |
+| 11 | `agent_scrape_request_count_total` misses failed fetches and `invalid_path`             | Agent    | medium   | ✅      |
 | 12 | `pathConfigs`: `path = "/"` fails every connect; duplicates silently keep the last URL  | Agent    | low      | ⬜      |
-| 13 | Agent latency histogram stops at 10s, below its own 15s scrape timeout                  | Agent    | low      | ⬜      |
+| 13 | Agent latency histogram stops at 10s, below its own 15s scrape timeout                  | Agent    | low      | ✅      |
 | 14 | `X-Prometheus-Scrape-Timeout-Seconds` isn't forwarded to the target                     | Agent    | low      | ✅      |
 | 15 | Basic credentials from the target URL are sent only after a 401                         | Agent    | low      | ✅      |
 | 16 | An embedded agent's `logLevel` changes the host JVM's root logger                       | Agent    | low      | ✅      |
@@ -148,7 +148,7 @@ The **Touches** column shows which steps edit the same files and so need to land
 | 7    | ⬜      | #1, #24, #6     | Service discovery that Prometheus accepts                                   | `Proxy.kt` (`buildServiceDiscoveryJson`), `ProxyOptions.kt`, `ProxyPathManager.addPath`, SD docs, a new container spec | SD as documented yields no targets today. One container spec using `http_sd_configs` guards all three. Do it after step 6, since both edit `addPath`'s validation.               |
 | 8    | ⬜      | #2              | Readiness that doesn't flap under load                                      | `config/config.conf`, `ProxyOptions.kt`, `Proxy.kt` health checks, `charts/prometheus-proxy`, k8s docs | A default and a chart change, so it needs a "Before you upgrade" note.                                                                                                       |
 | 9    | ✅      | #9, #16, #5, #41 | Safe to embed: register metrics once, leave the root logger and shutdown hooks alone, fix the examples | `AgentMetrics.kt`, `ProxyMetrics.kt`, `Agent.kt`, `BaseOptions.kt`, `Utils.kt`, `ProxyGrpcService.kt`, README, website, KDoc | All four are about running inside another JVM, so one embedded-host spec (restart, two agents, log level) covers them. Do it after step 4 and before step 10, which shares `AgentMetrics.kt`. |
-| 10   | ⬜      | #11, #13        | Agent metrics that count every scrape                                       | `AgentHttpService.kt`, `AgentMetrics.kt`, metrics docs, Grafana JSON                              | Do it after steps 4 and 9, which share these files. The dashboards and docs change with the counter.                                                                             |
+| 10   | ✅      | #11, #13        | Agent metrics that count every scrape                                       | `AgentHttpService.kt`, `AgentMetrics.kt`, metrics docs, Grafana JSON                              | Do it after steps 4 and 9, which share these files. The dashboards and docs change with the counter.                                                                             |
 | 11   | ⬜      | #10, #12, #18   | Agent config and discovery robustness                                       | `PathDiscoveryService.kt`, `AgentPathManager.kt`, `PathDiscoverySource.kt`, `AgentOptions.kt`, trust-manager init | Startup validation, plus a last-known-good list that outlives the connection. Independent of the proxy steps.                                                                    |
 | 12   | ⬜      | #4, #17         | Quiet logs for unauthenticated connections and routine outages              | `AgentContextManager.kt`, `AgentContextCleanupService.kt`, `AgentGrpcService.kt`, `Utils.kt`      | Changes only log levels and one counter, each covered by a `ListAppender` test. Do it after step 5, which shares `AgentContextManager.kt`.                                        |
 | 13   | ⬜      | #19             | `MetricFilter` handles quoted UTF-8 names                                   | `agent/filter/MetricFilter.kt`                                                                    | Self-contained, so it can go any time.                                                                                                                                           |
@@ -534,7 +534,7 @@ against it when a read fails (reconciling is idempotent). Reword the log message
 **Test:** use a source that succeeds once and then throws. After `pathManager.clear()` and `reconcileOnce()`, the
 cached paths are registered again.
 
-### 11. [ ] `agent_scrape_request_count_total` never counts failed fetches or the documented `invalid_path` type
+### 11. [x] `agent_scrape_request_count_total` never counts failed fetches or the documented `invalid_path` type
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -568,6 +568,13 @@ cached paths are registered again.
 - a refused connection is counted;
 - a timeout is counted.
 
+**Resolution:** `fetchScrapeUrl` counts both branches, so `invalid_path` is emitted. A fetch with no answer is
+counted as `timed_out` when `hasTimeoutCause()` is true and as `failure` otherwise (a refused connection, a DNS
+failure). `unsuccessful` keeps its meaning: the target answered with a non-2xx status or an oversized body. Both
+metrics pages list the types. The agents dashboard's Unsuccessful Scrapes by Agent panel (`type!="success"`) picks
+them up unchanged. The three tests the finding asks for are in `agent/AgentHttpServiceTest.kt`; before the fix, the
+invalid path wasn't counted at all, and the refused connection and the timeout were counted with an empty type.
+
 ### 12. [ ] `pathConfigs` validation gaps: `path = "/"` fails every connect, and duplicates silently keep the last URL
 
 **Severity:** low · **Confidence:** confirmed
@@ -600,7 +607,7 @@ cached paths are registered again.
 - `["/", "ok"]` connects and registers `ok`.
 - `["metrics", "/metrics"]` fails construction, naming the path.
 
-### 13. [ ] The agent latency histogram stops at 10s, below the agent's own 15s scrape timeout
+### 13. [x] The agent latency histogram stops at 10s, below the agent's own 15s scrape timeout
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -612,6 +619,10 @@ Every agent-side timeout and slow scrape lands in `+Inf`.
 **Fix:** use the proxy's bucket list, and update the bucket list in the monitoring docs.
 
 **Test:** an `AgentMetrics` assertion on the bucket bounds.
+
+**Resolution:** both histograms take their buckets from `MetricBuilders.SCRAPE_LATENCY_BUCKETS`, the proxy's list,
+which runs to 90s. An `AgentMetricsTest` case asserts the bounds; before the fix, they stopped at 10s. The test that
+pinned the old layout now checks only that the histogram is classic-only.
 
 ### 14. [x] The agent doesn't forward `X-Prometheus-Scrape-Timeout-Seconds` to the target
 

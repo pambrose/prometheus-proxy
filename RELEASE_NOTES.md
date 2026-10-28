@@ -23,6 +23,12 @@ among them gRPC, which now runs at one version across all its modules.
 
 ### Bug Fixes
 
+- **The agent counts failed scrapes.** `agent_scrape_request_count_total` now counts a scrape that timed out
+  (`timed_out`), one that failed without an answer (`failure`), and one for a path the agent doesn't serve
+  (`invalid_path`). It used to count only scrapes whose target answered, so with a target down the agents
+  dashboard's Unsuccessful Scrapes panel stayed empty.
+- **The agent's latency histogram reaches 90s,** past its 15s scrape timeout, so slow scrapes and timeouts land
+  in a bucket instead of `+Inf`.
 - **More than one agent in a JVM works with metrics on.** A second embedded agent, or one started again after
   `shutdown()`, never connected. Now each one connects, its metrics carry its `launch_id`, and they go when it
   stops. A host metric with one of the agent metrics' names makes `startAsyncAgent()` throw, where the agent
