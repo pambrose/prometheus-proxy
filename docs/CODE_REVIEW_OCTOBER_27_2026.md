@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — October 2026 Findings
 
-**Status:** 47 issues — 9 fixed, 38 open (16 medium, 31 low, no high).
+**Status:** 47 issues — 11 fixed, 36 open (16 medium, 31 low, no high).
 
 **Date:** 2026-10-27
 
@@ -75,7 +75,7 @@ Six earlier fixes turn out to be incomplete:
 |----|-----------------------------------------------------------------------------------------|----------|----------|--------|
 | 1  | Service-discovery targets are URLs, which Prometheus refuses; SD as documented is empty | Proxy    | medium   | ⬜      |
 | 2  | Health thresholds (25) far below the caps; `/healthcheck` readiness flaps under load    | Proxy    | medium   | ⬜      |
-| 3  | Chunked-transfer sweep skipped on cancel; reclaim trusts the agent's `headerAgentId`    | Proxy    | low      | ⬜      |
+| 3  | Chunked-transfer sweep skipped on cancel; reclaim trusts the agent's `headerAgentId`    | Proxy    | low      | ✅      |
 | 4  | Unauthenticated connections still log INFO on removal and count as evictions           | Proxy    | low      | ⬜      |
 | 5  | Each `Proxy` leaks a JVM shutdown hook that keeps it reachable                          | Proxy    | low      | ⬜      |
 | 6  | A path equal to the SD path, blitz path, or `favicon.ico` registers but can't be scraped | Proxy   | low      | ⬜      |
@@ -93,7 +93,7 @@ Six earlier fixes turn out to be incomplete:
 | 18 | A bad `agent.http.trustStorePath` isn't caught at startup and fails every scrape        | Agent    | low      | ⬜      |
 | 19 | `MetricFilter` misjudges quoted UTF-8 metric names                                      | Agent    | low      | ⬜      |
 | 20 | Agent dead code, stale KDoc, and a `shutDown()` that isn't failure-isolated             | Agent    | low      | ⬜      |
-| 21 | Scrape-result ownership checked on one lookup, applied on another (September #1 gap)    | Security | medium   | ⬜      |
+| 21 | Scrape-result ownership checked on one lookup, applied on another (September #1 gap)    | Security | medium   | ✅      |
 | 22 | Path authorization runs a backtracking regex before the length cap applies             | Security | medium   | ⬜      |
 | 23 | Agent-reported names have no size limit and are repeated per path everywhere            | Security | medium   | ⬜      |
 | 24 | SD labels aren't type- or name-checked; one agent can invalidate the whole SD document  | Security | medium   | ⬜      |
@@ -143,7 +143,7 @@ The **Touches** column shows which steps edit the same files and so need to land
 | 2    | ✅      | #25             | Publish the Netty pin in the POM                                            | `build.gradle.kts`                                                                                | The release's headline change is this CVE fix, and today it reaches only the images. Land it on this branch first.                                                               |
 | 3    | ✅      | #29, #30        | `release-check` requires the named CI checks and complete bumps             | `Makefile`, `docs/RELEASE.md`, release skill                                                      | Protects every later release. Makefile-only, so it can run in parallel with any code step.                                                                                       |
 | 4    | ✅      | #8, #14, #15    | Stream the agent's fetch with a real size bound; forward the timeout; preemptive Basic | `agent/AgentHttpService.kt`                                                            | One bad target can take the agent's heap, and every path with it. The other two change the same request setup.                                                                   |
-| 5    | ⬜      | #21, #3         | Check and complete scrape results on one wrapper; sweep transfers on cancel | `ProxyServiceImpl.kt`, `ScrapeRequestManager.kt`, `AgentContextManager.kt`, `ChunkedContext.kt`, `specs/tla/ProxyRegistry.tla` | Both concern the ownership and lifetime of in-flight results. The change touches `ScrapeRequestManager`, so update the TLA+ action and add a Lincheck spec in the same PR.        |
+| 5    | ✅      | #21, #3         | Check and complete scrape results on one wrapper; sweep transfers on cancel | `ProxyServiceImpl.kt`, `ScrapeRequestManager.kt`, `AgentContextManager.kt`, `ChunkedContext.kt`, `specs/tla/ProxyRegistry.tla` | Both concern the ownership and lifetime of in-flight results. The change touches `ScrapeRequestManager`, so update the TLA+ action and add a Lincheck spec in the same PR.        |
 | 6    | ⬜      | #22, #23, #26   | Bound and authorize agent input before using it                             | `ProxyServiceImpl.kt` (`registerAgent`/`registerPath`), `AgentAuthManager.kt`, `ProxyOptions.kt`, `config.conf` | The three tenant-against-tenant availability issues. The new `proxy.internal` limits need config, validation, and docs. Do it after step 5, which edits the same file.            |
 | 7    | ⬜      | #1, #24, #6     | Service discovery that Prometheus accepts                                   | `Proxy.kt` (`buildServiceDiscoveryJson`), `ProxyOptions.kt`, `ProxyPathManager.addPath`, SD docs, a new container spec | SD as documented yields no targets today. One container spec using `http_sd_configs` guards all three. Do it after step 6, since both edit `addPath`'s validation.               |
 | 8    | ⬜      | #2              | Readiness that doesn't flap under load                                      | `config/config.conf`, `ProxyOptions.kt`, `Proxy.kt` health checks, `charts/prometheus-proxy`, k8s docs | A default and a chart change, so it needs a "Before you upgrade" note.                                                                                                       |
@@ -260,7 +260,7 @@ target.
 - With the default config, 100 wrappers in the scrape map keep `scrape_response_map_check` healthy.
 - An options test rejects a threshold above its cap.
 
-### 3. [ ] Chunked-transfer orphan sweep is skipped on cancellation, and reclaim matches the agent-supplied `headerAgentId`
+### 3. [x] Chunked-transfer orphan sweep is skipped on cancellation, and reclaim matches the agent-supplied `headerAgentId`
 
 **Severity:** low · **Confidence:** confirmed that the sweep is skipped. The leak itself needs a race or a mismatched
 header.
@@ -297,6 +297,11 @@ Leaked contexts eventually make `chunking_map_check` report unhealthy (see #2).
 - A flow that emits a HEADER and then throws `CancellationException` leaves `chunkedContextMapView` empty, and the
   scrape fails with `AGENT_DISCONNECTED`.
 - A context with a mismatched `headerAgentId` is still reclaimed by `removeAgentContext(owner)`.
+
+**Resolution:** `abandonUnfinished()` runs in a `finally` around `runCatchingCancellable`. `ChunkedContext.owner`,
+the agent from the tracked scrape, replaces the header's `headerAgentId`, and `removeChunkedContextsForAgent` matches
+on it. A header followed by a `CancellationException` now leaves `chunkedContextMapView` empty, and a context with a
+mismatched `headerAgentId` is reclaimed by `removeAgentContext(owner)`. Both tests failed against the old code.
 
 ### 4. [ ] Late-September #15 is incomplete: unauthenticated connections still log at INFO when removed, and count as evictions
 
@@ -745,7 +750,7 @@ whitespace.
 
 ## 🔒 Security
 
-### 21. [ ] September #1 is incomplete: a scrape result's ownership is checked on one lookup and applied on another
+### 21. [x] September #1 is incomplete: a scrape result's ownership is checked on one lookup and applied on another
 
 **Severity:** medium · **Confidence:** the check-then-act gap is confirmed; how often it can be hit is plausible, since
 it depends on timing.
@@ -790,6 +795,19 @@ kept the logic as it was.
   through a seam.
 - A `Lincheck`-tagged spec runs `tryAddToScrapeRequestMap` concurrently with non-owner `assignScrapeResults`, and the
   non-owner never completes.
+
+**Resolution:** `assignScrapeResults` and `failScrapeRequest` take an `isOwner` check that runs on the wrapper they
+complete, from the same lookup, and an untracked scrapeId is dropped. `failScrapeRequest` needed it too: once the
+separate pre-check was gone, the error path in `writeResponsesToProxy` would have let a non-owner fail any scrape.
+`readHeader` fetches the wrapper once with `getScrapeRequest`, checks it, records its agent as the transfer's owner,
+and opens the transfer with `putIfAbsent`. Chunks and summaries are checked against that recorded owner, not a fresh
+lookup, and removals take the context they checked. `ownerAgentId`, which invited the split check, is gone. The chunked
+map stays keyed by scrapeId: only the owner can open a transfer, and IDs are never reused. In `ProxyRegistry.tla`, the
+old model checked and completed in one atomic step, which is why `AnswerFromOwner` never caught this. A `SameLookup`
+constant now models both forms: with it FALSE, TLC finds the violation, and both configs set it TRUE. The race tests
+add the victim's scrape just before and just after the single lookup, and failed against the old code. A
+`ScrapeResultOwnershipLincheckTest` that replayed the old logic found `Scrape 1257, sent to 2515, was completed by
+2516`; it passes against the new API.
 
 ### 22. [ ] Path authorization runs a backtracking regex on the full path before the length cap applies
 
