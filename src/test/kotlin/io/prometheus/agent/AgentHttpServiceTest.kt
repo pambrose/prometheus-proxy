@@ -2063,6 +2063,18 @@ class AgentHttpServiceTest : StringSpec() {
     // ==================== Per-CA HTTPS trust store (#19 option 2) ====================
     // resolveHttpsTrustManager selects the X509TrustManager for the HTTPS scrape client.
 
+    // The trust manager was resolved lazily, on the first scrape, so a trust store that can't be loaded let the agent
+    // connect and register, then failed every scrape -- HTTP targets included -- with an error that named the target.
+    // It is now loaded as the agent is built, so the agent fails to start with an error that names the setting.
+    "AgentHttpService should fail construction for a trust store it can't load, naming the setting" {
+      val mockAgent = createMockAgent()
+      every { mockAgent.options.httpsTrustStorePath } returns "/nonexistent/agent-truststore.jks"
+      every { mockAgent.options.httpsTrustStorePassword } returns "secret"
+
+      shouldThrow<IllegalArgumentException> { AgentHttpService(mockAgent) }
+        .message shouldContain "agent.http.trustStorePath"
+    }
+
     "resolveHttpsTrustManager returns TrustAllX509TrustManager when trust-all is enabled" {
       AgentHttpService.resolveHttpsTrustManager(
         trustAllX509Certificates = true,

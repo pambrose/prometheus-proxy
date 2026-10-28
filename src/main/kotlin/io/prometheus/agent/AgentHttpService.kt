@@ -100,15 +100,25 @@ internal class AgentHttpService(
       )
     }
 
-  // Resolved once on first use: the HTTPS-scrape trust manager is fixed for the agent's lifetime, so
-  // it must not be rebuilt (re-reading the trust store from disk) on every cached-client recreation.
-  private val httpsTrustManager: X509TrustManager? by lazy {
-    resolveHttpsTrustManager(
-      trustAllX509Certificates = agent.options.trustAllX509Certificates,
-      trustStorePath = agent.options.httpsTrustStorePath,
-      trustStorePassword = agent.options.httpsTrustStorePassword,
-    )
-  }
+  // Resolved once, as the agent is built: the HTTPS-scrape trust manager is fixed for the agent's lifetime, so it must
+  // not be rebuilt (re-reading the trust store from disk) on every cached-client recreation. Resolved on first use, a
+  // trust store that can't be loaded let the agent connect, then failed every scrape, HTTP targets included, with an
+  // error that named the target; it now fails the agent's startup, naming the setting.
+  private val httpsTrustManager: X509TrustManager? =
+    agent.options.run {
+      runCatching {
+        resolveHttpsTrustManager(
+          trustAllX509Certificates = trustAllX509Certificates,
+          trustStorePath = httpsTrustStorePath,
+          trustStorePassword = httpsTrustStorePassword,
+        )
+      }.getOrElse { e ->
+        throw IllegalArgumentException(
+          "Unable to load agent.http.trustStorePath '$httpsTrustStorePath': ${e.message ?: e.simpleClassName}",
+          e,
+        )
+      }
+    }
 
   suspend fun fetchScrapeUrl(scrapeRequest: ScrapeRequest): ScrapeResults {
     val pathContext = agent.pathManager[scrapeRequest.path]

@@ -8,7 +8,9 @@ The agent runs inside the firewall and scrapes local metrics endpoints on behalf
 
 ## Path Configs
 
-The `pathConfigs` array defines which metrics endpoints the agent exposes through the proxy:
+The `pathConfigs` array defines which metrics endpoints the agent exposes through the proxy. An entry without a
+path (or with just `/`) or without a URL is skipped with a warning. Two entries for the same path, with or without
+a leading `/`, fail the agent's startup, since the second would replace the first's URL:
 
 ### Basic Configuration
 
@@ -91,15 +93,15 @@ rule, HOCON substitutions, and the empty-versus-deleted distinction -- ships as
 [`examples/discovery-targets.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/examples/discovery-targets.conf)
 and is shown verbatim on the [Example Configs](../examples.md) page.
 
-| Situation                               | Behavior                                                     |
-|:----------------------------------------|:------------------------------------------------------------|
-| Path in both `pathConfigs` and the file | Static wins; the discovered entry is skipped (logged)       |
-| File missing / unreadable / malformed   | Keeps the last-known-good set (a read failure drops nothing) |
-| Valid but empty file                    | Removes all discovered paths                                |
-| Entry with a blank `path` or `url`      | Skipped when the file is read, reported once until the set of skipped entries changes; the file's other entries still apply |
-| Seeing what discovery did               | The agent's `/debug` page lists the discovered paths it registered and the entries it skipped |
-| `pathConfigs` empty                     | Discovery-only — every path comes from the file             |
-| Proxy rejects a discovered path         | Logged once. A rejection that can clear is retried with a backoff: on the next poll, then after one `reconcileIntervalSecs`, then after waits that double up to `agent.internal.rejectedPathRetryMaxSecs` (5 min). Any other rejection is tried again only when the entry changes or the agent reconnects |
+| Situation                                        | Behavior                                                                                                                                                                                                                                                                                                  |
+|:-------------------------------------------------|:----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Path in both `pathConfigs` and the file          | Static wins; the discovered entry is skipped (logged)                                                                                                                                                                                                                                                     |
+| File missing / unreadable / malformed            | Keeps the last-known-good set (a read failure drops nothing), and registers it again after a reconnect                                                                                                                                                                                                    |
+| Valid but empty file                             | Removes all discovered paths                                                                                                                                                                                                                                                                              |
+| Entry with a blank `path` (or just `/`) or `url` | Skipped when the file is read, reported once until the set of skipped entries changes; the file's other entries still apply                                                                                                                                                                               |
+| Seeing what discovery did                        | The agent's `/debug` page lists the discovered paths it registered and the entries it skipped                                                                                                                                                                                                             |
+| `pathConfigs` empty                              | Discovery-only — every path comes from the file                                                                                                                                                                                                                                                           |
+| Proxy rejects a discovered path                  | Logged once. A rejection that can clear is retried with a backoff: on the next poll, then after one `reconcileIntervalSecs`, then after waits that double up to `agent.internal.rejectedPathRetryMaxSecs` (5 min). Any other rejection is tried again only when the entry changes or the agent reconnects |
 
 !!! note "Polling, not file-watching"
 
@@ -212,7 +214,9 @@ scenarios). Configure cache behavior:
 For HTTPS scrape targets signed by a private or internal CA, point the agent at a trust store that
 contains that CA (`--https_truststore` / `HTTPS_TRUST_STORE_PATH` / `agent.http.trustStorePath`, with
 the matching `*_password`) so certificates are still validated. An empty path uses the JDK default
-trust store, and `--trust_all_x509` (which disables verification entirely) takes precedence. See
+trust store, and `--trust_all_x509` (which disables verification entirely) takes precedence. The trust store is
+loaded as the agent starts, so a missing file or a wrong password fails the agent's startup with an error naming
+`agent.http.trustStorePath`, rather than every scrape. See
 [Scraping HTTPS Endpoints](../security/index.md#scraping-https-endpoints) for details.
 
 ## Scrape Settings

@@ -21,8 +21,19 @@ among them gRPC, which now runs at one version across all its modules.
   agent's scrape with its own data. The check and the result now use the same lookup, and a result for a scrape the
   proxy isn't tracking is dropped.
 
+### Before you upgrade
+
+- **Some agent configs that start today will fail at startup.** Two `pathConfigs` entries for the same path
+  (`metrics` and `/metrics`) are now rejected; before, the second silently replaced the first's URL. And an
+  `agent.http.trustStorePath` that can't be loaded, from a missing file or a wrong password, now fails startup
+  instead of every scrape. Both errors name the setting to fix.
+
 ### Bug Fixes
 
+- **Discovered targets survive a reconnect while the discovery file is bad.** The agent keeps the last list it
+  read and registers it again after a reconnect; before, every discovered target returned 404 until the file
+  was fixed.
+- **A path of just `/` no longer fails every connect.** It is skipped with a warning, like a blank path.
 - **The agent counts failed scrapes.** `agent_scrape_request_count_total` now counts a scrape that timed out
   (`timed_out`), one that failed without an answer (`failure`), and one for a path the agent doesn't serve
   (`invalid_path`). It used to count only scrapes whose target answered, so with a target down the agents

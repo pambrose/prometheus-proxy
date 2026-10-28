@@ -28,7 +28,8 @@ internal data class DiscoveredPath(
 ) {
   // An entry missing either could never register -- AgentPathManager.doRegisterPath requires both -- so a source
   // drops it rather than letting it fail on every reconcile.
-  val usable: Boolean get() = path.isNotBlank() && url.isNotBlank()
+  // A path of just "/" normalizes to "", so it is as unusable as a blank one.
+  val usable: Boolean get() = path.removePrefix("/").isNotBlank() && url.isNotBlank()
 }
 
 /**

@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — October 2026 Findings
 
-**Status:** 47 issues — 17 fixed, 30 open (16 medium, 31 low, no high).
+**Status:** 47 issues — 20 fixed, 27 open (16 medium, 31 low, no high).
 
 **Date:** 2026-10-27
 
@@ -82,15 +82,15 @@ Six earlier fixes turn out to be incomplete:
 | 7  | Dead or test-only proxy code, including an unreachable `no_agents` branch               | Proxy    | low      | ⬜      |
 | 8  | `maxContentLengthMBytes` doesn't bound memory; Ktor buffers the whole body first        | Agent    | medium   | ✅      |
 | 9  | A second agent in one JVM with metrics on never connects (duplicate registration)       | Agent    | medium   | ✅      |
-| 10 | Discovered paths vanish on any reconnect while the discovery file is unreadable         | Agent    | medium   | ⬜      |
+| 10 | Discovered paths vanish on any reconnect while the discovery file is unreadable         | Agent    | medium   | ✅      |
 | 11 | `agent_scrape_request_count_total` misses failed fetches and `invalid_path`             | Agent    | medium   | ✅      |
-| 12 | `pathConfigs`: `path = "/"` fails every connect; duplicates silently keep the last URL  | Agent    | low      | ⬜      |
+| 12 | `pathConfigs`: `path = "/"` fails every connect; duplicates silently keep the last URL  | Agent    | low      | ✅      |
 | 13 | Agent latency histogram stops at 10s, below its own 15s scrape timeout                  | Agent    | low      | ✅      |
 | 14 | `X-Prometheus-Scrape-Timeout-Seconds` isn't forwarded to the target                     | Agent    | low      | ✅      |
 | 15 | Basic credentials from the target URL are sent only after a 401                         | Agent    | low      | ✅      |
 | 16 | An embedded agent's `logLevel` changes the host JVM's root logger                       | Agent    | low      | ✅      |
 | 17 | A routine proxy outage logs an ERROR stack trace on every reconnect                     | Agent    | low      | ⬜      |
-| 18 | A bad `agent.http.trustStorePath` isn't caught at startup and fails every scrape        | Agent    | low      | ⬜      |
+| 18 | A bad `agent.http.trustStorePath` isn't caught at startup and fails every scrape        | Agent    | low      | ✅      |
 | 19 | `MetricFilter` misjudges quoted UTF-8 metric names                                      | Agent    | low      | ⬜      |
 | 20 | Agent dead code, stale KDoc, and a `shutDown()` that isn't failure-isolated             | Agent    | low      | ⬜      |
 | 21 | Scrape-result ownership checked on one lookup, applied on another (September #1 gap)    | Security | medium   | ✅      |
@@ -149,7 +149,7 @@ The **Touches** column shows which steps edit the same files and so need to land
 | 8    | ⬜      | #2              | Readiness that doesn't flap under load                                      | `config/config.conf`, `ProxyOptions.kt`, `Proxy.kt` health checks, `charts/prometheus-proxy`, k8s docs | A default and a chart change, so it needs a "Before you upgrade" note.                                                                                                       |
 | 9    | ✅      | #9, #16, #5, #41 | Safe to embed: register metrics once, leave the root logger and shutdown hooks alone, fix the examples | `AgentMetrics.kt`, `ProxyMetrics.kt`, `Agent.kt`, `BaseOptions.kt`, `Utils.kt`, `ProxyGrpcService.kt`, README, website, KDoc | All four are about running inside another JVM, so one embedded-host spec (restart, two agents, log level) covers them. Do it after step 4 and before step 10, which shares `AgentMetrics.kt`. |
 | 10   | ✅      | #11, #13        | Agent metrics that count every scrape                                       | `AgentHttpService.kt`, `AgentMetrics.kt`, metrics docs, Grafana JSON                              | Do it after steps 4 and 9, which share these files. The dashboards and docs change with the counter.                                                                             |
-| 11   | ⬜      | #10, #12, #18   | Agent config and discovery robustness                                       | `PathDiscoveryService.kt`, `AgentPathManager.kt`, `PathDiscoverySource.kt`, `AgentOptions.kt`, trust-manager init | Startup validation, plus a last-known-good list that outlives the connection. Independent of the proxy steps.                                                                    |
+| 11   | ✅      | #10, #12, #18   | Agent config and discovery robustness                                       | `PathDiscoveryService.kt`, `AgentPathManager.kt`, `PathDiscoverySource.kt`, `AgentOptions.kt`, trust-manager init | Startup validation, plus a last-known-good list that outlives the connection. Independent of the proxy steps.                                                                    |
 | 12   | ⬜      | #4, #17         | Quiet logs for unauthenticated connections and routine outages              | `AgentContextManager.kt`, `AgentContextCleanupService.kt`, `AgentGrpcService.kt`, `Utils.kt`      | Changes only log levels and one counter, each covered by a `ListAppender` test. Do it after step 5, which shares `AgentContextManager.kt`.                                        |
 | 13   | ⬜      | #19             | `MetricFilter` handles quoted UTF-8 names                                   | `agent/filter/MetricFilter.kt`                                                                    | Self-contained, so it can go any time.                                                                                                                                           |
 | 14   | ⬜      | #31, #36, #34   | Docs site: build on PRs, cool down hand upgrades, deploy after publishing   | `docs.yml`, `ci.yml`, `Makefile`                                                                  | Keeps a broken site build off `master`, and keeps the site from advertising a version that isn't published yet. Workflow-only, so it can run in parallel with code steps.        |
@@ -507,7 +507,7 @@ per-path series it recorded. Both build their metrics in `startUp()`, so a host 
 startup. `EmbeddedAgentMetricsTest` covers a restart and two agents at once, both without a registry clear, plus the
 startup clash. The metrics unit tests now close what they create, instead of clearing the registry.
 
-### 10. [ ] Discovered paths vanish on any reconnect while the discovery file is unreadable
+### 10. [x] Discovered paths vanish on any reconnect while the discovery file is unreadable
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -533,6 +533,13 @@ against it when a read fails (reconciling is idempotent). Reword the log message
 
 **Test:** use a source that succeeds once and then throws. After `pathManager.clear()` and `reconcileOnce()`, the
 cached paths are registered again.
+
+**Resolution:** `PathDiscoveryService`, which outlives connections, keeps the last list it read successfully. When a
+read fails, it reconciles that list instead: a no-op while the paths are registered, and it registers them again after
+a reconnect cleared them. The log now says it is keeping the paths last read. Before any good read, a failure still
+reconciles nothing. The finding's test (a source that succeeds once and then throws) expected two reconciles of the
+cached list, and got one before the fix. `kubernetes.md`, the agent configuration page, and
+`examples/discovery-targets.conf` now say the set survives a reconnect.
 
 ### 11. [x] `agent_scrape_request_count_total` never counts failed fetches or the documented `invalid_path` type
 
@@ -575,7 +582,7 @@ metrics pages list the types. The agents dashboard's Unsuccessful Scrapes by Age
 them up unchanged. The three tests the finding asks for are in `agent/AgentHttpServiceTest.kt`; before the fix, the
 invalid path wasn't counted at all, and the refused connection and the timeout were counted with an empty type.
 
-### 12. [ ] `pathConfigs` validation gaps: `path = "/"` fails every connect, and duplicates silently keep the last URL
+### 12. [x] `pathConfigs` validation gaps: `path = "/"` fails every connect, and duplicates silently keep the last URL
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -606,6 +613,12 @@ invalid path wasn't counted at all, and the refused connection and the timeout w
 
 - `["/", "ok"]` connects and registers `ok`.
 - `["metrics", "/metrics"]` fails construction, naming the path.
+
+**Resolution:** `PathConfig.usable` and `DiscoveredPath.usable` check `path.removePrefix("/").isNotBlank()`, so `/` is
+skipped with the existing warning. `pathConfigs` rejects duplicate normalized paths at startup, naming the path, as
+`agent.filters` does. Both of the finding's tests failed before the fix. With the gRPC service mocked, `/` reached the
+proxy as an empty path; in production, the `require` there threw and failed the connect. A third test covers
+`DiscoveredPath.usable`.
 
 ### 13. [x] The agent latency histogram stops at 10s, below the agent's own 15s scrape timeout
 
@@ -715,7 +728,7 @@ Elsewhere, the project logs a repeating failure once at WARN and then at DEBUG.
 
 **Test:** N consecutive connect failures produce one WARN.
 
-### 18. [ ] A bad `agent.http.trustStorePath` or password isn't caught at startup and fails every scrape
+### 18. [x] A bad `agent.http.trustStorePath` or password isn't caught at startup and fails every scrape
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -735,6 +748,12 @@ Elsewhere, the project logs a repeating failure once at WARN and then at DEBUG.
 **Fix:** load the trust manager at startup and fail fast, as the other options do.
 
 **Test:** constructing the agent with a missing trust store throws a clear error.
+
+**Resolution:** `AgentHttpService` resolves the trust manager as it is built, not lazily, so the `Agent` constructor
+fails. The error says `Unable to load agent.http.trustStorePath '<path>': <cause>`. A test constructs the service with a
+missing trust store and expects that error; before the fix, construction succeeded. The agent configuration page
+says the trust store is loaded at startup, and RELEASE_NOTES has a "Before you upgrade" note covering this and #12's
+duplicate check.
 
 ### 19. [ ] `MetricFilter` misjudges quoted UTF-8 metric names
 
