@@ -23,7 +23,6 @@ package io.prometheus.agent
 
 import com.google.common.net.HttpHeaders.ACCEPT
 import com.google.common.net.HttpHeaders.CONTENT_TYPE
-import com.pambrose.common.dsl.KtorDsl.get
 import com.pambrose.common.util.simpleClassName
 import com.pambrose.common.util.zip
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
@@ -41,6 +40,7 @@ import io.ktor.client.plugins.plugin
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.header
+import io.ktor.client.request.prepareGet
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.HttpHeaders
@@ -63,8 +63,10 @@ import io.prometheus.common.Utils.sanitizeUrlsInText
 import io.prometheus.common.hasTimeoutCause
 import io.prometheus.grpc.ScrapeRequest
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.withTimeout
 import kotlinx.io.readByteArray
+import java.math.BigDecimal
 import javax.net.ssl.X509TrustManager
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -178,14 +180,11 @@ internal class AgentHttpService(
     val clientKey = with(Url(url)) { ClientKey(user, password) }
     val entry = httpClientCache.getOrCreateClient(clientKey) { newHttpClient(clientKey) }
     try {
-      var result: ScrapeResults? = null
-      entry.client.get(
-        url = url,
-        setUp = prepareRequestHeaders(scrapeRequest),
-      ) { response ->
-        result = buildScrapeResults(response, url, scrapeRequest, filter)
+      // A streaming request, so the body is read only by buildScrapeResults, which stops at the size limit. A plain
+      // request reads the whole body into the heap before its response block runs, however large it is.
+      return entry.client.prepareGet(url, prepareRequestHeaders(scrapeRequest)).execute { response ->
+        buildScrapeResults(response, url, scrapeRequest, filter)
       }
-      return requireNotNull(result) { "Response handler was not called for ${sanitizeUrl(url)}" }
     } finally {
       httpClientCache.onFinishedWithClient(entry)
     }
@@ -196,6 +195,9 @@ internal class AgentHttpService(
       val limit = scrapeTimeout(request)
       logger.debug { "Setting scrape timeout = $limit" }
       timeout { requestTimeoutMillis = limit.inWholeMilliseconds }
+      // Exporters such as blackbox_exporter and snmp_exporter size their work by this header, as they do when
+      // Prometheus scrapes them directly.
+      header(SCRAPE_TIMEOUT_HEADER, limit.toHeaderSeconds())
 
       // Set non-default headers
       // The scrape travels to Prometheus as text, so the target is asked only for a text format; see textOnlyAccept.
@@ -219,6 +221,9 @@ internal class AgentHttpService(
         val msg = "Content length $contentLength exceeds maximum allowed size $maxContentLength"
         // Only the log line names the target and scrape; msg is also the failure reason returned to the proxy.
         logger.warn { "$msg for $safeUrl (scrapeId: ${scrapeRequest.scrapeId})" }
+        // The body is never read, so cancel the call: a streaming request's cleanup otherwise waits for the body to
+        // finish arriving, which a target that stalls after its headers drags out to the scrape timeout.
+        response.cancel()
         return ScrapeResults(
           srAgentId = scrapeRequest.agentId,
           srScrapeId = scrapeRequest.scrapeId,
@@ -235,7 +240,8 @@ internal class AgentHttpService(
       // no Content-Length header (e.g. chunked transfer encoding) or an understated one bypasses the
       // header guard above, and bodyAsText() would buffer the entire body into the heap before the
       // size check below — a memory-exhaustion vector. readBuffer caps the read, so the guard
-      // runs against a bounded buffer. The bytes are reused for both the size check and gzip;
+      // runs against a bounded buffer; fetchContent's request streams, so nothing read the body before
+      // this. The bytes are reused for both the size check and gzip;
       // ByteArray.zip() avoids the second UTF-8 encode that String.zip() would do.
       val contentBytes = response.bodyAsChannel().readBuffer(maxContentLength + 1).readByteArray()
       val contentByteSize = contentBytes.size.toLong()
@@ -331,10 +337,14 @@ internal class AgentHttpService(
         }
       }
 
-      // Setup authentication if username and password are specified
+      // Setup authentication if username and password are specified. The credentials go with the first request rather
+      // than in answer to a 401, since a target that answers an unauthenticated request with 403 or a login redirect
+      // never sends one. An Authorization header forwarded from Prometheus is sent instead, as it always was, and the
+      // URL's credentials answer a 401 to it. Only same-origin redirects are followed, so they reach only the target.
       clientKey.credentials?.let { creds ->
         install(Auth) {
           basic {
+            sendWithoutRequest { request -> !request.headers.contains(HttpHeaders.Authorization) }
             credentials {
               BasicAuthCredentials(creds.username, creds.password)
             }
@@ -441,6 +451,13 @@ internal class AgentHttpService(
     private const val MAX_RETRY_DELAY_MS = 5000L
 
     private const val PROTOBUF_MEDIA_TYPE = "application/vnd.google.protobuf"
+
+    // Prometheus's scrape timeout, which the proxy also reads from the scrape request.
+    private const val SCRAPE_TIMEOUT_HEADER = "X-Prometheus-Scrape-Timeout-Seconds"
+
+    // Seconds in the format Prometheus sends them: "10", "2.5".
+    private fun Duration.toHeaderSeconds(): String =
+      BigDecimal(inWholeMilliseconds).movePointLeft(3).stripTrailingZeros().toPlainString()
 
     /**
      * [accept], Prometheus's `Accept` header, without the protobuf media type.
