@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — October 2026 Findings
 
-**Status:** 47 issues — 23 fixed, 24 open (16 medium, 31 low, no high).
+**Status:** 47 issues — 26 fixed, 21 open (16 medium, 31 low, no high).
 
 **Date:** 2026-10-27
 
@@ -103,12 +103,12 @@ Six earlier fixes turn out to be incomplete:
 | 28 | Security docs don't say the scrape port is unauthenticated, or what it forwards         | Security | low      | ⬜      |
 | 29 | `release-check` accepts any all-green check set without requiring the CI jobs           | CI/build | medium   | ✅      |
 | 30 | Version-bump check passes partial bumps and skips two of step 2's files                 | CI/build | medium   | ✅      |
-| 31 | The docs site is never built on a pull request                                          | CI/build | medium   | ⬜      |
+| 31 | The docs site is never built on a pull request                                          | CI/build | medium   | ✅      |
 | 32 | This branch would pass `release-check` with no release date in either changelog         | CI/build | low      | ✅      |
 | 33 | The `--continue` comments are wrong: a failed test means no coverage report             | CI/build | low      | ✅      |
-| 34 | The site and Helm charts point at a version before it's published                       | CI/build | low      | ⬜      |
+| 34 | The site and Helm charts point at a version before it's published                       | CI/build | low      | ✅      |
 | 35 | The testing plugin re-adds `kotlin-test` and a second copy of the test dependencies     | CI/build | low      | ⬜      |
-| 36 | Hand lock upgrades skip the 7-day cooldown Dependabot follows                           | CI/build | low      | ⬜      |
+| 36 | Hand lock upgrades skip the 7-day cooldown Dependabot follows                           | CI/build | low      | ✅      |
 | 37 | The TLA+ tools jar isn't versioned; local runs can use different tools than CI          | CI/build | low      | ⬜      |
 | 38 | CI hygiene: `build` job has no timeout; tool images pinned by tag only                  | CI/build | low      | ⬜      |
 | 39 | The image's UID is implicit, but the charts hard-code it                                | CI/build | low      | ⬜      |
@@ -152,7 +152,7 @@ The **Touches** column shows which steps edit the same files and so need to land
 | 11   | ✅      | #10, #12, #18   | Agent config and discovery robustness                                       | `PathDiscoveryService.kt`, `AgentPathManager.kt`, `PathDiscoverySource.kt`, `AgentOptions.kt`, trust-manager init | Startup validation, plus a last-known-good list that outlives the connection. Independent of the proxy steps.                                                                    |
 | 12   | ⬜      | #4, #17         | Quiet logs for unauthenticated connections and routine outages              | `AgentContextManager.kt`, `AgentContextCleanupService.kt`, `AgentGrpcService.kt`, `Utils.kt`      | Changes only log levels and one counter, each covered by a `ListAppender` test. Do it after step 5, which shares `AgentContextManager.kt`.                                        |
 | 13   | ⬜      | #19             | `MetricFilter` handles quoted UTF-8 names                                   | `agent/filter/MetricFilter.kt`                                                                    | Self-contained, so it can go any time.                                                                                                                                           |
-| 14   | ⬜      | #31, #36, #34   | Docs site: build on PRs, cool down hand upgrades, deploy after publishing   | `docs.yml`, `ci.yml`, `Makefile`                                                                  | Keeps a broken site build off `master`, and keeps the site from advertising a version that isn't published yet. Workflow-only, so it can run in parallel with code steps.        |
+| 14   | ✅      | #31, #36, #34   | Docs site: build on PRs, cool down hand upgrades, deploy after publishing   | `docs.yml`, `ci.yml`, `Makefile`                                                                  | Keeps a broken site build off `master`, and keeps the site from advertising a version that isn't published yet. Workflow-only, so it can run in parallel with code steps.        |
 | 15   | ⬜      | #27, #39, #40   | Helm and image packaging                                                    | `charts/*`, `etc/docker/*.Dockerfile`, `build.gradle.kts` shadow config                           | A Secret-backed auth config, an explicit UID, and NOTICE merging. Needs a `helm-smoke` run and the container tests.                                                              |
 | 16   | ⬜      | #42, #44, #28   | Documentation drift                                                         | website pages, `llms.txt`, `docs/TESTING.md`, `SECURITY.md`                                       | No behavior change. Each item can ride along with any earlier PR that touches the same page.                                                                                     |
 | 17   | ⬜      | #45, #46, #47   | Tests that can fail, and that don't race for ports                          | the cited specs, `TestPorts.kt`                                                                   | Removes false confidence. #45's `TESTING.md` line goes with step 16 if that lands first.                                                                                         |
@@ -1187,7 +1187,7 @@ skill. On a scratch copy, the unbumped files gave exactly the 49 lines the relea
 mention, a full bump passed, and a missed `appVersion` and README tag were both reported. The gradle comment points
 at step 2.
 
-### 31. [ ] The docs site is never built on a pull request
+### 31. [x] The docs site is never built on a pull request
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -1210,6 +1210,15 @@ commit blocks `release-check` until a fix lands.
 - Run `uv run --locked zensical build --clean`.
 - Give it a per-ref concurrency group; the `pages` group would queue it behind deploys.
 - Add a matching make target to `CI_JOBS`.
+
+**Resolution:** a `docs-site` job in `ci.yml` runs a new `make build-site` (`uv run --locked zensical build
+--clean`), which `docs.yml`'s build also runs, so the two can't drift. `ci.yml` was chosen over a `pull_request`
+trigger on `docs.yml` for three reasons: it already has a per-ref concurrency group, it keeps `docs.yml` deploy-only,
+and it follows the one-make-target-per-job pattern `CI_JOBS` mirrors. The job's name matches no required check and
+no other workflow's job. `docs.yml` still doesn't run on pull requests, so its `build` job can't satisfy the required
+`build` check. `RELEASE_REQUIRED_JOBS` includes `ci.yml/docs-site`, since `make release` now deploys the site.
+Making it a required check on `master` is a branch-protection setting, left to the maintainer. With a snippet source
+moved, `make build-site` fails with `SnippetMissingError`.
 
 ### 32. [x] This branch would pass `release-check` with no release date in either changelog
 
@@ -1257,7 +1266,7 @@ test task's `ignoreFailures`, and fail the build afterwards.
 not when a test fails, because the kover tasks depend on the test task. The optional `ignoreFailures` property wasn't
 added.
 
-### 34. [ ] The site and the Helm charts point at a version before it's published
+### 34. [x] The site and the Helm charts point at a version before it's published
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -1278,6 +1287,16 @@ The window grows when a release stalls, as it has on Docker Hub push failures.
 - On a push, deploy only when the version in `gradle.properties` is already on Maven Central, or always build the site
   from the latest release tag.
 
+**Resolution:** on a push, `docs.yml`'s build checks that the `gradle.properties` version's POM is on Maven Central and
+both its images are on Docker Hub. It deploys only if all three answer 200. A 404 skips the deploy with a notice,
+and any other answer skips it with a warning to run `make gh-docs`. The site and KDocs are still built either way.
+A `workflow_dispatch` always deploys, and `make release` starts one (`make gh-docs`) after `docker-verify`, so
+Maven Central's propagation delay can't block the release's deploy. Between releases the version is published, so
+docs changes deploy as they merge. This is preferred over building from the latest release tag, which would hold
+every docs change until the next release. **Not addressed:** the Helm chart half. A fresh clone of `master`
+defaults to an image not yet published, which comes from bumping `appVersion` before publishing; it is left for
+step 15.
+
 ### 35. [ ] The `com.pambrose.testing` plugin re-adds `kotlin-test` and a second copy of the test dependencies
 
 **Severity:** low · **Confidence:** confirmed in the plugin source, 1.1.5 through 1.1.8.
@@ -1294,7 +1313,7 @@ versions.
 **Fix:** set `pambroseTesting { addKotest.set(false); addLogbackClassic.set(false); addKotlinTest.set(false) }`, so the
 catalog is the only source of these versions.
 
-### 36. [ ] Hand lock upgrades skip the 7-day cooldown Dependabot follows
+### 36. [x] Hand lock upgrades skip the 7-day cooldown Dependabot follows
 
 **Severity:** low · **Confidence:** confirmed for the facts; plausible for the fix.
 
@@ -1309,6 +1328,14 @@ None of them was built before merge (see #31).
 
 **Fix:** apply the same cooldown with uv's `exclude-newer` (recent uv accepts a relative span), and check that
 `uv run --locked` still accepts the lock. Otherwise, leave website updates to Dependabot.
+
+**Resolution:** `make upgrade-site` runs `uv lock --upgrade --exclude-newer "$(SITE_COOLDOWN)"` (7 days), then a
+plain `uv lock`. uv records the cutoff in `uv.lock`, and CI's `uv run --locked` without it rejects that lock. The
+second lock drops the cutoff and keeps the versions chosen. `make check-site` dry-runs the same upgrade. On scratch
+copies, the two steps leave a lock that passes `uv lock --check` and `uv run --locked`, and the first step alone
+leaves one that `--locked` rejects. The next upgrade will roll back what 91f651a locked within the 7 days: zensical
+0.0.72, python-dateutil 3.0.0, certifi, and tzdata. The cutoff isn't in `pyproject.toml`: that would force a re-lock
+and hold back Dependabot's security updates, which are exempt from its cooldown.
 
 ### 37. [ ] The TLA+ tools jar isn't versioned, so a local run can use different tools than CI
 
