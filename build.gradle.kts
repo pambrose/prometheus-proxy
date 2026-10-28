@@ -35,7 +35,7 @@ plugins {
   alias(libs.plugins.taskinfo) apply false
 }
 
-// Version and group are defined in gradle.properties; also update version refs in README.md and llms.txt
+// Version and group are defined in gradle.properties; a bump also updates the files step 2 of docs/RELEASE.md lists
 providers.gradleProperty("overrideVersion").orNull?.let { version = it }
 
 // ValueSources are read fresh on each build (configuration-cache-safe), so APP_RELEASE_DATE and

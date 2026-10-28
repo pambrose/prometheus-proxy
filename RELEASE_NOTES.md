@@ -36,7 +36,9 @@ among them gRPC, which now runs at one version across all its modules.
   that listed every up-to-date dependency first, and no longer offers a grpc-kotlin commit hash as an update.
   `make versions-all` prints the full report.
 - `make release-check` fails until both changelogs give the release date, so a release can't go out still
-  marked as unreleased.
+  marked as unreleased. It also requires each CI job a release depends on to have run and passed for the release
+  commit, and fails when a file the version bump updates still has the previous version, such as a chart's
+  `appVersion`.
 - The instructions for AI coding agents move from `CLAUDE.md` to `AGENTS.md`, which most agents read.
 - `make ci` runs the CI workflow's checks locally: the TLA+ model checks, the alerting-rule and Helm chart checks,
   and the build with its tests and coverage floors. It runs every check even when one fails and lists the failures
