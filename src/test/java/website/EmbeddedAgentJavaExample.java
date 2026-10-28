@@ -24,7 +24,7 @@ public class EmbeddedAgentJavaExample {
   public static void main(String[] args) {
     // Start the agent in the background
     EmbeddedAgentInfo agentInfo =
-      Agent.startAsyncAgent("agent-config.conf", true, true);
+      Agent.startAsyncAgent("agent-config.conf", false, true);
 
     System.out.println("Agent started: " + agentInfo.getAgentName());
 

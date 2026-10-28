@@ -94,6 +94,12 @@ object TestPorts {
   const val REJECTED_PATH_RETRY_HTTP_PORT = 9594
   const val REJECTED_PATH_RETRY_AGENT_PORT = 9524
 
+  // EmbeddedAgentMetricsTest
+  const val EMBEDDED_METRICS_HTTP_PORT = 9595
+  const val EMBEDDED_METRICS_GRPC_PORT = 9596
+  const val EMBEDDED_METRICS_AGENT_1_PORT = 9597
+  const val EMBEDDED_METRICS_AGENT_2_PORT = 9598
+
   // AgentProxyFailoverTest
   const val FAILOVER_PROXY_A_HTTP_PORT = 9530
   const val FAILOVER_PROXY_A_GRPC_PORT = 9531

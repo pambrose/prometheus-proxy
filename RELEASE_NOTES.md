@@ -23,6 +23,13 @@ among them gRPC, which now runs at one version across all its modules.
 
 ### Bug Fixes
 
+- **More than one agent in a JVM works with metrics on.** A second embedded agent, or one started again after
+  `shutdown()`, never connected. Now each one connects, its metrics carry its `launch_id`, and they go when it
+  stops. A host metric with one of the agent metrics' names makes `startAsyncAgent()` throw, where the agent
+  used to retry forever.
+- **An embedded agent's log level leaves the host's logging alone.** It applies to the `io.prometheus` loggers
+  only.
+- **A stopped proxy no longer stays in memory** until the JVM exits.
 - **The agent's response-size limit now limits memory.** A target that kept sending, such as a misrouted URL,
   was read into memory until the scrape timeout, which could exhaust the agent's heap and stop it, along with the
   application hosting an embedded agent. The agent now stops reading one byte past `maxContentLengthMBytes`, and
@@ -43,6 +50,8 @@ among them gRPC, which now runs at one version across all its modules.
 
 ### Documentation
 
+- The embedded-agent examples pass `exitOnMissingConfig = false`. Copied with `true`, a config error, even one
+  failed fetch of a config URL, exited the host application.
 - The README's Kotlin badge follows the version the build uses, and its Docker stats badges link to the proxy's
   and agent's Docker Hub pages.
 

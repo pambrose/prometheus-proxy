@@ -27,7 +27,6 @@ import com.pambrose.common.utils.TlsContext
 import com.pambrose.common.utils.TlsContext.Companion.PLAINTEXT_CONTEXT
 import com.pambrose.common.utils.TlsUtils.buildServerTlsContext
 import com.pambrose.common.utils.shutdownGracefully
-import com.pambrose.common.utils.shutdownWithJvm
 import com.google.common.util.concurrent.MoreExecutors
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.grpc.Server
@@ -73,8 +72,9 @@ internal class ProxyGrpcService(
       else
         PLAINTEXT_CONTEXT
 
+    // No JVM shutdown hook of its own: one added here was never removed, and held the server, and through it the whole
+    // Proxy, until the JVM exited. The Proxy's own hook, added at startup and removed at shutdown, stops this service.
     grpcServer = createGrpcServer(tlsContext, options)
-    grpcServer.shutdownWithJvm(SHUTDOWN_GRACE)
     addListener(genericServiceListener(logger), MoreExecutors.directExecutor())
 
     healthCheck = healthCheck {

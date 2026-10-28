@@ -20,12 +20,15 @@ package io.prometheus.common
 
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
+import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.ranges.shouldBeIn
 import io.kotest.matchers.shouldBe
 import io.prometheus.common.MetricBuilders.counter
 import io.prometheus.common.MetricBuilders.gauge
 import io.prometheus.common.MetricBuilders.histogram
+import io.prometheus.common.MetricBuilders.sampledGauge
 import io.prometheus.common.MetricBuilders.setToCurrentTime
 import io.prometheus.metrics.core.metrics.Gauge
 import io.prometheus.metrics.model.registry.PrometheusRegistry
@@ -73,6 +76,21 @@ class MetricBuildersTest : StringSpec() {
       val point = histogram.collect().dataPoints.single()
       point.hasNativeHistogramData().shouldBeFalse()
       point.exemplars.size() shouldBe 0
+    }
+
+    // The callback runs inside every scrape, so a value that throws must not fail the scrape, and every other metric
+    // in it: it is reported as NaN, and the gauge's other values still are.
+    "a sampledGauge value that throws should be reported as NaN" {
+      val gauge =
+        sampledGauge("metric_builders_test_sampled", "Metric builders test sampled gauge", "id") {
+          report("ok") { 1.0 }
+          report("broken") { error("sampler failed") }
+        }
+
+      val values = gauge.collect().dataPoints.associate { it.labels.get("id") to it.value }
+
+      values["ok"] shouldBe 1.0
+      values["broken"].shouldNotBeNull().isNaN().shouldBeTrue()
     }
 
     // The 1.x client has no setToCurrentTime(). The start-time gauges feed `time() - *_start_time_seconds` on the

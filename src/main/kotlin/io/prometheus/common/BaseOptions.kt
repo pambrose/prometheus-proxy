@@ -44,6 +44,7 @@ import io.prometheus.common.EnvVars.TRANSPORT_FILTER_DISABLED
 import io.prometheus.common.EnvVars.TRUST_CERT_COLLECTION_FILE_PATH
 import io.prometheus.common.Utils.sanitizeUrl
 import io.prometheus.common.Utils.sanitizeUrlsInText
+import org.slf4j.Logger.ROOT_LOGGER_NAME
 import java.io.File
 import java.io.FileNotFoundException
 import java.net.URI
@@ -455,6 +456,9 @@ abstract class BaseOptions protected constructor(
   /**
    * Resolves [logLevel] from CLI > [envVar] > [configDefault] and applies it. When the resolved value is
    * empty the level from `logback.xml` is left in place. [role] is used only for log/exception text.
+   *
+   * An embedded agent shares its host application's logging, so it sets the level of the `io.prometheus` loggers
+   * only; setting the root logger's would change the host's own logging too.
    */
   protected fun assignLogLevel(
     role: String,
@@ -464,7 +468,7 @@ abstract class BaseOptions protected constructor(
     logLevel = resolveStringOption(logLevel, envVar, configDefault)
     if (logLevel.isNotEmpty()) {
       logger.info { "$role.logLevel: $logLevel" }
-      Utils.setLogLevel(role, logLevel)
+      Utils.setLogLevel(role, logLevel, loggerName = if (embedded) Utils.PROJECT_LOGGER_NAME else ROOT_LOGGER_NAME)
     } else {
       logger.info { "$role.logLevel: info" }
     }
