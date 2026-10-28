@@ -33,6 +33,49 @@ class MetricFilterTest : StringSpec() {
   ) = MetricFilter.createOrNull(allow, deny, "test_path").shouldNotBeNull()
 
   init {
+    // Prometheus 3 offers escaping=allow-utf-8, which the agent passes on, so a target can write a name outside the
+    // legacy character set quoted: `# TYPE "a.b" counter`, and `{"a.b",job="x"} 1` with the name as the first thing in
+    // the braces. The filter kept the quotes in the family name and read the sample name as "", so an allow list
+    // dropped the allowed family and a deny list couldn't drop it.
+    "an allow list should keep a family with a quoted name" {
+      val payload =
+        "# HELP \"a.b\" A dotted counter.\n# TYPE \"a.b\" counter\n{\"a.b\",job=\"x\"} 1\n" +
+          "# HELP other Other.\n# TYPE other counter\nother 2\n"
+
+      val result = filter(allow = ["a\\.b"]).filterText(payload)
+
+      result.text shouldBe "# HELP \"a.b\" A dotted counter.\n# TYPE \"a.b\" counter\n{\"a.b\",job=\"x\"} 1\n"
+      result.linesDropped shouldBe 3
+    }
+
+    "a deny list should drop a family with a quoted name" {
+      val payload = "# TYPE \"a.b\" counter\n{\"a.b\"} 1\nother 2\n"
+
+      filter(deny = ["a\\.b"]).filterText(payload).text shouldBe "other 2\n"
+    }
+
+    "a quoted histogram name's suffixed samples should belong to its family" {
+      val payload =
+        "# TYPE \"req.seconds\" histogram\n{\"req.seconds_bucket\",le=\"1\"} 3\n{\"req.seconds_sum\"} 0.5\n" +
+          "{\"req.seconds_count\"} 3\nup 1\n"
+
+      filter(deny = ["req\\.seconds"]).filterText(payload).text shouldBe "up 1\n"
+    }
+
+    "a quoted name should be unescaped before it is matched" {
+      val payload = "# TYPE \"say \\\"hi\\\"\" gauge\n{\"say \\\"hi\\\"\"} 1\nup 1\n"
+
+      filter(deny = ["say \"hi\""]).filterText(payload).text shouldBe "up 1\n"
+    }
+
+    // The text format allows blanks before a line's first token. A sample line indented that way was judged by the
+    // name before its first blank, "", and an indented comment wasn't seen as one.
+    "a line with leading blanks should be judged by its name" {
+      val payload = "  # TYPE go_goroutines gauge\n  go_goroutines 12\n\tup 1\n"
+
+      filter(deny = ["go_goroutines"]).filterText(payload).text shouldBe "\tup 1\n"
+    }
+
     "createOrNull should return null when both lists are empty" {
       MetricFilter.createOrNull(emptyList(), emptyList(), "test_path").shouldBeNull()
     }

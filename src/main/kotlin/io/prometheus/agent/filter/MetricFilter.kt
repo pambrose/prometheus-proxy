@@ -131,6 +131,22 @@ internal class MetricFilter private constructor(
     var currentFamily: String? = null
     var currentVerdict = true
 
+    // Judges a sample line by its name, name[nameStart, nameEnd): it inherits the open family's verdict when it belongs
+    // to that family, and is judged on its own name otherwise, which closes the family.
+    fun keepSample(
+      name: String,
+      nameStart: Int,
+      nameEnd: Int,
+    ): Boolean {
+      val family = currentFamily
+      if (family != null && belongsToFamily(name, nameStart, nameEnd, family))
+        return currentVerdict
+      // Not part of the open family. This is the only branch that has to materialize the name, since keepFamily
+      // matches regexes.
+      currentFamily = null
+      return keepFamily(name.substring(nameStart, nameEnd))
+    }
+
     // Scanned by index rather than text.split('\n'): a multi-megabyte payload would otherwise
     // materialize one String per line plus the backing List before a single line is judged.
     var start = 0
@@ -139,15 +155,17 @@ internal class MetricFilter private constructor(
       val end = if (newline < 0) text.length else newline
       // Inspect without a trailing \r, but emit the original line verbatim so CRLF survives.
       val inspectEnd = if (end > start && text[end - 1] == '\r') end - 1 else end
+      // The text format allows blanks before a line's first token.
+      val first = firstNonBlank(text, start, inspectEnd)
 
       val keep =
         when {
-          isBlank(text, start, inspectEnd) -> {
+          first == inspectEnd -> {
             true
           }
 
-          text[start] == '#' -> {
-            val family = parseCommentFamily(text.substring(start, inspectEnd))
+          text[first] == '#' -> {
+            val family = parseCommentFamily(text.substring(first, inspectEnd))
             if (family == null) {
               true // Unrecognized comment (e.g. "# EOF") passes through untouched.
             } else {
@@ -163,16 +181,13 @@ internal class MetricFilter private constructor(
           }
 
           else -> {
-            val nameEnd = sampleNameEnd(text, start, inspectEnd)
-            val family = currentFamily
-            if (family != null && belongsToFamily(text, start, nameEnd, family)) {
-              currentVerdict
-            } else {
-              // Not part of the open family -- close it and judge this line on its own name. This is
-              // the only branch that has to materialize the name, since keepFamily matches regexes.
-              currentFamily = null
-              keepFamily(text.substring(start, nameEnd))
-            }
+            // A quoted name, written as the first thing in the braces ({"a.b",...}), is unescaped first; a plain one is
+            // compared in place.
+            val quoted = quotedSampleName(text, first, inspectEnd)
+            if (quoted != null)
+              keepSample(quoted, 0, quoted.length)
+            else
+              keepSample(text, first, sampleNameEnd(text, first, inspectEnd))
           }
         }
 
@@ -231,16 +246,59 @@ internal class MetricFilter private constructor(
       contentType.substringBefore(';').trim().lowercase()
         .let { it.isEmpty() || it == "text/plain" || it == "application/openmetrics-text" }
 
-    // Whether text[start, end) is empty or all whitespace, without materializing the range.
-    private fun isBlank(
+    // The index of the first non-blank character in text[start, end), or end when the range is blank, without
+    // materializing the range.
+    private fun firstNonBlank(
       text: String,
       start: Int,
       end: Int,
-    ): Boolean {
+    ): Int {
       for (i in start until end) {
-        if (!text[i].isWhitespace()) return false
+        if (!text[i].isWhitespace()) return i
       }
-      return true
+      return end
+    }
+
+    // The name of a sample line that starts at text[start] with a quoted name, such as {"a.b",job="x"} 1, or null for
+    // a line with a plain name. Prometheus 3 writes a name outside the legacy character set this way.
+    private fun quotedSampleName(
+      text: String,
+      start: Int,
+      end: Int,
+    ): String? =
+      if (text[start] == '{' && start + 1 < end && text[start + 1] == '"')
+        unquote(text, start + 1, end)
+      else
+        null
+
+    // The quoted string that opens at text[quote], unescaped as the text format escapes a name (\\, \", and \n), or
+    // null when the quote is never closed.
+    private fun unquote(
+      text: String,
+      quote: Int,
+      end: Int = text.length,
+    ): String? {
+      val name = StringBuilder()
+      var i = quote + 1
+      while (i < end) {
+        val c = text[i]
+        when {
+          c == '"' -> {
+            return name.toString()
+          }
+
+          c == '\\' && i + 1 < end -> {
+            name.append(if (text[i + 1] == 'n') '\n' else text[i + 1])
+            i++
+          }
+
+          else -> {
+            name.append(c)
+          }
+        }
+        i++
+      }
+      return null
     }
 
     // Metric name is everything before the first '{' or whitespace, so label values -- which may
@@ -269,14 +327,17 @@ internal class MetricFilter private constructor(
     // "# HELP foo help text" / "# TYPE foo counter" / "# UNIT foo seconds" -> "foo". Any other
     // comment -> null. The keyword terminator matches either a space or a tab, symmetric with the
     // name terminator below, so "# TYPE\tfoo counter" opens the family just like "# TYPE foo counter".
+    // A quoted name, such as "# TYPE \"a.b\" counter", is unquoted, so it matches as written in the config.
     private fun parseCommentFamily(line: String): String? {
       val body = line.removePrefix("#").trimStart()
       val keyword = FAMILY_KEYWORDS.firstOrNull { body.startsWith("$it ") || body.startsWith("$it\t") } ?: return null
-      return body.substring(keyword.length + 1)
-        .trimStart()
-        .substringBefore(' ')
-        .substringBefore('\t')
-        .takeIf { it.isNotEmpty() }
+      val rest = body.substring(keyword.length + 1).trimStart()
+      val name =
+        if (rest.startsWith('"'))
+          unquote(rest, 0)
+        else
+          rest.substringBefore(' ').substringBefore('\t')
+      return name?.takeIf { it.isNotEmpty() }
     }
 
     // Whether the metric name at text[start, nameEnd) is the exact family name, or the family plus one
