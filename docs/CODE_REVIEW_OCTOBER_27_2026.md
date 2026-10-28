@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — October 2026 Findings
 
-**Status:** 47 issues — 27 fixed, 20 open (16 medium, 31 low, no high).
+**Status:** 47 issues — 30 fixed, 17 open (16 medium, 31 low, no high).
 
 **Date:** 2026-10-27
 
@@ -73,12 +73,12 @@ Six earlier fixes turn out to be incomplete:
 
 | #  | Finding                                                                                 | Area     | Severity | Status |
 |----|-----------------------------------------------------------------------------------------|----------|----------|--------|
-| 1  | Service-discovery targets are URLs, which Prometheus refuses; SD as documented is empty | Proxy    | medium   | ⬜      |
+| 1  | Service-discovery targets are URLs, which Prometheus refuses; SD as documented is empty | Proxy    | medium   | ✅      |
 | 2  | Health thresholds (25) far below the caps; `/healthcheck` readiness flaps under load    | Proxy    | medium   | ⬜      |
 | 3  | Chunked-transfer sweep skipped on cancel; reclaim trusts the agent's `headerAgentId`    | Proxy    | low      | ✅      |
 | 4  | Unauthenticated connections still log INFO on removal and count as evictions           | Proxy    | low      | ⬜      |
 | 5  | Each `Proxy` leaks a JVM shutdown hook that keeps it reachable                          | Proxy    | low      | ✅      |
-| 6  | A path equal to the SD path, blitz path, or `favicon.ico` registers but can't be scraped | Proxy   | low      | ⬜      |
+| 6  | A path equal to the SD path, blitz path, or `favicon.ico` registers but can't be scraped | Proxy   | low      | ✅      |
 | 7  | Dead or test-only proxy code, including an unreachable `no_agents` branch               | Proxy    | low      | ⬜      |
 | 8  | `maxContentLengthMBytes` doesn't bound memory; Ktor buffers the whole body first        | Agent    | medium   | ✅      |
 | 9  | A second agent in one JVM with metrics on never connects (duplicate registration)       | Agent    | medium   | ✅      |
@@ -96,7 +96,7 @@ Six earlier fixes turn out to be incomplete:
 | 21 | Scrape-result ownership checked on one lookup, applied on another (September #1 gap)    | Security | medium   | ✅      |
 | 22 | Path authorization runs a backtracking regex before the length cap applies             | Security | medium   | ✅      |
 | 23 | Agent-reported names have no size limit and are repeated per path everywhere            | Security | medium   | ✅      |
-| 24 | SD labels aren't type- or name-checked; one agent can invalidate the whole SD document  | Security | medium   | ⬜      |
+| 24 | SD labels aren't type- or name-checked; one agent can invalidate the whole SD document  | Security | medium   | ✅      |
 | 25 | The Netty CVE override isn't in the published POM; embedders get vulnerable Netty       | Security | medium   | ✅      |
 | 26 | A connection that skips `connectAgent` works as an agent without being announced        | Security | low      | ✅      |
 | 27 | Helm proxy chart takes `proxy.auth` tokens only via a ConfigMap; example schema wrong   | Security | low      | ⬜      |
@@ -145,7 +145,7 @@ The **Touches** column shows which steps edit the same files and so need to land
 | 4    | ✅      | #8, #14, #15    | Stream the agent's fetch with a real size bound; forward the timeout; preemptive Basic | `agent/AgentHttpService.kt`                                                            | One bad target can take the agent's heap, and every path with it. The other two change the same request setup.                                                                   |
 | 5    | ✅      | #21, #3         | Check and complete scrape results on one wrapper; sweep transfers on cancel | `ProxyServiceImpl.kt`, `ScrapeRequestManager.kt`, `AgentContextManager.kt`, `ChunkedContext.kt`, `specs/tla/ProxyRegistry.tla` | Both concern the ownership and lifetime of in-flight results. The change touches `ScrapeRequestManager`, so update the TLA+ action and add a Lincheck spec in the same PR.        |
 | 6    | ✅      | #22, #23, #26   | Bound and authorize agent input before using it                             | `ProxyServiceImpl.kt` (`registerAgent`/`registerPath`), `AgentAuthManager.kt`, `ProxyOptions.kt`, `config.conf` | The three tenant-against-tenant availability issues. The new `proxy.internal` limits need config, validation, and docs. Do it after step 5, which edits the same file.            |
-| 7    | ⬜      | #1, #24, #6     | Service discovery that Prometheus accepts                                   | `Proxy.kt` (`buildServiceDiscoveryJson`), `ProxyOptions.kt`, `ProxyPathManager.addPath`, SD docs, a new container spec | SD as documented yields no targets today. One container spec using `http_sd_configs` guards all three. Do it after step 6, since both edit `addPath`'s validation.               |
+| 7    | ✅      | #1, #24, #6     | Service discovery that Prometheus accepts                                   | `Proxy.kt` (`buildServiceDiscoveryJson`), `ProxyOptions.kt`, `ProxyPathManager.addPath`, SD docs, a new container spec | SD as documented yields no targets today. One container spec using `http_sd_configs` guards all three. Do it after step 6, since both edit `addPath`'s validation.               |
 | 8    | ⬜      | #2              | Readiness that doesn't flap under load                                      | `config/config.conf`, `ProxyOptions.kt`, `Proxy.kt` health checks, `charts/prometheus-proxy`, k8s docs | A default and a chart change, so it needs a "Before you upgrade" note.                                                                                                       |
 | 9    | ✅      | #9, #16, #5, #41 | Safe to embed: register metrics once, leave the root logger and shutdown hooks alone, fix the examples | `AgentMetrics.kt`, `ProxyMetrics.kt`, `Agent.kt`, `BaseOptions.kt`, `Utils.kt`, `ProxyGrpcService.kt`, README, website, KDoc | All four are about running inside another JVM, so one embedded-host spec (restart, two agents, log level) covers them. Do it after step 4 and before step 10, which shares `AgentMetrics.kt`. |
 | 10   | ✅      | #11, #13        | Agent metrics that count every scrape                                       | `AgentHttpService.kt`, `AgentMetrics.kt`, metrics docs, Grafana JSON                              | Do it after steps 4 and 9, which share these files. The dashboards and docs change with the counter.                                                                             |
@@ -181,7 +181,7 @@ SD target format and its default), and 8 (the health thresholds) each need a "Be
 
 ## 📡 Proxy
 
-### 1. [ ] Service-discovery targets are URLs, which Prometheus refuses, so SD as documented yields no targets
+### 1. [x] Service-discovery targets are URLs, which Prometheus refuses, so SD as documented yields no targets
 
 **Severity:** medium · **Confidence:** plausible. The repo side is confirmed; Prometheus's `CheckTargetAddress` was
 read in its source, not exercised.
@@ -218,6 +218,14 @@ The tests don't catch it:
 
 - `buildServiceDiscoveryJson` with `http://proxy.example.com:8080/` emits the target `proxy.example.com:8080`.
 - A container spec scrapes through `http_sd_configs` and asserts `up == 1`.
+
+**Resolution:** confirmed. The new `containers/ContainersServiceDiscoveryTest` has Prometheus find the agent's path only
+through `http_sd_configs`, with `sdTargetPrefix` given as the documented URL. Against the old code it found no target
+in 60 seconds; with the fix, `up == 1` and the metric is scraped. A new `proxy/SdTarget` parses `sdTargetPrefix` at
+startup: `host:port` as given, or an `http` or `https` URL split into the target (`host:port`), a `__scheme__` label,
+and a `__metrics_path__` prefix. Anything else fails startup when service discovery is on; with it off, the value is
+parsed only if it can be. The default is `localhost:8080`, and the docs, snippets, README, and CLI tables give
+`host:port`. RELEASE_NOTES' "Before you upgrade" says to drop any `__address__` workaround rule.
 
 ### 2. [ ] Default health thresholds (25) sit far below the caps, so `/healthcheck` readiness flaps under load
 
@@ -353,7 +361,7 @@ The hook is also redundant. `GenericService`'s own hook already runs `Proxy.shut
 `GenericService` adds in `startUp()` and removes in `shutDown()`, already stops the server. A `ProxyTest` case checks
 that a `WeakReference` to a started and stopped proxy clears after GC. It didn't before the fix.
 
-### 6. [ ] A path equal to the SD path, the blitz path, or `favicon.ico` registers but can never be scraped
+### 6. [x] A path equal to the SD path, the blitz path, or `favicon.ico` registers but can never be scraped
 
 **Severity:** low · **Confidence:** plausible. Ktor's route precedence (a constant segment beats `/*`) comes from its
 routing semantics, not from a test.
@@ -378,6 +386,10 @@ routing semantics, not from a test.
 - the blitz path, when blitz is on.
 
 **Test:** with SD enabled, `addPath("discovery")` is rejected with `INVALID_PATH`.
+
+**Resolution:** `ProxyPathManager.formRejection` refuses `favicon.ico`, the `sdPath` when service discovery is on, and
+the blitz path when blitz is on, with `INVALID_PATH`. The finding's test (`addPath("discovery")` with SD on), plus the
+other two, failed before the fix. The service discovery page says so.
 
 ### 7. [ ] Dead or test-only proxy code, including an unreachable `no_agents` branch
 
@@ -965,7 +977,7 @@ stays at 4 MiB: agents accept `chunkContentSizeKbs` up to 4,032 KB, so a smaller
 agent, and once fields are cut before storage, a large message is a one-off allocation, not repeated per path.
 RELEASE_NOTES' "Before you upgrade" covers the series change a cut name causes.
 
-### 24. [ ] SD labels aren't checked for type or name, so one agent's labels can invalidate the whole discovery document
+### 24. [x] SD labels aren't checked for type or name, so one agent's labels can invalidate the whole discovery document
 
 **Severity:** medium when SD is on (it is off by default) · **Confidence:** plausible. The proxy side is confirmed;
 Prometheus failing the whole response comes from reading its `http_sd` decoding source, not from running it.
@@ -996,6 +1008,16 @@ Prometheus restart, it has no targets at all. The proxy logs nothing.
 
 - `addPath` rejects `{"a":1}`, `{"a":{"b":"c"}}`, and `{"":"x"}`.
 - Every label value in `buildServiceDiscoveryJson`'s output is a string primitive.
+
+**Resolution:** labels Prometheus couldn't decode are left out of service discovery rather than refused at
+registration. That covers a non-string value and a name outside `[a-zA-Z_][a-zA-Z0-9_]*`, the set every Prometheus
+version accepts. This departs from the suggestion: labels matter only to service discovery, so refusing the path
+(or failing the agent's startup) would take a scrape offline for a user who doesn't use SD. The guarantee is the
+same: no agent's labels can invalidate the response. `common/Utils.labelsProblem` names the first problem; the proxy
+logs it at WARN when the path registers, and the agent at startup for a `pathConfigs` entry.
+`buildServiceDiscoveryJson` checks each entry with `isValidLabelName` and `isString`. A `ProxyTest` case registers
+`{"count":1,"nested":{…},"list":[…],"":…,"a-b":…,"team":"web"}` and gets only `team` in the response. A mutant
+without the check fails it, as mutants without either warning fail theirs.
 
 ### 25. [x] The Netty CVE override doesn't reach the published Maven artifact, so embedders get vulnerable Netty
 

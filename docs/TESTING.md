@@ -233,6 +233,8 @@ something.
 - **AgentContextCleanupServiceTest** — Stale agent eviction (removes agents inactive beyond maxAgentInactivitySecs)
 - **ChunkedContextTest** — Chunk accumulation, CRC32 checksum validation, header/chunk/trailer sequencing
 - **ProxyOptionsTest** — CLI parsing, defaults, validation, TLS settings, gRPC options
+- **SdTargetTest** — `sdTargetPrefix` parsing: host:port as is; an http(s) URL split into the target, `__scheme__`,
+  and a path prefix; anything else refused, naming the setting
 - **ProxyDynamicConfigTest** — Dynamic config overrides via -D flags (maxZippedContentSizeMBytes,
   scrapeRequestTimeoutSecs, etc.)
 - **ProxyServerInterceptorTest** — gRPC server interceptor: agent-id metadata extraction from incoming calls
@@ -409,6 +411,8 @@ listener already on the host — both binds succeed, and the OS then routes the 
 process, which surfaces as a wait strategy timing out against a status the container never produced.
 
 - **ContainersSmokeTest** — baseline: Prometheus scrapes a single metric through the proxy and agent
+- **ContainersServiceDiscoveryTest** — Prometheus finds the agent's path only through `http_sd_configs`, with
+  `sdTargetPrefix` given as a URL, and scrapes it (`up == 1`)
 - **ContainersProxyHttpTest** — HTTP surfaces: registered-path scrapes, 404/503 passthrough, admin servlets,
   self-metrics, service discovery
 - **ContainersConsolidatedTest** — two consolidated agents register the same path; the proxy merges responses

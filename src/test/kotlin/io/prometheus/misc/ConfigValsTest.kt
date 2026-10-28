@@ -193,7 +193,7 @@ class ConfigValsTest : StringSpec() {
       configVals.proxy.service.discovery.apply {
         enabled.shouldBeFalse()
         path shouldBe "discovery"
-        targetPrefix shouldBe "http://localhost:$PROXY_HTTP_PORT/"
+        targetPrefix shouldBe "localhost:$PROXY_HTTP_PORT"
       }
     }
 

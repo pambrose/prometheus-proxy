@@ -70,7 +70,7 @@ services:
       - ADMIN_ENABLED=true
       - METRICS_ENABLED=true
       - SD_ENABLED=true
-      - SD_TARGET_PREFIX=http://proxy:8080/
+      - SD_TARGET_PREFIX=proxy:8080
     restart: unless-stopped
 
   agent:

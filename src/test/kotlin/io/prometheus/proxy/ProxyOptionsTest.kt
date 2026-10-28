@@ -400,6 +400,16 @@ class ProxyOptionsTest : StringSpec() {
       exception.message shouldContain "sdTargetPrefix is empty"
     }
 
+    // Prometheus takes a service discovery target as __address__, which can't contain "/", so the URL the docs gave
+    // (http://localhost:8080/) made it drop every target. The value is parsed at startup: host:port, or an http(s) URL
+    // whose host:port becomes the target. Anything else is refused there, not by Prometheus at every refresh.
+    "a sdTargetPrefix that is neither host:port nor an http(s) URL should be rejected when service discovery is on" {
+      listOf("ftp://proxy:8080", "http://", "proxy/metrics", "http://proxy:8080/?x=1").forEach { prefix ->
+        shouldThrow<IllegalArgumentException> { ProxyOptions(listOf("--sd_enabled", "--sd_target_prefix", prefix)) }
+          .message shouldContain "sdTargetPrefix"
+      }
+    }
+
     "an empty sdPath should be accepted while service discovery stays disabled" {
       // The guard is gated on sdEnabled, so a blank path is harmless until the endpoint is turned on.
       val options = proxyOptionsFromConfig("""proxy.service.discovery.path = "" """)

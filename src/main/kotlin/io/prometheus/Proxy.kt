@@ -37,6 +37,7 @@ import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import io.prometheus.common.Messages.BLANK_AGENT_ID_MSG
 import io.prometheus.common.Utils.getVersionDesc
 import io.prometheus.common.Utils.toJsonElement
+import io.prometheus.common.Utils.isValidLabelName
 import io.prometheus.proxy.AgentAuthManager
 import io.prometheus.proxy.AgentContext
 import io.prometheus.proxy.AgentContextCleanupService
@@ -47,6 +48,7 @@ import io.prometheus.proxy.ProxyFailure
 import io.prometheus.proxy.ProxyGrpcService
 import io.prometheus.proxy.ProxyHttpService
 import io.prometheus.proxy.ProxyMetrics
+import io.prometheus.proxy.SdTarget
 import io.prometheus.proxy.ProxyOptions
 import io.prometheus.proxy.ProxyPathManager
 import io.prometheus.proxy.ScrapeRecord
@@ -546,16 +548,19 @@ class Proxy(
    * @return JsonArray containing service discovery information for all registered paths
    * @see <a href="https://prometheus.io/docs/prometheus/latest/http_sd/">Prometheus HTTP Service Discovery</a>
    */
-  internal fun buildServiceDiscoveryJson(): JsonArray =
-    buildJsonArray {
+  internal fun buildServiceDiscoveryJson(): JsonArray {
+    // Null only when service discovery is off and the value doesn't parse; parse() then names the problem.
+    val target = options.sdTarget ?: SdTarget.parse(options.sdTargetPrefix)
+    return buildJsonArray {
       pathManager.allPathContextInfos().forEach { (path, agentContextInfo) ->
         addJsonObject {
           putJsonArray("targets") {
-            add(JsonPrimitive(options.sdTargetPrefix))
+            add(JsonPrimitive(target.address))
           }
           putJsonObject("labels") {
             val pathWithSlash = if (path.startsWith("/")) path else "/$path"
-            put("__metrics_path__", JsonPrimitive(pathWithSlash))
+            put("__metrics_path__", JsonPrimitive(target.pathPrefix + pathWithSlash))
+            target.scheme?.also { put("__scheme__", JsonPrimitive(it)) }
 
             val agentContexts = agentContextInfo.agentContexts
             put("agentName", JsonPrimitive(agentContexts.joinToString { it.agentName }))
@@ -567,10 +572,21 @@ class Proxy(
               // Apply agent-supplied labels, except the reserved keys (see isReservedSdLabelKey). ProxyPathManager
               // warned about them once when the path registered; this runs on every service-discovery poll.
               json.jsonObject.forEach { (k, v) ->
-                if (isReservedSdLabelKey(k, reserveJobAndInstanceLabels))
-                  logger.debug { "Ignoring reserved agent label '$k' for path $pathWithSlash" }
-                else
-                  put(k, v)
+                when {
+                  isReservedSdLabelKey(k, reserveJobAndInstanceLabels) -> {
+                    logger.debug { "Ignoring reserved agent label '$k' for path $pathWithSlash" }
+                  }
+
+                  // One label Prometheus can't decode fails the whole response, so every target behind the proxy
+                  // stopped updating (October #24). ProxyPathManager warned about these once, at registration.
+                  !isValidLabelName(k) || v !is JsonPrimitive || !v.isString -> {
+                    logger.debug { "Ignoring agent label '$k', which Prometheus can't decode, for $pathWithSlash" }
+                  }
+
+                  else -> {
+                    put(k, v)
+                  }
+                }
               }
             }.onFailure { e ->
               logger.warn { "Invalid JSON in labels value: $labels - ${e.simpleClassName}: ${e.message}" }
@@ -579,6 +595,7 @@ class Proxy(
         }
       }
     }
+  }
 
   override fun toString() =
     toStringElements {
