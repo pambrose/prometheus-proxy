@@ -46,6 +46,10 @@ internal class PathDiscoveryService(
   // The last reconcile's failure, as "Type: message", or null after a success; see reconcileOnce.
   private var lastFailure: String? = null
 
+  // The paths the source last read successfully, or null before the first good read. The live path map can't be the
+  // last-known-good set: every connect clears it, so a reconnect while the file was unreadable registered nothing.
+  private var lastGoodPaths: List<DiscoveredPath>? = null
+
   // The entries the last read dropped as unusable, empty for a source that does not report them.
   val skippedEntries: List<DiscoveredPath>
     get() = (source as? SkippedEntryReporter)?.skippedEntries.orEmpty()
@@ -71,13 +75,15 @@ internal class PathDiscoveryService(
 
   // One poll-and-reconcile tick. runCatchingCancellable rethrows CancellationException (so
   // disconnect/shutdown ends the loop) but swallows a read/parse or per-reconcile failure, so a bad
-  // tick logs and skips — leaving the live (last-known-good) set untouched — rather than killing discovery.
+  // tick logs rather than killing discovery. A failed read reconciles the last list read successfully instead: a
+  // no-op while those paths are still registered, and it registers them again after a reconnect cleared them.
   // A missing or malformed file fails every tick, so a failure is logged in full at WARN only when it differs from
   // the last one, and at DEBUG while it repeats; the next success is logged at INFO.
   internal suspend fun reconcileOnce() {
+    val read = runCatchingCancellable { source.read() }.onSuccess { lastGoodPaths = it }
     runCatchingCancellable {
-      val desired = source.read()
-      pathManager.reconcileDiscoveredPaths(desired)
+      (read.getOrNull() ?: lastGoodPaths)?.let { pathManager.reconcileDiscoveredPaths(it) }
+      read.getOrThrow()
     }.onSuccess {
       if (lastFailure != null)
         logger.info { "Path discovery reconcile succeeded again" }
@@ -85,9 +91,9 @@ internal class PathDiscoveryService(
     }.onFailure { e ->
       val failure = "${e::class.simpleName}: ${e.message}"
       if (failure == lastFailure)
-        logger.debug { "Path discovery reconcile failed again; keeping current paths: $failure" }
+        logger.debug { "Path discovery reconcile failed again; keeping the paths last read: $failure" }
       else
-        logger.warn(e) { "Path discovery reconcile failed; keeping current paths" }
+        logger.warn(e) { "Path discovery reconcile failed; keeping the paths last read" }
       lastFailure = failure
     }
   }

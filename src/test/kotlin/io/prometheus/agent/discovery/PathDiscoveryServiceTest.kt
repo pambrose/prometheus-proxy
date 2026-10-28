@@ -42,13 +42,38 @@ import kotlin.time.Duration.Companion.seconds
 
 class PathDiscoveryServiceTest : StringSpec() {
   init {
-    "a read failure skips reconcile so the live set is kept as last-known-good" {
+    "a read failure before any successful read should reconcile nothing, keeping the live set" {
       val pathManager = mockk<AgentPathManager>(relaxed = true)
       val service = PathDiscoveryService(pathManager, { throw IOException("boom") }, 30)
 
       service.reconcileOnce()
 
       coVerify(exactly = 0) { pathManager.reconcileDiscoveredPaths(any()) }
+    }
+
+    // Every connect clears the agent's paths, so the live set can't be the last-known-good one: an agent that
+    // reconnected while the file was unreadable registered no discovered paths at all, and each target returned 404
+    // until the file was fixed. A failed read now reconciles the last list read successfully.
+    "a read failure should reconcile the last paths read, so a reconnect registers them again" {
+      val desired = [DiscoveredPath("a", "a_metrics", "http://a/m", "{}")]
+      val reads = AtomicInt(0)
+      val pathManager = mockk<AgentPathManager>(relaxed = true)
+      val source =
+        PathDiscoverySource {
+          if (reads.incrementAndFetch() == 1) desired else throw IOException("bad edit")
+        }
+      val service = PathDiscoveryService(pathManager, source, 30)
+
+      service.reconcileOnce()
+      service.reconcileOnce()
+
+      coVerify(exactly = 2) { pathManager.reconcileDiscoveredPaths(desired) }
+    }
+
+    // A path of just "/" normalizes to "", which can never register, so discovery drops it like a blank one.
+    "a discovered path of just a slash should not be usable" {
+      DiscoveredPath("root", "/", "http://root.local/metrics", "{}").usable shouldBe false
+      DiscoveredPath("ok", "/ok", "http://ok.local/metrics", "{}").usable shouldBe true
     }
 
     "skippedEntries should come from the source" {

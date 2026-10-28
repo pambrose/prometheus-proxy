@@ -113,6 +113,13 @@ internal class AgentPathManager(
             }
         }
       }
+      .also { configs ->
+        // Keyed by normalized path, like agent.filters below, so a second entry would silently replace the first's URL.
+        val duplicates = configs.groupingBy { it.path.removePrefix("/") }.eachCount().filterValues { it > 1 }.keys
+        require(duplicates.isEmpty()) {
+          "agent.pathConfigs has more than one entry for path ${duplicates.joinToString { "/$it" }}; keep one"
+        }
+      }
       .onEach {
         logger.info { "Proxy path /${it.path} will be assigned to ${sanitizeUrl(it.url)} with labels ${it.labels}" }
       }
@@ -543,8 +550,9 @@ internal class AgentPathManager(
     // Name wrapped in double-quotes for the toPlainText() display, preserving the original format.
     val quotedName: String get() = "\"$name\""
 
-    // Mirrors DiscoveredPath.usable: doRegisterPath requires both, so an entry missing either can never register.
-    val usable: Boolean get() = path.isNotBlank() && url.isNotBlank()
+    // Mirrors DiscoveredPath.usable: doRegisterPath requires both, so an entry missing either can never register. A
+    // path of just "/" normalizes to "", so it is as unusable as a blank one.
+    val usable: Boolean get() = path.removePrefix("/").isNotBlank() && url.isNotBlank()
   }
 
   data class PathContext(
