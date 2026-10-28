@@ -275,7 +275,10 @@ histogram/summary/OpenMetrics suffix (`_bucket`, `_sum`, `_count`, `_created`, `
 metadata lines. One consequence worth knowing: once a family is open, a series-level rule such as
 `metricNameDeny: [ "http_req_duration_seconds_bucket" ]` is a silent no-op, since the `_bucket` lines
 inherit the family's verdict rather than being matched themselves. A sample line with no open family
-(a payload with no `TYPE` lines at all) is judged literally on its own full name.
+(a payload with no `TYPE` lines at all) is judged literally on its own full name. A name outside the
+legacy character set, which Prometheus 3 targets write quoted (`# TYPE "http.requests" counter`, and
+`{"http.requests",method="GET"} 3`), is matched without its quotes or escapes, so
+`metricNameAllow: [ "http\\.requests" ]` matches it.
 
 **An empty `metricNameAllow` allows everything.** `metricNameDeny` is applied *after* allow, so deny
 wins on overlap.
