@@ -25,13 +25,22 @@ HOMEBREW_FORMULAE := prometheus-agent prometheus-proxy
 # `make release` publishes only from a clean, up-to-date checkout of this branch whose GitHub CI has passed.
 RELEASE_BRANCH ?= master
 MAVEN_CENTRAL_URL := https://repo1.maven.org/maven2/com/pambrose/prometheus-proxy
-# The files step 2 of docs/RELEASE.md bumps to the new version; release-check fails if one doesn't mention VERSION.
-# Keep this list in step with that step.
+# The files step 2 of docs/RELEASE.md bumps to the new version; release-check fails if one doesn't mention VERSION, or
+# still has the previous release's version where step 2 bumps it. Keep this list in step with that step.
 RELEASE_VERSION_FILES := README.md llms.txt etc/compose/proxy.yml \
 	charts/prometheus-proxy/Chart.yaml charts/prometheus-agent/Chart.yaml \
 	website/prometheus-proxy/docs/getting-started.md website/prometheus-proxy/docs/index.md \
 	website/prometheus-proxy/docs/docker.md src/test/kotlin/website/DockerExamples.txt \
-	src/test/kotlin/website/EmbeddedAgentExamples.txt src/test/kotlin/website/KubernetesExamples.txt
+	src/test/kotlin/website/EmbeddedAgentExamples.txt src/test/kotlin/website/KubernetesExamples.txt \
+	docs/RELEASE.md .claude/skills/publishing-release/SKILL.md
+# The CI jobs that must have passed for the release commit, as workflow-file/job-name, separated by semicolons since
+# job names can hold spaces. make release itself runs only the tests and the distro build, so these are what cover
+# the coverage floors, TLA+, the alerting rules, the Helm charts, the container suite, and the image and workflow
+# scans. The workflow file tells apart jobs with the same name, such as ci.yml's and docs.yml's build. Renaming one
+# of these jobs, or adding a check a release should wait for, means updating this list.
+RELEASE_REQUIRED_JOBS := ci.yml/build;ci.yml/tla;ci.yml/rules;ci.yml/helm;container-tests.yml/container-tests;\
+	container-tests.yml/helm-smoke;security.yml/image-scan (proxy);security.yml/image-scan (agent);\
+	security.yml/codeql;zizmor.yml/code-scanning
 WEBSITE_DIR := website
 SITE_DIR := $(WEBSITE_DIR)/prometheus-proxy
 
@@ -378,7 +387,12 @@ docker-verify: _require-version  ## Check both published VERSION images carry ev
 	done
 
 # Publishes nothing: it fails unless this checkout is fit to publish VERSION. The local checks run first, then the
-# network ones (GitHub's CI checks for HEAD, Maven Central, Docker Hub).
+# network ones (GitHub's CI checks for HEAD, Maven Central, Docker Hub). A bumped file also fails if it still has the
+# previous release's version (the CHANGELOG section below VERSION's) where step 2 bumps it: an image tag or the Maven
+# coordinate, a Maven <version>, a chart's version or appVersion, or the backticked examples in docker.md,
+# docs/RELEASE.md, and the skill. Historical mentions, such as "Version 4.3.0 (released ...)", don't match. And every
+# CI check passing isn't enough, since with [skip ci] or a disabled workflow a lone third-party check can be the whole
+# list: each RELEASE_REQUIRED_JOBS job must also have run for HEAD and passed.
 release-check: _require-version _check-gpg-env  ## Fail unless this checkout is fit to publish VERSION
 	@case "$(VERSION)" in *SNAPSHOT*|*-rc*|*-beta*|*-alpha*) \
 		echo "ERROR: $(VERSION) is a pre-release; make release publishes final versions" >&2; exit 1;; esac
@@ -395,6 +409,12 @@ release-check: _require-version _check-gpg-env  ## Fail unless this checkout is 
 		|| { echo "ERROR: RELEASE_NOTES.md has no '## $(VERSION)' section starting '_Released YYYY-MM-DD_' (step 3 of docs/RELEASE.md)" >&2; exit 1; }
 	@missing=$$(for f in $(RELEASE_VERSION_FILES); do grep -qF '$(VERSION)' "$$f" || echo "  $$f"; done); \
 	[ -z "$$missing" ] || { printf 'ERROR: not bumped to $(VERSION) (step 2 of docs/RELEASE.md):\n%s\n' "$$missing" >&2; exit 1; }
+	@prev=$$(awk -v h='## [$(VERSION)]' 'f && /^## \[/ { sub(/^## \[/, ""); sub(/\].*/, ""); print; exit } index($$0, h) == 1 { f = 1 }' CHANGELOG.md); \
+	[ -n "$$prev" ] || { echo "ERROR: CHANGELOG.md has no release section below [$(VERSION)]" >&2; exit 1; }; \
+	p=$$(printf '%s' "$$prev" | sed 's/\./\\./g'); \
+	stale=$$(grep -nE "prometheus-(proxy|agent):$$p([^0-9.]|\$$)|<version>$$p</version>|^(version: $$p|appVersion: \"$$p\")\$$|e\.g\., \`$$p\`|\`$$p\` literal" \
+		$(RELEASE_VERSION_FILES) | sed 's/^/  /'); \
+	[ -z "$$stale" ] || { printf 'ERROR: still at the previous version, %s (step 2 of docs/RELEASE.md):\n%s\n' "$$prev" "$$stale" >&2; exit 1; }
 	@tagged=$$(git rev-parse -q --verify "refs/tags/$(VERSION)^{commit}"); \
 	[ -z "$$tagged" ] || [ "$$tagged" = "$$(git rev-parse HEAD)" ] \
 		|| { echo "ERROR: tag $(VERSION) points at another commit" >&2; exit 1; }
@@ -406,6 +426,18 @@ release-check: _require-version _check-gpg-env  ## Fail unless this checkout is 
 	[ -n "$$runs" ] || { echo "ERROR: no CI checks have run for HEAD" >&2; exit 1; }; \
 	failed=$$(echo "$$runs" | grep -Ev '^completed (success|skipped|neutral) ' | sed 's/^/  /'); \
 	[ -z "$$failed" ] || { printf 'ERROR: CI has not passed for HEAD:\n%s\n' "$$failed" >&2; exit 1; }
+	@wfruns=$$(gh api "repos/{owner}/{repo}/actions/runs?head_sha=$$(git rev-parse HEAD)&per_page=100" \
+		--jq '.workflow_runs[] | "\(.id) \(.path | sub(".*/"; ""))"') \
+		|| { echo "ERROR: could not read HEAD's workflow runs from GitHub; is gh logged in?" >&2; exit 1; }; \
+	jobs=$$(echo "$$wfruns" | while read -r id wf; do \
+			[ -n "$$id" ] || continue; \
+			gh api "repos/{owner}/{repo}/actions/runs/$$id/jobs?per_page=100" \
+				--jq ".jobs[] | \"$$wf/\(.name) \(.conclusion)\"" || exit 1; \
+		done) \
+		|| { echo "ERROR: could not read the jobs of HEAD's workflow runs from GitHub" >&2; exit 1; }; \
+	missing=$$(echo '$(RELEASE_REQUIRED_JOBS)' | tr ';' '\n' | sed 's/^ *//' | while read -r job; do \
+		echo "$$jobs" | grep -qFx "$$job success" || echo "  $$job"; done); \
+	[ -z "$$missing" ] || { printf 'ERROR: required CI jobs have not passed for HEAD:\n%s\n' "$$missing" >&2; exit 1; }
 	@! curl -fsI "$(MAVEN_CENTRAL_URL)/$(VERSION)/prometheus-proxy-$(VERSION).pom" >/dev/null 2>&1 \
 		|| { echo "ERROR: com.pambrose:prometheus-proxy:$(VERSION) is already on Maven Central; bump the version" >&2; exit 1; }
 	@for c in proxy agent; do \

@@ -109,8 +109,9 @@ per-section `assign*` function it belongs to.
 `BuildConfig.APP_RELEASE_DATE` and `BuildConfig.BUILD_TIME` are populated each build via `ValueSource`, so they reflect the actual build time and are not overridable. As a side effect, the configuration cache invalidates and `BuildConfig` regenerates on every build; release artifacts are therefore not byte-for-byte reproducible.
 
 Releases follow `docs/RELEASE.md`: after the version bump and changelogs are merged, `make release` publishes to Maven
-Central and Docker Hub, gated by `make release-check` (clean, up-to-date `master` whose CI passed; a dated section for
-the version in both changelogs, and the version in every bumped file; not already published). `RELEASE_VERSION_FILES` in the `Makefile` mirrors
+Central and Docker Hub, gated by `make release-check` (clean, up-to-date `master` on which every check, and each CI
+job `RELEASE_REQUIRED_JOBS` lists, passed; a dated section for the version in both changelogs; the version, and not
+the previous one, in every bumped file; not already published). `RELEASE_VERSION_FILES` in the `Makefile` mirrors
 step 2's list of hard-coded version literals; keep the two in step.
 
 ## Testing

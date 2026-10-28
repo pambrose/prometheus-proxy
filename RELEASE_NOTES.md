@@ -23,6 +23,15 @@ among them gRPC, which now runs at one version across all its modules.
 
 ### Bug Fixes
 
+- **The agent's response-size limit now limits memory.** A target that kept sending, such as a misrouted URL,
+  was read into memory until the scrape timeout, which could exhaust the agent's heap and stop it, along with the
+  application hosting an embedded agent. The agent now stops reading one byte past `maxContentLengthMBytes`, and
+  rejects a response that announces a larger size without reading it.
+- **Exporters see the scrape timeout.** The agent sends the target `X-Prometheus-Scrape-Timeout-Seconds`, as
+  Prometheus does, so exporters such as blackbox_exporter fit their probes within it instead of being cut off.
+- **Credentials in a target URL go with the first request.** A target that answers a request without them with
+  403, or with a redirect to a login page, now gets them, and other protected targets answer in one round trip
+  instead of two. An `Authorization` header from Prometheus's scrape config still takes precedence.
 - **The agent's warnings about an oversized scrape say which target it was.** They now include the target's URL,
   with credentials and query values masked, and the scrape's ID, so an agent serving several paths shows which one
   sent too much data. The proxy's warnings about a scrape it no longer tracks write that ID as `scrapeId:`, as its
@@ -45,7 +54,9 @@ among them gRPC, which now runs at one version across all its modules.
   that listed every up-to-date dependency first, and no longer offers a grpc-kotlin commit hash as an update.
   `make versions-all` prints the full report.
 - `make release-check` fails until both changelogs give the release date, so a release can't go out still
-  marked as unreleased.
+  marked as unreleased. It also requires each CI job a release depends on to have run and passed for the release
+  commit, and fails when a file the version bump updates still has the previous version, such as a chart's
+  `appVersion`.
 - The instructions for AI coding agents move from `CLAUDE.md` to `AGENTS.md`, which most agents read.
 - `make ci` runs the CI workflow's checks locally: the TLA+ model checks, the alerting-rule and Helm chart checks,
   and the build with its tests and coverage floors. It runs every check even when one fails and lists the failures

@@ -178,6 +178,10 @@ inside HTTP client error messages, which embed the request URL. The proxy redact
 older agents as well. A config URL that fails to load (`--config http://user:pass@host/agent.conf`) is
 redacted in the error log and in the `ConfigLoadException` an embedding application catches.
 
+The agent sends a URL's credentials as HTTP Basic auth with the first request to the target, and follows a
+redirect only within the target's own origin, so they reach only that host. An `Authorization` header that
+Prometheus sends with the scrape takes precedence; the URL's credentials then answer only a 401 challenge.
+
 ## Scrape Port Responses
 
 The proxy passes a target's `Content-Type` through only for the Prometheus exposition formats

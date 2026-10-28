@@ -35,6 +35,9 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.types.shouldBeInstanceOf
 import io.ktor.http.ContentType
+import io.ktor.http.content.OutgoingContent
+import io.ktor.utils.io.ByteWriteChannel
+import io.ktor.utils.io.writeFully
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.engine.embeddedServer
 import kotlin.concurrent.atomics.plusAssign
@@ -42,7 +45,9 @@ import io.ktor.http.HttpHeaders
 import io.ktor.server.response.header
 import io.ktor.server.response.respondRedirect
 import io.ktor.server.request.header
+import io.ktor.server.response.respond
 import io.ktor.server.response.respondBytes
+import io.ktor.server.response.respondBytesWriter
 import io.ktor.server.response.respondText
 import io.ktor.server.response.respondTextWriter
 import io.ktor.server.routing.get
@@ -62,7 +67,9 @@ import io.prometheus.grpc.scrapeRequest
 import io.prometheus.common.startAndAwaitReady
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.proxy.ProxyUtils.unzip
+import io.prometheus.common.ScrapeResults
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import java.util.zip.GZIPInputStream
 import javax.net.ssl.X509TrustManager
@@ -853,6 +860,124 @@ class AgentHttpServiceTest : StringSpec() {
       }
     }
 
+    // Prometheus's X-Prometheus-Scrape-Timeout-Seconds tells an exporter how long it has. blackbox_exporter and
+    // snmp_exporter size their probes by it, and without it fall back to their own budget, so the agent's timeout cut a
+    // probe of a dead host short and the scrape failed instead of reporting probe_success 0. The target now gets the
+    // timeout the agent itself enforces: the shorter of its own and the one the proxy forwarded, in seconds.
+    "fetchScrapeUrl should tell the target the scrape timeout the agent enforces" {
+      val timeoutsSeen = mutableListOf<String>()
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
+        routing {
+          get("/metrics") {
+            timeoutsSeen += call.request.header("X-Prometheus-Scrape-Timeout-Seconds").orEmpty()
+            call.respondText("ok")
+          }
+        }
+      }
+
+      try {
+        val port = server.startAndAwaitReady()
+        val mockAgent = createMockAgentWithPaths()
+        val service = AgentHttpService(mockAgent)
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
+
+        // The agent's own timeout is 10s (createMockAgentWithPaths); 0 means the proxy forwarded none.
+        for (forwardedMillis in listOf(2_500L, 0L, 30_000L)) {
+          val results = service.fetchScrapeUrl(
+            scrapeRequest {
+              agentId = "agent-1"
+              scrapeId = 64L
+              path = "metrics"
+              scrapeTimeoutMillis = forwardedMillis
+            },
+          )
+          results.srValidResponse.shouldBeTrue()
+        }
+
+        timeoutsSeen shouldBe listOf("2.5", "10", "10")
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+    // Ktor's Basic auth sent the URL's credentials only in answer to a 401 challenge. A target that answers an
+    // unauthenticated request with 403, or with a redirect to a login page, never got them, and every other protected
+    // scrape took two round trips. The credentials now go with the first request.
+    "fetchScrapeUrl should send the target URL's credentials with the first request" {
+      val requestsSeen = AtomicInt(0)
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
+        routing {
+          get("/metrics") {
+            requestsSeen += 1
+            // Base64 of "scraper:s3cret"
+            if (call.request.headers[HttpHeaders.Authorization] == "Basic c2NyYXBlcjpzM2NyZXQ=")
+              call.respondText("protected_metric 1")
+            else
+              call.respondText("", status = HttpStatusCode.Forbidden)
+          }
+        }
+      }
+
+      try {
+        val port = server.startAndAwaitReady()
+        val mockAgent = createMockAgentWithPaths()
+        val service = AgentHttpService(mockAgent)
+        mockAgent.pathManager.registerPath("metrics", "http://scraper:s3cret@localhost:$port/metrics")
+
+        val results = service.fetchScrapeUrl(
+          scrapeRequest {
+            agentId = "agent-1"
+            scrapeId = 66L
+            path = "metrics"
+          },
+        )
+
+        results.srStatusCode shouldBe HttpStatusCode.OK.value
+        results.srContentAsText shouldContain "protected_metric 1"
+        requestsSeen.load() shouldBe 1
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+    // Prometheus's own Authorization header, forwarded by the proxy, is sent as it is. The URL's credentials are
+    // sent up front only when there is no such header, so they still serve only as the answer to a 401.
+    "fetchScrapeUrl should send a forwarded Authorization header instead of the URL's credentials" {
+      val authorizationsSeen = mutableListOf<String>()
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
+        routing {
+          get("/metrics") {
+            authorizationsSeen += call.request.headers[HttpHeaders.Authorization].orEmpty()
+            call.respondText("ok")
+          }
+        }
+      }
+
+      try {
+        val port = server.startAndAwaitReady()
+        val mockAgent = createMockAgentWithPaths()
+        val service = AgentHttpService(mockAgent)
+        mockAgent.pathManager.registerPath("metrics", "http://scraper:s3cret@localhost:$port/metrics")
+
+        val results = service.fetchScrapeUrl(
+          scrapeRequest {
+            agentId = "agent-1"
+            scrapeId = 65L
+            path = "metrics"
+            authHeader = "Bearer prometheus-token"
+          },
+        )
+
+        results.srValidResponse.shouldBeTrue()
+        authorizationsSeen shouldBe listOf("Bearer prometheus-token")
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
     // ==================== Timeout Tests ====================
 
     "fetchScrapeUrl should handle timeout gracefully" {
@@ -1548,6 +1673,101 @@ class AgentHttpServiceTest : StringSpec() {
 
     // The 413 warnings must say which target and scrape they are about: an agent serving many paths otherwise
     // logs a size failure that can't be traced to one. The URL carries a query secret to show it is sanitized.
+    // maxContentLengthMBytes is a memory bound, so it has to limit what is read, not just what is kept: Ktor's
+    // non-streaming request read the whole body into the heap before either size check ran. A target that never stops
+    // sending -- a misrouted URL, a log-tail endpoint -- was buffered until the scrape timeout, and an OutOfMemoryError
+    // takes the whole agent down. The read now stops one byte past the limit.
+    "fetchScrapeUrl should return 413 as soon as an endless body passes the size limit" {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
+        routing {
+          get("/metrics") {
+            call.respondBytesWriter(ContentType.Text.Plain) {
+              val chunk = ByteArray(64 * 1024) { 'a'.code.toByte() }
+              while (true) {
+                writeFully(chunk)
+                flush()
+                // Throttled so the buffered read the fix replaces stays well within the test JVM's heap
+                delay(5.milliseconds)
+              }
+            }
+          }
+        }
+      }
+
+      try {
+        val port = server.startAndAwaitReady()
+        val mockAgent = createMockAgentWithPaths()
+        val options = mockAgent.options
+        every { options.maxContentLengthMBytes } returns 1
+        every { options.scrapeTimeoutSecs } returns 5
+        val service = AgentHttpService(mockAgent)
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
+
+        var results: ScrapeResults? = null
+        val request = scrapeRequest {
+          agentId = "agent-1"
+          scrapeId = 203L
+          path = "metrics"
+        }
+        val elapsed = measureTime { results = service.fetchScrapeUrl(request) }
+
+        results.shouldNotBeNull().srStatusCode shouldBe HttpStatusCode.PayloadTooLarge.value
+        // About 17 chunks reach the limit; waiting for the 5s scrape timeout means the body was buffered whole.
+        elapsed.inWholeMilliseconds shouldBeLessThan 3_000L
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+    // A Content-Length over the limit is rejected from the headers alone; the body is never read.
+    "fetchScrapeUrl should return 413 for an oversized Content-Length without waiting for the body" {
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
+        routing {
+          get("/metrics") {
+            call.respond(
+              object : OutgoingContent.WriteChannelContent() {
+                override val contentLength = 64L * 1024 * 1024
+                override val contentType = ContentType.Text.Plain
+
+                // Sends the first kilobyte of the 64 MB it announced, then nothing more.
+                override suspend fun writeTo(channel: ByteWriteChannel) {
+                  channel.writeFully(ByteArray(1024) { 'a'.code.toByte() })
+                  channel.flush()
+                  awaitCancellation()
+                }
+              },
+            )
+          }
+        }
+      }
+
+      try {
+        val port = server.startAndAwaitReady()
+        val mockAgent = createMockAgentWithPaths()
+        val options = mockAgent.options
+        every { options.maxContentLengthMBytes } returns 1
+        every { options.scrapeTimeoutSecs } returns 5
+        val service = AgentHttpService(mockAgent)
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
+
+        var results: ScrapeResults? = null
+        val request = scrapeRequest {
+          agentId = "agent-1"
+          scrapeId = 204L
+          path = "metrics"
+        }
+        val elapsed = measureTime { results = service.fetchScrapeUrl(request) }
+
+        results.shouldNotBeNull().srStatusCode shouldBe HttpStatusCode.PayloadTooLarge.value
+        // The body never completes, so reading it first would only end at the 5s scrape timeout.
+        elapsed.inWholeMilliseconds shouldBeLessThan 3_000L
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
     "fetchScrapeUrl Content-Length 413 warning names the sanitized URL and scrapeId" {
       val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
