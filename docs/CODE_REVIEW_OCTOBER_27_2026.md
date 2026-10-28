@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — October 2026 Findings
 
-**Status:** 47 issues — 4 fixed, 43 open (16 medium, 31 low, no high).
+**Status:** 47 issues — 6 fixed, 41 open (16 medium, 31 low, no high).
 
 **Date:** 2026-10-27
 
@@ -101,8 +101,8 @@ Six earlier fixes turn out to be incomplete:
 | 26 | A connection that skips `connectAgent` works as an agent without being announced        | Security | low      | ⬜      |
 | 27 | Helm proxy chart takes `proxy.auth` tokens only via a ConfigMap; example schema wrong   | Security | low      | ⬜      |
 | 28 | Security docs don't say the scrape port is unauthenticated, or what it forwards         | Security | low      | ⬜      |
-| 29 | `release-check` accepts any all-green check set without requiring the CI jobs           | CI/build | medium   | ⬜      |
-| 30 | Version-bump check passes partial bumps and skips two of step 2's files                 | CI/build | medium   | ⬜      |
+| 29 | `release-check` accepts any all-green check set without requiring the CI jobs           | CI/build | medium   | ✅      |
+| 30 | Version-bump check passes partial bumps and skips two of step 2's files                 | CI/build | medium   | ✅      |
 | 31 | The docs site is never built on a pull request                                          | CI/build | medium   | ⬜      |
 | 32 | This branch would pass `release-check` with no release date in either changelog         | CI/build | low      | ✅      |
 | 33 | The `--continue` comments are wrong: a failed test means no coverage report             | CI/build | low      | ✅      |
@@ -135,27 +135,29 @@ Each step is sized to be one PR, and the issues in a step are meant to be fixed 
 
 The **Touches** column shows which steps edit the same files and so need to land one after another.
 
-| Step | Issues          | PR theme                                                                    | Touches                                                                                           | Why here                                                                                                                                                                         |
-|------|-----------------|-----------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 1    | #43, #32, #33   | Finish the 4.4.0 branch: log the bumps, date the release, fix the comments  | `CHANGELOG.md`, `RELEASE_NOTES.md`, catalog and Dependabot comments, `Makefile`, `ci.yml`         | All three are in this unmerged branch's own changes. Commit on `4.4.0-release` before it merges.                                                                                 |
-| 2    | #25             | Publish the Netty pin in the POM                                            | `build.gradle.kts`                                                                                | The release's headline change is this CVE fix, and today it reaches only the images. Land it on this branch first.                                                               |
-| 3    | #29, #30        | `release-check` requires the named CI checks and complete bumps             | `Makefile`, `docs/RELEASE.md`, release skill                                                      | Protects every later release. Makefile-only, so it can run in parallel with any code step.                                                                                       |
-| 4    | #8, #14, #15    | Stream the agent's fetch with a real size bound; forward the timeout; preemptive Basic | `agent/AgentHttpService.kt`                                                            | One bad target can take the agent's heap, and every path with it. The other two change the same request setup.                                                                   |
-| 5    | #21, #3         | Check and complete scrape results on one wrapper; sweep transfers on cancel | `ProxyServiceImpl.kt`, `ScrapeRequestManager.kt`, `AgentContextManager.kt`, `ChunkedContext.kt`, `specs/tla/ProxyRegistry.tla` | Both concern the ownership and lifetime of in-flight results. The change touches `ScrapeRequestManager`, so update the TLA+ action and add a Lincheck spec in the same PR.        |
-| 6    | #22, #23, #26   | Bound and authorize agent input before using it                             | `ProxyServiceImpl.kt` (`registerAgent`/`registerPath`), `AgentAuthManager.kt`, `ProxyOptions.kt`, `config.conf` | The three tenant-against-tenant availability issues. The new `proxy.internal` limits need config, validation, and docs. Do it after step 5, which edits the same file.            |
-| 7    | #1, #24, #6     | Service discovery that Prometheus accepts                                   | `Proxy.kt` (`buildServiceDiscoveryJson`), `ProxyOptions.kt`, `ProxyPathManager.addPath`, SD docs, a new container spec | SD as documented yields no targets today. One container spec using `http_sd_configs` guards all three. Do it after step 6, since both edit `addPath`'s validation.               |
-| 8    | #2              | Readiness that doesn't flap under load                                      | `config/config.conf`, `ProxyOptions.kt`, `Proxy.kt` health checks, `charts/prometheus-proxy`, k8s docs | A default and a chart change, so it needs a "Before you upgrade" note.                                                                                                       |
-| 9    | #9, #16, #5, #41 | Safe to embed: register metrics once, leave the root logger and shutdown hooks alone, fix the examples | `AgentMetrics.kt`, `ProxyMetrics.kt`, `Agent.kt`, `BaseOptions.kt`, `Utils.kt`, `ProxyGrpcService.kt`, README, website, KDoc | All four are about running inside another JVM, so one embedded-host spec (restart, two agents, log level) covers them. Do it after step 4 and before step 10, which shares `AgentMetrics.kt`. |
-| 10   | #11, #13        | Agent metrics that count every scrape                                       | `AgentHttpService.kt`, `AgentMetrics.kt`, metrics docs, Grafana JSON                              | Do it after steps 4 and 9, which share these files. The dashboards and docs change with the counter.                                                                             |
-| 11   | #10, #12, #18   | Agent config and discovery robustness                                       | `PathDiscoveryService.kt`, `AgentPathManager.kt`, `PathDiscoverySource.kt`, `AgentOptions.kt`, trust-manager init | Startup validation, plus a last-known-good list that outlives the connection. Independent of the proxy steps.                                                                    |
-| 12   | #4, #17         | Quiet logs for unauthenticated connections and routine outages              | `AgentContextManager.kt`, `AgentContextCleanupService.kt`, `AgentGrpcService.kt`, `Utils.kt`      | Changes only log levels and one counter, each covered by a `ListAppender` test. Do it after step 5, which shares `AgentContextManager.kt`.                                        |
-| 13   | #19             | `MetricFilter` handles quoted UTF-8 names                                   | `agent/filter/MetricFilter.kt`                                                                    | Self-contained, so it can go any time.                                                                                                                                           |
-| 14   | #31, #36, #34   | Docs site: build on PRs, cool down hand upgrades, deploy after publishing   | `docs.yml`, `ci.yml`, `Makefile`                                                                  | Keeps a broken site build off `master`, and keeps the site from advertising a version that isn't published yet. Workflow-only, so it can run in parallel with code steps.        |
-| 15   | #27, #39, #40   | Helm and image packaging                                                    | `charts/*`, `etc/docker/*.Dockerfile`, `build.gradle.kts` shadow config                           | A Secret-backed auth config, an explicit UID, and NOTICE merging. Needs a `helm-smoke` run and the container tests.                                                              |
-| 16   | #42, #44, #28   | Documentation drift                                                         | website pages, `llms.txt`, `docs/TESTING.md`, `SECURITY.md`                                       | No behavior change. Each item can ride along with any earlier PR that touches the same page.                                                                                     |
-| 17   | #45, #46, #47   | Tests that can fail, and that don't race for ports                          | the cited specs, `TestPorts.kt`                                                                   | Removes false confidence. #45's `TESTING.md` line goes with step 16 if that lands first.                                                                                         |
-| 18   | #35, #37, #38   | Build tidy-ups                                                              | `build.gradle.kts`, `Makefile`, workflows                                                         | Hygiene. After #35, compare the `testRuntimeClasspath` against today's.                                                                                                          |
-| 19   | #7, #20         | Remove dead code                                                            | proxy and agent sources and their tests                                                           | Last, so the deletions don't collide with the behavior fixes, and the tests move onto the entry points those fixes settle.                                                       |
+✅ = done · ⬜ = open
+
+| Step | Status | Issues          | PR theme                                                                    | Touches                                                                                           | Why here                                                                                                                                                                         |
+|------|--------|-----------------|-----------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 1    | ✅      | #43, #32, #33   | Finish the 4.4.0 branch: log the bumps, require dates, fix the comments     | `CHANGELOG.md`, `RELEASE_NOTES.md`, catalog and Dependabot comments, `Makefile`, `ci.yml`         | All three are in this unmerged branch's own changes. Commit on `4.4.0-release` before it merges.                                                                                 |
+| 2    | ✅      | #25             | Publish the Netty pin in the POM                                            | `build.gradle.kts`                                                                                | The release's headline change is this CVE fix, and today it reaches only the images. Land it on this branch first.                                                               |
+| 3    | ✅      | #29, #30        | `release-check` requires the named CI checks and complete bumps             | `Makefile`, `docs/RELEASE.md`, release skill                                                      | Protects every later release. Makefile-only, so it can run in parallel with any code step.                                                                                       |
+| 4    | ⬜      | #8, #14, #15    | Stream the agent's fetch with a real size bound; forward the timeout; preemptive Basic | `agent/AgentHttpService.kt`                                                            | One bad target can take the agent's heap, and every path with it. The other two change the same request setup.                                                                   |
+| 5    | ⬜      | #21, #3         | Check and complete scrape results on one wrapper; sweep transfers on cancel | `ProxyServiceImpl.kt`, `ScrapeRequestManager.kt`, `AgentContextManager.kt`, `ChunkedContext.kt`, `specs/tla/ProxyRegistry.tla` | Both concern the ownership and lifetime of in-flight results. The change touches `ScrapeRequestManager`, so update the TLA+ action and add a Lincheck spec in the same PR.        |
+| 6    | ⬜      | #22, #23, #26   | Bound and authorize agent input before using it                             | `ProxyServiceImpl.kt` (`registerAgent`/`registerPath`), `AgentAuthManager.kt`, `ProxyOptions.kt`, `config.conf` | The three tenant-against-tenant availability issues. The new `proxy.internal` limits need config, validation, and docs. Do it after step 5, which edits the same file.            |
+| 7    | ⬜      | #1, #24, #6     | Service discovery that Prometheus accepts                                   | `Proxy.kt` (`buildServiceDiscoveryJson`), `ProxyOptions.kt`, `ProxyPathManager.addPath`, SD docs, a new container spec | SD as documented yields no targets today. One container spec using `http_sd_configs` guards all three. Do it after step 6, since both edit `addPath`'s validation.               |
+| 8    | ⬜      | #2              | Readiness that doesn't flap under load                                      | `config/config.conf`, `ProxyOptions.kt`, `Proxy.kt` health checks, `charts/prometheus-proxy`, k8s docs | A default and a chart change, so it needs a "Before you upgrade" note.                                                                                                       |
+| 9    | ⬜      | #9, #16, #5, #41 | Safe to embed: register metrics once, leave the root logger and shutdown hooks alone, fix the examples | `AgentMetrics.kt`, `ProxyMetrics.kt`, `Agent.kt`, `BaseOptions.kt`, `Utils.kt`, `ProxyGrpcService.kt`, README, website, KDoc | All four are about running inside another JVM, so one embedded-host spec (restart, two agents, log level) covers them. Do it after step 4 and before step 10, which shares `AgentMetrics.kt`. |
+| 10   | ⬜      | #11, #13        | Agent metrics that count every scrape                                       | `AgentHttpService.kt`, `AgentMetrics.kt`, metrics docs, Grafana JSON                              | Do it after steps 4 and 9, which share these files. The dashboards and docs change with the counter.                                                                             |
+| 11   | ⬜      | #10, #12, #18   | Agent config and discovery robustness                                       | `PathDiscoveryService.kt`, `AgentPathManager.kt`, `PathDiscoverySource.kt`, `AgentOptions.kt`, trust-manager init | Startup validation, plus a last-known-good list that outlives the connection. Independent of the proxy steps.                                                                    |
+| 12   | ⬜      | #4, #17         | Quiet logs for unauthenticated connections and routine outages              | `AgentContextManager.kt`, `AgentContextCleanupService.kt`, `AgentGrpcService.kt`, `Utils.kt`      | Changes only log levels and one counter, each covered by a `ListAppender` test. Do it after step 5, which shares `AgentContextManager.kt`.                                        |
+| 13   | ⬜      | #19             | `MetricFilter` handles quoted UTF-8 names                                   | `agent/filter/MetricFilter.kt`                                                                    | Self-contained, so it can go any time.                                                                                                                                           |
+| 14   | ⬜      | #31, #36, #34   | Docs site: build on PRs, cool down hand upgrades, deploy after publishing   | `docs.yml`, `ci.yml`, `Makefile`                                                                  | Keeps a broken site build off `master`, and keeps the site from advertising a version that isn't published yet. Workflow-only, so it can run in parallel with code steps.        |
+| 15   | ⬜      | #27, #39, #40   | Helm and image packaging                                                    | `charts/*`, `etc/docker/*.Dockerfile`, `build.gradle.kts` shadow config                           | A Secret-backed auth config, an explicit UID, and NOTICE merging. Needs a `helm-smoke` run and the container tests.                                                              |
+| 16   | ⬜      | #42, #44, #28   | Documentation drift                                                         | website pages, `llms.txt`, `docs/TESTING.md`, `SECURITY.md`                                       | No behavior change. Each item can ride along with any earlier PR that touches the same page.                                                                                     |
+| 17   | ⬜      | #45, #46, #47   | Tests that can fail, and that don't race for ports                          | the cited specs, `TestPorts.kt`                                                                   | Removes false confidence. #45's `TESTING.md` line goes with step 16 if that lands first.                                                                                         |
+| 18   | ⬜      | #35, #37, #38   | Build tidy-ups                                                              | `build.gradle.kts`, `Makefile`, workflows                                                         | Hygiene. After #35, compare the `testRuntimeClasspath` against today's.                                                                                                          |
+| 19   | ⬜      | #7, #20         | Remove dead code                                                            | proxy and agent sources and their tests                                                           | Last, so the deletions don't collide with the behavior fixes, and the tests move onto the entry points those fixes settle.                                                       |
 
 **Parallel tracks:** these sets of steps touch disjoint files, so they can be worked on at the same time.
 
@@ -999,7 +1001,7 @@ Optionally, add a per-path query-parameter allowlist on the agent.
 
 ## 🏗️ CI, build, and release
 
-### 29. [ ] `release-check` accepts any all-green set of check runs, without requiring the CI jobs
+### 29. [x] `release-check` accepts any all-green set of check runs, without requiring the CI jobs
 
 **Severity:** medium · **Confidence:** confirmed (the mechanism)
 
@@ -1018,7 +1020,14 @@ requires these checks to be present: `build`, `tla`, `rules`, `helm`, `container
 **Fix:** add a `RELEASE_REQUIRED_CHECKS` list, and fail when any of those checks is missing as well as when one
 has failed.
 
-### 30. [ ] The version-bump check passes partial bumps, and skips two of the files step 2 lists
+**Resolution:** a `RELEASE_REQUIRED_JOBS` list in the `Makefile` names the jobs as workflow-file/job-name, since
+`ci.yml` and `docs.yml` both have a `build` job: CI's `build`, `tla`, `rules`, and `helm`, the container tests and
+`helm-smoke`, both image scans, `codeql`, and zizmor's `code-scanning`. After the existing all-checks gate,
+`release-check` reads HEAD's workflow runs and their jobs from the Actions API and fails, listing them, unless each
+required job ran and succeeded. Against `master`'s HEAD (`c4a2303`) the check passes; against `778f2df`, which CI
+never ran on, it lists all ten jobs; with a bad token it says it couldn't read the runs.
+
+### 30. [x] The version-bump check passes partial bumps, and skips two of the files step 2 lists
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -1047,6 +1056,14 @@ has failed.
   historical mentions like "since 4.3.0" alone.
 - Add the two missing files, or say why they are left out.
 - Point the gradle comment at step 2.
+
+**Resolution:** `release-check` takes the previous release from the `CHANGELOG.md` section below `$(VERSION)`'s,
+and fails, listing each line, when a bumped file still has that version in a bumpable context:
+`prometheus-(proxy|agent):PREV`, `<version>PREV</version>`, `version: PREV` and `appVersion: "PREV"` lines,
+``e.g., `PREV` ``, and `` `PREV` literal``. `RELEASE_VERSION_FILES` now includes `docs/RELEASE.md` and the release
+skill. On a scratch copy, the unbumped files gave exactly the 49 lines the release bump changes and no historical
+mention, a full bump passed, and a missed `appVersion` and README tag were both reported. The gradle comment points
+at step 2.
 
 ### 31. [ ] The docs site is never built on a pull request
 

@@ -9,9 +9,13 @@ Steps 1-3 are edits to merge to `master`. After that, `make release` runs steps 
 `master` checkout. It first runs `make release-check`, which publishes nothing and fails unless:
 
 - the working tree is clean, on `master`, and matches `origin/master`;
-- every GitHub CI check for that commit has passed;
+- every GitHub check for that commit has passed, and each CI job `RELEASE_REQUIRED_JOBS` in the `Makefile` lists
+  ran for it and passed;
 - both changelogs have a dated section for the version (`## [VERSION] - YYYY-MM-DD` in `CHANGELOG.md`, and
-  `_Released YYYY-MM-DD_` under `## VERSION` in `RELEASE_NOTES.md`), and every file step 2 lists mentions it;
+  `_Released YYYY-MM-DD_` under `## VERSION` in `RELEASE_NOTES.md`);
+- every file step 2 lists mentions the version, and none still has the previous release's version where step 2
+  bumps it (an image tag, the Maven coordinate or `<version>`, a chart's `version` or `appVersion`, or the
+  backticked examples);
 - the version isn't a pre-release, its tag (if one exists) points at this commit, and it isn't already on Maven
   Central or Docker Hub;
 - the GPG setup `publish-maven-central` needs is in place, and Docker is running.
