@@ -47,13 +47,14 @@ The endpoint returns a JSON array in the format expected by Prometheus HTTP SD:
 
 Each entry contains:
 
-| Field                     | Description                                               |
-|:--------------------------|:----------------------------------------------------------|
-| `targets`                 | Array containing the proxy endpoint (from `targetPrefix`) |
-| `labels.__metrics_path__` | The path to scrape on the proxy                           |
-| `labels.agentName`        | Name(s) of agent(s) serving this path                     |
-| `labels.hostName`         | Hostname(s) of agent(s) serving this path                 |
-| `labels.*`                | Custom labels from agent `pathConfigs`                    |
+| Field                     | Description                                                       |
+|:--------------------------|:------------------------------------------------------------------|
+| `targets`                 | The proxy's address, `host:port`, from `targetPrefix`             |
+| `labels.__metrics_path__` | The path to scrape on the proxy, after any path in `targetPrefix` |
+| `labels.__scheme__`       | The scheme, when `targetPrefix` is a URL                          |
+| `labels.agentName`        | Name(s) of agent(s) serving this path                             |
+| `labels.hostName`         | Hostname(s) of agent(s) serving this path                         |
+| `labels.*`                | Custom labels from agent `pathConfigs`                            |
 
 ## Prometheus Configuration
 
@@ -73,14 +74,18 @@ The `refresh_interval` controls how often Prometheus queries the discovery endpo
 
 ## Target Prefix
 
-The `targetPrefix` setting determines the base URL in the `targets` array. Set this to the
-external address of your proxy:
+The `targetPrefix` setting is the address Prometheus scrapes the advertised paths at: the
+external `host:port` of your proxy, as Prometheus reaches it. The default is `localhost:8080`.
 
 ```hocon
-proxy.service.discovery.targetPrefix = "http://proxy.example.com:8080/"
+proxy.service.discovery.targetPrefix = "proxy.example.com:8080"
 ```
 
-This ensures Prometheus can reach the proxy from its network location.
+It can also be an `http` or `https` URL, such as `https://proxy.example.com/prometheus/`.
+Prometheus doesn't accept a URL as a target, so the proxy splits it: the host and port become
+the target, the scheme becomes each target's `__scheme__` label, and any path goes in front of
+`__metrics_path__`. A value that is neither fails the proxy's startup when service discovery is
+enabled.
 
 ## Labels
 
@@ -99,6 +104,14 @@ agent.pathConfigs: [
 ```
 
 The labels appear in the discovery response and can be used in Prometheus relabeling rules.
+They must be a JSON object whose keys are label names that every Prometheus version accepts
+(`[a-zA-Z_][a-zA-Z0-9_]*`) and whose values are strings. Prometheus decodes the labels as a map
+of string to string, and one entry that isn't fails its whole discovery response, so the proxy
+leaves such entries out. The proxy logs a warning naming them when the path registers, and the
+agent logs one at startup for a `pathConfigs` entry. The path itself still registers.
+
+A path can't be the discovery path, `favicon.ico`, or the blitz path: the proxy serves those
+itself, so it refuses to register them.
 
 !!! note "Reserved label keys"
 

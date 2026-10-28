@@ -23,6 +23,7 @@ import io.prometheus.agent.discovery.DiscoveredPath
 import io.prometheus.agent.filter.MetricFilter
 import io.prometheus.common.Messages.BLANK_PATH_MSG
 import io.prometheus.common.Utils.defaultEmptyJsonObject
+import io.prometheus.common.Utils.labelsProblem
 import io.prometheus.common.Utils.sanitizeUrl
 import io.prometheus.grpc.PathRejectionCause.CONSOLIDATION_MISMATCH
 import io.prometheus.grpc.PathRejectionCause.HELD_BY_ANOTHER_IDENTITY
@@ -118,6 +119,13 @@ internal class AgentPathManager(
         val duplicates = configs.groupingBy { it.path.removePrefix("/") }.eachCount().filterValues { it > 1 }.keys
         require(duplicates.isEmpty()) {
           "agent.pathConfigs has more than one entry for path ${duplicates.joinToString { "/$it" }}; keep one"
+        }
+        // The proxy leaves labels it can't serve out of service discovery, so say so at startup, where it can be fixed.
+        // A warning, not a failure: labels matter only to service discovery, and the path still serves scrapes.
+        configs.forEach { c ->
+          labelsProblem(c.labels)?.also {
+            logger.warn { "pathConfigs entry ${c.quotedName} has labels service discovery will leave out: $it" }
+          }
         }
       }
       .onEach {

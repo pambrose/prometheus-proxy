@@ -37,6 +37,11 @@ among them gRPC, which now runs at one version across all its modules.
 
 ### Before you upgrade
 
+- **Service discovery targets change form.** Each target is now `host:port`, as Prometheus requires, with a
+  URL `sdTargetPrefix` split into the target, a `__scheme__` label, and a `__metrics_path__` prefix. Prometheus
+  dropped the old URL targets, so no existing series change, but if you added a relabel rule rewriting
+  `__address__` to work around it, remove it. The `sdTargetPrefix` default is now `localhost:8080`, and a value
+  that is neither `host:port` nor an `http`/`https` URL fails startup when service discovery is enabled.
 - **The new checks on what agents send refuse no agent**, and the stock agent behaves as before. Two things can
   look different:
   - An agent whose name or host name is longer than 256 characters has it cut to 256, so its `agentName` or
@@ -51,6 +56,12 @@ among them gRPC, which now runs at one version across all its modules.
 
 ### Bug Fixes
 
+- **Service discovery works.** Prometheus refused every target the proxy advertised, since each was a URL; they
+  are now `host:port`, and a new end-to-end test has Prometheus scrape through `http_sd_configs`.
+- **One agent's labels can't break service discovery for everyone.** A label value that isn't a string, or a
+  name Prometheus doesn't accept, made Prometheus reject the whole discovery response. Such labels are left out,
+  with a warning when the path registers.
+- **A path the proxy serves itself can't be registered:** `favicon.ico`, and the discovery and blitz paths.
 - **Metric filters match quoted metric names.** A target that writes a name such as `a.b` quoted, as
   Prometheus 3 allows, had that family dropped by an allow list that named it, and kept by a deny list.
 - **Discovered targets survive a reconnect while the discovery file is bad.** The agent keeps the last list it

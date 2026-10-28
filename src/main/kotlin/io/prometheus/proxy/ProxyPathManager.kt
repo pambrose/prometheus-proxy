@@ -29,6 +29,8 @@ import io.prometheus.grpc.PathRejectionCause.INVALID_PATH
 import io.prometheus.grpc.PathRejectionCause.PATH_LIMIT_REACHED
 import io.prometheus.grpc.UnregisterPathResponse
 import io.prometheus.grpc.unregisterPathResponse
+import io.prometheus.common.Utils.labelsProblem
+import io.prometheus.proxy.ProxyConstants.FAVICON_FILENAME
 
 /**
  * Maps scrape URL paths to their registered [AgentContext] instances.
@@ -158,6 +160,29 @@ internal class ProxyPathManager(
       return rejectPath(agentContext, shown, "Invalid path: /$shown (a path segment is required)", INVALID_PATH)
     return sizeRejection(key, shown, labels, agentContext)
       ?: multiSegmentPathError(key, shown)?.let { PathRejection(it, INVALID_PATH) }
+      ?: reservedPathRejection(key, shown, agentContext)
+  }
+
+  // Rejects a path the scrape port answers itself: registered, it would be advertised in service discovery but could
+  // never be scraped. The SD path returned the SD JSON, favicon.ico a 404, and the blitz path "42" (October #6).
+  private fun reservedPathRejection(
+    key: String,
+    shown: String,
+    agentContext: AgentContext,
+  ): PathRejection? {
+    val reserved =
+      when {
+        key == FAVICON_FILENAME -> "the favicon path"
+        proxy.options.sdEnabled && key == pathKey(proxy.options.sdPath) -> "the service discovery path"
+        proxy.isBlitzRequest(key) -> "the blitz path"
+        else -> return null
+      }
+    return rejectPath(
+      agentContext,
+      shown,
+      "Invalid path: /$shown is $reserved, which the proxy serves itself",
+      INVALID_PATH,
+    )
   }
 
   // Rejects a path longer than proxy.internal.maxPathLength, or labels larger than maxLabelsSizeBytes; 0 turns either
@@ -362,6 +387,10 @@ internal class ProxyPathManager(
     val reserved = Proxy.reservedSdLabelKeys(labels, proxy.reserveJobAndInstanceLabels)
     if (reserved.isNotEmpty())
       logger.warn { "Agent labels $reserved for path /$path are reserved and won't appear in service discovery" }
+    // Left out of service discovery rather than refused: labels matter only there, and the path still serves scrapes.
+    labelsProblem(labels)?.also {
+      logger.warn { "Agent labels for path /$path won't all appear in service discovery: $it" }
+    }
     // The agentId, not the context, whose name and host name the agent reports: this is logged for every path.
     if (!isTestMode) logger.info { "Added path /$path for agentId ${agentContext.agentId}" }
     // Inside synchronized(pathMap) on purpose: tryEmit never suspends or blocks, so publishing here

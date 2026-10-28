@@ -36,6 +36,7 @@ import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.grpc.chunkedScrapeResponse
 import io.prometheus.grpc.headerData
 import io.prometheus.grpc.registerAgentRequest
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -111,6 +112,34 @@ class ProxyTest : StringSpec() {
       labels["hostName"]!!.jsonPrimitive.content shouldBe "internal.host.com"
     }
 
+    // Prometheus rejects a target that contains "/", so a URL prefix -- the documented form -- gave no targets at all.
+    // Its host:port is now the target, its scheme the __scheme__ label, and its path a prefix of __metrics_path__.
+    "buildServiceDiscoveryJson should split a URL target prefix into the target, __scheme__, and the path prefix" {
+      val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=https://proxy.example.com:8443/prom/")
+      val agentContext = createAgentContext()
+      proxy.agentContextManager.addAgentContext(agentContext)
+      proxy.pathManager.addPath("app1_metrics", "", agentContext)
+
+      val entry = proxy.buildServiceDiscoveryJson().single().jsonObject
+      val labels = entry["labels"]!!.jsonObject
+
+      entry["targets"]!!.jsonArray.map { it.jsonPrimitive.content } shouldBe listOf("proxy.example.com:8443")
+      labels["__scheme__"]!!.jsonPrimitive.content shouldBe "https"
+      labels["__metrics_path__"]!!.jsonPrimitive.content shouldBe "/prom/app1_metrics"
+    }
+
+    "buildServiceDiscoveryJson should leave __scheme__ to the scrape config for a host:port target prefix" {
+      val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=proxy.example.com:$PROXY_HTTP_PORT")
+      val agentContext = createAgentContext()
+      proxy.agentContextManager.addAgentContext(agentContext)
+      proxy.pathManager.addPath("app1_metrics", "", agentContext)
+
+      val labels = proxy.buildServiceDiscoveryJson().single().jsonObject["labels"]!!.jsonObject
+
+      labels["__scheme__"].shouldBeNull()
+      labels["__metrics_path__"]!!.jsonPrimitive.content shouldBe "/app1_metrics"
+    }
+
     "buildServiceDiscoveryJson should produce multiple entries for multiple paths" {
       val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=proxy:$PROXY_HTTP_PORT")
       val agentContext = createAgentContext()
@@ -154,6 +183,22 @@ class ProxyTest : StringSpec() {
       labels["agentName"]!!.jsonPrimitive.content shouldBe "agent-bad-labels"
       // Invalid JSON labels should not cause custom keys to appear
       labels.containsKey("environment").shouldBeFalse()
+    }
+
+    // Prometheus decodes service discovery labels as a map of string to string with valid label names, and one label
+    // that isn't fails the whole response: every target behind the proxy stops updating, and after a restart
+    // Prometheus has none. Such labels are left out of the response, and the rest kept.
+    "buildServiceDiscoveryJson should leave out labels Prometheus couldn't decode" {
+      val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=proxy:$PROXY_HTTP_PORT")
+      val agentContext = createAgentContext()
+      proxy.agentContextManager.addAgentContext(agentContext)
+      val labels = """{"count":1,"nested":{"b":"c"},"list":["x"],"":"empty","a-b":"dash","team":"web"}"""
+      proxy.pathManager.addPath("metrics", labels, agentContext)
+
+      val served = proxy.buildServiceDiscoveryJson().single().jsonObject["labels"]!!.jsonObject
+
+      served.keys shouldBe setOf("__metrics_path__", "agentName", "hostName", "team")
+      served.values.all { it is JsonPrimitive && it.isString } shouldBe true
     }
 
     // Agent-supplied labels must not clobber the proxy-computed reserved keys (__metrics_path__,
