@@ -25,11 +25,21 @@ import io.grpc.Metadata
 import io.grpc.ServerCall
 import io.grpc.ServerCallHandler
 import io.grpc.ServerInterceptor
+import io.prometheus.Proxy
 import io.prometheus.common.GrpcConstants.AGENT_ID
 import io.prometheus.common.GrpcConstants.META_AGENT_ID_KEY
 import io.prometheus.proxy.ProxyServerTransportFilter.Companion.AGENT_ID_KEY
 
-internal class ProxyServerInterceptor : ServerInterceptor {
+/**
+ * Binds each call to its connection: publishes the transport-assigned agentId on the gRPC [Context], sends it back in
+ * the `agent-id` response header, and announces the connection's pending [AgentContext] as a connected agent.
+ *
+ * @param proxy whose [Proxy.agentContextManager] holds the connection's pending context. Read on each call, as
+ *   [ProxyServerTransportFilter] does, since [Proxy] builds its gRPC server before the manager
+ */
+internal class ProxyServerInterceptor(
+  private val proxy: Proxy,
+) : ServerInterceptor {
   override fun <ReqT, RespT> interceptCall(
     call: ServerCall<ReqT, RespT>,
     requestHeaders: Metadata,
@@ -50,6 +60,12 @@ internal class ProxyServerInterceptor : ServerInterceptor {
     val connectionAgentId =
       call.attributes.get(AGENT_ID_KEY)
         ?: return handler.startCall(forwardingCall, requestHeaders)
+
+    // A call reaches this interceptor only once it has passed agent authentication: AgentAuthServerInterceptor is
+    // server-wide, so it runs first, and it closes a call it rejects without passing it on. So every call here may
+    // announce the connection, which is idempotent. Only connectAgent did, so a client that skipped it served paths
+    // while missing from the agent count, the dashboard, the health checks, and the connect events (October #26).
+    proxy.agentContextManager.announceAgentContext(connectionAgentId)
 
     val context = Context.current().withValue(CONNECTION_AGENT_ID_KEY, connectionAgentId)
     return Contexts.interceptCall(context, forwardingCall, requestHeaders, handler)

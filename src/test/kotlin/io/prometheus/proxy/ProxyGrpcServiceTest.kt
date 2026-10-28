@@ -21,12 +21,17 @@ package io.prometheus.proxy
 import com.pambrose.common.dsl.GrpcDsl.channel
 import com.pambrose.common.utils.TlsContext.Companion.PLAINTEXT_CONTEXT
 import io.grpc.ManagedChannel
+import io.grpc.Metadata
 import io.grpc.Status
+import io.grpc.StatusRuntimeException
 import io.grpc.reflection.v1.ServerReflectionGrpc
 import io.grpc.reflection.v1.ServerReflectionRequest
 import io.grpc.reflection.v1.ServerReflectionResponse
+import io.grpc.stub.MetadataUtils
 import io.grpc.stub.StreamObserver
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -36,11 +41,17 @@ import io.mockk.every
 import io.mockk.mockk
 import io.prometheus.Proxy
 import io.prometheus.agent.AgentTokenClientInterceptor
+import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
+import io.prometheus.common.GrpcConstants.META_AGENT_ID_KEY
 import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
+import io.prometheus.grpc.PathRejectionCause
 import io.prometheus.grpc.ProxyServiceGrpc
+import io.prometheus.grpc.RegisterPathResponse
+import io.prometheus.grpc.registerPathRequest
 import io.prometheus.proxy.AgentAuthManager.AuthEntry
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 
 class ProxyGrpcServiceTest : StringSpec() {
   private fun createMockProxy(
@@ -285,5 +296,86 @@ class ProxyGrpcServiceTest : StringSpec() {
         validToken.getOrThrow() shouldContain ProxyServiceGrpc.SERVICE_NAME
       }
     }
+
+    // ==================== Announcing a connection's agent ====================
+    //
+    // October #26: the transport filter adds each connection's context pending, and only connectAgent announced it, so
+    // a client that skipped connectAgent, learning its agentId from the agent-id header any call returns, served paths
+    // while missing from the dashboard's agent list, proxy_agent_map_size, the health checks, and the connected and
+    // disconnected events. Any call that passes authentication now announces it.
+
+    "a connection that skips connectAgent should be announced by its first call" {
+      val (proxy, manager) = proxyWithRealManagers()
+      withChannelTo(proxy) { channel ->
+        val stub = PathRegistrar(channel)
+
+        // The first call names no agentId it could know, and is refused, but its response headers give it away.
+        stub.registerPath("unknown", "metrics").rejectionCause shouldBe PathRejectionCause.BINDING_MISMATCH
+        manager.agentContextSize shouldBe 1
+
+        val response = stub.registerPath(stub.agentId, "metrics")
+        response.valid.shouldBeTrue()
+        manager.agentContextSize shouldBe 1
+        manager.agentContextEntries.single().key shouldBe stub.agentId
+      }
+    }
+
+    "a connection should stay pending until a call passes agent authentication" {
+      val authManager = AgentAuthManager.create([AuthEntry("team_a", "s3cret", ["team_a_*"])], legacyToken = "")
+      val (proxy, manager) = proxyWithRealManagers(authManager)
+      withChannelTo(proxy) { channel ->
+        val failure =
+          shouldThrow<StatusRuntimeException> { PathRegistrar(channel, token = "wrong").registerPath("1", "x") }
+        failure.status.code shouldBe Status.Code.UNAUTHENTICATED
+        manager.agentContextSize shouldBe 0
+
+        PathRegistrar(channel, token = "s3cret").registerPath("unknown", "team_a_metrics")
+        manager.agentContextSize shouldBe 1
+      }
+    }
+
+    "connectAgent should announce the connection's agent" {
+      val (proxy, manager) = proxyWithRealManagers()
+      withChannelTo(proxy) { channel ->
+        ProxyServiceGrpc.newBlockingStub(channel).connectAgent(EMPTY_INSTANCE)
+        manager.agentContextSize shouldBe 1
+      }
+    }
+  }
+
+  // A mocked proxy, with the transport filter on, whose agent-context and path managers are real, so a test can see
+  // what a call over the wire does to them.
+  private fun proxyWithRealManagers(authManager: AgentAuthManager? = null): Pair<Proxy, AgentContextManager> {
+    val proxy = createMockProxy(transportFilterDisabled = false, authManager = authManager)
+    val manager = AgentContextManager(isTestMode = true)
+    every { proxy.agentContextManager } returns manager
+    every { proxy.pathManager } returns ProxyPathManager(proxy, isTestMode = true)
+    return proxy to manager
+  }
+
+  // A client that registers paths over [channel] without calling connectAgent, presenting [token] when given, and
+  // keeps the agentId the proxy's last response header named.
+  private class PathRegistrar(
+    channel: ManagedChannel,
+    token: String? = null,
+  ) {
+    private val headers = AtomicReference<Metadata>()
+    private val stub =
+      ProxyServiceGrpc.newBlockingStub(channel)
+        .withInterceptors(MetadataUtils.newCaptureMetadataInterceptor(headers, AtomicReference()))
+        .let { if (token == null) it else it.withInterceptors(AgentTokenClientInterceptor(token)) }
+
+    val agentId: String get() = headers.get().shouldNotBeNull().get(META_AGENT_ID_KEY).shouldNotBeNull()
+
+    fun registerPath(
+      agentId: String,
+      path: String,
+    ): RegisterPathResponse =
+      stub.registerPath(
+        registerPathRequest {
+          this.agentId = agentId
+          this.path = path
+        },
+      )
   }
 }

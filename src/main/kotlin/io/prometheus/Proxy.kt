@@ -240,6 +240,10 @@ class Proxy(
   internal val maxPathLength: Int get() = proxyConfigVals.internal.maxPathLength
   internal val maxLabelsSizeBytes: Int get() = proxyConfigVals.internal.maxLabelsSizeBytes
 
+  // How much of what an agent reports about itself the proxy keeps; 0 means all. See ProxyServiceImpl.registerAgent.
+  internal val maxAgentFieldLength: Int get() = proxyConfigVals.internal.maxAgentFieldLength
+  internal val maxAgentProxyEndpoints: Int get() = proxyConfigVals.internal.maxAgentProxyEndpoints
+
   // Whether agent-supplied job and instance labels are kept out of service discovery; see isReservedSdLabelKey.
   internal val reserveJobAndInstanceLabels: Boolean
     get() = proxyConfigVals.service.discovery.reserveJobAndInstanceLabels
