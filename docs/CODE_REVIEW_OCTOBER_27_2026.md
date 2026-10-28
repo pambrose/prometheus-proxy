@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — October 2026 Findings
 
-**Status:** 47 issues — 30 fixed, 17 open (16 medium, 31 low, no high).
+**Status:** 47 issues — 33 fixed, 14 open (16 medium, 31 low, no high).
 
 **Date:** 2026-10-27
 
