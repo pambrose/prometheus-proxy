@@ -216,7 +216,7 @@ class ProxyHttpRoutesTest : StringSpec() {
             srContentType = contentType,
             srContentAsText = "metric_value 1.0",
           ),
-        )
+        ) { true }
       }
       ProxyHttpRoutes.submitScrapeRequest(agentContext, proxy, "metrics", "", mockk<ApplicationRequest>(relaxed = true))
     }
@@ -729,7 +729,7 @@ class ProxyHttpRoutesTest : StringSpec() {
           srContentAsText = "metric_value 1.0",
           srUrl = "http://localhost:$PROXY_HTTP_PORT/metrics",
         )
-        proxy.scrapeRequestManager.assignScrapeResults(results)
+        proxy.scrapeRequestManager.assignScrapeResults(results) { true }
       }
 
       val response = ProxyHttpRoutes.submitScrapeRequest(
@@ -763,7 +763,7 @@ class ProxyHttpRoutesTest : StringSpec() {
           srContentAsZipped = originalContent.zip(),
           srUrl = "http://localhost:$PROXY_HTTP_PORT/metrics",
         )
-        proxy.scrapeRequestManager.assignScrapeResults(results)
+        proxy.scrapeRequestManager.assignScrapeResults(results) { true }
       }
 
       val response = ProxyHttpRoutes.submitScrapeRequest(
@@ -795,7 +795,7 @@ class ProxyHttpRoutesTest : StringSpec() {
           srContentAsZipped = "not-gzip".toByteArray(),
           srUrl = "http://localhost:$PROXY_HTTP_PORT/metrics",
         )
-        proxy.scrapeRequestManager.assignScrapeResults(results)
+        proxy.scrapeRequestManager.assignScrapeResults(results) { true }
       }
 
       val response = ProxyHttpRoutes.submitScrapeRequest(
@@ -833,7 +833,7 @@ class ProxyHttpRoutesTest : StringSpec() {
           srContentAsZipped = originalContent.zip(),
           srUrl = "http://localhost:$PROXY_HTTP_PORT/metrics",
         )
-        proxy.scrapeRequestManager.assignScrapeResults(results)
+        proxy.scrapeRequestManager.assignScrapeResults(results) { true }
       }
 
       val response = ProxyHttpRoutes.submitScrapeRequest(
@@ -864,7 +864,7 @@ class ProxyHttpRoutesTest : StringSpec() {
           srContentAsText = "metric_value 1.0",
           srUrl = "http://localhost:$PROXY_HTTP_PORT/metrics",
         )
-        proxy.scrapeRequestManager.assignScrapeResults(results)
+        proxy.scrapeRequestManager.assignScrapeResults(results) { true }
       }
 
       val response = ProxyHttpRoutes.submitScrapeRequest(
@@ -987,7 +987,7 @@ class ProxyHttpRoutesTest : StringSpec() {
           srFailureReason = "Internal Server Error",
           srUrl = "http://localhost:$PROXY_HTTP_PORT/metrics",
         )
-        proxy.scrapeRequestManager.assignScrapeResults(results)
+        proxy.scrapeRequestManager.assignScrapeResults(results) { true }
       }
 
       val response = ProxyHttpRoutes.submitScrapeRequest(
@@ -1019,7 +1019,7 @@ class ProxyHttpRoutesTest : StringSpec() {
           srFailureReason = "Endpoint not found",
           srUrl = "http://localhost:$PROXY_HTTP_PORT/missing",
         )
-        proxy.scrapeRequestManager.assignScrapeResults(results)
+        proxy.scrapeRequestManager.assignScrapeResults(results) { true }
       }
 
       val response = ProxyHttpRoutes.submitScrapeRequest(

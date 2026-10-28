@@ -24,7 +24,9 @@ import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.types.shouldBeSameInstanceAs
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.grpc.chunkedScrapeResponse
 import io.prometheus.grpc.headerData
@@ -34,6 +36,9 @@ import java.util.zip.CRC32
 // Large scrape responses are split into chunks to avoid gRPC message size limits.
 // ChunkedContext accumulates chunks and verifies checksums for data integrity.
 class ChunkedContextTest : StringSpec() {
+  // The agent the transfer's scrape was sent to.
+  private val owner = AgentContext("test-remote")
+
   private fun createHeaderResponse(
     validResponse: Boolean = true,
     scrapeId: Long = 12345L,
@@ -61,11 +66,19 @@ class ChunkedContextTest : StringSpec() {
 
     "constructor should initialize with header data" {
       val response = createHeaderResponse()
-      val context = ChunkedContext(response, 1000000)
+      val context = ChunkedContext(response, 1000000, owner)
 
       context.shouldNotBeNull()
       context.totalChunkCount shouldBe 0
       context.totalByteCount shouldBe 0
+    }
+
+    // The header's agentId is the agent's own claim; the owner is the one the proxy sent the scrape to.
+    "owner should be the agent given, not the header's agentId" {
+      val context = ChunkedContext(createHeaderResponse(agentId = "claimed-agent"), 1000000, owner)
+
+      context.owner shouldBeSameInstanceAs owner
+      context.owner.agentId shouldNotBe "claimed-agent"
     }
 
     "applySummary should propagate header fields to scrapeResults" {
@@ -77,7 +90,7 @@ class ChunkedContextTest : StringSpec() {
         url = "http://test/metrics",
         contentType = "text/plain; charset=utf-8",
       )
-      val context = ChunkedContext(response, 1000000)
+      val context = ChunkedContext(response, 1000000, owner)
 
       val crc = CRC32()
       val data = "test".toByteArray()
@@ -100,7 +113,7 @@ class ChunkedContextTest : StringSpec() {
 
     "applyChunk should increment chunk count" {
       val response = createHeaderResponse()
-      val context = ChunkedContext(response, 1000000)
+      val context = ChunkedContext(response, 1000000, owner)
 
       val data = "test data".toByteArray()
       val checksum = CRC32().apply { update(data) }.value
@@ -112,7 +125,7 @@ class ChunkedContextTest : StringSpec() {
 
     "applyChunk should accumulate byte count" {
       val response = createHeaderResponse()
-      val context = ChunkedContext(response, 1000000)
+      val context = ChunkedContext(response, 1000000, owner)
 
       val data = "test data 12345".toByteArray()
       val checksum = CRC32().apply { update(data) }.value
@@ -124,7 +137,7 @@ class ChunkedContextTest : StringSpec() {
 
     "applyChunk should accumulate multiple chunks" {
       val response = createHeaderResponse()
-      val context = ChunkedContext(response, 1000000)
+      val context = ChunkedContext(response, 1000000, owner)
 
       val crc = CRC32()
 
@@ -144,7 +157,7 @@ class ChunkedContextTest : StringSpec() {
 
     "applyChunk should throw on chunk count mismatch" {
       val response = createHeaderResponse()
-      val context = ChunkedContext(response, 1000000)
+      val context = ChunkedContext(response, 1000000, owner)
 
       val data = "test data".toByteArray()
       val checksum = CRC32().apply { update(data) }.value
@@ -157,7 +170,7 @@ class ChunkedContextTest : StringSpec() {
 
     "applyChunk should throw on checksum mismatch" {
       val response = createHeaderResponse()
-      val context = ChunkedContext(response, 1000000)
+      val context = ChunkedContext(response, 1000000, owner)
 
       val data = "test data".toByteArray()
       val wrongChecksum = 12345L // Wrong checksum
@@ -169,7 +182,7 @@ class ChunkedContextTest : StringSpec() {
 
     "applyChunk should throw when maxZippedContentSize is exceeded" {
       val response = createHeaderResponse()
-      val context = ChunkedContext(response, 10)
+      val context = ChunkedContext(response, 10, owner)
 
       val data = "test data over 10 bytes".toByteArray()
       val checksum = CRC32().apply { update(data) }.value
@@ -184,7 +197,7 @@ class ChunkedContextTest : StringSpec() {
     "applyChunk should accept content exactly at maxZippedContentSize" {
       val response = createHeaderResponse()
       val data = "exactly10!".toByteArray() // 10 bytes
-      val context = ChunkedContext(response, data.size.toLong()) // limit == exactly the data size
+      val context = ChunkedContext(response, data.size.toLong(), owner) // limit == exactly the data size
 
       val checksum = CRC32().apply { update(data) }.value
 
@@ -198,7 +211,7 @@ class ChunkedContextTest : StringSpec() {
 
     "applySummary should verify chunk count" {
       val response = createHeaderResponse()
-      val context = ChunkedContext(response, 1000000)
+      val context = ChunkedContext(response, 1000000, owner)
 
       val crc = CRC32()
       val data = "test data".toByteArray()
@@ -214,7 +227,7 @@ class ChunkedContextTest : StringSpec() {
 
     "applySummary should throw on chunk count mismatch" {
       val response = createHeaderResponse()
-      val context = ChunkedContext(response, 1000000)
+      val context = ChunkedContext(response, 1000000, owner)
 
       val crc = CRC32()
       val data = "test data".toByteArray()
@@ -229,7 +242,7 @@ class ChunkedContextTest : StringSpec() {
 
     "applySummary should throw on byte count mismatch" {
       val response = createHeaderResponse()
-      val context = ChunkedContext(response, 1000000)
+      val context = ChunkedContext(response, 1000000, owner)
 
       val crc = CRC32()
       val data = "test data".toByteArray()
@@ -244,7 +257,7 @@ class ChunkedContextTest : StringSpec() {
 
     "applySummary should throw on checksum mismatch" {
       val response = createHeaderResponse()
-      val context = ChunkedContext(response, 1000000)
+      val context = ChunkedContext(response, 1000000, owner)
 
       val crc = CRC32()
       val data = "test data".toByteArray()
@@ -259,7 +272,7 @@ class ChunkedContextTest : StringSpec() {
 
     "applySummary should set content in scrapeResults" {
       val response = createHeaderResponse()
-      val context = ChunkedContext(response, 1000000)
+      val context = ChunkedContext(response, 1000000, owner)
 
       val crc = CRC32()
       val data = "metrics content here".toByteArray()
@@ -278,7 +291,7 @@ class ChunkedContextTest : StringSpec() {
 
     "should handle multiple chunks and verify final summary" {
       val response = createHeaderResponse()
-      val context = ChunkedContext(response, 1000000)
+      val context = ChunkedContext(response, 1000000, owner)
 
       val crc = CRC32()
 
@@ -311,7 +324,7 @@ class ChunkedContextTest : StringSpec() {
         validResponse = false,
         failureReason = "Connection timeout",
       )
-      val context = ChunkedContext(response, 1000000)
+      val context = ChunkedContext(response, 1000000, owner)
 
       val crc = CRC32()
       val data = "test".toByteArray()
@@ -324,7 +337,7 @@ class ChunkedContextTest : StringSpec() {
 
     "applySummary should handle empty content type from header" {
       val response = createHeaderResponse(contentType = "")
-      val context = ChunkedContext(response, 1000000)
+      val context = ChunkedContext(response, 1000000, owner)
 
       val crc = CRC32()
       val data = "test".toByteArray()
@@ -343,7 +356,7 @@ class ChunkedContextTest : StringSpec() {
       // Before the fix, checksum was computed on data.size instead of chunkByteCount,
       // which included stale bytes from a previous read.
       val response = createHeaderResponse()
-      val context = ChunkedContext(response, 1000000)
+      val context = ChunkedContext(response, 1000000, owner)
 
       val bufferSize = 1024
       val actualBytes = 100
@@ -367,7 +380,7 @@ class ChunkedContextTest : StringSpec() {
     "applyChunk should reject checksum computed on full buffer when chunkByteCount is smaller" {
       // This verifies that the old buggy behavior (checksumming full data.size) would fail.
       val response = createHeaderResponse()
-      val context = ChunkedContext(response, 1000000)
+      val context = ChunkedContext(response, 1000000, owner)
 
       val bufferSize = 1024
       val actualBytes = 100
@@ -386,7 +399,7 @@ class ChunkedContextTest : StringSpec() {
     "full chunked transfer should work when last chunk is partial" {
       // Simulates a realistic chunked transfer: two full chunks and one partial last chunk.
       val response = createHeaderResponse()
-      val context = ChunkedContext(response, 1000000)
+      val context = ChunkedContext(response, 1000000, owner)
 
       val chunkSize = 16
       // Total data is 40 bytes: two full 16-byte chunks + one 8-byte partial chunk
@@ -429,7 +442,7 @@ class ChunkedContextTest : StringSpec() {
       val largeLimit = largeLimitMBytes * 1024L * 1024L // 2,147,483,648 — overflows Int
 
       val response = createHeaderResponse()
-      val context = ChunkedContext(response, largeLimit)
+      val context = ChunkedContext(response, largeLimit, owner)
 
       val data = "test data".toByteArray()
       val checksum = CRC32().apply { update(data) }.value
@@ -445,7 +458,7 @@ class ChunkedContextTest : StringSpec() {
       val limit = limitMBytes * 1024L * 1024L // 4,294,967,296
 
       val response = createHeaderResponse()
-      val context = ChunkedContext(response, limit)
+      val context = ChunkedContext(response, limit, owner)
 
       val data = "metrics content".toByteArray()
       val checksum = CRC32().apply { update(data) }.value
@@ -458,7 +471,7 @@ class ChunkedContextTest : StringSpec() {
 
     "applySummary should throw when called before any chunks" {
       val response = createHeaderResponse()
-      val context = ChunkedContext(response, 1000000)
+      val context = ChunkedContext(response, 1000000, owner)
 
       // No chunks applied — totalChunkCount is 0, summaryChunkCount is 1
       shouldThrow<ChunkValidationException> {
@@ -468,7 +481,7 @@ class ChunkedContextTest : StringSpec() {
 
     "applySummary should succeed with zero chunks when summary expects zero" {
       val response = createHeaderResponse()
-      val context = ChunkedContext(response, 1000000)
+      val context = ChunkedContext(response, 1000000, owner)
 
       // Both sides agree: 0 chunks, 0 bytes, initial CRC32 value
       val emptyCrc = CRC32().value
@@ -481,7 +494,7 @@ class ChunkedContextTest : StringSpec() {
 
     "applyChunk should handle zero-length data" {
       val response = createHeaderResponse()
-      val context = ChunkedContext(response, 1000000)
+      val context = ChunkedContext(response, 1000000, owner)
 
       val emptyData = ByteArray(0)
       val crc = CRC32().apply { update(emptyData, 0, 0) }
@@ -495,7 +508,7 @@ class ChunkedContextTest : StringSpec() {
     // from the header, so non-zipped chunked content is correctly represented.
     "Bug #10: applySummary should propagate headerZipped=true from header" {
       val response = createHeaderResponse(zipped = true)
-      val context = ChunkedContext(response, 1000000)
+      val context = ChunkedContext(response, 1000000, owner)
 
       val crc = CRC32()
       val data = "test".toByteArray()
@@ -508,7 +521,7 @@ class ChunkedContextTest : StringSpec() {
 
     "Bug #10: applySummary should propagate headerZipped=false from header" {
       val response = createHeaderResponse(zipped = false)
-      val context = ChunkedContext(response, 1000000)
+      val context = ChunkedContext(response, 1000000, owner)
 
       val crc = CRC32()
       val data = "test".toByteArray()
@@ -529,7 +542,7 @@ class ChunkedContextTest : StringSpec() {
       val response = createHeaderResponse()
       // Set a limit above Int.MAX_VALUE
       val limit = Int.MAX_VALUE.toLong() + 1000L
-      val context = ChunkedContext(response, limit)
+      val context = ChunkedContext(response, limit, owner)
 
       val crc = CRC32()
 
@@ -552,7 +565,7 @@ class ChunkedContextTest : StringSpec() {
       val response = createHeaderResponse()
       // Use a small limit to test the overflow-safe comparison
       val limit = 100L
-      val context = ChunkedContext(response, limit)
+      val context = ChunkedContext(response, limit, owner)
 
       val data = ByteArray(101) { 0x41 }
       val checksum = CRC32().apply { update(data) }.value
@@ -567,7 +580,7 @@ class ChunkedContextTest : StringSpec() {
       // correctly when maxZippedContentSize exceeds Int.MAX_VALUE
       val response = createHeaderResponse()
       val limit = 3_000_000_000L // ~3 GB, larger than Int.MAX_VALUE
-      val context = ChunkedContext(response, limit)
+      val context = ChunkedContext(response, limit, owner)
 
       // Small chunk should pass the size check
       val data = "test data".toByteArray()
@@ -579,7 +592,7 @@ class ChunkedContextTest : StringSpec() {
 
     "applyChunk should throw ChunkValidationException when chunkByteCount exceeds data size" {
       val response = createHeaderResponse()
-      val context = ChunkedContext(response, 1000000)
+      val context = ChunkedContext(response, 1000000, owner)
 
       val data = "short".toByteArray()
       // chunkByteCount (1000) > data.size (5) -- now caught by the validation guard
@@ -591,7 +604,7 @@ class ChunkedContextTest : StringSpec() {
 
     "applyChunk should throw ChunkValidationException when chunkByteCount is negative" {
       val response = createHeaderResponse()
-      val context = ChunkedContext(response, 1000000)
+      val context = ChunkedContext(response, 1000000, owner)
 
       val data = "test data".toByteArray()
       val ex = shouldThrow<ChunkValidationException> {
@@ -602,7 +615,7 @@ class ChunkedContextTest : StringSpec() {
 
     "applyChunk should succeed when chunkByteCount equals data size" {
       val response = createHeaderResponse()
-      val context = ChunkedContext(response, 1000000)
+      val context = ChunkedContext(response, 1000000, owner)
 
       val data = "exact match".toByteArray()
       val checksum = CRC32().apply { update(data) }.value
@@ -613,7 +626,7 @@ class ChunkedContextTest : StringSpec() {
 
     "applyChunk should succeed when chunkByteCount is less than data size" {
       val response = createHeaderResponse()
-      val context = ChunkedContext(response, 1000000)
+      val context = ChunkedContext(response, 1000000, owner)
 
       val buffer = ByteArray(1024)
       val realData = "partial".toByteArray()

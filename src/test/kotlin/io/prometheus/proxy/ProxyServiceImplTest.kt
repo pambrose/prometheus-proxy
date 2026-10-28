@@ -26,6 +26,8 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.maps.shouldBeEmpty
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
@@ -34,6 +36,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import io.mockk.spyk
 import io.mockk.verify
 import io.prometheus.Proxy
 import io.prometheus.metrics.core.datapoints.CounterDataPoint
@@ -56,6 +59,7 @@ import io.prometheus.grpc.scrapeResponse
 import io.prometheus.grpc.summaryData
 import io.prometheus.grpc.unregisterPathRequest
 import io.prometheus.proxy.ProxyPathManager.PathRejection
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -79,18 +83,38 @@ class ProxyServiceImplTest : StringSpec() {
     }
   }
 
+  // A tracked scrape sent to [owner], as a mocked ScrapeRequestManager returns it.
+  private fun trackedScrape(owner: AgentContext = mockk(relaxed = true)): ScrapeRequestWrapper =
+    mockk<ScrapeRequestWrapper>(relaxed = true).also { every { it.agentContext } returns owner }
+
+  // The owner a ChunkedContext built directly by a test records; ownership isn't what those tests check.
+  private val transferOwner = AgentContext("transfer-owner")
+
+  // A test that checks what really happens to a scrape or a chunked transfer passes real managers (or spies on them);
+  // the rest get relaxed mocks.
   private fun createMockProxy(
     transportFilterDisabled: Boolean = false,
     isRunning: Boolean = true,
     metrics: ProxyMetrics = mockk(relaxed = true),
+    scrapeRequestManager: ScrapeRequestManager? = null,
+    agentContextManager: AgentContextManager? = null,
   ): Proxy {
     val mockOptions = mockk<ProxyOptions>(relaxed = true)
     every { mockOptions.transportFilterDisabled } returns transportFilterDisabled
 
-    val mockAgentContextManager = mockk<AgentContextManager>(relaxed = true)
+    val mockAgentContextManager =
+      agentContextManager ?: mockk<AgentContextManager>(relaxed = true).also {
+        // A relaxed Boolean is false, which would read as a transfer already under way or already removed.
+        every { it.putChunkedContext(any(), any()) } returns true
+        every { it.removeChunkedContext(any(), any()) } returns true
+      }
     val mockPathManager = mockk<ProxyPathManager>(relaxed = true)
-    val mockScrapeRequestManager = mockk<ScrapeRequestManager>(relaxed = true)
-    every { mockScrapeRequestManager.containsScrapeRequest(any()) } returns true
+    val mockScrapeRequestManager =
+      scrapeRequestManager ?: mockk<ScrapeRequestManager>(relaxed = true).also {
+        every { it.containsScrapeRequest(any()) } returns true
+        // Every scrapeId is tracked, for an agent with no bound identity, which a call with no connection agentId owns.
+        every { it.getScrapeRequest(any()) } returns trackedScrape()
+      }
 
     val configVals = testConfigVals(
       """
@@ -1139,7 +1163,7 @@ class ProxyServiceImplTest : StringSpec() {
 
       // Make assignScrapeResults throw on the first call, succeed on the second
       var callCount = 0
-      every { scrapeRequestManager.assignScrapeResults(any()) } answers {
+      every { scrapeRequestManager.assignScrapeResults(any(), any()) } answers {
         callCount++
         if (callCount == 1) error("Simulated processing failure")
       }
@@ -1149,7 +1173,7 @@ class ProxyServiceImplTest : StringSpec() {
 
       result shouldBe EMPTY_INSTANCE
       // Both messages should have been attempted (stream not killed by first failure)
-      verify(exactly = 2) { scrapeRequestManager.assignScrapeResults(any()) }
+      verify(exactly = 2) { scrapeRequestManager.assignScrapeResults(any(), any()) }
     }
 
     // M2: Previously, writeChunkedResponsesToProxy used string-based dispatch on
@@ -1213,12 +1237,8 @@ class ProxyServiceImplTest : StringSpec() {
         }
       }
 
-      every { contextManager.putChunkedContext(scrapeId, any()) } returns Unit
-      every { contextManager.getChunkedContext(scrapeId) } returns ChunkedContext(header, 1000000)
-      every { contextManager.removeChunkedContext(scrapeId) } returns ChunkedContext(header, 1000000).apply {
-        applyChunk(data, data.size, 1, checksum)
-      }
-      every { scrapeRequestManager.assignScrapeResults(any()) } returns Unit
+      // One context for the whole transfer: the chunk is applied to it, then the summary reads it.
+      every { contextManager.getChunkedContext(scrapeId) } returns ChunkedContext(header, 1000000, transferOwner)
 
       // NOT_SET message first, then a valid header-chunk-summary sequence
       val result = service.writeChunkedResponsesToProxy(flowOf(emptyResponse, header, chunk, summary))
@@ -1226,7 +1246,7 @@ class ProxyServiceImplTest : StringSpec() {
       result shouldBe EMPTY_INSTANCE
       // The valid sequence should still be processed despite the NOT_SET message
       verify(exactly = 1) { contextManager.putChunkedContext(scrapeId, any()) }
-      verify(exactly = 1) { scrapeRequestManager.assignScrapeResults(any()) }
+      verify(exactly = 1) { scrapeRequestManager.assignScrapeResults(any(), any()) }
     }
 
     // ==================== writeChunkedResponsesToProxy Error Handling Tests ====================
@@ -1386,7 +1406,7 @@ class ProxyServiceImplTest : StringSpec() {
       val crc = CRC32()
       crc.update(data)
 
-      // Set up the completed context's chunked context for the summary removal
+      // The completed transfer's context, which its chunk is applied to and its summary then removes
       val completedChunkedContext = ChunkedContext(
         chunkedScrapeResponse {
           header = headerData {
@@ -1399,11 +1419,10 @@ class ProxyServiceImplTest : StringSpec() {
           }
         },
         1000000,
+        transferOwner,
       )
-      completedChunkedContext.applyChunk(data, data.size, 1, crc.value)
 
-      // Return the real chunked context when summary removes it
-      every { contextManager.removeChunkedContext(completedScrapeId) } returns completedChunkedContext
+      every { contextManager.getChunkedContext(completedScrapeId) } returns completedChunkedContext
       every { contextManager.removeChunkedContext(orphanedScrapeId) } returns mockk(relaxed = true)
 
       val header1 = chunkedScrapeResponse {
@@ -1459,9 +1478,10 @@ class ProxyServiceImplTest : StringSpec() {
 
       result shouldBe EMPTY_INSTANCE
 
-      // Completed context was removed by summary processing (assignScrapeResults called)
-      verify(exactly = 1) { contextManager.removeChunkedContext(completedScrapeId) }
-      verify(exactly = 1) { scrapeRequestManager.assignScrapeResults(any()) }
+      // Completed context was removed by summary processing (assignScrapeResults called), and not again by the sweep
+      verify(exactly = 1) { contextManager.removeChunkedContext(completedScrapeId, completedChunkedContext) }
+      verify(exactly = 0) { contextManager.removeChunkedContext(completedScrapeId) }
+      verify(exactly = 1) { scrapeRequestManager.assignScrapeResults(any(), any()) }
       // Orphaned context should be cleaned up and failed during cleanup phase
       verify { contextManager.removeChunkedContext(orphanedScrapeId) }
       // Bug #4: Only the orphaned scrape should be failed, not the completed one
@@ -1513,7 +1533,8 @@ class ProxyServiceImplTest : StringSpec() {
       }
 
       // Use a real ChunkedContext so applyChunk() actually validates
-      every { contextManager.getChunkedContext(scrapeId) } returns ChunkedContext(header, 1000000)
+      val context = ChunkedContext(header, 1000000, transferOwner)
+      every { contextManager.getChunkedContext(scrapeId) } returns context
 
       val service = ProxyServiceImpl(proxy)
       val result = service.writeChunkedResponsesToProxy(flowOf(header, chunk))
@@ -1524,8 +1545,8 @@ class ProxyServiceImplTest : StringSpec() {
       verify {
         scrapeRequestManager.failScrapeRequest(scrapeId, match { it.contains("Chunk") }, ProxyFailure.INVALID_RESPONSE)
       }
-      // Context should have been cleaned up
-      verify { contextManager.removeChunkedContext(scrapeId) }
+      // The context the chunk failed on should have been cleaned up
+      verify { contextManager.removeChunkedContext(scrapeId, context) }
       // Counted at the chunk stage only: the failed transfer is not also counted as abandoned at stream end.
       verify(exactly = 1) { counters.chunkStage.inc() }
       verify(exactly = 0) { counters.summaryStage.inc() }
@@ -1574,12 +1595,8 @@ class ProxyServiceImplTest : StringSpec() {
         }
       }
 
-      // Use a real ChunkedContext that has had the chunk applied, so applySummary() validates
-      val realContext = ChunkedContext(header, 1000000).apply {
-        applyChunk(data, data.size, 1, correctChecksum)
-      }
-      every { contextManager.getChunkedContext(scrapeId) } returns ChunkedContext(header, 1000000)
-      every { contextManager.removeChunkedContext(scrapeId) } returns realContext
+      // Use a real ChunkedContext, which the chunk is applied to, so applySummary() validates
+      every { contextManager.getChunkedContext(scrapeId) } returns ChunkedContext(header, 1000000, transferOwner)
 
       val service = ProxyServiceImpl(proxy)
       val result = service.writeChunkedResponsesToProxy(flowOf(header, chunk, summary))
@@ -1669,7 +1686,7 @@ class ProxyServiceImplTest : StringSpec() {
 
       service.writeResponsesToProxy(flowOf(response1, response2))
 
-      verify(exactly = 2) { scrapeRequestManager.assignScrapeResults(any()) }
+      verify(exactly = 2) { scrapeRequestManager.assignScrapeResults(any(), any()) }
     }
 
     // Item 7: a per-response processing error must fail the in-flight request immediately so the
@@ -1678,7 +1695,7 @@ class ProxyServiceImplTest : StringSpec() {
     "Item 7: writeResponsesToProxy should fail the scrape request when processing throws" {
       val proxy = createMockProxy()
       val scrapeRequestManager = proxy.scrapeRequestManager
-      every { scrapeRequestManager.assignScrapeResults(any()) } answers { error("Simulated processing failure") }
+      every { scrapeRequestManager.assignScrapeResults(any(), any()) } answers { error("Simulated processing failure") }
 
       val response = scrapeResponse {
         agentId = "agent-1"
@@ -1691,7 +1708,7 @@ class ProxyServiceImplTest : StringSpec() {
       val result = service.writeResponsesToProxy(flowOf(response))
 
       result shouldBe EMPTY_INSTANCE
-      // The waiting HTTP handler is notified via failScrapeRequest for the failed scrapeId.
+      // The waiting HTTP handler is notified via failScrapeRequest for the failed scrapeId, under the same owner check.
       verify {
         scrapeRequestManager.failScrapeRequest(
           700L,
@@ -1699,18 +1716,19 @@ class ProxyServiceImplTest : StringSpec() {
           it.contains("Error processing")
         },
           ProxyFailure.INVALID_RESPONSE,
+          any(),
         )
       }
     }
 
     // Item 30: a chunked HEADER for an unknown/stale scrapeId must be dropped, not turned into a
-    // ChunkedContext (which would leak the entry). The shared createMockProxy() stubs
-    // containsScrapeRequest=true, so override it to false to exercise the drop branch.
+    // ChunkedContext (which would leak the entry). The shared createMockProxy() tracks every
+    // scrapeId, so override it to untracked to exercise the drop branch.
     "Item 30: writeChunkedResponsesToProxy should drop header for unknown scrapeId" {
       val proxy = createMockProxy()
       val contextManager = proxy.agentContextManager
       val scrapeId = 800L
-      every { proxy.scrapeRequestManager.containsScrapeRequest(scrapeId) } returns false
+      every { proxy.scrapeRequestManager.getScrapeRequest(scrapeId) } returns null
 
       val header = chunkedScrapeResponse {
         header = headerData {
@@ -1750,14 +1768,19 @@ class ProxyServiceImplTest : StringSpec() {
       }
     }
 
+    // The scrape the HTTP handler tracks (or is about to track) for another agent; its scrapeId is the one an intruder
+    // aims at.
+    fun victimScrape(victimAgent: AgentContext = AgentContext("victim-host")) =
+      ScrapeRequestWrapper(victimAgent, "metrics", "", "", null, false)
+
     "writeResponsesToProxy should ignore a result for a scrape sent to another agent" {
-      val proxy = createMockProxy()
-      val scrapeRequestManager = proxy.scrapeRequestManager
-      every { scrapeRequestManager.ownerAgentId(900L) } returns "victim-agent"
+      val victim = victimScrape()
+      val scrapeRequestManager = ScrapeRequestManager().apply { addToScrapeRequestMap(victim) }
+      val proxy = createMockProxy(scrapeRequestManager = scrapeRequestManager)
 
       val forged = scrapeResponse {
         agentId = "attacker-agent"
-        scrapeId = 900L
+        scrapeId = victim.scrapeId
         validResponse = true
         statusCode = 200
         contentAsText = "forged_metric 1"
@@ -1767,37 +1790,39 @@ class ProxyServiceImplTest : StringSpec() {
         ProxyServiceImpl(proxy).writeResponsesToProxy(flowOf(forged))
       }
 
-      verify(exactly = 0) { scrapeRequestManager.assignScrapeResults(any()) }
+      victim.scrapeResults.shouldBeNull()
     }
 
     "writeResponsesToProxy should accept a result for a scrape sent to the connection's agent" {
-      val proxy = createMockProxy()
-      val scrapeRequestManager = proxy.scrapeRequestManager
-      every { scrapeRequestManager.ownerAgentId(901L) } returns "own-agent"
+      val owner = AgentContext("own-host")
+      val scrape = victimScrape(owner)
+      val scrapeRequestManager = ScrapeRequestManager().apply { addToScrapeRequestMap(scrape) }
+      val proxy = createMockProxy(scrapeRequestManager = scrapeRequestManager)
 
       val response = scrapeResponse {
-        agentId = "own-agent"
-        scrapeId = 901L
+        agentId = owner.agentId
+        scrapeId = scrape.scrapeId
         validResponse = true
         statusCode = 200
       }
 
-      onConnection("own-agent") {
+      onConnection(owner.agentId) {
         ProxyServiceImpl(proxy).writeResponsesToProxy(flowOf(response))
       }
 
-      verify(exactly = 1) { scrapeRequestManager.assignScrapeResults(match { it.srScrapeId == 901L }) }
+      scrape.scrapeResults?.srScrapeId shouldBe scrape.scrapeId
+      scrape.proxyFailure.shouldBeNull()
     }
 
     "writeResponsesToProxy should not fail a scrape sent to another agent when processing its result throws" {
-      val proxy = createMockProxy()
-      val scrapeRequestManager = proxy.scrapeRequestManager
-      every { scrapeRequestManager.ownerAgentId(902L) } returns "victim-agent"
-      every { scrapeRequestManager.assignScrapeResults(any()) } answers { error("Simulated processing failure") }
+      val victim = victimScrape()
+      val scrapeRequestManager = spyk(ScrapeRequestManager()).apply { addToScrapeRequestMap(victim) }
+      every { scrapeRequestManager.assignScrapeResults(any(), any()) } answers { error("Simulated processing failure") }
+      val proxy = createMockProxy(scrapeRequestManager = scrapeRequestManager)
 
       val malformed = scrapeResponse {
         agentId = "attacker-agent"
-        scrapeId = 902L
+        scrapeId = victim.scrapeId
         validResponse = true
         statusCode = 200
       }
@@ -1806,62 +1831,120 @@ class ProxyServiceImplTest : StringSpec() {
         ProxyServiceImpl(proxy).writeResponsesToProxy(flowOf(malformed))
       }
 
-      verify(exactly = 0) { scrapeRequestManager.failScrapeRequest(902L, any(), any()) }
+      // The failure path reached failScrapeRequest, whose owner check left the victim's scrape alone.
+      verify { scrapeRequestManager.failScrapeRequest(victim.scrapeId, any(), ProxyFailure.INVALID_RESPONSE, any()) }
+      victim.scrapeResults.shouldBeNull()
     }
 
     "writeChunkedResponsesToProxy should not open a transfer for a scrape sent to another agent" {
-      val proxy = createMockProxy()
-      val contextManager = proxy.agentContextManager
-      // Stub through a captured reference: a chained `proxy.scrapeRequestManager.x()` stub makes MockK swap
-      // in a child mock, which would drop createMockProxy()'s containsScrapeRequest=true stub.
-      val scrapeRequestManager = proxy.scrapeRequestManager
-      every { scrapeRequestManager.ownerAgentId(903L) } returns "victim-agent"
+      val victim = victimScrape()
+      val scrapeRequestManager = ScrapeRequestManager().apply { addToScrapeRequestMap(victim) }
+      val contextManager = AgentContextManager(isTestMode = true)
+      val proxy = createMockProxy(scrapeRequestManager = scrapeRequestManager, agentContextManager = contextManager)
 
       val header = chunkedScrapeResponse {
         header = headerData {
           headerValidResponse = true
-          headerScrapeId = 903L
+          headerScrapeId = victim.scrapeId
           headerAgentId = "attacker-agent"
           headerStatusCode = 200
           headerContentType = "text/plain"
         }
       }
+      val opened = CompletableDeferred<Int>()
 
       onConnection("attacker-agent") {
-        ProxyServiceImpl(proxy).writeChunkedResponsesToProxy(flowOf(header))
+        ProxyServiceImpl(proxy).writeChunkedResponsesToProxy(
+          flow {
+            emit(header)
+            opened.complete(contextManager.chunkedContextSize)
+          },
+        )
       }
 
-      verify(exactly = 0) { contextManager.putChunkedContext(any(), any()) }
+      opened.await() shouldBe 0
+      // Nor did the end-of-stream sweep fail the victim's scrape as abandoned.
+      victim.scrapeResults.shouldBeNull()
     }
 
-    "writeChunkedResponsesToProxy should open a transfer for a scrape sent to the connection's agent" {
+    "writeChunkedResponsesToProxy should open a transfer owned by the agent the scrape was sent to" {
       val proxy = createMockProxy()
       val contextManager = proxy.agentContextManager
       val scrapeRequestManager = proxy.scrapeRequestManager
-      every { scrapeRequestManager.ownerAgentId(906L) } returns "own-agent"
+      val owner = AgentContext("own-host")
+      every { scrapeRequestManager.getScrapeRequest(906L) } returns trackedScrape(owner)
 
       val header = chunkedScrapeResponse {
         header = headerData {
           headerValidResponse = true
           headerScrapeId = 906L
-          headerAgentId = "own-agent"
+          headerAgentId = owner.agentId
           headerStatusCode = 200
           headerContentType = "text/plain"
         }
       }
 
-      onConnection("own-agent") {
+      onConnection(owner.agentId) {
         ProxyServiceImpl(proxy).writeChunkedResponsesToProxy(flowOf(header))
       }
 
-      verify(exactly = 1) { contextManager.putChunkedContext(906L, any()) }
+      verify(exactly = 1) { contextManager.putChunkedContext(906L, match { it.owner === owner }) }
+    }
+
+    "writeChunkedResponsesToProxy should keep the transfer under way when a second header arrives" {
+      val owner = AgentContext("own-host")
+      val scrape = victimScrape(owner)
+      val scrapeRequestManager = ScrapeRequestManager().apply { addToScrapeRequestMap(scrape) }
+      val contextManager = AgentContextManager(isTestMode = true)
+      val proxy = createMockProxy(scrapeRequestManager = scrapeRequestManager, agentContextManager = contextManager)
+
+      fun header(url: String) =
+        chunkedScrapeResponse {
+          header = headerData {
+            headerValidResponse = true
+            headerScrapeId = scrape.scrapeId
+            headerAgentId = owner.agentId
+            headerStatusCode = 200
+            headerContentType = "text/plain"
+            headerUrl = url
+          }
+        }
+      val data = "metric 1".toByteArray()
+      val crc = CRC32().apply { update(data) }
+      val chunk = chunkedScrapeResponse {
+        chunk = chunkData {
+          chunkScrapeId = scrape.scrapeId
+          chunkCount = 1
+          chunkByteCount = data.size
+          chunkChecksum = crc.value
+          chunkBytes = ByteString.copyFrom(data)
+        }
+      }
+      val summary = chunkedScrapeResponse {
+        summary = summaryData {
+          summaryScrapeId = scrape.scrapeId
+          summaryChunkCount = 1
+          summaryByteCount = data.size
+          summaryChecksum = crc.value
+        }
+      }
+
+      onConnection(owner.agentId) {
+        ProxyServiceImpl(proxy).writeChunkedResponsesToProxy(
+          flowOf(header("http://first/metrics"), chunk, header("http://second/metrics"), summary),
+        )
+      }
+
+      // The chunk received before the second header still completes the scrape, under the first header.
+      scrape.proxyFailure.shouldBeNull()
+      scrape.scrapeResults?.srUrl shouldBe "http://first/metrics"
+      contextManager.chunkedContextMapView.shouldBeEmpty()
     }
 
     "writeChunkedResponsesToProxy should not apply a chunk to a transfer for another agent's scrape" {
       val proxy = createMockProxy()
       val contextManager = proxy.agentContextManager
       val scrapeRequestManager = proxy.scrapeRequestManager
-      every { scrapeRequestManager.ownerAgentId(904L) } returns "victim-agent"
 
       // The victim's in-progress transfer. A chunk with a bad checksum would fail validation, discard this
       // context, and fail the victim's scrape if it were ever applied.
@@ -1874,7 +1957,8 @@ class ProxyServiceImplTest : StringSpec() {
           headerContentType = "text/plain"
         }
       }
-      every { contextManager.getChunkedContext(904L) } returns ChunkedContext(victimHeader, 1000000)
+      every { contextManager.getChunkedContext(904L) } returns
+        ChunkedContext(victimHeader, 1000000, AgentContext("victim-host"))
 
       val data = "forged chunk".toByteArray()
       val badChunk = chunkedScrapeResponse {
@@ -1892,14 +1976,25 @@ class ProxyServiceImplTest : StringSpec() {
       }
 
       verify(exactly = 0) { contextManager.removeChunkedContext(904L) }
-      verify(exactly = 0) { scrapeRequestManager.failScrapeRequest(904L, any(), any()) }
+      verify(exactly = 0) { contextManager.removeChunkedContext(904L, any()) }
+      verify(exactly = 0) { scrapeRequestManager.failScrapeRequest(904L, any(), any(), any()) }
     }
 
     "writeChunkedResponsesToProxy should not apply a summary to a transfer for another agent's scrape" {
       val proxy = createMockProxy()
       val contextManager = proxy.agentContextManager
       val scrapeRequestManager = proxy.scrapeRequestManager
-      every { scrapeRequestManager.ownerAgentId(905L) } returns "victim-agent"
+      val victimHeader = chunkedScrapeResponse {
+        header = headerData {
+          headerValidResponse = true
+          headerScrapeId = 905L
+          headerAgentId = "victim-agent"
+          headerStatusCode = 200
+          headerContentType = "text/plain"
+        }
+      }
+      every { contextManager.getChunkedContext(905L) } returns
+        ChunkedContext(victimHeader, 1000000, AgentContext("victim-host"))
 
       val summary = chunkedScrapeResponse {
         summary = summaryData {
@@ -1914,8 +2009,137 @@ class ProxyServiceImplTest : StringSpec() {
         ProxyServiceImpl(proxy).writeChunkedResponsesToProxy(flowOf(summary))
       }
 
-      // Removing the context is what a summary does first; the victim's transfer must be left intact.
-      verify(exactly = 0) { contextManager.removeChunkedContext(905L) }
+      // The victim's transfer must be left intact, and its scrape not completed.
+      verify(exactly = 0) { contextManager.removeChunkedContext(905L, any()) }
+      verify(exactly = 0) { scrapeRequestManager.assignScrapeResults(any(), any()) }
+    }
+
+    // ==================== ownership checked on the scrape the result completes ====================
+    //
+    // The ownership check and the completion used to be two lookups of the scrape map. A scrapeId not yet tracked
+    // passed the check, so if the HTTP handler started tracking it for another agent before the second lookup, the
+    // non-owner's result completed that agent's scrape. Scrape IDs are sequential, so an agent can aim at the next few.
+    // There is now one lookup, which both the check and the act read; the seams below track the victim's scrape just
+    // before it, or just after it.
+
+    "writeResponsesToProxy should not let a non-owner complete a scrape tracked just before its result is applied" {
+      val victim = victimScrape()
+      val scrapeRequestManager = spyk(ScrapeRequestManager())
+      every { scrapeRequestManager.assignScrapeResults(match { it.srScrapeId == victim.scrapeId }, any()) } answers {
+        scrapeRequestManager.addToScrapeRequestMap(victim)
+        callOriginal()
+      }
+      val proxy = createMockProxy(scrapeRequestManager = scrapeRequestManager)
+
+      val forged = scrapeResponse {
+        agentId = "intruder-agent"
+        scrapeId = victim.scrapeId
+        validResponse = true
+        statusCode = 200
+        contentAsText = "forged_metric 1"
+      }
+
+      onConnection("intruder-agent") {
+        ProxyServiceImpl(proxy).writeResponsesToProxy(flowOf(forged))
+      }
+
+      scrapeRequestManager.containsScrapeRequest(victim.scrapeId).shouldBeTrue()
+      victim.scrapeResults.shouldBeNull()
+    }
+
+    // Through the chunked RPC the intruder couldn't fill the victim's scrape, since its chunks and summary were checked
+    // once the scrape was tracked, but the transfer it opened was swept at the end of its stream, failing the victim's
+    // scrape as abandoned.
+    fun chunkedHeaderFrom(
+      agentId: String,
+      scrapeId: Long,
+    ) = chunkedScrapeResponse {
+      header = headerData {
+        headerValidResponse = true
+        headerScrapeId = scrapeId
+        headerAgentId = agentId
+        headerStatusCode = 200
+        headerContentType = "text/plain"
+      }
+    }
+
+    "writeChunkedResponsesToProxy should not let a non-owner open a transfer for a scrape tracked before its header" {
+      val victim = victimScrape()
+      val scrapeRequestManager = spyk(ScrapeRequestManager())
+      every { scrapeRequestManager.getScrapeRequest(victim.scrapeId) } answers {
+        scrapeRequestManager.addToScrapeRequestMap(victim)
+        callOriginal()
+      }
+      val contextManager = AgentContextManager(isTestMode = true)
+      val proxy = createMockProxy(scrapeRequestManager = scrapeRequestManager, agentContextManager = contextManager)
+
+      onConnection("intruder-agent") {
+        ProxyServiceImpl(proxy).writeChunkedResponsesToProxy(
+          flowOf(chunkedHeaderFrom("intruder-agent", victim.scrapeId)),
+        )
+      }
+
+      scrapeRequestManager.containsScrapeRequest(victim.scrapeId).shouldBeTrue()
+      contextManager.chunkedContextMapView.shouldBeEmpty()
+      victim.scrapeResults.shouldBeNull()
+    }
+
+    // The interleaving the old check lost: the scrapeId was untracked when looked up, and tracked for another agent
+    // right after. An untracked scrapeId now has no owner to pass the check, so the header is dropped.
+    "writeChunkedResponsesToProxy should drop a header for a scrape tracked just after its lookup" {
+      val victim = victimScrape()
+      val scrapeRequestManager = spyk(ScrapeRequestManager())
+      every { scrapeRequestManager.getScrapeRequest(victim.scrapeId) } answers {
+        callOriginal().also { scrapeRequestManager.addToScrapeRequestMap(victim) }
+      }
+      val contextManager = AgentContextManager(isTestMode = true)
+      val proxy = createMockProxy(scrapeRequestManager = scrapeRequestManager, agentContextManager = contextManager)
+
+      onConnection("intruder-agent") {
+        ProxyServiceImpl(proxy).writeChunkedResponsesToProxy(
+          flowOf(chunkedHeaderFrom("intruder-agent", victim.scrapeId)),
+        )
+      }
+
+      scrapeRequestManager.containsScrapeRequest(victim.scrapeId).shouldBeTrue()
+      contextManager.chunkedContextMapView.shouldBeEmpty()
+      victim.scrapeResults.shouldBeNull()
+    }
+
+    // ==================== chunked transfers swept when the stream is cancelled ====================
+
+    // When an agent disconnects mid-transfer, grpc-kotlin cancels the RPC. The end-of-stream sweep ran after
+    // runCatchingCancellable, which rethrows CancellationException, so it was skipped in the most common way a stream
+    // ends, leaving the buffer to removeAgentContext's reclaim, which misses a transfer opened while it runs.
+    "writeChunkedResponsesToProxy should sweep a transfer left unfinished when the stream is cancelled" {
+      val owner = AgentContext("owner-host")
+      val scrape = ScrapeRequestWrapper(owner, "metrics", "", "", null, false)
+      val scrapeRequestManager = ScrapeRequestManager().apply { addToScrapeRequestMap(scrape) }
+      val contextManager = AgentContextManager(isTestMode = true)
+      val proxy = createMockProxy(scrapeRequestManager = scrapeRequestManager, agentContextManager = contextManager)
+
+      val header = chunkedScrapeResponse {
+        header = headerData {
+          headerValidResponse = true
+          headerScrapeId = scrape.scrapeId
+          headerAgentId = owner.agentId
+          headerStatusCode = 200
+          headerContentType = "text/plain"
+        }
+      }
+      val disconnected = flow {
+        emit(header)
+        throw kotlinx.coroutines.CancellationException("agent disconnected mid-transfer")
+      }
+
+      shouldThrow<kotlinx.coroutines.CancellationException> {
+        onConnection(owner.agentId) {
+          ProxyServiceImpl(proxy).writeChunkedResponsesToProxy(disconnected)
+        }
+      }
+
+      contextManager.chunkedContextMapView.shouldBeEmpty()
+      scrape.proxyFailure shouldBe ProxyFailure.AGENT_DISCONNECTED
     }
 
     // ==================== heartbeats bound to the connection ====================
@@ -2134,17 +2358,16 @@ class ProxyServiceImplTest : StringSpec() {
       response.valid.shouldBeFalse()
     }
 
+    // The identity is read off the owner the tracked scrape holds. It was looked up in the AgentContextManager by the
+    // owner's agentId, and a missing context let the result through; the mocked manager here has no such context.
     "writeResponsesToProxy should ignore a result from a different identity when the transport filter is disabled" {
-      val proxy = createMockProxy(transportFilterDisabled = true)
-      val agentContextManager = proxy.agentContextManager
-      val scrapeRequestManager = proxy.scrapeRequestManager
-      val victimContext = AgentContext("victim-host", authIdentityName = "team-a")
-      every { scrapeRequestManager.ownerAgentId(910L) } returns victimContext.agentId
-      every { agentContextManager.getAgentContext(victimContext.agentId) } returns victimContext
+      val victim = victimScrape(AgentContext("victim-host", authIdentityName = "team-a"))
+      val scrapeRequestManager = ScrapeRequestManager().apply { addToScrapeRequestMap(victim) }
+      val proxy = createMockProxy(transportFilterDisabled = true, scrapeRequestManager = scrapeRequestManager)
 
       val forged = scrapeResponse {
-        agentId = victimContext.agentId
-        scrapeId = 910L
+        agentId = victim.agentContext.agentId
+        scrapeId = victim.scrapeId
         validResponse = true
         statusCode = 200
       }
@@ -2153,7 +2376,51 @@ class ProxyServiceImplTest : StringSpec() {
         ProxyServiceImpl(proxy).writeResponsesToProxy(flowOf(forged))
       }
 
-      verify(exactly = 0) { scrapeRequestManager.assignScrapeResults(any()) }
+      victim.scrapeResults.shouldBeNull()
+    }
+
+    "writeResponsesToProxy should accept a result from the owner's identity when the transport filter is disabled" {
+      val scrape = victimScrape(AgentContext("own-host", authIdentityName = "team-a"))
+      val scrapeRequestManager = ScrapeRequestManager().apply { addToScrapeRequestMap(scrape) }
+      val proxy = createMockProxy(transportFilterDisabled = true, scrapeRequestManager = scrapeRequestManager)
+
+      val response = scrapeResponse {
+        agentId = scrape.agentContext.agentId
+        scrapeId = scrape.scrapeId
+        validResponse = true
+        statusCode = 200
+      }
+
+      asIdentity("team-a") {
+        ProxyServiceImpl(proxy).writeResponsesToProxy(flowOf(response))
+      }
+
+      scrape.scrapeResults?.srScrapeId shouldBe scrape.scrapeId
+    }
+
+    "writeChunkedResponsesToProxy should not open a transfer for another identity with the transport filter disabled" {
+      val victim = victimScrape(AgentContext("victim-host", authIdentityName = "team-a"))
+      val scrapeRequestManager = ScrapeRequestManager().apply { addToScrapeRequestMap(victim) }
+      val contextManager = AgentContextManager(isTestMode = true)
+      val proxy =
+        createMockProxy(
+          transportFilterDisabled = true,
+          scrapeRequestManager = scrapeRequestManager,
+          agentContextManager = contextManager,
+        )
+      val opened = CompletableDeferred<Int>()
+
+      asIdentity("team-b") {
+        ProxyServiceImpl(proxy).writeChunkedResponsesToProxy(
+          flow {
+            emit(chunkedHeaderFrom(victim.agentContext.agentId, victim.scrapeId))
+            opened.complete(contextManager.chunkedContextSize)
+          },
+        )
+      }
+
+      opened.await() shouldBe 0
+      victim.scrapeResults.shouldBeNull()
     }
   }
 }
