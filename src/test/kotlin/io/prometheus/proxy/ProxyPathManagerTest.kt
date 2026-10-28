@@ -168,6 +168,40 @@ class ProxyPathManagerTest : StringSpec() {
     // The scrape route is registered as get("/*"), which matches exactly one path segment, so a
     // multi-segment path would be advertised in service discovery yet 404 at scrape time. Reject it
     // at registration with a clear reason instead of silently registering an unreachable path.
+    // Labels Prometheus couldn't decode are left out of service discovery (see ProxyTest). The path still registers,
+    // since labels matter only there, and the registration says which labels won't appear.
+    "addPath should register a path whose labels service discovery can't serve, and warn about them" {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val context = createMockAgentContext()
+
+      val warnings =
+        captureLogs<ProxyPathManager>(Level.WARN) {
+          manager.addPath("metrics", """{"a":1}""", context).shouldBeNull()
+          manager.addPath("clean", """{"team":"web"}""", context).shouldBeNull()
+        }.map { it.formattedMessage }
+
+      manager.pathMapSize shouldBe 2
+      warnings.single() shouldContain "/metrics"
+      warnings.single() shouldContain "label 'a' must have a string value"
+    }
+
+    // The scrape port answers these paths itself, so an agent's registration of one was advertised in service
+    // discovery but could never be scraped: the SD path returned the SD JSON, favicon.ico a 404, and blitz "42".
+    "addPath should reject a path the scrape port serves itself" {
+      val proxy = createMockProxy()
+      every { proxy.options.sdEnabled } returns true
+      every { proxy.options.sdPath } returns "/discovery"
+      every { proxy.isBlitzRequest(any()) } answers { firstArg<String>() == "blitz-check" }
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val context = createMockAgentContext()
+
+      listOf("discovery", "/discovery", "favicon.ico", "blitz-check").forEach { path ->
+        manager.addPath(path, "", context).shouldNotBeNull().cause shouldBe PathRejectionCause.INVALID_PATH
+      }
+      manager.pathMapSize shouldBe 0
+    }
+
     "addPath should reject a multi-segment path" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)

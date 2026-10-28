@@ -113,6 +113,10 @@ class ProxyOptions internal constructor(
   var sdTargetPrefix = ""
     private set
 
+  // sdTargetPrefix parsed, or null when service discovery is off and the value doesn't parse.
+  internal var sdTarget: SdTarget? = null
+    private set
+
   /**
    * Enables the Proxy's read-only operational dashboard, served from its **own** port ([dashboardPort]) rather
    * than the admin or scrape port. Off by default, matching the admin and metrics posture.
@@ -283,8 +287,12 @@ class ProxyOptions internal constructor(
     logger.info { "sdPath: $sdPath" }
 
     sdTargetPrefix = resolveStringOption(sdTargetPrefix, SD_TARGET_PREFIX, discovery.targetPrefix)
-    if (sdEnabled)
-      require(sdTargetPrefix.isNotEmpty()) { "sdTargetPrefix is empty" }
+    // Parsed here, so a value Prometheus can't use fails startup, not every refresh of every target (October #1).
+    sdTarget =
+      if (sdEnabled)
+        SdTarget.parse(sdTargetPrefix)
+      else
+        runCatching { SdTarget.parse(sdTargetPrefix) }.getOrNull()
     logger.info { "sdTargetPrefix: $sdTargetPrefix" }
   }
 

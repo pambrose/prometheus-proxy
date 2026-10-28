@@ -3,7 +3,7 @@
 java -jar prometheus-proxy.jar \
   --sd_enabled \
   --sd_path discovery \
-  --sd_target_prefix http://proxy-host.example.com:8080/
+  --sd_target_prefix proxy-host.example.com:8080
 ; --8<-- [end:sd-enable-cli]
 
 ; --8<-- [start:sd-enable-config]
@@ -11,7 +11,7 @@ proxy {
   service.discovery {
     enabled = true
     path = "discovery"
-    targetPrefix = "http://proxy-host.example.com:8080/"
+    targetPrefix = "proxy-host.example.com:8080"
   }
 }
 ; --8<-- [end:sd-enable-config]
@@ -53,5 +53,5 @@ scrape_configs:
 # Enable service discovery via environment variables:
 SD_ENABLED=true
 SD_PATH=discovery
-SD_TARGET_PREFIX=http://proxy-host.example.com:8080/
+SD_TARGET_PREFIX=proxy-host.example.com:8080
 ; --8<-- [end:sd-env-vars]

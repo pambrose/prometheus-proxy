@@ -19,7 +19,7 @@ icon: lucide/terminal
 | `--metrics_port, -m`             | `METRICS_PORT`                    | `proxy.metrics.port`                    | 8082                     | Metrics listen port          |
 | `--sd_enabled`                   | `SD_ENABLED`                      | `proxy.service.discovery.enabled`       | false                    | Enable service discovery     |
 | `--sd_path`                      | `SD_PATH`                         | `proxy.service.discovery.path`          | "discovery"              | SD endpoint path             |
-| `--sd_target_prefix`             | `SD_TARGET_PREFIX`                | `proxy.service.discovery.targetPrefix`  | "http://localhost:8080/" | SD target prefix             |
+| `--sd_target_prefix`             | `SD_TARGET_PREFIX`                | `proxy.service.discovery.targetPrefix`  | "localhost:8080"         | SD target (host:port or URL) |
 | `--dashboard`                    | `DASHBOARD_ENABLED`               | `proxy.dashboard.enabled`               | false                    | Enable operational dashboard |
 | `--dashboard_port`               | `DASHBOARD_PORT`                  | `proxy.dashboard.port`                  | 8094                     | Dashboard listen port        |
 | `--dashboard_path`               | `DASHBOARD_PATH`                  | `proxy.dashboard.path`                  | "dashboard"              | Dashboard base path          |
