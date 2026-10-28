@@ -234,7 +234,7 @@ The fat JARs include `src/shadow/resources/META-INF/services/io.grpc.NameResolve
 - **Language**: Kotlin (JVM 17+)
 - **Build**: Gradle with Kotlin DSL
 - **gRPC**: protobuf + grpc-java + grpc-kotlin
-- **HTTP Server**: Ktor (Netty engine)
+- **HTTP Server**: Ktor (CIO engine) for the proxy's scrape port and dashboard; Jetty, through common-utils, for the admin and metrics endpoints
 - **HTTP Client**: Ktor CIO client
 - **Configuration**: Typesafe Config (HOCON)
 - **Metrics**: Prometheus Java client 1.x (`io.prometheus:prometheus-metrics-*`), through common-utils' `prometheus-utils`

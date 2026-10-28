@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — October 2026 Findings
 
-**Status:** 47 issues — 27 fixed, 20 open (16 medium, 31 low, no high).
+**Status:** 47 issues — 30 fixed, 17 open (16 medium, 31 low, no high).
 
 **Date:** 2026-10-27
 
@@ -100,7 +100,7 @@ Six earlier fixes turn out to be incomplete:
 | 25 | The Netty CVE override isn't in the published POM; embedders get vulnerable Netty       | Security | medium   | ✅      |
 | 26 | A connection that skips `connectAgent` works as an agent without being announced        | Security | low      | ✅      |
 | 27 | Helm proxy chart takes `proxy.auth` tokens only via a ConfigMap; example schema wrong   | Security | low      | ⬜      |
-| 28 | Security docs don't say the scrape port is unauthenticated, or what it forwards         | Security | low      | ⬜      |
+| 28 | Security docs don't say the scrape port is unauthenticated, or what it forwards         | Security | low      | ✅      |
 | 29 | `release-check` accepts any all-green check set without requiring the CI jobs           | CI/build | medium   | ✅      |
 | 30 | Version-bump check passes partial bumps and skips two of step 2's files                 | CI/build | medium   | ✅      |
 | 31 | The docs site is never built on a pull request                                          | CI/build | medium   | ✅      |
@@ -114,9 +114,9 @@ Six earlier fixes turn out to be incomplete:
 | 39 | The image's UID is implicit, but the charts hard-code it                                | CI/build | low      | ⬜      |
 | 40 | The fat JARs keep only one dependency's `NOTICE`                                        | CI/build | low      | ⬜      |
 | 41 | Every embedded-agent example passes `exitOnMissingConfig = true` and exits the host     | Docs     | medium   | ✅      |
-| 42 | Website tuning table names a nonexistent key; Troubleshooting a nonexistent metric      | Docs     | medium   | ⬜      |
+| 42 | Website tuning table names a nonexistent key; Troubleshooting a nonexistent metric      | Docs     | medium   | ✅      |
 | 43 | 4.4.0 changelogs miss the common-utils and gradle-plugins bumps                         | Docs     | low      | ✅      |
-| 44 | `docs/TESTING.md` omits three specs and misstates `all-tests`                           | Docs     | low      | ⬜      |
+| 44 | `docs/TESTING.md` omits three specs and misstates `all-tests`                           | Docs     | low      | ✅      |
 | 45 | Tests whose assertions can't fail, or that test the JDK                                 | Tests    | low      | ⬜      |
 | 46 | Failed-startup tests free ephemeral ports and then bind them again                      | Tests    | low      | ⬜      |
 | 47 | The #314 JVM metric groups are never checked on a real `/metrics`                       | Tests    | low      | ⬜      |
@@ -154,7 +154,7 @@ The **Touches** column shows which steps edit the same files and so need to land
 | 13   | ✅      | #19             | `MetricFilter` handles quoted UTF-8 names                                   | `agent/filter/MetricFilter.kt`                                                                    | Self-contained, so it can go any time.                                                                                                                                           |
 | 14   | ✅      | #31, #36, #34   | Docs site: build on PRs, cool down hand upgrades, deploy after publishing   | `docs.yml`, `ci.yml`, `Makefile`                                                                  | Keeps a broken site build off `master`, and keeps the site from advertising a version that isn't published yet. Workflow-only, so it can run in parallel with code steps.        |
 | 15   | ⬜      | #27, #39, #40   | Helm and image packaging                                                    | `charts/*`, `etc/docker/*.Dockerfile`, `build.gradle.kts` shadow config                           | A Secret-backed auth config, an explicit UID, and NOTICE merging. Needs a `helm-smoke` run and the container tests.                                                              |
-| 16   | ⬜      | #42, #44, #28   | Documentation drift                                                         | website pages, `llms.txt`, `docs/TESTING.md`, `SECURITY.md`                                       | No behavior change. Each item can ride along with any earlier PR that touches the same page.                                                                                     |
+| 16   | ✅      | #42, #44, #28   | Documentation drift                                                         | website pages, `llms.txt`, `docs/TESTING.md`, `SECURITY.md`                                       | No behavior change. Each item can ride along with any earlier PR that touches the same page.                                                                                     |
 | 17   | ⬜      | #45, #46, #47   | Tests that can fail, and that don't race for ports                          | the cited specs, `TestPorts.kt`                                                                   | Removes false confidence. #45's `TESTING.md` line goes with step 16 if that lands first.                                                                                         |
 | 18   | ⬜      | #35, #37, #38   | Build tidy-ups                                                              | `build.gradle.kts`, `Makefile`, workflows                                                         | Hygiene. After #35, compare the `testRuntimeClasspath` against today's.                                                                                                          |
 | 19   | ⬜      | #7, #20         | Remove dead code                                                            | proxy and agent sources and their tests                                                           | Last, so the deletions don't collide with the behavior fixes, and the tests move onto the entry points those fixes settle.                                                       |
@@ -1097,7 +1097,7 @@ URLs.
 **Test:** a chart CI values file renders a Secret-backed config, and the `helm template` output has no token in any
 ConfigMap.
 
-### 28. [ ] The security docs don't say the scrape port is unauthenticated, or what it forwards
+### 28. [x] The security docs don't say the scrape port is unauthenticated, or what it forwards
 
 **Severity:** low (documentation) · **Confidence:** confirmed
 
@@ -1125,6 +1125,18 @@ mention it.
 - care with exporters that take a target parameter.
 
 Optionally, add a per-path query-parameter allowlist on the agent.
+
+**Resolution:** `SECURITY.md` lists the scrape port as by design: unauthenticated on `0.0.0.0:8080`, forwarding a
+client's query string and `Authorization` header, with service discovery listing every path, agent name, and host.
+It also notes that an exporter taking a target parameter reaches whatever it can. The security page gains a Scrape
+Port Access section with these recommendations:
+- bind `proxy.http.host` to a private address, which is config-only or `-Dproxy.http.host=…`;
+- publish the Docker port on a private address;
+- note that the chart's Service is ClusterIP, and use a `NetworkPolicy`;
+- firewall the port;
+- take care with target-parameter exporters.
+
+The production checklist has a bullet for it. The optional query-parameter allowlist isn't implemented.
 
 ---
 
@@ -1458,7 +1470,7 @@ the KDoc's standalone example is `AgentOptions(args, exitOnMissingConfig = true)
 config or option error and uses the built-in config when none is given; `true` requires a config and exits the
 process.
 
-### 42. [ ] The website's tuning table names a config key that doesn't exist, and Troubleshooting a metric that doesn't
+### 42. [x] The website's tuning table names a config key that doesn't exist, and Troubleshooting a metric that doesn't
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -1482,6 +1494,21 @@ process.
 **Fix:** correct the key, the default, the metric name, and the engine. Optionally, extend `DashboardMetricNamesTest`
 (or add a sibling test) to check the backticked `proxy_*`/`agent_*` names and the `proxy.`/`agent.` keys on the website
 pages against the exposed series and `config/config.conf`.
+
+**Resolution:** the four names are corrected: `agent.http.maxConcurrentClients`, the `10` MB default,
+`proxy_agent_map_size`, and the engines in `llms.txt`. The scrape port and dashboard use Ktor CIO, and the admin and
+metrics endpoints use Jetty, via common-utils. The optional check is done too, as three tests:
+- **`DashboardMetricNamesTest`** gains a check that every `proxy_*`/`agent_*` name in the website's inline code is an
+  exposed series or histogram family. It failed on `proxy_connected_agents`.
+- **The new `WebsiteConfigKeysTest`** checks that every `proxy.`/`agent.` key in inline code exists in
+  `config/config.conf`, and that every Default-column value matches it. It failed on `agent.maxConcurrentClients`,
+  `proxy.hostname` (`configuration/index.md`, now `agent.proxy.hostname`), and the `—` default.
+- **Shared helper:** `misc/WebsitePages` strips fenced code and returns inline spans.
+
+Each check has a small allowlist, and every entry gives its reason. Two more wrong keys the checks found are fixed:
+`configuration/index.md`, and `getting-started.md`'s `proxy.hostname`. The `llms.txt` engine claim is prose, so no
+check covers it. Left for later: `config/config.conf`'s comment on `agent.http.clientTimeoutSecs` says it replaces
+`internal.cioTimeoutSecs`, which is still declared.
 
 ### 43. [x] The 4.4.0 changelogs miss the common-utils and gradle-plugins bumps, and describe the state before them
 
@@ -1520,7 +1547,7 @@ and the grpc and Prometheus lines credit 5.1.2. Its Gradle module metadata confi
 protobuf comment are current, the website's bridge advice says to match the `prometheus-metrics-core` the agent
 brings, and RELEASE_NOTES has the Documentation item and the `make versions` commit-hash fix.
 
-### 44. [ ] `docs/TESTING.md` says it names every spec but omits three, and misstates `all-tests`
+### 44. [x] `docs/TESTING.md` says it names every spec but omits three, and misstates `all-tests`
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -1539,6 +1566,15 @@ brings, and RELEASE_NOTES has the Documentation item and the `make versions` com
 
 **Fix:** add the missing entries and correct the target description. Optionally, add a spec in the style of
 `TestPortsTest` that fails when a `*Test.kt` isn't named in `TESTING.md`.
+
+**Resolution:** `docs/TESTING.md` describes `all-tests` as `tests` plus `lincheck-tests` plus `container-tests`, and
+lists every spec and support file it missed, including ones added since the review. "Four support helpers" became
+"These support helpers", so no count can go stale. The optional spec, `misc/TestingGuideTest`, has two tests:
+- Every `*Test.kt` must appear in bold in its own package's section. That is section-aware, since `agent/` and
+  `proxy/` both have an `AgentContextTest`.
+- Every other test source must be named.
+
+It failed on six unlisted specs and eight helpers and snippet sources.
 
 ---
 

@@ -138,10 +138,10 @@ normally shows up as `upstream_timed_out`.
   that too. The agent passes the timeout it enforces on to the target in the same header, so exporters that
   size their work by it, such as blackbox_exporter, finish within it.
 - **`timed_out`** — the agent is unresponsive or the link to it is broken. Check the agent is still
-  connected (`proxy_connected_agents`) and raise `proxy.internal.scrapeRequestTimeoutSecs` only if
+  connected (`proxy_agent_map_size`) and raise `proxy.internal.scrapeRequestTimeoutSecs` only if
   the agent legitimately needs longer than 90s.
-- Either can mean the agent is saturated — raise `maxConcurrentClients` (default `1`) so scrapes
-  run in parallel; watch `agent_scrape_backlog_size` and `proxy_cumulative_agent_backlog_size`.
+- Either can mean the agent is saturated — raise `agent.http.maxConcurrentClients` (default `1`) so
+  scrapes run in parallel; watch `agent_scrape_backlog_size` and `proxy_cumulative_agent_backlog_size`.
 - See [Performance Tuning](advanced.md#performance-tuning).
 
 ---

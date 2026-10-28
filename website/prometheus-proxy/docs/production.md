@@ -20,6 +20,10 @@ security, reliability, and tuning knobs documented elsewhere into one operationa
   [Per-Agent Identities](security/index.md#per-agent-identities-and-path-authorization),
   including the incremental migration path from a shared token.
 - **Segment the network** so only trusted agents can reach the gRPC port (`50051`).
+- **Keep the scrape port (`8080`) to Prometheus.** It has no authentication, and whoever reaches it can have
+  the agents scrape their targets with their own query string and `Authorization` header. Bind it to a
+  private address with `proxy.http.host` and firewall it. See
+  [Scrape Port Access](security/index.md#scrape-port-access).
 - **Do not expose the admin or dashboard ports publicly.** `/threaddump` and friends are
   operational tools, not public endpoints — keep `8092`/`8093` on an internal network only. The
   [dashboard](web-dashboard.md) port (`8094`) is equally unauthenticated and shows agent names,
@@ -145,16 +149,16 @@ metrics; the other returns `404` and shows as `up=0`. Deduplicate in the usual P
 
 Start from the defaults and adjust against the backlog and latency metrics:
 
-| Parameter                                  | Default | When to change                                       |
-|:-------------------------------------------|:--------|:-----------------------------------------------------|
-| `agent.maxConcurrentClients`               | 1       | Raise for many endpoints or slow targets             |
-| `agent.scrapeTimeoutSecs`                  | 15      | Raise for slow targets                               |
-| `agent.http.clientTimeoutSecs`             | 90      | Lower for fast-failing scrapes                       |
-| `agent.chunkContentSizeKbs`                | 32      | Raise for large payloads to cut chunk count          |
-| `agent.minGzipSizeBytes`                   | 512     | Lower to compress more aggressively                  |
-| `agent.http.maxContentLengthMBytes`        | 10      | Raise for large scrape bodies (guards agent heap)    |
-| `proxy.internal.maxUnzippedContentSizeMBytes` | —    | Raise for large decompressed payloads                |
-| `proxy.internal.maxAgentInactivitySecs`    | 60      | Tune stale-agent eviction window                     |
+| Parameter                                     | Default | When to change                                    |
+|:----------------------------------------------|:--------|:--------------------------------------------------|
+| `agent.http.maxConcurrentClients`             | 1       | Raise for many endpoints or slow targets          |
+| `agent.scrapeTimeoutSecs`                     | 15      | Raise for slow targets                            |
+| `agent.http.clientTimeoutSecs`                | 90      | Lower for fast-failing scrapes                    |
+| `agent.chunkContentSizeKbs`                   | 32      | Raise for large payloads to cut chunk count       |
+| `agent.minGzipSizeBytes`                      | 512     | Lower to compress more aggressively               |
+| `agent.http.maxContentLengthMBytes`           | 10      | Raise for large scrape bodies (guards agent heap) |
+| `proxy.internal.maxUnzippedContentSizeMBytes` | 10      | Raise for large decompressed payloads             |
+| `proxy.internal.maxAgentInactivitySecs`       | 60      | Tune stale-agent eviction window                  |
 
 Size the JVM heap for the largest **decompressed** payload times the scrape concurrency, and
 watch `agent_scrape_backlog_size` / `proxy_cumulative_agent_backlog_size` — a steadily growing
