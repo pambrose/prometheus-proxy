@@ -36,6 +36,14 @@ internal object MetricBuilders {
 
   private val logger = logger {}
 
+  /**
+   * The proxy's and agent's scrape latency buckets, in seconds. They reach the proxy's default
+   * `scrapeRequestTimeoutSecs` (90), past the agent's default `scrapeTimeoutSecs` (15), so a timeout lands in a bucket
+   * rather than `+Inf`.
+   */
+  val SCRAPE_LATENCY_BUCKETS =
+    doubleArrayOf(.005, .01, .025, .05, .1, .25, .5, 1.0, 2.5, 5.0, 10.0, 15.0, 30.0, 60.0, 90.0)
+
   fun counter(block: Counter.Builder.() -> Unit): Counter = Counter.builder().withoutExemplars().apply(block).build()
 
   fun gauge(block: Gauge.Builder.() -> Unit): Gauge = Gauge.builder().withoutExemplars().apply(block).build()

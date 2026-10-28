@@ -140,6 +140,17 @@ class AgentMetricsTest : StringSpec() {
       latencyMetric.shouldNotBeNull()
     }
 
+    // The agent's default scrape timeout is 15s, so with buckets ending at 10s every agent-side timeout and slow scrape
+    // landed in +Inf. The agent's histogram now has the proxy's buckets, which reach the proxy's 90s timeout.
+    "scrapeRequestLatency buckets should reach past the agent's scrape timeout" {
+      val metrics = opened(AgentMetrics(mockAgentForMetrics()))
+      metrics.scrapeRequestLatency.labelValues("test-launch-id", "test-agent").observe(15.0)
+
+      val buckets = metrics.scrapeRequestLatency.collect().dataPoints.single().classicBuckets
+      buckets.map { it.upperBound } shouldBe
+        listOf(.005, .01, .025, .05, .1, .25, .5, 1.0, 2.5, 5.0, 10.0, 15.0, 30.0, 60.0, 90.0, Double.POSITIVE_INFINITY)
+    }
+
     // ==================== Label Differentiation Tests ====================
 
     "counters should track different label combinations separately" {
@@ -202,14 +213,12 @@ class AgentMetricsTest : StringSpec() {
     }
 
     // Built through MetricBuilders, which keeps histograms classic-only (see its KDoc for why).
-    "scrapeRequestLatency should keep classic buckets only, with its bucket layout" {
+    // The bucket layout is checked by the "should reach past the agent's scrape timeout" test above.
+    "scrapeRequestLatency should keep classic buckets only" {
       val metrics = opened(AgentMetrics(mockAgentForMetrics()))
       metrics.scrapeRequestLatency.labelValues("test-launch-id", "test-agent").observe(0.1)
 
-      val point = metrics.scrapeRequestLatency.collect().dataPoints.single()
-      point.hasNativeHistogramData().shouldBeFalse()
-      point.classicBuckets.map { it.upperBound } shouldBe
-        listOf(.005, .01, .025, .05, .1, .25, .5, 1.0, 2.5, 5.0, 10.0, Double.POSITIVE_INFINITY)
+      metrics.scrapeRequestLatency.collect().dataPoints.single().hasNativeHistogramData().shouldBeFalse()
     }
 
     // Built through MetricBuilders, which keeps no exemplars (see its KDoc for why).

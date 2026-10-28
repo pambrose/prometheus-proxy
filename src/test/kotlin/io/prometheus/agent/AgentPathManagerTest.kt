@@ -924,6 +924,43 @@ class AgentPathManagerTest : StringSpec() {
       maxConcurrent.load() shouldBe 1
     }
 
+    // "/" passed pathConfigs' check for a path and a url, then normalized to "", and the require() that rejects a blank
+    // path threw out of registerPaths: the paths after it never registered, and every connect failed.
+    "registerPaths should skip a path of just a slash and register the rest" {
+      val agent =
+        createMockAgent(
+          pathConfigsHocon =
+            """
+            { name = "root", path = "/", url = "http://localhost:9100/metrics", labels = "{}" },
+            { name = "ok", path = "ok", url = "http://localhost:9200/metrics", labels = "{}" }
+            """,
+        )
+      val grpcService = agent.grpcService
+      val manager = AgentPathManager(agent)
+
+      manager.registerPaths()
+
+      manager["ok"].shouldNotBeNull()
+      // Only "ok" reaches the proxy; the real AgentGrpcService would throw for the blank path "/" normalizes to.
+      coVerify(exactly = 1) { grpcService.registerPathOnProxy(any(), any(), any(), any()) }
+      coVerify(exactly = 1) { grpcService.registerPathOnProxy("ok", any(), any(), any()) }
+    }
+
+    // Two entries for one normalized path both registered, and the second's URL silently replaced the first's, here
+    // and on the proxy. agent.filters already rejected the same mistake.
+    "construction should reject two pathConfigs entries for the same path, naming it" {
+      val agent =
+        createMockAgent(
+          pathConfigsHocon =
+            """
+            { name = "a", path = "metrics", url = "http://localhost:9100/metrics", labels = "{}" },
+            { name = "b", path = "/metrics", url = "http://localhost:9200/metrics", labels = "{}" }
+            """,
+        )
+
+      shouldThrow<IllegalArgumentException> { AgentPathManager(agent) }.message shouldContain "/metrics"
+    }
+
     "registerPaths should register all configured paths" {
       val configVals = testConfigVals(
         """

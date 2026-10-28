@@ -100,22 +100,36 @@ internal class AgentHttpService(
       )
     }
 
-  // Resolved once on first use: the HTTPS-scrape trust manager is fixed for the agent's lifetime, so
-  // it must not be rebuilt (re-reading the trust store from disk) on every cached-client recreation.
-  private val httpsTrustManager: X509TrustManager? by lazy {
-    resolveHttpsTrustManager(
-      trustAllX509Certificates = agent.options.trustAllX509Certificates,
-      trustStorePath = agent.options.httpsTrustStorePath,
-      trustStorePassword = agent.options.httpsTrustStorePassword,
-    )
-  }
+  // Resolved once, as the agent is built: the HTTPS-scrape trust manager is fixed for the agent's lifetime, so it must
+  // not be rebuilt (re-reading the trust store from disk) on every cached-client recreation. Resolved on first use, a
+  // trust store that can't be loaded let the agent connect, then failed every scrape, HTTP targets included, with an
+  // error that named the target; it now fails the agent's startup, naming the setting.
+  private val httpsTrustManager: X509TrustManager? =
+    agent.options.run {
+      runCatching {
+        resolveHttpsTrustManager(
+          trustAllX509Certificates = trustAllX509Certificates,
+          trustStorePath = httpsTrustStorePath,
+          trustStorePassword = httpsTrustStorePassword,
+        )
+      }.getOrElse { e ->
+        throw IllegalArgumentException(
+          "Unable to load agent.http.trustStorePath '$httpsTrustStorePath': ${e.message ?: e.simpleClassName}",
+          e,
+        )
+      }
+    }
 
   suspend fun fetchScrapeUrl(scrapeRequest: ScrapeRequest): ScrapeResults {
     val pathContext = agent.pathManager[scrapeRequest.path]
-    return if (pathContext != null)
-      fetchContentFromUrl(scrapeRequest, pathContext)
-    else
-      handleInvalidPath(scrapeRequest)
+    val results =
+      if (pathContext != null)
+        fetchContentFromUrl(scrapeRequest, pathContext)
+      else
+        handleInvalidPath(scrapeRequest)
+    // Counted here, so every scrape the proxy asks for is counted under its type, however it ends.
+    agent.updateScrapeCounter(results.scrapeCounterMsg)
+    return results
   }
 
   private suspend fun fetchContentFromUrl(
@@ -153,11 +167,12 @@ internal class AgentHttpService(
           srStatusCode = errorCode(e, logUrl),
           srFailureReason = scrapeFailureReason(e, req.debugEnabled),
           srUrl = if (req.debugEnabled) logUrl else "",
+          // A fetch that got no answer: the agent's own timeout, or a refused connection, DNS failure, and the like.
+          scrapeCounterMsg = if (e.hasTimeoutCause()) TIMED_OUT_MSG else FAILURE_MSG,
         )
       } finally {
         requestTimer?.observeDuration()
       }
-    agent.updateScrapeCounter(results.scrapeCounterMsg)
     return results
   }
 
@@ -446,6 +461,8 @@ internal class AgentHttpService(
     private const val INVALID_PATH_MSG = "invalid_path"
     private const val SUCCESS_MSG = "success"
     private const val UNSUCCESSFUL_MSG = "unsuccessful"
+    private const val TIMED_OUT_MSG = "timed_out"
+    private const val FAILURE_MSG = "failure"
 
     // Cap on the retry backoff so total retry time stays bounded within the scrape timeout (finding 28).
     private const val MAX_RETRY_DELAY_MS = 5000L

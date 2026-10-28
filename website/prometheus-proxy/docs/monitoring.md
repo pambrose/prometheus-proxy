@@ -165,18 +165,19 @@ Response size buckets: 1KB, 10KB, 100KB, 500KB, 1MB, 5MB, 10MB
 
 ### Counters
 
-| Metric                             | Labels              | Description                                                           |
-|:-----------------------------------|:--------------------|:----------------------------------------------------------------------|
-| `agent_scrape_request_count_total` | `launch_id`, `type` | Scrape requests processed (`success`, `unsuccessful`, `invalid_path`) |
-| `agent_scrape_result_count_total`  | `launch_id`, `type` | Results sent (`non-gzipped`, `gzipped`, `chunked`, `dropped`)         |
-| `agent_connect_count_total`        | `launch_id`, `type` | Connection attempts (`success`, `failure`)                            |
-| `agent_filter_lines_dropped_total` | `launch_id`, `path` | Lines removed by the path's metric filter                             |
-| `agent_filter_bytes_saved_total`   | `launch_id`, `path` | Bytes saved before gzip by the metric filter                          |
+| Metric                             | Labels              | Description                                                                                   |
+|:-----------------------------------|:--------------------|:----------------------------------------------------------------------------------------------|
+| `agent_scrape_request_count_total` | `launch_id`, `type` | Scrape requests processed (`success`, `unsuccessful`, `timed_out`, `failure`, `invalid_path`) |
+| `agent_scrape_result_count_total`  | `launch_id`, `type` | Results sent (`non-gzipped`, `gzipped`, `chunked`, `dropped`)                                 |
+| `agent_connect_count_total`        | `launch_id`, `type` | Connection attempts (`success`, `failure`)                                                    |
+| `agent_filter_lines_dropped_total` | `launch_id`, `path` | Lines removed by the path's metric filter                                                     |
+| `agent_filter_bytes_saved_total`   | `launch_id`, `path` | Bytes saved before gzip by the metric filter                                                  |
 
 The `launch_id` label uniquely identifies each agent process lifetime. `unsuccessful` means the target answered with
-a non-2xx status or a response over `agent.http.maxContentLengthMBytes`; `invalid_path` means the proxy asked for a
-path the agent doesn't serve; `dropped` is a result lost because the connection to the proxy closed before it was
-sent.
+a non-2xx status or a response over `agent.http.maxContentLengthMBytes`; `timed_out` means the target didn't answer
+within the agent's scrape timeout; `failure` means the fetch failed without an answer, such as a refused connection
+or a DNS failure; `invalid_path` means the proxy asked for a path the agent doesn't serve; `dropped` is a result lost
+because the connection to the proxy closed before it was sent.
 
 The two `agent_filter_*` counters only create series for paths that have a filter configured, so
 they are absent entirely unless [metric filtering](configuration/agent.md#metric-filtering) is in
@@ -187,6 +188,8 @@ use. See that section for what the filter does and does not drop.
 | Metric                                 | Labels                    | Description                        |
 |:---------------------------------------|:--------------------------|:-----------------------------------|
 | `agent_scrape_request_latency_seconds` | `launch_id`, `agent_name` | Time to fetch from target endpoint |
+
+It has the proxy latency histogram's buckets, up to 90s, past the agent's 15s scrape timeout.
 
 ### Gauges
 
