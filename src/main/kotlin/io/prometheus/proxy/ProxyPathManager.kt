@@ -122,11 +122,7 @@ internal class ProxyPathManager(
     metadata: PathMetadata = PathMetadata(),
   ): PathRejection? {
     require(path.isNotBlank()) { BLANK_PATH_MSG }
-    val key = pathKey(path)
-    // "/" passes the blank check but names no path the scrape route can reach.
-    if (key.isBlank())
-      return rejectPath(agentContext, path, "Invalid path: /$key (a path segment is required)", INVALID_PATH)
-    sizeRejection(key, labels, agentContext)?.let { return it }
+    formRejection(path, labels, agentContext)?.let { return it }
     // The target URL is redacted on the way in so the dashboard and /debug never show credentials, even from an agent
     // that predates agent-side redaction.
     val entry =
@@ -138,19 +134,41 @@ internal class ProxyPathManager(
         pathSource = metadata.pathSource,
         identityName = metadata.identityName,
       )
-    return multiSegmentPathError(key)?.let { PathRejection(it, INVALID_PATH) }
-      ?: addValidatedPath(key, agentContext, entry)
+    return addValidatedPath(pathKey(path), agentContext, entry)
+  }
+
+  /**
+   * Returns why [path] can't be registered as given, or null when its form and size are fine: it names no path
+   * segment, it is longer than `proxy.internal.maxPathLength`, its [labels] are larger than `maxLabelsSizeBytes`, or
+   * it has more than one segment.
+   *
+   * Each check is linear in the input and takes no lock, so `registerPath` runs them before it matches the path
+   * against the caller's identity globs, which must never see a path of unbounded length (October #22). [addPath]
+   * runs them as well. Every reason shows at most [SHOWN_PATH_CHARS] characters of the path.
+   */
+  fun formRejection(
+    path: String,
+    labels: String,
+    agentContext: AgentContext,
+  ): PathRejection? {
+    val key = pathKey(path)
+    val shown = shownPath(key)
+    // A blank path, or "/", names no path the scrape route can reach.
+    if (key.isBlank())
+      return rejectPath(agentContext, shown, "Invalid path: /$shown (a path segment is required)", INVALID_PATH)
+    return sizeRejection(key, shown, labels, agentContext)
+      ?: multiSegmentPathError(key, shown)?.let { PathRejection(it, INVALID_PATH) }
   }
 
   // Rejects a path longer than proxy.internal.maxPathLength, or labels larger than maxLabelsSizeBytes; 0 turns either
   // check off. Without them a path and its labels were bounded only by gRPC's 4 MiB message limit. A long path is
-  // truncated in the reason, and in the rejection this connection remembers, so it isn't kept whole.
+  // truncated to [shown] in the reason, and in the rejection this connection remembers, so it isn't kept whole.
   private fun sizeRejection(
     key: String,
+    shown: String,
     labels: String,
     agentContext: AgentContext,
   ): PathRejection? {
-    val shown = if (key.length > SHOWN_PATH_CHARS) key.take(SHOWN_PATH_CHARS) + "..." else key
     val maxLength = proxy.maxPathLength
     if (maxLength > 0 && key.length > maxLength) {
       val reason = "Path /$shown is ${key.length} characters, over proxy.internal.maxPathLength ($maxLength)"
@@ -308,7 +326,7 @@ internal class ProxyPathManager(
   ) {
     val displacedContexts = agentInfo?.agentContexts.orEmpty().filterNot { it.agentId == agentContext.agentId }
     if (displacedContexts.isNotEmpty()) {
-      logger.info { "Overwriting path /$path for ${displacedContexts.first()}" }
+      logger.info { "Overwriting path /$path for agentId ${displacedContexts.first().agentId}" }
       proxy.metrics { agentDisplacementCount.inc() }
     }
     pathMap[path] = entry
@@ -320,7 +338,7 @@ internal class ProxyPathManager(
     displacedContexts.forEach { displacedContext ->
       countPaths(displacedContext.agentId, -1)
       if ((pathCounts[displacedContext.agentId] ?: 0) == 0) {
-        logger.info { "Invalidating orphaned $displacedContext after path /$path was overwritten" }
+        logger.info { "Invalidating orphaned agentId ${displacedContext.agentId} after path /$path was overwritten" }
         displacedContext.invalidate()
       }
     }
@@ -344,7 +362,8 @@ internal class ProxyPathManager(
     val reserved = Proxy.reservedSdLabelKeys(labels, proxy.reserveJobAndInstanceLabels)
     if (reserved.isNotEmpty())
       logger.warn { "Agent labels $reserved for path /$path are reserved and won't appear in service discovery" }
-    if (!isTestMode) logger.info { "Added path /$path for $agentContext" }
+    // The agentId, not the context, whose name and host name the agent reports: this is logged for every path.
+    if (!isTestMode) logger.info { "Added path /$path for agentId ${agentContext.agentId}" }
     // Inside synchronized(pathMap) on purpose: tryEmit never suspends or blocks, so publishing here
     // cannot stall a registration, and the event is emitted only once the map actually reflects it.
     proxy.eventBus.emit(ProxyEvent.PathRegistered(path, agentContext.agentId))
@@ -356,10 +375,13 @@ internal class ProxyPathManager(
   // may not have stripped it. Returns a failure reason, or null when the path is a single segment.
   // [key] is already stripped of its leading slash by pathKey, so any slash left -- including a second leading one, as
   // in "//foo" -- makes it a path the scrape route can't reach. Stripping again here let "//foo" through as "foo" and
-  // stored it under "/foo".
-  private fun multiSegmentPathError(key: String): String? {
+  // stored it under "/foo". The reason shows [shown], the key truncated as in sizeRejection.
+  private fun multiSegmentPathError(
+    key: String,
+    shown: String,
+  ): String? {
     if ('/' !in key) return null
-    return "Multi-segment path not supported (use a single path segment): /$key"
+    return "Multi-segment path not supported (use a single path segment): /$shown"
       .also { logger.error { it } }
   }
 
@@ -443,7 +465,7 @@ internal class ProxyPathManager(
       // The path's last registration is gone, so its per-path metric series go with it.
       proxy.metrics { removePathSeries(path) }
       if (!isTestMode)
-        logger.info { "Removed path /$path for $agentInfo" }
+        logger.info { "Removed path /$path for agentId $agentId" }
     } else {
       pathMap[path] = agentInfo.copy(agentContexts = remaining)
       if (!isTestMode)
@@ -473,5 +495,9 @@ internal class ProxyPathManager(
 
     // How much of an over-long path a rejection shows.
     private const val SHOWN_PATH_CHARS = 64
+
+    // [key] as a rejection shows it: whole up to SHOWN_PATH_CHARS characters, and otherwise cut there and marked "...".
+    internal fun shownPath(key: String): String =
+      if (key.length > SHOWN_PATH_CHARS) key.take(SHOWN_PATH_CHARS) + "..." else key
   }
 }

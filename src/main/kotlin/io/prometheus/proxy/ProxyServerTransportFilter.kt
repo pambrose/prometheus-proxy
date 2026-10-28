@@ -35,7 +35,7 @@ internal class ProxyServerTransportFilter(
   override fun transportReady(attributes: Attributes): Attributes {
     val remoteAddress = attributes.get(Grpc.TRANSPORT_ATTR_REMOTE_ADDR)?.let(::displayAddress) ?: UNKNOWN_ADDRESS
     val agentContext = AgentContext(remoteAddress)
-    // Pending until connectAgent: no call on this connection has been authenticated yet.
+    // Pending until ProxyServerInterceptor sees the connection's first authenticated call: none has been made yet.
     proxy.agentContextManager.addAgentContext(agentContext, announce = false)
 
     return attributes {

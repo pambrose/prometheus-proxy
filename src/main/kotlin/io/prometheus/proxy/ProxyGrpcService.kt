@@ -105,7 +105,7 @@ internal class ProxyGrpcService(
       val interceptors: List<ServerInterceptor> =
         buildList {
           if (!options.transportFilterDisabled)
-            add(ProxyServerInterceptor())
+            add(ProxyServerInterceptor(proxy))
           if (proxy.isZipkinEnabled)
             add(grpcTracing.newServerInterceptor())
         }

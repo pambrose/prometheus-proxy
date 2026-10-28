@@ -26,8 +26,10 @@ import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.ints.shouldBeLessThan
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -1121,6 +1123,56 @@ class ProxyPathManagerTest : StringSpec() {
       rejection.shouldNotBeNull().cause shouldBe PathRejectionCause.INVALID_PATH
       rejection.reason shouldContain "maxLabelsSizeBytes"
       manager.pathMapSize shouldBe 1
+    }
+
+    // October #23: the lines logged for each path a registration adds, takes over, or removes printed the whole agent
+    // context, with its self-reported name and host, or, on removal, the path's whole entry with its labels. Repeated
+    // for up to maxPathsPerAgent paths, that multiplied whatever an agent sent. They now name the agentId.
+    "per-path INFO lines should name the agentId, not the agent's own fields or the path's labels" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = false)
+      val first =
+        AgentContext("remote-first").apply { assignProperties(registerAgentRequest { agentName = "FIRST-NAME" }) }
+      val second =
+        AgentContext("remote-second").apply { assignProperties(registerAgentRequest { hostName = "SECOND-HOST" }) }
+      val labels = """{"marker":"LABELS-MARKER"}"""
+
+      val messages =
+        captureLogs<ProxyPathManager>(Level.INFO) {
+          manager.addPath("metrics", labels, first)
+          manager.addPath("metrics", labels, second)
+          manager.removeFromPathManager(second.agentId, "disconnect")
+        }.map { it.formattedMessage }
+
+      fun line(start: String) = messages.single { it.startsWith(start) }
+      line("Added path /metrics for agentId ${first.agentId}")
+      line("Added path /metrics for agentId ${second.agentId}")
+      line("Overwriting path /metrics") shouldContain first.agentId
+      line("Invalidating orphaned") shouldContain first.agentId
+      line("Removed path /metrics") shouldContain second.agentId
+      for (marker in ["FIRST-NAME", "SECOND-HOST", "LABELS-MARKER"]) {
+        messages.filter { marker in it }.shouldBeEmpty()
+      }
+    }
+
+    // registerPath runs these checks before it authorizes a path (October #22), so they see whatever the agent sent.
+    // With maxPathLength off, the multi-segment reason, which is also logged, shows only the start of a long path.
+    "formRejection should show a long multi-segment path truncated" {
+      val manager = ProxyPathManager(createLimitedProxy(maxPathLength = 0), isTestMode = true)
+      val path = "app/" + "x".repeat(10_000)
+
+      val rejection = manager.formRejection(path, "{}", createMockAgentContext())
+
+      rejection.shouldNotBeNull().cause shouldBe PathRejectionCause.INVALID_PATH
+      rejection.reason shouldContain "Multi-segment"
+      rejection.reason shouldContain "/app/xxx"
+      rejection.reason.length shouldBeLessThan 200
+    }
+
+    "formRejection should accept a single-segment path of allowed size" {
+      val manager = ProxyPathManager(createLimitedProxy(maxPathLength = 8), isTestMode = true)
+
+      manager.formRejection("/metrics", "{}", createMockAgentContext()).shouldBeNull()
+      manager.pathMapSize shouldBe 0
     }
 
     // An agent disconnect retires every path it alone served, and only those.

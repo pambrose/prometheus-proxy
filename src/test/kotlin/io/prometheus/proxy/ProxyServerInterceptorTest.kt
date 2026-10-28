@@ -29,10 +29,15 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
+import io.prometheus.Proxy
 import io.prometheus.common.GrpcConstants.META_AGENT_ID_KEY
 import io.prometheus.proxy.ProxyServerTransportFilter.Companion.AGENT_ID_KEY
 
 class ProxyServerInterceptorTest : StringSpec() {
+  // A mocked proxy whose agent-context manager is [manager].
+  private fun proxyWith(manager: AgentContextManager): Proxy =
+    mockk<Proxy>(relaxed = true).also { every { it.agentContextManager } returns manager }
+
   init {
     // ==================== META_AGENT_ID_KEY Tests ====================
 
@@ -51,7 +56,7 @@ class ProxyServerInterceptorTest : StringSpec() {
     // ==================== Interceptor Behavior Tests ====================
 
     "interceptCall should delegate to handler" {
-      val interceptor = ProxyServerInterceptor()
+      val interceptor = ProxyServerInterceptor(mockk(relaxed = true))
 
       val mockCall = mockk<ServerCall<Any, Any>>(relaxed = true)
       val mockHandler = mockk<ServerCallHandler<Any, Any>>(relaxed = true)
@@ -69,7 +74,7 @@ class ProxyServerInterceptorTest : StringSpec() {
     // With no transport-assigned agentId (transportFilterDisabled, or an in-process server with no
     // transport filter), the Context key stays unset so ProxyServiceImpl skips the binding check.
     "interceptCall should leave the connection agentId unset when the attribute is missing" {
-      val interceptor = ProxyServerInterceptor()
+      val interceptor = ProxyServerInterceptor(mockk(relaxed = true))
 
       val mockCall = mockk<ServerCall<Any, Any>>(relaxed = true)
       val mockHandler = mockk<ServerCallHandler<Any, Any>>(relaxed = true)
@@ -85,7 +90,7 @@ class ProxyServerInterceptorTest : StringSpec() {
     }
 
     "interceptCall should bind the transport-assigned agentId onto the Context" {
-      val interceptor = ProxyServerInterceptor()
+      val interceptor = ProxyServerInterceptor(mockk(relaxed = true))
 
       val mockCall = mockk<ServerCall<Any, Any>>(relaxed = true)
       val mockHandler = mockk<ServerCallHandler<Any, Any>>(relaxed = true)
@@ -101,8 +106,37 @@ class ProxyServerInterceptorTest : StringSpec() {
       verify { mockHandler.startCall(any(), any()) }
     }
 
+    // October #26: only connectAgent announced the connection's pending context, so a client that skipped it served
+    // paths unannounced. This interceptor sees every call that passed authentication, whichever RPC it is.
+    "interceptCall should announce the connection's pending agent context" {
+      val manager = AgentContextManager(isTestMode = true)
+      val agentContext = AgentContext("remote-addr").also { manager.addAgentContext(it, announce = false) }
+      val interceptor = ProxyServerInterceptor(proxyWith(manager))
+      val mockCall = mockk<ServerCall<Any, Any>>(relaxed = true)
+      every { mockCall.attributes } returns Attributes.newBuilder().set(AGENT_ID_KEY, agentContext.agentId).build()
+
+      manager.agentContextSize shouldBe 0
+      interceptor.interceptCall(mockCall, Metadata(), mockk(relaxed = true))
+      interceptor.interceptCall(mockCall, Metadata(), mockk(relaxed = true))
+
+      agentContext.announced shouldBe true
+      manager.agentContextSize shouldBe 1
+    }
+
+    // Without a transport filter (transportFilterDisabled) there is no pending context:
+    // connectAgentWithTransportFilterDisabled adds its context announced.
+    "interceptCall should announce nothing when the call has no connection agentId" {
+      val manager = mockk<AgentContextManager>(relaxed = true)
+      val mockCall = mockk<ServerCall<Any, Any>>(relaxed = true)
+      every { mockCall.attributes } returns Attributes.EMPTY
+
+      ProxyServerInterceptor(proxyWith(manager)).interceptCall(mockCall, Metadata(), mockk(relaxed = true))
+
+      verify(exactly = 0) { manager.announceAgentContext(any()) }
+    }
+
     "sendHeaders should inject agent-id from call attributes" {
-      val interceptor = ProxyServerInterceptor()
+      val interceptor = ProxyServerInterceptor(mockk(relaxed = true))
 
       // Set up attributes with AGENT_ID_KEY
       val attributes = Attributes.newBuilder()
@@ -131,7 +165,7 @@ class ProxyServerInterceptorTest : StringSpec() {
     }
 
     "sendHeaders should not inject agent-id when attribute is missing" {
-      val interceptor = ProxyServerInterceptor()
+      val interceptor = ProxyServerInterceptor(mockk(relaxed = true))
 
       // Empty attributes — no AGENT_ID_KEY
       val attributes = Attributes.newBuilder().build()
