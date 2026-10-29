@@ -37,7 +37,7 @@ tcnative = "2.0.84.Final"
 # advisories 4.2.18.Final fixes. build.gradle.kts raises every Netty module except netty-tcnative (pinned above) to this
 # release, and declares them through the `netty` bundle so the published POM pins it for embedders too. Drop the
 # override and the bundle once grpc brings 4.2.18.Final or later.
-netty = "4.2.18.Final"
+netty = "4.2.19.Final"
 
 # Ktor
 ktor = "3.6.0"
