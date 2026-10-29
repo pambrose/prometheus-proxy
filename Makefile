@@ -178,6 +178,12 @@ helm-lint:  ## Lint the Helm charts and validate their rendered manifests (needs
 		manifests=$$(docker run --rm -v "$(CURDIR)/charts:/charts:ro" $(HELM_IMAGE) template ci /charts/$$chart -f /$$values); \
 		printf '%s\n' "$$manifests" | docker run --rm -i $(KUBECONFORM_IMAGE) -strict -summary \
 			-kubernetes-version $(KUBERNETES_VERSION) -schema-location default -schema-location '$(CRD_SCHEMAS)' -; \
+		if [ "$$(basename $$values)" = secret-config-values.yaml ]; then \
+			if printf '%s\n' "$$manifests" | grep -q '^kind: ConfigMap'; then \
+				echo "Error: $$chart with existingSecret renders a ConfigMap, which would hold its config" >&2; exit 1; fi; \
+			printf '%s\n' "$$manifests" | grep -q "secretName: $$chart-config" || \
+				{ echo "Error: $$chart with existingSecret doesn't mount the $$chart-config Secret" >&2; exit 1; }; \
+		fi; \
 	done; done
 
 # The online audits (known-vulnerable and impostor actions) need a GitHub token: GH_TOKEN, else gh's login, else they're

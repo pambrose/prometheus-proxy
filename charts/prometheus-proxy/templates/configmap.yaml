@@ -1,4 +1,4 @@
-{{- if and .Values.config (not .Values.existingConfigMap) }}
+{{- if include "prometheus-proxy.rendersConfig" . }}
 apiVersion: v1
 kind: ConfigMap
 metadata:

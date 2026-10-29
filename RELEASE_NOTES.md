@@ -34,6 +34,11 @@ among them gRPC, which now runs at one version across all its modules.
 - **Every authenticated connection appears as a connected agent.** A client that skipped the `connectAgent` call
   could register paths and serve scrapes while missing from the dashboard's agent list, the agent count, and the
   health checks. The first call that passes authentication now counts, whichever call it is.
+- **The Helm charts can keep the config in a Secret.** Per-agent `proxy.auth` tokens, and credentials in an agent's
+  target URLs, could only go in a ConfigMap, which more people can often read than Secrets. The new
+  `existingSecret` value takes the whole config from a Secret, and the proxy chart shows how to read each token
+  from an environment variable set from a Secret instead. Its example of `proxy.auth`, which didn't match the
+  config format, is fixed.
 
 ### Before you upgrade
 
@@ -158,6 +163,10 @@ among them gRPC, which now runs at one version across all its modules.
   and Maven coordinate that don't exist yet. Between releases, docs changes still deploy as they merge.
 - `make upgrade-site` takes only docs-site dependency versions that are at least 7 days old, the cooldown Dependabot
   already applies.
+- The JARs and images include every dependency's notices and licenses. Only one dependency's NOTICE file and a
+  couple of license files were kept; all are now merged into `META-INF/NOTICE` and `META-INF/LICENSE`.
+- The images' user is UID and GID 1001 by number, the IDs the charts already run as, so a base-image change
+  can't move it, and Kubernetes' `runAsNonRoot` can check it on its own.
 - Tests that couldn't fail now check what they claim: the scrape port's idle timeout, each gRPC keepalive and
   connection-age option, and the JVM buffer-pool and compilation metrics on a real `/metrics`. Tests that bound a
   port the OS had just handed out take fixed test ports instead.

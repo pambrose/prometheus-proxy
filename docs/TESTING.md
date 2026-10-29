@@ -480,6 +480,8 @@ process, which surfaces as a wait strategy timing out against a status the conta
 - **ContainersWebDashboardTest** — the dashboard against the real fat JAR, which is the point: htmx ships as
   a WebJar served from the classpath, so a packaging regression would leave the page loading a 404
 - **ContainersPortBindingTest** — every published port binds loopback rather than the wildcard address
+- **ContainersPackagingTest** — the images run as UID and GID 1001, given by number, as the charts expect, and each
+  fat JAR's `META-INF/NOTICE` and `META-INF/LICENSE` carry every dependency's notice and license text
 - **ContainersScalingTest** — parameter-driven scaling (see below)
 
 #### Scaling Test (`ContainersScalingTest`)

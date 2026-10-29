@@ -73,7 +73,9 @@ config: |
 The charts set up what the manifests below do by hand: the admin-endpoint probes, resource requests, a non-root pod
 with a read-only root filesystem, and optionally a ServiceMonitor (`serviceMonitor.enabled`), an agent token from a
 Secret (`agentToken.existingSecret`), TLS (`tls.secretName`), and, for the agent, a discovery ConfigMap
-(`discovery.enabled`). Each chart's README lists its values. The rest of this page builds the same deployment from
+(`discovery.enabled`). A config that holds secrets, such as `proxy.auth` tokens or credentials in an agent's target
+URLs, can come from a Secret (`existingSecret`) instead of the ConfigMap the chart renders. Each chart's README lists
+its values. The rest of this page builds the same deployment from
 plain manifests.
 
 ## Deploying the Proxy
