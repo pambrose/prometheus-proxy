@@ -34,9 +34,9 @@ protoc = "3.25.9"
 # tracking grpc's version once it reaches 2.0.84.Final or later. common-utils' grpc-utils also brings tcnative, with its per-platform natives; this declaration sets the version.
 tcnative = "2.0.84.Final"
 # grpc-netty 1.85.1 brings Netty 4.2.17.Final, which has CVE-2026-93492 (HTTP/2 HPACK encoder DoS) and the other
-# advisories 4.2.18.Final fixes. build.gradle.kts raises every Netty module except netty-tcnative (pinned above) to this
-# release, and declares them through the `netty` bundle so the published POM pins it for embedders too. Drop the
-# override and the bundle once grpc brings 4.2.18.Final or later.
+# advisories 4.2.18.Final and 4.2.19.Final fix. build.gradle.kts raises every Netty module except netty-tcnative (pinned
+# above) to this release, and declares them through the `netty` bundle so the published POM pins it for embedders too.
+# Drop the override and the bundle once grpc brings 4.2.19.Final or later.
 netty = "4.2.19.Final"
 
 # Ktor
