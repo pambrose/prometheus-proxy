@@ -25,6 +25,7 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContain as shouldContainElement
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
@@ -558,6 +559,21 @@ class ProxyOptionsTest : StringSpec() {
     "nothing is sent in cleartext when no tokens are configured" {
       ProxyOptions.areAgentTokensSentInCleartext(agentToken = "", authIdentityCount = 0, isTlsEnabled = false)
         .shouldBeFalse()
+    }
+
+    // The charts' way to keep proxy.auth tokens out of a ConfigMap is to substitute each from an environment variable
+    // set from a Secret (October #27). The test's environment can't be set in-process, so HOME stands in for one.
+    "a proxy.auth token should be substituted from an environment variable" {
+      val home = System.getenv("HOME").shouldNotBeNull()
+      val options =
+        proxyOptionsFromConfig(
+          """
+          proxy.auth = [
+            { name = "team-a", token = ${'$'}{HOME}, paths = ["team_a_*"] }
+          ]
+          """,
+        )
+      options.configVals.proxy.auth.single().token shouldBe home
     }
 
     // A non-positive limit would refuse every scrape.

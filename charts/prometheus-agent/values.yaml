@@ -31,6 +31,10 @@ config: |
 # The name of an existing ConfigMap with an agent.conf key, used instead of config.
 existingConfigMap: ""
 
+# The name of an existing Secret with an agent.conf key, used instead of config and existingConfigMap: for pathConfigs
+# whose URLs hold credentials, which a ConfigMap shows to anyone who can read ConfigMaps in the namespace.
+existingSecret: ""
+
 # Dynamic target discovery: the agent re-reads a paths list from its own ConfigMap on an interval, so targets can
 # change without restarting it, and without touching the main config. See
 # https://pambrose.github.io/prometheus-proxy/kubernetes/#updating-targets-without-restarting-the-agent
@@ -107,6 +111,7 @@ readinessProbe:
   initialDelaySeconds: 10
   periodSeconds: 15
 
+# 1001 is the UID and GID the images create their user with (etc/docker/agent.Dockerfile); change them together.
 podSecurityContext:
   runAsNonRoot: true
   runAsUser: 1001

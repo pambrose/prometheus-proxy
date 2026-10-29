@@ -45,6 +45,7 @@ change within `discovery.reconcileIntervalSecs`, after the kubelet updates the m
 | `proxy.hostname`                         | (required)                                 | The proxy's gRPC address, `host:port` (`PROXY_HOSTNAME`)                           |
 | `config`                                 | an empty `pathConfigs`                     | Agent configuration in HOCON, mounted as `AGENT_CONFIG`                            |
 | `existingConfigMap`                      | `""`                                       | A ConfigMap with an `agent.conf` key, instead of `config`                          |
+| `existingSecret`                         | `""`                                       | A Secret with an `agent.conf` key, instead of either; for credentials in URLs      |
 | `replicaCount`                           | `1`                                        | More than one needs `agent.consolidated = true` in `config`                        |
 | `discovery.enabled`                      | `false`                                    | Re-read a paths list from its own ConfigMap                                        |
 | `discovery.targets`                      | `""`                                       | The paths list in HOCON                                                            |

@@ -1,7 +1,7 @@
-{{- if not (or .Values.config .Values.existingConfigMap) }}
-{{- fail "the agent needs a config: set config (HOCON with its pathConfigs) or existingConfigMap" }}
+{{- if not (or .Values.config .Values.existingConfigMap .Values.existingSecret) }}
+{{- fail "the agent needs a config: set config (HOCON with its pathConfigs), existingConfigMap, or existingSecret" }}
 {{- end }}
-{{- if not .Values.existingConfigMap }}
+{{- if not (or .Values.existingConfigMap .Values.existingSecret) }}
 apiVersion: v1
 kind: ConfigMap
 metadata:

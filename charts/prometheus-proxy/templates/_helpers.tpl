@@ -37,5 +37,10 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
 {{- define "prometheus-proxy.hasConfig" -}}
-{{- if or .Values.config .Values.existingConfigMap }}true{{ end }}
+{{- if or .Values.config .Values.existingConfigMap .Values.existingSecret }}true{{ end }}
+{{- end }}
+
+{{/* Whether this chart renders proxy.conf into a ConfigMap of its own: from config, when no existing one is named. */}}
+{{- define "prometheus-proxy.rendersConfig" -}}
+{{- if and .Values.config (not .Values.existingConfigMap) (not .Values.existingSecret) }}true{{ end }}
 {{- end }}

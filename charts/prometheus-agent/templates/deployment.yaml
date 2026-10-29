@@ -16,7 +16,7 @@ spec:
     metadata:
       annotations:
         # Restart the agent when its main config changes. Discovery targets are re-read in place, so they don't.
-        {{- if not .Values.existingConfigMap }}
+        {{- if not (or .Values.existingConfigMap .Values.existingSecret) }}
         checksum/config: {{ .Values.config | sha256sum }}
         {{- end }}
         {{- with .Values.podAnnotations }}
@@ -151,8 +151,13 @@ spec:
         - name: tmp
           emptyDir: {}
         - name: config
+          {{- with .Values.existingSecret }}
+          secret:
+            secretName: {{ . }}
+          {{- else }}
           configMap:
             name: {{ include "prometheus-agent.configMapName" . }}
+          {{- end }}
         {{- if .Values.discovery.enabled }}
         - name: discovery
           configMap:

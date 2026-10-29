@@ -12,13 +12,16 @@ LABEL maintainer="Paul Ambrose <pambrose@mac.com>"
 # Define the user to use in this instance to prevent using root that even in a container, can be a security risk.
 ENV APPLICATION_USER=prometheus
 
-# Then add the user, create the /app folder and give permissions to our user, in a single layer.
-RUN adduser --disabled-password --gecos '' $APPLICATION_USER \
+# Then add the user, create the /app folder and give permissions to our user, in a single layer. The UID and GID are
+# given rather than left to adduser, which picked 1001 only because the base image has a user at 1000: the charts run
+# the pods as 1001 (podSecurityContext in charts/*/values.yaml), so change them together.
+RUN addgroup --gid 1001 $APPLICATION_USER \
+    && adduser --uid 1001 --gid 1001 --disabled-password --gecos '' $APPLICATION_USER \
     && mkdir /app \
-    && chown -R $APPLICATION_USER /app
+    && chown -R 1001:1001 /app
 
-# Mark this container to use the specified $APPLICATION_USER
-USER $APPLICATION_USER
+# Run as that user, by number, so Kubernetes' runAsNonRoot can check it without a runAsUser.
+USER 1001:1001
 
 # Make /app the working directory
 WORKDIR /app

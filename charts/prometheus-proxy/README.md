@@ -27,7 +27,24 @@ Without credentials, any process that can reach the gRPC port can register as an
 
 - `agentToken.existingSecret`: a shared token, from a Secret you create (key `token`, or set `agentToken.key`)
 - `tls.secretName` (with `cert.pem` and `key.pem`), plus `tls.caFile` to require client certificates (mutual TLS)
-- per-agent identities, as `proxy.auth` in `config`
+- per-agent identities, as `proxy.auth` in the config
+
+The chart renders `config` into a ConfigMap, which anyone who can read ConfigMaps in the namespace can read, so keep
+`proxy.auth` tokens out of it. Either substitute each token from an environment variable set from a Secret:
+
+```yaml
+config: |
+  proxy {
+    auth = [
+      { name = "team-a", token = ${TEAM_A_TOKEN}, paths = ["team_a_*"] }
+    ]
+  }
+env:
+  - name: TEAM_A_TOKEN
+    valueFrom: { secretKeyRef: { name: proxy-auth-tokens, key: team-a } }
+```
+
+or put the whole config, under a `proxy.conf` key, in a Secret you name in `existingSecret`.
 
 See the [security guide](https://pambrose.github.io/prometheus-proxy/security/).
 
@@ -39,6 +56,7 @@ See the [security guide](https://pambrose.github.io/prometheus-proxy/security/).
 | `httpPort` / `agentPort`                 | `8080` / `50051`                           | The port Prometheus scrapes, and the gRPC port agents connect to         |
 | `config`                                 | `""`                                       | Proxy configuration in HOCON, mounted as `PROXY_CONFIG`                  |
 | `existingConfigMap`                      | `""`                                       | A ConfigMap with a `proxy.conf` key, instead of `config`                 |
+| `existingSecret`                         | `""`                                       | A Secret with a `proxy.conf` key, instead of either; for `proxy.auth`    |
 | `agentToken.existingSecret`              | `""`                                       | Secret holding the shared agent token (`AGENT_TOKEN`)                    |
 | `tls.secretName`                         | `""`                                       | Secret with the gRPC port's certificate and key, mounted at `/app/certs` |
 | `tls.caFile`                             | `""`                                       | CA in that Secret; setting it requires client certificates               |

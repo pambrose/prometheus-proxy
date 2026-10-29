@@ -17,7 +17,7 @@ spec:
   template:
     metadata:
       annotations:
-        {{- if and .Values.config (not .Values.existingConfigMap) }}
+        {{- if include "prometheus-proxy.rendersConfig" . }}
         checksum/config: {{ .Values.config | sha256sum }}
         {{- end }}
         {{- with .Values.podAnnotations }}
@@ -157,8 +157,13 @@ spec:
           emptyDir: {}
         {{- if include "prometheus-proxy.hasConfig" . }}
         - name: config
+          {{- with .Values.existingSecret }}
+          secret:
+            secretName: {{ . }}
+          {{- else }}
           configMap:
             name: {{ include "prometheus-proxy.configMapName" . }}
+          {{- end }}
         {{- end }}
         {{- with .Values.tls.secretName }}
         - name: certs
