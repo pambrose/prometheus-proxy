@@ -7,8 +7,8 @@ icon: lucide/container
 Multi-platform images (amd64, arm64, s390x, ppc64le) are published on Docker Hub for every release.
 
 ```bash
-docker pull pambrose/prometheus-proxy:4.3.0
-docker pull pambrose/prometheus-agent:4.3.0
+docker pull pambrose/prometheus-proxy:4.4.0
+docker pull pambrose/prometheus-agent:4.4.0
 ```
 
 ## Basic Usage
@@ -62,10 +62,14 @@ These run in the background under a restart policy, as described in
 --8<-- "DockerExamples.txt:docker-agent-local-config"
 ```
 
-!!! info "Container WORKDIR"
+!!! info "Container WORKDIR and user"
 
     The `WORKDIR` of both proxy and agent images is `/app`. Use `/app` as the base
     directory in `--mount` target paths.
+
+    Both images run as a non-root user with UID and GID 1001, given by number, so a mounted
+    config or certificate must be readable by that user. In Kubernetes, `runAsNonRoot` can
+    check the user without a `runAsUser`.
 
 ## Docker Compose
 
@@ -119,4 +123,4 @@ docker pull pambrose/prometheus-agent:latest
 
 !!! tip "Pin versions in production"
 
-    Use explicit version tags (e.g., `4.3.0`) in production to avoid unexpected upgrades.
+    Use explicit version tags (e.g., `4.4.0`) in production to avoid unexpected upgrades.

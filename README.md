@@ -37,6 +37,16 @@ behind a firewall and preserves the native pull-based model architecture.
 
 ## ✨ New Features
 
+Version 4.4.0 (released 2026-10-29) is a security and reliability release. An authenticated agent can no longer
+complete another agent's scrape or stall the proxy with a long path, the proxy bounds what agents report about
+themselves, and builds that embed the agent now get the patched Netty. Service discovery gives Prometheus targets it
+accepts, now also behind HTTPS or a path prefix; the Helm charts can take their config from a Secret
+(`existingSecret`); and the agent passes the scrape timeout on to exporters, sends a target URL's credentials with
+the first request, and reads no more of a response into memory than `maxContentLengthMBytes`. Some agent configs
+that start today will fail at startup, and the proxy chart's readiness probe moves to `/ping`, so read
+**Before you upgrade** in the [release notes](RELEASE_NOTES.md) first; the [changelog](CHANGELOG.md) has the full
+list.
+
 Version 4.3.0 (released 2026-10-12) adds three opt-in JVM metric groups (buffer pools, JIT compilation, and native
 memory), shows each agent's real address on the dashboard instead of `Unknown`, and makes a proxy that fails to
 start exit instead of hanging. The images move to the Ubuntu 24.04 variant of their `eclipse-temurin` base, which
@@ -244,12 +254,12 @@ If you prefer to build the project from source:
 
 ```bash
 # Start proxy
-docker run --rm -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.3.0
+docker run --rm -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.4.0
 
 # Start agent
 docker run --rm \
   --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-  pambrose/prometheus-agent:4.3.0
+  pambrose/prometheus-agent:4.4.0
 ```
 
 These run in the foreground until Ctrl+C. To run a container in the background instead, and have it start again
@@ -258,7 +268,7 @@ doesn't allow `--rm` with `--restart`):
 
 ```bash
 docker run --detach --name prometheus-proxy --restart unless-stopped \
-  -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.3.0
+  -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.4.0
 
 docker logs --follow prometheus-proxy   # follow its log
 docker stop prometheus-proxy            # stop it, and no longer restart it
@@ -345,8 +355,8 @@ scrape_configs:
 The docker images support multiple architectures (amd64, arm64, s390x, ppc64le):
 
 ```bash
-docker pull pambrose/prometheus-proxy:4.3.0
-docker pull pambrose/prometheus-agent:4.3.0
+docker pull pambrose/prometheus-proxy:4.4.0
+docker pull pambrose/prometheus-agent:4.4.0
 ```
 
 ### Production Docker Setup
@@ -359,7 +369,7 @@ docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
         --env ADMIN_ENABLED=true \
         --env METRICS_ENABLED=true \
         --restart unless-stopped \
-        pambrose/prometheus-proxy:4.3.0
+        pambrose/prometheus-proxy:4.4.0
 ```
 
 Start an agent container with:
@@ -369,7 +379,7 @@ Start an agent container with:
 docker run --rm -p 8083:8083 -p 8093:8093 \
         --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
         --restart unless-stopped \
-        pambrose/prometheus-agent:4.3.0
+        pambrose/prometheus-agent:4.4.0
 ```
 
 Or use Docker Compose: [`etc/compose/proxy.yml`](etc/compose/proxy.yml) runs a proxy, an agent, and a Prometheus server
@@ -391,7 +401,7 @@ is in your current directory, run an agent container with:
 docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/prom-agent.conf,target=/app/prom-agent.conf \
     --env AGENT_CONFIG=prom-agent.conf \
-    pambrose/prometheus-agent:4.3.0
+    pambrose/prometheus-agent:4.4.0
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
@@ -424,6 +434,10 @@ missing or unreadable config. If the agent then fails to start (for example, its
 use), `startAsyncAgent` throws `IllegalStateException` with the startup failure as its cause, after releasing everything
 the agent had opened.
 
+Several agents can run in one JVM with metrics on, at once or one after another: they share one set of agent metrics,
+and each series carries its agent's `launch_id`. An embedded agent's `logLevel` sets only the `io.prometheus` loggers,
+so it leaves your application's own logging alone.
+
 ### Service Discovery
 
 Enable Prometheus service discovery support:
@@ -436,6 +450,10 @@ java -jar prometheus-proxy.jar \
 ```
 
 Access discovery endpoint at: `http://proxy-host:8080/discovery`
+
+`--sd_target_prefix` is the proxy's address as Prometheus reaches it: `host:port` (the default is `localhost:8080`),
+or an `http` or `https` URL such as `https://proxy.example.com/prometheus/`, whose scheme and path the proxy gives each
+target as its `__scheme__` label and a prefix of its `__metrics_path__`.
 
 > 📖 **Docs site:** [Service Discovery guide](https://pambrose.github.io/prometheus-proxy/service-discovery/) explains the discovery payload format and the Prometheus
 `http_sd_configs` wiring.
@@ -828,7 +846,7 @@ docker run --rm -p 8082:8082 -p 8092:8092 -p 50440:50440 -p 8080:8080 \
     --env PROXY_CONFIG=tls-no-mutual-auth.conf \
     --env ADMIN_ENABLED=true \
     --env METRICS_ENABLED=true \
-    pambrose/prometheus-proxy:4.3.0
+    pambrose/prometheus-proxy:4.4.0
 
 docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
@@ -836,7 +854,7 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
     --env AGENT_CONFIG=tls-no-mutual-auth.conf \
     --env PROXY_HOSTNAME=mymachine.lan:50440 \
     --name docker-agent \
-    pambrose/prometheus-agent:4.3.0
+    pambrose/prometheus-agent:4.4.0
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
@@ -927,6 +945,15 @@ java -jar prometheus-agent.jar \
 
 The proxy logs a warning on the first request that includes an `Authorization` header when TLS is not enabled.
 
+### Scrape Port Access
+
+The scrape port (default `8080`, listening on `0.0.0.0`) has no authentication. Anyone who can reach it can have the
+agents scrape their targets, with the request's own query string and `Authorization` header passed through, and, with
+service discovery on, list every path with its agents' names and hosts. With an exporter that takes its target as a
+query parameter, such as blackbox_exporter's `/probe?target=…`, that reaches any host the exporter can. Bind
+`proxy.http.host` to a private address and firewall the port so only Prometheus reaches it; see
+[Scrape Port Access](https://pambrose.github.io/prometheus-proxy/security/#scrape-port-access).
+
 ### Scraping HTTPS Endpoints
 
 For HTTPS scrape targets signed by a custom or private CA (e.g. an internal corporate CA), point the agent at
@@ -1002,7 +1029,8 @@ at [pambrose.github.io/prometheus-proxy/kdocs](https://pambrose.github.io/promet
 **Note:** Running on Kubernetes? Helm charts for the proxy and the agent are in [`charts/`](charts/), and the
 [Kubernetes deployment guide](https://pambrose.github.io/prometheus-proxy/kubernetes/) covers them along with ready-to-use proxy and
 agent manifests, standalone and sidecar agent patterns, gRPC exposure for remote agents, and Prometheus Operator
-(`ServiceMonitor`) integration.
+(`ServiceMonitor`) integration. A config that holds secrets, such as `proxy.auth` tokens or credentials in an agent's
+target URLs, can come from a Secret (`existingSecret`) instead of the chart's ConfigMap.
 
 **Note:** Deploying to production? The
 [Running in Production guide](https://pambrose.github.io/prometheus-proxy/production/) pulls the security, reliability,
@@ -1019,7 +1047,7 @@ repositories {
 }
 
 dependencies {
-  implementation("com.pambrose:prometheus-proxy:4.3.0")
+  implementation("com.pambrose:prometheus-proxy:4.4.0")
 }
 ```
 
