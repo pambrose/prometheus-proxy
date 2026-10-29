@@ -451,23 +451,60 @@ class BaseOptionsTest : StringSpec() {
     // ==================== Bug #2: resolveBoolean priority tests (CLI > env > config) ====================
 
     "resolveBoolean should return config default when env is null and cli is false" {
-      resolveBoolean(cliValue = false, envVarName = "TEST", envVarValue = null, configDefault = false).shouldBeFalse()
-      resolveBoolean(cliValue = false, envVarName = "TEST", envVarValue = null, configDefault = true).shouldBeTrue()
+      resolveBoolean(
+        cliValue = false,
+        cliExplicitlySet = false,
+        envVarName = "TEST",
+        envVarValue = null,
+        configDefault = false,
+      ).shouldBeFalse()
+      resolveBoolean(
+        cliValue = false,
+        cliExplicitlySet = false,
+        envVarName = "TEST",
+        envVarValue = null,
+        configDefault = true,
+      ).shouldBeTrue()
     }
 
     "resolveBoolean should return cli=true regardless of env or config" {
-      resolveBoolean(cliValue = true, envVarName = "TEST", envVarValue = null, configDefault = false).shouldBeTrue()
-      resolveBoolean(cliValue = true, envVarName = "TEST", envVarValue = "false", configDefault = false).shouldBeTrue()
-      resolveBoolean(cliValue = true, envVarName = "TEST", envVarValue = "true", configDefault = false).shouldBeTrue()
+      resolveBoolean(
+        cliValue = true,
+        cliExplicitlySet = true,
+        envVarName = "TEST",
+        envVarValue = null,
+        configDefault = false,
+      ).shouldBeTrue()
+      resolveBoolean(
+        cliValue = true,
+        cliExplicitlySet = true,
+        envVarName = "TEST",
+        envVarValue = "false",
+        configDefault = false,
+      ).shouldBeTrue()
+      resolveBoolean(
+        cliValue = true,
+        cliExplicitlySet = true,
+        envVarName = "TEST",
+        envVarValue = "true",
+        configDefault = false,
+      ).shouldBeTrue()
     }
 
     "resolveBoolean should let env=true override config=false when cli is false" {
-      resolveBoolean(cliValue = false, envVarName = "TEST", envVarValue = "true", configDefault = false).shouldBeTrue()
+      resolveBoolean(
+        cliValue = false,
+        cliExplicitlySet = false,
+        envVarName = "TEST",
+        envVarValue = "true",
+        configDefault = false,
+      ).shouldBeTrue()
     }
 
     "resolveBoolean should let env=false override config=true when cli is false" {
       resolveBoolean(
         cliValue = false,
+        cliExplicitlySet = false,
         envVarName = "TEST",
         envVarValue = "false",
         configDefault = true,
@@ -475,12 +512,19 @@ class BaseOptionsTest : StringSpec() {
     }
 
     "resolveBoolean should handle case-insensitive TRUE" {
-      resolveBoolean(cliValue = false, envVarName = "TEST", envVarValue = "TRUE", configDefault = false).shouldBeTrue()
+      resolveBoolean(
+        cliValue = false,
+        cliExplicitlySet = false,
+        envVarName = "TEST",
+        envVarValue = "TRUE",
+        configDefault = false,
+      ).shouldBeTrue()
     }
 
     "resolveBoolean should handle case-insensitive FALSE" {
       resolveBoolean(
         cliValue = false,
+        cliExplicitlySet = false,
         envVarName = "TEST",
         envVarValue = "FALSE",
         configDefault = true,
@@ -488,9 +532,16 @@ class BaseOptionsTest : StringSpec() {
     }
 
     "resolveBoolean should handle mixed case True and False" {
-      resolveBoolean(cliValue = false, envVarName = "TEST", envVarValue = "True", configDefault = false).shouldBeTrue()
       resolveBoolean(
         cliValue = false,
+        cliExplicitlySet = false,
+        envVarName = "TEST",
+        envVarValue = "True",
+        configDefault = false,
+      ).shouldBeTrue()
+      resolveBoolean(
+        cliValue = false,
+        cliExplicitlySet = false,
         envVarName = "TEST",
         envVarValue = "False",
         configDefault = true,
@@ -500,7 +551,13 @@ class BaseOptionsTest : StringSpec() {
     "resolveBoolean should throw on invalid env var value" {
       val ex =
         shouldThrow<IllegalArgumentException> {
-          resolveBoolean(cliValue = false, envVarName = "MY_VAR", envVarValue = "invalid", configDefault = false)
+          resolveBoolean(
+            cliValue = false,
+            cliExplicitlySet = false,
+            envVarName = "MY_VAR",
+            envVarValue = "invalid",
+            configDefault = false,
+          )
         }
       ex.message shouldContain "MY_VAR"
       ex.message shouldContain "invalid"
@@ -508,13 +565,25 @@ class BaseOptionsTest : StringSpec() {
 
     "resolveBoolean should throw on empty string env var value" {
       shouldThrow<IllegalArgumentException> {
-        resolveBoolean(cliValue = false, envVarName = "TEST", envVarValue = "", configDefault = false)
+        resolveBoolean(
+          cliValue = false,
+          cliExplicitlySet = false,
+          envVarName = "TEST",
+          envVarValue = "",
+          configDefault = false,
+        )
       }
     }
 
     "resolveBoolean should throw on numeric env var value" {
       shouldThrow<IllegalArgumentException> {
-        resolveBoolean(cliValue = false, envVarName = "TEST", envVarValue = "1", configDefault = false)
+        resolveBoolean(
+          cliValue = false,
+          cliExplicitlySet = false,
+          envVarName = "TEST",
+          envVarValue = "1",
+          configDefault = false,
+        )
       }
     }
 
@@ -523,6 +592,7 @@ class BaseOptionsTest : StringSpec() {
     "env=false should override config=true when no CLI flag" {
       resolveBoolean(
         cliValue = false,
+        cliExplicitlySet = false,
         envVarName = "ADMIN_ENABLED",
         envVarValue = "false",
         configDefault = true,
@@ -532,6 +602,7 @@ class BaseOptionsTest : StringSpec() {
     "CLI --admin flag should win over env=false" {
       resolveBoolean(
         cliValue = true,
+        cliExplicitlySet = true,
         envVarName = "ADMIN_ENABLED",
         envVarValue = "false",
         configDefault = false,
@@ -541,6 +612,7 @@ class BaseOptionsTest : StringSpec() {
     "config default should win when no CLI flag and no env var" {
       resolveBoolean(
         cliValue = false,
+        cliExplicitlySet = false,
         envVarName = "ADMIN_ENABLED",
         envVarValue = null,
         configDefault = true,

@@ -21,7 +21,6 @@ import io.prometheus.common.ScrapeResults
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.minusAssign
-import kotlin.concurrent.atomics.plusAssign
 
 /**
  * Tracks in-flight scrape requests and assigns results when responses arrive.
@@ -56,15 +55,6 @@ internal class ScrapeRequestManager {
   // Scrape requests in flight across all agents. Claimed atomically before a request is added, so concurrent
   // submissions cannot overshoot the limit the way a size check followed by a put could.
   private val inFlightCount = AtomicInt(0)
-
-  fun addToScrapeRequestMap(scrapeRequest: ScrapeRequestWrapper): ScrapeRequestWrapper? {
-    val scrapeId = scrapeRequest.scrapeId
-    logger.debug { "Adding scrapeId: $scrapeId to scrapeRequestMap" }
-    return scrapeRequestMapView.put(scrapeId, scrapeRequest).also { previous ->
-      if (previous == null)
-        inFlightCount += 1
-    }
-  }
 
   /**
    * Completes the tracked request [scrapeResults] answers, if [isOwner] accepts it.

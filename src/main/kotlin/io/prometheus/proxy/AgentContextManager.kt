@@ -97,13 +97,6 @@ internal class AgentContextManager(
 
   fun getAgentContext(agentId: String) = agentContextMap[agentId]
 
-  internal fun putAgentContext(
-    agentId: String,
-    context: AgentContext,
-  ) {
-    agentContextMap[agentId] = context
-  }
-
   // Opens a transfer for [scrapeId] unless one is already under way, which a second header must not replace. Returns
   // whether [context] was stored.
   fun putChunkedContext(

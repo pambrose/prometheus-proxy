@@ -368,7 +368,7 @@ class ProxyTest : StringSpec() {
       val owner = createAgentContext()
       proxy.agentContextManager.addAgentContext(owner)
       val scrape = ScrapeRequestWrapper(owner, "metrics", "", "", null, false)
-      proxy.scrapeRequestManager.addToScrapeRequestMap(scrape)
+      proxy.scrapeRequestManager.tryAddToScrapeRequestMap(scrape, Int.MAX_VALUE)
 
       val header = chunkedScrapeResponse {
         header = headerData {
@@ -504,7 +504,7 @@ class ProxyTest : StringSpec() {
         acceptVal = "",
         debugEnabledVal = false,
       )
-      proxy.scrapeRequestManager.addToScrapeRequestMap(wrapper)
+      proxy.scrapeRequestManager.tryAddToScrapeRequestMap(wrapper, Int.MAX_VALUE)
 
       // Fixed order: fail requests THEN invalidate agents
       proxy.scrapeRequestManager.failAllInFlightScrapeRequests("Proxy is shutting down", ProxyFailure.PROXY_STOPPED)
@@ -532,7 +532,7 @@ class ProxyTest : StringSpec() {
         acceptVal = "",
         debugEnabledVal = false,
       )
-      proxy.scrapeRequestManager.addToScrapeRequestMap(wrapper)
+      proxy.scrapeRequestManager.tryAddToScrapeRequestMap(wrapper, Int.MAX_VALUE)
 
       // Old (broken) order: invalidate agents THEN fail requests
       proxy.agentContextManager.invalidateAllAgentContexts()

@@ -100,7 +100,6 @@ Since 4.3.0, three more groups are available, also off by default:
 | `success`               | Scrape completed successfully                                       |
 | `timed_out`             | Agent did not answer within the proxy's `scrapeRequestTimeoutSecs`  |
 | `upstream_timed_out`    | Agent answered, but its own fetch of the target timed out (408/504) |
-| `no_agents`             | The path's registration had no agents left to send the scrape to    |
 | `invalid_path`          | No agent has registered the requested path                          |
 | `missing_path`          | The request had no path (a scrape of `/`)                           |
 | `agent_disconnected`    | Agent disconnected, evicted, or displaced before answering (503)    |

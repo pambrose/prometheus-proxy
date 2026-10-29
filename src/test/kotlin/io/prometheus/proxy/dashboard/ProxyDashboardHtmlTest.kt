@@ -362,15 +362,6 @@ class ProxyDashboardHtmlTest : StringSpec() {
       html shouldContain "Registered paths"
     }
 
-    // Layout is derived from the URL on both sides -- the server for the initial render, the browser for
-    // what it announces over the socket -- so the two must agree on what counts as the path view.
-    "layout should be derived from the request path" {
-      DashboardLayout.of("/dashboard/paths") shouldBe DashboardLayout.PATH
-      DashboardLayout.of("/dashboard/paths/") shouldBe DashboardLayout.PATH
-      DashboardLayout.of("/dashboard") shouldBe DashboardLayout.AGENT
-      DashboardLayout.of("/dashboard/agents/7") shouldBe DashboardLayout.AGENT
-    }
-
     // ProxyDashboardService hands the renderer a base with no trailing slash, which is empty at a root
     // mount. Every sub-route must still join with exactly one separator: "//events" is a
     // protocol-relative URL, which sends the browser to a host named "events".

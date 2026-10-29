@@ -104,25 +104,6 @@ class AgentContextManagerTest : StringSpec() {
       manager.agentContextSize shouldBe 1
     }
 
-    "addAgentContext should return old context when replacing" {
-      val manager = AgentContextManager(isTestMode = true)
-      val context1 = AgentContext("remote-addr-1")
-
-      manager.addAgentContext(context1)
-
-      // Use putAgentContext to replace with a second context using the same agentId
-      val context2 = AgentContext("remote-addr-2")
-      manager.putAgentContext(context1.agentId, context2)
-      // putAgentContext stores without announcing; the replacement counts once announced.
-      manager.announceAgentContext(context1.agentId)
-
-      // Verify replacement occurred
-      val retrieved = manager.getAgentContext(context1.agentId)
-      retrieved.shouldNotBeNull()
-      retrieved shouldBe context2
-      manager.agentContextSize shouldBe 1
-    }
-
     "addAgentContext should handle multiple agents" {
       val manager = AgentContextManager(isTestMode = true)
       val context1 = AgentContext("remote-1")

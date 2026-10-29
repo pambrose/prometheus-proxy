@@ -79,7 +79,6 @@ class ProxyPathManagerTest : StringSpec() {
     every { context.agentId } returns agentId
     every { context.consolidated } returns consolidated
     every { context.isNotValid() } returns false
-    every { context.desc } returns if (consolidated) "consolidated " else ""
     return context
   }
 
@@ -664,7 +663,7 @@ class ProxyPathManagerTest : StringSpec() {
       manager.pathMapSize shouldBe 1
     }
 
-    "allPaths should return all registered paths" {
+    "allPathContextInfos should key every registered path, without its leading slash" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context = createMockAgentContext()
@@ -673,7 +672,7 @@ class ProxyPathManagerTest : StringSpec() {
       manager.addPath("/metrics2", """{"job":"test"}""", context)
       manager.addPath("/metrics3", """{"job":"test"}""", context)
 
-      val paths = manager.allPaths
+      val paths = manager.allPathContextInfos().keys
 
       paths.shouldHaveSize(3)
       paths shouldContain "metrics1"

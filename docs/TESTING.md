@@ -171,7 +171,9 @@ the build.
 ### Unit Tests — Agent (`agent/`)
 
 - **AgentTest** — Agent main class lifecycle, heartbeats, reconnection, scrape request processing; when one
-  connection task ends, the others are cancelled, so an idle read stream cannot hold a dead connection open
+  connection task ends, the others are cancelled, so an idle read stream cannot hold a dead connection open; and a
+  gRPC shutdown that throws (a MockK constructor mock) still stops the admin and metrics servers and closes the client
+  cache
 - **AgentGrpcServiceTest** — gRPC service: scrape request/response streaming, heartbeats, registration, error handling,
   channel shutdown
 - **AgentHttpServiceTest** — HTTP service: scraping endpoints, compression support, response handling, timeout behavior,
@@ -263,7 +265,8 @@ Two support helpers also live here (not test classes themselves):
   latency and response size, and its removal race; no per-path histogram series outlives the path's removal
 - **RecentReqsSynchronizationTest** — Synchronized access to recentReqs EvictingQueue (prevents
   ConcurrentModificationException)
-- **ScrapeRequestManagerTest** — Add/remove scrape requests, timeout handling, concurrent access
+- **ScrapeRequestManagerTest** — Add/remove scrape requests (a replaced scrapeId gives back its in-flight slot),
+  timeout handling, concurrent access
 - **ScrapeRequestManagerLincheckTest** — Lincheck (tagged `Lincheck`): handlers admitting and untracking requests under
   the in-flight limit race an agent's answer, a single failure, and `failAllScrapeRequests`; the limit holds and its
   counter matches the map, each request keeps one completer's result and matching `proxyFailure`, and a disconnect fails

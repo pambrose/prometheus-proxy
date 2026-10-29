@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — October 2026 Findings
 
-**Status:** 47 issues — 45 fixed, 2 open (16 medium, 31 low, no high).
+**Status:** 47 issues — 47 fixed, 0 open (16 medium, 31 low, no high).
 
 **Date:** 2026-10-27
 
@@ -79,7 +79,7 @@ Six earlier fixes turn out to be incomplete:
 | 4  | Unauthenticated connections still log INFO on removal and count as evictions           | Proxy    | low      | ✅      |
 | 5  | Each `Proxy` leaks a JVM shutdown hook that keeps it reachable                          | Proxy    | low      | ✅      |
 | 6  | A path equal to the SD path, blitz path, or `favicon.ico` registers but can't be scraped | Proxy   | low      | ✅      |
-| 7  | Dead or test-only proxy code, including an unreachable `no_agents` branch               | Proxy    | low      | ⬜      |
+| 7  | Dead or test-only proxy code, including an unreachable `no_agents` branch               | Proxy    | low      | ✅      |
 | 8  | `maxContentLengthMBytes` doesn't bound memory; Ktor buffers the whole body first        | Agent    | medium   | ✅      |
 | 9  | A second agent in one JVM with metrics on never connects (duplicate registration)       | Agent    | medium   | ✅      |
 | 10 | Discovered paths vanish on any reconnect while the discovery file is unreadable         | Agent    | medium   | ✅      |
@@ -92,7 +92,7 @@ Six earlier fixes turn out to be incomplete:
 | 17 | A routine proxy outage logs an ERROR stack trace on every reconnect                     | Agent    | low      | ✅      |
 | 18 | A bad `agent.http.trustStorePath` isn't caught at startup and fails every scrape        | Agent    | low      | ✅      |
 | 19 | `MetricFilter` misjudges quoted UTF-8 metric names                                      | Agent    | low      | ✅      |
-| 20 | Agent dead code, stale KDoc, and a `shutDown()` that isn't failure-isolated             | Agent    | low      | ⬜      |
+| 20 | Agent dead code, stale KDoc, and a `shutDown()` that isn't failure-isolated             | Agent    | low      | ✅      |
 | 21 | Scrape-result ownership checked on one lookup, applied on another (September #1 gap)    | Security | medium   | ✅      |
 | 22 | Path authorization runs a backtracking regex before the length cap applies             | Security | medium   | ✅      |
 | 23 | Agent-reported names have no size limit and are repeated per path everywhere            | Security | medium   | ✅      |
@@ -157,7 +157,7 @@ The **Touches** column shows which steps edit the same files and so need to land
 | 16   | ✅      | #42, #44, #28   | Documentation drift                                                         | website pages, `llms.txt`, `docs/TESTING.md`, `SECURITY.md`                                       | No behavior change. Each item can ride along with any earlier PR that touches the same page.                                                                                     |
 | 17   | ✅      | #45, #46, #47   | Tests that can fail, and that don't race for ports                          | the cited specs, `TestPorts.kt`                                                                   | Removes false confidence. #45's `TESTING.md` line goes with step 16 if that lands first.                                                                                         |
 | 18   | ✅      | #35, #37, #38   | Build tidy-ups                                                              | `build.gradle.kts`, `Makefile`, workflows                                                         | Hygiene. After #35, compare the `testRuntimeClasspath` against today's.                                                                                                          |
-| 19   | ⬜      | #7, #20         | Remove dead code                                                            | proxy and agent sources and their tests                                                           | Last, so the deletions don't collide with the behavior fixes, and the tests move onto the entry points those fixes settle.                                                       |
+| 19   | ✅      | #7, #20         | Remove dead code                                                            | proxy and agent sources and their tests                                                           | Last, so the deletions don't collide with the behavior fixes, and the tests move onto the entry points those fixes settle.                                                       |
 
 **Parallel tracks:** these sets of steps touch disjoint files, so they can be worked on at the same time.
 
@@ -417,7 +417,7 @@ routing semantics, not from a test.
 the blitz path when blitz is on, with `INVALID_PATH`. The finding's test (`addPath("discovery")` with SD on), plus the
 other two, failed before the fix. The service discovery page says so.
 
-### 7. [ ] Dead or test-only proxy code, including an unreachable `no_agents` branch
+### 7. [x] Dead or test-only proxy code, including an unreachable `no_agents` branch
 
 **Severity:** low · **Confidence:** confirmed. Grep finds only the declarations in main source.
 
@@ -445,6 +445,23 @@ other two, failed before the fix. The service discovery page says so.
   `addAgentContext`, `allPathContextInfos`).
 - For `no_agents`, either drop it from the outcome docs (the case is reported as `invalid_agent_context`), or check
   for an empty list first so the label means what the docs say.
+
+**Resolution:**
+
+- Removed: the `tracing` lazy, `addToScrapeRequestMap`, `putAgentContext`, `allPaths`, `AgentContext.desc`, and
+  `DashboardLayout.of`.
+  - Their tests use `tryAddToScrapeRequestMap` with no limit, `addAgentContext(…, announce = false)` (which stores a
+    context without announcing it, as `putAgentContext` did), and `allPathContextInfos().keys`.
+  - A new `ScrapeRequestManagerTest` case checks that a replaced `scrapeId` gives back its in-flight slot.
+  - The two tests of replacing a context under another's `agentId`, which production's unique IDs never do, and
+    the `desc` and `DashboardLayout.of` tests are gone.
+- `pathCountFor` stays. `ProxyPathManagerLincheckTest`'s `PathCountsAgree` checks the count itself, which nothing else
+  exposes. `pathLimitRejection`, `warnNearPathLimit`, and the displacement check now call it rather than repeating its
+  lookup, so it has production callers.
+- `no_agents` is dropped, the first option. The second would be unreachable too: `dropAgentFromPath` removes a path
+  with its last agent, so the path map never holds an empty agent list, and `executeScrapeRequests` returns one
+  response per agent. The branch is gone, and the docs no longer list the outcome. Troubleshooting's "last agent left
+  as the scrape arrived" case is listed under 404 as `invalid_agent_context`, which is what that scrape gets.
 
 ---
 
@@ -838,7 +855,7 @@ line's blanks before its first token are skipped, as the text format allows, so 
 judged by its name. Five `MetricFilterTest` cases cover an allow list, a deny list, a quoted histogram, an escaped
 quote, and leading blanks; each failed before the fix. The agent configuration page describes quoted names.
 
-### 20. [ ] Agent dead code, stale KDoc, and a `shutDown()` that isn't failure-isolated
+### 20. [x] Agent dead code, stale KDoc, and a `shutDown()` that isn't failure-isolated
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -857,6 +874,22 @@ quote, and leading blanks; each failed before the fix. The agent configuration p
 - Remove the dead code, or move it to test scope.
 - Correct the KDoc.
 - Run each `shutDown()` step under `runCatching`, and rethrow the first failure.
+
+**Resolution:**
+
+- Removed: `shutDownChannel()` and its test, the 3-argument `resolveBooleanOption`, and the 4-argument
+  `resolveBoolean`.
+  - `resolveBooleanOption` was `protected` on the public `BaseOptions`, so only a subclass outside the project could
+    have called it; `AgentOptions` and `ProxyOptions` are final.
+  - The legacy `resolveBoolean`'s tests call the 5-argument form, with `cliExplicitlySet` equal to `cliValue`, as the
+    legacy one assumed.
+- The class KDoc gives the fixed reconnect pace (`agent.internal.reconnectPauseSecs`). `startSyncAgent`'s says it
+  returns once the agent is running, and that the agent's non-daemon thread keeps the JVM up.
+- `shutDown()` runs its four steps under `runCatching` and rethrows the first failure with the rest suppressed, as
+  common-utils' `AbstractGenericService.shutDown()` does. `releaseAfterFailedStartUp` shares the helper.
+- The new `AgentTest` case mocks `AgentGrpcService`'s constructor so `shutDown()` throws. Before the change the admin
+  and metrics servers kept running and the client cache stayed open; now all three are released and the agent is
+  `FAILED` with the gRPC failure.
 
 ---
 

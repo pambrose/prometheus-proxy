@@ -142,7 +142,7 @@ class InProcessHealthCheckTest : StringSpec() {
       val scrapeIds =
         List(100) {
           ScrapeRequestWrapper(context, "metrics", "", "", "", false)
-            .also { proxy.scrapeRequestManager.addToScrapeRequestMap(it) }
+            .also { proxy.scrapeRequestManager.tryAddToScrapeRequestMap(it, Int.MAX_VALUE) }
             .scrapeId
         }
       try {

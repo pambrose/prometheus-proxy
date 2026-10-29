@@ -81,30 +81,6 @@ class AgentContextTest : StringSpec() {
       context.consolidated shouldBe true
     }
 
-    "desc should return empty string for non-consolidated context" {
-      val context = AgentContext("192.168.1.1")
-
-      val request = registerAgentRequest {
-        agentId = "test-id"
-        consolidated = false
-      }
-      context.assignProperties(request)
-
-      context.desc shouldBe ""
-    }
-
-    "desc should return 'consolidated ' for consolidated context" {
-      val context = AgentContext("192.168.1.1")
-
-      val request = registerAgentRequest {
-        agentId = "test-id"
-        consolidated = true
-      }
-      context.assignProperties(request)
-
-      context.desc shouldBe "consolidated "
-    }
-
     "scrapeRequestBacklogSize should start at zero" {
       val context = AgentContext("192.168.1.1")
 
