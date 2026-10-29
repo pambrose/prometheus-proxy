@@ -40,7 +40,7 @@ tcnative = "2.0.84.Final"
 netty = "4.2.19.Final"
 
 # Ktor
-ktor = "3.6.0"
+ktor = "3.6.1"
 
 # WebJars (htmx client assets, served from the classpath -- no CDN, works airgapped).
 # Pinned to htmx 2.x: the dashboard's WebSocket layer is built on htmx-ext-ws and the

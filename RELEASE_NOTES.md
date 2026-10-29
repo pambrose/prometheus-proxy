@@ -4,10 +4,33 @@
 
 ## 4.4.0
 
-_Not yet released_
+_Released 2026-10-29_
 
-This release makes the agent's oversized-scrape warnings say which target they're about and updates dependencies,
-among them gRPC, which now runs at one version across all its modules.
+A security and reliability release. An authenticated agent can no longer complete another agent's scrape or stall
+the proxy with a long path, the proxy bounds what agents report about themselves, and builds that embed the agent
+now get the patched Netty. Service discovery gives Prometheus targets it accepts, the agent's response-size limit
+now bounds its memory, and several agents can run in one JVM with metrics on. Among the new features, the Helm
+charts can take their config from a Secret, the agent passes the scrape timeout on to exporters, and service
+discovery works behind HTTPS or a path prefix. Some agent configs that start today will fail at startup, and the
+proxy chart's readiness probe moves to `/ping`, so read **Before you upgrade** first.
+
+### New Features
+
+- **The Helm charts can keep the config in a Secret.** Per-agent `proxy.auth` tokens, and credentials in an agent's
+  target URLs, could only go in a ConfigMap, which more people can often read than Secrets. The new
+  `existingSecret` value takes the whole config from a Secret, with a `proxy.conf` or `agent.conf` key, and the
+  chart then renders no ConfigMap. The proxy chart also shows how to read each token from an environment variable
+  set from a Secret instead, and its example of `proxy.auth`, which didn't match the config format, is fixed.
+- **Exporters see the scrape timeout.** The agent sends the target `X-Prometheus-Scrape-Timeout-Seconds`, as
+  Prometheus does: the shorter of `agent.scrapeTimeoutSecs` and Prometheus's own timeout. Exporters that size their
+  work by it, such as blackbox_exporter and snmp_exporter, now finish within it; a probe of a dead host reports
+  `probe_success 0` instead of being cut off and failing the scrape.
+- **Service discovery behind HTTPS or a path prefix.** `sdTargetPrefix` can be an `http` or `https` URL, such as
+  `https://proxy.example.com/prometheus/`: each target is its host and port, its scheme goes in the `__scheme__`
+  label, and its path in front of `__metrics_path__`, so Prometheus can reach the proxy through a TLS-terminating
+  ingress or under a path without relabel rules.
+- **Two new proxy settings bound what an agent reports about itself:** `proxy.internal.maxAgentFieldLength` (256
+  characters) and `maxAgentProxyEndpoints` (16). See Security.
 
 ### Security
 
@@ -36,11 +59,9 @@ among them gRPC, which now runs at one version across all its modules.
 - **Every authenticated connection appears as a connected agent.** A client that skipped the `connectAgent` call
   could register paths and serve scrapes while missing from the dashboard's agent list, the agent count, and the
   health checks. The first call that passes authentication now counts, whichever call it is.
-- **The Helm charts can keep the config in a Secret.** Per-agent `proxy.auth` tokens, and credentials in an agent's
-  target URLs, could only go in a ConfigMap, which more people can often read than Secrets. The new
-  `existingSecret` value takes the whole config from a Secret, and the proxy chart shows how to read each token
-  from an environment variable set from a Secret instead. Its example of `proxy.auth`, which didn't match the
-  config format, is fixed.
+- **The images' Brotli library is patched.** The proxy and agent images build on the current Ubuntu 24.04
+  `eclipse-temurin` base, whose `libbrotli1` fixes CVE-2026-111497, a HIGH out-of-bounds write in the Brotli
+  decoder. The JDK is unchanged.
 
 ### Before you upgrade
 
@@ -70,7 +91,8 @@ among them gRPC, which now runs at one version across all its modules.
 ### Bug Fixes
 
 - **Service discovery works.** Prometheus refused every target the proxy advertised, since each was a URL; they
-  are now `host:port`, and a new end-to-end test has Prometheus scrape through `http_sd_configs`.
+  are now `host:port` (see New Features for a URL `sdTargetPrefix`), and a new end-to-end test has Prometheus
+  scrape through `http_sd_configs`.
 - **One agent's labels can't break service discovery for everyone.** A label value that isn't a string, or a
   name Prometheus doesn't accept, made Prometheus reject the whole discovery response. Such labels are left out,
   with a warning when the path registers.
@@ -98,8 +120,6 @@ among them gRPC, which now runs at one version across all its modules.
   was read into memory until the scrape timeout, which could exhaust the agent's heap and stop it, along with the
   application hosting an embedded agent. The agent now stops reading one byte past `maxContentLengthMBytes`, and
   rejects a response that announces a larger size without reading it.
-- **Exporters see the scrape timeout.** The agent sends the target `X-Prometheus-Scrape-Timeout-Seconds`, as
-  Prometheus does, so exporters such as blackbox_exporter fit their probes within it instead of being cut off.
 - **Credentials in a target URL go with the first request.** A target that answers a request without them with
   403, or with a redirect to a login page, now gets them, and other protected targets answer in one round trip
   instead of two. An `Authorization` header from Prometheus's scrape config still takes precedence.
@@ -189,11 +209,11 @@ among them gRPC, which now runs at one version across all its modules.
 Runtime: common-utils 5.1.1 → 5.2.0, grpc 1.84.2 → 1.85.1, with every grpc module now held to the same version (the
 agent and proxy previously ran grpc's Netty transport from 1.84.1, the version common-utils 5.1.1 brought), the
 Prometheus Java client 1.9.0 → 1.10.0 (`prometheus-metrics-core`, which embedders also get, as they do
-common-utils), kotlinx-serialization 1.11.0 → 1.12.0, Jackson 2.22.3 → 2.22.4, and Logback 1.6.5 → 1.6.6. Netty
-4.2.18.Final → 4.2.19.Final (see Security), ahead of the 4.2.17.Final grpc 1.85.1 brings, which has an HTTP/2
-denial-of-service vulnerability (CVE-2026-93492). Build only: Gradle 9.8.1 → 9.8.2, Kotest 6.2.5 → 6.2.6, and the
-project's own Gradle plugins 1.1.7 → 1.1.8. The documentation site's Python lock picks up Zensical 0.0.70 → 0.0.72,
-and the workflows' pinned GitHub Actions are updated (CodeQL 4.39.1, setup-java 6.1.0, setup-uv 10.3.2,
+common-utils), Ktor 3.6.0 → 3.6.1, kotlinx-serialization 1.11.0 → 1.12.0, Jackson 2.22.3 → 2.22.4, and Logback 1.6.5
+→ 1.6.6. Netty 4.2.18.Final → 4.2.19.Final (see Security), ahead of the 4.2.17.Final grpc 1.85.1 brings, which has
+an HTTP/2 denial-of-service vulnerability (CVE-2026-93492). Build only: Gradle 9.8.1 → 9.8.2, Kotest 6.2.5 → 6.2.6,
+and the project's own Gradle plugins 1.1.7 → 1.1.8. The documentation site's Python lock picks up Zensical 0.0.70 →
+0.0.72, and the workflows' pinned GitHub Actions are updated (CodeQL 4.39.1, setup-java 6.1.0, setup-uv 10.3.2,
 zizmor-action 0.7.1, and claude-code-action 1.0.259).
 
 ---

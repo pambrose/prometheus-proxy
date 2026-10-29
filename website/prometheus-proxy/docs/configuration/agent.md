@@ -227,7 +227,7 @@ loaded as the agent starts, so a missing file or a wrong password fails the agen
 
 | Setting               | Default | Description                                       |
 |:----------------------|:--------|:--------------------------------------------------|
-| `scrapeTimeoutSecs`   | 15      | Total time allowed for a scrape including retries; a shorter Prometheus scrape timeout wins |
+| `scrapeTimeoutSecs`   | 15      | Total time allowed for a scrape including retries; a shorter Prometheus scrape timeout wins, and the agent sends whichever applies to the target in `X-Prometheus-Scrape-Timeout-Seconds` |
 | `scrapeMaxRetries`    | 0       | Maximum retries; 0 disables retries               |
 | `chunkContentSizeKbs` | 32      | Chunked above this; at most 4032                  |
 | `minGzipSizeBytes`    | 512     | Gzip-compressed above this; at most 4128768       |
