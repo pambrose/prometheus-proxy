@@ -65,6 +65,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.launch
 import java.io.ByteArrayInputStream
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.locks.ReentrantLock
@@ -145,6 +146,11 @@ internal class AgentGrpcService(
   // land between them, so a concurrent reader -- the /debug servlet runs on a Jetty thread -- could
   // render a host:port pair that was never configured.
   val currentEndpoint: HostPort get() = endpoints[endpointIndex]
+
+  // The last connect failure logged at WARN for each proxy endpoint, until a connect to it succeeds: a proxy that
+  // stays down, or a dead primary in a failover list, logs its failure once and then at DEBUG (October #17). The
+  // endpoints are the configured list, so this stays as small.
+  private val connectFailures = ConcurrentHashMap<String, String>()
 
   val agentHostName: String get() = currentEndpoint.host
   val agentPort: Int get() = currentEndpoint.port
@@ -319,15 +325,20 @@ internal class AgentGrpcService(
   // config-file value, so an agent given --tf_disabled on the command line sent this RPC in transport-filter
   // mode while omitting the interceptor, and the proxy rejected it as a config mismatch. One read cannot
   // disagree with itself.
-  suspend fun connectAgent() =
-    runCatchingCancellable {
-      logger.info { "Connecting to proxy at ${agent.proxyHost} using ${tlsContext.desc()}..." }
+  suspend fun connectAgent(): Boolean {
+    val proxyHost = agent.proxyHost
+    return runCatchingCancellable {
+      if (connectFailures.containsKey(proxyHost))
+        logger.debug { "Connecting to proxy at $proxyHost using ${tlsContext.desc()} again..." }
+      else
+        logger.info { "Connecting to proxy at $proxyHost using ${tlsContext.desc()}..." }
       if (options.transportFilterDisabled)
         unaryStub().connectAgentWithTransportFilterDisabled(EMPTY_INSTANCE).also { agent.agentId = it.agentId }
       else
         unaryStub().connectAgent(EMPTY_INSTANCE)
 
-      logger.info { "Connected to proxy at ${agent.proxyHost} using ${tlsContext.desc()}" }
+      connectFailures.remove(proxyHost)
+      logger.info { "Connected to proxy at $proxyHost using ${tlsContext.desc()}" }
       agent.metrics { connectCount.labelValues(agent.launchId, "success").inc() }
       true
     }.getOrElse { e ->
@@ -337,12 +348,16 @@ internal class AgentGrpcService(
       if (e is Error)
         throw e
       agent.metrics { connectCount.labelValues(agent.launchId, "failure").inc() }
-      // Pass the throwable so a stack trace is captured for diagnosis.
-      logger.error(e) {
-        "Cannot connect to proxy at ${agent.proxyHost} using ${tlsContext.desc()} - ${e.simpleClassName}: ${e.message}"
-      }
+      val failure = "${e.simpleClassName}: ${e.message}"
+      val message = "Cannot connect to proxy at $proxyHost using ${tlsContext.desc()} - $failure"
+      // The first failure, and a change, at WARN with the stack trace for diagnosis; a repeat at DEBUG.
+      if (connectFailures.put(proxyHost, failure) == failure)
+        logger.debug { message }
+      else
+        logger.warn(e) { message }
       false
     }
+  }
 
   suspend fun registerAgent(initialConnectionLatch: CountDownLatch) {
     val request =

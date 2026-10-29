@@ -24,6 +24,7 @@ import io.grpc.Context
 import io.grpc.Status
 import io.grpc.StatusException
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
@@ -890,6 +891,70 @@ class ProxyServiceImplTest : StringSpec() {
       val response = service.pathMapSize(request)
 
       response.pathCount shouldBe 42
+    }
+
+    // request.agentId is caller-supplied, up to gRPC's 4 MiB message limit, until it's matched to a context, and
+    // each RPC's "missing AgentContext" ERROR line and reason wrote it whole (October #4, found while fixing #23).
+    "an agentId the proxy doesn't know should be cut to 64 characters in the log and the reason" {
+      val longAgentId = "a".repeat(10_000)
+      val proxy = createMockProxy()
+      every { proxy.agentContextManager.getAgentContext(any()) } returns null
+      val service = ProxyServiceImpl(proxy)
+      val calls: List<Pair<String, suspend () -> String>> =
+        listOf(
+          "registerAgent" to { service.registerAgent(registerAgentRequest { agentId = longAgentId }).reason },
+          "registerPath" to {
+            service.registerPath(
+              registerPathRequest {
+              agentId = longAgentId
+              path = "metrics"
+            },
+            ).reason
+          },
+          "unregisterPath" to {
+            service.unregisterPath(
+              unregisterPathRequest {
+              agentId = longAgentId
+              path = "metrics"
+            },
+            ).reason
+          },
+          "sendHeartBeat" to { service.sendHeartBeat(heartBeatRequest { agentId = longAgentId }).reason },
+        )
+
+      calls.forEach { (rpc, call) ->
+        var reason = ""
+        val events = captureLogs<ProxyServiceImpl> { reason = call() }
+        withClue(rpc) {
+          reason shouldContain "a".repeat(64) + "..."
+          reason.length shouldBeLessThan 200
+          events.map { it.formattedMessage }.forEach { it.length shouldBeLessThan 200 }
+          events.size shouldBe 1
+        }
+      }
+    }
+
+    // The connection-mismatch WARN and reason wrote the caller's agentId whole too.
+    "a mismatched agentId should be cut to 64 characters in the log and the reason" {
+      val longAgentId = "b".repeat(10_000)
+      val service = ProxyServiceImpl(createMockProxy())
+      val context = Context.current().withValue(ProxyServerInterceptor.CONNECTION_AGENT_ID_KEY, "connection-agent")
+      val previous = context.attach()
+      var reason = ""
+      val events =
+        try {
+          captureLogs<ProxyServiceImpl> {
+            reason =
+            service.sendHeartBeat(heartBeatRequest { agentId = longAgentId }).reason
+          }
+        } finally {
+          context.detach(previous)
+        }
+
+      reason shouldContain "b".repeat(64) + "..."
+      reason.length shouldBeLessThan 200
+      events.single().level shouldBe Level.WARN
+      events.single().formattedMessage.length shouldBeLessThan 200
     }
 
     "sendHeartBeat should succeed with valid agent context" {

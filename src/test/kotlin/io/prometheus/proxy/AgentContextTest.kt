@@ -33,6 +33,7 @@ import io.mockk.every
 import kotlin.time.TestTimeSource
 import io.mockk.mockk
 import io.mockk.verify
+import io.prometheus.grpc.PathRejectionCause
 import io.prometheus.grpc.RegisterAgentRequest
 import java.time.Instant
 import kotlinx.coroutines.async
@@ -43,6 +44,24 @@ import kotlin.time.Duration.Companion.seconds
 
 class AgentContextTest : StringSpec() {
   init {
+    // ==================== Path Rejection Memo Tests ====================
+
+    // The memo keeps one entry per distinct rejected path for the life of the connection, so an agent sending new
+    // paths without end grew it without end (October #4, found while fixing #23). A rejection past the cap isn't
+    // remembered, so it's logged at DEBUG.
+    "recordRejection should remember at most MAX_REMEMBERED_REJECTIONS paths" {
+      val context = AgentContext("remote")
+      val cap = AgentContext.MAX_REMEMBERED_REJECTIONS
+
+      (1..cap).all { context.recordRejection("path$it", PathRejectionCause.INVALID_PATH) }.shouldBeTrue()
+
+      context.recordRejection("one-too-many", PathRejectionCause.INVALID_PATH).shouldBeFalse()
+      // A path already remembered is still told of a new cause, and one forgotten makes room.
+      context.recordRejection("path1", PathRejectionCause.NOT_AUTHORIZED).shouldBeTrue()
+      context.forgetRejection("path2")
+      context.recordRejection("one-too-many", PathRejectionCause.INVALID_PATH).shouldBeTrue()
+    }
+
     // ==================== Creation Tests ====================
 
     "should generate unique agentIds" {

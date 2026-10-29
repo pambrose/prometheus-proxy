@@ -158,7 +158,11 @@ internal class AgentContextManager(
     if (agentContext == null) {
       logger.debug { "AgentContext already removed for agentId: $agentId ($reason)" }
     } else {
-      if (!isTestMode)
+      // A connection that never authenticated -- a bad token, a port scanner, a grpc_health_probe -- isn't an agent,
+      // so its closing is logged at DEBUG (October #4).
+      if (!agentContext.announced)
+        logger.debug { "Removed $agentContext for agentId: $agentId ($reason)" }
+      else if (!isTestMode)
         logger.info { "Removed $agentContext for agentId: $agentId ($reason)" }
       agentContext.invalidate()
     }

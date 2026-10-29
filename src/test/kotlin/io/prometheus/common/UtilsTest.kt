@@ -19,12 +19,16 @@
 package io.prometheus.common
 
 import ch.qos.logback.classic.Level
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.github.oshai.kotlinlogging.KotlinLoggingConfiguration
 import io.grpc.Status
+import io.grpc.StatusRuntimeException
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeEmpty
@@ -32,6 +36,7 @@ import io.prometheus.common.Utils.HostPort
 import io.prometheus.common.Utils.appendQueryParams
 import io.prometheus.common.Utils.defaultEmptyJsonObject
 import io.prometheus.common.Utils.exceptionDetails
+import io.prometheus.common.Utils.logStreamFailure
 import io.prometheus.common.Utils.parseEndpointList
 import io.prometheus.common.Utils.parseHostPort
 import io.prometheus.common.Utils.sanitizeQueryParams
@@ -390,6 +395,30 @@ class UtilsTest : StringSpec() {
 
       copied.host shouldBe "localhost"
       copied.port shouldBe PROMETHEUS_PORT
+    }
+
+    // ==================== logStreamFailure Tests ====================
+
+    // A stream ending UNAVAILABLE is the proxy going away, routine during an outage, and each disconnect wrote one to
+    // three ERROR stack traces (October #17).
+    "logStreamFailure should log an UNAVAILABLE stream end at WARN without a stack trace, and others at ERROR" {
+      val loggerName = "io.prometheus.common.LogStreamFailureTest"
+      val streamLogger = KotlinLogging.logger(loggerName)
+
+      val unavailable =
+        captureLogs(loggerName) {
+          streamLogger.logStreamFailure("readRequestsFromProxy", StatusRuntimeException(Status.UNAVAILABLE))
+        }
+      val internal =
+        captureLogs(loggerName) {
+          streamLogger.logStreamFailure("readRequestsFromProxy", StatusRuntimeException(Status.INTERNAL))
+        }
+
+      unavailable.single().level shouldBe Level.WARN
+      unavailable.single().throwableProxy.shouldBeNull()
+      unavailable.single().formattedMessage shouldContain "readRequestsFromProxy"
+      internal.single().level shouldBe Level.ERROR
+      internal.single().throwableProxy.shouldNotBeNull()
     }
 
     // ==================== exceptionDetails Tests ====================

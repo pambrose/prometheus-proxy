@@ -190,11 +190,15 @@ internal class AgentContext(
   fun isNotValid() = !isValid()
 
   // Records that this connection was told [cause] for [path], returning true when that is news: the first
-  // rejection of the path, or a different cause than last time.
+  // rejection of the path, or a different cause than last time. Once the memo holds MAX_REMEMBERED_REJECTIONS paths,
+  // a new one isn't remembered and isn't news, so an agent sending new paths without end can't grow it without end
+  // (October #4).
   fun recordRejection(
     path: String,
     cause: PathRejectionCause,
   ): Boolean {
+    if (!loggedPathRejections.containsKey(path) && loggedPathRejections.size >= MAX_REMEMBERED_REJECTIONS)
+      return false
     val previous = loggedPathRejections.put(path, cause)
     return previous != cause
   }
@@ -255,5 +259,8 @@ internal class AgentContext(
 
   companion object {
     private val AGENT_ID_GENERATOR = AtomicLong(0L)
+
+    // How many rejected paths one connection's memo keeps; see recordRejection.
+    internal const val MAX_REMEMBERED_REJECTIONS = 1_000
   }
 }
