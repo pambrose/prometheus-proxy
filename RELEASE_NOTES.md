@@ -59,6 +59,9 @@ proxy chart's readiness probe moves to `/ping`, so read **Before you upgrade** f
 - **Every authenticated connection appears as a connected agent.** A client that skipped the `connectAgent` call
   could register paths and serve scrapes while missing from the dashboard's agent list, the agent count, and the
   health checks. The first call that passes authentication now counts, whichever call it is.
+- **The images' Brotli library is patched.** The proxy and agent images build on the current Ubuntu 24.04
+  `eclipse-temurin` base, whose `libbrotli1` fixes CVE-2026-111497, a HIGH out-of-bounds write in the Brotli
+  decoder. The JDK is unchanged.
 
 ### Before you upgrade
 
