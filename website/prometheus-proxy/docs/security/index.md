@@ -125,6 +125,11 @@ legacy token and a `proxy.auth` identity cannot take over each other's live path
     properties) cannot express a list. Identity names must be unique and tokens non-empty; the proxy
     fails fast at startup otherwise.
 
+    A token can still come from the environment, through HOCON substitution: `token = ${TEAM_A_TOKEN}`
+    reads the `TEAM_A_TOKEN` variable, which keeps the tokens out of the config file. In Kubernetes, set the
+    variables from a Secret, or keep the whole config in one (the proxy chart's `existingSecret`); a ConfigMap
+    can be read by anyone who can read ConfigMaps in its namespace.
+
 ### Migrating from a shared token
 
 Setting `proxy.auth` does **not** disable a legacy `proxy.agentToken`. When both are present, the

@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — October 2026 Findings
 
-**Status:** 47 issues — 36 fixed, 11 open (16 medium, 31 low, no high).
+**Status:** 47 issues — 39 fixed, 8 open (16 medium, 31 low, no high).
 
 **Date:** 2026-10-27
 
@@ -99,7 +99,7 @@ Six earlier fixes turn out to be incomplete:
 | 24 | SD labels aren't type- or name-checked; one agent can invalidate the whole SD document  | Security | medium   | ✅      |
 | 25 | The Netty CVE override isn't in the published POM; embedders get vulnerable Netty       | Security | medium   | ✅      |
 | 26 | A connection that skips `connectAgent` works as an agent without being announced        | Security | low      | ✅      |
-| 27 | Helm proxy chart takes `proxy.auth` tokens only via a ConfigMap; example schema wrong   | Security | low      | ⬜      |
+| 27 | Helm proxy chart takes `proxy.auth` tokens only via a ConfigMap; example schema wrong   | Security | low      | ✅      |
 | 28 | Security docs don't say the scrape port is unauthenticated, or what it forwards         | Security | low      | ✅      |
 | 29 | `release-check` accepts any all-green check set without requiring the CI jobs           | CI/build | medium   | ✅      |
 | 30 | Version-bump check passes partial bumps and skips two of step 2's files                 | CI/build | medium   | ✅      |
@@ -111,8 +111,8 @@ Six earlier fixes turn out to be incomplete:
 | 36 | Hand lock upgrades skip the 7-day cooldown Dependabot follows                           | CI/build | low      | ✅      |
 | 37 | The TLA+ tools jar isn't versioned; local runs can use different tools than CI          | CI/build | low      | ⬜      |
 | 38 | CI hygiene: `build` job has no timeout; tool images pinned by tag only                  | CI/build | low      | ⬜      |
-| 39 | The image's UID is implicit, but the charts hard-code it                                | CI/build | low      | ⬜      |
-| 40 | The fat JARs keep only one dependency's `NOTICE`                                        | CI/build | low      | ⬜      |
+| 39 | The image's UID is implicit, but the charts hard-code it                                | CI/build | low      | ✅      |
+| 40 | The fat JARs keep only one dependency's `NOTICE`                                        | CI/build | low      | ✅      |
 | 41 | Every embedded-agent example passes `exitOnMissingConfig = true` and exits the host     | Docs     | medium   | ✅      |
 | 42 | Website tuning table names a nonexistent key; Troubleshooting a nonexistent metric      | Docs     | medium   | ✅      |
 | 43 | 4.4.0 changelogs miss the common-utils and gradle-plugins bumps                         | Docs     | low      | ✅      |
@@ -153,7 +153,7 @@ The **Touches** column shows which steps edit the same files and so need to land
 | 12   | ✅      | #4, #17         | Quiet logs for unauthenticated connections and routine outages              | `AgentContextManager.kt`, `AgentContextCleanupService.kt`, `AgentGrpcService.kt`, `Utils.kt`      | Changes only log levels and one counter, each covered by a `ListAppender` test. Do it after step 5, which shares `AgentContextManager.kt`.                                        |
 | 13   | ✅      | #19             | `MetricFilter` handles quoted UTF-8 names                                   | `agent/filter/MetricFilter.kt`                                                                    | Self-contained, so it can go any time.                                                                                                                                           |
 | 14   | ✅      | #31, #36, #34   | Docs site: build on PRs, cool down hand upgrades, deploy after publishing   | `docs.yml`, `ci.yml`, `Makefile`                                                                  | Keeps a broken site build off `master`, and keeps the site from advertising a version that isn't published yet. Workflow-only, so it can run in parallel with code steps.        |
-| 15   | ⬜      | #27, #39, #40   | Helm and image packaging                                                    | `charts/*`, `etc/docker/*.Dockerfile`, `build.gradle.kts` shadow config                           | A Secret-backed auth config, an explicit UID, and NOTICE merging. Needs a `helm-smoke` run and the container tests.                                                              |
+| 15   | ✅      | #27, #39, #40   | Helm and image packaging                                                    | `charts/*`, `etc/docker/*.Dockerfile`, `build.gradle.kts` shadow config                           | A Secret-backed auth config, an explicit UID, and NOTICE merging. Needs a `helm-smoke` run and the container tests.                                                              |
 | 16   | ✅      | #42, #44, #28   | Documentation drift                                                         | website pages, `llms.txt`, `docs/TESTING.md`, `SECURITY.md`                                       | No behavior change. Each item can ride along with any earlier PR that touches the same page.                                                                                     |
 | 17   | ⬜      | #45, #46, #47   | Tests that can fail, and that don't race for ports                          | the cited specs, `TestPorts.kt`                                                                   | Removes false confidence. #45's `TESTING.md` line goes with step 16 if that lands first.                                                                                         |
 | 18   | ⬜      | #35, #37, #38   | Build tidy-ups                                                              | `build.gradle.kts`, `Makefile`, workflows                                                         | Hygiene. After #35, compare the `testRuntimeClasspath` against today's.                                                                                                          |
@@ -1130,7 +1130,7 @@ agent always calls `connectAgent` first. A `ProxyGrpcServiceTest` client that sk
 agentId from the `agent-id` header, and registers a path found `agentContextSize` 0 before the fix. An auth-gated
 variant failed the same way, and a mutation that runs auth after the interceptor fails it.
 
-### 27. [ ] The Helm proxy chart can take `proxy.auth` tokens only through a ConfigMap, and its example shows the wrong schema
+### 27. [x] The Helm proxy chart can take `proxy.auth` tokens only through a ConfigMap, and its example shows the wrong schema
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -1154,6 +1154,16 @@ URLs.
 
 **Test:** a chart CI values file renders a Secret-backed config, and the `helm template` output has no token in any
 ConfigMap.
+
+**Resolution:** both, in both charts.
+
+- `existingSecret` names a Secret with a `proxy.conf` or `agent.conf` key. It is mounted where the ConfigMap would
+  be, and the chart then renders no ConfigMap of its own.
+- The proxy chart's `values.yaml` and README show the corrected `auth = [ { name, token, paths } ]` form, with each
+  token substituted from an environment variable set from a Secret (`token = ${TEAM_A_TOKEN}`). The Security page
+  documents the substitution, and a `ProxyOptionsTest` case pins it.
+- Each chart's `ci/secret-config-values.yaml` is rendered by `make helm-lint`. The check fails if the render has a
+  ConfigMap, or doesn't mount the Secret; before the template change it failed on the mount.
 
 ### 28. [x] The security docs don't say the scrape port is unauthenticated, or what it forwards
 
@@ -1449,7 +1459,7 @@ the old TLC, while CI downloads the new one.
 - Pin the tool images by digest, with the tag in a comment.
 - Pin `CRD_SCHEMAS` to a commit.
 
-### 39. [ ] The image's UID is implicit, but the charts hard-code it
+### 39. [x] The image's UID is implicit, but the charts hard-code it
 
 **Severity:** low · **Confidence:** plausible
 
@@ -1464,7 +1474,15 @@ the old TLC, while CI downloads the new one.
 
 **Fix:** use `adduser --uid 1001 …` and `USER 1001`, with a comment linking the charts to that UID.
 
-### 40. [ ] The fat JARs keep only one dependency's `NOTICE`
+**Resolution:**
+
+- Both Dockerfiles create the group and user with GID and UID 1001, chown `/app` to `1001:1001`, and run as
+  `USER 1001:1001`.
+- Comments in the Dockerfiles and the charts' `podSecurityContext` point at each other.
+- The new `ContainersPackagingTest` checks each image's configured user, and `id` and the owner of `/app` inside
+  it. It failed with `prometheus` before the change.
+
+### 40. [x] The fat JARs keep only one dependency's `NOTICE`
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -1476,6 +1494,17 @@ requires them.
 
 **Fix:** add Shadow's `ApacheNoticeResourceTransformer` and `ApacheLicenseResourceTransformer`, or append the files.
 Keep `.claude/rules/shadow-jar.md`'s service-file rules intact.
+
+**Resolution:** `ApacheNoticeResourceTransformer`, but `MergeLicenseResourceTransformer` in place of
+`ApacheLicenseResourceTransformer`. In Shadow 9.6.1 the latter drops every LICENSE file instead of merging them.
+
+- Every NOTICE is merged into `META-INF/NOTICE`.
+- Every license text follows the project's own in `META-INF/LICENSE`. First-wins had also dropped all but one
+  `META-INF/LICENSE.txt`, slf4j's MIT license among them.
+- The exact paths the two transformers take are let through as `INCLUDE`; the shadow-jar rule says why they must
+  stay exact.
+- `ContainersPackagingTest` checks each JAR's merged files against six dependencies' NOTICEs and four license
+  texts, and failed before the change.
 
 ---
 
