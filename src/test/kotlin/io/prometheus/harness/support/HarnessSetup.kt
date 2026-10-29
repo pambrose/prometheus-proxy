@@ -16,6 +16,7 @@
 
 package io.prometheus.harness.support
 
+import com.pambrose.common.metrics.SystemMetrics
 import com.pambrose.common.util.simpleClassName
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Agent
@@ -41,6 +42,10 @@ open class HarnessSetup {
     startupTimeout: Duration = 10.seconds,
   ) {
     PrometheusRegistry.defaultRegistry.clear()
+    // SystemMetrics remembers the JVM metric groups it registered with each registry and never registers them again,
+    // so without this only the first spec in the JVM got them; with it, each spec's proxy and agent serve them, as in
+    // a new JVM.
+    SystemMetrics.forget(PrometheusRegistry.defaultRegistry)
 
     // Wait for the proxy port to be available (previous test may not have fully released it)
     awaitPortFree(proxyPort)

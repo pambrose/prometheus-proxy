@@ -4,9 +4,10 @@ Two independent specs: `ProxyRegistry.tla` for the proxy side and `AgentFailover
 
 `make tla-checks` (from the repo root) model-checks both with their quick configs in about 15 seconds, and fails if
 either finds a violation; CI's `tla` job runs it on every pull request and push to `master`. It downloads the TLA+
-tools jar (pinned in the Makefile's `TLA_VERSION`) into this directory on first use, and refuses a download whose
-SHA-256 doesn't match `TLA_SHA256`; the jar is git-ignored. To run a config by hand, or the long
-`ProxyRegistrySafety.cfg`, use the commands below from this directory.
+tools jar (pinned in the Makefile's `TLA_VERSION`) into this directory, and refuses a download whose SHA-256 doesn't
+match `TLA_SHA256`; the jar is git-ignored. It checks the jar on every run, so after a version bump the old one is
+replaced rather than run. To run a config by hand, or the long `ProxyRegistrySafety.cfg`, use the commands below
+from this directory.
 
 ## ProxyRegistry
 

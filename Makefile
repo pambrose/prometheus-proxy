@@ -9,7 +9,7 @@
         tree depends lint detekt detekt-baseline \
         versions versions-all kdocs clean-site check-site upgrade-site build-site site \
         publish-local publish-local-snapshot publish-snapshot publish-maven-central \
-        upgrade-wrapper _check-gpg-env _require-version _require-gradle-version
+        upgrade-wrapper _check-gpg-env _require-version _require-gradle-version _tla-tools
 
 VERSION := $(shell sed -n 's/^version=\(.*\)/\1/p' gradle.properties)
 GRADLE_VERSION := $(shell sed -n 's/^gradle-wrapper = "\(.*\)"/\1/p' gradle/libs.versions.toml)
@@ -46,8 +46,8 @@ RELEASE_REQUIRED_JOBS := ci.yml/build;ci.yml/tla;ci.yml/rules;ci.yml/helm;ci.yml
 WEBSITE_DIR := website
 SITE_DIR := $(WEBSITE_DIR)/prometheus-proxy
 
-# TLA+ model checking (specs/tla). The tools jar is downloaded on first use and git-ignored; TLC's working
-# states go under build/.
+# TLA+ model checking (specs/tla). The tools jar is git-ignored, and downloaded when it's missing or doesn't match
+# TLA_SHA256; TLC's working states go under build/.
 TLA_VERSION := 1.7.4
 # SHA-256 of that release's tla2tools.jar, recorded when it was pinned (GitHub publishes no digest for the asset); a
 # download that doesn't match is refused. Update it together with TLA_VERSION.
@@ -56,16 +56,23 @@ TLA_DIR := specs/tla
 TLA_JAR := $(TLA_DIR)/tla2tools.jar
 TLC = cd $(TLA_DIR) && java -XX:+UseParallelGC -cp tla2tools.jar tlc2.TLC -workers auto -deadlock -cleanup
 
-# The Prometheus image whose promtool checks grafana/alerts.yml. Keep in step with
+# The tool images below are pinned by digest as well as tag, so a re-pushed tag can't change what make and CI run
+# without a diff here. Each digest is the image's multi-platform index (`docker buildx imagetools inspect <image:tag>`
+# prints it); update the tag and digest together.
+
+# The Prometheus image whose promtool checks grafana/alerts.yml. Keep its version in step with
 # ContainerTestSupport.PROMETHEUS_IMAGE, the Prometheus the container suite scrapes through.
-PROMETHEUS_IMAGE := prom/prometheus:v3.14.0
+PROMETHEUS_IMAGE := prom/prometheus:v3.14.0@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0
 
 # Helm chart checks (charts/): lint each chart with every values file in its ci/ directory, then validate the rendered
 # manifests against the Kubernetes schemas and, for the ServiceMonitor, the Prometheus Operator CRD's.
-HELM_IMAGE := alpine/helm:3.22.0
-KUBECONFORM_IMAGE := ghcr.io/yannh/kubeconform:v0.8.0
+HELM_IMAGE := alpine/helm:3.22.0@sha256:70ed3f7b02ab2eee12aa520ad6870305db8a82516b07aff62f5656c657a26e2a
+KUBECONFORM_IMAGE := ghcr.io/yannh/kubeconform:v0.8.0@sha256:faffaf43f95aa6425306e1ab8d6fcad72acb9049158f38e574c085ea1ec0f64e
 KUBERNETES_VERSION := 1.30.0
-CRD_SCHEMAS := https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json
+# The CRD schemas come from a fixed commit of datreeio's catalog (2026-10-25), not its main branch, which changed
+# them without a diff here.
+CRD_SCHEMAS_COMMIT := 3eb90d47aba8d61919d4419dd38301536e32a94b
+CRD_SCHEMAS := https://raw.githubusercontent.com/datreeio/CRDs-catalog/$(CRD_SCHEMAS_COMMIT)/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json
 CHARTS := prometheus-proxy prometheus-agent
 
 # The jobs of the CI workflow (.github/workflows/ci.yml) that `make ci` runs, quickest first; build-site is its docs-site
@@ -158,13 +165,20 @@ tls-tests:  ## Run TLS harness tests
 lincheck-tests:  ## Run the Lincheck concurrency tests (excluded from the default test run)
 	$(GRADLE) test -PkotestTags=Lincheck --tests "*LincheckTest"
 
-$(TLA_JAR):
-	curl -fsSL -o $@.tmp https://github.com/tlaplus/tlaplus/releases/download/v$(TLA_VERSION)/tla2tools.jar
-	@echo "$(TLA_SHA256)  $@.tmp" | shasum -a 256 -c - >/dev/null \
-		|| { rm -f $@.tmp; echo "Error: $@ checksum mismatch; expected $(TLA_SHA256)" >&2; exit 1; }
-	mv $@.tmp $@
+# Checks the jar on every run, not only after a download: as a plain file target, the jar an earlier TLA_VERSION left
+# stayed in use after TLA_VERSION and TLA_SHA256 moved on, while CI downloaded the new one. A jar that doesn't match,
+# or is missing, is fetched again.
+_tla-tools:
+	@if ! echo "$(TLA_SHA256)  $(TLA_JAR)" | shasum -a 256 -c - >/dev/null 2>&1; then \
+		set -e; \
+		echo "Downloading the TLA+ tools $(TLA_VERSION) to $(TLA_JAR)"; \
+		curl -fsSL -o $(TLA_JAR).tmp https://github.com/tlaplus/tlaplus/releases/download/v$(TLA_VERSION)/tla2tools.jar; \
+		echo "$(TLA_SHA256)  $(TLA_JAR).tmp" | shasum -a 256 -c - >/dev/null \
+			|| { rm -f $(TLA_JAR).tmp; echo "Error: $(TLA_JAR) checksum mismatch; expected $(TLA_SHA256)" >&2; exit 1; }; \
+		mv $(TLA_JAR).tmp $(TLA_JAR); \
+	fi
 
-tla-checks: $(TLA_JAR)  ## Model-check the TLA+ specs in specs/tla (the quick configs; downloads the TLA+ tools once)
+tla-checks: _tla-tools  ## Model-check the TLA+ specs in specs/tla (the quick configs; fetches the pinned TLA+ tools if needed)
 	$(TLC) -metadir $(CURDIR)/build/tla/AgentFailover -config AgentFailover.cfg AgentFailover.tla
 	$(TLC) -metadir $(CURDIR)/build/tla/ProxyRegistry -config ProxyRegistry.cfg ProxyRegistry.tla
 

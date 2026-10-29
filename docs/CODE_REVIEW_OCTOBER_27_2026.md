@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — October 2026 Findings
 
-**Status:** 47 issues — 42 fixed, 5 open (16 medium, 31 low, no high).
+**Status:** 47 issues — 45 fixed, 2 open (16 medium, 31 low, no high).
 
 **Date:** 2026-10-27
 
@@ -107,10 +107,10 @@ Six earlier fixes turn out to be incomplete:
 | 32 | This branch would pass `release-check` with no release date in either changelog         | CI/build | low      | ✅      |
 | 33 | The `--continue` comments are wrong: a failed test means no coverage report             | CI/build | low      | ✅      |
 | 34 | The site and Helm charts point at a version before it's published                       | CI/build | low      | ✅      |
-| 35 | The testing plugin re-adds `kotlin-test` and a second copy of the test dependencies     | CI/build | low      | ⬜      |
+| 35 | The testing plugin re-adds `kotlin-test` and a second copy of the test dependencies     | CI/build | low      | ✅      |
 | 36 | Hand lock upgrades skip the 7-day cooldown Dependabot follows                           | CI/build | low      | ✅      |
-| 37 | The TLA+ tools jar isn't versioned; local runs can use different tools than CI          | CI/build | low      | ⬜      |
-| 38 | CI hygiene: `build` job has no timeout; tool images pinned by tag only                  | CI/build | low      | ⬜      |
+| 37 | The TLA+ tools jar isn't versioned; local runs can use different tools than CI          | CI/build | low      | ✅      |
+| 38 | CI hygiene: `build` job has no timeout; tool images pinned by tag only                  | CI/build | low      | ✅      |
 | 39 | The image's UID is implicit, but the charts hard-code it                                | CI/build | low      | ✅      |
 | 40 | The fat JARs keep only one dependency's `NOTICE`                                        | CI/build | low      | ✅      |
 | 41 | Every embedded-agent example passes `exitOnMissingConfig = true` and exits the host     | Docs     | medium   | ✅      |
@@ -156,7 +156,7 @@ The **Touches** column shows which steps edit the same files and so need to land
 | 15   | ✅      | #27, #39, #40   | Helm and image packaging                                                    | `charts/*`, `etc/docker/*.Dockerfile`, `build.gradle.kts` shadow config                           | A Secret-backed auth config, an explicit UID, and NOTICE merging. Needs a `helm-smoke` run and the container tests.                                                              |
 | 16   | ✅      | #42, #44, #28   | Documentation drift                                                         | website pages, `llms.txt`, `docs/TESTING.md`, `SECURITY.md`                                       | No behavior change. Each item can ride along with any earlier PR that touches the same page.                                                                                     |
 | 17   | ✅      | #45, #46, #47   | Tests that can fail, and that don't race for ports                          | the cited specs, `TestPorts.kt`                                                                   | Removes false confidence. #45's `TESTING.md` line goes with step 16 if that lands first.                                                                                         |
-| 18   | ⬜      | #35, #37, #38   | Build tidy-ups                                                              | `build.gradle.kts`, `Makefile`, workflows                                                         | Hygiene. After #35, compare the `testRuntimeClasspath` against today's.                                                                                                          |
+| 18   | ✅      | #35, #37, #38   | Build tidy-ups                                                              | `build.gradle.kts`, `Makefile`, workflows                                                         | Hygiene. After #35, compare the `testRuntimeClasspath` against today's.                                                                                                          |
 | 19   | ⬜      | #7, #20         | Remove dead code                                                            | proxy and agent sources and their tests                                                           | Last, so the deletions don't collide with the behavior fixes, and the tests move onto the entry points those fixes settle.                                                       |
 
 **Parallel tracks:** these sets of steps touch disjoint files, so they can be worked on at the same time.
@@ -1384,7 +1384,7 @@ every docs change until the next release. **Not addressed:** the Helm chart half
 defaults to an image not yet published, which comes from bumping `appVersion` before publishing; it is left for
 step 15.
 
-### 35. [ ] The `com.pambrose.testing` plugin re-adds `kotlin-test` and a second copy of the test dependencies
+### 35. [x] The `com.pambrose.testing` plugin re-adds `kotlin-test` and a second copy of the test dependencies
 
 **Severity:** low · **Confidence:** confirmed in the plugin source, 1.1.5 through 1.1.8.
 
@@ -1399,6 +1399,11 @@ versions.
 
 **Fix:** set `pambroseTesting { addKotest.set(false); addLogbackClassic.set(false); addKotlinTest.set(false) }`, so the
 catalog is the only source of these versions.
+
+**Resolution:** as proposed, in `build.gradle.kts`. Compared with `./gradlew dependencies` before and after, the
+`testRuntimeClasspath` loses only `kotlin-test`, `kotlin-test-junit5`, and the `junit-jupiter-engine` it brought, and
+the `testCompileClasspath` only the first two. Kotest stays at 6.2.6 and Logback at 1.6.6, the catalog's versions. No
+spec imports `kotlin.test` or uses JUnit Jupiter, and the suite runs the same tests.
 
 ### 36. [x] Hand lock upgrades skip the 7-day cooldown Dependabot follows
 
@@ -1424,7 +1429,7 @@ leaves one that `--locked` rejects. The next upgrade will roll back what 91f651a
 0.0.72, python-dateutil 3.0.0, certifi, and tzdata. The cutoff isn't in `pyproject.toml`: that would force a re-lock
 and hold back Dependabot's security updates, which are exempt from its cooldown.
 
-### 37. [ ] The TLA+ tools jar isn't versioned, so a local run can use different tools than CI
+### 37. [x] The TLA+ tools jar isn't versioned, so a local run can use different tools than CI
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -1436,7 +1441,12 @@ the old TLC, while CI downloads the new one.
 
 **Fix:** name the jar `tla2tools-$(TLA_VERSION).jar` and adjust `.gitignore`, or verify the SHA on every run.
 
-### 38. [ ] CI hygiene: the `build` job has no timeout, and the tool images are pinned by tag only
+**Resolution:** the second. The new `_tla-tools` target, which `tla-checks` runs first, checks the jar against
+`TLA_SHA256` on every run and downloads it again when it is missing or doesn't match. The jar keeps its name, so the
+README's by-hand commands still work. `make tla-checks TLA_SHA256=<other>` ran the old jar and passed before the
+change, and now fetches the release and refuses it; a corrupted jar is replaced, and a good one is used as it is.
+
+### 38. [x] CI hygiene: the `build` job has no timeout, and the tool images are pinned by tag only
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -1458,6 +1468,17 @@ the old TLC, while CI downloads the new one.
 - Add `timeout-minutes` (for example 45) to `build` and the docs jobs.
 - Pin the tool images by digest, with the tag in a comment.
 - Pin `CRD_SCHEMAS` to a commit.
+
+**Resolution:**
+
+- `timeout-minutes` on CI's `build` (30; it takes about 5), `docs.yml`'s build (20) and deploy (10), and
+  `claude.yml` (60).
+- The Prometheus, Helm, and kubeconform images are pinned as `image:tag@sha256:…`, as `ZIZMOR_IMAGE` already was, so
+  the tag stays in the reference rather than a comment. Each digest is the multi-platform index, and matched the
+  images already pulled.
+- `CRD_SCHEMAS` takes a fixed commit of datreeio's catalog from the new `CRD_SCHEMAS_COMMIT`.
+- The new `misc/CiHygieneTest` fails on a workflow job without `timeout-minutes`, a `Makefile` `*_IMAGE` without a
+  digest, or a CRD schema URL without a commit. Against the old files it failed all three, the first on four jobs.
 
 ### 39. [x] The image's UID is implicit, but the charts hard-code it
 
@@ -1744,9 +1765,10 @@ still pass.
 - `NettyTestWithAdminMetricsTest` asserts both families on both endpoints, and that no `jvm_native_memory_` series
   is served.
 - It passed alone but failed in the full suite. The harness clears the default registry before each spec, and
-  common-utils' `SystemMetrics` registers each group in a registry only once. So the spec first has `SystemMetrics`
-  forget the default registry, by reflection on its private `registeredSets`, since common-utils has no reset. A
-  reset API in common-utils would retire the reflection.
+  common-utils' `SystemMetrics` registers each group in a registry only once. So the spec first had `SystemMetrics`
+  forget the default registry, by reflection on its private `registeredSets`, since common-utils had no reset.
+  common-utils 5.2.0 added `SystemMetrics.forget`, which `HarnessSetup.setupProxyAndAgent` now calls after clearing
+  the registry, so the reflection is gone and every harness spec's proxy and agent serve the groups.
 - `DataClassTest` asserts that each flag turns on exactly its own export.
 
 The tests failed with `bufferPoolExportsEnabled` forced off, and with `nativeMemory` also set by `bufferPool`, which
