@@ -32,6 +32,12 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.spyk
 import io.prometheus.Proxy
+import io.prometheus.common.TestPorts.PROXY_FAILED_START_ADMIN_PORT
+import io.prometheus.common.TestPorts.PROXY_FAILED_START_METRICS_PORT
+import io.prometheus.common.TestPorts.PROXY_FAILED_SUB_SERVICE_ADMIN_PORT
+import io.prometheus.common.TestPorts.PROXY_FAILED_SUB_SERVICE_AGENT_PORT
+import io.prometheus.common.TestPorts.PROXY_FAILED_SUB_SERVICE_HTTP_PORT
+import io.prometheus.common.TestPorts.PROXY_GC_HTTP_PORT
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.grpc.chunkedScrapeResponse
 import io.prometheus.grpc.headerData
@@ -626,8 +632,7 @@ class ProxyTest : StringSpec() {
     // ProxyGrpcService added a JVM shutdown hook for its gRPC server and never removed it. The hook held the server,
     // and through it the whole Proxy, so every Proxy built in a JVM stayed reachable until the JVM exited.
     "a stopped proxy should become garbage collectable" {
-      val httpPort = ServerSocket(0).use { it.localPort }
-      var proxy: Proxy? = createTestProxy("--port", "$httpPort")
+      var proxy: Proxy? = createTestProxy("--port", "$PROXY_GC_HTTP_PORT")
       proxy!!.startSync()
       proxy.stopSync()
       val ref = WeakReference(proxy)
@@ -646,8 +651,6 @@ class ProxyTest : StringSpec() {
     // a taken port logged the failure but never exited, its admin server's threads keeping the JVM alive.
     "a failed startup should stop what the proxy started" {
       PrometheusRegistry.defaultRegistry.clear()
-      val adminPort = ServerSocket(0).use { it.localPort }
-      val metricsPort = ServerSocket(0).use { it.localPort }
       ServerSocket(0).use { takenHttpPort ->
         val proxy =
           createTestProxy(
@@ -655,17 +658,17 @@ class ProxyTest : StringSpec() {
             "${takenHttpPort.localPort}",
             "--admin",
             "--admin_port",
-            "$adminPort",
+            "$PROXY_FAILED_START_ADMIN_PORT",
             "--metrics",
             "--metrics_port",
-            "$metricsPort",
+            "$PROXY_FAILED_START_METRICS_PORT",
           )
 
         shouldThrow<IllegalStateException> { proxy.startSync() }
 
         // Captured as values first, so each check reports on its own inside assertSoftly.
         val state = proxy.state()
-        val adminPortFree = runCatching { ServerSocket(adminPort).close() }.isSuccess
+        val adminPortFree = runCatching { ServerSocket(PROXY_FAILED_START_ADMIN_PORT).close() }.isSuccess
         val metricsRunning = proxy.metricsService.isRunning
 
         assertSoftly {
@@ -681,7 +684,9 @@ class ProxyTest : StringSpec() {
     // too, or their threads and ports outlive the failed start just as the admin server's did.
     "a failed startup should also stop the sub-services that started before the failure" {
       PrometheusRegistry.defaultRegistry.clear()
-      val (agentPort, httpPort, adminPort) = List(3) { ServerSocket(0) }.map { socket -> socket.use { it.localPort } }
+      val agentPort = PROXY_FAILED_SUB_SERVICE_AGENT_PORT
+      val httpPort = PROXY_FAILED_SUB_SERVICE_HTTP_PORT
+      val adminPort = PROXY_FAILED_SUB_SERVICE_ADMIN_PORT
       ServerSocket(0).use { takenDashboardPort ->
         val proxy =
           Proxy(

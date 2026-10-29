@@ -167,6 +167,9 @@ among them gRPC, which now runs at one version across all its modules.
   couple of license files were kept; all are now merged into `META-INF/NOTICE` and `META-INF/LICENSE`.
 - The images' user is UID and GID 1001 by number, the IDs the charts already run as, so a base-image change
   can't move it, and Kubernetes' `runAsNonRoot` can check it on its own.
+- Tests that couldn't fail now check what they claim: the scrape port's idle timeout, each gRPC keepalive and
+  connection-age option, and the JVM buffer-pool and compilation metrics on a real `/metrics`. Tests that bound a
+  port the OS had just handed out take fixed test ports instead.
 
 ### Dependency updates
 

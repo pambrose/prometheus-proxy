@@ -20,6 +20,7 @@ package io.prometheus.harness
 
 import com.pambrose.common.dsl.KtorDsl.get
 import com.pambrose.common.dsl.KtorDsl.withHttpClient
+import com.pambrose.common.metrics.SystemMetrics
 import com.pambrose.common.util.simpleClassName
 import com.pambrose.common.util.sleep
 import io.kotest.matchers.collections.shouldNotBeEmpty
@@ -49,6 +50,7 @@ import io.prometheus.harness.support.ProxyCallTestArgs
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.harness.support.withPrefix
+import io.prometheus.metrics.model.registry.PrometheusRegistry
 import kotlin.time.Duration.Companion.seconds
 
 class NettyTestWithAdminMetricsTest :
@@ -66,6 +68,7 @@ class NettyTestWithAdminMetricsTest :
 
   init {
     beforeSpec {
+      forgetSystemMetricsRegistrations()
       setupProxyAndAgent(
         proxyPort = PROXY_PORT,
         proxySetup = {
@@ -136,6 +139,24 @@ class NettyTestWithAdminMetricsTest :
       }
     }
 
+    // October #47: harness.conf turns on the three JVM metric groups #314 added, but only the proxy_* and agent_*
+    // families were checked, so the flags could be dropped between the config and common-utils unnoticed. Native
+    // memory exports nothing unless the JVM runs with -XX:NativeMemoryTracking, which the test JVM doesn't. This
+    // relies on forgetSystemMetricsRegistrations() in beforeSpec.
+    "metrics endpoints should serve the JVM buffer pool and compilation metrics harness.conf turns on" {
+      listOf(HARNESS_PROXY_METRICS_PORT, HARNESS_AGENT_METRICS_PORT).forEach { port ->
+        withHttpClient {
+          get("$port/metrics".withPrefix()) { response ->
+            val body = response.bodyAsText()
+            response.status shouldBe HttpStatusCode.OK
+            body shouldContain "\njvm_buffer_pool_used_bytes{pool=\""
+            body shouldContain "\njvm_compilation_time_seconds_total "
+            body shouldNotContain "jvm_native_memory_"
+          }
+        }
+      }
+    }
+
     // Prometheus 3 asks for OpenMetrics first.
     "metrics endpoint should serve OpenMetrics when the Accept header asks for it" {
       withHttpClient {
@@ -160,5 +181,17 @@ class NettyTestWithAdminMetricsTest :
       addresses.shouldNotBeEmpty()
       addresses.forEach { it shouldMatch Regex("""(127\.0\.0\.1|\[0:0:0:0:0:0:0:1]):\d+""") }
     }
+  }
+}
+
+// common-utils' SystemMetrics registers each JVM metric group once per registry and remembers having done so. Once an
+// earlier spec in this JVM has registered them, the default registry's clear() in setupProxyAndAgent removes them for
+// good, and this spec's proxy and agent serve none. Forgetting what SystemMetrics registered there lets them register
+// the groups again, as in a new JVM. Call it before setupProxyAndAgent, which clears the registry.
+private fun forgetSystemMetricsRegistrations() {
+  val registeredSets = SystemMetrics::class.java.getDeclaredField("registeredSets").apply { isAccessible = true }
+  // SystemMetrics.initialize is synchronized on the object.
+  synchronized(SystemMetrics) {
+    (registeredSets.get(null) as MutableMap<*, *>).remove(PrometheusRegistry.defaultRegistry)
   }
 }

@@ -18,6 +18,7 @@
 
 package io.prometheus.misc
 
+import com.pambrose.common.service.MetricsConfig
 import com.typesafe.config.ConfigFactory
 import com.typesafe.config.ConfigParseOptions
 import com.typesafe.config.ConfigSyntax
@@ -35,6 +36,20 @@ class DataClassTest : StringSpec() {
     val config = ConfigFactory.parseString(str, ConfigParseOptions.defaults().setSyntax(ConfigSyntax.CONF))
     return ConfigVals(config.withFallback(ConfigFactory.load().resolve()).resolve())
   }
+
+  // The names of the JVM export flags [config] turns on, so a test can see that a flag sets only its own field.
+  private fun exportFlagsOn(config: MetricsConfig): Set<String> =
+    mapOf(
+      "standardExportsEnabled" to config.standardExportsEnabled,
+      "memoryPoolsExportsEnabled" to config.memoryPoolsExportsEnabled,
+      "garbageCollectorExportsEnabled" to config.garbageCollectorExportsEnabled,
+      "threadExportsEnabled" to config.threadExportsEnabled,
+      "classLoadingExportsEnabled" to config.classLoadingExportsEnabled,
+      "versionInfoExportsEnabled" to config.versionInfoExportsEnabled,
+      "bufferPoolExportsEnabled" to config.bufferPoolExportsEnabled,
+      "compilationExportsEnabled" to config.compilationExportsEnabled,
+      "nativeMemoryExportsEnabled" to config.nativeMemoryExportsEnabled,
+    ).filterValues { it }.keys
 
   init {
     "agent admin config should parse all fields correctly" {
@@ -118,19 +133,21 @@ class DataClassTest : StringSpec() {
           it.versionInfoExportsEnabled.shouldBeTrue()
         }
 
+      // October #47: the three flags #314 added were checked only for coming out true, which passes even if one
+      // flag's value also reached a sibling's field, so these check that every other export flag stays off.
       newMetricsConfig(true, 555, configVals("agent.metrics.bufferPoolExportsEnabled=true").agent.metrics)
         .also {
-          it.bufferPoolExportsEnabled.shouldBeTrue()
+          exportFlagsOn(it) shouldBe setOf("bufferPoolExportsEnabled")
         }
 
       newMetricsConfig(true, 555, configVals("agent.metrics.compilationExportsEnabled=true").agent.metrics)
         .also {
-          it.compilationExportsEnabled.shouldBeTrue()
+          exportFlagsOn(it) shouldBe setOf("compilationExportsEnabled")
         }
 
       newMetricsConfig(true, 555, configVals("agent.metrics.nativeMemoryExportsEnabled=true").agent.metrics)
         .also {
-          it.nativeMemoryExportsEnabled.shouldBeTrue()
+          exportFlagsOn(it) shouldBe setOf("nativeMemoryExportsEnabled")
         }
     }
 
@@ -241,19 +258,21 @@ class DataClassTest : StringSpec() {
           it.versionInfoExportsEnabled.shouldBeTrue()
         }
 
+      // October #47: the three flags #314 added were checked only for coming out true, which passes even if one
+      // flag's value also reached a sibling's field, so these check that every other export flag stays off.
       newMetricsConfig(true, 666, configVals("proxy.metrics.bufferPoolExportsEnabled=true").proxy.metrics)
         .also {
-          it.bufferPoolExportsEnabled.shouldBeTrue()
+          exportFlagsOn(it) shouldBe setOf("bufferPoolExportsEnabled")
         }
 
       newMetricsConfig(true, 666, configVals("proxy.metrics.compilationExportsEnabled=true").proxy.metrics)
         .also {
-          it.compilationExportsEnabled.shouldBeTrue()
+          exportFlagsOn(it) shouldBe setOf("compilationExportsEnabled")
         }
 
       newMetricsConfig(true, 666, configVals("proxy.metrics.nativeMemoryExportsEnabled=true").proxy.metrics)
         .also {
-          it.nativeMemoryExportsEnabled.shouldBeTrue()
+          exportFlagsOn(it) shouldBe setOf("nativeMemoryExportsEnabled")
         }
     }
 

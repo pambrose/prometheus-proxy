@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — October 2026 Findings
 
-**Status:** 47 issues — 39 fixed, 8 open (16 medium, 31 low, no high).
+**Status:** 47 issues — 42 fixed, 5 open (16 medium, 31 low, no high).
 
 **Date:** 2026-10-27
 
@@ -117,9 +117,9 @@ Six earlier fixes turn out to be incomplete:
 | 42 | Website tuning table names a nonexistent key; Troubleshooting a nonexistent metric      | Docs     | medium   | ✅      |
 | 43 | 4.4.0 changelogs miss the common-utils and gradle-plugins bumps                         | Docs     | low      | ✅      |
 | 44 | `docs/TESTING.md` omits three specs and misstates `all-tests`                           | Docs     | low      | ✅      |
-| 45 | Tests whose assertions can't fail, or that test the JDK                                 | Tests    | low      | ⬜      |
-| 46 | Failed-startup tests free ephemeral ports and then bind them again                      | Tests    | low      | ⬜      |
-| 47 | The #314 JVM metric groups are never checked on a real `/metrics`                       | Tests    | low      | ⬜      |
+| 45 | Tests whose assertions can't fail, or that test the JDK                                 | Tests    | low      | ✅      |
+| 46 | Failed-startup tests free ephemeral ports and then bind them again                      | Tests    | low      | ✅      |
+| 47 | The #314 JVM metric groups are never checked on a real `/metrics`                       | Tests    | low      | ✅      |
 
 ---
 
@@ -155,7 +155,7 @@ The **Touches** column shows which steps edit the same files and so need to land
 | 14   | ✅      | #31, #36, #34   | Docs site: build on PRs, cool down hand upgrades, deploy after publishing   | `docs.yml`, `ci.yml`, `Makefile`                                                                  | Keeps a broken site build off `master`, and keeps the site from advertising a version that isn't published yet. Workflow-only, so it can run in parallel with code steps.        |
 | 15   | ✅      | #27, #39, #40   | Helm and image packaging                                                    | `charts/*`, `etc/docker/*.Dockerfile`, `build.gradle.kts` shadow config                           | A Secret-backed auth config, an explicit UID, and NOTICE merging. Needs a `helm-smoke` run and the container tests.                                                              |
 | 16   | ✅      | #42, #44, #28   | Documentation drift                                                         | website pages, `llms.txt`, `docs/TESTING.md`, `SECURITY.md`                                       | No behavior change. Each item can ride along with any earlier PR that touches the same page.                                                                                     |
-| 17   | ⬜      | #45, #46, #47   | Tests that can fail, and that don't race for ports                          | the cited specs, `TestPorts.kt`                                                                   | Removes false confidence. #45's `TESTING.md` line goes with step 16 if that lands first.                                                                                         |
+| 17   | ✅      | #45, #46, #47   | Tests that can fail, and that don't race for ports                          | the cited specs, `TestPorts.kt`                                                                   | Removes false confidence. #45's `TESTING.md` line goes with step 16 if that lands first.                                                                                         |
 | 18   | ⬜      | #35, #37, #38   | Build tidy-ups                                                              | `build.gradle.kts`, `Makefile`, workflows                                                         | Hygiene. After #35, compare the `testRuntimeClasspath` against today's.                                                                                                          |
 | 19   | ⬜      | #7, #20         | Remove dead code                                                            | proxy and agent sources and their tests                                                           | Last, so the deletions don't collide with the behavior fixes, and the tests move onto the entry points those fixes settle.                                                       |
 
@@ -1667,7 +1667,7 @@ It failed on six unlisted specs and eight helpers and snippet sources.
 
 ## 🧪 Tests
 
-### 45. [ ] Tests whose assertions can't fail, or that test the JDK instead of the product
+### 45. [x] Tests whose assertions can't fail, or that test the JDK instead of the product
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -1690,7 +1690,18 @@ It failed on six unlisted specs and eight helpers and snippet sources.
   the keepalive claim from `TESTING.md`.
 - Delete the JDK-only tests.
 
-### 46. [ ] Failed-startup tests free ephemeral ports and then bind them again
+**Resolution:** all three.
+
+- `idleTimeout` is `internal`, and the tests assert 45s and 90s.
+- The eight options moved, unchanged, into `ProxyGrpcService.applyConnectionOptions`, a `ServerBuilder<*>` extension.
+  A MockK test checks that each configured value reaches its own setter, and another that nothing is set when every
+  option is left unset. The build-only tests now say "without throwing", and `TESTING.md`'s keepalive line is true.
+- The four JDK-only `SslSettingsTest` cases are deleted.
+
+Each strengthened test failed when the behavior it guards was broken: `idleTimeout` pinned to 45s, and the
+`maxConnectionAgeGrace` call removed.
+
+### 46. [x] Failed-startup tests free ephemeral ports and then bind them again
 
 **Severity:** low · **Confidence:** plausible (not observed)
 
@@ -1705,7 +1716,10 @@ The ports deliberately held open as "taken" are fine.
 **Fix:** give these specs `TestPorts` entries below 32768 for every port a service binds. Keep `ServerSocket(0)` only
 for the port that is meant to stay occupied.
 
-### 47. [ ] The three JVM metric groups added in #314 are never checked on a real `/metrics`
+**Resolution:** seven `TestPorts` entries, 9700–9706, cover every port a proxy or agent binds in those tests,
+`ProxyTest`'s garbage-collection test included. `ServerSocket(0)` remains only for the ports held open as taken.
+
+### 47. [x] The three JVM metric groups added in #314 are never checked on a real `/metrics`
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -1724,6 +1738,19 @@ still pass.
 - Assert `jvm_buffer_pool_used_bytes` and `jvm_compilation_time_seconds_total` in the metrics-endpoint test. Native
   memory exports nothing without `-XX:NativeMemoryTracking`, so assert that it's absent, or skip it.
 - In `DataClassTest`, assert that the sibling flags stay `false`.
+
+**Resolution:** both.
+
+- `NettyTestWithAdminMetricsTest` asserts both families on both endpoints, and that no `jvm_native_memory_` series
+  is served.
+- It passed alone but failed in the full suite. The harness clears the default registry before each spec, and
+  common-utils' `SystemMetrics` registers each group in a registry only once. So the spec first has `SystemMetrics`
+  forget the default registry, by reflection on its private `registeredSets`, since common-utils has no reset. A
+  reset API in common-utils would retire the reflection.
+- `DataClassTest` asserts that each flag turns on exactly its own export.
+
+The tests failed with `bufferPoolExportsEnabled` forced off, and with `nativeMemory` also set by `bufferPool`, which
+the old assertions let pass.
 
 ---
 

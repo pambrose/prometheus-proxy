@@ -57,6 +57,7 @@ import io.kotest.matchers.string.shouldNotContain
 import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.common.agentOptions
 import io.prometheus.common.ConfigLoadException
+import io.prometheus.common.TestPorts.AGENT_FAILED_START_METRICS_PORT
 import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
@@ -201,13 +202,12 @@ class AgentTest : StringSpec() {
     // startUp() had already started, and stop() (what EmbeddedAgentInfo.shutdown() calls) threw on the FAILED service.
     "a failed startup should release what the agent holds and leave stop() safe to call" {
       PrometheusRegistry.defaultRegistry.clear()
-      val metricsPort = ServerSocket(0).use { it.localPort }
       ServerSocket(0).use { takenAdminPort ->
         val agent =
           createTestAgent(
             "--metrics",
             "--metrics_port",
-            "$metricsPort",
+            "$AGENT_FAILED_START_METRICS_PORT",
             "--admin",
             "--admin_port",
             "${takenAdminPort.localPort}",

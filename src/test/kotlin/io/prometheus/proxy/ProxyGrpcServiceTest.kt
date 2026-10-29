@@ -22,6 +22,7 @@ import com.pambrose.common.dsl.GrpcDsl.channel
 import com.pambrose.common.utils.TlsContext.Companion.PLAINTEXT_CONTEXT
 import io.grpc.ManagedChannel
 import io.grpc.Metadata
+import io.grpc.ServerBuilder
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
 import io.grpc.reflection.v1.ServerReflectionGrpc
@@ -29,6 +30,7 @@ import io.grpc.reflection.v1.ServerReflectionRequest
 import io.grpc.reflection.v1.ServerReflectionResponse
 import io.grpc.stub.MetadataUtils
 import io.grpc.stub.StreamObserver
+import io.kotest.assertions.throwables.shouldNotThrowAny
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeTrue
@@ -37,8 +39,11 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
+import io.mockk.Called
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
+import io.mockk.verifyAll
 import io.prometheus.Proxy
 import io.prometheus.agent.AgentTokenClientInterceptor
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
@@ -49,6 +54,7 @@ import io.prometheus.grpc.ProxyServiceGrpc
 import io.prometheus.grpc.RegisterPathResponse
 import io.prometheus.grpc.registerPathRequest
 import io.prometheus.proxy.AgentAuthManager.AuthEntry
+import io.prometheus.proxy.ProxyGrpcService.Companion.applyConnectionOptions
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
@@ -89,6 +95,19 @@ class ProxyGrpcServiceTest : StringSpec() {
       every { mockProxy.agentAuthManager } returns authManager
     return mockProxy
   }
+
+  // A mocked proxy with every handshake, keepalive, and connection-age option set, each to a different value.
+  private fun createConnectionOptionsProxy(): Proxy =
+    createMockProxy(
+      handshakeTimeoutSecs = 60L,
+      keepAliveTimeSecs = 120L,
+      keepAliveTimeoutSecs = 20L,
+      permitKeepAliveWithoutCalls = true,
+      permitKeepAliveTimeSecs = 300L,
+      maxConnectionIdleSecs = 600L,
+      maxConnectionAgeSecs = 3600L,
+      maxConnectionAgeGraceSecs = 30L,
+    )
 
   // Starts an in-process ProxyGrpcService for [proxy] and runs [block] with a plaintext channel to it.
   private fun withChannelTo(
@@ -161,31 +180,18 @@ class ProxyGrpcServiceTest : StringSpec() {
       str shouldNotContain "InProcess"
     }
 
-    // ==================== HealthCheck Tests ====================
-
-    "healthCheck should not be null" {
-      val mockProxy = createMockProxy()
-      val service = ProxyGrpcService(mockProxy, inProcessName = "health-test")
-
-      service.healthCheck.shouldNotBeNull()
-    }
-
     // ==================== Server Configuration Tests ====================
 
     "should create InProcess server without throwing" {
       val mockProxy = createMockProxy()
 
-      // Should not throw
-      val service = ProxyGrpcService(mockProxy, inProcessName = "config-test")
-      service.shouldNotBeNull()
+      shouldNotThrowAny { ProxyGrpcService(mockProxy, inProcessName = "config-test") }
     }
 
     "should create Netty server without throwing" {
       val mockProxy = createMockProxy()
 
-      // Should not throw
-      val service = ProxyGrpcService(mockProxy, port = 0)
-      service.shouldNotBeNull()
+      shouldNotThrowAny { ProxyGrpcService(mockProxy, port = 0) }
     }
 
     // ==================== HealthCheck Result Tests ====================
@@ -238,28 +244,47 @@ class ProxyGrpcServiceTest : StringSpec() {
 
     // ==================== Server Configuration Branch Tests ====================
 
-    "should create server with transport filter enabled" {
+    "should create server with transport filter enabled without throwing" {
       val mockProxy = createMockProxy(transportFilterDisabled = false)
 
-      val service = ProxyGrpcService(mockProxy, inProcessName = "transport-filter-test")
-      service.shouldNotBeNull()
+      shouldNotThrowAny { ProxyGrpcService(mockProxy, inProcessName = "transport-filter-test") }
     }
 
-    "should create server with keepalive settings" {
-      // Must use Netty (port) rather than InProcess — InProcess does not support keepAlive
-      val mockProxy = createMockProxy(
-        handshakeTimeoutSecs = 60L,
-        keepAliveTimeSecs = 120L,
-        keepAliveTimeoutSecs = 20L,
-        permitKeepAliveWithoutCalls = true,
-        permitKeepAliveTimeSecs = 300L,
-        maxConnectionIdleSecs = 600L,
-        maxConnectionAgeSecs = 3600L,
-        maxConnectionAgeGraceSecs = 30L,
-      )
+    // Must use Netty (port) rather than InProcess, which does not support keepalive. This shows only that the Netty
+    // builder takes every option; the tests below check that each one reaches it.
+    "should create Netty server with keepalive settings without throwing" {
+      val mockProxy = createConnectionOptionsProxy()
 
-      val service = ProxyGrpcService(mockProxy, port = 0)
-      service.shouldNotBeNull()
+      shouldNotThrowAny { ProxyGrpcService(mockProxy, port = 0) }
+    }
+
+    // ==================== Connection Option Tests ====================
+    // The tests above checked only that the server was built, so an option dropped on its way to the builder went
+    // unnoticed (October #45). Each option has its own value, so one passed to the wrong setter fails too.
+
+    "each configured handshake, keepalive, and connection-age option should reach the server builder" {
+      val builder = mockk<ServerBuilder<*>>(relaxed = true)
+
+      builder.applyConnectionOptions(createConnectionOptionsProxy().options)
+
+      verifyAll {
+        builder.handshakeTimeout(60L, TimeUnit.SECONDS)
+        builder.keepAliveTime(120L, TimeUnit.SECONDS)
+        builder.keepAliveTimeout(20L, TimeUnit.SECONDS)
+        builder.permitKeepAliveWithoutCalls(true)
+        builder.permitKeepAliveTime(300L, TimeUnit.SECONDS)
+        builder.maxConnectionIdle(600L, TimeUnit.SECONDS)
+        builder.maxConnectionAge(3600L, TimeUnit.SECONDS)
+        builder.maxConnectionAgeGrace(30L, TimeUnit.SECONDS)
+      }
+    }
+
+    "connection options left unset should leave gRPC's defaults" {
+      val builder = mockk<ServerBuilder<*>>(relaxed = true)
+
+      builder.applyConnectionOptions(createMockProxy().options)
+
+      verify { builder wasNot Called }
     }
 
     // ==================== Reflection Tests ====================
