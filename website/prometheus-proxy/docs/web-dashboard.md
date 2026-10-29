@@ -81,11 +81,11 @@ the proxy returning, at the cost of retry traffic that is negligible on a LAN.
 `chunks` and `scrapes` are **transient in-flight gauges**, not running totals — they count work happening
 *right now*, so at rest they sit at `0`. The number after the slash is a health threshold, not a capacity.
 
-- **scrapes `N`/25** — scrape requests currently being serviced. The proxy adds one the moment it forwards
+- **scrapes `N`/800** — scrape requests currently being serviced. The proxy adds one the moment it forwards
   a Prometheus scrape to an agent and removes it the moment the agent responds, times out, or disconnects.
   It rises with concurrent in-flight scrapes — many paths at once, a slow endpoint, or a high scrape rate —
   and falls back to `0` as they drain.
-- **chunks `N`/25** — large responses currently being reassembled. A response is streamed in chunks only
+- **chunks `N`/800** — large responses currently being reassembled. A response is streamed in chunks only
   when it exceeds `agent.chunkContentSizeKbs` (default 32 KB); the proxy holds one context per such response
   until its final chunk arrives. Small metrics payloads never touch it, so it stays `0` unless a big
   endpoint is mid-transfer.
@@ -96,10 +96,10 @@ scrape — a fast scrape opens and closes well inside that window. To watch them
 endpoint larger than 32 KB (chunks) or drive concurrent or slow scrapes (scrapes), ideally with a shorter
 `refreshIntervalSecs`.
 
-The `/25` is the **unhealthy threshold** (`proxy.internal.scrapeRequestMapUnhealthySize` and
-`chunkContextMapUnhealthySize`). When either count reaches it, that segment turns amber — a backpressure
-signal that requests are not draining: agents stuck or slow, or a leak. Green and near `0` is the healthy
-resting state.
+The `/800` is the **unhealthy threshold** (`proxy.internal.scrapeRequestMapUnhealthySize` and
+`chunkContextMapUnhealthySize`, by default 80% of `maxInFlightScrapeRequests`). When either count reaches
+it, that segment turns amber — a backpressure signal that requests are not draining: agents stuck or slow,
+or a leak. Green and near `0` is the healthy resting state.
 
 ## The Agents layout
 
@@ -152,9 +152,9 @@ enough ago eventually ages out. It is a recent-past view, not an audit log.
 The proxy's admin port (8092) is a servlet container that cannot host WebSockets, so the dashboard could not
 live there even if that were desirable.
 
-It also turns out to be the safer arrangement. Kubernetes liveness and readiness probes target `/ping`
-and `/healthcheck` on the admin port. If the dashboard shared that port, you could not firewall the dashboard
-without also cutting off your health probes.
+It also turns out to be the safer arrangement. Kubernetes liveness and readiness probes target `/ping` on
+the admin port. If the dashboard shared that port, you could not firewall the dashboard without also cutting
+off your health probes.
 
 Ports in a fully-enabled proxy:
 

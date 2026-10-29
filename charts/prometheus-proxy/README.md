@@ -42,7 +42,7 @@ See the [security guide](https://pambrose.github.io/prometheus-proxy/security/).
 | `agentToken.existingSecret`              | `""`                                       | Secret holding the shared agent token (`AGENT_TOKEN`)                    |
 | `tls.secretName`                         | `""`                                       | Secret with the gRPC port's certificate and key, mounted at `/app/certs` |
 | `tls.caFile`                             | `""`                                       | CA in that Secret; setting it requires client certificates               |
-| `admin.enabled` / `admin.port`           | `true` / `8092`                            | `/ping` and `/healthcheck`, used by the probes; not on the Service       |
+| `admin.enabled` / `admin.port`           | `true` / `8092`                            | `/ping`, used by the probes, and `/healthcheck`; not on the Service      |
 | `metrics.enabled` / `metrics.port`       | `true` / `8082`                            | The proxy's own metrics, on the Service                                  |
 | `dashboard.enabled` / `dashboard.port`   | `false` / `8094`                           | The read-only dashboard; not on the Service, so use `port-forward`       |
 | `service.type`                           | `ClusterIP`                                | The main Service: HTTP, gRPC, and metrics ports                          |

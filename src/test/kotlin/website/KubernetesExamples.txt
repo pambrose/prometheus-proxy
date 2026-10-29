@@ -32,7 +32,7 @@ spec:
             initialDelaySeconds: 10
             periodSeconds: 15
           readinessProbe:
-            httpGet: { path: /healthcheck, port: admin }
+            httpGet: { path: /ping, port: admin }   # not /healthcheck, which measures load
             initialDelaySeconds: 10
             periodSeconds: 15
           resources:

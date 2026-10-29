@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — October 2026 Findings
 
-**Status:** 47 issues — 33 fixed, 14 open (16 medium, 31 low, no high).
+**Status:** 47 issues — 34 fixed, 13 open (16 medium, 31 low, no high).
 
 **Date:** 2026-10-27
 
@@ -74,7 +74,7 @@ Six earlier fixes turn out to be incomplete:
 | #  | Finding                                                                                 | Area     | Severity | Status |
 |----|-----------------------------------------------------------------------------------------|----------|----------|--------|
 | 1  | Service-discovery targets are URLs, which Prometheus refuses; SD as documented is empty | Proxy    | medium   | ✅      |
-| 2  | Health thresholds (25) far below the caps; `/healthcheck` readiness flaps under load    | Proxy    | medium   | ⬜      |
+| 2  | Health thresholds (25) far below the caps; `/healthcheck` readiness flaps under load    | Proxy    | medium   | ✅      |
 | 3  | Chunked-transfer sweep skipped on cancel; reclaim trusts the agent's `headerAgentId`    | Proxy    | low      | ✅      |
 | 4  | Unauthenticated connections still log INFO on removal and count as evictions           | Proxy    | low      | ⬜      |
 | 5  | Each `Proxy` leaks a JVM shutdown hook that keeps it reachable                          | Proxy    | low      | ✅      |
@@ -146,7 +146,7 @@ The **Touches** column shows which steps edit the same files and so need to land
 | 5    | ✅      | #21, #3         | Check and complete scrape results on one wrapper; sweep transfers on cancel | `ProxyServiceImpl.kt`, `ScrapeRequestManager.kt`, `AgentContextManager.kt`, `ChunkedContext.kt`, `specs/tla/ProxyRegistry.tla` | Both concern the ownership and lifetime of in-flight results. The change touches `ScrapeRequestManager`, so update the TLA+ action and add a Lincheck spec in the same PR.        |
 | 6    | ✅      | #22, #23, #26   | Bound and authorize agent input before using it                             | `ProxyServiceImpl.kt` (`registerAgent`/`registerPath`), `AgentAuthManager.kt`, `ProxyOptions.kt`, `config.conf` | The three tenant-against-tenant availability issues. The new `proxy.internal` limits need config, validation, and docs. Do it after step 5, which edits the same file.            |
 | 7    | ✅      | #1, #24, #6     | Service discovery that Prometheus accepts                                   | `Proxy.kt` (`buildServiceDiscoveryJson`), `ProxyOptions.kt`, `ProxyPathManager.addPath`, SD docs, a new container spec | SD as documented yields no targets today. One container spec using `http_sd_configs` guards all three. Do it after step 6, since both edit `addPath`'s validation.               |
-| 8    | ⬜      | #2              | Readiness that doesn't flap under load                                      | `config/config.conf`, `ProxyOptions.kt`, `Proxy.kt` health checks, `charts/prometheus-proxy`, k8s docs | A default and a chart change, so it needs a "Before you upgrade" note.                                                                                                       |
+| 8    | ✅      | #2              | Readiness that doesn't flap under load                                      | `config/config.conf`, `ProxyOptions.kt`, `Proxy.kt` health checks, `charts/prometheus-proxy`, k8s docs | A default and a chart change, so it needs a "Before you upgrade" note.                                                                                                       |
 | 9    | ✅      | #9, #16, #5, #41 | Safe to embed: register metrics once, leave the root logger and shutdown hooks alone, fix the examples | `AgentMetrics.kt`, `ProxyMetrics.kt`, `Agent.kt`, `BaseOptions.kt`, `Utils.kt`, `ProxyGrpcService.kt`, README, website, KDoc | All four are about running inside another JVM, so one embedded-host spec (restart, two agents, log level) covers them. Do it after step 4 and before step 10, which shares `AgentMetrics.kt`. |
 | 10   | ✅      | #11, #13        | Agent metrics that count every scrape                                       | `AgentHttpService.kt`, `AgentMetrics.kt`, metrics docs, Grafana JSON                              | Do it after steps 4 and 9, which share these files. The dashboards and docs change with the counter.                                                                             |
 | 11   | ✅      | #10, #12, #18   | Agent config and discovery robustness                                       | `PathDiscoveryService.kt`, `AgentPathManager.kt`, `PathDiscoverySource.kt`, `AgentOptions.kt`, trust-manager init | Startup validation, plus a last-known-good list that outlives the connection. Independent of the proxy steps.                                                                    |
@@ -227,7 +227,7 @@ and a `__metrics_path__` prefix. Anything else fails startup when service discov
 parsed only if it can be. The default is `localhost:8080`, and the docs, snippets, README, and CLI tables give
 `host:port`. RELEASE_NOTES' "Before you upgrade" says to drop any `__address__` workaround rule.
 
-### 2. [ ] Default health thresholds (25) sit far below the caps, so `/healthcheck` readiness flaps under load
+### 2. [x] Default health thresholds (25) sit far below the caps, so `/healthcheck` readiness flaps under load
 
 **Severity:** medium · **Confidence:** confirmed. The threshold logic and the probe wiring are traced; whether it
 trips depends on load.
@@ -267,6 +267,20 @@ target.
 
 - With the default config, 100 wrappers in the scrape map keep `scrape_response_map_check` healthy.
 - An options test rejects a threshold above its cap.
+
+**Resolution:** all three, except the backlog threshold.
+
+- The proxy chart's readiness probe, and the proxy manifest in `KubernetesExamples.txt`, use `/ping`. The Kubernetes
+  and Running in Production pages describe the proxy's `/healthcheck` as a load signal to alert on. The agent keeps
+  `/healthcheck`.
+- `scrapeRequestMapUnhealthySize` and `chunkContextMapUnhealthySize` default to `0`. `ProxyOptions` resolves that to
+  80% of `maxInFlightScrapeRequests` for the health checks and the dashboard. A configured value is kept, and one
+  below 0 or above the cap fails startup.
+- `scrapeRequestBacklogUnhealthySize` is unchanged, since each agent's queue is capped at twice it; with readiness
+  on `/ping`, one slow agent no longer makes the proxy unready.
+
+The 100-scrape `InProcessHealthCheckTest` case answered 500 against the old default, and the options tests failed
+on the old values.
 
 ### 3. [x] Chunked-transfer orphan sweep is skipped on cancellation, and reclaim matches the agent-supplied `headerAgentId`
 

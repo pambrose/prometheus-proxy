@@ -179,8 +179,9 @@ class ConfigValsTest : StringSpec() {
         staleAgentCheckPauseSecs shouldBe 10
         maxAgentInactivitySecs shouldBe 60
         scrapeRequestBacklogUnhealthySize shouldBe 25
-        scrapeRequestMapUnhealthySize shouldBe 25
-        chunkContextMapUnhealthySize shouldBe 25
+        // 0 resolves to 80% of maxInFlightScrapeRequests (ProxyOptions).
+        scrapeRequestMapUnhealthySize shouldBe 0
+        chunkContextMapUnhealthySize shouldBe 0
         blitz.enabled.shouldBeFalse()
         blitz.path.shouldNotBeEmpty()
       }

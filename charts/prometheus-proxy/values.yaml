@@ -40,7 +40,7 @@ tls:
   keyFile: key.pem
   caFile: ""
 
-# The admin endpoints (/ping, /healthcheck, /version, /threaddump). The probes use them, so leave them on unless you
+# The admin endpoints (/ping, /healthcheck, /version, /threaddump). The probes use /ping, so leave them on unless you
 # replace the probes. Unauthenticated: the port is not added to the Service.
 admin:
   enabled: true
