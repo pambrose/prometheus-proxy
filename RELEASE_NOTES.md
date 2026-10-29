@@ -14,7 +14,9 @@ among them gRPC, which now runs at one version across all its modules.
 - **Builds that embed the agent get the patched Netty.** Since 4.2.0, the newer Netty that replaces the vulnerable
   one gRPC brings reached only the fat JARs and Docker images. A host that depended on
   `com.pambrose:prometheus-proxy` got gRPC's Netty instead, which in 4.3.0 was 4.2.16.Final, with the critical
-  CVE-2026-75595. The published dependency list now pins Netty 4.2.18.Final.
+  CVE-2026-75595. The published dependency list now pins Netty 4.2.19.Final.
+- **Netty 4.2.19.Final.** A security release of the Netty that gRPC runs on, fixing 16 advisories, among them HTTP
+  request smuggling and unbounded resource use in the HTTP/1.1 and HTTP/2 codecs.
 - **A scrape result is checked against the scrape it completes.** 4.1.0 made the proxy accept a result only from
   the agent the scrape was sent to, but it checked one lookup and applied the result on another. An authenticated
   agent that sent a result for the next scrape ID before the proxy started tracking it could complete another
@@ -188,11 +190,11 @@ Runtime: common-utils 5.1.1 → 5.2.0, grpc 1.84.2 → 1.85.1, with every grpc m
 agent and proxy previously ran grpc's Netty transport from 1.84.1, the version common-utils 5.1.1 brought), the
 Prometheus Java client 1.9.0 → 1.10.0 (`prometheus-metrics-core`, which embedders also get, as they do
 common-utils), kotlinx-serialization 1.11.0 → 1.12.0, Jackson 2.22.3 → 2.22.4, and Logback 1.6.5 → 1.6.6. Netty
-stays at 4.2.18.Final, ahead of the 4.2.17.Final grpc 1.85.1 brings, which has an HTTP/2 denial-of-service
-vulnerability (CVE-2026-93492). Build only: Gradle 9.8.1 → 9.8.2, Kotest 6.2.5 → 6.2.6, and the project's own
-Gradle plugins 1.1.7 → 1.1.8. The documentation site's Python lock picks up Zensical 0.0.70 → 0.0.72, and the
-workflows' pinned GitHub Actions are updated (CodeQL 4.39.0, setup-java 6.1.0, setup-uv 10.3.0, zizmor-action
-0.7.1, and claude-code-action 1.0.252).
+4.2.18.Final → 4.2.19.Final (see Security), ahead of the 4.2.17.Final grpc 1.85.1 brings, which has an HTTP/2
+denial-of-service vulnerability (CVE-2026-93492). Build only: Gradle 9.8.1 → 9.8.2, Kotest 6.2.5 → 6.2.6, and the
+project's own Gradle plugins 1.1.7 → 1.1.8. The documentation site's Python lock picks up Zensical 0.0.70 → 0.0.72,
+and the workflows' pinned GitHub Actions are updated (CodeQL 4.39.1, setup-java 6.1.0, setup-uv 10.3.2,
+zizmor-action 0.7.1, and claude-code-action 1.0.259).
 
 ---
 
