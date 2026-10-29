@@ -225,9 +225,11 @@ Two support helpers also live here (not test classes themselves):
 - **ProxyTest** — Proxy main class lifecycle, agent info retrieval, JSON serialization, stale agent cleanup
 - **ProxyServiceImplTest** — gRPC implementation: registerAgent, registerPath, heartbeat, scrape responses, chunked
   responses
-- **ProxyGrpcServiceTest** — gRPC server configuration: TLS, keepalive, transport filter; reflection is not served
-  when disabled, and when enabled it requires a valid agent token if agent auth is configured
-- **ProxyHttpServiceTest** — ProxyHttpService string representation
+- **ProxyGrpcServiceTest** — gRPC server configuration: each handshake, keepalive, and connection-age option reaches
+  the server builder (a MockK builder) and an unset one leaves gRPC's default, and the transport filter; reflection
+  is not served when disabled, and when enabled it requires a valid agent token if agent auth is configured
+- **ProxyHttpServiceTest** — ProxyHttpService string representation, lifecycle, and idle timeout: 45s when
+  `http.idleTimeoutSecs` is -1, otherwise the configured value
 - **ProxyHttpConfigTest** — HTTP server config: Ktor compression, status pages, CORS; a call cancelled by a client
   disconnect, or a write to one that has gone, is logged at DEBUG, while an unexpected exception still logs at WARN
 - **ProxyHttpRoutesTest** — HTTP routing: path resolution, query params, error responses, compression,
@@ -339,7 +341,8 @@ These support helpers also live here (not test classes themselves):
   on the website's pages all name series the proxy and agent expose (a counter only with its `_total` suffix); proxy
   panels filter by the job and instance pickers and agent panels by the agent picker; and every counter is declared
   with the `_total` name it is exposed as
-- **DataClassTest** — Config data classes (AdminConfig, MetricsConfig, ZipkinConfig parsing)
+- **DataClassTest** — Config data classes (AdminConfig, MetricsConfig, ZipkinConfig parsing); the buffer pool,
+  compilation, and native memory export flags each turn on only their own MetricsConfig field
 - **LogbackConfigTest** — the bundled `logback.xml`, loaded from inside a JAR, and `logback/docker-logback.xml`,
   loaded from disk, configure without a WARN status, so neither makes logback print its status list at every start
 - **OptionsTest** — ProxyOptions and AgentOptions config file loading
@@ -364,7 +367,9 @@ Integration tests exercise full proxy+agent workflows with real instances:
 - **InProcessTestNoAdminMetricsTest** — In-process gRPC tests without admin/metrics
 - **InProcessTestWithAdminMetricsTest** — In-process gRPC tests with admin/metrics enabled
 - **NettyTestNoAdminMetricsTest** — Netty transport tests without admin/metrics
-- **NettyTestWithAdminMetricsTest** — Netty transport tests with admin/metrics enabled
+- **NettyTestWithAdminMetricsTest** — Netty transport tests with admin/metrics enabled; both metrics endpoints serve
+  the JVM buffer pool and compilation metrics `harness.conf` turns on, and no native memory metrics, which need
+  `-XX:NativeMemoryTracking`
 - **TlsNoMutualAuthTest** — the standard harness suite over a real TLS channel (Netty), without mutual
   authentication
 - **TlsWithMutualAuthTest** — the standard harness suite over a real mutual-TLS channel (Netty, client certs)

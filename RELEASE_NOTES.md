@@ -158,6 +158,9 @@ among them gRPC, which now runs at one version across all its modules.
   and Maven coordinate that don't exist yet. Between releases, docs changes still deploy as they merge.
 - `make upgrade-site` takes only docs-site dependency versions that are at least 7 days old, the cooldown Dependabot
   already applies.
+- Tests that couldn't fail now check what they claim: the scrape port's idle timeout, each gRPC keepalive and
+  connection-age option, and the JVM buffer-pool and compilation metrics on a real `/metrics`. Tests that bound a
+  port the OS had just handed out take fixed test ports instead.
 
 ### Dependency updates
 

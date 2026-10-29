@@ -52,7 +52,8 @@ internal class ProxyHttpService(
   val httpPort: Int,
   isTestMode: Boolean,
 ) : GenericIdleService() {
-  private val idleTimeout =
+  // Internal so a test can check the value the server is given (October #45).
+  internal val idleTimeout =
     with(proxy.proxyConfigVals.http) {
       (if (idleTimeoutSecs == -1) DEFAULT_IDLE_TIMEOUT_SECS else idleTimeoutSecs).seconds
     }

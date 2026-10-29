@@ -20,13 +20,13 @@ package io.prometheus.proxy
 
 import com.typesafe.config.ConfigFactory
 import io.kotest.core.spec.style.StringSpec
-import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.mockk.every
 import io.mockk.mockk
 import io.prometheus.Proxy
 import io.prometheus.common.ConfigVals
+import kotlin.time.Duration.Companion.seconds
 
 class ProxyHttpServiceTest : StringSpec() {
   private fun createMockProxy(): Proxy {
@@ -79,6 +79,7 @@ class ProxyHttpServiceTest : StringSpec() {
     }
 
     // ==================== Idle Timeout Tests ====================
+    // These checked only that the service was built, so they passed even with idleTimeoutSecs ignored (October #45).
 
     "should use default idle timeout when configured as -1" {
       val config = ConfigFactory.parseString(
@@ -96,9 +97,8 @@ class ProxyHttpServiceTest : StringSpec() {
       every { mockProxy.proxyConfigVals } returns configVals.proxy
       every { mockProxy.isZipkinEnabled } returns false
 
-      // Should not throw — default idle timeout of 45 is used
       val service = ProxyHttpService(mockProxy, httpPort = 0, isTestMode = true)
-      service.shouldNotBeNull()
+      service.idleTimeout shouldBe 45.seconds
     }
 
     "should use configured idle timeout when not -1" {
@@ -117,9 +117,8 @@ class ProxyHttpServiceTest : StringSpec() {
       every { mockProxy.proxyConfigVals } returns configVals.proxy
       every { mockProxy.isZipkinEnabled } returns false
 
-      // Should not throw — configured idle timeout of 90 is used
       val service = ProxyHttpService(mockProxy, httpPort = 0, isTestMode = true)
-      service.shouldNotBeNull()
+      service.idleTimeout shouldBe 90.seconds
     }
   }
 }
