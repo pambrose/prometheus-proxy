@@ -65,6 +65,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.launch
 import java.io.ByteArrayInputStream
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.locks.ReentrantLock
@@ -145,6 +146,11 @@ internal class AgentGrpcService(
   // land between them, so a concurrent reader -- the /debug servlet runs on a Jetty thread -- could
   // render a host:port pair that was never configured.
   val currentEndpoint: HostPort get() = endpoints[endpointIndex]
+
+  // The last connect failure logged at WARN for each proxy endpoint, until a connect to it succeeds: a proxy that
+  // stays down, or a dead primary in a failover list, logs its failure once and then at DEBUG (October #17). The
+  // endpoints are the configured list, so this stays as small.
+  private val connectFailures = ConcurrentHashMap<String, String>()
 
   val agentHostName: String get() = currentEndpoint.host
   val agentPort: Int get() = currentEndpoint.port
@@ -231,21 +237,13 @@ internal class AgentGrpcService(
       shutDownLocked()
     }
 
-  // Shuts the gRPC channel down without touching tracing, breaking any in-flight RPCs (e.g. an idle
-  // readRequestsFromProxy collect). This is the *transient* teardown used by the heartbeat loop to force
-  // a reconnect, so it deliberately leaves the service able to build a new channel.
-  fun shutDownChannel() =
-    grpcLock.withLock {
-      shutDownChannelLocked()
-    }
-
-  // Terminal counterpart of shutDownChannel(), called from Agent.triggerShutdown() so stopSync() can
-  // unblock the run loop (finding 1). Guava invokes triggerShutdown() exactly once, so tearing the
-  // current channel down is not enough on its own: a run-loop iteration that read `while (isRunning)`
-  // as true just before stopAsync() flipped it can still reach resetGrpcStubs() and build a fresh live
-  // channel that nothing will ever break, parking run() in an idle collect and reinstating the deadlock.
-  // Latching shutDownRequested under grpcLock makes the outcome the same either way the race lands:
-  // reset-then-stop tears the new channel down, stop-then-reset never creates it.
+  // Shuts the gRPC channel down for good, without touching tracing, breaking any in-flight RPCs (e.g. an idle
+  // readRequestsFromProxy collect). Called from Agent.triggerShutdown() so stopSync() can unblock the run loop
+  // (finding 1). Guava invokes triggerShutdown() exactly once, so tearing the current channel down is not enough on
+  // its own: a run-loop iteration that read `while (isRunning)` as true just before stopAsync() flipped it can still
+  // reach resetGrpcStubs() and build a fresh live channel that nothing will ever break, parking run() in an idle
+  // collect and reinstating the deadlock. Latching shutDownRequested under grpcLock makes the outcome the same either
+  // way the race lands: reset-then-stop tears the new channel down, stop-then-reset never creates it.
   //
   // The full shutDown() (tracing included) still runs from the service shutDown() hook, and
   // channel.shutdownNow() is idempotent so that later call is a no-op on the channel.
@@ -319,15 +317,20 @@ internal class AgentGrpcService(
   // config-file value, so an agent given --tf_disabled on the command line sent this RPC in transport-filter
   // mode while omitting the interceptor, and the proxy rejected it as a config mismatch. One read cannot
   // disagree with itself.
-  suspend fun connectAgent() =
-    runCatchingCancellable {
-      logger.info { "Connecting to proxy at ${agent.proxyHost} using ${tlsContext.desc()}..." }
+  suspend fun connectAgent(): Boolean {
+    val proxyHost = agent.proxyHost
+    return runCatchingCancellable {
+      if (connectFailures.containsKey(proxyHost))
+        logger.debug { "Connecting to proxy at $proxyHost using ${tlsContext.desc()} again..." }
+      else
+        logger.info { "Connecting to proxy at $proxyHost using ${tlsContext.desc()}..." }
       if (options.transportFilterDisabled)
         unaryStub().connectAgentWithTransportFilterDisabled(EMPTY_INSTANCE).also { agent.agentId = it.agentId }
       else
         unaryStub().connectAgent(EMPTY_INSTANCE)
 
-      logger.info { "Connected to proxy at ${agent.proxyHost} using ${tlsContext.desc()}" }
+      connectFailures.remove(proxyHost)
+      logger.info { "Connected to proxy at $proxyHost using ${tlsContext.desc()}" }
       agent.metrics { connectCount.labelValues(agent.launchId, "success").inc() }
       true
     }.getOrElse { e ->
@@ -337,12 +340,16 @@ internal class AgentGrpcService(
       if (e is Error)
         throw e
       agent.metrics { connectCount.labelValues(agent.launchId, "failure").inc() }
-      // Pass the throwable so a stack trace is captured for diagnosis.
-      logger.error(e) {
-        "Cannot connect to proxy at ${agent.proxyHost} using ${tlsContext.desc()} - ${e.simpleClassName}: ${e.message}"
-      }
+      val failure = "${e.simpleClassName}: ${e.message}"
+      val message = "Cannot connect to proxy at $proxyHost using ${tlsContext.desc()} - $failure"
+      // The first failure, and a change, at WARN with the stack trace for diagnosis; a repeat at DEBUG.
+      if (connectFailures.put(proxyHost, failure) == failure)
+        logger.debug { message }
+      else
+        logger.warn(e) { message }
       false
     }
+  }
 
   suspend fun registerAgent(initialConnectionLatch: CountDownLatch) {
     val request =

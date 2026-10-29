@@ -52,12 +52,11 @@ internal class ProxyHttpService(
   val httpPort: Int,
   isTestMode: Boolean,
 ) : GenericIdleService() {
-  private val idleTimeout =
+  // Internal so a test can check the value the server is given (October #45).
+  internal val idleTimeout =
     with(proxy.proxyConfigVals.http) {
       (if (idleTimeoutSecs == -1) DEFAULT_IDLE_TIMEOUT_SECS else idleTimeoutSecs).seconds
     }
-
-  private val tracing by lazy { proxy.zipkinReporterService.newTracing("proxy-http") }
 
   private fun getConfig(httpPort: Int): Configuration.() -> Unit =
     {
@@ -86,8 +85,6 @@ internal class ProxyHttpService(
   }
 
   override fun shutDown() {
-    if (proxy.isZipkinEnabled)
-      tracing.close()
     httpServer.stop(5.seconds.inWholeMilliseconds, 5.seconds.inWholeMilliseconds)
   }
 

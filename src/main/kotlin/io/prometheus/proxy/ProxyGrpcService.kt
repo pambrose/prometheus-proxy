@@ -30,6 +30,7 @@ import com.pambrose.common.utils.shutdownGracefully
 import com.google.common.util.concurrent.MoreExecutors
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.grpc.Server
+import io.grpc.ServerBuilder
 import io.grpc.ServerInterceptor
 import io.grpc.ServerInterceptors
 import io.grpc.protobuf.services.ProtoReflectionServiceV1
@@ -105,7 +106,7 @@ internal class ProxyGrpcService(
       val interceptors: List<ServerInterceptor> =
         buildList {
           if (!options.transportFilterDisabled)
-            add(ProxyServerInterceptor())
+            add(ProxyServerInterceptor(proxy))
           if (proxy.isZipkinEnabled)
             add(grpcTracing.newServerInterceptor())
         }
@@ -120,29 +121,7 @@ internal class ProxyGrpcService(
       if (!options.reflectionDisabled)
         addService(ProtoReflectionServiceV1.newInstance())
 
-      if (options.handshakeTimeoutSecs > -1L)
-        handshakeTimeout(options.handshakeTimeoutSecs, SECONDS)
-
-      if (options.keepAliveTimeSecs > -1L)
-        keepAliveTime(options.keepAliveTimeSecs, SECONDS)
-
-      if (options.keepAliveTimeoutSecs > -1L)
-        keepAliveTimeout(options.keepAliveTimeoutSecs, SECONDS)
-
-      if (options.permitKeepAliveWithoutCalls)
-        permitKeepAliveWithoutCalls(options.permitKeepAliveWithoutCalls)
-
-      if (options.permitKeepAliveTimeSecs > -1L)
-        permitKeepAliveTime(options.permitKeepAliveTimeSecs, SECONDS)
-
-      if (options.maxConnectionIdleSecs > -1L)
-        maxConnectionIdle(options.maxConnectionIdleSecs, SECONDS)
-
-      if (options.maxConnectionAgeSecs > -1L)
-        maxConnectionAge(options.maxConnectionAgeSecs, SECONDS)
-
-      if (options.maxConnectionAgeGraceSecs > -1L)
-        maxConnectionAgeGrace(options.maxConnectionAgeGraceSecs, SECONDS)
+      applyConnectionOptions(options)
     }
 
   override fun startUp() {
@@ -171,5 +150,34 @@ internal class ProxyGrpcService(
 
     // Grace period for gRPC server shutdown before forcing termination (finding 28).
     private val SHUTDOWN_GRACE = 2.seconds
+
+    // Sets each handshake, keepalive, and connection-age option the proxy is configured with, and leaves gRPC's
+    // default for one left at -1 (or false). Its own function so a test can check that each option reaches the
+    // builder, since a built Server doesn't expose them (October #45).
+    internal fun ServerBuilder<*>.applyConnectionOptions(options: ProxyOptions) {
+      if (options.handshakeTimeoutSecs > -1L)
+        handshakeTimeout(options.handshakeTimeoutSecs, SECONDS)
+
+      if (options.keepAliveTimeSecs > -1L)
+        keepAliveTime(options.keepAliveTimeSecs, SECONDS)
+
+      if (options.keepAliveTimeoutSecs > -1L)
+        keepAliveTimeout(options.keepAliveTimeoutSecs, SECONDS)
+
+      if (options.permitKeepAliveWithoutCalls)
+        permitKeepAliveWithoutCalls(options.permitKeepAliveWithoutCalls)
+
+      if (options.permitKeepAliveTimeSecs > -1L)
+        permitKeepAliveTime(options.permitKeepAliveTimeSecs, SECONDS)
+
+      if (options.maxConnectionIdleSecs > -1L)
+        maxConnectionIdle(options.maxConnectionIdleSecs, SECONDS)
+
+      if (options.maxConnectionAgeSecs > -1L)
+        maxConnectionAge(options.maxConnectionAgeSecs, SECONDS)
+
+      if (options.maxConnectionAgeGraceSecs > -1L)
+        maxConnectionAgeGrace(options.maxConnectionAgeGraceSecs, SECONDS)
+    }
   }
 }

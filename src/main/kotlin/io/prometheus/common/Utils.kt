@@ -27,6 +27,8 @@ import io.github.oshai.kotlinlogging.KotlinLoggingConfiguration
 import io.grpc.Status
 import io.prometheus.Proxy
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import org.slf4j.Logger.ROOT_LOGGER_NAME
 import org.slf4j.LoggerFactory
 
@@ -115,6 +117,37 @@ internal object Utils {
 
   fun String.toJsonElement() = Json.parseToJsonElement(this)
 
+  // A Prometheus label name, as every Prometheus version accepts one. Prometheus 3 can accept more, but a name 2.x
+  // refuses fails a 2.x server's whole service discovery response.
+  private val LABEL_NAME = Regex("[a-zA-Z_][a-zA-Z0-9_]*")
+
+  /** Whether [name] is a label name every Prometheus version accepts in service discovery. */
+  fun isValidLabelName(name: String): Boolean = LABEL_NAME.matches(name)
+
+  /**
+   * Why some of [labels], a path's labels, can't appear in service discovery, or null when all can: a blank value, or
+   * a JSON object whose keys are label names and whose values are strings. Prometheus decodes the labels as a map of
+   * string to string, and one entry that isn't fails the whole response, so every target behind the proxy stops
+   * updating; the proxy leaves such entries out of it.
+   */
+  fun labelsProblem(labels: String): String? {
+    if (labels.isBlank())
+      return null
+    val json =
+      runCatching { labels.toJsonElement() }.getOrNull() as? JsonObject
+        ?: return "labels must be a JSON object, such as {\"team\":\"web\"}"
+    return json.entries.firstNotNullOfOrNull { (name, value) ->
+      val shown = name.take(SHOWN_LABEL_NAME_CHARS)
+      when {
+        !isValidLabelName(name) -> "label name '$shown' isn't a valid Prometheus label name ([a-zA-Z_][a-zA-Z0-9_]*)"
+        value !is JsonPrimitive || !value.isString -> "label '$shown' must have a string value"
+        else -> null
+      }
+    }
+  }
+
+  private const val SHOWN_LABEL_NAME_CHARS = 64
+
   // The parent of every proxy and agent logger.
   internal const val PROJECT_LOGGER_NAME = "io.prometheus"
 
@@ -171,15 +204,20 @@ internal object Utils {
   // while/cause loop. Shared so the different cause-walks no longer drift (finding 34).
   fun Throwable.causeChain(): Sequence<Throwable> = generateSequence(this) { it.cause }
 
-  // Logs a connection/stream-task failure at ERROR with the gRPC status details. Shared by the agent's
-  // connection-task and stream-task failure handlers, which were byte-for-byte identical (finding 23) and
-  // used apply {} only to smuggle the Status receiver for exceptionDetails() (finding 36).
+  // Logs a connection/stream-task failure with the gRPC status details: at WARN without a stack trace when the
+  // status is UNAVAILABLE, the proxy going away, which every disconnect logged one to three of at ERROR (October
+  // #17), and at ERROR with one otherwise. Shared by the agent's connection-task and stream-task failure handlers,
+  // which were byte-for-byte identical (finding 23) and used apply {} only to smuggle the Status receiver for
+  // exceptionDetails() (finding 36).
   fun KLogger.logStreamFailure(
     name: String,
     e: Throwable,
   ) {
     val status = Status.fromThrowable(e)
-    error(e) { "$name(): ${status.exceptionDetails(e)}" }
+    if (status.code == Status.Code.UNAVAILABLE)
+      warn { "$name(): ${status.exceptionDetails(e)}" }
+    else
+      error(e) { "$name(): ${status.exceptionDetails(e)}" }
   }
 
   data class HostPort(

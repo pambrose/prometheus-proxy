@@ -179,6 +179,21 @@ object TestPorts {
   const val DASHBOARD_UI_HOST_GRPC_PORT = 9589
   const val DASHBOARD_UI_HOST_DASHBOARD_PORT = 9593
 
+  // ProxyTest and AgentTest: what a real proxy or agent binds in the garbage-collection and failed-startup cases.
+  // These came from ServerSocket(0), released and bound again later, so another connection could take one in between
+  // (October #46). The port each failed-startup case holds open as taken still does.
+  const val PROXY_GC_HTTP_PORT = 9700
+  const val PROXY_FAILED_START_ADMIN_PORT = 9701
+  const val PROXY_FAILED_START_METRICS_PORT = 9702
+  const val PROXY_FAILED_SUB_SERVICE_AGENT_PORT = 9703
+  const val PROXY_FAILED_SUB_SERVICE_HTTP_PORT = 9704
+  const val PROXY_FAILED_SUB_SERVICE_ADMIN_PORT = 9705
+  const val AGENT_FAILED_START_METRICS_PORT = 9706
+
+  // AgentTest: the admin and metrics servers an agent whose gRPC shutdown fails must still stop (October #20).
+  const val AGENT_FAILED_SHUTDOWN_ADMIN_PORT = 9707
+  const val AGENT_FAILED_SHUTDOWN_METRICS_PORT = 9708
+
   // First port of the block each standard harness suite registers scrape targets on (startPort + i)
   const val HARNESS_DEFAULT_START_PORT = 9600
   const val IN_PROCESS_NO_ADMIN_START_PORT = 10100

@@ -1,0 +1,11 @@
+global:
+  scrape_interval: 2s
+  evaluation_interval: 2s
+
+# Discovers the proxy's paths through its service discovery endpoint instead of listing them.
+scrape_configs:
+  - job_name: 'proxy-sd'
+    fallback_scrape_protocol: PrometheusText0.0.4
+    http_sd_configs:
+      - url: 'http://proxy-host:8080/discovery'
+        refresh_interval: 2s

@@ -73,7 +73,9 @@ config: |
 The charts set up what the manifests below do by hand: the admin-endpoint probes, resource requests, a non-root pod
 with a read-only root filesystem, and optionally a ServiceMonitor (`serviceMonitor.enabled`), an agent token from a
 Secret (`agentToken.existingSecret`), TLS (`tls.secretName`), and, for the agent, a discovery ConfigMap
-(`discovery.enabled`). Each chart's README lists its values. The rest of this page builds the same deployment from
+(`discovery.enabled`). A config that holds secrets, such as `proxy.auth` tokens or credentials in an agent's target
+URLs, can come from a Secret (`existingSecret`) instead of the ConfigMap the chart renders. Each chart's README lists
+its values. The rest of this page builds the same deployment from
 plain manifests.
 
 ## Deploying the Proxy
@@ -253,10 +255,19 @@ The mounted config (`tls.conf`) references the certificate paths under `/app/cer
 
 The proxy and agent Deployments above wire Kubernetes probes to the admin endpoints:
 
-| Probe        | Endpoint       | Meaning                                  |
-|:-------------|:---------------|:-----------------------------------------|
-| `livenessProbe`  | `GET /ping`        | Returns `pong` while the process is up   |
-| `readinessProbe` | `GET /healthcheck` | Returns health status; non-200 if unhealthy |
+| Probe            | Proxy       | Agent              |
+|:-----------------|:------------|:-------------------|
+| `livenessProbe`  | `GET /ping` | `GET /ping`        |
+| `readinessProbe` | `GET /ping` | `GET /healthcheck` |
+
+`/ping` returns `pong` while the process is up. `/healthcheck` returns each health check's status, and a
+non-200 when any is unhealthy.
+
+The proxy's readiness probe is `/ping` because its `/healthcheck` measures load. Each agent stays connected to
+one proxy pod, so taking a busy pod out of the Service doesn't move its load elsewhere: the scrapes for its
+agents' targets fail until it's ready again. Alert on the proxy's `/healthcheck` instead. It turns unhealthy
+when the scrapes or chunked transfers in flight reach 80% of `maxInFlightScrapeRequests`, or one agent's
+queue reaches `scrapeRequestBacklogUnhealthySize`.
 
 Both endpoints are served on the **admin** port (`8092` for the proxy, `8093` for the agent),
 which requires `ADMIN_ENABLED=true`. The manifests also set conservative CPU/memory

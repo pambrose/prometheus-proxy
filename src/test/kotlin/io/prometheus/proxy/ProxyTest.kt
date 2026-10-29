@@ -32,10 +32,17 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.spyk
 import io.prometheus.Proxy
+import io.prometheus.common.TestPorts.PROXY_FAILED_START_ADMIN_PORT
+import io.prometheus.common.TestPorts.PROXY_FAILED_START_METRICS_PORT
+import io.prometheus.common.TestPorts.PROXY_FAILED_SUB_SERVICE_ADMIN_PORT
+import io.prometheus.common.TestPorts.PROXY_FAILED_SUB_SERVICE_AGENT_PORT
+import io.prometheus.common.TestPorts.PROXY_FAILED_SUB_SERVICE_HTTP_PORT
+import io.prometheus.common.TestPorts.PROXY_GC_HTTP_PORT
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.grpc.chunkedScrapeResponse
 import io.prometheus.grpc.headerData
 import io.prometheus.grpc.registerAgentRequest
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -111,6 +118,34 @@ class ProxyTest : StringSpec() {
       labels["hostName"]!!.jsonPrimitive.content shouldBe "internal.host.com"
     }
 
+    // Prometheus rejects a target that contains "/", so a URL prefix -- the documented form -- gave no targets at all.
+    // Its host:port is now the target, its scheme the __scheme__ label, and its path a prefix of __metrics_path__.
+    "buildServiceDiscoveryJson should split a URL target prefix into the target, __scheme__, and the path prefix" {
+      val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=https://proxy.example.com:8443/prom/")
+      val agentContext = createAgentContext()
+      proxy.agentContextManager.addAgentContext(agentContext)
+      proxy.pathManager.addPath("app1_metrics", "", agentContext)
+
+      val entry = proxy.buildServiceDiscoveryJson().single().jsonObject
+      val labels = entry["labels"]!!.jsonObject
+
+      entry["targets"]!!.jsonArray.map { it.jsonPrimitive.content } shouldBe listOf("proxy.example.com:8443")
+      labels["__scheme__"]!!.jsonPrimitive.content shouldBe "https"
+      labels["__metrics_path__"]!!.jsonPrimitive.content shouldBe "/prom/app1_metrics"
+    }
+
+    "buildServiceDiscoveryJson should leave __scheme__ to the scrape config for a host:port target prefix" {
+      val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=proxy.example.com:$PROXY_HTTP_PORT")
+      val agentContext = createAgentContext()
+      proxy.agentContextManager.addAgentContext(agentContext)
+      proxy.pathManager.addPath("app1_metrics", "", agentContext)
+
+      val labels = proxy.buildServiceDiscoveryJson().single().jsonObject["labels"]!!.jsonObject
+
+      labels["__scheme__"].shouldBeNull()
+      labels["__metrics_path__"]!!.jsonPrimitive.content shouldBe "/app1_metrics"
+    }
+
     "buildServiceDiscoveryJson should produce multiple entries for multiple paths" {
       val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=proxy:$PROXY_HTTP_PORT")
       val agentContext = createAgentContext()
@@ -154,6 +189,22 @@ class ProxyTest : StringSpec() {
       labels["agentName"]!!.jsonPrimitive.content shouldBe "agent-bad-labels"
       // Invalid JSON labels should not cause custom keys to appear
       labels.containsKey("environment").shouldBeFalse()
+    }
+
+    // Prometheus decodes service discovery labels as a map of string to string with valid label names, and one label
+    // that isn't fails the whole response: every target behind the proxy stops updating, and after a restart
+    // Prometheus has none. Such labels are left out of the response, and the rest kept.
+    "buildServiceDiscoveryJson should leave out labels Prometheus couldn't decode" {
+      val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=proxy:$PROXY_HTTP_PORT")
+      val agentContext = createAgentContext()
+      proxy.agentContextManager.addAgentContext(agentContext)
+      val labels = """{"count":1,"nested":{"b":"c"},"list":["x"],"":"empty","a-b":"dash","team":"web"}"""
+      proxy.pathManager.addPath("metrics", labels, agentContext)
+
+      val served = proxy.buildServiceDiscoveryJson().single().jsonObject["labels"]!!.jsonObject
+
+      served.keys shouldBe setOf("__metrics_path__", "agentName", "hostName", "team")
+      served.values.all { it is JsonPrimitive && it.isString } shouldBe true
     }
 
     // Agent-supplied labels must not clobber the proxy-computed reserved keys (__metrics_path__,
@@ -317,7 +368,7 @@ class ProxyTest : StringSpec() {
       val owner = createAgentContext()
       proxy.agentContextManager.addAgentContext(owner)
       val scrape = ScrapeRequestWrapper(owner, "metrics", "", "", null, false)
-      proxy.scrapeRequestManager.addToScrapeRequestMap(scrape)
+      proxy.scrapeRequestManager.tryAddToScrapeRequestMap(scrape, Int.MAX_VALUE)
 
       val header = chunkedScrapeResponse {
         header = headerData {
@@ -453,7 +504,7 @@ class ProxyTest : StringSpec() {
         acceptVal = "",
         debugEnabledVal = false,
       )
-      proxy.scrapeRequestManager.addToScrapeRequestMap(wrapper)
+      proxy.scrapeRequestManager.tryAddToScrapeRequestMap(wrapper, Int.MAX_VALUE)
 
       // Fixed order: fail requests THEN invalidate agents
       proxy.scrapeRequestManager.failAllInFlightScrapeRequests("Proxy is shutting down", ProxyFailure.PROXY_STOPPED)
@@ -481,7 +532,7 @@ class ProxyTest : StringSpec() {
         acceptVal = "",
         debugEnabledVal = false,
       )
-      proxy.scrapeRequestManager.addToScrapeRequestMap(wrapper)
+      proxy.scrapeRequestManager.tryAddToScrapeRequestMap(wrapper, Int.MAX_VALUE)
 
       // Old (broken) order: invalidate agents THEN fail requests
       proxy.agentContextManager.invalidateAllAgentContexts()
@@ -581,8 +632,7 @@ class ProxyTest : StringSpec() {
     // ProxyGrpcService added a JVM shutdown hook for its gRPC server and never removed it. The hook held the server,
     // and through it the whole Proxy, so every Proxy built in a JVM stayed reachable until the JVM exited.
     "a stopped proxy should become garbage collectable" {
-      val httpPort = ServerSocket(0).use { it.localPort }
-      var proxy: Proxy? = createTestProxy("--port", "$httpPort")
+      var proxy: Proxy? = createTestProxy("--port", "$PROXY_GC_HTTP_PORT")
       proxy!!.startSync()
       proxy.stopSync()
       val ref = WeakReference(proxy)
@@ -601,8 +651,6 @@ class ProxyTest : StringSpec() {
     // a taken port logged the failure but never exited, its admin server's threads keeping the JVM alive.
     "a failed startup should stop what the proxy started" {
       PrometheusRegistry.defaultRegistry.clear()
-      val adminPort = ServerSocket(0).use { it.localPort }
-      val metricsPort = ServerSocket(0).use { it.localPort }
       ServerSocket(0).use { takenHttpPort ->
         val proxy =
           createTestProxy(
@@ -610,17 +658,17 @@ class ProxyTest : StringSpec() {
             "${takenHttpPort.localPort}",
             "--admin",
             "--admin_port",
-            "$adminPort",
+            "$PROXY_FAILED_START_ADMIN_PORT",
             "--metrics",
             "--metrics_port",
-            "$metricsPort",
+            "$PROXY_FAILED_START_METRICS_PORT",
           )
 
         shouldThrow<IllegalStateException> { proxy.startSync() }
 
         // Captured as values first, so each check reports on its own inside assertSoftly.
         val state = proxy.state()
-        val adminPortFree = runCatching { ServerSocket(adminPort).close() }.isSuccess
+        val adminPortFree = runCatching { ServerSocket(PROXY_FAILED_START_ADMIN_PORT).close() }.isSuccess
         val metricsRunning = proxy.metricsService.isRunning
 
         assertSoftly {
@@ -636,7 +684,9 @@ class ProxyTest : StringSpec() {
     // too, or their threads and ports outlive the failed start just as the admin server's did.
     "a failed startup should also stop the sub-services that started before the failure" {
       PrometheusRegistry.defaultRegistry.clear()
-      val (agentPort, httpPort, adminPort) = List(3) { ServerSocket(0) }.map { socket -> socket.use { it.localPort } }
+      val agentPort = PROXY_FAILED_SUB_SERVICE_AGENT_PORT
+      val httpPort = PROXY_FAILED_SUB_SERVICE_HTTP_PORT
+      val adminPort = PROXY_FAILED_SUB_SERVICE_ADMIN_PORT
       ServerSocket(0).use { takenDashboardPort ->
         val proxy =
           Proxy(

@@ -96,14 +96,15 @@ The proxy has no usable mapping for that path.
   scrapes 404. Use a single segment (e.g. `app_metrics`, not `app/metrics`).
 - **Agent not registered** — confirm the agent started cleanly and registered the path
   (check `proxy_path_map_size` and the agent logs).
+- **Agent gone** (`invalid_agent_context`) — every agent on the path has disconnected, and the
+  path is on its way out; seen briefly as the path's last agent leaves. Check
+  `proxy_agent_map_size` and whether the agent is up.
 
 ### `503 Service Unavailable`
 
 The path is known but cannot be served right now.
 
 - **Proxy shutting down** (`proxy_stopped`).
-- **No agent for the path** (`no_agents`) — the path's last agent left as the scrape arrived. Check
-  `proxy_agent_map_size` and whether the agent is up.
 - **Agent disconnected** (`agent_disconnected`) — before or during the scrape, including an eviction
   or another agent taking over the path. Transient during agent restarts; for redundancy use
   [consolidated mode](advanced.md#consolidated-mode).
@@ -138,10 +139,10 @@ normally shows up as `upstream_timed_out`.
   that too. The agent passes the timeout it enforces on to the target in the same header, so exporters that
   size their work by it, such as blackbox_exporter, finish within it.
 - **`timed_out`** — the agent is unresponsive or the link to it is broken. Check the agent is still
-  connected (`proxy_connected_agents`) and raise `proxy.internal.scrapeRequestTimeoutSecs` only if
+  connected (`proxy_agent_map_size`) and raise `proxy.internal.scrapeRequestTimeoutSecs` only if
   the agent legitimately needs longer than 90s.
-- Either can mean the agent is saturated — raise `maxConcurrentClients` (default `1`) so scrapes
-  run in parallel; watch `agent_scrape_backlog_size` and `proxy_cumulative_agent_backlog_size`.
+- Either can mean the agent is saturated — raise `agent.http.maxConcurrentClients` (default `1`) so
+  scrapes run in parallel; watch `agent_scrape_backlog_size` and `proxy_cumulative_agent_backlog_size`.
 - See [Performance Tuning](advanced.md#performance-tuning).
 
 ---

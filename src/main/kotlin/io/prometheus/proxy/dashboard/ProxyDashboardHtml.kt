@@ -57,12 +57,6 @@ import java.time.format.DateTimeFormatter
 internal enum class DashboardLayout {
   AGENT,
   PATH,
-  ;
-
-  companion object {
-    /** Derived from the request path, so the layout is bookmarkable and survives a reload. */
-    fun of(path: String): DashboardLayout = if (path.trimEnd('/').endsWith("/paths")) PATH else AGENT
-  }
 }
 
 /**

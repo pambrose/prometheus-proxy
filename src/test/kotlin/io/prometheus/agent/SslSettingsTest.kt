@@ -25,9 +25,6 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import java.io.FileNotFoundException
-import java.security.KeyStore
-import javax.net.ssl.SSLContext
-import javax.net.ssl.TrustManagerFactory
 import javax.net.ssl.X509TrustManager
 
 class SslSettingsTest : StringSpec() {
@@ -102,38 +99,6 @@ class SslSettingsTest : StringSpec() {
       val (path, password) = createTempKeyStore()
       val trustManager = SslSettings.getTrustManager(path, password)
       trustManager.shouldBeInstanceOf<X509TrustManager>()
-    }
-
-    // ==================== Type Verification Tests ====================
-    // These tests verify the return types of the methods when they succeed
-
-    "TrustManagerFactory getDefaultAlgorithm should return valid algorithm" {
-      // Verify that the default algorithm is available
-      val algorithm = TrustManagerFactory.getDefaultAlgorithm()
-      algorithm.shouldNotBeNull()
-    }
-
-    "KeyStore getDefaultType should return valid type" {
-      // Verify that the default keystore type is available
-      val type = KeyStore.getDefaultType()
-      type.shouldNotBeNull()
-    }
-
-    "SSLContext TLS instance should be obtainable" {
-      // Verify that TLS SSLContext can be created
-      val sslContext = SSLContext.getInstance("TLS")
-      sslContext.shouldNotBeNull()
-      sslContext.protocol shouldBe "TLS"
-    }
-
-    "TrustManagerFactory can be initialized with null" {
-      // Verify default trust manager factory behavior
-      val tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
-      tmf.init(null as KeyStore?)
-      val trustManagers = tmf.trustManagers
-      trustManagers.shouldNotBeNull()
-      trustManagers.isNotEmpty() shouldBe true
-      trustManagers[0].shouldBeInstanceOf<X509TrustManager>()
     }
   }
 }

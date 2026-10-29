@@ -238,7 +238,7 @@ Each entry in `pathConfigs` maps:
     **In the background**, `brew services` runs the agent with
     `$(brew --prefix)/etc/prometheus-agent.conf` and starts it again at login. The formula installs
     a starting point there with no paths, so copy your `agent.conf` over it first. The service passes
-    no `--proxy`, so the file's `proxy.hostname` decides which proxy the agent connects to:
+    no `--proxy`, so the file's `agent.proxy.hostname` decides which proxy the agent connects to:
 
     ```bash
     cp agent.conf "$(brew --prefix)/etc/prometheus-agent.conf"

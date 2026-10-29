@@ -20,16 +20,61 @@ among them gRPC, which now runs at one version across all its modules.
   agent that sent a result for the next scrape ID before the proxy started tracking it could complete another
   agent's scrape with its own data. The check and the result now use the same lookup, and a result for a scrape the
   proxy isn't tracking is dropped.
+- **A path can't stall the proxy on its way to authorization.** The proxy compared a registered path with the
+  agent identity's path patterns before checking its length. A pattern with several `*`s could take seconds per
+  path it didn't match, and a path could be millions of characters long, so one authenticated agent could tie up
+  the proxy for every other agent. A path over `maxPathLength`, or with more than one segment, is now refused
+  before the patterns see it, and matching a pattern takes time in proportion to the path's length. A denied path
+  is logged with only its first characters.
+- **Long agent names and host names are cut.** The proxy stored the name, host name, launch ID, and failover list
+  an agent reports, at any size, and repeated them for every path the agent serves, in logs, service discovery,
+  the dashboard, and `/debug`. It now keeps the first 256 characters of each and the first 16 failover endpoints,
+  set by the new `proxy.internal.maxAgentFieldLength` and `maxAgentProxyEndpoints`, and warns when it cuts one.
+  The log line for each registered path names the agent's ID instead.
+- **Every authenticated connection appears as a connected agent.** A client that skipped the `connectAgent` call
+  could register paths and serve scrapes while missing from the dashboard's agent list, the agent count, and the
+  health checks. The first call that passes authentication now counts, whichever call it is.
+- **The Helm charts can keep the config in a Secret.** Per-agent `proxy.auth` tokens, and credentials in an agent's
+  target URLs, could only go in a ConfigMap, which more people can often read than Secrets. The new
+  `existingSecret` value takes the whole config from a Secret, and the proxy chart shows how to read each token
+  from an environment variable set from a Secret instead. Its example of `proxy.auth`, which didn't match the
+  config format, is fixed.
 
 ### Before you upgrade
 
+- **Service discovery targets change form.** Each target is now `host:port`, as Prometheus requires, with a
+  URL `sdTargetPrefix` split into the target, a `__scheme__` label, and a `__metrics_path__` prefix. Prometheus
+  dropped the old URL targets, so no existing series change, but if you added a relabel rule rewriting
+  `__address__` to work around it, remove it. The `sdTargetPrefix` default is now `localhost:8080`, and a value
+  that is neither `host:port` nor an `http`/`https` URL fails startup when service discovery is enabled.
+- **The new checks on what agents send refuse no agent**, and the stock agent behaves as before. Two things can
+  look different:
+  - An agent whose name or host name is longer than 256 characters has it cut to 256, so its `agentName` or
+    `hostName` service discovery label changes, and with it the labels on that target's series. Raise
+    `proxy.internal.maxAgentFieldLength`, or set it to `0`, to keep such values whole.
+  - A custom client that never called `connectAgent` now shows up on the dashboard and in
+    `proxy_agent_map_size`.
 - **Some agent configs that start today will fail at startup.** Two `pathConfigs` entries for the same path
   (`metrics` and `/metrics`) are now rejected; before, the second silently replaced the first's URL. And an
   `agent.http.trustStorePath` that can't be loaded, from a missing file or a wrong password, now fails startup
   instead of every scrape. Both errors name the setting to fix.
+- **The proxy chart's readiness probe is now `/ping`, and the proxy's `/healthcheck` reports load later.**
+  `/healthcheck` turned unhealthy at 25 scrapes or chunked transfers in flight; those thresholds now default to
+  80% of `maxInFlightScrapeRequests` (800 by default). A `scrapeRequestMapUnhealthySize` or
+  `chunkContextMapUnhealthySize` you set is kept, but one above `maxInFlightScrapeRequests` now fails startup. If
+  you wrote your own manifests from the docs, point the proxy's readiness probe at `/ping` too, and alert on
+  `/healthcheck` instead.
 
 ### Bug Fixes
 
+- **Service discovery works.** Prometheus refused every target the proxy advertised, since each was a URL; they
+  are now `host:port`, and a new end-to-end test has Prometheus scrape through `http_sd_configs`.
+- **One agent's labels can't break service discovery for everyone.** A label value that isn't a string, or a
+  name Prometheus doesn't accept, made Prometheus reject the whole discovery response. Such labels are left out,
+  with a warning when the path registers.
+- **A path the proxy serves itself can't be registered:** `favicon.ico`, and the discovery and blitz paths.
+- **Metric filters match quoted metric names.** A target that writes a name such as `a.b` quoted, as
+  Prometheus 3 allows, had that family dropped by an allow list that named it, and kept by a deny list.
 - **Discovered targets survive a reconnect while the discovery file is bad.** The agent keeps the last list it
   read and registers it again after a reconnect; before, every discovered target returned 404 until the file
   was fixed.
@@ -64,6 +109,20 @@ among them gRPC, which now runs at one version across all its modules.
   through sending a result in chunks, the proxy skipped the cleanup it runs when the stream ends, and could keep up
   to `maxZippedContentSizeMBytes` of buffered data for good. The cleanup now always runs, and the buffer belongs to
   the agent the scrape was sent to, not to whichever agent the result's first message names.
+- **A busy proxy stays in its Service.** The chart's and the docs' readiness probe was `/healthcheck`, which
+  reported unhealthy at 25 scrapes in flight, a fortieth of the 1000 the proxy admits, or when one agent had 25
+  queued. Kubernetes then took the pod out of the Service, which failed the scrapes for its agents' targets until
+  the load dropped, and the cycle repeated. The probe is now `/ping`, and the in-flight thresholds default to 80%
+  of `maxInFlightScrapeRequests`.
+- **Quieter logs.**
+  - A connection to the agent port that never authenticates, such as a port scanner or a health probe, no longer
+    writes INFO lines or counts in `proxy_eviction_count_total`, so the evictions alert fires only for agents.
+  - During a proxy outage the agent logs a connect failure once at WARN, and again only when it changes, instead
+    of an ERROR stack trace every 3 seconds. The same goes for a dead primary in a failover list, and a stream
+    ended by the proxy going away is a one-line WARN.
+  - An unknown agent ID or path in the proxy's logs is cut to its first 64 characters.
+- **An agent whose gRPC shutdown fails still releases its ports.** The admin and metrics servers stopped only if
+  every earlier shutdown step succeeded. Each step now runs regardless, and the first failure is reported.
 
 ### Documentation
 
@@ -71,6 +130,19 @@ among them gRPC, which now runs at one version across all its modules.
   failed fetch of a config URL, exited the host application.
 - The README's Kotlin badge follows the version the build uses, and its Docker stats badges link to the proxy's
   and agent's Docker Hub pages.
+- The security docs say the scrape port has no authentication: anyone who can reach it can have the agents
+  scrape their targets with their own query string and `Authorization` header, which an exporter that takes its
+  target as a query parameter turns into a way to probe any host it can reach. Bind `proxy.http.host` to a
+  private address and firewall the port so only Prometheus reaches it; see Scrape Port Access on the Security
+  page.
+- The website's tuning table named `agent.maxConcurrentClients`, which doesn't exist, so setting it did nothing;
+  the key is `agent.http.maxConcurrentClients`. It also gave no default for
+  `proxy.internal.maxUnzippedContentSizeMBytes`, which is 10, and Troubleshooting named a `proxy_connected_agents`
+  gauge, which is `proxy_agent_map_size`. A test now checks the metric names, config keys, and defaults the
+  website gives.
+- The testing guide names every spec and helper, and a test keeps it that way.
+- The scrape outcomes no longer list `no_agents`, which the proxy never reported. The agent's API docs no longer
+  promise exponential reconnect backoff, or say that `startSyncAgent` blocks until the agent stops.
 
 ### Build and tooling
 
@@ -90,10 +162,29 @@ among them gRPC, which now runs at one version across all its modules.
 - The Claude Code workflow starts a job only for an `@claude` mention written by the repository owner, an
   organization member, or a collaborator, and the workflows are audited with zizmor 1.31.1, which flags the
   comment trigger that workflow uses.
+- The documentation site is built for every pull request, so a change that breaks it fails before it merges. It's
+  deployed when a release is published rather than when its version bump merges, so it no longer gives a Docker tag
+  and Maven coordinate that don't exist yet. Between releases, docs changes still deploy as they merge.
+- `make upgrade-site` takes only docs-site dependency versions that are at least 7 days old, the cooldown Dependabot
+  already applies.
+- The JARs and images include every dependency's notices and licenses. Only one dependency's NOTICE file and a
+  couple of license files were kept; all are now merged into `META-INF/NOTICE` and `META-INF/LICENSE`.
+- The images' user is UID and GID 1001 by number, the IDs the charts already run as, so a base-image change
+  can't move it, and Kubernetes' `runAsNonRoot` can check it on its own.
+- Tests that couldn't fail now check what they claim: the scrape port's idle timeout, each gRPC keepalive and
+  connection-age option, and the JVM buffer-pool and compilation metrics on a real `/metrics`. Tests that bound a
+  port the OS had just handed out take fixed test ports instead.
+- The test dependencies come only from the version catalog. A build plugin added its own copies of Kotest, Logback,
+  and `kotlin-test`, so the test classpath could run versions the catalog didn't name.
+- `make tla-checks` replaces a TLA+ tools jar that doesn't match the pinned checksum, so a TLA+ version bump takes
+  effect locally as it does in CI.
+- Every CI job has a time limit, and the tool images and schemas the checks use are pinned, so a re-pushed tag or a
+  moved branch can't change what CI runs without a change in the repository.
+- Code that only tests used, or that nothing used, is removed.
 
 ### Dependency updates
 
-Runtime: common-utils 5.1.1 → 5.1.2, grpc 1.84.2 → 1.85.1, with every grpc module now held to the same version (the
+Runtime: common-utils 5.1.1 → 5.2.0, grpc 1.84.2 → 1.85.1, with every grpc module now held to the same version (the
 agent and proxy previously ran grpc's Netty transport from 1.84.1, the version common-utils 5.1.1 brought), the
 Prometheus Java client 1.9.0 → 1.10.0 (`prometheus-metrics-core`, which embedders also get, as they do
 common-utils), kotlinx-serialization 1.11.0 → 1.12.0, Jackson 2.22.3 → 2.22.4, and Logback 1.6.5 → 1.6.6. Netty

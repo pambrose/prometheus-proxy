@@ -25,6 +25,7 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContain as shouldContainElement
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
@@ -400,6 +401,16 @@ class ProxyOptionsTest : StringSpec() {
       exception.message shouldContain "sdTargetPrefix is empty"
     }
 
+    // Prometheus takes a service discovery target as __address__, which can't contain "/", so the URL the docs gave
+    // (http://localhost:8080/) made it drop every target. The value is parsed at startup: host:port, or an http(s) URL
+    // whose host:port becomes the target. Anything else is refused there, not by Prometheus at every refresh.
+    "a sdTargetPrefix that is neither host:port nor an http(s) URL should be rejected when service discovery is on" {
+      listOf("ftp://proxy:8080", "http://", "proxy/metrics", "http://proxy:8080/?x=1").forEach { prefix ->
+        shouldThrow<IllegalArgumentException> { ProxyOptions(listOf("--sd_enabled", "--sd_target_prefix", prefix)) }
+          .message shouldContain "sdTargetPrefix"
+      }
+    }
+
     "an empty sdPath should be accepted while service discovery stays disabled" {
       // The guard is gated on sdEnabled, so a blank path is harmless until the endpoint is turned on.
       val options = proxyOptionsFromConfig("""proxy.service.discovery.path = "" """)
@@ -550,6 +561,21 @@ class ProxyOptionsTest : StringSpec() {
         .shouldBeFalse()
     }
 
+    // The charts' way to keep proxy.auth tokens out of a ConfigMap is to substitute each from an environment variable
+    // set from a Secret (October #27). The test's environment can't be set in-process, so HOME stands in for one.
+    "a proxy.auth token should be substituted from an environment variable" {
+      val home = System.getenv("HOME").shouldNotBeNull()
+      val options =
+        proxyOptionsFromConfig(
+          """
+          proxy.auth = [
+            { name = "team-a", token = ${'$'}{HOME}, paths = ["team_a_*"] }
+          ]
+          """,
+        )
+      options.configVals.proxy.auth.single().token shouldBe home
+    }
+
     // A non-positive limit would refuse every scrape.
     "maxInFlightScrapeRequests of 0 should be rejected" {
       val exception = shouldThrow<IllegalArgumentException> {
@@ -564,6 +590,42 @@ class ProxyOptionsTest : StringSpec() {
         proxyOptions(["-Dproxy.internal.scrapeRequestBacklogUnhealthySize=0"])
       }
       exception.message shouldContain "scrapeRequestBacklogUnhealthySize"
+    }
+
+    // A fixed 25 sat far below the in-flight limit, so readiness flapped under ordinary load (October #2).
+    "the scrape and chunk map thresholds should default to 80% of maxInFlightScrapeRequests" {
+      proxyOptions([]).apply {
+        scrapeRequestMapUnhealthySize shouldBe 800
+        chunkContextMapUnhealthySize shouldBe 800
+      }
+      proxyOptions(["-Dproxy.internal.maxInFlightScrapeRequests=101"]).apply {
+        scrapeRequestMapUnhealthySize shouldBe 81
+        chunkContextMapUnhealthySize shouldBe 81
+      }
+      proxyOptions(["-Dproxy.internal.maxInFlightScrapeRequests=1"]).scrapeRequestMapUnhealthySize shouldBe 1
+    }
+
+    "a configured scrape or chunk map threshold should be kept" {
+      proxyOptions(
+        [
+          "-Dproxy.internal.scrapeRequestMapUnhealthySize=25",
+          "-Dproxy.internal.chunkContextMapUnhealthySize=1000",
+        ],
+      ).apply {
+        scrapeRequestMapUnhealthySize shouldBe 25
+        chunkContextMapUnhealthySize shouldBe 1000
+      }
+    }
+
+    // The scrape map never holds more than maxInFlightScrapeRequests, so a threshold above it could never trip.
+    "a scrape or chunk map threshold above maxInFlightScrapeRequests, or negative, should be rejected" {
+      listOf("scrapeRequestMapUnhealthySize", "chunkContextMapUnhealthySize").forEach { name ->
+        listOf(1001, -1).forEach { value ->
+          shouldThrow<IllegalArgumentException> {
+            proxyOptions(["-Dproxy.internal.$name=$value"])
+          }.message shouldContain name
+        }
+      }
     }
 
     // The dashboard's push loop waits refreshIntervalSecs between pushes; at 0 the wait returns at once, so the loop
@@ -595,6 +657,28 @@ class ProxyOptionsTest : StringSpec() {
         exception.message shouldContain key
       }
       proxyOptions(["-Dproxy.internal.maxPathsPerAgent=0"]).configVals.proxy.internal.maxPathsPerAgent shouldBe 0
+    }
+
+    // October #23: an agent's name, host name, and launch ID are shown, not used, but repeated for every path it
+    // serves. 256 characters is more than a DNS host name (253) and far more than a launch ID (15); real failover lists
+    // have a handful of entries.
+    "agent field limits should default to 256 characters and 16 proxy endpoints" {
+      val internal = proxyOptions([]).configVals.proxy.internal
+      internal.maxAgentFieldLength shouldBe 256
+      internal.maxAgentProxyEndpoints shouldBe 16
+    }
+
+    // 0 turns a limit off, as for the path limits; only a negative value is meaningless.
+    "a negative agent field limit should be rejected" {
+      for (key in ["maxAgentFieldLength", "maxAgentProxyEndpoints"]) {
+        val exception = shouldThrow<IllegalArgumentException> { proxyOptions(["-Dproxy.internal.$key=-1"]) }
+        exception.message shouldContain key
+      }
+      val unlimited =
+        proxyOptions(["-Dproxy.internal.maxAgentFieldLength=0", "-Dproxy.internal.maxAgentProxyEndpoints=0"])
+          .configVals.proxy.internal
+      unlimited.maxAgentFieldLength shouldBe 0
+      unlimited.maxAgentProxyEndpoints shouldBe 0
     }
 
     // A blank bind address would fail only when the scrape server starts, with an opaque Ktor error.

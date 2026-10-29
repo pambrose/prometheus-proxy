@@ -961,6 +961,23 @@ class AgentPathManagerTest : StringSpec() {
       shouldThrow<IllegalArgumentException> { AgentPathManager(agent) }.message shouldContain "/metrics"
     }
 
+    // The proxy leaves labels it can't serve out of service discovery, so a pathConfigs entry with them is reported at
+    // startup, naming it, where it can be fixed. It still registers: labels matter only to service discovery.
+    "construction should warn about a pathConfigs entry whose labels service discovery will leave out" {
+      val agent =
+        createMockAgent(
+          pathConfigsHocon =
+            """
+            { name = "numeric", path = "metrics", url = "http://localhost:9100/metrics", labels = "{\"a\":1}" }
+            """,
+        )
+
+      val warnings = captureLogs<AgentPathManager>(Level.WARN) { AgentPathManager(agent) }.map { it.formattedMessage }
+
+      warnings.single() shouldContain "numeric"
+      warnings.single() shouldContain "label 'a' must have a string value"
+    }
+
     "registerPaths should register all configured paths" {
       val configVals = testConfigVals(
         """

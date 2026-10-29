@@ -18,19 +18,25 @@
 
 package io.prometheus.proxy
 
+import ch.qos.logback.classic.Level
 import com.google.protobuf.ByteString
 import io.grpc.Context
 import io.grpc.Status
 import io.grpc.StatusException
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.maps.shouldBeEmpty
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
+import io.kotest.matchers.ints.shouldBeLessThan
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
+import io.kotest.matchers.string.shouldStartWith
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -41,10 +47,13 @@ import io.mockk.verify
 import io.prometheus.Proxy
 import io.prometheus.metrics.core.datapoints.CounterDataPoint
 import io.prometheus.metrics.core.metrics.Counter
+import io.prometheus.common.awaitOnDaemonThread
+import io.prometheus.common.captureLogs
 import io.prometheus.common.testConfigVals
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
 import io.prometheus.grpc.ChunkedScrapeResponse
 import io.prometheus.grpc.PathRejectionCause
+import io.prometheus.grpc.RegisterPathResponse
 import io.prometheus.grpc.ScrapeRequest
 import io.prometheus.grpc.ScrapeResponse
 import io.prometheus.grpc.agentInfo
@@ -63,7 +72,9 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.runBlocking
 import java.util.zip.CRC32
+import kotlin.time.Duration.Companion.seconds
 
 @Suppress("LargeClass")
 class ProxyServiceImplTest : StringSpec() {
@@ -108,7 +119,13 @@ class ProxyServiceImplTest : StringSpec() {
         every { it.putChunkedContext(any(), any()) } returns true
         every { it.removeChunkedContext(any(), any()) } returns true
       }
-    val mockPathManager = mockk<ProxyPathManager>(relaxed = true)
+    val mockPathManager =
+      mockk<ProxyPathManager>(relaxed = true).also {
+        // A relaxed mock answers a non-null rejection, which would refuse every path before addPath. A test that stubs
+        // the manager must stub it through a local: a chained every { proxy.pathManager.x } swaps in a child mock
+        // without this stub.
+        every { it.formRejection(any(), any(), any()) } returns null
+      }
     val mockScrapeRequestManager =
       scrapeRequestManager ?: mockk<ScrapeRequestManager>(relaxed = true).also {
         every { it.containsScrapeRequest(any()) } returns true
@@ -147,6 +164,45 @@ class ProxyServiceImplTest : StringSpec() {
     return mockProxy
   }
 
+  // A mocked proxy whose path manager is real, with the given limits, and a real agent context it can find: what a
+  // test of the path checks registerPath runs needs.
+  private fun proxyWithRealPathManager(maxPathLength: Int = 0): Pair<Proxy, AgentContext> {
+    val proxy = createMockProxy()
+    every { proxy.maxPathLength } returns maxPathLength
+    every { proxy.pathManager } returns ProxyPathManager(proxy, isTestMode = true)
+    val agentContext = AgentContext("remote-addr")
+    every { proxy.agentContextManager.getAgentContext(agentContext.agentId) } returns agentContext
+    return proxy to agentContext
+  }
+
+  // A mocked proxy with the given agent field limits (0, a relaxed mock's answer, is unlimited) and a real agent
+  // context it can find, so a test can read back what registerAgent stored.
+  private fun proxyWithRealAgentContext(
+    maxAgentFieldLength: Int = 0,
+    maxAgentProxyEndpoints: Int = 0,
+  ): Pair<Proxy, AgentContext> {
+    val proxy = createMockProxy()
+    every { proxy.maxAgentFieldLength } returns maxAgentFieldLength
+    every { proxy.maxAgentProxyEndpoints } returns maxAgentProxyEndpoints
+    val agentContext = AgentContext("remote-addr")
+    every { proxy.agentContextManager.getAgentContext(agentContext.agentId) } returns agentContext
+    return proxy to agentContext
+  }
+
+  // Runs [block] with [identity] on the gRPC Context, as AgentAuthServerInterceptor attaches it.
+  private fun <T> withIdentity(
+    identity: AgentIdentity,
+    block: () -> T,
+  ): T {
+    val context = Context.current().withValue(AgentAuthManager.AGENT_IDENTITY_KEY, identity)
+    val previous = context.attach()
+    return try {
+      block()
+    } finally {
+      context.detach(previous)
+    }
+  }
+
   init {
     "connectAgent should succeed when transportFilterDisabled matches" {
       val proxy = createMockProxy(transportFilterDisabled = false)
@@ -158,23 +214,8 @@ class ProxyServiceImplTest : StringSpec() {
       verify { proxy.metrics(any<ProxyMetrics.() -> Unit>()) }
     }
 
-    // connectAgent is an agent's first call, and with agent auth configured the interceptor has let it through, so it
-    // is where the connection's context becomes a connected agent: logged, counted, and shown on the dashboard.
-    "connectAgent should announce the connection's agent context" {
-      val proxy = createMockProxy(transportFilterDisabled = false)
-      val manager = proxy.agentContextManager
-      val service = ProxyServiceImpl(proxy)
-
-      val context = Context.current().withValue(ProxyServerInterceptor.CONNECTION_AGENT_ID_KEY, "conn-agent")
-      val previous = context.attach()
-      try {
-        service.connectAgent(EMPTY_INSTANCE)
-      } finally {
-        context.detach(previous)
-      }
-
-      verify { manager.announceAgentContext("conn-agent") }
-    }
+    // Announcing the connection's context moved to ProxyServerInterceptor, which sees every authenticated call, not
+    // just this one (October #26); ProxyServerInterceptorTest and ProxyGrpcServiceTest cover it.
 
     "connectAgent should throw StatusException with FAILED_PRECONDITION when transportFilterDisabled mismatch" {
       val proxy = createMockProxy(transportFilterDisabled = true)
@@ -251,6 +292,102 @@ class ProxyServiceImplTest : StringSpec() {
       verify { mockAgentContext.markActivityTime(false) }
     }
 
+    // October #23: the name, host name, launch ID, and endpoint list an agent reports were stored whole, bounded only
+    // by gRPC's 4 MiB message limit, and repeated for every path the agent serves: in logs, service discovery, the
+    // dashboard, and /debug. They are now cut to proxy.internal limits; the agent stays registered.
+    "registerAgent should cut over-long agent-reported fields to the proxy.internal limits" {
+      val (proxy, agentContext) = proxyWithRealAgentContext(maxAgentFieldLength = 256, maxAgentProxyEndpoints = 4)
+      val request =
+        registerAgentRequest {
+          agentId = agentContext.agentId
+          agentName = "n".repeat(10_000)
+          hostName = "h".repeat(10_000)
+          launchId = "l".repeat(10_000)
+          proxyEndpoints += List(100) { "proxy-$it:" + "9".repeat(1_000) }
+          currentEndpointIndex = 1
+        }
+
+      val response = ProxyServiceImpl(proxy).registerAgent(request)
+
+      response.valid.shouldBeTrue()
+      agentContext.agentName shouldBe "n".repeat(256)
+      agentContext.hostName shouldBe "h".repeat(256)
+      agentContext.launchId shouldBe "l".repeat(256)
+      agentContext.proxyEndpoints.size shouldBe 4
+      agentContext.proxyEndpoints.forEach { it.length shouldBe 256 }
+      agentContext.proxyEndpoints.first() shouldStartWith "proxy-0:"
+      agentContext.currentEndpointIndex shouldBe 1
+    }
+
+    "registerAgent should warn about the fields it cut without logging their values" {
+      val (proxy, agentContext) = proxyWithRealAgentContext(maxAgentFieldLength = 16, maxAgentProxyEndpoints = 2)
+      val longName = "agent-name-" + "x".repeat(5_000)
+      val warnings =
+        captureLogs<ProxyServiceImpl> {
+          runBlocking {
+            ProxyServiceImpl(proxy).registerAgent(
+              registerAgentRequest {
+                agentId = agentContext.agentId
+                agentName = longName
+                hostName = "short"
+                proxyEndpoints += ["a:1", "b:2", "c:3"]
+              },
+            )
+          }
+        }.filter { it.level == Level.WARN }.map { it.formattedMessage }
+
+      val warning = warnings.single()
+      warning shouldStartWith "Agent ${agentContext.agentId} registered with "
+      warning shouldContain "agentName"
+      warning shouldContain "5011"
+      warning shouldContain "proxyEndpoints"
+      warning shouldNotContain "hostName"
+      warning shouldNotContain "x".repeat(16)
+    }
+
+    // A cut never ends on the first half of a surrogate pair, which would leave an unpaired surrogate to encode.
+    "registerAgent should not split a surrogate pair when it cuts a field" {
+      val (proxy, agentContext) = proxyWithRealAgentContext(maxAgentFieldLength = 4)
+      ProxyServiceImpl(proxy).registerAgent(
+        registerAgentRequest {
+          agentId = agentContext.agentId
+          agentName = "abc😀def"
+        },
+      )
+
+      agentContext.agentName shouldBe "abc"
+    }
+
+    "registerAgent should keep agent-reported fields whole within the limits, or when the limits are off" {
+      val within = "w".repeat(256)
+      for (limit in [256, 0]) {
+        val (proxy, agentContext) = proxyWithRealAgentContext(
+          maxAgentFieldLength = limit,
+          maxAgentProxyEndpoints = limit,
+        )
+        val warnings =
+          captureLogs<ProxyServiceImpl> {
+            runBlocking {
+              ProxyServiceImpl(proxy).registerAgent(
+                registerAgentRequest {
+                  agentId = agentContext.agentId
+                  agentName = within
+                  hostName = within
+                  launchId = within
+                  proxyEndpoints += List(16) { within }
+                },
+              )
+            }
+          }.filter { it.level == Level.WARN }
+
+        agentContext.agentName shouldBe within
+        agentContext.hostName shouldBe within
+        agentContext.launchId shouldBe within
+        agentContext.proxyEndpoints shouldBe List(16) { within }
+        warnings.shouldBeEmpty()
+      }
+    }
+
     "registerAgent should fail with missing agent context" {
       val proxy = createMockProxy()
       val testAgentId = "missing-agent-123"
@@ -278,8 +415,9 @@ class ProxyServiceImplTest : StringSpec() {
 
       every { mockAgentContext.agentId } returns testAgentId
       every { proxy.agentContextManager.getAgentContext(testAgentId) } returns mockAgentContext
-      every { proxy.pathManager.addPath(testPath, testLabels, mockAgentContext) } returns null
-      every { proxy.pathManager.pathMapSize } returns 5
+      val pathManager = proxy.pathManager
+      every { pathManager.addPath(testPath, testLabels, mockAgentContext) } returns null
+      every { pathManager.pathMapSize } returns 5
 
       val request = registerPathRequest {
         agentId = testAgentId
@@ -294,7 +432,7 @@ class ProxyServiceImplTest : StringSpec() {
       response.pathId shouldNotBe -1
       response.pathCount shouldBe 5
 
-      verify { proxy.pathManager.addPath(testPath, testLabels, mockAgentContext) }
+      verify { pathManager.addPath(testPath, testLabels, mockAgentContext) }
       verify { mockAgentContext.markActivityTime(false) }
     }
 
@@ -309,9 +447,10 @@ class ProxyServiceImplTest : StringSpec() {
 
       every { mockAgentContext.agentId } returns testAgentId
       every { proxy.agentContextManager.getAgentContext(testAgentId) } returns mockAgentContext
-      every { proxy.pathManager.addPath(testPath, any(), mockAgentContext) } returns
+      val pathManager = proxy.pathManager
+      every { pathManager.addPath(testPath, any(), mockAgentContext) } returns
         PathRejection(rejectionReason, cause = PathRejectionCause.CONSOLIDATION_MISMATCH)
-      every { proxy.pathManager.pathMapSize } returns 0
+      every { pathManager.pathMapSize } returns 0
 
       val request = registerPathRequest {
         agentId = testAgentId
@@ -386,7 +525,7 @@ class ProxyServiceImplTest : StringSpec() {
       every { proxy.agentContextManager.getAgentContext(testAgentId) } returns mockAgentContext
       every { pathManager.pathMapSize } returns 0
 
-      val identity = AgentIdentity("team_a", ByteArray(0), [AgentAuthManager.globToRegex("team_a_*")])
+      val identity = AgentIdentity("team_a", ByteArray(0), ["team_a_*"])
       val request = registerPathRequest {
         agentId = testAgentId
         path = deniedPath
@@ -420,12 +559,13 @@ class ProxyServiceImplTest : StringSpec() {
 
       every { mockAgentContext.agentId } returns testAgentId
       every { proxy.agentContextManager.getAgentContext(testAgentId) } returns mockAgentContext
+      val pathManager = proxy.pathManager
       every {
-        proxy.pathManager.addPath(allowedPath, any(), mockAgentContext, match { it.identityName == "team_a" })
+        pathManager.addPath(allowedPath, any(), mockAgentContext, match { it.identityName == "team_a" })
       } returns null
-      every { proxy.pathManager.pathMapSize } returns 1
+      every { pathManager.pathMapSize } returns 1
 
-      val identity = AgentIdentity("team_a", ByteArray(0), [AgentAuthManager.globToRegex("team_a_*")])
+      val identity = AgentIdentity("team_a", ByteArray(0), ["team_a_*"])
       val request = registerPathRequest {
         agentId = testAgentId
         path = allowedPath
@@ -443,7 +583,92 @@ class ProxyServiceImplTest : StringSpec() {
 
       response.valid.shouldBeTrue()
       // The caller's identity reaches addPath, which lets only the same identity take over a live agent's path.
-      verify { proxy.pathManager.addPath(allowedPath, any(), mockAgentContext, match { it.identityName == "team_a" }) }
+      verify { pathManager.addPath(allowedPath, any(), mockAgentContext, match { it.identityName == "team_a" }) }
+    }
+
+    // October #22: the identity's globs saw the path before its length was checked, and a glob with several stars,
+    // matched as a backtracking regex, took seconds on a 512-character path it didn't match. A path over
+    // maxPathLength is now refused before any glob sees it.
+    "registerPath should refuse an over-long path before the identity's globs see it".config(timeout = 10.seconds) {
+      val (proxy, agentContext) = proxyWithRealPathManager(maxPathLength = 512)
+      val identity = AgentIdentity("team_a", ByteArray(0), ["*_*_*_*_metrics"])
+      val request =
+        registerPathRequest {
+          agentId = agentContext.agentId
+          path = "_".repeat(4096)
+        }
+
+      val response =
+        awaitOnDaemonThread { withIdentity(identity) { runBlocking { ProxyServiceImpl(proxy).registerPath(request) } } }
+
+      response.valid.shouldBeFalse()
+      response.rejectionCause shouldBe PathRejectionCause.INVALID_PATH
+      response.reason shouldContain "maxPathLength"
+    }
+
+    // The cheap form checks run before authorization too, so a path no identity could register is refused for what
+    // it is rather than as unauthorized.
+    "registerPath should refuse a multi-segment path as INVALID_PATH before authorizing it" {
+      val (proxy, agentContext) = proxyWithRealPathManager()
+      val identity = AgentIdentity("team_a", ByteArray(0), ["team_a_*"])
+      val response =
+        withIdentity(identity) {
+          runBlocking {
+            ProxyServiceImpl(proxy).registerPath(
+              registerPathRequest {
+                agentId = agentContext.agentId
+                path = "team_b/metrics"
+              },
+            )
+          }
+        }
+
+      response.rejectionCause shouldBe PathRejectionCause.INVALID_PATH
+      response.reason shouldContain "Multi-segment"
+    }
+
+    // A blank path reached addPath, whose require() threw, and the agent got an UNKNOWN status instead of a rejection.
+    "registerPath should refuse a blank path as INVALID_PATH" {
+      val (proxy, agentContext) = proxyWithRealPathManager()
+      val response =
+        ProxyServiceImpl(proxy).registerPath(
+          registerPathRequest {
+            agentId = agentContext.agentId
+            path = "  "
+          },
+        )
+
+      response.valid.shouldBeFalse()
+      response.rejectionCause shouldBe PathRejectionCause.INVALID_PATH
+    }
+
+    // With maxPathLength off, a denied path can still be long: the WARN and the reason show only its start, as the
+    // path manager's own rejections do. Both used to carry the path whole, on every call.
+    "registerPath should show a denied path truncated in its log line and reason" {
+      val (proxy, agentContext) = proxyWithRealPathManager(maxPathLength = 0)
+      val identity = AgentIdentity("team_a", ByteArray(0), ["team_a_*"])
+      val deniedPath = "team_b_" + "x".repeat(10_000)
+      lateinit var response: RegisterPathResponse
+      val warnings =
+        captureLogs<ProxyServiceImpl> {
+          response =
+            withIdentity(identity) {
+              runBlocking {
+                ProxyServiceImpl(proxy).registerPath(
+                  registerPathRequest {
+                    agentId = agentContext.agentId
+                    path = deniedPath
+                  },
+                )
+              }
+            }
+        }.map { it.formattedMessage }.filter { "denied registration" in it }
+
+      response.rejectionCause shouldBe PathRejectionCause.NOT_AUTHORIZED
+      response.reason shouldContain "/team_b_xxx"
+      response.reason shouldNotContain deniedPath
+      response.reason.length shouldBeLessThan 200
+      warnings.single().length shouldBeLessThan 200
     }
 
     // ==================== agentId / connection binding ====================
@@ -468,7 +693,7 @@ class ProxyServiceImplTest : StringSpec() {
 
       // The attacker is authorized for team_a_* and asks for a team_a_* path, so the identity check
       // passes — only the agentId binding stands between it and the victim's context.
-      val identity = AgentIdentity("team_a", ByteArray(0), [AgentAuthManager.globToRegex("team_a_*")])
+      val identity = AgentIdentity("team_a", ByteArray(0), ["team_a_*"])
       val request = registerPathRequest {
         agentId = victimAgentId
         path = "team_a_metrics"
@@ -503,8 +728,9 @@ class ProxyServiceImplTest : StringSpec() {
 
       every { mockAgentContext.agentId } returns testAgentId
       every { proxy.agentContextManager.getAgentContext(testAgentId) } returns mockAgentContext
-      every { proxy.pathManager.addPath(allowedPath, any(), mockAgentContext) } returns null
-      every { proxy.pathManager.pathMapSize } returns 1
+      val pathManager = proxy.pathManager
+      every { pathManager.addPath(allowedPath, any(), mockAgentContext) } returns null
+      every { pathManager.pathMapSize } returns 1
 
       val request = registerPathRequest {
         agentId = testAgentId
@@ -522,7 +748,7 @@ class ProxyServiceImplTest : StringSpec() {
         }
 
       response.valid.shouldBeTrue()
-      verify { proxy.pathManager.addPath(allowedPath, any(), mockAgentContext) }
+      verify { pathManager.addPath(allowedPath, any(), mockAgentContext) }
     }
 
     "unregisterPath should reject a request whose agentId is not the connection's" {
@@ -665,6 +891,70 @@ class ProxyServiceImplTest : StringSpec() {
       val response = service.pathMapSize(request)
 
       response.pathCount shouldBe 42
+    }
+
+    // request.agentId is caller-supplied, up to gRPC's 4 MiB message limit, until it's matched to a context, and
+    // each RPC's "missing AgentContext" ERROR line and reason wrote it whole (October #4, found while fixing #23).
+    "an agentId the proxy doesn't know should be cut to 64 characters in the log and the reason" {
+      val longAgentId = "a".repeat(10_000)
+      val proxy = createMockProxy()
+      every { proxy.agentContextManager.getAgentContext(any()) } returns null
+      val service = ProxyServiceImpl(proxy)
+      val calls: List<Pair<String, suspend () -> String>> =
+        listOf(
+          "registerAgent" to { service.registerAgent(registerAgentRequest { agentId = longAgentId }).reason },
+          "registerPath" to {
+            service.registerPath(
+              registerPathRequest {
+              agentId = longAgentId
+              path = "metrics"
+            },
+            ).reason
+          },
+          "unregisterPath" to {
+            service.unregisterPath(
+              unregisterPathRequest {
+              agentId = longAgentId
+              path = "metrics"
+            },
+            ).reason
+          },
+          "sendHeartBeat" to { service.sendHeartBeat(heartBeatRequest { agentId = longAgentId }).reason },
+        )
+
+      calls.forEach { (rpc, call) ->
+        var reason = ""
+        val events = captureLogs<ProxyServiceImpl> { reason = call() }
+        withClue(rpc) {
+          reason shouldContain "a".repeat(64) + "..."
+          reason.length shouldBeLessThan 200
+          events.map { it.formattedMessage }.forEach { it.length shouldBeLessThan 200 }
+          events.size shouldBe 1
+        }
+      }
+    }
+
+    // The connection-mismatch WARN and reason wrote the caller's agentId whole too.
+    "a mismatched agentId should be cut to 64 characters in the log and the reason" {
+      val longAgentId = "b".repeat(10_000)
+      val service = ProxyServiceImpl(createMockProxy())
+      val context = Context.current().withValue(ProxyServerInterceptor.CONNECTION_AGENT_ID_KEY, "connection-agent")
+      val previous = context.attach()
+      var reason = ""
+      val events =
+        try {
+          captureLogs<ProxyServiceImpl> {
+            reason =
+            service.sendHeartBeat(heartBeatRequest { agentId = longAgentId }).reason
+          }
+        } finally {
+          context.detach(previous)
+        }
+
+      reason shouldContain "b".repeat(64) + "..."
+      reason.length shouldBeLessThan 200
+      events.single().level shouldBe Level.WARN
+      events.single().formattedMessage.length shouldBeLessThan 200
     }
 
     "sendHeartBeat should succeed with valid agent context" {
@@ -1775,7 +2065,7 @@ class ProxyServiceImplTest : StringSpec() {
 
     "writeResponsesToProxy should ignore a result for a scrape sent to another agent" {
       val victim = victimScrape()
-      val scrapeRequestManager = ScrapeRequestManager().apply { addToScrapeRequestMap(victim) }
+      val scrapeRequestManager = ScrapeRequestManager().apply { tryAddToScrapeRequestMap(victim, Int.MAX_VALUE) }
       val proxy = createMockProxy(scrapeRequestManager = scrapeRequestManager)
 
       val forged = scrapeResponse {
@@ -1796,7 +2086,7 @@ class ProxyServiceImplTest : StringSpec() {
     "writeResponsesToProxy should accept a result for a scrape sent to the connection's agent" {
       val owner = AgentContext("own-host")
       val scrape = victimScrape(owner)
-      val scrapeRequestManager = ScrapeRequestManager().apply { addToScrapeRequestMap(scrape) }
+      val scrapeRequestManager = ScrapeRequestManager().apply { tryAddToScrapeRequestMap(scrape, Int.MAX_VALUE) }
       val proxy = createMockProxy(scrapeRequestManager = scrapeRequestManager)
 
       val response = scrapeResponse {
@@ -1816,7 +2106,7 @@ class ProxyServiceImplTest : StringSpec() {
 
     "writeResponsesToProxy should not fail a scrape sent to another agent when processing its result throws" {
       val victim = victimScrape()
-      val scrapeRequestManager = spyk(ScrapeRequestManager()).apply { addToScrapeRequestMap(victim) }
+      val scrapeRequestManager = spyk(ScrapeRequestManager()).apply { tryAddToScrapeRequestMap(victim, Int.MAX_VALUE) }
       every { scrapeRequestManager.assignScrapeResults(any(), any()) } answers { error("Simulated processing failure") }
       val proxy = createMockProxy(scrapeRequestManager = scrapeRequestManager)
 
@@ -1838,7 +2128,7 @@ class ProxyServiceImplTest : StringSpec() {
 
     "writeChunkedResponsesToProxy should not open a transfer for a scrape sent to another agent" {
       val victim = victimScrape()
-      val scrapeRequestManager = ScrapeRequestManager().apply { addToScrapeRequestMap(victim) }
+      val scrapeRequestManager = ScrapeRequestManager().apply { tryAddToScrapeRequestMap(victim, Int.MAX_VALUE) }
       val contextManager = AgentContextManager(isTestMode = true)
       val proxy = createMockProxy(scrapeRequestManager = scrapeRequestManager, agentContextManager = contextManager)
 
@@ -1894,7 +2184,7 @@ class ProxyServiceImplTest : StringSpec() {
     "writeChunkedResponsesToProxy should keep the transfer under way when a second header arrives" {
       val owner = AgentContext("own-host")
       val scrape = victimScrape(owner)
-      val scrapeRequestManager = ScrapeRequestManager().apply { addToScrapeRequestMap(scrape) }
+      val scrapeRequestManager = ScrapeRequestManager().apply { tryAddToScrapeRequestMap(scrape, Int.MAX_VALUE) }
       val contextManager = AgentContextManager(isTestMode = true)
       val proxy = createMockProxy(scrapeRequestManager = scrapeRequestManager, agentContextManager = contextManager)
 
@@ -2026,7 +2316,7 @@ class ProxyServiceImplTest : StringSpec() {
       val victim = victimScrape()
       val scrapeRequestManager = spyk(ScrapeRequestManager())
       every { scrapeRequestManager.assignScrapeResults(match { it.srScrapeId == victim.scrapeId }, any()) } answers {
-        scrapeRequestManager.addToScrapeRequestMap(victim)
+        scrapeRequestManager.tryAddToScrapeRequestMap(victim, Int.MAX_VALUE)
         callOriginal()
       }
       val proxy = createMockProxy(scrapeRequestManager = scrapeRequestManager)
@@ -2067,7 +2357,7 @@ class ProxyServiceImplTest : StringSpec() {
       val victim = victimScrape()
       val scrapeRequestManager = spyk(ScrapeRequestManager())
       every { scrapeRequestManager.getScrapeRequest(victim.scrapeId) } answers {
-        scrapeRequestManager.addToScrapeRequestMap(victim)
+        scrapeRequestManager.tryAddToScrapeRequestMap(victim, Int.MAX_VALUE)
         callOriginal()
       }
       val contextManager = AgentContextManager(isTestMode = true)
@@ -2090,7 +2380,7 @@ class ProxyServiceImplTest : StringSpec() {
       val victim = victimScrape()
       val scrapeRequestManager = spyk(ScrapeRequestManager())
       every { scrapeRequestManager.getScrapeRequest(victim.scrapeId) } answers {
-        callOriginal().also { scrapeRequestManager.addToScrapeRequestMap(victim) }
+        callOriginal().also { scrapeRequestManager.tryAddToScrapeRequestMap(victim, Int.MAX_VALUE) }
       }
       val contextManager = AgentContextManager(isTestMode = true)
       val proxy = createMockProxy(scrapeRequestManager = scrapeRequestManager, agentContextManager = contextManager)
@@ -2114,7 +2404,7 @@ class ProxyServiceImplTest : StringSpec() {
     "writeChunkedResponsesToProxy should sweep a transfer left unfinished when the stream is cancelled" {
       val owner = AgentContext("owner-host")
       val scrape = ScrapeRequestWrapper(owner, "metrics", "", "", null, false)
-      val scrapeRequestManager = ScrapeRequestManager().apply { addToScrapeRequestMap(scrape) }
+      val scrapeRequestManager = ScrapeRequestManager().apply { tryAddToScrapeRequestMap(scrape, Int.MAX_VALUE) }
       val contextManager = AgentContextManager(isTestMode = true)
       val proxy = createMockProxy(scrapeRequestManager = scrapeRequestManager, agentContextManager = contextManager)
 
@@ -2362,7 +2652,7 @@ class ProxyServiceImplTest : StringSpec() {
     // owner's agentId, and a missing context let the result through; the mocked manager here has no such context.
     "writeResponsesToProxy should ignore a result from a different identity when the transport filter is disabled" {
       val victim = victimScrape(AgentContext("victim-host", authIdentityName = "team-a"))
-      val scrapeRequestManager = ScrapeRequestManager().apply { addToScrapeRequestMap(victim) }
+      val scrapeRequestManager = ScrapeRequestManager().apply { tryAddToScrapeRequestMap(victim, Int.MAX_VALUE) }
       val proxy = createMockProxy(transportFilterDisabled = true, scrapeRequestManager = scrapeRequestManager)
 
       val forged = scrapeResponse {
@@ -2381,7 +2671,7 @@ class ProxyServiceImplTest : StringSpec() {
 
     "writeResponsesToProxy should accept a result from the owner's identity when the transport filter is disabled" {
       val scrape = victimScrape(AgentContext("own-host", authIdentityName = "team-a"))
-      val scrapeRequestManager = ScrapeRequestManager().apply { addToScrapeRequestMap(scrape) }
+      val scrapeRequestManager = ScrapeRequestManager().apply { tryAddToScrapeRequestMap(scrape, Int.MAX_VALUE) }
       val proxy = createMockProxy(transportFilterDisabled = true, scrapeRequestManager = scrapeRequestManager)
 
       val response = scrapeResponse {
@@ -2400,7 +2690,7 @@ class ProxyServiceImplTest : StringSpec() {
 
     "writeChunkedResponsesToProxy should not open a transfer for another identity with the transport filter disabled" {
       val victim = victimScrape(AgentContext("victim-host", authIdentityName = "team-a"))
-      val scrapeRequestManager = ScrapeRequestManager().apply { addToScrapeRequestMap(victim) }
+      val scrapeRequestManager = ScrapeRequestManager().apply { tryAddToScrapeRequestMap(victim, Int.MAX_VALUE) }
       val contextManager = AgentContextManager(isTestMode = true)
       val proxy =
         createMockProxy(

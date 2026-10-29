@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — October 2026 Findings
 
-**Status:** 47 issues — 20 fixed, 27 open (16 medium, 31 low, no high).
+**Status:** 47 issues — 47 fixed, 0 open (16 medium, 31 low, no high).
 
 **Date:** 2026-10-27
 
@@ -73,13 +73,13 @@ Six earlier fixes turn out to be incomplete:
 
 | #  | Finding                                                                                 | Area     | Severity | Status |
 |----|-----------------------------------------------------------------------------------------|----------|----------|--------|
-| 1  | Service-discovery targets are URLs, which Prometheus refuses; SD as documented is empty | Proxy    | medium   | ⬜      |
-| 2  | Health thresholds (25) far below the caps; `/healthcheck` readiness flaps under load    | Proxy    | medium   | ⬜      |
+| 1  | Service-discovery targets are URLs, which Prometheus refuses; SD as documented is empty | Proxy    | medium   | ✅      |
+| 2  | Health thresholds (25) far below the caps; `/healthcheck` readiness flaps under load    | Proxy    | medium   | ✅      |
 | 3  | Chunked-transfer sweep skipped on cancel; reclaim trusts the agent's `headerAgentId`    | Proxy    | low      | ✅      |
-| 4  | Unauthenticated connections still log INFO on removal and count as evictions           | Proxy    | low      | ⬜      |
+| 4  | Unauthenticated connections still log INFO on removal and count as evictions           | Proxy    | low      | ✅      |
 | 5  | Each `Proxy` leaks a JVM shutdown hook that keeps it reachable                          | Proxy    | low      | ✅      |
-| 6  | A path equal to the SD path, blitz path, or `favicon.ico` registers but can't be scraped | Proxy   | low      | ⬜      |
-| 7  | Dead or test-only proxy code, including an unreachable `no_agents` branch               | Proxy    | low      | ⬜      |
+| 6  | A path equal to the SD path, blitz path, or `favicon.ico` registers but can't be scraped | Proxy   | low      | ✅      |
+| 7  | Dead or test-only proxy code, including an unreachable `no_agents` branch               | Proxy    | low      | ✅      |
 | 8  | `maxContentLengthMBytes` doesn't bound memory; Ktor buffers the whole body first        | Agent    | medium   | ✅      |
 | 9  | A second agent in one JVM with metrics on never connects (duplicate registration)       | Agent    | medium   | ✅      |
 | 10 | Discovered paths vanish on any reconnect while the discovery file is unreadable         | Agent    | medium   | ✅      |
@@ -89,37 +89,37 @@ Six earlier fixes turn out to be incomplete:
 | 14 | `X-Prometheus-Scrape-Timeout-Seconds` isn't forwarded to the target                     | Agent    | low      | ✅      |
 | 15 | Basic credentials from the target URL are sent only after a 401                         | Agent    | low      | ✅      |
 | 16 | An embedded agent's `logLevel` changes the host JVM's root logger                       | Agent    | low      | ✅      |
-| 17 | A routine proxy outage logs an ERROR stack trace on every reconnect                     | Agent    | low      | ⬜      |
+| 17 | A routine proxy outage logs an ERROR stack trace on every reconnect                     | Agent    | low      | ✅      |
 | 18 | A bad `agent.http.trustStorePath` isn't caught at startup and fails every scrape        | Agent    | low      | ✅      |
-| 19 | `MetricFilter` misjudges quoted UTF-8 metric names                                      | Agent    | low      | ⬜      |
-| 20 | Agent dead code, stale KDoc, and a `shutDown()` that isn't failure-isolated             | Agent    | low      | ⬜      |
+| 19 | `MetricFilter` misjudges quoted UTF-8 metric names                                      | Agent    | low      | ✅      |
+| 20 | Agent dead code, stale KDoc, and a `shutDown()` that isn't failure-isolated             | Agent    | low      | ✅      |
 | 21 | Scrape-result ownership checked on one lookup, applied on another (September #1 gap)    | Security | medium   | ✅      |
-| 22 | Path authorization runs a backtracking regex before the length cap applies             | Security | medium   | ⬜      |
-| 23 | Agent-reported names have no size limit and are repeated per path everywhere            | Security | medium   | ⬜      |
-| 24 | SD labels aren't type- or name-checked; one agent can invalidate the whole SD document  | Security | medium   | ⬜      |
+| 22 | Path authorization runs a backtracking regex before the length cap applies             | Security | medium   | ✅      |
+| 23 | Agent-reported names have no size limit and are repeated per path everywhere            | Security | medium   | ✅      |
+| 24 | SD labels aren't type- or name-checked; one agent can invalidate the whole SD document  | Security | medium   | ✅      |
 | 25 | The Netty CVE override isn't in the published POM; embedders get vulnerable Netty       | Security | medium   | ✅      |
-| 26 | A connection that skips `connectAgent` works as an agent without being announced        | Security | low      | ⬜      |
-| 27 | Helm proxy chart takes `proxy.auth` tokens only via a ConfigMap; example schema wrong   | Security | low      | ⬜      |
-| 28 | Security docs don't say the scrape port is unauthenticated, or what it forwards         | Security | low      | ⬜      |
+| 26 | A connection that skips `connectAgent` works as an agent without being announced        | Security | low      | ✅      |
+| 27 | Helm proxy chart takes `proxy.auth` tokens only via a ConfigMap; example schema wrong   | Security | low      | ✅      |
+| 28 | Security docs don't say the scrape port is unauthenticated, or what it forwards         | Security | low      | ✅      |
 | 29 | `release-check` accepts any all-green check set without requiring the CI jobs           | CI/build | medium   | ✅      |
 | 30 | Version-bump check passes partial bumps and skips two of step 2's files                 | CI/build | medium   | ✅      |
-| 31 | The docs site is never built on a pull request                                          | CI/build | medium   | ⬜      |
+| 31 | The docs site is never built on a pull request                                          | CI/build | medium   | ✅      |
 | 32 | This branch would pass `release-check` with no release date in either changelog         | CI/build | low      | ✅      |
 | 33 | The `--continue` comments are wrong: a failed test means no coverage report             | CI/build | low      | ✅      |
-| 34 | The site and Helm charts point at a version before it's published                       | CI/build | low      | ⬜      |
-| 35 | The testing plugin re-adds `kotlin-test` and a second copy of the test dependencies     | CI/build | low      | ⬜      |
-| 36 | Hand lock upgrades skip the 7-day cooldown Dependabot follows                           | CI/build | low      | ⬜      |
-| 37 | The TLA+ tools jar isn't versioned; local runs can use different tools than CI          | CI/build | low      | ⬜      |
-| 38 | CI hygiene: `build` job has no timeout; tool images pinned by tag only                  | CI/build | low      | ⬜      |
-| 39 | The image's UID is implicit, but the charts hard-code it                                | CI/build | low      | ⬜      |
-| 40 | The fat JARs keep only one dependency's `NOTICE`                                        | CI/build | low      | ⬜      |
+| 34 | The site and Helm charts point at a version before it's published                       | CI/build | low      | ✅      |
+| 35 | The testing plugin re-adds `kotlin-test` and a second copy of the test dependencies     | CI/build | low      | ✅      |
+| 36 | Hand lock upgrades skip the 7-day cooldown Dependabot follows                           | CI/build | low      | ✅      |
+| 37 | The TLA+ tools jar isn't versioned; local runs can use different tools than CI          | CI/build | low      | ✅      |
+| 38 | CI hygiene: `build` job has no timeout; tool images pinned by tag only                  | CI/build | low      | ✅      |
+| 39 | The image's UID is implicit, but the charts hard-code it                                | CI/build | low      | ✅      |
+| 40 | The fat JARs keep only one dependency's `NOTICE`                                        | CI/build | low      | ✅      |
 | 41 | Every embedded-agent example passes `exitOnMissingConfig = true` and exits the host     | Docs     | medium   | ✅      |
-| 42 | Website tuning table names a nonexistent key; Troubleshooting a nonexistent metric      | Docs     | medium   | ⬜      |
+| 42 | Website tuning table names a nonexistent key; Troubleshooting a nonexistent metric      | Docs     | medium   | ✅      |
 | 43 | 4.4.0 changelogs miss the common-utils and gradle-plugins bumps                         | Docs     | low      | ✅      |
-| 44 | `docs/TESTING.md` omits three specs and misstates `all-tests`                           | Docs     | low      | ⬜      |
-| 45 | Tests whose assertions can't fail, or that test the JDK                                 | Tests    | low      | ⬜      |
-| 46 | Failed-startup tests free ephemeral ports and then bind them again                      | Tests    | low      | ⬜      |
-| 47 | The #314 JVM metric groups are never checked on a real `/metrics`                       | Tests    | low      | ⬜      |
+| 44 | `docs/TESTING.md` omits three specs and misstates `all-tests`                           | Docs     | low      | ✅      |
+| 45 | Tests whose assertions can't fail, or that test the JDK                                 | Tests    | low      | ✅      |
+| 46 | Failed-startup tests free ephemeral ports and then bind them again                      | Tests    | low      | ✅      |
+| 47 | The #314 JVM metric groups are never checked on a real `/metrics`                       | Tests    | low      | ✅      |
 
 ---
 
@@ -144,20 +144,20 @@ The **Touches** column shows which steps edit the same files and so need to land
 | 3    | ✅      | #29, #30        | `release-check` requires the named CI checks and complete bumps             | `Makefile`, `docs/RELEASE.md`, release skill                                                      | Protects every later release. Makefile-only, so it can run in parallel with any code step.                                                                                       |
 | 4    | ✅      | #8, #14, #15    | Stream the agent's fetch with a real size bound; forward the timeout; preemptive Basic | `agent/AgentHttpService.kt`                                                            | One bad target can take the agent's heap, and every path with it. The other two change the same request setup.                                                                   |
 | 5    | ✅      | #21, #3         | Check and complete scrape results on one wrapper; sweep transfers on cancel | `ProxyServiceImpl.kt`, `ScrapeRequestManager.kt`, `AgentContextManager.kt`, `ChunkedContext.kt`, `specs/tla/ProxyRegistry.tla` | Both concern the ownership and lifetime of in-flight results. The change touches `ScrapeRequestManager`, so update the TLA+ action and add a Lincheck spec in the same PR.        |
-| 6    | ⬜      | #22, #23, #26   | Bound and authorize agent input before using it                             | `ProxyServiceImpl.kt` (`registerAgent`/`registerPath`), `AgentAuthManager.kt`, `ProxyOptions.kt`, `config.conf` | The three tenant-against-tenant availability issues. The new `proxy.internal` limits need config, validation, and docs. Do it after step 5, which edits the same file.            |
-| 7    | ⬜      | #1, #24, #6     | Service discovery that Prometheus accepts                                   | `Proxy.kt` (`buildServiceDiscoveryJson`), `ProxyOptions.kt`, `ProxyPathManager.addPath`, SD docs, a new container spec | SD as documented yields no targets today. One container spec using `http_sd_configs` guards all three. Do it after step 6, since both edit `addPath`'s validation.               |
-| 8    | ⬜      | #2              | Readiness that doesn't flap under load                                      | `config/config.conf`, `ProxyOptions.kt`, `Proxy.kt` health checks, `charts/prometheus-proxy`, k8s docs | A default and a chart change, so it needs a "Before you upgrade" note.                                                                                                       |
+| 6    | ✅      | #22, #23, #26   | Bound and authorize agent input before using it                             | `ProxyServiceImpl.kt` (`registerAgent`/`registerPath`), `AgentAuthManager.kt`, `ProxyOptions.kt`, `config.conf` | The three tenant-against-tenant availability issues. The new `proxy.internal` limits need config, validation, and docs. Do it after step 5, which edits the same file.            |
+| 7    | ✅      | #1, #24, #6     | Service discovery that Prometheus accepts                                   | `Proxy.kt` (`buildServiceDiscoveryJson`), `ProxyOptions.kt`, `ProxyPathManager.addPath`, SD docs, a new container spec | SD as documented yields no targets today. One container spec using `http_sd_configs` guards all three. Do it after step 6, since both edit `addPath`'s validation.               |
+| 8    | ✅      | #2              | Readiness that doesn't flap under load                                      | `config/config.conf`, `ProxyOptions.kt`, `Proxy.kt` health checks, `charts/prometheus-proxy`, k8s docs | A default and a chart change, so it needs a "Before you upgrade" note.                                                                                                       |
 | 9    | ✅      | #9, #16, #5, #41 | Safe to embed: register metrics once, leave the root logger and shutdown hooks alone, fix the examples | `AgentMetrics.kt`, `ProxyMetrics.kt`, `Agent.kt`, `BaseOptions.kt`, `Utils.kt`, `ProxyGrpcService.kt`, README, website, KDoc | All four are about running inside another JVM, so one embedded-host spec (restart, two agents, log level) covers them. Do it after step 4 and before step 10, which shares `AgentMetrics.kt`. |
 | 10   | ✅      | #11, #13        | Agent metrics that count every scrape                                       | `AgentHttpService.kt`, `AgentMetrics.kt`, metrics docs, Grafana JSON                              | Do it after steps 4 and 9, which share these files. The dashboards and docs change with the counter.                                                                             |
 | 11   | ✅      | #10, #12, #18   | Agent config and discovery robustness                                       | `PathDiscoveryService.kt`, `AgentPathManager.kt`, `PathDiscoverySource.kt`, `AgentOptions.kt`, trust-manager init | Startup validation, plus a last-known-good list that outlives the connection. Independent of the proxy steps.                                                                    |
-| 12   | ⬜      | #4, #17         | Quiet logs for unauthenticated connections and routine outages              | `AgentContextManager.kt`, `AgentContextCleanupService.kt`, `AgentGrpcService.kt`, `Utils.kt`      | Changes only log levels and one counter, each covered by a `ListAppender` test. Do it after step 5, which shares `AgentContextManager.kt`.                                        |
-| 13   | ⬜      | #19             | `MetricFilter` handles quoted UTF-8 names                                   | `agent/filter/MetricFilter.kt`                                                                    | Self-contained, so it can go any time.                                                                                                                                           |
-| 14   | ⬜      | #31, #36, #34   | Docs site: build on PRs, cool down hand upgrades, deploy after publishing   | `docs.yml`, `ci.yml`, `Makefile`                                                                  | Keeps a broken site build off `master`, and keeps the site from advertising a version that isn't published yet. Workflow-only, so it can run in parallel with code steps.        |
-| 15   | ⬜      | #27, #39, #40   | Helm and image packaging                                                    | `charts/*`, `etc/docker/*.Dockerfile`, `build.gradle.kts` shadow config                           | A Secret-backed auth config, an explicit UID, and NOTICE merging. Needs a `helm-smoke` run and the container tests.                                                              |
-| 16   | ⬜      | #42, #44, #28   | Documentation drift                                                         | website pages, `llms.txt`, `docs/TESTING.md`, `SECURITY.md`                                       | No behavior change. Each item can ride along with any earlier PR that touches the same page.                                                                                     |
-| 17   | ⬜      | #45, #46, #47   | Tests that can fail, and that don't race for ports                          | the cited specs, `TestPorts.kt`                                                                   | Removes false confidence. #45's `TESTING.md` line goes with step 16 if that lands first.                                                                                         |
-| 18   | ⬜      | #35, #37, #38   | Build tidy-ups                                                              | `build.gradle.kts`, `Makefile`, workflows                                                         | Hygiene. After #35, compare the `testRuntimeClasspath` against today's.                                                                                                          |
-| 19   | ⬜      | #7, #20         | Remove dead code                                                            | proxy and agent sources and their tests                                                           | Last, so the deletions don't collide with the behavior fixes, and the tests move onto the entry points those fixes settle.                                                       |
+| 12   | ✅      | #4, #17         | Quiet logs for unauthenticated connections and routine outages              | `AgentContextManager.kt`, `AgentContextCleanupService.kt`, `AgentGrpcService.kt`, `Utils.kt`      | Changes only log levels and one counter, each covered by a `ListAppender` test. Do it after step 5, which shares `AgentContextManager.kt`.                                        |
+| 13   | ✅      | #19             | `MetricFilter` handles quoted UTF-8 names                                   | `agent/filter/MetricFilter.kt`                                                                    | Self-contained, so it can go any time.                                                                                                                                           |
+| 14   | ✅      | #31, #36, #34   | Docs site: build on PRs, cool down hand upgrades, deploy after publishing   | `docs.yml`, `ci.yml`, `Makefile`                                                                  | Keeps a broken site build off `master`, and keeps the site from advertising a version that isn't published yet. Workflow-only, so it can run in parallel with code steps.        |
+| 15   | ✅      | #27, #39, #40   | Helm and image packaging                                                    | `charts/*`, `etc/docker/*.Dockerfile`, `build.gradle.kts` shadow config                           | A Secret-backed auth config, an explicit UID, and NOTICE merging. Needs a `helm-smoke` run and the container tests.                                                              |
+| 16   | ✅      | #42, #44, #28   | Documentation drift                                                         | website pages, `llms.txt`, `docs/TESTING.md`, `SECURITY.md`                                       | No behavior change. Each item can ride along with any earlier PR that touches the same page.                                                                                     |
+| 17   | ✅      | #45, #46, #47   | Tests that can fail, and that don't race for ports                          | the cited specs, `TestPorts.kt`                                                                   | Removes false confidence. #45's `TESTING.md` line goes with step 16 if that lands first.                                                                                         |
+| 18   | ✅      | #35, #37, #38   | Build tidy-ups                                                              | `build.gradle.kts`, `Makefile`, workflows                                                         | Hygiene. After #35, compare the `testRuntimeClasspath` against today's.                                                                                                          |
+| 19   | ✅      | #7, #20         | Remove dead code                                                            | proxy and agent sources and their tests                                                           | Last, so the deletions don't collide with the behavior fixes, and the tests move onto the entry points those fixes settle.                                                       |
 
 **Parallel tracks:** these sets of steps touch disjoint files, so they can be worked on at the same time.
 
@@ -181,7 +181,7 @@ SD target format and its default), and 8 (the health thresholds) each need a "Be
 
 ## 📡 Proxy
 
-### 1. [ ] Service-discovery targets are URLs, which Prometheus refuses, so SD as documented yields no targets
+### 1. [x] Service-discovery targets are URLs, which Prometheus refuses, so SD as documented yields no targets
 
 **Severity:** medium · **Confidence:** plausible. The repo side is confirmed; Prometheus's `CheckTargetAddress` was
 read in its source, not exercised.
@@ -219,7 +219,15 @@ The tests don't catch it:
 - `buildServiceDiscoveryJson` with `http://proxy.example.com:8080/` emits the target `proxy.example.com:8080`.
 - A container spec scrapes through `http_sd_configs` and asserts `up == 1`.
 
-### 2. [ ] Default health thresholds (25) sit far below the caps, so `/healthcheck` readiness flaps under load
+**Resolution:** confirmed. The new `containers/ContainersServiceDiscoveryTest` has Prometheus find the agent's path only
+through `http_sd_configs`, with `sdTargetPrefix` given as the documented URL. Against the old code it found no target
+in 60 seconds; with the fix, `up == 1` and the metric is scraped. A new `proxy/SdTarget` parses `sdTargetPrefix` at
+startup: `host:port` as given, or an `http` or `https` URL split into the target (`host:port`), a `__scheme__` label,
+and a `__metrics_path__` prefix. Anything else fails startup when service discovery is on; with it off, the value is
+parsed only if it can be. The default is `localhost:8080`, and the docs, snippets, README, and CLI tables give
+`host:port`. RELEASE_NOTES' "Before you upgrade" says to drop any `__address__` workaround rule.
+
+### 2. [x] Default health thresholds (25) sit far below the caps, so `/healthcheck` readiness flaps under load
 
 **Severity:** medium · **Confidence:** confirmed. The threshold logic and the probe wiring are traced; whether it
 trips depends on load.
@@ -259,6 +267,20 @@ target.
 
 - With the default config, 100 wrappers in the scrape map keep `scrape_response_map_check` healthy.
 - An options test rejects a threshold above its cap.
+
+**Resolution:** all three, except the backlog threshold.
+
+- The proxy chart's readiness probe, and the proxy manifest in `KubernetesExamples.txt`, use `/ping`. The Kubernetes
+  and Running in Production pages describe the proxy's `/healthcheck` as a load signal to alert on. The agent keeps
+  `/healthcheck`.
+- `scrapeRequestMapUnhealthySize` and `chunkContextMapUnhealthySize` default to `0`. `ProxyOptions` resolves that to
+  80% of `maxInFlightScrapeRequests` for the health checks and the dashboard. A configured value is kept, and one
+  below 0 or above the cap fails startup.
+- `scrapeRequestBacklogUnhealthySize` is unchanged, since each agent's queue is capped at twice it; with readiness
+  on `/ping`, one slow agent no longer makes the proxy unready.
+
+The 100-scrape `InProcessHealthCheckTest` case answered 500 against the old default, and the options tests failed
+on the old values.
 
 ### 3. [x] Chunked-transfer orphan sweep is skipped on cancellation, and reclaim matches the agent-supplied `headerAgentId`
 
@@ -303,7 +325,7 @@ the agent from the tracked scrape, replaces the header's `headerAgentId`, and `r
 on it. A header followed by a `CancellationException` now leaves `chunkedContextMapView` empty, and a context with a
 mismatched `headerAgentId` is reclaimed by `removeAgentContext(owner)`. Both tests failed against the old code.
 
-### 4. [ ] Late-September #15 is incomplete: unauthenticated connections still log at INFO when removed, and count as evictions
+### 4. [x] Late-September #15 is incomplete: unauthenticated connections still log at INFO when removed, and count as evictions
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -326,6 +348,24 @@ a second INFO line and counts as an agent eviction.
 - removing an unannounced context emits no INFO line;
 - evicting one leaves `agentEvictionCount` unchanged.
 
+**Found while fixing #23, for the same step:** some log lines still write agent-supplied values whole. An
+unvalidated `request.agentId`, up to about 4 MiB, is logged in `connectionMismatchReason` at WARN and in the "missing
+AgentContext" lines at ERROR, across `registerAgent`, `registerPath`, `unregisterPath`, and `sendHeartBeat`.
+`removePath` logs `unregisterPath`'s path whole at ERROR. `AgentContext.loggedPathRejections` keeps one entry per
+distinct rejected path per connection, unbounded in count though each entry is now at most about 67 characters.
+
+**Resolution:**
+
+- `removeFromContextManager` and the cleanup service's eviction log at INFO only for an announced context, and at
+  DEBUG otherwise. Only an announced context increments `agentEvictionCount`.
+- `ProxyServiceImpl.shownAgentId` cuts an unvalidated `agentId` to 64 characters, as `shownPath` does, in the
+  mismatch WARN, the four "missing AgentContext" ERROR lines, their reasons, and `readRequestsFromProxy`'s
+  `NOT_FOUND`. `removePath` shows its path the same way.
+- `AgentContext.recordRejection` keeps at most `MAX_REMEMBERED_REJECTIONS` (1,000) paths, and a new path past that
+  is logged at DEBUG.
+
+Each `ListAppender` test failed against the old code.
+
 ### 5. [x] Each `Proxy` adds a JVM shutdown hook for its gRPC server that is never removed
 
 **Severity:** low · **Confidence:** confirmed. common-utils' `shutdownWithJvm` calls `Runtime.addShutdownHook`.
@@ -347,7 +387,7 @@ The hook is also redundant. `GenericService`'s own hook already runs `Proxy.shut
 `GenericService` adds in `startUp()` and removes in `shutDown()`, already stops the server. A `ProxyTest` case checks
 that a `WeakReference` to a started and stopped proxy clears after GC. It didn't before the fix.
 
-### 6. [ ] A path equal to the SD path, the blitz path, or `favicon.ico` registers but can never be scraped
+### 6. [x] A path equal to the SD path, the blitz path, or `favicon.ico` registers but can never be scraped
 
 **Severity:** low · **Confidence:** plausible. Ktor's route precedence (a constant segment beats `/*`) comes from its
 routing semantics, not from a test.
@@ -373,7 +413,11 @@ routing semantics, not from a test.
 
 **Test:** with SD enabled, `addPath("discovery")` is rejected with `INVALID_PATH`.
 
-### 7. [ ] Dead or test-only proxy code, including an unreachable `no_agents` branch
+**Resolution:** `ProxyPathManager.formRejection` refuses `favicon.ico`, the `sdPath` when service discovery is on, and
+the blitz path when blitz is on, with `INVALID_PATH`. The finding's test (`addPath("discovery")` with SD on), plus the
+other two, failed before the fix. The service discovery page says so.
+
+### 7. [x] Dead or test-only proxy code, including an unreachable `no_agents` branch
 
 **Severity:** low · **Confidence:** confirmed. Grep finds only the declarations in main source.
 
@@ -401,6 +445,23 @@ routing semantics, not from a test.
   `addAgentContext`, `allPathContextInfos`).
 - For `no_agents`, either drop it from the outcome docs (the case is reported as `invalid_agent_context`), or check
   for an empty list first so the label means what the docs say.
+
+**Resolution:**
+
+- Removed: the `tracing` lazy, `addToScrapeRequestMap`, `putAgentContext`, `allPaths`, `AgentContext.desc`, and
+  `DashboardLayout.of`.
+  - Their tests use `tryAddToScrapeRequestMap` with no limit, `addAgentContext(…, announce = false)` (which stores a
+    context without announcing it, as `putAgentContext` did), and `allPathContextInfos().keys`.
+  - A new `ScrapeRequestManagerTest` case checks that a replaced `scrapeId` gives back its in-flight slot.
+  - The two tests of replacing a context under another's `agentId`, which production's unique IDs never do, and
+    the `desc` and `DashboardLayout.of` tests are gone.
+- `pathCountFor` stays. `ProxyPathManagerLincheckTest`'s `PathCountsAgree` checks the count itself, which nothing else
+  exposes. `pathLimitRejection`, `warnNearPathLimit`, and the displacement check now call it rather than repeating its
+  lookup, so it has production callers.
+- `no_agents` is dropped, the first option. The second would be unreachable too: `dropAgentFromPath` removes a path
+  with its last agent, so the path map never holds an empty agent list, and `executeScrapeRequests` returns one
+  response per agent. The branch is gone, and the docs no longer list the outcome. Troubleshooting's "last agent left
+  as the scrape arrived" case is listed under 404 as `invalid_agent_context`, which is what that scrape gets.
 
 ---
 
@@ -703,7 +764,7 @@ when `embedded`, so a standalone agent and the proxy still set the root logger. 
 it. `AgentOptionsTest` checks that embedded options with `--log_level warn` leave the root logger at INFO and set
 `io.prometheus` to WARN; before the fix, the root logger became WARN.
 
-### 17. [ ] A routine proxy outage logs an ERROR stack trace on every reconnect
+### 17. [x] A routine proxy outage logs an ERROR stack trace on every reconnect
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -727,6 +788,16 @@ Elsewhere, the project logs a repeating failure once at WARN and then at DEBUG.
 - log an `UNAVAILABLE` stream end at WARN.
 
 **Test:** N consecutive connect failures produce one WARN.
+
+**Resolution:**
+
+- `connectAgent` keeps the last failure logged for each endpoint until a connect to it succeeds. A first or changed
+  failure logs at WARN, with the stack trace, and a repeat at DEBUG, as does the `Connecting to proxy` line. A dead
+  primary in a failover list therefore logs once, though connects to the secondary succeed in between.
+- `logStreamFailure` logs an `UNAVAILABLE` status at WARN without a stack trace, and anything else at ERROR as
+  before.
+
+Five failed connects now log one WARN and no ERROR; they logged five ERRORs before.
 
 ### 18. [x] A bad `agent.http.trustStorePath` or password isn't caught at startup and fails every scrape
 
@@ -755,7 +826,7 @@ missing trust store and expects that error; before the fix, construction succeed
 says the trust store is loaded at startup, and RELEASE_NOTES has a "Before you upgrade" note covering this and #12's
 duplicate check.
 
-### 19. [ ] `MetricFilter` misjudges quoted UTF-8 metric names
+### 19. [x] `MetricFilter` misjudges quoted UTF-8 metric names
 
 **Severity:** low · **Confidence:** plausible. It needs a target that emits Prometheus 3 quoted names;
 `textOnlyAccept` passes Prometheus's `escaping=allow-utf-8` offer through.
@@ -777,7 +848,14 @@ whitespace.
 
 **Test:** filter a payload with quoted names using an allow list, then a deny list.
 
-### 20. [ ] Agent dead code, stale KDoc, and a `shutDown()` that isn't failure-isolated
+**Resolution:** `parseCommentFamily` unquotes a quoted family name, and a sample line that starts with `{"` is judged
+by the quoted name inside the braces. Both are unescaped (`\\`, `\"`, `\n`) before matching, and a quoted
+histogram's `_bucket`, `_sum`, and `_count` samples still belong to its family. The optional part is done too: a
+line's blanks before its first token are skipped, as the text format allows, so an indented comment or sample is
+judged by its name. Five `MetricFilterTest` cases cover an allow list, a deny list, a quoted histogram, an escaped
+quote, and leading blanks; each failed before the fix. The agent configuration page describes quoted names.
+
+### 20. [x] Agent dead code, stale KDoc, and a `shutDown()` that isn't failure-isolated
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -796,6 +874,22 @@ whitespace.
 - Remove the dead code, or move it to test scope.
 - Correct the KDoc.
 - Run each `shutDown()` step under `runCatching`, and rethrow the first failure.
+
+**Resolution:**
+
+- Removed: `shutDownChannel()` and its test, the 3-argument `resolveBooleanOption`, and the 4-argument
+  `resolveBoolean`.
+  - `resolveBooleanOption` was `protected` on the public `BaseOptions`, so only a subclass outside the project could
+    have called it; `AgentOptions` and `ProxyOptions` are final.
+  - The legacy `resolveBoolean`'s tests call the 5-argument form, with `cliExplicitlySet` equal to `cliValue`, as the
+    legacy one assumed.
+- The class KDoc gives the fixed reconnect pace (`agent.internal.reconnectPauseSecs`). `startSyncAgent`'s says it
+  returns once the agent is running, and that the agent's non-daemon thread keeps the JVM up.
+- `shutDown()` runs its four steps under `runCatching` and rethrows the first failure with the rest suppressed, as
+  common-utils' `AbstractGenericService.shutDown()` does. `releaseAfterFailedStartUp` shares the helper.
+- The new `AgentTest` case mocks `AgentGrpcService`'s constructor so `shutDown()` throws. Before the change the admin
+  and metrics servers kept running and the client cache stayed open; now all three are released and the agent is
+  `FAILED` with the gRPC failure.
 
 ---
 
@@ -860,7 +954,7 @@ add the victim's scrape just before and just after the single lookup, and failed
 `ScrapeResultOwnershipLincheckTest` that replayed the old logic found `Scrape 1257, sent to 2515, was completed by
 2516`; it passes against the new API.
 
-### 22. [ ] Path authorization runs a backtracking regex on the full path before the length cap applies
+### 22. [x] Path authorization runs a backtracking regex on the full path before the length cap applies
 
 **Severity:** medium · **Confidence:** confirmed. The same regex construction was timed on JDK 25.
 
@@ -899,7 +993,17 @@ whole at WARN on every call.
 - An identity with `*_*_*_*_metrics` and a 4,096-character path gets a prompt `INVALID_PATH`, under a Kotest timeout.
 - The matcher passes adversarial input under a timeout, alongside the existing glob tests.
 
-### 23. [ ] Agent-reported registration fields have no size limit and are copied per path into logs, SD, the dashboard, and `/debug`
+**Resolution:** the length, blank, `/`, multi-segment, and labels-size checks move from `addPath` into a lock-free
+`ProxyPathManager.formRejection`. `registerPath` runs it before `isAuthorized`, and `addPath` still does too. A
+blank path now gets `INVALID_PATH` rather than failing the call with `UNKNOWN`. `AgentAuthManager.globMatches`, a
+two-pointer matcher that backs up to the last `*`, replaces the regex; its cost is at most path length times glob
+length. A seeded check of 20,000 random globs against the old regex agrees, except that `*` and `?` now also match
+line terminators, as documented. Denied paths are logged and echoed cut to 64 characters (`shownPath`). The
+finding's test (`*_*_*_*_metrics` and a 4,096-character path) timed out under 10 seconds before the fix. A
+`DaemonAwait` test helper makes that timeout able to stop a `Regex.matches` that ignores interruption. The
+adversarial matcher test now runs in about 4 ms.
+
+### 23. [x] Agent-reported registration fields have no size limit and are copied per path into logs, SD, the dashboard, and `/debug`
 
 **Severity:** medium · **Confidence:** confirmed. The proxy side is traced.
 
@@ -933,7 +1037,16 @@ size times path count. Against the Helm chart's 512 Mi memory limit, that can ex
 - A `proxy/ProxyServiceImplTest.kt` case where `registerAgent` with an oversized name is rejected or truncated.
 - Option-validation tests for the new limits.
 
-### 24. [ ] SD labels aren't checked for type or name, so one agent's labels can invalidate the whole discovery document
+**Resolution:** two new limits, `proxy.internal.maxAgentFieldLength` (256: name, host name, launch ID, and each
+endpoint) and `maxAgentProxyEndpoints` (16), each 0 for unlimited and validated in `ProxyOptions`. Oversized fields
+are truncated, never inside a surrogate pair, with one WARN naming the fields and their sizes but not their values.
+Truncating rather than rejecting keeps an agent with a long host name connected, since the fields are display-only
+on the proxy. Per-path INFO lines (added, overwritten, orphaned, removed) name the agentId. `maxInboundMessageSize`
+stays at 4 MiB: agents accept `chunkContentSizeKbs` up to 4,032 KB, so a smaller proxy limit could break a valid
+agent, and once fields are cut before storage, a large message is a one-off allocation, not repeated per path.
+RELEASE_NOTES' "Before you upgrade" covers the series change a cut name causes.
+
+### 24. [x] SD labels aren't checked for type or name, so one agent's labels can invalidate the whole discovery document
 
 **Severity:** medium when SD is on (it is off by default) · **Confidence:** plausible. The proxy side is confirmed;
 Prometheus failing the whole response comes from reading its `http_sd` decoding source, not from running it.
@@ -964,6 +1077,16 @@ Prometheus restart, it has no targets at all. The proxy logs nothing.
 
 - `addPath` rejects `{"a":1}`, `{"a":{"b":"c"}}`, and `{"":"x"}`.
 - Every label value in `buildServiceDiscoveryJson`'s output is a string primitive.
+
+**Resolution:** labels Prometheus couldn't decode are left out of service discovery rather than refused at
+registration. That covers a non-string value and a name outside `[a-zA-Z_][a-zA-Z0-9_]*`, the set every Prometheus
+version accepts. This departs from the suggestion: labels matter only to service discovery, so refusing the path
+(or failing the agent's startup) would take a scrape offline for a user who doesn't use SD. The guarantee is the
+same: no agent's labels can invalidate the response. `common/Utils.labelsProblem` names the first problem; the proxy
+logs it at WARN when the path registers, and the agent at startup for a `pathConfigs` entry.
+`buildServiceDiscoveryJson` checks each entry with `isValidLabelName` and `isString`. A `ProxyTest` case registers
+`{"count":1,"nested":{…},"list":[…],"":…,"a-b":…,"team":"web"}` and gets only `team` in the response. A mutant
+without the check fails it, as mutants without either warning fail theirs.
 
 ### 25. [x] The Netty CVE override doesn't reach the published Maven artifact, so embedders get vulnerable Netty
 
@@ -1000,7 +1123,7 @@ declared as `runtimeOnly` dependencies through a new `netty` bundle in `gradle/l
 turns up, so a grpc update that adds one can't reopen this; with `netty-codec-socks` dropped from the bundle,
 `agentJar` failed with that message. Both changelogs have a Security entry.
 
-### 26. [ ] A connection that never calls `connectAgent` works as a full agent without being announced
+### 26. [x] A connection that never calls `connectAgent` works as a full agent without being announced
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -1031,7 +1154,16 @@ doc with whichever you choose.
 
 **Test:** `registerPath` on a pending context is rejected (or announces it), and `agentContextSize` reflects that.
 
-### 27. [ ] The Helm proxy chart can take `proxy.auth` tokens only through a ConfigMap, and its example shows the wrong schema
+**Resolution:** of the two options, announce on the first authenticated call. `ProxyServerInterceptor` announces the
+connection's pending context on every call it sees. With auth configured, a call reaches it only after the
+server-wide `AgentAuthServerInterceptor` accepted it, and announcing is idempotent and skips an invalidated context.
+`connectAgent` no longer announces itself. One place covers every RPC, including future ones, rejects no client,
+and makes `docs/security-agent-authentication.md`'s "pending until the first authenticated call" true. The stock
+agent always calls `connectAgent` first. A `ProxyGrpcServiceTest` client that skips `connectAgent`, learns its
+agentId from the `agent-id` header, and registers a path found `agentContextSize` 0 before the fix. An auth-gated
+variant failed the same way, and a mutation that runs auth after the interceptor fails it.
+
+### 27. [x] The Helm proxy chart can take `proxy.auth` tokens only through a ConfigMap, and its example shows the wrong schema
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -1056,7 +1188,17 @@ URLs.
 **Test:** a chart CI values file renders a Secret-backed config, and the `helm template` output has no token in any
 ConfigMap.
 
-### 28. [ ] The security docs don't say the scrape port is unauthenticated, or what it forwards
+**Resolution:** both, in both charts.
+
+- `existingSecret` names a Secret with a `proxy.conf` or `agent.conf` key. It is mounted where the ConfigMap would
+  be, and the chart then renders no ConfigMap of its own.
+- The proxy chart's `values.yaml` and README show the corrected `auth = [ { name, token, paths } ]` form, with each
+  token substituted from an environment variable set from a Secret (`token = ${TEAM_A_TOKEN}`). The Security page
+  documents the substitution, and a `ProxyOptionsTest` case pins it.
+- Each chart's `ci/secret-config-values.yaml` is rendered by `make helm-lint`. The check fails if the render has a
+  ConfigMap, or doesn't mount the Secret; before the template change it failed on the mount.
+
+### 28. [x] The security docs don't say the scrape port is unauthenticated, or what it forwards
 
 **Severity:** low (documentation) · **Confidence:** confirmed
 
@@ -1084,6 +1226,18 @@ mention it.
 - care with exporters that take a target parameter.
 
 Optionally, add a per-path query-parameter allowlist on the agent.
+
+**Resolution:** `SECURITY.md` lists the scrape port as by design: unauthenticated on `0.0.0.0:8080`, forwarding a
+client's query string and `Authorization` header, with service discovery listing every path, agent name, and host.
+It also notes that an exporter taking a target parameter reaches whatever it can. The security page gains a Scrape
+Port Access section with these recommendations:
+- bind `proxy.http.host` to a private address, which is config-only or `-Dproxy.http.host=…`;
+- publish the Docker port on a private address;
+- note that the chart's Service is ClusterIP, and use a `NetworkPolicy`;
+- firewall the port;
+- take care with target-parameter exporters.
+
+The production checklist has a bullet for it. The optional query-parameter allowlist isn't implemented.
 
 ---
 
@@ -1153,7 +1307,7 @@ skill. On a scratch copy, the unbumped files gave exactly the 49 lines the relea
 mention, a full bump passed, and a missed `appVersion` and README tag were both reported. The gradle comment points
 at step 2.
 
-### 31. [ ] The docs site is never built on a pull request
+### 31. [x] The docs site is never built on a pull request
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -1176,6 +1330,15 @@ commit blocks `release-check` until a fix lands.
 - Run `uv run --locked zensical build --clean`.
 - Give it a per-ref concurrency group; the `pages` group would queue it behind deploys.
 - Add a matching make target to `CI_JOBS`.
+
+**Resolution:** a `docs-site` job in `ci.yml` runs a new `make build-site` (`uv run --locked zensical build
+--clean`), which `docs.yml`'s build also runs, so the two can't drift. `ci.yml` was chosen over a `pull_request`
+trigger on `docs.yml` for three reasons: it already has a per-ref concurrency group, it keeps `docs.yml` deploy-only,
+and it follows the one-make-target-per-job pattern `CI_JOBS` mirrors. The job's name matches no required check and
+no other workflow's job. `docs.yml` still doesn't run on pull requests, so its `build` job can't satisfy the required
+`build` check. `RELEASE_REQUIRED_JOBS` includes `ci.yml/docs-site`, since `make release` now deploys the site.
+Making it a required check on `master` is a branch-protection setting, left to the maintainer. With a snippet source
+moved, `make build-site` fails with `SnippetMissingError`.
 
 ### 32. [x] This branch would pass `release-check` with no release date in either changelog
 
@@ -1223,7 +1386,7 @@ test task's `ignoreFailures`, and fail the build afterwards.
 not when a test fails, because the kover tasks depend on the test task. The optional `ignoreFailures` property wasn't
 added.
 
-### 34. [ ] The site and the Helm charts point at a version before it's published
+### 34. [x] The site and the Helm charts point at a version before it's published
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -1244,7 +1407,17 @@ The window grows when a release stalls, as it has on Docker Hub push failures.
 - On a push, deploy only when the version in `gradle.properties` is already on Maven Central, or always build the site
   from the latest release tag.
 
-### 35. [ ] The `com.pambrose.testing` plugin re-adds `kotlin-test` and a second copy of the test dependencies
+**Resolution:** on a push, `docs.yml`'s build checks that the `gradle.properties` version's POM is on Maven Central and
+both its images are on Docker Hub. It deploys only if all three answer 200. A 404 skips the deploy with a notice,
+and any other answer skips it with a warning to run `make gh-docs`. The site and KDocs are still built either way.
+A `workflow_dispatch` always deploys, and `make release` starts one (`make gh-docs`) after `docker-verify`, so
+Maven Central's propagation delay can't block the release's deploy. Between releases the version is published, so
+docs changes deploy as they merge. This is preferred over building from the latest release tag, which would hold
+every docs change until the next release. **Not addressed:** the Helm chart half. A fresh clone of `master`
+defaults to an image not yet published, which comes from bumping `appVersion` before publishing; it is left for
+step 15.
+
+### 35. [x] The `com.pambrose.testing` plugin re-adds `kotlin-test` and a second copy of the test dependencies
 
 **Severity:** low · **Confidence:** confirmed in the plugin source, 1.1.5 through 1.1.8.
 
@@ -1260,7 +1433,12 @@ versions.
 **Fix:** set `pambroseTesting { addKotest.set(false); addLogbackClassic.set(false); addKotlinTest.set(false) }`, so the
 catalog is the only source of these versions.
 
-### 36. [ ] Hand lock upgrades skip the 7-day cooldown Dependabot follows
+**Resolution:** as proposed, in `build.gradle.kts`. Compared with `./gradlew dependencies` before and after, the
+`testRuntimeClasspath` loses only `kotlin-test`, `kotlin-test-junit5`, and the `junit-jupiter-engine` it brought, and
+the `testCompileClasspath` only the first two. Kotest stays at 6.2.6 and Logback at 1.6.6, the catalog's versions. No
+spec imports `kotlin.test` or uses JUnit Jupiter, and the suite runs the same tests.
+
+### 36. [x] Hand lock upgrades skip the 7-day cooldown Dependabot follows
 
 **Severity:** low · **Confidence:** confirmed for the facts; plausible for the fix.
 
@@ -1276,7 +1454,15 @@ None of them was built before merge (see #31).
 **Fix:** apply the same cooldown with uv's `exclude-newer` (recent uv accepts a relative span), and check that
 `uv run --locked` still accepts the lock. Otherwise, leave website updates to Dependabot.
 
-### 37. [ ] The TLA+ tools jar isn't versioned, so a local run can use different tools than CI
+**Resolution:** `make upgrade-site` runs `uv lock --upgrade --exclude-newer "$(SITE_COOLDOWN)"` (7 days), then a
+plain `uv lock`. uv records the cutoff in `uv.lock`, and CI's `uv run --locked` without it rejects that lock. The
+second lock drops the cutoff and keeps the versions chosen. `make check-site` dry-runs the same upgrade. On scratch
+copies, the two steps leave a lock that passes `uv lock --check` and `uv run --locked`, and the first step alone
+leaves one that `--locked` rejects. The next upgrade will roll back what 91f651a locked within the 7 days: zensical
+0.0.72, python-dateutil 3.0.0, certifi, and tzdata. The cutoff isn't in `pyproject.toml`: that would force a re-lock
+and hold back Dependabot's security updates, which are exempt from its cooldown.
+
+### 37. [x] The TLA+ tools jar isn't versioned, so a local run can use different tools than CI
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -1288,7 +1474,12 @@ the old TLC, while CI downloads the new one.
 
 **Fix:** name the jar `tla2tools-$(TLA_VERSION).jar` and adjust `.gitignore`, or verify the SHA on every run.
 
-### 38. [ ] CI hygiene: the `build` job has no timeout, and the tool images are pinned by tag only
+**Resolution:** the second. The new `_tla-tools` target, which `tla-checks` runs first, checks the jar against
+`TLA_SHA256` on every run and downloads it again when it is missing or doesn't match. The jar keeps its name, so the
+README's by-hand commands still work. `make tla-checks TLA_SHA256=<other>` ran the old jar and passed before the
+change, and now fetches the release and refuses it; a corrupted jar is replaced, and a good one is used as it is.
+
+### 38. [x] CI hygiene: the `build` job has no timeout, and the tool images are pinned by tag only
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -1311,7 +1502,18 @@ the old TLC, while CI downloads the new one.
 - Pin the tool images by digest, with the tag in a comment.
 - Pin `CRD_SCHEMAS` to a commit.
 
-### 39. [ ] The image's UID is implicit, but the charts hard-code it
+**Resolution:**
+
+- `timeout-minutes` on CI's `build` (30; it takes about 5), `docs.yml`'s build (20) and deploy (10), and
+  `claude.yml` (60).
+- The Prometheus, Helm, and kubeconform images are pinned as `image:tag@sha256:…`, as `ZIZMOR_IMAGE` already was, so
+  the tag stays in the reference rather than a comment. Each digest is the multi-platform index, and matched the
+  images already pulled.
+- `CRD_SCHEMAS` takes a fixed commit of datreeio's catalog from the new `CRD_SCHEMAS_COMMIT`.
+- The new `misc/CiHygieneTest` fails on a workflow job without `timeout-minutes`, a `Makefile` `*_IMAGE` without a
+  digest, or a CRD schema URL without a commit. Against the old files it failed all three, the first on four jobs.
+
+### 39. [x] The image's UID is implicit, but the charts hard-code it
 
 **Severity:** low · **Confidence:** plausible
 
@@ -1326,7 +1528,15 @@ the old TLC, while CI downloads the new one.
 
 **Fix:** use `adduser --uid 1001 …` and `USER 1001`, with a comment linking the charts to that UID.
 
-### 40. [ ] The fat JARs keep only one dependency's `NOTICE`
+**Resolution:**
+
+- Both Dockerfiles create the group and user with GID and UID 1001, chown `/app` to `1001:1001`, and run as
+  `USER 1001:1001`.
+- Comments in the Dockerfiles and the charts' `podSecurityContext` point at each other.
+- The new `ContainersPackagingTest` checks each image's configured user, and `id` and the owner of `/app` inside
+  it. It failed with `prometheus` before the change.
+
+### 40. [x] The fat JARs keep only one dependency's `NOTICE`
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -1338,6 +1548,17 @@ requires them.
 
 **Fix:** add Shadow's `ApacheNoticeResourceTransformer` and `ApacheLicenseResourceTransformer`, or append the files.
 Keep `.claude/rules/shadow-jar.md`'s service-file rules intact.
+
+**Resolution:** `ApacheNoticeResourceTransformer`, but `MergeLicenseResourceTransformer` in place of
+`ApacheLicenseResourceTransformer`. In Shadow 9.6.1 the latter drops every LICENSE file instead of merging them.
+
+- Every NOTICE is merged into `META-INF/NOTICE`.
+- Every license text follows the project's own in `META-INF/LICENSE`. First-wins had also dropped all but one
+  `META-INF/LICENSE.txt`, slf4j's MIT license among them.
+- The exact paths the two transformers take are let through as `INCLUDE`; the shadow-jar rule says why they must
+  stay exact.
+- `ContainersPackagingTest` checks each JAR's merged files against six dependencies' NOTICEs and four license
+  texts, and failed before the change.
 
 ---
 
@@ -1390,7 +1611,7 @@ the KDoc's standalone example is `AgentOptions(args, exitOnMissingConfig = true)
 config or option error and uses the built-in config when none is given; `true` requires a config and exits the
 process.
 
-### 42. [ ] The website's tuning table names a config key that doesn't exist, and Troubleshooting a metric that doesn't
+### 42. [x] The website's tuning table names a config key that doesn't exist, and Troubleshooting a metric that doesn't
 
 **Severity:** medium · **Confidence:** confirmed
 
@@ -1414,6 +1635,21 @@ process.
 **Fix:** correct the key, the default, the metric name, and the engine. Optionally, extend `DashboardMetricNamesTest`
 (or add a sibling test) to check the backticked `proxy_*`/`agent_*` names and the `proxy.`/`agent.` keys on the website
 pages against the exposed series and `config/config.conf`.
+
+**Resolution:** the four names are corrected: `agent.http.maxConcurrentClients`, the `10` MB default,
+`proxy_agent_map_size`, and the engines in `llms.txt`. The scrape port and dashboard use Ktor CIO, and the admin and
+metrics endpoints use Jetty, via common-utils. The optional check is done too, as three tests:
+- **`DashboardMetricNamesTest`** gains a check that every `proxy_*`/`agent_*` name in the website's inline code is an
+  exposed series or histogram family. It failed on `proxy_connected_agents`.
+- **The new `WebsiteConfigKeysTest`** checks that every `proxy.`/`agent.` key in inline code exists in
+  `config/config.conf`, and that every Default-column value matches it. It failed on `agent.maxConcurrentClients`,
+  `proxy.hostname` (`configuration/index.md`, now `agent.proxy.hostname`), and the `—` default.
+- **Shared helper:** `misc/WebsitePages` strips fenced code and returns inline spans.
+
+Each check has a small allowlist, and every entry gives its reason. Two more wrong keys the checks found are fixed:
+`configuration/index.md`, and `getting-started.md`'s `proxy.hostname`. The `llms.txt` engine claim is prose, so no
+check covers it. Left for later: `config/config.conf`'s comment on `agent.http.clientTimeoutSecs` says it replaces
+`internal.cioTimeoutSecs`, which is still declared.
 
 ### 43. [x] The 4.4.0 changelogs miss the common-utils and gradle-plugins bumps, and describe the state before them
 
@@ -1452,7 +1688,7 @@ and the grpc and Prometheus lines credit 5.1.2. Its Gradle module metadata confi
 protobuf comment are current, the website's bridge advice says to match the `prometheus-metrics-core` the agent
 brings, and RELEASE_NOTES has the Documentation item and the `make versions` commit-hash fix.
 
-### 44. [ ] `docs/TESTING.md` says it names every spec but omits three, and misstates `all-tests`
+### 44. [x] `docs/TESTING.md` says it names every spec but omits three, and misstates `all-tests`
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -1472,11 +1708,20 @@ brings, and RELEASE_NOTES has the Documentation item and the `make versions` com
 **Fix:** add the missing entries and correct the target description. Optionally, add a spec in the style of
 `TestPortsTest` that fails when a `*Test.kt` isn't named in `TESTING.md`.
 
+**Resolution:** `docs/TESTING.md` describes `all-tests` as `tests` plus `lincheck-tests` plus `container-tests`, and
+lists every spec and support file it missed, including ones added since the review. "Four support helpers" became
+"These support helpers", so no count can go stale. The optional spec, `misc/TestingGuideTest`, has two tests:
+- Every `*Test.kt` must appear in bold in its own package's section. That is section-aware, since `agent/` and
+  `proxy/` both have an `AgentContextTest`.
+- Every other test source must be named.
+
+It failed on six unlisted specs and eight helpers and snippet sources.
+
 ---
 
 ## 🧪 Tests
 
-### 45. [ ] Tests whose assertions can't fail, or that test the JDK instead of the product
+### 45. [x] Tests whose assertions can't fail, or that test the JDK instead of the product
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -1499,7 +1744,18 @@ brings, and RELEASE_NOTES has the Documentation item and the `make versions` com
   the keepalive claim from `TESTING.md`.
 - Delete the JDK-only tests.
 
-### 46. [ ] Failed-startup tests free ephemeral ports and then bind them again
+**Resolution:** all three.
+
+- `idleTimeout` is `internal`, and the tests assert 45s and 90s.
+- The eight options moved, unchanged, into `ProxyGrpcService.applyConnectionOptions`, a `ServerBuilder<*>` extension.
+  A MockK test checks that each configured value reaches its own setter, and another that nothing is set when every
+  option is left unset. The build-only tests now say "without throwing", and `TESTING.md`'s keepalive line is true.
+- The four JDK-only `SslSettingsTest` cases are deleted.
+
+Each strengthened test failed when the behavior it guards was broken: `idleTimeout` pinned to 45s, and the
+`maxConnectionAgeGrace` call removed.
+
+### 46. [x] Failed-startup tests free ephemeral ports and then bind them again
 
 **Severity:** low · **Confidence:** plausible (not observed)
 
@@ -1514,7 +1770,10 @@ The ports deliberately held open as "taken" are fine.
 **Fix:** give these specs `TestPorts` entries below 32768 for every port a service binds. Keep `ServerSocket(0)` only
 for the port that is meant to stay occupied.
 
-### 47. [ ] The three JVM metric groups added in #314 are never checked on a real `/metrics`
+**Resolution:** seven `TestPorts` entries, 9700–9706, cover every port a proxy or agent binds in those tests,
+`ProxyTest`'s garbage-collection test included. `ServerSocket(0)` remains only for the ports held open as taken.
+
+### 47. [x] The three JVM metric groups added in #314 are never checked on a real `/metrics`
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -1533,6 +1792,20 @@ still pass.
 - Assert `jvm_buffer_pool_used_bytes` and `jvm_compilation_time_seconds_total` in the metrics-endpoint test. Native
   memory exports nothing without `-XX:NativeMemoryTracking`, so assert that it's absent, or skip it.
 - In `DataClassTest`, assert that the sibling flags stay `false`.
+
+**Resolution:** both.
+
+- `NettyTestWithAdminMetricsTest` asserts both families on both endpoints, and that no `jvm_native_memory_` series
+  is served.
+- It passed alone but failed in the full suite. The harness clears the default registry before each spec, and
+  common-utils' `SystemMetrics` registers each group in a registry only once. So the spec first had `SystemMetrics`
+  forget the default registry, by reflection on its private `registeredSets`, since common-utils had no reset.
+  common-utils 5.2.0 added `SystemMetrics.forget`, which `HarnessSetup.setupProxyAndAgent` now calls after clearing
+  the registry, so the reflection is gone and every harness spec's proxy and agent serve the groups.
+- `DataClassTest` asserts that each flag turns on exactly its own export.
+
+The tests failed with `bufferPoolExportsEnabled` forced off, and with `nativeMemory` also set by `bufferPool`, which
+the old assertions let pass.
 
 ---
 

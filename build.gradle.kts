@@ -1,5 +1,7 @@
 import com.github.benmanes.gradle.versions.updates.DependencyUpdatesTask
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+import com.github.jengelman.gradle.plugins.shadow.transformers.ApacheNoticeResourceTransformer
+import com.github.jengelman.gradle.plugins.shadow.transformers.MergeLicenseResourceTransformer
 import com.google.protobuf.gradle.id
 import com.vanniktech.maven.publish.JavadocJar
 import com.vanniktech.maven.publish.KotlinJvm
@@ -80,6 +82,15 @@ buildConfig {
   // hand-maintained constant that goes stale on the next dependency bump and 404s the asset route.
   buildConfigField("String", "HTMX_VERSION", "\"${libs.versions.htmx.get()}\"")
   buildConfigField("String", "HTMX_WS_VERSION", "\"${libs.versions.htmxWs.get()}\"")
+}
+
+// By default the testing plugin also adds kotlin-test, kotest-runner-junit5, and logback-classic at its own versions,
+// so the test classpath took the higher of each and the catalog's, and kotlin-test, with kotlin-test-junit5 and a JUnit
+// Jupiter engine no spec uses, stayed after this build stopped declaring it. The catalog's are then the only versions.
+pambroseTesting {
+  addKotlinTest.set(false)
+  addKotest.set(false)
+  addLogbackClassic.set(false)
 }
 
 dependencies {
@@ -307,14 +318,32 @@ fun Project.configureJars() {
   // Kept out of src/main/resources so the published Maven jar is clean.
   val shadowResources = file("src/shadow/resources")
 
+  // The NOTICE and license files the transformers below merge. Matched exactly, since a path let through as INCLUDE
+  // that no transformer takes ends up in the JAR once per dependency that ships it.
+  val noticePaths = listOf("META-INF/NOTICE", "META-INF/NOTICE.txt", "META-INF/NOTICE.md", "META-INF/notice.md")
+  val licensePaths =
+    listOf("META-INF/LICENSE", "META-INF/LICENSE.txt", "META-INF/LICENSE.md", "LICENSE", "LICENSE.txt", "LICENSE.md")
+
   fun ShadowJar.configureFatJar(archiveName: String, mainClass: String) {
     archiveFileName.set(archiveName)
     manifest { attributes("Main-Class" to mainClass) }
     mergeServiceFiles()
+    // First-wins kept one dependency's NOTICE and one LICENSE of each name, where the Apache License's section 4(d)
+    // requires every NOTICE, and MIT and the like require their own license text (October #40). Every NOTICE is
+    // merged into META-INF/NOTICE, and every license text follows the project's own in META-INF/LICENSE.
+    transform<ApacheNoticeResourceTransformer> {
+      projectName.set("prometheus-proxy")
+      organizationName.set("Paul Ambrose")
+      organizationURL.set("https://github.com/pambrose/prometheus-proxy")
+      inceptionYear.set("2017")
+    }
+    transform<MergeLicenseResourceTransformer> {
+      artifactLicense.set(rootProject.layout.projectDirectory.file("LICENSE.txt"))
+    }
     // ShadowJar's default DuplicatesStrategy (EXCLUDE) drops duplicate entries before the
     // merging transformers run, so allow duplicates through on the transformer-matched
     // paths only; everything else keeps first-wins EXCLUDE semantics.
-    filesMatching(listOf("META-INF/services/**", "META-INF/*.kotlin_module")) {
+    filesMatching(listOf("META-INF/services/**", "META-INF/*.kotlin_module") + noticePaths + licensePaths) {
       duplicatesStrategy = DuplicatesStrategy.INCLUDE
     }
     from(mainOutput)

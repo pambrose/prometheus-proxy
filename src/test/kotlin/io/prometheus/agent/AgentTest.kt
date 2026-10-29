@@ -41,6 +41,8 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkConstructor
+import io.mockk.unmockkConstructor
 import io.mockk.verify
 import io.prometheus.Agent
 import io.ktor.server.cio.CIO as ServerCIO
@@ -57,6 +59,9 @@ import io.kotest.matchers.string.shouldNotContain
 import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.common.agentOptions
 import io.prometheus.common.ConfigLoadException
+import io.prometheus.common.TestPorts.AGENT_FAILED_SHUTDOWN_ADMIN_PORT
+import io.prometheus.common.TestPorts.AGENT_FAILED_SHUTDOWN_METRICS_PORT
+import io.prometheus.common.TestPorts.AGENT_FAILED_START_METRICS_PORT
 import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
@@ -201,13 +206,12 @@ class AgentTest : StringSpec() {
     // startUp() had already started, and stop() (what EmbeddedAgentInfo.shutdown() calls) threw on the FAILED service.
     "a failed startup should release what the agent holds and leave stop() safe to call" {
       PrometheusRegistry.defaultRegistry.clear()
-      val metricsPort = ServerSocket(0).use { it.localPort }
       ServerSocket(0).use { takenAdminPort ->
         val agent =
           createTestAgent(
             "--metrics",
             "--metrics_port",
-            "$metricsPort",
+            "$AGENT_FAILED_START_METRICS_PORT",
             "--admin",
             "--admin_port",
             "${takenAdminPort.localPort}",
@@ -232,6 +236,48 @@ class AgentTest : StringSpec() {
           cacheFailure?.message.orEmpty() shouldContain "closed"
           stopFailure.shouldBeNull()
         }
+      }
+    }
+
+    // ==================== Failed shutdown Tests ====================
+
+    // shutDown() ran its steps in turn, so when the gRPC shutdown threw, the HTTP client cache stayed open and
+    // super.shutDown() never stopped the admin and metrics servers, which held their ports for the life of the JVM.
+    "a failed gRPC shutdown should still stop the agent's servers and close its client cache" {
+      PrometheusRegistry.defaultRegistry.clear()
+      mockkConstructor(AgentGrpcService::class)
+      try {
+        every { anyConstructed<AgentGrpcService>().shutDown() } throws IllegalStateException("gRPC shutdown failed")
+        val agent =
+          createTestAgent(
+            "--metrics",
+            "--metrics_port",
+            "$AGENT_FAILED_SHUTDOWN_METRICS_PORT",
+            "--admin",
+            "--admin_port",
+            "$AGENT_FAILED_SHUTDOWN_ADMIN_PORT",
+          )
+        agent.startSync()
+
+        // Captured as values first, so each check below reports on its own inside assertSoftly.
+        val stopFailure = runCatching { agent.stopSync() }.exceptionOrNull()
+        val cacheFailure =
+          runCatching {
+            agent.agentHttpService.httpClientCache.getOrCreateClient(HttpClientCache.ClientKey(null, null)) {
+              HttpClient(CIO)
+            }
+          }.exceptionOrNull()
+
+        assertSoftly {
+          stopFailure.shouldNotBeNull()
+          agent.state() shouldBe Service.State.FAILED
+          agent.failureCause().message shouldBe "gRPC shutdown failed"
+          agent.servletService.isRunning.shouldBeFalse()
+          agent.metricsService.isRunning.shouldBeFalse()
+          cacheFailure?.message.orEmpty() shouldContain "closed"
+        }
+      } finally {
+        unmockkConstructor(AgentGrpcService::class)
       }
     }
 

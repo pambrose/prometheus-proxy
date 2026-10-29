@@ -18,6 +18,7 @@
 
 package io.prometheus.proxy
 
+import ch.qos.logback.classic.Level
 import com.typesafe.config.ConfigFactory
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.core.spec.style.StringSpec
@@ -30,6 +31,7 @@ import io.mockk.spyk
 import io.mockk.verify
 import io.prometheus.Proxy
 import io.prometheus.common.ConfigVals
+import io.prometheus.common.captureLogs
 import kotlin.time.Duration.Companion.seconds
 
 // Tests for AgentContextCleanupService which evicts inactive agents from the proxy.
@@ -110,7 +112,7 @@ class AgentContextCleanupServiceTest : StringSpec() {
       every { staleAgentContext.inactivityDuration } returns 5.seconds
 
       // Add stale context directly to the map
-      agentContextManager.putAgentContext("stale-agent-123", staleAgentContext)
+      agentContextManager.addAgentContext(staleAgentContext, announce = false)
 
       val mockMetrics = mockk<ProxyMetrics>(relaxed = true)
       val mockProxy = mockk<Proxy>(relaxed = true)
@@ -134,6 +136,44 @@ class AgentContextCleanupServiceTest : StringSpec() {
       service.stopAsync().awaitTerminated()
     }
 
+    // A connection that never authenticated isn't an agent: evicting it wrote an INFO line and counted in
+    // proxy_eviction_count_total (October #4).
+    "evicting a context should log at INFO and count only when it was announced" {
+      listOf(false, true).forEach { announced ->
+        val agentContextManager = AgentContextManager(isTestMode = true)
+        val staleAgentContext = mockk<AgentContext>(relaxed = true)
+        every { staleAgentContext.agentId } returns "stale-agent"
+        every { staleAgentContext.inactivityDuration } returns 5.seconds
+        every { staleAgentContext.announced } returns announced
+        agentContextManager.addAgentContext(staleAgentContext, announce = false)
+
+        val mockMetrics = mockk<ProxyMetrics>(relaxed = true)
+        val mockProxy = mockk<Proxy>(relaxed = true)
+        every { mockProxy.agentContextManager } returns agentContextManager
+        every { mockProxy.metrics(any<ProxyMetrics.() -> Unit>()) } answers {
+          firstArg<ProxyMetrics.() -> Unit>().invoke(mockMetrics)
+        }
+        every { mockProxy.removeAgentContext(any(), any()) } answers {
+          agentContextManager.removeFromContextManager(firstArg<String>(), secondArg<String>())
+        }
+
+        val service =
+          AgentContextCleanupService(
+            mockProxy,
+            createConfigVals(maxAgentInactivitySecs = 1, staleAgentCheckPauseSecs = 1),
+          )
+        val events =
+          captureLogs<AgentContextCleanupService>(Level.DEBUG) {
+            service.startAsync()
+            eventually(5.seconds) { verify(exactly = 1) { mockProxy.removeAgentContext("stale-agent", "Eviction") } }
+            service.stopAsync().awaitTerminated()
+          }.filter { "Evicting" in it.formattedMessage }
+
+        events.map { it.level } shouldBe listOf(if (announced) Level.INFO else Level.DEBUG)
+        verify(exactly = if (announced) 1 else 0) { mockMetrics.agentEvictionCount }
+      }
+    }
+
     "cleanup should not evict active agent" {
       val configVals = createConfigVals(
         maxAgentInactivitySecs = 60,
@@ -147,7 +187,7 @@ class AgentContextCleanupServiceTest : StringSpec() {
       every { activeAgentContext.agentId } returns "active-agent-123"
       every { activeAgentContext.inactivityDuration } returns 5.seconds
 
-      agentContextManager.putAgentContext("active-agent-123", activeAgentContext)
+      agentContextManager.addAgentContext(activeAgentContext, announce = false)
 
       val mockProxy = mockk<Proxy>(relaxed = true)
       every { mockProxy.agentContextManager } returns agentContextManager
@@ -244,7 +284,7 @@ class AgentContextCleanupServiceTest : StringSpec() {
       every { agentContext.agentId } returns "revived-agent"
       every { agentContext.inactivityDuration } returnsMany [5.seconds, 1.seconds]
 
-      agentContextManager.putAgentContext("revived-agent", agentContext)
+      agentContextManager.addAgentContext(agentContext, announce = false)
 
       val mockProxy = mockk<Proxy>(relaxed = true)
       every { mockProxy.agentContextManager } returns agentContextManager
@@ -272,7 +312,7 @@ class AgentContextCleanupServiceTest : StringSpec() {
       every { agentContext.agentId } returns "still-stale"
       every { agentContext.inactivityDuration } returns 5.seconds
 
-      agentContextManager.putAgentContext("still-stale", agentContext)
+      agentContextManager.addAgentContext(agentContext, announce = false)
 
       val mockMetrics = mockk<ProxyMetrics>(relaxed = true)
       val mockProxy = mockk<Proxy>(relaxed = true)
@@ -317,9 +357,9 @@ class AgentContextCleanupServiceTest : StringSpec() {
       every { staleAgent3.agentId } returns "stale-3"
       every { staleAgent3.inactivityDuration } returns 15.seconds
 
-      agentContextManager.putAgentContext("stale-1", staleAgent1)
-      agentContextManager.putAgentContext("stale-2", staleAgent2)
-      agentContextManager.putAgentContext("stale-3", staleAgent3)
+      agentContextManager.addAgentContext(staleAgent1, announce = false)
+      agentContextManager.addAgentContext(staleAgent2, announce = false)
+      agentContextManager.addAgentContext(staleAgent3, announce = false)
 
       val mockMetrics = mockk<ProxyMetrics>(relaxed = true)
       val mockProxy = mockk<Proxy>(relaxed = true)

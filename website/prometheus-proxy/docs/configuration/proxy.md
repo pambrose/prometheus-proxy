@@ -153,21 +153,32 @@ Configure agent cleanup and scrape request management:
 --8<-- "AdvancedExamples.txt:stale-agent-config"
 ```
 
-| Setting                             | Default | Description                                                                        |
-|:------------------------------------|:--------|:-----------------------------------------------------------------------------------|
-| `staleAgentCheckEnabled`            | true    | Enable periodic stale agent cleanup                                                |
-| `maxAgentInactivitySecs`            | 60      | Seconds of inactivity before agent is evicted                                      |
-| `staleAgentCheckPauseSecs`          | 10      | Interval between cleanup checks                                                    |
-| `scrapeRequestTimeoutSecs`          | 90      | Timeout for individual scrape requests                                             |
-| `scrapeRequestBacklogUnhealthySize` | 25      | Backlog that marks the proxy unhealthy; each agent's queue is capped at twice this |
-| `maxInFlightScrapeRequests`         | 1000    | Max scrapes in flight across all agents; more get a 503                            |
-| `maxPathsPerAgent`                  | 20000   | Max paths one agent connection may register; more are refused (0 = unlimited)     |
-| `maxPathLength`                     | 512     | Max characters in a registered path (0 = unlimited)                                |
-| `maxLabelsSizeBytes`                | 8192    | Max size of a path's labels JSON, in bytes (0 = unlimited)                         |
+| Setting                             | Default | Description                                                                              |
+|:------------------------------------|:--------|:-----------------------------------------------------------------------------------------|
+| `staleAgentCheckEnabled`            | true    | Enable periodic stale agent cleanup                                                      |
+| `maxAgentInactivitySecs`            | 60      | Seconds of inactivity before agent is evicted                                            |
+| `staleAgentCheckPauseSecs`          | 10      | Interval between cleanup checks                                                          |
+| `scrapeRequestTimeoutSecs`          | 90      | Timeout for individual scrape requests                                                   |
+| `scrapeRequestBacklogUnhealthySize` | 25      | Backlog that marks the proxy unhealthy; each agent's queue is capped at twice this       |
+| `maxInFlightScrapeRequests`         | 1000    | Max scrapes in flight across all agents; more get a 503                                  |
+| `scrapeRequestMapUnhealthySize`     | 0       | Scrapes in flight that mark the proxy unhealthy (0 = 80% of `maxInFlightScrapeRequests`) |
+| `chunkContextMapUnhealthySize`      | 0       | Chunked transfers in progress that mark the proxy unhealthy (0 = 80% of the same)        |
+| `maxPathsPerAgent`                  | 20000   | Max paths one agent connection may register; more are refused (0 = unlimited)            |
+| `maxPathLength`                     | 512     | Max characters in a registered path (0 = unlimited)                                      |
+| `maxLabelsSizeBytes`                | 8192    | Max size of a path's labels JSON, in bytes (0 = unlimited)                               |
+| `maxAgentFieldLength`               | 256     | Max characters of an agent's name, host, launch ID, or endpoint (0 = unlimited)          |
+| `maxAgentProxyEndpoints`            | 16      | Max entries of an agent's proxy endpoint list (0 = unlimited)                            |
 
 The three path limits are safety nets against a runaway or misbehaving agent, set well above normal use. A path
-over a limit is refused at registration, and the agent logs the rejection once without retrying it. The proxy warns
-when an agent reaches 80% of `maxPathsPerAgent`.
+over a limit is refused at registration, before it is checked against the agent's
+[identity patterns](#per-agent-identities), and the agent logs the rejection once without retrying it. The proxy
+warns when an agent reaches 80% of `maxPathsPerAgent`.
+
+The two agent limits bound what an agent reports about itself when it registers. The proxy only displays these
+values, in its logs, service discovery labels, dashboard, and `/debug` page, but it repeats them for every path the
+agent serves. A longer value is cut to its first `maxAgentFieldLength` characters, and a longer endpoint list to its
+first `maxAgentProxyEndpoints` entries. The agent stays registered, and the proxy logs one warning naming what it
+cut.
 
 ## Content Size Limits
 

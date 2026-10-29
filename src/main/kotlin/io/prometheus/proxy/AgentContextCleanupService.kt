@@ -61,11 +61,15 @@ internal class AgentContextCleanupService(
         // heartbeat between the findStaleAgents snapshot and this eviction attempt.
         val inactiveTime = agentContext.inactivityDuration
         if (inactiveTime > maxAgentInactivityTime) {
-          logger.info {
+          // A connection that never authenticated isn't an agent, so closing it is logged at DEBUG and isn't counted
+          // as an eviction (October #4).
+          val announced = agentContext.announced
+          val message =
             "Evicting agentId $agentId after $inactiveTime (max $maxAgentInactivityTime) of inactivity: $agentContext"
-          }
+          if (announced) logger.info { message } else logger.debug { message }
           proxy.removeAgentContext(agentId, "Eviction")
-          proxy.metrics { agentEvictionCount.inc() }
+          if (announced)
+            proxy.metrics { agentEvictionCount.inc() }
         } else {
           logger.debug {
             "Skipping eviction for agentId $agentId: activity detected since stale check ($inactiveTime)"

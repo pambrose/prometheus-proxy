@@ -26,8 +26,10 @@ import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.ints.shouldBeLessThan
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -77,7 +79,6 @@ class ProxyPathManagerTest : StringSpec() {
     every { context.agentId } returns agentId
     every { context.consolidated } returns consolidated
     every { context.isNotValid() } returns false
-    every { context.desc } returns if (consolidated) "consolidated " else ""
     return context
   }
 
@@ -166,6 +167,40 @@ class ProxyPathManagerTest : StringSpec() {
     // The scrape route is registered as get("/*"), which matches exactly one path segment, so a
     // multi-segment path would be advertised in service discovery yet 404 at scrape time. Reject it
     // at registration with a clear reason instead of silently registering an unreachable path.
+    // Labels Prometheus couldn't decode are left out of service discovery (see ProxyTest). The path still registers,
+    // since labels matter only there, and the registration says which labels won't appear.
+    "addPath should register a path whose labels service discovery can't serve, and warn about them" {
+      val proxy = createMockProxy()
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val context = createMockAgentContext()
+
+      val warnings =
+        captureLogs<ProxyPathManager>(Level.WARN) {
+          manager.addPath("metrics", """{"a":1}""", context).shouldBeNull()
+          manager.addPath("clean", """{"team":"web"}""", context).shouldBeNull()
+        }.map { it.formattedMessage }
+
+      manager.pathMapSize shouldBe 2
+      warnings.single() shouldContain "/metrics"
+      warnings.single() shouldContain "label 'a' must have a string value"
+    }
+
+    // The scrape port answers these paths itself, so an agent's registration of one was advertised in service
+    // discovery but could never be scraped: the SD path returned the SD JSON, favicon.ico a 404, and blitz "42".
+    "addPath should reject a path the scrape port serves itself" {
+      val proxy = createMockProxy()
+      every { proxy.options.sdEnabled } returns true
+      every { proxy.options.sdPath } returns "/discovery"
+      every { proxy.isBlitzRequest(any()) } answers { firstArg<String>() == "blitz-check" }
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val context = createMockAgentContext()
+
+      listOf("discovery", "/discovery", "favicon.ico", "blitz-check").forEach { path ->
+        manager.addPath(path, "", context).shouldNotBeNull().cause shouldBe PathRejectionCause.INVALID_PATH
+      }
+      manager.pathMapSize shouldBe 0
+    }
+
     "addPath should reject a multi-segment path" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
@@ -528,6 +563,21 @@ class ProxyPathManagerTest : StringSpec() {
       response.reason shouldContain "path not found"
     }
 
+    // unregisterPath's path reaches removePath unchecked, and its ERROR line and reason wrote it whole (October #4,
+    // found while fixing #23).
+    "removePath should cut the path it can't remove to 64 characters in the log and the reason" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val longPath = "p".repeat(10_000)
+
+      var reason = ""
+      val events =
+        captureLogs<ProxyPathManager>(Level.WARN) { reason = manager.removePath(longPath, "agent-123").reason }
+
+      reason shouldContain "p".repeat(64) + "..."
+      reason.length shouldBeLessThan 200
+      events.single().formattedMessage.length shouldBeLessThan 200
+    }
+
     "removePath should fail when agent ID mismatch" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
@@ -613,7 +663,7 @@ class ProxyPathManagerTest : StringSpec() {
       manager.pathMapSize shouldBe 1
     }
 
-    "allPaths should return all registered paths" {
+    "allPathContextInfos should key every registered path, without its leading slash" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context = createMockAgentContext()
@@ -622,7 +672,7 @@ class ProxyPathManagerTest : StringSpec() {
       manager.addPath("/metrics2", """{"job":"test"}""", context)
       manager.addPath("/metrics3", """{"job":"test"}""", context)
 
-      val paths = manager.allPaths
+      val paths = manager.allPathContextInfos().keys
 
       paths.shouldHaveSize(3)
       paths shouldContain "metrics1"
@@ -1121,6 +1171,56 @@ class ProxyPathManagerTest : StringSpec() {
       rejection.shouldNotBeNull().cause shouldBe PathRejectionCause.INVALID_PATH
       rejection.reason shouldContain "maxLabelsSizeBytes"
       manager.pathMapSize shouldBe 1
+    }
+
+    // October #23: the lines logged for each path a registration adds, takes over, or removes printed the whole agent
+    // context, with its self-reported name and host, or, on removal, the path's whole entry with its labels. Repeated
+    // for up to maxPathsPerAgent paths, that multiplied whatever an agent sent. They now name the agentId.
+    "per-path INFO lines should name the agentId, not the agent's own fields or the path's labels" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = false)
+      val first =
+        AgentContext("remote-first").apply { assignProperties(registerAgentRequest { agentName = "FIRST-NAME" }) }
+      val second =
+        AgentContext("remote-second").apply { assignProperties(registerAgentRequest { hostName = "SECOND-HOST" }) }
+      val labels = """{"marker":"LABELS-MARKER"}"""
+
+      val messages =
+        captureLogs<ProxyPathManager>(Level.INFO) {
+          manager.addPath("metrics", labels, first)
+          manager.addPath("metrics", labels, second)
+          manager.removeFromPathManager(second.agentId, "disconnect")
+        }.map { it.formattedMessage }
+
+      fun line(start: String) = messages.single { it.startsWith(start) }
+      line("Added path /metrics for agentId ${first.agentId}")
+      line("Added path /metrics for agentId ${second.agentId}")
+      line("Overwriting path /metrics") shouldContain first.agentId
+      line("Invalidating orphaned") shouldContain first.agentId
+      line("Removed path /metrics") shouldContain second.agentId
+      for (marker in ["FIRST-NAME", "SECOND-HOST", "LABELS-MARKER"]) {
+        messages.filter { marker in it }.shouldBeEmpty()
+      }
+    }
+
+    // registerPath runs these checks before it authorizes a path (October #22), so they see whatever the agent sent.
+    // With maxPathLength off, the multi-segment reason, which is also logged, shows only the start of a long path.
+    "formRejection should show a long multi-segment path truncated" {
+      val manager = ProxyPathManager(createLimitedProxy(maxPathLength = 0), isTestMode = true)
+      val path = "app/" + "x".repeat(10_000)
+
+      val rejection = manager.formRejection(path, "{}", createMockAgentContext())
+
+      rejection.shouldNotBeNull().cause shouldBe PathRejectionCause.INVALID_PATH
+      rejection.reason shouldContain "Multi-segment"
+      rejection.reason shouldContain "/app/xxx"
+      rejection.reason.length shouldBeLessThan 200
+    }
+
+    "formRejection should accept a single-segment path of allowed size" {
+      val manager = ProxyPathManager(createLimitedProxy(maxPathLength = 8), isTestMode = true)
+
+      manager.formRejection("/metrics", "{}", createMockAgentContext()).shouldBeNull()
+      manager.pathMapSize shouldBe 0
     }
 
     // An agent disconnect retires every path it alone served, and only those.

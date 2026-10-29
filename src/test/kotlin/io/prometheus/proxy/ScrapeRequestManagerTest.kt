@@ -52,38 +52,40 @@ class ScrapeRequestManagerTest : StringSpec() {
       manager.scrapeMapSize shouldBe 0
     }
 
-    "addToScrapeRequestMap should add request and return null for new scrapeId" {
+    "tryAddToScrapeRequestMap should add a request for a new scrapeId" {
       val manager = ScrapeRequestManager()
       val wrapper = createMockWrapper(123L)
 
-      val result = manager.addToScrapeRequestMap(wrapper)
+      manager.tryAddToScrapeRequestMap(wrapper, Int.MAX_VALUE) shouldBe true
 
-      result.shouldBeNull()
       manager.scrapeMapSize shouldBe 1
+      manager.getScrapeRequest(123L) shouldBe wrapper
     }
 
-    "addToScrapeRequestMap should return old wrapper when replacing" {
+    "tryAddToScrapeRequestMap should replace a request with the same scrapeId without taking another slot" {
       val manager = ScrapeRequestManager()
       val wrapper1 = createMockWrapper(123L)
       val wrapper2 = createMockWrapper(123L)
 
-      manager.addToScrapeRequestMap(wrapper1)
-      val result = manager.addToScrapeRequestMap(wrapper2)
+      manager.tryAddToScrapeRequestMap(wrapper1, maxInFlight = 2) shouldBe true
+      manager.tryAddToScrapeRequestMap(wrapper2, maxInFlight = 2) shouldBe true
 
-      result.shouldNotBeNull()
-      result shouldBe wrapper1
       manager.scrapeMapSize shouldBe 1
+      manager.getScrapeRequest(123L) shouldBe wrapper2
+      // The replacement gave back the slot it claimed, so one is still free.
+      manager.tryAddToScrapeRequestMap(createMockWrapper(456L), maxInFlight = 2) shouldBe true
+      manager.tryAddToScrapeRequestMap(createMockWrapper(789L), maxInFlight = 2) shouldBe false
     }
 
-    "addToScrapeRequestMap should handle multiple different scrapeIds" {
+    "tryAddToScrapeRequestMap should handle multiple different scrapeIds" {
       ScrapeRequestManager().apply {
         val wrapper1 = createMockWrapper(123L)
         val wrapper2 = createMockWrapper(456L)
         val wrapper3 = createMockWrapper(789L)
 
-        addToScrapeRequestMap(wrapper1)
-        addToScrapeRequestMap(wrapper2)
-        addToScrapeRequestMap(wrapper3)
+        tryAddToScrapeRequestMap(wrapper1, Int.MAX_VALUE)
+        tryAddToScrapeRequestMap(wrapper2, Int.MAX_VALUE)
+        tryAddToScrapeRequestMap(wrapper3, Int.MAX_VALUE)
 
         scrapeMapSize shouldBe 3
       }
@@ -105,7 +107,7 @@ class ScrapeRequestManagerTest : StringSpec() {
       val manager = ScrapeRequestManager()
       val wrapper = createMockWrapper(123L)
 
-      manager.addToScrapeRequestMap(wrapper)
+      manager.tryAddToScrapeRequestMap(wrapper, Int.MAX_VALUE)
       manager.scrapeMapSize shouldBe 1
 
       val result = manager.removeFromScrapeRequestMap(123L)
@@ -130,9 +132,9 @@ class ScrapeRequestManagerTest : StringSpec() {
         val wrapper2 = createMockWrapper(456L)
         val wrapper3 = createMockWrapper(789L)
 
-        addToScrapeRequestMap(wrapper1)
-        addToScrapeRequestMap(wrapper2)
-        addToScrapeRequestMap(wrapper3)
+        tryAddToScrapeRequestMap(wrapper1, Int.MAX_VALUE)
+        tryAddToScrapeRequestMap(wrapper2, Int.MAX_VALUE)
+        tryAddToScrapeRequestMap(wrapper3, Int.MAX_VALUE)
 
         removeFromScrapeRequestMap(456L)
 
@@ -147,13 +149,13 @@ class ScrapeRequestManagerTest : StringSpec() {
       ScrapeRequestManager().apply {
         scrapeMapSize shouldBe 0
 
-        addToScrapeRequestMap(createMockWrapper(1L))
+        tryAddToScrapeRequestMap(createMockWrapper(1L), Int.MAX_VALUE)
         scrapeMapSize shouldBe 1
 
-        addToScrapeRequestMap(createMockWrapper(2L))
+        tryAddToScrapeRequestMap(createMockWrapper(2L), Int.MAX_VALUE)
         scrapeMapSize shouldBe 2
 
-        addToScrapeRequestMap(createMockWrapper(3L))
+        tryAddToScrapeRequestMap(createMockWrapper(3L), Int.MAX_VALUE)
         scrapeMapSize shouldBe 3
 
         removeFromScrapeRequestMap(2L)
@@ -177,8 +179,8 @@ class ScrapeRequestManagerTest : StringSpec() {
       val wrapper1 = createMockWrapper(123L)
       val wrapper2 = createMockWrapper(456L)
 
-      manager.addToScrapeRequestMap(wrapper1)
-      manager.addToScrapeRequestMap(wrapper2)
+      manager.tryAddToScrapeRequestMap(wrapper1, Int.MAX_VALUE)
+      manager.tryAddToScrapeRequestMap(wrapper2, Int.MAX_VALUE)
 
       val results1 = mockk<ScrapeResults>(relaxed = true)
       val results2 = mockk<ScrapeResults>(relaxed = true)
@@ -201,7 +203,7 @@ class ScrapeRequestManagerTest : StringSpec() {
 
       every { results.srScrapeId } returns 100L
 
-      manager.addToScrapeRequestMap(wrapper)
+      manager.tryAddToScrapeRequestMap(wrapper, Int.MAX_VALUE)
       manager.assignScrapeResults(results) { true }
 
       // Result publication is now folded behind the completion CAS (finding 16).
@@ -216,7 +218,7 @@ class ScrapeRequestManagerTest : StringSpec() {
 
       every { results.srScrapeId } returns 200L
 
-      manager.addToScrapeRequestMap(wrapper)
+      manager.tryAddToScrapeRequestMap(wrapper, Int.MAX_VALUE)
       manager.assignScrapeResults(results) { true }
 
       verify { agentContext.markActivityTime(true) }
@@ -234,7 +236,7 @@ class ScrapeRequestManagerTest : StringSpec() {
       every { wrapper.agentContext.agentId } returns "agent-99"
       every { wrapper.complete(capture(resultsSlot), any()) } returns true
 
-      manager.addToScrapeRequestMap(wrapper)
+      manager.tryAddToScrapeRequestMap(wrapper, Int.MAX_VALUE)
       manager.failScrapeRequest(300L, "Chunk checksum mismatch", ProxyFailure.INVALID_RESPONSE)
 
       verify { wrapper.complete(any(), ProxyFailure.INVALID_RESPONSE) }
@@ -257,7 +259,7 @@ class ScrapeRequestManagerTest : StringSpec() {
         val wrapper = createMockWrapper(301L)
         every { wrapper.complete(capture(resultsSlot), any()) } returns true
 
-        manager.addToScrapeRequestMap(wrapper)
+        manager.tryAddToScrapeRequestMap(wrapper, Int.MAX_VALUE)
         manager.failScrapeRequest(301L, "reason", failure)
 
         withClue(failure) { resultsSlot.captured.srStatusCode shouldBe failure.statusCode.value }
@@ -274,8 +276,8 @@ class ScrapeRequestManagerTest : StringSpec() {
       every { mine.agentContext.agentId } returns "agent-a"
       every { theirs.agentContext.agentId } returns "agent-b"
 
-      manager.addToScrapeRequestMap(mine)
-      manager.addToScrapeRequestMap(theirs)
+      manager.tryAddToScrapeRequestMap(mine, Int.MAX_VALUE)
+      manager.tryAddToScrapeRequestMap(theirs, Int.MAX_VALUE)
       manager.failAllScrapeRequests("agent-a", "Agent disconnected", ProxyFailure.AGENT_DISCONNECTED)
 
       verify { mine.complete(any(), ProxyFailure.AGENT_DISCONNECTED) }
@@ -321,7 +323,7 @@ class ScrapeRequestManagerTest : StringSpec() {
         true
       }
 
-      manager.addToScrapeRequestMap(wrapper)
+      manager.tryAddToScrapeRequestMap(wrapper, Int.MAX_VALUE)
 
       val results1 = mockk<ScrapeResults>(relaxed = true)
       every { results1.srScrapeId } returns 400L
@@ -342,7 +344,7 @@ class ScrapeRequestManagerTest : StringSpec() {
       val manager = ScrapeRequestManager()
       val wrapper = createMockWrapper(500L)
 
-      manager.addToScrapeRequestMap(wrapper)
+      manager.tryAddToScrapeRequestMap(wrapper, Int.MAX_VALUE)
 
       val results1 = mockk<ScrapeResults>(relaxed = true)
       every { results1.srScrapeId } returns 500L
@@ -364,7 +366,7 @@ class ScrapeRequestManagerTest : StringSpec() {
       val wrapper = createMockWrapper(600L)
       every { wrapper.agentContext.agentId } returns "agent-42"
 
-      manager.addToScrapeRequestMap(wrapper)
+      manager.tryAddToScrapeRequestMap(wrapper, Int.MAX_VALUE)
 
       // Call fail twice for the same scrapeId
       manager.failScrapeRequest(600L, "first failure", ProxyFailure.AGENT_DISCONNECTED)
@@ -423,7 +425,7 @@ class ScrapeRequestManagerTest : StringSpec() {
       val manager = ScrapeRequestManager()
       val wrapper = createMockWrapper(1000L)
 
-      manager.addToScrapeRequestMap(wrapper)
+      manager.tryAddToScrapeRequestMap(wrapper, Int.MAX_VALUE)
 
       manager.getScrapeRequest(1000L) shouldBeSameInstanceAs wrapper
     }
@@ -444,7 +446,7 @@ class ScrapeRequestManagerTest : StringSpec() {
       every { results.srScrapeId } returns 1100L
       val checked = mutableListOf<ScrapeRequestWrapper>()
 
-      manager.addToScrapeRequestMap(wrapper)
+      manager.tryAddToScrapeRequestMap(wrapper, Int.MAX_VALUE)
       manager.assignScrapeResults(results) {
         checked += it
         true
@@ -461,7 +463,7 @@ class ScrapeRequestManagerTest : StringSpec() {
       val results = mockk<ScrapeResults>(relaxed = true)
       every { results.srScrapeId } returns 1101L
 
-      manager.addToScrapeRequestMap(wrapper)
+      manager.tryAddToScrapeRequestMap(wrapper, Int.MAX_VALUE)
       manager.assignScrapeResults(results) { false }
 
       verify(exactly = 0) { wrapper.complete(any(), any()) }
@@ -488,7 +490,7 @@ class ScrapeRequestManagerTest : StringSpec() {
       val manager = ScrapeRequestManager()
       val wrapper = createMockWrapper(1103L)
 
-      manager.addToScrapeRequestMap(wrapper)
+      manager.tryAddToScrapeRequestMap(wrapper, Int.MAX_VALUE)
       manager.failScrapeRequest(1103L, "bad response", ProxyFailure.INVALID_RESPONSE) { false }
 
       verify(exactly = 0) { wrapper.complete(any(), any()) }
@@ -498,7 +500,7 @@ class ScrapeRequestManagerTest : StringSpec() {
       val manager = ScrapeRequestManager()
       val wrapper = createMockWrapper(1104L)
 
-      manager.addToScrapeRequestMap(wrapper)
+      manager.tryAddToScrapeRequestMap(wrapper, Int.MAX_VALUE)
       manager.failScrapeRequest(1104L, "bad response", ProxyFailure.INVALID_RESPONSE) { it === wrapper }
 
       verify { wrapper.complete(any(), ProxyFailure.INVALID_RESPONSE) }

@@ -134,5 +134,23 @@ class InProcessHealthCheckTest : StringSpec() {
 
       healthCheck(PROXY_ADMIN_PORT, HttpStatusCode.OK)
     }
+
+    // The scrape map's threshold was 25, so 100 in-flight scrapes, far below the 1000 the proxy admits, turned the
+    // proxy unhealthy (October #2). It now defaults to 80% of maxInFlightScrapeRequests.
+    "with the default thresholds, 100 in-flight scrapes should leave the scrape map check healthy" {
+      val context = AgentContext("in-flight").also { proxy.agentContextManager.addAgentContext(it) }
+      val scrapeIds =
+        List(100) {
+          ScrapeRequestWrapper(context, "metrics", "", "", "", false)
+            .also { proxy.scrapeRequestManager.tryAddToScrapeRequestMap(it, Int.MAX_VALUE) }
+            .scrapeId
+        }
+      try {
+        healthCheck(PROXY_ADMIN_PORT, HttpStatusCode.OK, "\"scrape_response_map_check\"")
+      } finally {
+        scrapeIds.forEach { proxy.scrapeRequestManager.removeFromScrapeRequestMap(it) }
+        proxy.removeAgentContext(context.agentId, "test cleanup")
+      }
+    }
   }
 }

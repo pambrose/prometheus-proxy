@@ -21,21 +21,53 @@ jobs:
   # named "github-pages", which is what re-running a combined build+deploy job did.
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       pages: read
+    outputs:
+      deploy: ${{ steps.published.outputs.deploy }}
     steps:
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      # Build the Zensical documentation site from website/uv.lock, the same resolution `make site`
-      # uses locally. uv reads website/.python-version and installs that Python itself.
+      # The site gives the gradle.properties version as its Docker image tag and Maven coordinate, and those don't
+      # exist from the merge of a version bump until `make release` publishes them. So a push deploys only once the
+      # version's POM is on Maven Central and both its images are on Docker Hub; until then the site stays at the
+      # previous release. A push that doesn't bump the version finds it published, so docs changes deploy as they
+      # merge. A workflow_dispatch always deploys: `make release` starts one (`make gh-docs`) once it has verified the
+      # images. The site is built either way, so a push that doesn't deploy still checks the build.
+      - name: Check that the version the site gives is published
+        id: published
+        run: |
+          deploy=true
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            version=$(sed -n 's/^version=//p' gradle.properties)
+            for url in \
+              "https://repo1.maven.org/maven2/com/pambrose/prometheus-proxy/$version/prometheus-proxy-$version.pom" \
+              "https://hub.docker.com/v2/namespaces/pambrose/repositories/prometheus-proxy/tags/$version" \
+              "https://hub.docker.com/v2/namespaces/pambrose/repositories/prometheus-agent/tags/$version"; do
+              code=$(curl -sSL -o /dev/null -w '%{http_code}' --max-time 30 "$url" || true)
+              case "$code" in
+                200) ;;
+                404)
+                  deploy=false
+                  echo "::notice::Not deploying: $version isn't published yet ($url); make release deploys the site once it is" ;;
+                *)
+                  deploy=false
+                  echo "::warning::Not deploying: could not tell whether $version is published ($url answered $code); make gh-docs deploys the site" ;;
+              esac
+            done
+          fi
+          echo "deploy=$deploy" >> "$GITHUB_OUTPUT"
+
+      # Build the Zensical documentation site from website/uv.lock with `make build-site`, which CI's docs-site job
+      # also runs on every pull request. uv reads website/.python-version and installs that Python itself.
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
       # mkdocs-material, which the emoji extension needs, is pinned in website/pyproject.toml and so in uv.lock.
-      - run: uv run --locked zensical build --clean
-        working-directory: website/prometheus-proxy
+      - run: make build-site
 
       # Build KDoc API documentation
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
@@ -58,10 +90,13 @@ jobs:
 
   # Deploy the artifact produced by the build job. Deliberately minimal (no
   # checkout or build) so re-running just this job re-deploys the existing
-  # artifact without rebuilding or re-uploading it.
+  # artifact without rebuilding or re-uploading it. It is skipped on a push whose
+  # version isn't published yet (the build job's check).
   deploy:
     needs: build
+    if: needs.build.outputs.deploy == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       pages: write
       id-token: write

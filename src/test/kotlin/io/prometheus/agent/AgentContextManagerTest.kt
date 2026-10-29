@@ -45,22 +45,6 @@ class AgentContextManagerTest : StringSpec() {
       manager.getAgentContext(context.agentId).shouldNotBeNull()
     }
 
-    "addAgentContext should return old context when replacing existing agent" {
-      val manager = AgentContextManager(isTestMode = true)
-      val context1 = AgentContext("192.168.1.1")
-      val context2 = AgentContext("192.168.1.2")
-
-      manager.addAgentContext(context1)
-      // Use putAgentContext to simulate replacement
-      val agentId = context1.agentId
-      manager.putAgentContext(agentId, context2)
-      // putAgentContext stores without announcing; the replacement counts once announced.
-      manager.announceAgentContext(agentId)
-
-      manager.agentContextSize shouldBe 1
-      manager.getAgentContext(agentId) shouldBe context2
-    }
-
     "getAgentContext should return context for existing agent" {
       val manager = AgentContextManager(isTestMode = true)
       val context = AgentContext("192.168.1.1")

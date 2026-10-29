@@ -51,7 +51,7 @@ htmx = "2.0.11"
 htmxWs = "2.0.4"
 
 # Metrics
-# The version common-utils 5.1.2 is built against. build.gradle.kts imports this BOM so the Prometheus modules
+# The version common-utils 5.2.0 is built against. build.gradle.kts imports this BOM so the Prometheus modules
 # common-utils brings (JVM instrumentation, exposition formats, exporters) resolve to the same version as
 # prometheus-metrics-core, even when this one moves ahead of common-utils.
 prometheus = "1.10.0"
@@ -73,7 +73,7 @@ typesafe = "1.4.9"
 jcommander = "3.0"
 
 # Common Utils
-utils = "5.1.2"
+utils = "5.2.0"
 
 # Misc
 annotation = "1.3.2"

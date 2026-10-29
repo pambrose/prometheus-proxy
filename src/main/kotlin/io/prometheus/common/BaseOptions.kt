@@ -246,12 +246,6 @@ abstract class BaseOptions protected constructor(
     cliValue: Boolean,
     envVar: EnvVars,
     configDefault: Boolean,
-  ): Boolean = resolveBoolean(cliValue, envVar.name, System.getenv(envVar.name), configDefault)
-
-  protected fun resolveBooleanOption(
-    cliValue: Boolean,
-    envVar: EnvVars,
-    configDefault: Boolean,
     vararg cliNames: String,
   ): Boolean {
     val cliExplicitlySet = isFlagInArgs(*cliNames)
@@ -605,15 +599,5 @@ abstract class BaseOptions protected constructor(
         envVarValue != null -> EnvVars.parseBooleanStrict(envVarName, envVarValue)
         else -> configDefault
       }
-
-    // Legacy overload: assumes CLI was explicitly set when cliValue is true.
-    // With JCommander arity-0 booleans, this is correct for the enable case.
-    // Use the overload with cliExplicitlySet for proper disable-from-CLI support.
-    internal fun resolveBoolean(
-      cliValue: Boolean,
-      envVarName: String,
-      envVarValue: String?,
-      configDefault: Boolean,
-    ): Boolean = resolveBoolean(cliValue, cliValue, envVarName, envVarValue, configDefault)
   }
 }

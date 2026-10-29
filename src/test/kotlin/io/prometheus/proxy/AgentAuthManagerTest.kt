@@ -19,17 +19,33 @@
 package io.prometheus.proxy
 
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
+import io.prometheus.common.awaitOnDaemonThread
 import io.prometheus.proxy.AgentAuthManager.AuthEntry
 import io.prometheus.proxy.AgentAuthManager.Companion.LEGACY_IDENTITY_NAME
+import kotlin.random.Random
+import kotlin.time.Duration.Companion.seconds
 
 class AgentAuthManagerTest : StringSpec() {
-  private fun identity(vararg patterns: String): AgentIdentity =
-    AgentIdentity("test", ByteArray(0), patterns.map { AgentAuthManager.globToRegex(it) })
+  private fun identity(vararg patterns: String): AgentIdentity = AgentIdentity("test", ByteArray(0), patterns.toList())
+
+  // The regex the glob matcher replaced: `*` as `.*`, `?` as `.`, anything else literal. Correct, but it backtracks,
+  // so it serves only as a reference on short inputs.
+  private fun referenceRegex(glob: String): Regex =
+    Regex(
+      glob.map {
+        when (it) {
+          '*' -> ".*"
+          '?' -> "."
+          else -> Regex.escape(it.toString())
+        }
+      }.joinToString(""),
+    )
 
   init {
     // ---- glob / isAuthorized semantics ----
@@ -76,6 +92,64 @@ class AgentAuthManagerTest : StringSpec() {
       identity.isAuthorized("team_a_x").shouldBeTrue()
       identity.isAuthorized("shared_metrics").shouldBeTrue()
       identity.isAuthorized("team_b_x").shouldBeFalse()
+    }
+
+    // October #22: a glob was matched as a backtracking regex, `*` as `.*`, which tries every placement of every star
+    // before it gives up: `*_*_*_*_metrics` took about 9 seconds on a 512-character path it didn't match, holding a
+    // gRPC thread. The matcher is now linear in the path for a given glob. A path of 4,096 characters, past
+    // maxPathLength, would take the regex far longer than the timeout. Matched on a daemon thread so the timeout can
+    // fail a match that never returns.
+    "a glob with several stars answers a long path it doesn't match promptly".config(timeout = 10.seconds) {
+      val underscores = "_".repeat(4096)
+      awaitOnDaemonThread { identity("*_*_*_*_metrics").isAuthorized(underscores) }.shouldBeFalse()
+      awaitOnDaemonThread { identity("*a*a*a*a*a*b").isAuthorized("a".repeat(4096)) }.shouldBeFalse()
+    }
+
+    "a star matches an empty run, and only a whole path matches" {
+      val identity = identity("a*b*c")
+      identity.isAuthorized("abc").shouldBeTrue()
+      identity.isAuthorized("a__b__c").shouldBeTrue()
+      identity.isAuthorized("abcd").shouldBeFalse()
+      identity.isAuthorized("xabc").shouldBeFalse()
+      identity("*").isAuthorized("").shouldBeTrue()
+      identity("**").isAuthorized("anything").shouldBeTrue()
+      identity("a*").isAuthorized("").shouldBeFalse()
+    }
+
+    // A matcher that resumes from the first star instead of the last, or skips the stars a glob ends with, gets these
+    // wrong.
+    "a mismatch backs up to the last star, and trailing stars match nothing" {
+      identity("*ab*cd").isAuthorized("aab_abccd").shouldBeTrue()
+      identity("*ab*cd").isAuthorized("aab_abccde").shouldBeFalse()
+      identity("ab**").isAuthorized("ab").shouldBeTrue()
+      identity("a?*").isAuthorized("a").shouldBeFalse()
+    }
+
+    // Wildcards in the path are ordinary characters: only the glob's own `*` and `?` are wildcards.
+    "a star or question mark in the path is matched as a literal character" {
+      identity("a?c").isAuthorized("a*c").shouldBeTrue()
+      identity("abc").isAuthorized("a?c").shouldBeFalse()
+      identity("a*c").isAuthorized("a*c").shouldBeTrue()
+    }
+
+    // The matcher must agree with the regex it replaced on every input. Seeded, so a failure reproduces.
+    "the glob matcher agrees with the reference regex on random short globs and paths" {
+      val random = Random(22)
+      val globChars = "ab_*?"
+      val pathChars = "ab_"
+      repeat(20_000) {
+        val glob = String(CharArray(random.nextInt(0, 7)) { globChars[random.nextInt(globChars.length)] })
+        val path = String(CharArray(random.nextInt(0, 9)) { pathChars[random.nextInt(pathChars.length)] })
+        withClue("glob '$glob' against '$path'") {
+          AgentAuthManager.globMatches(glob, path) shouldBe referenceRegex(glob).matches(path)
+        }
+      }
+    }
+
+    "a glob with several stars answers a long path it matches promptly".config(timeout = 10.seconds) {
+      val underscores = "_".repeat(4096)
+      awaitOnDaemonThread { identity("*_*_*_*_metrics").isAuthorized(underscores + "metrics") }.shouldBeTrue()
+      awaitOnDaemonThread { identity("*a*a*a*a*a*b").isAuthorized("a".repeat(4096) + "b") }.shouldBeTrue()
     }
 
     // ---- token resolution ----

@@ -432,7 +432,7 @@ Enable Prometheus service discovery support:
 java -jar prometheus-proxy.jar \
   --sd_enabled \
   --sd_path discovery \
-  --sd_target_prefix http://proxy-host:8080/
+  --sd_target_prefix proxy-host:8080
 ```
 
 Access discovery endpoint at: `http://proxy-host:8080/discovery`

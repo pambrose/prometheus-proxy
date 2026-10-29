@@ -34,14 +34,15 @@ make nh-tests         # Unit tests only (agent, proxy, common, misc — no harne
 make ip-tests         # In-process integration tests only
 make netty-tests      # Netty integration tests only
 make tls-tests        # TLS integration tests only
-make lincheck-tests   # Lincheck concurrency tests only (left out of every other target)
-make tla-checks       # Model-check the TLA+ specs in specs/tla (downloads the TLA+ tools once)
+make lincheck-tests   # Lincheck concurrency tests only (left out of every other target but all-tests)
+make tla-checks       # Model-check the TLA+ specs in specs/tla (fetches the pinned TLA+ tools if needed)
 make container-tests  # Full Testcontainers end-to-end suite (needs Docker)
 make scaling-tests    # Parameter-driven scaling container test only (needs Docker)
-make all-tests        # Full suite: `make tests` + `make container-tests`
+make all-tests        # Full suite: `make tests` + `make lincheck-tests` + `make container-tests`
                       #   (container-tests already includes ContainersScalingTest's default table)
-make ci               # The CI workflow's jobs, run in turn: TLA+, alerting rules, Helm charts, and the
-                      #   build job (`make ci-build`: MINI tests + coverage floors); needs Docker
+make ci               # The CI workflow's jobs, run in turn: TLA+, alerting rules, Helm charts, the docs
+                      #   site (`make build-site`), and the build job (`make ci-build`: MINI tests +
+                      #   coverage floors); needs Docker
 ```
 
 The suite builds its proxy and agent images under stable tags, so runs reuse them and a clean run now
@@ -86,10 +87,10 @@ need Docker, so a plain `make tests` / `./gradlew check` registers each spec as 
 
 The Lincheck specs (`*LincheckTest`) explore thread interleavings and together take several minutes, so they carry
 the Kotest `Lincheck` tag (`common/Lincheck.kt`), and the `Test` task's default tag expression, `!Lincheck`, leaves
-them out of `./gradlew test`, `make tests`, `make all-tests`, and the CI build. `make lincheck-tests` runs them
-(`-PkotestTags=Lincheck`), as does the manual **Lincheck** workflow in GitHub Actions; tag any new Lincheck spec the
-same way. The TLA+ specs are not tests but models of the design, checked by `make tla-checks`, which CI runs on
-every pull request; `specs/tla/README.md` describes them.
+them out of `./gradlew test`, `make tests`, and the CI build. `make lincheck-tests` runs them
+(`-PkotestTags=Lincheck`), and so do `make all-tests` and the manual **Lincheck** workflow in GitHub Actions; tag any
+new Lincheck spec the same way. The TLA+ specs are not tests but models of the design, checked by `make tla-checks`,
+which CI runs on every pull request; `specs/tla/README.md` describes them.
 
 Keep MockK out of the Lincheck specs. To mock a final class, MockK rewrites the bytecode of that class and its
 superclasses, `Object`'s methods included, for the rest of the JVM, and routes every `equals()` and exception
@@ -143,10 +144,10 @@ src/test/kotlin/io/prometheus/
 ├── agent/          # Agent component tests
 │   ├── discovery/  # Path-discovery tests
 │   └── filter/     # Metric-filter tests
-├── common/         # Shared utility tests, plus test-only support (TestPorts, TestOptions, EmbeddedTestServer)
+├── common/         # Shared utility and metrics tests, plus the test-only support most specs share
 ├── proxy/          # Proxy component tests
 │   └── dashboard/  # Dashboard renderer tests and fixtures
-├── misc/           # Cross-cutting tests (admin paths, config classes, options)
+├── misc/           # Cross-cutting tests (admin paths, config classes, options, packaging, CI, the docs' names)
 ├── harness/        # Integration tests: real proxy + agent, in-process or over Netty; scale configs
 │   └── support/    # Harness infrastructure (setup, the standard suite)
 └── containers/     # Testcontainers end-to-end tests, gated on RUN_CONTAINER_TESTS
@@ -156,14 +157,23 @@ src/test/kotlin/io/prometheus/
 Directories rather than filenames on purpose: a file-by-file listing here duplicates the Test Categories
 section below and rots on the next added spec, which is how this document came to be missing eighteen of
 them at once. The categories below name every spec and say what it pins, which is upkeep that buys
-something.
+something, and `misc/TestingGuideTest` fails the build when a spec isn't named in its package's section or a
+support file isn't named at all.
+
+Outside `io/prometheus/`, `src/test/kotlin/website/` and `src/test/java/website/` hold the docs site's code
+snippets, which `website/prometheus-proxy/zensical.toml` resolves by file name. Most are `.txt` files of marked
+regions; **EmbeddedAgentKotlinExample** and **EmbeddedAgentJavaExample** are the embedded-agent examples on the
+Embedded Agent page, compiled with the tests so that a change to `Agent.startAsyncAgent()` that breaks them fails
+the build.
 
 ## Test Categories
 
 ### Unit Tests — Agent (`agent/`)
 
 - **AgentTest** — Agent main class lifecycle, heartbeats, reconnection, scrape request processing; when one
-  connection task ends, the others are cancelled, so an idle read stream cannot hold a dead connection open
+  connection task ends, the others are cancelled, so an idle read stream cannot hold a dead connection open; and a
+  gRPC shutdown that throws (a MockK constructor mock) still stops the admin and metrics servers and closes the client
+  cache
 - **AgentGrpcServiceTest** — gRPC service: scrape request/response streaming, heartbeats, registration, error handling,
   channel shutdown
 - **AgentHttpServiceTest** — HTTP service: scraping endpoints, compression support, response handling, timeout behavior,
@@ -204,14 +214,24 @@ something.
 - **MetricFilterTest** (`filter/`) — Allow/deny filtering: fully anchored regexes, deny winning over allow, whole
   families dropped or kept (HELP/TYPE/UNIT lines, histogram, summary and OpenMetrics series), line endings preserved
 
+Two support helpers also live here (not test classes themselves):
+
+- **KeyStoreTestSupport** — `createTempKeyStore()`, an empty keystore in an auto-deleted temp file, with its
+  password, for the `SslSettings` and `AgentHttpService` trust-store tests
+- **DiscoveryTestSupport** (`discovery/`) — `discoveryPathsHocon()`, which builds a discovery file's
+  `paths = [...]` body for the harness and container discovery specs, so the format they write is defined in one
+  place
+
 ### Unit Tests — Proxy (`proxy/`)
 
 - **ProxyTest** — Proxy main class lifecycle, agent info retrieval, JSON serialization, stale agent cleanup
 - **ProxyServiceImplTest** — gRPC implementation: registerAgent, registerPath, heartbeat, scrape responses, chunked
   responses
-- **ProxyGrpcServiceTest** — gRPC server configuration: TLS, keepalive, transport filter; reflection is not served
-  when disabled, and when enabled it requires a valid agent token if agent auth is configured
-- **ProxyHttpServiceTest** — ProxyHttpService string representation
+- **ProxyGrpcServiceTest** — gRPC server configuration: each handshake, keepalive, and connection-age option reaches
+  the server builder (a MockK builder) and an unset one leaves gRPC's default, and the transport filter; reflection
+  is not served when disabled, and when enabled it requires a valid agent token if agent auth is configured
+- **ProxyHttpServiceTest** — ProxyHttpService string representation, lifecycle, and idle timeout: 45s when
+  `http.idleTimeoutSecs` is -1, otherwise the configured value
 - **ProxyHttpConfigTest** — HTTP server config: Ktor compression, status pages, CORS; a call cancelled by a client
   disconnect, or a write to one that has gone, is logged at DEBUG, while an unexpected exception still logs at WARN
 - **ProxyHttpRoutesTest** — HTTP routing: path resolution, query params, error responses, compression,
@@ -232,6 +252,8 @@ something.
 - **AgentContextCleanupServiceTest** — Stale agent eviction (removes agents inactive beyond maxAgentInactivitySecs)
 - **ChunkedContextTest** — Chunk accumulation, CRC32 checksum validation, header/chunk/trailer sequencing
 - **ProxyOptionsTest** — CLI parsing, defaults, validation, TLS settings, gRPC options
+- **SdTargetTest** — `sdTargetPrefix` parsing: host:port as is; an http(s) URL split into the target, `__scheme__`,
+  and a path prefix; anything else refused, naming the setting
 - **ProxyDynamicConfigTest** — Dynamic config overrides via -D flags (maxZippedContentSizeMBytes,
   scrapeRequestTimeoutSecs, etc.)
 - **ProxyServerInterceptorTest** — gRPC server interceptor: agent-id metadata extraction from incoming calls
@@ -243,7 +265,8 @@ something.
   latency and response size, and its removal race; no per-path histogram series outlives the path's removal
 - **RecentReqsSynchronizationTest** — Synchronized access to recentReqs EvictingQueue (prevents
   ConcurrentModificationException)
-- **ScrapeRequestManagerTest** — Add/remove scrape requests, timeout handling, concurrent access
+- **ScrapeRequestManagerTest** — Add/remove scrape requests (a replaced scrapeId gives back its in-flight slot),
+  timeout handling, concurrent access
 - **ScrapeRequestManagerLincheckTest** — Lincheck (tagged `Lincheck`): handlers admitting and untracking requests under
   the in-flight limit race an agent's answer, a single failure, and `failAllScrapeRequests`; the limit holds and its
   counter matches the map, each request keeps one completer's result and matching `proxyFailure`, and a disconnect fails
@@ -266,6 +289,12 @@ something.
 - **ProxySnapshotTest** (`dashboard/`) — Dashboard view models: eviction countdown, health thresholds, failover
   position, and `buildPathViews` joining registered paths to their latest scrape and surfacing departed ones
 
+One support helper also lives here (not a test class itself):
+
+- **DashboardFixtures** (`dashboard/`) — builders for the dashboard view models (`pathView`, `agentView`,
+  `scrapeRecord`, `snapshot`) with every field defaulted, shared by `ProxyDashboardHtmlTest` and
+  `ProxySnapshotTest`, so a test names only the field it is about
+
 ### Unit Tests — Common (`common/`)
 
 - **BaseOptionsTest** — Shared CLI argument parsing, config loading, boolean resolution
@@ -273,13 +302,19 @@ something.
 - **ConfigWrappersTest** — Factory methods for AdminConfig, MetricsConfig, ZipkinConfig
 - **ConstantsTest** — Constant values (EMPTY_AGENT_ID_MSG, EMPTY_PATH_MSG, EMPTY_INSTANCE)
 - **EnvVarsTest** — Environment variable mappings and fallback defaults
+- **MetricBuildersTest** — the metric builders keep no exemplars and only classic histogram buckets; a
+  `sampledGauge` value that throws is reported as NaN instead of failing the scrape; and `setToCurrentTime` sets
+  Unix seconds, which the dashboards' `time() - *_start_time_seconds` panels assume
 - **ScrapeResultsTest** — ScrapeResults data class, error code mapping, timeout handling, protobuf conversion
+- **SharedCollectorsTest** — the collectors every agent (or proxy) in a JVM shares register on the first acquire
+  and unregister, with their series cleared, on the last release; register again after a registry clear; and,
+  when the registry rejects one, leave none of them registered
 - **TestPortsTest** — every port in `TestPorts` is distinct, so no two specs can bind the same port, and below 32768,
   outside the ephemeral range the OS hands out to outgoing connections
 - **UtilsTest** — Utility functions: parseHostPort, sanitizeUrl, appendQueryParams, decodeParams, toJsonElement,
   setLogLevel, exceptionDetails
 
-Four support helpers also live here (not test classes themselves):
+These support helpers also live here (not test classes themselves):
 
 - **TestPorts** — canonical port constants shared across the unit, harness, and container suites, so no test
   hard-codes a port literal. The ones that mirror the proxy/agent config defaults and the fixed container ports are
@@ -293,18 +328,43 @@ Four support helpers also live here (not test classes themselves):
   and polls with real HTTP probes until it serves several consecutive clean replies before returning the port
 - **LogCapture** — `captureLogs<T>(level) { … }`, which runs a block and returns what `T`'s logger emitted,
   optionally at a lower level, restoring the logger's appenders and level afterward
+- **MetricsMocks** — `mockProxyForMetrics()` / `mockAgentForMetrics()`, mocks that stub only what `ProxyMetrics`
+  and `AgentMetrics` read when they are built and scraped, for the metrics specs and `misc/DashboardMetricNamesTest`
+- **DaemonAwait** — `awaitOnDaemonThread { … }`, which runs a block on a daemon thread and suspends until it
+  returns, so the spec's timeout can fail a CPU-bound call, such as a backtracking regex, that ignores cancellation
+- **Lincheck** — the Kotest tag every `*LincheckTest` carries, which the default test run excludes
 
 ### Unit Tests — Misc (`misc/`)
 
 - **AdminDefaultPathTest** — Admin endpoints with default paths (ping, version, health, thread dump)
 - **AdminEmptyPathTest** — Admin endpoints with empty paths (disables endpoints)
 - **AdminNonDefaultPathTest** — Admin endpoints with custom paths
+- **CiHygieneTest** — every job in `.github/workflows` sets `timeout-minutes`, every tool image the `Makefile` runs
+  (`*_IMAGE`) is pinned by digest, and the CRD schemas `helm-lint` validates against come from a fixed commit, so a
+  hung job gives its check back and what CI runs changes only with a diff here
 - **ConfigValsTest** — ConfigVals auto-generated from HOCON schema (validates default values)
-- **DataClassTest** — Config data classes (AdminConfig, MetricsConfig, ZipkinConfig parsing)
+- **DashboardMetricNamesTest** — the Grafana dashboards, the alert rules, the docs' PromQL, and the metric names
+  on the website's pages all name series the proxy and agent expose (a counter only with its `_total` suffix); proxy
+  panels filter by the job and instance pickers and agent panels by the agent picker; and every counter is declared
+  with the `_total` name it is exposed as
+- **DataClassTest** — Config data classes (AdminConfig, MetricsConfig, ZipkinConfig parsing); the buffer pool,
+  compilation, and native memory export flags each turn on only their own MetricsConfig field
+- **LogbackConfigTest** — the bundled `logback.xml`, loaded from inside a JAR, and `logback/docker-logback.xml`,
+  loaded from disk, configure without a WARN status, so neither makes logback print its status list at every start
 - **OptionsTest** — ProxyOptions and AgentOptions config file loading
 - **ShadowServiceFilesTest** — every class listed in the pinned fat-JAR service files
   (`src/shadow/resources/META-INF/services/`) loads and implements its service, so a stale provider name fails here
   instead of only in the container suite
+- **TestingGuideTest** — every `*Test.kt` under `src/test/kotlin` is named in its package's section of this
+  document, and every support file under `src/test` is named somewhere in it
+- **WebsiteConfigKeysTest** — every `proxy.` and `agent.` config key the website's pages name is in
+  `config/config.conf`, since HOCON ignores a key it doesn't know, and every default the pages' tables give for one
+  is the one `config/config.conf` declares
+
+One support helper also lives here (not a test class itself):
+
+- **WebsitePages** — the docs site's pages with their fenced code blocks removed, and the inline code in them, for
+  `DashboardMetricNamesTest` and `WebsiteConfigKeysTest`
 
 ### Integration Tests (`harness/`)
 
@@ -313,7 +373,9 @@ Integration tests exercise full proxy+agent workflows with real instances:
 - **InProcessTestNoAdminMetricsTest** — In-process gRPC tests without admin/metrics
 - **InProcessTestWithAdminMetricsTest** — In-process gRPC tests with admin/metrics enabled
 - **NettyTestNoAdminMetricsTest** — Netty transport tests without admin/metrics
-- **NettyTestWithAdminMetricsTest** — Netty transport tests with admin/metrics enabled
+- **NettyTestWithAdminMetricsTest** — Netty transport tests with admin/metrics enabled; both metrics endpoints serve
+  the JVM buffer pool and compilation metrics `harness.conf` turns on, and no native memory metrics, which need
+  `-XX:NativeMemoryTracking`
 - **TlsNoMutualAuthTest** — the standard harness suite over a real TLS channel (Netty), without mutual
   authentication
 - **TlsWithMutualAuthTest** — the standard harness suite over a real mutual-TLS channel (Netty, client certs)
@@ -377,7 +439,9 @@ mechanism that the standard suite cannot reach:
 
 #### Harness Infrastructure (`harness/support/`)
 
-- **HarnessSetup** — Base class providing `setupProxyAndAgent()` / `takeDownProxyAndAgent()` lifecycle
+- **HarnessSetup** — Base class providing `setupProxyAndAgent()` / `takeDownProxyAndAgent()` lifecycle; before each
+  spec it clears the default registry and has `SystemMetrics` forget it, so each spec's proxy and agent register the
+  JVM metric groups again
 - **HarnessHelpersTest** — `awaitPortFree()` fails when a port stays taken, and `HarnessConstants.localConfigFile()`
   fails for a missing test config rather than fetching one from GitHub
 - **TestUtils** — Utility functions: `startProxy()`, `startAgent()`, `exceptionHandler()`
@@ -408,6 +472,8 @@ listener already on the host — both binds succeed, and the OS then routes the 
 process, which surfaces as a wait strategy timing out against a status the container never produced.
 
 - **ContainersSmokeTest** — baseline: Prometheus scrapes a single metric through the proxy and agent
+- **ContainersServiceDiscoveryTest** — Prometheus finds the agent's path only through `http_sd_configs`, with
+  `sdTargetPrefix` given as a URL, and scrapes it (`up == 1`)
 - **ContainersProxyHttpTest** — HTTP surfaces: registered-path scrapes, 404/503 passthrough, admin servlets,
   self-metrics, service discovery
 - **ContainersConsolidatedTest** — two consolidated agents register the same path; the proxy merges responses
@@ -422,6 +488,8 @@ process, which surfaces as a wait strategy timing out against a status the conta
 - **ContainersWebDashboardTest** — the dashboard against the real fat JAR, which is the point: htmx ships as
   a WebJar served from the classpath, so a packaging regression would leave the page loading a 404
 - **ContainersPortBindingTest** — every published port binds loopback rather than the wildcard address
+- **ContainersPackagingTest** — the images run as UID and GID 1001, given by number, as the charts expect, and each
+  fat JAR's `META-INF/NOTICE` and `META-INF/LICENSE` carry every dependency's notice and license text
 - **ContainersScalingTest** — parameter-driven scaling (see below)
 
 #### Scaling Test (`ContainersScalingTest`)
