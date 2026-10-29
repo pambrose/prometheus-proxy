@@ -1,6 +1,6 @@
 # Prometheus-Proxy Code Review — October 2026 Findings
 
-**Status:** 47 issues — 34 fixed, 13 open (16 medium, 31 low, no high).
+**Status:** 47 issues — 36 fixed, 11 open (16 medium, 31 low, no high).
 
 **Date:** 2026-10-27
 
@@ -76,7 +76,7 @@ Six earlier fixes turn out to be incomplete:
 | 1  | Service-discovery targets are URLs, which Prometheus refuses; SD as documented is empty | Proxy    | medium   | ✅      |
 | 2  | Health thresholds (25) far below the caps; `/healthcheck` readiness flaps under load    | Proxy    | medium   | ✅      |
 | 3  | Chunked-transfer sweep skipped on cancel; reclaim trusts the agent's `headerAgentId`    | Proxy    | low      | ✅      |
-| 4  | Unauthenticated connections still log INFO on removal and count as evictions           | Proxy    | low      | ⬜      |
+| 4  | Unauthenticated connections still log INFO on removal and count as evictions           | Proxy    | low      | ✅      |
 | 5  | Each `Proxy` leaks a JVM shutdown hook that keeps it reachable                          | Proxy    | low      | ✅      |
 | 6  | A path equal to the SD path, blitz path, or `favicon.ico` registers but can't be scraped | Proxy   | low      | ✅      |
 | 7  | Dead or test-only proxy code, including an unreachable `no_agents` branch               | Proxy    | low      | ⬜      |
@@ -89,7 +89,7 @@ Six earlier fixes turn out to be incomplete:
 | 14 | `X-Prometheus-Scrape-Timeout-Seconds` isn't forwarded to the target                     | Agent    | low      | ✅      |
 | 15 | Basic credentials from the target URL are sent only after a 401                         | Agent    | low      | ✅      |
 | 16 | An embedded agent's `logLevel` changes the host JVM's root logger                       | Agent    | low      | ✅      |
-| 17 | A routine proxy outage logs an ERROR stack trace on every reconnect                     | Agent    | low      | ⬜      |
+| 17 | A routine proxy outage logs an ERROR stack trace on every reconnect                     | Agent    | low      | ✅      |
 | 18 | A bad `agent.http.trustStorePath` isn't caught at startup and fails every scrape        | Agent    | low      | ✅      |
 | 19 | `MetricFilter` misjudges quoted UTF-8 metric names                                      | Agent    | low      | ✅      |
 | 20 | Agent dead code, stale KDoc, and a `shutDown()` that isn't failure-isolated             | Agent    | low      | ⬜      |
@@ -150,7 +150,7 @@ The **Touches** column shows which steps edit the same files and so need to land
 | 9    | ✅      | #9, #16, #5, #41 | Safe to embed: register metrics once, leave the root logger and shutdown hooks alone, fix the examples | `AgentMetrics.kt`, `ProxyMetrics.kt`, `Agent.kt`, `BaseOptions.kt`, `Utils.kt`, `ProxyGrpcService.kt`, README, website, KDoc | All four are about running inside another JVM, so one embedded-host spec (restart, two agents, log level) covers them. Do it after step 4 and before step 10, which shares `AgentMetrics.kt`. |
 | 10   | ✅      | #11, #13        | Agent metrics that count every scrape                                       | `AgentHttpService.kt`, `AgentMetrics.kt`, metrics docs, Grafana JSON                              | Do it after steps 4 and 9, which share these files. The dashboards and docs change with the counter.                                                                             |
 | 11   | ✅      | #10, #12, #18   | Agent config and discovery robustness                                       | `PathDiscoveryService.kt`, `AgentPathManager.kt`, `PathDiscoverySource.kt`, `AgentOptions.kt`, trust-manager init | Startup validation, plus a last-known-good list that outlives the connection. Independent of the proxy steps.                                                                    |
-| 12   | ⬜      | #4, #17         | Quiet logs for unauthenticated connections and routine outages              | `AgentContextManager.kt`, `AgentContextCleanupService.kt`, `AgentGrpcService.kt`, `Utils.kt`      | Changes only log levels and one counter, each covered by a `ListAppender` test. Do it after step 5, which shares `AgentContextManager.kt`.                                        |
+| 12   | ✅      | #4, #17         | Quiet logs for unauthenticated connections and routine outages              | `AgentContextManager.kt`, `AgentContextCleanupService.kt`, `AgentGrpcService.kt`, `Utils.kt`      | Changes only log levels and one counter, each covered by a `ListAppender` test. Do it after step 5, which shares `AgentContextManager.kt`.                                        |
 | 13   | ✅      | #19             | `MetricFilter` handles quoted UTF-8 names                                   | `agent/filter/MetricFilter.kt`                                                                    | Self-contained, so it can go any time.                                                                                                                                           |
 | 14   | ✅      | #31, #36, #34   | Docs site: build on PRs, cool down hand upgrades, deploy after publishing   | `docs.yml`, `ci.yml`, `Makefile`                                                                  | Keeps a broken site build off `master`, and keeps the site from advertising a version that isn't published yet. Workflow-only, so it can run in parallel with code steps.        |
 | 15   | ⬜      | #27, #39, #40   | Helm and image packaging                                                    | `charts/*`, `etc/docker/*.Dockerfile`, `build.gradle.kts` shadow config                           | A Secret-backed auth config, an explicit UID, and NOTICE merging. Needs a `helm-smoke` run and the container tests.                                                              |
@@ -325,7 +325,7 @@ the agent from the tracked scrape, replaces the header's `headerAgentId`, and `r
 on it. A header followed by a `CancellationException` now leaves `chunkedContextMapView` empty, and a context with a
 mismatched `headerAgentId` is reclaimed by `removeAgentContext(owner)`. Both tests failed against the old code.
 
-### 4. [ ] Late-September #15 is incomplete: unauthenticated connections still log at INFO when removed, and count as evictions
+### 4. [x] Late-September #15 is incomplete: unauthenticated connections still log at INFO when removed, and count as evictions
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -353,6 +353,18 @@ unvalidated `request.agentId`, up to about 4 MiB, is logged in `connectionMismat
 AgentContext" lines at ERROR, across `registerAgent`, `registerPath`, `unregisterPath`, and `sendHeartBeat`.
 `removePath` logs `unregisterPath`'s path whole at ERROR. `AgentContext.loggedPathRejections` keeps one entry per
 distinct rejected path per connection, unbounded in count though each entry is now at most about 67 characters.
+
+**Resolution:**
+
+- `removeFromContextManager` and the cleanup service's eviction log at INFO only for an announced context, and at
+  DEBUG otherwise. Only an announced context increments `agentEvictionCount`.
+- `ProxyServiceImpl.shownAgentId` cuts an unvalidated `agentId` to 64 characters, as `shownPath` does, in the
+  mismatch WARN, the four "missing AgentContext" ERROR lines, their reasons, and `readRequestsFromProxy`'s
+  `NOT_FOUND`. `removePath` shows its path the same way.
+- `AgentContext.recordRejection` keeps at most `MAX_REMEMBERED_REJECTIONS` (1,000) paths, and a new path past that
+  is logged at DEBUG.
+
+Each `ListAppender` test failed against the old code.
 
 ### 5. [x] Each `Proxy` adds a JVM shutdown hook for its gRPC server that is never removed
 
@@ -735,7 +747,7 @@ when `embedded`, so a standalone agent and the proxy still set the root logger. 
 it. `AgentOptionsTest` checks that embedded options with `--log_level warn` leave the root logger at INFO and set
 `io.prometheus` to WARN; before the fix, the root logger became WARN.
 
-### 17. [ ] A routine proxy outage logs an ERROR stack trace on every reconnect
+### 17. [x] A routine proxy outage logs an ERROR stack trace on every reconnect
 
 **Severity:** low · **Confidence:** confirmed
 
@@ -759,6 +771,16 @@ Elsewhere, the project logs a repeating failure once at WARN and then at DEBUG.
 - log an `UNAVAILABLE` stream end at WARN.
 
 **Test:** N consecutive connect failures produce one WARN.
+
+**Resolution:**
+
+- `connectAgent` keeps the last failure logged for each endpoint until a connect to it succeeds. A first or changed
+  failure logs at WARN, with the stack trace, and a repeat at DEBUG, as does the `Connecting to proxy` line. A dead
+  primary in a failover list therefore logs once, though connects to the secondary succeed in between.
+- `logStreamFailure` logs an `UNAVAILABLE` status at WARN without a stack trace, and anything else at ERROR as
+  before.
+
+Five failed connects now log one WARN and no ERROR; they logged five ERRORs before.
 
 ### 18. [x] A bad `agent.http.trustStorePath` or password isn't caught at startup and fails every scrape
 

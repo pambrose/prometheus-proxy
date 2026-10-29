@@ -18,6 +18,7 @@
 
 package io.prometheus.proxy
 
+import ch.qos.logback.classic.Level
 import com.typesafe.config.ConfigFactory
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.core.spec.style.StringSpec
@@ -30,6 +31,7 @@ import io.mockk.spyk
 import io.mockk.verify
 import io.prometheus.Proxy
 import io.prometheus.common.ConfigVals
+import io.prometheus.common.captureLogs
 import kotlin.time.Duration.Companion.seconds
 
 // Tests for AgentContextCleanupService which evicts inactive agents from the proxy.
@@ -132,6 +134,44 @@ class AgentContextCleanupServiceTest : StringSpec() {
         verify(atLeast = 1) { mockProxy.removeAgentContext("stale-agent-123", "Eviction") }
       }
       service.stopAsync().awaitTerminated()
+    }
+
+    // A connection that never authenticated isn't an agent: evicting it wrote an INFO line and counted in
+    // proxy_eviction_count_total (October #4).
+    "evicting a context should log at INFO and count only when it was announced" {
+      listOf(false, true).forEach { announced ->
+        val agentContextManager = AgentContextManager(isTestMode = true)
+        val staleAgentContext = mockk<AgentContext>(relaxed = true)
+        every { staleAgentContext.agentId } returns "stale-agent"
+        every { staleAgentContext.inactivityDuration } returns 5.seconds
+        every { staleAgentContext.announced } returns announced
+        agentContextManager.putAgentContext("stale-agent", staleAgentContext)
+
+        val mockMetrics = mockk<ProxyMetrics>(relaxed = true)
+        val mockProxy = mockk<Proxy>(relaxed = true)
+        every { mockProxy.agentContextManager } returns agentContextManager
+        every { mockProxy.metrics(any<ProxyMetrics.() -> Unit>()) } answers {
+          firstArg<ProxyMetrics.() -> Unit>().invoke(mockMetrics)
+        }
+        every { mockProxy.removeAgentContext(any(), any()) } answers {
+          agentContextManager.removeFromContextManager(firstArg<String>(), secondArg<String>())
+        }
+
+        val service =
+          AgentContextCleanupService(
+            mockProxy,
+            createConfigVals(maxAgentInactivitySecs = 1, staleAgentCheckPauseSecs = 1),
+          )
+        val events =
+          captureLogs<AgentContextCleanupService>(Level.DEBUG) {
+            service.startAsync()
+            eventually(5.seconds) { verify(exactly = 1) { mockProxy.removeAgentContext("stale-agent", "Eviction") } }
+            service.stopAsync().awaitTerminated()
+          }.filter { "Evicting" in it.formattedMessage }
+
+        events.map { it.level } shouldBe listOf(if (announced) Level.INFO else Level.DEBUG)
+        verify(exactly = if (announced) 1 else 0) { mockMetrics.agentEvictionCount }
+      }
     }
 
     "cleanup should not evict active agent" {

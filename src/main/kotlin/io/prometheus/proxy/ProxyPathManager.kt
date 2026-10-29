@@ -421,6 +421,8 @@ internal class ProxyPathManager(
     require(path.isNotBlank()) { BLANK_PATH_MSG }
     require(agentId.isNotBlank()) { BLANK_AGENT_ID_MSG }
     val key = pathKey(path)
+    // unregisterPath's path is unchecked, so the failure shows it cut (October #4).
+    val shown = shownPath(key)
 
     // Null once the path is removed, otherwise why it couldn't be.
     val failure =
@@ -428,12 +430,12 @@ internal class ProxyPathManager(
         val agentInfo = pathMap[key]
         when {
           agentInfo == null -> {
-            "Unable to remove path /$key - path not found"
+            "Unable to remove path /$shown - path not found"
           }
 
           agentInfo.agentContexts.none { it.agentId == agentId } -> {
             val agentIds = agentInfo.agentContexts.joinToString(", ") { it.agentId }
-            "Unable to remove path /$key - invalid agentId: $agentId -- [$agentIds]"
+            "Unable to remove path /$shown - invalid agentId: $agentId -- [$agentIds]"
           }
 
           else -> {

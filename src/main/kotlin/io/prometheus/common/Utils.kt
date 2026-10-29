@@ -204,15 +204,20 @@ internal object Utils {
   // while/cause loop. Shared so the different cause-walks no longer drift (finding 34).
   fun Throwable.causeChain(): Sequence<Throwable> = generateSequence(this) { it.cause }
 
-  // Logs a connection/stream-task failure at ERROR with the gRPC status details. Shared by the agent's
-  // connection-task and stream-task failure handlers, which were byte-for-byte identical (finding 23) and
-  // used apply {} only to smuggle the Status receiver for exceptionDetails() (finding 36).
+  // Logs a connection/stream-task failure with the gRPC status details: at WARN without a stack trace when the
+  // status is UNAVAILABLE, the proxy going away, which every disconnect logged one to three of at ERROR (October
+  // #17), and at ERROR with one otherwise. Shared by the agent's connection-task and stream-task failure handlers,
+  // which were byte-for-byte identical (finding 23) and used apply {} only to smuggle the Status receiver for
+  // exceptionDetails() (finding 36).
   fun KLogger.logStreamFailure(
     name: String,
     e: Throwable,
   ) {
     val status = Status.fromThrowable(e)
-    error(e) { "$name(): ${status.exceptionDetails(e)}" }
+    if (status.code == Status.Code.UNAVAILABLE)
+      warn { "$name(): ${status.exceptionDetails(e)}" }
+    else
+      error(e) { "$name(): ${status.exceptionDetails(e)}" }
   }
 
   data class HostPort(

@@ -564,6 +564,21 @@ class ProxyPathManagerTest : StringSpec() {
       response.reason shouldContain "path not found"
     }
 
+    // unregisterPath's path reaches removePath unchecked, and its ERROR line and reason wrote it whole (October #4,
+    // found while fixing #23).
+    "removePath should cut the path it can't remove to 64 characters in the log and the reason" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val longPath = "p".repeat(10_000)
+
+      var reason = ""
+      val events =
+        captureLogs<ProxyPathManager>(Level.WARN) { reason = manager.removePath(longPath, "agent-123").reason }
+
+      reason shouldContain "p".repeat(64) + "..."
+      reason.length shouldBeLessThan 200
+      events.single().formattedMessage.length shouldBeLessThan 200
+    }
+
     "removePath should fail when agent ID mismatch" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)

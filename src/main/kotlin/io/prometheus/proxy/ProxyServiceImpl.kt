@@ -127,10 +127,9 @@ internal class ProxyServiceImpl(
     return if (connectionAgentId == null || connectionAgentId == requestAgentId) {
       null
     } else {
-      logger.warn {
-        "Agent on connection $connectionAgentId sent agentId $requestAgentId to $rpcName(); rejecting"
-      }
-      "agentId $requestAgentId does not match the connection's agentId ($rpcName)"
+      val shown = shownAgentId(requestAgentId)
+      logger.warn { "Agent on connection $connectionAgentId sent agentId $shown to $rpcName(); rejecting" }
+      "agentId $shown does not match the connection's agentId ($rpcName)"
     }
   }
 
@@ -168,8 +167,9 @@ internal class ProxyServiceImpl(
       connectionMismatchReason(request.agentId, "registerAgent") ?: run {
         val agentContext = proxy.agentContextManager.getAgentContext(request.agentId)
         if (agentContext == null) {
-          logger.error { "registerAgent() missing AgentContext agentId: ${request.agentId}" }
-          "Invalid agentId: ${request.agentId} (registerAgent)"
+          val shown = shownAgentId(request.agentId)
+          logger.error { "registerAgent() missing AgentContext agentId: $shown" }
+          "Invalid agentId: $shown (registerAgent)"
         } else {
           identityMismatchReason(agentContext, "registerAgent") ?: run {
             agentContext.assignProperties(boundedRegistration(request, agentContext.agentId))
@@ -262,8 +262,9 @@ internal class ProxyServiceImpl(
       connectionMismatchReason(request.agentId, "registerPath")?.let { PathRejection(it, BINDING_MISMATCH) } ?: run {
         val agentContext = proxy.agentContextManager.getAgentContext(request.agentId)
         if (agentContext == null) {
-          logger.error { "Missing AgentContext for agentId: ${request.agentId}" }
-          PathRejection("Invalid agentId: ${request.agentId} (registerPath)", INVALID_AGENT)
+          val shown = shownAgentId(request.agentId)
+          logger.error { "Missing AgentContext for agentId: $shown" }
+          PathRejection("Invalid agentId: $shown (registerPath)", INVALID_AGENT)
         } else {
           identityMismatchReason(agentContext, "registerPath")?.let { PathRejection(it, BINDING_MISMATCH) } ?: run {
             // AGENT_IDENTITY_KEY is null when per-agent auth is disabled (no interceptor); an identity
@@ -327,10 +328,11 @@ internal class ProxyServiceImpl(
     val agentContext = proxy.agentContextManager.getAgentContext(agentId)
     val identityReason = agentContext?.let { identityMismatchReason(it, "unregisterPath") }
     return if (agentContext == null) {
-      logger.error { "Missing AgentContext for agentId: $agentId" }
+      val shown = shownAgentId(agentId)
+      logger.error { "Missing AgentContext for agentId: $shown" }
       unregisterPathResponse {
         valid = false
-        reason = "Invalid agentId: $agentId (unregisterPath)"
+        reason = "Invalid agentId: $shown (unregisterPath)"
       }
     } else if (identityReason != null) {
       unregisterPathResponse {
@@ -357,8 +359,9 @@ internal class ProxyServiceImpl(
         val failureReason =
           connectionMismatchReason(request.agentId, "sendHeartBeat")
             ?: if (agentContext == null) {
-              logger.error { "sendHeartBeat() missing AgentContext agentId: ${request.agentId}" }
-              "Invalid agentId: ${request.agentId} (sendHeartBeat)"
+              val shown = shownAgentId(request.agentId)
+              logger.error { "sendHeartBeat() missing AgentContext agentId: $shown" }
+              "Invalid agentId: $shown (sendHeartBeat)"
             } else {
               identityMismatchReason(agentContext, "sendHeartBeat")
             }
@@ -389,7 +392,9 @@ internal class ProxyServiceImpl(
       }
       try {
         val agentContext = proxy.agentContextManager.getAgentContext(agentId)
-          ?: throw StatusException(Status.NOT_FOUND.withDescription("No AgentContext found for agentId: $agentId"))
+          ?: throw StatusException(
+            Status.NOT_FOUND.withDescription("No AgentContext found for agentId: ${shownAgentId(agentId)}"),
+          )
         emitScrapeRequests(agentContext)
       } finally {
         // When transportFilterDisabled is true, there is no ProxyServerTransportFilter to
@@ -669,5 +674,10 @@ internal class ProxyServiceImpl(
       value: String,
       max: Int,
     ): String = value.substring(0, if (value[max - 1].isHighSurrogate()) max - 1 else max)
+
+    // [agentId] as a log line or a reason shows it, cut as a rejected path is. The proxy assigns agentIds, so a real
+    // one is short, but request.agentId is caller-supplied, up to gRPC's 4 MiB message limit, until it's matched to a
+    // context (October #4).
+    private fun shownAgentId(agentId: String): String = ProxyPathManager.shownPath(agentId)
   }
 }

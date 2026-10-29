@@ -18,8 +18,10 @@
 
 package io.prometheus.proxy
 
+import ch.qos.logback.classic.Level
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.longs.shouldBeLessThan
@@ -29,6 +31,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeSameInstanceAs
 import io.ktor.http.HttpStatusCode
 import io.mockk.mockk
+import io.prometheus.common.captureLogs
 import io.prometheus.grpc.chunkedScrapeResponse
 import io.prometheus.grpc.headerData
 import kotlinx.coroutines.async
@@ -168,6 +171,28 @@ class AgentContextManagerTest : StringSpec() {
       removed shouldBe context
       removed.isNotValid() shouldBe true
       manager.agentContextSize shouldBe 0
+    }
+
+    // Every connection that never authenticates -- a bad token, a port scanner, a grpc_health_probe -- reaches
+    // removeFromContextManager when it closes, and wrote "Removed ..." at INFO each time (October #4).
+    "removing a context that never authenticated should log at DEBUG, and an announced one at INFO" {
+      val manager = AgentContextManager(isTestMode = false)
+      // Added as the transport filter adds every connection's context, then announced as its first authenticated
+      // call does.
+      val pending = AgentContext("10.0.1.14:1234").also { manager.addAgentContext(it, announce = false) }
+      val announced = AgentContext("10.0.1.15:1234").also { manager.addAgentContext(it, announce = false) }
+      manager.announceAgentContext(announced.agentId)
+
+      val pendingEvents =
+        captureLogs<AgentContextManager>(Level.DEBUG) { manager.removeFromContextManager(pending.agentId, "test") }
+          .filter { "Removed" in it.formattedMessage }
+      val announcedEvents =
+        captureLogs<AgentContextManager>(Level.DEBUG) { manager.removeFromContextManager(announced.agentId, "test") }
+          .filter { "Removed" in it.formattedMessage }
+
+      pendingEvents.map { it.level } shouldBe listOf(Level.DEBUG)
+      announcedEvents shouldHaveSize 1
+      announcedEvents.single().level shouldBe Level.INFO
     }
 
     "removeFromContextManager should return null for non-existent agentId" {

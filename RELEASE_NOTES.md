@@ -109,6 +109,13 @@ among them gRPC, which now runs at one version across all its modules.
   queued. Kubernetes then took the pod out of the Service, which failed the scrapes for its agents' targets until
   the load dropped, and the cycle repeated. The probe is now `/ping`, and the in-flight thresholds default to 80%
   of `maxInFlightScrapeRequests`.
+- **Quieter logs.**
+  - A connection to the agent port that never authenticates, such as a port scanner or a health probe, no longer
+    writes INFO lines or counts in `proxy_eviction_count_total`, so the evictions alert fires only for agents.
+  - During a proxy outage the agent logs a connect failure once at WARN, and again only when it changes, instead
+    of an ERROR stack trace every 3 seconds. The same goes for a dead primary in a failover list, and a stream
+    ended by the proxy going away is a one-line WARN.
+  - An unknown agent ID or path in the proxy's logs is cut to its first 64 characters.
 
 ### Documentation
 

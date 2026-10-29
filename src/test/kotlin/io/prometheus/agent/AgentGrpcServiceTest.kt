@@ -26,6 +26,10 @@ import com.pambrose.common.service.ZipkinReporterService
 import com.pambrose.common.util.zip
 import com.pambrose.common.util.hostInfo
 import io.grpc.Metadata
+import io.kotest.matchers.nulls.shouldNotBeNull
+import io.kotest.matchers.collections.shouldBeEmpty
+import io.grpc.StatusRuntimeException
+import io.grpc.Status
 import io.kotest.assertions.throwables.shouldNotThrow
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.assertions.throwables.shouldThrowAny
@@ -427,6 +431,61 @@ class AgentGrpcServiceTest : StringSpec() {
         val result = service.connectAgent()
 
         result.shouldBeFalse()
+      }
+    }
+
+    // With the 3s reconnect pause, a proxy outage wrote about 20 ERROR stack traces a minute (October #17).
+    "repeated failures to connect to one proxy should log one WARN with the stack trace, and the rest at DEBUG" {
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
+        coEvery { mockStub.connectAgent(any(), any<Metadata>()) } throws
+          StatusRuntimeException(Status.UNAVAILABLE.withDescription("io exception"))
+
+        val events = captureLogs<AgentGrpcService>(Level.DEBUG) { repeat(5) { service.connectAgent().shouldBeFalse() } }
+
+        events.filter { it.level == Level.ERROR }.shouldBeEmpty()
+        val warnings = events.filter { it.level == Level.WARN }
+        warnings.map { it.formattedMessage }.single() shouldContain "Cannot connect to proxy"
+        warnings.single().throwableProxy.shouldNotBeNull()
+        events.count { it.level == Level.INFO && "Connecting to proxy" in it.formattedMessage } shouldBe 1
+        events.count { it.level == Level.DEBUG && "Cannot connect to proxy" in it.formattedMessage } shouldBe 4
+      }
+    }
+
+    "a different connect failure, or one after a connect succeeded, should log a WARN again" {
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
+        val unavailable = StatusRuntimeException(Status.UNAVAILABLE.withDescription("io exception"))
+        val unauthenticated = StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("bad token"))
+        coEvery { mockStub.connectAgent(any(), any<Metadata>()) } throws
+          unavailable andThenThrows unavailable andThenThrows unauthenticated andThen EMPTY_INSTANCE andThenThrows
+          unauthenticated
+
+        val events = captureLogs<AgentGrpcService>(Level.DEBUG) { repeat(5) { service.connectAgent() } }
+
+        events.filter { it.level == Level.WARN }.map { it.formattedMessage }.let { warnings ->
+          warnings.size shouldBe 3
+          warnings[0] shouldContain "UNAVAILABLE"
+          warnings[1] shouldContain "UNAUTHENTICATED"
+          warnings[2] shouldContain "UNAUTHENTICATED"
+        }
+      }
+    }
+
+    // A dead primary in a failover list failed once every cycle, between connects to the secondary that succeeded.
+    "a dead primary in a failover list should log one WARN, though connects to the secondary succeed in between" {
+      withStubbedService("primary:1,secondary:1") { service, mockStub ->
+        coEvery { mockStub.connectAgent(any(), any<Metadata>()) } throws
+          StatusRuntimeException(Status.UNAVAILABLE) andThen EMPTY_INSTANCE andThenThrows
+          StatusRuntimeException(Status.UNAVAILABLE) andThen EMPTY_INSTANCE
+
+        val events =
+          captureLogs<AgentGrpcService>(Level.DEBUG) {
+            listOf("primary:1", "secondary:1", "primary:1", "secondary:1").forEach { host ->
+              every { service.agent.proxyHost } returns host
+              service.connectAgent()
+            }
+          }
+
+        events.filter { it.level == Level.WARN }.map { it.formattedMessage }.single() shouldContain "primary:1"
       }
     }
 
