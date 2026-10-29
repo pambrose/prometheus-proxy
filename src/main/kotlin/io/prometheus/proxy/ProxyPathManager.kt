@@ -95,7 +95,7 @@ internal class ProxyPathManager(
     if (count > 0) pathCounts[agentId] = count else pathCounts.remove(agentId)
   }
 
-  // The number of paths [agentId] serves.
+  // The number of paths [agentId] serves. Callers that already hold pathMap take it again, which the JVM allows.
   internal fun pathCountFor(agentId: String): Int = synchronized(pathMap) { pathCounts[agentId] ?: 0 }
 
   // AgentContextInfo is deeply immutable and mutations replace the pathMap entry (never mutate in
@@ -105,9 +105,6 @@ internal class ProxyPathManager(
 
   val pathMapSize: Int
     get() = synchronized(pathMap) { pathMap.size }
-
-  val allPaths: List<String>
-    get() = synchronized(pathMap) { pathMap.keys.toList() }
 
   // Copy only the map to snapshot the key set under the lock; the immutable values can be shared.
   fun allPathContextInfos(): Map<String, AgentContextInfo> = synchronized(pathMap) { pathMap.toMap() }
@@ -216,7 +213,7 @@ internal class ProxyPathManager(
     path: String,
   ): PathRejection? {
     val max = proxy.maxPathsPerAgent
-    val count = pathCounts[agentContext.agentId] ?: 0
+    val count = pathCountFor(agentContext.agentId)
     if (max <= 0 || count < max)
       return null
     val reason =
@@ -229,7 +226,7 @@ internal class ProxyPathManager(
   // registrations start failing. Callers MUST hold pathMap.
   private fun warnNearPathLimit(agentContext: AgentContext) {
     val max = proxy.maxPathsPerAgent
-    val count = pathCounts[agentContext.agentId] ?: 0
+    val count = pathCountFor(agentContext.agentId)
     if (max > 0 && count == (max * 4 + 4) / 5)
       logger.warn {
         "Agent ${agentContext.agentId} serves $count of $max paths allowed by proxy.internal.maxPathsPerAgent"
@@ -362,7 +359,7 @@ internal class ProxyPathManager(
     // The agent will reconnect and re-register its paths if needed.
     displacedContexts.forEach { displacedContext ->
       countPaths(displacedContext.agentId, -1)
-      if ((pathCounts[displacedContext.agentId] ?: 0) == 0) {
+      if (pathCountFor(displacedContext.agentId) == 0) {
         logger.info { "Invalidating orphaned agentId ${displacedContext.agentId} after path /$path was overwritten" }
         displacedContext.invalidate()
       }

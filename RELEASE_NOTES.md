@@ -121,6 +121,8 @@ among them gRPC, which now runs at one version across all its modules.
     of an ERROR stack trace every 3 seconds. The same goes for a dead primary in a failover list, and a stream
     ended by the proxy going away is a one-line WARN.
   - An unknown agent ID or path in the proxy's logs is cut to its first 64 characters.
+- **An agent whose gRPC shutdown fails still releases its ports.** The admin and metrics servers stopped only if
+  every earlier shutdown step succeeded. Each step now runs regardless, and the first failure is reported.
 
 ### Documentation
 
@@ -139,6 +141,8 @@ among them gRPC, which now runs at one version across all its modules.
   gauge, which is `proxy_agent_map_size`. A test now checks the metric names, config keys, and defaults the
   website gives.
 - The testing guide names every spec and helper, and a test keeps it that way.
+- The scrape outcomes no longer list `no_agents`, which the proxy never reported. The agent's API docs no longer
+  promise exponential reconnect backoff, or say that `startSyncAgent` blocks until the agent stops.
 
 ### Build and tooling
 
@@ -176,6 +180,7 @@ among them gRPC, which now runs at one version across all its modules.
   effect locally as it does in CI.
 - Every CI job has a time limit, and the tool images and schemas the checks use are pinned, so a re-pushed tag or a
   moved branch can't change what CI runs without a change in the repository.
+- Code that only tests used, or that nothing used, is removed.
 
 ### Dependency updates
 

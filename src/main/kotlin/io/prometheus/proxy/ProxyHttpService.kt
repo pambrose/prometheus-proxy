@@ -58,8 +58,6 @@ internal class ProxyHttpService(
       (if (idleTimeoutSecs == -1) DEFAULT_IDLE_TIMEOUT_SECS else idleTimeoutSecs).seconds
     }
 
-  private val tracing by lazy { proxy.zipkinReporterService.newTracing("proxy-http") }
-
   private fun getConfig(httpPort: Int): Configuration.() -> Unit =
     {
       connector {
@@ -87,8 +85,6 @@ internal class ProxyHttpService(
   }
 
   override fun shutDown() {
-    if (proxy.isZipkinEnabled)
-      tracing.close()
     httpServer.stop(5.seconds.inWholeMilliseconds, 5.seconds.inWholeMilliseconds)
   }
 

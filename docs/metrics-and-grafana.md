@@ -96,7 +96,6 @@ Three more groups are off by default:
 | `success`               | Scrape completed successfully                                                |
 | `timed_out`             | Agent did not answer within the proxy's `scrapeRequestTimeoutSecs`           |
 | `upstream_timed_out`    | Agent answered, but its fetch exceeded `agent.scrapeTimeoutSecs`, or Prometheus's shorter scrape timeout (408/504) |
-| `no_agents`             | The path's registration had no agents left to send the scrape to             |
 | `invalid_path`          | No agent has registered the requested path                                   |
 | `missing_path`          | The request had no path (a scrape of `/`)                                    |
 | `agent_disconnected`    | Agent disconnected, was evicted, or was displaced before it answered (503)   |

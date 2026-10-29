@@ -123,9 +123,6 @@ internal class AgentContext(
   var currentEndpointIndex: Int by nonNullableReference(0)
     private set
 
-  internal val desc: String
-    get() = if (consolidated) "consolidated " else ""
-
   internal val lastRequestDuration
     get() = lastRequestTimeMark.elapsedNow()
 

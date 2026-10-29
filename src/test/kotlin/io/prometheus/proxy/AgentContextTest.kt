@@ -470,27 +470,6 @@ class AgentContextTest : StringSpec() {
       str shouldContain "10.0.0.1"
     }
 
-    "desc should indicate consolidated mode" {
-      val context = AgentContext("remote-addr")
-      val request = mockk<RegisterAgentRequest>()
-      every { request.launchId } returns "launch-1"
-      every { request.agentName } returns "agent"
-      every { request.hostName } returns "host"
-      every { request.consolidated } returns true
-      every { request.proxyEndpointsList } returns LazyStringArrayList()
-      every { request.currentEndpointIndex } returns 0
-
-      context.assignProperties(request)
-
-      context.desc shouldContain "consolidated"
-    }
-
-    "desc should be empty for non-consolidated agent" {
-      val context = AgentContext("remote-addr")
-
-      context.desc shouldBe ""
-    }
-
     // ==================== markActivityTime Branch Tests ====================
 
     "markActivityTime with isRequest false should reset inactivity but not the request time" {

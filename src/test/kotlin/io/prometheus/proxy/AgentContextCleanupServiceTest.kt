@@ -112,7 +112,7 @@ class AgentContextCleanupServiceTest : StringSpec() {
       every { staleAgentContext.inactivityDuration } returns 5.seconds
 
       // Add stale context directly to the map
-      agentContextManager.putAgentContext("stale-agent-123", staleAgentContext)
+      agentContextManager.addAgentContext(staleAgentContext, announce = false)
 
       val mockMetrics = mockk<ProxyMetrics>(relaxed = true)
       val mockProxy = mockk<Proxy>(relaxed = true)
@@ -145,7 +145,7 @@ class AgentContextCleanupServiceTest : StringSpec() {
         every { staleAgentContext.agentId } returns "stale-agent"
         every { staleAgentContext.inactivityDuration } returns 5.seconds
         every { staleAgentContext.announced } returns announced
-        agentContextManager.putAgentContext("stale-agent", staleAgentContext)
+        agentContextManager.addAgentContext(staleAgentContext, announce = false)
 
         val mockMetrics = mockk<ProxyMetrics>(relaxed = true)
         val mockProxy = mockk<Proxy>(relaxed = true)
@@ -187,7 +187,7 @@ class AgentContextCleanupServiceTest : StringSpec() {
       every { activeAgentContext.agentId } returns "active-agent-123"
       every { activeAgentContext.inactivityDuration } returns 5.seconds
 
-      agentContextManager.putAgentContext("active-agent-123", activeAgentContext)
+      agentContextManager.addAgentContext(activeAgentContext, announce = false)
 
       val mockProxy = mockk<Proxy>(relaxed = true)
       every { mockProxy.agentContextManager } returns agentContextManager
@@ -284,7 +284,7 @@ class AgentContextCleanupServiceTest : StringSpec() {
       every { agentContext.agentId } returns "revived-agent"
       every { agentContext.inactivityDuration } returnsMany [5.seconds, 1.seconds]
 
-      agentContextManager.putAgentContext("revived-agent", agentContext)
+      agentContextManager.addAgentContext(agentContext, announce = false)
 
       val mockProxy = mockk<Proxy>(relaxed = true)
       every { mockProxy.agentContextManager } returns agentContextManager
@@ -312,7 +312,7 @@ class AgentContextCleanupServiceTest : StringSpec() {
       every { agentContext.agentId } returns "still-stale"
       every { agentContext.inactivityDuration } returns 5.seconds
 
-      agentContextManager.putAgentContext("still-stale", agentContext)
+      agentContextManager.addAgentContext(agentContext, announce = false)
 
       val mockMetrics = mockk<ProxyMetrics>(relaxed = true)
       val mockProxy = mockk<Proxy>(relaxed = true)
@@ -357,9 +357,9 @@ class AgentContextCleanupServiceTest : StringSpec() {
       every { staleAgent3.agentId } returns "stale-3"
       every { staleAgent3.inactivityDuration } returns 15.seconds
 
-      agentContextManager.putAgentContext("stale-1", staleAgent1)
-      agentContextManager.putAgentContext("stale-2", staleAgent2)
-      agentContextManager.putAgentContext("stale-3", staleAgent3)
+      agentContextManager.addAgentContext(staleAgent1, announce = false)
+      agentContextManager.addAgentContext(staleAgent2, announce = false)
+      agentContextManager.addAgentContext(staleAgent3, announce = false)
 
       val mockMetrics = mockk<ProxyMetrics>(relaxed = true)
       val mockProxy = mockk<Proxy>(relaxed = true)

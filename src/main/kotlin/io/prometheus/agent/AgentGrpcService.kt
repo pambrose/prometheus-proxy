@@ -237,21 +237,13 @@ internal class AgentGrpcService(
       shutDownLocked()
     }
 
-  // Shuts the gRPC channel down without touching tracing, breaking any in-flight RPCs (e.g. an idle
-  // readRequestsFromProxy collect). This is the *transient* teardown used by the heartbeat loop to force
-  // a reconnect, so it deliberately leaves the service able to build a new channel.
-  fun shutDownChannel() =
-    grpcLock.withLock {
-      shutDownChannelLocked()
-    }
-
-  // Terminal counterpart of shutDownChannel(), called from Agent.triggerShutdown() so stopSync() can
-  // unblock the run loop (finding 1). Guava invokes triggerShutdown() exactly once, so tearing the
-  // current channel down is not enough on its own: a run-loop iteration that read `while (isRunning)`
-  // as true just before stopAsync() flipped it can still reach resetGrpcStubs() and build a fresh live
-  // channel that nothing will ever break, parking run() in an idle collect and reinstating the deadlock.
-  // Latching shutDownRequested under grpcLock makes the outcome the same either way the race lands:
-  // reset-then-stop tears the new channel down, stop-then-reset never creates it.
+  // Shuts the gRPC channel down for good, without touching tracing, breaking any in-flight RPCs (e.g. an idle
+  // readRequestsFromProxy collect). Called from Agent.triggerShutdown() so stopSync() can unblock the run loop
+  // (finding 1). Guava invokes triggerShutdown() exactly once, so tearing the current channel down is not enough on
+  // its own: a run-loop iteration that read `while (isRunning)` as true just before stopAsync() flipped it can still
+  // reach resetGrpcStubs() and build a fresh live channel that nothing will ever break, parking run() in an idle
+  // collect and reinstating the deadlock. Latching shutDownRequested under grpcLock makes the outcome the same either
+  // way the race lands: reset-then-stop tears the new channel down, stop-then-reset never creates it.
   //
   // The full shutDown() (tracing included) still runs from the service shutDown() hook, and
   // channel.shutdownNow() is idempotent so that later call is a no-op on the channel.

@@ -139,7 +139,8 @@ import kotlin.time.TimeSource.Monotonic
  * ## Error Handling
  *
  * The Agent includes robust error handling for:
- * - Network connectivity issues with exponential backoff
+ * - Network connectivity issues, retrying at a fixed rate of one connect attempt per
+ *   `agent.internal.reconnectPauseSecs` (3 by default)
  * - Individual scrape failures without affecting other scrapes
  * - Configuration errors with detailed error messages
  * - Resource exhaustion with proper cleanup
@@ -696,17 +697,29 @@ class Agent(
         { runBlocking { agentHttpService.close() } },
         { closeMetrics() },
       ]
-    steps.forEach { step ->
-      runCatching(step).onFailure { e -> logger.debug(e) { "Releasing after a failed startup: ${e.message}" } }
+    steps.runEach().forEach { e -> logger.debug(e) { "Releasing after a failed startup: ${e.message}" } }
+  }
+
+  // Every step runs even when an earlier one fails, so a gRPC shutdown that throws can't leave the client cache open,
+  // or the admin and metrics servers that super.shutDown() stops running. The first failure is rethrown with the rest
+  // attached as suppressed exceptions.
+  override fun shutDown() {
+    val steps: List<() -> Unit> =
+      [
+        { grpcService.shutDown() },
+        { runBlocking { agentHttpService.close() } },
+        { closeMetrics() },
+        { super.shutDown() },
+      ]
+    val failures = steps.runEach()
+    failures.firstOrNull()?.let { first ->
+      failures.drop(1).forEach(first::addSuppressed)
+      throw first
     }
   }
 
-  override fun shutDown() {
-    grpcService.shutDown()
-    runBlocking { agentHttpService.close() }
-    closeMetrics()
-    super.shutDown()
-  }
+  // Runs every step, including those after one that throws, and returns what they threw.
+  private fun List<() -> Unit>.runEach(): List<Throwable> = mapNotNull { step -> runCatching(step).exceptionOrNull() }
 
   // Removes this agent from the agent metrics every agent in the JVM shares, if it built them.
   private fun closeMetrics() {
@@ -765,14 +778,16 @@ class Agent(
     }
 
     /**
-     * Starts an Agent in the calling thread and blocks until shutdown.
+     * Starts an Agent and returns once it is running.
      *
      * Logs the agent banner and version, parses [args] into an [AgentOptions], constructs an [Agent], and
-     * immediately calls `startSync()` from the constructor's `initBlock`. Control returns to the caller only
-     * after the Agent terminates (e.g. process signal, fatal error, or explicit [stop]).
+     * calls `startSync()` from the constructor's `initBlock`, which waits up to 30 seconds for the Agent to
+     * start and throws if it doesn't. The Agent then runs on its own service thread, which isn't a daemon
+     * thread, so a JVM whose `main()` calls this keeps running until the Agent stops (e.g. a process signal,
+     * a fatal error, or [stop]).
      *
-     * Use this from `main()` or any code that wants to run the Agent as the foreground task. For embedded
-     * usage inside another running JVM, use [startAsyncAgent] instead.
+     * Use this from `main()`, as the standalone Agent does. For embedded usage inside another running JVM,
+     * use [startAsyncAgent], which returns an [EmbeddedAgentInfo] handle for stopping it.
      *
      * @param args Raw command-line arguments forwarded to [AgentOptions] for parsing.
      * @param exitOnMissingConfig When `true`, the Agent behaves as the standalone CLI does: it requires a config

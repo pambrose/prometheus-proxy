@@ -165,19 +165,9 @@ internal object ProxyHttpRoutes {
     path: String,
     queryParams: String,
   ): ResponseResults {
+    // One response per agent. The path map never holds an empty agent list, and the caller has already answered
+    // invalid_agent_context for one (isNotValid() is true for it), so there is always at least one.
     val results: List<ScrapeRequestResponse> = executeScrapeRequests(agentContextInfo, proxy, path, queryParams)
-
-    // Handle case where no results were returned (all agents failed or disconnected)
-    if (results.isEmpty()) {
-      logger.warn { "No scrape results returned for path: $path" }
-      return ResponseResults(
-        statusCode = HttpStatusCode.ServiceUnavailable,
-        contentType = Text.Plain.withCharset(Charsets.UTF_8),
-        contentText = "No agents available to handle request",
-        updateMsgs = ["no_agents"],
-      )
-    }
-
     return mergeResponseResults(results)
   }
 
