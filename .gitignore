@@ -102,3 +102,18 @@ website/**/.cache/
 .impeccable/live/sessions/
 .impeccable/hook.cache.json
 .impeccable/hook.pending.json
+
+# Claude Code's per-machine state under .claude/, which otherwise holds the tracked rules/ and project
+# skills: agent worktrees (whole checkouts), scheduled-task and routine state, checkpoints, and the
+# agent mailbox and registry. None of it describes the project. As with .impeccable/ above, this clone's
+# .git/info/exclude already lists them, but no other clone shares that file.
+.claude/worktrees/
+.claude/scheduled_tasks.lock
+.claude/scheduled_tasks.json
+.claude/routines/.state/
+.claude/checkpoints/
+.claude/mailbox/
+.claude/agent-registry.json
+.claude/agent-memory-local
+.claude/first-run
+.claude/assistant-daemon-state.json
