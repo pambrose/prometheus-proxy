@@ -84,6 +84,15 @@ buildConfig {
   buildConfigField("String", "HTMX_WS_VERSION", "\"${libs.versions.htmxWs.get()}\"")
 }
 
+// By default the testing plugin also adds kotlin-test, kotest-runner-junit5, and logback-classic at its own versions,
+// so the test classpath took the higher of each and the catalog's, and kotlin-test, with kotlin-test-junit5 and a JUnit
+// Jupiter engine no spec uses, stayed after this build stopped declaring it. The catalog's are then the only versions.
+pambroseTesting {
+  addKotlinTest.set(false)
+  addKotest.set(false)
+  addLogbackClassic.set(false)
+}
+
 dependencies {
   implementation(libs.kotlin.reflect)
   implementation(libs.kotlinx.serialization)

@@ -35,7 +35,7 @@ make ip-tests         # In-process integration tests only
 make netty-tests      # Netty integration tests only
 make tls-tests        # TLS integration tests only
 make lincheck-tests   # Lincheck concurrency tests only (left out of every other target but all-tests)
-make tla-checks       # Model-check the TLA+ specs in specs/tla (downloads the TLA+ tools once)
+make tla-checks       # Model-check the TLA+ specs in specs/tla (fetches the pinned TLA+ tools if needed)
 make container-tests  # Full Testcontainers end-to-end suite (needs Docker)
 make scaling-tests    # Parameter-driven scaling container test only (needs Docker)
 make all-tests        # Full suite: `make tests` + `make lincheck-tests` + `make container-tests`
@@ -147,7 +147,7 @@ src/test/kotlin/io/prometheus/
 ├── common/         # Shared utility and metrics tests, plus the test-only support most specs share
 ├── proxy/          # Proxy component tests
 │   └── dashboard/  # Dashboard renderer tests and fixtures
-├── misc/           # Cross-cutting tests (admin paths, config classes, options, packaging, the docs' names)
+├── misc/           # Cross-cutting tests (admin paths, config classes, options, packaging, CI, the docs' names)
 ├── harness/        # Integration tests: real proxy + agent, in-process or over Netty; scale configs
 │   └── support/    # Harness infrastructure (setup, the standard suite)
 └── containers/     # Testcontainers end-to-end tests, gated on RUN_CONTAINER_TESTS
@@ -336,6 +336,9 @@ These support helpers also live here (not test classes themselves):
 - **AdminDefaultPathTest** — Admin endpoints with default paths (ping, version, health, thread dump)
 - **AdminEmptyPathTest** — Admin endpoints with empty paths (disables endpoints)
 - **AdminNonDefaultPathTest** — Admin endpoints with custom paths
+- **CiHygieneTest** — every job in `.github/workflows` sets `timeout-minutes`, every tool image the `Makefile` runs
+  (`*_IMAGE`) is pinned by digest, and the CRD schemas `helm-lint` validates against come from a fixed commit, so a
+  hung job gives its check back and what CI runs changes only with a diff here
 - **ConfigValsTest** — ConfigVals auto-generated from HOCON schema (validates default values)
 - **DashboardMetricNamesTest** — the Grafana dashboards, the alert rules, the docs' PromQL, and the metric names
   on the website's pages all name series the proxy and agent expose (a counter only with its `_total` suffix); proxy
@@ -433,7 +436,9 @@ mechanism that the standard suite cannot reach:
 
 #### Harness Infrastructure (`harness/support/`)
 
-- **HarnessSetup** — Base class providing `setupProxyAndAgent()` / `takeDownProxyAndAgent()` lifecycle
+- **HarnessSetup** — Base class providing `setupProxyAndAgent()` / `takeDownProxyAndAgent()` lifecycle; before each
+  spec it clears the default registry and has `SystemMetrics` forget it, so each spec's proxy and agent register the
+  JVM metric groups again
 - **HarnessHelpersTest** — `awaitPortFree()` fails when a port stays taken, and `HarnessConstants.localConfigFile()`
   fails for a missing test config rather than fetching one from GitHub
 - **TestUtils** — Utility functions: `startProxy()`, `startAgent()`, `exceptionHandler()`

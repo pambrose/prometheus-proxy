@@ -20,6 +20,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # About 5 minutes; without a limit, a hung harness test would hold this required check for GitHub's 6-hour default.
+    timeout-minutes: 30
     # Set HARNESS_CONFIG at the job level so every Gradle invocation observes the same value.
     # The build script propagates this into the `test` task's environment, making it part of
     # the task inputs; if it varied between steps Gradle would consider `:test` out-of-date and

@@ -170,10 +170,16 @@ among them gRPC, which now runs at one version across all its modules.
 - Tests that couldn't fail now check what they claim: the scrape port's idle timeout, each gRPC keepalive and
   connection-age option, and the JVM buffer-pool and compilation metrics on a real `/metrics`. Tests that bound a
   port the OS had just handed out take fixed test ports instead.
+- The test dependencies come only from the version catalog. A build plugin added its own copies of Kotest, Logback,
+  and `kotlin-test`, so the test classpath could run versions the catalog didn't name.
+- `make tla-checks` replaces a TLA+ tools jar that doesn't match the pinned checksum, so a TLA+ version bump takes
+  effect locally as it does in CI.
+- Every CI job has a time limit, and the tool images and schemas the checks use are pinned, so a re-pushed tag or a
+  moved branch can't change what CI runs without a change in the repository.
 
 ### Dependency updates
 
-Runtime: common-utils 5.1.1 → 5.1.2, grpc 1.84.2 → 1.85.1, with every grpc module now held to the same version (the
+Runtime: common-utils 5.1.1 → 5.2.0, grpc 1.84.2 → 1.85.1, with every grpc module now held to the same version (the
 agent and proxy previously ran grpc's Netty transport from 1.84.1, the version common-utils 5.1.1 brought), the
 Prometheus Java client 1.9.0 → 1.10.0 (`prometheus-metrics-core`, which embedders also get, as they do
 common-utils), kotlinx-serialization 1.11.0 → 1.12.0, Jackson 2.22.3 → 2.22.4, and Logback 1.6.5 → 1.6.6. Netty
