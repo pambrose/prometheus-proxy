@@ -2,6 +2,18 @@
 
 ---
 
+## Unreleased
+
+_Not yet released_
+
+### Build and tooling
+
+- The images' `org.opencontainers.image.version` label gives the release version. It said `24.04`, inherited from
+  the Ubuntu base, which tools that read image labels showed as the image's version. The images also name the commit
+  they were built from and the repository.
+
+---
+
 ## 4.4.0
 
 _Released 2026-10-29_

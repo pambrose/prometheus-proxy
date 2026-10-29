@@ -18,6 +18,11 @@ GRADLE := ./gradlew
 TSCFG_VERSION := 1.2.5
 PLATFORMS := linux/amd64,linux/arm64,linux/s390x,linux/ppc64le
 IMAGE_PREFIX := pambrose/prometheus
+# OCI labels for the published images. Without its own version label, an image keeps the one its Ubuntu base sets
+# (24.04), which tools that read the labels show as the image's version.
+IMAGE_LABELS = --label org.opencontainers.image.version=$(VERSION) \
+	--label org.opencontainers.image.revision=$(shell git rev-parse HEAD) \
+	--label org.opencontainers.image.source=https://github.com/pambrose/prometheus-proxy
 # A local clone of pambrose/homebrew-tap, which `make homebrew-formulae` writes the formulae into. Each formula's
 # source is etc/homebrew/<name>.rb and installs the release jar of the same name.
 HOMEBREW_TAP_DIR ?= ../homebrew-tap
@@ -373,8 +378,8 @@ docker-push: _require-version jars  ## Build and push multi-arch agent/proxy ima
 	esac
 	# prepare multiarch
 	docker buildx use buildx 2>/dev/null || docker buildx create --use --name=buildx
-	docker buildx build --platform $(PLATFORMS) -f ./etc/docker/proxy.Dockerfile --push -t $(IMAGE_PREFIX)-proxy:latest -t $(IMAGE_PREFIX)-proxy:$(VERSION) .
-	docker buildx build --platform $(PLATFORMS) -f ./etc/docker/agent.Dockerfile --push -t $(IMAGE_PREFIX)-agent:latest -t $(IMAGE_PREFIX)-agent:$(VERSION) .
+	docker buildx build --platform $(PLATFORMS) $(IMAGE_LABELS) -f ./etc/docker/proxy.Dockerfile --push -t $(IMAGE_PREFIX)-proxy:latest -t $(IMAGE_PREFIX)-proxy:$(VERSION) .
+	docker buildx build --platform $(PLATFORMS) $(IMAGE_LABELS) -f ./etc/docker/agent.Dockerfile --push -t $(IMAGE_PREFIX)-agent:latest -t $(IMAGE_PREFIX)-agent:$(VERSION) .
 
 # Hashes the jars attached to the GitHub release rather than build/libs, since those are the files brew downloads.
 # Both jars are downloaded before any formula is written, so a missing jar leaves the tap untouched.

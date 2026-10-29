@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [Unreleased]
+
+### Build & Tooling
+
+- The Docker images carry the release version in `org.opencontainers.image.version`, and the commit they were built from and the repository in `org.opencontainers.image.revision` and `org.opencontainers.image.source`, set by `make docker-push` (`IMAGE_LABELS` in the `Makefile`). They had only the version label their Ubuntu base sets, `24.04`, which tools that read image labels showed as the image's version
+
 ## [4.4.0] - 2026-10-29
 
 ### Security
