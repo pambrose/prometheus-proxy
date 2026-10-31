@@ -9,6 +9,8 @@ All notable changes to this project are documented in this file.
 ### Build & Tooling
 
 - The Docker images carry the release version in `org.opencontainers.image.version`, and the commit they were built from and the repository in `org.opencontainers.image.revision` and `org.opencontainers.image.source`, set by `make docker-push` (`IMAGE_LABELS` in the `Makefile`). They had only the version label their Ubuntu base sets, `24.04`, which tools that read image labels showed as the image's version
+- Update the GitHub Actions the workflows pin by commit SHA: `anthropics/claude-code-action` 1.0.259 → 1.0.262 and `zizmorcore/zizmor-action` 0.7.1 → 0.8.0, which only adds support for zizmor prereleases; zizmor itself stays at 1.31.1 (#363). The Claude Code workflow now checks out the pull request commit it fetched as the run started, where it took the branch's tip, and skips the run if the branch moved after the `@claude` comment, so a push made after the comment can't change the code the run reads; mention `@claude` again to run on the new commit
+- Update `mkdocs-material` 9.7.7 → 9.8.0 (`website/pyproject.toml` and `website/uv.lock`), a security release that raises its minimum Jinja2, Markdown, Pygments, and PyMdown Extensions versions past ones with known advisories; the lock already held newer versions of all four (#362). The site needs it only for the emoji icons `zensical.toml` configures (`material.extensions.emoji`), and Material for MkDocs reaches end of life on May 5, 2027
 
 ## [4.4.0] - 2026-10-29
 

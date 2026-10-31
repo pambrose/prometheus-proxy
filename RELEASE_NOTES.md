@@ -11,6 +11,15 @@ _Not yet released_
 - The images' `org.opencontainers.image.version` label gives the release version. It said `24.04`, inherited from
   the Ubuntu base, which tools that read image labels showed as the image's version. The images also name the commit
   they were built from and the repository.
+- A Claude Code run started by an `@claude` comment on a pull request works on the commit the pull request had when
+  the run started, and skips if the branch moved after the comment, so a later push can't change the code it reads.
+  Mention `@claude` again to run on the new commit.
+
+### Dependency updates
+
+The documentation site's `mkdocs-material` goes 9.7.7 → 9.8.0, a security release that raises the minimum versions
+of Jinja2, Markdown, Pygments, and PyMdown Extensions it accepts, and the workflows' pinned GitHub Actions are
+updated (claude-code-action 1.0.262 and zizmor-action 0.8.0).
 
 ---
 
