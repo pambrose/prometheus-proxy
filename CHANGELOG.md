@@ -6,9 +6,18 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Security
+
+- The proxy and agent images take the current build of their digest-pinned `eclipse-temurin:25-jre-noble` base, which moves the JRE 25.0.4.1 → 25.0.5, the October 2026 Java security update. Its trust store no longer holds the eMudhra roots `emSign Root CA - C1`, `emSign ECC Root CA - C3`, and `emSign ECC Root CA - G3`, which Temurin's October releases removed after the eMudhra CA compromise, so a connection that relies on the JRE's default trust store, such as an agent scraping an HTTPS target with `agent.http.trustStorePath` unset, no longer accepts a certificate issued under them; `emSign Root CA - G1`, which Mozilla still trusts, stays. The required `image-scan` check couldn't flag the old JRE: Trivy scans the image's Ubuntu packages, and Temurin installs the JRE outside them. The Ubuntu packages are unchanged
+
 ### Build & Tooling
 
 - The Docker images carry the release version in `org.opencontainers.image.version`, and the commit they were built from and the repository in `org.opencontainers.image.revision` and `org.opencontainers.image.source`, set by `make docker-push` (`IMAGE_LABELS` in the `Makefile`). They had only the version label their Ubuntu base sets, `24.04`, which tools that read image labels showed as the image's version
+
+### Dependencies
+
+- Update the Gradle versions plugin (`io.github.ben-manes.versions`, which `make versions` runs) 0.66.0 → 0.67.0
+- Update the documentation site's Python dependency lock (`website/uv.lock`): deepmerge 3.0.1 → 4.0.0, which Zensical uses to merge its config; the generated site is unchanged
 - Update the GitHub Actions the workflows pin by commit SHA: `anthropics/claude-code-action` 1.0.259 → 1.0.262 and `zizmorcore/zizmor-action` 0.7.1 → 0.8.0, which only adds support for zizmor prereleases; zizmor itself stays at 1.31.1 (#363). The Claude Code workflow now checks out the pull request commit it fetched as the run started, where it took the branch's tip, and skips the run if the branch moved after the `@claude` comment, so a push made after the comment can't change the code the run reads; mention `@claude` again to run on the new commit
 - Update `mkdocs-material` 9.7.7 → 9.8.0 (`website/pyproject.toml` and `website/uv.lock`), a security release that raises its minimum Jinja2, Markdown, Pygments, and PyMdown Extensions versions past ones with known advisories; the lock already held newer versions of all four (#362). The site needs it only for the emoji icons `zensical.toml` configures (`material.extensions.emoji`), and Material for MkDocs reaches end of life on May 5, 2027
 

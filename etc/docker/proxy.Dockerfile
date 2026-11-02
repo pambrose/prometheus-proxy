@@ -6,7 +6,7 @@
 # eclipse-temurin (Ubuntu-based) publishes amd64, arm64, s390x, and ppc64le manifests, so the full
 # multi-arch `make docker-push` platform set resolves; Alpine JRE images cover only amd64/arm64.
 # Java 25 (LTS) runtime; the fat JAR is Java 17 bytecode, which runs unchanged on the newer JRE.
-FROM eclipse-temurin:25-jre-noble@sha256:ce8543ddd3070ccbeaac2106a74c9387ddeb8d47a1c43348345715c1ef245c7f
+FROM eclipse-temurin:25-jre-noble@sha256:a98128a57de944a72bd31fbc79b898edd5a5864d3652071d5bbd2160ab7d7dce
 LABEL maintainer="Paul Ambrose <pambrose@mac.com>"
 
 # Define the user to use in this instance to prevent using root that even in a container, can be a security risk.
