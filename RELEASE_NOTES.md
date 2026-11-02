@@ -2,9 +2,22 @@
 
 ---
 
-## Unreleased
+## 4.4.1
 
-_Not yet released_
+_Released 2026-11-01_
+
+A patch release for the Docker images. They move to Java 25.0.5, the October 2026 Java security update, whose
+trusted certificates drop the eMudhra roots removed after the eMudhra CA compromise, and they now carry their release
+version, commit, and source repository as labels. Nothing here changes configuration, metrics, or the wire protocol,
+and the library behaves as 4.4.0 did, so upgrading is a drop-in replacement.
+
+### Security
+
+- **The images' Java runtime has October's security update.** The proxy and agent images build on the current
+  `eclipse-temurin:25-jre-noble` base, which moves Java from 25.0.4.1 to 25.0.5. Its trusted certificates drop three
+  eMudhra roots, removed after the eMudhra CA compromise, so a connection that relies on Java's default trusted
+  certificates, such as an agent scraping an HTTPS target without its own trust store, no longer accepts a
+  certificate issued under them. The images' Ubuntu packages are unchanged.
 
 ### Build and tooling
 
@@ -18,8 +31,9 @@ _Not yet released_
 ### Dependency updates
 
 The documentation site's `mkdocs-material` goes 9.7.7 → 9.8.0, a security release that raises the minimum versions
-of Jinja2, Markdown, Pygments, and PyMdown Extensions it accepts, and the workflows' pinned GitHub Actions are
-updated (claude-code-action 1.0.262 and zizmor-action 0.8.0).
+of Jinja2, Markdown, Pygments, and PyMdown Extensions it accepts, and its lock picks up deepmerge 3.0.1 → 4.0.0. The
+workflows' pinned GitHub Actions are updated (claude-code-action 1.0.262 and zizmor-action 0.8.0). Build only: the
+Gradle versions plugin 0.66.0 → 0.67.0.
 
 ---
 

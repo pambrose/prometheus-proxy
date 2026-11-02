@@ -21,7 +21,7 @@ maven-publish = "0.37.0"
 protobuf = "0.10.0"
 shadow = "9.6.1"
 taskinfo = "3.1.0"
-versions = "0.66.0"
+versions = "0.67.0"
 
 # gRPC / Protobuf
 grpc = "1.85.1"
