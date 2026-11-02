@@ -7,8 +7,8 @@ icon: lucide/container
 Multi-platform images (amd64, arm64, s390x, ppc64le) are published on Docker Hub for every release.
 
 ```bash
-docker pull pambrose/prometheus-proxy:4.4.0
-docker pull pambrose/prometheus-agent:4.4.0
+docker pull pambrose/prometheus-proxy:4.4.1
+docker pull pambrose/prometheus-agent:4.4.1
 ```
 
 ## Basic Usage
@@ -123,4 +123,4 @@ docker pull pambrose/prometheus-agent:latest
 
 !!! tip "Pin versions in production"
 
-    Use explicit version tags (e.g., `4.4.0`) in production to avoid unexpected upgrades.
+    Use explicit version tags (e.g., `4.4.1`) in production to avoid unexpected upgrades.

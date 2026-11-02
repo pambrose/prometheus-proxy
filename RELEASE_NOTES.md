@@ -2,9 +2,14 @@
 
 ---
 
-## Unreleased
+## 4.4.1
 
-_Not yet released_
+_Released 2026-11-01_
+
+A patch release for the Docker images. They move to Java 25.0.5, the October 2026 Java security update, whose
+trusted certificates drop the eMudhra roots removed after the eMudhra CA compromise, and they now carry their release
+version, commit, and source repository as labels. Nothing here changes configuration, metrics, or the wire protocol,
+and the library behaves as 4.4.0 did, so upgrading is a drop-in replacement.
 
 ### Security
 
