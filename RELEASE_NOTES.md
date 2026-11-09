@@ -2,6 +2,32 @@
 
 ---
 
+## 4.4.2
+
+_Unreleased_
+
+A patch release that updates dependencies. Nothing here changes metrics or the wire protocol, but the configuration
+library is stricter: a config value with text after a list or an object, which loaded with that text dropped, no
+longer loads. Read **Before you upgrade** and check your config files first.
+
+### Before you upgrade
+
+- **Text after a list or an object in a config value is an error.** Typesafe Config 1.4.10 rejects it where earlier
+  versions dropped it. `a = [1] suffix` loaded as `[1]`, and `a = [0, 1] | [2, 3]` loaded as `[0, 1, 2, 3]`; both
+  now fail with `ConfigException.WrongType`, so a proxy or agent config file with such a value no longer loads.
+  Whitespace between lists or objects still joins them: `[1] [2]` is `[1, 2]`.
+
+### Dependency updates
+
+Runtime: Typesafe Config 1.4.9 → 1.4.10 (see **Before you upgrade**), kotlin-logging 8.0.4 → 8.0.6, and Jackson
+2.22.4 → 2.23.0. Build and test only: Gradle 9.8.2 → 9.9.0, the protobuf Gradle plugin 0.10.0 → 0.10.1, the project's
+own Gradle plugins 1.1.8 → 1.1.9, MockK 1.14.11 → 1.14.12, and Dokka 2.2.0 → 2.3.0, which bundles patched FreeMarker,
+jsoup, and Jackson and changes the generated API docs only cosmetically. The documentation site's Python lock picks up
+Zensical 0.0.72 → 0.0.74, python-dateutil 3.0.0 → 4.0.0, and watchdog 6.0.0 → 7.0.0, and the workflows' pinned GitHub
+Actions are updated (setup-gradle 6.4.1, setup-uv 10.3.3, and claude-code-action 1.0.266).
+
+---
+
 ## 4.4.1
 
 _Released 2026-11-01_
