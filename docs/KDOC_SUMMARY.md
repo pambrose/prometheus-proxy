@@ -162,7 +162,7 @@ Package-level documentation is provided in [`docs/packages.md`](packages.md) usi
 
 ## Dokka Integration
 
-HTML API documentation is generated via the [Dokka](https://github.com/Kotlin/dokka) Gradle plugin (v2.2.0).
+HTML API documentation is generated via the [Dokka](https://github.com/Kotlin/dokka) Gradle plugin (v2.3.0).
 
 ```bash
 # Generate HTML docs

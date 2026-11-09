@@ -12,6 +12,8 @@
         upgrade-wrapper _check-gpg-env _require-version _require-gradle-version _tla-tools
 
 VERSION := $(shell sed -n 's/^version=\(.*\)/\1/p' gradle.properties)
+# The snapshot targets' version: VERSION with one -SNAPSHOT suffix, whether or not gradle.properties already has it.
+SNAPSHOT_VERSION := $(patsubst %-SNAPSHOT,%,$(VERSION))-SNAPSHOT
 GRADLE_VERSION := $(shell sed -n 's/^gradle-wrapper = "\(.*\)"/\1/p' gradle/libs.versions.toml)
 
 GRADLE := ./gradlew
@@ -562,10 +564,10 @@ publish-local: _require-version  ## Publish artifacts to the local Maven reposit
 	$(GRADLE) publishToMavenLocal
 
 publish-local-snapshot: _require-version  ## Publish a -SNAPSHOT artifact to the local Maven repository
-	$(GRADLE) -PoverrideVersion=$(VERSION)-SNAPSHOT publishToMavenLocal
+	$(GRADLE) -PoverrideVersion=$(SNAPSHOT_VERSION) publishToMavenLocal
 
 publish-snapshot: _require-version _check-gpg-env  ## Publish a -SNAPSHOT artifact to Maven Central
-	$(GPG_ENV) $(GRADLE) -PoverrideVersion=$(VERSION)-SNAPSHOT publishToMavenCentral
+	$(GPG_ENV) $(GRADLE) -PoverrideVersion=$(SNAPSHOT_VERSION) publishToMavenCentral
 
 publish-maven-central: _require-version _check-gpg-env  ## Publish a release artifact to Maven Central
 	$(GPG_ENV) $(GRADLE) publishAndReleaseToMavenCentral
