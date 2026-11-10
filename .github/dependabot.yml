@@ -52,8 +52,9 @@ updates:
       docs-site:
         patterns: ["*"]
 
-  # The proxy and agent images' digest-pinned eclipse-temurin base. Dependabot bumps the digest (and the tag, within
-  # the Java 25 line) so base-image security patches arrive as a PR.
+  # The proxy and agent images' digest-pinned bases: distroless, the OS the images run on, which has only a latest
+  # tag, so Dependabot bumps its digest, and eclipse-temurin, which supplies the JRE, whose digest and tag (within the
+  # Java 25 line) it bumps. Either way, OS and Java security patches arrive as a PR.
   - package-ecosystem: docker
     directory: /etc/docker
     schedule:

@@ -6,8 +6,13 @@ All notable changes to this project are documented in this file.
 
 ## [4.4.2] - Unreleased
 
+### Security
+
+- The proxy and agent images move from the Ubuntu 24.04 of their `eclipse-temurin:25-jre-noble` base to Google's distroless Debian 13 (`gcr.io/distroless/base-nossl-debian13`), which has glibc, CA certificates, and time zone data but no shell or package manager; a build stage copies in the same Temurin JRE 25.0.5. That drops `apt`, whose CVE-2026-109518 failed the required `image-scan` check on the Ubuntu base while no rebuilt Temurin image carried Ubuntu's fix, and takes the images from 108 OS packages to 7, so fewer OS vulnerabilities reach them, and distroless is rebuilt from Debian's updates rather than waiting on a Temurin build. The images add the `prometheus` user (UID and GID 1001, home `/app`) and the C.UTF-8 locale distroless lacks, so they run as before, and are about 150 MB smaller. Without a shell, `docker exec … sh` and `kubectl exec` no longer work in them (`kubectl debug` attaches a container that has one), and an image built `FROM` them can't `RUN` commands
+
 ### Build & Tooling
 
+- `ContainersPackagingTest` reads `/app`'s owner from the archive `docker cp` gets rather than running `stat` in the image, which has no shell, and checks that each image's JVM knows its user and uses UTF-8, which the distroless base's missing passwd entry and locales would break
 - `make publish-snapshot` and `make publish-local-snapshot` publish the `gradle.properties` version as it is when it already ends in `-SNAPSHOT`, as `4.4.2-SNAPSHOT` does; they appended a second suffix and published `4.4.2-SNAPSHOT-SNAPSHOT`. A release version still gets `-SNAPSHOT` appended
 
 ### Documentation

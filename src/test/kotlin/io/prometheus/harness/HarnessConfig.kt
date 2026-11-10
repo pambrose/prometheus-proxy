@@ -74,10 +74,10 @@ enum class HarnessConfig(
     proxyCallTimeoutSecs = 240,
   ),
   XXLARGE(
-    httpServerCount = 40,
+    httpServerCount = 50,
     pathCount = 500,
     sequentialQueryCount = 10000,
-    parallelQueryCount = 50,
+    parallelQueryCount = 75,
     concurrentClients = 500,
     addRemoveReps = 10000,
     proxyCallTimeoutSecs = 480,
