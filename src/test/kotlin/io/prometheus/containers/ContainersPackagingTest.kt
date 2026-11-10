@@ -28,13 +28,15 @@ import io.prometheus.containers.support.ContainerTestSupport.agentImage
 import io.prometheus.containers.support.ContainerTestSupport.containerTestsEnabled
 import io.prometheus.containers.support.ContainerTestSupport.proxyImage
 import io.prometheus.containers.support.stopQuietly
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.testcontainers.DockerClientFactory
 import org.testcontainers.containers.GenericContainer
 import org.testcontainers.containers.startupcheck.OneShotStartupCheckStrategy
 import java.util.jar.JarFile
 
 // What the images and fat JARs are built with, rather than how they run: the user the images run as, which the
-// charts' securityContext names by number, and the NOTICE and LICENSE files the JARs redistribute.
+// charts' securityContext names by number, the JVM's user and encodings, and the NOTICE and LICENSE files the JARs
+// redistribute.
 class ContainersPackagingTest : StringSpec() {
   private val images = listOf("proxy" to proxyImage, "agent" to agentImage)
   private val fatJars = listOf("build/libs/prometheus-proxy.jar", "build/libs/prometheus-agent.jar")
@@ -47,7 +49,7 @@ class ContainersPackagingTest : StringSpec() {
 
   init {
     if (!containerTestsEnabled()) {
-      "Image user and fat-JAR notices (set RUN_CONTAINER_TESTS=true to enable)"
+      "Image user, JVM settings, and fat-JAR notices (set RUN_CONTAINER_TESTS=true to enable)"
         .config(enabled = false) { }
     } else {
       // The charts set runAsUser, runAsGroup, and fsGroup to 1001, but the images' user got 1001 only because the
@@ -56,17 +58,43 @@ class ContainersPackagingTest : StringSpec() {
       "each image should run as UID and GID 1001, given by number, and own /app" {
         images.forEach { (name, image) ->
           withClue(name) {
-            DockerClientFactory.instance().client().inspectImageCmd(image.get()).exec().config.shouldNotBeNull()
-              .user shouldBe "1001:1001"
+            val client = DockerClientFactory.instance().client()
+            client.inspectImageCmd(image.get()).exec().config.shouldNotBeNull().user shouldBe "1001:1001"
 
-            val ids = "echo $(id -u):$(id -g) $(stat -c %u:%g /app)"
+            // The images have no shell to run stat in, so /app's owner comes from the archive docker cp reads.
+            val id = client.createContainerCmd(image.get()).exec().id
+            try {
+              val app =
+                client.copyArchiveFromContainerCmd(id, "/app").exec().use { TarArchiveInputStream(it).nextEntry }
+              app.shouldNotBeNull().name shouldBe "app/"
+              "${app.longUserId}:${app.longGroupId}" shouldBe "1001:1001"
+            } finally {
+              client.removeContainerCmd(id).withForce(true).exec()
+            }
+          }
+        }
+      }
+
+      // The images copy Temurin's JRE onto distroless, which has no user at 1001 and no locales: the Dockerfiles add
+      // a passwd entry for the user and the C.UTF-8 locale. Without the locale the JVM's native and stdout encodings
+      // fall back to ASCII; the locale comes from Ubuntu's C library and has to load under Debian's.
+      "each image's JVM should know its user and use UTF-8" {
+        images.forEach { (name, image) ->
+          withClue(name) {
             val container =
               GenericContainer(image)
-                .withCreateContainerCmdModifier { it.withEntrypoint("sh", "-c", ids) }
+                .withCreateContainerCmdModifier { it.withEntrypoint("java", "-XshowSettings:properties", "-version") }
                 .withStartupCheckStrategy(OneShotStartupCheckStrategy())
             try {
               container.start()
-              container.logs.trim() shouldBe "1001:1001 1001:1001"
+              val settings = container.logs
+              listOf(
+                "user.name = prometheus",
+                "user.home = /app",
+                "native.encoding = UTF-8",
+                "stdout.encoding = UTF-8",
+                "sun.jnu.encoding = UTF-8",
+              ).forEach { settings shouldContain it }
             } finally {
               stopQuietly(container)
             }

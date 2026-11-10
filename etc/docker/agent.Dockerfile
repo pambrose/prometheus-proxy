@@ -1,24 +1,37 @@
-# Pinned by digest for reproducible builds (tag kept for readability). Dependabot bumps the digest to pick up
-# base-image security patches; to check it by hand: docker buildx imagetools inspect eclipse-temurin:25-jre-noble
-# The -noble (Ubuntu 24.04 LTS) variant, not the default 25-jre tag: Ubuntu 26.04 bundles Canonical's pebble, a Go
-# binary the images never run but whose Go stdlib CVEs fail the Trivy scan, and Adoptium won't remove it
-# (adoptium/containers#1064). The JRE is the same Temurin build in both.
-# eclipse-temurin (Ubuntu-based) publishes amd64, arm64, s390x, and ppc64le manifests, so the full
-# multi-arch `make docker-push` platform set resolves; Alpine JRE images cover only amd64/arm64.
-# Java 25 (LTS) runtime; the fat JAR is Java 17 bytecode, which runs unchanged on the newer JRE.
-FROM eclipse-temurin:25-jre-noble@sha256:a98128a57de944a72bd31fbc79b898edd5a5864d3652071d5bbd2160ab7d7dce
+# Both images are pinned by digest for reproducible builds (tags kept for readability); Dependabot bumps the digests
+# to pick up security patches. To check one by hand: docker buildx imagetools inspect <image:tag>
+
+# The runtime base: Google's distroless Debian 13 with glibc, CA certificates, and time zone data, and no shell or
+# package manager. The Temurin JRE links only glibc (it bundles zlib and freetype), so these few Debian packages are
+# all the OS the image carries, and all Trivy scans; distroless is rebuilt from Debian's updates. It publishes amd64,
+# arm64, s390x, and ppc64le manifests, so the full multi-arch `make docker-push` platform set resolves.
+FROM gcr.io/distroless/base-nossl-debian13:latest@sha256:d710a5c8bfe4cf7e726d7e1afd73e363a9fb02c2a11ad893d2d6185c1b9a89cb AS runtime
+
+# The Java 25 (LTS) runtime comes from Temurin, which publishes the same four platforms; the fat JAR is Java 17
+# bytecode, which runs unchanged on the newer JRE. The image takes only /opt/java/openjdk and the C.UTF-8 locale from
+# this stage, which also does the steps that need a shell. Keep the -noble (Ubuntu 24.04) variant: its locale files
+# load under Debian 13's glibc, which ContainersPackagingTest checks.
+FROM eclipse-temurin:25-jre-noble@sha256:a98128a57de944a72bd31fbc79b898edd5a5864d3652071d5bbd2160ab7d7dce AS jre
+
+# Add the user the image runs as, rather than running as root, to the base's passwd and group files, and make it an
+# /app it owns. The UID and GID are fixed: the charts run the pods as 1001 (podSecurityContext in
+# charts/*/values.yaml), so change them together.
+COPY --from=runtime /etc/passwd /etc/group /rootfs/etc/
+RUN echo 'prometheus:x:1001:1001::/app:/sbin/nologin' >> /rootfs/etc/passwd \
+    && echo 'prometheus:x:1001:' >> /rootfs/etc/group \
+    && mkdir /rootfs/app \
+    && chown 1001:1001 /rootfs/app
+
+FROM runtime
 LABEL maintainer="Paul Ambrose <pambrose@mac.com>"
 
-# Define the user to use in this instance to prevent using root that even in a container, can be a security risk.
-ENV APPLICATION_USER=prometheus
-
-# Then add the user, create the /app folder and give permissions to our user, in a single layer. The UID and GID are
-# given rather than left to adduser, which picked 1001 only because the base image has a user at 1000: the charts run
-# the pods as 1001 (podSecurityContext in charts/*/values.yaml), so change them together.
-RUN addgroup --gid 1001 $APPLICATION_USER \
-    && adduser --uid 1001 --gid 1001 --disabled-password --gecos '' $APPLICATION_USER \
-    && mkdir /app \
-    && chown -R 1001:1001 /app
+COPY --from=jre /rootfs/ /
+COPY --from=jre /opt/java/openjdk /opt/java/openjdk
+# The base has no locales; without C.UTF-8, the JVM's native and stdout encodings fall back to ASCII.
+COPY --from=jre /usr/lib/locale/C.utf8 /usr/lib/locale/C.utf8
+ENV JAVA_HOME=/opt/java/openjdk \
+    PATH=/opt/java/openjdk/bin:$PATH \
+    LANG=C.UTF-8
 
 # Run as that user, by number, so Kubernetes' runAsNonRoot can check it without a runAsUser.
 USER 1001:1001

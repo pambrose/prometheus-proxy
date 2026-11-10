@@ -6,9 +6,10 @@
 
 _Unreleased_
 
-A patch release that updates dependencies. Nothing here changes metrics or the wire protocol, but the configuration
-library is stricter: a config value with text after a list or an object, which loaded with that text dropped, no
-longer loads. Read **Before you upgrade** and check your config files first.
+A patch release that moves the Docker images to a smaller base, clear of an `apt` vulnerability, and updates
+dependencies. Nothing here changes metrics or the wire protocol, but the images no longer have a shell, and the
+configuration library is stricter: a config value with text after a list or an object, which loaded with that text
+dropped, no longer loads. Read **Before you upgrade** and check your config files first.
 
 ### Before you upgrade
 
@@ -16,6 +17,18 @@ longer loads. Read **Before you upgrade** and check your config files first.
   versions dropped it. `a = [1] suffix` loaded as `[1]`, and `a = [0, 1] | [2, 3]` loaded as `[0, 1, 2, 3]`; both
   now fail with `ConfigException.WrongType`, so a proxy or agent config file with such a value no longer loads.
   Whitespace between lists or objects still joins them: `[1] [2]` is `[1, 2]`.
+- **The images have no shell.** Their new base has no shell or package manager, so `docker exec <container> sh` and
+  `kubectl exec` into a pod fail; `kubectl debug` attaches a debugging container instead. An image built `FROM` the
+  proxy or agent image can't `RUN` commands or install packages. The images still run as UID and GID 1001, in
+  `/app`, with the same entry point.
+
+### Security
+
+- **The images are clear of an `apt` vulnerability and carry far less to patch.** They move from Ubuntu 24.04 to
+  Google's distroless Debian 13, with the same Temurin Java 25.0.5 runtime. That drops `apt`, whose CVE-2026-109518
+  the Ubuntu base still carried, and takes the images from 108 OS packages to 7, so fewer OS vulnerabilities reach
+  them, and distroless picks up Debian's fixes without waiting for a new Temurin build. The images are also about
+  150 MB smaller.
 
 ### Documentation
 
