@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+
+{% block scripts %}
+  {{ super() }}
+  {#- Context7's chat for questions about the API, answered from its index of this repository. The widget reads its
+      settings from the last script tag with a data-library attribute and adds its chat box to the page once, outside
+      the parts that instant navigation replaces, so it stays open from page to page. #}
+  <script src="https://context7.com/widget.js" data-library="/pambrose/prometheus-proxy"></script>
+{% endblock %}

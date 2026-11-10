@@ -10,6 +10,10 @@ All notable changes to this project are documented in this file.
 
 - `make publish-snapshot` and `make publish-local-snapshot` publish the `gradle.properties` version as it is when it already ends in `-SNAPSHOT`, as `4.4.2-SNAPSHOT` does; they appended a second suffix and published `4.4.2-SNAPSHOT-SNAPSHOT`. A release version still gets `-SNAPSHOT` appended
 
+### Documentation
+
+- Add Context7's chat widget to every page of the documentation site, for questions about the API answered from Context7's index of this repository (`/pambrose/prometheus-proxy`). A theme override (`website/prometheus-proxy/overrides/main.html`, set as the theme's `custom_dir`) loads it; the README links to the library's Context7 page instead, since GitHub drops scripts from a rendered README
+
 ### Dependencies
 
 - Update Typesafe Config 1.4.9 → 1.4.10, whose HOCON parser rejects text after a list or an object in a value, where earlier versions dropped it: `a = [1] suffix`, which loaded as `[1]`, and `a = [0, 1] | [2, 3]`, which loaded as `[0, 1, 2, 3]`, now fail with `ConfigException.WrongType`, as does a substitution after a list or an object that resolves to a string, so a proxy or agent config file with such a value no longer loads. Whitespace between lists or objects still concatenates or merges them. A value that starts with `-.`, such as `-.33`, is read as a string in a `.conf` file (`getDouble` still reads it as -0.33) and rejected in a JSON one. It also keeps an integer just past the `Long` range a number, where it had clamped it to `Long.MAX_VALUE` or read it as a string, and `ConfigObject.values()` no longer drops entries whose values are equal

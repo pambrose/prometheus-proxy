@@ -64,6 +64,9 @@ nav = [
 # ----------------------------------------------------------------------------
 [project.theme]
 
+# Template overrides; overrides/main.html adds the Context7 chat widget to every page.
+custom_dir = "overrides"
+
 language = "en"
 
 features = [

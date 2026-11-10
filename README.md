@@ -18,6 +18,10 @@ endpoints.
 [Prometheus Proxy](https://pambrose.github.io/prometheus-proxy/) enables Prometheus to scrape metrics endpoints running
 behind a firewall and preserves the native pull-based model architecture.
 
+Questions about the API? The [docs site](https://pambrose.github.io/prometheus-proxy/) has a
+[Context7](https://context7.com/pambrose/prometheus-proxy) chat on every page that answers from this project's
+documentation.
+
 ## Table of Contents
 
 - [New Features](#-new-features)

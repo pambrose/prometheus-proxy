@@ -17,6 +17,11 @@ longer loads. Read **Before you upgrade** and check your config files first.
   now fail with `ConfigException.WrongType`, so a proxy or agent config file with such a value no longer loads.
   Whitespace between lists or objects still joins them: `[1] [2]` is `[1, 2]`.
 
+### Documentation
+
+- Every page of the documentation site has a Context7 chat for questions about the API, answered from Context7's
+  index of this repository.
+
 ### Dependency updates
 
 Runtime: Typesafe Config 1.4.9 → 1.4.10 (see **Before you upgrade**), kotlin-logging 8.0.4 → 8.0.6, and Jackson
