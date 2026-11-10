@@ -1,6 +1,6 @@
 [versions]
 # Toolchain
-gradle-wrapper = "9.9.0"
+gradle-wrapper = "9.9.1"
 jvm = "17"
 # The JVM the tests run on: the runtime the Docker images ship (main code still compiles for `jvm`)
 testJvm = "25"

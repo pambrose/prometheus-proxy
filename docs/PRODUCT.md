@@ -133,7 +133,7 @@ lives relative to the docs site.
 
 **Real and usable:**
 
-- **Repo signals only** — GitHub releases (v4.4.1, released 2026-11-01), Docker Hub pull counts for
+- **Repo signals only** — GitHub releases (v4.4.2, released 2026-11-10), Docker Hub pull counts for
   both images, Maven Central presence, Apache 2.0 license, CI / Codecov / Codacy badges. All
   independently verifiable.
 - **Working configuration and demonstration** — the config examples under `examples/`, the reference

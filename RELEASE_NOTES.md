@@ -4,7 +4,7 @@
 
 ## 4.4.2
 
-_Unreleased_
+_Released 2026-11-10_
 
 A patch release that moves the Docker images to a smaller base, clear of an `apt` vulnerability, and updates
 dependencies. Nothing here changes metrics or the wire protocol, but the images no longer have a shell, and the
