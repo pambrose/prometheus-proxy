@@ -29,15 +29,17 @@ gengrpc = "1.5.0"
 # Keep in sync with the protobuf-java version grpc-protobuf depends on (3.25.9 for grpc 1.85.1)
 protoc = "3.25.9"
 # Ahead of the netty-tcnative grpc-java is built and tested with (2.0.81.Final for grpc 1.84.x and 1.85.x, per its
-# SECURITY.md) for the native fixes in 2.0.82-2.0.84, among them a use-after-free on session-key rotation and NUL bytes
-# accepted in SNI names. tcnative 2.0.x keeps its API stable, so grpc and Netty work with it unchanged. Go back to
-# tracking grpc's version once it reaches 2.0.84.Final or later. common-utils' grpc-utils also brings tcnative, with its per-platform natives; this declaration sets the version.
-tcnative = "2.0.84.Final"
+# SECURITY.md) for the native fixes in 2.0.82-2.0.85, among them a use-after-free on session-key rotation, NUL bytes
+# accepted in SNI names, and an out-of-bounds read in ALPN protocol selection. 2.0.85.Final is the version Netty
+# 4.2.20.Final, below, is built against. tcnative 2.0.x keeps its API stable, so grpc and Netty work with it unchanged.
+# Go back to tracking grpc's version once it reaches 2.0.85.Final or later. common-utils' grpc-utils also brings
+# tcnative, with its per-platform natives; this declaration sets the version.
+tcnative = "2.0.85.Final"
 # grpc-netty 1.85.1 brings Netty 4.2.17.Final, which has CVE-2026-93492 (HTTP/2 HPACK encoder DoS) and the other
-# advisories 4.2.18.Final and 4.2.19.Final fix. build.gradle.kts raises every Netty module except netty-tcnative (pinned
-# above) to this release, and declares them through the `netty` bundle so the published POM pins it for embedders too.
-# Drop the override and the bundle once grpc brings 4.2.19.Final or later.
-netty = "4.2.19.Final"
+# advisories 4.2.18.Final, 4.2.19.Final, and 4.2.20.Final fix. build.gradle.kts raises every Netty module except
+# netty-tcnative (pinned above) to this release, and declares them through the `netty` bundle so the published POM pins
+# it for embedders too. Drop the override and the bundle once grpc brings 4.2.20.Final or later.
+netty = "4.2.20.Final"
 
 # Ktor
 ktor = "3.6.1"
@@ -64,7 +66,7 @@ jackson = "2.23.0"
 zipkin = "6.3.1"
 
 # Logging
-logging = "8.0.6"
+logging = "8.0.7"
 logback = "1.6.6"
 slf4j = "2.0.20"
 

@@ -43,10 +43,10 @@ documentation.
 
 Version 4.4.2 (released 2026-11-10) moves the Docker images to Google's distroless Debian 13 base, with the same Java
 25.0.5 runtime: they are clear of an `apt` vulnerability, carry 7 OS packages instead of 108, and no longer have a
-shell. Typesafe Config 1.4.10 rejects a config value with text after a list or an object, which earlier versions
-loaded with that text dropped, so read **Before you upgrade** in the [release notes](RELEASE_NOTES.md) first. Every
-page of the documentation site has a Context7 chat for questions about the API; the [changelog](CHANGELOG.md) has the
-full list.
+shell. Netty moves to 4.2.20.Final for its security fixes, among them a mutual-TLS authentication bypass. Typesafe
+Config 1.4.10 rejects a config value with text after a list or an object, which earlier versions loaded with that text
+dropped, so read **Before you upgrade** in the [release notes](RELEASE_NOTES.md) first. Every page of the documentation
+site has a Context7 chat for questions about the API; the [changelog](CHANGELOG.md) has the full list.
 
 Version 4.4.1 (released 2026-11-01) is a security patch release for the Docker images: they move to Java 25.0.5, the
 October 2026 Java security update, whose trusted certificates drop the eMudhra roots removed after the eMudhra CA

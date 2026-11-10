@@ -6,10 +6,10 @@
 
 _Released 2026-11-10_
 
-A patch release that moves the Docker images to a smaller base, clear of an `apt` vulnerability, and updates
-dependencies. Nothing here changes metrics or the wire protocol, but the images no longer have a shell, and the
-configuration library is stricter: a config value with text after a list or an object, which loaded with that text
-dropped, no longer loads. Read **Before you upgrade** and check your config files first.
+A patch release that moves the Docker images to a smaller base, clear of an `apt` vulnerability, takes Netty's latest
+security fixes, and updates dependencies. Nothing here changes metrics or the wire protocol, but the images no longer
+have a shell, and the configuration library is stricter: a config value with text after a list or an object, which
+loaded with that text dropped, no longer loads. Read **Before you upgrade** and check your config files first.
 
 ### Before you upgrade
 
@@ -29,6 +29,10 @@ dropped, no longer loads. Read **Before you upgrade** and check your config file
   the Ubuntu base still carried, and takes the images from 108 OS packages to 7, so fewer OS vulnerabilities reach
   them, and distroless picks up Debian's fixes without waiting for a new Temurin build. The images are also about
   150 MB smaller.
+- **Netty has the fixes in 4.2.20.Final.** Among the advisories it fixes, those in parts of Netty the proxy and agent
+  ship are three out-of-bounds reads in its buffers, unbounded memory use in HTTP/2, control characters passed through
+  in HTTP, and a way to bypass mutual-TLS authentication by resuming a TLS session. Builds that embed the agent get
+  4.2.20.Final through the published POM.
 
 ### Documentation
 
@@ -37,12 +41,14 @@ dropped, no longer loads. Read **Before you upgrade** and check your config file
 
 ### Dependency updates
 
-Runtime: Typesafe Config 1.4.9 → 1.4.10 (see **Before you upgrade**), kotlin-logging 8.0.4 → 8.0.6, and Jackson
-2.22.4 → 2.23.0. Build and test only: Gradle 9.8.2 → 9.9.1, the protobuf Gradle plugin 0.10.0 → 0.10.1, the project's
-own Gradle plugins 1.1.8 → 1.1.9, MockK 1.14.11 → 1.14.12, and Dokka 2.2.0 → 2.3.0, which bundles patched FreeMarker,
-jsoup, and Jackson and changes the generated API docs only cosmetically. The documentation site's Python lock picks up
-Zensical 0.0.72 → 0.0.74, python-dateutil 3.0.0 → 4.0.0, and watchdog 6.0.0 → 7.0.0, and the workflows' pinned GitHub
-Actions are updated (setup-gradle 6.4.1, setup-uv 10.3.3, and claude-code-action 1.0.266).
+Runtime: Typesafe Config 1.4.9 → 1.4.10 (see **Before you upgrade**), kotlin-logging 8.0.4 → 8.0.7, Jackson 2.22.4 →
+2.23.0, Netty 4.2.19.Final → 4.2.20.Final (see **Security**), and netty-tcnative 2.0.84.Final → 2.0.85.Final, whose TLS
+bindings fix an out-of-bounds read in ALPN protocol selection and native memory leaks. Build and test only: Gradle 9.8.2
+→ 9.9.1, the protobuf Gradle plugin 0.10.0 → 0.10.1, the project's own Gradle plugins 1.1.8 → 1.1.9, MockK 1.14.11 →
+1.14.12, and Dokka 2.2.0 → 2.3.0, which bundles patched FreeMarker, jsoup, and Jackson and changes the generated API
+docs only cosmetically. The documentation site's Python lock picks up Zensical 0.0.72 → 0.0.74, python-dateutil 3.0.0 →
+4.0.0, and watchdog 6.0.0 → 7.0.0, and the workflows' pinned GitHub Actions are updated (setup-gradle 6.4.1, setup-uv
+10.3.3, claude-code-action 1.0.267, kind-action 1.15.2, CodeQL 4.39.2, and zizmor-action 0.8.1).
 
 ---
 
