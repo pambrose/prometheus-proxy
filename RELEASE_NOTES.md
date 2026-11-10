@@ -38,7 +38,7 @@ dropped, no longer loads. Read **Before you upgrade** and check your config file
 ### Dependency updates
 
 Runtime: Typesafe Config 1.4.9 → 1.4.10 (see **Before you upgrade**), kotlin-logging 8.0.4 → 8.0.6, and Jackson
-2.22.4 → 2.23.0. Build and test only: Gradle 9.8.2 → 9.9.0, the protobuf Gradle plugin 0.10.0 → 0.10.1, the project's
+2.22.4 → 2.23.0. Build and test only: Gradle 9.8.2 → 9.9.1, the protobuf Gradle plugin 0.10.0 → 0.10.1, the project's
 own Gradle plugins 1.1.8 → 1.1.9, MockK 1.14.11 → 1.14.12, and Dokka 2.2.0 → 2.3.0, which bundles patched FreeMarker,
 jsoup, and Jackson and changes the generated API docs only cosmetically. The documentation site's Python lock picks up
 Zensical 0.0.72 → 0.0.74, python-dateutil 3.0.0 → 4.0.0, and watchdog 6.0.0 → 7.0.0, and the workflows' pinned GitHub
