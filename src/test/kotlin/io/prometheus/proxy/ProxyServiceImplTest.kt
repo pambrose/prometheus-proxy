@@ -2396,6 +2396,116 @@ class ProxyServiceImplTest : StringSpec() {
       victim.scrapeResults.shouldBeNull()
     }
 
+    // ==================== ownership never taken from the agent's own claim ====================
+    //
+    // A result's agentId and a chunked header's headerAgentId are what the agent says about itself. The tests above
+    // set them to the intruder's own connection ID, so a check that trusted the claim instead of the connection would
+    // still pass them. Here the intruder names the agent the scrape was sent to (November #33).
+
+    "writeResponsesToProxy should ignore a result naming the scrape's agent from another connection" {
+      val victim = victimScrape()
+      val scrapeRequestManager = ScrapeRequestManager().apply { tryAddToScrapeRequestMap(victim, Int.MAX_VALUE) }
+      val proxy = createMockProxy(scrapeRequestManager = scrapeRequestManager)
+
+      val forged = scrapeResponse {
+        agentId = victim.agentContext.agentId
+        scrapeId = victim.scrapeId
+        validResponse = true
+        statusCode = 200
+        contentAsText = "forged_metric 1"
+      }
+
+      onConnection("attacker-agent") {
+        ProxyServiceImpl(proxy).writeResponsesToProxy(flowOf(forged))
+      }
+
+      victim.scrapeResults.shouldBeNull()
+    }
+
+    "writeResponsesToProxy should not fail a scrape when a result naming its agent from another connection throws" {
+      val victim = victimScrape()
+      val scrapeRequestManager = spyk(ScrapeRequestManager()).apply { tryAddToScrapeRequestMap(victim, Int.MAX_VALUE) }
+      every { scrapeRequestManager.assignScrapeResults(any(), any()) } answers { error("Simulated processing failure") }
+      val proxy = createMockProxy(scrapeRequestManager = scrapeRequestManager)
+
+      val malformed = scrapeResponse {
+        agentId = victim.agentContext.agentId
+        scrapeId = victim.scrapeId
+        validResponse = true
+        statusCode = 200
+      }
+
+      onConnection("attacker-agent") {
+        ProxyServiceImpl(proxy).writeResponsesToProxy(flowOf(malformed))
+      }
+
+      // The failure path reached failScrapeRequest, whose owner check read the connection, not the response.
+      verify { scrapeRequestManager.failScrapeRequest(victim.scrapeId, any(), ProxyFailure.INVALID_RESPONSE, any()) }
+      victim.scrapeResults.shouldBeNull()
+      victim.proxyFailure.shouldBeNull()
+    }
+
+    "writeChunkedResponsesToProxy should not open a transfer for a header naming the scrape's agent" {
+      val victim = victimScrape()
+      val scrapeRequestManager = ScrapeRequestManager().apply { tryAddToScrapeRequestMap(victim, Int.MAX_VALUE) }
+      val contextManager = AgentContextManager(isTestMode = true)
+      val proxy = createMockProxy(scrapeRequestManager = scrapeRequestManager, agentContextManager = contextManager)
+      val opened = CompletableDeferred<Int>()
+
+      onConnection("attacker-agent") {
+        ProxyServiceImpl(proxy).writeChunkedResponsesToProxy(
+          flow {
+            emit(chunkedHeaderFrom(victim.agentContext.agentId, victim.scrapeId))
+            opened.complete(contextManager.chunkedContextSize)
+          },
+        )
+      }
+
+      opened.await() shouldBe 0
+      // Nor did the end-of-stream sweep fail the victim's scrape as abandoned.
+      victim.scrapeResults.shouldBeNull()
+      victim.proxyFailure.shouldBeNull()
+    }
+
+    // The whole transfer an intruder would send to fill another agent's scrape with its own metrics: the header names
+    // that agent, and every count and checksum is right.
+    "writeChunkedResponsesToProxy should not complete a scrape from a transfer naming its agent" {
+      val victim = victimScrape()
+      val scrapeRequestManager = ScrapeRequestManager().apply { tryAddToScrapeRequestMap(victim, Int.MAX_VALUE) }
+      val contextManager = AgentContextManager(isTestMode = true)
+      val proxy = createMockProxy(scrapeRequestManager = scrapeRequestManager, agentContextManager = contextManager)
+
+      val data = "forged_metric 1".toByteArray()
+      val crc = CRC32().apply { update(data) }
+      val chunk = chunkedScrapeResponse {
+        chunk = chunkData {
+          chunkScrapeId = victim.scrapeId
+          chunkCount = 1
+          chunkByteCount = data.size
+          chunkChecksum = crc.value
+          chunkBytes = ByteString.copyFrom(data)
+        }
+      }
+      val summary = chunkedScrapeResponse {
+        summary = summaryData {
+          summaryScrapeId = victim.scrapeId
+          summaryChunkCount = 1
+          summaryByteCount = data.size
+          summaryChecksum = crc.value
+        }
+      }
+
+      onConnection("attacker-agent") {
+        ProxyServiceImpl(proxy).writeChunkedResponsesToProxy(
+          flowOf(chunkedHeaderFrom(victim.agentContext.agentId, victim.scrapeId), chunk, summary),
+        )
+      }
+
+      contextManager.chunkedContextMapView.shouldBeEmpty()
+      victim.scrapeResults.shouldBeNull()
+      victim.proxyFailure.shouldBeNull()
+    }
+
     // ==================== chunked transfers swept when the stream is cancelled ====================
 
     // When an agent disconnects mid-transfer, grpc-kotlin cancels the RPC. The end-of-stream sweep ran after

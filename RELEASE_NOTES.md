@@ -11,6 +11,11 @@ _Not yet released_
 - Two tests check what they claim: the test that a host metric with an agent metric's name fails the embedded
   agent's startup now requires the registry's rejection as the cause, where any startup failure passed it, and the
   dashboard metric-name test releases the metrics it builds, which stayed registered for the rest of the test run.
+- The tests that keep one agent from answering another agent's scrape now fail if the proxy trusts the agent ID an
+  agent reports, rather than the connection it arrived on. The forged results they sent named the sender itself, so
+  that mistake went unnoticed.
+- A path-authorization test that fetched its config from GitHub when the local copy was missing reads only the local
+  copy, and a test keeps the test sources from fetching files from GitHub.
 
 ---
 
