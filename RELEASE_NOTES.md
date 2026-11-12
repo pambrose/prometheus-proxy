@@ -62,6 +62,8 @@ relying on the agent's logging configuration should read **Before you upgrade**.
   discovery.
 - The website's Embedded Agent page explains that the host application configures the agent's logging, with the
   `io.grpc.internal` setting the standalone agent uses.
+- The November 2026 code review is in `docs/`, with each finding's status and a fix plan; the October review, all of
+  whose findings are resolved, moves to `docs/archive/`.
 
 ### Build and tooling
 
