@@ -2,6 +2,18 @@
 
 ---
 
+## Unreleased
+
+_Not yet released_
+
+### Build and tooling
+
+- Two tests check what they claim: the test that a host metric with an agent metric's name fails the embedded
+  agent's startup now requires the registry's rejection as the cause, where any startup failure passed it, and the
+  dashboard metric-name test releases the metrics it builds, which stayed registered for the rest of the test run.
+
+---
+
 ## 4.4.2
 
 _Released 2026-11-10_

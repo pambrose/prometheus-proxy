@@ -23,6 +23,8 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.types.shouldBeInstanceOf
 import io.prometheus.Agent
 import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.common.TestPorts
@@ -104,10 +106,15 @@ class EmbeddedAgentMetricsTest : StringSpec() {
 
     // The agent builds its metrics as it starts, so a registry that rejects them -- here for a host metric with one of
     // their names -- fails startAsyncAgent, instead of every connect, forever, with nothing reported to the host.
+    // startAsyncAgent reports every startup failure as an IllegalStateException, so only its cause tells the registry's
+    // rejection apart from another failure, such as a metrics port already in use.
     "a host metric with an agent metric's name should fail the agent's startup" {
       val hostMetric = Gauge.builder().name("agent_connect_count").register()
       try {
-        shouldThrow<IllegalStateException> { startAgent("metrics-agent-clash", AGENT_1_METRICS_PORT) }
+        // An agent that starts anyway is shut down at once, so it can't outlive the test.
+        val failure =
+          shouldThrow<IllegalStateException> { startAgent("metrics-agent-clash", AGENT_1_METRICS_PORT).shutdown() }
+        failure.cause.shouldBeInstanceOf<IllegalArgumentException>().message shouldContain "agent_connect_count"
       } finally {
         PrometheusRegistry.defaultRegistry.unregister(hostMetric)
       }

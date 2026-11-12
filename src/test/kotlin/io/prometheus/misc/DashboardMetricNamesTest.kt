@@ -47,13 +47,12 @@ import java.io.File
 // the website must name them. A counter is exposed only with a _total suffix, so a query for the bare name matches
 // nothing and a panel or alert silently shows no data.
 class DashboardMetricNamesTest : StringSpec() {
+  // The proxy's and agent's metrics, built before the spec and closed after it. Each joins the collectors every proxy
+  // or agent in the JVM shares, so one left open would keep them registered, and counted, for the rest of the JVM.
+  private val openMetrics = mutableListOf<AutoCloseable>()
+
   // The proxy's and agent's metrics, as a scrape of the default registry reports them.
-  private val snapshots by lazy {
-    PrometheusRegistry.defaultRegistry.clear()
-    ProxyMetrics(mockProxyForMetrics())
-    AgentMetrics(mockAgentForMetrics())
-    PrometheusRegistry.defaultRegistry.scrape().toList()
-  }
+  private val snapshots by lazy { PrometheusRegistry.defaultRegistry.scrape().toList() }
 
   // The series names those metrics expose, plus the up series Prometheus records for every scrape target.
   private val exposed by lazy {
@@ -142,6 +141,23 @@ class DashboardMetricNamesTest : StringSpec() {
     )
 
   init {
+    beforeSpec {
+      PrometheusRegistry.defaultRegistry.clear()
+      openMetrics += ProxyMetrics(mockProxyForMetrics())
+      openMetrics += AgentMetrics(mockAgentForMetrics())
+    }
+
+    // The shared collectors are unregistered only when the last proxy or agent holding them closes, so once this
+    // spec's metrics are closed, none of the proxy's or agent's metrics is left in the registry it cleared.
+    afterSpec {
+      openMetrics.forEach { it.close() }
+      openMetrics.clear()
+      PrometheusRegistry.defaultRegistry
+        .scrape { it.startsWith("proxy_") || it.startsWith("agent_") }
+        .map { it.metadata.name }
+        .shouldBeEmpty()
+    }
+
     sources.forEach { (file, extract) ->
       "every proxy and agent series queried in $file should be exposed" {
         val queries = extract(File(file).readText())
