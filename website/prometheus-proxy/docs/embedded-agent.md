@@ -63,7 +63,20 @@ Starts the agent in background threads/coroutines.
 
 **Returns:** `EmbeddedAgentInfo`
 
-**Throws:** `ConfigLoadException` when the config cannot be loaded and `exitOnMissingConfig` is `false`;
+**Throws:** `ConfigLoadException`, when `exitOnMissingConfig` is `false`, for a config that can't be loaded or
+parsed, or for a setting the agent can't use, from the config or an environment variable:
+
+- a value of the wrong type or out of range, such as `scrapeTimeoutSecs = "abc"` or `0`;
+- an unresolved `${…}` substitution;
+- a malformed proxy endpoint;
+- a duplicate `pathConfigs` or `filters` entry, or a filter regex that doesn't compile;
+- an HTTPS trust store (`agent.http.trustStorePath`) or TLS certificate file that is missing or malformed.
+
+Credentials in a config URL are redacted from its message and from every message in its cause chain. The cause is the
+exception that rejected the setting, usually an `IllegalArgumentException`. When that exception's message held a URL
+with credentials, as a Typesafe `ConfigException`'s does for a value read from a config URL, the cause is a stand-in
+`ConfigLoadException` with the redacted message and the original stack trace.
+
 `IllegalStateException` when the agent fails to start (for example, its admin or metrics port is already in
 use), with the startup failure as its cause. A failed start releases everything the agent had opened.
 
@@ -119,6 +132,11 @@ In Spring Boot, set `logging.level.io.grpc.internal=WARN` instead.
 
 ## Upgrading from 4.4.x
 
+- `startAsyncAgent()` throws `ConfigLoadException` for a config that loads but holds a setting the agent can't use,
+  as listed under [`Agent.startAsyncAgent()`](#agentstartasyncagent). Through 4.4.2 those escaped as an
+  `IllegalArgumentException` or a Typesafe `ConfigException`, and a `ConfigException`'s message began with the config
+  URL, credentials included. Code that caught either should catch `ConfigLoadException`; the
+  `IllegalArgumentException` is now its cause.
 - The library jar no longer carries a `logback.xml`. Through 4.4.2 it did, and Logback, and Spring Boot ahead of
   your `logback-spring.xml`, took it for your application's configuration. An application with no Logback
   configuration of its own now gets Logback's default, which logs everything at DEBUG, so add one (see

@@ -16,6 +16,11 @@ configuration, the Java example compiles, and Maven builds get the patched Jacks
 proxy and agent already ship. Nothing changes for the standalone JARs or the Docker images, but an embedder that was
 relying on the agent's logging configuration should read **Before you upgrade**.
 
+Fixes for applications that embed the agent from Maven Central. The library jar stops replacing the host's logging
+configuration, the Java example compiles, and Maven builds get the patched Jackson and TLS natives the standalone
+proxy and agent already ship. Nothing changes for the standalone JARs or the Docker images, but an embedder that was
+relying on the agent's logging configuration should read **Before you upgrade**.
+
 ### Before you upgrade
 
 - **An embedded agent no longer brings a logging configuration.** The library jar carried a `logback.xml`, which
@@ -26,6 +31,13 @@ relying on the agent's logging configuration should read **Before you upgrade**.
   does. The website's Embedded Agent page shows how.
 - **Maven builds get newer Jackson.** A Maven build that embeds the agent now resolves Jackson 2.23.0 through it,
   where it got 2.12.7. A Jackson version your build declares itself still wins.
+- **An embedded agent throws `ConfigLoadException` for every setting it rejects.** A config that loaded but held a
+  bad setting, such as a value of the wrong type or out of range, an unresolved `${…}` substitution, a duplicate
+  `pathConfigs` entry, or a trust store that can't be loaded, made `startAsyncAgent` throw an
+  `IllegalArgumentException` or a Typesafe `ConfigException`, though the documentation promised a
+  `ConfigLoadException`. It now throws a `ConfigLoadException`, with the original exception as its cause. If your code
+  catches `IllegalArgumentException` or `ConfigException` from `startAsyncAgent` or `startSyncAgent`, catch
+  `ConfigLoadException` instead.
 
 ### Security
 
@@ -44,6 +56,11 @@ relying on the agent's logging configuration should read **Before you upgrade**.
   scrape, one agent stream may have at most twice `proxy.internal.scrapeRequestBacklogUnhealthySize` transfers under
   way, and the text in a transfer's header is cut to 4,096 characters a field. The stock agent sends each transfer
   whole, so it isn't affected.
+- **A config URL's credentials stay out of the error a bad setting causes.** With
+  `--config http://user:pass@host/agent.conf`, a value of the wrong type or an unresolved substitution in that config
+  put the URL, credentials included, in the exception an embedding application caught and in the stack trace a
+  standalone agent or proxy printed. They're now redacted there, as they already were when the config failed to load,
+  and from every message in the exception's cause chain.
 
 ### Bug Fixes
 
@@ -74,6 +91,13 @@ relying on the agent's logging configuration should read **Before you upgrade**.
   usually arrives just after, and the proxy logged a WARN for it, and one for each chunk of a large result. It now logs
   these at DEBUG; the `client_cancelled` and `timed_out` outcomes in `proxy_scrape_requests_total` still count each
   such scrape.
+- **A standalone agent or proxy with a bad setting exits cleanly.** It logs `Invalid configuration:` and the reason,
+  and exits with code 1, as it does for a config it can't load, instead of ending with an uncaught exception's stack
+  trace.
+- **`PROXY_HOSTNAME` overrides a malformed or blank proxy address in the config.** With an `agent.proxy.endpoints`
+  entry such as `proxy-a:5005x`, or a blank `agent.proxy.hostname`, the agent failed at startup even when
+  `PROXY_HOSTNAME`, which the Helm chart always sets, named the proxy to use. The config's value is now read only when
+  it's the one used.
 
 ### Documentation
 
@@ -90,6 +114,8 @@ relying on the agent's logging configuration should read **Before you upgrade**.
   `io.grpc.internal` setting the standalone agent uses.
 - The November 2026 code review is in `docs/`, with each finding's status and a fix plan; the October review, all of
   whose findings are resolved, moves to `docs/archive/`.
+- The website's Embedded Agent page lists the settings for which `startAsyncAgent` throws `ConfigLoadException`, and
+  its Security page says a config URL's credentials are redacted from the error a bad setting causes as well.
 
 ### Build and tooling
 
@@ -115,6 +141,9 @@ relying on the agent's logging configuration should read **Before you upgrade**.
   test.
 - Comments and `make help` text that still described the Ubuntu base image, or said `make tests` runs every test,
   are corrected.
+- Tests check that an embedded agent reports each kind of bad setting as a `ConfigLoadException` that carries no
+  credentials from the config URL, and that a standalone agent or proxy given one exits with code 1 and a single log
+  line.
 
 ---
 

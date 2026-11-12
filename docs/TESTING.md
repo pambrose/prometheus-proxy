@@ -203,7 +203,9 @@ no jar on the classpath carries a `logback.xml`, which would replace the host ap
 - **AgentPathManagerLincheckTest** — Lincheck, stress only (tagged `Lincheck`): static registration, unregistration, and
   discovery reconciles race over a real in-process gRPC connection; once they finish, the agent's local path map and
   the proxy's registrations for it agree exactly
-- **AgentOptionsTest** — CLI parsing, defaults, validation, SSL settings, gRPC options
+- **AgentOptionsTest** — CLI parsing, defaults, validation, SSL settings, gRPC options; embedded, a setting the
+  options reject, a wrong-typed or unparseable `-D` override included, throws `ConfigLoadException`; and
+  `PROXY_HOSTNAME` overrides a malformed or blank config endpoint without parsing it
 - **AgentClientInterceptorTest** — gRPC client interceptor that adds agent-id metadata to outbound calls
 - **AgentTokenClientInterceptorTest** — gRPC client interceptor that attaches the agent token header to outbound calls
 - **EndpointFailoverTest** — Proxy endpoint rotation: a failed connect or a rejected registration moves to the next
@@ -321,7 +323,9 @@ One support helper also lives here (not a test class itself):
 
 ### Unit Tests — Common (`common/`)
 
-- **BaseOptionsTest** — Shared CLI argument parsing, config loading, boolean resolution
+- **BaseOptionsTest** — Shared CLI argument parsing, config loading, boolean resolution; in a forked JVM, a
+  standalone agent or proxy whose config URL carries credentials exits 1 on a setting it rejects, with one log line
+  and no credentials or uncaught stack trace
 - **ConfigLoadExceptionTest** — The public exception embedded hosts catch: message-only and with-cause constructors
 - **ConfigWrappersTest** — Factory methods for AdminConfig, MetricsConfig, ZipkinConfig
 - **ConstantsTest** — Constant values (EMPTY_AGENT_ID_MSG, EMPTY_PATH_MSG, EMPTY_INSTANCE)
@@ -450,7 +454,9 @@ mechanism that the standard suite cannot reach:
   reaches the proxy once rather than on every retry, whether static or discovered; Netty, so each token resolves
   to its own identity
 - **EmbeddedAgentApiTest** — the public `startAsyncAgent()` handle connects from a config file, reports its
-  identity, and disconnects on `shutdown()`
+  identity, and disconnects on `shutdown()`; and a config served from a URL with credentials that holds a setting
+  the agent rejects, whether its options or its constructor reject it, throws `ConfigLoadException`, with the
+  credentials in none of its messages, its cause chain, or the log
 - **EmbeddedAgentMetricsTest** — with metrics on, an agent started again after `shutdown()` and two agents at
   once each connect and count their own connects without a registry clear in between; a stopped agent's series go
   with it; and a host metric with an agent metric's name fails `startAsyncAgent()`, with the registry's rejection
