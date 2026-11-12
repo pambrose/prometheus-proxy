@@ -47,8 +47,9 @@ class ScrapeRequestManagerLincheckTest : StringSpec() {
     tags(Lincheck)
 
     "scrape tracking keeps the in-flight limit and one completion per request under model checking" {
-      // An answer or failure for a request its handler already untracked logs a WARN, and Logback formatting its
-      // timestamp walks the JDK's locale tables -- thousands of steps model checking traces and reports as a hang.
+      // An answer or failure for a request its handler already untracked is logged, at DEBUG since November #3, and
+      // with that level on, Logback formatting its timestamp walks the JDK's locale tables -- thousands of steps model
+      // checking traces and reports as a hang.
       withLoggingOff<ScrapeRequestManager> {
         ModelCheckingOptions()
           // Lincheck 3.7 throws an NPE in SnapshotTracker while minimizing a failure found from a Kotest coroutine,

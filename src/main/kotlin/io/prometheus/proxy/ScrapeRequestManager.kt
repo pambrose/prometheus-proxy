@@ -62,6 +62,9 @@ internal class ScrapeRequestManager {
    * [isOwner] is given the wrapper this call completes, so the ownership check and the completion read one lookup.
    * Checking on a lookup of its own first let a scrapeId the HTTP handler started tracking for another agent in
    * between take the non-owner's result. A scrapeId that isn't tracked has no owner, so its result is dropped.
+   *
+   * The drop is logged at DEBUG: a scrape that hits Prometheus's timeout usually gets its answer just after the handler
+   * stopped tracking it, and the handler already records that as `client_cancelled` or `timed_out` (November #3).
    */
   fun assignScrapeResults(
     scrapeResults: ScrapeResults,
@@ -74,12 +77,13 @@ internal class ScrapeRequestManager {
           wrapper.complete(scrapeResults)
           wrapper.agentContext.markActivityTime(true)
         }
-      } ?: logger.warn { "Missing ScrapeRequestWrapper for scrapeId: $scrapeId (likely timed out)" }
+      } ?: logger.debug { "Missing ScrapeRequestWrapper for scrapeId: $scrapeId (likely timed out)" }
   }
 
   // Completes a request the proxy fails itself, rather than the agent answering it; [failure] gives its outcome label
   // and status. A failure an agent's data caused passes [isOwner], checked on the wrapper it fails as in
-  // assignScrapeResults; one the proxy decides on its own needs no owner.
+  // assignScrapeResults; one the proxy decides on its own needs no owner. A scrapeId no longer tracked is logged at
+  // DEBUG, as in assignScrapeResults: its handler has returned, and recorded why.
   fun failScrapeRequest(
     scrapeId: Long,
     failureReason: String,
@@ -100,7 +104,7 @@ internal class ScrapeRequestManager {
           )
           wrapper.agentContext.markActivityTime(true)
         }
-      } ?: logger.warn { "failScrapeRequest() missing ScrapeRequestWrapper for scrapeId: $scrapeId" }
+      } ?: logger.debug { "failScrapeRequest() missing ScrapeRequestWrapper for scrapeId: $scrapeId" }
   }
 
   fun failAllScrapeRequests(

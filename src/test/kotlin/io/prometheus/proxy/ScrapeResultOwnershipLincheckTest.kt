@@ -39,8 +39,9 @@ class ScrapeResultOwnershipLincheckTest : StringSpec() {
     tags(Lincheck)
 
     "a non-owner's result never completes a scrape tracked concurrently, under model checking" {
-      // A result for an untracked scrapeId logs a WARN, and Logback formatting its timestamp walks the JDK's locale
-      // tables -- thousands of steps model checking traces and reports as a hang.
+      // A result for an untracked scrapeId is logged, at DEBUG since November #3, and with that level on, Logback
+      // formatting its timestamp walks the JDK's locale tables -- thousands of steps model checking traces and reports
+      // as a hang.
       withLoggingOff<ScrapeRequestManager> {
         ModelCheckingOptions()
           // Lincheck 3.7 throws an NPE in SnapshotTracker while minimizing a failure found from a Kotest coroutine,

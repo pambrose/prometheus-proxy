@@ -54,7 +54,16 @@ import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.common.proxyOptions
+import com.google.protobuf.ByteString
+import io.prometheus.grpc.chunkData
+import io.prometheus.grpc.chunkedScrapeResponse
+import io.prometheus.grpc.headerData
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.ClosedSendChannelException
+import kotlinx.coroutines.flow.flow
+import java.util.zip.CRC32
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.concurrent.atomics.AtomicBoolean
@@ -219,6 +228,59 @@ class ProxyHttpRoutesTest : StringSpec() {
         ) { true }
       }
       ProxyHttpRoutes.submitScrapeRequest(agentContext, proxy, "metrics", "", mockk<ApplicationRequest>(relaxed = true))
+    }
+
+  // Runs [handler] while [agentContext]'s agent opens a chunked transfer for the scrape it is sent, a header and one
+  // chunk, and then keeps its stream open with no summary. Returns what [handler] returned, and how many transfers were
+  // open once the chunk was read and once [handler] had returned, both before the stream ends and sweeps what is left.
+  private suspend fun <T> withUnfinishedTransfer(
+    proxy: Proxy,
+    agentContext: AgentContext,
+    handler: suspend CoroutineScope.(transferOpen: CompletableDeferred<Unit>) -> T,
+  ): Triple<T, Int, Int> =
+    coroutineScope {
+      val transferOpen = CompletableDeferred<Unit>()
+      val handlerDone = CompletableDeferred<Unit>()
+      var openDuring = -1
+      val stream =
+        launch {
+          val scrapeId = agentContext.readScrapeRequest()!!.scrapeId
+          val data = "metric 1".toByteArray()
+          ProxyServiceImpl(proxy).writeChunkedResponsesToProxy(
+            flow {
+              emit(
+                chunkedScrapeResponse {
+                  header = headerData {
+                    headerValidResponse = true
+                    headerScrapeId = scrapeId
+                    headerAgentId = agentContext.agentId
+                    headerStatusCode = 200
+                    headerContentType = "text/plain"
+                  }
+                },
+              )
+              emit(
+                chunkedScrapeResponse {
+                  chunk = chunkData {
+                    chunkScrapeId = scrapeId
+                    chunkCount = 1
+                    chunkByteCount = data.size
+                    chunkChecksum = CRC32().apply { update(data) }.value
+                    chunkBytes = ByteString.copyFrom(data)
+                  }
+                },
+              )
+              openDuring = proxy.agentContextManager.chunkedContextSize
+              transferOpen.complete(Unit)
+              handlerDone.await()
+            },
+          )
+        }
+      val result = handler(transferOpen)
+      val openAfter = proxy.agentContextManager.chunkedContextSize
+      handlerDone.complete(Unit)
+      stream.join()
+      Triple(result, openDuring, openAfter)
     }
 
   init {
@@ -659,6 +721,38 @@ class ProxyHttpRoutesTest : StringSpec() {
       // disconnect before the request was queued.
       response.statusCode shouldBe HttpStatusCode.ServiceUnavailable
       response.updateMsg shouldBe "agent_disconnected"
+    }
+
+    // A chunked transfer outlived its scrape: the handler's finally stopped tracking the scrape but left its transfer,
+    // which an agent keeping the stream open then held for as long as it stayed connected (November #13).
+    "submitScrapeRequest should drop its scrape's unfinished chunked transfer when it times out" {
+      val proxy = createSpyProxyForSubmit(timeoutSecs = 1)
+      val agentContext = AgentContext("test-remote")
+
+      val (response, openDuring, openAfter) =
+        withUnfinishedTransfer(proxy, agentContext) {
+          ProxyHttpRoutes.submitScrapeRequest(agentContext, proxy, "metrics", "", mockk(relaxed = true))
+        }
+
+      response.updateMsg shouldBe "timed_out"
+      openDuring shouldBe 1
+      openAfter shouldBe 0
+    }
+
+    "submitScrapeRequest should drop its scrape's unfinished chunked transfer when Prometheus hangs up" {
+      val proxy = createSpyProxyForSubmit(timeoutSecs = 30)
+      val agentContext = AgentContext("test-remote")
+
+      val (_, openDuring, openAfter) =
+        withUnfinishedTransfer(proxy, agentContext) { transferOpen ->
+          val handler =
+            async { ProxyHttpRoutes.submitScrapeRequest(agentContext, proxy, "metrics", "", mockk(relaxed = true)) }
+          transferOpen.await()
+          handler.cancelAndJoin()
+        }
+
+      openDuring shouldBe 1
+      openAfter shouldBe 0
     }
 
     "submitScrapeRequest should unblock immediately when proxy is shut down" {

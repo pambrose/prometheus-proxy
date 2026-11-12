@@ -31,6 +31,7 @@ import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.maps.shouldBeEmpty
 import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.ints.shouldBeLessThan
@@ -47,6 +48,7 @@ import io.mockk.verify
 import io.prometheus.Proxy
 import io.prometheus.metrics.core.datapoints.CounterDataPoint
 import io.prometheus.metrics.core.metrics.Counter
+import io.prometheus.common.ScrapeResults
 import io.prometheus.common.awaitOnDaemonThread
 import io.prometheus.common.captureLogs
 import io.prometheus.common.testConfigVals
@@ -2540,6 +2542,250 @@ class ProxyServiceImplTest : StringSpec() {
 
       contextManager.chunkedContextMapView.shouldBeEmpty()
       scrape.proxyFailure shouldBe ProxyFailure.AGENT_DISCONNECTED
+    }
+
+    // ==================== chunked transfers end with their scrape (November #13) ====================
+    //
+    // A transfer stayed in the chunked map after its scrape's handler had returned, for as long as the agent kept its
+    // stream open: an agent that answered a scrape on writeResponsesToProxy, and then sent that scrape's chunks but no
+    // summary, kept up to maxZippedContentSizeMBytes, plus a header of up to 4 MiB, per scrape. Each check below runs
+    // while the stream is still open, since the end-of-stream sweep removes whatever is left.
+
+    fun chunkFor(
+      scrapeId: Long,
+      data: ByteArray,
+      count: Int = 1,
+      checksum: CRC32 = CRC32().apply { update(data) },
+    ) = chunkedScrapeResponse {
+      chunk = chunkData {
+        chunkScrapeId = scrapeId
+        chunkCount = count
+        chunkByteCount = data.size
+        chunkChecksum = checksum.value
+        chunkBytes = ByteString.copyFrom(data)
+      }
+    }
+
+    "writeChunkedResponsesToProxy should drop a transfer whose scrape was answered on the other stream" {
+      val owner = AgentContext("owner-host")
+      val scrape = ScrapeRequestWrapper(owner, "metrics", "", "", null, false)
+      val scrapeRequestManager = ScrapeRequestManager().apply { tryAddToScrapeRequestMap(scrape, Int.MAX_VALUE) }
+      val contextManager = AgentContextManager(isTestMode = true)
+      val proxy = createMockProxy(scrapeRequestManager = scrapeRequestManager, agentContextManager = contextManager)
+      val openAfterHeader = CompletableDeferred<Int>()
+      val openAfterChunk = CompletableDeferred<Int>()
+
+      onConnection(owner.agentId) {
+        ProxyServiceImpl(proxy).writeChunkedResponsesToProxy(
+          flow {
+            emit(chunkedHeaderFrom(owner.agentId, scrape.scrapeId))
+            openAfterHeader.complete(contextManager.chunkedContextSize)
+            // The agent answers the same scrape on writeResponsesToProxy, so its handler returns and stops tracking it.
+            scrapeRequestManager.assignScrapeResults(
+              ScrapeResults(srAgentId = owner.agentId, srScrapeId = scrape.scrapeId, srStatusCode = 200),
+            ) { true }
+            scrapeRequestManager.removeFromScrapeRequestMap(scrape.scrapeId)
+            emit(chunkFor(scrape.scrapeId, "metric 1".toByteArray()))
+            openAfterChunk.complete(contextManager.chunkedContextSize)
+          },
+        )
+      }
+
+      openAfterHeader.await() shouldBe 1
+      openAfterChunk.await() shouldBe 0
+    }
+
+    // The handler's finally (ProxyHttpRoutes.dispatchScrapeRequest) runs between the header's lookup of the scrape and
+    // the store of its transfer: it stops tracking the scrape, then finds no transfer to remove.
+    "writeChunkedResponsesToProxy should not keep a transfer whose scrape ended just before it was stored" {
+      val owner = AgentContext("owner-host")
+      val scrape = ScrapeRequestWrapper(owner, "metrics", "", "", null, false)
+      val scrapeRequestManager = ScrapeRequestManager().apply { tryAddToScrapeRequestMap(scrape, Int.MAX_VALUE) }
+      val contextManager = spyk(AgentContextManager(isTestMode = true))
+      every { contextManager.putChunkedContext(scrape.scrapeId, any()) } answers {
+        scrapeRequestManager.removeFromScrapeRequestMap(scrape.scrapeId)
+        contextManager.removeChunkedContext(scrape.scrapeId)
+        callOriginal()
+      }
+      val proxy = createMockProxy(scrapeRequestManager = scrapeRequestManager, agentContextManager = contextManager)
+      val open = CompletableDeferred<Int>()
+
+      onConnection(owner.agentId) {
+        ProxyServiceImpl(proxy).writeChunkedResponsesToProxy(
+          flow {
+            emit(chunkedHeaderFrom(owner.agentId, scrape.scrapeId))
+            open.complete(contextManager.chunkedContextSize)
+          },
+        )
+      }
+
+      verify(exactly = 1) { contextManager.putChunkedContext(scrape.scrapeId, any()) }
+      open.await() shouldBe 0
+    }
+
+    // One stream may have at most twice scrapeRequestBacklogUnhealthySize transfers under way, the cap on an agent's
+    // queue; here that is 2. The stock agent sends each transfer whole before the next, so it has one at a time.
+    "writeChunkedResponsesToProxy should refuse a transfer beyond the most one stream may have under way" {
+      val proxy = createMockProxy(agentContextManager = AgentContextManager(isTestMode = true))
+      every { proxy.proxyConfigVals } returns
+        testConfigVals(
+          """
+          proxy {
+            auth = []
+            internal.scrapeRequestBacklogUnhealthySize = 1
+          }
+          agent {
+            pathConfigs = []
+            filters = []
+          }
+          """,
+        ).proxy
+      val scrapeRequestManager = proxy.scrapeRequestManager
+      val contextManager = proxy.agentContextManager
+      val open = CompletableDeferred<Set<Long>>()
+
+      ProxyServiceImpl(proxy).writeChunkedResponsesToProxy(
+        flow {
+          (961L..963L).forEach { emit(chunkedHeaderFrom("agent-1", it)) }
+          open.complete(contextManager.chunkedContextMapView.keys.toSet())
+        },
+      )
+
+      open.await() shouldBe setOf(961L, 962L)
+      // The refused transfer's scrape is failed at once, rather than left to time out.
+      verify(exactly = 1) {
+        scrapeRequestManager.failScrapeRequest(963L, any(), ProxyFailure.INVALID_RESPONSE, any())
+      }
+      verify(exactly = 0) { scrapeRequestManager.failScrapeRequest(961L, any(), ProxyFailure.INVALID_RESPONSE, any()) }
+    }
+
+    // A transfer keeps its header until it ends; gRPC's 4 MiB message limit was the only bound on the header's strings.
+    "writeChunkedResponsesToProxy should cut the header's strings when the transfer opens" {
+      val owner = AgentContext("owner-host")
+      val scrape = ScrapeRequestWrapper(owner, "metrics", "", "", null, false)
+      val scrapeRequestManager = ScrapeRequestManager().apply { tryAddToScrapeRequestMap(scrape, Int.MAX_VALUE) }
+      val proxy =
+        createMockProxy(
+          scrapeRequestManager = scrapeRequestManager,
+          agentContextManager = AgentContextManager(isTestMode = true),
+        )
+      val limit = ProxyServiceImpl.MAX_CHUNKED_HEADER_FIELD_LENGTH
+      val long = "x".repeat(1_000_000)
+      val data = "metric 1".toByteArray()
+      val crc = CRC32().apply { update(data) }
+      val header = chunkedScrapeResponse {
+        header = headerData {
+          headerValidResponse = true
+          headerScrapeId = scrape.scrapeId
+          headerAgentId = "agent-$long"
+          headerStatusCode = 200
+          headerContentType = "text/plain; $long"
+          headerUrl = "http://target/metrics?$long"
+          headerFailureReason = "reason $long"
+        }
+      }
+      val summary = chunkedScrapeResponse {
+        summary = summaryData {
+          summaryScrapeId = scrape.scrapeId
+          summaryChunkCount = 1
+          summaryByteCount = data.size
+          summaryChecksum = crc.value
+        }
+      }
+
+      onConnection(owner.agentId) {
+        ProxyServiceImpl(proxy).writeChunkedResponsesToProxy(flowOf(header, chunkFor(scrape.scrapeId, data), summary))
+      }
+
+      val results = scrape.scrapeResults.shouldNotBeNull()
+      results.srAgentId shouldBe "agent-$long".take(limit)
+      results.srContentType shouldBe "text/plain; $long".take(limit)
+      results.srUrl shouldBe "http://target/metrics?$long".take(limit)
+      results.srFailureReason shouldBe "reason $long".take(limit)
+    }
+
+    // ==================== late results logged at DEBUG (November #3) ====================
+    //
+    // A scrape that hits Prometheus's timeout usually gets its answer just after the handler stopped tracking it, which
+    // the client_cancelled and timed_out outcomes already record. Each such answer logged a WARN, and a chunked one a
+    // WARN for its header, one for each chunk, and one for its summary.
+
+    "a result, and a 10-chunk transfer, for a scrape no longer tracked should log nothing above DEBUG" {
+      val proxy =
+        createMockProxy(
+          scrapeRequestManager = ScrapeRequestManager(),
+          agentContextManager = AgentContextManager(isTestMode = true),
+        )
+      val lateId = 970L
+      val data = "metric 1\n".toByteArray()
+      val crc = CRC32()
+      val chunks = (1..10).map { count -> chunkFor(lateId, data, count, crc.apply { update(data) }) }
+      val summary = chunkedScrapeResponse {
+        summary = summaryData {
+          summaryScrapeId = lateId
+          summaryChunkCount = 10
+          summaryByteCount = data.size * 10
+          summaryChecksum = crc.value
+        }
+      }
+      val late = scrapeResponse {
+        agentId = "agent-1"
+        scrapeId = lateId + 1
+        validResponse = true
+        statusCode = 200
+        contentAsText = "metric 1"
+      }
+
+      val events =
+        captureLogs("io.prometheus.proxy", Level.DEBUG) {
+          ProxyServiceImpl(proxy).writeResponsesToProxy(flowOf(late))
+          ProxyServiceImpl(proxy).writeChunkedResponsesToProxy(
+            flowOf(chunkedHeaderFrom("agent-1", lateId), *chunks.toTypedArray(), summary),
+          )
+        }
+
+      events.filter { it.level.isGreaterOrEqual(Level.INFO) }.map { it.formattedMessage }.shouldBeEmpty()
+      // Logged once for the transfer, not once for each chunk.
+      events.count { it.formattedMessage.startsWith("Missing chunked context for chunk") } shouldBe 1
+    }
+
+    "a transfer whose scrape ends partway should log nothing above DEBUG for the rest of it" {
+      val owner = AgentContext("owner-host")
+      val scrape = ScrapeRequestWrapper(owner, "metrics", "", "", null, false)
+      val scrapeRequestManager = ScrapeRequestManager().apply { tryAddToScrapeRequestMap(scrape, Int.MAX_VALUE) }
+      val contextManager = AgentContextManager(isTestMode = true)
+      val proxy = createMockProxy(scrapeRequestManager = scrapeRequestManager, agentContextManager = contextManager)
+      val data = "metric 1\n".toByteArray()
+      val crc = CRC32()
+      val chunks = (1..10).map { count -> chunkFor(scrape.scrapeId, data, count, crc.apply { update(data) }) }
+      val summary = chunkedScrapeResponse {
+        summary = summaryData {
+          summaryScrapeId = scrape.scrapeId
+          summaryChunkCount = 10
+          summaryByteCount = data.size * 10
+          summaryChecksum = crc.value
+        }
+      }
+
+      val events =
+        captureLogs("io.prometheus.proxy", Level.DEBUG) {
+          onConnection(owner.agentId) {
+            ProxyServiceImpl(proxy).writeChunkedResponsesToProxy(
+              flow {
+                emit(chunkedHeaderFrom(owner.agentId, scrape.scrapeId))
+                emit(chunks.first())
+                // The handler times out: it stops tracking the scrape, then removes the transfer.
+                scrapeRequestManager.removeFromScrapeRequestMap(scrape.scrapeId)
+                contextManager.removeChunkedContext(scrape.scrapeId)
+                chunks.drop(1).forEach { emit(it) }
+                emit(summary)
+              },
+            )
+          }
+        }
+
+      events.filter { it.level.isGreaterOrEqual(Level.INFO) }.map { it.formattedMessage }.shouldBeEmpty()
+      contextManager.chunkedContextMapView.shouldBeEmpty()
     }
 
     // ==================== heartbeats bound to the connection ====================

@@ -87,6 +87,53 @@ class ProxyTest : StringSpec() {
       )
     }
 
+  // How much proxy_chunked_transfers_abandoned_total rose while an agent's stream opened a transfer, with a header and
+  // no summary, and then [ending] removed the agent and ended the stream (endStream), in the order it chooses. The
+  // proxy's metrics are shared by every proxy in the JVM, so they're closed again at the end.
+  private suspend fun abandonedTransfers(
+    ending: suspend (proxy: Proxy, owner: AgentContext, endStream: suspend () -> Unit) -> Unit,
+  ): Double {
+    val proxy = createTestProxy("-Dproxy.metrics.enabled=true")
+    try {
+      val counter = proxy.metrics.chunkedTransfersAbandoned
+      val before = counter.get()
+      val owner = createAgentContext().also { proxy.agentContextManager.addAgentContext(it) }
+      val scrape = ScrapeRequestWrapper(owner, "metrics", "", "", null, false)
+      proxy.scrapeRequestManager.tryAddToScrapeRequestMap(scrape, Int.MAX_VALUE)
+      val header = chunkedScrapeResponse {
+        header = headerData {
+          headerValidResponse = true
+          headerScrapeId = scrape.scrapeId
+          headerAgentId = owner.agentId
+          headerStatusCode = 200
+          headerContentType = "text/plain"
+        }
+      }
+      val headerRead = CompletableDeferred<Unit>()
+      val streamEnd = CompletableDeferred<Unit>()
+      coroutineScope {
+        val stream = async {
+          ProxyServiceImpl(proxy).writeChunkedResponsesToProxy(
+            flow {
+              emit(header)
+              headerRead.complete(Unit)
+              streamEnd.await()
+            },
+          )
+        }
+        headerRead.await()
+        proxy.agentContextManager.chunkedContextSize shouldBe 1
+        ending(proxy, owner) {
+          streamEnd.complete(Unit)
+          stream.await()
+        }
+      }
+      return counter.get() - before
+    } finally {
+      proxy.metrics.close()
+    }
+  }
+
   init {
     // ==================== buildServiceDiscoveryJson Tests ====================
 
@@ -402,6 +449,30 @@ class ProxyTest : StringSpec() {
         agentRemoved.complete(Unit)
         stream.await()
       }
+    }
+
+    // Two paths reclaim an unfinished transfer when its agent goes: the stream's end-of-stream sweep, which counted it
+    // in proxy_chunked_transfers_abandoned_total, and removeAgentContext, which didn't. On a disconnect the second
+    // usually wins, and on an eviction it always does, so the counter stayed near zero (November #2). Only one of the
+    // two gets each transfer, so each is counted once, whichever goes first.
+    "removeAgentContext should count a transfer it reclaims as abandoned, once" {
+      val abandoned =
+        abandonedTransfers { proxy, owner, endStream ->
+          proxy.removeAgentContext(owner.agentId, "disconnect")
+          endStream()
+        }
+
+      abandoned shouldBe 1.0
+    }
+
+    "a transfer the stream's sweep abandons first should not be counted again by removeAgentContext" {
+      val abandoned =
+        abandonedTransfers { proxy, owner, endStream ->
+          endStream()
+          proxy.removeAgentContext(owner.agentId, "disconnect")
+        }
+
+      abandoned shouldBe 1.0
     }
 
     "removeAgentContext should return null for unknown agentId" {

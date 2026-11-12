@@ -101,6 +101,11 @@ internal object ProxyHttpRoutes {
   // sizes its own request channel.
   private const val BACKLOG_CAPACITY_MULTIPLIER = 2
 
+  // The most scrape requests one agent's queue holds. One chunked stream's transfers under way are capped at the same
+  // number (ProxyServiceImpl's readHeader).
+  internal fun maxAgentBacklog(proxy: Proxy): Int =
+    proxy.proxyConfigVals.internal.scrapeRequestBacklogUnhealthySize * BACKLOG_CAPACITY_MULTIPLIER
+
   fun Routing.handleRequests(proxy: Proxy) {
     handleServiceDiscoveryEndpoint(proxy)
     handleClientRequests(proxy)
@@ -353,9 +358,10 @@ internal object ProxyHttpRoutes {
       buildSuccessResponse(proxy, path, scrapeRequest, scrapeResults, statusCode, contentType)
   }
 
-  // Registers the request, sends it to the agent, and awaits completion, cleaning up the request map in
-  // a finally. Returns a terminal ScrapeRequestResponse for the agent-disconnected and timed-out cases,
-  // or null when the agent completed and the caller should read scrapeRequest.scrapeResults.
+  // Registers the request, sends it to the agent, and awaits completion, cleaning up the request map, and any chunked
+  // transfer still open for the request, in a finally. Returns a terminal ScrapeRequestResponse for the
+  // agent-disconnected and timed-out cases, or null when the agent completed and the caller should read
+  // scrapeRequest.scrapeResults.
   private suspend fun dispatchScrapeRequest(
     agentContext: AgentContext,
     proxy: Proxy,
@@ -373,6 +379,11 @@ internal object ProxyHttpRoutes {
       val scrapeId = scrapeRequest.scrapeId
       proxy.scrapeRequestManager.removeFromScrapeRequestMap(scrapeId)
         ?: logger.error { "Scrape request $scrapeId missing in map" }
+      // Nobody awaits this scrape's chunked transfer anymore, so it goes too, rather than lasting as long as the agent
+      // keeps its stream open (November #13). It must go after the request: readHeader stores a transfer and then
+      // checks that its request is still tracked, so whichever of the two runs second sees the other's change.
+      proxy.agentContextManager.removeChunkedContext(scrapeId)
+        ?.also { logger.debug { "Dropped the unfinished chunked transfer for scrapeId: $scrapeId" } }
     }
   }
 
@@ -384,10 +395,9 @@ internal object ProxyHttpRoutes {
     scrapeRequest: ScrapeRequestWrapper,
     timeoutTime: Duration,
   ): ScrapeRequestResponse? {
-    val maxBacklog = proxy.proxyConfigVals.internal.scrapeRequestBacklogUnhealthySize * BACKLOG_CAPACITY_MULTIPLIER
     val queued =
       try {
-        agentContext.writeScrapeRequest(scrapeRequest, maxBacklog)
+        agentContext.writeScrapeRequest(scrapeRequest, maxAgentBacklog(proxy))
       } catch (_: ClosedSendChannelException) {
         return unavailable(scrapeRequest, ProxyFailure.AGENT_DISCONNECTED.label)
       }
