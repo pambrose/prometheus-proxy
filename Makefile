@@ -4,7 +4,7 @@
         docker-clean docker-clean-dry \
         all-scaling scaling-paths scaling-agents scaling-payload scaling-consolidated scaling-concurrency scaling-soak \
         coverage coverage-html coverage-xml coverage-log coverage-verify \
-        coverage-open coverage-packages coverage-clean reports gh-docs \
+        coverage-open coverage-packages coverage-clean reports site-version gh-docs \
         gh-status tsconfig distro docker-push docker-verify homebrew-formulae release release-check _confirm-release \
         tree depends lint detekt detekt-baseline \
         versions versions-all kdocs clean-site check-site upgrade-site build-site site \
@@ -20,8 +20,8 @@ GRADLE := ./gradlew
 TSCFG_VERSION := 1.2.5
 PLATFORMS := linux/amd64,linux/arm64,linux/s390x,linux/ppc64le
 IMAGE_PREFIX := pambrose/prometheus
-# OCI labels for the published images. Without its own version label, an image keeps the one its Ubuntu base sets
-# (24.04), which tools that read the labels show as the image's version.
+# OCI labels for the published images: the version, commit, and source that tools reading an image's labels show. The
+# distroless base sets no labels, so these and the Dockerfiles' maintainer are all the images carry.
 IMAGE_LABELS = --label org.opencontainers.image.version=$(VERSION) \
 	--label org.opencontainers.image.revision=$(shell git rev-parse HEAD) \
 	--label org.opencontainers.image.source=https://github.com/pambrose/prometheus-proxy
@@ -52,6 +52,9 @@ RELEASE_REQUIRED_JOBS := ci.yml/build;ci.yml/tla;ci.yml/rules;ci.yml/helm;ci.yml
 	security.yml/image-scan (agent);security.yml/codeql;zizmor.yml/code-scanning
 WEBSITE_DIR := website
 SITE_DIR := $(WEBSITE_DIR)/prometheus-proxy
+# Where site-version looks: the docs site's pages, and the snippet directories zensical.toml's snippets base_path
+# names. Its last entry, the repo root, gives the site only examples/ and grafana/, which name no version.
+SITE_VERSION_SOURCES := $(SITE_DIR)/docs src/test/kotlin/website src/test/java/website
 
 # TLA+ model checking (specs/tla). The tools jar is git-ignored, and downloaded when it's missing or doesn't match
 # TLA_SHA256; TLC's working states go under build/.
@@ -67,8 +70,8 @@ TLC = cd $(TLA_DIR) && java -XX:+UseParallelGC -cp tla2tools.jar tlc2.TLC -worke
 # without a diff here. Each digest is the image's multi-platform index (`docker buildx imagetools inspect <image:tag>`
 # prints it); update the tag and digest together.
 
-# The Prometheus image whose promtool checks grafana/alerts.yml. Keep its version in step with
-# ContainerTestSupport.PROMETHEUS_IMAGE, the Prometheus the container suite scrapes through.
+# The Prometheus image whose promtool checks grafana/alerts.yml. The same image, digest included, as
+# ContainerTestSupport.PROMETHEUS_IMAGE, the Prometheus the container suite scrapes through (CiHygieneTest checks).
 PROMETHEUS_IMAGE := prom/prometheus:v3.14.0@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0
 
 # Helm chart checks (charts/): lint each chart with every values file in its ci/ directory, then validate the rendered
@@ -152,13 +155,13 @@ refresh:  ## Refresh dependencies
 jars:  ## Build the prometheus-{agent,proxy} fat jars
 	$(GRADLE) agentJar proxyJar
 
-tests:  ## Run all tests (forces re-execution)
+tests:  ## Rerun every check, lint and tests, without the Lincheck and container specs (all-tests runs them)
 	$(GRADLE) --rerun-tasks check
 
-mini-tests:  ## Run all tests with the MINI harness profile
+mini-tests:  ## make tests with the MINI harness profile
 	$(GRADLE) --rerun-tasks check -PharnessConfig=MINI
 
-xxl-tests:  ## Run all tests with the XXLARGE harness profile
+xxl-tests:  ## make tests with the XXLARGE harness profile
 	$(GRADLE) --rerun-tasks check -PharnessConfig=XXLARGE
 
 nh-tests:  ## Run only the non-harness unit tests
@@ -370,6 +373,21 @@ coverage-clean:  ## Remove coverage reports and test outputs
 
 # Backwards-compatible alias for the previous `make reports` invocation.
 reports: coverage  ## Alias for `coverage`
+
+# The version the docs site advertises: the tag of every pambrose/prometheus-proxy and -agent image, and the version of
+# the com.pambrose:prometheus-proxy coordinate, on its pages and in its snippets, which step 2 of docs/RELEASE.md bumps.
+# Fails unless they give exactly one. It isn't the gradle.properties version (VERSION), which can be a -SNAPSHOT
+# between releases, while the site still gives the last release. docs.yml deploys a push once this version is
+# published, and bin/docker-*.sh run its images. A tag ends at a letter or digit, so a sentence's full stop isn't part
+# of it, and starts with a digit, so latest isn't a version.
+site-version:  ## Print the version the docs site advertises in its image tags and Maven coordinate
+	@versions=$$(grep -rhoE '(pambrose/prometheus-(proxy|agent)|com\.pambrose:prometheus-proxy):[0-9]([0-9A-Za-z.-]*[0-9A-Za-z])?' \
+		$(SITE_VERSION_SOURCES) | sed 's/.*://' | sort -u); \
+	[ -n "$$versions" ] \
+		|| { echo "ERROR: no image tag or Maven coordinate in $(SITE_VERSION_SOURCES) gives a version" >&2; exit 1; }; \
+	[ "$$(echo "$$versions" | wc -l)" -eq 1 ] \
+		|| { echo "ERROR: the docs site gives more than one version:" $$versions >&2; exit 1; }; \
+	echo "$$versions"
 
 # A push to master deploys the docs site only once the version it advertises is published (see docs.yml); a run started
 # here, as make release does once it has published, deploys whatever the version.

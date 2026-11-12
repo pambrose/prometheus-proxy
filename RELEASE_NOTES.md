@@ -105,6 +105,16 @@ relying on the agent's logging configuration should read **Before you upgrade**.
   published, as an embedding application does. It compiles the website's Java and Kotlin examples, and checks the
   Jackson, netty-tcnative, and Netty versions Maven resolves and that no jar carries a Logback configuration. A
   release waits for it.
+- Documentation changes reach the website as they merge again. The docs workflow deployed only once the version in
+  `gradle.properties` was published, and between releases that version is a `-SNAPSHOT`, which is never released, so
+  no docs change deployed until the next release. It now checks the version the website gives, which
+  `make site-version` prints, so a new release's pages still wait for the release to be published. The
+  `bin/docker-*.sh` scripts run that version too.
+- CI builds the documentation site with a pinned uv, 0.13.7, rather than whichever release is newest.
+- The container tests pin their nginx and Prometheus images by digest, so a tag pushed again can't change what they
+  test.
+- Comments and `make help` text that still described the Ubuntu base image, or said `make tests` runs every test,
+  are corrected.
 
 ---
 

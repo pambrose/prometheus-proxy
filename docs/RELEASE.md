@@ -26,11 +26,12 @@ GitHub release (step 7) and Homebrew (step 9) steps, which stay manual. Run `mak
 what's still missing. If a release stops after publishing somewhere, finish it with the remaining targets, since
 `release-check` refuses a version that is already published.
 
-Merging steps 1-3 doesn't deploy the site. The site shows the `gradle.properties` version as its Docker tag and Maven
-coordinate, so the docs workflow (`.github/workflows/docs.yml`) deploys a push to `master` only once that version is
-on Maven Central and both its images are on Docker Hub. Until `make release` deploys it, the site stays at the
-previous release, and docs changes merged in the meantime wait with it. Outside a release, the version on `master` is
-already published, so a docs change deploys as it merges. `make gh-docs` deploys whatever the version.
+Merging steps 1-3 doesn't deploy the site. The site shows the version step 2 bumps as its Docker tag and Maven
+coordinate (`make site-version` prints it), so the docs workflow (`.github/workflows/docs.yml`) deploys a push to
+`master` only once that version is on Maven Central and both its images are on Docker Hub. Until `make release`
+deploys it, the site stays at the previous release, and docs changes merged in the meantime wait with it. Between
+releases the site shows the last release, which is published, so a docs change deploys as it merges, whatever
+`gradle.properties` holds, a `-SNAPSHOT` included. `make gh-docs` deploys whatever the version.
 
 1) Bump `version` in `gradle.properties` (the single source of truth).
 
@@ -51,7 +52,8 @@ already published, so a docs change deploys as it merges. `make gh-docs` deploys
    - This step, and the matching line in `.claude/skills/publishing-release/SKILL.md`.
 
    `RELEASE_VERSION_FILES` in the `Makefile` lists these files for `make release-check`; keep it in step with this
-   list.
+   list. `make site-version` prints the version the website's pages and snippets now give, and fails if they give
+   more than one.
 
    Leave historical and illustrative mentions alone: `CHANGELOG.md`, `RELEASE_NOTES.md`,
    `docs/archive/`, the per-feature release annotations in `llms.txt`, the release reference in
