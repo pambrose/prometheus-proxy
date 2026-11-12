@@ -6,6 +6,13 @@
 
 _Not yet released_
 
+### Security
+
+- **Requesting dashboard pages in a loop can no longer slow scrapes.** Each page load collected the proxy's state
+  under the lock every scrape takes. Pages now reuse the most recent collection, at most
+  `proxy.dashboard.refreshIntervalSecs` old (2 s by default), as the dashboard's live updates already did, and an agent
+  or path that comes or goes still shows on the next page load.
+
 ### Build and tooling
 
 - Two tests check what they claim: the test that a host metric with an agent metric's name fails the embedded

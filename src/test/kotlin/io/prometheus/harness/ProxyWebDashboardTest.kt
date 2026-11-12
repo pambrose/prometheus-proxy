@@ -471,6 +471,75 @@ class ProxyWebDashboardTest : StringSpec() {
         }
       }
     }
+
+    // The same coupling through the page routes, which need no WebSocket at all: each GET used to collect a snapshot,
+    // so a client looping GETs held the path-map lock as often as it liked (November #18). A page now renders the
+    // recent snapshot. No agent connects, no session opens, and the refresh interval outlasts the spec, so the first
+    // GET is the only collect: nothing filled the cache before it, and nothing invalidates it after. Exactly one,
+    // rather than at most one, so a spy that never saw a collect cannot pass.
+    "page GETs should render without collecting a snapshot each" {
+      withDashboard(
+        PAGE_CACHE_HTTP_PORT,
+        PAGE_CACHE_GRPC_PORT,
+        PAGE_CACHE_DASHBOARD_PORT,
+        dashboardArgs = [
+          "--dashboard",
+          "--dashboard_port",
+          "$PAGE_CACHE_DASHBOARD_PORT",
+          "-Dproxy.dashboard.refreshIntervalSecs=60",
+        ],
+      ) {
+        // An asset, which collects nothing, to wait for the listener before the spy starts counting.
+        eventually(20.seconds) { client.get("$base/dashboard/assets/htmx.min.js").status shouldBe HttpStatusCode.OK }
+
+        mockkObject(ProxySnapshot.Companion)
+        try {
+          repeat(PAGE_ROUNDS) {
+            listOf("$base/dashboard", "$base/dashboard/paths", "$base/dashboard/agents/1").forEach { url ->
+              client.get(url).status shouldBe HttpStatusCode.OK
+            }
+            client.get("$base/dashboard/agents/1") { header("HX-Request", "true") }.status shouldBe HttpStatusCode.OK
+          }
+          verify(exactly = 1) { ProxySnapshot.collect(any()) }
+        } finally {
+          unmockkObject(ProxySnapshot.Companion)
+        }
+      }
+    }
+
+    // The other half of the cache's contract: a topology change shows on the next page, not a refresh interval later.
+    // The interval outlasts the spec, so only the invalidation a topology event triggers can pass this. Each change
+    // gets a moment, since the event reaches the dashboard asynchronously, but far less than the interval.
+    "a page GET after a topology change should show the change" {
+      withDashboard(
+        PAGE_FRESH_HTTP_PORT,
+        PAGE_FRESH_GRPC_PORT,
+        PAGE_FRESH_DASHBOARD_PORT,
+        configFile = PATHS_CONFIG_FILE,
+        dashboardArgs = [
+          "--dashboard",
+          "--dashboard_port",
+          "$PAGE_FRESH_DASHBOARD_PORT",
+          "-Dproxy.dashboard.refreshIntervalSecs=60",
+        ],
+      ) {
+        // Fill the cache with the empty proxy first, so a page that ignored the change would still show it empty.
+        eventually(20.seconds) { client.get("$base/dashboard").bodyAsText() shouldContain "No agents connected" }
+        client.get("$base/dashboard/paths").bodyAsText() shouldNotContain PATHS_PATH
+
+        val agent = connectAgent()
+        eventually(TOPOLOGY_PATIENCE) {
+          client.get("$base/dashboard").bodyAsText() shouldContain PATHS_AGENT_NAME
+          client.get("$base/dashboard/paths").bodyAsText() shouldContain PATHS_PATH
+        }
+
+        agent.stopSync(10.seconds)
+        eventually(TOPOLOGY_PATIENCE) {
+          client.get("$base/dashboard").bodyAsText() shouldContain "No agents connected"
+          client.get("$base/dashboard/paths").bodyAsText() shouldNotContain PATHS_PATH
+        }
+      }
+    }
   }
 
   companion object {
@@ -554,6 +623,24 @@ class ProxyWebDashboardTest : StringSpec() {
     private const val CACHE_GRPC_PORT = TestPorts.DASHBOARD_UI_CACHE_GRPC_PORT
     private const val CACHE_DASHBOARD_PORT = TestPorts.DASHBOARD_UI_CACHE_DASHBOARD_PORT
     private const val MESSAGE_COUNT = 5
+
+    private const val PAGE_CACHE_HTTP_PORT = TestPorts.DASHBOARD_UI_PAGE_CACHE_HTTP_PORT
+    private const val PAGE_CACHE_GRPC_PORT = TestPorts.DASHBOARD_UI_PAGE_CACHE_GRPC_PORT
+    private const val PAGE_CACHE_DASHBOARD_PORT = TestPorts.DASHBOARD_UI_PAGE_CACHE_DASHBOARD_PORT
+
+    // Each round GETs all three page routes, and the agent route both as a page and as an htmx fragment.
+    private const val PAGE_ROUNDS = 5
+
+    private const val PAGE_FRESH_HTTP_PORT = TestPorts.DASHBOARD_UI_PAGE_FRESH_HTTP_PORT
+    private const val PAGE_FRESH_GRPC_PORT = TestPorts.DASHBOARD_UI_PAGE_FRESH_GRPC_PORT
+    private const val PAGE_FRESH_DASHBOARD_PORT = TestPorts.DASHBOARD_UI_PAGE_FRESH_DASHBOARD_PORT
+
+    // What PATHS_CONFIG_FILE's agent is called and registers.
+    private const val PATHS_AGENT_NAME = "web-ui-path-agent"
+    private const val PATHS_PATH = "/ui_path_metrics"
+
+    // Far below the 60s refresh interval the freshness spec sets, so only an invalidation can pass within it.
+    private val TOPOLOGY_PATIENCE = 10.seconds
 
     // The agent-list row marker for the session's selected agent (the nav uses aria-current="page").
     private const val SELECTED_ROW = """aria-current="true""""

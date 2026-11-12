@@ -179,6 +179,14 @@ object TestPorts {
   const val DASHBOARD_UI_HOST_GRPC_PORT = 9589
   const val DASHBOARD_UI_HOST_DASHBOARD_PORT = 9593
 
+  // ProxyWebDashboardTest: the page routes serving the cached snapshot (November #18).
+  const val DASHBOARD_UI_PAGE_CACHE_HTTP_PORT = 9720
+  const val DASHBOARD_UI_PAGE_CACHE_GRPC_PORT = 9721
+  const val DASHBOARD_UI_PAGE_CACHE_DASHBOARD_PORT = 9722
+  const val DASHBOARD_UI_PAGE_FRESH_HTTP_PORT = 9723
+  const val DASHBOARD_UI_PAGE_FRESH_GRPC_PORT = 9724
+  const val DASHBOARD_UI_PAGE_FRESH_DASHBOARD_PORT = 9725
+
   // ProxyTest and AgentTest: what a real proxy or agent binds in the garbage-collection and failed-startup cases.
   // These came from ServerSocket(0), released and bound again later, so another connection could take one in between
   // (October #46). The port each failed-startup case holds open as taken still does.

@@ -286,7 +286,9 @@ Two support helpers also live here (not test classes themselves):
   path-centric layouts, tolerant selection and layout parsing, departed paths, failover markers, accessibility, and
   the WebSocket connection indicator
 - **ProxyDashboardServiceTest** (`dashboard/`) — Dashboard request guards: the WebSocket Origin check (own host,
-  `allowedOrigins`, foreign or malformed origins refused) and the opt-in `allowedHosts` Host check against DNS rebinding
+  `allowedOrigins`, foreign or malformed origins refused), the opt-in `allowedHosts` Host check against DNS rebinding,
+  and the snapshot cache pages and sessions render from: one collect per refresh interval however many reads, shared
+  by concurrent reads, and none reused across a topology change, even one landing mid-collect
 - **ProxySnapshotTest** (`dashboard/`) — Dashboard view models: eviction countdown, health thresholds, failover
   position, and `buildPathViews` joining registered paths to their latest scrape and surfacing departed ones
 
@@ -438,8 +440,9 @@ mechanism that the standard suite cannot reach:
 - **InProcessTransportFilterDisabledTest** — both sides with the transport filter off: a scrape succeeds,
   and the request stream's own termination is what reclaims the agent context
 - **ProxyWebDashboardTest** — the dashboard service rather than the renderer: page, WebSocket push,
-  selection round-trip, both layouts, a root-mounted base path, and, with `allowedHosts` set, a 403 on every route
-  for a request naming an unknown host
+  selection round-trip, both layouts, a root-mounted base path, with `allowedHosts` set a 403 on every route
+  for a request naming an unknown host, and page GETs and WebSocket messages rendering the cached snapshot while a
+  topology change still shows on the next page
 - **TlsMutualAuthRejectionTest** — the negative mutual-TLS path over a real Netty handshake, which the
   in-process TLS specs cannot perform (item 28 in `docs/archive/CODE_REVIEW_JUNE_2026.md`)
 

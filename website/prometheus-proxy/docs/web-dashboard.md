@@ -181,7 +181,9 @@ The dashboard adds no work to the scrape path. Updates are driven by an internal
 operation is non-blocking, so it can never delay an agent registration or a scrape.
 
 State is collected once per update and shared across every connected browser, so the cost does not scale
-with the number of open dashboards. Counters that drift rather than change — backlog depth, map sizes,
+with the number of open dashboards. Loading or reloading a page reuses that collection too, as long as it is
+less than `refreshIntervalSecs` old and no agent or path has changed since, so requesting pages in a loop
+can't make the proxy collect any faster. Counters that drift rather than change — backlog depth, map sizes,
 eviction countdowns — refresh on `refreshIntervalSecs` rather than on every event.
 
 ## Running an HA pair
