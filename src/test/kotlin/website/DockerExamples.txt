@@ -1,14 +1,24 @@
 ; --8<-- [start:docker-proxy-basic]
-# Start a proxy container:
-docker run --rm -p 8080:8080 -p 50051:50051 \
+# Create a network for the proxy and agent containers:
+docker network create prometheus-proxy-net
+
+# Start a proxy container on it, with its metrics enabled:
+docker run --rm --name prometheus-proxy --network prometheus-proxy-net \
+  -p 8080:8080 -p 50051:50051 \
+  --env METRICS_ENABLED=true \
   pambrose/prometheus-proxy:4.4.2
 ; --8<-- [end:docker-proxy-basic]
 
 ; --8<-- [start:docker-agent-basic]
-# Start an agent with a remote config:
-docker run --rm \
+# Start an agent with a remote config, connecting to the proxy by its container name:
+docker run --rm --network prometheus-proxy-net \
+  --env PROXY_HOSTNAME=prometheus-proxy \
   --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
   pambrose/prometheus-agent:4.4.2
+
+# Scrape the proxy's and the agent's own metrics through the proxy:
+curl http://localhost:8080/proxy_metrics
+curl http://localhost:8080/agent_metrics
 ; --8<-- [end:docker-agent-basic]
 
 ; --8<-- [start:docker-background]
@@ -53,6 +63,7 @@ docker run --detach --name prometheus-agent \
   -p 8093:8093 \
   --mount type=bind,source="$(pwd)"/prom-agent.conf,target=/app/prom-agent.conf \
   --env AGENT_CONFIG=prom-agent.conf \
+  --env PROXY_HOSTNAME=proxy-host.example.com \
   --restart unless-stopped \
   pambrose/prometheus-agent:4.4.2
 ; --8<-- [end:docker-agent-local-config]

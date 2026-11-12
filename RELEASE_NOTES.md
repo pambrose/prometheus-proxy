@@ -22,6 +22,18 @@ _Not yet released_
   (`prometheus-agent` and `prometheus-proxy` by default), as the documentation describes, rather than `grpc_client`
   and `grpc_server`.
 
+### Documentation
+
+- **The Docker quick start works.** The agent's config pointed it at `localhost`, which in a container is the agent
+  itself, so it never connected. The quick start now puts the proxy and the agent on a shared Docker network, gives
+  the agent the proxy's container name in `PROXY_HOSTNAME`, and turns on the proxy's metrics, so
+  `http://localhost:8080/proxy_metrics` and `/agent_metrics` answer. `examples/simple.conf` fetches the proxy's
+  metrics from `PROXY_HOSTNAME` when it's set, and still runs both on one host without it.
+- The README's production Docker commands run: they combined `--rm` with `--restart`, which Docker refuses. They
+  give the URLs the metrics are served at, on port 8080.
+- The example configs' label values are strings, so they no longer log warnings at startup or lose labels in service
+  discovery.
+
 ### Build and tooling
 
 - Two tests check what they claim: the test that a host metric with an agent metric's name fails the embedded

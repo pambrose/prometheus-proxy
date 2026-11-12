@@ -31,6 +31,10 @@ java -jar prometheus-proxy.jar --config examples/simple.conf
 java -jar prometheus-agent.jar  --config examples/simple.conf
 ```
 
+In Docker, the agent's `localhost` is its own container, so give it `PROXY_HOSTNAME`, the proxy's host name without a
+port: the agent connects to the proxy there, and fetches the proxy's metrics from there too. The
+[Docker quick start](docker.md#basic-usage) runs it that way.
+
 ## Debugging a local run — `prom-agent.conf`
 
 The same self-monitoring setup as `simple.conf`, turned up for troubleshooting: the proxy's debug
