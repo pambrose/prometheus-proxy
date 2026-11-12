@@ -18,9 +18,11 @@
 
 package io.prometheus.proxy
 
+import ch.qos.logback.classic.Level
 import io.grpc.Attributes
 import io.grpc.Grpc
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -28,6 +30,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import io.prometheus.Proxy
+import io.prometheus.common.captureLogs
 import io.prometheus.proxy.ProxyServerTransportFilter.Companion.AGENT_ID_KEY
 import io.prometheus.proxy.ProxyServiceImpl.Companion.UNKNOWN_ADDRESS
 import java.net.InetSocketAddress
@@ -198,6 +201,36 @@ class ProxyServerTransportFilterTest : StringSpec() {
 
       // Verify removeAgentContext was still called
       verify { mockProxy.removeAgentContext(agentId, "Termination") }
+    }
+
+    // A connection that never authenticates -- a bad token on a long-lived channel, an L7 load balancer's health
+    // checks -- stays pending until the cleanup service evicts it, at DEBUG. When it later closed, the filter logged
+    // "already removed" at INFO, the noise October #4 removed elsewhere (November #4). An announced agent's eviction
+    // is logged at INFO, and so is its transport's end, as any agent's disconnect is.
+    "a transport ending after its context was evicted should log at INFO only for an announced agent" {
+      listOf(false, true).forEach { announced ->
+        val (mockProxy, agentContextManager) = createMockProxy()
+        every { mockProxy.removeAgentContext(any(), any()) } answers {
+          agentContextManager.removeFromContextManager(firstArg(), secondArg())
+        }
+        val filter = ProxyServerTransportFilter(mockProxy)
+        val attrs = filter.transportReady(Attributes.EMPTY)
+        val agentId = attrs.get(AGENT_ID_KEY).shouldNotBeNull()
+        if (announced)
+          agentContextManager.announceAgentContext(agentId)
+
+        val events =
+          captureLogs("io.prometheus.proxy", Level.DEBUG) {
+            // As AgentContextCleanupService evicts it.
+            mockProxy.removeAgentContext(agentId, "Eviction").shouldNotBeNull()
+            filter.transportTerminated(attrs)
+          }
+
+        events.filter { "already removed before transport terminated" in it.formattedMessage }
+          .map { it.level } shouldBe listOf(if (announced) Level.INFO else Level.DEBUG)
+        if (!announced)
+          events.filter { it.level.isGreaterOrEqual(Level.INFO) }.shouldBeEmpty()
+      }
     }
 
     // ==================== Transport Filter Lifecycle ====================

@@ -48,6 +48,14 @@ relying on the agent's logging configuration should read **Before you upgrade**.
   Kotlin, leaving the banner on; Java had to pass all three arguments.
 - **Gradle builds that ask for a shadowed artifact no longer get an empty one.** The published Gradle module listed a
   `shadowRuntimeElements` variant with no files; it is gone.
+- **A connection that never authenticates no longer logs at INFO when it closes.** A client with a bad token, or a
+  load balancer that holds connections open for health checks, is dropped at DEBUG once it has been idle for
+  `proxy.internal.maxAgentInactivitySecs`, but its connection closing later still wrote `already removed before
+  transport terminated` at INFO. That line is now at DEBUG for such a connection, and stays at INFO for an agent.
+- **A proxy that accepts connections but never answers no longer fills the agent's log with stack traces.** The agent
+  logs a failed connect at WARN once, then at DEBUG while it repeats. A timed-out connect's message includes how long
+  the attempt took, so each one looked new and logged a WARN with a stack trace, about twice a minute. Repeats are now
+  recognized by their gRPC status, and the log still shows the full message.
 
 ### Documentation
 

@@ -35,6 +35,7 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.grpc.StatusRuntimeException
 import io.grpc.Status
+import io.grpc.StatusException
 import io.kotest.assertions.throwables.shouldNotThrow
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.assertions.throwables.shouldThrowAny
@@ -88,6 +89,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import java.lang.reflect.InvocationTargetException
+import java.net.InetAddress
+import java.net.ServerSocket
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit.SECONDS
@@ -483,6 +486,70 @@ class AgentGrpcServiceTest : StringSpec() {
           warnings[0] shouldContain "UNAVAILABLE"
           warnings[1] shouldContain "UNAUTHENTICATED"
           warnings[2] shouldContain "UNAUTHENTICATED"
+        }
+      }
+    }
+
+    // gRPC's DEADLINE_EXCEEDED description carries the time the call took, so against a proxy that accepts TCP but
+    // never answers -- a hung process, an L4 load balancer with no backend -- each attempt failed with a new message,
+    // and each logged a WARN with its stack trace (November #9). The full description is still logged.
+    "DEADLINE_EXCEEDED connect failures whose descriptions differ only in the elapsed time should log one WARN" {
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
+        fun deadlineExceeded(elapsed: String) =
+          StatusException(
+            Status.DEADLINE_EXCEEDED.withDescription(
+              "CallOptions deadline exceeded after ${elapsed}s. Name resolution delay 0.000000000 seconds. " +
+                "[closed=[], open=[[connecting_and_lb_delay=30001748917ns, was_still_waiting]]]",
+            ),
+          )
+        coEvery { mockStub.connectAgent(any(), any<Metadata>()) } throws
+          deadlineExceeded("29.999954000") andThenThrows deadlineExceeded("29.999961000") andThenThrows
+          StatusException(Status.UNAVAILABLE.withDescription("io exception"))
+
+        val failures =
+          captureLogs<AgentGrpcService>(Level.DEBUG) { repeat(3) { service.connectAgent().shouldBeFalse() } }
+            .filter { "Cannot connect to proxy" in it.formattedMessage }
+
+        // A change of status code is still a change.
+        failures.map { it.level } shouldBe listOf(Level.WARN, Level.DEBUG, Level.WARN)
+        failures[0].formattedMessage shouldContain "after 29.999954000s"
+        failures[1].formattedMessage shouldContain "after 29.999961000s"
+      }
+    }
+
+    // A failure without a gRPC status is keyed on its class, so a message that differs each time doesn't defeat the
+    // dedupe, and another class is still a change.
+    "connect failures without a gRPC status should log a WARN only when their class changes" {
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
+        coEvery { mockStub.connectAgent(any(), any<Metadata>()) } throws
+          IllegalStateException("attempt 1") andThenThrows IllegalStateException("attempt 2") andThenThrows
+          IllegalArgumentException("attempt 3")
+
+        val failures =
+          captureLogs<AgentGrpcService>(Level.DEBUG) { repeat(3) { service.connectAgent().shouldBeFalse() } }
+            .filter { "Cannot connect to proxy" in it.formattedMessage }
+
+        failures.map { it.level } shouldBe listOf(Level.WARN, Level.DEBUG, Level.WARN)
+      }
+    }
+
+    // The same through a real channel, to a port that completes the TCP handshake but never answers HTTP/2, as a hung
+    // proxy does: gRPC builds each attempt's description from that attempt's own timings.
+    "connects to a proxy that accepts TCP but never answers should log one WARN" {
+      ServerSocket(0, 0, InetAddress.getLoopbackAddress()).use { blackhole ->
+        val agent = createMockAgent("127.0.0.1:${blackhole.localPort}")
+        // A network channel rather than the in-process one, so the failure is the one a blackholed proxy gives.
+        val service = AgentGrpcService(agent, agent.options, "")
+        service.unaryDeadlineSecs = 1
+        try {
+          val failures =
+            captureLogs<AgentGrpcService>(Level.DEBUG) { repeat(2) { service.connectAgent().shouldBeFalse() } }
+              .filter { "Cannot connect to proxy" in it.formattedMessage }
+
+          failures.map { it.level } shouldBe listOf(Level.WARN, Level.DEBUG)
+          failures.forEach { it.formattedMessage shouldContain "DEADLINE_EXCEEDED" }
+        } finally {
+          service.shutDown()
         }
       }
     }

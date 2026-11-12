@@ -187,7 +187,8 @@ no jar on the classpath carries a `logback.xml`, which would replace the host ap
   cache
 - **AgentGrpcServiceTest** — gRPC service: scrape request/response streaming, heartbeats, registration, error handling,
   channel shutdown; with Zipkin on, the channel is built before `zipkinReporterService` is assigned, and every channel
-  a reconnect builds traces through one `Tracing`
+  a reconnect builds traces through one `Tracing`; a repeated connect failure logs one WARN, compared by gRPC status
+  code (or class), including against a port that accepts TCP but never answers HTTP/2
 - **AgentHttpServiceTest** — HTTP service: scraping endpoints, compression support, response handling, timeout behavior,
   error cases
 - **AgentHttpServiceHeaderTest** — HTTP Accept header handling per-request (prevents stale headers in cached clients)
@@ -272,7 +273,7 @@ Two support helpers also live here (not test classes themselves):
   scrapeRequestTimeoutSecs, etc.)
 - **ProxyServerInterceptorTest** — gRPC server interceptor: agent-id metadata extraction from incoming calls
 - **ProxyServerTransportFilterTest** — gRPC transport filter: agent context creation on connection, cleanup on
-  disconnect
+  disconnect, and a transport that ends after its eviction logging at INFO only for an announced agent
 - **ProxyUtilsTest** — Helper functions: invalidAgentContextResponse, respondWith
 - **ProxyMetricsTest** — Prometheus metrics registration and gauge/counter updates
 - **ProxyMetricsLincheckTest** — Lincheck, stress only (tagged `Lincheck`): a path registering, scrapes recording its
