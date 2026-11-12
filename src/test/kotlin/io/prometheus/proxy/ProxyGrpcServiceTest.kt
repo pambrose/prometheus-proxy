@@ -18,7 +18,14 @@
 
 package io.prometheus.proxy
 
+import brave.Span
+import brave.Tracing
+import brave.handler.MutableSpan
+import brave.handler.SpanHandler
+import brave.handler.SpanHandler.Cause
+import brave.propagation.TraceContext
 import com.pambrose.common.dsl.GrpcDsl.channel
+import com.pambrose.common.service.ZipkinReporterService
 import com.pambrose.common.utils.TlsContext.Companion.PLAINTEXT_CONTEXT
 import io.grpc.ManagedChannel
 import io.grpc.Metadata
@@ -56,6 +63,7 @@ import io.prometheus.grpc.registerPathRequest
 import io.prometheus.proxy.AgentAuthManager.AuthEntry
 import io.prometheus.proxy.ProxyGrpcService.Companion.applyConnectionOptions
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
@@ -366,7 +374,45 @@ class ProxyGrpcServiceTest : StringSpec() {
         manager.agentContextSize shouldBe 1
       }
     }
+
+    // ==================== November #7: Zipkin tracing built on the first call ====================
+
+    // The proxy builds this service, and with it the gRPC server and its interceptors, before its initServletService
+    // assigns zipkinReporterService, and reading it there threw UninitializedPropertyAccessException, so a proxy with
+    // Zipkin on could not be built. The tracing interceptor now looks the reporter up when the first call arrives.
+    "November #7: the server should be built before zipkinReporterService is assigned and trace once it is" {
+      val (proxy, _) = proxyWithRealManagers()
+      every { proxy.isZipkinEnabled } returns true
+      every { proxy.zipkinReporterService } throws
+        UninitializedPropertyAccessException("lateinit property zipkinReporterService has not been initialized")
+
+      val spans = LinkedBlockingQueue<MutableSpan>()
+      val tracing = Tracing.newBuilder().addSpanHandler(collectInto(spans)).build()
+      val zipkinService = mockk<ZipkinReporterService>(relaxed = true)
+      every { zipkinService.newTracing(any()) } returns tracing
+
+      withChannelTo(proxy) { channel ->
+        // What initServletService does after the service is built.
+        every { proxy.zipkinReporterService } returns zipkinService
+
+        repeat(2) {
+          ProxyServiceGrpc.newBlockingStub(channel).connectAgent(EMPTY_INSTANCE)
+          spans.poll(5, TimeUnit.SECONDS).shouldNotBeNull().kind() shouldBe Span.Kind.SERVER
+        }
+        verify(exactly = 1) { zipkinService.newTracing(any()) }
+      }
+    }
   }
+
+  // A span handler that keeps each span a Tracing finishes.
+  private fun collectInto(spans: LinkedBlockingQueue<MutableSpan>) =
+    object : SpanHandler() {
+      override fun end(
+        context: TraceContext,
+        span: MutableSpan,
+        cause: Cause,
+      ): Boolean = spans.add(span)
+    }
 
   // A mocked proxy, with the transport filter on, whose agent-context and path managers are real, so a test can see
   // what a call over the wire does to them.

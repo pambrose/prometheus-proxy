@@ -13,6 +13,15 @@ _Not yet released_
   `proxy.dashboard.refreshIntervalSecs` old (2 s by default), as the dashboard's live updates already did, and an agent
   or path that comes or goes still shows on the next page load.
 
+### Bug Fixes
+
+- **Zipkin tracing works.** Turning it on, with `agent.internal.zipkin.enabled` or `proxy.internal.zipkin.enabled`,
+  made the agent or the proxy fail at startup with `UninitializedPropertyAccessException`, and an embedded agent's
+  `startAsyncAgent` throw. Both now start with it on, and trace the gRPC calls between them: the agent reports a
+  client span for each call, and the proxy a server span in the same trace, each under its `serviceName` setting
+  (`prometheus-agent` and `prometheus-proxy` by default), as the documentation describes, rather than `grpc_client`
+  and `grpc_server`.
+
 ### Build and tooling
 
 - Two tests check what they claim: the test that a host metric with an agent metric's name fails the embedded

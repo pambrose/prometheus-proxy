@@ -164,3 +164,7 @@ agent.internal.zipkin {
   serviceName = "prometheus-agent"
 }
 ```
+
+Tracing covers the gRPC calls between agent and proxy: the agent reports a client span for each call, and the proxy
+a server span in the same trace, each under its own `serviceName`. Spans are sent in the background, so a Zipkin
+server that can't be reached costs the spans, not the agent or the proxy.

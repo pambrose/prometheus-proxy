@@ -35,6 +35,7 @@ import io.grpc.ServerInterceptor
 import io.grpc.ServerInterceptors
 import io.grpc.protobuf.services.ProtoReflectionServiceV1
 import io.prometheus.Proxy
+import io.prometheus.common.DeferredServerInterceptor
 import java.util.concurrent.TimeUnit.SECONDS
 import kotlin.time.Duration.Companion.seconds
 
@@ -56,7 +57,10 @@ internal class ProxyGrpcService(
   private val port: Int = -1,
   private val inProcessName: String = "",
 ) : GenericIdleService() {
-  private val tracing by lazy { proxy.zipkinReporterService.newTracing("grpc_server") }
+  // Named for proxy.internal.zipkin.serviceName. The Proxy builds this service, and with it the server below, before
+  // its initServletService assigns zipkinReporterService, so the tracing interceptor reads it when the first call
+  // arrives, not when installed (November #7).
+  private val tracing by lazy { proxy.zipkinReporterService.newTracing() }
   private val grpcTracing by lazy { GrpcTracing.create(tracing) }
   private val grpcServer: Server
   val healthCheck: HealthCheck
@@ -108,7 +112,7 @@ internal class ProxyGrpcService(
           if (!options.transportFilterDisabled)
             add(ProxyServerInterceptor(proxy))
           if (proxy.isZipkinEnabled)
-            add(grpcTracing.newServerInterceptor())
+            add(DeferredServerInterceptor { grpcTracing.newServerInterceptor() })
         }
 
       addService(ServerInterceptors.intercept(proxyService.bindService(), interceptors))

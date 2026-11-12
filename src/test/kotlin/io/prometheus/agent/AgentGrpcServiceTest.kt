@@ -20,7 +20,12 @@ package io.prometheus.agent
 
 import ch.qos.logback.classic.Level
 import io.kotest.matchers.string.shouldNotContain
+import brave.Span
 import brave.Tracing
+import brave.handler.MutableSpan
+import brave.handler.SpanHandler
+import brave.handler.SpanHandler.Cause
+import brave.propagation.TraceContext
 import com.pambrose.common.concurrent.await
 import com.pambrose.common.service.ZipkinReporterService
 import com.pambrose.common.util.zip
@@ -59,6 +64,7 @@ import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.grpc.ChunkedScrapeResponse
 import io.prometheus.grpc.PathRejectionCause
+import io.prometheus.grpc.ProxyServiceGrpc
 import io.prometheus.grpc.ProxyServiceGrpcKt
 import io.prometheus.grpc.RegisterAgentRequest
 import io.prometheus.grpc.ScrapeResponse
@@ -83,6 +89,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import java.lang.reflect.InvocationTargetException
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit.SECONDS
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.AtomicInt
@@ -175,6 +182,16 @@ class AgentGrpcServiceTest : StringSpec() {
     method.isAccessible = true
     method.callSuspend(service, agent, connectionContext, nonChunkedChannel, chunkedChannel)
   }
+
+  // A span handler that keeps each span a Tracing finishes.
+  private fun collectInto(spans: LinkedBlockingQueue<MutableSpan>) =
+    object : SpanHandler() {
+      override fun end(
+        context: TraceContext,
+        span: MutableSpan,
+        cause: Cause,
+      ): Boolean = spans.add(span)
+    }
 
   init {
     "parseProxyHostname should extract hostname and port correctly" {
@@ -611,8 +628,13 @@ class AgentGrpcServiceTest : StringSpec() {
       every { agent.zipkinReporterService } returns zipkinService
       every { zipkinService.newTracing(any()) } returns tracing
 
-      // Construction builds the first channel, installing the tracing interceptor (creating `tracing`).
+      // Construction builds the first channel, and its first call creates `tracing` (November #7). No server answers to
+      // the channel's name, so the call fails, but only after the tracing interceptor has seen it.
       val service = AgentGrpcService(agent, agent.options, "test-server")
+      shouldThrow<StatusRuntimeException> {
+        ProxyServiceGrpc.newBlockingStub(service.channel).connectAgent(EMPTY_INSTANCE)
+      }
+      verify(exactly = 1) { zipkinService.newTracing(any()) }
 
       // Each reconnect swaps the channel but must NOT close the one-shot tracing.
       repeat(3) { service.resetGrpcStubs() }
@@ -621,6 +643,43 @@ class AgentGrpcServiceTest : StringSpec() {
       // Only the final shutDown closes tracing.
       service.shutDown()
       verify(exactly = 1) { tracing.close() }
+    }
+
+    // ==================== November #7: Zipkin tracing built on the first call ====================
+
+    // The constructor's resetGrpcStubs() runs before Agent's initServletService assigns zipkinReporterService, and
+    // reading it there threw UninitializedPropertyAccessException, so an agent with Zipkin on could not be built. The
+    // tracing interceptor now looks the reporter up on the first call. Every channel a reconnect builds must still
+    // trace, through the one Tracing.
+    "November #7: the channel should be built before zipkinReporterService is assigned and trace once it is" {
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
+      every { agent.isZipkinEnabled } returns true
+      every { agent.zipkinReporterService } throws
+        UninitializedPropertyAccessException("lateinit property zipkinReporterService has not been initialized")
+
+      val service = AgentGrpcService(agent, agent.options, "zipkin-${System.nanoTime()}")
+      try {
+        // What initServletService does after the constructor returns.
+        val spans = LinkedBlockingQueue<MutableSpan>()
+        val tracing = Tracing.newBuilder().addSpanHandler(collectInto(spans)).build()
+        val zipkinService = mockk<ZipkinReporterService>(relaxed = true)
+        every { zipkinService.newTracing(any()) } returns tracing
+        every { agent.zipkinReporterService } returns zipkinService
+
+        repeat(3) { attempt ->
+          if (attempt > 0)
+            service.resetGrpcStubs()
+          // No server answers to the channel's name, so the call fails, but only after the tracing interceptor has
+          // started a span for it.
+          shouldThrow<StatusRuntimeException> {
+            ProxyServiceGrpc.newBlockingStub(service.channel).connectAgent(EMPTY_INSTANCE)
+          }
+          spans.poll(5, SECONDS).shouldNotBeNull().kind() shouldBe Span.Kind.CLIENT
+        }
+        verify(exactly = 1) { zipkinService.newTracing(any()) }
+      } finally {
+        service.shutDown()
+      }
     }
 
     // ==================== Concurrent shutDown / resetGrpcStubs Tests ====================

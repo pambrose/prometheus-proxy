@@ -34,6 +34,7 @@ import io.grpc.ManagedChannel
 import io.prometheus.Agent
 import io.prometheus.agent.AgentOptions.Companion.DEFAULT_GRPC_PORT
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
+import io.prometheus.common.DeferredClientInterceptor
 import io.prometheus.common.Messages.BLANK_AGENT_ID_MSG
 import io.prometheus.common.Messages.BLANK_PATH_MSG
 import io.prometheus.common.ScrapeResults
@@ -115,8 +116,14 @@ internal class AgentGrpcService(
   // further channel may be created. Read and written only under grpcLock, which is what makes the
   // stop-vs-reconnect ordering decisive rather than racy.
   private var shutDownRequested by atomicBoolean(false)
-  private val tracing by lazy { agent.zipkinReporterService.newTracing("grpc_client") }
+
+  // Named for agent.internal.zipkin.serviceName. One Tracing for the service's life, shared by every channel a
+  // reconnect builds. The constructor builds the first channel before Agent's initServletService assigns
+  // zipkinReporterService, so the interceptor each channel installs reads it on the first call, not when installed
+  // (November #7).
+  private val tracing by lazy { agent.zipkinReporterService.newTracing() }
   private val grpcTracing by lazy { GrpcTracing.create(tracing) }
+  private val tracingInterceptor = DeferredClientInterceptor { grpcTracing.newClientInterceptor() }
 
   internal lateinit var grpcStub: ProxyServiceGrpcKt.ProxyServiceCoroutineStub
 
@@ -283,7 +290,7 @@ internal class AgentGrpcService(
           inProcessServerName = inProcessServerName,
         ) {
           if (agent.isZipkinEnabled)
-            intercept(grpcTracing.newClientInterceptor())
+            intercept(tracingInterceptor)
 
           if (options.keepAliveTimeSecs > -1L)
             keepAliveTime(options.keepAliveTimeSecs, SECONDS)
