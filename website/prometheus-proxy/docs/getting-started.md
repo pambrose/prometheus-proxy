@@ -257,6 +257,9 @@ Each entry in `pathConfigs` maps:
 
 === "Docker"
 
+    In a container, `localhost` is the agent's own container, so point each `url` in `agent.conf` at
+    an address the container can reach, such as the service's host name.
+
     **In the foreground**, the container runs attached to your terminal and logs there until you stop
     it with Ctrl+C; `--rm` then removes it:
 

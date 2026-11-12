@@ -270,22 +270,38 @@ If you prefer to build the project from source:
 ### Docker Quick Start
 
 ```bash
-# Start proxy
-docker run --rm -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.4.2
+# Create a network for the two containers
+docker network create prometheus-proxy-net
 
-# Start agent
-docker run --rm \
+# Start proxy, with its metrics enabled
+docker run --rm --name prometheus-proxy --network prometheus-proxy-net \
+  -p 8080:8080 -p 50051:50051 \
+  --env METRICS_ENABLED=true \
+  pambrose/prometheus-proxy:4.4.2
+
+# Start agent, in another terminal
+docker run --rm --network prometheus-proxy-net \
+  --env PROXY_HOSTNAME=prometheus-proxy \
   --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
   pambrose/prometheus-agent:4.4.2
+
+# Scrape the proxy's and the agent's own metrics through the proxy
+curl http://localhost:8080/proxy_metrics
+curl http://localhost:8080/agent_metrics
 ```
 
+In a container, `localhost` is the container itself, so the agent reaches the proxy by its container name on the
+network they share, given in `PROXY_HOSTNAME`. The agent's config, [simple.conf](examples/simple.conf), fetches the
+proxy's metrics from that host too, which is why the proxy needs `METRICS_ENABLED`. In a real deployment the agent runs
+on another host, inside the firewall, with `PROXY_HOSTNAME` set to the proxy's address and no shared network.
+
 These run in the foreground until Ctrl+C. To run a container in the background instead, and have it start again
-if it exits or Docker restarts, replace `--rm` with `--detach --name <name> --restart unless-stopped` (Docker
-doesn't allow `--rm` with `--restart`):
+if it exits or Docker restarts, replace `--rm` with `--detach --restart unless-stopped`, and give the agent a `--name`
+too (Docker doesn't allow `--rm` with `--restart`):
 
 ```bash
-docker run --detach --name prometheus-proxy --restart unless-stopped \
-  -p 8080:8080 -p 50051:50051 pambrose/prometheus-proxy:4.4.2
+docker run --detach --name prometheus-proxy --restart unless-stopped --network prometheus-proxy-net \
+  -p 8080:8080 -p 50051:50051 --env METRICS_ENABLED=true pambrose/prometheus-proxy:4.4.2
 
 docker logs --follow prometheus-proxy   # follow its log
 docker stop prometheus-proxy            # stop it, and no longer restart it
@@ -309,19 +325,19 @@ agent {
     {
       name: "App1 metrics"
       path: app1_metrics
-      labels: "{\"key1\": \"value1\", \"key2\": 2}"
+      labels: "{\"key1\": \"value1\", \"key2\": \"2\"}"
       url: "http://app1.local:9100/metrics"
     },
     {
       name: "App2 metrics"
       path: app2_metrics
-      labels: "{\"key3\": \"value3\", \"key4\": 4}"
+      labels: "{\"key3\": \"value3\", \"key4\": \"4\"}"
       url: "http://app2.local:9100/metrics"
     },
     {
       name: "App3 metrics"
       path: app3_metrics
-      labels: "{\"key5\": \"value5\", \"key6\": 6}"
+      labels: "{\"key5\": \"value5\", \"key6\": \"6\"}"
       url: "http://app3.local:9100/metrics"
     }
   ]
@@ -378,14 +394,19 @@ docker pull pambrose/prometheus-agent:4.4.2
 
 ### Production Docker Setup
 
+These run in the background, and start again if they exit or Docker restarts, on the `prometheus-proxy-net` network
+from the [Docker Quick Start](#docker-quick-start) (`docker network create prometheus-proxy-net` if you skipped it). On
+separate hosts, leave out `--network` and set the agent's `PROXY_HOSTNAME` to the proxy's address.
+
 Start a proxy container with:
 
 ```bash
 # Proxy with admin and metrics enabled
-docker run --rm -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
+docker run --detach --name prometheus-proxy --restart unless-stopped \
+        --network prometheus-proxy-net \
+        -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
         --env ADMIN_ENABLED=true \
         --env METRICS_ENABLED=true \
-        --restart unless-stopped \
         pambrose/prometheus-proxy:4.4.2
 ```
 
@@ -393,9 +414,11 @@ Start an agent container with:
 
 ```bash
 # Agent with remote config file
-docker run --rm -p 8083:8083 -p 8093:8093 \
+docker run --detach --name prometheus-agent --restart unless-stopped \
+        --network prometheus-proxy-net \
+        -p 8083:8083 -p 8093:8093 \
+        --env PROXY_HOSTNAME=prometheus-proxy \
         --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-        --restart unless-stopped \
         pambrose/prometheus-agent:4.4.2
 ```
 
@@ -404,10 +427,13 @@ that scrapes through them (`docker compose -f etc/compose/proxy.yml up`).
 
 Using the config
 file [simple.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf), the proxy
-and the agent metrics would be available from the proxy on *localhost* at:
+and the agent metrics would be available from the proxy's scrape port on *localhost* at:
 
-* http://localhost:8082/proxy_metrics
-* http://localhost:8083/agent_metrics
+* http://localhost:8080/proxy_metrics
+* http://localhost:8080/agent_metrics
+
+Ports 8082 and 8083 serve the proxy's and the agent's own metrics at `/metrics`, which the agent fetches for those two
+paths.
 
 If you want to use a local config file with a docker container (instead of the above HTTP-served config file), use the
 docker [mount](https://docs.docker.com/storage/bind-mounts/) option. Assuming the config file `prom-agent.conf`
@@ -416,8 +442,10 @@ is in your current directory, run an agent container with:
 ```bash
 # Agent with local config file
 docker run --rm -p 8083:8083 -p 8093:8093 \
+    --network prometheus-proxy-net \
     --mount type=bind,source="$(pwd)"/prom-agent.conf,target=/app/prom-agent.conf \
     --env AGENT_CONFIG=prom-agent.conf \
+    --env PROXY_HOSTNAME=prometheus-proxy \
     pambrose/prometheus-agent:4.4.2
 ```
 

@@ -84,14 +84,23 @@ Get running in under a minute:
 === "Docker"
 
     ```bash
+    # A network for the two containers, so the agent reaches the proxy by its name
+    docker network create prometheus-proxy-net
+
     # Start the proxy
-    docker run --rm -p 8080:8080 -p 50051:50051 \
+    docker run --rm --name prometheus-proxy --network prometheus-proxy-net \
+      -p 8080:8080 -p 50051:50051 --env METRICS_ENABLED=true \
       pambrose/prometheus-proxy:4.4.2
 
-    # Start the agent
-    docker run --rm \
+    # Start the agent, in another terminal
+    docker run --rm --network prometheus-proxy-net \
+      --env PROXY_HOSTNAME=prometheus-proxy \
       --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
       pambrose/prometheus-agent:4.4.2
+
+    # Scrape the proxy's and the agent's own metrics through the proxy
+    curl http://localhost:8080/proxy_metrics
+    curl http://localhost:8080/agent_metrics
     ```
 
 === "Helm"

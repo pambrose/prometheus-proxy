@@ -13,6 +13,10 @@ docker pull pambrose/prometheus-agent:4.4.2
 
 ## Basic Usage
 
+In a container, `localhost` is the container itself, so these put the proxy and the agent on a network they share,
+and the agent reaches the proxy by its container name, given in `PROXY_HOSTNAME`. In a real deployment the agent runs
+on another host, inside the firewall, with `PROXY_HOSTNAME` set to the proxy's address and no shared network.
+
 ### Proxy
 
 ```bash
@@ -20,6 +24,11 @@ docker pull pambrose/prometheus-agent:4.4.2
 ```
 
 ### Agent with Remote Config
+
+Run the agent in another terminal. Its config,
+[`simple.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/examples/simple.conf), serves the proxy's
+and the agent's own metrics through the proxy, and fetches the proxy's from the `PROXY_HOSTNAME` host, which is why
+the proxy needs `METRICS_ENABLED`:
 
 ```bash
 --8<-- "DockerExamples.txt:docker-agent-basic"

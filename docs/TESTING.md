@@ -358,6 +358,11 @@ These support helpers also live here (not test classes themselves):
   their shared collectors registered
 - **DataClassTest** — Config data classes (AdminConfig, MetricsConfig, ZipkinConfig parsing); the buffer pool,
   compilation, and native memory export flags each turn on only their own MetricsConfig field
+- **DocsExamplesTest** — every `examples/*.conf` loads through `AgentOptions` and `ProxyOptions` (a discovery
+  targets file through `FileDiscoverySource`) with labels service discovery can serve; `simple.conf` fetches the
+  proxy's metrics from `PROXY_HOSTNAME`, as the Docker quick start needs, or from `localhost`; and no `docker run`
+  command in the README, `llms.txt`, or the website's pages and snippets combines `--rm` with `--restart`, which
+  Docker refuses
 - **LocalTestConfigTest** — no test source under `src/test/kotlin/io` names `raw.githubusercontent.com`, so a spec
   reads its config from the checkout, and a renamed or deleted one fails instead of testing a copy on GitHub `master`
 - **LogbackConfigTest** — the bundled `logback.xml`, loaded from inside a JAR, and `logback/docker-logback.xml`,
