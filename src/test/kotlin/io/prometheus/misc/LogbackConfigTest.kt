@@ -45,13 +45,13 @@ class LogbackConfigTest : StringSpec() {
   }
 
   init {
-    // The fat JARs load src/main/resources/logback.xml as a jar: URL, which logback can't watch, so a
+    // The fat JARs load src/shadow/resources/logback.xml as a jar: URL, which logback can't watch, so a
     // scan="true" there records two WARNs and every start of the proxy or agent printed the status list.
     "bundled logback.xml should configure from inside a JAR without warnings" {
       val jar = File.createTempFile("logback-config", ".jar").apply { deleteOnExit() }
       JarOutputStream(jar.outputStream()).use { out ->
         out.putNextEntry(JarEntry("logback.xml"))
-        out.write(File("src/main/resources/logback.xml").readBytes())
+        out.write(File("src/shadow/resources/logback.xml").readBytes())
         out.closeEntry()
       }
 

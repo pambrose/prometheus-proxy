@@ -15,6 +15,10 @@
   -->
 
 <!--
+  The fat JARs' and the images' logging config. It lives in src/shadow/resources, which only the fat JARs include:
+  in the published library jar, Logback (and Spring Boot) would take it for the config of every application that
+  embeds the agent, in place of the application's own.
+
   No scan attribute: logback can't watch a config loaded from inside the JAR, and asking it to records
   WARN statuses that make it print its whole internal status list at startup. For live reload, point
   -Dlogback.configurationFile at a file on disk with scan="true" (see logback/docker-logback.xml).

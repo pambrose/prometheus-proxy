@@ -1,6 +1,6 @@
 .PHONY: default help stop clean clean-all stubs build tibuild refresh jars \
         tests mini-tests xxl-tests nh-tests ip-tests netty-tests tls-tests lincheck-tests tla-checks check-rules helm-lint zizmor \
-        container-tests scaling-tests all-tests ci ci-build regen-certs \
+        container-tests scaling-tests all-tests ci ci-build consumer-check regen-certs \
         docker-clean docker-clean-dry \
         all-scaling scaling-paths scaling-agents scaling-payload scaling-consolidated scaling-concurrency scaling-soak \
         coverage coverage-html coverage-xml coverage-log coverage-verify \
@@ -42,12 +42,12 @@ RELEASE_VERSION_FILES := README.md llms.txt etc/compose/proxy.yml \
 	docs/RELEASE.md .claude/skills/publishing-release/SKILL.md
 # The CI jobs that must have passed for the release commit, as workflow-file/job-name, separated by semicolons since
 # job names can hold spaces. make release itself runs only the tests and the distro build, so these are what cover
-# the coverage floors, TLA+, the alerting rules, the Helm charts, the docs site build, the container suite, and the
-# image and workflow scans. The site build is here because make release ends by deploying the site, so a commit whose
-# site doesn't build stops before anything is published. The workflow file tells apart jobs with the same name, such
-# as ci.yml's and docs.yml's build. Renaming one of these jobs, or adding a check a release should wait for, means
-# updating this list.
-RELEASE_REQUIRED_JOBS := ci.yml/build;ci.yml/tla;ci.yml/rules;ci.yml/helm;ci.yml/docs-site;\
+# the coverage floors, TLA+, the alerting rules, the Helm charts, the docs site build, what a Maven build that embeds
+# the agent gets from the POM about to be published (consumer-check), the container suite, and the image and workflow
+# scans. The site build is here because make release ends by deploying the site, so a commit whose site doesn't build
+# stops before anything is published. The workflow file tells apart jobs with the same name, such as ci.yml's and
+# docs.yml's build. Renaming one of these jobs, or adding a check a release should wait for, means updating this list.
+RELEASE_REQUIRED_JOBS := ci.yml/build;ci.yml/tla;ci.yml/rules;ci.yml/helm;ci.yml/docs-site;ci.yml/consumer-check;\
 	container-tests.yml/container-tests;container-tests.yml/helm-smoke;security.yml/image-scan (proxy);\
 	security.yml/image-scan (agent);security.yml/codeql;zizmor.yml/code-scanning
 WEBSITE_DIR := website
@@ -84,7 +84,11 @@ CHARTS := prometheus-proxy prometheus-agent
 
 # The jobs of the CI workflow (.github/workflows/ci.yml) that `make ci` runs, quickest first; build-site is its docs-site
 # job, and ci-build its build job. Keep the list, and ci-build's steps, in step with that workflow.
-CI_JOBS := tla-checks check-rules helm-lint build-site ci-build
+CI_JOBS := tla-checks check-rules helm-lint build-site consumer-check ci-build
+
+# The version consumer-check publishes to the local Maven repository and builds against. Never a released version,
+# which the local repository may already hold from Maven Central, so the check always reads what this checkout builds.
+CONSUMER_CHECK_VERSION := $(patsubst %-SNAPSHOT,%,$(VERSION))-consumer-check-SNAPSHOT
 
 # zizmor audits the GitHub Actions workflows and dependabot.yml. The same version as .github/workflows/zizmor.yml, with
 # the digest zizmor-action pins for it (its support/versions file); update the two together.
@@ -227,7 +231,7 @@ all-tests: tests lincheck-tests container-tests  ## Run the full suite: all test
 # Runs CI's jobs one after another on the working tree, uncommitted changes included. A failed job doesn't stop the
 # rest, as in CI, where they run in parallel; the failed ones are listed at the end. The Codecov upload is left out, and
 # so are the pull request's other workflows: `make container-tests` and `make zizmor` run two of them.
-ci:  ## Run the CI workflow's jobs locally: TLA+, alerting rules, Helm charts, the docs site, and the build (needs Docker)
+ci:  ## Run the CI workflow's jobs locally: TLA+, alerting rules, Helm charts, the docs site, the consumer check, and the build (needs Docker)
 	@failed=; for job in $(CI_JOBS); do \
 		printf '\n\033[1;36m==> make %s\033[0m\n\n' $$job; \
 		$(MAKE) --no-print-directory $$job || failed="$$failed $$job"; \
@@ -241,6 +245,13 @@ ci:  ## Run the CI workflow's jobs locally: TLA+, alerting rules, Helm charts, t
 ci-build:  ## The CI workflow's build job: compile, lint, and detekt, then the tests and coverage floors (MINI harness)
 	HARNESS_CONFIG=MINI $(GRADLE) clean build -x test
 	HARNESS_CONFIG=MINI $(GRADLE) --continue test koverVerify koverVerifyPerClass koverXmlReport koverLog
+
+# CI's consumer-check job. A Maven build that embeds the agent resolves the published POM by Maven's rules, which the
+# repo's Gradle builds don't follow, so this publishes the artifact to the local Maven repository, needing no GPG key,
+# as publish-local-snapshot does, and has etc/consumer-check/check.sh build a Maven project that depends only on it.
+consumer-check: _require-version  ## Build a Maven project that embeds the agent against this checkout's POM, and check what it resolves (needs mvn)
+	$(GRADLE) -PoverrideVersion=$(CONSUMER_CHECK_VERSION) publishToMavenLocal
+	./etc/consumer-check/check.sh $(CONSUMER_CHECK_VERSION)
 
 docker-clean-dry:  ## Preview what `make docker-clean` would reclaim (removes nothing)
 	@./bin/docker-clean-tests.sh --dry-run --cache

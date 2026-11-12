@@ -129,3 +129,31 @@ jobs:
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
       - name: Build the docs site
         run: make build-site
+
+  # Builds etc/consumer-check, a Maven project that depends only on the artifact this commit would publish, as an
+  # application that embeds the agent does (`make consumer-check`). The other jobs compile and test against Gradle's
+  # resolution, so only this one sees what a Maven embedder gets: it fails unless the docs site's embedded-agent
+  # examples compile, Jackson, netty-tcnative, and Netty resolve at the catalog's versions, and no jar on the classpath
+  # carries a logback.xml. The runner's Maven builds the project; setup-java caches what it downloads, keyed on the
+  # project and the version catalog.
+  consumer-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          # JDK 25 (the last, so the default) runs Gradle and Maven; JDK 17 is the toolchain the main code compiles with.
+          java-version: |
+            17
+            25
+          cache: maven
+          cache-dependency-path: |
+            etc/consumer-check/pom.xml
+            gradle/libs.versions.toml
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+      - name: Build a Maven project that embeds the agent
+        run: make consumer-check

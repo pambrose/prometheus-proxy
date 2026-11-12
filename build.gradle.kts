@@ -93,6 +93,9 @@ pambroseTesting {
   addLogbackClassic.set(false)
 }
 
+// The platforms netty-tcnative-boringssl-static has natives for (see dependencies).
+val tcnativeClassifiers = listOf("linux-x86_64", "linux-aarch_64", "osx-x86_64", "osx-aarch_64", "windows-x86_64")
+
 dependencies {
   implementation(libs.kotlin.reflect)
   implementation(libs.kotlinx.serialization)
@@ -103,16 +106,24 @@ dependencies {
   implementation(platform(libs.grpc.bom))
   implementation(libs.bundles.ktor)
   implementation(libs.bundles.webjars)
+  // Agent and Proxy, both public, extend service-utils' GenericService, so a compiler that sees either needs it, and
+  // the guava-utils and Guava it brings at compile scope. api puts it on consumers' compile classpaths (compile scope in
+  // the POM); with implementation, a Java build that embeds the agent couldn't compile a call to startAsyncAgent.
+  api(libs.common.utils.service)
   implementation(libs.bundles.common.utils)
   implementation(libs.protobuf.kotlin)
   implementation(libs.grpc.kotlin.stub)
 
   // BoringSSL bindings that let Netty use OpenSSL for TLS instead of the JDK. This artifact holds no native
-  // code; the natives come in per-platform classifier jars, which common-utils' grpc-utils declares for Linux
-  // (x86_64, aarch_64), macOS (x86_64, aarch_64), and Windows (x86_64). So the fat JARs, and builds that embed the
-  // agent, use OpenSSL on those platforms and fall back to the JDK's TLS elsewhere. Declared to pin the tcnative
-  // version (see libs.versions.toml); runtimeOnly because nothing references it at compile time.
+  // code; the natives come in per-platform classifier jars, for Linux (x86_64, aarch_64), macOS (x86_64, aarch_64),
+  // and Windows (x86_64). So the fat JARs, and builds that embed the agent, use OpenSSL on those platforms and fall
+  // back to the JDK's TLS elsewhere. Declared to pin the tcnative version (see libs.versions.toml); runtimeOnly because
+  // nothing references it at compile time.
   runtimeOnly(libs.netty.tcnative)
+  // The natives, at the same version. common-utils' grpc-utils declares them at the tcnative it was built with, and
+  // Maven tells a classifier jar apart from the plain one, so without these a Maven build took grpc-utils' natives
+  // beside these classes. Gradle resolves every classifier at one version, so they change nothing here.
+  tcnativeClassifiers.forEach { runtimeOnly(variantOf(libs.netty.tcnative) { classifier(it) }) }
   // Declares the Netty modules grpc-netty brings at the patched release, so the published POM and Gradle module pin it
   // for builds that embed the agent; the resolution override below changes only this build's own classpaths.
   runtimeOnly(libs.bundles.netty)
@@ -124,8 +135,11 @@ dependencies {
   // Aligns the Prometheus Java client modules common-utils brings with prometheus-metrics-core; see libs.versions.toml.
   implementation(platform(libs.prometheus.metrics.bom))
   implementation(libs.dropwizard.metrics)
-  // Raises the Jackson that Dropwizard metrics-json brings (2.12.7) past its CVEs; see libs.versions.toml.
+  // Raises the Jackson that Dropwizard metrics-json brings (2.12.7) past its CVEs; see libs.versions.toml. The BOM aligns
+  // this build and Gradle consumers, but Maven ignores a dependency's BOM imports, so the `jackson` bundle also declares
+  // the modules at the patched version, which is what reaches a Maven build that embeds the agent.
   implementation(platform(libs.jackson.bom))
+  runtimeOnly(libs.bundles.jackson)
   implementation(libs.zipkin.brave)
 
   implementation(libs.kotlin.logging)
@@ -142,9 +156,11 @@ dependencies {
 // Raises every Netty module grpc-netty brings (4.2.17.Final) to the patched release in libs.versions.toml. netty-tcnative
 // keeps its own pin there: its classes and the per-platform natives must match, which a Netty BOM would break by
 // raising only some of them. Only the `netty` bundle reaches the published POM, so a Netty module on the runtime
-// classpath that the bundle doesn't list fails the build instead of reaching embedders unpatched.
+// classpath that the bundle doesn't list fails the build instead of reaching embedders unpatched. Jackson gets the same
+// check: the jackson-bom raises it on this build's classpaths, but only the `jackson` bundle reaches a Maven embedder.
 val nettyVersion = libs.versions.netty.get()
 val pinnedNettyModules = libs.bundles.netty.get().map { it.module.name }.toSet()
+val pinnedJacksonModules = libs.bundles.jackson.get().map { it.module.name }.toSet()
 configurations.configureEach {
   val isRuntimeClasspath = name == "runtimeClasspath"
   resolutionStrategy.eachDependency {
@@ -155,7 +171,18 @@ configurations.configureEach {
       useVersion(nettyVersion)
       because("grpc-netty 1.85.1's Netty 4.2.17.Final has CVE-2026-93492")
     }
+    if (isRuntimeClasspath && requested.group.startsWith("com.fasterxml.jackson") && requested.name != "jackson-bom") {
+      check(requested.name in pinnedJacksonModules) {
+        "${requested.module} is on the runtime classpath but not in the jackson bundle in libs.versions.toml"
+      }
+    }
   }
+}
+
+// jackson-annotations has had no patch number since Jackson 2.20 (2.23, not 2.23.0), so the `jackson` bundle declares it
+// at its own version, which has to stay `jackson`'s major.minor, the one the jackson-bom gives it.
+check(libs.versions.jacksonAnnotations.get() == libs.versions.jackson.get().substringBeforeLast('.')) {
+  "jacksonAnnotations in libs.versions.toml should be the major.minor of jackson"
 }
 
 configureKotlin()
@@ -306,6 +333,12 @@ fun Project.configureJars() {
     enabled = false
   }
 
+  // The Shadow plugin still adds its shadowRuntimeElements variant to the java component. Published, it had no files,
+  // so a Gradle consumer that asked for shadowed or embedded bundling selected it and got nothing on its classpath.
+  components.named<AdhocComponentWithVariants>("java") {
+    withVariantsFromConfiguration(configurations["shadowRuntimeElements"]) { skip() }
+  }
+
   val mainOutput = sourceSets.main.get().output
   val runtimeClasspath = configurations.runtimeClasspath
 
@@ -315,7 +348,8 @@ fun Project.configureJars() {
   // `unix` scheme on any non-IP hostname. The filesMatching() block below fixes the
   // merge itself; the static service files under src/shadow/resources additionally
   // pin the critical grpc providers as a guard against future Shadow regressions.
-  // Kept out of src/main/resources so the published Maven jar is clean.
+  // logback.xml is there too: in the published library jar, it would replace the logging config of the application
+  // that embeds the agent. Kept out of src/main/resources so the published Maven jar is clean.
   val shadowResources = file("src/shadow/resources")
 
   // The NOTICE and license files the transformers below merge. Matched exactly, since a path let through as INCLUDE
@@ -434,6 +468,21 @@ fun Project.configurePublishing() {
     // Skip signing when no GPG key is provided (e.g., local publishing)
     if (project.findProperty("signingInMemoryKey") != null) {
       signAllPublications()
+    }
+  }
+
+  // A variant of the published Gradle module with no files resolves to nothing for a consumer that selects it, as the
+  // Shadow plugin's did (see configureJars), so every publish, local or to Maven Central, fails on one.
+  tasks.withType<GenerateModuleMetadata>().configureEach {
+    val moduleFile = outputFile
+    doLast {
+      val module = groovy.json.JsonSlurper().parse(moduleFile.get().asFile) as Map<*, *>
+      val empty =
+        (module["variants"] as List<*>)
+          .map { it as Map<*, *> }
+          .filter { (it["files"] as List<*>?).isNullOrEmpty() }
+          .map { it["name"] }
+      check(empty.isEmpty()) { "The published Gradle module has variants with no files: $empty" }
     }
   }
 }

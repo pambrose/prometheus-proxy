@@ -33,7 +33,7 @@ protoc = "3.25.9"
 # accepted in SNI names, and an out-of-bounds read in ALPN protocol selection. 2.0.85.Final is the version Netty
 # 4.2.20.Final, below, is built against. tcnative 2.0.x keeps its API stable, so grpc and Netty work with it unchanged.
 # Go back to tracking grpc's version once it reaches 2.0.85.Final or later. common-utils' grpc-utils also brings
-# tcnative, with its per-platform natives; this declaration sets the version.
+# tcnative, with its per-platform natives; build.gradle.kts declares the classes and every native at this version.
 tcnative = "2.0.85.Final"
 # grpc-netty 1.85.1 brings Netty 4.2.17.Final, which has CVE-2026-93492 (HTTP/2 HPACK encoder DoS) and the other
 # advisories 4.2.18.Final, 4.2.19.Final, and 4.2.20.Final fix. build.gradle.kts raises every Netty module except
@@ -59,8 +59,11 @@ htmxWs = "2.0.4"
 prometheus = "1.10.0"
 dropwizard = "4.2.40"
 # Dropwizard metrics-json (common-utils' service-utils) brings Jackson 2.12.7, which has CVE-2025-52999 and
-# CVE-2026-54512/54513 (high). build.gradle.kts imports this BOM to raise it.
+# CVE-2026-54512/54513 (high). build.gradle.kts imports this BOM to raise it, and declares the `jackson` bundle at this
+# version so the published POM raises it for Maven builds that embed the agent too. jackson-annotations has had no patch
+# number since 2.20, so its version is jackson's major.minor, which build.gradle.kts checks.
 jackson = "2.23.0"
+jacksonAnnotations = "2.23"
 
 # Tracing
 zipkin = "6.3.1"
@@ -138,6 +141,10 @@ prometheus-metrics-bom = { module = "io.prometheus:prometheus-metrics-bom", vers
 prometheus-metrics-core = { module = "io.prometheus:prometheus-metrics-core", version.ref = "prometheus" }
 dropwizard-metrics = { module = "io.dropwizard.metrics:metrics-healthchecks", version.ref = "dropwizard" }
 jackson-bom = { module = "com.fasterxml.jackson:jackson-bom", version.ref = "jackson" }
+# The Jackson modules Dropwizard metrics-json brings, at the patched `jackson` version; see build.gradle.kts
+jackson-annotations = { module = "com.fasterxml.jackson.core:jackson-annotations", version.ref = "jacksonAnnotations" }
+jackson-core = { module = "com.fasterxml.jackson.core:jackson-core", version.ref = "jackson" }
+jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson" }
 
 # Tracing
 zipkin-brave = { module = "io.zipkin.brave:brave-instrumentation-grpc", version.ref = "zipkin" }
@@ -208,11 +215,19 @@ netty = [
   "netty-transport-native-unix-common"
 ]
 
+jackson = [
+  "jackson-annotations",
+  "jackson-core",
+  "jackson-databind"
+]
+
 webjars = [
   "webjar-htmx",
   "webjar-htmx-ws"
 ]
 
+# Not common-utils-service, which build.gradle.kts declares as api, since the public Agent and Proxy extend its
+# GenericService.
 common-utils = [
   "common-utils-core",
   "common-utils-dropwizard",
@@ -221,7 +236,6 @@ common-utils = [
   "common-utils-jetty",
   "common-utils-ktor-client",
   "common-utils-prometheus",
-  "common-utils-service",
   "common-utils-zipkin"
 ]
 
