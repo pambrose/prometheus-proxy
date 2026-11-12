@@ -62,16 +62,22 @@ object ContainerTestSupport {
 
   /**
    * The image every nginx stub runs. Pinned rather than the floating `nginx:alpine`, so container runs are
-   * reproducible; the same version as the reverse-proxy example in `nginx/docker/Dockerfile`.
+   * reproducible; the same version as the reverse-proxy example in `nginx/docker/Dockerfile`. Pinned by digest too,
+   * since `1.31-alpine` moves with every nginx 1.31.x and Alpine rebuild: the digest is the image's multi-platform
+   * index (`docker buildx imagetools inspect <image:tag>` prints it), so update the tag and digest together.
+   * Testcontainers pulls the digest, and the tag is there for the reader.
    */
-  const val NGINX_IMAGE = "nginx:1.31-alpine"
+  const val NGINX_IMAGE =
+    "nginx:1.31-alpine@sha256:713fc2ebfd92e8217db451477182ee91944b123d2b1ee9fd5a8c6e91ca6c3a11"
 
   /**
    * The Prometheus image the end-to-end specs scrape through. Pinned for the same reason as [NGINX_IMAGE]: the floating
-   * `latest` changed what the suite tested without any change here. Bump it deliberately, since the specs check PromQL
-   * results and the HTTP service-discovery contract.
+   * `latest` changed what the suite tested without any change here, and a tag can be pushed again. Bump it
+   * deliberately, since the specs check PromQL results and the HTTP service-discovery contract, and with the
+   * `Makefile`'s `PROMETHEUS_IMAGE`, whose promtool checks the alerting rules (`CiHygieneTest` checks they match).
    */
-  const val PROMETHEUS_IMAGE = "prom/prometheus:v3.14.0"
+  const val PROMETHEUS_IMAGE =
+    "prom/prometheus:v3.14.0@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0"
 
   /** True only when `RUN_CONTAINER_TESTS=true`; otherwise every spec registers a single disabled placeholder. */
   fun containerTestsEnabled(): Boolean = System.getenv("RUN_CONTAINER_TESTS") == "true"

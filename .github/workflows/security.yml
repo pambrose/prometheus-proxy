@@ -1,10 +1,10 @@
 name: Security
 
-# Scans for known vulnerabilities. Trivy scans the proxy and agent images (the Temurin base layer and every library in
-# the fat JARs) and fails on a HIGH or CRITICAL vulnerability that has a fix; CodeQL analyzes the Kotlin code. Runs on
-# pull requests, on push to master, and weekly, since a newly published CVE can affect code that hasn't changed.
-# Findings from master and the weekly run go to the repository's code scanning alerts. No untrusted event payloads are
-# referenced.
+# Scans for known vulnerabilities. Trivy scans the proxy and agent images (the packages of the distroless Debian 13 base
+# the Temurin JRE is copied onto, and every library in the fat JARs) and fails on a HIGH or CRITICAL vulnerability that
+# has a fix; CodeQL analyzes the Kotlin code. Runs on pull requests, on push to master, and weekly, since a newly
+# published CVE can affect code that hasn't changed. Findings from master and the weekly run go to the repository's
+# code scanning alerts. No untrusted event payloads are referenced.
 on:
   push:
     branches: [ master ]

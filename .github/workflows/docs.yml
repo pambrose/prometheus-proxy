@@ -33,18 +33,20 @@ jobs:
         with:
           persist-credentials: false
 
-      # The site gives the gradle.properties version as its Docker image tag and Maven coordinate, and those don't
-      # exist from the merge of a version bump until `make release` publishes them. So a push deploys only once the
-      # version's POM is on Maven Central and both its images are on Docker Hub; until then the site stays at the
-      # previous release. A push that doesn't bump the version finds it published, so docs changes deploy as they
-      # merge. A workflow_dispatch always deploys: `make release` starts one (`make gh-docs`) once it has verified the
-      # images. The site is built either way, so a push that doesn't deploy still checks the build.
+      # The site gives, as its Docker image tag and Maven coordinate, the version that step 2 of docs/RELEASE.md bumps
+      # (`make site-version` prints it), and a bumped version doesn't exist until `make release` publishes it. So a
+      # push deploys only once the version's POM is on Maven Central and both its images are on Docker Hub; until then
+      # the site stays at the previous release. Between releases the site still gives the last one, which is
+      # published, so docs changes deploy as they merge, whatever gradle.properties holds: a -SNAPSHOT there had kept
+      # every docs change from deploying until the next release. A workflow_dispatch always deploys: `make release`
+      # starts one (`make gh-docs`) once it has verified the images. The site is built either way, so a push that
+      # doesn't deploy still checks the build. If make can't name one version, the job fails.
       - name: Check that the version the site gives is published
         id: published
         run: |
           deploy=true
           if [ "$GITHUB_EVENT_NAME" = push ]; then
-            version=$(sed -n 's/^version=//p' gradle.properties)
+            version=$(make -s --no-print-directory site-version)
             for url in \
               "https://repo1.maven.org/maven2/com/pambrose/prometheus-proxy/$version/prometheus-proxy-$version.pom" \
               "https://hub.docker.com/v2/namespaces/pambrose/repositories/prometheus-proxy/tags/$version" \
@@ -66,6 +68,10 @@ jobs:
       # Build the Zensical documentation site from website/uv.lock with `make build-site`, which CI's docs-site job
       # also runs on every pull request. uv reads website/.python-version and installs that Python itself.
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          # Without a version, setup-uv installs the newest uv, so the deploy could change with no diff here. The same
+          # uv as ci.yml's docs-site job (CiHygieneTest checks); update both with the uv website/uv.lock is locked with.
+          version: "0.13.7"
       # mkdocs-material, which the emoji extension needs, is pinned in website/pyproject.toml and so in uv.lock.
       - run: make build-site
 

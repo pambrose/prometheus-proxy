@@ -367,8 +367,10 @@ These support helpers also live here (not test classes themselves):
 - **AdminEmptyPathTest** — Admin endpoints with empty paths (disables endpoints)
 - **AdminNonDefaultPathTest** — Admin endpoints with custom paths
 - **CiHygieneTest** — every job in `.github/workflows` sets `timeout-minutes`, every tool image the `Makefile` runs
-  (`*_IMAGE`) is pinned by digest, and the CRD schemas `helm-lint` validates against come from a fixed commit, so a
-  hung job gives its check back and what CI runs changes only with a diff here
+  (`*_IMAGE`) and every third-party image `ContainerTestSupport` gives the container suite is pinned by digest, in a
+  form Testcontainers pulls by digest, the suite's Prometheus is the `Makefile`'s, every `astral-sh/setup-uv` step
+  installs a pinned uv, the same one in each, and the CRD schemas `helm-lint` validates against come from a fixed
+  commit, so a hung job gives its check back and what CI runs changes only with a diff here
 - **ConfigValsTest** — ConfigVals auto-generated from HOCON schema (validates default values)
 - **DashboardMetricNamesTest** — the Grafana dashboards, the alert rules, the docs' PromQL, and the metric names
   on the website's pages all name series the proxy and agent expose (a counter only with its `_total` suffix); proxy
@@ -391,6 +393,10 @@ These support helpers also live here (not test classes themselves):
 - **ShadowServiceFilesTest** — every class listed in the pinned fat-JAR service files
   (`src/shadow/resources/META-INF/services/`) loads and implements its service, so a stale provider name fails here
   instead of only in the container suite
+- **SiteVersionTest** — `make site-version` prints the version the docs site's image tags and Maven coordinate give:
+  the Docker examples' tag, a release version, whatever `gradle.properties` holds. It skips `latest` and a full stop
+  after a tag, and fails when the site gives two versions or none. `docs.yml`'s deploy check and `bin/docker-*.sh`
+  read their version from it, not from `gradle.properties`, whose `-SNAPSHOT` between releases has no image
 - **TestingGuideTest** — every `*Test.kt` under `src/test/kotlin` is named in its package's section of this
   document, and every support file under `src/test` is named somewhere in it
 - **WebsiteConfigKeysTest** — every `proxy.` and `agent.` config key the website's pages name is in
@@ -501,9 +507,10 @@ Two more live one level up, in `harness/` itself:
 ### Container Tests (`containers/`)
 
 End-to-end Testcontainers specs that build the proxy and agent images from `etc/docker/*.Dockerfile`, stand them up
-alongside `nginx:1.31-alpine` metrics stubs (and `prom/prometheus:v3.14.0` where needed), and exercise the full
-Prometheus → proxy → agent → endpoint scrape path over real network transport. Every spec is gated on
-`RUN_CONTAINER_TESTS=true`; shared factories live in `containers/support/ContainerTestSupport.kt`.
+alongside `nginx:1.31-alpine` metrics stubs (and `prom/prometheus:v3.14.0` where needed), each pinned by digest as
+well as tag, and exercise the full Prometheus → proxy → agent → endpoint scrape path over real network transport.
+Every spec is gated on `RUN_CONTAINER_TESTS=true`; shared factories live in
+`containers/support/ContainerTestSupport.kt`.
 
 `containers/support/LoopbackPortBindings.kt` publishes every container port on `127.0.0.1` instead of
 Docker's `0.0.0.0` default. It has no call sites: it is registered through
