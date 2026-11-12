@@ -40,6 +40,7 @@ internal class ProxyServerTransportFilter(
 
     return attributes {
       set(AGENT_ID_KEY, agentContext.agentId)
+      set(AGENT_CONTEXT_KEY, agentContext)
       setAll(attributes)
     }
   }
@@ -48,7 +49,7 @@ internal class ProxyServerTransportFilter(
     attributes.get(AGENT_ID_KEY)?.also { agentId ->
       val context = proxy.removeAgentContext(agentId, "Termination")
       when {
-        context == null -> logger.info { "Agent $agentId already removed before transport terminated" }
+        context == null -> logAlreadyRemoved(agentId, attributes.get(AGENT_CONTEXT_KEY)?.announced == true)
 
         // A connection that never made an authenticated call was never reported as connected.
         !context.announced -> logger.debug { "Closed unannounced connection $context" }
@@ -59,9 +60,23 @@ internal class ProxyServerTransportFilter(
     super.transportTerminated(attributes)
   }
 
+  // The cleanup service evicted the context first, and logged that at INFO only for an announced agent, as this does. A
+  // pending connection logged this at INFO, the noise October #4 removed elsewhere (November #4).
+  private fun logAlreadyRemoved(
+    agentId: String,
+    announced: Boolean,
+  ) {
+    val message = "Agent $agentId already removed before transport terminated"
+    if (announced) logger.info { message } else logger.debug { message }
+  }
+
   companion object {
     private val logger = logger {}
     internal val AGENT_ID_KEY: Attributes.Key<String> = Attributes.Key.create(AGENT_ID)
+
+    // The context transportReady created, kept only for transportTerminated's log level: once the cleanup service has
+    // evicted it, the manager can't say whether it was announced. Calls find their context through AGENT_ID_KEY.
+    private val AGENT_CONTEXT_KEY: Attributes.Key<AgentContext> = Attributes.Key.create("agent-context")
 
     // host:port without a reverse DNS lookup (hostString, not hostName), an IPv6 host in brackets, and any other
     // address type (the in-process transport's) as it prints itself.
