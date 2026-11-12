@@ -175,7 +175,8 @@ the build.
   gRPC shutdown that throws (a MockK constructor mock) still stops the admin and metrics servers and closes the client
   cache
 - **AgentGrpcServiceTest** — gRPC service: scrape request/response streaming, heartbeats, registration, error handling,
-  channel shutdown
+  channel shutdown; with Zipkin on, the channel is built before `zipkinReporterService` is assigned, and every channel
+  a reconnect builds traces through one `Tracing`
 - **AgentHttpServiceTest** — HTTP service: scraping endpoints, compression support, response handling, timeout behavior,
   error cases
 - **AgentHttpServiceHeaderTest** — HTTP Accept header handling per-request (prevents stale headers in cached clients)
@@ -230,7 +231,8 @@ Two support helpers also live here (not test classes themselves):
   when its `agentId` or `headerAgentId` names that agent
 - **ProxyGrpcServiceTest** — gRPC server configuration: each handshake, keepalive, and connection-age option reaches
   the server builder (a MockK builder) and an unset one leaves gRPC's default, and the transport filter; reflection
-  is not served when disabled, and when enabled it requires a valid agent token if agent auth is configured
+  is not served when disabled, and when enabled it requires a valid agent token if agent auth is configured; with
+  Zipkin on, the server is built before `zipkinReporterService` is assigned and traces once it is
 - **ProxyHttpServiceTest** — ProxyHttpService string representation, lifecycle, and idle timeout: 45s when
   `http.idleTimeoutSecs` is -1, otherwise the configured value
 - **ProxyHttpConfigTest** — HTTP server config: Ktor compression, status pages, CORS; a call cancelled by a client
@@ -304,6 +306,9 @@ One support helper also lives here (not a test class itself):
 - **ConfigLoadExceptionTest** — The public exception embedded hosts catch: message-only and with-cause constructors
 - **ConfigWrappersTest** — Factory methods for AdminConfig, MetricsConfig, ZipkinConfig
 - **ConstantsTest** — Constant values (EMPTY_AGENT_ID_MSG, EMPTY_PATH_MSG, EMPTY_INSTANCE)
+- **DeferredInterceptorsTest** — the client and server interceptors that build their delegate on the first call, once,
+  and again on a later call if building it failed, which lets the Zipkin tracing interceptors be installed before the
+  reporter they need exists
 - **EnvVarsTest** — Environment variable mappings and fallback defaults
 - **MetricBuildersTest** — the metric builders keep no exemplars and only classic histogram buckets; a
   `sampledGauge` value that throws is reported as NaN instead of failing the scrape; and `setToCurrentTime` sets
@@ -439,6 +444,9 @@ mechanism that the standard suite cannot reach:
   transport-filter mode
 - **InProcessTransportFilterDisabledTest** — both sides with the transport filter off: a scrape succeeds,
   and the request stream's own termination is what reclaims the agent context
+- **InProcessZipkinTest** — with Zipkin on, the proxy and the agent each start, serve a scrape, and stop, against a
+  collector that can't be reached; with it on for both and a stand-in collector, the agent's client spans and the
+  proxy's server spans arrive under their configured service names, in one trace
 - **ProxyWebDashboardTest** — the dashboard service rather than the renderer: page, WebSocket push,
   selection round-trip, both layouts, a root-mounted base path, with `allowedHosts` set a 403 on every route
   for a request naming an unknown host, and page GETs and WebSocket messages rendering the cached snapshot while a

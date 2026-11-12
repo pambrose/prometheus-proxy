@@ -202,6 +202,13 @@ object TestPorts {
   const val AGENT_FAILED_SHUTDOWN_ADMIN_PORT = 9707
   const val AGENT_FAILED_SHUTDOWN_METRICS_PORT = 9708
 
+  // InProcessZipkinTest: the HTTP port of each case's proxy, and a Zipkin port nothing listens on, which the reporter
+  // fails to send to without holding up startup, a scrape, or shutdown.
+  const val ZIPKIN_UNREACHABLE_PORT = 9710
+  const val ZIPKIN_PROXY_HTTP_PORT = 9711
+  const val ZIPKIN_AGENT_HTTP_PORT = 9712
+  const val ZIPKIN_BOTH_HTTP_PORT = 9713
+
   // First port of the block each standard harness suite registers scrape targets on (startPort + i)
   const val HARNESS_DEFAULT_START_PORT = 9600
   const val IN_PROCESS_NO_ADMIN_START_PORT = 10100
