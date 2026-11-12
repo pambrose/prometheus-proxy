@@ -29,7 +29,6 @@ import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.common.TestPorts
 import io.prometheus.harness.support.TestUtils.stopAll
 import io.prometheus.proxy.ProxyOptions
-import java.io.File
 import kotlin.time.Duration.Companion.seconds
 
 // Per-agent identity and path authorization (Feature 3). The proxy is configured with two identities
@@ -107,13 +106,10 @@ class AgentPathAuthTest : StringSpec() {
     private const val TARGET_URL = "http://localhost:9100/metrics"
 
     // The `proxy.auth` identity list is a HOCON list, which the -D property mechanism cannot express,
-    // so it lives in a dedicated config file resolved like the shared harness config.
-    private const val GH_PREFIX = "https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/"
+    // so it lives in a dedicated config file, read from the checkout like the shared harness config.
     private const val AUTH_CONFIG_FILE = "config/test-configs/path-auth.conf"
 
-    private fun localOrGitHub(path: String): String = if (File(path).exists()) path else "$GH_PREFIX$path"
-
-    private val CONFIG_ARG = ["--config", localOrGitHub(AUTH_CONFIG_FILE)]
+    private val CONFIG_ARG = ["--config", HarnessConstants.localConfigFile(AUTH_CONFIG_FILE)]
 
     // Dedicated ports to avoid clashing with the shared harness ports and the other auth tests.
     private const val HTTP_PORT = TestPorts.PATH_AUTH_HTTP_PORT

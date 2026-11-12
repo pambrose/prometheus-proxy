@@ -226,7 +226,8 @@ Two support helpers also live here (not test classes themselves):
 
 - **ProxyTest** — Proxy main class lifecycle, agent info retrieval, JSON serialization, stale agent cleanup
 - **ProxyServiceImplTest** — gRPC implementation: registerAgent, registerPath, heartbeat, scrape responses, chunked
-  responses
+  responses; a result or a chunked transfer for a scrape sent to another agent neither completes nor fails it, even
+  when its `agentId` or `headerAgentId` names that agent
 - **ProxyGrpcServiceTest** — gRPC server configuration: each handshake, keepalive, and connection-age option reaches
   the server builder (a MockK builder) and an unset one leaves gRPC's default, and the transport filter; reflection
   is not served when disabled, and when enabled it requires a valid agent token if agent auth is configured
@@ -272,8 +273,8 @@ Two support helpers also live here (not test classes themselves):
   counter matches the map, each request keeps one completer's result and matching `proxyFailure`, and a disconnect fails
   only its own agent's requests
 - **ScrapeResultOwnershipLincheckTest** — Lincheck (tagged `Lincheck`): a handler tracking and untracking a scrape races
-  answers for its scrapeId from its owner and from another agent, which can name it before it is tracked; only the
-  owner ever completes it
+  answers for its scrapeId from its owner and from another agent, which can name it before it is tracked and claims to
+  be the owner; only the owner's answer ever completes it
 - **ScrapeRequestWrapperTest** — Scrape request lifecycle, timeout behavior, response delivery
 - **AgentAuthManagerTest** — Per-agent auth: path-glob matching, token resolution (including the legacy allow-all
   token), `isEnabled`, and fail-fast rejection of empty, duplicate or colliding identities
@@ -350,6 +351,8 @@ These support helpers also live here (not test classes themselves):
   their shared collectors registered
 - **DataClassTest** — Config data classes (AdminConfig, MetricsConfig, ZipkinConfig parsing); the buffer pool,
   compilation, and native memory export flags each turn on only their own MetricsConfig field
+- **LocalTestConfigTest** — no test source under `src/test/kotlin/io` names `raw.githubusercontent.com`, so a spec
+  reads its config from the checkout, and a renamed or deleted one fails instead of testing a copy on GitHub `master`
 - **LogbackConfigTest** — the bundled `logback.xml`, loaded from inside a JAR, and `logback/docker-logback.xml`,
   loaded from disk, configure without a WARN status, so neither makes logback print its status list at every start
 - **OptionsTest** — ProxyOptions and AgentOptions config file loading
@@ -400,7 +403,8 @@ mechanism that the standard suite cannot reach:
   updating and removing them with no restart
 - **AgentMetricFilterTest** — per-path metric filtering: a denied metric family never reaches the proxy
 - **AgentPathAuthTest** — per-agent identity with path-glob authorization, over Netty so the token header
-  actually crosses the wire; a security boundary
+  actually crosses the wire; a security boundary. Its `proxy.auth` list is in `config/test-configs/path-auth.conf`,
+  read through `HarnessConstants.localConfigFile`
 - **AgentProxyFailoverTest** — the agent lands on its second endpoint once the first proxy stops. Netty
   only: an in-process channel ignores host and port, so failover cannot be expressed there
 - **AgentRejectedPathRetryTest** — a static path rejected because a live agent of another identity serves it

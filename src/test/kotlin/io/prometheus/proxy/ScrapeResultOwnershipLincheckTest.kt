@@ -31,8 +31,9 @@ import org.jetbrains.lincheck.datastructures.Validate
 import org.slf4j.LoggerFactory
 
 // Lincheck races the HTTP handler tracking a scrape against an answer for its scrapeId from an agent it wasn't sent
-// to, which scrape IDs from one process-wide counter let any agent aim at (October #21). The owner answers and the
-// handler untracks too. Checked after every run: only the agent the scrape was sent to ever completes it.
+// to, which scrape IDs from one process-wide counter let any agent aim at (October #21), and which names the owner as
+// its agentId. The owner answers and the handler untracks too. Checked after every run: only the owner's answer ever
+// completes the scrape.
 class ScrapeResultOwnershipLincheckTest : StringSpec() {
   init {
     tags(Lincheck)
@@ -105,37 +106,47 @@ class ScrapeResultOwnershipOps {
   // The owner's answer, through writeResponsesToProxy.
   @Operation
   fun answer() {
-    respond(owner)
+    respond(owner, OWNER_CONTENT)
   }
 
-  // An answer for the same scrapeId from a connected agent the scrape wasn't sent to.
+  // An answer for the same scrapeId from a connected agent the scrape wasn't sent to. It gives the owner's agentId, as
+  // a forged answer would, so only the connection it arrives on tells it apart (November #33).
   @Operation
   fun forge() {
-    respond(intruder)
+    respond(intruder, FORGED_CONTENT)
   }
 
-  // writeResponsesToProxy's handling of one response on [agent]'s connection: the owner check runs on the wrapper the
-  // result completes (ProxyServiceImpl.ownedByConnection, comparing the connection's agentId).
-  private fun respond(agent: AgentContext) {
+  // writeResponsesToProxy's handling of one response on [connection]'s connection, every response naming the owner:
+  // the owner check runs on the wrapper the result completes and compares the connection's agentId, never the
+  // response's. A copy of ProxyServiceImpl.ownedByConnection, a private member of a service that needs a Proxy, which
+  // this spec can't build without MockK; ProxyServiceImplTest checks the product's.
+  private fun respond(
+    connection: AgentContext,
+    content: String,
+  ) {
     val results =
       ScrapeResults(
-        srAgentId = agent.agentId,
+        srAgentId = owner.agentId,
         srScrapeId = scrape.scrapeId,
         srValidResponse = true,
         srStatusCode = HttpStatusCode.OK.value,
+        srContentAsText = content,
       )
-    manager.assignScrapeResults(results) { wrapper -> wrapper.agentContext.agentId == agent.agentId }
+    manager.assignScrapeResults(results) { wrapper -> wrapper.agentContext.agentId == connection.agentId }
   }
 
+  // Told apart by content, since both answers give the owner's agentId.
   @Validate
   fun validate() {
-    val completedBy = scrape.scrapeResults?.srAgentId
-    check(completedBy == null || completedBy == owner.agentId) {
-      "Scrape ${scrape.scrapeId}, sent to ${owner.agentId}, was completed by $completedBy"
+    val completedWith = scrape.scrapeResults?.srContentAsText
+    check(completedWith == null || completedWith == OWNER_CONTENT) {
+      "Scrape ${scrape.scrapeId}, sent to ${owner.agentId}, was completed by ${intruder.agentId}'s answer"
     }
   }
 
   companion object {
     private const val MAX_IN_FLIGHT = 2
+    private const val OWNER_CONTENT = "owner_metric 1"
+    private const val FORGED_CONTENT = "forged_metric 1"
   }
 }
