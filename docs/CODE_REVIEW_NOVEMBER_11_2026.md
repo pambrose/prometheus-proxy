@@ -1,8 +1,9 @@
 # Prometheus-Proxy Code Review — November 11, 2026
 
-**Status:** 38 issues — 12 fixed, 26 open (11 medium, 27 low, no high).
+**Status:** 39 issues — 24 fixed, 15 open (11 medium, 28 low, no high).
 
-**Progress:** Wave A (steps 1, 2, 3, 7, 11, and 13) is merged: #374–#379 fixed the 12 issues marked ✅.
+**Progress:** Wave A (steps 1, 2, 3, 7, 11, and 13, in #374–#379) and Wave B (steps 4, 8, 9, and 12, in #381–#384,
+with #24 a settings change) fixed the 24 issues marked ✅.
 
 **Date:** 2026-11-11
 
@@ -20,18 +21,18 @@ from the repo root.
 | #  | Finding                                                                                              | Area     | Severity | Status |
 |----|------------------------------------------------------------------------------------------------------|----------|----------|--------|
 | 1  | `proxy.http.idleTimeoutSecs = 0` makes the scrape port close every connection unanswered             | Proxy    | low      | ⬜      |
-| 2  | `proxy_chunked_transfers_abandoned_total` misses the transfers `removeAgentContext` reclaims          | Proxy    | low      | ⬜      |
-| 3  | A late agent result logs a WARN per routine timeout, and one per chunk when chunked                  | Proxy    | low      | ⬜      |
-| 4  | A pending connection evicted by the cleanup service still logs INFO when it closes                   | Proxy    | low      | ⬜      |
+| 2  | `proxy_chunked_transfers_abandoned_total` misses the transfers `removeAgentContext` reclaims          | Proxy    | low      | ✅      |
+| 3  | A late agent result logs a WARN per routine timeout, and one per chunk when chunked                  | Proxy    | low      | ✅      |
+| 4  | A pending connection evicted by the cleanup service still logs INFO when it closes                   | Proxy    | low      | ✅      |
 | 5  | `SdTarget.parse` accepts a `host:port` with a query or fragment                                      | Proxy    | low      | ⬜      |
 | 6  | Proxy KDoc and comments that no longer match the code                                                | Proxy    | low      | ⬜      |
 | 7  | Turning on Zipkin crashes the agent, and the proxy, while they're constructed                         | Agent    | medium   | ✅      |
-| 8  | A bad config value bypasses `ConfigLoadException`, and leaks a credentialed config URL               | Agent    | medium   | ⬜      |
-| 9  | The connect-failure WARN-once dedupe is defeated by gRPC's changing `DEADLINE_EXCEEDED` text         | Agent    | low      | ⬜      |
-| 10 | `PROXY_HOSTNAME` can't override a malformed `agent.proxy.endpoints` in the config                     | Agent    | low      | ⬜      |
+| 8  | A bad config value bypasses `ConfigLoadException`, and leaks a credentialed config URL               | Agent    | medium   | ✅      |
+| 9  | The connect-failure WARN-once dedupe is defeated by gRPC's changing `DEADLINE_EXCEEDED` text         | Agent    | low      | ✅      |
+| 10 | `PROXY_HOSTNAME` can't override a malformed `agent.proxy.endpoints` in the config                     | Agent    | low      | ✅      |
 | 11 | `PathDiscoveryService` KDoc contradicts the code                                                     | Agent    | low      | ⬜      |
 | 12 | `targetUrl` and `pathSource` have no size limit, so one agent can exhaust the proxy's heap           | Security | medium   | ⬜      |
-| 13 | A chunked transfer outlives its scrape, so an agent can hold ~9 MiB per scrape                       | Security | medium   | ⬜      |
+| 13 | A chunked transfer outlives its scrape, so an agent can hold ~9 MiB per scrape                       | Security | medium   | ✅      |
 | 14 | Filter disabled: `readRequestsFromProxy` checks one lookup and acts on another                       | Security | medium   | ⬜      |
 | 15 | Each service-discovery request logs every invalid labels value whole at WARN                         | Security | medium   | ⬜      |
 | 16 | Agent-supplied strings reach the proxy's logs with CR/LF intact                                      | Security | low      | ⬜      |
@@ -40,11 +41,11 @@ from the repo root.
 | 19 | The published library jar ships `logback.xml`, which replaces the host's logging config              | CI/build | medium   | ✅      |
 | 20 | Java embedders can't compile against the published artifact                                         | CI/build | medium   | ✅      |
 | 21 | Maven embedders still get Jackson 2.12.7, and tcnative 2.0.84 natives under 2.0.85 classes           | CI/build | medium   | ✅      |
-| 22 | `docs.yml` probes the `-SNAPSHOT` version, so docs changes don't deploy between releases             | CI/build | low      | ⬜      |
+| 22 | `docs.yml` probes the `-SNAPSHOT` version, so docs changes don't deploy between releases             | CI/build | low      | ✅      |
 | 23 | The published Gradle module has an empty `shadowRuntimeElements` variant                             | CI/build | low      | ✅      |
-| 24 | `docs-site` and `zizmor` still aren't required checks                                                | CI/build | low      | ⬜      |
-| 25 | CI's docs build uses whichever uv is newest                                                          | CI/build | low      | ⬜      |
-| 26 | Comments and help text left stale by the distroless move                                             | CI/build | low      | ⬜      |
+| 24 | `docs-site` and `zizmor` still aren't required checks                                                | CI/build | low      | ✅      |
+| 25 | CI's docs build uses whichever uv is newest                                                          | CI/build | low      | ✅      |
+| 26 | Comments and help text left stale by the distroless move                                             | CI/build | low      | ✅      |
 | 27 | The Docker quick starts can't connect, and the production commands combine `--rm` with `--restart`   | Docs     | medium   | ✅      |
 | 28 | The shipped examples use non-string label values, which SD leaves out                                | Docs     | low      | ✅      |
 | 29 | `metrics-and-grafana.md` gives the pre-4.4.0 agent buckets and names a removed class                 | Docs     | low      | ⬜      |
@@ -55,8 +56,9 @@ from the repo root.
 | 34 | `AgentPathAuthTest` still falls back to fetching its config from GitHub `master`                     | Tests    | low      | ✅      |
 | 35 | The registry-clash test accepts any startup failure                                                  | Tests    | low      | ✅      |
 | 36 | `DashboardMetricNamesTest` never closes the metrics it builds                                        | Tests    | low      | ✅      |
-| 37 | The container suite's third-party images are pinned by tag only                                      | Tests    | low      | ⬜      |
+| 37 | The container suite's third-party images are pinned by tag only                                      | Tests    | low      | ✅      |
 | 38 | `harness.conf` sets Zipkin keys that don't exist                                                     | Tests    | low      | ⬜      |
+| 39 | Path discovery dedupes its failures on the message, which a gRPC deadline changes every time         | Agent    | low      | ⬜      |
 
 ---
 
@@ -100,17 +102,18 @@ The **Touches** column shows which steps edit the same files, and so need to lan
 | 1    | ✅ #374 | #33, #34                     | Make the ownership and path-auth tests able to fail                  | `proxy/ProxyServiceImplTest.kt`, `proxy/ScrapeResultOwnershipLincheckTest.kt`, `harness/AgentPathAuthTest.kt`                 | Steps 4–6 rework the code these tests guard, so the tests should catch a regression before that work starts. Test-only.                                                                          |
 | 2    | ✅ #375 | #19, #20, #21, #23           | Fix what embedders get from Maven Central                             | `build.gradle.kts`, `gradle/libs.versions.toml`, `src/main/resources` → `src/shadow/resources`, `Agent.kt` (`@JvmOverloads`), README, `embedded-agent.md`, a new Maven-consumer job in `ci.yml` | Every embedder of 4.4.2 is affected, and one consumer project tests all four. Changes no behavior for the standalone images, so it can ship on its own as a patch release.                       |
 | 3    | ✅ #376 | #27, #28                     | Docker quick starts that connect, and examples with string labels     | README, `llms.txt`, `src/test/kotlin/website/DockerExamples.txt`, `examples/*.conf`, a new `misc/` spec                       | The first thing a new user runs. The examples are served from `master`, so the fix takes effect on merge. Docs and examples only.                                                                |
-| 4    | ⬜      | #13, #3, #2                  | Chunked transfers end with their scrape                               | `proxy/ProxyServiceImpl.kt` (chunked stream), `proxy/ProxyHttpRoutes.kt` (`dispatchScrapeRequest`), `proxy/ScrapeRequestManager.kt`, `Proxy.kt` (`removeAgentContext`), metrics docs | #13 is the cheapest way for one agent to exhaust the heap. #3 has to land with it, or every late chunk logs a WARN, and #2 counts the reclaims it adds. Check whether `ProxyRegistry.tla` needs the new removal. |
+| 4    | ✅ #381 | #13, #3, #2                  | Chunked transfers end with their scrape                               | `proxy/ProxyServiceImpl.kt` (chunked stream), `proxy/ProxyHttpRoutes.kt` (`dispatchScrapeRequest`), `proxy/ScrapeRequestManager.kt`, `Proxy.kt` (`removeAgentContext`), metrics docs | #13 is the cheapest way for one agent to exhaust the heap. #3 has to land with it, or every late chunk logs a WARN, and #2 counts the reclaims it adds. Check whether `ProxyRegistry.tla` needs the new removal. |
 | 5    | ⬜      | #12, #15, #16                | Bound, parse once, and escape what agents send                        | `proxy/ProxyServiceImpl.kt` (`registerPath`), `proxy/ProxyPathManager.kt`, `Proxy.kt` (`buildServiceDiscoveryJson`), `proxy/ProxyHttpRoutes.kt`, `proxy/ProxyOptions.kt`, `config/config.conf`, both logback files, security docs | The rest of the tenant-against-tenant memory and log issues. A new `proxy.internal` limit and a narrower path alphabet need config, validation, docs, and "Before you upgrade" notes. After step 4, which edits the same files. |
 | 6    | ⬜      | #14, #17                     | Make `transportFilterDisabled` mode bind like the default             | `proxy/ProxyServiceImpl.kt` (`readRequestsFromProxy`, `connectAgentWithTransportFilterDisabled`), `proxy/AgentContextManager.kt`, `specs/tla/ProxyRegistry.tla` | Changes how a context is removed, so update the TLA+ action and run `make tla-checks` in the same PR. After step 5, which edits the same file.                                                   |
 | 7    | ✅ #377 | #7                           | Zipkin that starts                                                    | `Agent.kt`, `agent/AgentGrpcService.kt`, `Proxy.kt` (construction order), `proxy/ProxyGrpcService.kt`; possibly common-utils | A documented feature that can't be turned on. If the fix goes into common-utils instead, this step waits for that release.                                                                      |
-| 8    | ⬜      | #8, #10                      | Config errors embedders can catch, and env overrides that win         | `common/BaseOptions.kt`, `agent/AgentOptions.kt`, `Agent.kt` KDoc, `embedded-agent.md`, `security/index.md`                   | Both are option resolution, and one embedded-API spec covers #8's inputs. Embedders that catch `IllegalArgumentException` today need a release note. After step 7, which shares `Agent.kt`.      |
-| 9    | ⬜      | #4, #9                       | Quiet the remaining routine log noise                                 | `proxy/ProxyServerTransportFilter.kt`, `agent/AgentGrpcService.kt`                                                            | A log level and a dedupe key, each covered by a `ListAppender` test. After step 7, which shares `AgentGrpcService.kt`.                                                                           |
+| 8    | ✅ #382 | #8, #10                      | Config errors embedders can catch, and env overrides that win         | `common/BaseOptions.kt`, `agent/AgentOptions.kt`, `Agent.kt` KDoc, `embedded-agent.md`, `security/index.md`                   | Both are option resolution, and one embedded-API spec covers #8's inputs. Embedders that catch `IllegalArgumentException` today need a release note. After step 7, which shares `Agent.kt`.      |
+| 9    | ✅ #383 | #4, #9                       | Quiet the remaining routine log noise                                 | `proxy/ProxyServerTransportFilter.kt`, `agent/AgentGrpcService.kt`                                                            | A log level and a dedupe key, each covered by a `ListAppender` test. After step 7, which shares `AgentGrpcService.kt`.                                                                           |
 | 10   | ⬜      | #1, #5                       | Refuse proxy settings that can't work                                 | `proxy/ProxyOptions.kt`, `proxy/SdTarget.kt`                                                                                  | Two startup checks. A config that started before may now fail, so each needs a "Before you upgrade" line. After step 5, which shares `ProxyOptions.kt`.                                           |
 | 11   | ✅ #378 | #18                          | Dashboard pages from the cached snapshot                              | `proxy/dashboard/ProxyDashboardService.kt`                                                                                    | Self-contained. Read `.claude/rules/dashboard-constraints.md` first.                                                                                                                              |
-| 12   | ⬜      | #22, #24, #25, #26, #37      | CI and release hygiene                                                | `docs.yml`, `ci.yml`, `Makefile`, `security.yml`, `bin/docker-*.sh`, `containers/support/ContainerTestSupport.kt`, `misc/CiHygieneTest.kt`, `docs/RELEASE.md`, AGENTS.md, branch protection | Workflow and test-infrastructure only. #24 is a repository setting rather than a code change. After step 2, which adds a job to `ci.yml`.                                                         |
+| 12   | ✅ #384 | #22, #24, #25, #26, #37      | CI and release hygiene                                                | `docs.yml`, `ci.yml`, `Makefile`, `security.yml`, `bin/docker-*.sh`, `containers/support/ContainerTestSupport.kt`, `misc/CiHygieneTest.kt`, `docs/RELEASE.md`, AGENTS.md, branch protection | Workflow and test-infrastructure only. #24 is a repository setting rather than a code change. After step 2, which adds a job to `ci.yml`.                                                         |
 | 13   | ✅ #379 | #35, #36                     | Tests that check what they claim                                      | `harness/EmbeddedAgentMetricsTest.kt`, `misc/DashboardMetricNamesTest.kt`                                                     | Test-only, so it can go any time.                                                                                                                                                                |
 | 14   | ⬜      | #29, #30, #31, #32, #6, #11, #38 | Documentation, KDoc, and config drift                             | `config/test-configs/harness.conf`, `docs/metrics-and-grafana.md`, website pages, README, `common/EnvVars.kt`, `common/BaseOptions.kt`, `proxy/ProxyOptions.kt`, the proxy KDoc in #6, `agent/discovery/PathDiscoveryService.kt` | No behavior change. Last, so the KDoc describes what steps 4–10 settle. Any item can instead ride along with an earlier PR that edits the same file.                                             |
+| 15   | ⬜      | #39                          | Dedupe path-discovery failures on their cause                         | `agent/discovery/PathDiscoveryService.kt`, `agent/AgentPathManager.kt`                                                       | Found while fixing #9; the same change as step 9's `connectFailureKey`. Independent of the other remaining steps. |
 
 ### What can run in parallel
 
@@ -126,10 +129,10 @@ Taken together, that gives these waves. Every step in a wave can be worked on at
 | Wave | Status | Steps                       | Waits for                                    |
 |------|--------|-----------------------------|----------------------------------------------|
 | A    | ✅      | 1, 2, 3, 7, 11, 13          | nothing                                      |
-| B    | ⬜      | 4, 8, 9, 12                 | 4 on 1; 8 and 9 on 7; 12 on 2                |
+| B    | ✅      | 4, 8, 9, 12                 | 4 on 1; 8 and 9 on 7; 12 on 2                |
 | C    | ⬜      | 5                           | 4                                            |
 | D    | ⬜      | 6, 10                       | 5                                            |
-| E    | ⬜      | 14                          | the code steps (4–10)                        |
+| E    | ⬜      | 14, 15                      | the code steps (4–10)                        |
 
 Four files are edited across tracks, in separate places, so they merge cleanly, though the later PR rebases:
 
@@ -218,7 +221,7 @@ checks do.
 
 **Tests:** `ProxyOptionsTest` rejects 0 and -2, and accepts -1 and 90.
 
-### 2. ⬜ `proxy_chunked_transfers_abandoned_total` misses transfers that `removeAgentContext` reclaims, which on a disconnect is usually all of them
+### 2. ✅ `proxy_chunked_transfers_abandoned_total` misses transfers that `removeAgentContext` reclaims, which on a disconnect is usually all of them
 
 **Severity:** low · **Confidence:** confirmed that the reclaim path never counts. That it usually wins the race is
 plausible: grpc-java calls `transportTerminated` synchronously on the event loop, while the RPC's `finally` runs only
@@ -240,7 +243,12 @@ removers gets each context, so nothing is counted twice.
 **Tests:** open a transfer, call `proxy.removeAgentContext(owner)`, then end the stream: the counter rises by exactly
 1. Then the reverse order.
 
-### 3. ⬜ A late agent result logs a WARN on every routine Prometheus timeout, and a late chunked result logs one per chunk
+**Resolution:** Fixed in #381. `removeAgentContext` adds the transfers it reclaims to the counter, and now reclaims
+before failing the agent's scrapes, so a handler that removes its own transfer as it returns can't take it uncounted.
+Each transfer has one remover, so none is counted twice; `ProxyTest` checks the counter rises by exactly 1 in either
+order (0 on the old code).
+
+### 3. ✅ A late agent result logs a WARN on every routine Prometheus timeout, and a late chunked result logs one per chunk
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -264,7 +272,11 @@ WARN, one "Missing chunked context" WARN per chunk (about 160 for 5 MB at 32 KB)
 **Tests:** a `ListAppender` test in which results, and a 10-chunk transfer, for an untracked scrapeId log nothing
 above DEBUG.
 
-### 4. ⬜ A pending connection evicted by the cleanup service still logs INFO when it closes
+**Resolution:** Fixed in #381. A result, header, chunk, or summary for an untracked scrapeId, and `failScrapeRequest`
+for one, log at DEBUG, and a late transfer's missing-transfer line is logged once. A `ListAppender` test that sends a
+late result and a 10-chunk transfer logged 13 WARNs on the old code and now logs nothing above DEBUG.
+
+### 4. ✅ A pending connection evicted by the cleanup service still logs INFO when it closes
 
 **Severity:** low · **Confidence:** confirmed by trace.
 
@@ -285,6 +297,11 @@ before transport terminated` at INFO. That is the unauthenticated-connection noi
 **Tests:** a `ListAppender` test: evict a pending context, then terminate its transport, and expect no INFO line.
 
 **Follows up:** October #4.
+
+**Resolution:** Fixed in #383. Only a cleanup-service eviction leaves `transportTerminated` without a context. The
+filter now keeps the context it created in the transport's attributes and logs the line at DEBUG for a connection that
+never authenticated, keeping INFO for an announced agent, whose eviction is logged at INFO too. A `ListAppender` test
+that evicts a pending and an announced context and then ends their transports failed on the old code.
 
 ### 5. ⬜ `SdTarget.parse` accepts a `host:port` with a query or fragment
 
@@ -362,7 +379,7 @@ on the first call, after `initServletService` has assigned the reporter, and eve
 with `grpc_client` and `grpc_server`. The new `InProcessZipkinTest` starts a real proxy and agent with tracing on, and
 it failed on the old code with this exception.
 
-### 8. ⬜ A bad config value bypasses `ConfigLoadException` and its redaction, so a credentialed config URL leaks into the exception
+### 8. ✅ A bad config value bypasses `ConfigLoadException` and its redaction, so a credentialed config URL leaks into the exception
 
 **Severity:** medium · **Confidence:** confirmed by calling `Agent.startAsyncAgent(cfg, false, false)` on the fat
 jar:
@@ -416,7 +433,16 @@ Typesafe exception messages began with that URL, unredacted.
 **Follows up:** late-September #13 (config URL redaction) and October #41, whose doc rewrite now promises
 `ConfigLoadException` for an option error.
 
-### 9. ⬜ The connect-failure WARN-once dedupe is defeated by gRPC's changing `DEADLINE_EXCEEDED` text
+**Resolution:** Fixed in #382. `BaseOptions.failOnInvalidConfig` runs the config's `resolve()`, the `-D` merge,
+`ConfigVals`, and `assignConfigVals()` under one handler: embedded, it throws a `ConfigLoadException` with credentials
+redacted from every message in its cause chain; standalone, `Proxy.main` and `Agent.startSyncAgent` log one redacted
+line and exit 1. Both agent entry points build the Agent under it too, so the constructor's trust-store, TLS-file,
+duplicate-entry, and filter-regex checks are reported the same way; building an `Agent` directly still throws
+`IllegalArgumentException`. An `EmbeddedAgentApiTest` case for each input, served from `http://user:secret@…`, and
+forked-JVM `BaseOptionsTest` cases for the standalone agent and proxy failed on the old code. Embedders catch
+`ConfigLoadException` now, which the release notes' Before you upgrade says.
+
+### 9. ✅ The connect-failure WARN-once dedupe is defeated by gRPC's changing `DEADLINE_EXCEEDED` text
 
 **Severity:** low · **Confidence:** plausible. The message format is confirmed in grpc-core 1.85.1's
 `ClientCallImpl.formatDeadlineExceededStatus()`; it wasn't exercised against a blackholed proxy.
@@ -438,7 +464,13 @@ differ only in the elapsed time, log one WARN and one DEBUG.
 
 **Follows up:** October #17.
 
-### 10. ⬜ `PROXY_HOSTNAME` can't override a malformed `agent.proxy.endpoints` or `hostname` in the config
+**Resolution:** Fixed in #383. `connectAgent` dedupes on `Status.fromThrowable(e).code`, or on the exception class when
+there's no gRPC status, and still logs the full message. Against a loopback port that accepts TCP but never answers,
+grpc-java 1.85.1's descriptions differed on every attempt (elapsed time, name-resolution delay,
+`connecting_and_lb_delay`), which confirmed the finding; that case and two mocked ones logged a WARN per attempt on the
+old code and now log one WARN, then DEBUG. The same pattern elsewhere is #39.
+
+### 10. ✅ `PROXY_HOSTNAME` can't override a malformed `agent.proxy.endpoints` or `hostname` in the config
 
 **Severity:** low · **Confidence:** confirmed. With `agent { proxy.endpoints = ["proxy-a:5005x"] }` and
 `PROXY_HOSTNAME=127.0.0.1:1`, startup throws `IllegalArgumentException: Invalid port in 'proxy-a:5005x'`.
@@ -457,6 +489,11 @@ entries are parsed only when they're used.
 **Tests:** an `AgentOptionsTest` case. Env vars can't be set in-process, so route the read through an injectable
 helper, as `EnvVars`' parse helpers are, or use `--proxy`. Then check that a malformed config endpoint doesn't fail
 when an override is present.
+
+**Resolution:** Fixed in #382. `AgentOptions.proxyHostnameSpec` takes `PROXY_HOSTNAME`'s value as an argument and parses
+the config's `endpoints` or `hostname` only when neither `--proxy` nor the env var is set. `AgentOptionsTest` shows a
+malformed endpoint and a blank hostname are ignored when an override is set, which failed on the old code, and still
+rejected without one.
 
 ### 11. ⬜ `PathDiscoveryService` KDoc contradicts the code
 
@@ -479,6 +516,27 @@ now only a backstop.
 **Tests:** none needed.
 
 **Follows up:** October #10 and #20.
+
+### 39. ⬜ Path discovery dedupes its failures on the message, which a gRPC deadline changes every time
+
+**Severity:** low · **Confidence:** plausible. The pattern is confirmed; that a reconcile fails with a changing
+`DEADLINE_EXCEEDED` in practice wasn't exercised. Found while fixing #9.
+
+**Where:** `agent/discovery/PathDiscoveryService.kt:92` (`reconcileOnce`) and `agent/AgentPathManager.kt:415`
+(`discoveredRejection`).
+
+**Problem:** both key a failure on `"${e::class.simpleName}: ${e.message}"`, the shape #9 fixed in `connectAgent`.
+`reconcileOnce` logs a WARN with a stack trace whenever that key changes, so a reconcile that keeps failing with
+`DEADLINE_EXCEEDED`, whose description carries the elapsed time, logs one on every poll. `discoveredRejection` stores
+the same string as the rejection's reason.
+
+**Fix:** key both on the gRPC status code, or the exception class without one, as `connectFailureKey` does, and keep
+the full message in the log line.
+
+**Tests:** two reconciles failing with `DEADLINE_EXCEEDED` descriptions that differ only in the elapsed time log one
+WARN and one DEBUG.
+
+**Follows up:** #9.
 
 ---
 
@@ -538,7 +596,7 @@ AGENTS.md's rule is to "bound or cut any new agent-supplied value before storing
 
 **Follows up:** October #23 (incomplete) and late-September #14.
 
-### 13. ⬜ A chunked transfer outlives its scrape, so an agent can hold up to about 9 MiB per scrape for as long as it stays connected
+### 13. ✅ A chunked transfer outlives its scrape, so an agent can hold up to about 9 MiB per scrape for as long as it stays connected
 
 **Severity:** medium · **Confidence:** confirmed by trace (found by both the proxy and the security passes). Nothing
 removes a `ChunkedContext` whose scrape is no longer tracked while the stream stays open.
@@ -599,6 +657,14 @@ agent doesn't trigger this.
 
 **Follows up:** July #17 (deferred). Its premise, that a transfer is "freed at SUMMARY or the end-of-stream orphan
 sweep", holds only for an honest agent. The October #21 rework of `readHeader` kept the gap.
+
+**Resolution:** Fixed in #381. `dispatchScrapeRequest`'s `finally` removes the scrape's transfer after untracking it,
+and `readHeader` re-checks that the scrape is tracked once it has stored the transfer, so whichever runs second removes
+it. `readChunk` and `readSummary` drop a transfer whose scrape is gone, one stream may have at most the agent backlog
+cap of transfers under way, and a header's strings are cut to 4,096 characters. New `ProxyServiceImplTest` and
+`ProxyHttpRoutesTest` tests (a unary answer, an injected race, a handler timeout and cancel, the cap, the cut) failed on
+the old code, and the new `ChunkedTransferLifetimeLincheckTest` fails if either side's order is broken.
+`ProxyRegistry.tla` abstracts chunking away, so it is unchanged.
 
 ### 14. ⬜ With the transport filter disabled, `readRequestsFromProxy` checks identity on one lookup and acts on another, so an agent can read or remove another identity's new agent
 
@@ -890,7 +956,7 @@ versions, and the `eachDependency` guard now covers Jackson. The consumer check 
 Netty resolve at those versions for a Maven build; against the old POM it found Jackson 2.12.7 and tcnative 2.0.84
 natives.
 
-### 22. ⬜ `docs.yml` checks the `gradle.properties` version, so with a `-SNAPSHOT` on `master`, no docs change deploys until the next release
+### 22. ✅ `docs.yml` checks the `gradle.properties` version, so with a `-SNAPSHOT` on `master`, no docs change deploys until the next release
 
 **Severity:** low · **Confidence:** confirmed from the workflow and its run logs.
 
@@ -920,6 +986,11 @@ published version, the whole time. The `bin/docker-*.sh` scripts have the same c
 **Tests:** move the probe into a make target (for example `site-version`) that `docs.yml` calls, and pin its output
 with a `misc/` spec.
 
+**Resolution:** Fixed in #384. The new `make site-version` prints the version the site's image tags and Maven coordinate
+give, failing unless they give exactly one, and `docs.yml` probes that version instead of the `gradle.properties` one: a
+docs change deploys as it merges, while a merged version bump still waits for `make release`. `bin/docker-*.sh` run that
+version, and `docs/RELEASE.md`, AGENTS.md, and the docs-site skill are reworded. The new `SiteVersionTest` pins it.
+
 ### 23. ✅ The published Gradle module has an empty `shadowRuntimeElements` variant
 
 **Severity:** low · **Confidence:** confirmed in `prometheus-proxy-4.4.2.module` on Maven Central.
@@ -938,7 +1009,7 @@ withVariantsFromConfiguration(configurations["shadowRuntimeElements"]) { skip() 
 
 **Resolution:** Fixed in #375. The variant is skipped, and every publish now fails on a variant with no files.
 
-### 24. ⬜ `docs-site` and `zizmor` still aren't required checks
+### 24. ✅ `docs-site` and `zizmor` still aren't required checks
 
 **Severity:** low · **Confidence:** confirmed with `gh api …/branches/master/protection`.
 
@@ -958,7 +1029,12 @@ names a job that isn't required.
 
 **Follows up:** October #31.
 
-### 25. ⬜ CI's docs build uses whichever uv is newest
+**Resolution:** Done on 2026-11-12 as a repository setting: `master`'s branch protection now also requires `docs-site`,
+`zizmor`, and `consumer-check` (#375's job), 15 checks in all. The suggested `release-check` warning was skipped:
+`RELEASE_REQUIRED_JOBS` names push-only jobs such as `zizmor.yml/code-scanning`, whose pull-request counterpart has
+another name.
+
+### 25. ✅ CI's docs build uses whichever uv is newest
 
 **Severity:** low · **Confidence:** confirmed that it floats; the impact is plausible.
 
@@ -975,7 +1051,11 @@ required-version`), and update it along with the local uv.
 
 **Tests:** a `CiHygieneTest` case that requires `version` or `version-file` on every `setup-uv` step.
 
-### 26. ⬜ Comments and help text left stale by the distroless move
+**Resolution:** Fixed in #384. Both `setup-uv` steps pin `version: "0.13.7"`, the release CI had been getting as the
+newest; `website/uv.lock` passes `uv lock --check` under it and the site builds `--locked`. A `CiHygieneTest` case
+requires the same `version` or `version-file` on every `setup-uv` step.
+
+### 26. ✅ Comments and help text left stale by the distroless move
 
 **Severity:** low · **Confidence:** confirmed.
 
@@ -991,6 +1071,10 @@ required-version`), and update it along with the local uv.
 **Fix:** reword all three.
 
 **Tests:** none needed.
+
+**Resolution:** Fixed in #384. The `Makefile`'s OCI-label comment says the distroless base sets no labels,
+`security.yml` says Trivy scans the distroless Debian 13 base's packages, and the `tests`, `mini-tests`, and `xxl-tests`
+help says what they leave out.
 
 ---
 
@@ -1252,7 +1336,7 @@ metrics with distinct IDs and expects the last release to unregister them would 
 **Resolution:** Fixed in #379. The metrics are built in `beforeSpec` and closed in `afterSpec`, which then checks that
 no `proxy_` or `agent_` metric is left registered.
 
-### 37. ⬜ The container suite's third-party images are pinned by tag only
+### 37. ✅ The container suite's third-party images are pinned by tag only
 
 **Severity:** low · **Confidence:** confirmed.
 
@@ -1269,6 +1353,10 @@ reads only the `Makefile`'s `*_IMAGE` variables.
 `*_IMAGE` constants (skipping the two locally built test images).
 
 **Follows up:** October #38.
+
+**Resolution:** Fixed in #384. `NGINX_IMAGE` and `PROMETHEUS_IMAGE` are pinned as `image:tag@sha256:…` index digests,
+the Prometheus one the same as the `Makefile`'s. `CiHygieneTest` requires a digest on every third-party `*_IMAGE`
+constant, checks Testcontainers parses each to the digest it pulls, and checks the two Prometheus pins agree.
 
 ### 38. ⬜ `harness.conf` sets Zipkin keys that don't exist
 

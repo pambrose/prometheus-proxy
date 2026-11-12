@@ -6,20 +6,13 @@
 
 _Not yet released_
 
-Fixes for applications that embed the agent from Maven Central. The library jar stops replacing the host's logging
-configuration, the Java example compiles, and Maven builds get the patched Jackson and TLS natives the standalone
-proxy and agent already ship. Nothing changes for the standalone JARs or the Docker images, but an embedder that was
-relying on the agent's logging configuration should read **Before you upgrade**.
-
-Fixes for applications that embed the agent from Maven Central. The library jar stops replacing the host's logging
-configuration, the Java example compiles, and Maven builds get the patched Jackson and TLS natives the standalone
-proxy and agent already ship. Nothing changes for the standalone JARs or the Docker images, but an embedder that was
-relying on the agent's logging configuration should read **Before you upgrade**.
-
-Fixes for applications that embed the agent from Maven Central. The library jar stops replacing the host's logging
-configuration, the Java example compiles, and Maven builds get the patched Jackson and TLS natives the standalone
-proxy and agent already ship. Nothing changes for the standalone JARs or the Docker images, but an embedder that was
-relying on the agent's logging configuration should read **Before you upgrade**.
+Fixes from the November 2026 code review. For applications that embed the agent from Maven Central, the library jar
+stops replacing the host's logging configuration, the Java example compiles, Maven builds get the patched Jackson and
+TLS natives, and a setting the agent rejects throws a `ConfigLoadException` with credentials redacted. The proxy no
+longer lets one agent hold memory with chunked transfers that never finish, or a dashboard client slow its scrapes;
+Zipkin tracing can be turned on; and the Docker quick start connects. A standalone proxy or agent with a bad setting
+now exits with one redacted line instead of a stack trace. Embedders should read **Before you upgrade**: the logging
+configuration and the exception a bad setting throws have changed.
 
 ### Before you upgrade
 
