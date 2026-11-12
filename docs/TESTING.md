@@ -346,7 +346,8 @@ These support helpers also live here (not test classes themselves):
 - **DashboardMetricNamesTest** — the Grafana dashboards, the alert rules, the docs' PromQL, and the metric names
   on the website's pages all name series the proxy and agent expose (a counter only with its `_total` suffix); proxy
   panels filter by the job and instance pickers and agent panels by the agent picker; and every counter is declared
-  with the `_total` name it is exposed as
+  with the `_total` name it is exposed as. The metrics it builds are closed after the spec, which must leave none of
+  their shared collectors registered
 - **DataClassTest** — Config data classes (AdminConfig, MetricsConfig, ZipkinConfig parsing); the buffer pool,
   compilation, and native memory export flags each turn on only their own MetricsConfig field
 - **LogbackConfigTest** — the bundled `logback.xml`, loaded from inside a JAR, and `logback/docker-logback.xml`,
@@ -410,7 +411,8 @@ mechanism that the standard suite cannot reach:
   identity, and disconnects on `shutdown()`
 - **EmbeddedAgentMetricsTest** — with metrics on, an agent started again after `shutdown()` and two agents at
   once each connect and count their own connects without a registry clear in between; a stopped agent's series go
-  with it; and a host metric with an agent metric's name fails `startAsyncAgent()`
+  with it; and a host metric with an agent metric's name fails `startAsyncAgent()`, with the registry's rejection
+  as the cause
 - **AgentTokenAuthTest** — the legacy pre-shared agent token, over Netty so the header crosses the wire: a
   matching token registers, and a wrong one is rejected with UNAUTHENTICATED and never registers; a security
   boundary

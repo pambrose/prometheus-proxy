@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [Unreleased]
+
+### Build & Tooling
+
+- Two tests that could pass without checking what they claim now check it. `EmbeddedAgentMetricsTest`'s registry-clash test accepted any `IllegalStateException` from `startAsyncAgent()`, which reports every startup failure that way, so a metrics port already in use passed it with no clash at all; it now requires the cause to be the registry's `IllegalArgumentException` naming `agent_connect_count`, and shuts down an agent that starts anyway, which had been left running on the metrics port the spec's next test binds. `DashboardMetricNamesTest` never closed the `ProxyMetrics` and `AgentMetrics` it built, so they kept the collectors every proxy and agent in the JVM shares registered, and counted themselves in the sampled gauges, for the rest of the test run; it builds them in `beforeSpec`, closes them in `afterSpec`, and then checks that none of those collectors is left registered
+
 ## [4.4.2] - 2026-11-10
 
 ### Security
