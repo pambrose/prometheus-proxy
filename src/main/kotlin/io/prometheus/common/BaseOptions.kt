@@ -342,18 +342,21 @@ abstract class BaseOptions protected constructor(
 
     parseArgs()
 
-    // A config that can't be fetched or parsed ends startup inside readConfig. One that loads but holds a setting this
-    // process rejects -- an unresolved substitution, a wrong type, a value out of range -- ends it here when embedded,
-    // with a redacted ConfigLoadException as readConfig's (November #8). A standalone process ends instead in its entry
-    // point (Proxy.main, Agent.startSyncAgent), which logs the same redacted message and exits 1, and which also covers
-    // the checks the Proxy and Agent constructors make. Exiting here would also end any JVM that builds standalone
-    // options itself, which has always had their IllegalArgumentException to catch.
-    if (!parseOnly) {
-      if (embedded)
-        failOnInvalidConfig(embedded = true) { loadConfig() }
-      else
-        loadConfig()
-    }
+    if (!parseOnly)
+      loadValidatedConfig()
+  }
+
+  // A config that can't be fetched or parsed ends startup inside readConfig. One that loads but holds a setting this
+  // process rejects -- an unresolved substitution, a wrong type, a value out of range -- ends it here when embedded,
+  // with a redacted ConfigLoadException as readConfig's (November #8). A standalone process ends instead in its entry
+  // point (Proxy.main, Agent.startSyncAgent), which logs the same redacted message and exits 1, and which also covers
+  // the checks the Proxy and Agent constructors make. Exiting here would also end any JVM that builds standalone
+  // options itself, which has always had their IllegalArgumentException to catch.
+  private fun loadValidatedConfig() {
+    if (embedded)
+      failOnInvalidConfig(embedded = true) { loadConfig() }
+    else
+      loadConfig()
   }
 
   private fun loadConfig() {
