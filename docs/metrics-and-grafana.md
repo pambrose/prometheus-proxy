@@ -252,7 +252,9 @@ checksums. Two metrics track integrity issues:
   fails CRC validation. Label `stage` is `chunk` (mid-transfer) or `summary`
   (final validation). These indicate network corruption or agent bugs.
 - `proxy_chunked_transfers_abandoned_total` — incremented when an agent
-  disconnects mid-transfer (stream terminates before the summary message).
+  disconnects, or is evicted, mid-transfer (its stream or connection ends before
+  the summary message), once per transfer, whichever of the stream's end and the
+  agent's removal reclaims it.
 
 ### Agent Displacement
 

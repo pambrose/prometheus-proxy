@@ -447,14 +447,19 @@ class Proxy(
     // A context that was never announced was never shown as connected, so it isn't shown leaving either.
     if (agentContext?.announced == true)
       eventBus.emit(ProxyEvent.AgentDisconnected(agentId, reason))
-    scrapeRequestManager.failAllScrapeRequests(agentId, "Agent disconnected: $reason", ProxyFailure.AGENT_DISCONNECTED)
-    // Proactively reclaim any in-flight chunked-transfer buffers for this agent (the requests
-    // themselves were just failed above) rather than waiting for each stream's orphan sweep.
+    // Proactively reclaim any in-flight chunked-transfer buffers for this agent rather than waiting for each stream's
+    // orphan sweep, and count them as abandoned, as the sweep does (November #2). Each transfer has one remover --
+    // this, the stream's sweep, a chunk or summary that finds its scrape gone, or the scrape's HTTP handler -- so none
+    // is counted twice. Reclaimed before the requests are failed below: a failed request's handler removes its
+    // transfer as it returns, and one it got to first would go uncounted.
     agentContextManager.removeChunkedContextsForAgent(agentId)
       .also { reclaimed ->
-        if (reclaimed.isNotEmpty())
+        if (reclaimed.isNotEmpty()) {
           logger.info { "Reclaimed ${reclaimed.size} in-flight chunked context(s) for agentId: $agentId ($reason)" }
+          metrics { chunkedTransfersAbandoned.inc(reclaimed.size.toDouble()) }
+        }
       }
+    scrapeRequestManager.failAllScrapeRequests(agentId, "Agent disconnected: $reason", ProxyFailure.AGENT_DISCONNECTED)
     return agentContext
   }
 

@@ -293,14 +293,17 @@ class ScrapeRequestManagerTest : StringSpec() {
       manager.scrapeMapSize shouldBe 0
     }
 
-    "failScrapeRequest log message for a missing scrapeId should include it" {
+    // Failing a scrape whose handler has already returned is routine: a late chunk that fails validation, say, or a
+    // disconnect racing the handler's own timeout (November #3).
+    "failScrapeRequest should log a missing scrapeId at DEBUG, naming it" {
       val manager = ScrapeRequestManager()
 
       val relevantLogs =
-        captureLogs<ScrapeRequestManager> {
+        captureLogs<ScrapeRequestManager>(Level.DEBUG) {
           manager.failScrapeRequest(998L, "no such request", ProxyFailure.INVALID_RESPONSE)
         }.filter { it.message.contains("missing ScrapeRequestWrapper") }
       relevantLogs shouldHaveSize 1
+      relevantLogs[0].level shouldBe Level.DEBUG
       relevantLogs[0].formattedMessage shouldContain "scrapeId: 998"
     }
 
@@ -382,18 +385,20 @@ class ScrapeRequestManagerTest : StringSpec() {
     // Bug #5: When a scrape request times out, the proxy removes its ScrapeRequestWrapper
     // from the map. If the agent's late response then arrives, assignScrapeResults() finds
     // no wrapper and previously logged at ERROR level. This is a normal, expected condition
-    // during timeouts and should be logged at WARN, not ERROR.
+    // during timeouts. It was then logged at WARN, once for every scrape that hit Prometheus's
+    // timeout, which the client_cancelled and timed_out outcomes already record, so it is
+    // logged at DEBUG (November #3).
 
-    "Bug #5: assignScrapeResults should log at WARN level for missing scrapeId" {
+    "Bug #5: assignScrapeResults should log at DEBUG level for missing scrapeId" {
       val manager = ScrapeRequestManager()
       val mockResults = mockk<ScrapeResults>(relaxed = true)
       every { mockResults.srScrapeId } returns 999L
 
       val relevantLogs =
-        captureLogs<ScrapeRequestManager> { manager.assignScrapeResults(mockResults) { true } }
+        captureLogs<ScrapeRequestManager>(Level.DEBUG) { manager.assignScrapeResults(mockResults) { true } }
           .filter { it.message.contains("Missing ScrapeRequestWrapper") }
       relevantLogs shouldHaveSize 1
-      relevantLogs[0].level shouldBe Level.WARN
+      relevantLogs[0].level shouldBe Level.DEBUG
     }
 
     "Bug #5: assignScrapeResults should not log at ERROR level for missing scrapeId" {
@@ -413,7 +418,7 @@ class ScrapeRequestManagerTest : StringSpec() {
       every { mockResults.srScrapeId } returns 777L
 
       val relevantLogs =
-        captureLogs<ScrapeRequestManager> { manager.assignScrapeResults(mockResults) { true } }
+        captureLogs<ScrapeRequestManager>(Level.DEBUG) { manager.assignScrapeResults(mockResults) { true } }
           .filter { it.message.contains("Missing ScrapeRequestWrapper") }
       relevantLogs shouldHaveSize 1
       relevantLogs[0].formattedMessage shouldContain "scrapeId: 777"

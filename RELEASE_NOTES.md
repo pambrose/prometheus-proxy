@@ -11,6 +11,11 @@ configuration, the Java example compiles, and Maven builds get the patched Jacks
 proxy and agent already ship. Nothing changes for the standalone JARs or the Docker images, but an embedder that was
 relying on the agent's logging configuration should read **Before you upgrade**.
 
+Fixes for applications that embed the agent from Maven Central. The library jar stops replacing the host's logging
+configuration, the Java example compiles, and Maven builds get the patched Jackson and TLS natives the standalone
+proxy and agent already ship. Nothing changes for the standalone JARs or the Docker images, but an embedder that was
+relying on the agent's logging configuration should read **Before you upgrade**.
+
 ### Before you upgrade
 
 - **An embedded agent no longer brings a logging configuration.** The library jar carried a `logback.xml`, which
@@ -33,6 +38,12 @@ relying on the agent's logging configuration should read **Before you upgrade**.
   2.0.84.Final's native libraries under its 2.0.85.Final classes, without the 2.0.85 fix for an out-of-bounds read in
   ALPN protocol selection. The published POM now declares Jackson 2.23.0 and every netty-tcnative native at
   2.0.85.Final. Gradle builds, the fat JARs, and the Docker images already had both.
+- **An agent can no longer keep chunked transfers after their scrape ends.** The proxy kept a large result's transfer
+  until the agent finished it, so an agent that started transfers and never finished them, and kept its connection
+  open, could make the proxy hold up to about 9 MiB per scrape until it ran out of memory. A transfer now ends with its
+  scrape, one agent stream may have at most twice `proxy.internal.scrapeRequestBacklogUnhealthySize` transfers under
+  way, and the text in a transfer's header is cut to 4,096 characters a field. The stock agent sends each transfer
+  whole, so it isn't affected.
 
 ### Bug Fixes
 
@@ -56,6 +67,13 @@ relying on the agent's logging configuration should read **Before you upgrade**.
   logs a failed connect at WARN once, then at DEBUG while it repeats. A timed-out connect's message includes how long
   the attempt took, so each one looked new and logged a WARN with a stack trace, about twice a minute. Repeats are now
   recognized by their gRPC status, and the log still shows the full message.
+- **`proxy_chunked_transfers_abandoned_total` counts the transfers a disconnect cuts short.** It counted only those
+  an agent's stream cleaned up as it ended, but when an agent disconnects the proxy usually reclaims them first, and
+  when it evicts one it always does, so the counter stayed near zero.
+- **A late answer from an agent no longer logs a WARN.** When a scrape hits Prometheus's timeout, the agent's answer
+  usually arrives just after, and the proxy logged a WARN for it, and one for each chunk of a large result. It now logs
+  these at DEBUG; the `client_cancelled` and `timed_out` outcomes in `proxy_scrape_requests_total` still count each
+  such scrape.
 
 ### Documentation
 

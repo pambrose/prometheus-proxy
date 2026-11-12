@@ -237,10 +237,13 @@ Two support helpers also live here (not test classes themselves):
 
 ### Unit Tests — Proxy (`proxy/`)
 
-- **ProxyTest** — Proxy main class lifecycle, agent info retrieval, JSON serialization, stale agent cleanup
+- **ProxyTest** — Proxy main class lifecycle, agent info retrieval, JSON serialization, stale agent cleanup;
+  `removeAgentContext` counts each chunked transfer it reclaims as abandoned, and never one the stream's sweep counted
 - **ProxyServiceImplTest** — gRPC implementation: registerAgent, registerPath, heartbeat, scrape responses, chunked
   responses; a result or a chunked transfer for a scrape sent to another agent neither completes nor fails it, even
-  when its `agentId` or `headerAgentId` names that agent
+  when its `agentId` or `headerAgentId` names that agent; a transfer ends with its scrape, even one whose scrape ended
+  just before it was stored, one stream has at most the agent's backlog cap of transfers under way, a header's strings
+  are cut, and a late result or transfer logs nothing above DEBUG
 - **ProxyGrpcServiceTest** — gRPC server configuration: each handshake, keepalive, and connection-age option reaches
   the server builder (a MockK builder) and an unset one leaves gRPC's default, and the transport filter; reflection
   is not served when disabled, and when enabled it requires a valid agent token if agent auth is configured; with
@@ -250,7 +253,7 @@ Two support helpers also live here (not test classes themselves):
 - **ProxyHttpConfigTest** — HTTP server config: Ktor compression, status pages, CORS; a call cancelled by a client
   disconnect, or a write to one that has gone, is logged at DEBUG, while an unexpected exception still logs at WARN
 - **ProxyHttpRoutesTest** — HTTP routing: path resolution, query params, error responses, compression,
-  ensureLeadingSlash
+  ensureLeadingSlash; a handler that times out or is cancelled drops its scrape's unfinished chunked transfer
 - **ProxyPathManagerTest** — Path registration/unregistration, consolidated mode, agent selection, concurrent access;
   a live agent's path is taken over only by the same auth identity
 - **ProxyPathManagerLincheckTest** — Lincheck, stress only (tagged `Lincheck`): path registration, unregistration,
@@ -289,6 +292,10 @@ Two support helpers also live here (not test classes themselves):
 - **ScrapeResultOwnershipLincheckTest** — Lincheck (tagged `Lincheck`): a handler tracking and untracking a scrape races
   answers for its scrapeId from its owner and from another agent, which can name it before it is tracked and claims to
   be the owner; only the owner's answer ever completes it
+- **ChunkedTransferLifetimeLincheckTest** — Lincheck (tagged `Lincheck`): a handler untracking a scrape and removing
+  its chunked transfer races a header opening one (store, then re-check the scrape) and a chunk dropping it; once the
+  handler has returned, no transfer is left for its scrape. Every operation runs in the parallel part, since a
+  `finish()` before it or after it would hide the race
 - **ScrapeRequestWrapperTest** — Scrape request lifecycle, timeout behavior, response delivery
 - **AgentAuthManagerTest** — Per-agent auth: path-glob matching, token resolution (including the legacy allow-all
   token), `isEnabled`, and fail-fast rejection of empty, duplicate or colliding identities
