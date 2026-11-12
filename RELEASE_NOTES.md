@@ -14,16 +14,6 @@ Zipkin tracing can be turned on; and the Docker quick start connects. A standalo
 now exits with one redacted line instead of a stack trace. Embedders should read **Before you upgrade**: the logging
 configuration and the exception a bad setting throws have changed.
 
-Fixes for applications that embed the agent from Maven Central. The library jar stops replacing the host's logging
-configuration, the Java example compiles, and Maven builds get the patched Jackson and TLS natives the standalone
-proxy and agent already ship. Nothing changes for the standalone JARs or the Docker images, but an embedder that was
-relying on the agent's logging configuration should read **Before you upgrade**.
-
-Fixes for applications that embed the agent from Maven Central. The library jar stops replacing the host's logging
-configuration, the Java example compiles, and Maven builds get the patched Jackson and TLS natives the standalone
-proxy and agent already ship. Nothing changes for the standalone JARs or the Docker images, but an embedder that was
-relying on the agent's logging configuration should read **Before you upgrade**.
-
 ### Before you upgrade
 
 - **An embedded agent no longer brings a logging configuration.** The library jar carried a `logback.xml`, which
