@@ -25,6 +25,7 @@ import com.beust.jcommander.ParameterException
 import com.pambrose.common.util.runCatchingCancellable
 import com.pambrose.common.util.simpleClassName
 import com.typesafe.config.Config
+import com.typesafe.config.ConfigException
 import com.typesafe.config.ConfigFactory
 import com.typesafe.config.ConfigParseOptions
 import com.typesafe.config.ConfigResolveOptions
@@ -341,11 +342,24 @@ abstract class BaseOptions protected constructor(
 
     parseArgs()
 
+    // A config that can't be fetched or parsed ends startup inside readConfig. One that loads but holds a setting this
+    // process rejects -- an unresolved substitution, a wrong type, a value out of range -- ends it here when embedded,
+    // with a redacted ConfigLoadException as readConfig's (November #8). A standalone process ends instead in its entry
+    // point (Proxy.main, Agent.startSyncAgent), which logs the same redacted message and exits 1, and which also covers
+    // the checks the Proxy and Agent constructors make. Exiting here would also end any JVM that builds standalone
+    // options itself, which has always had their IllegalArgumentException to catch.
     if (!parseOnly) {
-      readConfig(envConfig, exitOnMissingConfig)
-      configVals = ConfigVals(config)
-      assignConfigVals()
+      if (embedded)
+        failOnInvalidConfig(embedded = true) { loadConfig() }
+      else
+        loadConfig()
     }
+  }
+
+  private fun loadConfig() {
+    readConfig(envConfig, exitOnMissingConfig)
+    configVals = ConfigVals(config)
+    assignConfigVals()
   }
 
   protected fun assignKeepAliveTimeSecs(defaultVal: Long) {
@@ -498,17 +512,6 @@ abstract class BaseOptions protected constructor(
 
   private fun String.isPropertiesSuffix() = lowercase().endsWith(".properties") || lowercase().endsWith(".props")
 
-  // [e] itself when its message has nothing to redact, otherwise a stand-in with the redacted message and [e]'s stack
-  // trace, so the ConfigLoadException's cause can be logged without printing credentials from a config URL.
-  private fun redacted(e: Throwable): Throwable {
-    val message = e.message ?: return e
-    val safe = sanitizeUrlsInText(message)
-    return if (safe == message)
-      e
-    else
-      ConfigLoadException("${e.simpleClassName}: $safe").also { it.stackTrace = e.stackTrace }
-  }
-
   private fun getConfigSyntax(configName: String) =
     when {
       configName.isJsonSuffix() -> ConfigSyntax.JSON
@@ -585,6 +588,60 @@ abstract class BaseOptions protected constructor(
     const val DEBUG = "debug"
     const val HTTP_PREFIX = "http://"
     const val HTTPS_PREFIX = "https://"
+
+    // How deep redacted() follows a cause chain; a longer chain loses what lies past it rather than risk a cycle.
+    private const val MAX_REDACTED_CAUSES = 16
+
+    /**
+     * Runs [block], which loads options or builds a Proxy or Agent from them, and ends startup on a setting it rejects:
+     * a Typesafe [ConfigException] (a wrong type, an unresolved substitution) or an [IllegalArgumentException] (a value
+     * out of range, a duplicate entry, a file such as a trust store that can't be loaded).
+     *
+     * [embedded] gets a [ConfigLoadException] for the host to catch; otherwise the process exits 1, as it does on a
+     * config it can't load. Either way the reason is logged, and a config URL's credentials are redacted from the log,
+     * the message, and the cause chain: a Typesafe message begins with the URL the value came from (November #8).
+     */
+    internal fun <T> failOnInvalidConfig(
+      embedded: Boolean,
+      block: () -> T,
+    ): T =
+      try {
+        block()
+      } catch (e: ConfigException) {
+        invalidConfig(e, embedded)
+      } catch (e: IllegalArgumentException) {
+        invalidConfig(e, embedded)
+      }
+
+    private fun invalidConfig(
+      e: Throwable,
+      embedded: Boolean,
+    ): Nothing {
+      // No stack trace: its first line is the exception's raw message, which can hold the URL.
+      val message = "Invalid configuration: ${sanitizeUrlsInText(e.message ?: e.simpleClassName)}"
+      logger.error { message }
+      if (embedded)
+        throw ConfigLoadException(message, redacted(e))
+      else
+        exitProcess(1)
+    }
+
+    // [e] itself when neither its message nor its causes' have anything to redact, otherwise a stand-in with the
+    // redacted message, [e]'s stack trace, and the redacted cause, so a ConfigLoadException's cause chain can be logged
+    // without printing credentials from a config URL.
+    private fun redacted(
+      e: Throwable,
+      depth: Int = 0,
+    ): Throwable {
+      val cause = e.cause?.takeIf { depth < MAX_REDACTED_CAUSES }?.let { redacted(it, depth + 1) }
+      val message = e.message
+      val safe = message?.let { sanitizeUrlsInText(it) }
+      return if (safe == message && cause === e.cause)
+        e
+      else
+        ConfigLoadException(listOfNotNull(e.simpleClassName, safe).joinToString(": "), cause)
+          .also { it.stackTrace = e.stackTrace }
+    }
 
     // Priority: CLI (if explicitly set) > env > config
     internal fun resolveBoolean(

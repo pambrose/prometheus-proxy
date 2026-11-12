@@ -472,10 +472,12 @@ agent. This approach eliminates the need for a separate agent process when your 
   agentInfo.shutdown();
   ```
 
-If the configuration cannot be loaded (a parse error, an unreachable config URL, or a missing file), the embedded
-`startAsyncAgent` / `startSyncAgent` entry points throw `io.prometheus.common.ConfigLoadException` for your application
-to catch, rather than terminating the host JVM via `exitProcess`. Stand-alone agents (run from the CLI) still exit on a
-missing or unreadable config. If the agent then fails to start (for example, its admin or metrics port is already in
+If the configuration cannot be loaded (a parse error, an unreachable config URL, or a missing file), or it holds a
+setting the agent can't use (a value of the wrong type or out of range, an unresolved `${…}` substitution, or a trust
+store that can't be loaded), the embedded `startAsyncAgent` / `startSyncAgent` entry points throw
+`io.prometheus.common.ConfigLoadException` for your application to catch, rather than terminating the host JVM via
+`exitProcess`; credentials in a config URL are redacted from it. Stand-alone agents (run from the CLI) still log the
+reason and exit with code 1. If the agent then fails to start (for example, its admin or metrics port is already in
 use), `startAsyncAgent` throws `IllegalStateException` with the startup failure as its cause, after releasing everything
 the agent had opened.
 

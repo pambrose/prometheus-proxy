@@ -49,6 +49,7 @@ import io.prometheus.agent.discovery.FileDiscoverySource
 import io.prometheus.agent.discovery.PathDiscoveryService
 import io.prometheus.metrics.core.datapoints.Timer
 import io.prometheus.common.BaseOptions.Companion.DEBUG
+import io.prometheus.common.BaseOptions.Companion.failOnInvalidConfig
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.ConfigWrappers.newAdminConfig
 import io.prometheus.common.ConfigWrappers.newMetricsConfig
@@ -144,6 +145,11 @@ import kotlin.time.TimeSource.Monotonic
  * - Individual scrape failures without affecting other scrapes
  * - Configuration errors with detailed error messages
  * - Resource exhaustion with proper cleanup
+ *
+ * Built directly, the constructor throws [IllegalArgumentException] for a setting it rejects: an HTTPS trust store or
+ * TLS certificate file that is missing or malformed, a duplicate `pathConfigs` or `filters` entry, or a filter regex
+ * that doesn't compile. [startAsyncAgent] and [startSyncAgent] report those as they report an invalid option: a
+ * [io.prometheus.common.ConfigLoadException] when embedded, and a logged error and exit code 1 otherwise.
  *
  * @param options Configuration options for the agent, typically loaded from command line or config files
  * @param inProcessServerName Optional in-process server name for testing scenarios. When specified,
@@ -781,19 +787,22 @@ class Agent(
      * Starts an Agent and returns once it is running.
      *
      * Logs the agent banner and version, parses [args] into an [AgentOptions], constructs an [Agent], and
-     * calls `startSync()` from the constructor's `initBlock`, which waits up to 30 seconds for the Agent to
-     * start and throws if it doesn't. The Agent then runs on its own service thread, which isn't a daemon
-     * thread, so a JVM whose `main()` calls this keeps running until the Agent stops (e.g. a process signal,
-     * a fatal error, or [stop]).
+     * calls `startSync()`, which waits up to 30 seconds for the Agent to start and throws if it doesn't. The
+     * Agent then runs on its own service thread, which isn't a daemon thread, so a JVM whose `main()` calls
+     * this keeps running until the Agent stops (e.g. a process signal, a fatal error, or [stop]).
      *
      * Use this from `main()`, as the standalone Agent does. For embedded usage inside another running JVM,
      * use [startAsyncAgent], which returns an [EmbeddedAgentInfo] handle for stopping it.
      *
      * @param args Raw command-line arguments forwarded to [AgentOptions] for parsing.
      * @param exitOnMissingConfig When `true`, the Agent behaves as the standalone CLI does: it requires a config
-     *   file or URL, and exits the process when the config can't be loaded, an option is invalid, or `-v`/`-u` is
-     *   given. When `false`, as when embedding, it falls back to the built-in reference config when none is given,
-     *   and throws [io.prometheus.common.ConfigLoadException] in those cases instead.
+     *   file or URL, and logs the reason and exits the process when the config can't be loaded, a setting is invalid
+     *   (from the config, the command line, or an environment variable; see [startAsyncAgent] for what that covers),
+     *   or `-v`/`-u` is given. When `false`, as when embedding, it falls back to the built-in reference config when
+     *   none is given, and throws [io.prometheus.common.ConfigLoadException] in those cases instead.
+     * @throws io.prometheus.common.ConfigLoadException when `exitOnMissingConfig` is `false` and the config can't be
+     *   loaded, a setting is invalid, or `-v`/`-u` is given.
+     * @throws IllegalStateException if the Agent fails to start, with the startup failure as the cause.
      */
     @JvmStatic
     fun startSyncAgent(
@@ -806,8 +815,17 @@ class Agent(
         info { getBanner("banners/agent.txt", this) }
         info { getVersionDesc() }
       }
-      Agent(options = AgentOptions(args, exitOnMissingConfig)) { startSync() }
+      newAgent(exitOnMissingConfig) { AgentOptions(args, exitOnMissingConfig) }.startSync()
     }
+
+    // Builds the Agent an entry point starts. A setting its options or the Agent itself rejects -- a wrong type, a
+    // value out of range, a trust store it can't load, a duplicate pathConfigs or filters entry, a filter regex that
+    // doesn't compile -- throws a redacted ConfigLoadException when embedded, and exits 1 otherwise, as a config that
+    // can't be loaded does (November #8). Only the build is covered: a failure to start is an IllegalStateException.
+    private fun newAgent(
+      exitOnMissingConfig: Boolean,
+      options: () -> AgentOptions,
+    ): Agent = failOnInvalidConfig(embedded = !exitOnMissingConfig) { Agent(options = options()) }
 
     /**
      * Starts an Agent on a background thread and returns once it has started, suitable for embedding inside
@@ -821,13 +839,20 @@ class Agent(
      * @param configFilename Path or URL to the HOCON config file. Forwarded to the
      *   [AgentOptions] config-filename constructor so it follows the same resolution rules as the
      *   `--config` CLI flag.
-     * @param exitOnMissingConfig Pass `false` when embedding: a config that can't be loaded, an invalid option, or
-     *   `-v`/`-u` then throws [io.prometheus.common.ConfigLoadException] for the host to catch. `true` gives the
-     *   standalone CLI's behavior, which requires a config and exits the process on any of these, host and all.
+     * @param exitOnMissingConfig Pass `false` when embedding: a config that can't be loaded or parsed, a setting that
+     *   is invalid, or `-v`/`-u` then throws [io.prometheus.common.ConfigLoadException] for the host to catch. `true`
+     *   gives the standalone CLI's behavior, which requires a config and exits the process on any of these, host and
+     *   all.
      * @param logBanner When `true` (default), logs the Agent ASCII banner and version on startup. Pass `false`
      *   to suppress banner output when embedding inside an app that owns its own logging surface. Java callers can
      *   leave it out too: `@JvmOverloads` gives them the two-argument form, which a Kotlin default alone doesn't.
      * @return An [EmbeddedAgentInfo] handle for inspecting and shutting down the launched Agent.
+     * @throws io.prometheus.common.ConfigLoadException when `exitOnMissingConfig` is `false` and the config can't be
+     *   loaded or parsed, or a setting is invalid, whether it comes from the config or an environment variable: a
+     *   value of the wrong type or out of range, an unresolved `${…}` substitution, a malformed proxy endpoint, a
+     *   duplicate `pathConfigs` or `filters` entry, a filter regex that doesn't compile, or an HTTPS trust store or
+     *   TLS certificate file that is missing or malformed. Credentials in a config URL are redacted from its message
+     *   and from every message in its cause chain.
      * @throws IllegalStateException if the Agent fails to start, for example because its admin or metrics port is
      *   already in use. The startup failure is the cause, and whatever the Agent had opened is released first.
      */
@@ -846,7 +871,8 @@ class Agent(
         }
       // startSync(), not startAsync(): a startup failure must reach the caller as an exception rather than leave it
       // holding a handle to a FAILED agent.
-      val agent = Agent(options = AgentOptions(configFilename, exitOnMissingConfig)) { startSync() }
+      val agent = newAgent(exitOnMissingConfig) { AgentOptions(configFilename, exitOnMissingConfig) }
+      agent.startSync()
       return EmbeddedAgentInfo(agent)
     }
   }

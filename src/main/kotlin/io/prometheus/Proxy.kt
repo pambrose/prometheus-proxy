@@ -30,6 +30,7 @@ import com.pambrose.common.util.randomId
 import com.pambrose.common.util.simpleClassName
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.common.BaseOptions.Companion.DEBUG
+import io.prometheus.common.BaseOptions.Companion.failOnInvalidConfig
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.ConfigWrappers.newAdminConfig
 import io.prometheus.common.ConfigWrappers.newMetricsConfig
@@ -648,8 +649,12 @@ class Proxy(
      * JVM entry point for the standalone Proxy process.
      *
      * Logs the Proxy ASCII banner and version, parses [args] into a [ProxyOptions], constructs a [Proxy],
-     * and immediately calls `startSync()` from the constructor's `initBlock`. Control returns to the JVM only
-     * after the Proxy terminates (e.g. process signal, fatal error, or explicit shutdown).
+     * and immediately calls `startSync()`. Control returns to the JVM only after the Proxy terminates (e.g.
+     * process signal, fatal error, or explicit shutdown).
+     *
+     * A config that can't be loaded, or a setting the options or the Proxy reject (a value of the wrong type or
+     * out of range, an unresolved `${…}` substitution, a malformed `proxy.auth` entry), logs the reason and exits
+     * the process with code 1, with any credentials in a config URL redacted.
      *
      * `prometheus-proxy.jar` starts here, through a launcher that first turns off kotlin-logging's startup
      * message. Unlike [Agent.main], the Proxy always loads its built-in reference config when no
@@ -668,7 +673,10 @@ class Proxy(
         info { getBanner("banners/proxy.txt", logger) }
         info { getVersionDesc(false) }
       }
-      Proxy(options = ProxyOptions(args)) { startSync() }
+      // A setting the options or the Proxy reject ends startup as a config that can't be loaded does: a redacted log
+      // line and exit code 1, where it escaped main() as an uncaught exception whose stack trace began with the config
+      // URL, credentials and all (November #8).
+      failOnInvalidConfig(embedded = false) { Proxy(options = ProxyOptions(args)) }.startSync()
     }
   }
 }

@@ -185,8 +185,12 @@ A target URL can carry credentials, such as `http://user:pass@host/metrics?api_k
 redacts the user info and query values everywhere a target URL is sent, logged, or displayed: in its
 logs, in what it sends the proxy, and so on the dashboard and `/debug` pages. It also redacts them
 inside HTTP client error messages, which embed the request URL. The proxy redacts target URLs from
-older agents as well. A config URL that fails to load (`--config http://user:pass@host/agent.conf`) is
-redacted in the error log and in the `ConfigLoadException` an embedding application catches.
+older agents as well. A config URL (`--config http://user:pass@host/agent.conf`) is redacted from the
+error the agent or proxy reports when the config fails to load, and when it loads but holds a setting
+that is rejected, such as a value of the wrong type or an unresolved `${…}` substitution, whose message
+names the URL the value came from. That covers the error log, which is all a standalone agent or proxy
+reports before it exits, and the `ConfigLoadException` an embedding application catches, every message
+in its cause chain included.
 
 The agent sends a URL's credentials as HTTP Basic auth with the first request to the target, and follows a
 redirect only within the target's own origin, so they reach only that host. An `Authorization` header that

@@ -98,5 +98,6 @@ of its size).
   names recognized by the Proxy and Agent, with `getEnv()` overloads for `String`, `Boolean`,
   `Int`, and `Long` that reject malformed values.
 - [ConfigLoadException][io.prometheus.common.ConfigLoadException] is thrown when a configuration
-  file or URL cannot be loaded and the process was started with `exitOnMissingConfig = false`
-  (embedded mode). Embedders can catch it so a config failure does not terminate the host JVM.
+  file or URL cannot be loaded, or holds a setting the agent can't use, and the process was started
+  with `exitOnMissingConfig = false` (embedded mode). Embedders can catch it so a config failure does
+  not terminate the host JVM.

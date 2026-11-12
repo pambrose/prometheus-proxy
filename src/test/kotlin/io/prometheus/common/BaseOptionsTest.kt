@@ -37,6 +37,7 @@ import java.io.File
 import java.net.URI
 import java.util.concurrent.TimeUnit
 import kotlin.io.path.createTempDirectory
+import kotlin.io.path.createTempFile
 import io.ktor.server.cio.CIO as ServerCIO
 
 class BaseOptionsTest : StringSpec() {
@@ -421,6 +422,39 @@ class BaseOptionsTest : StringSpec() {
       result.output shouldNotContain "Exception in thread"
     }
 
+    // November #8: a config that loads but holds a setting the process can't use escaped main() as an uncaught
+    // exception, whose stack trace printed the Typesafe message, config URL and credentials first. Each now ends
+    // startup as a config that can't be loaded does: one redacted log line, and exit code 1.
+    "standalone Agent CLI exits 1 on a wrong-typed config value, without the config URL's credentials" {
+      val result = runCliMainWithConfigUrl("io.prometheus.Agent", "agent { scrapeTimeoutSecs = \"abc\" }")
+
+      result.exitCode shouldBe 1
+      result.output shouldContain "scrapeTimeoutSecs"
+      result.output shouldNotContain SECRET
+      result.output shouldNotContain "Exception in thread"
+    }
+
+    "standalone Proxy CLI exits 1 on an unresolved substitution, without the config URL's credentials" {
+      val result = runCliMainWithConfigUrl("io.prometheus.Proxy", $$"proxy { agentToken = ${missing.value} }")
+
+      result.exitCode shouldBe 1
+      result.output shouldContain "missing.value"
+      result.output shouldNotContain SECRET
+      result.output shouldNotContain "Exception in thread"
+    }
+
+    // The trust store is loaded as the Agent is built, after its options are resolved, so this covers the entry point's
+    // handling of the Agent constructor's own checks.
+    "standalone Agent CLI exits 1 on a trust store it can't load" {
+      val result =
+        runCliMainWithConfigUrl("io.prometheus.Agent", "agent { http.trustStorePath = \"/no/such/dir/store.jks\" }")
+
+      result.exitCode shouldBe 1
+      result.output shouldContain "trustStorePath"
+      result.output shouldNotContain SECRET
+      result.output shouldNotContain "Exception in thread"
+    }
+
     "standalone Proxy CLI starts with no config file at all" {
       // The blank-config fallback must survive the change: the Proxy runs off its built-in reference
       // config, so --version with no -c reaches the version branch rather than a missing-config exit.
@@ -678,7 +712,9 @@ class BaseOptionsTest : StringSpec() {
   )
 
   // Runs a main class in a forked JVM on the test runtime classpath and captures its exit code. The only
-  // way to assert an exitProcess() path: calling it in-process would terminate the test worker.
+  // way to assert an exitProcess() path: calling it in-process would terminate the test worker. The output
+  // goes to a file rather than a pipe, so a process that never exits, such as one left running by a
+  // non-daemon thread after main() throws, fails the test at the timeout instead of blocking the read.
   private fun runCliMain(
     mainClass: String,
     vararg args: String,
@@ -686,13 +722,39 @@ class BaseOptionsTest : StringSpec() {
     val javaBin =
       ProcessHandle.current().info().command()
         .orElse(File(File(System.getProperty("java.home"), "bin"), "java").path)
-    val process =
-      ProcessBuilder([javaBin, "-cp", System.getProperty("java.class.path"), mainClass] + args)
-        .redirectErrorStream(true)
-        .start()
-    val output = process.inputStream.bufferedReader().use { it.readText() }
-    process.waitFor(CLI_TIMEOUT_SECS, TimeUnit.SECONDS).shouldBeTrue()
-    return CliResult(process.exitValue(), output)
+    val outputFile = createTempFile("cli-main", ".log").toFile()
+    try {
+      val process =
+        ProcessBuilder([javaBin, "-cp", System.getProperty("java.class.path"), mainClass] + args)
+          .redirectErrorStream(true)
+          .redirectOutput(outputFile)
+          .start()
+      val exited = process.waitFor(CLI_TIMEOUT_SECS, TimeUnit.SECONDS)
+      if (!exited)
+        process.destroyForcibly().waitFor()
+      exited.shouldBeTrue()
+      return CliResult(process.exitValue(), outputFile.readText())
+    } finally {
+      outputFile.delete()
+    }
+  }
+
+  // Serves [config] at /agent.conf on a URL that carries credentials, and runs [mainClass] in a forked JVM with
+  // `--config` set to that URL.
+  private suspend fun runCliMainWithConfigUrl(
+    mainClass: String,
+    config: String,
+  ): CliResult {
+    val server =
+      embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
+        routing { get("/agent.conf") { call.respondText(config) } }
+      }
+    try {
+      val port = server.startAndAwaitReady()
+      return runCliMain(mainClass, "--config", "http://user:$SECRET@$LOOPBACK_HOST:$port/agent.conf")
+    } finally {
+      server.stop(0, 0)
+    }
   }
 
   // Serves the given config body over HTTP at /<fileName> and asserts the loaded proxy port.
@@ -724,5 +786,7 @@ class BaseOptionsTest : StringSpec() {
     private const val CLI_TIMEOUT_SECS = 60L
 
     private const val KOTLIN_LOGGING_STARTUP_LINE = "kotlin-logging: initializing"
+
+    private const val SECRET = "secret"
   }
 }

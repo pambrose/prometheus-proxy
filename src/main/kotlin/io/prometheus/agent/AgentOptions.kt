@@ -354,13 +354,9 @@ class AgentOptions internal constructor(
     // to apply. The single hostname is promoted to a one-element list so both shapes normalize through
     // one expression -- agent.proxy.port becomes the per-entry default, and once this string reaches
     // AgentGrpcService the only default left is 50051. Built only when needed, so a malformed config entry
-    // doesn't fail an agent given --proxy.
-    proxyHostname =
-      proxyHostname.ifEmpty {
-        val entries = proxy.endpoints.ifEmpty { [proxy.hostname] }
-        PROXY_HOSTNAME.getEnv(entries.joinToString(",") { parseHostPort(stripScheme(it.trim()), proxy.port).spec })
-      }
-    // Parse eagerly so a malformed endpoint fails at startup with a clear message rather than surfacing
+    // doesn't fail an agent given --proxy or PROXY_HOSTNAME.
+    proxyHostname = proxyHostnameSpec(proxyHostname, System.getenv(PROXY_HOSTNAME.name), proxy)
+    // Parse the value used eagerly, so a malformed endpoint fails at startup with a clear message rather than surfacing
     // later as a connect failure that rotation would paper over by moving to the next endpoint. Written back with
     // agent.proxy.port as the default, so a host-only entry from --proxy or PROXY_HOSTNAME gets the configured port
     // rather than the 50051 AgentGrpcService would otherwise apply.
@@ -536,6 +532,26 @@ class AgentOptions internal constructor(
     // the payload. A chunk, or an unzipped scrape at or below minGzipSizeBytes, travels as a single message; one past
     // the limit ends the agent's write stream and drops every in-flight result on that connection.
     internal const val MAX_GRPC_PAYLOAD_BYTES = 4 * 1024 * 1024 - 64 * 1024
+
+    /**
+     * The proxy endpoints the agent dials, before they're parsed: [cliValue] (`--proxy`) when given, else [envValue]
+     * (`PROXY_HOSTNAME`, as `System.getenv` returns it), else the config's `agent.proxy.endpoints`, or, when that's
+     * empty, its `agent.proxy.hostname`, each entry with `agent.proxy.port` as its default port.
+     *
+     * The config's entries are parsed only when they're the value used, so a malformed or blank one doesn't fail an
+     * agent that `--proxy` or `PROXY_HOSTNAME` points elsewhere (November #10). Takes the env var's value as an
+     * argument, since a test can't set one in-process.
+     */
+    internal fun proxyHostnameSpec(
+      cliValue: String,
+      envValue: String?,
+      proxy: ConfigVals.Agent.Proxy,
+    ): String =
+      cliValue.ifEmpty {
+        envValue ?: proxy.endpoints
+          .ifEmpty { [proxy.hostname] }
+          .joinToString(",") { parseHostPort(stripScheme(it.trim()), proxy.port).spec }
+      }
 
     /**
      * True when the agent has a token but its gRPC channel is plaintext, so the token is sent in the clear.

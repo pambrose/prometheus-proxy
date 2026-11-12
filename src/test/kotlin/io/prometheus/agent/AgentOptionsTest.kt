@@ -29,11 +29,13 @@ import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.types.shouldBeInstanceOf
 import io.prometheus.agent.AgentOptions.Companion.DEFAULT_GRPC_PORT
 import io.prometheus.common.ConfigLoadException
 import io.prometheus.common.Utils.HostPort
 import io.prometheus.common.Utils.parseEndpointList
 import io.prometheus.common.agentOptions
+import io.prometheus.common.testConfigVals
 import org.slf4j.LoggerFactory
 
 class AgentOptionsTest : StringSpec() {
@@ -90,14 +92,14 @@ class AgentOptionsTest : StringSpec() {
     // A non-positive scrapeTimeoutSecs makes withTimeout() cancel every scrape immediately, so it must
     // fail fast at startup like the other numeric options (chunk, retries, client_timeout, etc.).
     "scrapeTimeoutSecs of 0 should be rejected" {
-      val exception = shouldThrow<IllegalArgumentException> {
+      val exception = shouldBeRejected {
         agentOptions(["--name", "test", "--proxy", "host", "--timeout", "0"], false)
       }
       exception.message shouldContain "scrapeTimeoutSecs"
     }
 
     "negative scrapeTimeoutSecs from config should be rejected" {
-      shouldThrow<IllegalArgumentException> {
+      shouldBeRejected {
         agentOptions(["--name", "test", "--proxy", "host", "-Dagent.scrapeTimeoutSecs=-5"], false)
       }
     }
@@ -304,26 +306,26 @@ class AgentOptionsTest : StringSpec() {
     // RateLimiter.create(1.0 / reconnectPauseSecs) (0 -> infinite rate), scrapeRequestBacklogUnhealthySize
     // * 2 is the connection channel capacity (0 -> rendezvous channel), and a negative minGzipSizeBytes
     // would gzip everything.
-    "Finding 11: reconnectPauseSecs of 0 should throw IllegalArgumentException" {
-      shouldThrow<IllegalArgumentException> {
+    "Finding 11: reconnectPauseSecs of 0 should be rejected" {
+      shouldBeRejected {
         agentOptions(["--name", "test", "--proxy", "host", "-Dagent.internal.reconnectPauseSecs=0"], false)
       }
     }
 
-    "rejectedPathRetrySecs of 0 should throw IllegalArgumentException" {
-      shouldThrow<IllegalArgumentException> {
+    "rejectedPathRetrySecs of 0 should be rejected" {
+      shouldBeRejected {
         agentOptions(["--name", "test", "--proxy", "host", "-Dagent.internal.rejectedPathRetrySecs=0"], false)
       }
     }
 
-    "rejectedPathRetryMaxSecs of 0 should throw IllegalArgumentException" {
-      shouldThrow<IllegalArgumentException> {
+    "rejectedPathRetryMaxSecs of 0 should be rejected" {
+      shouldBeRejected {
         agentOptions(["--name", "test", "--proxy", "host", "-Dagent.internal.rejectedPathRetryMaxSecs=0"], false)
       }
     }
 
-    "Finding 11: scrapeRequestBacklogUnhealthySize of 0 should throw IllegalArgumentException" {
-      shouldThrow<IllegalArgumentException> {
+    "Finding 11: scrapeRequestBacklogUnhealthySize of 0 should be rejected" {
+      shouldBeRejected {
         agentOptions(
           ["--name", "test", "--proxy", "host", "-Dagent.internal.scrapeRequestBacklogUnhealthySize=0"],
           false,
@@ -335,20 +337,20 @@ class AgentOptionsTest : StringSpec() {
     // delay() returns immediately for a non-positive duration, so 0 spins that loop without ever
     // suspending or reaching a cancellation check, pinning an IO thread for the connection's lifetime.
     // Same hazard the discovery.reconcileIntervalSecs guard below already covers.
-    "heartbeatCheckPauseMillis of 0 should throw IllegalArgumentException" {
-      shouldThrow<IllegalArgumentException> {
+    "heartbeatCheckPauseMillis of 0 should be rejected" {
+      shouldBeRejected {
         agentOptions(["--name", "test", "--proxy", "host", "-Dagent.internal.heartbeatCheckPauseMillis=0"], false)
       }
     }
 
-    "heartbeatCheckPauseMillis of -1 should throw IllegalArgumentException" {
-      shouldThrow<IllegalArgumentException> {
+    "heartbeatCheckPauseMillis of -1 should be rejected" {
+      shouldBeRejected {
         agentOptions(["--name", "test", "--proxy", "host", "-Dagent.internal.heartbeatCheckPauseMillis=-1"], false)
       }
     }
 
     "Finding 11: a negative minGzipSizeBytes from config should be rejected" {
-      shouldThrow<IllegalArgumentException> {
+      shouldBeRejected {
         agentOptions(["--name", "test", "--proxy", "host", "-Dagent.minGzipSizeBytes=-5"], false)
       }
     }
@@ -364,7 +366,7 @@ class AgentOptionsTest : StringSpec() {
     }
 
     "minGzipSizeBytes of -1 from config should be rejected" {
-      shouldThrow<IllegalArgumentException> {
+      shouldBeRejected {
         agentOptions(["--name", "test", "--proxy", "host", "-Dagent.minGzipSizeBytes=-1"], false)
       }
     }
@@ -374,8 +376,8 @@ class AgentOptionsTest : StringSpec() {
       options.minGzipSizeBytes shouldBe 0
     }
 
-    "maxConcurrentHttpClients of 0 should throw IllegalArgumentException" {
-      shouldThrow<IllegalArgumentException> {
+    "maxConcurrentHttpClients of 0 should be rejected" {
+      shouldBeRejected {
         agentOptions(
           ["--name", "test", "--proxy", "host", "--max_concurrent_clients", "0"],
           false,
@@ -383,8 +385,8 @@ class AgentOptionsTest : StringSpec() {
       }
     }
 
-    "httpClientTimeoutSecs of 0 should throw IllegalArgumentException" {
-      shouldThrow<IllegalArgumentException> {
+    "httpClientTimeoutSecs of 0 should be rejected" {
+      shouldBeRejected {
         agentOptions(
           ["--name", "test", "--proxy", "host", "--client_timeout_secs", "0"],
           false,
@@ -403,8 +405,8 @@ class AgentOptionsTest : StringSpec() {
       options.maxCacheSize shouldBe 1
     }
 
-    "maxCacheSize of 0 should throw IllegalArgumentException" {
-      shouldThrow<IllegalArgumentException> {
+    "maxCacheSize of 0 should be rejected" {
+      shouldBeRejected {
         agentOptions(
           ["--name", "test", "--proxy", "host", "--max_cache_size", "0"],
           false,
@@ -420,8 +422,8 @@ class AgentOptionsTest : StringSpec() {
       options.maxCacheAgeMins shouldBe 1
     }
 
-    "maxCacheAgeMins of 0 should throw IllegalArgumentException" {
-      shouldThrow<IllegalArgumentException> {
+    "maxCacheAgeMins of 0 should be rejected" {
+      shouldBeRejected {
         agentOptions(
           ["--name", "test", "--proxy", "host", "--max_cache_age_mins", "0"],
           false,
@@ -437,8 +439,8 @@ class AgentOptionsTest : StringSpec() {
       options.maxCacheIdleMins shouldBe 1
     }
 
-    "maxCacheIdleMins of 0 should throw IllegalArgumentException" {
-      shouldThrow<IllegalArgumentException> {
+    "maxCacheIdleMins of 0 should be rejected" {
+      shouldBeRejected {
         agentOptions(
           ["--name", "test", "--proxy", "host", "--max_cache_idle_mins", "0"],
           false,
@@ -454,8 +456,8 @@ class AgentOptionsTest : StringSpec() {
       options.cacheCleanupIntervalMins shouldBe 1
     }
 
-    "cacheCleanupIntervalMins of 0 should throw IllegalArgumentException" {
-      shouldThrow<IllegalArgumentException> {
+    "cacheCleanupIntervalMins of 0 should be rejected" {
+      shouldBeRejected {
         agentOptions(
           ["--name", "test", "--proxy", "host", "--cache_cleanup_interval_mins", "0"],
           false,
@@ -496,7 +498,7 @@ class AgentOptionsTest : StringSpec() {
 
     "chunkContentSizeKbs past the gRPC message bound should be rejected" {
       val e =
-        shouldThrow<IllegalArgumentException> {
+        shouldBeRejected {
           agentOptions(["--name", "test", "--proxy", "host", "--chunk", "${MAX_CHUNK_KBS + 1}"], false)
         }
       e.message shouldContain "chunkContentSizeKbs"
@@ -509,7 +511,7 @@ class AgentOptionsTest : StringSpec() {
 
     "minGzipSizeBytes past the gRPC message bound should be rejected" {
       val e =
-        shouldThrow<IllegalArgumentException> {
+        shouldBeRejected {
           agentOptions(["--name", "test", "--proxy", "host", "--gzip", "${MAX_PAYLOAD_BYTES + 1}"], false)
         }
       e.message shouldContain "minGzipSizeBytes"
@@ -518,7 +520,7 @@ class AgentOptionsTest : StringSpec() {
     "Bug #9: chunkContentSizeBytes exceeding max safe KB should throw" {
       // Int.MAX_VALUE / 1024 + 1 = 2097152, which overflows when multiplied by 1024
       val overflowKb = (Int.MAX_VALUE / 1024 + 1).toString()
-      shouldThrow<IllegalArgumentException> {
+      shouldBeRejected {
         agentOptions(
           ["--name", "test", "--proxy", "host", "--chunk", overflowKb],
           false,
@@ -527,7 +529,7 @@ class AgentOptionsTest : StringSpec() {
     }
 
     "Bug #9: chunkContentSizeBytes of 0 should throw" {
-      shouldThrow<IllegalArgumentException> {
+      shouldBeRejected {
         agentOptions(
           ["--name", "test", "--proxy", "host", "--chunk", "0"],
           false,
@@ -544,15 +546,15 @@ class AgentOptionsTest : StringSpec() {
     fun discoveryOptions(vararg extra: String) =
       agentOptions(["--name", "test", "--proxy", "host", "-Dagent.discovery.enabled=true"] + extra, false)
 
-    "discovery enabled with an empty file path should throw IllegalArgumentException" {
+    "discovery enabled with an empty file path should be rejected" {
       // agent.discovery.file.path defaults to empty, so enabling discovery on its own is the misconfig.
-      val exception = shouldThrow<IllegalArgumentException> { discoveryOptions() }
+      val exception = shouldBeRejected { discoveryOptions() }
       exception.message shouldContain "agent.discovery.file.path"
     }
 
-    "discovery enabled with a non-positive reconcile interval should throw IllegalArgumentException" {
+    "discovery enabled with a non-positive reconcile interval should be rejected" {
       val exception =
-        shouldThrow<IllegalArgumentException> {
+        shouldBeRejected {
           discoveryOptions(DISCOVERY_FILE_ARG, "-Dagent.discovery.reconcileIntervalSecs=0")
         }
       exception.message shouldContain "reconcileIntervalSecs"
@@ -565,16 +567,16 @@ class AgentOptionsTest : StringSpec() {
     }
 
     // A non-positive cap would reject every scrape body, so it fails at startup like the other http limits.
-    "maxContentLengthMBytes of 0 should throw IllegalArgumentException" {
+    "maxContentLengthMBytes of 0 should be rejected" {
       val exception =
-        shouldThrow<IllegalArgumentException> {
+        shouldBeRejected {
           agentOptions(["--name", "test", "--proxy", "host", "--max_content_length_mbytes", "0"], false)
         }
       exception.message shouldContain "maxContentLengthMBytes"
     }
 
-    "maxContentLengthMBytes of 0 from config should throw IllegalArgumentException" {
-      shouldThrow<IllegalArgumentException> {
+    "maxContentLengthMBytes of 0 from config should be rejected" {
+      shouldBeRejected {
         agentOptions(["--name", "test", "--proxy", "host", "-Dagent.http.maxContentLengthMBytes=0"], false)
       }
     }
@@ -626,9 +628,39 @@ class AgentOptionsTest : StringSpec() {
         [HostPort("first", 1234), HostPort("second", 5678)]
     }
 
+    // November #10: the config's endpoints were parsed before PROXY_HOSTNAME was checked, so the env var couldn't
+    // override a malformed or blank config value; the agent failed at startup on the value it was told to ignore. Env
+    // vars can't be set in-process, so these call the resolution AgentOptions makes with System.getenv's result.
+    "PROXY_HOSTNAME should override a malformed agent.proxy.endpoints entry without parsing it" {
+      val proxy = testConfigVals("""agent.proxy.endpoints = ["proxy-a:5005x"]""").agent.proxy
+
+      AgentOptions.proxyHostnameSpec(cliValue = "", envValue = "127.0.0.1:1", proxy = proxy) shouldBe "127.0.0.1:1"
+    }
+
+    "PROXY_HOSTNAME should override a blank agent.proxy.hostname" {
+      val proxy = testConfigVals("""agent.proxy.hostname = "" """).agent.proxy
+
+      AgentOptions.proxyHostnameSpec(cliValue = "", envValue = "proxy-b", proxy = proxy) shouldBe "proxy-b"
+    }
+
+    "--proxy should override a malformed agent.proxy.endpoints entry, whatever PROXY_HOSTNAME holds" {
+      val proxy = testConfigVals("""agent.proxy.endpoints = ["proxy-a:5005x"]""").agent.proxy
+
+      AgentOptions.proxyHostnameSpec(cliValue = "cli-host:2", envValue = "env-host:3", proxy = proxy) shouldBe
+        "cli-host:2"
+    }
+
+    // The config value is still checked when it's the one used.
+    "a malformed agent.proxy.endpoints entry should still fail with no override" {
+      val proxy = testConfigVals("""agent.proxy.endpoints = ["proxy-a:5005x"]""").agent.proxy
+
+      val e = shouldThrow<IllegalArgumentException> { AgentOptions.proxyHostnameSpec("", null, proxy) }
+      e.message.orEmpty() shouldContain "5005x"
+    }
+
     "a malformed endpoint should fail at option resolution rather than at connect time" {
       val e =
-        shouldThrow<IllegalArgumentException> {
+        shouldBeRejected {
           agentOptions(["--name", "test", "--proxy", "good:1234,bad:notaport"], false)
         }
       e.message.orEmpty() shouldContain "notaport"
@@ -672,6 +704,29 @@ class AgentOptionsTest : StringSpec() {
       ).shouldBeFalse()
     }
 
+    // ==================== Invalid settings when embedded ====================
+
+    // November #8: a -D override merges into the config after it's loaded, and ConfigVals reads its type after that,
+    // both outside readConfig's failure handling, so either failure escaped as a Typesafe ConfigException.
+    "a wrong-typed -D override should throw ConfigLoadException when embedded" {
+      val e =
+        shouldThrow<ConfigLoadException> {
+          agentOptions(["--name", "test", "--proxy", "host", "-Dagent.scrapeTimeoutSecs=abc"], false)
+        }
+      e.message shouldContain "scrapeTimeoutSecs"
+    }
+
+    // A -D pair is parsed as a properties line, and java.util.Properties rejects a malformed \u escape with an
+    // IllegalArgumentException.
+    "a -D override that doesn't parse should throw ConfigLoadException when embedded" {
+      val e =
+        shouldThrow<ConfigLoadException> {
+          agentOptions(["--name", "test", "--proxy", "host", "-Dagent.name=\\u12zz"], false)
+        }
+      e.cause.shouldBeInstanceOf<IllegalArgumentException>()
+      e.message shouldContain "Malformed"
+    }
+
     // ==================== Parse-only Options ====================
 
     // Agent.startSyncAgent first builds parse-only options, just to handle -u and -v before the banner is logged. That
@@ -698,5 +753,11 @@ class AgentOptionsTest : StringSpec() {
 
     private const val ENDPOINTS_CONFIG_FILE = "config/test-configs/proxy-endpoints.conf"
     private const val DISCOVERY_FILE_ARG = "-Dagent.discovery.file.path=discovered.conf"
+
+    // These specs build embedded options (exitOnMissingConfig false), where a setting the options reject throws
+    // ConfigLoadException, with the IllegalArgumentException that rejected it as the cause (November #8). The message
+    // carries the cause's, so a spec can still check which setting it names.
+    private inline fun shouldBeRejected(block: () -> Any?): ConfigLoadException =
+      shouldThrow<ConfigLoadException>(block).also { it.cause.shouldBeInstanceOf<IllegalArgumentException>() }
   }
 }

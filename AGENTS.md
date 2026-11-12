@@ -62,7 +62,7 @@ Only these types are part of the supported, documented public API. Everything el
 - `io.prometheus.agent.AgentOptions` / `io.prometheus.proxy.ProxyOptions` / `io.prometheus.common.BaseOptions`
 - `io.prometheus.agent.EmbeddedAgentInfo` (handle returned by `Agent.startAsyncAgent`)
 - `io.prometheus.common.EnvVars`
-- `io.prometheus.common.ConfigLoadException` (thrown by `startAsyncAgent` on a config-load failure when `exitOnMissingConfig` is false, so embedded hosts can catch it instead of the JVM exiting)
+- `io.prometheus.common.ConfigLoadException` (thrown by `startAsyncAgent` and `startSyncAgent` when `exitOnMissingConfig` is false, on a config that can't be loaded or a setting the options or the Agent reject, with a config URL's credentials redacted from its whole cause chain, so embedded hosts can catch it instead of the JVM exiting)
 
 When promoting a type from `internal` to `public`, also add a cross-reference to it in `docs/packages.md` (the Dokka `includes.from` file). When demoting, remove the link to avoid dangling references in the generated site.
 
