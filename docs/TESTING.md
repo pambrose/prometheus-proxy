@@ -40,9 +40,12 @@ make container-tests  # Full Testcontainers end-to-end suite (needs Docker)
 make scaling-tests    # Parameter-driven scaling container test only (needs Docker)
 make all-tests        # Full suite: `make tests` + `make lincheck-tests` + `make container-tests`
                       #   (container-tests already includes ContainersScalingTest's default table)
+make consumer-check   # Publish to the local Maven repository at a throwaway -consumer-check-SNAPSHOT
+                      #   version, then build etc/consumer-check, a Maven project that embeds the agent
+                      #   (see below); needs mvn
 make ci               # The CI workflow's jobs, run in turn: TLA+, alerting rules, Helm charts, the docs
-                      #   site (`make build-site`), and the build job (`make ci-build`: MINI tests +
-                      #   coverage floors); needs Docker
+                      #   site (`make build-site`), the consumer check, and the build job (`make ci-build`:
+                      #   MINI tests + coverage floors); needs Docker
 ```
 
 The suite builds its proxy and agent images under stable tags, so runs reuse them and a clean run now
@@ -165,6 +168,14 @@ snippets, which `website/prometheus-proxy/zensical.toml` resolves by file name. 
 regions; **EmbeddedAgentKotlinExample** and **EmbeddedAgentJavaExample** are the embedded-agent examples on the
 Embedded Agent page, compiled with the tests so that a change to `Agent.startAsyncAgent()` that breaks them fails
 the build.
+
+The tests compile those examples against the project's own classpath, which a build that embeds the agent doesn't
+get: it gets what the published POM gives it, resolved by its own build tool. `make consumer-check`, which CI's
+`consumer-check` job runs, covers that. It publishes this checkout to the local Maven repository and has
+`etc/consumer-check/check.sh` build `etc/consumer-check`, a Maven project that depends only on that artifact. The
+check fails unless both examples compile there (a public type's supertype at runtime scope broke the Java one),
+Maven resolves Jackson, every netty-tcnative native, and Netty at the versions `gradle/libs.versions.toml` pins, and
+no jar on the classpath carries a `logback.xml`, which would replace the host application's logging config.
 
 ## Test Categories
 
@@ -365,8 +376,9 @@ These support helpers also live here (not test classes themselves):
   Docker refuses
 - **LocalTestConfigTest** — no test source under `src/test/kotlin/io` names `raw.githubusercontent.com`, so a spec
   reads its config from the checkout, and a renamed or deleted one fails instead of testing a copy on GitHub `master`
-- **LogbackConfigTest** — the bundled `logback.xml`, loaded from inside a JAR, and `logback/docker-logback.xml`,
-  loaded from disk, configure without a WARN status, so neither makes logback print its status list at every start
+- **LogbackConfigTest** — the fat JARs' `logback.xml` (`src/shadow/resources`, kept out of the library jar), loaded
+  from inside a JAR, and `logback/docker-logback.xml`, loaded from disk, configure without a WARN status, so neither
+  makes logback print its status list at every start
 - **OptionsTest** — ProxyOptions and AgentOptions config file loading
 - **ShadowServiceFilesTest** — every class listed in the pinned fat-JAR service files
   (`src/shadow/resources/META-INF/services/`) loads and implements its service, so a stale provider name fails here

@@ -6,12 +6,33 @@
 
 _Not yet released_
 
+Fixes for applications that embed the agent from Maven Central. The library jar stops replacing the host's logging
+configuration, the Java example compiles, and Maven builds get the patched Jackson and TLS natives the standalone
+proxy and agent already ship. Nothing changes for the standalone JARs or the Docker images, but an embedder that was
+relying on the agent's logging configuration should read **Before you upgrade**.
+
+### Before you upgrade
+
+- **An embedded agent no longer brings a logging configuration.** The library jar carried a `logback.xml`, which
+  Logback, and Spring Boot ahead of your `logback-spring.xml`, used as your application's logging configuration.
+  It is gone, so your own configuration applies again. If your application has none, and its logging came from the
+  agent's file (INFO, with gRPC's internal logging at WARN), Logback now falls back to its default, which logs
+  everything at DEBUG: add a `logback.xml`, and consider setting `io.grpc.internal` to WARN as the standalone agent
+  does. The website's Embedded Agent page shows how.
+- **Maven builds get newer Jackson.** A Maven build that embeds the agent now resolves Jackson 2.23.0 through it,
+  where it got 2.12.7. A Jackson version your build declares itself still wins.
+
 ### Security
 
 - **Requesting dashboard pages in a loop can no longer slow scrapes.** Each page load collected the proxy's state
   under the lock every scrape takes. Pages now reuse the most recent collection, at most
   `proxy.dashboard.refreshIntervalSecs` old (2 s by default), as the dashboard's live updates already did, and an agent
   or path that comes or goes still shows on the next page load.
+- **Maven builds that embed the agent get the patched Jackson and TLS natives.** Maven ignored the agent's Jackson
+  version pin, so those builds got Jackson 2.12.7, with the vulnerabilities the 4.3.x pin fixed, and ran netty-tcnative
+  2.0.84.Final's native libraries under its 2.0.85.Final classes, without the 2.0.85 fix for an out-of-bounds read in
+  ALPN protocol selection. The published POM now declares Jackson 2.23.0 and every netty-tcnative native at
+  2.0.85.Final. Gradle builds, the fat JARs, and the Docker images already had both.
 
 ### Bug Fixes
 
@@ -21,6 +42,12 @@ _Not yet released_
   client span for each call, and the proxy a server span in the same trace, each under its `serviceName` setting
   (`prometheus-agent` and `prometheus-proxy` by default), as the documentation describes, rather than `grpc_client`
   and `grpc_server`.
+- **Java code that embeds the agent compiles.** Against the published artifact, the website's Java example failed with
+  `cannot access com.pambrose.common.service.GenericService`, because the class `Agent` extends came only at runtime.
+  It now comes at compile time. `Agent.startAsyncAgent("agent.conf", false)` also works from Java, as it does from
+  Kotlin, leaving the banner on; Java had to pass all three arguments.
+- **Gradle builds that ask for a shadowed artifact no longer get an empty one.** The published Gradle module listed a
+  `shadowRuntimeElements` variant with no files; it is gone.
 
 ### Documentation
 
@@ -33,6 +60,8 @@ _Not yet released_
   give the URLs the metrics are served at, on port 8080.
 - The example configs' label values are strings, so they no longer log warnings at startup or lose labels in service
   discovery.
+- The website's Embedded Agent page explains that the host application configures the agent's logging, with the
+  `io.grpc.internal` setting the standalone agent uses.
 
 ### Build and tooling
 
@@ -44,6 +73,10 @@ _Not yet released_
   that mistake went unnoticed.
 - A path-authorization test that fetched its config from GitHub when the local copy was missing reads only the local
   copy, and a test keeps the test sources from fetching files from GitHub.
+- A new CI check, `make consumer-check`, builds a Maven project that depends only on the artifact about to be
+  published, as an embedding application does. It compiles the website's Java and Kotlin examples, and checks the
+  Jackson, netty-tcnative, and Netty versions Maven resolves and that no jar carries a Logback configuration. A
+  release waits for it.
 
 ---
 

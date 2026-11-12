@@ -825,13 +825,15 @@ class Agent(
      *   `-v`/`-u` then throws [io.prometheus.common.ConfigLoadException] for the host to catch. `true` gives the
      *   standalone CLI's behavior, which requires a config and exits the process on any of these, host and all.
      * @param logBanner When `true` (default), logs the Agent ASCII banner and version on startup. Pass `false`
-     *   to suppress banner output when embedding inside an app that owns its own logging surface.
+     *   to suppress banner output when embedding inside an app that owns its own logging surface. Java callers can
+     *   leave it out too: `@JvmOverloads` gives them the two-argument form, which a Kotlin default alone doesn't.
      * @return An [EmbeddedAgentInfo] handle for inspecting and shutting down the launched Agent.
      * @throws IllegalStateException if the Agent fails to start, for example because its admin or metrics port is
      *   already in use. The startup failure is the cause, and whatever the Agent had opened is released first.
      */
     @Suppress("unused")
     @JvmStatic
+    @JvmOverloads
     fun startAsyncAgent(
       configFilename: String,
       exitOnMissingConfig: Boolean,

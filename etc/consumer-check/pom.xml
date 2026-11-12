@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  A Maven project that depends only on com.pambrose:prometheus-proxy, as an application that embeds the agent does.
+  `make consumer-check` publishes this checkout to the local Maven repository and runs check.sh, which builds this
+  project against what Maven resolves from the published POM. The repo's own builds resolve through Gradle, which
+  honors the published BOM imports and conflict rules that Maven doesn't, so only a Maven build like this one sees what
+  a Maven embedder gets.
+
+  The sources are the docs site's embedded-agent examples, compiled in place rather than copied, so the examples on
+  the Embedded Agent page are the ones checked. check.sh passes the two versions below; the build writes under the
+  repo's build/consumer-check, beside check.sh's resolution reports.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>io.prometheus.consumercheck</groupId>
+  <artifactId>consumer-check</artifactId>
+  <version>1</version>
+
+  <properties>
+    <!-- Set by check.sh: the version make consumer-check published, and Kotlin's from gradle/libs.versions.toml. -->
+    <prometheus-proxy.version>unset</prometheus-proxy.version>
+    <kotlin.version>unset</kotlin.version>
+    <repo.root>${project.basedir}/../..</repo.root>
+    <!-- The oldest Java the published artifact supports (jvm in gradle/libs.versions.toml). -->
+    <maven.compiler.release>17</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.pambrose</groupId>
+      <artifactId>prometheus-proxy</artifactId>
+      <version>${prometheus-proxy.version}</version>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <directory>${repo.root}/build/consumer-check/target</directory>
+    <sourceDirectory>${repo.root}/src/test/java</sourceDirectory>
+
+    <!-- Pinned, so what this build runs changes only with a diff here, whatever Maven the machine has. -->
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-resources-plugin</artifactId>
+          <version>3.5.0</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <version>3.16.0</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-dependency-plugin</artifactId>
+          <version>3.11.0</version>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+
+    <plugins>
+      <!-- The Java example only: src/test/java is the repo's test source root. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <includes>
+            <include>website/EmbeddedAgentJavaExample.java</include>
+          </includes>
+        </configuration>
+      </plugin>
+      <!-- src/test/kotlin/website holds the Kotlin example and the site's .txt snippets, which the compiler skips. -->
+      <plugin>
+        <groupId>org.jetbrains.kotlin</groupId>
+        <artifactId>kotlin-maven-plugin</artifactId>
+        <version>${kotlin.version}</version>
+        <executions>
+          <execution>
+            <id>compile</id>
+            <goals>
+              <goal>compile</goal>
+            </goals>
+            <configuration>
+              <sourceDirs>
+                <sourceDir>${repo.root}/src/test/kotlin/website</sourceDir>
+              </sourceDirs>
+              <jvmTarget>17</jvmTarget>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

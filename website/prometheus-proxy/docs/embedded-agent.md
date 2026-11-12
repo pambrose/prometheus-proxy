@@ -59,7 +59,7 @@ Starts the agent in background threads/coroutines.
 |:----------------------|:----------|:-----------------------------------------------------------------------------------------------------------------------------------------|
 | `configFilename`      | `String`  | Path to the HOCON config file                                                                                                            |
 | `exitOnMissingConfig` | `Boolean` | Pass `false` to embed: a config error or invalid option throws `ConfigLoadException`. `true` exits the JVM, as the standalone agent does |
-| `logBanner`           | `Boolean` | Log the startup banner (default: `true`)                                                                                                 |
+| `logBanner`           | `Boolean` | Log the startup banner (default: `true`, which Java callers get by leaving it out too)                                                   |
 
 **Returns:** `EmbeddedAgentInfo`
 
@@ -100,6 +100,31 @@ loggers only, so it doesn't change your application's own logging. A standalone 
 
     The config file path is relative to your application's working directory.
     Use an absolute path if needed.
+
+## Logging
+
+Your application configures the agent's logging. The agent logs through SLF4J to Logback, and the library jar carries
+no Logback configuration, so your own `logback.xml` (or, in Spring Boot, `logback-spring.xml` and the `logging.level`
+properties) applies to the agent's loggers as it does to the rest. With no configuration at all, Logback logs
+everything at DEBUG, gRPC and Netty included.
+
+The standalone agent's configuration sets `io.grpc.internal` to WARN, so that only gRPC's internal warnings and errors
+reach its log; you may want the same:
+
+```xml
+<logger name="io.grpc.internal" level="WARN"/>
+```
+
+In Spring Boot, set `logging.level.io.grpc.internal=WARN` instead.
+
+## Upgrading from 4.4.x
+
+- The library jar no longer carries a `logback.xml`. Through 4.4.2 it did, and Logback, and Spring Boot ahead of
+  your `logback-spring.xml`, took it for your application's configuration. An application with no Logback
+  configuration of its own now gets Logback's default, which logs everything at DEBUG, so add one (see
+  [Logging](#logging)); one whose own configuration was being replaced gets it back.
+- Maven builds now get Jackson 2.23.0 and netty-tcnative 2.0.85.Final, natives included, through the agent, where
+  they got Jackson 2.12.7 and the 2.0.84.Final natives. A Jackson your build declares itself still wins.
 
 ## Upgrading from 4.1.x
 

@@ -463,7 +463,7 @@ agent. This approach eliminates the need for a separate agent process when your 
 
   ```Java
   // Start embedded agent; false (exitOnMissingConfig) makes config errors throw instead of exiting the JVM
-  EmbeddedAgentInfo agentInfo = startAsyncAgent("configFile.conf", false);
+  EmbeddedAgentInfo agentInfo = Agent.startAsyncAgent("configFile.conf", false);
 
   // Your application code runs here
   // The agent runs in the background and does not block your application
@@ -481,7 +481,9 @@ the agent had opened.
 
 Several agents can run in one JVM with metrics on, at once or one after another: they share one set of agent metrics,
 and each series carries its agent's `launch_id`. An embedded agent's `logLevel` sets only the `io.prometheus` loggers,
-so it leaves your application's own logging alone.
+so it leaves your application's own logging alone. Your application's Logback configuration also configures the
+agent's loggers, since the library jar carries none of its own; the standalone agent's sets `io.grpc.internal` to WARN,
+which you may want too.
 
 ### Service Discovery
 

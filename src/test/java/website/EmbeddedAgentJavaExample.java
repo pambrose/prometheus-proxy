@@ -22,9 +22,10 @@ import io.prometheus.agent.EmbeddedAgentInfo;
 
 public class EmbeddedAgentJavaExample {
   public static void main(String[] args) {
-    // Start the agent in the background
+    // Start the agent in the background. false makes a config error throw instead of exiting the JVM; a third
+    // argument, false, would leave out the startup banner.
     EmbeddedAgentInfo agentInfo =
-      Agent.startAsyncAgent("agent-config.conf", false, true);
+      Agent.startAsyncAgent("agent-config.conf", false);
 
     System.out.println("Agent started: " + agentInfo.getAgentName());
 
