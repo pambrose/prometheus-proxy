@@ -64,6 +64,8 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
@@ -72,7 +74,10 @@ import kotlinx.serialization.json.jsonPrimitive
 import java.net.URI
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.AtomicLong
 import kotlin.concurrent.atomics.minusAssign
+import kotlin.concurrent.atomics.plusAssign
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
@@ -105,7 +110,8 @@ import kotlin.time.TimeSource
  *
  * The port has no authentication, so what the service can bound, it does: a WebSocket handshake from a foreign
  * browser origin is refused, sessions are capped at `proxy.dashboard.maxSessions`, a session that stops reading is
- * closed rather than buffered for, and a browser message re-renders the recent snapshot rather than collecting one.
+ * closed rather than buffered for, and a page request or a browser message renders the recent snapshot rather than
+ * collecting one (see [SnapshotCache]).
  * Setting `proxy.dashboard.allowedHosts` also refuses a request naming an unknown host, which stops DNS rebinding.
  * The listen address is `proxy.dashboard.host`; binding it to a private address is what keeps the page private.
  */
@@ -151,15 +157,8 @@ internal class ProxyDashboardService(
   // connects; the set's own size is only an estimate while another thread is adding to it.
   private val sessionCount = AtomicInt(0)
 
-  /** A collected snapshot and when it was taken. */
-  private class TimedSnapshot(
-    val snapshot: ProxySnapshot,
-    val taken: TimeMark,
-  )
-
-  // Written by every collect and cleared by topology events; read by sessions. See recentSnapshot.
-  @Volatile
-  private var latestSnapshot: TimedSnapshot? = null
+  // What every page and session renders from; the push loop refills it on each wake. See SnapshotCache.
+  private val snapshots = SnapshotCache(refreshInterval) { snapshot() }
 
   // Runs before the WebSocket upgrade, so a refused page never receives a frame. See isOriginAllowed.
   private val originCheck =
@@ -246,20 +245,20 @@ internal class ProxyDashboardService(
         }
 
         get(basePath) {
-          val snapshot = snapshot()
+          val snapshot = snapshots.recent()
           call.respondHtml { with(ProxyDashboardHtml) { renderPage(snapshot, null, routeBase, DashboardLayout.AGENT) } }
         }
 
         // A real page rather than a fragment: switching layout is a navigation, so the browser gets a
         // fresh document whose region ids match the layout it is now showing.
         get("$routeBase/paths") {
-          val snapshot = snapshot()
+          val snapshot = snapshots.recent()
           call.respondHtml { with(ProxyDashboardHtml) { renderPage(snapshot, null, routeBase, DashboardLayout.PATH) } }
         }
 
         get("$routeBase/agents/{agentId}") {
           val agentId = call.parameters["agentId"]
-          val snapshot = snapshot()
+          val snapshot = snapshots.recent()
           // hx-push-url makes this URL the address bar's, so it must survive a reload or a shared link.
           // A row click is an htmx swap and wants just the detail fragment; a full navigation to the same
           // URL wants the whole dashboard with the agent selected. htmx marks its own requests with
@@ -290,13 +289,13 @@ internal class ProxyDashboardService(
             sessions.add(session)
             try {
               // Render immediately rather than making the browser wait for the first event or tick.
-              push(session, recentSnapshot())
+              push(session, snapshots.recent())
               for (frame in incoming) {
                 if (frame is Frame.Text) {
                   val text = frame.readText()
                   session.selectedId = parseSelection(text)
                   session.layout = parseLayout(text)
-                  push(session, recentSnapshot())
+                  push(session, snapshots.recent())
                 }
               }
             } finally {
@@ -329,8 +328,8 @@ internal class ProxyDashboardService(
       proxy.eventBus.flow
         .filter { it !is ProxyEvent.ScrapeCompleted }
         .collect {
-          // Clear the cache so a session never renders a topology older than the change it is reacting to.
-          latestSnapshot = null
+          // Retire the cached snapshot so no page or session renders a topology older than the change.
+          snapshots.invalidate()
           wake.trySend(Unit)
         }
     }
@@ -352,7 +351,8 @@ internal class ProxyDashboardService(
     while (scope.isActive) {
       withTimeoutOrNull(refreshInterval) { wake.receive() }
       if (sessions.isEmpty()) continue
-      val snapshot = freshSnapshot()
+      // Always a collect, never the cache: a tick exists to sample the values that drift.
+      val snapshot = snapshots.fresh()
       sessions.forEach { push(it, snapshot) }
     }
   }
@@ -376,21 +376,6 @@ internal class ProxyDashboardService(
    */
   private suspend fun snapshot(): ProxySnapshot = withContext(Dispatchers.IO) { ProxySnapshot.collect(proxy) }
 
-  /** Collects a snapshot and records it as the most recent one. */
-  private suspend fun freshSnapshot(): ProxySnapshot =
-    snapshot().also { latestSnapshot = TimedSnapshot(it, TimeSource.Monotonic.markNow()) }
-
-  /**
-   * The most recent snapshot if it is younger than the refresh interval, otherwise a fresh collect.
-   *
-   * What a WebSocket session renders from. A client decides how fast its messages arrive, so collecting per
-   * message would reintroduce the scrape-latency coupling [snapshot] is built to avoid. The price is data up to
-   * one refresh interval old, the staleness the push loop already accepts; a topology change clears the cache,
-   * so a session never waits a full interval to see a new agent.
-   */
-  private suspend fun recentSnapshot(): ProxySnapshot =
-    latestSnapshot?.takeIf { it.taken.elapsedNow() < refreshInterval }?.snapshot ?: freshSnapshot()
-
   /** Claims a session slot, or returns false when [maxSessions] sessions are already connected. */
   private fun reserveSession(): Boolean {
     while (true) {
@@ -410,6 +395,65 @@ internal class ProxyDashboardService(
     ASSETS.mapNotNull { (name, resource) ->
       javaClass.classLoader.getResourceAsStream(resource)?.use { name to it.readBytes() }
     }.toMap()
+  }
+
+  /**
+   * The most recent [ProxySnapshot], served until it is [maxAge] old or the topology changes.
+   *
+   * Every page and WebSocket render reads from here. A client decides how fast its requests and messages arrive, so
+   * collecting per request would let it hold the path-map monitor, which every scrape and registration takes, as often
+   * as it liked -- the scrape-latency coupling [snapshot] runs off the event loop to avoid. Through the cache, the
+   * collect rate is bounded by the refresh interval instead. The price is drifting values (backlogs, countdowns, scrape
+   * history) up to one interval old, the staleness the push loop already accepts.
+   *
+   * Topology is not held that long. [invalidate], called on every topology event, starts a new generation, and an entry
+   * is served only while the generation it was collected in is current. So a collect that began before a change and
+   * ended after it is not reused. Clearing the entry on the event did not ensure that: the late collect refilled the
+   * cache with the old topology, and with no session open, nothing else collected for a whole interval. What remains is
+   * the moment an event takes to reach the dashboard after the change it reports.
+   *
+   * One collect runs at a time. A read that finds no usable entry waits for the collect under way and renders its
+   * result, so a burst of requests on an empty cache costs one collect rather than one each.
+   */
+  internal class SnapshotCache(
+    private val maxAge: Duration,
+    private val clock: TimeSource = TimeSource.Monotonic,
+    private val collect: suspend () -> ProxySnapshot,
+  ) {
+    /** A collected snapshot, when its collect began, and the generation it began in. */
+    private class Entry(
+      val snapshot: ProxySnapshot,
+      val taken: TimeMark,
+      val generation: Long,
+    )
+
+    private val collecting = Mutex()
+    private val generation = AtomicLong(0L)
+
+    @Volatile
+    private var latest: Entry? = null
+
+    /** Retires every snapshot collected, or being collected, before this call. */
+    fun invalidate() {
+      generation += 1L
+    }
+
+    /** The cached snapshot while it is usable; otherwise a collect, shared with every read that arrives meanwhile. */
+    suspend fun recent(): ProxySnapshot = usable() ?: collecting.withLock { usable() ?: collectAndStore() }
+
+    /** Always a collect, for the push loop's tick; the reads after it are served what it collected. */
+    suspend fun fresh(): ProxySnapshot = collecting.withLock { collectAndStore() }
+
+    private fun usable(): ProxySnapshot? =
+      latest?.takeIf { it.generation == generation.load() && it.taken.elapsedNow() < maxAge }?.snapshot
+
+    // Callers hold collecting. The generation and the time are read before the collect, so an entry never claims to be
+    // newer than the state it read.
+    private suspend fun collectAndStore(): ProxySnapshot {
+      val collectedIn = generation.load()
+      val taken = clock.markNow()
+      return collect().also { latest = Entry(it, taken, collectedIn) }
+    }
   }
 
   override fun toString() =
