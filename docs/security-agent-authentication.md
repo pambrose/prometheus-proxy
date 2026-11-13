@@ -48,7 +48,12 @@ deployment.
      connection's. Scrape results — unary and chunked — are accepted only from the agent the scrape was sent to.
    - **Transport filter disabled (`transportFilterDisabled`, for example behind nginx).** There is no
      connection-assigned agentId. Instead, `connectAgentWithTransportFilterDisabled` records the caller's identity
-     on the new agent context, and the same calls, including scrape results, must present that identity.
+     on the new agent context, and the same calls, including scrape results, must present that identity. Each call
+     checks the identity on the context it then acts on, from one lookup: `readRequestsFromProxy` streams that
+     context, and as the stream ends removes only that context (`Proxy.removeAgentContextIfCurrent`), so a stream
+     that names an agentId before it is assigned gets `NOT_FOUND` and can't later read or remove the context
+     another identity connects with under it. Each identity may hold at most `proxy.internal.maxAgentsPerIdentity`
+     (10,000) agent contexts; a connect past that gets `RESOURCE_EXHAUSTED`.
 
 The binding checks are `connectionMismatchReason`, `identityMismatchReason`, and `isScrapeOwnedByConnection` in
 `proxy/ProxyServiceImpl.kt`. A rejected call never refreshes the named agent's activity time and never removes its
@@ -68,6 +73,12 @@ context.
   that connect with no authentication at all are indistinguishable to the proxy. One of them can act on another's
   agent context: read its scrape requests (including a forwarded Prometheus `Authorization` header), unregister its
   paths, or answer its scrapes. Give each agent its own identity, or keep the transport filter enabled.
+- **One identity's agent limit is shared by its agents.** With the transport filter disabled, a peer of an
+  identity that calls `connectAgentWithTransportFilterDisabled` in a loop can hold all
+  `proxy.internal.maxAgentsPerIdentity` of that identity's contexts until they are evicted, about 70 seconds after
+  its last call, and meanwhile that identity's other agents can't reconnect. The limit bounds the proxy's memory,
+  which a peer could otherwise exhaust, and other identities are unaffected; but with agent auth off, or on the
+  legacy token, every agent has one identity, so such a peer keeps every agent from reconnecting.
 - **Path takeover within one identity.** A non-consolidated registration still replaces a live owner that
   connected with the same identity, which keeps redeploys working. Unauthenticated agents, and every holder of the
   legacy token, share one identity, so any of them can still take over another's path. See remediation item 4.
@@ -234,6 +245,15 @@ In rough priority order:
   helper, `AgentValues.shownValue`, which cuts it and escapes its control characters, so a path, a label key, or the
   agent's name, host name, or launch ID can't forge log lines. A path with whitespace, a control character, `?`, or
   `#`, which no scrape can reach, is refused at registration (and in an agent's `pathConfigs` at startup).
+- **The scrape-request stream bound on one lookup** (finding #14) — with the transport filter disabled,
+  `readRequestsFromProxy` checked the caller's identity on one lookup, streamed what a second found, and removed the
+  agentId as it ended, even after a `NOT_FOUND`. A caller that named the next agentId could stream, or remove, the
+  context another identity connected with under it. It now checks, streams, and removes the one context it looked up.
+- **Agent contexts per identity limited** (finding #17) — with the transport filter disabled, each
+  `connectAgentWithTransportFilterDisabled` call created and announced a context, with its own path quota, that
+  lasted until its stream ended or it was evicted, with no limit. `proxy.internal.maxAgentsPerIdentity` (10,000)
+  now bounds the contexts each identity holds, and a connect past it is refused with `RESOURCE_EXHAUSTED`, which the
+  agent retries.
 
 ## References
 

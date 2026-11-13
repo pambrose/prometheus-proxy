@@ -2,7 +2,7 @@
 
 Two independent specs: `ProxyRegistry.tla` for the proxy side and `AgentFailover.tla` for the agent's failover.
 
-`make tla-checks` (from the repo root) model-checks both with their quick configs in about 15 seconds, and fails if
+`make tla-checks` (from the repo root) model-checks both with their quick configs in about 25 seconds, and fails if
 either finds a violation; CI's `tla` job runs it on every pull request and push to `master`. It downloads the TLA+
 tools jar (pinned in the Makefile's `TLA_VERSION`) into this directory, and refuses a download whose SHA-256 doesn't
 match `TLA_SHA256`; the jar is git-ignored. It checks the jar on every run, so after a version bump the old one is
@@ -14,8 +14,9 @@ from this directory.
 `ProxyRegistry.tla` models the proxy's agent registry, path map, and scrape-request lifecycle: `AgentContextManager`,
 `AgentContext` (validity, queue, notifier, `invalidate()` and its drain), `ProxyPathManager` (the out-of-lock lookup and
 the `synchronized(pathMap)` block of `addPath`, `removePath`, `removeFromPathManager`), `ScrapeRequestManager`,
-`Proxy.removeAgentContext`, one HTTP handler per scrape, and the `readRequestsFromProxy` loop. Heartbeats, chunking,
-metrics, and the event bus are abstracted away. Agent-side failover is in `AgentFailover.tla`.
+`Proxy.removeAgentContext`, one HTTP handler per scrape, and the `readRequestsFromProxy` loop, including, with the
+transport filter disabled, a stream that names another connection's agentId, which only the identity check binds.
+Heartbeats, chunking, metrics, and the event bus are abstracted away. Agent-side failover is in `AgentFailover.tla`.
 
 It is a model of the code, not the code: when you change one of those classes, update the matching action.
 
@@ -29,6 +30,7 @@ It is a model of the code, not the code: when you change one of those classes, u
 | `IdentityIsolation` | No identity takes over or joins a path another identity's live agent serves |
 | `AnswerFromOwner` | Only the agent a scrape was sent to can answer it, even when another agent names it before it is tracked |
 | `ModesNeverMix` | Consolidated and non-consolidated agents never share a path |
+| `StreamIdentity` | With the transport filter disabled, a scrape-request stream reads, and as it ends removes, only a context of its caller's identity, even when it named the agentId before that context was registered |
 | `EveryScrapeFinishes` | With the handler timeout off, every started scrape still finishes |
 
 ### Running
@@ -37,7 +39,7 @@ With `tla2tools.jar` in this directory (`make tla-checks` fetches it, or downloa
 [TLA+ releases](https://github.com/tlaplus/tlaplus/releases)):
 
 ```bash
-# Safety and liveness, 2 connections (about 15s)
+# Safety and liveness, 2 connections (about 25s)
 java -cp tla2tools.jar tlc2.TLC -workers auto -deadlock -config ProxyRegistry.cfg ProxyRegistry.tla
 
 # Safety only, 3 connections, 2 paths, 2 scrapes (hours; not yet run to completion)
@@ -54,6 +56,15 @@ before `assignScrapeResults` looked the scrape up again, with an untracked scrap
 `AnswerFromOwner` violated by an agent answering a scrape id before it is tracked, the HTTP handler tracking that id for
 another agent, and the answer completing it. The configs set `SameLookup = TRUE`, where the check runs on the wrapper
 `assignScrapeResults` completes.
+
+`StreamSameLookup = FALSE` restores `readRequestsFromProxy` as it was before November #14's fix, with the transport
+filter disabled: it checked the caller's identity on a lookup of its own, let an agentId with no context through,
+streamed whatever a second lookup found, and removed the agentId in its `finally` even after that lookup found nothing.
+TLC then reports `StreamIdentity` violated by a connection naming an agentId before it is assigned, its second lookup
+finding nothing, and an agent of another identity connecting under that agentId before the stream's `finally` removes
+it. The configs set `StreamSameLookup = TRUE`, where the stream checks, reads, and removes the one context it looked up.
+One connection, the `Intruder`, plays the caller: connections are interchangeable and `Init` tries every mix of
+identities, so letting each connection intrude only doubles the states.
 
 ## AgentFailover
 

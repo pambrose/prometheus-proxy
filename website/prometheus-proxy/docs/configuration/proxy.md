@@ -169,6 +169,7 @@ Configure agent cleanup and scrape request management:
 | `maxAgentFieldLength`               | 256     | Max characters of an agent's name, host, launch ID, or endpoint (0 = unlimited)          |
 | `maxAgentProxyEndpoints`            | 16      | Max entries of an agent's proxy endpoint list (0 = unlimited)                            |
 | `maxTargetUrlLength`                | 2048    | Max characters of a path's target URL, as the agent reports it (0 = unlimited)           |
+| `maxAgentsPerIdentity`              | 10000   | Max agents connected as one identity with `transportFilterDisabled` (0 = unlimited)      |
 
 The three path limits are safety nets against a runaway or misbehaving agent, set well above normal use. A path
 over a limit is refused at registration, before it is checked against the agent's
@@ -182,6 +183,8 @@ every path the agent serves. A longer name, host name, launch ID, endpoint, or p
 target URL to its first `maxTargetUrlLength` characters, after its credentials are redacted. The agent and its paths
 stay registered, and the proxy logs one warning naming what it cut. The agent redacts a target URL's query values
 before it sends it, so a real one is far shorter than 2048 characters.
+
+`maxAgentsPerIdentity` applies only with the [transport filter](#transport-filter) disabled; see there.
 
 ## Content Size Limits
 
@@ -203,9 +206,10 @@ proxy.transportFilterDisabled = true
 
 !!! warning
 
-    With `transportFilterDisabled`, agent disconnections are not immediately detected.
-    Agent contexts on the proxy are removed after the inactivity timeout
-    (default: 60 seconds).
+    With `transportFilterDisabled`, the proxy can't see a connection close, only the agent's request
+    stream end. An agent that disconnects ends that stream, and is removed at once. One that dies
+    before opening its stream, or whose connection stays half-open, is removed after the inactivity
+    timeout (default: 60 seconds, `proxy.internal.maxAgentInactivitySecs`).
 
 !!! note "Give each agent its own identity"
 
@@ -213,6 +217,18 @@ proxy.transportFilterDisabled = true
     to the auth identity the agent connected with. Agents that share an identity, including every agent
     on the legacy `proxy.agentToken`, can't be told apart, so give each agent its own `proxy.auth` token.
     See [Isolation Between Agents](../security/index.md#isolation-between-agents).
+
+!!! note "Agents per identity"
+
+    With the filter disabled, every connect adds an agent on the proxy, so the proxy limits the agents
+    connected as one auth identity to `proxy.internal.maxAgentsPerIdentity` (10,000). It refuses a connect
+    past the limit with `RESOURCE_EXHAUSTED`, rather than drop an agent already connected, and the refused
+    agent tries again after its reconnect pause. The proxy warns as an identity reaches 80% of the limit,
+    and when it refuses a connect, at most once a minute for each identity. With agent auth off, or on the
+    legacy `proxy.agentToken`, every agent has the same identity, so the limit is a total. Leave room for
+    agents that count twice for a while: one that reconnects while its old connection is half-open, until
+    the old one is evicted, and one whose registration is refused, once for each retry until each is
+    evicted. Set `0` for no limit.
 
 ## gRPC Reflection
 

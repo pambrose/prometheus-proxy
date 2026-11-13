@@ -188,7 +188,8 @@ no jar on the classpath carries a `logback.xml`, which would replace the host ap
 - **AgentGrpcServiceTest** — gRPC service: scrape request/response streaming, heartbeats, registration, error handling,
   channel shutdown; with Zipkin on, the channel is built before `zipkinReporterService` is assigned, and every channel
   a reconnect builds traces through one `Tracing`; a repeated connect failure logs one WARN, compared by gRPC status
-  code (or class), including against a port that accepts TCP but never answers HTTP/2
+  code (or class), including against a port that accepts TCP but never answers HTTP/2; a connect the proxy refuses
+  with `RESOURCE_EXHAUSTED` is a failed connect, which the agent retries
 - **AgentHttpServiceTest** — HTTP service: scraping endpoints, compression support, response handling, timeout behavior,
   error cases
 - **AgentHttpServiceHeaderTest** — HTTP Accept header handling per-request (prevents stale headers in cached clients)
@@ -245,7 +246,9 @@ Two support helpers also live here (not test classes themselves):
   responses; a result or a chunked transfer for a scrape sent to another agent neither completes nor fails it, even
   when its `agentId` or `headerAgentId` names that agent; a transfer ends with its scrape, even one whose scrape ended
   just before it was stored, one stream has at most the agent's backlog cap of transfers under way, a header's strings
-  are cut, and a late result or transfer logs nothing above DEBUG
+  are cut, and a late result or transfer logs nothing above DEBUG; with the transport filter disabled, a scrape-request
+  stream that names an agentId before it is assigned neither streams nor removes the context another identity then
+  connects with under it, and 10,000 connects by one identity leave at most `maxAgentsPerIdentity` agents
 - **ProxyGrpcServiceTest** — gRPC server configuration: each handshake, keepalive, and connection-age option reaches
   the server builder (a MockK builder) and an unset one leaves gRPC's default, and the transport filter; reflection
   is not served when disabled, and when enabled it requires a valid agent token if agent auth is configured; with
@@ -268,7 +271,8 @@ Two support helpers also live here (not test classes themselves):
   hand-off -- write, read, invalidate -- from three threads under model checking and stress; each write's outcome
   must fit a sequential order, and no accepted request may be stranded after invalidate
 - **AgentContextManagerTest** — Proxy's AgentContextManager: add/remove contexts, chunked context management, concurrent
-  access
+  access; a conditional removal takes only the context it is given; concurrent adds never pass an identity's
+  agent limit, a removal frees a slot, and a refused add logs a WARN at most once a minute for each identity
 - **AgentContextCleanupServiceTest** — Stale agent eviction (removes agents inactive beyond maxAgentInactivitySecs)
 - **ChunkedContextTest** — Chunk accumulation, CRC32 checksum validation, header/chunk/trailer sequencing
 - **ProxyOptionsTest** — CLI parsing, defaults, validation, TLS settings, gRPC options
@@ -485,7 +489,8 @@ mechanism that the standard suite cannot reach:
 - **InProcessStaleAgentCleanupTest** — the eviction thread staying off, and being forced on by the
   transport-filter mode
 - **InProcessTransportFilterDisabledTest** — both sides with the transport filter off: a scrape succeeds,
-  and the request stream's own termination is what reclaims the agent context
+  and the request stream's own termination is what reclaims the agent context; an agent that
+  `maxAgentsPerIdentity` refuses keeps retrying, and connects once another agent leaves
 - **InProcessZipkinTest** — with Zipkin on, the proxy and the agent each start, serve a scrape, and stop, against a
   collector that can't be reached; with it on for both and a stand-in collector, the agent's client spans and the
   proxy's server spans arrive under their configured service names, in one trace

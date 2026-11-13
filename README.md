@@ -803,9 +803,11 @@ An example nginx conf file is [here](https://github.com/pambrose/prometheus-prox
 and an example agent/proxy conf file
 is [here](https://github.com/pambrose/prometheus-proxy/blob/master/nginx/nginx-proxy.conf)
 
-**⚠️ Note:** With `transportFilterDisabled`, agent disconnections aren't immediately detected. Agent contexts on the
-proxy
-are removed after inactivity timeout (default: 1 minute, controlled by `proxy.internal.maxAgentInactivitySecs`).
+**⚠️ Note:** With `transportFilterDisabled`, the proxy can't see a connection close, only the agent's request stream
+end. An agent that disconnects ends that stream, and is removed at once; one that dies before opening its stream, or
+whose connection stays half-open, is removed after the inactivity timeout (default: 1 minute, controlled by
+`proxy.internal.maxAgentInactivitySecs`). The proxy also limits the agents connected as one auth identity to
+`proxy.internal.maxAgentsPerIdentity` (10,000), and with agent auth off every agent shares one identity.
 
 ### gRPC Reflection
 

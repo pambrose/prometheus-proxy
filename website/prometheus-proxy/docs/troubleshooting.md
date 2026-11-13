@@ -193,10 +193,25 @@ The endpoints are **disabled by default**. Enable them with `--admin` / `--metri
 
 ## Disconnects aren't detected behind Nginx
 
-With `transportFilterDisabled` (required when fronting gRPC with Nginx), agent disconnects
-aren't noticed immediately — stale contexts are cleaned up only after
-`proxy.internal.maxAgentInactivitySecs` (default 60s). This is expected; see
+With `transportFilterDisabled` (required when fronting gRPC with Nginx), the proxy notices an
+agent leave when the agent's request stream ends, which a disconnect normally does at once. An
+agent that dies before opening that stream, or whose connection stays half-open, stays listed
+until `proxy.internal.maxAgentInactivitySecs` (default 60s) evicts it. This is expected; see
 [Nginx Reverse Proxy](advanced.md#nginx-reverse-proxy).
+
+### `RESOURCE_EXHAUSTED` when an agent connects behind Nginx
+
+With `transportFilterDisabled`, the proxy refuses a connect once
+`proxy.internal.maxAgentsPerIdentity` (10,000) agents are connected with the same auth identity,
+and logs `Refused a connect`. With agent auth off, or on the legacy `proxy.agentToken`, every
+agent shares one identity, so the limit counts the whole fleet. The agent keeps retrying, and gets
+in once another agent leaves.
+
+- **Fix:** raise the limit, or set it to `0` for none, if the fleet needs more. If it shouldn't,
+  look for agents that keep reconnecting, such as ones whose registration is rejected: each attempt
+  counts until it is evicted. Giving each team its own `proxy.auth` identity also keeps one team's
+  agents from using up another's room. See
+  [Transport Filter](configuration/proxy.md#transport-filter).
 
 ---
 

@@ -586,6 +586,21 @@ class AgentGrpcServiceTest : StringSpec() {
       }
     }
 
+    // A proxy with the transport filter disabled refuses a connect past proxy.internal.maxAgentsPerIdentity with
+    // RESOURCE_EXHAUSTED (November #17). The connect fails like any other, so Agent.run pauses and tries again, rather
+    // than the agent stopping.
+    "connectAgent with transportFilterDisabled should report a RESOURCE_EXHAUSTED refusal as a failed connect" {
+      withStubbedService("localhost:$PROXY_AGENT_PORT", transportFilterDisabled = true) { service, mockStub ->
+        coEvery { mockStub.connectAgentWithTransportFilterDisabled(any(), any<Metadata>()) } throws
+          StatusException(Status.RESOURCE_EXHAUSTED.withDescription("maxAgentsPerIdentity limit"))
+
+        val events = captureLogs<AgentGrpcService>(Level.DEBUG) { service.connectAgent().shouldBeFalse() }
+
+        verify(exactly = 0) { service.agent.agentId = any() }
+        events.single { it.level == Level.WARN }.formattedMessage shouldContain "RESOURCE_EXHAUSTED"
+      }
+    }
+
     // ==================== registerAgent Tests ====================
 
     "registerAgent should send request with correct agent details" {

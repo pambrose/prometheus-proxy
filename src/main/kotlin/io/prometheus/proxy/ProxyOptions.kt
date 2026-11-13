@@ -400,7 +400,7 @@ class ProxyOptions internal constructor(
   }
 
   // Checks for the scrape-port bind address, the in-flight limit and the map health checks' thresholds under it, and
-  // the path- and agent-registration limits.
+  // the path-, agent-registration, and agents-per-identity limits.
   private fun validateHttpHostAndInFlightLimit(proxyConfigVals: ConfigVals.Proxy2) {
     val http = proxyConfigVals.http
     // A blank bind address would otherwise fail only when the scrape server starts, with an opaque Ktor error.
@@ -419,7 +419,8 @@ class ProxyOptions internal constructor(
     chunkContextMapUnhealthySize =
       resolveMapThreshold("chunkContextMapUnhealthySize", internal.chunkContextMapUnhealthySize, internal)
 
-    // Path- and agent-registration limits: 0 turns one off, and only a negative value is meaningless.
+    // Path- and agent-registration limits, and the per-identity agent limit (November #17): 0 turns one off, and only a
+    // negative value is meaningless.
     with(internal) {
       listOf(
         "maxPathsPerAgent" to maxPathsPerAgent,
@@ -428,6 +429,7 @@ class ProxyOptions internal constructor(
         "maxAgentFieldLength" to maxAgentFieldLength,
         "maxAgentProxyEndpoints" to maxAgentProxyEndpoints,
         "maxTargetUrlLength" to maxTargetUrlLength,
+        "maxAgentsPerIdentity" to maxAgentsPerIdentity,
       ).forEach { (name, value) ->
         require(value >= 0) { "internal.$name must be >= 0 (0 = unlimited): $value" }
         logger.info { "internal.$name: ${if (value == 0) "unlimited" else value}" }

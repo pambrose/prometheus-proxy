@@ -117,9 +117,11 @@ class ProxyServiceImplTest : StringSpec() {
 
     val mockAgentContextManager =
       agentContextManager ?: mockk<AgentContextManager>(relaxed = true).also {
-        // A relaxed Boolean is false, which would read as a transfer already under way or already removed.
+        // A relaxed Boolean is false, which would read as a transfer already under way or already removed, or as a
+        // connect over maxAgentsPerIdentity.
         every { it.putChunkedContext(any(), any()) } returns true
         every { it.removeChunkedContext(any(), any()) } returns true
+        every { it.addAgentContextWithinLimit(any(), any()) } returns true
       }
     val mockPathManager =
       mockk<ProxyPathManager>(relaxed = true).also {
@@ -249,7 +251,7 @@ class ProxyServiceImplTest : StringSpec() {
       val proxy = createMockProxy(transportFilterDisabled = true)
       val agentContextSlot = slot<AgentContext>()
 
-      every { proxy.agentContextManager.addAgentContext(capture(agentContextSlot)) } returns null
+      every { proxy.agentContextManager.addAgentContextWithinLimit(capture(agentContextSlot), any()) } returns true
 
       val service = ProxyServiceImpl(proxy)
       val result = service.connectAgentWithTransportFilterDisabled(EMPTY_INSTANCE)
@@ -258,7 +260,7 @@ class ProxyServiceImplTest : StringSpec() {
       agentContextSlot.isCaptured.shouldBeTrue()
       agentContextSlot.captured.agentId shouldBe result.agentId
 
-      verify { proxy.agentContextManager.addAgentContext(any()) }
+      verify { proxy.agentContextManager.addAgentContextWithinLimit(any(), any()) }
       verify { proxy.metrics(any<ProxyMetrics.() -> Unit>()) }
     }
 
@@ -1443,8 +1445,10 @@ class ProxyServiceImplTest : StringSpec() {
 
       flow.collect {}
 
-      // Agent context should be cleaned up since transportFilterDisabled is true
-      verify { proxy.removeAgentContext(testAgentId, any()) }
+      // Agent context should be cleaned up since transportFilterDisabled is true: the context streamed, not whatever
+      // the agentId names by then (November #14).
+      verify { proxy.removeAgentContextIfCurrent(mockAgentContext, any()) }
+      verify(exactly = 0) { proxy.removeAgentContext(any(), any()) }
     }
 
     "readRequestsFromProxy should not clean up agent context when transportFilter enabled" {
@@ -1464,6 +1468,7 @@ class ProxyServiceImplTest : StringSpec() {
 
       // Agent context should NOT be cleaned up — ProxyServerTransportFilter handles it
       verify(exactly = 0) { proxy.removeAgentContext(any(), any()) }
+      verify(exactly = 0) { proxy.removeAgentContextIfCurrent(any(), any()) }
     }
 
     "readRequestsFromProxy should clean up on stream cancellation when transportFilterDisabled" {
@@ -1486,7 +1491,7 @@ class ProxyServiceImplTest : StringSpec() {
 
       flow.collect {}
 
-      verify { proxy.removeAgentContext(testAgentId, any()) }
+      verify { proxy.removeAgentContextIfCurrent(mockAgentContext, any()) }
     }
 
     // ==================== writeResponsesToProxy Error Handling Tests ====================
@@ -2001,7 +2006,7 @@ class ProxyServiceImplTest : StringSpec() {
       val agentId = agentContext.agentId
 
       every { proxy.agentContextManager.getAgentContext(agentId) } returns agentContext
-      coEvery { proxy.removeAgentContext(agentId, any()) } returns agentContext
+      every { proxy.removeAgentContextIfCurrent(agentContext, any()) } returns true
 
       val service = ProxyServiceImpl(proxy)
       val request = agentInfo { this.agentId = agentId }
@@ -2013,7 +2018,7 @@ class ProxyServiceImplTest : StringSpec() {
       service.readRequestsFromProxy(request).collect { results.add(it) }
 
       // Verify cleanup was called because transportFilterDisabled is true
-      coVerify { proxy.removeAgentContext(agentId, match { it.contains("transport filter disabled") }) }
+      verify { proxy.removeAgentContextIfCurrent(agentContext, match { it.contains("transport filter disabled") }) }
     }
 
     // Bug #20: When transportFilterDisabled is false, readRequestsFromProxy should NOT
@@ -2036,6 +2041,7 @@ class ProxyServiceImplTest : StringSpec() {
 
       // Verify cleanup was NOT called because transportFilterDisabled is false
       coVerify(exactly = 0) { proxy.removeAgentContext(any(), any()) }
+      verify(exactly = 0) { proxy.removeAgentContextIfCurrent(any(), any()) }
     }
 
     "writeResponsesToProxy should call assignScrapeResults for each response" {
@@ -2935,8 +2941,72 @@ class ProxyServiceImplTest : StringSpec() {
       }
 
       val added = slot<AgentContext>()
-      verify { agentContextManager.addAgentContext(capture(added)) }
+      verify { agentContextManager.addAgentContextWithinLimit(capture(added), any()) }
       added.captured.authIdentityName shouldBe "team-a"
+    }
+
+    // Each connect created and announced a context, which lasted until its stream ended or it was evicted, with no
+    // limit, so one caller could hold as many as it could make in ~70s (November #17).
+    "10,000 connects by one identity should leave at most maxAgentsPerIdentity agents" {
+      val contextManager = AgentContextManager(isTestMode = true)
+      val proxy = createMockProxy(transportFilterDisabled = true, agentContextManager = contextManager)
+      every { proxy.maxAgentsPerIdentity } returns 100
+      val service = ProxyServiceImpl(proxy)
+
+      val refusals =
+        asIdentity("team-a") {
+          (1..10_000).mapNotNull {
+            runCatching { service.connectAgentWithTransportFilterDisabled(EMPTY_INSTANCE) }.exceptionOrNull()
+          }
+        }
+
+      contextManager.agentContextSize shouldBe 100
+      refusals.size shouldBe 9_900
+      refusals.map { (it as? StatusException)?.status?.code }.toSet() shouldBe setOf(Status.Code.RESOURCE_EXHAUSTED)
+    }
+
+    "maxAgentsPerIdentity should limit each identity separately, and free a slot when an agent goes" {
+      val contextManager = AgentContextManager(isTestMode = true)
+      val proxy = createMockProxy(transportFilterDisabled = true, agentContextManager = contextManager)
+      every { proxy.maxAgentsPerIdentity } returns 2
+      val service = ProxyServiceImpl(proxy)
+
+      suspend fun connectAs(identity: String) =
+        asIdentity(identity) { runCatching { service.connectAgentWithTransportFilterDisabled(EMPTY_INSTANCE) } }
+
+      val teamA = listOf(connectAs("team-a"), connectAs("team-a"))
+      connectAs("team-a").isFailure.shouldBeTrue()
+      // Another identity isn't held up by team-a's agents.
+      connectAs("team-b").isSuccess.shouldBeTrue()
+
+      contextManager.removeFromContextManager(teamA.first().getOrThrow().agentId, "test disconnect")
+
+      connectAs("team-a").isSuccess.shouldBeTrue()
+      contextManager.agentContextSize shouldBe 3
+    }
+
+    "maxAgentsPerIdentity of 0 should not limit connects" {
+      val contextManager = AgentContextManager(isTestMode = true)
+      val proxy = createMockProxy(transportFilterDisabled = true, agentContextManager = contextManager)
+      every { proxy.maxAgentsPerIdentity } returns 0
+      val service = ProxyServiceImpl(proxy)
+
+      asIdentity("team-a") { repeat(500) { service.connectAgentWithTransportFilterDisabled(EMPTY_INSTANCE) } }
+
+      contextManager.agentContextSize shouldBe 500
+    }
+
+    // With agent auth off every agent has the empty identity, so the limit is a total.
+    "maxAgentsPerIdentity should count every agent together when agent auth is off" {
+      val contextManager = AgentContextManager(isTestMode = true)
+      val proxy = createMockProxy(transportFilterDisabled = true, agentContextManager = contextManager)
+      every { proxy.maxAgentsPerIdentity } returns 3
+      val service = ProxyServiceImpl(proxy)
+
+      val outcomes = (1..5).map { runCatching { service.connectAgentWithTransportFilterDisabled(EMPTY_INSTANCE) } }
+
+      outcomes.count { it.isSuccess } shouldBe 3
+      contextManager.agentContextSize shouldBe 3
     }
 
     "registerPath should reject an agentId whose context is bound to a different identity" {
@@ -3068,6 +3138,66 @@ class ProxyServiceImplTest : StringSpec() {
       exception.status.code shouldBe Status.PERMISSION_DENIED.code
       // With the transport filter disabled, a closing stream removes the agent it named.
       verify(exactly = 0) { proxy.removeAgentContext(any(), any()) }
+      verify(exactly = 0) { proxy.removeAgentContextIfCurrent(any(), any()) }
+    }
+
+    // The identity was checked on one lookup and the stream read from a second, so a caller that named an agentId
+    // before it was assigned passed the check while it was free, and then streamed the context another identity
+    // connected with under it: that agent's scrape requests, forwarded Authorization header included (November #14).
+    "readRequestsFromProxy should not stream a context that appears after its lookup found none" {
+      val proxy = createMockProxy(transportFilterDisabled = true)
+      val victim = mockk<AgentContext>(relaxed = true)
+      val victimRequest = mockk<ScrapeRequest>(relaxed = true)
+      val queued = mockk<ScrapeRequestWrapper>(relaxed = true)
+      every { victim.agentId } returns "7"
+      every { victim.authIdentityName } returns "team-b"
+      every { victim.isValid() } returnsMany [true, false]
+      every { queued.scrapeRequest } returns victimRequest
+      coEvery { victim.readScrapeRequest() } returns queued andThen null
+      every { proxy.agentContextManager.getAgentContext("7") } returnsMany listOf(null, victim)
+
+      val emitted: MutableList<ScrapeRequest> = []
+      val failure =
+        asIdentity("team-a") {
+          runCatching {
+            ProxyServiceImpl(proxy).readRequestsFromProxy(agentInfo { agentId = "7" }).collect { emitted += it }
+          }
+        }.exceptionOrNull()
+
+      emitted.shouldBeEmpty()
+      (failure as? StatusException)?.status?.code shouldBe Status.Code.NOT_FOUND
+    }
+
+    // When the second lookup found nothing as well, the stream threw NOT_FOUND, and its finally then removed whatever
+    // context had been added under that agentId in the meantime, though it belonged to another identity: the
+    // victim's paths dropped and its scrapes failed (November #14).
+    "readRequestsFromProxy should not remove a context added after its lookup found none" {
+      val contextManager = spyk(AgentContextManager(isTestMode = true))
+      val proxy = createMockProxy(transportFilterDisabled = true, agentContextManager = contextManager)
+      // The mocked proxy removes for real, so a stream's finally removes what it names.
+      every { proxy.removeAgentContext(any(), any()) } answers {
+        contextManager.removeFromContextManager(firstArg(), secondArg())
+      }
+      every { proxy.removeAgentContextIfCurrent(any(), any()) } answers {
+        contextManager.removeFromContextManagerIfCurrent(firstArg(), secondArg())
+      }
+      val victim = AgentContext("victim-host", authIdentityName = "team-b")
+      // The victim connects just after the lookup finds nothing, and before the stream that named it ends.
+      every { contextManager.getAgentContext(victim.agentId) } answers {
+        contextManager.addAgentContext(victim)
+        null
+      } andThen null
+
+      val failure =
+        asIdentity("team-a") {
+          runCatching {
+            ProxyServiceImpl(proxy).readRequestsFromProxy(agentInfo { agentId = victim.agentId }).collect {}
+          }
+        }.exceptionOrNull()
+
+      (failure as? StatusException)?.status?.code shouldBe Status.Code.NOT_FOUND
+      contextManager.agentContextEntries.map { it.value } shouldBe [victim]
+      victim.isValid().shouldBeTrue()
     }
 
     "sendHeartBeat should reject an agentId whose context is bound to a different identity" {

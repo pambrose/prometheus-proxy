@@ -13,11 +13,15 @@ on both proxy and agent:
 --8<-- "AdvancedExamples.txt:nginx-cli"
 ```
 
-!!! warning "Delayed disconnect detection"
+!!! warning "Disconnect detection"
 
-    With `transportFilterDisabled`, agent disconnections are not immediately detected.
-    Agent contexts on the proxy are removed after the inactivity timeout
+    With `transportFilterDisabled`, the proxy can't see a connection close, only the agent's request
+    stream end. An agent that disconnects ends that stream, and is removed at once. One that dies before
+    opening its stream, or whose connection stays half-open, is removed after the inactivity timeout
     (default: 60 seconds, controlled by `proxy.internal.maxAgentInactivitySecs`).
+
+In this mode the proxy also limits the agents connected as one auth identity, which is every agent when
+agent auth is off; see [Transport Filter](configuration/proxy.md#transport-filter).
 
 Example Nginx and proxy configuration files are available in the repository:
 
