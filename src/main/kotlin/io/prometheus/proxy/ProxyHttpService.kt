@@ -52,7 +52,8 @@ internal class ProxyHttpService(
   val httpPort: Int,
   isTestMode: Boolean,
 ) : GenericIdleService() {
-  // Internal so a test can check the value the server is given (October #45).
+  // Internal so a test can check the value the server is given (October #45). ProxyOptions refuses 0 and any other
+  // negative value, which would close every connection unanswered (November #1).
   internal val idleTimeout =
     with(proxy.proxyConfigVals.http) {
       (if (idleTimeoutSecs == -1) DEFAULT_IDLE_TIMEOUT_SECS else idleTimeoutSecs).seconds
@@ -94,6 +95,7 @@ internal class ProxyHttpService(
     private val logger = logger {}
 
     // Fallback Ktor server idle timeout (seconds) used when http.idleTimeoutSecs is the -1 sentinel (finding 28).
-    private const val DEFAULT_IDLE_TIMEOUT_SECS = 45
+    // Internal so ProxyOptions can log it as the default.
+    internal const val DEFAULT_IDLE_TIMEOUT_SECS = 45
   }
 }

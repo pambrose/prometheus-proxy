@@ -9,14 +9,15 @@ _Not yet released_
 Fixes from the November 2026 code review. For applications that embed the agent from Maven Central, the library jar
 stops replacing the host's logging configuration, the Java example compiles, Maven builds get the patched Jackson and
 TLS natives, and a setting the agent rejects throws a `ConfigLoadException` with credentials redacted. The proxy no
-longer lets one agent hold memory with chunked transfers that never finish or with huge target URLs, flood its log
-from service discovery, or forge lines in its log, and a dashboard client can no longer slow its scrapes. Behind
-nginx, an agent can no longer read or disconnect another identity's agent as it connects, or add agents without
-limit. Zipkin tracing can be turned on, and the Docker quick start connects. A standalone proxy or agent with a bad
-setting now exits with one redacted line instead of a stack trace. Read **Before you upgrade**: for embedders, the
-logging configuration and the exception a bad setting throws have changed; for everyone, the proxy now cuts a path's
-target URL to 2048 characters and refuses a path with whitespace, a control character, `?`, or `#`; and behind nginx,
-it allows at most 10,000 agents connected with one identity, which is every agent when agent auth is off.
+longer lets one agent hold memory with chunked transfers that never finish or with huge target URLs, flood its log from
+service discovery, or forge lines in its log, and a dashboard client can no longer slow its scrapes. Behind nginx, an
+agent can no longer read or disconnect another identity's agent as it connects, or add agents without limit. Zipkin
+tracing can be turned on, and the Docker quick start connects. A standalone proxy or agent with a bad setting now exits
+with one redacted line instead of a stack trace. Read **Before you upgrade**: for embedders, the logging configuration
+and the exception a bad setting throws have changed; for everyone, the proxy now cuts a path's target URL to 2048
+characters, refuses a path with whitespace, a control character, `?`, or `#`, and won't start with a scrape-port idle
+timeout of `0` or a service discovery target that has a query or fragment; and behind nginx, it allows at most 10,000
+agents connected with one identity, which is every agent when agent auth is off.
 
 ### Before you upgrade
 
@@ -55,6 +56,14 @@ it allows at most 10,000 agents connected with one identity, which is every agen
   half-open, and on each retry after its registration is refused, until the extra one is evicted. If your fleet
   could come near the limit, raise it, or set it to `0` for none, before you upgrade. With the transport filter on,
   the default, nothing changes.
+- **`proxy.http.idleTimeoutSecs` must be `-1` or positive.** With `0`, or a negative value other than `-1`, the
+  proxy's scrape port closed every connection without answering, so every scrape failed while the proxy looked
+  healthy. Such a value now fails the proxy's startup with `Invalid configuration:`. `0` never turned the timeout off:
+  use `-1` for the default, 45 seconds, or a number of seconds.
+- **A service discovery target with a query or fragment fails startup.** With service discovery on, a
+  `proxy.service.discovery.targetPrefix` such as `proxy:8080?x` or `proxy:8080#f` was accepted and given to
+  Prometheus as the target, which built broken scrape URLs from it. It now fails the proxy's startup, as a URL with a
+  query or fragment already did; remove the `?` or `#` and what follows it.
 
 ### Security
 
@@ -167,6 +176,8 @@ it allows at most 10,000 agents connected with one identity, which is every agen
   before opening its request stream, or whose connection stays half-open. The Proxy Configuration page documents
   `proxy.internal.maxAgentsPerIdentity`, Troubleshooting covers a connect it refuses, and the Security page describes
   both fixes for running behind nginx.
+- The website's Proxy Configuration page explains `proxy.http.idleTimeoutSecs`, and its Service Discovery page says
+  which target values fail startup.
 
 ### Build and tooling
 
@@ -203,6 +214,9 @@ it allows at most 10,000 agents connected with one identity, which is every agen
   scrape requests nor disconnect it, which failed before the fix; that 10,000 connects with one identity leave at
   most the limit's agents; and that a refused agent keeps retrying until it gets in. The TLA+ model of the proxy's
   registry covers the request stream, and reports the old one's flaw when it's restored.
+- Tests check that the proxy refuses to start with an idle timeout of `0` or `-2`, or a service discovery target with
+  a query or fragment, naming the setting, and accepts an idle timeout of `-1` or `90`. Each refusal failed before
+  its fix.
 
 ---
 

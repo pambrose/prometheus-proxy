@@ -84,8 +84,8 @@ proxy.service.discovery.targetPrefix = "proxy.example.com:8080"
 It can also be an `http` or `https` URL, such as `https://proxy.example.com/prometheus/`.
 Prometheus doesn't accept a URL as a target, so the proxy splits it: the host and port become
 the target, the scheme becomes each target's `__scheme__` label, and any path goes in front of
-`__metrics_path__`. A value that is neither fails the proxy's startup when service discovery is
-enabled.
+`__metrics_path__`. A value that is neither, or that has user info, a query, or a fragment, fails
+the proxy's startup when service discovery is enabled.
 
 ## Labels
 

@@ -64,6 +64,10 @@ internal data class SdTarget(
       require(!uri.host.isNullOrEmpty() && uri.rawPath.isNullOrEmpty() && uri.rawUserInfo == null) {
         "sdTargetPrefix '$prefix' must be host:port, or an http or https URL"
       }
+      // The target is served as given, so a query or fragment, even an empty one, reached Prometheus (November #5).
+      require(uri.rawQuery == null && uri.rawFragment == null) {
+        "sdTargetPrefix '$prefix' can't have a query or a fragment"
+      }
       return SdTarget(prefix, null, "")
     }
 

@@ -29,6 +29,9 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldStartWith
+import io.prometheus.common.BaseOptions.Companion.failOnInvalidConfig
+import io.prometheus.common.ConfigLoadException
 import io.prometheus.common.TestPorts.PROMETHEUS_PORT
 import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
 import io.prometheus.common.TestPorts.PROXY_DASHBOARD_PORT
@@ -411,6 +414,18 @@ class ProxyOptionsTest : StringSpec() {
       }
     }
 
+    // A host:port with a query or fragment passed startup and was served as the target verbatim (November #5). Set in
+    // the config, it now fails a standalone proxy's startup as the values above do.
+    "a configured sdTargetPrefix with a query or fragment should fail startup when service discovery is on" {
+      listOf("localhost:8080?x", "localhost:8080#f").forEach { prefix ->
+        shouldThrow<ConfigLoadException> {
+          failOnInvalidConfig(embedded = true) {
+            proxyOptionsFromConfig("proxy.service.discovery.targetPrefix = \"$prefix\"", extraArgs = ["--sd_enabled"])
+          }
+        }.message shouldStartWith "Invalid configuration: sdTargetPrefix '$prefix'"
+      }
+    }
+
     "an empty sdPath should be accepted while service discovery stays disabled" {
       // The guard is gated on sdEnabled, so a blank path is harmless until the endpoint is turned on.
       val options = proxyOptionsFromConfig("""proxy.service.discovery.path = "" """)
@@ -706,6 +721,29 @@ class ProxyOptionsTest : StringSpec() {
     "a blank proxy.http.host should be rejected" {
       val exception = shouldThrow<IllegalArgumentException> { proxyOptions(["-Dproxy.http.host="]) }
       exception.message shouldContain "http.host"
+    }
+
+    // CIO's response writer waits idleTimeoutSecs for each response, the first as soon as a connection opens, so with 0
+    // or a negative value it closed every scrape connection unanswered while the proxy looked healthy. Only -1, for the
+    // 45s default, and a positive value work (November #1).
+    "an http.idleTimeoutSecs of 0, or a negative value other than -1, should be rejected" {
+      listOf(0, -2).forEach { secs ->
+        shouldThrow<IllegalArgumentException> { proxyOptions(["-Dproxy.http.idleTimeoutSecs=$secs"]) }
+          .message shouldContain "http.idleTimeoutSecs"
+      }
+    }
+
+    "an http.idleTimeoutSecs of -1 or a positive value should be accepted" {
+      listOf(-1, 90).forEach { secs ->
+        proxyOptions(["-Dproxy.http.idleTimeoutSecs=$secs"]).configVals.proxy.http.idleTimeoutSecs shouldBe secs
+      }
+    }
+
+    // Config-only, and failOnInvalidConfig is how a standalone proxy reports it: one Invalid configuration line.
+    "an http.idleTimeoutSecs of 0 in the config should fail startup, naming the setting" {
+      shouldThrow<ConfigLoadException> {
+        failOnInvalidConfig(embedded = true) { proxyOptionsFromConfig("proxy.http.idleTimeoutSecs = 0") }
+      }.message shouldStartWith "Invalid configuration: http.idleTimeoutSecs"
     }
 
     // ==================== Parse-only Options ====================
