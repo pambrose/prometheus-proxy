@@ -39,6 +39,14 @@ abstract class AbstractHarnessTests(
       HarnessTests.proxyCallTest(argsProvider())
     }
 
+    "should chunk a scrape larger than the chunk size and deliver it intact" {
+      HarnessTests.chunkedScrapeTest(
+        argsProvider().agent,
+        argsProvider().proxyPort,
+        simpleClassName,
+      )
+    }
+
     "should return not found for missing path" {
       BasicHarnessTests.missingPathTest(
         argsProvider().proxyPort,

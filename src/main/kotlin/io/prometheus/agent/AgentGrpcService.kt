@@ -285,7 +285,12 @@ internal class AgentGrpcService(
         channel(
           hostName = endpoint.host,
           port = endpoint.port,
-          enableRetry = true,
+          // Retry, which with no retry policy gives only transparent retries, makes gRPC buffer each message a call
+          // sends until the call commits. A client stream commits once that buffer passes its per-RPC limit, counted
+          // from the message sizes the transport reports, and the in-process transport reports none, so in-process
+          // the agent's result streams kept every message they sent for the whole connection. In-process has no
+          // network for a transparent retry to help with, so retry is on only for a real transport (November #43).
+          enableRetry = inProcessServerName.isEmpty(),
           tlsContext = tlsContext,
           overrideAuthority = agent.options.overrideAuthority,
           inProcessServerName = inProcessServerName,

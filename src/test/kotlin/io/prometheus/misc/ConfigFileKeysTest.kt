@@ -82,6 +82,21 @@ class ConfigFileKeysTest : StringSpec() {
   // The settings [text] gives that the schema doesn't declare.
   private fun undeclaredIn(text: String) = undeclared("", ConfigFactory.parseString(text).root(), schema)
 
+  // The test sources, but this spec, whose own check holds a -D key that doesn't exist.
+  private val testSources by lazy {
+    File(TEST_SOURCES)
+      .walkTopDown()
+      .filter { it.isFile && it.extension == "kt" && it.name != SELF }
+      .sortedBy { it.invariantSeparatorsPath }
+      .toList()
+  }
+
+  // The keys of the proxy and agent -D settings [source] passes in a string literal, such as
+  // "-Dagent.proxy.port=$port". A key built at run time, as "-Dproxy.internal.$key=-1" and
+  // "-D$side.internal.zipkin.enabled=true" are, isn't seen: the pattern takes only a key spelled out in full up to its
+  // '='.
+  private fun dSettingKeys(source: String) = D_SETTING.findAll(source).map { it.groupValues[1] }.toSet()
+
   init {
     "every setting in a config the repo ships or its tests load should be declared in config/config.conf" {
       configFiles.map { it.invariantSeparatorsPath } shouldContain HARNESS_CONFIG
@@ -111,6 +126,35 @@ class ConfigFileKeysTest : StringSpec() {
       undeclaredIn("""agent.filters = [{ path = a, metricNameAllow = [], metricNameDeny = ["go_.*"] }]""") shouldBe
         emptyList()
     }
+
+    // A -D setting is merged into the config as a file's is, so a misnamed key does nothing just the same, and the
+    // check above, which reads files, can't see one. TestUtils.startAgent passed -Dagent.chunkContentSizeBytes, which
+    // AgentOptions derives from agent.chunkContentSizeKbs, so the seven harness specs that meant to chunk small ran at
+    // the default 32 KB (November #41).
+    "every -D setting a test passes should be declared in config/config.conf" {
+      val keysByFile = testSources.associate { it.invariantSeparatorsPath to dSettingKeys(it.readText()) }
+
+      // The scan finds the keys TestUtils passes, so a pattern that matched nothing would fail here, not pass.
+      keysByFile[TEST_UTILS].orEmpty() shouldContain "agent.proxy.port"
+
+      keysByFile
+        .mapValues { (_, keys) -> keys.filter { key -> undeclaredIn("$key = x").isNotEmpty() } }
+        .filterValues { it.isNotEmpty() } shouldBe emptyMap()
+    }
+
+    "the -D scan should find a key spelled out in a string literal, and skip one built at run time or in a comment" {
+      val source =
+        listOf(
+          "add(\"-Dagent.chunkContentSizeBytes=\$size\")",
+          "proxyOptions([\"-Dproxy.internal.\$key=-1\"])",
+          "add(\"-D\$side.internal.zipkin.enabled=true\")",
+          "// passes -Dagent.admin.port=1",
+        ).joinToString("\n")
+
+      dSettingKeys(source) shouldBe setOf("agent.chunkContentSizeBytes")
+      undeclaredIn("agent.chunkContentSizeBytes = x") shouldBe listOf("agent.chunkContentSizeBytes")
+      undeclaredIn("agent.chunkContentSizeKbs = x") shouldBe emptyList()
+    }
   }
 
   companion object {
@@ -121,6 +165,14 @@ class ConfigFileKeysTest : StringSpec() {
     private const val DISCOVERY_PATHS_KEY = "paths"
     private val CONFIG_DIRS =
       listOf("config/test-configs", "examples", "testing", "etc/compose", "src/test/resources/containers")
+
+    private const val TEST_SOURCES = "src/test/kotlin"
+    private const val TEST_UTILS = "src/test/kotlin/io/prometheus/harness/support/TestUtils.kt"
+    private const val SELF = "ConfigFileKeysTest.kt"
+
+    // A proxy or agent -D setting in a string literal: the quote, then the key, made only of the characters a key
+    // spelled out in full has, then its '='.
+    private val D_SETTING = Regex("\"-D((?:proxy|agent)\\.[A-Za-z0-9_.]+)=")
 
     // Top-level keys that hold no setting: simple.conf's proxyMetricsHost only feeds a substitution in a pathConfigs
     // url, and neither the proxy nor the agent reads it.

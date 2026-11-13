@@ -157,6 +157,10 @@ agents connected with one identity, which is every agent when agent auth is off.
   entry such as `proxy-a:5005x`, or a blank `agent.proxy.hostname`, the agent failed at startup even when
   `PROXY_HOSTNAME`, which the Helm chart always sets, named the proxy to use. The config's value is now read only when
   it's the one used.
+- **An agent connected in-process no longer holds on to everything it sends.** An agent started with an in-process
+  server name, as the tests do, kept every scrape result it sent the proxy in memory until it disconnected, because of
+  how gRPC buffers messages for retrying on a transport that doesn't report their sizes. In-process connections now skip
+  that retry buffer; network connections are unchanged.
 
 ### Documentation
 
@@ -237,6 +241,10 @@ agents connected with one identity, which is every agent when agent auth is off.
 - The test harness's config set two Zipkin keys that don't exist, so they did nothing; it sets the real ones now,
   with tracing still off. A new test checks that every setting in the example and test configs is one the reference
   config declares, and another that the metrics guide's latency buckets are the ones the code uses.
+- The integration tests that set a small chunk size for scrape results passed it under a key that doesn't exist, so
+  they ran at the default 32 KB and split only their largest scrapes. They set 1 KB now, the smallest the setting
+  takes, and a new test in each checks that a scrape several chunks long is split and reassembled intact. Another
+  test checks that every setting the tests pass on the command line is one the reference config declares.
 
 ---
 
