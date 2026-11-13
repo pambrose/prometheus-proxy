@@ -19,6 +19,7 @@ package io.prometheus.harness
 
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
@@ -111,9 +112,48 @@ class InProcessTransportFilterDisabledTest : StringSpec() {
         stub.stop(0, 0)
       }
     }
+
+    // Past proxy.internal.maxAgentsPerIdentity a connect is refused with RESOURCE_EXHAUSTED (November #17). The agent
+    // has to take that as a failed connect and retry after its reconnect pause, rather than stop, so it gets in once
+    // a slot frees. With agent auth off every agent has the same, empty, identity, so the limit is a total.
+    "an agent refused by maxAgentsPerIdentity should keep retrying, and connect once another agent leaves" {
+      PrometheusRegistry.defaultRegistry.clear()
+
+      val serverName = "tf-disabled-limit-${System.nanoTime()}"
+      val proxy =
+        startProxy(
+          serverName = serverName,
+          proxyPort = LIMIT_HTTP_PORT,
+          args = ["--tf_disabled", "-Dproxy.internal.maxAgentsPerIdentity=1"],
+        )
+      val agentArgs = ["--tf_disabled", "-Dagent.internal.reconnectPauseSecs=1"]
+      try {
+        val first = startAgent(serverName = serverName, args = agentArgs)
+        first.awaitInitialConnection(10.seconds).shouldBeTrue()
+        val second = startAgent(serverName = serverName, args = agentArgs)
+        try {
+          // Refused on each attempt, about one a second, while the first agent holds the only slot.
+          second.awaitInitialConnection(3.seconds).shouldBeFalse()
+          second.isRunning.shouldBeTrue()
+          proxy.agentContextManager.agentContextSize shouldBe 1
+
+          first.stopSync(15.seconds)
+
+          second.awaitInitialConnection(15.seconds).shouldBeTrue()
+          eventually(10.seconds) {
+            proxy.agentContextManager.agentContextEntries.map { it.key } shouldBe [second.agentId]
+          }
+        } finally {
+          listOf(first, second).filter { it.isRunning }.forEach { runCatching { it.stopSync(5.seconds) } }
+        }
+      } finally {
+        runCatching { proxy.stopSync(10.seconds) }
+      }
+    }
   }
 
   companion object {
     private const val HTTP_PORT = TestPorts.TF_DISABLED_HTTP_PORT
+    private const val LIMIT_HTTP_PORT = TestPorts.TF_DISABLED_LIMIT_HTTP_PORT
   }
 }

@@ -101,11 +101,18 @@ internal class ProxyServiceImpl(
     // to the auth identity this call presented instead (see identityMismatchReason). Empty when auth is off.
     val identityName = AgentAuthManager.AGENT_IDENTITY_KEY.get()?.name.orEmpty()
     val agentContext = AgentContext(UNKNOWN_ADDRESS, identityName)
-    return agentInfo {
-      agentId = agentContext.agentId
-    }.also {
-      proxy.agentContextManager.addAgentContext(agentContext)
+    // Every call creates a context, which lasts until its stream ends or it is evicted, so the contexts one identity
+    // may hold are limited (November #17). A connect past the limit is refused rather than evicting another context:
+    // after a proxy restart a whole fleet reconnects at once, and evicting would drop agents that just connected. The
+    // agent retries a refused connect after its reconnect pause.
+    val maxAgents = proxy.maxAgentsPerIdentity
+    if (!proxy.agentContextManager.addAgentContextWithinLimit(agentContext, maxAgents)) {
+      val msg =
+        "The proxy already has $maxAgents agents connected with this agent's identity, its " +
+          "proxy.internal.maxAgentsPerIdentity limit; retry once one disconnects"
+      throw StatusException(Status.RESOURCE_EXHAUSTED.withDescription(msg))
     }
+    return agentInfo { agentId = agentContext.agentId }
   }
 
   /**
@@ -385,32 +392,40 @@ internal class ProxyServiceImpl(
 
   override fun readRequestsFromProxy(request: AgentInfo): Flow<ScrapeRequest> =
     flow {
-      val agentId = request.agentId
-      readRequestsDenial(agentId)?.also { reason ->
-        // Thrown before the try/finally so the mismatched agentId never reaches the cleanup branch —
-        // a spoofed id must not be able to evict another agent's context.
-        throw StatusException(Status.PERMISSION_DENIED.withDescription(reason))
-      }
+      // Looked up, and checked, before the try/finally, so a call that is refused never reaches the cleanup, and the
+      // context the cleanup removes is the one checked and streamed.
+      val agentContext = readableAgentContext(request.agentId)
       try {
-        val agentContext = proxy.agentContextManager.getAgentContext(agentId)
-          ?: throw StatusException(
-            Status.NOT_FOUND.withDescription("No AgentContext found for agentId: ${shownAgentId(agentId)}"),
-          )
         emitScrapeRequests(agentContext)
       } finally {
         // When transportFilterDisabled is true, there is no ProxyServerTransportFilter to
         // detect agent disconnect and clean up. Handle cleanup here on stream termination.
-        if (proxy.options.transportFilterDisabled) {
-          proxy.removeAgentContext(agentId, "Stream terminated (transport filter disabled)")
-        }
+        if (proxy.options.transportFilterDisabled)
+          proxy.removeAgentContextIfCurrent(agentContext, "Stream terminated (transport filter disabled)")
       }
     }
 
-  // Why this connection may not read [agentId]'s scrape requests: the transport belongs to another agentId, or the
-  // caller's auth identity isn't the one the agent's context is bound to. Null when it may.
-  private fun readRequestsDenial(agentId: String): String? =
-    connectionMismatchReason(agentId, "readRequestsFromProxy")
-      ?: proxy.agentContextManager.getAgentContext(agentId)?.let { identityMismatchReason(it, "readRequestsFromProxy") }
+  /**
+   * The context whose scrape requests this connection may read: [agentId]'s, from one lookup.
+   *
+   * Throws PERMISSION_DENIED when the transport belongs to another agentId, or the caller's auth identity isn't the one
+   * the context is bound to, and NOT_FOUND when there is no context. The identity was checked on one lookup and the
+   * stream read from a second, so a caller that named an agentId about to be assigned passed the check while it was
+   * free, and then streamed the context another identity connected with under it, or, when the second lookup also
+   * found nothing, removed that context as its stream ended (November #14).
+   */
+  private fun readableAgentContext(agentId: String): AgentContext {
+    val agentContext = proxy.agentContextManager.getAgentContext(agentId)
+    val denial =
+      connectionMismatchReason(agentId, "readRequestsFromProxy")
+        ?: agentContext?.let { identityMismatchReason(it, "readRequestsFromProxy") }
+    if (denial != null)
+      throw StatusException(Status.PERMISSION_DENIED.withDescription(denial))
+    return agentContext
+      ?: throw StatusException(
+        Status.NOT_FOUND.withDescription("No AgentContext found for agentId: ${shownAgentId(agentId)}"),
+      )
+  }
 
   // Delivers [agentContext]'s queued scrape requests until the proxy stops or the context is invalidated, skipping
   // the ones no longer awaited.

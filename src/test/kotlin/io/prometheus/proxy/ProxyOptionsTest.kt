@@ -691,6 +691,17 @@ class ProxyOptionsTest : StringSpec() {
       exception.message shouldContain "maxTargetUrlLength"
     }
 
+    // November #17: with the transport filter disabled every connect creates an agent context, with no limit. Every
+    // agent shares one identity with agent auth off, so the default leaves room for a large fleet behind one nginx.
+    "the agents-per-identity limit should default to 10000, accept 0 for unlimited, and reject a negative value" {
+      proxyOptions([]).configVals.proxy.internal.maxAgentsPerIdentity shouldBe 10_000
+      val unlimited = proxyOptions(["-Dproxy.internal.maxAgentsPerIdentity=0"]).configVals.proxy.internal
+      unlimited.maxAgentsPerIdentity shouldBe 0
+      val exception =
+        shouldThrow<IllegalArgumentException> { proxyOptions(["-Dproxy.internal.maxAgentsPerIdentity=-1"]) }
+      exception.message shouldContain "maxAgentsPerIdentity"
+    }
+
     // A blank bind address would fail only when the scrape server starts, with an opaque Ktor error.
     "a blank proxy.http.host should be rejected" {
       val exception = shouldThrow<IllegalArgumentException> { proxyOptions(["-Dproxy.http.host="]) }

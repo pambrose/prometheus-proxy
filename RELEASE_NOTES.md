@@ -10,11 +10,13 @@ Fixes from the November 2026 code review. For applications that embed the agent 
 stops replacing the host's logging configuration, the Java example compiles, Maven builds get the patched Jackson and
 TLS natives, and a setting the agent rejects throws a `ConfigLoadException` with credentials redacted. The proxy no
 longer lets one agent hold memory with chunked transfers that never finish or with huge target URLs, flood its log
-from service discovery, or forge lines in its log, and a dashboard client can no longer slow its scrapes; Zipkin
-tracing can be turned on; and the Docker quick start connects. A standalone proxy or agent with a bad setting now
-exits with one redacted line instead of a stack trace. Read **Before you upgrade**: for embedders, the logging
-configuration and the exception a bad setting throws have changed, and for everyone, the proxy now cuts a path's
-target URL to 2048 characters and refuses a path with whitespace, a control character, `?`, or `#`.
+from service discovery, or forge lines in its log, and a dashboard client can no longer slow its scrapes. Behind
+nginx, an agent can no longer read or disconnect another identity's agent as it connects, or add agents without
+limit. Zipkin tracing can be turned on, and the Docker quick start connects. A standalone proxy or agent with a bad
+setting now exits with one redacted line instead of a stack trace. Read **Before you upgrade**: for embedders, the
+logging configuration and the exception a bad setting throws have changed; for everyone, the proxy now cuts a path's
+target URL to 2048 characters and refuses a path with whitespace, a control character, `?`, or `#`; and behind nginx,
+it allows at most 10,000 agents connected with one identity, which is every agent when agent auth is off.
 
 ### Before you upgrade
 
@@ -45,6 +47,14 @@ target URL to 2048 characters and refuses a path with whitespace, a control char
   `pathConfigs` entry with one at startup, naming it: a standalone agent exits with `Invalid configuration:`, and an
   embedded one throws `ConfigLoadException`. A path that worked before isn't affected; rename one that never could
   be scraped. Every other character is still allowed, including `.`, `-`, `~`, `:`, `%`, and non-ASCII letters.
+- **Behind nginx, the proxy allows at most 10,000 agents connected with one identity.** With
+  `transportFilterDisabled`, the new `proxy.internal.maxAgentsPerIdentity` (10,000) refuses a connect once that many
+  agents are connected with the same auth identity, and the refused agent retries every few seconds until one
+  leaves. With agent auth off, or every agent on the legacy `proxy.agentToken`, all agents share one identity, so the
+  limit counts your whole fleet. An agent can count twice for a while: when it reconnects while its old connection is
+  half-open, and on each retry after its registration is refused, until the extra one is evicted. If your fleet
+  could come near the limit, raise it, or set it to `0` for none, before you upgrade. With the transport filter on,
+  the default, nothing changes.
 
 ### Security
 
@@ -83,6 +93,18 @@ target URL to 2048 characters and refuses a path with whitespace, a control char
 - **An unknown scrape path is logged escaped.** A request for a path no agent serves is logged with its path cut
   and its control characters escaped, so a client of the scrape port can't write terminal escapes or very long
   text into the proxy's log.
+- **Behind nginx, an agent can no longer read or disconnect another identity's agent as it connects.** With the
+  transport filter disabled, an agent could ask for the scrape requests of the next agent ID, before any agent had
+  it. If an agent of another identity then connected with that ID, the first agent could receive its scrape
+  requests, including any `Authorization` header Prometheus sent, or disconnect it, dropping its paths. The proxy
+  now checks, streams, and disconnects only the agent it found when the request arrived, and refuses a request for
+  an agent ID no agent has.
+- **Behind nginx, one caller can no longer add agents without limit.** Each connect added an agent, logged and shown
+  on the dashboard and allowed its own 20,000 paths, which lasted about a minute unless it went on to stream, so a
+  caller connecting in a loop could add as many as it liked. Each identity now has at most
+  `proxy.internal.maxAgentsPerIdentity` agents (see **Before you upgrade**). With agent auth off, or on the legacy
+  shared token, all agents share that limit, so give each agent its own `proxy.auth` identity to keep one from using
+  up another's.
 
 ### Bug Fixes
 
@@ -140,6 +162,11 @@ target URL to 2048 characters and refuses a path with whitespace, a control char
   its Security page says a config URL's credentials are redacted from the error a bad setting causes as well.
 - The website's Proxy Configuration page documents `proxy.internal.maxTargetUrlLength`, and its Agent Configuration,
   Glossary, Troubleshooting, and Security pages say which characters a path can't contain.
+- The notes on running behind nginx, on the website and in the README, said a disconnected agent stays listed until
+  the inactivity timeout. An agent that disconnects is removed at once; the timeout applies only to one that dies
+  before opening its request stream, or whose connection stays half-open. The Proxy Configuration page documents
+  `proxy.internal.maxAgentsPerIdentity`, Troubleshooting covers a connect it refuses, and the Security page describes
+  both fixes for running behind nginx.
 
 ### Build and tooling
 
@@ -172,6 +199,10 @@ target URL to 2048 characters and refuses a path with whitespace, a control char
   URL's credentials stay redacted when the cut falls inside them, that service-discovery requests log nothing about a
   path's labels, and that an agent name, label key, or path with a line break never reaches a log line unescaped.
   Each failed before its fix.
+- Tests check that, behind nginx, an agent that names another's ID before that agent connects can neither read its
+  scrape requests nor disconnect it, which failed before the fix; that 10,000 connects with one identity leave at
+  most the limit's agents; and that a refused agent keeps retrying until it gets in. The TLA+ model of the proxy's
+  registry covers the request stream, and reports the old one's flaw when it's restored.
 
 ---
 

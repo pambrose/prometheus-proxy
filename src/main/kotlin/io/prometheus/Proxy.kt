@@ -250,6 +250,10 @@ class Proxy(
   // How much of a path's target URL the proxy keeps; 0 means all. See ProxyPathManager.addPath.
   internal val maxTargetUrlLength: Int get() = proxyConfigVals.internal.maxTargetUrlLength
 
+  // How many agents may be connected as one auth identity with the transport filter disabled; 0 means no limit. See
+  // ProxyServiceImpl.connectAgentWithTransportFilterDisabled.
+  internal val maxAgentsPerIdentity: Int get() = proxyConfigVals.internal.maxAgentsPerIdentity
+
   // Whether agent-supplied job and instance labels are kept out of service discovery; see isReservedSdLabelKey.
   internal val reserveJobAndInstanceLabels: Boolean
     get() = proxyConfigVals.service.discovery.reserveJobAndInstanceLabels
@@ -444,6 +448,36 @@ class Proxy(
     // blocked on the pathMap monitor is released after the sweep but before invalidation, stranding
     // a path pointing at a dead context that nothing later removes (finding 7).
     val agentContext = agentContextManager.removeFromContextManager(agentId, reason)
+    releaseRemovedAgent(agentId, agentContext, reason)
+    return agentContext
+  }
+
+  /**
+   * Removes [agentContext] as [removeAgentContext] does, but only while it is still the context registered under its
+   * agentId, and returns whether it was.
+   *
+   * With the transport filter disabled, the agent's scrape-request stream removes the context it streamed as it ends.
+   * It removed by the agentId the caller named, so a stream that found no context under it could remove one added
+   * there afterward, which another identity had connected with (November #14). When another caller, such as the
+   * cleanup service, removed this context first, that caller swept its paths, transfers, and scrapes.
+   */
+  internal fun removeAgentContextIfCurrent(
+    agentContext: AgentContext,
+    reason: String,
+  ): Boolean =
+    agentContextManager.removeFromContextManagerIfCurrent(agentContext, reason).also { removed ->
+      if (removed)
+        releaseRemovedAgent(agentContext.agentId, agentContext, reason)
+    }
+
+  // The rest of a removal, once the context is out of the context manager and invalidated: sweep the agent's paths,
+  // report it gone, and reclaim its chunked transfers and fail its scrapes. [agentContext] is null when no context was
+  // registered under [agentId]; the sweeps still run, as they always have.
+  private fun releaseRemovedAgent(
+    agentId: String,
+    agentContext: AgentContext?,
+    reason: String,
+  ) {
     pathManager.removeFromPathManager(agentId, reason)
     // Emitted here rather than inside removeFromContextManager so the event's happens-before edge
     // covers BOTH managers. Emitting at removal time let a consumer wake between the two calls and
@@ -464,7 +498,6 @@ class Proxy(
         }
       }
     scrapeRequestManager.failAllScrapeRequests(agentId, "Agent disconnected: $reason", ProxyFailure.AGENT_DISCONNECTED)
-    return agentContext
   }
 
   /**

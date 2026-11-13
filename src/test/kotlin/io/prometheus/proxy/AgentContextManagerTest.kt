@@ -28,14 +28,17 @@ import io.kotest.matchers.longs.shouldBeLessThan
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.types.shouldBeSameInstanceAs
 import io.ktor.http.HttpStatusCode
+import io.mockk.every
 import io.mockk.mockk
 import io.prometheus.common.captureLogs
 import io.prometheus.grpc.chunkedScrapeResponse
 import io.prometheus.grpc.headerData
 import kotlinx.coroutines.async
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TestTimeSource
 
 class AgentContextManagerTest : StringSpec() {
   init {
@@ -240,6 +243,91 @@ class AgentContextManagerTest : StringSpec() {
       removed.shouldNotBeNull()
       removed.isNotValid() shouldBe true
       manager.agentContextSize shouldBe 0
+    }
+
+    // ==================== removeFromContextManagerIfCurrent Tests ====================
+
+    // A caller that acted on a context it looked up removes that context, never one registered under the same agentId
+    // since (November #14). Real agentIds are never reused, so the other context here is a mock with the same agentId.
+    "removeFromContextManagerIfCurrent should remove only the context it is given" {
+      val manager = AgentContextManager(isTestMode = true)
+      val registered = AgentContext("remote-addr").also { manager.addAgentContext(it) }
+      val other = mockk<AgentContext>(relaxed = true) { every { agentId } returns registered.agentId }
+
+      manager.removeFromContextManagerIfCurrent(other, "test").shouldBeFalse()
+      manager.getAgentContext(registered.agentId) shouldBeSameInstanceAs registered
+      registered.isValid().shouldBeTrue()
+
+      manager.removeFromContextManagerIfCurrent(registered, "test").shouldBeTrue()
+      manager.getAgentContext(registered.agentId).shouldBeNull()
+      registered.isNotValid().shouldBeTrue()
+      manager.removeFromContextManagerIfCurrent(registered, "test").shouldBeFalse()
+    }
+
+    // ==================== addAgentContextWithinLimit Tests ====================
+
+    // The slot is claimed before the context is added, so connects that race can't overshoot the limit (November #17).
+    "concurrent adds should never leave more than the limit of one identity's contexts" {
+      val manager = AgentContextManager(isTestMode = true)
+      val contexts = (1..2_000).map { AgentContext("remote-$it", authIdentityName = "team-a") }
+
+      val added =
+        contexts.parallelStream().map { manager.addAgentContextWithinLimit(it, 50) }.toList().count { it }
+
+      added shouldBe 50
+      manager.agentContextSize shouldBe 50
+    }
+
+    "a removed context should free its identity's slot, whichever way it is removed" {
+      val manager = AgentContextManager(isTestMode = true)
+      val first = AgentContext("remote-1", authIdentityName = "team-a")
+      val second = AgentContext("remote-2", authIdentityName = "team-a")
+      manager.addAgentContextWithinLimit(first, 2).shouldBeTrue()
+      manager.addAgentContextWithinLimit(second, 2).shouldBeTrue()
+      manager.addAgentContextWithinLimit(AgentContext("remote-3", authIdentityName = "team-a"), 2).shouldBeFalse()
+
+      manager.removeFromContextManager(first.agentId, "test")
+      manager.addAgentContextWithinLimit(AgentContext("remote-4", authIdentityName = "team-a"), 2).shouldBeTrue()
+      manager.removeFromContextManagerIfCurrent(second, "test")
+      manager.addAgentContextWithinLimit(AgentContext("remote-5", authIdentityName = "team-a"), 2).shouldBeTrue()
+
+      manager.agentContextSize shouldBe 2
+    }
+
+    // A client refused in a loop is refused on every call, so a WARN each time would flood the log.
+    "a refused connect should log a WARN at most once a minute for each identity" {
+      val clock = TestTimeSource()
+      val manager = AgentContextManager(isTestMode = true, clock = clock)
+
+      fun add(identity: String) = manager.addAgentContextWithinLimit(AgentContext("remote", identity), 1)
+
+      add("team-a").shouldBeTrue()
+      add("team-b").shouldBeTrue()
+
+      fun refusalLevels(block: () -> Unit) =
+        captureLogs<AgentContextManager>(Level.DEBUG) { block() }
+          .filter { "Refused a connect" in it.formattedMessage }
+          .map { it.level }
+
+      refusalLevels { repeat(3) { add("team-a").shouldBeFalse() } } shouldBe [Level.WARN, Level.DEBUG, Level.DEBUG]
+      // Another identity's first refusal is still reported.
+      refusalLevels { add("team-b").shouldBeFalse() } shouldBe [Level.WARN]
+      clock += 59.seconds
+      refusalLevels { add("team-a").shouldBeFalse() } shouldBe [Level.DEBUG]
+      clock += 1.seconds
+      refusalLevels { add("team-a").shouldBeFalse() } shouldBe [Level.WARN]
+    }
+
+    "an identity reaching 80% of its limit should log one WARN" {
+      val manager = AgentContextManager(isTestMode = true)
+
+      val warnings =
+        captureLogs<AgentContextManager>(Level.DEBUG) {
+          repeat(10) { manager.addAgentContextWithinLimit(AgentContext("remote-$it", "team-a"), 10) }
+        }.filter { it.level == Level.WARN }
+
+      val warning = warnings.map { it.formattedMessage }.single()
+      warning shouldContain "8 agents are connected as identity 'team-a', of the 10"
     }
 
     // ==================== ChunkedContext Map Tests ====================

@@ -117,6 +117,9 @@ object TestPorts {
   // InProcessTransportFilterDisabledTest
   const val TF_DISABLED_HTTP_PORT = 9562
 
+  // InProcessTransportFilterDisabledTest: the proxy whose maxAgentsPerIdentity refuses a second agent (November #17).
+  const val TF_DISABLED_LIMIT_HTTP_PORT = 11000
+
   // InProcessStaleAgentCleanupTest
   const val STALE_CLEANUP_OFF_HTTP_PORT = 9563
   const val STALE_CLEANUP_FORCED_HTTP_PORT = 9564

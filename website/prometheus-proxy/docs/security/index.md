@@ -171,7 +171,15 @@ Authenticated agents share one proxy, so the proxy keeps each agent to its own t
 - **Behind a reverse proxy, calls are bound to an identity.** With
   [`transportFilterDisabled`](../configuration/proxy.md#transport-filter) there is no connection to tie a
   call to, so the proxy records the auth identity an agent connected with and refuses a call naming that
-  agent under a different identity.
+  agent under a different identity. The stream an agent reads its scrape requests from checks, reads, and,
+  when it ends, removes the one agent it found when it opened, so a stream that names an agent ID before
+  that agent connects is refused, rather than later reading or removing the agent another identity
+  connects with under that ID.
+- **Behind a reverse proxy, each identity's agents are limited.** Every connect adds an agent, so the
+  proxy refuses a connect once `proxy.internal.maxAgentsPerIdentity` (10,000) agents are connected with
+  the same identity, rather than let one caller add agents without limit. Agents of other identities
+  are unaffected, but agents that share an identity share its limit, and with agent auth off that is
+  every agent.
 
 !!! warning "Identity binding is only as fine-grained as the identities"
 
