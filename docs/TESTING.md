@@ -200,7 +200,9 @@ no jar on the classpath carries a `logback.xml`, which would replace the host ap
   scrape-request backlog count, kept as `AgentGrpcService` and the scrape loop keep it, never goes negative and returns
   to zero once the connection closes -- including a queued request `close()` drains and a sender blocked on a full
   channel as it closes -- and no accepted scrape result is lost by the close
-- **AgentPathManagerTest** — Path registration/unregistration, path lookup, concurrent access
+- **AgentPathManagerTest** — Path registration/unregistration, path lookup, concurrent access; a discovered path's
+  repeating registration failure logs one WARN, compared by gRPC status code, so timeouts whose descriptions differ
+  only in the elapsed time log one, while a rejection for another reason is warned about again
 - **AgentPathManagerLincheckTest** — Lincheck, stress only (tagged `Lincheck`): static registration, unregistration, and
   discovery reconciles race over a real in-process gRPC connection; once they finish, the agent's local path map and
   the proxy's registrations for it agree exactly
@@ -225,8 +227,10 @@ no jar on the classpath carries a `logback.xml`, which would replace the host ap
 - **TrustAllX509TrustManagerTest** — TrustAllX509TrustManager (dev/test only, bypasses SSL validation)
 - **FileDiscoverySourceTest** (`discovery/`) — Discovery-file parsing: HOCON and JSON, empty or absent `paths`,
   rejection of missing files, malformed files and incomplete entries, and HOCON substitution resolution
-- **PathDiscoveryServiceTest** (`discovery/`) — A read failure skips reconcile so the last-known-good set is kept;
-  a successful read, including an empty one, reconciles the desired set
+- **PathDiscoveryServiceTest** (`discovery/`) — A failed read reconciles the last good read, so a reconnect registers
+  its paths again, and reconciles nothing before the first; a successful read, including an empty one, reconciles the
+  desired set; a repeating failure logs one WARN, compared by gRPC status code, or by class and message without one,
+  so timeouts whose descriptions differ only in the elapsed time log one, while a different read error is news
 - **MetricFilterTest** (`filter/`) — Allow/deny filtering: fully anchored regexes, deny winning over allow, whole
   families dropped or kept (HELP/TYPE/UNIT lines, histogram, summary and OpenMetrics series), line endings preserved
 
@@ -354,7 +358,8 @@ One support helper also lives here (not a test class itself):
 - **TestPortsTest** — every port in `TestPorts` is distinct, so no two specs can bind the same port, and below 32768,
   outside the ephemeral range the OS hands out to outgoing connections
 - **UtilsTest** — Utility functions: parseHostPort, sanitizeUrl, appendQueryParams, decodeParams, toJsonElement,
-  setLogLevel, exceptionDetails
+  setLogLevel, exceptionDetails; failureKey, which keys a failure by its gRPC status code, wrapped or not, and one
+  without a status by its class, and its message only when asked
 
 These support helpers also live here (not test classes themselves):
 
@@ -372,6 +377,9 @@ These support helpers also live here (not test classes themselves):
   optionally at a lower level, restoring the logger's appenders and level afterward
 - **MetricsMocks** — `mockProxyForMetrics()` / `mockAgentForMetrics()`, mocks that stub only what `ProxyMetrics`
   and `AgentMetrics` read when they are built and scraped, for the metrics specs and `misc/DashboardMetricNamesTest`
+- **DeadlineExceeded** — `deadlineExceeded(elapsed)`, a `DEADLINE_EXCEEDED` `StatusException` described as
+  grpc-java describes one, elapsed time included, for the specs that check a repeating failure is compared by its
+  status code rather than its message
 - **DaemonAwait** — `awaitOnDaemonThread { … }`, which runs a block on a daemon thread and suspends until it
   returns, so the spec's timeout can fail a CPU-bound call, such as a backtracking regex, that ignores cancellation
 - **Lincheck** — the Kotest tag every `*LincheckTest` carries, which the default test run excludes

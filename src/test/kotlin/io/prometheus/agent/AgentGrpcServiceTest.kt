@@ -59,6 +59,7 @@ import io.mockk.verify
 import io.prometheus.Agent
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
 import io.prometheus.common.ScrapeResults
+import io.prometheus.common.deadlineExceeded
 import io.prometheus.common.Utils.HostPort
 import io.prometheus.common.TestPorts.PROMETHEUS_PORT
 import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
@@ -495,13 +496,6 @@ class AgentGrpcServiceTest : StringSpec() {
     // and each logged a WARN with its stack trace (November #9). The full description is still logged.
     "DEADLINE_EXCEEDED connect failures whose descriptions differ only in the elapsed time should log one WARN" {
       withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
-        fun deadlineExceeded(elapsed: String) =
-          StatusException(
-            Status.DEADLINE_EXCEEDED.withDescription(
-              "CallOptions deadline exceeded after ${elapsed}s. Name resolution delay 0.000000000 seconds. " +
-                "[closed=[], open=[[connecting_and_lb_delay=30001748917ns, was_still_waiting]]]",
-            ),
-          )
         coEvery { mockStub.connectAgent(any(), any<Metadata>()) } throws
           deadlineExceeded("29.999954000") andThenThrows deadlineExceeded("29.999961000") andThenThrows
           StatusException(Status.UNAVAILABLE.withDescription("io exception"))

@@ -17,12 +17,14 @@
 package io.prometheus.agent
 
 import com.pambrose.common.util.runCatchingCancellable
+import com.pambrose.common.util.simpleClassName
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Agent
 import io.prometheus.agent.discovery.DiscoveredPath
 import io.prometheus.agent.filter.MetricFilter
 import io.prometheus.common.Messages.BLANK_PATH_MSG
 import io.prometheus.common.Utils.defaultEmptyJsonObject
+import io.prometheus.common.Utils.failureKey
 import io.prometheus.common.AgentValues.labelsProblem
 import io.prometheus.common.AgentValues.pathCharacterProblem
 import io.prometheus.common.Utils.sanitizeUrl
@@ -405,7 +407,7 @@ internal class AgentPathManager(
       if (e is RequestFailureException)
         logRejection(PathSource.DISCOVERED, path, e, repeat, record.backoff?.wait)
       else if (repeat)
-        logger.debug { "Still failing to register discovered path /$path: ${record.failure}" }
+        logger.debug { "Still failing to register discovered path /$path: ${e.simpleClassName}: ${e.message}" }
       else
         logger.warn(e) { "Failed to register discovered path /$path" }
     }
@@ -413,7 +415,10 @@ internal class AgentPathManager(
 
   // The record of [e], the latest failure to register a discovered entry with [url] and [labels], given the backoff
   // of the failure before it. Only a rejection is backed off: any other failure never reached the proxy, so it keeps
-  // the reconcile's pace.
+  // the reconcile's pace. The failure is recorded by gRPC status code, or by class and message without one: a
+  // deadline's description carries its elapsed time, so recording the message made every timeout a new failure, and
+  // each logged a WARN with its stack trace (November #39). A rejection keeps its message, the proxy's reason, so one
+  // for another reason is still news.
   private fun discoveredRejection(
     url: String,
     labels: String,
@@ -424,7 +429,7 @@ internal class AgentPathManager(
     // Every failure but a rejection that can't clear is retried.
     val retryable = rejection?.retryable != false
     val backoff = if (rejection?.retryable == true) nextBackoff(priorBackoff, discoveredRetryInterval) else null
-    return DiscoveredRejection(url, labels, retryable, "${e::class.simpleName}: ${e.message}", backoff)
+    return DiscoveredRejection(url, labels, retryable, failureKey(e, withMessage = true), backoff)
   }
 
   // Lock-free registration body; callers MUST hold pathMutex. Kotlin's Mutex is not reentrant, so
@@ -510,7 +515,8 @@ internal class AgentPathManager(
   }
 
   // The last failure to register a discovered entry. [retryable] says whether the entry stays in the desired set;
-  // [failure] identifies the failure, so an identical repeat is logged at DEBUG instead of a fresh stack trace.
+  // [failure] identifies the failure, as Utils.failureKey gives it, so a repeat is logged at DEBUG instead of a fresh
+  // stack trace. Only that comparison reads it: the log lines take the full message from the exception itself.
   private data class DiscoveredRejection(
     val url: String,
     val labels: String,

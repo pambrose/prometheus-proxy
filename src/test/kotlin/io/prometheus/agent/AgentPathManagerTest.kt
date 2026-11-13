@@ -45,6 +45,7 @@ import io.prometheus.grpc.PathRejectionCause
 import io.prometheus.grpc.registerPathResponse
 import io.prometheus.grpc.unregisterPathResponse
 import io.prometheus.common.captureLogs
+import io.prometheus.common.deadlineExceeded
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -1401,6 +1402,58 @@ class AgentPathManagerTest : StringSpec() {
       events.count { it.level == Level.DEBUG } shouldBe 2
       // Still retried: the failure may clear, unlike a rejection whose cause cannot.
       coVerify(exactly = 3) { grpc.registerPathOnProxy("d_metrics", any(), any(), any()) }
+    }
+
+    // gRPC's DEADLINE_EXCEEDED description carries the time the call took, so a registration that kept timing out
+    // failed with a new message on every reconcile, and each logged a WARN with its stack trace (November #39). A
+    // failure with a gRPC status is compared by its code; the full description is still logged.
+    "reconcile should log one WARN for registrations failing with DEADLINE_EXCEEDED that differ only in elapsed time" {
+      val agent = createMockAgent()
+      val grpc = agent.grpcService
+      val manager = AgentPathManager(agent)
+      coEvery { grpc.registerPathOnProxy("d_metrics", any(), any(), any()) } throws
+        deadlineExceeded("29.999954000") andThenThrows deadlineExceeded("29.999961000") andThenThrows
+        StatusException(Status.UNAVAILABLE.withDescription("io exception"))
+
+      val events =
+        captureLogs<AgentPathManager>(Level.DEBUG) {
+          repeat(3) { manager.reconcileDiscoveredPaths(dMetrics) }
+        }.filter { "d_metrics" in it.formattedMessage }
+
+      // A change of status code is still a change.
+      events.map { it.level } shouldBe listOf(Level.WARN, Level.DEBUG, Level.WARN)
+      events[0].throwableProxy.shouldNotBeNull().message shouldContain "after 29.999954000s"
+      events[1].formattedMessage shouldContain "after 29.999961000s"
+    }
+
+    // A rejection has no gRPC status, so it is still compared by its message, the proxy's reason, which carries no
+    // timing: a path the proxy rejects again for another reason is news (November #39).
+    "a discovered path rejected again for a different reason should be warned about again" {
+      val clock = TestTimeSource()
+      val agent = createMockAgent()
+      val grpc = agent.grpcService
+      val manager = AgentPathManager(agent, clock)
+      val held =
+        RequestFailureException(
+          "registerPathOnProxy() - Path /d_metrics is served by identity 'a'; identity 'b' cannot take it over",
+          rejectionCause = PathRejectionCause.HELD_BY_ANOTHER_IDENTITY,
+        )
+      val mismatch =
+        RequestFailureException(
+          "registerPathOnProxy() - Non-consolidated agent rejected for consolidated path /d_metrics",
+          rejectionCause = PathRejectionCause.CONSOLIDATION_MISMATCH,
+        )
+      coEvery { grpc.registerPathOnProxy("d_metrics", any(), any(), any()) } throws
+        held andThenThrows held andThenThrows mismatch
+
+      // Each poll is due: the first retry waits only for the next one, and the second 30s.
+      val events =
+        captureLogs<AgentPathManager>(Level.DEBUG) {
+          clock.tick(3, 30.seconds) { manager.reconcileDiscoveredPaths(dMetrics) }
+        }.filter { "/d_metrics" in it.formattedMessage }
+
+      events.map { it.level } shouldBe listOf(Level.WARN, Level.DEBUG, Level.WARN)
+      events[2].formattedMessage shouldContain "Non-consolidated"
     }
 
     // A discovery-only agent showed nothing on its debug page, since toPlainText lists only the static config.

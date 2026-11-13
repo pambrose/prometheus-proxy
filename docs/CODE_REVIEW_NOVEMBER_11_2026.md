@@ -1,10 +1,11 @@
 # Prometheus-Proxy Code Review — November 11, 2026
 
-**Status:** 40 issues — 33 fixed, 7 open (11 medium, 29 low, no high).
+**Status:** 42 issues — 40 fixed, 2 open (12 medium, 30 low, no high).
 
 **Progress:** Wave A (steps 1, 2, 3, 7, 11, and 13, in #374–#379), Wave B (steps 4, 8, 9, and 12, in #381–#384, with #24
-a settings change), Wave C (step 5, in #386, with #40 found and fixed there), and Wave D (steps 6 and 10, in #387 and
-#388, with #31 fixed in step 6) fixed the 33 issues marked ✅.
+a settings change), Wave C (step 5, in #386, with #40 found and fixed there), Wave D (steps 6 and 10, in #387 and #388,
+with #31 fixed in step 6), and Wave E (steps 14 and 15, in #389 and #390, with #11 moved to step 15) fixed the 40 issues
+marked ✅. Wave E found #41 and #42, which Wave F covers.
 
 **Date:** 2026-11-11
 
@@ -26,12 +27,12 @@ from the repo root.
 | 3  | A late agent result logs a WARN per routine timeout, and one per chunk when chunked                  | Proxy    | low      | ✅      |
 | 4  | A pending connection evicted by the cleanup service still logs INFO when it closes                   | Proxy    | low      | ✅      |
 | 5  | `SdTarget.parse` accepts a `host:port` with a query or fragment                                      | Proxy    | low      | ✅      |
-| 6  | Proxy KDoc and comments that no longer match the code                                                | Proxy    | low      | ⬜      |
+| 6  | Proxy KDoc and comments that no longer match the code                                                | Proxy    | low      | ✅      |
 | 7  | Turning on Zipkin crashes the agent, and the proxy, while they're constructed                         | Agent    | medium   | ✅      |
 | 8  | A bad config value bypasses `ConfigLoadException`, and leaks a credentialed config URL               | Agent    | medium   | ✅      |
 | 9  | The connect-failure WARN-once dedupe is defeated by gRPC's changing `DEADLINE_EXCEEDED` text         | Agent    | low      | ✅      |
 | 10 | `PROXY_HOSTNAME` can't override a malformed `agent.proxy.endpoints` in the config                     | Agent    | low      | ✅      |
-| 11 | `PathDiscoveryService` KDoc contradicts the code                                                     | Agent    | low      | ⬜      |
+| 11 | `PathDiscoveryService` KDoc contradicts the code                                                     | Agent    | low      | ✅      |
 | 12 | `targetUrl` and `pathSource` have no size limit, so one agent can exhaust the proxy's heap           | Security | medium   | ✅      |
 | 13 | A chunked transfer outlives its scrape, so an agent can hold ~9 MiB per scrape                       | Security | medium   | ✅      |
 | 14 | Filter disabled: `readRequestsFromProxy` checks one lookup and acts on another                       | Security | medium   | ✅      |
@@ -49,18 +50,20 @@ from the repo root.
 | 26 | Comments and help text left stale by the distroless move                                             | CI/build | low      | ✅      |
 | 27 | The Docker quick starts can't connect, and the production commands combine `--rm` with `--restart`   | Docs     | medium   | ✅      |
 | 28 | The shipped examples use non-string label values, which SD leaves out                                | Docs     | low      | ✅      |
-| 29 | `metrics-and-grafana.md` gives the pre-4.4.0 agent buckets and names a removed class                 | Docs     | low      | ⬜      |
-| 30 | The website tells embedders to call `EmbeddedAgentInfo.close()`, which doesn't exist                 | Docs     | low      | ⬜      |
+| 29 | `metrics-and-grafana.md` gives the pre-4.4.0 agent buckets and names a removed class                 | Docs     | low      | ✅      |
+| 30 | The website tells embedders to call `EmbeddedAgentInfo.close()`, which doesn't exist                 | Docs     | low      | ✅      |
 | 31 | The nginx-mode warnings say a disconnected agent lingers until the inactivity timeout                | Docs     | low      | ✅      |
-| 32 | Public KDoc lists the rejected `all` log level, and the old `sdTargetPrefix` form                    | Docs     | low      | ⬜      |
+| 32 | Public KDoc lists the rejected `all` log level, and the old `sdTargetPrefix` form                    | Docs     | low      | ✅      |
 | 33 | The ownership tests forge only the attacker's own agentId, so can't catch a trust-the-claim regression | Tests  | medium   | ✅      |
 | 34 | `AgentPathAuthTest` still falls back to fetching its config from GitHub `master`                     | Tests    | low      | ✅      |
 | 35 | The registry-clash test accepts any startup failure                                                  | Tests    | low      | ✅      |
 | 36 | `DashboardMetricNamesTest` never closes the metrics it builds                                        | Tests    | low      | ✅      |
 | 37 | The container suite's third-party images are pinned by tag only                                      | Tests    | low      | ✅      |
-| 38 | `harness.conf` sets Zipkin keys that don't exist                                                     | Tests    | low      | ⬜      |
-| 39 | Path discovery dedupes its failures on the message, which a gRPC deadline changes every time         | Agent    | low      | ⬜      |
+| 38 | `harness.conf` sets Zipkin keys that don't exist                                                     | Tests    | low      | ✅      |
+| 39 | Path discovery dedupes its failures on the message, which a gRPC deadline changes every time         | Agent    | low      | ✅      |
 | 40 | An unknown scrape path is logged whole, with any control characters it carries                       | Security | low      | ✅      |
+| 41 | The harness's chunk-size override sets a key that doesn't exist, so no harness spec chunks           | Tests    | medium   | ⬜      |
+| 42 | A transport failure in the agent's path retries logs a WARN with a stack trace every tick            | Agent    | low      | ⬜      |
 
 ---
 
@@ -114,8 +117,10 @@ The **Touches** column shows which steps edit the same files, and so need to lan
 | 11   | ✅ #378 | #18                          | Dashboard pages from the cached snapshot                              | `proxy/dashboard/ProxyDashboardService.kt`                                                                                    | Self-contained. Read `.claude/rules/dashboard-constraints.md` first.                                                                                                                              |
 | 12   | ✅ #384 | #22, #24, #25, #26, #37      | CI and release hygiene                                                | `docs.yml`, `ci.yml`, `Makefile`, `security.yml`, `bin/docker-*.sh`, `containers/support/ContainerTestSupport.kt`, `misc/CiHygieneTest.kt`, `docs/RELEASE.md`, AGENTS.md, branch protection | Workflow and test-infrastructure only. #24 is a repository setting rather than a code change. After step 2, which adds a job to `ci.yml`.                                                         |
 | 13   | ✅ #379 | #35, #36                     | Tests that check what they claim                                      | `harness/EmbeddedAgentMetricsTest.kt`, `misc/DashboardMetricNamesTest.kt`                                                     | Test-only, so it can go any time.                                                                                                                                                                |
-| 14   | ⬜      | #29, #30, #32, #6, #11, #38  | Documentation, KDoc, and config drift                             | `config/test-configs/harness.conf`, `docs/metrics-and-grafana.md`, website pages, README, `common/EnvVars.kt`, `common/BaseOptions.kt`, `proxy/ProxyOptions.kt`, the proxy KDoc in #6, `agent/discovery/PathDiscoveryService.kt` | No behavior change. Last, so the KDoc describes what steps 4–10 settle. Any item can instead ride along with an earlier PR that edits the same file.                                             |
-| 15   | ⬜      | #39                          | Dedupe path-discovery failures on their cause                         | `agent/discovery/PathDiscoveryService.kt`, `agent/AgentPathManager.kt`                                                       | Found while fixing #9; the same change as step 9's `connectFailureKey`. Independent of the other remaining steps. |
+| 14   | ✅ #389 | #29, #30, #32, #6, #38       | Documentation, KDoc, and config drift                             | `config/test-configs/harness.conf`, `docs/metrics-and-grafana.md`, website pages, README, `common/EnvVars.kt`, `common/BaseOptions.kt`, `proxy/ProxyOptions.kt`, the proxy KDoc in #6, `agent/discovery/PathDiscoveryService.kt` | No behavior change. Last, so the KDoc describes what steps 4–10 settle. Any item can instead ride along with an earlier PR that edits the same file.                                             |
+| 15   | ✅ #390 | #39, #11                     | Dedupe path-discovery failures on their cause                         | `agent/discovery/PathDiscoveryService.kt`, `agent/AgentPathManager.kt`                                                       | Found while fixing #9; the same change as step 9's `connectFailureKey`. Independent of the other remaining steps. |
+| 16   | ⬜      | #41                          | Make the harness chunk as its specs ask                               | `harness/support/TestUtils.kt`, `harness/HarnessConstants.kt`, the seven harness specs that pass `chunkContentSizeBytes`, `misc/ConfigFileKeysTest.kt` | Found in step 14. Test-only, but the first end-to-end chunking in the harness may surface failures it never saw, so it's its own PR. Independent of step 17. |
+| 17   | ⬜      | #42                          | Dedupe transport failures in the agent's path retries                 | `agent/AgentPathManager.kt`                                                                                   | Found in step 15; the same `Utils.failureKey` dedupe. After step 15, which edits the same file. |
 
 ### What can run in parallel
 
@@ -134,7 +139,8 @@ Taken together, that gives these waves. Every step in a wave can be worked on at
 | B    | ✅      | 4, 8, 9, 12                 | 4 on 1; 8 and 9 on 7; 12 on 2                |
 | C    | ✅      | 5                           | 4                                            |
 | D    | ✅      | 6, 10                       | 5                                            |
-| E    | ⬜      | 14, 15                      | the code steps (4–10)                        |
+| E    | ✅      | 14, 15                      | the code steps (4–10)                        |
+| F    | ⬜      | 16, 17                      | 17 on 15                                     |
 
 Four files are edited across tracks, in separate places, so they merge cleanly, though the later PR rebases:
 
@@ -328,7 +334,7 @@ KDoc's `@throws … for anything else`, and the scrape URL Prometheus builds fro
 `sdTargetPrefix '…' can't have a query or a fragment`. The new `SdTargetTest` test and a `ProxyOptionsTest` startup test
 failed on the old code.
 
-### 6. ⬜ Proxy KDoc and comments that no longer match the code
+### 6. ✅ Proxy KDoc and comments that no longer match the code
 
 **Severity:** low · **Confidence:** confirmed.
 
@@ -344,6 +350,12 @@ failed on the old code.
 **Fix:** reword each to match the code.
 
 **Tests:** none needed.
+
+**Resolution:** Fixed in #389. `ProxyEvent.AgentConnected`'s KDoc says it fires on a connection's first authenticated
+call of any kind, or, with the transport filter disabled, on `connectAgentWithTransportFilterDisabled`.
+`ScrapeRecord.durationMillis` is described as measured on the proxy's side, so it includes queueing and transport, or
+runs until the client hung up. The `ScrapeRequestWrapper` comment names `complete()`, and the comment on
+`Proxy.launchId` says per Proxy instance, not per process.
 
 ---
 
@@ -506,7 +518,7 @@ the config's `endpoints` or `hostname` only when neither `--proxy` nor the env v
 malformed endpoint and a blank hostname are ignored when an override is set, which failed on the old code, and still
 rejected without one.
 
-### 11. ⬜ `PathDiscoveryService` KDoc contradicts the code
+### 11. ✅ `PathDiscoveryService` KDoc contradicts the code
 
 **Severity:** low · **Confidence:** confirmed.
 
@@ -528,7 +540,12 @@ now only a backstop.
 
 **Follows up:** October #10 and #20.
 
-### 39. ⬜ Path discovery dedupes its failures on the message, which a gRPC deadline changes every time
+**Resolution:** Fixed in #390, with #39, which edits the same file. The class KDoc says a failed read reconciles the
+last good read (#346), and `run()`'s says a sibling connection task ending cancels it (#263), with `keepRunning` only a
+backstop. `Agent.kt`'s comment on the `reconcilePaths` task says the same, and `docs/TESTING.md`'s
+`PathDiscoveryServiceTest` entry no longer says a failed read skips the reconcile.
+
+### 39. ✅ Path discovery dedupes its failures on the message, which a gRPC deadline changes every time
 
 **Severity:** low · **Confidence:** plausible. The pattern is confirmed; that a reconcile fails with a changing
 `DEADLINE_EXCEEDED` in practice wasn't exercised. Found while fixing #9.
@@ -548,6 +565,44 @@ the full message in the log line.
 WARN and one DEBUG.
 
 **Follows up:** #9.
+
+**Resolution:** Fixed in #390. `connectAgent`'s key moved to `Utils.failureKey`: the gRPC status code, or, without one,
+the class, and with `withMessage` the message too. `reconcileOnce` and `discoveredRejection` pass `withMessage`, since a
+discovery file's parse error and the proxy's rejection reason carry stable messages that say what changed; only gRPC
+descriptions carry timings. `discoveredRejection` stores only the key, which only the repeat comparison reads; the log
+lines take the full message from the exception. No gRPC failure reaches `reconcileOnce` today, since
+`FileDiscoverySource` makes no RPCs and `reconcileDiscoveredPaths` catches each path's failure; the reachable case was
+`registerPathOnProxy`'s 30s deadline, which logged a WARN with a stack trace on every reconcile. The new
+`DEADLINE_EXCEEDED` tests in `PathDiscoveryServiceTest` and `AgentPathManagerTest` failed on the old code.
+
+### 42. ⬜ A transport failure while retrying a rejected static path, or unregistering a stale discovered path, logs a WARN with a stack trace every tick
+
+**Severity:** low · **Confidence:** confirmed by reading the code. Found while fixing #39.
+
+**Where:** `agent/AgentPathManager.kt`:
+
+- `:230-242`, `retryRejectedStaticPaths`: `onFailure { e -> logger.warn(e) { "Failed to retry static path /$path" } }`.
+  `registerStaticPath` (`:208`) catches only `RequestFailureException`, so a transport failure reaches it.
+- `:354-363`, `unregisterStaleDiscoveredPaths`: `.onFailure { logger.warn(it) { "Failed to unregister discovered path
+  /$path" } }`.
+
+**Problem:**
+
+- A transport failure, such as `DEADLINE_EXCEEDED` or `UNAVAILABLE`, logs a WARN with its stack trace for each path on
+  each retry tick, and for each stale path on each reconcile, with no dedupe.
+- It doesn't advance the static path's backoff, which only a rejection does, so the path is retried every
+  `rejectedPathRetrySecs` while the failure lasts.
+- Both last only until the connection's other tasks notice it's gone and end it, so it's a burst, not a flood. #39 fixed
+  the same shape for discovered-path registration.
+
+**Fix:** dedupe both on `Utils.failureKey`, as #39 does: WARN when a failure first appears, DEBUG while it repeats. On a
+transport failure, advance the static path's backoff, or leave the path to the reconnect, which registers static paths
+again.
+
+**Tests:** two static-path retries that fail with `DEADLINE_EXCEEDED` log one WARN and one DEBUG; so do two reconciles
+whose unregister of the same stale path fails.
+
+**Follows up:** #39.
 
 ---
 
@@ -1227,7 +1282,7 @@ quick start's `AGENT_CONFIG`, and no test loads them.
 **Resolution:** Fixed in #376. The values are quoted, and `DocsExamplesTest` requires valid labels in every
 `examples/*.conf`.
 
-### 29. ⬜ `docs/metrics-and-grafana.md` gives the pre-4.4.0 agent latency buckets and names a removed class
+### 29. ✅ `docs/metrics-and-grafana.md` gives the pre-4.4.0 agent latency buckets and names a removed class
 
 **Severity:** low · **Confidence:** confirmed.
 
@@ -1250,7 +1305,13 @@ each agent instance.
 **Tests:** `DashboardMetricNamesTest` reads only this file's `promql` blocks. Checking its tables' bucket ranges
 against `SCRAPE_LATENCY_BUCKETS` would catch the next drift.
 
-### 30. ⬜ The website tells embedders to call `EmbeddedAgentInfo.close()`, which doesn't exist
+**Resolution:** Fixed in #389. The cell reads `5ms–90s`, and the gauges are named as `GaugeWithCallback`s built by
+`MetricBuilders.sampledGauge`. `launch_id` identifies each agent instance there, on the website's Monitoring, Glossary,
+and Grafana pages, and in `EmbeddedAgentInfo.launchId`'s KDoc, and both gauge tables show that
+`proxy_start_time_seconds` carries one. `DashboardMetricNamesTest` now checks the tables' bucket ranges, and the bucket
+lists on both pages, against `SCRAPE_LATENCY_BUCKETS`; the range check fails on the old `5ms–10s`.
+
+### 30. ✅ The website tells embedders to call `EmbeddedAgentInfo.close()`, which doesn't exist
 
 **Severity:** low · **Confidence:** confirmed.
 
@@ -1262,6 +1323,9 @@ against `SCRAPE_LATENCY_BUCKETS` would catch the next drift.
 
 **Fix:** drop "(or `close()`)". (Making `EmbeddedAgentInfo` `AutoCloseable` would also work, but it's a public API
 change, and `use { }` would make it easy to stop an agent sooner than intended.)
+
+**Resolution:** Fixed in #389. The Production page names only `shutdown()`, and `EmbeddedAgentInfo` stays a plain data
+class.
 
 ### 31. ✅ The `transportFilterDisabled` (nginx) warnings say a disconnected agent lingers until the inactivity timeout; the code removes it when its stream ends
 
@@ -1289,7 +1353,7 @@ after the inactivity timeout", and Troubleshooting adds that stale contexts "are
 and Troubleshooting pages say a disconnect that ends the agent's stream removes it at once, and that the inactivity
 timeout covers only an agent that dies before opening its stream, or a half-open connection.
 
-### 32. ⬜ Public `EnvVars` and `ProxyOptions` KDoc lists a log level that's rejected, and describes `sdTargetPrefix` the old way
+### 32. ✅ Public `EnvVars` and `ProxyOptions` KDoc lists a log level that's rejected, and describes `sdTargetPrefix` the old way
 
 **Severity:** low · **Confidence:** confirmed.
 
@@ -1315,6 +1379,10 @@ All three are Dokka-published API types.
 `--sd_target_prefix` usage text the same wording.
 
 **Follows up:** October #1 (the SD target wording).
+
+**Resolution:** Fixed in #389. The three log-level KDocs drop `all`. `SD_TARGET_PREFIX`, `ProxyOptions.sdTargetPrefix`,
+and the `--sd_target_prefix` usage text describe the target as `docs/cli-args.md` does, with the rules #388 completed:
+`host:port` or an http(s) URL, with no user info, query, or fragment.
 
 ---
 
@@ -1440,7 +1508,7 @@ reads only the `Makefile`'s `*_IMAGE` variables.
 the Prometheus one the same as the `Makefile`'s. `CiHygieneTest` requires a digest on every third-party `*_IMAGE`
 constant, checks Testcontainers parses each to the digest it pulls, and checks the two Prometheus pins agree.
 
-### 38. ⬜ `harness.conf` sets Zipkin keys that don't exist
+### 38. ✅ `harness.conf` sets Zipkin keys that don't exist
 
 **Severity:** low · **Confidence:** confirmed. Found while fixing #7.
 
@@ -1454,6 +1522,46 @@ a test that sets them to `true`, would expect otherwise.
 **Fix:** move them under `internal`, or delete them.
 
 **Tests:** a `misc/` check that every key in `config/test-configs/*.conf` exists in `config/config.conf`.
+
+**Resolution:** Fixed in #389. The two keys moved under `internal`, still `false`. The new `ConfigFileKeysTest` checks
+every HOCON config the repo ships or its tests load (`config/test-configs`, `examples`, `testing`, `etc/compose`, the
+container suite's agent configs, and `reference.conf`) against `config/config.conf`, list entries included, and failed
+only on the old `harness.conf`. It checks files, not the `-D` arguments tests pass, which is how #41 went unseen.
+
+### 41. ⬜ The harness's chunk-size override sets a key that doesn't exist, so no harness spec chunks
+
+**Severity:** medium (tests) · **Confidence:** confirmed. Found while fixing #38.
+
+**Where:** `harness/support/TestUtils.kt:88,106-107` (`startAgent`), and the seven specs that pass
+`chunkContentSizeBytes = DEFAULT_CHUNK_SIZE_BYTES` (5): `InProcessTestWithAdminMetricsTest`,
+`InProcessTestNoAdminMetricsTest`, `InProcessReconnectTest`, `NettyTestWithAdminMetricsTest`,
+`NettyTestNoAdminMetricsTest`, `TlsNoMutualAuthTest`, and `TlsWithMutualAuthTest`.
+
+**Problem:**
+
+- `startAgent` passes `-Dagent.chunkContentSizeBytes=N`, but the key is `agent.chunkContentSizeKbs`, from which
+  `AgentOptions` derives `chunkContentSizeBytes`. Typesafe Config ignores the unknown key, so these specs run at the
+  default 32 KB.
+- No harness spec serves a response near that size, as far as a search shows, so chunked transfers, which #381 reworked
+  and #386 bounded, are covered only by unit tests with mocks, never end to end over the in-process, Netty, or TLS
+  transports the seven specs exist to cover.
+- `ConfigFileKeysTest` (#38) checks config files, not the `-D` arguments tests pass, so it can't see this.
+
+**Fix:**
+
+- `chunkContentSizeKbs` has 1 KB granularity, so 5 bytes can't be set through config. Set
+  `AgentOptions.chunkContentSizeBytes` after option resolution in `startAgent`, if the agent reads it only at runtime;
+  or pass `chunkContentSizeKbs = 1` and have the shared harness tests serve a response over 1 KB.
+- Expect the first end-to-end chunking in the harness to need fixes of its own, and check that the specs still pass in
+  their time budget.
+
+**Tests:**
+
+- A harness test that a scrape was chunked, such as `agent_scrape_result_count_total{type="chunked"}` rising.
+- A check that every `-D` key `TestUtils` passes exists in `config/config.conf`, in `ConfigFileKeysTest` or
+  `HarnessHelpersTest`.
+
+**Follows up:** #38.
 
 ---
 
