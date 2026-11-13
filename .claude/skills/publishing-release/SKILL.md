@@ -1,6 +1,6 @@
 ---
 name: publishing-release
-description: Use when publishing prometheus-proxy to Maven Central, cutting a release, running a snapshot publish, or bumping the project version — covers the Maven Central coordinates, GPG prerequisites, and the version-bump checklist.
+description: Use when publishing prometheus-proxy to Maven Central, cutting a release, running a snapshot publish, or bumping the project version — covers the Maven Central coordinates, GPG and Maven Central credential prerequisites, and the version-bump checklist.
 ---
 
 # Publishing prometheus-proxy
@@ -11,9 +11,12 @@ Repository declarations are centralized in `settings.gradle.kts` via `dependency
 
 ## Publish targets
 
-Snapshot and Maven Central release Make targets (`publish-snapshot`, `publish-maven-central`) require GPG environment variables and a keychain password entry; `make _check-gpg-env` validates them up-front.
+Snapshot and Maven Central release Make targets (`publish-snapshot`, `publish-maven-central`) need the GPG signing setup and the Maven Central credentials, and their prerequisites validate both up-front (`make release-check` runs both checks too):
 
-`make release` cuts a release once the version bump and changelogs are merged: it gates with `make release-check` (clean, up-to-date `master` whose GitHub checks passed, including each CI job `RELEASE_REQUIRED_JOBS` lists; both changelogs have a dated section for the version; the bumped files name it and no longer have the previous version where it's bumped; not already on Maven Central or Docker Hub; GPG and Docker ready), runs `make all-tests` and `make distro`, asks once, then publishes to Maven Central and Docker Hub, runs `make docker-verify`, and deploys the docs site with `make gh-docs` (a push to `master` deploys the site only once its version is published, so the merged bump doesn't). The GitHub release and Homebrew tap stay manual; it prints both. See `docs/RELEASE.md`.
+- `make _check-gpg-env`: `GPG_SIGNING_KEY_ID` is set, GPG holds its secret key, and the keychain entry `gradle-signing-password` (account `gpg-signing`) holds its passphrase.
+- `make _check-maven-central-env`: the keychain entries `maven-central-username` and `maven-central-password` (account `maven-central`) hold a central.sonatype.com user token's name and password. The targets pass them to Gradle as `ORG_GRADLE_PROJECT_mavenCentralUsername` / `ORG_GRADLE_PROJECT_mavenCentralPassword` in the publishing command's environment only; don't put them in `~/.gradle/gradle.properties`, which every Gradle build on the machine reads. Add each once with `security add-generic-password -a maven-central -s <entry> -U -w`, which asks for the value.
+
+`make release` cuts a release once the version bump and changelogs are merged: it gates with `make release-check` (clean, up-to-date `master` whose GitHub checks passed, including each CI job `RELEASE_REQUIRED_JOBS` lists; both changelogs have a dated section for the version; the bumped files name it and no longer have the previous version where it's bumped; not already on Maven Central or Docker Hub; GPG, the Maven Central credentials, and Docker ready), runs `make all-tests` and `make distro`, asks once, then publishes to Maven Central and Docker Hub, runs `make docker-verify`, and deploys the docs site with `make gh-docs` (a push to `master` deploys the site only once its version is published, so the merged bump doesn't). The GitHub release and Homebrew tap stay manual; it prints both. See `docs/RELEASE.md`.
 
 ## Bumping the version
 

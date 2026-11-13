@@ -9,7 +9,7 @@
         tree depends lint detekt detekt-baseline \
         versions versions-all kdocs clean-site check-site upgrade-site build-site site \
         publish-local publish-local-snapshot publish-snapshot publish-maven-central \
-        upgrade-wrapper _check-gpg-env _require-version _require-gradle-version _tla-tools
+        upgrade-wrapper _check-gpg-env _check-maven-central-env _require-version _require-gradle-version _tla-tools
 
 VERSION := $(shell sed -n 's/^version=\(.*\)/\1/p' gradle.properties)
 # The snapshot targets' version: VERSION with one -SNAPSHOT suffix, whether or not gradle.properties already has it.
@@ -111,6 +111,18 @@ GPG_ENV = \
 	ORG_GRADLE_PROJECT_signingInMemoryKey="$$(gpg --armor --export-secret-keys "$$GPG_SIGNING_KEY_ID")" \
 	ORG_GRADLE_PROJECT_signingInMemoryKeyId="$$GPG_SIGNING_KEY_ID" \
 	ORG_GRADLE_PROJECT_signingInMemoryKeyPassword="$$(security find-generic-password -a "gpg-signing" -s "gradle-signing-password" -w)"
+
+# Maven Central's credentials, a user token's name and password from central.sonatype.com, from the macOS keychain, as
+# the signing key's passphrase is: the maven-central-username and maven-central-password entries (account
+# maven-central), shared by every repository that publishes this way. They reach only the publishing commands, as the
+# vanniktech plugin's mavenCentralUsername and mavenCentralPassword, never ~/.gradle/gradle.properties, which every
+# Gradle build on the machine is given. Add them once with
+#   security add-generic-password -a maven-central -s maven-central-username -U -w
+#   security add-generic-password -a maven-central -s maven-central-password -U -w
+# each of which asks for the value, so it stays out of the shell's history.
+MAVEN_CENTRAL_ENV = \
+	ORG_GRADLE_PROJECT_mavenCentralUsername="$$(security find-generic-password -a "maven-central" -s "maven-central-username" -w)" \
+	ORG_GRADLE_PROJECT_mavenCentralPassword="$$(security find-generic-password -a "maven-central" -s "maven-central-password" -w)"
 
 default: help
 
@@ -453,7 +465,7 @@ docker-verify: _require-version  ## Check both published VERSION images carry ev
 # docs/RELEASE.md, and the skill. Historical mentions, such as "Version 4.3.0 (released ...)", don't match. And every
 # CI check passing isn't enough, since with [skip ci] or a disabled workflow a lone third-party check can be the whole
 # list: each RELEASE_REQUIRED_JOBS job must also have run for HEAD and passed.
-release-check: _require-version _check-gpg-env  ## Fail unless this checkout is fit to publish VERSION
+release-check: _require-version _check-gpg-env _check-maven-central-env  ## Fail unless this checkout is fit to publish VERSION
 	@case "$(VERSION)" in *SNAPSHOT*|*-rc*|*-beta*|*-alpha*) \
 		echo "ERROR: $(VERSION) is a pre-release; make release publishes final versions" >&2; exit 1;; esac
 	@test -z "$$(git status --porcelain)" \
@@ -595,11 +607,11 @@ publish-local: _require-version  ## Publish artifacts to the local Maven reposit
 publish-local-snapshot: _require-version  ## Publish a -SNAPSHOT artifact to the local Maven repository
 	$(GRADLE) -PoverrideVersion=$(SNAPSHOT_VERSION) publishToMavenLocal
 
-publish-snapshot: _require-version _check-gpg-env  ## Publish a -SNAPSHOT artifact to Maven Central
-	$(GPG_ENV) $(GRADLE) -PoverrideVersion=$(SNAPSHOT_VERSION) publishToMavenCentral
+publish-snapshot: _require-version _check-gpg-env _check-maven-central-env  ## Publish a -SNAPSHOT artifact to Maven Central
+	$(GPG_ENV) $(MAVEN_CENTRAL_ENV) $(GRADLE) -PoverrideVersion=$(SNAPSHOT_VERSION) publishToMavenCentral
 
-publish-maven-central: _require-version _check-gpg-env  ## Publish a release artifact to Maven Central
-	$(GPG_ENV) $(GRADLE) publishAndReleaseToMavenCentral
+publish-maven-central: _require-version _check-gpg-env _check-maven-central-env  ## Publish a release artifact to Maven Central
+	$(GPG_ENV) $(MAVEN_CENTRAL_ENV) $(GRADLE) publishAndReleaseToMavenCentral
 
 # Gradle's documented upgrade procedure: the first run rewrites
 # gradle-wrapper.properties using the *old* wrapper jar; the second run
@@ -618,6 +630,15 @@ _check-gpg-env:
 	@if [ -z "$$(security find-generic-password -a 'gpg-signing' -s 'gradle-signing-password' -w 2>/dev/null)" ]; then \
 		echo "ERROR: keychain entry 'gradle-signing-password' (account 'gpg-signing') is missing or empty" >&2; exit 1; \
 	fi
+
+# Fails, naming the keychain entry and never its value, when either of Maven Central's credentials is missing or empty
+_check-maven-central-env:
+	@for entry in maven-central-username maven-central-password; do \
+		if [ -z "$$(security find-generic-password -a 'maven-central' -s "$$entry" -w 2>/dev/null)" ]; then \
+			echo "ERROR: keychain entry '$$entry' (account 'maven-central') is missing or empty; add it with: security add-generic-password -a maven-central -s $$entry -U -w" >&2; \
+			exit 1; \
+		fi; \
+	done
 
 _require-version:
 	@[ -n "$(VERSION)" ] || { echo "ERROR: Could not determine project version from gradle.properties" >&2; exit 1; }

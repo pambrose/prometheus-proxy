@@ -252,6 +252,13 @@ agents connected with one identity, which is every agent when agent auth is off.
   they ran at the default 32 KB and split only their largest scrapes. They set 1 KB now, the smallest the setting
   takes, and a new test in each checks that a scrape several chunks long is split and reassembled intact. Another
   test checks that every setting the tests pass on the command line is one the reference config declares.
+- Codacy's duplication metric leaves out the tests, whose repeated setup put it over the repository's goal. The tests
+  are still analyzed for issues and complexity.
+- Publishing to Maven Central reads its credentials from the macOS keychain, as it does the signing key's passphrase,
+  and gives them only to the publishing command, rather than to every Gradle build on the machine through
+  `~/.gradle/gradle.properties`. The publish targets stop before Gradle runs when either keychain entry is missing,
+  and print the command that adds it. `make release-check` checks the entries too, so `make release` stops before
+  running its tests, rather than at the publishing step after them.
 
 ---
 
