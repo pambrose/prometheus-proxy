@@ -51,5 +51,14 @@ class SdTargetTest : StringSpec() {
           shouldThrow<IllegalArgumentException> { SdTarget.parse(prefix) }.message shouldContain "sdTargetPrefix"
         }
     }
+
+    // A URL's query and fragment were refused, but a host:port's were not, so "localhost:8080?x" was served verbatim as
+    // the target, and the scrape URL Prometheus built from it was broken (November #5). An empty one counts too.
+    "parse should reject a host:port with a query or a fragment" {
+      listOf("localhost:8080?x", "localhost:8080#f", "localhost?x", "localhost:8080?", "localhost:8080#")
+        .forEach { prefix ->
+          shouldThrow<IllegalArgumentException> { SdTarget.parse(prefix) }.message shouldContain "sdTargetPrefix"
+        }
+    }
   }
 }

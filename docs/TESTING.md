@@ -275,9 +275,11 @@ Two support helpers also live here (not test classes themselves):
   agent limit, a removal frees a slot, and a refused add logs a WARN at most once a minute for each identity
 - **AgentContextCleanupServiceTest** — Stale agent eviction (removes agents inactive beyond maxAgentInactivitySecs)
 - **ChunkedContextTest** — Chunk accumulation, CRC32 checksum validation, header/chunk/trailer sequencing
-- **ProxyOptionsTest** — CLI parsing, defaults, validation, TLS settings, gRPC options
+- **ProxyOptionsTest** — CLI parsing, defaults, validation, TLS settings, gRPC options; an `http.idleTimeoutSecs`
+  of 0 or a negative other than -1, and a configured `sdTargetPrefix` with a query or fragment, fail startup with an
+  `Invalid configuration:` message naming the setting
 - **SdTargetTest** — `sdTargetPrefix` parsing: host:port as is; an http(s) URL split into the target, `__scheme__`,
-  and a path prefix; anything else refused, naming the setting
+  and a path prefix; anything else, including a host:port with a query or fragment, refused, naming the setting
 - **ProxyDynamicConfigTest** — Dynamic config overrides via -D flags (maxZippedContentSizeMBytes,
   scrapeRequestTimeoutSecs, etc.)
 - **ProxyServerInterceptorTest** — gRPC server interceptor: agent-id metadata extraction from incoming calls

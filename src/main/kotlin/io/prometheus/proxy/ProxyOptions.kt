@@ -43,7 +43,7 @@ import io.prometheus.common.EnvVars.REFLECTION_DISABLED
 import io.prometheus.common.EnvVars.SD_ENABLED
 import io.prometheus.common.EnvVars.SD_PATH
 import io.prometheus.common.EnvVars.SD_TARGET_PREFIX
-import io.prometheus.common.requireGrpcTimeout
+import io.prometheus.common.requireDefaultOrPositive
 import io.prometheus.common.requirePositive
 
 // The primary constructor is internal so parseOnly stays out of the public API, and the public constructor below keeps
@@ -233,7 +233,7 @@ class ProxyOptions internal constructor(
     proxyPort = resolveIntOption(proxyPort, PROXY_PORT, proxyConfigVals.http.port)
     require(proxyPort in 1..65535) { "proxyPort must be in 1..65535: $proxyPort" }
     logger.info { "proxyPort: $proxyPort" }
-    validateHttpHostAndInFlightLimit(proxyConfigVals)
+    validateHttpAndInFlightLimit(proxyConfigVals)
 
     proxyAgentPort = resolveIntOption(proxyAgentPort, AGENT_PORT, proxyConfigVals.agent.port)
     require(proxyAgentPort in 1..65535) { "proxyAgentPort must be in 1..65535: $proxyAgentPort" }
@@ -346,7 +346,7 @@ class ProxyOptions internal constructor(
     logger.info { "reflectionDisabled: $reflectionDisabled" }
 
     handshakeTimeoutSecs = resolveLongOption(handshakeTimeoutSecs, HANDSHAKE_TIMEOUT_SECS, grpc.handshakeTimeoutSecs)
-    logger.requireGrpcTimeout("grpc.handshakeTimeoutSecs", handshakeTimeoutSecs, "120")
+    logger.requireDefaultOrPositive("grpc.handshakeTimeoutSecs", handshakeTimeoutSecs, "120")
 
     permitKeepAliveWithoutCalls =
       resolveBooleanOption(
@@ -359,18 +359,18 @@ class ProxyOptions internal constructor(
 
     permitKeepAliveTimeSecs =
       resolveLongOption(permitKeepAliveTimeSecs, PERMIT_KEEPALIVE_TIME_SECS, grpc.permitKeepAliveTimeSecs)
-    logger.requireGrpcTimeout("grpc.permitKeepAliveTimeSecs", permitKeepAliveTimeSecs, "300")
+    logger.requireDefaultOrPositive("grpc.permitKeepAliveTimeSecs", permitKeepAliveTimeSecs, "300")
 
     maxConnectionIdleSecs =
       resolveLongOption(maxConnectionIdleSecs, MAX_CONNECTION_IDLE_SECS, grpc.maxConnectionIdleSecs)
-    logger.requireGrpcTimeout("grpc.maxConnectionIdleSecs", maxConnectionIdleSecs, "INT_MAX")
+    logger.requireDefaultOrPositive("grpc.maxConnectionIdleSecs", maxConnectionIdleSecs, "INT_MAX")
 
     maxConnectionAgeSecs = resolveLongOption(maxConnectionAgeSecs, MAX_CONNECTION_AGE_SECS, grpc.maxConnectionAgeSecs)
-    logger.requireGrpcTimeout("grpc.maxConnectionAgeSecs", maxConnectionAgeSecs, "INT_MAX")
+    logger.requireDefaultOrPositive("grpc.maxConnectionAgeSecs", maxConnectionAgeSecs, "INT_MAX")
 
     maxConnectionAgeGraceSecs =
       resolveLongOption(maxConnectionAgeGraceSecs, MAX_CONNECTION_AGE_GRACE_SECS, grpc.maxConnectionAgeGraceSecs)
-    logger.requireGrpcTimeout("grpc.maxConnectionAgeGraceSecs", maxConnectionAgeGraceSecs, "INT_MAX")
+    logger.requireDefaultOrPositive("grpc.maxConnectionAgeGraceSecs", maxConnectionAgeGraceSecs, "INT_MAX")
   }
 
   // Config-only values (no CLI flag or env var), checked to fail fast at startup.
@@ -399,13 +399,22 @@ class ProxyOptions internal constructor(
     logger.info { "internal.maxZippedContentSizeMBytes: ${internal.maxZippedContentSizeMBytes}" }
   }
 
-  // Checks for the scrape-port bind address, the in-flight limit and the map health checks' thresholds under it, and
-  // the path-, agent-registration, and agents-per-identity limits.
-  private fun validateHttpHostAndInFlightLimit(proxyConfigVals: ConfigVals.Proxy2) {
+  // Checks for the scrape port's bind address and idle timeout, the in-flight limit and the map health checks'
+  // thresholds under it, and the path-, agent-registration, and agents-per-identity limits.
+  private fun validateHttpAndInFlightLimit(proxyConfigVals: ConfigVals.Proxy2) {
     val http = proxyConfigVals.http
     // A blank bind address would otherwise fail only when the scrape server starts, with an opaque Ktor error.
     require(http.host.isNotBlank()) { "proxy.http.host must not be blank" }
     logger.info { "http.host: ${http.host}" }
+
+    // Config-only. CIO waits this long for each response, the first as soon as a connection opens, so 0 or a negative
+    // value other than the -1 sentinel closed every scrape connection unanswered, while the proxy looked healthy
+    // (November #1).
+    logger.requireDefaultOrPositive(
+      "http.idleTimeoutSecs",
+      http.idleTimeoutSecs.toLong(),
+      ProxyHttpService.DEFAULT_IDLE_TIMEOUT_SECS.toString(),
+    )
 
     val internal = proxyConfigVals.internal
     // A non-positive limit would refuse every scrape.

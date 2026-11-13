@@ -15,6 +15,10 @@ Configure the HTTP service that Prometheus scrapes:
 --8<-- "ConfigExamples.txt:proxy-http-config"
 ```
 
+`proxy.http.idleTimeoutSecs` is how long the proxy keeps an idle connection from Prometheus open. `-1` gives the
+default, 45 seconds. `0` doesn't turn the timeout off: it, and any other negative value, fails the proxy's startup,
+since the scrape port would close every connection before answering it.
+
 ## gRPC Service
 
 Configure the gRPC service that agents connect to:

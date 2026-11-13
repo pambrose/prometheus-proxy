@@ -64,12 +64,13 @@ internal fun KLogger.requirePositive(
 }
 
 /**
- * Requires [value], a gRPC timeout or keepalive setting, to be -1 or positive, then logs it as `name: value`. -1 is the
- * sentinel that leaves gRPC's built-in default in place (the `> -1L` guards in ProxyGrpcService rely on it) and is
- * logged as `name: default ([default])`; any other non-positive value would surface as an opaque gRPC builder
- * exception at startup.
+ * Requires [value], a gRPC timeout or keepalive setting or the scrape port's idle timeout, to be -1 or positive, then
+ * logs it as `name: value`. -1 is the sentinel that keeps the built-in default, gRPC's (the `> -1L` guards in
+ * ProxyGrpcService rely on it) or ProxyHttpService's, and is logged as `name: default ([default])`. Any other
+ * non-positive value would surface as an opaque gRPC builder exception at startup or, as the idle timeout, make the
+ * scrape port close every connection unanswered (November #1).
  */
-internal fun KLogger.requireGrpcTimeout(
+internal fun KLogger.requireDefaultOrPositive(
   name: String,
   value: Long,
   default: String,
@@ -367,12 +368,12 @@ abstract class BaseOptions protected constructor(
 
   protected fun assignKeepAliveTimeSecs(defaultVal: Long) {
     keepAliveTimeSecs = resolveLongOption(keepAliveTimeSecs, KEEPALIVE_TIME_SECS, defaultVal)
-    logger.requireGrpcTimeout("grpc.keepAliveTimeSecs", keepAliveTimeSecs, "gRPC default")
+    logger.requireDefaultOrPositive("grpc.keepAliveTimeSecs", keepAliveTimeSecs, "gRPC default")
   }
 
   protected fun assignKeepAliveTimeoutSecs(defaultVal: Long) {
     keepAliveTimeoutSecs = resolveLongOption(keepAliveTimeoutSecs, KEEPALIVE_TIMEOUT_SECS, defaultVal)
-    logger.requireGrpcTimeout("grpc.keepAliveTimeoutSecs", keepAliveTimeoutSecs, "gRPC default")
+    logger.requireDefaultOrPositive("grpc.keepAliveTimeoutSecs", keepAliveTimeoutSecs, "gRPC default")
   }
 
   protected fun assignAdminEnabled(defaultVal: Boolean) {
