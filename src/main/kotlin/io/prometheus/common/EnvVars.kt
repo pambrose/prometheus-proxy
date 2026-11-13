@@ -48,7 +48,11 @@ enum class EnvVars {
   /** HTTP path the Proxy exposes the service-discovery document on (relative to the Proxy HTTP port). */
   SD_PATH,
 
-  /** Base URL used to build per-target entries in the service-discovery document (e.g. `http://proxy:8080/`). */
+  /**
+   * Service-discovery target: where Prometheus scrapes the advertised paths. `host:port`, default `localhost:8080`, or
+   * an `http` or `https` URL, split into the target, a `__scheme__` label, and a `__metrics_path__` prefix. It can't
+   * have user info, a query, or a fragment, and with service discovery on, a value that doesn't parse fails startup.
+   */
   SD_TARGET_PREFIX,
 
   /** Enables the Proxy's read-only operational dashboard on its own port. Default `false`. */
@@ -85,7 +89,7 @@ enum class EnvVars {
   MAX_CONNECTION_AGE_GRACE_SECS,
 
   /**
-   * Proxy log level: one of `all`, `trace`, `debug`, `info`, `warn`, `error`, `off`.
+   * Proxy log level: one of `trace`, `debug`, `info`, `warn`, `error`, `off`.
    * Empty leaves the configured level unchanged.
    */
   PROXY_LOG_LEVEL,
@@ -162,7 +166,7 @@ enum class EnvVars {
   UNARY_DEADLINE_SECS,
 
   /**
-   * Agent log level: one of `all`, `trace`, `debug`, `info`, `warn`, `error`, `off`.
+   * Agent log level: one of `trace`, `debug`, `info`, `warn`, `error`, `off`.
    * Empty leaves the configured level unchanged.
    */
   AGENT_LOG_LEVEL,

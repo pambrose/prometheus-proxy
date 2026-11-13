@@ -37,7 +37,9 @@ import java.time.Instant
  *   participating agent yields its own record, so this is not necessarily the merged status
  *   Prometheus saw
  * @param outcome the scrape-request outcome label, matching the `proxy_scrape_requests_total{type}` values
- * @param durationMillis how long the agent took to fetch the target
+ * @param durationMillis how long this agent's leg took as the proxy saw it: from when the proxy built the request
+ *   until it completed, so queueing and transport count as well as the agent's fetch. For `client_cancelled`, the time
+ *   until the client hung up (November #6)
  * @param contentLength size of the returned body, in characters
  */
 internal data class ScrapeRecord(

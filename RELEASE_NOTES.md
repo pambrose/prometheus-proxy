@@ -178,6 +178,15 @@ agents connected with one identity, which is every agent when agent auth is off.
   both fixes for running behind nginx.
 - The website's Proxy Configuration page explains `proxy.http.idleTimeoutSecs`, and its Service Discovery page says
   which target values fail startup.
+- The metrics guide in `docs/` gives the agent's scrape latency buckets as 5ms to 90s, the same as the proxy's, where
+  it still gave the old 10s top, and names the code behind the sampled gauges. It and the website say `launch_id`
+  identifies each agent, so several agents in one JVM each have their own, and that `proxy_start_time_seconds`
+  carries one. The website's Production page no longer mentions `EmbeddedAgentInfo.close()`, which doesn't exist:
+  stop an embedded agent with `shutdown()`. The Glossary's transport filter entry now says an agent behind nginx is
+  removed when its stream ends, as the other pages do.
+- The API docs no longer list `all` as a log level, which fails startup, and describe the service discovery target
+  as it now works: `host:port`, or an `http` or `https` URL, with no user info, query, or fragment. The
+  `--sd_target_prefix` help text says the same.
 
 ### Build and tooling
 
@@ -217,6 +226,9 @@ agents connected with one identity, which is every agent when agent auth is off.
 - Tests check that the proxy refuses to start with an idle timeout of `0` or `-2`, or a service discovery target with
   a query or fragment, naming the setting, and accepts an idle timeout of `-1` or `90`. Each refusal failed before
   its fix.
+- The test harness's config set two Zipkin keys that don't exist, so they did nothing; it sets the real ones now,
+  with tracing still off. A new test checks that every setting in the example and test configs is one the reference
+  config declares, and another that the metrics guide's latency buckets are the ones the code uses.
 
 ---
 

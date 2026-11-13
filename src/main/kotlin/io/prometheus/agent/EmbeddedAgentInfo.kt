@@ -41,9 +41,9 @@ import io.prometheus.Agent
  * ```
  *
  * @property launchId Random 15-character identifier generated when the [Agent] was constructed.
- *   Stable for the lifetime of the running process; rotates on every restart, so it is the right
- *   key for distinguishing this run from prior runs of the same `agentName` in metrics labels and
- *   log correlation.
+ *   Stable for the lifetime of this agent; every agent gets its own, whether after a restart or
+ *   alongside it in the same JVM, so it is the right key for distinguishing this run from prior
+ *   runs, and from other agents, of the same `agentName` in metrics labels and log correlation.
  * @property agentName Human-readable name from [AgentOptions.agentName], falling back to
  *   `Unnamed-<hostname>` when no name is configured. Surfaces in Prometheus metric labels and the
  *   Agent's log output. Unlike [launchId], this is intended to be stable across restarts.

@@ -105,11 +105,15 @@ class ProxyOptions internal constructor(
     private set
 
   /**
-   * Base URL used to build per-target entries in the service-discovery document
-   * (e.g. `http://proxy.example.com:8080/`).
-   * Required and validated to be non-empty when [sdEnabled] is `true`.
+   * Service-discovery target: where Prometheus scrapes the advertised paths. `host:port`, default `localhost:8080`, or
+   * an `http` or `https` URL, whose host and port are the target, and whose scheme and path the proxy gives each target
+   * as its `__scheme__` label and a prefix of its `__metrics_path__`. It can't have user info, a query, or a fragment.
+   * When [sdEnabled] is `true`, a value that doesn't parse fails startup.
    */
-  @Parameter(names = ["--sd_target_prefix"], description = "Service discovery target prefix")
+  @Parameter(
+    names = ["--sd_target_prefix"],
+    description = "Service discovery target: host:port, or an http(s) URL split into target, scheme, and path",
+  )
   var sdTargetPrefix = ""
     private set
 
