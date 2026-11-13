@@ -1,10 +1,10 @@
 # Prometheus-Proxy Code Review — November 11, 2026
 
-**Status:** 40 issues — 28 fixed, 12 open (11 medium, 29 low, no high).
+**Status:** 40 issues — 33 fixed, 7 open (11 medium, 29 low, no high).
 
-**Progress:** Wave A (steps 1, 2, 3, 7, 11, and 13, in #374–#379), Wave B (steps 4, 8, 9, and 12, in #381–#384,
-with #24 a settings change), and Wave C (step 5, in #386, with #40 found and fixed there) fixed the 28 issues
-marked ✅.
+**Progress:** Wave A (steps 1, 2, 3, 7, 11, and 13, in #374–#379), Wave B (steps 4, 8, 9, and 12, in #381–#384, with #24
+a settings change), Wave C (step 5, in #386, with #40 found and fixed there), and Wave D (steps 6 and 10, in #387 and
+#388, with #31 fixed in step 6) fixed the 33 issues marked ✅.
 
 **Date:** 2026-11-11
 
@@ -21,11 +21,11 @@ from the repo root.
 
 | #  | Finding                                                                                              | Area     | Severity | Status |
 |----|------------------------------------------------------------------------------------------------------|----------|----------|--------|
-| 1  | `proxy.http.idleTimeoutSecs = 0` makes the scrape port close every connection unanswered             | Proxy    | low      | ⬜      |
+| 1  | `proxy.http.idleTimeoutSecs = 0` makes the scrape port close every connection unanswered             | Proxy    | low      | ✅      |
 | 2  | `proxy_chunked_transfers_abandoned_total` misses the transfers `removeAgentContext` reclaims          | Proxy    | low      | ✅      |
 | 3  | A late agent result logs a WARN per routine timeout, and one per chunk when chunked                  | Proxy    | low      | ✅      |
 | 4  | A pending connection evicted by the cleanup service still logs INFO when it closes                   | Proxy    | low      | ✅      |
-| 5  | `SdTarget.parse` accepts a `host:port` with a query or fragment                                      | Proxy    | low      | ⬜      |
+| 5  | `SdTarget.parse` accepts a `host:port` with a query or fragment                                      | Proxy    | low      | ✅      |
 | 6  | Proxy KDoc and comments that no longer match the code                                                | Proxy    | low      | ⬜      |
 | 7  | Turning on Zipkin crashes the agent, and the proxy, while they're constructed                         | Agent    | medium   | ✅      |
 | 8  | A bad config value bypasses `ConfigLoadException`, and leaks a credentialed config URL               | Agent    | medium   | ✅      |
@@ -34,10 +34,10 @@ from the repo root.
 | 11 | `PathDiscoveryService` KDoc contradicts the code                                                     | Agent    | low      | ⬜      |
 | 12 | `targetUrl` and `pathSource` have no size limit, so one agent can exhaust the proxy's heap           | Security | medium   | ✅      |
 | 13 | A chunked transfer outlives its scrape, so an agent can hold ~9 MiB per scrape                       | Security | medium   | ✅      |
-| 14 | Filter disabled: `readRequestsFromProxy` checks one lookup and acts on another                       | Security | medium   | ⬜      |
+| 14 | Filter disabled: `readRequestsFromProxy` checks one lookup and acts on another                       | Security | medium   | ✅      |
 | 15 | Each service-discovery request logs every invalid labels value whole at WARN                         | Security | medium   | ✅      |
 | 16 | Agent-supplied strings reach the proxy's logs with CR/LF intact                                      | Security | low      | ✅      |
-| 17 | Filter disabled: each connect call creates and announces a new agent context, with no limit          | Security | low      | ⬜      |
+| 17 | Filter disabled: each connect call creates and announces a new agent context, with no limit          | Security | low      | ✅      |
 | 18 | The dashboard's page routes build a fresh snapshot on every request                                  | Security | low      | ✅      |
 | 19 | The published library jar ships `logback.xml`, which replaces the host's logging config              | CI/build | medium   | ✅      |
 | 20 | Java embedders can't compile against the published artifact                                         | CI/build | medium   | ✅      |
@@ -51,7 +51,7 @@ from the repo root.
 | 28 | The shipped examples use non-string label values, which SD leaves out                                | Docs     | low      | ✅      |
 | 29 | `metrics-and-grafana.md` gives the pre-4.4.0 agent buckets and names a removed class                 | Docs     | low      | ⬜      |
 | 30 | The website tells embedders to call `EmbeddedAgentInfo.close()`, which doesn't exist                 | Docs     | low      | ⬜      |
-| 31 | The nginx-mode warnings say a disconnected agent lingers until the inactivity timeout                | Docs     | low      | ⬜      |
+| 31 | The nginx-mode warnings say a disconnected agent lingers until the inactivity timeout                | Docs     | low      | ✅      |
 | 32 | Public KDoc lists the rejected `all` log level, and the old `sdTargetPrefix` form                    | Docs     | low      | ⬜      |
 | 33 | The ownership tests forge only the attacker's own agentId, so can't catch a trust-the-claim regression | Tests  | medium   | ✅      |
 | 34 | `AgentPathAuthTest` still falls back to fetching its config from GitHub `master`                     | Tests    | low      | ✅      |
@@ -106,15 +106,15 @@ The **Touches** column shows which steps edit the same files, and so need to lan
 | 3    | ✅ #376 | #27, #28                     | Docker quick starts that connect, and examples with string labels     | README, `llms.txt`, `src/test/kotlin/website/DockerExamples.txt`, `examples/*.conf`, a new `misc/` spec                       | The first thing a new user runs. The examples are served from `master`, so the fix takes effect on merge. Docs and examples only.                                                                |
 | 4    | ✅ #381 | #13, #3, #2                  | Chunked transfers end with their scrape                               | `proxy/ProxyServiceImpl.kt` (chunked stream), `proxy/ProxyHttpRoutes.kt` (`dispatchScrapeRequest`), `proxy/ScrapeRequestManager.kt`, `Proxy.kt` (`removeAgentContext`), metrics docs | #13 is the cheapest way for one agent to exhaust the heap. #3 has to land with it, or every late chunk logs a WARN, and #2 counts the reclaims it adds. Check whether `ProxyRegistry.tla` needs the new removal. |
 | 5    | ✅ #386 | #12, #15, #16, #40           | Bound, parse once, and escape what agents send                        | `proxy/ProxyServiceImpl.kt` (`registerPath`), `proxy/ProxyPathManager.kt`, `Proxy.kt` (`buildServiceDiscoveryJson`), `proxy/ProxyHttpRoutes.kt`, `proxy/ProxyOptions.kt`, `config/config.conf`, both logback files, security docs | The rest of the tenant-against-tenant memory and log issues. A new `proxy.internal` limit and a narrower path alphabet need config, validation, docs, and "Before you upgrade" notes. After step 4, which edits the same files. |
-| 6    | ⬜      | #14, #17                     | Make `transportFilterDisabled` mode bind like the default             | `proxy/ProxyServiceImpl.kt` (`readRequestsFromProxy`, `connectAgentWithTransportFilterDisabled`), `proxy/AgentContextManager.kt`, `specs/tla/ProxyRegistry.tla` | Changes how a context is removed, so update the TLA+ action and run `make tla-checks` in the same PR. After step 5, which edits the same file.                                                   |
+| 6    | ✅ #387 | #14, #17, #31                | Make `transportFilterDisabled` mode bind like the default             | `proxy/ProxyServiceImpl.kt` (`readRequestsFromProxy`, `connectAgentWithTransportFilterDisabled`), `proxy/AgentContextManager.kt`, `specs/tla/ProxyRegistry.tla` | Changes how a context is removed, so update the TLA+ action and run `make tla-checks` in the same PR. After step 5, which edits the same file.                                                   |
 | 7    | ✅ #377 | #7                           | Zipkin that starts                                                    | `Agent.kt`, `agent/AgentGrpcService.kt`, `Proxy.kt` (construction order), `proxy/ProxyGrpcService.kt`; possibly common-utils | A documented feature that can't be turned on. If the fix goes into common-utils instead, this step waits for that release.                                                                      |
 | 8    | ✅ #382 | #8, #10                      | Config errors embedders can catch, and env overrides that win         | `common/BaseOptions.kt`, `agent/AgentOptions.kt`, `Agent.kt` KDoc, `embedded-agent.md`, `security/index.md`                   | Both are option resolution, and one embedded-API spec covers #8's inputs. Embedders that catch `IllegalArgumentException` today need a release note. After step 7, which shares `Agent.kt`.      |
 | 9    | ✅ #383 | #4, #9                       | Quiet the remaining routine log noise                                 | `proxy/ProxyServerTransportFilter.kt`, `agent/AgentGrpcService.kt`                                                            | A log level and a dedupe key, each covered by a `ListAppender` test. After step 7, which shares `AgentGrpcService.kt`.                                                                           |
-| 10   | ⬜      | #1, #5                       | Refuse proxy settings that can't work                                 | `proxy/ProxyOptions.kt`, `proxy/SdTarget.kt`                                                                                  | Two startup checks. A config that started before may now fail, so each needs a "Before you upgrade" line. After step 5, which shares `ProxyOptions.kt`.                                           |
+| 10   | ✅ #388 | #1, #5                       | Refuse proxy settings that can't work                                 | `proxy/ProxyOptions.kt`, `proxy/SdTarget.kt`                                                                                  | Two startup checks. A config that started before may now fail, so each needs a "Before you upgrade" line. After step 5, which shares `ProxyOptions.kt`.                                           |
 | 11   | ✅ #378 | #18                          | Dashboard pages from the cached snapshot                              | `proxy/dashboard/ProxyDashboardService.kt`                                                                                    | Self-contained. Read `.claude/rules/dashboard-constraints.md` first.                                                                                                                              |
 | 12   | ✅ #384 | #22, #24, #25, #26, #37      | CI and release hygiene                                                | `docs.yml`, `ci.yml`, `Makefile`, `security.yml`, `bin/docker-*.sh`, `containers/support/ContainerTestSupport.kt`, `misc/CiHygieneTest.kt`, `docs/RELEASE.md`, AGENTS.md, branch protection | Workflow and test-infrastructure only. #24 is a repository setting rather than a code change. After step 2, which adds a job to `ci.yml`.                                                         |
 | 13   | ✅ #379 | #35, #36                     | Tests that check what they claim                                      | `harness/EmbeddedAgentMetricsTest.kt`, `misc/DashboardMetricNamesTest.kt`                                                     | Test-only, so it can go any time.                                                                                                                                                                |
-| 14   | ⬜      | #29, #30, #31, #32, #6, #11, #38 | Documentation, KDoc, and config drift                             | `config/test-configs/harness.conf`, `docs/metrics-and-grafana.md`, website pages, README, `common/EnvVars.kt`, `common/BaseOptions.kt`, `proxy/ProxyOptions.kt`, the proxy KDoc in #6, `agent/discovery/PathDiscoveryService.kt` | No behavior change. Last, so the KDoc describes what steps 4–10 settle. Any item can instead ride along with an earlier PR that edits the same file.                                             |
+| 14   | ⬜      | #29, #30, #32, #6, #11, #38  | Documentation, KDoc, and config drift                             | `config/test-configs/harness.conf`, `docs/metrics-and-grafana.md`, website pages, README, `common/EnvVars.kt`, `common/BaseOptions.kt`, `proxy/ProxyOptions.kt`, the proxy KDoc in #6, `agent/discovery/PathDiscoveryService.kt` | No behavior change. Last, so the KDoc describes what steps 4–10 settle. Any item can instead ride along with an earlier PR that edits the same file.                                             |
 | 15   | ⬜      | #39                          | Dedupe path-discovery failures on their cause                         | `agent/discovery/PathDiscoveryService.kt`, `agent/AgentPathManager.kt`                                                       | Found while fixing #9; the same change as step 9's `connectFailureKey`. Independent of the other remaining steps. |
 
 ### What can run in parallel
@@ -133,7 +133,7 @@ Taken together, that gives these waves. Every step in a wave can be worked on at
 | A    | ✅      | 1, 2, 3, 7, 11, 13          | nothing                                      |
 | B    | ✅      | 4, 8, 9, 12                 | 4 on 1; 8 and 9 on 7; 12 on 2                |
 | C    | ✅      | 5                           | 4                                            |
-| D    | ⬜      | 6, 10                       | 5                                            |
+| D    | ✅      | 6, 10                       | 5                                            |
 | E    | ⬜      | 14, 15                      | the code steps (4–10)                        |
 
 Four files are edited across tracks, in separate places, so they merge cleanly, though the later PR rebases:
@@ -205,7 +205,7 @@ grpc-java 1.85.1, common-utils 5.2.0). Each finding carries a confidence level:
 
 ## 📡 Proxy
 
-### 1. ⬜ `proxy.http.idleTimeoutSecs = 0`, or any negative but -1, makes the scrape port close every connection unanswered
+### 1. ✅ `proxy.http.idleTimeoutSecs = 0`, or any negative but -1, makes the scrape port close every connection unanswered
 
 **Severity:** low · **Confidence:** confirmed in Ktor 3.6.1's `ktor-server-cio` source (`ServerPipeline.kt`).
 
@@ -222,6 +222,11 @@ otherwise.
 checks do.
 
 **Tests:** `ProxyOptionsTest` rejects 0 and -2, and accepts -1 and 90.
+
+**Resolution:** Fixed in #388. `ProxyOptions` checks `http.idleTimeoutSecs` with `requireDefaultOrPositive`, renamed
+from `requireGrpcTimeout`, so 0 or a negative value other than -1 fails startup with `Invalid configuration:`. -1 gives
+`ProxyHttpService`'s 45-second default, not "no timeout": CIO always applies a timeout, and the docs now say so. The new
+`ProxyOptionsTest` tests, which refuse 0 and -2, failed on the old code.
 
 ### 2. ✅ `proxy_chunked_transfers_abandoned_total` misses transfers that `removeAgentContext` reclaims, which on a disconnect is usually all of them
 
@@ -305,7 +310,7 @@ filter now keeps the context it created in the transport's attributes and logs t
 never authenticated, keeping INFO for an announced agent, whose eviction is logged at INFO too. A `ListAppender` test
 that evicts a pending and an announced context and then ends their transports failed on the old code.
 
-### 5. ⬜ `SdTarget.parse` accepts a `host:port` with a query or fragment
+### 5. ✅ `SdTarget.parse` accepts a `host:port` with a query or fragment
 
 **Severity:** low · **Confidence:** confirmed by reading `java.net.URI`'s parse.
 
@@ -318,6 +323,10 @@ KDoc's `@throws … for anything else`, and the scrape URL Prometheus builds fro
 **Fix:** add `uri.rawQuery == null && uri.rawFragment == null` to `parseAddress`'s `require`.
 
 **Tests:** `SdTarget.parse("localhost:8080?x")` and `SdTarget.parse("localhost:8080#f")` throw.
+
+**Resolution:** Fixed in #388. `parseAddress` refuses a query or fragment, even an empty one, with its own message,
+`sdTargetPrefix '…' can't have a query or a fragment`. The new `SdTargetTest` test and a `ProxyOptionsTest` startup test
+failed on the old code.
 
 ### 6. ⬜ Proxy KDoc and comments that no longer match the code
 
@@ -677,7 +686,7 @@ cap of transfers under way, and a header's strings are cut to 4,096 characters. 
 the old code, and the new `ChunkedTransferLifetimeLincheckTest` fails if either side's order is broken.
 `ProxyRegistry.tla` abstracts chunking away, so it is unchanged.
 
-### 14. ⬜ With the transport filter disabled, `readRequestsFromProxy` checks identity on one lookup and acts on another, so an agent can read or remove another identity's new agent
+### 14. ✅ With the transport filter disabled, `readRequestsFromProxy` checks identity on one lookup and acts on another, so an agent can read or remove another identity's new agent
 
 **Severity:** medium · **Confidence:** plausible. The check-then-act and the unconditional removal are confirmed in
 the code. Winning the race depends on timing, but the attacker can retry as often as it likes.
@@ -722,6 +731,14 @@ This is October #21's check-then-act pattern, on the one RPC #21 and September #
 - with `returnsMany listOf(null, null)`, and B added before the `finally`, B is still registered afterward.
 
 **Follows up:** October #21 (the same class) and September #2 (identity binding with the filter disabled).
+
+**Resolution:** Fixed in #387. `readableAgentContext` looks the context up once, before the `try`, checks the connection
+and the identity on that object, and throws `PERMISSION_DENIED` or `NOT_FOUND`. The stream reads that context, and the
+`finally` calls the new `Proxy.removeAgentContextIfCurrent`, which removes it only through
+`agentContextMap.remove(agentId, ctx)` and then tears it down as `removeAgentContext` does. `ProxyRegistry.tla` models a
+stream that names another connection's agentId, with a new `StreamIdentity` invariant, which the old two lookups
+(`StreamSameLookup = FALSE`) violate. Both tests failed on the old code; in the second, the victim appears in the first
+lookup's answer, since the fixed code has no second lookup to inject into.
 
 ### 15. ✅ Each service-discovery request logs every invalid labels value whole at WARN, so one GET can write about 160 MiB of logs
 
@@ -806,7 +823,7 @@ the four refused kinds can never be scraped. The logback `%replace` was left out
 the startup banner and every multi-line message, and scoping it takes a second appender with `additivity="false"`,
 which would keep the proxy's loggers out of any appender an operator adds to the root.
 
-### 17. ⬜ With the transport filter disabled, every `connectAgentWithTransportFilterDisabled` call creates and announces a new agent context, with no limit
+### 17. ✅ With the transport filter disabled, every `connectAgentWithTransportFilterDisabled` call creates and announces a new agent context, with no limit
 
 **Severity:** low (a non-default mode) · **Confidence:** plausible. The missing limit is confirmed; the memory per
 context wasn't measured.
@@ -826,6 +843,15 @@ context wasn't measured.
 identity and stream.
 
 **Tests:** 10,000 calls from one identity leave at most the cap in `agentContextSize`.
+
+**Resolution:** Fixed in #387, with a per-identity cap only. The new `proxy.internal.maxAgentsPerIdentity` (10,000; 0
+for no limit) is enforced by `AgentContextManager.addAgentContextWithinLimit`, which claims a slot inside a `compute` on
+the identity before it adds the context, and frees it on removal. A connect past the cap gets `RESOURCE_EXHAUSTED`,
+which the agent already retries after its reconnect pause; evicting instead would drop a fleet reconnecting after a
+proxy restart. A refusal logs a WARN at most once a minute per identity. There is no separate total: the identities are
+a fixed, configured set, so they bound it, and a global cap would let one identity lock out the others. With auth off or
+the legacy token, every agent shares one identity, so the cap is the total, and `docs/security-agent-authentication.md`
+records that a peer connecting in a loop can then hold it for about 70s.
 
 ### 18. ✅ The dashboard's page routes build a fresh snapshot on every request
 
@@ -1237,7 +1263,7 @@ against `SCRAPE_LATENCY_BUCKETS` would catch the next drift.
 **Fix:** drop "(or `close()`)". (Making `EmbeddedAgentInfo` `AutoCloseable` would also work, but it's a public API
 change, and `use { }` would make it easy to stop an agent sooner than intended.)
 
-### 31. ⬜ The `transportFilterDisabled` (nginx) warnings say a disconnected agent lingers until the inactivity timeout; the code removes it when its stream ends
+### 31. ✅ The `transportFilterDisabled` (nginx) warnings say a disconnected agent lingers until the inactivity timeout; the code removes it when its stream ends
 
 **Severity:** low · **Confidence:** confirmed for a disconnect that ends the stream. Whether a half-open connection
 through nginx ends it promptly is plausible, but wasn't checked.
@@ -1258,6 +1284,10 @@ after the inactivity timeout", and Troubleshooting adds that stale contexts "are
 
 **Fix:** say that a disconnect that ends the agent's request stream is cleaned up at once, and that
 `maxAgentInactivitySecs` covers an agent that dies before opening its stream, or whose connection stays half-open.
+
+**Resolution:** Fixed in #387, alongside #14 and #17. The README and the website's Advanced Topics, Proxy Configuration,
+and Troubleshooting pages say a disconnect that ends the agent's stream removes it at once, and that the inactivity
+timeout covers only an agent that dies before opening its stream, or a half-open connection.
 
 ### 32. ⬜ Public `EnvVars` and `ProxyOptions` KDoc lists a log level that's rejected, and describes `sdTargetPrefix` the old way
 
