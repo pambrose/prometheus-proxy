@@ -37,7 +37,7 @@ Each path config entry has these fields:
 | Field    | Required | Description                                                   |
 |:---------|:---------|:--------------------------------------------------------------|
 | `name`   | Yes      | Human-readable endpoint name (for logs and debugging)         |
-| `path`   | Yes      | Single URL segment on the proxy that Prometheus scrapes (no embedded `/`, not blank) |
+| `path`   | Yes      | Single URL segment on the proxy that Prometheus scrapes (no embedded `/`, not blank; no whitespace, control characters, `?`, or `#`) |
 | `url`    | Yes      | Actual metrics endpoint the agent fetches from                |
 | `labels` | No       | JSON string of labels for service discovery (default: `"{}"`); keys starting with `__` are dropped |
 
@@ -51,6 +51,11 @@ Each path config entry has these fields:
     registered path at `/<path>` (a one-segment route), so a multi-segment value like
     `app/metrics` is rejected at registration (the agent logs the failure rather than reconnecting).
     Use `app_metrics` instead.
+
+    A `path` also can't contain whitespace, a control character, `?`, or `#`: no scrape's request path
+    can carry one, so Prometheus could never reach such a path. The agent refuses a `pathConfigs` entry
+    with one at startup, naming it, and the proxy refuses such a path at registration. Every other
+    character is allowed, including `.`, `-`, `~`, and `:`.
 
 ## Dynamic Target Discovery
 

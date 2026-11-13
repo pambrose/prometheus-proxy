@@ -24,6 +24,7 @@ import io.grpc.StatusException
 import io.prometheus.Proxy
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
 import io.prometheus.common.ScrapeResults.Companion.toScrapeResults
+import io.prometheus.common.AgentValues.truncate
 import io.prometheus.grpc.AgentInfo
 import io.prometheus.grpc.ChunkData
 import io.prometheus.grpc.ChunkedScrapeResponse
@@ -745,15 +746,10 @@ internal class ProxyServiceImpl(
     private const val RPC_NAME = "writeChunkedResponsesToProxy"
     internal const val UNKNOWN_ADDRESS = "Unknown"
 
-    // The most characters a chunked transfer keeps of each string in its header; see boundedHeader.
+    // The most characters a chunked transfer keeps of each string in its header; see boundedHeader. A fixed bound, not
+    // proxy.internal.maxTargetUrlLength: it caps what a transfer holds while it lasts (November #13), so a limit an
+    // operator can turn off mustn't lift it. A result's strings are cut again where they're shown; see ProxyHttpRoutes.
     internal const val MAX_CHUNKED_HEADER_FIELD_LENGTH = 4096
-
-    // The first [max] characters of [value], which is longer, or one fewer when the last would be the first half of a
-    // surrogate pair: an unpaired surrogate can't be encoded as UTF-8, in the logs or service discovery.
-    private fun truncate(
-      value: String,
-      max: Int,
-    ): String = value.substring(0, if (value[max - 1].isHighSurrogate()) max - 1 else max)
 
     // [response] with each string in its header cut to MAX_CHUNKED_HEADER_FIELD_LENGTH characters. A transfer keeps
     // its header until it ends, and gRPC's 4 MiB message limit was the only other bound on them, so each transfer could
@@ -766,7 +762,7 @@ internal class ProxyServiceImpl(
       if (fields.none { it.length > max })
         return response
 
-      fun cut(value: String) = if (value.length > max) truncate(value, max) else value
+      fun cut(value: String) = truncate(value, max)
 
       logger.debug { "Cut the chunked header for scrapeId: ${header.headerScrapeId} to $max characters a field" }
       return response.toBuilder()

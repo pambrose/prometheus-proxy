@@ -168,17 +168,20 @@ Configure agent cleanup and scrape request management:
 | `maxLabelsSizeBytes`                | 8192    | Max size of a path's labels JSON, in bytes (0 = unlimited)                               |
 | `maxAgentFieldLength`               | 256     | Max characters of an agent's name, host, launch ID, or endpoint (0 = unlimited)          |
 | `maxAgentProxyEndpoints`            | 16      | Max entries of an agent's proxy endpoint list (0 = unlimited)                            |
+| `maxTargetUrlLength`                | 2048    | Max characters of a path's target URL, as the agent reports it (0 = unlimited)           |
 
 The three path limits are safety nets against a runaway or misbehaving agent, set well above normal use. A path
 over a limit is refused at registration, before it is checked against the agent's
 [identity patterns](#per-agent-identities), and the agent logs the rejection once without retrying it. The proxy
 warns when an agent reaches 80% of `maxPathsPerAgent`.
 
-The two agent limits bound what an agent reports about itself when it registers. The proxy only displays these
-values, in its logs, service discovery labels, dashboard, and `/debug` page, but it repeats them for every path the
-agent serves. A longer value is cut to its first `maxAgentFieldLength` characters, and a longer endpoint list to its
-first `maxAgentProxyEndpoints` entries. The agent stays registered, and the proxy logs one warning naming what it
-cut.
+The agent limits bound what an agent reports about itself and its targets. The proxy only displays these values, in
+its logs, service discovery labels, dashboard, and `/debug` page, but it keeps them, and repeats some of them for
+every path the agent serves. A longer name, host name, launch ID, endpoint, or path source is cut to its first
+`maxAgentFieldLength` characters, a longer endpoint list to its first `maxAgentProxyEndpoints` entries, and a longer
+target URL to its first `maxTargetUrlLength` characters, after its credentials are redacted. The agent and its paths
+stay registered, and the proxy logs one warning naming what it cut. The agent redacts a target URL's query values
+before it sends it, so a real one is far shorter than 2048 characters.
 
 ## Content Size Limits
 

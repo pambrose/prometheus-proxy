@@ -20,7 +20,9 @@ import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Proxy
 import io.prometheus.common.Messages.BLANK_AGENT_ID_MSG
 import io.prometheus.common.Messages.BLANK_PATH_MSG
+import io.prometheus.common.AgentValues.pathCharacterProblem
 import io.prometheus.common.Utils.sanitizeUrl
+import io.prometheus.common.AgentValues.truncate
 import io.prometheus.grpc.PathRejectionCause
 import io.prometheus.grpc.PathRejectionCause.CONSOLIDATION_MISMATCH
 import io.prometheus.grpc.PathRejectionCause.HELD_BY_ANOTHER_IDENTITY
@@ -29,8 +31,9 @@ import io.prometheus.grpc.PathRejectionCause.INVALID_PATH
 import io.prometheus.grpc.PathRejectionCause.PATH_LIMIT_REACHED
 import io.prometheus.grpc.UnregisterPathResponse
 import io.prometheus.grpc.unregisterPathResponse
-import io.prometheus.common.Utils.labelsProblem
+import io.prometheus.common.AgentValues.shownValue
 import io.prometheus.proxy.ProxyConstants.FAVICON_FILENAME
+import kotlinx.serialization.json.JsonObject
 
 /**
  * Maps scrape URL paths to their registered [AgentContext] instances.
@@ -51,6 +54,7 @@ internal class ProxyPathManager(
 ) {
   data class AgentContextInfo(
     val isConsolidated: Boolean,
+    // As the agent sent them, for the dashboard and /debug.
     val labels: String,
     // Immutable: mutations replace the pathMap entry with a copy() carrying a new list, so a
     // data-class copy() can never share a still-mutating list with the stored entry.
@@ -63,6 +67,9 @@ internal class ProxyPathManager(
     // The auth identity the path's first registrant connected as, empty when agent auth is disabled. On a
     // consolidated path it is the identity every later agent must also present to join.
     val identityName: String = "",
+    // [labels] as service discovery serves them, parsed and filtered once, when the path registered, which each
+    // service-discovery request only copies (November #15). See Proxy.serviceDiscoveryLabels.
+    val sdLabels: JsonObject = JsonObject(emptyMap()),
   ) {
     fun isNotValid() = agentContexts.all { it.isNotValid() }
   }
@@ -122,28 +129,83 @@ internal class ProxyPathManager(
   ): PathRejection? {
     require(path.isNotBlank()) { BLANK_PATH_MSG }
     formRejection(path, labels, agentContext)?.let { return it }
-    // The target URL is redacted on the way in so the dashboard and /debug never show credentials, even from an agent
-    // that predates agent-side redaction.
+    val key = pathKey(path)
+    // What boundedMetadata cut, for the warning: field names and sizes, never the values.
+    val cut = mutableListOf<String>()
+    val bounded = boundedMetadata(metadata, cut)
+    val sdLabels = Proxy.serviceDiscoveryLabels(labels, proxy.reserveJobAndInstanceLabels)
     val entry =
       AgentContextInfo(
         isConsolidated = agentContext.consolidated,
         labels = labels,
         agentContexts = [agentContext],
-        targetUrl = sanitizeUrl(metadata.targetUrl),
-        pathSource = metadata.pathSource,
-        identityName = metadata.identityName,
+        targetUrl = bounded.targetUrl,
+        pathSource = bounded.pathSource,
+        identityName = bounded.identityName,
+        sdLabels = sdLabels.served,
       )
-    return addValidatedPath(pathKey(path), agentContext, entry)
+    return addValidatedPath(key, agentContext, entry).also { rejection ->
+      // Warned only once the path is stored, so an agent retrying a refused registration isn't warned about each time.
+      if (rejection == null)
+        warnAboutRegistration(key, agentContext, sdLabels, cut)
+    }
+  }
+
+  // Says once, as [path] registers, what of its registration won't be served as sent: the labels service discovery
+  // leaves out, which each service-discovery request no longer repeats (November #15), and the metadata [cut] names.
+  private fun warnAboutRegistration(
+    path: String,
+    agentContext: AgentContext,
+    sdLabels: Proxy.SdLabels,
+    cut: List<String>,
+  ) {
+    if (sdLabels.reserved.isNotEmpty()) {
+      val reserved = sdLabels.reserved.joinToString(prefix = "[", postfix = "]") { shownValue(it) }
+      logger.warn { "Agent labels $reserved for path /$path are reserved and won't appear in service discovery" }
+    }
+    // Left out of service discovery rather than refused: labels matter only there, and the path still serves scrapes.
+    sdLabels.problem?.also {
+      logger.warn { "Agent labels for path /$path won't all appear in service discovery: $it" }
+    }
+    if (cut.isNotEmpty())
+      logger.warn {
+        "Agent ${agentContext.agentId} registered path /$path with ${cut.joinToString()}, over " +
+          "proxy.internal.maxTargetUrlLength (${proxy.maxTargetUrlLength}) or maxAgentFieldLength " +
+          "(${proxy.maxAgentFieldLength}); keeping the start of each"
+      }
+  }
+
+  // [metadata] as a path's entry keeps it. The target URL is redacted, so the dashboard and /debug never show
+  // credentials, even from an agent that predates agent-side redaction, and then cut to
+  // proxy.internal.maxTargetUrlLength characters; the path source is cut to maxAgentFieldLength; 0 leaves either whole.
+  // Each was bounded only by gRPC's 4 MiB message limit and is shown on every dashboard push and /debug page, so about
+  // 100 registrations exhausted the heap (November #12). The URL is redacted first: cut first, a URL whose userinfo ran
+  // past the cut lost the "@" the redaction looks for, and kept the start of its password. Adds what it cut, and how
+  // long it was, to [cut].
+  private fun boundedMetadata(
+    metadata: PathMetadata,
+    cut: MutableList<String>,
+  ): PathMetadata {
+    fun bounded(
+      field: String,
+      value: String,
+      max: Int,
+    ): String = truncate(value, max).also { if (it.length < value.length) cut += "$field (${value.length} characters)" }
+
+    return metadata.copy(
+      targetUrl = bounded("targetUrl", sanitizeUrl(metadata.targetUrl), proxy.maxTargetUrlLength),
+      pathSource = bounded("pathSource", metadata.pathSource, proxy.maxAgentFieldLength),
+    )
   }
 
   /**
    * Returns why [path] can't be registered as given, or null when its form and size are fine: it names no path
-   * segment, it is longer than `proxy.internal.maxPathLength`, its [labels] are larger than `maxLabelsSizeBytes`, or
-   * it has more than one segment.
+   * segment, it is longer than `proxy.internal.maxPathLength`, its [labels] are larger than `maxLabelsSizeBytes`, it
+   * has a character no scrape's request path can carry, or it has more than one segment.
    *
    * Each check is linear in the input and takes no lock, so `registerPath` runs them before it matches the path
    * against the caller's identity globs, which must never see a path of unbounded length (October #22). [addPath]
-   * runs them as well. Every reason shows at most [SHOWN_PATH_CHARS] characters of the path.
+   * runs them as well. Every reason shows at most [SHOWN_PATH_CHARS] characters of the path, escaped.
    */
   fun formRejection(
     path: String,
@@ -156,9 +218,23 @@ internal class ProxyPathManager(
     if (key.isBlank())
       return rejectPath(agentContext, shown, "Invalid path: /$shown (a path segment is required)", INVALID_PATH)
     return sizeRejection(key, shown, labels, agentContext)
+      ?: characterRejection(key, shown, agentContext)
       ?: multiSegmentPathError(key, shown)?.let { PathRejection(it, INVALID_PATH) }
       ?: reservedPathRejection(key, shown, agentContext)
   }
+
+  // Rejects a path with a control character, whitespace, '?', or '#' (see AgentValues.pathCharacterProblem). No scrape
+  // could reach one, though it was advertised in service discovery, and the path is logged at INFO as it registers,
+  // where a line break in it let an agent forge log lines: a glob's '*' matches line terminators, so the globs let it
+  // through (November #16). The agent refuses such a pathConfigs entry at startup.
+  private fun characterRejection(
+    key: String,
+    shown: String,
+    agentContext: AgentContext,
+  ): PathRejection? =
+    pathCharacterProblem(key)?.let { problem ->
+      rejectPath(agentContext, shown, "Invalid path: /$shown ($problem)", INVALID_PATH)
+    }
 
   // Rejects a path the scrape port answers itself: registered, it would be advertised in service discovery but could
   // never be scraped. The SD path returned the SD JSON, favicon.ico a 404, and the blitz path "42" (October #6).
@@ -271,7 +347,7 @@ internal class ProxyPathManager(
           pathMap[path] = agentInfo?.joinedBy(agentContext, entry.identityName) ?: entry
         else
           takeOverPath(path, agentContext, agentInfo, entry)
-        recordRegistration(path, agentContext, entry.labels, alreadyServes)
+        recordRegistration(path, agentContext, alreadyServes)
       }
       rejection
     }
@@ -366,12 +442,11 @@ internal class ProxyPathManager(
     }
   }
 
-  // Counts, reports, and announces [agentContext]'s registration of [path] with [labels], once pathMap holds it.
-  // Callers MUST hold pathMap.
+  // Counts, reports, and announces [agentContext]'s registration of [path], once pathMap holds it. Callers MUST hold
+  // pathMap.
   private fun recordRegistration(
     path: String,
     agentContext: AgentContext,
-    labels: String,
     alreadyServes: Boolean,
   ) {
     if (!alreadyServes) {
@@ -380,14 +455,6 @@ internal class ProxyPathManager(
     }
     agentContext.forgetRejection(path)
     proxy.metrics { pathRegistered(path) }
-    // Said once here rather than on every service-discovery poll, which is where the labels are dropped.
-    val reserved = Proxy.reservedSdLabelKeys(labels, proxy.reserveJobAndInstanceLabels)
-    if (reserved.isNotEmpty())
-      logger.warn { "Agent labels $reserved for path /$path are reserved and won't appear in service discovery" }
-    // Left out of service discovery rather than refused: labels matter only there, and the path still serves scrapes.
-    labelsProblem(labels)?.also {
-      logger.warn { "Agent labels for path /$path won't all appear in service discovery: $it" }
-    }
     // The agentId, not the context, whose name and host name the agent reports: this is logged for every path.
     if (!isTestMode) logger.info { "Added path /$path for agentId ${agentContext.agentId}" }
     // Inside synchronized(pathMap) on purpose: tryEmit never suspends or blocks, so publishing here
@@ -524,8 +591,8 @@ internal class ProxyPathManager(
     // How much of an over-long path a rejection shows.
     private const val SHOWN_PATH_CHARS = 64
 
-    // [key] as a rejection shows it: whole up to SHOWN_PATH_CHARS characters, and otherwise cut there and marked "...".
-    internal fun shownPath(key: String): String =
-      if (key.length > SHOWN_PATH_CHARS) key.take(SHOWN_PATH_CHARS) + "..." else key
+    // [key] as a rejection or a log line shows it: whole up to SHOWN_PATH_CHARS characters, and otherwise cut there and
+    // marked "...", with its control characters escaped (November #16). See AgentValues.shownValue.
+    internal fun shownPath(key: String): String = shownValue(key, SHOWN_PATH_CHARS)
   }
 }

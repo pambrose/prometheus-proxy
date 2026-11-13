@@ -22,8 +22,11 @@ import com.pambrose.common.dsl.KtorDsl.newHttpClient
 import com.pambrose.common.util.zip
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.ints.shouldBeLessThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldStartWith
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
@@ -32,6 +35,7 @@ import io.ktor.http.withCharset
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
+import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import io.prometheus.Proxy
@@ -61,6 +65,22 @@ class ProxyUtilsTest : StringSpec() {
       result.statusCode shouldBe HttpStatusCode.NotFound
       result.updateMsgs shouldBe ["invalid_path"]
       verify { mockProxy.logActivity("Invalid path request /invalid-path") }
+    }
+
+    // The path comes from any client of the unauthenticated scrape port. CIO ends a request target at whitespace, but
+    // passes other control characters, such as a terminal escape, and a target as long as its line limit
+    // (November #40).
+    "invalidPathResponse should show a request path cut, with its control characters escaped" {
+      val mockProxy = mockk<Proxy>(relaxed = true)
+      val messages = mutableListOf<String>()
+      every { mockProxy.logActivity(capture(messages)) } returns Unit
+
+      ProxyUtils.invalidPathResponse("x\u001b[2J" + "a".repeat(10_000), mockProxy)
+
+      val message = messages.single()
+      message shouldStartWith "Invalid path request /x\\u001b[2J"
+      message.none { it.isISOControl() }.shouldBeTrue()
+      message.length shouldBeLessThan 100
     }
 
     "emptyPathResponse should return correct status and message" {

@@ -23,7 +23,8 @@ endpoints, and streams the responses back. See [Agent Configuration](configurati
 A single URL path segment registered by an agent (for example `app1_metrics`). Prometheus
 scrapes `http://proxy-host:8080/<path>`, and the proxy routes that request to the agent that
 registered the path. Paths must be a **single segment** — an embedded `/` (e.g.
-`app/metrics`) is rejected at registration. See [Troubleshooting](troubleshooting.md).
+`app/metrics`) is rejected at registration, as is whitespace, a control character, `?`, or `#`.
+See [Troubleshooting](troubleshooting.md).
 
 ### pathConfig
 

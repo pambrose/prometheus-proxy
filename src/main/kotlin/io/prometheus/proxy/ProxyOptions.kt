@@ -427,6 +427,7 @@ class ProxyOptions internal constructor(
         "maxLabelsSizeBytes" to maxLabelsSizeBytes,
         "maxAgentFieldLength" to maxAgentFieldLength,
         "maxAgentProxyEndpoints" to maxAgentProxyEndpoints,
+        "maxTargetUrlLength" to maxTargetUrlLength,
       ).forEach { (name, value) ->
         require(value >= 0) { "internal.$name must be >= 0 (0 = unlimited): $value" }
         logger.info { "internal.$name: ${if (value == 0) "unlimited" else value}" }

@@ -22,6 +22,7 @@ import com.pambrose.common.delegate.AtomicDelegates.atomicBoolean
 import com.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.pambrose.common.dsl.GuavaDsl.toStringElements
 import io.prometheus.common.ScrapeResults
+import io.prometheus.common.AgentValues.shownValue
 import io.prometheus.grpc.PathRejectionCause
 import io.prometheus.grpc.RegisterAgentRequest
 import java.util.concurrent.ConcurrentHashMap
@@ -233,14 +234,17 @@ internal class AgentContext(
       lastRequestTimeMark = now
   }
 
+  // Logged as the agent connects, disconnects, or is removed or evicted, so the fields the agent reports are shown with
+  // their control characters escaped: with its CR/LF intact, an agent name could forge log lines (November #16). They
+  // aren't cut again here; ProxyServiceImpl.registerAgent cut them to proxy.internal.maxAgentFieldLength.
   override fun toString() =
     toStringElements {
       add("agentId", agentId)
-      add("launchId", launchId)
+      add("launchId", shownValue(launchId, 0))
       add("consolidated", consolidated)
       add("valid", valid)
-      add("agentName", agentName)
-      add("hostName", hostName)
+      add("agentName", shownValue(agentName, 0))
+      add("hostName", shownValue(hostName, 0))
       add("remoteAddr", remoteAddr)
       add("lastRequestDuration", lastRequestDuration)
     }

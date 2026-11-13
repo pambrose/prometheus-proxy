@@ -9,10 +9,12 @@ _Not yet released_
 Fixes from the November 2026 code review. For applications that embed the agent from Maven Central, the library jar
 stops replacing the host's logging configuration, the Java example compiles, Maven builds get the patched Jackson and
 TLS natives, and a setting the agent rejects throws a `ConfigLoadException` with credentials redacted. The proxy no
-longer lets one agent hold memory with chunked transfers that never finish, or a dashboard client slow its scrapes;
-Zipkin tracing can be turned on; and the Docker quick start connects. A standalone proxy or agent with a bad setting
-now exits with one redacted line instead of a stack trace. Embedders should read **Before you upgrade**: the logging
-configuration and the exception a bad setting throws have changed.
+longer lets one agent hold memory with chunked transfers that never finish or with huge target URLs, flood its log
+from service discovery, or forge lines in its log, and a dashboard client can no longer slow its scrapes; Zipkin
+tracing can be turned on; and the Docker quick start connects. A standalone proxy or agent with a bad setting now
+exits with one redacted line instead of a stack trace. Read **Before you upgrade**: for embedders, the logging
+configuration and the exception a bad setting throws have changed, and for everyone, the proxy now cuts a path's
+target URL to 2048 characters and refuses a path with whitespace, a control character, `?`, or `#`.
 
 ### Before you upgrade
 
@@ -31,6 +33,18 @@ configuration and the exception a bad setting throws have changed.
   `ConfigLoadException`. It now throws a `ConfigLoadException`, with the original exception as its cause. If your code
   catches `IllegalArgumentException` or `ConfigException` from `startAsyncAgent` or `startSyncAgent`, catch
   `ConfigLoadException` instead.
+- **The proxy keeps at most 2048 characters of a path's target URL.** The new `proxy.internal.maxTargetUrlLength`
+  (2048) cuts the target URL an agent reports for each path, after its credentials are redacted, and the path's
+  source is cut to `maxAgentFieldLength` (256). The proxy only shows these, on the dashboard and `/debug`; the agent
+  scrapes its own copy of the URL, so scrapes are unaffected, and the agent redacts the URL's query values before it
+  sends it, so a real one is far shorter. Raise the limit, or set it to `0`, to keep longer URLs whole; a negative
+  value fails startup.
+- **A path with whitespace, a control character, `?`, or `#` is refused.** No scrape can reach such a path: a request
+  line ends at whitespace and can't carry a control character, `?` starts the query, and a client never sends `#`.
+  The proxy now refuses one at registration, as an invalid path that the agent doesn't retry, and the agent refuses a
+  `pathConfigs` entry with one at startup, naming it: a standalone agent exits with `Invalid configuration:`, and an
+  embedded one throws `ConfigLoadException`. A path that worked before isn't affected; rename one that never could
+  be scraped. Every other character is still allowed, including `.`, `-`, `~`, `:`, `%`, and non-ASCII letters.
 
 ### Security
 
@@ -54,6 +68,21 @@ configuration and the exception a bad setting throws have changed.
   put the URL, credentials included, in the exception an embedding application caught and in the stack trace a
   standalone agent or proxy printed. They're now redacted there, as they already were when the config failed to load,
   and from every message in the exception's cause chain.
+- **One agent can no longer run the proxy out of memory with long path details.** A path's target URL and source were
+  kept whole, bounded only by gRPC's 4 MiB message limit, and shown on every dashboard update and `/debug` page, so
+  about 100 registrations could exhaust the heap of the Helm chart's proxy. They're now cut (see **Before you
+  upgrade**), as are the failure reason, URL, and content type an agent returns with each scrape, before `/debug`
+  keeps them or the log shows them.
+- **Service discovery no longer re-logs bad labels on every request.** Each request to the service-discovery
+  endpoint, on the unauthenticated scrape port, re-read every path's labels and logged each value that wasn't a JSON
+  object whole at WARN, so one request could write about 160 MiB of logs. The labels are now read once, when the path
+  registers, which warns about the ones service discovery leaves out, and each request only copies the result.
+- **An agent can no longer forge lines in the proxy's log.** A path, a label key, or the name, host name, or launch
+  ID an agent reports could contain line breaks, which the proxy logged as they were. Every value an agent supplies is
+  now logged with its control characters escaped (`\n`, `\r`, `\uXXXX`), and a path with a line break is refused.
+- **An unknown scrape path is logged escaped.** A request for a path no agent serves is logged with its path cut
+  and its control characters escaped, so a client of the scrape port can't write terminal escapes or very long
+  text into the proxy's log.
 
 ### Bug Fixes
 
@@ -109,6 +138,8 @@ configuration and the exception a bad setting throws have changed.
   whose findings are resolved, moves to `docs/archive/`.
 - The website's Embedded Agent page lists the settings for which `startAsyncAgent` throws `ConfigLoadException`, and
   its Security page says a config URL's credentials are redacted from the error a bad setting causes as well.
+- The website's Proxy Configuration page documents `proxy.internal.maxTargetUrlLength`, and its Agent Configuration,
+  Glossary, Troubleshooting, and Security pages say which characters a path can't contain.
 
 ### Build and tooling
 
@@ -137,6 +168,10 @@ configuration and the exception a bad setting throws have changed.
 - Tests check that an embedded agent reports each kind of bad setting as a `ConfigLoadException` that carries no
   credentials from the config URL, and that a standalone agent or proxy given one exits with code 1 and a single log
   line.
+- Tests check that a huge target URL, path source, failure reason, URL, or content type is stored or logged cut, that a
+  URL's credentials stay redacted when the cut falls inside them, that service-discovery requests log nothing about a
+  path's labels, and that an agent name, label key, or path with a line break never reaches a log line unescaped.
+  Each failed before its fix.
 
 ---
 

@@ -23,8 +23,10 @@ import io.prometheus.agent.discovery.DiscoveredPath
 import io.prometheus.agent.filter.MetricFilter
 import io.prometheus.common.Messages.BLANK_PATH_MSG
 import io.prometheus.common.Utils.defaultEmptyJsonObject
-import io.prometheus.common.Utils.labelsProblem
+import io.prometheus.common.AgentValues.labelsProblem
+import io.prometheus.common.AgentValues.pathCharacterProblem
 import io.prometheus.common.Utils.sanitizeUrl
+import io.prometheus.common.AgentValues.shownValue
 import io.prometheus.grpc.PathRejectionCause.CONSOLIDATION_MISMATCH
 import io.prometheus.grpc.PathRejectionCause.HELD_BY_ANOTHER_IDENTITY
 import kotlinx.coroutines.delay
@@ -119,6 +121,16 @@ internal class AgentPathManager(
         val duplicates = configs.groupingBy { it.path.removePrefix("/") }.eachCount().filterValues { it > 1 }.keys
         require(duplicates.isEmpty()) {
           "agent.pathConfigs has more than one entry for path ${duplicates.joinToString { "/$it" }}; keep one"
+        }
+        // The proxy refuses a path no scrape can reach for a character in it (November #16), so such an entry fails
+        // here, at startup, where it can be fixed, rather than at every connect.
+        configs.forEach { c ->
+          pathCharacterProblem(c.path.removePrefix("/"))?.also { problem ->
+            throw IllegalArgumentException(
+              "agent.pathConfigs entry ${shownValue(c.quotedName)} has path '${shownValue(c.path)}', which the proxy " +
+                "refuses: $problem",
+            )
+          }
         }
         // The proxy leaves labels it can't serve out of service discovery, so say so at startup, where it can be fixed.
         // A warning, not a failure: labels matter only to service discovery, and the path still serves scrapes.

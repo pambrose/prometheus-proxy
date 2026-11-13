@@ -99,7 +99,7 @@ class EmbeddedAgentApiTest : StringSpec() {
 
     // November #8: the failure contract covers a config the agent loads but can't use, not only one it can't load. Each
     // of these escaped as an IllegalArgumentException or a Typesafe ConfigException, and the Typesafe messages began
-    // with the config URL, credentials and all. The first four are the review's inputs. The trust store and the three
+    // with the config URL, credentials and all. The first four are the review's inputs. The trust store and the four
     // after it fail as the Agent is built, rather than as its options are resolved.
     listOf(
       InvalidConfig("an out-of-range value", "scrapeTimeoutSecs = 0", "scrapeTimeoutSecs"),
@@ -114,6 +114,12 @@ class EmbeddedAgentApiTest : StringSpec() {
       InvalidConfig(
         "a duplicate pathConfigs entry",
         """pathConfigs = [{ name = a, path = m, url = "$TARGET_URL" }, { name = b, path = m, url = "$TARGET_URL" }]""",
+        "pathConfigs",
+      ),
+      // November #16: the proxy refuses such a path, so the agent refuses it at startup.
+      InvalidConfig(
+        "a pathConfigs path no scrape can carry",
+        """pathConfigs = [{ name = a, path = "app metrics", url = "$TARGET_URL" }]""",
         "pathConfigs",
       ),
       InvalidConfig(

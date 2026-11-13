@@ -168,9 +168,15 @@ class ProxyServiceImplTest : StringSpec() {
 
   // A mocked proxy whose path manager is real, with the given limits, and a real agent context it can find: what a
   // test of the path checks registerPath runs needs.
-  private fun proxyWithRealPathManager(maxPathLength: Int = 0): Pair<Proxy, AgentContext> {
+  private fun proxyWithRealPathManager(
+    maxPathLength: Int = 0,
+    maxTargetUrlLength: Int = 0,
+    maxAgentFieldLength: Int = 0,
+  ): Pair<Proxy, AgentContext> {
     val proxy = createMockProxy()
     every { proxy.maxPathLength } returns maxPathLength
+    every { proxy.maxTargetUrlLength } returns maxTargetUrlLength
+    every { proxy.maxAgentFieldLength } returns maxAgentFieldLength
     every { proxy.pathManager } returns ProxyPathManager(proxy, isTestMode = true)
     val agentContext = AgentContext("remote-addr")
     every { proxy.agentContextManager.getAgentContext(agentContext.agentId) } returns agentContext
@@ -345,6 +351,28 @@ class ProxyServiceImplTest : StringSpec() {
       warning shouldContain "proxyEndpoints"
       warning shouldNotContain "hostName"
       warning shouldNotContain "x".repeat(16)
+    }
+
+    // November #16: the name, host name, and launch ID were cut (October #23) but not escaped, and "Connected to"
+    // logged them at INFO, so an agent could forge whole log lines with CR/LF in its name.
+    "registerAgent should log an agent name with CR/LF escaped, leaving no raw line break in any message" {
+      val (proxy, agentContext) = proxyWithRealAgentContext(maxAgentFieldLength = 256)
+      val messages =
+        captureLogs("io.prometheus.proxy") {
+          runBlocking {
+            ProxyServiceImpl(proxy).registerAgent(
+              registerAgentRequest {
+                agentId = agentContext.agentId
+                agentName = "agent\r\n12:00:00.000 INFO  [ProxyServiceImpl.kt:177] - Connected to forged"
+                hostName = "host\nforged"
+                launchId = "launch\rforged"
+              },
+            )
+          }
+        }.map { it.formattedMessage }
+
+      messages.single { it.startsWith("Connected to") } shouldContain "agent\\r\\n12:00:00.000"
+      messages.filter { it.contains('\r') || it.contains('\n') }.shouldBeEmpty()
     }
 
     // A cut never ends on the first half of a surrogate pair, which would leave an unpaired surrogate to encode.
@@ -627,6 +655,58 @@ class ProxyServiceImplTest : StringSpec() {
 
       response.rejectionCause shouldBe PathRejectionCause.INVALID_PATH
       response.reason shouldContain "Multi-segment"
+    }
+
+    // November #12: a path's target URL and source were stored whole, bounded only by gRPC's 4 MiB message limit, and
+    // shown on every dashboard push and /debug page, so about 100 registrations exhausted the chart's heap. The URL is
+    // now cut to maxTargetUrlLength and the source to maxAgentFieldLength; the path still registers.
+    "registerPath should store a huge target URL and path source cut to the proxy.internal limits" {
+      val (proxy, agentContext) = proxyWithRealPathManager(maxTargetUrlLength = 2048, maxAgentFieldLength = 256)
+      val response =
+        ProxyServiceImpl(proxy).registerPath(
+          registerPathRequest {
+            agentId = agentContext.agentId
+            path = "metrics"
+            targetUrl = "http://target:9100/" + "u".repeat(1 shl 20)
+            pathSource = "s".repeat(1 shl 20)
+          },
+        )
+
+      response.valid.shouldBeTrue()
+      val info = proxy.pathManager.getAgentContextInfo("metrics").shouldNotBeNull()
+      info.targetUrl.length shouldBe 2048
+      info.targetUrl shouldStartWith "http://target:9100/uuu"
+      info.pathSource shouldBe "s".repeat(256)
+    }
+
+    // November #16: a path with a line break passed every check -- a glob's '*' matches line terminators by design --
+    // and was logged at INFO whole, so an agent could forge log lines. No scrape can reach such a path, so it's refused
+    // as invalid before the identity's globs see it, and the refusal shows it escaped.
+    "registerPath should refuse a path with a line break as INVALID_PATH, and log it escaped" {
+      val (proxy, agentContext) = proxyWithRealPathManager(maxPathLength = 512)
+      val identity = AgentIdentity("team_a", ByteArray(0), ["team_a_*"])
+      lateinit var response: RegisterPathResponse
+      val messages =
+        captureLogs("io.prometheus.proxy") {
+          response =
+            withIdentity(identity) {
+              runBlocking {
+                ProxyServiceImpl(proxy).registerPath(
+                  registerPathRequest {
+                    agentId = agentContext.agentId
+                    path = "team_a_x\n12:00:00.000 WARN forged"
+                  },
+                )
+              }
+            }
+        }.map { it.formattedMessage }
+
+      response.valid.shouldBeFalse()
+      response.rejectionCause shouldBe PathRejectionCause.INVALID_PATH
+      response.reason shouldContain "team_a_x\\n12:00"
+      response.reason shouldNotContain "\n"
+      proxy.pathManager.pathMapSize shouldBe 0
+      messages.single { "team_a_x" in it } shouldNotContain "\n"
     }
 
     // A blank path reached addPath, whose require() threw, and the agent got an UNKNOWN status instead of a rejection.
