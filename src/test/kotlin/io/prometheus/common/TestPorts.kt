@@ -63,6 +63,13 @@ object TestPorts {
   // The scrape target HarnessTests.timeoutTest serves, which every standard harness suite runs
   const val HARNESS_TIMEOUT_TARGET_PORT = 9528
 
+  // The scrape target HarnessTests.chunkedScrapeTest serves, which every standard harness suite and
+  // InProcessReconnectTest run (November #41)
+  const val HARNESS_CHUNKED_TARGET_PORT = 11300
+
+  // AgentGrpcStreamRetentionTest: the Netty proxy stand-in its control case streams to
+  const val RETENTION_NETTY_PORT = 11301
+
   // InProcessIdleShutdownTest, InProcessHeartbeatDisabledTest, and AgentMetricFilterTest
   const val IDLE_SHUTDOWN_HTTP_PORT = 9525
   const val HEARTBEAT_DISABLED_HTTP_PORT = 9526

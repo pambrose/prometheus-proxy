@@ -45,7 +45,13 @@ object HarnessConstants {
   const val MAX_DELAY_MILLIS = 600
 
   const val DEFAULT_SCRAPE_TIMEOUT_SECS = 3
-  const val DEFAULT_CHUNK_SIZE_BYTES = 5
+
+  // The smallest chunk size agent.chunkContentSizeKbs takes, so the standard suite's scrapes are cut into many chunks.
+  // It was 5 bytes, passed under a key that doesn't exist, so the specs ran at the default 32 KB (November #41). Bytes
+  // can't be set through config, and at 5 bytes proxyCallTest's largest target, about 250 KB gzipped, is 50,000 chunks
+  // a scrape: set by hand, the Netty suite ran past its time budget, and the in-process one out of heap (see
+  // AgentGrpcStreamRetentionTest).
+  const val DEFAULT_CHUNK_SIZE_KBS = 1
 
   private const val HARNESS_CONFIG_FILE = "config/test-configs/harness.conf"
   private const val JUNIT_FILE = "config/test-configs/junit-test.conf"

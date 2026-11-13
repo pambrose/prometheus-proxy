@@ -18,16 +18,18 @@
 
 package io.prometheus.harness
 
+import com.pambrose.common.util.simpleClassName
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldNotBeEmpty
-import io.prometheus.harness.HarnessConstants.DEFAULT_CHUNK_SIZE_BYTES
+import io.prometheus.harness.HarnessConstants.DEFAULT_CHUNK_SIZE_KBS
 import io.prometheus.harness.HarnessConstants.DEFAULT_SCRAPE_TIMEOUT_SECS
 import io.prometheus.harness.HarnessConstants.HARNESS_CONFIG
 import io.prometheus.harness.HarnessConstants.PROXY_PORT
 import io.prometheus.harness.support.HarnessSetup
+import io.prometheus.harness.support.HarnessTests
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
 import kotlin.time.Duration.Companion.seconds
@@ -49,7 +51,7 @@ class InProcessReconnectTest : StringSpec() {
           startAgent(
             serverName = "reconnect",
             scrapeTimeoutSecs = DEFAULT_SCRAPE_TIMEOUT_SECS,
-            chunkContentSizeBytes = DEFAULT_CHUNK_SIZE_BYTES,
+            chunkContentSizeKbs = DEFAULT_CHUNK_SIZE_KBS,
             maxConcurrentClients = HARNESS_CONFIG.concurrentClients,
             args = [
               "-Dagent.internal.heartbeatMaxInactivitySecs=1",
@@ -85,6 +87,12 @@ class InProcessReconnectTest : StringSpec() {
         agent.agentId shouldNotBe originalAgentId
         proxy.pathManager.getAgentContextInfo(path).shouldNotBeNull()
       }
+    }
+
+    // The chunk size this spec sets took effect only once startAgent passed a key that exists (November #41). Run after
+    // the reconnect, so the transfer goes over the new connection's chunked stream.
+    "a chunked scrape should arrive intact over the reconnected stream" {
+      HarnessTests.chunkedScrapeTest(agent, PROXY_PORT, simpleClassName)
     }
   }
 }

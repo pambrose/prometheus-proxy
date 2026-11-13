@@ -190,6 +190,11 @@ no jar on the classpath carries a `logback.xml`, which would replace the host ap
   a reconnect builds traces through one `Tracing`; a repeated connect failure logs one WARN, compared by gRPC status
   code (or class), including against a port that accepts TCP but never answers HTTP/2; a connect the proxy refuses
   with `RESOURCE_EXHAUSTED` is a failed connect, which the agent retries
+- **AgentGrpcStreamRetentionTest** — a chunk the proxy has read is no longer reachable while the agent's chunked
+  stream stays open, checked with weak references after 2 MiB of 1 KiB chunks. Over Netty, gRPC's retry buffer
+  commits past its 1 MiB per-RPC limit and lets go; over the in-process transport, which reports no message sizes,
+  it never committed, so the agent kept every chunk until it builds an in-process channel without retry (November
+  #43, found while fixing #41)
 - **AgentHttpServiceTest** — HTTP service: scraping endpoints, compression support, response handling, timeout behavior,
   error cases
 - **AgentHttpServiceHeaderTest** — HTTP Accept header handling per-request (prevents stale headers in cached clients)
@@ -398,7 +403,9 @@ These support helpers also live here (not test classes themselves):
   `examples`, `testing`, `etc/compose`, the container suite's agent configs, and the bundled `reference.conf`) is one
   `config/config.conf` declares, with the same shape, since HOCON ignores a key it doesn't know; a list's entries are
   checked against the fields its schema entry gives, as for `proxy.auth` and `agent.pathConfigs`, and a discovery
-  targets file's `paths` entries against `agent.pathConfigs`'
+  targets file's `paths` entries against `agent.pathConfigs`'. The same goes for every `proxy.` or `agent.` key a
+  test source under `src/test/kotlin` passes as a `-D` setting in a string literal, which HOCON ignores just the
+  same; a key built at run time isn't seen
 - **ConfigValsTest** — ConfigVals auto-generated from HOCON schema (validates default values)
 - **DashboardMetricNamesTest** — the Grafana dashboards, the alert rules, the docs' PromQL, and the metric names
   on the website's pages all name series the proxy and agent expose (a counter only with its `_total` suffix); proxy
@@ -451,15 +458,19 @@ Integration tests exercise full proxy+agent workflows with real instances:
   authentication
 - **TlsWithMutualAuthTest** — the standard harness suite over a real mutual-TLS channel (Netty, client certs)
 
-Each integration test class runs a standard suite defined in `AbstractHarnessTests`:
+Each integration test class runs a standard suite defined in `AbstractHarnessTests`, with its agent's chunk size at
+1 KB (`HarnessConstants.DEFAULT_CHUNK_SIZE_KBS`), the smallest `agent.chunkContentSizeKbs` takes, so a scrape's
+chunked transfer crosses the spec's transport:
 
 1. Scrape metrics through proxy
-2. Return not found for missing path
-3. Return not found for invalid path
-4. Add/remove paths correctly
-5. Add/remove paths under concurrent access
-6. Handle invalid agent URL gracefully
-7. Timeout when scrape exceeds deadline
+2. Chunk a scrape larger than the chunk size: the proxy reassembles it from as many chunks as the agent's chunk size
+   cuts it into, and the client gets it intact; with metrics on, the agent counts one chunked result
+3. Return not found for missing path
+4. Return not found for invalid path
+5. Add/remove paths correctly
+6. Add/remove paths under concurrent access
+7. Handle invalid agent URL gracefully
+8. Timeout when scrape exceeds deadline
 
 #### Targeted harness specs
 
@@ -501,7 +512,8 @@ mechanism that the standard suite cannot reach:
   reconnects with a fresh agent id, rather than leaving a zombie agent
 - **InProcessIdleShutdownTest** — stopping an idle connected agent must not deadlock (finding 1 in
   `docs/archive/CODE_REVIEW_JULY_2026.md`)
-- **InProcessReconnectTest** — the full disconnect → reconnect → re-register cycle, in-process
+- **InProcessReconnectTest** — the full disconnect → reconnect → re-register cycle, in-process; then a scrape
+  chunked at 1 KB arrives intact over the new connection's stream
 - **InProcessStaleAgentCleanupTest** — the eviction thread staying off, and being forced on by the
   transport-filter mode
 - **InProcessTransportFilterDisabledTest** — both sides with the transport filter off: a scrape succeeds,
@@ -525,10 +537,11 @@ mechanism that the standard suite cannot reach:
 - **HarnessHelpersTest** — `awaitPortFree()` fails when a port stays taken, and `HarnessConstants.localConfigFile()`
   fails for a missing test config rather than fetching one from GitHub
 - **TestUtils** — Utility functions: `startProxy()`, `startAgent()`, `exceptionHandler()`
-- **AbstractHarnessTests** — Abstract base defining the standard 7-test suite
+- **AbstractHarnessTests** — Abstract base defining the standard 8-test suite
 - **BasicHarnessTests** — Reusable test implementations (missing path, invalid path, add/remove paths, etc.)
-- **HarnessTests** — Core integration logic: `proxyCallTest()` (sequential, parallel, concurrent queries) and
-  `timeoutTest()`
+- **HarnessTests** — Core integration logic: `proxyCallTest()` (sequential, parallel, concurrent queries),
+  `chunkedScrapeTest()` (a target several chunks long once gzipped, checked against the proxy's DEBUG summary of the
+  transfer it reassembled, and the agent's `chunked` result count when metrics are on), and `timeoutTest()`
 
 Two more live one level up, in `harness/` itself:
 

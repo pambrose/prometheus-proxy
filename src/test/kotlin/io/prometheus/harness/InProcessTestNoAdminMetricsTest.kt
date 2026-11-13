@@ -20,7 +20,7 @@ package io.prometheus.harness
 
 import com.pambrose.common.util.simpleClassName
 import io.prometheus.common.TestPorts
-import io.prometheus.harness.HarnessConstants.DEFAULT_CHUNK_SIZE_BYTES
+import io.prometheus.harness.HarnessConstants.DEFAULT_CHUNK_SIZE_KBS
 import io.prometheus.harness.HarnessConstants.DEFAULT_SCRAPE_TIMEOUT_SECS
 import io.prometheus.harness.HarnessConstants.HARNESS_CONFIG
 import io.prometheus.harness.HarnessConstants.PROXY_PORT
@@ -52,7 +52,7 @@ class InProcessTestNoAdminMetricsTest :
           startAgent(
             serverName = "nometrics",
             scrapeTimeoutSecs = DEFAULT_SCRAPE_TIMEOUT_SECS,
-            chunkContentSizeBytes = DEFAULT_CHUNK_SIZE_BYTES,
+            chunkContentSizeKbs = DEFAULT_CHUNK_SIZE_KBS,
             maxConcurrentClients = HARNESS_CONFIG.concurrentClients,
           )
         },

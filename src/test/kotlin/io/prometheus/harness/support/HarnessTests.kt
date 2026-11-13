@@ -23,9 +23,13 @@ import com.pambrose.common.dsl.blockingGet
 import com.pambrose.common.dsl.KtorDsl.get
 import com.pambrose.common.dsl.KtorDsl.httpClient
 import com.pambrose.common.dsl.KtorDsl.withHttpClient
+import ch.qos.logback.classic.Level
 import com.pambrose.common.util.random
+import com.pambrose.common.util.zip
 import com.google.common.collect.Maps.newConcurrentMap
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
+import io.kotest.assertions.nondeterministic.eventually
+import io.kotest.assertions.withClue
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -41,11 +45,14 @@ import io.ktor.server.engine.embeddedServer
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
+import io.prometheus.common.TestPorts.HARNESS_CHUNKED_TARGET_PORT
 import io.prometheus.common.TestPorts.HARNESS_TIMEOUT_TARGET_PORT
 import io.prometheus.Agent
 import io.prometheus.agent.AgentPathManager
 import io.prometheus.agent.RequestFailureException
 import io.prometheus.common.TestPorts
+import io.prometheus.common.captureLogs
+import io.prometheus.proxy.ProxyServiceImpl
 import io.prometheus.harness.HarnessConstants.HARNESS_CONFIG
 import io.prometheus.harness.HarnessConstants.MAX_DELAY_MILLIS
 import io.prometheus.harness.HarnessConstants.MIN_DELAY_MILLIS
@@ -81,6 +88,11 @@ internal object HarnessTests {
 
   private val SERVER_STOP_GRACE_MS = 250.milliseconds.inWholeMilliseconds
   private val SERVER_STOP_TIMEOUT_MS = 1.seconds.inWholeMilliseconds
+
+  // chunkedScrapeTest's target: 1,000 lines, about 39 KB, which gzip to about 6 KB.
+  private const val CHUNKED_LINE_COUNT = 1_000
+  private const val CHUNKED = "chunked"
+  private const val SUMMARY_PREFIX = "Reading summary "
 
   // Poll the loopback port until it accepts a TCP connection. CIO's embeddedServer.start()
   // returns before the listener is bound; without this probe the first scrape can race startup. Fails when the port
@@ -140,6 +152,76 @@ internal object HarnessTests {
       pathManager.unregisterPath("/$proxyPath")
     } finally {
       logger.info { "Stopping httpServer" }
+      httpServer.stop(SERVER_STOP_GRACE_MS, SERVER_STOP_TIMEOUT_MS)
+    }
+  }
+
+  // November #41: startAgent's chunk size never took effect, so the specs that set one ran at the default 32 KB, and
+  // only proxyCallTest's largest target, about 250 KB gzipped, was ever chunked. This target gzips to about 6 KB:
+  // several chunks at the 1 KB those specs set, and none at the default. The proxy must reassemble it from as many
+  // chunks as the agent's chunk size cuts it into, and the client must get it intact; with metrics on, the agent must
+  // count one chunked result.
+  suspend fun chunkedScrapeTest(
+    agent: Agent,
+    proxyPort: Int,
+    caller: String,
+    agentPort: Int = HARNESS_CHUNKED_TARGET_PORT,
+    agentPath: String = "agent-chunked",
+    proxyPath: String = "proxy-chunked",
+  ) {
+    logger.debug { "Calling chunkedScrapeTest() from $caller" }
+
+    // Each line differs, so gzip leaves several chunks' worth.
+    val content =
+      buildString { repeat(CHUNKED_LINE_COUNT) { append("chunked_test_metric{index=\"$it\"} ${it * it}\n") } }
+    // What the agent sends: the body gzipped as AgentHttpService gzips it, cut into chunks of chunkContentSizeBytes.
+    val zippedSize = content.encodeToByteArray().zip().size
+    val chunkSize = agent.options.chunkContentSizeBytes
+    val chunkCount = (zippedSize + chunkSize - 1) / chunkSize
+    val chunkedCount = { agent.metrics.scrapeResultCount.labelValues(agent.launchId, CHUNKED).get() }
+
+    val httpServer =
+      embeddedServer(CIO, port = agentPort) {
+        routing {
+          get("/$agentPath") {
+            call.respondText(content, Text.Plain.withCharset(Charsets.UTF_8))
+          }
+        }
+      }
+
+    httpServer.start()
+
+    try {
+      awaitPortReady(agentPort)
+      agent.pathManager.registerPath("/$proxyPath", "$agentPort/$agentPath".withPrefix())
+      val chunkedBefore = if (agent.isMetricsEnabled) chunkedCount() else 0.0
+
+      // The proxy logs the summary of each chunked transfer it reassembles, with its chunk and byte counts, at DEBUG.
+      val events =
+        captureLogs<ProxyServiceImpl>(Level.DEBUG) {
+          withHttpClient {
+            get("$proxyPort/$proxyPath".withPrefix()) { response ->
+              response.status shouldBe HttpStatusCode.OK
+              response.bodyAsText() shouldBe content
+            }
+          }
+        }
+
+      // One chunked transfer, of the chunks the agent's chunk size cuts the target into. A chunk size the gzipped
+      // target fits in leaves none.
+      withClue("The chunked transfers of a target $zippedSize bytes gzipped, at a chunk size of $chunkSize bytes") {
+        events
+          .map { it.formattedMessage }
+          .filter { it.startsWith(SUMMARY_PREFIX) }
+          .map { it.substringBefore(" for scrapeId") } shouldBe
+          listOf("${SUMMARY_PREFIX}chunkCount: $chunkCount byteCount: $zippedSize")
+      }
+      // The agent counts the result once it has queued the summary, which can be after the proxy has answered.
+      if (agent.isMetricsEnabled)
+        eventually(5.seconds) { chunkedCount() - chunkedBefore shouldBe 1.0 }
+
+      agent.pathManager.unregisterPath("/$proxyPath")
+    } finally {
       httpServer.stop(SERVER_STOP_GRACE_MS, SERVER_STOP_TIMEOUT_MS)
     }
   }

@@ -85,7 +85,7 @@ object TestUtils {
     debugEnabled: Boolean = false,
     metricsEnabled: Boolean = false,
     scrapeTimeoutSecs: Int = -1,
-    chunkContentSizeBytes: Int = -1,
+    chunkContentSizeKbs: Int = -1,
     maxConcurrentClients: Int = -1,
     args: List<String> = emptyList(),
     configArgs: List<String> = CONFIG_ARG,
@@ -103,8 +103,10 @@ object TestUtils {
         add("-Dagent.metrics.enabled=$metricsEnabled")
         if (scrapeTimeoutSecs != -1)
           add("-Dagent.scrapeTimeoutSecs=$scrapeTimeoutSecs")
-        if (chunkContentSizeBytes != -1)
-          add("-Dagent.chunkContentSizeBytes=$chunkContentSizeBytes")
+        // The key AgentOptions derives chunkContentSizeBytes from. The byte value isn't a key, so passing it did
+        // nothing, and the specs that set it ran at the default 32 KB (November #41).
+        if (chunkContentSizeKbs != -1)
+          add("-Dagent.chunkContentSizeKbs=$chunkContentSizeKbs")
         if (maxConcurrentClients != -1)
           add("-Dagent.http.maxConcurrentClients=$maxConcurrentClients")
       },
