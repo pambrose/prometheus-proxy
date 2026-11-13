@@ -323,6 +323,11 @@ One support helper also lives here (not a test class itself):
 
 ### Unit Tests — Common (`common/`)
 
+- **AgentValuesTest** — what the proxy does to a value an agent supplies before keeping or logging it: `truncate`
+  never splits a surrogate pair; `shownValue` cuts and marks a long value and escapes every control character and line
+  separator, so a value can't forge a log line; `pathCharacterProblem` names a control character, whitespace, `?`, or
+  `#`, which no scrape's request path can carry, and accepts every other character; and `labelsProblem` names a label
+  service discovery can't serve, with the name escaped
 - **BaseOptionsTest** — Shared CLI argument parsing, config loading, boolean resolution; in a forked JVM, a
   standalone agent or proxy whose config URL carries credentials exits 1 on a setting it rejects, with one log line
   and no credentials or uncaught stack trace

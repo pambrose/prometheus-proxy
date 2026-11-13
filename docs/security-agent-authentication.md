@@ -222,6 +222,18 @@ In rough priority order:
 - **Service-discovery labels limited** (finding #12 of `docs/archive/CODE_REVIEW_LATE_SEPTEMBER_2026.md`) — agent labels can no
   longer set `__`-prefixed keys, and `proxy.service.discovery.reserveJobAndInstanceLabels` keeps them from setting `job`
   and `instance`, so an identity can't pass its targets off as another identity's.
+- **Path metadata and scrape results bounded** (finding #12 of `docs/CODE_REVIEW_NOVEMBER_11_2026.md`) — a path's
+  target URL is redacted and then cut to `proxy.internal.maxTargetUrlLength` (2048), and its source to
+  `maxAgentFieldLength`, so ~100 registrations of 4 MiB values can no longer exhaust the proxy's heap. A scrape's
+  failure reason, URL, and content type are cut to 4,096 characters, as a chunked transfer's header already was, before
+  `/debug` keeps them or a log line shows them.
+- **Service-discovery labels parsed once** (finding #15) — a path's labels are parsed and filtered when it registers,
+  which warns about the ones left out; each service-discovery request, on the unauthenticated scrape port, only copies
+  the result, where it re-parsed every path's labels and logged each bad value whole at WARN.
+- **Agent-supplied values escaped in the logs** (finding #16) — every value an agent supplies is logged through one
+  helper, `AgentValues.shownValue`, which cuts it and escapes its control characters, so a path, a label key, or the
+  agent's name, host name, or launch ID can't forge log lines. A path with whitespace, a control character, `?`, or
+  `#`, which no scrape can reach, is refused at registration (and in an agent's `pathConfigs` at startup).
 
 ## References
 

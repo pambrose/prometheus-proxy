@@ -87,7 +87,8 @@ internal object ProxyUtils {
     path: String,
     proxy: Proxy,
   ): ResponseResults {
-    val message = "Invalid path request /$path"
+    // Any client of the scrape port names the path, so it's shown cut and escaped, as an agent's is (November #40).
+    val message = "Invalid path request /${ProxyPathManager.shownPath(path)}"
     proxy.logActivity(message)
     logger.warn { message }
     return ResponseResults(

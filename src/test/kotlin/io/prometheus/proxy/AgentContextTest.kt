@@ -470,6 +470,27 @@ class AgentContextTest : StringSpec() {
       str shouldContain "10.0.0.1"
     }
 
+    // November #16: the connect, disconnect, removal, and eviction lines log the context, with the name, host name, and
+    // launch ID the agent reports, which can carry CR/LF. They're shown escaped, and kept whole as reported.
+    "toString should show the agent-reported fields with their control characters escaped" {
+      val context = AgentContext("10.0.0.1")
+      context.assignProperties(
+        io.prometheus.grpc.registerAgentRequest {
+          agentName = "name\r\nforged"
+          hostName = "host\nforged"
+          launchId = "launch\u0000id"
+        },
+      )
+
+      val str = context.toString()
+
+      str shouldContain "name\\r\\nforged"
+      str shouldContain "host\\nforged"
+      str shouldContain "launch\\u0000id"
+      str.none { it.isISOControl() }.shouldBeTrue()
+      context.agentName shouldBe "name\r\nforged"
+    }
+
     // ==================== markActivityTime Branch Tests ====================
 
     "markActivityTime with isRequest false should reset inactivity but not the request time" {

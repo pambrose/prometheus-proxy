@@ -154,6 +154,7 @@ The proxy logs the reason and returns `valid = false` to the agent:
 | Log reason                                                  | Cause / fix                                                                 |
 |:------------------------------------------------------------|:----------------------------------------------------------------------------|
 | `Multi-segment path not supported (use a single path segment)` | The `path` contains an embedded `/`. Use one segment.                    |
+| `Invalid path: /… ('…' can't appear in a scrape's request path)` | The `path` contains whitespace, a control character, `?`, or `#`, which no scrape can reach. Rename it. |
 | `Consolidated agent rejected for non-consolidated path`     | A consolidated agent tried to join a path another agent owns non-consolidated. Make **all** agents for the path consolidated, or none. |
 | `Non-consolidated agent rejected for consolidated path`     | The reverse of the above — same fix.                                        |
 

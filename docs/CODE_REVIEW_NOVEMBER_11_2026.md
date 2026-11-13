@@ -1,9 +1,10 @@
 # Prometheus-Proxy Code Review — November 11, 2026
 
-**Status:** 39 issues — 24 fixed, 15 open (11 medium, 28 low, no high).
+**Status:** 40 issues — 28 fixed, 12 open (11 medium, 29 low, no high).
 
-**Progress:** Wave A (steps 1, 2, 3, 7, 11, and 13, in #374–#379) and Wave B (steps 4, 8, 9, and 12, in #381–#384,
-with #24 a settings change) fixed the 24 issues marked ✅.
+**Progress:** Wave A (steps 1, 2, 3, 7, 11, and 13, in #374–#379), Wave B (steps 4, 8, 9, and 12, in #381–#384,
+with #24 a settings change), and Wave C (step 5, in #386, with #40 found and fixed there) fixed the 28 issues
+marked ✅.
 
 **Date:** 2026-11-11
 
@@ -31,11 +32,11 @@ from the repo root.
 | 9  | The connect-failure WARN-once dedupe is defeated by gRPC's changing `DEADLINE_EXCEEDED` text         | Agent    | low      | ✅      |
 | 10 | `PROXY_HOSTNAME` can't override a malformed `agent.proxy.endpoints` in the config                     | Agent    | low      | ✅      |
 | 11 | `PathDiscoveryService` KDoc contradicts the code                                                     | Agent    | low      | ⬜      |
-| 12 | `targetUrl` and `pathSource` have no size limit, so one agent can exhaust the proxy's heap           | Security | medium   | ⬜      |
+| 12 | `targetUrl` and `pathSource` have no size limit, so one agent can exhaust the proxy's heap           | Security | medium   | ✅      |
 | 13 | A chunked transfer outlives its scrape, so an agent can hold ~9 MiB per scrape                       | Security | medium   | ✅      |
 | 14 | Filter disabled: `readRequestsFromProxy` checks one lookup and acts on another                       | Security | medium   | ⬜      |
-| 15 | Each service-discovery request logs every invalid labels value whole at WARN                         | Security | medium   | ⬜      |
-| 16 | Agent-supplied strings reach the proxy's logs with CR/LF intact                                      | Security | low      | ⬜      |
+| 15 | Each service-discovery request logs every invalid labels value whole at WARN                         | Security | medium   | ✅      |
+| 16 | Agent-supplied strings reach the proxy's logs with CR/LF intact                                      | Security | low      | ✅      |
 | 17 | Filter disabled: each connect call creates and announces a new agent context, with no limit          | Security | low      | ⬜      |
 | 18 | The dashboard's page routes build a fresh snapshot on every request                                  | Security | low      | ✅      |
 | 19 | The published library jar ships `logback.xml`, which replaces the host's logging config              | CI/build | medium   | ✅      |
@@ -59,6 +60,7 @@ from the repo root.
 | 37 | The container suite's third-party images are pinned by tag only                                      | Tests    | low      | ✅      |
 | 38 | `harness.conf` sets Zipkin keys that don't exist                                                     | Tests    | low      | ⬜      |
 | 39 | Path discovery dedupes its failures on the message, which a gRPC deadline changes every time         | Agent    | low      | ⬜      |
+| 40 | An unknown scrape path is logged whole, with any control characters it carries                       | Security | low      | ✅      |
 
 ---
 
@@ -103,7 +105,7 @@ The **Touches** column shows which steps edit the same files, and so need to lan
 | 2    | ✅ #375 | #19, #20, #21, #23           | Fix what embedders get from Maven Central                             | `build.gradle.kts`, `gradle/libs.versions.toml`, `src/main/resources` → `src/shadow/resources`, `Agent.kt` (`@JvmOverloads`), README, `embedded-agent.md`, a new Maven-consumer job in `ci.yml` | Every embedder of 4.4.2 is affected, and one consumer project tests all four. Changes no behavior for the standalone images, so it can ship on its own as a patch release.                       |
 | 3    | ✅ #376 | #27, #28                     | Docker quick starts that connect, and examples with string labels     | README, `llms.txt`, `src/test/kotlin/website/DockerExamples.txt`, `examples/*.conf`, a new `misc/` spec                       | The first thing a new user runs. The examples are served from `master`, so the fix takes effect on merge. Docs and examples only.                                                                |
 | 4    | ✅ #381 | #13, #3, #2                  | Chunked transfers end with their scrape                               | `proxy/ProxyServiceImpl.kt` (chunked stream), `proxy/ProxyHttpRoutes.kt` (`dispatchScrapeRequest`), `proxy/ScrapeRequestManager.kt`, `Proxy.kt` (`removeAgentContext`), metrics docs | #13 is the cheapest way for one agent to exhaust the heap. #3 has to land with it, or every late chunk logs a WARN, and #2 counts the reclaims it adds. Check whether `ProxyRegistry.tla` needs the new removal. |
-| 5    | ⬜      | #12, #15, #16                | Bound, parse once, and escape what agents send                        | `proxy/ProxyServiceImpl.kt` (`registerPath`), `proxy/ProxyPathManager.kt`, `Proxy.kt` (`buildServiceDiscoveryJson`), `proxy/ProxyHttpRoutes.kt`, `proxy/ProxyOptions.kt`, `config/config.conf`, both logback files, security docs | The rest of the tenant-against-tenant memory and log issues. A new `proxy.internal` limit and a narrower path alphabet need config, validation, docs, and "Before you upgrade" notes. After step 4, which edits the same files. |
+| 5    | ✅ #386 | #12, #15, #16, #40           | Bound, parse once, and escape what agents send                        | `proxy/ProxyServiceImpl.kt` (`registerPath`), `proxy/ProxyPathManager.kt`, `Proxy.kt` (`buildServiceDiscoveryJson`), `proxy/ProxyHttpRoutes.kt`, `proxy/ProxyOptions.kt`, `config/config.conf`, both logback files, security docs | The rest of the tenant-against-tenant memory and log issues. A new `proxy.internal` limit and a narrower path alphabet need config, validation, docs, and "Before you upgrade" notes. After step 4, which edits the same files. |
 | 6    | ⬜      | #14, #17                     | Make `transportFilterDisabled` mode bind like the default             | `proxy/ProxyServiceImpl.kt` (`readRequestsFromProxy`, `connectAgentWithTransportFilterDisabled`), `proxy/AgentContextManager.kt`, `specs/tla/ProxyRegistry.tla` | Changes how a context is removed, so update the TLA+ action and run `make tla-checks` in the same PR. After step 5, which edits the same file.                                                   |
 | 7    | ✅ #377 | #7                           | Zipkin that starts                                                    | `Agent.kt`, `agent/AgentGrpcService.kt`, `Proxy.kt` (construction order), `proxy/ProxyGrpcService.kt`; possibly common-utils | A documented feature that can't be turned on. If the fix goes into common-utils instead, this step waits for that release.                                                                      |
 | 8    | ✅ #382 | #8, #10                      | Config errors embedders can catch, and env overrides that win         | `common/BaseOptions.kt`, `agent/AgentOptions.kt`, `Agent.kt` KDoc, `embedded-agent.md`, `security/index.md`                   | Both are option resolution, and one embedded-API spec covers #8's inputs. Embedders that catch `IllegalArgumentException` today need a release note. After step 7, which shares `Agent.kt`.      |
@@ -130,7 +132,7 @@ Taken together, that gives these waves. Every step in a wave can be worked on at
 |------|--------|-----------------------------|----------------------------------------------|
 | A    | ✅      | 1, 2, 3, 7, 11, 13          | nothing                                      |
 | B    | ✅      | 4, 8, 9, 12                 | 4 on 1; 8 and 9 on 7; 12 on 2                |
-| C    | ⬜      | 5                           | 4                                            |
+| C    | ✅      | 5                           | 4                                            |
 | D    | ⬜      | 6, 10                       | 5                                            |
 | E    | ⬜      | 14, 15                      | the code steps (4–10)                        |
 
@@ -542,7 +544,7 @@ WARN and one DEBUG.
 
 ## 🔒 Security
 
-### 12. ⬜ A registered path's `targetUrl` and `pathSource` have no size limit, so one agent can run the proxy out of memory in about 100 calls
+### 12. ✅ A registered path's `targetUrl` and `pathSource` have no size limit, so one agent can run the proxy out of memory in about 100 calls
 
 **Severity:** medium (the security pass rated it high; it is kept at medium to match October #22 and #23, which have
 the same attacker) · **Confidence:** confirmed by trace. The proxy sets no `maxInboundMessageSize`, and common-utils'
@@ -595,6 +597,15 @@ AGENTS.md's rule is to "bound or cut any new agent-supplied value before storing
 - `ProxyOptions` validation for the new limit.
 
 **Follows up:** October #23 (incomplete) and late-September #14.
+
+**Resolution:** Fixed in #386. `ProxyPathManager.addPath` redacts a path's target URL and then cuts it to the new
+`proxy.internal.maxTargetUrlLength` (2048; `0` for unlimited, a negative value fails startup), and cuts its source to
+`maxAgentFieldLength`, never inside a surrogate pair, with one WARN naming the fields and their sizes. A scrape's
+failure reason, URL, and raw content type are cut to 4,096 characters, the chunked header's limit, before
+`recordScrapeOutcome` and `parseContentType` keep or log them. The chunked header keeps its fixed 4,096, since a
+setting an operator can turn off mustn't lift #13's bound. No `maxInboundMessageSize` was added. The new tests (a
+1 MiB URL and source read back cut, a password past the cut still redacted, a bounded `toPlainText`, bounded `/debug`
+and content-type lines, and the option's validation) failed on the old code.
 
 ### 13. ✅ A chunked transfer outlives its scrape, so an agent can hold up to about 9 MiB per scrape for as long as it stays connected
 
@@ -712,7 +723,7 @@ This is October #21's check-then-act pattern, on the one RPC #21 and September #
 
 **Follows up:** October #21 (the same class) and September #2 (identity binding with the filter disabled).
 
-### 15. ⬜ Each service-discovery request logs every invalid labels value whole at WARN, so one GET can write about 160 MiB of logs
+### 15. ✅ Each service-discovery request logs every invalid labels value whole at WARN, so one GET can write about 160 MiB of logs
 
 **Severity:** medium when service discovery is on (it is off by default) · **Confidence:** confirmed by trace.
 
@@ -744,7 +755,12 @@ neither call logs a WARN.
 
 **Follows up:** October #24, and the log-cutting work in #353.
 
-### 16. ⬜ Agent-supplied strings reach the proxy's logs with CR/LF intact
+**Resolution:** Fixed in #386. `addPath` parses and filters a path's labels once, by October #24's rules, and keeps
+the result in `AgentContextInfo.sdLabels`; `buildServiceDiscoveryJson` only copies it. Registration's warnings are the
+only ones, logged after the path is stored rather than inside the `pathMap` lock. `ProxyTest` checks that two
+discovery requests log no WARN for labels `{"a":`, which failed on the old code.
+
+### 16. ✅ Agent-supplied strings reach the proxy's logs with CR/LF intact
 
 **Severity:** low · **Confidence:** confirmed. Both logback configs use `%msg%n` with no escaping
 (`src/main/resources/logback.xml`, `logback/docker-logback.xml`).
@@ -780,6 +796,15 @@ neither call logs a WARN.
 - `registerAgent` with a name containing `\r\n`, under a `ListAppender`, leaves no message with a raw newline.
 
 **Follows up:** #353 and October #4, which cut agent values in logs but didn't escape them.
+
+**Resolution:** Fixed in #386. The new `AgentValues.shownValue` cuts a value and escapes control characters and line
+and paragraph separators. `shownPath`, the label warnings, `labelsProblem`, the scrape-result fields, and
+`AgentContext.toString` use it. `formRejection` refuses a path with whitespace, a control character, `?`, or `#`, and
+the agent refuses such a `pathConfigs` entry at startup. The alphabet isn't narrowed to `pchar`: a percent-encoded or
+non-ASCII path is scraped today by a client that sends it as registered, so `pchar` would break working setups, while
+the four refused kinds can never be scraped. The logback `%replace` was left out: on the shipped appender it flattens
+the startup banner and every multi-line message, and scoping it takes a second appender with `additivity="false"`,
+which would keep the proxy's loggers out of any appender an operator adds to the root.
 
 ### 17. ⬜ With the transport filter disabled, every `connectAgentWithTransportFilterDisabled` call creates and announces a new agent context, with no limit
 
@@ -827,6 +852,33 @@ identity and stream.
 for less than the refresh interval but never across a topology change: a generation counter also discards a collect that
 a change overtook, which the old clear-on-event cache could serve for a whole interval. One collect serves concurrent
 reads. Twenty GETs within an interval now collect once, against twenty before.
+
+### 40. ✅ An unknown scrape path is logged whole, with any control characters it carries
+
+**Severity:** low · **Confidence:** confirmed by a test. Found while fixing #16.
+
+**Where:** `proxy/ProxyUtils.kt:90` (`invalidPathResponse`), called from `proxy/ProxyHttpRoutes.kt:144,161` for any
+request path no agent registered.
+
+**Problem:**
+
+- **Attacker:** any client of the scrape port, which is unauthenticated.
+- **Trigger:** a `GET` of an unregistered path holding a control character, such as a terminal escape, or as long as
+  the request line allows. CIO ends the request target at whitespace, so CR and LF can't get in, but it passes the
+  other control characters.
+- **Impact:** the path goes whole into a WARN and the `/debug` activity log, so a client can write terminal escape
+  sequences, or a request line's worth of text per request, into both. That's the same gap #16 closes for agents, with
+  no authentication in front of it.
+
+**Fix:** show the path through `shownPath`, as an agent's is.
+
+**Tests:** `invalidPathResponse` with a path holding `ESC[2J` and 10,000 more characters logs a message with the escape
+written out, no control characters, and under 100 characters.
+
+**Follows up:** #16.
+
+**Resolution:** Fixed in #386. `invalidPathResponse` logs `shownPath(path)`. The new `ProxyUtilsTest` test failed on
+the old code.
 
 ---
 

@@ -35,6 +35,7 @@ import io.ktor.server.routing.get
 import io.prometheus.Proxy
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.Utils.sanitizeQueryParams
+import io.prometheus.common.AgentValues.shownValue
 import io.prometheus.proxy.ProxyConstants.FAVICON_FILENAME
 import io.prometheus.proxy.ProxyUtils.DecodedContent
 import io.prometheus.proxy.ProxyUtils.incrementScrapeRequestCount
@@ -100,6 +101,11 @@ internal object ProxyHttpRoutes {
   // Each agent's queue is capped at this multiple of scrapeRequestBacklogUnhealthySize, matching how the agent
   // sizes its own request channel.
   private const val BACKLOG_CAPACITY_MULTIPLIER = 2
+
+  // The most characters /debug keeps, or a log line shows, of an agent's per-scrape failure reason, URL, or content
+  // type: what a chunked transfer's header keeps of each, so a unary result, bounded only by gRPC's 4 MiB message
+  // limit, is shown no longer than a chunked one (November #12).
+  private const val MAX_SHOWN_RESULT_CHARS = ProxyServiceImpl.MAX_CHUNKED_HEADER_FIELD_LENGTH
 
   // The most scrape requests one agent's queue holds. One chunked stream's transfers under way are capped at the same
   // number (ProxyServiceImpl's readHeader).
@@ -290,12 +296,13 @@ internal object ProxyHttpRoutes {
     // ScrapeCompleted event feed only the dashboard. Without these checks every agent on every scrape paid for a
     // formatted status string, two process-wide locks, and an event that nothing reads.
     if (proxy.options.debugEnabled) {
+      // The agent's failure reason and URL are cut, and escaped so each entry stays one line (November #12, #16).
       val status =
         buildString {
           append("/$path - ${response.updateMsg} - ${response.statusCode}")
           if (!response.statusCode.isSuccess())
-            append(" reason: [${response.failureReason}]")
-          append(" time: ${response.fetchDuration} url: ${response.url}")
+            append(" reason: [${shownValue(response.failureReason, MAX_SHOWN_RESULT_CHARS)}]")
+          append(" time: ${response.fetchDuration} url: ${shownValue(response.url, MAX_SHOWN_RESULT_CHARS)}")
         }
       proxy.logActivity(status)
     }
@@ -421,7 +428,8 @@ internal object ProxyHttpRoutes {
   // Parses the agent-reported Content-Type, falling back to text/plain (the correct default for the
   // Prometheus exposition format) with a warning when it is malformed. Only the exposition types pass through: the
   // body is served from the proxy's own origin, so a target answering text/html could otherwise run a script there in
-  // an operator's browser. Any other type is served as text/plain, logged at DEBUG since it repeats every scrape.
+  // an operator's browser. Any other type is served as text/plain, logged at DEBUG since it repeats every scrape. Both
+  // log lines show the agent's value cut and escaped (November #12, #16).
   private fun parseContentType(
     rawContentType: String,
     path: String,
@@ -429,7 +437,7 @@ internal object ProxyHttpRoutes {
     runCatching { ContentType.parse(rawContentType) }
       .getOrElse {
         logger.warn {
-          "Error parsing content type for /$path: '$rawContentType' " +
+          "Error parsing content type for /$path: '${shownValue(rawContentType, MAX_SHOWN_RESULT_CHARS)}' " +
             "(${it.simpleClassName}); falling back to text/plain"
         }
         Text.Plain.withCharset(Charsets.UTF_8)
@@ -437,7 +445,9 @@ internal object ProxyHttpRoutes {
         if (EXPOSITION_CONTENT_TYPES.any { parsed.match(it) }) {
           parsed
         } else {
-          logger.debug { "Serving /$path's content type '$rawContentType' as text/plain" }
+          logger.debug {
+            "Serving /$path's content type '${shownValue(rawContentType, MAX_SHOWN_RESULT_CHARS)}' as text/plain"
+          }
           Text.Plain.withCharset(Charsets.UTF_8)
         }
       }

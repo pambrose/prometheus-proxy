@@ -34,6 +34,8 @@ import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
+import io.kotest.matchers.string.shouldStartWith
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -61,11 +63,15 @@ class ProxyPathManagerTest : StringSpec() {
     maxPathsPerAgent: Int = 0,
     maxPathLength: Int = 0,
     maxLabelsSizeBytes: Int = 0,
+    maxTargetUrlLength: Int = 0,
+    maxAgentFieldLength: Int = 0,
   ): Proxy =
     createMockProxy().also { proxy ->
       every { proxy.maxPathsPerAgent } returns maxPathsPerAgent
       every { proxy.maxPathLength } returns maxPathLength
       every { proxy.maxLabelsSizeBytes } returns maxLabelsSizeBytes
+      every { proxy.maxTargetUrlLength } returns maxTargetUrlLength
+      every { proxy.maxAgentFieldLength } returns maxAgentFieldLength
     }
 
   // Counter-based like AgentContext.AGENT_ID_GENERATOR; a timestamp+random id can collide
@@ -137,6 +143,81 @@ class ProxyPathManagerTest : StringSpec() {
         "http://***@target:9100/metrics?token=***"
     }
 
+    // November #12: the URL is redacted before it is cut. Cut first, a URL whose userinfo ran past the cut lost the "@"
+    // the redaction looks for, and the stored URL kept the start of the password.
+    "addPath should redact a target URL before cutting it, so credentials past the cut stay redacted" {
+      val manager = ProxyPathManager(createLimitedProxy(maxTargetUrlLength = 64), isTestMode = true)
+      val url = "http://admin:" + "p".repeat(100) + "@target:9100/" + "m".repeat(100)
+
+      manager.addPath("metrics", "{}", createMockAgentContext(), PathMetadata(targetUrl = url)).shouldBeNull()
+
+      val stored = manager.getAgentContextInfo("metrics").shouldNotBeNull().targetUrl
+      stored.length shouldBe 64
+      stored shouldStartWith "http://***@target:9100/mmm"
+      stored shouldNotContain "ppp"
+    }
+
+    "addPath should keep a path's target URL and source whole within the limits, or when the limits are off" {
+      val url = "http://target:9100/" + "u".repeat(45)
+      for (limit in [64, 0]) {
+        val manager =
+          ProxyPathManager(
+            createLimitedProxy(maxTargetUrlLength = limit, maxAgentFieldLength = limit),
+            isTestMode = true,
+          )
+        val warnings =
+          captureLogs<ProxyPathManager>(Level.WARN) {
+            manager.addPath("metrics", "{}", createMockAgentContext(), PathMetadata(url, "s".repeat(64)))
+          }
+
+        val info = manager.getAgentContextInfo("metrics").shouldNotBeNull()
+        info.targetUrl shouldBe url
+        info.pathSource shouldBe "s".repeat(64)
+        warnings.shouldBeEmpty()
+      }
+    }
+
+    // Like registerAgent's cut (October #23): one warning naming the fields and their sizes, never their values.
+    "addPath should warn once about the target URL and source it cut, without logging their values" {
+      val manager =
+        ProxyPathManager(createLimitedProxy(maxTargetUrlLength = 2048, maxAgentFieldLength = 256), isTestMode = true)
+      val context = createMockAgentContext()
+
+      val warnings =
+        captureLogs<ProxyPathManager>(Level.WARN) {
+          manager.addPath(
+            "metrics",
+            "{}",
+            context,
+            PathMetadata(targetUrl = "http://t/" + "u".repeat(5_000), pathSource = "s".repeat(1_000)),
+          )
+        }.map { it.formattedMessage }
+
+      val warning = warnings.single()
+      warning shouldContain context.agentId
+      warning shouldContain "/metrics"
+      warning shouldContain "targetUrl (5009 characters)"
+      warning shouldContain "pathSource (1000 characters)"
+      warning shouldContain "maxTargetUrlLength"
+      warning shouldNotContain "uuu"
+      warning shouldNotContain "sss"
+    }
+
+    // /debug builds this page inside the pathMap lock, and each entry carried its target URL and source whole.
+    "toPlainText should stay bounded when an agent registers a huge target URL and path source" {
+      val manager =
+        ProxyPathManager(createLimitedProxy(maxTargetUrlLength = 2048, maxAgentFieldLength = 256), isTestMode = true)
+
+      manager.addPath(
+        "metrics",
+        "{}",
+        createMockAgentContext(),
+        PathMetadata(targetUrl = "http://t/" + "u".repeat(1 shl 20), pathSource = "s".repeat(1 shl 20)),
+      )
+
+      manager.toPlainText().length shouldBeLessThan 4_096
+    }
+
     "addPath should throw when path is blank" {
       val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
 
@@ -183,6 +264,22 @@ class ProxyPathManagerTest : StringSpec() {
       manager.pathMapSize shouldBe 2
       warnings.single() shouldContain "/metrics"
       warnings.single() shouldContain "label 'a' must have a string value"
+    }
+
+    // November #16: the label keys an agent sends are logged as the path registers, the reserved ones and the first
+    // that Prometheus can't decode, and could carry CR/LF to forge log lines.
+    "addPath should log the label keys it warns about with their control characters escaped" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+
+      val warnings =
+        captureLogs<ProxyPathManager>(Level.WARN) {
+          manager.addPath("metrics", """{"b\nforged":"c","__x\r\nforged":"a"}""", createMockAgentContext())
+            .shouldBeNull()
+        }.map { it.formattedMessage }
+
+      warnings.single { "reserved" in it } shouldContain "__x\\r\\nforged"
+      warnings.single { "won't all appear" in it } shouldContain "b\\nforged"
+      warnings.filter { it.contains('\r') || it.contains('\n') }.shouldBeEmpty()
     }
 
     // The scrape port answers these paths itself, so an agent's registration of one was advertised in service
@@ -1214,6 +1311,32 @@ class ProxyPathManagerTest : StringSpec() {
       rejection.reason shouldContain "Multi-segment"
       rejection.reason shouldContain "/app/xxx"
       rejection.reason.length shouldBeLessThan 200
+    }
+
+    // November #16: no scrape's request path can carry a control character, whitespace, '?', or '#', so a path with one
+    // was advertised in service discovery but never scraped, and a line break in it forged lines in the proxy's log.
+    "formRejection should refuse a path with a character no scrape's request path can carry" {
+      val manager = ProxyPathManager(createLimitedProxy(maxPathLength = 512), isTestMode = true)
+
+      for (path in ["a\nb", "a\rb", "a\tb", "a b", " metrics", "a\u0000b", "a\u007fb", "a\u2028b", "a?b=1", "a#b"]) {
+        val rejection = manager.formRejection(path, "{}", createMockAgentContext())
+
+        withClue(path) {
+          rejection.shouldNotBeNull().cause shouldBe PathRejectionCause.INVALID_PATH
+          rejection.reason shouldContain "can't appear in a scrape's request path"
+          rejection.reason.none { it.isISOControl() || it == '\u2028' }.shouldBeTrue()
+        }
+      }
+    }
+
+    // Narrowed no further: a path that a client sending it as registered can scrape still registers, '/' aside.
+    "formRejection should accept the path characters a scrape can carry" {
+      val manager = ProxyPathManager(createLimitedProxy(maxPathLength = 512), isTestMode = true)
+
+      val paths = ["app1_metrics", "team-a.metrics~1", "a!b\$c&d'e(f)g*h+i,j;k=l:m@n", "m%C3%A9triques", "métriques"]
+      for (path in paths) {
+        withClue(path) { manager.formRejection(path, "{}", createMockAgentContext()).shouldBeNull() }
+      }
     }
 
     "formRejection should accept a single-segment path of allowed size" {

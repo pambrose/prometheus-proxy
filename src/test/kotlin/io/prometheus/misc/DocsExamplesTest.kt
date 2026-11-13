@@ -24,7 +24,7 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.shouldBe
 import io.prometheus.agent.discovery.FileDiscoverySource
-import io.prometheus.common.Utils.labelsProblem
+import io.prometheus.common.AgentValues.labelsProblem
 import io.prometheus.common.agentOptions
 import io.prometheus.common.proxyOptions
 import java.io.File

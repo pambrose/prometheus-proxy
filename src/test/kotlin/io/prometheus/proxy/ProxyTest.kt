@@ -42,6 +42,7 @@ import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.grpc.chunkedScrapeResponse
 import io.prometheus.grpc.headerData
 import io.prometheus.grpc.registerAgentRequest
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -339,6 +340,48 @@ class ProxyTest : StringSpec() {
       registrationWarnings.single() shouldContain "__scheme__"
       registrationWarnings.single() shouldContain "hostName"
       buildWarnings shouldBe emptyList()
+    }
+
+    // November #15: service discovery re-parsed every path's labels on every request, and logged each value that isn't
+    // a JSON object whole at WARN each time: up to 8 KiB times 20,000 paths, about 160 MiB a GET of the unauthenticated
+    // scrape port. The labels are parsed once, when the path registers, and only that warns.
+    "service discovery requests should not warn about a path's invalid labels again" {
+      val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=proxy:$PROXY_HTTP_PORT")
+      val agentContext = createAgentContext()
+      proxy.agentContextManager.addAgentContext(agentContext)
+
+      val registrationWarnings =
+        captureLogs<ProxyPathManager>(Level.WARN) {
+          proxy.pathManager.addPath("metrics", """{"a":""", agentContext)
+        }.map { it.formattedMessage }
+      val buildWarnings =
+        captureLogs("io.prometheus", Level.WARN) {
+          repeat(2) { proxy.buildServiceDiscoveryJson().size shouldBe 1 }
+        }
+
+      registrationWarnings.single() shouldContain "JSON object"
+      buildWarnings.shouldBeEmpty()
+    }
+
+    // The path's entry keeps what service discovery serves, parsed and filtered once by October #24's rules, beside the
+    // labels as the agent sent them, which the dashboard and /debug show.
+    "addPath should keep the labels service discovery serves, filtered once, beside the labels as sent" {
+      val proxy =
+        createTestProxy(
+          "-Dproxy.service.discovery.targetPrefix=proxy:$PROXY_HTTP_PORT",
+          "-Dproxy.service.discovery.reserveJobAndInstanceLabels=true",
+        )
+      val agentContext = createAgentContext()
+      proxy.agentContextManager.addAgentContext(agentContext)
+      val labels = """{"count":1,"__scheme__":"https","hostName":"x","job":"j","a-b":"dash","team":"web"}"""
+
+      proxy.pathManager.addPath("metrics", labels, agentContext).shouldBeNull()
+
+      val info = proxy.pathManager.getAgentContextInfo("metrics").shouldNotBeNull()
+      info.labels shouldBe labels
+      info.sdLabels shouldBe JsonObject(mapOf("team" to JsonPrimitive("web")))
+      proxy.pathManager.addPath("blank", "", agentContext).shouldBeNull()
+      proxy.pathManager.getAgentContextInfo("blank").shouldNotBeNull().sdLabels shouldBe JsonObject(emptyMap())
     }
 
     "a path with no reserved agent labels should register without a warning" {

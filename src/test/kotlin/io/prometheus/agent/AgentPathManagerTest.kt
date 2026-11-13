@@ -961,6 +961,42 @@ class AgentPathManagerTest : StringSpec() {
       shouldThrow<IllegalArgumentException> { AgentPathManager(agent) }.message shouldContain "/metrics"
     }
 
+    // November #16: the proxy refuses a path with a character no scrape's request path can carry. Refused here too, a
+    // pathConfigs entry with one fails at startup, naming it, rather than being refused at every connect.
+    "construction should reject a pathConfigs entry whose path no scrape can carry, naming it" {
+      for (path in ["app metrics", "metrics?format=x", "a#b", """a\tb""", """a\nb"""]) {
+        val agent =
+          createMockAgent(
+            pathConfigsHocon =
+              """
+              { name = "ok", path = "metrics", url = "http://localhost:9100/metrics", labels = "{}" },
+              { name = "bad", path = "$path", url = "http://localhost:9200/metrics", labels = "{}" }
+              """,
+          )
+
+        val message = shouldThrow<IllegalArgumentException> { AgentPathManager(agent) }.message.orEmpty()
+
+        withClue(path) {
+          message shouldContain "\"bad\""
+          message shouldContain "can't appear in a scrape's request path"
+          message.none { it == '\n' || it == '\t' }.shouldBeTrue()
+        }
+      }
+    }
+
+    "construction should accept pathConfigs paths with the characters a scrape can carry" {
+      val agent =
+        createMockAgent(
+          pathConfigsHocon =
+            """
+            { name = "a", path = "/team-a.metrics~1", url = "http://localhost:9100/metrics", labels = "{}" },
+            { name = "b", path = "a:b@c!d", url = "http://localhost:9200/metrics", labels = "{}" }
+            """,
+        )
+
+      AgentPathManager(agent).toPlainText() shouldContain "team-a.metrics~1"
+    }
+
     // The proxy leaves labels it can't serve out of service discovery, so a pathConfigs entry with them is reported at
     // startup, naming it, where it can be fixed. It still registers: labels matter only to service discovery.
     "construction should warn about a pathConfigs entry whose labels service discovery will leave out" {

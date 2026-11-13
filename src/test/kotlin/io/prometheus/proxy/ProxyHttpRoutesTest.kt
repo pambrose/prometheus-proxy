@@ -26,6 +26,8 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import kotlinx.coroutines.coroutineScope
 import io.kotest.assertions.withClue
+import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.ints.shouldBeLessThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
@@ -53,7 +55,9 @@ import io.prometheus.Proxy
 import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
+import io.prometheus.common.captureLogs
 import io.prometheus.common.proxyOptions
+import ch.qos.logback.classic.Level
 import com.google.protobuf.ByteString
 import io.prometheus.grpc.chunkData
 import io.prometheus.grpc.chunkedScrapeResponse
@@ -552,6 +556,30 @@ class ProxyHttpRoutesTest : StringSpec() {
       capturedActivity.captured shouldContain "reason:"
     }
 
+    // November #12: /debug's activity queue kept an agent's failure reason and URL whole, bounded only by gRPC's 4 MiB
+    // message limit, 50 entries deep. Each is now cut, and escaped, so an entry stays one bounded line (November #16).
+    "recordScrapeOutcome should keep a huge failure reason and URL cut, on one line" {
+      val capturedActivity = slot<String>()
+      val mockProxy = mockk<Proxy>(relaxed = true)
+      every { mockProxy.logActivity(capture(capturedActivity)) } returns Unit
+      val response =
+        ScrapeRequestResponse(
+          statusCode = HttpStatusCode.BadGateway,
+          updateMsg = "upstream_error",
+          failureReason = "reason\r\nforged " + "r".repeat(1 shl 20),
+          url = "http://target/" + "u".repeat(1 shl 20),
+          fetchDuration = 5.milliseconds,
+        )
+
+      callRecordScrapeOutcome("metrics", response, mockProxy)
+
+      val activity = capturedActivity.captured
+      activity shouldContain "reason: [reason\\r\\nforged rrr"
+      activity shouldContain "url: http://target/uuu"
+      activity.length shouldBeLessThan 10_000
+      activity.none { it == '\r' || it == '\n' }.shouldBeTrue()
+    }
+
     // ==================== authHeaderWithoutTlsWarned Tests ====================
     // The AtomicBoolean ensures the auth-without-TLS warning fires only once.
 
@@ -984,6 +1012,28 @@ class ProxyHttpRoutesTest : StringSpec() {
         withClue(served) {
           response.statusCode shouldBe HttpStatusCode.OK
           response.contentType shouldBe ContentType.Text.Plain.withCharset(Charsets.UTF_8)
+        }
+      }
+    }
+
+    // November #12: an unparseable content type was logged whole at WARN on every scrape, and one served as text/plain
+    // whole at DEBUG; an agent could make either 4 MiB a scrape, with its CR/LF intact (November #16).
+    "a huge agent content type should be logged cut and escaped, whether or not it parses" {
+      for (contentType in [
+        "bad\r\nforged" + "x".repeat(
+          1 shl 20,
+        ), "text/html; a=\"\r\nforged" + "x".repeat(1 shl 20),
+      ]) {
+        val messages =
+          captureLogs<ProxyHttpRoutes>(Level.DEBUG) { submitWithContentType(contentType) }
+            .map { it.formattedMessage }
+            .filter { "content type" in it }
+
+        withClue(contentType.take(16)) {
+          val message = messages.single()
+          message.length shouldBeLessThan 10_000
+          message shouldContain "\\r\\nforged"
+          message.none { it == '\r' || it == '\n' }.shouldBeTrue()
         }
       }
     }

@@ -681,6 +681,16 @@ class ProxyOptionsTest : StringSpec() {
       unlimited.maxAgentProxyEndpoints shouldBe 0
     }
 
+    // November #12: a registered path's target URL was stored whole, bounded only by gRPC's 4 MiB message limit. The
+    // agent redacts its query values before sending it, so a real one is far shorter than 2048 characters.
+    "the target URL limit should default to 2048 characters, accept 0 for unlimited, and reject a negative value" {
+      proxyOptions([]).configVals.proxy.internal.maxTargetUrlLength shouldBe 2048
+      proxyOptions(["-Dproxy.internal.maxTargetUrlLength=0"]).configVals.proxy.internal.maxTargetUrlLength shouldBe 0
+      val exception =
+        shouldThrow<IllegalArgumentException> { proxyOptions(["-Dproxy.internal.maxTargetUrlLength=-1"]) }
+      exception.message shouldContain "maxTargetUrlLength"
+    }
+
     // A blank bind address would fail only when the scrape server starts, with an opaque Ktor error.
     "a blank proxy.http.host should be rejected" {
       val exception = shouldThrow<IllegalArgumentException> { proxyOptions(["-Dproxy.http.host="]) }
