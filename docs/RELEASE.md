@@ -18,7 +18,8 @@ Steps 1-3 are edits to merge to `master`. After that, `make release` runs steps 
   backticked examples);
 - the version isn't a pre-release, its tag (if one exists) points at this commit, and it isn't already on Maven
   Central or Docker Hub;
-- the GPG setup `publish-maven-central` needs is in place, and Docker is running.
+- the GPG setup and Maven Central credentials `publish-maven-central` needs are in place (step 6), and Docker is
+  running.
 
 It then runs `make all-tests` and `make distro`, asks once, publishes to Maven Central and Docker Hub, checks the
 published images with `make docker-verify`, and deploys the docs site with `make gh-docs`. It ends by printing the
@@ -71,9 +72,21 @@ releases the site shows the last release, which is published, so a docs change d
    `build/libs/prometheus-proxy.jar`.
 
 6) Publish the release artifact to Maven Central: `make publish-maven-central`
-   (runs `./gradlew publishAndReleaseToMavenCentral`). The required GPG environment is validated
-   automatically by the target's `_check-gpg-env` prerequisite — see the GPG variables and keychain
-   entry it checks. To publish a snapshot instead, use `make publish-snapshot`.
+   (runs `./gradlew publishAndReleaseToMavenCentral`). To publish a snapshot instead, use
+   `make publish-snapshot`, which needs the same setup. Each target's prerequisites, which `make release-check`
+   runs too, check that setup first and name what's missing:
+   - `_check-gpg-env`, the signing key: `GPG_SIGNING_KEY_ID` is set, GPG holds its secret key, and the keychain
+     entry `gradle-signing-password` (account `gpg-signing`) holds its passphrase.
+   - `_check-maven-central-env`, the Maven Central credentials: the keychain entries `maven-central-username` and
+     `maven-central-password` (account `maven-central`) hold a user token's name and password from
+     central.sonatype.com. The targets pass them to Gradle in the publishing command's environment only, so keep
+     them out of `~/.gradle/gradle.properties`, which every Gradle build on the machine reads. Add each entry once
+     with the command below, which asks for the value, so it stays out of the shell's history:
+
+     ```bash
+     security add-generic-password -a maven-central -s maven-central-username -U -w
+     security add-generic-password -a maven-central -s maven-central-password -U -w
+     ```
 
 7) Create a release on GitHub (https://github.com/pambrose/prometheus-proxy/releases):
    - **Tag**: the version with no `v` prefix (e.g. `4.0.1`).

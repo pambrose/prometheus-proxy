@@ -1,0 +1,13 @@
+---
+# Codacy uses this file in place of the "Ignored files" list in its UI, so the two files ignored there are
+# listed here: the tscfg-generated ConfigVals.java (`make tsconfig`) and the release skill.
+exclude_paths:
+  - "src/main/java/io/prometheus/common/ConfigVals.java"
+  - ".claude/skills/publishing-release/SKILL.md"
+
+engines:
+  # Kotest specs repeat their setup by design, so duplication is measured on main code only.
+  # Test code is still analyzed for issues and complexity.
+  duplication:
+    exclude_paths:
+      - "src/test/**"
