@@ -207,7 +207,10 @@ no jar on the classpath carries a `logback.xml`, which would replace the host ap
   channel as it closes -- and no accepted scrape result is lost by the close
 - **AgentPathManagerTest** — Path registration/unregistration, path lookup, concurrent access; a discovered path's
   repeating registration failure logs one WARN, compared by gRPC status code, so timeouts whose descriptions differ
-  only in the elapsed time log one, while a rejection for another reason is warned about again
+  only in the elapsed time log one, while a rejection for another reason is warned about again; so do a static path's
+  repeating failed retry, until the proxy answers in between, and a stale discovered path's repeating failed
+  unregister, until the path returns to the file; a static path whose retries fail in transport backs off as a
+  rejected one does, and still registers once the proxy accepts it
 - **AgentPathManagerLincheckTest** — Lincheck, stress only (tagged `Lincheck`): static registration, unregistration, and
   discovery reconciles race over a real in-process gRPC connection; once they finish, the agent's local path map and
   the proxy's registrations for it agree exactly

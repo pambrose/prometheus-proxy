@@ -143,6 +143,13 @@ agents connected with one identity, which is every agent when agent auth is off.
   seconds by default, logged a WARN with a stack trace. Repeats are now recognized by their gRPC status, as they are
   for a failed connect, and the log still shows the full message. A discovery file that fails with a different error,
   or a path the proxy rejects for a different reason, is still logged at WARN.
+- **A static path the agent retries, or a discovered path it removes, no longer fills its log with stack traces while
+  the proxy can't be reached.** When retrying a static path the proxy had rejected, or removing a discovered path that
+  left the discovery file, failed with a time-out or a dropped connection, the agent logged a WARN with a stack trace
+  for each path on every retry or reconcile, until it reconnected. It now logs the failure at WARN once, then at DEBUG
+  while it repeats. A static path's failed retry also waits longer each time, as a rejected one does, from 10 seconds
+  up to `agent.internal.rejectedPathRetryMaxSecs`, instead of retrying every 10 seconds; the log says when the next
+  retry comes.
 - **`proxy_chunked_transfers_abandoned_total` counts the transfers a disconnect cuts short.** It counted only those
   an agent's stream cleaned up as it ended, but when an agent disconnects the proxy usually reclaims them first, and
   when it evicts one it always does, so the counter stayed near zero.

@@ -86,6 +86,10 @@ internal class AgentPathManager(
   // by pathMutex.
   private val discoveredRejections = HashMap<String, DiscoveredRejection>()
 
+  // The failure that last kept each stale discovered path registered, by normalized path, as Utils.failureKey gives
+  // it; see unregisterStaleDiscoveredPaths. Guarded by pathMutex.
+  private val staleUnregisterFailures = HashMap<String, String>()
+
   // The discovered paths last reported for each kind of conflict; see reportConflict. Guarded by pathMutex.
   private val reportedConflicts = EnumMap<DiscoveryConflict, Set<String>>(DiscoveryConflict::class.java)
 
@@ -99,6 +103,7 @@ internal class AgentPathManager(
       pathContextMap.clear()
       rejectedStaticPaths.clear()
       discoveredRejections.clear()
+      staleUnregisterFailures.clear()
       reportedConflicts.clear()
     }
 
@@ -178,8 +183,8 @@ internal class AgentPathManager(
       .toMap()
 
   // Static paths whose last registration the proxy rejected as retryable, for retryRejectedStaticPaths to retry, each
-  // with the backoff that says when its next retry is due.
-  private val rejectedStaticPaths = ConcurrentHashMap<PathConfig, RetryBackoff>()
+  // with the backoff that says when its next retry is due, and the transport failure its last retry met, if any.
+  private val rejectedStaticPaths = ConcurrentHashMap<PathConfig, StaticRetry>()
 
   // A proxy rejecting one path (valid=false -- e.g. the agent's identity isn't authorized for it) must not
   // abort registration of the others: that used to end the connection, and the agent then reconnected
@@ -216,31 +221,56 @@ internal class AgentPathManager(
       rejectedStaticPaths -= config
       null
     } catch (e: RequestFailureException) {
-      // A null from compute removes the entry, so a rejection that can't clear drops the path from retrying.
-      val backoff =
+      // A null from compute removes the entry, so a rejection that can't clear drops the path from retrying. The proxy
+      // answered, so the record starts with no transport failure: one that comes back is news.
+      val retry =
         rejectedStaticPaths.compute(config) { _, prior ->
-          if (e.retryable) nextBackoff(prior, staticRetryInterval) else null
+          if (e.retryable) StaticRetry(nextBackoff(prior?.backoff, staticRetryInterval)) else null
         }
-      logRejection(PathSource.STATIC, config.path.removePrefix("/"), e, repeat, backoff?.wait)
+      logRejection(PathSource.STATIC, config.path.removePrefix("/"), e, repeat, retry?.backoff?.wait)
       e
     }
 
   // Retries each static path the proxy rejected as retryable. Static paths are otherwise registered only at connect,
   // but such a rejection can clear while the agent stays connected: the live agent that held the path disconnects.
   // Each path is isolated, as in reconcileDiscoveredPaths, so no failure ends the connection, whose other tasks
-  // already end it when it is really gone.
+  // already end it when it is really gone. A transport failure keeps the path for retrying (see staticRetryFailed).
   suspend fun retryRejectedStaticPaths() {
-    for ((config, backoff) in rejectedStaticPaths.toList()) {
+    for ((config, retry) in rejectedStaticPaths.toList()) {
       // Each path waits out its own backoff; see nextBackoff.
-      if (!backoff.isDue)
+      if (!retry.backoff.isDue)
         continue
       val path = config.path.removePrefix("/")
       runCatchingCancellable { registerStaticPath(config, repeat = true) }
         .onSuccess { rejection ->
           if (rejection == null)
             logger.info { "Registered static path /$path after the proxy had rejected it" }
-        }.onFailure { e -> logger.warn(e) { "Failed to retry static path /$path" } }
+        }.onFailure { e -> staticRetryFailed(config, retry, e) }
     }
+  }
+
+  // Records [e], a failure that kept the proxy from answering a retry of [config], whose record was [prior] (November
+  // #42). A failure on one call needn't mean the connection is gone, so the path stays for retrying: leaving it to the
+  // reconnect could leave it unregistered for the rest of a connection that survives. Its backoff advances, as on a
+  // rejection, since retrying on every tick cost a round trip per path per tick while the failure lasted, and each
+  // time-out held the retry loop for a whole unary deadline. As in registerDiscoveredPath, the stack trace is logged
+  // when a failure first appears and a repeat at DEBUG. The proxy's answer, whose message is its reason, never comes
+  // here, so as in connectAgent a failure is keyed by its gRPC status code, or its class without one, not its message.
+  private fun staticRetryFailed(
+    config: PathConfig,
+    prior: StaticRetry,
+    e: Throwable,
+  ) {
+    val failure = failureKey(e)
+    val next = StaticRetry(nextBackoff(prior.backoff, staticRetryInterval), failure)
+    // replace() changes only a path still waiting to be retried, so a concurrent clear() isn't undone.
+    rejectedStaticPaths.replace(config, next)
+    val path = config.path.removePrefix("/")
+    val retrying = retryingIn(next.backoff.wait)
+    if (prior.failure == failure)
+      logger.debug { "Still failing to retry static path /$path, $retrying: ${e.simpleClassName}: ${e.message}" }
+    else
+      logger.warn(e) { "Failed to retry static path /$path, $retrying" }
   }
 
   // Runs retryRejectedStaticPaths every [interval] while [active] holds -- Agent.connectToProxy's retry task -- and
@@ -266,8 +296,7 @@ internal class AgentPathManager(
     retryIn: Duration?,
   ) {
     val kind = source.name.lowercase()
-    // A zero wait means the next tick of the retry loop, which is what "retrying" has always meant here.
-    val retrying = if (retryIn == null || retryIn == Duration.ZERO) "retrying" else "retrying in $retryIn"
+    val retrying = retryingIn(retryIn)
     when {
       !e.retryable -> logger.warn { "Proxy rejected $kind path /$path, not retrying: ${e.message}" }
       !repeat -> logger.warn { "Proxy rejected $kind path /$path, $retrying: ${e.message}" }
@@ -275,11 +304,17 @@ internal class AgentPathManager(
     }
   }
 
+  // How a log line says when a path is retried, given its backoff's [wait]. A zero wait means the next tick of the
+  // retry loop, which is what "retrying" has always meant here.
+  private fun retryingIn(wait: Duration?): String =
+    if (wait == null || wait == Duration.ZERO) "retrying" else "retrying in $wait"
+
   // The backoff for a path the proxy rejected for a cause that can clear, given its [prior] backoff (null on the first
   // rejection). The first retry waits only for the next tick of the loop that retries the path; after that the wait
-  // starts at [base] and doubles with each rejection, up to maxRetryBackoff. Retrying on every tick cost the proxy a
-  // round trip per rejected path per interval for as long as a conflict lasted; the price of pacing is that a cleared
-  // conflict is noticed up to the current wait later.
+  // starts at [base] and doubles with each rejection, and with each retry of a static path that fails in transport
+  // (see staticRetryFailed), up to maxRetryBackoff. Retrying on every tick cost the proxy a round trip per rejected
+  // path per interval for as long as a conflict lasted; the price of pacing is that a cleared conflict is noticed up to
+  // the current wait later.
   private fun nextBackoff(
     prior: RetryBackoff?,
     base: Duration,
@@ -352,15 +387,28 @@ internal class AgentPathManager(
   private fun isStaticPath(path: String): Boolean =
     path in configuredStaticPaths || pathContextMap[path]?.source == PathSource.STATIC
 
-  // Unregisters the DISCOVERED paths no longer [desired]. Callers MUST hold pathMutex.
+  // Unregisters the DISCOVERED paths no longer [desired]. Callers MUST hold pathMutex. A failure keeps its path for the
+  // next reconcile to retry, so one that lasts repeats on every reconcile: its stack trace is logged when it first
+  // appears for the path, and a repeat at DEBUG, as registerDiscoveredPath does (November #42). doUnregisterPath
+  // handles the proxy's answer itself, so only a failure that kept the proxy from answering comes here, keyed, as in
+  // connectAgent, by its gRPC status code, or its class without one, not by a message that can change every attempt.
   private suspend fun unregisterStaleDiscoveredPaths(desired: Set<String>) {
     val stale =
-      pathContextMap.mapNotNull { (path, ctx) ->
+      pathContextMap.mapNotNullTo(HashSet()) { (path, ctx) ->
         path.takeIf { ctx.source == PathSource.DISCOVERED && path !in desired }
       }
+    // Forget the failures of paths no longer stale: unregistered, desired again, or no longer discovered.
+    staleUnregisterFailures.keys.retainAll(stale)
     for (path in stale) {
       runCatchingCancellable { doUnregisterPath(path) }
-        .onFailure { logger.warn(it) { "Failed to unregister discovered path /$path" } }
+        .onSuccess { staleUnregisterFailures -= path }
+        .onFailure { e ->
+          val failure = failureKey(e)
+          if (staleUnregisterFailures.put(path, failure) == failure)
+            logger.debug { "Still failing to unregister discovered path /$path: ${e.simpleClassName}: ${e.message}" }
+          else
+            logger.warn(e) { "Failed to unregister discovered path /$path" }
+        }
     }
   }
 
@@ -558,13 +606,21 @@ internal class AgentPathManager(
   }
 
   // When a path the proxy rejected for a cause that can clear may be retried: [wait] is the current backoff, which
-  // nextBackoff doubles on the next rejection, and [dueAt] is when it is up.
+  // nextBackoff doubles on the next rejection, or a static path's next failed retry, and [dueAt] is when it is up.
   private data class RetryBackoff(
     val wait: Duration,
     val dueAt: TimeMark,
   ) {
     val isDue: Boolean get() = dueAt.hasPassedNow()
   }
+
+  // A static path waiting for retryRejectedStaticPaths: [backoff] says when it is next due, and [failure] is the
+  // transport failure its last retry met, as Utils.failureKey gives it, or null when the proxy answered, so a repeat
+  // is logged at DEBUG instead of a fresh stack trace (see staticRetryFailed).
+  private data class StaticRetry(
+    val backoff: RetryBackoff,
+    val failure: String? = null,
+  )
 
   // Strongly-typed view of a single `agent.pathConfigs` entry, replacing the prior magic-string map.
   private data class PathConfig(

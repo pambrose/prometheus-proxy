@@ -1345,6 +1345,87 @@ class AgentPathManagerTest : StringSpec() {
       manager.hasRejectedStaticPaths.shouldBeTrue()
     }
 
+    // A retry that kept timing out logged a WARN with its stack trace on every tick, since nothing compared it with the
+    // last failure, and a deadline's description carries its elapsed time anyway (November #42). A failure with a gRPC
+    // status is compared by its code, as #39 does for a discovered path; the full description is still logged.
+    "a static path's retries failing with DEADLINE_EXCEEDED should log one WARN, then DEBUG" {
+      val clock = TestTimeSource()
+      val (manager, grpcService) = managerRejectingMetrics2(clock = clock)
+      manager.registerPaths()
+      coEvery { grpcService.registerPathOnProxy("metrics2", any(), any(), any()) } throws
+        deadlineExceeded("29.999954000") andThenThrows deadlineExceeded("29.999961000") andThenThrows
+        StatusException(Status.UNAVAILABLE.withDescription("io exception"))
+
+      // Each tick is past the cap, so every retry is due whatever the backoff.
+      val events =
+        captureLogs<AgentPathManager>(Level.DEBUG) {
+          clock.tick(3, 5.minutes) { manager.retryRejectedStaticPaths() }
+        }.filter { "/metrics2" in it.formattedMessage }
+
+      // A change of status code is still a change.
+      events.map { it.level } shouldBe listOf(Level.WARN, Level.DEBUG, Level.WARN)
+      events[0].throwableProxy.shouldNotBeNull().message shouldContain "after 29.999954000s"
+      events[1].formattedMessage shouldContain "after 29.999961000s"
+      // The failed retry is backed off (see below), so the log says when the next one comes.
+      events[0].formattedMessage shouldContain "retrying in 10s"
+    }
+
+    // A failed retry is backed off as a rejection is (November #42). It wasn't, so while a transport failure lasted the
+    // path was retried on every tick, each time-out holding the retry loop for a whole unary deadline.
+    "retryRejectedStaticPaths should back off a static path whose retries keep failing in transport" {
+      val clock = TestTimeSource()
+      val (manager, grpcService) = managerRejectingMetrics2(clock = clock)
+      manager.registerPaths()
+      coEvery { grpcService.registerPathOnProxy("metrics2", any(), any(), any()) } throws
+        deadlineExceeded("30.000012000")
+
+      clock.tick(10, 10.seconds) { manager.retryRejectedStaticPaths() }
+
+      // As for a rejection: the connect attempt, then retries at 10s, 20s, 40s and 80s.
+      coVerify(exactly = 5) { grpcService.registerPathOnProxy("metrics2", any(), any(), any()) }
+      manager.hasRejectedStaticPaths.shouldBeTrue()
+    }
+
+    // A transport failure on one call needn't mean the connection is gone, so the path stays for retrying, rather than
+    // waiting for a reconnect that may not come (November #42).
+    "a static path whose retries failed in transport should register once the proxy accepts it" {
+      val clock = TestTimeSource()
+      val (manager, grpcService) = managerRejectingMetrics2(clock = clock)
+      manager.registerPaths()
+      coEvery { grpcService.registerPathOnProxy("metrics2", any(), any(), any()) } throws
+        deadlineExceeded("30.000012000")
+      clock.tick(3, 10.seconds) { manager.retryRejectedStaticPaths() }
+
+      acceptMetrics2(grpcService)
+      clock.tick(1, 5.minutes) { manager.retryRejectedStaticPaths() }
+
+      manager["metrics2"].shouldNotBeNull()
+      manager.hasRejectedStaticPaths.shouldBeFalse()
+    }
+
+    // The proxy answering ends a transport failure, so one that comes back is news again.
+    "a static path's transport failure should be warned about again after the proxy answers in between" {
+      val clock = TestTimeSource()
+      val (manager, grpcService) = managerRejectingMetrics2(clock = clock)
+      manager.registerPaths()
+      val held =
+        RequestFailureException(
+          "registerPathOnProxy() - proxy rejected path /metrics2",
+          rejectionCause = PathRejectionCause.HELD_BY_ANOTHER_IDENTITY,
+        )
+      coEvery { grpcService.registerPathOnProxy("metrics2", any(), any(), any()) } throws
+        deadlineExceeded("29.999954000") andThenThrows held andThenThrows deadlineExceeded("29.999961000")
+
+      val events =
+        captureLogs<AgentPathManager>(Level.DEBUG) {
+          clock.tick(3, 5.minutes) { manager.retryRejectedStaticPaths() }
+        }.filter { "/metrics2" in it.formattedMessage }
+
+      // The rejection in between is a repeat of the one at connect, so it is logged at DEBUG.
+      events.map { it.level } shouldBe listOf(Level.WARN, Level.DEBUG, Level.WARN)
+      events[2].throwableProxy.shouldNotBeNull()
+    }
+
     // Only a rejection by a live agent holding the path clears while the agent stays connected. No other cause
     // does, including none (a proxy predating the field) and one this agent doesn't recognize.
     "registerPaths should keep a rejected static path for retrying only for a cause that can clear" {
@@ -1424,6 +1505,49 @@ class AgentPathManagerTest : StringSpec() {
       events.map { it.level } shouldBe listOf(Level.WARN, Level.DEBUG, Level.WARN)
       events[0].throwableProxy.shouldNotBeNull().message shouldContain "after 29.999954000s"
       events[1].formattedMessage shouldContain "after 29.999961000s"
+    }
+
+    // A stale discovered path whose unregister fails in transport stays for the next reconcile to retry, and each one
+    // that failed logged a WARN with its stack trace (November #42). It is compared by gRPC status code, as above.
+    "reconcile should log one WARN for unregisters of a stale path failing with DEADLINE_EXCEEDED" {
+      val agent = createMockAgent()
+      val grpc = agent.grpcService
+      val manager = AgentPathManager(agent)
+      manager.reconcileDiscoveredPaths(dMetrics)
+      coEvery { grpc.unregisterPathOnProxy("d_metrics") } throws
+        deadlineExceeded("29.999954000") andThenThrows deadlineExceeded("29.999961000") andThenThrows
+        StatusException(Status.UNAVAILABLE.withDescription("io exception"))
+
+      val events =
+        captureLogs<AgentPathManager>(Level.DEBUG) {
+          repeat(3) { manager.reconcileDiscoveredPaths(emptyList()) }
+        }.filter { "d_metrics" in it.formattedMessage }
+
+      // A change of status code is still a change.
+      events.map { it.level } shouldBe listOf(Level.WARN, Level.DEBUG, Level.WARN)
+      events[0].throwableProxy.shouldNotBeNull().message shouldContain "after 29.999954000s"
+      events[1].formattedMessage shouldContain "after 29.999961000s"
+      // Still retried on every reconcile, and kept until an unregister gets through.
+      coVerify(exactly = 3) { grpc.unregisterPathOnProxy("d_metrics") }
+      manager["d_metrics"].shouldNotBeNull()
+    }
+
+    // A stale path that returns to the file and then leaves it again is a new removal, so its failure is news again.
+    "a stale path's unregister failure should be warned about again once the path has returned and left again" {
+      val agent = createMockAgent()
+      val grpc = agent.grpcService
+      val manager = AgentPathManager(agent)
+      manager.reconcileDiscoveredPaths(dMetrics)
+      coEvery { grpc.unregisterPathOnProxy("d_metrics") } throws deadlineExceeded("29.999954000")
+
+      val warnings =
+        captureLogs<AgentPathManager>(Level.WARN) {
+          manager.reconcileDiscoveredPaths(emptyList())
+          manager.reconcileDiscoveredPaths(dMetrics)
+          manager.reconcileDiscoveredPaths(emptyList())
+        }.filter { "d_metrics" in it.formattedMessage }
+
+      warnings shouldHaveSize 2
     }
 
     // A rejection has no gRPC status, so it is still compared by its message, the proxy's reason, which carries no
