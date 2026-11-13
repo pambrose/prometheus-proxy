@@ -187,7 +187,7 @@ backlog means agents can't keep up. See [Performance Tuning](advanced.md#perform
 ## Shutdown
 
 - Standalone proxy/agent processes shut down cleanly on SIGTERM. **Embedded** agents should be
-  stopped via `EmbeddedAgentInfo.shutdown()` (or `close()`), which blocks until terminated.
+  stopped via `EmbeddedAgentInfo.shutdown()`, which blocks until terminated.
   See [Embedded Agent](embedded-agent.md).
 
 ## Pre-flight checklist

@@ -28,6 +28,7 @@ import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.shouldBe
 import io.prometheus.agent.AgentMetrics
+import io.prometheus.common.MetricBuilders.SCRAPE_LATENCY_BUCKETS
 import io.prometheus.common.Utils.toJsonElement
 import io.prometheus.common.mockAgentForMetrics
 import io.prometheus.common.mockProxyForMetrics
@@ -130,6 +131,50 @@ class DashboardMetricNamesTest : StringSpec() {
       .replace(GROUPING, "")
       .let { stripped -> METRIC_NAME.findAll(stripped).map { it.value }.toSet() }
 
+  // Each histogram a table row names, with the row's cell under a Buckets column, for the tables that have one.
+  private fun bucketRanges(markdown: String): Map<String, String> {
+    val ranges = mutableMapOf<String, String>()
+    var header: List<String>? = null
+    for (line in markdown.lines()) {
+      val columns = header
+      val cells = line.trim().removeSurrounding("|").split("|").map { it.trim() }
+      when {
+        !line.startsWith("|") -> {
+          header = null
+        }
+
+        columns == null -> {
+          header = cells
+        }
+
+        else -> {
+          val column = columns.indexOf("Buckets")
+          if (column in cells.indices && cells.first().startsWith("`"))
+            ranges[cells.first().trim('`')] = cells[column]
+        }
+      }
+    }
+    return ranges
+  }
+
+  // The bounds the "Latency buckets:" line in [text] lists, in seconds, or null when it has none. The metrics doc gives
+  // them in seconds (`.005, ... 90` seconds), the website with units (5ms, ... 90s).
+  private fun latencyBounds(text: String): List<Double>? =
+    text
+      .lines()
+      .singleOrNull { it.startsWith(LATENCY_BOUNDS) }
+      ?.substringAfter(LATENCY_BOUNDS)
+      ?.substringBefore(" seconds")
+      ?.replace("`", "")
+      ?.split(",")
+      ?.map(::seconds)
+
+  // A bucket bound, such as 5ms, 2.5s, or a bare .005, in seconds.
+  private fun seconds(bound: String): Double =
+    bound.trim().let {
+      if (it.endsWith("ms")) it.removeSuffix("ms").toDouble() / MILLIS_PER_SECOND else it.removeSuffix("s").toDouble()
+    }
+
   // Each file with the queries it holds, extracted from its text.
   private val sources: Map<String, (String) -> List<String>> =
     mapOf(
@@ -201,6 +246,26 @@ class DashboardMetricNamesTest : StringSpec() {
         .filterNot { it.endsWith("_total") }
         .shouldBeEmpty()
     }
+
+    // The proxy's and agent's latency histograms are built with SCRAPE_LATENCY_BUCKETS, but the metrics doc kept giving
+    // the agent's range as 5ms–10s after the agent moved to them (November #29).
+    "the latency histograms' bucket ranges in $METRICS_DOC should span SCRAPE_LATENCY_BUCKETS" {
+      val latencyHistograms =
+        snapshots
+          .filterIsInstance<HistogramSnapshot>()
+          .map { it.metadata.name }
+          .filter { it.endsWith(LATENCY_SUFFIX) }
+      val ranges = bucketRanges(File(METRICS_DOC).readText()).filterKeys { it.endsWith(LATENCY_SUFFIX) }
+      ranges.keys shouldBe latencyHistograms.toSet()
+      ranges.values
+        .map { range -> range.split("–").map(::seconds) }
+        .distinct() shouldBe listOf(listOf(SCRAPE_LATENCY_BUCKETS.first(), SCRAPE_LATENCY_BUCKETS.last()))
+    }
+
+    "the latency bucket bounds $METRICS_DOC and the website's Monitoring page list should be SCRAPE_LATENCY_BUCKETS" {
+      listOf(File(METRICS_DOC).readText(), WebsitePages.prose.getValue(MONITORING_PAGE))
+        .map(::latencyBounds) shouldBe List(2) { SCRAPE_LATENCY_BUCKETS.toList() }
+    }
   }
 
   companion object {
@@ -209,6 +274,10 @@ class DashboardMetricNamesTest : StringSpec() {
     private const val MONITORING_SNIPPETS = "src/test/kotlin/website/MonitoringExamples.txt"
     private const val METRICS_DOC = "docs/metrics-and-grafana.md"
     private const val ALERT_RULES = "grafana/alerts.yml"
+    private const val MONITORING_PAGE = "monitoring.md"
+    private const val LATENCY_SUFFIX = "_latency_seconds"
+    private const val LATENCY_BOUNDS = "Latency buckets:"
+    private const val MILLIS_PER_SECOND = 1_000.0
     private val MATCHERS = Regex("""\{[^}]*}""")
     private val GROUPING = Regex("""\b(?:by|without|on|ignoring|group_left|group_right)\s*\([^)]*\)""")
     private val METRIC_NAME = Regex("""\b(?:(?:proxy|agent)_[a-z_]+|up)\b""")

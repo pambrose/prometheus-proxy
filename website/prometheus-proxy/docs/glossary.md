@@ -118,11 +118,12 @@ gRPC call so the proxy can authenticate agents at the application layer. See
 
 A gRPC server filter the proxy uses to detect agent disconnects promptly. Disabling it
 (`transportFilterDisabled`) is required when fronting the gRPC port with an L7 proxy such as
-Nginx, at the cost of relying on the inactivity timeout for cleanup. See
+Nginx. Without it, an agent is removed when its request stream ends, and the inactivity timeout
+covers only an agent that dies before opening its stream, or whose connection stays half-open. See
 [Advanced Topics](advanced.md#nginx-reverse-proxy).
 
 ### launch_id
 
-A per-process identifier attached as a label to agent metrics, so a Prometheus target can
-distinguish one agent process lifetime from the next across restarts. See
-[Monitoring](monitoring.md#agent-metrics).
+An identifier each agent instance gets when it starts, attached as a label to agent metrics, so a
+Prometheus target can tell an agent's series from those of its previous run, and from those of other
+agents embedded in the same JVM. See [Monitoring](monitoring.md#agent-metrics).

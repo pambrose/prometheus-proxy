@@ -54,9 +54,9 @@ the proxy's scrape job to be named `prometheus-proxy`.
 
 !!! tip "Detecting restarts"
 
-    `proxy_start_time_seconds` and `agent_start_time_seconds` carry a per-process `launch_id`;
-    a change in `launch_id` (or a sudden reset of `*_start_time_seconds`) flags a restart on a
-    dashboard or alert.
+    `proxy_start_time_seconds` and `agent_start_time_seconds` carry a `launch_id` that each proxy
+    or agent instance gets when it starts; a change in `launch_id` (or a sudden reset of
+    `*_start_time_seconds`) flags a restart on a dashboard or alert.
 
 ## See also
 

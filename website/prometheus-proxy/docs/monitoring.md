@@ -151,7 +151,7 @@ Response size buckets: 1KB, 10KB, 100KB, 500KB, 1MB, 5MB, 10MB
 
 | Metric                                | Description                                    |
 |:--------------------------------------|:-----------------------------------------------|
-| `proxy_start_time_seconds`            | Proxy start time (Unix epoch)                  |
+| `proxy_start_time_seconds`            | Proxy start time (Unix epoch), by `launch_id`  |
 | `proxy_agent_map_size`                | Number of connected agents                     |
 | `proxy_path_map_size`                 | Number of registered scrape paths              |
 | `proxy_scrape_map_size`               | Number of in-flight scrape requests            |
@@ -172,11 +172,12 @@ Response size buckets: 1KB, 10KB, 100KB, 500KB, 1MB, 5MB, 10MB
 | `agent_filter_lines_dropped_total` | `launch_id`, `path` | Lines removed by the path's metric filter                                                     |
 | `agent_filter_bytes_saved_total`   | `launch_id`, `path` | Bytes saved before gzip by the metric filter                                                  |
 
-The `launch_id` label uniquely identifies each agent process lifetime. `unsuccessful` means the target answered with
-a non-2xx status or a response over `agent.http.maxContentLengthMBytes`; `timed_out` means the target didn't answer
-within the agent's scrape timeout; `failure` means the fetch failed without an answer, such as a refused connection
-or a DNS failure; `invalid_path` means the proxy asked for a path the agent doesn't serve; `dropped` is a result lost
-because the connection to the proxy closed before it was sent.
+The `launch_id` label identifies each agent instance: an agent gets a new one each time it starts, and each of several
+agents embedded in one JVM has its own. `unsuccessful` means the target answered with a non-2xx status or a response
+over `agent.http.maxContentLengthMBytes`; `timed_out` means the target didn't answer within the agent's scrape
+timeout; `failure` means the fetch failed without an answer, such as a refused connection or a DNS failure;
+`invalid_path` means the proxy asked for a path the agent doesn't serve; `dropped` is a result lost because the
+connection to the proxy closed before it was sent.
 
 The two `agent_filter_*` counters only create series for paths that have a filter configured, so
 they are absent entirely unless [metric filtering](configuration/agent.md#metric-filtering) is in

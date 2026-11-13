@@ -194,7 +194,7 @@ abstract class BaseOptions protected constructor(
     private set
 
   /**
-   * Logback log level for this process: one of `all`, `trace`, `debug`, `info`, `warn`, `error`, `off`.
+   * Logback log level for this process: one of `trace`, `debug`, `info`, `warn`, `error`, `off`.
    * Empty falls back to the role-specific env var ([io.prometheus.common.EnvVars.PROXY_LOG_LEVEL] or
    * [io.prometheus.common.EnvVars.AGENT_LOG_LEVEL]) and then `<role>.logLevel` config; if still empty,
    * the level configured in `logback.xml` is used.

@@ -386,12 +386,18 @@ These support helpers also live here (not test classes themselves):
   form Testcontainers pulls by digest, the suite's Prometheus is the `Makefile`'s, every `astral-sh/setup-uv` step
   installs a pinned uv, the same one in each, and the CRD schemas `helm-lint` validates against come from a fixed
   commit, so a hung job gives its check back and what CI runs changes only with a diff here
+- **ConfigFileKeysTest** — every setting in a HOCON config the repo ships or its tests load (`config/test-configs`,
+  `examples`, `testing`, `etc/compose`, the container suite's agent configs, and the bundled `reference.conf`) is one
+  `config/config.conf` declares, with the same shape, since HOCON ignores a key it doesn't know; a list's entries are
+  checked against the fields its schema entry gives, as for `proxy.auth` and `agent.pathConfigs`, and a discovery
+  targets file's `paths` entries against `agent.pathConfigs`'
 - **ConfigValsTest** — ConfigVals auto-generated from HOCON schema (validates default values)
 - **DashboardMetricNamesTest** — the Grafana dashboards, the alert rules, the docs' PromQL, and the metric names
   on the website's pages all name series the proxy and agent expose (a counter only with its `_total` suffix); proxy
-  panels filter by the job and instance pickers and agent panels by the agent picker; and every counter is declared
-  with the `_total` name it is exposed as. The metrics it builds are closed after the spec, which must leave none of
-  their shared collectors registered
+  panels filter by the job and instance pickers and agent panels by the agent picker; every counter is declared
+  with the `_total` name it is exposed as; and the latency bucket ranges in `metrics-and-grafana.md`'s tables, and
+  the bounds it and the website's Monitoring page list, are `SCRAPE_LATENCY_BUCKETS`. The metrics it builds are
+  closed after the spec, which must leave none of their shared collectors registered
 - **DataClassTest** — Config data classes (AdminConfig, MetricsConfig, ZipkinConfig parsing); the buffer pool,
   compilation, and native memory export flags each turn on only their own MetricsConfig field
 - **DocsExamplesTest** — every `examples/*.conf` loads through `AgentOptions` and `ProxyOptions` (a discovery

@@ -30,13 +30,15 @@ import kotlinx.coroutines.flow.asSharedFlow
  */
 internal sealed interface ProxyEvent {
   /**
-   * An agent connected: its first call, `connectAgent`, got past agent authentication.
+   * An agent connected: the first ProxyService call on its connection, of any kind, got past agent authentication.
    *
    * Emitted when the connection's [AgentContext] is announced. The transport filter creates that context
    * for every HTTP/2 connection, before any call is authenticated, but keeps it pending -- a health
-   * probe or a client with a bad token never produces this event. It still precedes `registerAgent`,
-   * so the context's identity fields are `"Unassigned"`; consumers wanting a named, serving agent should
-   * wait for [AgentRegistered].
+   * probe or a client with a bad token never produces this event. `ProxyServerInterceptor` announces it on
+   * the connection's first authenticated call, not only `connectAgent`, so a client can't skip it (October #26).
+   * With the transport filter disabled, `connectAgentWithTransportFilterDisabled` creates and announces it
+   * (November #6). It still precedes `registerAgent`, so the context's identity fields are `"Unassigned"`;
+   * consumers wanting a named, serving agent should wait for [AgentRegistered].
    */
   data class AgentConnected(
     val agentId: String,

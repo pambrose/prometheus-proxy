@@ -146,15 +146,16 @@ Response size buckets: `1KB, 10KB, 100KB, 500KB, 1MB, 5MB, 10MB`.
 
 | Metric                                | Description                                    |
 |---------------------------------------|------------------------------------------------|
-| `proxy_start_time_seconds`            | Proxy start time (Unix epoch)                  |
+| `proxy_start_time_seconds`            | Proxy start time (Unix epoch), by `launch_id`  |
 | `proxy_agent_map_size`                | Number of connected agents                     |
 | `proxy_path_map_size`                 | Number of registered scrape paths              |
 | `proxy_scrape_map_size`               | Number of in-flight scrape requests            |
 | `proxy_chunk_context_map_size`        | Number of in-flight chunked transfers          |
 | `proxy_cumulative_agent_backlog_size` | Total queued scrape requests across all agents |
 
-Gauges use lazy sampling (`SamplerGaugeCollector`) — values are read from
-live data structures on each Prometheus scrape, not pushed on every state change.
+All but `proxy_start_time_seconds` are sampled: each is a `GaugeWithCallback`, built by `MetricBuilders.sampledGauge`,
+that reads its value from live data structures on each Prometheus scrape, rather than being set on every state
+change.
 
 ---
 
@@ -180,8 +181,8 @@ because the connection to the proxy closed before it was sent)
 
 **`agent_connect_count_total` type labels:** `success`, `failure`
 
-The `launch_id` label uniquely identifies each agent process lifetime, allowing
-you to distinguish metrics from agent restarts.
+The `launch_id` label identifies each agent instance: an agent gets a new one each time it starts, and each of
+several agents embedded in one JVM has its own, so you can tell their series apart.
 
 The two `agent_filter_*` counters only create series for paths that have a metric filter configured
 (`agent.filters`), so they are absent entirely unless metric filtering is in use.
@@ -190,7 +191,7 @@ The two `agent_filter_*` counters only create series for paths that have a metri
 
 | Metric                                 | Labels                    | Buckets | Description                                    |
 |----------------------------------------|---------------------------|---------|------------------------------------------------|
-| `agent_scrape_request_latency_seconds` | `launch_id`, `agent_name` | 5ms–10s | Time to fetch metrics from the target endpoint |
+| `agent_scrape_request_latency_seconds` | `launch_id`, `agent_name` | 5ms–90s | Time to fetch metrics from the target endpoint |
 
 Same bucket boundaries as the proxy latency histogram.
 

@@ -230,7 +230,7 @@ class Proxy(
   internal val agentContextManager = AgentContextManager(isTestMode, eventBus)
   internal val scrapeRequestManager = ScrapeRequestManager()
 
-  // Per-process id (mirrors Agent.launchId). Intentionally used to label only proxy_start_time_seconds,
+  // Per-Proxy-instance id (mirrors Agent.launchId). Intentionally used to label only proxy_start_time_seconds,
   // which is enough to detect a restart on a Prometheus target; the counters/histograms are left
   // unlabeled since PromQL rate()/increase() already tolerate counter resets across restarts.
   internal val launchId = randomId(15)
