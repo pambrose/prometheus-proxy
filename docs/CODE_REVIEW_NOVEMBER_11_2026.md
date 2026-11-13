@@ -1,11 +1,11 @@
 # Prometheus-Proxy Code Review — November 11, 2026
 
-**Status:** 42 issues — 40 fixed, 2 open (12 medium, 30 low, no high).
+**Status:** 43 issues — all fixed (12 medium, 31 low, no high).
 
 **Progress:** Wave A (steps 1, 2, 3, 7, 11, and 13, in #374–#379), Wave B (steps 4, 8, 9, and 12, in #381–#384, with #24
 a settings change), Wave C (step 5, in #386, with #40 found and fixed there), Wave D (steps 6 and 10, in #387 and #388,
-with #31 fixed in step 6), and Wave E (steps 14 and 15, in #389 and #390, with #11 moved to step 15) fixed the 40 issues
-marked ✅. Wave E found #41 and #42, which Wave F covers.
+with #31 fixed in step 6), Wave E (steps 14 and 15, in #389 and #390, with #11 moved to step 15), and Wave F (steps 16
+and 17, for #41 and #42, which Wave E found, in #391 and #392, with #43 found and fixed in step 16) fixed all 43 issues.
 
 **Date:** 2026-11-11
 
@@ -62,8 +62,9 @@ from the repo root.
 | 38 | `harness.conf` sets Zipkin keys that don't exist                                                     | Tests    | low      | ✅      |
 | 39 | Path discovery dedupes its failures on the message, which a gRPC deadline changes every time         | Agent    | low      | ✅      |
 | 40 | An unknown scrape path is logged whole, with any control characters it carries                       | Security | low      | ✅      |
-| 41 | The harness's chunk-size override sets a key that doesn't exist, so no harness spec chunks           | Tests    | medium   | ⬜      |
-| 42 | A transport failure in the agent's path retries logs a WARN with a stack trace every tick            | Agent    | low      | ⬜      |
+| 41 | The harness's chunk-size override sets a key that doesn't exist, so it chunks only big scrapes       | Tests    | low      | ✅      |
+| 42 | A transport failure in the agent's path retries logs a WARN with a stack trace every tick            | Agent    | low      | ✅      |
+| 43 | An in-process agent keeps every message it streams, in gRPC's retry buffer                           | Agent    | medium   | ✅      |
 
 ---
 
@@ -119,8 +120,8 @@ The **Touches** column shows which steps edit the same files, and so need to lan
 | 13   | ✅ #379 | #35, #36                     | Tests that check what they claim                                      | `harness/EmbeddedAgentMetricsTest.kt`, `misc/DashboardMetricNamesTest.kt`                                                     | Test-only, so it can go any time.                                                                                                                                                                |
 | 14   | ✅ #389 | #29, #30, #32, #6, #38       | Documentation, KDoc, and config drift                             | `config/test-configs/harness.conf`, `docs/metrics-and-grafana.md`, website pages, README, `common/EnvVars.kt`, `common/BaseOptions.kt`, `proxy/ProxyOptions.kt`, the proxy KDoc in #6, `agent/discovery/PathDiscoveryService.kt` | No behavior change. Last, so the KDoc describes what steps 4–10 settle. Any item can instead ride along with an earlier PR that edits the same file.                                             |
 | 15   | ✅ #390 | #39, #11                     | Dedupe path-discovery failures on their cause                         | `agent/discovery/PathDiscoveryService.kt`, `agent/AgentPathManager.kt`                                                       | Found while fixing #9; the same change as step 9's `connectFailureKey`. Independent of the other remaining steps. |
-| 16   | ⬜      | #41                          | Make the harness chunk as its specs ask                               | `harness/support/TestUtils.kt`, `harness/HarnessConstants.kt`, the seven harness specs that pass `chunkContentSizeBytes`, `misc/ConfigFileKeysTest.kt` | Found in step 14. Test-only, but the first end-to-end chunking in the harness may surface failures it never saw, so it's its own PR. Independent of step 17. |
-| 17   | ⬜      | #42                          | Dedupe transport failures in the agent's path retries                 | `agent/AgentPathManager.kt`                                                                                   | Found in step 15; the same `Utils.failureKey` dedupe. After step 15, which edits the same file. |
+| 16   | ✅ #391 | #41, #43                     | Make the harness chunk as its specs ask                               | `harness/support/TestUtils.kt`, `harness/HarnessConstants.kt`, the seven harness specs that pass `chunkContentSizeBytes`, `misc/ConfigFileKeysTest.kt` | Found in step 14. Test-only, but the first end-to-end chunking in the harness may surface failures it never saw, so it's its own PR. Independent of step 17. |
+| 17   | ✅ #392 | #42                          | Dedupe transport failures in the agent's path retries                 | `agent/AgentPathManager.kt`                                                                                   | Found in step 15; the same `Utils.failureKey` dedupe. After step 15, which edits the same file. |
 
 ### What can run in parallel
 
@@ -140,7 +141,7 @@ Taken together, that gives these waves. Every step in a wave can be worked on at
 | C    | ✅      | 5                           | 4                                            |
 | D    | ✅      | 6, 10                       | 5                                            |
 | E    | ✅      | 14, 15                      | the code steps (4–10)                        |
-| F    | ⬜      | 16, 17                      | 17 on 15                                     |
+| F    | ✅      | 16, 17                      | 17 on 15                                     |
 
 Four files are edited across tracks, in separate places, so they merge cleanly, though the later PR rebases:
 
@@ -575,7 +576,7 @@ lines take the full message from the exception. No gRPC failure reaches `reconci
 `registerPathOnProxy`'s 30s deadline, which logged a WARN with a stack trace on every reconcile. The new
 `DEADLINE_EXCEEDED` tests in `PathDiscoveryServiceTest` and `AgentPathManagerTest` failed on the old code.
 
-### 42. ⬜ A transport failure while retrying a rejected static path, or unregistering a stale discovered path, logs a WARN with a stack trace every tick
+### 42. ✅ A transport failure while retrying a rejected static path, or unregistering a stale discovered path, logs a WARN with a stack trace every tick
 
 **Severity:** low · **Confidence:** confirmed by reading the code. Found while fixing #39.
 
@@ -603,6 +604,47 @@ again.
 whose unregister of the same stale path fails.
 
 **Follows up:** #39.
+
+**Resolution:** Fixed in #392. A static path's retry record keeps the `failureKey` of the transport failure its last
+retry met, so a new one logs a WARN with its stack trace, a repeat logs DEBUG, and a proxy answer in between resets it.
+A transport failure now advances the path's backoff, as a rejection does, and keeps the path for retrying: leaving it to
+the reconnect would strand it on a connection that survives one deadline. Ten 10s ticks of failures now make 5 calls,
+not 11. `unregisterStaleDiscoveredPaths` keeps a failure key per stale path, under `pathMutex`, forgotten once the path
+stops being stale. Both key by status code, or class without one, and not by message, since the proxy's answers never
+reach them. Three of the six new `AgentPathManagerTest` tests failed on the old code. Left as is: #39's
+`discoveredRejection` drops a discovered path's backoff on a transport failure, the opposite of this; with the 30s
+reconcile interval it matters little.
+
+### 43. ✅ An agent on an in-process channel keeps every message it streams to the proxy
+
+**Severity:** medium for in-process mode, a public but test-oriented option (`Agent`'s `inProcessServerName`) ·
+**Confidence:** confirmed by a heap histogram and a test. Found while fixing #41.
+
+**Where:** `agent/AgentGrpcService.kt:288`: the agent's channel is built with `enableRetry = true`.
+
+**Problem:**
+
+- With retry on, gRPC's `RetriableStream` buffers each message a call sends until the call commits. The agent configures
+  no retry policy, so retry gives it only transparent retries, but the buffering applies all the same.
+- A client stream the proxy answers only at its end commits once that buffer passes its per-RPC limit, 1 MiB, counted
+  from the message sizes the transport reports. The in-process transport reports none, unless
+  `GRPC_EXPERIMENTAL_SUPPORT_TRACING_MESSAGE_SIZES` is set.
+- So in-process, `writeResponsesToProxy` and `writeChunkedResponsesToProxy` kept every scrape result and chunk they sent
+  until the connection ended. With 5-byte chunks, the in-process harness ran out of heap holding 2.4M `ChunkData`. Netty
+  reports sizes, so its streams commit past 1 MiB and let go.
+
+**Fix:** build an in-process channel without retry: in-process has no network for a transparent retry to help with.
+Setting the experimental flag in the test JVM would fix only the tests.
+
+**Tests:** `AgentGrpcStreamRetentionTest` streams 2,000 1 KiB chunks through the real `AgentGrpcService`, and checks
+with weak references that the chunks the proxy read are released, in-process and over Netty.
+
+**Follows up:** #41.
+
+**Resolution:** Fixed in #391, with #41. `enableRetry` is `inProcessServerName.isEmpty()`, so Netty and TLS channels
+keep retry, and the in-process case of `AgentGrpcStreamRetentionTest` failed before the fix. Left open: the agent sets
+`maxRetryAttempts(5)` with no retry policy, so retry only ever gives transparent retries; whether a policy was meant is
+a separate question.
 
 ---
 
@@ -1528,9 +1570,10 @@ every HOCON config the repo ships or its tests load (`config/test-configs`, `exa
 container suite's agent configs, and `reference.conf`) against `config/config.conf`, list entries included, and failed
 only on the old `harness.conf`. It checks files, not the `-D` arguments tests pass, which is how #41 went unseen.
 
-### 41. ⬜ The harness's chunk-size override sets a key that doesn't exist, so no harness spec chunks
+### 41. ✅ The harness's chunk-size override sets a key that doesn't exist, so its specs chunk only their biggest scrape
 
-**Severity:** medium (tests) · **Confidence:** confirmed. Found while fixing #38.
+**Severity:** low (tests; filed as medium, and lowered once the fix showed the gap was smaller, as the Problem now
+says) · **Confidence:** confirmed. Found while fixing #38.
 
 **Where:** `harness/support/TestUtils.kt:88,106-107` (`startAgent`), and the seven specs that pass
 `chunkContentSizeBytes = DEFAULT_CHUNK_SIZE_BYTES` (5): `InProcessTestWithAdminMetricsTest`,
@@ -1542,9 +1585,10 @@ only on the old `harness.conf`. It checks files, not the `-D` arguments tests pa
 - `startAgent` passes `-Dagent.chunkContentSizeBytes=N`, but the key is `agent.chunkContentSizeKbs`, from which
   `AgentOptions` derives `chunkContentSizeBytes`. Typesafe Config ignores the unknown key, so these specs run at the
   default 32 KB.
-- No harness spec serves a response near that size, as far as a search shows, so chunked transfers, which #381 reworked
-  and #386 bounded, are covered only by unit tests with mocks, never end to end over the in-process, Netty, or TLS
-  transports the seven specs exist to cover.
+- Only `proxyCallTest`'s 100,000-line target, about 257 KB gzipped, passes 32 KB, so it was the only scrape chunked, in
+  8 chunks. Small chunks, and chunking of an ordinary scrape, never ran end to end over the in-process, Netty, or TLS
+  transports the seven specs exist to cover. (As filed, this said no harness spec chunked; the fix found the large
+  target.)
 - `ConfigFileKeysTest` (#38) checks config files, not the `-D` arguments tests pass, so it can't see this.
 
 **Fix:**
@@ -1562,6 +1606,15 @@ only on the old `harness.conf`. It checks files, not the `-D` arguments tests pa
   `HarnessHelpersTest`.
 
 **Follows up:** #38.
+
+**Resolution:** Fixed in #391. `startAgent` takes `chunkContentSizeKbs` and passes the real key, and the seven specs set
+1 KB (`DEFAULT_CHUNK_SIZE_KBS`), the smallest the setting takes. 5 bytes can't be set through config, since
+`AgentOptions.chunkContentSizeBytes` has a private setter on a public API class, and, forced by reflection, it cut
+`proxyCallTest`'s large target into 51,425 chunks per scrape and ran past its time guard. The new `chunkedScrapeTest` in
+the shared harness tests serves a 1,000-line target, 6,305 bytes gzipped, and checks that the body arrives intact, that
+the proxy's summary reports 7 chunks, and, with metrics on, that the agent's `chunked` counter rises by 1; it failed in
+all seven specs before the fix. `ConfigFileKeysTest` also checks every literal `-Dproxy.…` / `-Dagent.…` key under
+`src/test/kotlin`, and failed only on `TestUtils`. Chunking at 5 bytes is what found #43.
 
 ---
 
