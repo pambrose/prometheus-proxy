@@ -19,9 +19,13 @@
 package io.prometheus.agent.discovery
 
 import ch.qos.logback.classic.Level
+import io.grpc.Status
+import io.grpc.StatusException
 import io.kotest.core.spec.style.StringSpec
 import io.prometheus.common.captureLogs
+import io.prometheus.common.deadlineExceeded
 import io.kotest.matchers.nulls.shouldNotBeNull
+import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.ints.shouldBeGreaterThanOrEqual
@@ -154,6 +158,30 @@ class PathDiscoveryServiceTest : StringSpec() {
           .filter { "reconcile failed" in it.formattedMessage }
 
       warnings shouldHaveSize 2
+    }
+
+    // gRPC's DEADLINE_EXCEEDED description carries the time the call took, so a source whose remote call kept timing
+    // out failed with a new message on every poll, and each logged a WARN with its stack trace (November #39). A
+    // failure with a gRPC status is compared by its code; the full description is still logged.
+    "reconciles failing with DEADLINE_EXCEEDED descriptions that differ only in the elapsed time should log one WARN" {
+      val failures =
+        ArrayDeque(
+          listOf(
+            deadlineExceeded("29.999954000"),
+            deadlineExceeded("29.999961000"),
+            StatusException(Status.UNAVAILABLE.withDescription("io exception")),
+          ),
+        )
+      val service = PathDiscoveryService(mockk(relaxed = true), { throw failures.removeFirst() }, 30)
+
+      val events =
+        captureLogs<PathDiscoveryService>(Level.DEBUG) { repeat(3) { service.reconcileOnce() } }
+          .filter { "reconcile failed" in it.formattedMessage }
+
+      // A change of status code is still a change.
+      events.map { it.level } shouldBe listOf(Level.WARN, Level.DEBUG, Level.WARN)
+      events[0].throwableProxy.shouldNotBeNull().message shouldContain "after 29.999954000s"
+      events[1].formattedMessage shouldContain "after 29.999961000s"
     }
 
     // Recovery is reported, and a later failure -- even the same one -- is news again.

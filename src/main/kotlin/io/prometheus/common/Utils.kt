@@ -167,6 +167,25 @@ internal object Utils {
 
   fun Status.exceptionDetails(e: Throwable) = "$code $description ${e.simpleClassName} - ${e.message}"
 
+  // What makes two failures the same one, for a dedupe that logs a failure at WARN when it first appears and at DEBUG
+  // while it repeats: a gRPC failure's status code, not its description. DEADLINE_EXCEEDED's description carries the
+  // attempt's elapsed time and connection delays, so a call that kept failing the same way read as a new failure every
+  // time, and each logged a WARN with its stack trace (November #9, #39). A failure without a gRPC status reads as
+  // UNKNOWN, so its class tells it from another, and with [withMessage] its message too: for a caller whose other
+  // failures carry a stable message that says what went wrong, such as a discovery file's parse error or the proxy's
+  // reason for rejecting a path.
+  fun failureKey(
+    e: Throwable,
+    withMessage: Boolean = false,
+  ): String {
+    val code = Status.fromThrowable(e).code
+    return when {
+      code != Status.Code.UNKNOWN -> code.name
+      withMessage -> "${e.simpleClassName}: ${e.message}"
+      else -> e.simpleClassName
+    }
+  }
+
   // The throwable's cause chain (itself first), for detecting a wrapped cause without a hand-rolled
   // while/cause loop. Shared so the different cause-walks no longer drift (finding 34).
   fun Throwable.causeChain(): Sequence<Throwable> = generateSequence(this) { it.cause }

@@ -30,12 +30,14 @@ import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeEmpty
 import io.prometheus.common.Utils.HostPort
 import io.prometheus.common.Utils.appendQueryParams
 import io.prometheus.common.Utils.defaultEmptyJsonObject
 import io.prometheus.common.Utils.exceptionDetails
+import io.prometheus.common.Utils.failureKey
 import io.prometheus.common.Utils.logStreamFailure
 import io.prometheus.common.Utils.parseEndpointList
 import io.prometheus.common.Utils.parseHostPort
@@ -457,6 +459,27 @@ class UtilsTest : StringSpec() {
       val details = status.exceptionDetails(exception)
 
       details shouldContain "IOException"
+    }
+
+    // ==================== failureKey Tests ====================
+
+    // gRPC's DEADLINE_EXCEEDED description carries the call's elapsed time, so keyed by message, a call that kept
+    // timing out read as a new failure every time (November #9, #39). Status.fromThrowable finds a wrapped status.
+    "failureKey should key a gRPC failure by its status code, whatever its description, wrapped or not" {
+      failureKey(deadlineExceeded("29.999954000")) shouldBe "DEADLINE_EXCEEDED"
+      failureKey(deadlineExceeded("29.999961000"), withMessage = true) shouldBe "DEADLINE_EXCEEDED"
+      val wrapped = java.io.IOException("stream ended", StatusRuntimeException(Status.UNAVAILABLE))
+      failureKey(wrapped) shouldBe "UNAVAILABLE"
+      failureKey(StatusRuntimeException(Status.UNAVAILABLE)) shouldNotBe failureKey(deadlineExceeded("1.0"))
+    }
+
+    "failureKey should key a failure without a gRPC status by its class, and by its message only when asked" {
+      failureKey(IllegalStateException("attempt 1")) shouldBe failureKey(IllegalStateException("attempt 2"))
+      failureKey(IllegalStateException("x")) shouldNotBe failureKey(IllegalArgumentException("x"))
+      failureKey(java.io.IOException("parse error at line 3"), withMessage = true) shouldBe
+        "IOException: parse error at line 3"
+      failureKey(java.io.IOException("line 3"), withMessage = true) shouldNotBe
+        failureKey(java.io.IOException("line 7"), withMessage = true)
     }
 
     // ==================== toJsonElement Edge Case Tests ====================

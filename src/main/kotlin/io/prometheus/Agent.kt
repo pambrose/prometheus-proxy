@@ -347,8 +347,8 @@ class Agent(
       startHeartBeat(connectionContext)
     }
 
-    // Dynamic target discovery: reconcile discovered paths for the connection's lifetime.
-    // Polls isRunning/connected so the task ends on disconnect or shutdown (like startHeartBeat).
+    // Dynamic target discovery: reconcile discovered paths for the connection's lifetime. Another task ending cancels
+    // it (see launchConnectionTask); it also polls isRunning/connected, as a backstop, as startHeartBeat does.
     pathDiscoveryService?.let { service ->
       launchConnectionTask(connectionContext, "reconcilePaths") {
         service.run { isConnectionLive(connectionContext) }

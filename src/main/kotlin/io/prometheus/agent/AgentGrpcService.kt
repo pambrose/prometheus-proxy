@@ -31,7 +31,6 @@ import com.google.protobuf.ByteString.copyFrom
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.grpc.ClientInterceptors
 import io.grpc.ManagedChannel
-import io.grpc.Status
 import io.prometheus.Agent
 import io.prometheus.agent.AgentOptions.Companion.DEFAULT_GRPC_PORT
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
@@ -39,6 +38,7 @@ import io.prometheus.common.DeferredClientInterceptor
 import io.prometheus.common.Messages.BLANK_AGENT_ID_MSG
 import io.prometheus.common.Messages.BLANK_PATH_MSG
 import io.prometheus.common.ScrapeResults
+import io.prometheus.common.Utils.failureKey
 import io.prometheus.common.Utils.logStreamFailure
 import io.prometheus.common.Utils.HostPort
 import io.prometheus.common.Utils.parseEndpointList
@@ -155,7 +155,7 @@ internal class AgentGrpcService(
   // render a host:port pair that was never configured.
   val currentEndpoint: HostPort get() = endpoints[endpointIndex]
 
-  // The last connect failure logged at WARN for each proxy endpoint, as connectFailureKey gives it, until a connect to
+  // The last connect failure logged at WARN for each proxy endpoint, as Utils.failureKey gives it, until a connect to
   // it succeeds: a proxy that stays down, or a dead primary in a failover list, logs its failure once and then at
   // DEBUG (October #17). The endpoints are the configured list, so this stays as small.
   private val connectFailures = ConcurrentHashMap<String, String>()
@@ -348,7 +348,9 @@ internal class AgentGrpcService(
       if (e is Error)
         throw e
       agent.metrics { connectCount.labelValues(agent.launchId, "failure").inc() }
-      val failure = connectFailureKey(e)
+      // Compared by gRPC status code, or by class without one, since a deadline's description changes every attempt
+      // (November #9).
+      val failure = failureKey(e)
       val message =
         "Cannot connect to proxy at $proxyHost using ${tlsContext.desc()} - ${e.simpleClassName}: ${e.message}"
       // The first failure, and a change, at WARN with the stack trace for diagnosis; a repeat at DEBUG.
@@ -358,15 +360,6 @@ internal class AgentGrpcService(
         logger.warn(e) { message }
       false
     }
-  }
-
-  // What makes two connect failures the same one: the gRPC status code, not the message. DEADLINE_EXCEEDED's
-  // description carries the attempt's elapsed time and connection delays, so a proxy that accepts TCP but never answers
-  // failed with a new message every attempt, and each logged a WARN (November #9). A failure without a gRPC status
-  // reads as UNKNOWN, so its class tells one such failure from another.
-  private fun connectFailureKey(e: Throwable): String {
-    val code = Status.fromThrowable(e).code
-    return if (code == Status.Code.UNKNOWN) "${e.simpleClassName}: $code" else code.name
   }
 
   suspend fun registerAgent(initialConnectionLatch: CountDownLatch) {

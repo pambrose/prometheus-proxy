@@ -137,6 +137,12 @@ agents connected with one identity, which is every agent when agent auth is off.
   logs a failed connect at WARN once, then at DEBUG while it repeats. A timed-out connect's message includes how long
   the attempt took, so each one looked new and logged a WARN with a stack trace, about twice a minute. Repeats are now
   recognized by their gRPC status, and the log still shows the full message.
+- **A discovered path whose registration keeps timing out no longer fills the agent's log with stack traces.** The
+  agent logs a discovered path's failed registration at WARN once, then at DEBUG while it repeats, and does the same
+  for a failed discovery poll. A timed-out call's message includes how long it took, so each reconcile, every 30
+  seconds by default, logged a WARN with a stack trace. Repeats are now recognized by their gRPC status, as they are
+  for a failed connect, and the log still shows the full message. A discovery file that fails with a different error,
+  or a path the proxy rejects for a different reason, is still logged at WARN.
 - **`proxy_chunked_transfers_abandoned_total` counts the transfers a disconnect cuts short.** It counted only those
   an agent's stream cleaned up as it ended, but when an agent disconnects the proxy usually reclaims them first, and
   when it evicts one it always does, so the counter stayed near zero.
@@ -212,6 +218,8 @@ agents connected with one identity, which is every agent when agent auth is off.
   test.
 - Comments and `make help` text that still described the Ubuntu base image, or said `make tests` runs every test,
   are corrected.
+- The path discovery service's code comments describe what it does: a failed read reuses the paths it last read, and
+  a disconnect cancels it.
 - Tests check that an embedded agent reports each kind of bad setting as a `ConfigLoadException` that carries no
   credentials from the config URL, and that a standalone agent or proxy given one exits with code 1 and a single log
   line.
