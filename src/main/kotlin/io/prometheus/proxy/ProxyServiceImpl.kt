@@ -428,9 +428,9 @@ internal class ProxyServiceImpl(
   }
 
   // Delivers [agentContext]'s queued scrape requests until the proxy stops or the context is invalidated, skipping
-  // the ones no longer awaited.
+  // the ones no longer awaited. Starting counts: see Proxy.isStartingOrRunning.
   private suspend fun FlowCollector<ScrapeRequest>.emitScrapeRequests(agentContext: AgentContext) {
-    while (proxy.isRunning && agentContext.isValid()) {
+    while (proxy.isStartingOrRunning && agentContext.isValid()) {
       val wrapper = agentContext.readScrapeRequest()?.takeIf { isStillAwaited(it) } ?: continue
       try {
         emit(wrapper.scrapeRequest)
@@ -512,12 +512,13 @@ internal class ProxyServiceImpl(
     return EMPTY_INSTANCE
   }
 
-  // Logs why a response stream failed, unless the proxy is stopping or the stream was just cancelled.
+  // Logs why a response stream failed, unless the proxy is stopping or the stream was just cancelled. A starting proxy
+  // logs it too: see Proxy.isStartingOrRunning.
   private fun logResponseStreamFailure(
     rpcName: String,
     throwable: Throwable,
   ) {
-    if (!proxy.isRunning)
+    if (!proxy.isStartingOrRunning)
       return
     val status = Status.fromThrowable(throwable)
     if (status.code != Status.Code.CANCELLED && status.cause !is CancellationException)
