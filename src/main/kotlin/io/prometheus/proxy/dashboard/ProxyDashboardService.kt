@@ -71,6 +71,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 import java.net.URI
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.concurrent.atomics.AtomicInt
@@ -131,15 +132,22 @@ internal class ProxyDashboardService(
   private val routeBase = basePath.trimEnd('/')
 
   /**
-   * What a session's page shows: its layout and the agent selected in it, from the browser's latest message.
+   * What a session's page shows: its layout and the agent selected in it, from the browser's latest message, and that
+   * message's [seq], the count of messages the page had sent.
    *
-   * One value rather than two fields, so a push reads both at once. Read separately, a push racing the first
-   * message could pair its layout with the selection from before it, and render the detail pane with nothing
+   * One value rather than separate fields, so a push reads all of them at once. Read separately, a push racing the
+   * first message could pair its layout with the selection from before it, and render the detail pane with nothing
    * selected -- the flash [Session.view] being null exists to prevent.
+   *
+   * Every frame is stamped with [seq], and the page drops a frame stamped below the count it has sent (see
+   * ProxyDashboardHtml.pushFragment). That closes the race between a row click and the push loop: a tick rendered from
+   * the previous selection can reach the browser after the click's own swap, and without the stamp it put the previous
+   * agent back in the detail pane until the next frame.
    */
   private class View(
     val layout: DashboardLayout,
     val selectedId: String?,
+    val seq: Long,
   )
 
   /** One connected browser: how to reach it, and what its page shows. */
@@ -306,7 +314,7 @@ internal class ProxyDashboardService(
               for (frame in incoming) {
                 if (frame is Frame.Text) {
                   val text = frame.readText()
-                  session.view = View(parseLayout(text), parseSelection(text))
+                  session.view = View(parseLayout(text), parseSelection(text), parseSeq(text))
                   push(session, snapshots.recent())
                 }
               }
@@ -375,7 +383,9 @@ internal class ProxyDashboardService(
   ) {
     runCatching {
       val view = session.view
-      session.send(ProxyDashboardHtml.pushFragment(snapshot, view?.selectedId, routeBase, view?.layout))
+      session.send(
+        ProxyDashboardHtml.pushFragment(snapshot, view?.selectedId, routeBase, view?.layout, view?.seq ?: 0L),
+      )
     }
       .onFailure { logger.debug { "Dropping dashboard session: ${it.simpleClassName}" } }
   }
@@ -545,6 +555,23 @@ internal class ProxyDashboardService(
           ?.content
           ?.let { name -> DashboardLayout.entries.firstOrNull { it.name == name } }
       }.getOrNull() ?: DashboardLayout.AGENT
+
+    /**
+     * Reads `{"seq": 12}`, the count of messages the page has sent, from a session message, defaulting to 0.
+     *
+     * Same contract as [parseSelection]: anything unexpected -- garbage, a missing field, a string, a fraction, or a
+     * negative number -- resolves to 0 rather than throwing inside the WebSocket loop. A page that predates the field
+     * sends none and ignores the stamp, so 0 changes nothing for it.
+     */
+    internal fun parseSeq(text: String): Long =
+      runCatching {
+        json.parseToJsonElement(text)
+          .jsonObject["seq"]
+          ?.jsonPrimitive
+          ?.takeUnless { it.isString }
+          ?.longOrNull
+          ?.takeIf { it >= 0 }
+      }.getOrNull() ?: 0L
 
     /**
      * Whether a WebSocket handshake carrying [origin] may proceed, given the request's [host] header.

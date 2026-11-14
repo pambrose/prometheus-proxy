@@ -330,8 +330,11 @@ class ProxyWebDashboardTest : StringSpec() {
           }
 
           // A row click sends this exact message; the selection must show up in a pushed agent list.
-          send(Frame.Text("""{"select":"$agentId","layout":"AGENT"}"""))
+          send(Frame.Text("""{"select":"$agentId","layout":"AGENT","seq":1}"""))
           awaitFrame(SELECTED_ROW)
+          // Every frame rendered from that message carries its count, which the page compares against the
+          // count it has sent to drop a frame rendered from an older message.
+          awaitFrame("""${ProxyDashboardHtml.VIEW_ATTR}="1"""")
 
           // Switching layout the same way changes which regions the push carries.
           send(Frame.Text("""{"layout":"PATH"}"""))

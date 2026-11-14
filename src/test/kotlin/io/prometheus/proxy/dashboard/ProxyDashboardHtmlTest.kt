@@ -284,8 +284,9 @@ class ProxyDashboardHtmlTest : StringSpec() {
     // top-level siblings.
     "a push must place the OOB regions at the top level, not inside a wrapper" {
       val frame = ProxyDashboardHtml.pushFragment(snapshot(), null, "/dashboard", DashboardLayout.AGENT).trimStart()
-      // The very first element is a real region carrying hx-swap-oob, not a bare <div> wrapper.
-      frame shouldStartWith """<div class="md-list""""
+      // The very first element is a real region carrying hx-swap-oob -- the status bar, which carries the
+      // frame's view stamp -- not a bare <div> wrapper.
+      frame shouldStartWith """<span class="bar-right""""
       frame shouldNotStartWith "<div><"
       // The first tag itself is the OOB target -- hx-swap-oob appears before the region's closing markup.
       frame.substringBefore(">") shouldContain "hx-swap-oob"
@@ -303,6 +304,50 @@ class ProxyDashboardHtmlTest : StringSpec() {
       frame shouldNotContain "Select an agent"
       // Still a frame of top-level OOB regions, like every other.
       frame.trimStart().substringBefore(">") shouldContain "hx-swap-oob"
+    }
+
+    // The page drops a frame rendered from an older message than its latest, which closes the race between
+    // a row click and a tick rendered from the previous selection. It reads the stamp from the frame's first
+    // tag, so the status region must come first, in every layout.
+    "a push should stamp its view count on the frame's first tag" {
+      listOf(DashboardLayout.AGENT, DashboardLayout.PATH, null).forEach { layout ->
+        val frame = ProxyDashboardHtml.pushFragment(snapshot(), "1", "/dashboard", layout, viewSeq = 7)
+        VIEW_STAMP.find(frame)?.groupValues?.get(1) shouldBe "7"
+      }
+      // A session that has sent nothing yet is stamped 0.
+      VIEW_STAMP.find(ProxyDashboardHtml.pushFragment(snapshot(), null, "/dashboard", null))
+        ?.groupValues
+        ?.get(1) shouldBe "0"
+    }
+
+    // The match is anchored at the start of the frame, inside the status region's tag. An agent that names
+    // itself after the stamp lands in the agent list, after that tag, so it cannot stand in for the real
+    // one -- a forged 0 would otherwise make every page drop every frame and freeze.
+    "an agent-supplied value should not be read as the view stamp" {
+      val forged = snapshot(agents = [agent(name = """x" data-view="0" """)])
+      val frame = ProxyDashboardHtml.pushFragment(forged, "1", "/dashboard", DashboardLayout.AGENT, viewSeq = 9)
+      VIEW_STAMP.find(frame)?.groupValues?.get(1) shouldBe "9"
+    }
+
+    "view count parsing should tolerate anything a browser might send" {
+      ProxyDashboardService.parseSeq("""{"seq":12}""") shouldBe 12L
+      ProxyDashboardService.parseSeq("""{"select":"a1","layout":"AGENT","seq":3}""") shouldBe 3L
+      // Everything unexpected falls back to 0, which a page predating the field never compares against.
+      ProxyDashboardService.parseSeq("""{"seq":"12"}""") shouldBe 0L
+      ProxyDashboardService.parseSeq("""{"seq":-1}""") shouldBe 0L
+      ProxyDashboardService.parseSeq("""{"seq":1.5}""") shouldBe 0L
+      ProxyDashboardService.parseSeq("""{"seq":null}""") shouldBe 0L
+      ProxyDashboardService.parseSeq("""{"select":"a1"}""") shouldBe 0L
+      ProxyDashboardService.parseSeq("not json at all") shouldBe 0L
+    }
+
+    "the page script should count its messages and drop frames stamped below the count" {
+      val page = createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(), null, "/dashboard") } }
+      page shouldContain "seq: seq"
+      page shouldContain "addEventListener('htmx:ws:before:message:incoming'"
+      page shouldContain "evt.preventDefault()"
+      // Anchored at the start of the frame, on the attribute the server writes.
+      page shouldContain """/^<span[^>]*\s${ProxyDashboardHtml.VIEW_ATTR}="""
     }
 
     "an empty proxy should say so in the path layout too" {
@@ -526,5 +571,10 @@ class ProxyDashboardHtmlTest : StringSpec() {
       page shouldContain "body.ws-down .conn .conn-down { display:inline; }"
       page shouldContain "body.ws-down .beacon"
     }
+  }
+
+  private companion object {
+    // What the page script matches: the stamp inside the frame's first tag.
+    val VIEW_STAMP = Regex("""^<span[^>]*\s${ProxyDashboardHtml.VIEW_ATTR}="(\d+)"""")
   }
 }

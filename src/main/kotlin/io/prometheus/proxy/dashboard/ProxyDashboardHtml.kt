@@ -75,6 +75,7 @@ internal object ProxyDashboardHtml {
   const val STATUS_ID = "status-bar"
   const val PATH_TABLE_ID = "path-table"
   const val ANNOUNCER_ID = "conn-announce"
+  const val VIEW_ATTR = "data-view"
 
   /** The full page. Only served on a real navigation; every later update arrives over the socket. */
   fun HTML.renderPage(
@@ -228,9 +229,14 @@ internal object ProxyDashboardHtml {
   private fun SPAN.statusInner(
     snapshot: ProxySnapshot,
     oob: Boolean,
+    viewSeq: Long = 0L,
   ) {
     attributes["id"] = STATUS_ID
-    if (oob) attributes["hx-swap-oob"] = "true"
+    if (oob) {
+      attributes["hx-swap-oob"] = "true"
+      // The frame's view stamp; see pushFragment.
+      attributes[VIEW_ATTR] = "$viewSeq"
+    }
     // Both labels are always rendered; which one shows is driven by the `ws-down` class on <body>,
     // which the WebSocket lifecycle handlers toggle. Body-level rather than here because this region
     // is overwritten by every push -- and a push can only happen while connected, so the server never
@@ -400,14 +406,21 @@ internal object ProxyDashboardHtml {
    * status bar, which every layout has. Rendering a guess instead (the agent layout, nothing selected)
    * would replace a page's detail pane with the "select an agent" placeholder until the browser's message
    * arrived -- a flash on every connect and reconnect.
+   *
+   * [viewSeq] is the count the page sent with the message this frame was rendered from, stamped on the
+   * status region; the page drops a frame stamped below the count it has sent since, which describes a
+   * page it no longer shows. The status region goes first, so the stamp is on the frame's first tag: the
+   * page matches it there, anchored at the start, which no agent-supplied value can reach.
    */
   fun pushFragment(
     snapshot: ProxySnapshot,
     selectedId: String?,
     routeBase: String,
     layout: DashboardLayout? = DashboardLayout.AGENT,
+    viewSeq: Long = 0L,
   ): String =
     buildString {
+      append(createHTML().span("bar-right") { statusInner(snapshot, oob = true, viewSeq) })
       when (layout) {
         DashboardLayout.AGENT -> {
           append(createHTML().div("md-list") { agentListInner(snapshot, selectedId, routeBase, oob = true) })
@@ -420,7 +433,6 @@ internal object ProxyDashboardHtml {
 
         null -> {}
       }
-      append(createHTML().span("bar-right") { statusInner(snapshot, oob = true) })
     }
 
   /**
@@ -511,11 +523,27 @@ internal object ProxyDashboardHtml {
       // The extension's connection, which outlives its socket: each reconnect replaces connection.socket,
       // so this keeps the connection and reads the socket when it sends.
       var conn = null;
+      // The count of messages this page has sent. The server stamps every frame with the count of the
+      // message it rendered the frame from, so a frame stamped lower describes a page this one no longer
+      // shows. Without it a row click raced the push loop: a tick rendered from the previous selection could
+      // land after the click's own swap and put the previous agent back until the next frame.
+      var seq = 0;
       function announce() {
         var s = conn && conn.socket;
         // Only on an open socket. Nothing is lost by skipping: every open announces again from the URL.
-        if (s && s.readyState === WebSocket.OPEN) s.send(JSON.stringify({ select: selectedId(), layout: layout() }));
+        if (s && s.readyState === WebSocket.OPEN) {
+          seq += 1;
+          s.send(JSON.stringify({ select: selectedId(), layout: layout(), seq: seq }));
+        }
       }
+      // Drops a frame rendered from an older message. The stamp is on the frame's first tag, the status
+      // region, which the server writes whole; the match is anchored there, so no agent-supplied value can
+      // stand in for it.
+      document.body.addEventListener('htmx:ws:before:message:incoming', function (evt) {
+        var data = evt.detail.message.data;
+        var m = typeof data === 'string' && /^<span[^>]*\s$VIEW_ATTR="(\d+)"/.exec(data);
+        if ((m ? Number(m[1]) : 0) < seq) evt.preventDefault();
+      });
       // The connection indicator. The extension reconnects on its own (with the backoff capped in the
       // htmx-config meta tag); this only reflects that effort so the page does not keep claiming "live"
       // while frozen. Toggled on <body> so it persists while no push can arrive to re-render the status bar,

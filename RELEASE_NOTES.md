@@ -179,6 +179,9 @@ behind nginx, it allows at most 10,000 agents connected with one identity, which
 - **The dashboard's detail pane doesn't flash when it reconnects.** As its connection opened, the dashboard briefly
   showed "Select an agent" in place of the selected agent's details. It no longer does, which matters more now that
   returning to a hidden tab reconnects.
+- **Selecting an agent on the dashboard sticks.** A refresh that crossed your click could put the previously selected
+  agent back in the detail pane for up to the refresh interval (2 seconds by default). The dashboard now ignores an
+  update rendered before your selection.
 
 ### Documentation
 
