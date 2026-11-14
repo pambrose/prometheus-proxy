@@ -1,0 +1,22 @@
+# Fast alerting rules for the dashboard demo, so a scenario's alert fires within seconds rather than the minutes the
+# production rules in grafana/alerts.yml wait. `make check-rules` validates this file with promtool.
+
+groups:
+  - name: prometheus-proxy-demo
+    rules:
+      - alert: DemoTargetDown
+        expr: up == 0
+        for: 15s
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} behind the firewall is not answering"
+          description: "Prometheus could not scrape {{ $labels.job }} through the proxy for 15s."
+
+      - alert: DemoAgentEvicted
+        expr: increase(proxy_eviction_count_total[2m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "The proxy evicted a silent agent"
+          description: "An agent stopped sending heartbeats and was evicted after the proxy's inactivity limit."

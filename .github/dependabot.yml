@@ -74,3 +74,20 @@ updates:
       interval: weekly
     cooldown:
       default-days: 7
+
+  # The dashboard demo's third-party images (demos/dashboard/compose.yml): Grafana and the Python image its simulated
+  # services run on, each pinned by tag and digest. The proxy and agent images it builds from this checkout aren't
+  # pulled, so there's nothing to update for them.
+  - package-ecosystem: docker-compose
+    directory: /demos/dashboard
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      dashboard-demo:
+        patterns: ["*"]
+    ignore:
+      # The demo runs the Prometheus the Makefile's PROMETHEUS_IMAGE pins, which check-rules validates its config with
+      # and CiHygieneTest holds it to; it moves with that pin, by hand, not on its own.
+      - dependency-name: "prom/prometheus"

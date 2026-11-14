@@ -1,0 +1,30 @@
+# Prometheus config for the dashboard demo (demos/dashboard/compose.yml).
+#
+# It names no target: one job discovers every path the agents register through the proxy's HTTP service discovery
+# endpoint, and scrapes each through the proxy. A path the agents add, such as the ones `demo.sh discover` lists,
+# is scraped within a few seconds with no change here. `make check-rules` validates this file with promtool.
+
+global:
+  # Short intervals so the dashboard and Grafana move visibly during a demo.
+  scrape_interval: 5s
+  # Longer than the agents' 3s scrapeTimeoutSecs, so a hung target is reported by the agent, not cut off here.
+  scrape_timeout: 4s
+  evaluation_interval: 5s
+
+rule_files:
+  # The alerting rules the project ships (grafana/alerts.yml), and the demo's fast ones (demo-alerts.yml).
+  - /etc/prometheus/rules/*.yml
+
+scrape_configs:
+  - job_name: proxy-discovered
+    http_sd_configs:
+      - url: http://proxy:8080/discovery
+        refresh_interval: 5s
+    relabel_configs:
+      # Each agent's path labels include a job (prometheus-proxy, agent-east, orders, ...), which replaces this
+      # scrape config's job_name, since Prometheus applies job_name only to a target that has no job label.
+      # Keep the serving agent's name as an `agent` label, and drop the container host names.
+      - source_labels: [agentName]
+        target_label: agent
+      - action: labeldrop
+        regex: agentName|hostName

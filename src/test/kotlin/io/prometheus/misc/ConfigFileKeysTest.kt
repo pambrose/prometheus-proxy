@@ -164,7 +164,14 @@ class ConfigFileKeysTest : StringSpec() {
     private const val NGINX_CONFIG = "nginx-tls.conf"
     private const val DISCOVERY_PATHS_KEY = "paths"
     private val CONFIG_DIRS =
-      listOf("config/test-configs", "examples", "testing", "etc/compose", "src/test/resources/containers")
+      listOf(
+        "config/test-configs",
+        "examples",
+        "testing",
+        "etc/compose",
+        "demos/dashboard/config",
+        "src/test/resources/containers",
+      )
 
     private const val TEST_SOURCES = "src/test/kotlin"
     private const val TEST_UTILS = "src/test/kotlin/io/prometheus/harness/support/TestUtils.kt"

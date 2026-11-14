@@ -106,6 +106,22 @@ class CiHygieneTest : StringSpec() {
       ContainerTestSupport.PROMETHEUS_IMAGE shouldBe makeVars["PROMETHEUS_IMAGE"]
     }
 
+    // The dashboard demo (demos/dashboard) pulls its third-party images, and check-rules validates its Prometheus
+    // config with the Makefile's promtool, so the demo runs that Prometheus. Its proxy and agent images are built from
+    // this checkout, tagged :local, so have no digest.
+    "every image the dashboard demo pulls should be pinned by digest, its Prometheus the Makefile's" {
+      val images =
+        COMPOSE_IMAGE
+          .findAll(File(DEMO_COMPOSE).readText())
+          .map { it.groupValues[1] }
+          .filterNot { it.endsWith(":local") }
+          .toList()
+      images.map { it.substringBefore(":") } shouldContainAll listOf("prom/prometheus", "grafana/grafana")
+
+      images.forEach { image -> withClue(image) { image shouldMatch DIGEST_PINNED } }
+      images.filter { it.startsWith("prom/prometheus:") } shouldBe listOf(makeVars["PROMETHEUS_IMAGE"])
+    }
+
     // Without a version, setup-uv installs the newest uv, so what builds and deploys the docs site changed with each uv
     // release and no diff here (November #25). And docs-site checks the build docs.yml deploys only if both install the
     // same one.
@@ -145,11 +161,15 @@ class CiHygieneTest : StringSpec() {
     private const val MAKEFILE = "Makefile"
     private const val CONTAINER_TEST_SUPPORT =
       "src/test/kotlin/io/prometheus/containers/support/ContainerTestSupport.kt"
+    private const val DEMO_COMPOSE = "demos/dashboard/compose.yml"
     private const val SETUP_UV = "astral-sh/setup-uv@"
     private val MAKE_ASSIGNMENT = Regex("""(?m)^([A-Z][A-Z0-9_]*) :?= (.*)$""")
 
     // A `const val` whose name ends in _IMAGE, with its string on the same line or the next.
     private val CONTAINER_IMAGE = Regex("""const val ([A-Z][A-Z0-9_]*_IMAGE) =\s*"([^"]*)"""")
+
+    // A compose service's image, the value of its `image:` key.
+    private val COMPOSE_IMAGE = Regex("""(?m)^\s+image: (\S+)""")
     private val DIGEST_PINNED = Regex("""\S+:\S+@sha256:[0-9a-f]{64}""")
   }
 }

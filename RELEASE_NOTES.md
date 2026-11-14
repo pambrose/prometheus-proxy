@@ -71,6 +71,14 @@ when agent auth is off.
   Prometheus as the target, which built broken scrape URLs from it. It now fails the proxy's startup, as a URL with a
   query or fragment already did; remove the `?` or `#` and what follows it.
 
+### New Features
+
+- **A demo of the dashboard and Grafana.** From a clone of the repository, `make demo-up` starts a proxy with its
+  dashboard, three agents, a set of simulated services, Prometheus, and Grafana with the project's dashboards, all on
+  your machine; `make demo-down` removes it. `demos/dashboard/README.md` walks through what to show: a failing or hung
+  target, a redundant pair of agents, services discovered without a restart, and an agent evicted after it goes
+  silent.
+
 ### Security
 
 - **Requesting dashboard pages in a loop can no longer slow scrapes.** Each page load collected the proxy's state
