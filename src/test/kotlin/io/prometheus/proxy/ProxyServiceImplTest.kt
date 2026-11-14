@@ -1542,8 +1542,29 @@ class ProxyServiceImplTest : StringSpec() {
         throw IllegalStateException("Simulated flow error")
       }
 
-      val result = service.writeResponsesToProxy(errorFlow)
-      result shouldBe EMPTY_INSTANCE
+      // A stopping proxy fails every open stream, so those failures are noise.
+      val errors =
+        captureLogs<ProxyServiceImpl> {
+          runBlocking { service.writeResponsesToProxy(errorFlow) shouldBe EMPTY_INSTANCE }
+        }.filter { it.level == Level.ERROR }
+      errors shouldBe emptyList()
+    }
+
+    // A starting proxy is not a stopping one: an agent can connect, and its stream fail, before startUp() returns, and
+    // that failure is as real as one after it.
+    "writeResponsesToProxy should log a stream failure while the proxy is still starting" {
+      val proxy = createMockProxy(isRunning = false, isStarting = true)
+      val service = ProxyServiceImpl(proxy)
+
+      val errorFlow: Flow<ScrapeResponse> = flow {
+        throw IllegalStateException("Simulated flow error")
+      }
+
+      val errors =
+        captureLogs<ProxyServiceImpl> {
+          runBlocking { service.writeResponsesToProxy(errorFlow) shouldBe EMPTY_INSTANCE }
+        }.filter { it.level == Level.ERROR }.map { it.formattedMessage }
+      errors.single() shouldContain "Error in writeResponsesToProxy()"
     }
 
     "writeResponsesToProxy should continue processing after single message failure" {

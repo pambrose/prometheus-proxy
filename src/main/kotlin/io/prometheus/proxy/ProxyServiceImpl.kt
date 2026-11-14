@@ -512,12 +512,13 @@ internal class ProxyServiceImpl(
     return EMPTY_INSTANCE
   }
 
-  // Logs why a response stream failed, unless the proxy is stopping or the stream was just cancelled.
+  // Logs why a response stream failed, unless the proxy is stopping or the stream was just cancelled. A starting proxy
+  // logs it too: see Proxy.isStartingOrRunning.
   private fun logResponseStreamFailure(
     rpcName: String,
     throwable: Throwable,
   ) {
-    if (!proxy.isRunning)
+    if (!proxy.isStartingOrRunning)
       return
     val status = Status.fromThrowable(throwable)
     if (status.code != Status.Code.CANCELLED && status.cause !is CancellationException)
