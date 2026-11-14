@@ -27,8 +27,9 @@ updates:
         patterns: ["*"]
         update-types: [minor, patch]
     ignore:
-      # grpc-java pins protobuf 3.x (grpc 1.85 depends on protobuf-java 3.25.9), and protobuf-generated code does not
-      # carry across a protobuf major, so a protobuf major waits for a grpc release that supports it.
+      # A protobuf major changes the runtime the code protoc generates needs, and grpc's own generated classes have to
+      # run on it too, so it's a planned upgrade, not a routine bump. The project needn't wait for grpc-java to move: it
+      # is on protobuf 4.x while grpc depends on 3.25.9 (see `protoc` in libs.versions.toml).
       - dependency-name: "com.google.protobuf:protobuf-*"
         update-types: ["version-update:semver-major"]
       - dependency-name: "com.google.protobuf:protoc"

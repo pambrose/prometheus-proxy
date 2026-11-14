@@ -20,6 +20,9 @@
 #
 #   - Jackson, every netty-tcnative artifact (the per-platform natives included), and Netty resolve at the versions
 #     gradle/libs.versions.toml pins, where Maven's own resolution picked older ones (November 2026 review, #21);
+#   - protobuf-java, protobuf-java-util, and protobuf-kotlin resolve at protoc's version, which is ahead of the 3.x grpc
+#     depends on: the code protoc generates needs a runtime at least that new, and without the pins Maven chose between
+#     the two majors by declaration order;
 #   - no jar on the classpath carries a Logback config, which would replace the host application's own (#19), and the
 #     library jar still carries reference.conf;
 #   - the docs site's embedded-agent examples compile (#20).
@@ -45,6 +48,7 @@ jackson="$(catalog_version jackson)"
 jackson_annotations="$(catalog_version jacksonAnnotations)"
 tcnative="$(catalog_version tcnative)"
 netty="$(catalog_version netty)"
+protobuf="$(catalog_version protoc)"
 kotlin="$(catalog_version kotlin)"
 
 mvn=(mvn -B -q -f "$root/etc/consumer-check/pom.xml" "-Dprometheus-proxy.version=$version" "-Dkotlin.version=$kotlin")
@@ -103,6 +107,16 @@ bad="$(echo "$tcnative_resolved" | not_at '' "$tcnative" | joined)"
 echo "==> Netty: $netty"
 bad="$(resolved '^io[.]netty$' | awk -F: '$2 !~ /^netty-tcnative/' | not_at '' "$netty" | joined)"
 [ -z "$bad" ] || fail "Netty isn't at $netty: $bad"
+
+echo "==> Protobuf: $protobuf"
+protobuf_resolved="$(resolved '^com[.]google[.]protobuf$')"
+indented <<< "$protobuf_resolved"
+for module in protobuf-java protobuf-java-util protobuf-kotlin; do
+  echo "$protobuf_resolved" | awk -F: -v m="$module" '$2 == m { found = 1 } END { exit !found }' \
+    || fail "Protobuf: $module isn't resolved"
+done
+bad="$(echo "$protobuf_resolved" | not_at '' "$protobuf" | joined)"
+[ -z "$bad" ] || fail "Protobuf isn't at $protobuf: $bad"
 
 echo "==> Logback: no config on the classpath"
 library=""

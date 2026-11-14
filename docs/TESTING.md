@@ -174,8 +174,8 @@ get: it gets what the published POM gives it, resolved by its own build tool. `m
 `consumer-check` job runs, covers that. It publishes this checkout to the local Maven repository and has
 `etc/consumer-check/check.sh` build `etc/consumer-check`, a Maven project that depends only on that artifact. The
 check fails unless both examples compile there (a public type's supertype at runtime scope broke the Java one),
-Maven resolves Jackson, every netty-tcnative native, and Netty at the versions `gradle/libs.versions.toml` pins, and
-no jar on the classpath carries a `logback.xml`, which would replace the host application's logging config.
+Maven resolves Jackson, every netty-tcnative native, Netty, and protobuf at the versions `gradle/libs.versions.toml`
+pins, and no jar on the classpath carries a `logback.xml`, which would replace the host application's logging config.
 
 ## Test Categories
 

@@ -111,6 +111,10 @@ dependencies {
   api(libs.common.utils.service)
   implementation(libs.bundles.common.utils)
   implementation(libs.protobuf.kotlin)
+  // Declares protobuf-java, and the protobuf-java-util grpc-services brings at 3.x, at protoc's version, so the
+  // published POM pins them for builds that embed the agent: the code protoc generates needs a runtime at least that
+  // new. See `protoc` in libs.versions.toml.
+  runtimeOnly(libs.bundles.protobuf)
   implementation(libs.grpc.kotlin.stub)
 
   // BoringSSL bindings that let Netty use OpenSSL for TLS instead of the JDK. This artifact holds no native
