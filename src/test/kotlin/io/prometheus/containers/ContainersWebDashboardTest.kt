@@ -31,6 +31,7 @@ import io.prometheus.containers.support.baseUrl
 import io.prometheus.containers.support.bodyOf
 import io.prometheus.containers.support.closeQuietly
 import io.prometheus.containers.support.stopQuietly
+import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.ASSET_DIR
 import org.testcontainers.containers.Network
 import kotlin.time.Duration.Companion.seconds
 
@@ -80,10 +81,10 @@ class ContainersWebDashboardTest : StringSpec() {
           // the page would still render but every interaction would be dead -- a failure that is
           // invisible to any test that only checks HTML.
           eventually(30.seconds) {
-            httpClient.bodyOf("$uiUrl/dashboard/assets/htmx.min.js") shouldContain "htmx"
+            httpClient.bodyOf("$uiUrl/dashboard/$ASSET_DIR/htmx.min.js") shouldContain "htmx"
           }
           eventually(30.seconds) {
-            httpClient.bodyOf("$uiUrl/dashboard/assets/ws.js") shouldContain "ws"
+            httpClient.bodyOf("$uiUrl/dashboard/$ASSET_DIR/hx-ws.min.js") shouldContain "registerExtension"
           }
 
           // The detail fragment is what a row click fetches; it must carry the agent's registered path.

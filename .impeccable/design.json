@@ -221,8 +221,8 @@
       },
       {
         "name": "ws-reconnect-backoff",
-        "value": "min(500 * 2^n, 2000) + random() * 250",
-        "purpose": "Not CSS, but a felt-timing decision: replaces htmx-ext-ws full-jitter backoff (1s→64s) so a LAN dashboard recovers in ~2s instead of sitting dead after the proxy is already back."
+        "value": "htmx-config ws: reconnectDelay 500, reconnectMaxDelay 2000, reconnectJitter 0.125 (500ms, 1s, then 2s ± 250ms)",
+        "purpose": "Not CSS, but a felt-timing decision: caps htmx 4's hx-ws backoff (500ms doubling to 60s) so a LAN dashboard recovers in ~2s instead of sitting dead after the proxy is already back."
       }
     ],
     "breakpoints": [

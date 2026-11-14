@@ -81,7 +81,6 @@ buildConfig {
   // dependency exactly. Sourcing them from the version catalog makes that structural rather than a
   // hand-maintained constant that goes stale on the next dependency bump and 404s the asset route.
   buildConfigField("String", "HTMX_VERSION", "\"${libs.versions.htmx.get()}\"")
-  buildConfigField("String", "HTMX_WS_VERSION", "\"${libs.versions.htmxWs.get()}\"")
 }
 
 // By default the testing plugin also adds kotlin-test, kotest-runner-junit5, and logback-classic at its own versions,

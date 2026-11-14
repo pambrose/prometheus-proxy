@@ -71,6 +71,10 @@ connection drops, the green dot turns red and reads **reconnecting…**; the bro
 two seconds and the dot returns to green on its own once it reconnects — no reload. A page that still
 says *live* is genuinely receiving updates, so a frozen dashboard cannot masquerade as a healthy one.
 
+A tab in the background gives up its connection and reconnects as soon as you return to it. That is a
+pause, not an outage, so it doesn't turn the dot red, and tabs left open in the background don't count
+against `proxy.dashboard.maxSessions`.
+
 The retry interval is deliberately short and fixed. htmx's default WebSocket backoff doubles after each
 failed attempt, up to a minute, which for an internal dashboard means the page can stay dark for tens of
 seconds after the proxy is already back. A steady two-second retry recovers within about that long of
