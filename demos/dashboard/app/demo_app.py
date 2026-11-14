@@ -104,6 +104,16 @@ class Histogram:
         return out
 
 
+# The simulation's randomness only makes the graphs move, so the random module's generator is the right one. Bandit's
+# B311 (meant for tokens, keys, and the like) flags it, and is waived here, where every such draw is made.
+def uniform(low, high):
+    return random.uniform(low, high)  # nosec B311
+
+
+def randint(low, high):
+    return random.randint(low, high)  # nosec B311
+
+
 def jitter():
     """A random factor around 1, so the rates wobble like real traffic."""
     return max(0.0, random.gauss(1.0, 0.15))
@@ -122,7 +132,7 @@ class Simulation:
         self.revenue = 0.0
         self.payments = {(m, r): 0.0 for m in PAYMENT_METHODS for r in ("approved", "declined")}
         self.payment_latency = Histogram(0.18)
-        self.stock = {(w, p): random.randint(400, 900) for w in WAREHOUSES for p in PRODUCTS}
+        self.stock = {(w, p): randint(400, 900) for w in WAREHOUSES for p in PRODUCTS}
         self.restocks = {w: 0 for w in WAREHOUSES}
         self.shipped = {}
         self.search = {"hit": 0.0, "miss": 0.0}
@@ -151,7 +161,7 @@ class Simulation:
         orders = 12.0 * work * jitter()
         self.orders["completed"] += orders * 0.96
         self.orders["cancelled"] += orders * 0.04
-        self.revenue += orders * 0.96 * random.uniform(38.0, 46.0)
+        self.revenue += orders * 0.96 * uniform(38.0, 46.0)
 
     def advance_payments(self, work):
         payments = 14.0 * work * jitter()
@@ -163,9 +173,9 @@ class Simulation:
 
     def advance_inventory(self, work):
         for key in self.stock:
-            self.stock[key] -= int(random.uniform(0.5, 2.5) * work)
+            self.stock[key] -= int(uniform(0.5, 2.5) * work)
         for key in [k for k, units in self.stock.items() if units < 120]:
-            self.stock[key] += random.randint(500, 800)
+            self.stock[key] += randint(500, 800)
             self.restocks[key[0]] += 1
 
     def advance_shipping(self, work):
@@ -212,7 +222,7 @@ def render_orders(_replica, load):
         *family("shop_revenue_dollars_total", "counter", "Revenue from completed orders.",
                 [f"shop_revenue_dollars_total {sim.revenue:.2f}"]),
         *family("shop_active_carts", "gauge", "Shopping carts with items in them.",
-                [f"shop_active_carts {150 + 100 * (load - 1) * 2 + random.randint(-8, 8):.0f}"]),
+                [f"shop_active_carts {150 + 100 * (load - 1) * 2 + randint(-8, 8):.0f}"]),
     ]
 
 
@@ -238,9 +248,9 @@ def render_catalog(_replica, _load):
     # A large payload: one price and one stock level per item, with values that change on every scrape so gzip can't
     # shrink it below the agent's chunk threshold.
     skus = [(f"SKU-{i:06d}", CATEGORIES[i % len(CATEGORIES)]) for i in range(CATALOG_ITEMS)]
-    prices = [f'catalog_item_price_dollars{{sku="{sku}",category="{category}"}} {random.uniform(1, 500):.4f}'
+    prices = [f'catalog_item_price_dollars{{sku="{sku}",category="{category}"}} {uniform(1, 500):.4f}'
               for sku, category in skus]
-    stock = [f'catalog_item_stock_units{{sku="{sku}"}} {random.randint(0, 5000)}' for sku, _ in skus]
+    stock = [f'catalog_item_stock_units{{sku="{sku}"}} {randint(0, 5000)}' for sku, _ in skus]
     return [
         *family("catalog_item_price_dollars", "gauge", "Current list price, by item.", prices),
         *family("catalog_item_stock_units", "gauge", "Units on hand, by item.", stock),
@@ -403,7 +413,7 @@ class Handler(BaseHTTPRequestHandler):
         if mode == "error":
             self.send_text(500, f"{service} is failing (demo outage)\n")
             return
-        time.sleep(SLOW_SECS if mode == "slow" else BASE_LATENCY[service] * random.uniform(0.5, 1.5))
+        time.sleep(SLOW_SECS if mode == "slow" else BASE_LATENCY[service] * uniform(0.5, 1.5))
         now = time.time()
         with lock:
             sim.advance(now)
@@ -426,7 +436,8 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     write_discovery_file(False)
-    server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
+    # All interfaces, so the agents reach it over the compose network; compose.yml publishes none of its ports.
+    server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)  # nosec B104
     server.daemon_threads = True
     print(f"demo-app serving {', '.join(SERVICES)} on :{PORT}; discovery file {DISCOVERY_FILE}", flush=True)
     server.serve_forever()
