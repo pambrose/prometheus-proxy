@@ -117,6 +117,10 @@ behind nginx, it allows at most 10,000 agents connected with one identity, which
 
 ### Bug Fixes
 
+- **Agents that connect while the proxy is starting stay connected.** An agent that reached the proxy after it began
+  accepting agents but before it finished starting was disconnected at once, and reconnected every few seconds until
+  startup finished, failing its scrapes meanwhile. That happened to agents racing a proxy restart. They now stay
+  connected through it.
 - **Zipkin tracing works.** Turning it on, with `agent.internal.zipkin.enabled` or `proxy.internal.zipkin.enabled`,
   made the agent or the proxy fail at startup with `UninitializedPropertyAccessException`, and an embedded agent's
   `startAsyncAgent` throw. Both now start with it on, and trace the gRPC calls between them: the agent reports a

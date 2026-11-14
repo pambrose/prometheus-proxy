@@ -18,6 +18,7 @@ package io.prometheus
 
 import com.codahale.metrics.health.HealthCheck
 import com.google.common.collect.EvictingQueue
+import com.google.common.util.concurrent.Service
 import com.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.pambrose.common.dsl.MetricsDsl.healthCheck
 import com.pambrose.common.service.GenericService
@@ -237,6 +238,18 @@ class Proxy(
 
   // internal: the generated ConfigVals type is not part of the documented public API (finding 26).
   internal val proxyConfigVals: ConfigVals.Proxy2 get() = configVals.proxy
+
+  /**
+   * Whether the proxy is starting or running: it hasn't begun to stop, and its startup hasn't failed. An agent's
+   * scrape-request stream lasts while this holds.
+   *
+   * Not [isRunning], which is false for the whole of [startUp]. That starts the gRPC server first, then the HTTP
+   * service, the dashboard, and the cleanup service, so an agent that connected before they were up had its stream
+   * end at once, as if the proxy were stopping, and reconnected a pause later, as a second agent context. No scrape
+   * request reaches a stream before the proxy is running, since the scrape route refuses them until then.
+   */
+  internal val isStartingOrRunning: Boolean
+    get() = state().let { it == Service.State.STARTING || it == Service.State.RUNNING }
 
   // Limits on what one agent connection may register; 0 means unlimited. See ProxyPathManager.addPath.
   internal val maxPathsPerAgent: Int get() = proxyConfigVals.internal.maxPathsPerAgent

@@ -108,6 +108,8 @@ class ProxyServiceImplTest : StringSpec() {
   private fun createMockProxy(
     transportFilterDisabled: Boolean = false,
     isRunning: Boolean = true,
+    // Still inside Proxy.startUp(): the gRPC server is up and taking agents, but the proxy isn't RUNNING yet.
+    isStarting: Boolean = false,
     metrics: ProxyMetrics = mockk(relaxed = true),
     scrapeRequestManager: ScrapeRequestManager? = null,
     agentContextManager: AgentContextManager? = null,
@@ -164,6 +166,7 @@ class ProxyServiceImplTest : StringSpec() {
     every { mockProxy.pathManager } returns mockPathManager
     every { mockProxy.scrapeRequestManager } returns mockScrapeRequestManager
     every { mockProxy.isRunning } returns isRunning
+    every { mockProxy.isStartingOrRunning } returns (isRunning || isStarting)
 
     return mockProxy
   }
@@ -1383,6 +1386,28 @@ class ProxyServiceImplTest : StringSpec() {
 
     // ==================== readRequestsFromProxy Edge Case Tests ====================
 
+    // Proxy.startUp() starts the gRPC server before the HTTP service, the dashboard, and the cleanup service, and
+    // isRunning is false until startUp() returns. An agent that connected in that window had its stream end at once,
+    // as if the proxy were stopping, and reconnected a pause later, as a second agent context.
+    "readRequestsFromProxy should stream to an agent that connects while the proxy is still starting" {
+      val proxy = createMockProxy(isRunning = false, isStarting = true)
+      val agentContext = mockk<AgentContext>(relaxed = true)
+      val wrapper = mockk<ScrapeRequestWrapper>(relaxed = true)
+      val scrapeRequest = mockk<ScrapeRequest>(relaxed = true)
+      val testAgentId = "test-agent-early"
+
+      every { agentContext.agentId } returns testAgentId
+      every { agentContext.isValid() } returnsMany [true, false]
+      coEvery { agentContext.readScrapeRequest() } returns wrapper andThen null
+      every { wrapper.scrapeRequest } returns scrapeRequest
+      every { proxy.agentContextManager.getAgentContext(testAgentId) } returns agentContext
+
+      val emitted: MutableList<ScrapeRequest> = []
+      ProxyServiceImpl(proxy).readRequestsFromProxy(agentInfo { agentId = testAgentId }).collect { emitted.add(it) }
+
+      emitted shouldBe [scrapeRequest]
+    }
+
     "readRequestsFromProxy should stop when proxy stops running" {
       val proxy = createMockProxy(isRunning = true)
       val mockAgentContext = mockk<AgentContext>(relaxed = true)
@@ -1391,7 +1416,7 @@ class ProxyServiceImplTest : StringSpec() {
       every { mockAgentContext.agentId } returns testAgentId
       every { mockAgentContext.isValid() } returns true
       // Simulate proxy stopping after first check
-      every { proxy.isRunning } returnsMany [true, false]
+      every { proxy.isStartingOrRunning } returnsMany [true, false]
       coEvery { mockAgentContext.readScrapeRequest() } returns null
       every { proxy.agentContextManager.getAgentContext(testAgentId) } returns mockAgentContext
 

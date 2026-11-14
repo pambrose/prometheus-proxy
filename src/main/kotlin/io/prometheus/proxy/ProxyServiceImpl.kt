@@ -428,9 +428,9 @@ internal class ProxyServiceImpl(
   }
 
   // Delivers [agentContext]'s queued scrape requests until the proxy stops or the context is invalidated, skipping
-  // the ones no longer awaited.
+  // the ones no longer awaited. Starting counts: see Proxy.isStartingOrRunning.
   private suspend fun FlowCollector<ScrapeRequest>.emitScrapeRequests(agentContext: AgentContext) {
-    while (proxy.isRunning && agentContext.isValid()) {
+    while (proxy.isStartingOrRunning && agentContext.isValid()) {
       val wrapper = agentContext.readScrapeRequest()?.takeIf { isStillAwaited(it) } ?: continue
       try {
         emit(wrapper.scrapeRequest)
