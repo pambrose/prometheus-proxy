@@ -395,12 +395,17 @@ internal object ProxyDashboardHtml {
    *
    * Emits only the regions that exist for this session's layout. A swap addressed at an absent id is a
    * silent no-op, so this keeps the frame honest and small -- a path-layout session has no agent list.
+   *
+   * A null [layout] means the session has not yet said which page it shows, so the frame carries only the
+   * status bar, which every layout has. Rendering a guess instead (the agent layout, nothing selected)
+   * would replace a page's detail pane with the "select an agent" placeholder until the browser's message
+   * arrived -- a flash on every connect and reconnect.
    */
   fun pushFragment(
     snapshot: ProxySnapshot,
     selectedId: String?,
     routeBase: String,
-    layout: DashboardLayout = DashboardLayout.AGENT,
+    layout: DashboardLayout? = DashboardLayout.AGENT,
   ): String =
     buildString {
       when (layout) {
@@ -412,6 +417,8 @@ internal object ProxyDashboardHtml {
         DashboardLayout.PATH -> {
           append(createHTML().div("scroller") { pathTableInner(snapshot, oob = true) })
         }
+
+        null -> {}
       }
       append(createHTML().span("bar-right") { statusInner(snapshot, oob = true) })
     }
@@ -545,6 +552,7 @@ internal object ProxyDashboardHtml {
       document.body.addEventListener('htmx:ws:after:connection', function (evt) {
         conn = evt.detail.connection;
         connected(true);
+        // At once: until this message arrives, the server pushes a new session only the status bar.
         announce();
       });
       document.body.addEventListener('htmx:ws:close', function () {

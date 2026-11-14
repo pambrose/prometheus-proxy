@@ -194,8 +194,14 @@ class ProxyWebDashboardTest : StringSpec() {
         client.get("$base/dashboard/assets/htmx.min.js").status shouldBe HttpStatusCode.NotFound
 
         client.webSocket(socketUrl) {
-          // The immediate frame on connect, so a browser renders without waiting for a tick.
-          nextText() shouldContain "hx-swap-oob"
+          // The immediate frame on connect, so a browser renders without waiting for a tick. It carries only
+          // the status bar, since the session has not yet said which page it shows.
+          nextText().also {
+            it shouldContain "hx-swap-oob"
+            it shouldNotContain """id="${ProxyDashboardHtml.AGENT_LIST_ID}""""
+          }
+          // What the page sends as soon as its socket opens.
+          send(Frame.Text("""{"select":null,"layout":"AGENT"}"""))
 
           // Connect an agent only NOW, with the socket already open, so the frame below can only have
           // been produced by the push path.
@@ -315,8 +321,13 @@ class ProxyWebDashboardTest : StringSpec() {
         val agentId = connectAgent().agentId
 
         client.webSocket(socketUrl) {
-          // Nothing is selected on connect, so the first frame marks no row current.
-          nextText() shouldNotContain SELECTED_ROW
+          // The first frame comes before the session has said what its page shows, so it carries only the
+          // status bar: no agent list to mark a row in, and no detail pane to blank.
+          nextText().also {
+            it shouldContain """id="${ProxyDashboardHtml.STATUS_ID}""""
+            it shouldNotContain """id="${ProxyDashboardHtml.AGENT_LIST_ID}""""
+            it shouldNotContain """id="${ProxyDashboardHtml.DETAIL_ID}""""
+          }
 
           // A row click sends this exact message; the selection must show up in a pushed agent list.
           send(Frame.Text("""{"select":"$agentId","layout":"AGENT"}"""))

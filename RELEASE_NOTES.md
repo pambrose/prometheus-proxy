@@ -176,6 +176,9 @@ behind nginx, it allows at most 10,000 agents connected with one identity, which
 - **A screen reader hears about a dashboard outage once.** While the proxy was unreachable, the dashboard announced
   "Connection to the proxy lost" again on every reconnect attempt, every couple of seconds. It now announces the loss
   once, and the recovery once.
+- **The dashboard's detail pane doesn't flash when it reconnects.** As its connection opened, the dashboard briefly
+  showed "Select an agent" in place of the selected agent's details. It no longer does, which matters more now that
+  returning to a hidden tab reconnects.
 
 ### Documentation
 

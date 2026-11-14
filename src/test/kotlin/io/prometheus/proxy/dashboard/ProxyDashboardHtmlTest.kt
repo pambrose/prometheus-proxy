@@ -291,6 +291,20 @@ class ProxyDashboardHtmlTest : StringSpec() {
       frame.substringBefore(">") shouldContain "hx-swap-oob"
     }
 
+    // A session that has not yet said which page it shows gets only the status bar. A guess at the rest
+    // (the agent layout, nothing selected) replaced the page's detail pane with the "select an agent"
+    // placeholder until the browser's message arrived, a flash on every connect and reconnect.
+    "a push for a session with no known layout should carry only the status bar" {
+      val frame = ProxyDashboardHtml.pushFragment(snapshot(), null, "/dashboard", layout = null)
+      frame shouldContain """id="${ProxyDashboardHtml.STATUS_ID}""""
+      frame shouldNotContain """id="${ProxyDashboardHtml.AGENT_LIST_ID}""""
+      frame shouldNotContain """id="${ProxyDashboardHtml.DETAIL_ID}""""
+      frame shouldNotContain """id="${ProxyDashboardHtml.PATH_TABLE_ID}""""
+      frame shouldNotContain "Select an agent"
+      // Still a frame of top-level OOB regions, like every other.
+      frame.trimStart().substringBefore(">") shouldContain "hx-swap-oob"
+    }
+
     "an empty proxy should say so in the path layout too" {
       ProxyDashboardHtml.pushFragment(
         snapshot(agents = emptyList()),

@@ -130,16 +130,27 @@ internal class ProxyDashboardService(
   // the same URLs, so a rule applied in only one of the two layers is a rule that can disagree with itself.
   private val routeBase = basePath.trimEnd('/')
 
-  /** One connected browser: how to reach it, which layout it is on, and which agent it is viewing. */
+  /**
+   * What a session's page shows: its layout and the agent selected in it, from the browser's latest message.
+   *
+   * One value rather than two fields, so a push reads both at once. Read separately, a push racing the first
+   * message could pair its layout with the selection from before it, and render the detail pane with nothing
+   * selected -- the flash [Session.view] being null exists to prevent.
+   */
+  private class View(
+    val layout: DashboardLayout,
+    val selectedId: String?,
+  )
+
+  /** One connected browser: how to reach it, and what its page shows. */
   private class Session(
     val send: suspend (String) -> Unit,
   ) {
-    // Both written by this session's socket coroutine and read by the shared push loop, hence @Volatile.
+    // Written by this session's socket coroutine and read by the shared push loop, hence @Volatile. Null until the
+    // browser's first message says which page it shows, and until then a push carries only the status bar (see
+    // ProxyDashboardHtml.pushFragment). The browser sends that message as soon as the socket opens.
     @Volatile
-    var selectedId: String? = null
-
-    @Volatile
-    var layout: DashboardLayout = DashboardLayout.AGENT
+    var view: View? = null
   }
 
   private val sessions = ConcurrentHashMap.newKeySet<Session>()
@@ -289,13 +300,13 @@ internal class ProxyDashboardService(
             val session = Session { text -> outgoing.send(Frame.Text(text)) }
             sessions.add(session)
             try {
-              // Render immediately rather than making the browser wait for the first event or tick.
+              // The status bar at once, rather than making the browser wait for the first event or tick. The
+              // regions that depend on what the page shows follow its first message, below.
               push(session, snapshots.recent())
               for (frame in incoming) {
                 if (frame is Frame.Text) {
                   val text = frame.readText()
-                  session.selectedId = parseSelection(text)
-                  session.layout = parseLayout(text)
+                  session.view = View(parseLayout(text), parseSelection(text))
                   push(session, snapshots.recent())
                 }
               }
@@ -363,7 +374,8 @@ internal class ProxyDashboardService(
     snapshot: ProxySnapshot,
   ) {
     runCatching {
-      session.send(ProxyDashboardHtml.pushFragment(snapshot, session.selectedId, routeBase, session.layout))
+      val view = session.view
+      session.send(ProxyDashboardHtml.pushFragment(snapshot, view?.selectedId, routeBase, view?.layout))
     }
       .onFailure { logger.debug { "Dropping dashboard session: ${it.simpleClassName}" } }
   }
