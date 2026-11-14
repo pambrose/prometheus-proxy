@@ -260,6 +260,14 @@ agents connected with one identity, which is every agent when agent auth is off.
   and print the command that adds it. `make release-check` checks the entries too, so `make release` stops before
   running its tests, rather than at the publishing step after them.
 
+### Dependency updates
+
+Runtime: kotlinx-serialization 1.12.0 → 1.13.0, which reverts 1.12.0's change to the exceptions JSON errors are
+reported with (the proxy and agent catch every JSON parse failure whatever its type, so it doesn't change their
+behavior), and Logback 1.6.6 → 1.6.7, whose one behavior change, to `<propertiesConfigurator>` scanning, the shipped
+logging configs don't use. Test only: Kotest 6.2.6 → 6.2.7. The documentation site's Python lock picks up Zensical
+0.0.74 → 0.1.0, Markdown 3.11.2 → 3.11.3, and watchdog 7.0.0 → 7.1.0.
+
 ---
 
 ## 4.4.2
