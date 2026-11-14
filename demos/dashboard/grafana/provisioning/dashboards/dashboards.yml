@@ -1,0 +1,12 @@
+# Loads the dashboards compose.yml mounts in /etc/grafana/dashboards: the demo overview and the project's own
+# grafana/prometheus-proxy.json and grafana/prometheus-agents.json, mounted from the repo so they never drift.
+apiVersion: 1
+
+providers:
+  - name: prometheus-proxy
+    folder: Prometheus Proxy
+    type: file
+    disableDeletion: true
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/dashboards

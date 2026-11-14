@@ -16,6 +16,13 @@ and how recent scrapes actually went.
     It listens on all interfaces by default, and the proxy logs a warning at startup when it does. Set
     `proxy.dashboard.host` (or `--dashboard_host`) to `127.0.0.1` to keep it on the proxy host.
 
+!!! tip "See it running"
+
+    The repository's [`demos/dashboard`](https://github.com/pambrose/prometheus-proxy/tree/master/demos/dashboard)
+    runs the dashboard with three agents, a set of simulated services, Prometheus, and Grafana, all on one machine:
+    `make demo-up` in a clone starts it, and `make demo-down` removes it. Its README walks through a failing target,
+    a redundant pair of agents, paths discovered at runtime, and an evicted agent, as the dashboard shows them.
+
 ## Enabling it
 
 === "Config file"

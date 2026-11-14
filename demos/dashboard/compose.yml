@@ -1,0 +1,127 @@
+# The Prometheus Proxy dashboard demo: a proxy with its dashboard on, three agents behind a simulated firewall, a set
+# of simulated services, and Prometheus and Grafana in front. See README.md. From the repository root:
+#
+#   make demo-up      # builds the jars and the images from this checkout, then starts everything
+#   make demo-down    # stops it and removes its containers, network, and volume
+#
+# Every published port binds to 127.0.0.1 only: the dashboard has no authentication, Grafana lets anyone view it
+# without signing in, and its admin password is the default, which suits a demo on a laptop and nothing else. Set DEMO_DASHBOARD_PORT, DEMO_GRAFANA_PORT,
+# DEMO_PROMETHEUS_PORT, or DEMO_PROXY_PORT to move a host port that's already taken.
+
+name: prometheus-proxy-demo
+
+# The three agents share one image, built from this checkout's agent jar.
+x-agent: &agent
+  image: prometheus-proxy-demo/agent:local
+  build:
+    context: ../..
+    dockerfile: etc/docker/agent.Dockerfile
+  environment:
+    AGENT_CONFIG: /app/agent.conf
+  depends_on:
+    proxy:
+      condition: service_started
+    demo-app:
+      condition: service_healthy
+  restart: on-failure
+
+services:
+  proxy:
+    image: prometheus-proxy-demo/proxy:local
+    build:
+      context: ../..
+      dockerfile: etc/docker/proxy.Dockerfile
+    hostname: proxy
+    environment:
+      PROXY_CONFIG: /app/proxy.conf
+    volumes:
+      - ./config/proxy.conf:/app/proxy.conf:ro
+    ports:
+      - "127.0.0.1:${DEMO_DASHBOARD_PORT:-8094}:8094"  # Dashboard
+      - "127.0.0.1:${DEMO_PROXY_PORT:-8080}:8080"      # Scrape port: /discovery and each path, for curl
+    restart: on-failure
+
+  agent-east:
+    <<: *agent
+    hostname: east-dc-01
+    volumes:
+      - ./config/agent-east.conf:/app/agent.conf:ro
+      - discovery:/discovery:ro
+
+  agent-west-1:
+    <<: *agent
+    hostname: west-dc-01
+    volumes:
+      - ./config/agent-west-1.conf:/app/agent.conf:ro
+
+  agent-west-2:
+    <<: *agent
+    hostname: west-dc-02
+    volumes:
+      - ./config/agent-west-2.conf:/app/agent.conf:ro
+
+  # The applications behind the firewall, simulated; it also writes agent-east's discovery file (app/demo_app.py).
+  demo-app:
+    image: python:3.14-alpine@sha256:5862d971d1f0ae26b258cefa4e893556b1d3aba81bd2ff30888704ad378bab67
+    command: ["python", "-u", "/app/demo_app.py"]
+    volumes:
+      - ./app:/app:ro
+      - discovery:/discovery
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+    restart: on-failure
+
+  # The same image, digest included, as PROMETHEUS_IMAGE in the Makefile.
+  prometheus:
+    image: prom/prometheus:v3.14.0@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/demo-alerts.yml:/etc/prometheus/rules/demo-alerts.yml:ro
+      - ../../grafana/alerts.yml:/etc/prometheus/rules/alerts.yml:ro
+    ports:
+      - "127.0.0.1:${DEMO_PROMETHEUS_PORT:-9090}:9090"
+    depends_on:
+      - proxy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:9090/-/ready"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    restart: on-failure
+
+  grafana:
+    image: grafana/grafana:13.3.1@sha256:0615ec4fbd4072004b7d86b46ded63013a74b7d6eb1119273dd89e8fa25c13cf
+    environment:
+      # Anyone who opens Grafana sees the dashboards without signing in, as a Viewer, the only role Grafana gives
+      # anonymous users. To use Explore or change a dashboard, sign in as admin / admin.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/dashboards/demo-overview.json
+      # Nothing phones home or downloads at startup, so the demo runs offline once the images are pulled.
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards/demo-overview.json:/etc/grafana/dashboards/demo-overview.json:ro
+      # The project's own dashboards, from the repo, so the demo always shows the current ones.
+      - ../../grafana/prometheus-proxy.json:/etc/grafana/dashboards/prometheus-proxy.json:ro
+      - ../../grafana/prometheus-agents.json:/etc/grafana/dashboards/prometheus-agents.json:ro
+    ports:
+      - "127.0.0.1:${DEMO_GRAFANA_PORT:-3000}:3000"
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:3000/api/health"]
+      interval: 2s
+      timeout: 2s
+      retries: 60
+    restart: on-failure
+
+volumes:
+  # agent-east's discovery file, which demo-app writes and the agent reads.
+  discovery:

@@ -1,7 +1,7 @@
 .PHONY: default help stop clean clean-all stubs build tibuild refresh jars \
         tests mini-tests xxl-tests nh-tests ip-tests netty-tests tls-tests lincheck-tests tla-checks check-rules helm-lint zizmor \
         container-tests scaling-tests all-tests ci ci-build consumer-check regen-certs \
-        docker-clean docker-clean-dry \
+        docker-clean docker-clean-dry demo-up demo-down \
         all-scaling scaling-paths scaling-agents scaling-payload scaling-consolidated scaling-concurrency scaling-soak \
         coverage coverage-html coverage-xml coverage-log coverage-verify \
         coverage-open coverage-packages coverage-clean reports site-version gh-docs \
@@ -55,6 +55,9 @@ SITE_DIR := $(WEBSITE_DIR)/prometheus-proxy
 # Where site-version looks: the docs site's pages, and the snippet directories zensical.toml's snippets base_path
 # names. Its last entry, the repo root, gives the site only examples/ and grafana/, which name no version.
 SITE_VERSION_SOURCES := $(SITE_DIR)/docs src/test/kotlin/website src/test/java/website
+
+# The customer demo of the dashboard and Grafana: its compose file, configs, and demo.sh.
+DEMO_DIR := demos/dashboard
 
 # TLA+ model checking (specs/tla). The tools jar is git-ignored, and downloaded when it's missing or doesn't match
 # TLA_SHA256; TLC's working states go under build/.
@@ -208,8 +211,14 @@ tla-checks: _tla-tools  ## Model-check the TLA+ specs in specs/tla (the quick co
 	$(TLC) -metadir $(CURDIR)/build/tla/AgentFailover -config AgentFailover.cfg AgentFailover.tla
 	$(TLC) -metadir $(CURDIR)/build/tla/ProxyRegistry -config ProxyRegistry.cfg ProxyRegistry.tla
 
-check-rules:  ## Validate the alerting rules in grafana/alerts.yml with promtool (needs Docker)
+# The demo's Prometheus config is checked as the demo's container sees it, with both rule files where its rule_files
+# glob looks, so promtool also checks the demo's alerting rules and that the config loads them.
+check-rules:  ## Validate the alerting rules in grafana/alerts.yml, and the dashboard demo's Prometheus config and rules, with promtool (needs Docker)
 	docker run --rm -v "$(CURDIR)/grafana:/rules:ro" --entrypoint promtool $(PROMETHEUS_IMAGE) check rules /rules/alerts.yml
+	docker run --rm -v "$(CURDIR)/$(DEMO_DIR)/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
+		-v "$(CURDIR)/$(DEMO_DIR)/prometheus/demo-alerts.yml:/etc/prometheus/rules/demo-alerts.yml:ro" \
+		-v "$(CURDIR)/grafana/alerts.yml:/etc/prometheus/rules/alerts.yml:ro" \
+		--entrypoint promtool $(PROMETHEUS_IMAGE) check config /etc/prometheus/prometheus.yml
 
 helm-lint:  ## Lint the Helm charts and validate their rendered manifests (needs Docker)
 	@set -e; for chart in $(CHARTS); do for values in charts/$$chart/ci/*-values.yaml; do \
@@ -267,6 +276,14 @@ ci-build:  ## The CI workflow's build job: compile, lint, and detekt, then the t
 consumer-check: _require-version  ## Build a Maven project that embeds the agent against this checkout's POM, and check what it resolves (needs mvn)
 	$(GRADLE) -PoverrideVersion=$(CONSUMER_CHECK_VERSION) publishToMavenLocal
 	./etc/consumer-check/check.sh $(CONSUMER_CHECK_VERSION)
+
+# The customer demo of the dashboard and Grafana (demos/dashboard/README.md). It runs images built from this checkout's
+# jars, so it always shows the current dashboard; demo.sh in that directory runs the scenarios.
+demo-up: jars  ## Start the dashboard + Grafana demo, built from this checkout (needs Docker; demos/dashboard/README.md)
+	@./$(DEMO_DIR)/demo.sh up
+
+demo-down:  ## Stop the dashboard demo and remove its containers, network, and volume
+	@./$(DEMO_DIR)/demo.sh down
 
 docker-clean-dry:  ## Preview what `make docker-clean` would reclaim (removes nothing)
 	@./bin/docker-clean-tests.sh --dry-run --cache
