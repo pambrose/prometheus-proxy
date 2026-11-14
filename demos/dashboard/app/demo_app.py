@@ -104,6 +104,15 @@ class Histogram:
         return out
 
 
+def jitter():
+    """A random factor around 1, so the rates wobble like real traffic."""
+    return max(0.0, random.gauss(1.0, 0.15))
+
+
+def failing(service):
+    return modes[service] != "ok"
+
+
 class Simulation:
     """Every service's state, advanced on each scrape by the time since the last one."""
 
@@ -125,41 +134,57 @@ class Simulation:
         dt = max(0.0, now - self.last)
         self.last = now
         load = cycle(now)
+        for step in (
+            self.advance_orders,
+            self.advance_payments,
+            self.advance_inventory,
+            self.advance_shipping,
+            self.advance_search,
+            self.advance_recommendations,
+            self.advance_notifications,
+        ):
+            step(load * dt)
 
-        def jitter():
-            return max(0.0, random.gauss(1.0, 0.15))
+    # Each step takes `work`: the simulated load multiplied by the seconds since the last advance.
 
-        orders = 12.0 * load * dt * jitter()
+    def advance_orders(self, work):
+        orders = 12.0 * work * jitter()
         self.orders["completed"] += orders * 0.96
         self.orders["cancelled"] += orders * 0.04
         self.revenue += orders * 0.96 * random.uniform(38.0, 46.0)
 
-        payments = 14.0 * load * dt * jitter()
-        decline_rate = 0.25 if modes["payments"] != "ok" else 0.03
+    def advance_payments(self, work):
+        payments = 14.0 * work * jitter()
+        decline_rate = 0.25 if failing("payments") else 0.03
         for method, share in PAYMENT_METHODS.items():
             self.payments[(method, "approved")] += payments * share * (1 - decline_rate)
             self.payments[(method, "declined")] += payments * share * decline_rate
-        self.payment_latency.observe_many(int(payments), slowdown=3.0 if modes["payments"] != "ok" else 1.0)
+        self.payment_latency.observe_many(int(payments), slowdown=3.0 if failing("payments") else 1.0)
 
+    def advance_inventory(self, work):
         for key in self.stock:
-            self.stock[key] -= int(random.uniform(0.5, 2.5) * load * dt)
-            if self.stock[key] < 120:
-                self.stock[key] += random.randint(500, 800)
-                self.restocks[key[0]] += 1
+            self.stock[key] -= int(random.uniform(0.5, 2.5) * work)
+        for key in [k for k, units in self.stock.items() if units < 120]:
+            self.stock[key] += random.randint(500, 800)
+            self.restocks[key[0]] += 1
 
-        for replica in self.shipped:
+    def advance_shipping(self, work):
+        for shipped in self.shipped.values():
             for carrier in CARRIERS:
-                self.shipped[replica][carrier] += 2.0 * load * dt * jitter()
+                shipped[carrier] += 2.0 * work * jitter()
 
-        searches = 30.0 * load * dt * jitter()
+    def advance_search(self, work):
+        searches = 30.0 * work * jitter()
         self.search["hit"] += searches * 0.92
         self.search["miss"] += searches * 0.08
         self.search_latency.observe_many(int(searches))
 
-        self.recommendations["v1"] += 6.0 * load * dt * jitter()
-        self.recommendations["v2"] += 9.0 * load * dt * jitter()
+    def advance_recommendations(self, work):
+        self.recommendations["v1"] += 6.0 * work * jitter()
+        self.recommendations["v2"] += 9.0 * work * jitter()
 
-        sent = 20.0 * load * dt * jitter()
+    def advance_notifications(self, work):
+        sent = 20.0 * work * jitter()
         for channel, share in CHANNELS.items():
             self.notifications[channel] += sent * share
 
@@ -174,111 +199,115 @@ def family(name, kind, help_text, samples):
     return [f"# HELP {name} {help_text}", f"# TYPE {name} {kind}", *samples]
 
 
+def counter(name, help_text, label, values):
+    """A counter family with one label, whose samples are `values`' items."""
+    return family(name, "counter", help_text, [f'{name}{{{label}="{k}"}} {v:.0f}' for k, v in values.items()])
+
+
+# Each service's metrics, given the replica (shipping only) and the current traffic multiplier.
+
+def render_orders(_replica, load):
+    return [
+        *counter("shop_orders_total", "Orders placed, by final status.", "status", sim.orders),
+        *family("shop_revenue_dollars_total", "counter", "Revenue from completed orders.",
+                [f"shop_revenue_dollars_total {sim.revenue:.2f}"]),
+        *family("shop_active_carts", "gauge", "Shopping carts with items in them.",
+                [f"shop_active_carts {150 + 100 * (load - 1) * 2 + random.randint(-8, 8):.0f}"]),
+    ]
+
+
+def render_payments(_replica, _load):
+    samples = [f'payments_transactions_total{{method="{m}",result="{r}"}} {v:.0f}'
+               for (m, r), v in sim.payments.items()]
+    return [
+        *family("payments_transactions_total", "counter", "Payment transactions, by method and result.", samples),
+        *family("payments_latency_seconds", "histogram", "Payment authorization latency.",
+                sim.payment_latency.lines("payments_latency_seconds")),
+    ]
+
+
+def render_inventory(_replica, _load):
+    stock = [f'inventory_stock_units{{warehouse="{w}",product="{p}"}} {v}' for (w, p), v in sim.stock.items()]
+    return [
+        *family("inventory_stock_units", "gauge", "Units on hand, by warehouse and product.", stock),
+        *counter("inventory_restocks_total", "Restock deliveries received, by warehouse.", "warehouse", sim.restocks),
+    ]
+
+
+def render_catalog(_replica, _load):
+    # A large payload: one price and one stock level per item, with values that change on every scrape so gzip can't
+    # shrink it below the agent's chunk threshold.
+    skus = [(f"SKU-{i:06d}", CATEGORIES[i % len(CATEGORIES)]) for i in range(CATALOG_ITEMS)]
+    prices = [f'catalog_item_price_dollars{{sku="{sku}",category="{category}"}} {random.uniform(1, 500):.4f}'
+              for sku, category in skus]
+    stock = [f'catalog_item_stock_units{{sku="{sku}"}} {random.randint(0, 5000)}' for sku, _ in skus]
+    return [
+        *family("catalog_item_price_dollars", "gauge", "Current list price, by item.", prices),
+        *family("catalog_item_stock_units", "gauge", "Units on hand, by item.", stock),
+    ]
+
+
+def render_shipping(replica, load):
+    shipped = [f'shipping_packages_shipped_total{{replica="{replica}",carrier="{c}"}} {v:.0f}'
+               for c, v in sim.replica(replica).items()]
+    depth = max(0, int(40 * load + random.gauss(0, 6)))
+    return [
+        *family("shipping_packages_shipped_total", "counter", "Packages handed to a carrier, by replica and carrier.",
+                shipped),
+        *family("shipping_queue_depth", "gauge", "Packages waiting to ship, by replica.",
+                [f'shipping_queue_depth{{replica="{replica}"}} {depth}']),
+    ]
+
+
+def render_search(_replica, _load):
+    return [
+        *counter("search_queries_total", "Search queries, by whether they found results.", "result", sim.search),
+        *family("search_latency_seconds", "histogram", "Search query latency.",
+                sim.search_latency.lines("search_latency_seconds")),
+    ]
+
+
+def render_recommendations(_replica, load):
+    ratio = 0.08 + 0.03 * (load - 1) + random.gauss(0, 0.004)
+    return [
+        *counter("recommendations_served_total", "Recommendations served, by model.", "model", sim.recommendations),
+        *family("recommendations_click_through_ratio", "gauge", "Share of recommendations clicked.",
+                [f"recommendations_click_through_ratio {ratio:.4f}"]),
+    ]
+
+
+def render_notifications(_replica, _load):
+    return counter("notifications_sent_total", "Notifications sent, by channel.", "channel", sim.notifications)
+
+
+RENDERERS = {
+    "orders": render_orders,
+    "payments": render_payments,
+    "inventory": render_inventory,
+    "catalog": render_catalog,
+    "shipping": render_shipping,
+    "search": render_search,
+    "recommendations": render_recommendations,
+    "notifications": render_notifications,
+}
+
+
 def render(service, replica, now):
-    load = cycle(now)
-    if service == "orders":
-        return [
-            *family(
-                "shop_orders_total",
-                "counter",
-                "Orders placed, by final status.",
-                [f'shop_orders_total{{status="{s}"}} {v:.0f}' for s, v in sim.orders.items()],
-            ),
-            *family("shop_revenue_dollars_total", "counter", "Revenue from completed orders.",
-                    [f"shop_revenue_dollars_total {sim.revenue:.2f}"]),
-            *family("shop_active_carts", "gauge", "Shopping carts with items in them.",
-                    [f"shop_active_carts {150 + 100 * (load - 1) * 2 + random.randint(-8, 8):.0f}"]),
-        ]
-    if service == "payments":
-        return [
-            *family(
-                "payments_transactions_total",
-                "counter",
-                "Payment transactions, by method and result.",
-                [f'payments_transactions_total{{method="{m}",result="{r}"}} {v:.0f}'
-                 for (m, r), v in sim.payments.items()],
-            ),
-            *family("payments_latency_seconds", "histogram", "Payment authorization latency.",
-                    sim.payment_latency.lines("payments_latency_seconds")),
-        ]
-    if service == "inventory":
-        return [
-            *family(
-                "inventory_stock_units",
-                "gauge",
-                "Units on hand, by warehouse and product.",
-                [f'inventory_stock_units{{warehouse="{w}",product="{p}"}} {v}' for (w, p), v in sim.stock.items()],
-            ),
-            *family(
-                "inventory_restocks_total",
-                "counter",
-                "Restock deliveries received, by warehouse.",
-                [f'inventory_restocks_total{{warehouse="{w}"}} {v}' for w, v in sim.restocks.items()],
-            ),
-        ]
-    if service == "catalog":
-        # A large payload: one price and one stock level per item, with values that change on every scrape so gzip
-        # can't shrink it below the agent's chunk threshold.
-        prices = []
-        stock = []
-        for i in range(CATALOG_ITEMS):
-            sku = f"SKU-{i:06d}"
-            category = CATEGORIES[i % len(CATEGORIES)]
-            prices.append(f'catalog_item_price_dollars{{sku="{sku}",category="{category}"}} '
-                          f"{random.uniform(1, 500):.4f}")
-            stock.append(f'catalog_item_stock_units{{sku="{sku}"}} {random.randint(0, 5000)}')
-        return [
-            *family("catalog_item_price_dollars", "gauge", "Current list price, by item.", prices),
-            *family("catalog_item_stock_units", "gauge", "Units on hand, by item.", stock),
-        ]
-    if service == "shipping":
-        shipped = sim.replica(replica)
-        return [
-            *family(
-                "shipping_packages_shipped_total",
-                "counter",
-                "Packages handed to a carrier, by replica and carrier.",
-                [f'shipping_packages_shipped_total{{replica="{replica}",carrier="{c}"}} {v:.0f}'
-                 for c, v in shipped.items()],
-            ),
-            *family("shipping_queue_depth", "gauge", "Packages waiting to ship, by replica.",
-                    [f'shipping_queue_depth{{replica="{replica}"}} {max(0, int(40 * load + random.gauss(0, 6)))}']),
-        ]
-    if service == "search":
-        return [
-            *family("search_queries_total", "counter", "Search queries, by whether they found results.",
-                    [f'search_queries_total{{result="{r}"}} {v:.0f}' for r, v in sim.search.items()]),
-            *family("search_latency_seconds", "histogram", "Search query latency.",
-                    sim.search_latency.lines("search_latency_seconds")),
-        ]
-    if service == "recommendations":
-        return [
-            *family("recommendations_served_total", "counter", "Recommendations served, by model.",
-                    [f'recommendations_served_total{{model="{m}"}} {v:.0f}'
-                     for m, v in sim.recommendations.items()]),
-            *family("recommendations_click_through_ratio", "gauge", "Share of recommendations clicked.",
-                    [f"recommendations_click_through_ratio {0.08 + 0.03 * (load - 1) + random.gauss(0, 0.004):.4f}"]),
-        ]
-    if service == "notifications":
-        return [
-            *family("notifications_sent_total", "counter", "Notifications sent, by channel.",
-                    [f'notifications_sent_total{{channel="{c}"}} {v:.0f}' for c, v in sim.notifications.items()]),
-        ]
-    return []
+    return RENDERERS[service](replica, cycle(now))
 
 
 def write_discovery_file(enabled):
     """Lists the discoverable services in the agent's discovery file, or none, replacing the file atomically."""
-    paths = []
-    if enabled:
-        for service, info in DISCOVERABLE.items():
-            paths.append({
-                "name": info["name"],
-                "path": f"{service}_metrics",
-                "url": f"{SELF_URL}/{service}/metrics",
-                # The agent's labels are a JSON string, not an object; Prometheus takes job from them.
-                "labels": json.dumps({"job": service, "team": info["team"], "source": "discovered"}),
-            })
+    paths = [
+        {
+            "name": info["name"],
+            "path": f"{service}_metrics",
+            "url": f"{SELF_URL}/{service}/metrics",
+            # The agent's labels are a JSON string, not an object; Prometheus takes job from them.
+            "labels": json.dumps({"job": service, "team": info["team"], "source": "discovered"}),
+        }
+        for service, info in DISCOVERABLE.items()
+    ] if enabled else []
     os.makedirs(os.path.dirname(DISCOVERY_FILE), exist_ok=True)
     tmp = f"{DISCOVERY_FILE}.tmp"
     with open(tmp, "w", encoding="utf-8") as f:
@@ -289,12 +318,54 @@ def write_discovery_file(enabled):
 
 def parse_metrics_path(path):
     """Returns (service, replica) for a metrics path, or None."""
-    parts = [p for p in path.split("/") if p]
-    if len(parts) == 2 and parts[1] == "metrics" and parts[0] in SERVICES and parts[0] != "shipping":
-        return parts[0], None
-    if len(parts) == 3 and parts[0] == "shipping" and parts[2] == "metrics":
-        return "shipping", parts[1]
+    match [p for p in path.split("/") if p]:
+        case ["shipping", replica, "metrics"]:
+            return "shipping", replica
+        case [service, "metrics"] if service in SERVICES and service != "shipping":
+            return service, None
     return None
+
+
+def parse_control_path(path):
+    """Returns (services, mode) for a /control/<service|all>/<mode> path, or None."""
+    match [p for p in path.split("/") if p]:
+        case ["control", "all", mode] if mode in MODES:
+            return SERVICES, mode
+        case ["control", service, mode] if service in SERVICES and mode in MODES:
+            return [service], mode
+    return None
+
+
+def state():
+    return json.dumps({"modes": modes, "discovery": "on" if discovery_on else "off"}, indent=2) + "\n"
+
+
+def catalog_size():
+    """The catalog payload's raw and gzipped sizes, for checking it is large enough to be chunked."""
+    raw = "\n".join(render("catalog", None, time.time())).encode("utf-8")
+    return json.dumps({"raw": len(raw), "gzipped": len(gzip.compress(raw))}) + "\n"
+
+
+def set_modes(services, mode):
+    for service in services:
+        modes[service] = mode
+    return state()
+
+
+def set_discovery(enabled):
+    global discovery_on
+    discovery_on = enabled
+    write_discovery_file(enabled)
+    return state()
+
+
+# GET paths other than the metrics endpoints: (content type, a function returning the body, called under the lock).
+GET_ROUTES = {
+    "/healthz": ("text/plain; charset=utf-8", lambda: "ok\n"),
+    "/control": ("application/json", state),
+    "/catalog/size": ("application/json", catalog_size),
+}
+DISCOVERY_ROUTES = {"/discovery/on": True, "/discovery/off": False}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -313,31 +384,20 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    def state(self):
-        return json.dumps({"modes": modes, "discovery": "on" if discovery_on else "off"}, indent=2) + "\n"
-
     def do_GET(self):
-        if self.path == "/healthz":
-            self.send_text(200, "ok\n")
-            return
-        if self.path == "/control":
+        if self.path in GET_ROUTES:
+            content_type, body = GET_ROUTES[self.path]
             with lock:
-                body = self.state()
-            self.send_text(200, body, "application/json")
+                text = body()
+            self.send_text(200, text, content_type)
             return
-        if self.path == "/catalog/size":
-            # The catalog payload's raw and gzipped sizes, for checking it is large enough to be chunked.
-            with lock:
-                raw = "\n".join(render("catalog", None, time.time())).encode("utf-8")
-            self.send_text(200, json.dumps({"raw": len(raw), "gzipped": len(gzip.compress(raw))}) + "\n",
-                           "application/json")
-            return
-
         target = parse_metrics_path(self.path)
         if target is None:
             self.send_text(404, "not found\n")
             return
-        service, replica = target
+        self.serve_metrics(*target)
+
+    def serve_metrics(self, service, replica):
         with lock:
             mode = modes[service]
         if mode == "error":
@@ -351,23 +411,17 @@ class Handler(BaseHTTPRequestHandler):
         self.send_text(200, "\n".join(lines) + "\n", "text/plain; version=0.0.4; charset=utf-8")
 
     def do_POST(self):
-        global discovery_on
-        parts = [p for p in self.path.split("/") if p]
-        if len(parts) == 3 and parts[0] == "control" and parts[2] in MODES and (parts[1] in SERVICES or parts[1] == "all"):
+        control = parse_control_path(self.path)
+        if control is not None:
             with lock:
-                for service in SERVICES if parts[1] == "all" else [parts[1]]:
-                    modes[service] = parts[2]
-                body = self.state()
-            self.send_text(200, body, "application/json")
-            return
-        if len(parts) == 2 and parts[0] == "discovery" and parts[1] in ("on", "off"):
+                body = set_modes(*control)
+        elif self.path in DISCOVERY_ROUTES:
             with lock:
-                discovery_on = parts[1] == "on"
-                write_discovery_file(discovery_on)
-                body = self.state()
-            self.send_text(200, body, "application/json")
+                body = set_discovery(DISCOVERY_ROUTES[self.path])
+        else:
+            self.send_text(404, "unknown control request\n")
             return
-        self.send_text(404, "unknown control request\n")
+        self.send_text(200, body, "application/json")
 
 
 def main():
