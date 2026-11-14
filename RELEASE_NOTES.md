@@ -12,12 +12,12 @@ TLS natives, and a setting the agent rejects throws a `ConfigLoadException` with
 longer lets one agent hold memory with chunked transfers that never finish or with huge target URLs, flood its log from
 service discovery, or forge lines in its log, and a dashboard client can no longer slow its scrapes. Behind nginx, an
 agent can no longer read or disconnect another identity's agent as it connects, or add agents without limit. Zipkin
-tracing can be turned on, and the Docker quick start connects. A standalone proxy or agent with a bad setting now exits
-with one redacted line instead of a stack trace. Read **Before you upgrade**: for embedders, the logging configuration
-and the exception a bad setting throws have changed; for everyone, the proxy now cuts a path's target URL to 2048
-characters, refuses a path with whitespace, a control character, `?`, or `#`, and won't start with a scrape-port idle
-timeout of `0` or a service discovery target that has a query or fragment; and behind nginx, it allows at most 10,000
-agents connected with one identity, which is every agent when agent auth is off.
+tracing can be turned on, and the Docker quick start connects. The dashboard moves to htmx 4. A standalone proxy or
+agent with a bad setting now exits with one redacted line instead of a stack trace. Read **Before you upgrade**: for
+embedders, the logging configuration and the exception a bad setting throws have changed; for everyone, the proxy now
+cuts a path's target URL to 2048 characters, refuses a path with whitespace, a control character, `?`, or `#`, and
+won't start with a scrape-port idle timeout of `0` or a service discovery target that has a query or fragment; and
+behind nginx, it allows at most 10,000 agents connected with one identity, which is every agent when agent auth is off.
 
 ### Before you upgrade
 
@@ -168,6 +168,20 @@ agents connected with one identity, which is every agent when agent auth is off.
   server name, as the tests do, kept every scrape result it sent the proxy in memory until it disconnected, because of
   how gRPC buffers messages for retrying on a transport that doesn't report their sizes. In-process connections now skip
   that retry buffer; network connections are unchanged.
+- **The dashboard can't keep running a cached htmx after an upgrade.** Its scripts were served at fixed URLs, such as
+  `/dashboard/assets/htmx.min.js`, and cached for a year, so a browser that had opened the dashboard kept the htmx it
+  cached through a proxy upgrade that changed it, even on reload. The URLs now carry the htmx version
+  (`/dashboard/assets/4.0.1/htmx.min.js`), so an upgrade loads the new scripts. That matters for this release: its
+  htmx 4 page wouldn't connect under a cached htmx 2.
+- **A screen reader hears about a dashboard outage once.** While the proxy was unreachable, the dashboard announced
+  "Connection to the proxy lost" again on every reconnect attempt, every couple of seconds. It now announces the loss
+  once, and the recovery once.
+- **The dashboard's detail pane doesn't flash when it reconnects.** As its connection opened, the dashboard briefly
+  showed "Select an agent" in place of the selected agent's details. It no longer does, which matters more now that
+  returning to a hidden tab reconnects.
+- **Selecting an agent on the dashboard sticks.** A refresh that crossed your click could put the previously selected
+  agent back in the detail pane for up to the refresh interval (2 seconds by default). The dashboard now ignores an
+  update rendered before your selection.
 
 ### Documentation
 
@@ -267,6 +281,12 @@ reported with (the proxy and agent catch every JSON parse failure whatever its t
 behavior), and Logback 1.6.6 → 1.6.7, whose one behavior change, to `<propertiesConfigurator>` scanning, the shipped
 logging configs don't use. Test only: Kotest 6.2.6 → 6.2.7. The documentation site's Python lock picks up Zensical
 0.0.74 → 0.1.0, Markdown 3.11.2 → 3.11.3, and watchdog 7.0.0 → 7.1.0.
+
+The dashboard moves from htmx 2.0.11 to 4.0.1, which ships its WebSocket extension itself, so the `htmx-ext-ws` WebJar
+is gone. The dashboard looks and works as before, with one change: a tab gives up its connection while it is hidden
+and reconnects when you return to it, without showing *reconnecting…*, so tabs left in the background no longer count
+against `proxy.dashboard.maxSessions`. A dashboard page opened before the upgrade keeps working against the upgraded
+proxy until you reload it.
 
 ---
 

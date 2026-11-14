@@ -75,6 +75,7 @@ internal object ProxyDashboardHtml {
   const val STATUS_ID = "status-bar"
   const val PATH_TABLE_ID = "path-table"
   const val ANNOUNCER_ID = "conn-announce"
+  const val VIEW_ATTR = "data-view"
 
   /** The full page. Only served on a real navigation; every later update arrives over the socket. */
   fun HTML.renderPage(
@@ -90,12 +91,14 @@ internal object ProxyDashboardHtml {
       title("prometheus-proxy")
       meta(name = "viewport", content = "width=device-width, initial-scale=1")
       style { unsafe { raw(CSS) } }
-      script(src = "$routeBase/assets/htmx.min.js") {}
-      script(src = "$routeBase/assets/ws.js") {}
+      // Ahead of the scripts: htmx reads its config once, when htmx.min.js loads.
+      meta(name = "htmx-config", content = HTMX_CONFIG)
+      script(src = "$routeBase/${ProxyDashboardService.ASSET_DIR}/htmx.min.js") {}
+      script(src = "$routeBase/${ProxyDashboardService.ASSET_DIR}/hx-ws.min.js") {}
     }
     body {
-      attributes["hx-ext"] = "ws"
-      attributes["ws-connect"] = "$routeBase/events"
+      // Loading hx-ws.min.js is what enables the extension; htmx 4 has no hx-ext.
+      attributes["hx-ws:connect"] = "$routeBase/events"
 
       div("bar") {
         span("brand") { +"prometheus-proxy" }
@@ -226,9 +229,14 @@ internal object ProxyDashboardHtml {
   private fun SPAN.statusInner(
     snapshot: ProxySnapshot,
     oob: Boolean,
+    viewSeq: Long = 0L,
   ) {
     attributes["id"] = STATUS_ID
-    if (oob) attributes["hx-swap-oob"] = "true"
+    if (oob) {
+      attributes["hx-swap-oob"] = "true"
+      // The frame's view stamp; see pushFragment.
+      attributes[VIEW_ATTR] = "$viewSeq"
+    }
     // Both labels are always rendered; which one shows is driven by the `ws-down` class on <body>,
     // which the WebSocket lifecycle handlers toggle. Body-level rather than here because this region
     // is overwritten by every push -- and a push can only happen while connected, so the server never
@@ -385,21 +393,34 @@ internal object ProxyDashboardHtml {
    * One WebSocket frame carrying every out-of-band region that changed.
    *
    * The regions are concatenated as **top-level siblings**, never wrapped in a container. The htmx
-   * WebSocket extension applies a message by iterating only the *immediate* children of the parsed
-   * fragment and calling `oobSwap` on each; a wrapping element would be the sole child it sees, it has no
-   * id to match, and the real regions nested inside it would be silently ignored — the whole page would
-   * then update only on a manual reload.
+   * WebSocket extension swaps a message into the element that opened the socket, `<body>`, after htmx has
+   * pulled every `hx-swap-oob` region out of it. A frame of regions alone leaves nothing behind, and the
+   * extension skips an empty swap. A wrapper would be left behind, empty but still an element, and swapped
+   * in as `<body>`'s whole content, wiping the page. (htmx 2's extension instead ignored every region
+   * nested in a wrapper, so the page updated only on a manual reload.)
    *
    * Emits only the regions that exist for this session's layout. A swap addressed at an absent id is a
    * silent no-op, so this keeps the frame honest and small -- a path-layout session has no agent list.
+   *
+   * A null [layout] means the session has not yet said which page it shows, so the frame carries only the
+   * status bar, which every layout has. Rendering a guess instead (the agent layout, nothing selected)
+   * would replace a page's detail pane with the "select an agent" placeholder until the browser's message
+   * arrived -- a flash on every connect and reconnect.
+   *
+   * [viewSeq] is the count the page sent with the message this frame was rendered from, stamped on the
+   * status region; the page drops a frame stamped below the count it has sent since, which describes a
+   * page it no longer shows. The status region goes first, so the stamp is on the frame's first tag: the
+   * page matches it there, anchored at the start, which no agent-supplied value can reach.
    */
   fun pushFragment(
     snapshot: ProxySnapshot,
     selectedId: String?,
     routeBase: String,
-    layout: DashboardLayout = DashboardLayout.AGENT,
+    layout: DashboardLayout? = DashboardLayout.AGENT,
+    viewSeq: Long = 0L,
   ): String =
     buildString {
+      append(createHTML().span("bar-right") { statusInner(snapshot, oob = true, viewSeq) })
       when (layout) {
         DashboardLayout.AGENT -> {
           append(createHTML().div("md-list") { agentListInner(snapshot, selectedId, routeBase, oob = true) })
@@ -409,8 +430,9 @@ internal object ProxyDashboardHtml {
         DashboardLayout.PATH -> {
           append(createHTML().div("scroller") { pathTableInner(snapshot, oob = true) })
         }
+
+        null -> {}
       }
-      append(createHTML().span("bar-right") { statusInner(snapshot, oob = true) })
     }
 
   /**
@@ -462,24 +484,35 @@ internal object ProxyDashboardHtml {
   // rendering bug rather than as absent data.
   private const val DASH = "\u2013"
 
+  /**
+   * htmx's config, read from a `<meta>` tag.
+   *
+   * `noSwap` keeps htmx 2's rule that a 4xx or 5xx response is not swapped in. htmx 4 swaps every
+   * response but a 204 or 304, so a row click that failed would replace `#detail` with the error body, and
+   * the pushes, which address `#detail`, would have nothing left to update.
+   *
+   * `ws` caps the reconnect backoff. The extension's default doubles the wait from 500 ms up to a minute,
+   * resetting only on a successful open. That is tuned for public services guarding against a reconnect
+   * stampede, the opposite of this dashboard, which has a handful of viewers on a LAN. Left alone, a short
+   * outage grows the wait so far that the page can sit idle for tens of seconds after the proxy is already
+   * back. With these values the waits run 500 ms, 1 s, then 2 s ± 250 ms: recovery within about 2 s, and
+   * just enough jitter that many dashboards do not reconnect in lockstep.
+   */
+  private const val HTMX_CONFIG =
+    """{"noSwap":[204,304,"4xx","5xx"],"ws":{"reconnectDelay":500,"reconnectMaxDelay":2000,"reconnectJitter":0.125}}"""
+
   // Reads the selection back out of the URL that hx-push-url already set, and tells the server, so the
   // push loop knows whether this session wants a detail pane. Kept deliberately tiny: everything else
   // on the page is htmx.
   private val SELECTION_JS =
     """
     (function () {
-      // htmx-ext-ws defaults to 'full-jitter' backoff: the retry window doubles on every failed attempt
-      // (1s, 2s, 4s ... capped at 64s) and only resets on a successful open. That is tuned for public
-      // services guarding against a reconnect stampede -- the opposite of this dashboard, which has a
-      // handful of viewers on a LAN. Left alone, a short outage grows the window so far that the page can
-      // sit idle for tens of seconds after the proxy is already back. Replace it with a low, lightly
-      // jittered cap: recover within ~2s, keep just enough jitter that many dashboards do not reconnect
-      // in lockstep. Read on each retry, so setting it before the first disconnect is sufficient.
-      if (window.htmx) {
-        htmx.config.wsReconnectDelay = function (retryCount) {
-          return Math.min(500 * Math.pow(2, retryCount), 2000) + Math.random() * 250;
-        };
-      }
+      // htmx 4 runs the inline scripts of content it swaps in, and every back or forward navigation
+      // refetches the page and swaps it into <body>, so this script runs again on each one. The body, its
+      // listeners, and the socket all survive that swap, so a second run would only stack another set of
+      // listeners, and one announce per navigation would become two, then three.
+      if (window.__proxyUiInit) return;
+      window.__proxyUiInit = true;
       function selectedId() {
         var m = window.location.pathname.match(/\/agents\/([^/]+)$/);
         return m ? m[1] : null;
@@ -487,18 +520,43 @@ internal object ProxyDashboardHtml {
       function layout() {
         return /\/paths\/?$/.test(window.location.pathname) ? 'PATH' : 'AGENT';
       }
-      function announce(evt) {
-        var socket = evt && evt.detail && evt.detail.socketWrapper;
-        if (socket) window.__proxyUiSocket = socket;
-        var s = window.__proxyUiSocket;
-        if (s) s.send(JSON.stringify({ select: selectedId(), layout: layout() }));
+      // The extension's connection, which outlives its socket: each reconnect replaces connection.socket,
+      // so this keeps the connection and reads the socket when it sends.
+      var conn = null;
+      // The count of messages this page has sent. The server stamps every frame with the count of the
+      // message it rendered the frame from, so a frame stamped lower describes a page this one no longer
+      // shows. Without it a row click raced the push loop: a tick rendered from the previous selection could
+      // land after the click's own swap and put the previous agent back until the next frame.
+      var seq = 0;
+      function announce() {
+        var s = conn && conn.socket;
+        // Only on an open socket. Nothing is lost by skipping: every open announces again from the URL.
+        if (s && s.readyState === WebSocket.OPEN) {
+          seq += 1;
+          s.send(JSON.stringify({ select: selectedId(), layout: layout(), seq: seq }));
+        }
       }
-      // The connection indicator. htmx-ext-ws reconnects on its own (abnormal-closure backoff); this
-      // only reflects that effort so the page does not keep claiming "live" while frozen. Toggled on
-      // <body> so it persists while no push can arrive to re-render the status bar, and is cleared the
-      // instant the socket reopens -- the very next push then re-renders the bar in its healthy state.
-      // Deliberately not set on 'htmx:wsConnecting': that also fires for the first connect on load, and
-      // reacting to it would flash the indicator red before the initial open.
+      // Drops a frame rendered from an older message. The stamp is on the frame's first tag, the status
+      // region, which the server writes whole; the match is anchored there, so no agent-supplied value can
+      // stand in for it.
+      document.body.addEventListener('htmx:ws:before:message:incoming', function (evt) {
+        var data = evt.detail.message.data;
+        var m = typeof data === 'string' && /^<span[^>]*\s$VIEW_ATTR="(\d+)"/.exec(data);
+        if ((m ? Number(m[1]) : 0) < seq) evt.preventDefault();
+      });
+      // The connection indicator. The extension reconnects on its own (with the backoff capped in the
+      // htmx-config meta tag); this only reflects that effort so the page does not keep claiming "live"
+      // while frozen. Toggled on <body> so it persists while no push can arrive to re-render the status bar,
+      // and is cleared the instant the socket reopens -- the very next push then re-renders the bar in its
+      // healthy state. Deliberately not set on 'htmx:ws:before:connection': that also fires for the first
+      // connect on load, and reacting to it would flash the indicator red before the initial open. Nor on
+      // 'htmx:ws:error', which also reports a message that failed to send or to swap while the socket stays
+      // open; a failed connect always ends in 'htmx:ws:close' too.
+      //
+      // A hidden tab is the other exception. The extension closes the socket while the tab is hidden and
+      // reopens it when the tab is shown again, which frees the session for the proxy. That is a pause, not
+      // an outage, so a close while the tab is hidden changes nothing. An outage that begins while the tab is
+      // hidden still shows: the reconnect that runs when the tab is shown fails while it is visible.
       //
       // The same transition is spoken into the live region. The beacon reports this visually with colour
       // and a change of rhythm, neither of which reaches a screen reader; without this the page goes
@@ -508,20 +566,28 @@ internal object ProxyDashboardHtml {
       function announceConn(up) {
         var region = document.getElementById('$ANNOUNCER_ID');
         if (!region) return;
-        // Nothing to say about the first successful connect; only a recovery from a real outage.
-        if (!up) region.textContent = 'Connection to the proxy lost. Reconnecting.';
-        else if (wasDown) region.textContent = 'Connection to the proxy restored.';
+        // Only transitions are news. Every failed retry closes the socket again, and rewriting the region on
+        // each one would re-announce the outage every couple of seconds for as long as it lasts. Nothing to
+        // say about the first successful connect either; only a recovery from a real outage.
+        if (!up && !wasDown) region.textContent = 'Connection to the proxy lost. Reconnecting.';
+        else if (up && wasDown) region.textContent = 'Connection to the proxy restored.';
       }
       function connected(up) {
         document.body.classList.toggle('ws-down', !up);
         announceConn(up);
         wasDown = !up;
       }
-      document.body.addEventListener('htmx:wsOpen', function () { connected(true); });
-      document.body.addEventListener('htmx:wsClose', function () { connected(false); });
-      document.body.addEventListener('htmx:wsError', function () { connected(false); });
-      document.body.addEventListener('htmx:wsOpen', announce);
-      document.body.addEventListener('htmx:pushedIntoHistory', announce);
+      document.body.addEventListener('htmx:ws:after:connection', function (evt) {
+        conn = evt.detail.connection;
+        connected(true);
+        // At once: until this message arrives, the server pushes a new session only the status bar.
+        announce();
+      });
+      document.body.addEventListener('htmx:ws:close', function () {
+        if (!document.hidden) connected(false);
+      });
+      // htmx 4 dispatches its history events on document, which a listener on <body> never hears.
+      document.addEventListener('htmx:after:history:push', announce);
       window.addEventListener('popstate', announce);
     })();
     """.trimIndent()

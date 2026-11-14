@@ -276,17 +276,78 @@ class ProxyDashboardHtmlTest : StringSpec() {
       agentFrame shouldNotContain """id="${ProxyDashboardHtml.PATH_TABLE_ID}""""
     }
 
-    // The bug that shipped: the OOB regions were wrapped in an outer <div>. The htmx WebSocket extension
-    // iterates only the immediate children of the parsed message, so the wrapper was the sole child it
+    // The bug that shipped: the OOB regions were wrapped in an outer <div>. htmx 2's WebSocket extension
+    // iterated only the immediate children of the parsed message, so the wrapper was the sole child it
     // saw -- with no id to match -- and every region nested inside it was silently dropped. The page
-    // then updated only on a manual reload. The regions must be top-level siblings.
+    // then updated only on a manual reload. Under htmx 4 a wrapper is worse: the regions are pulled out
+    // of it, and the empty wrapper left behind is swapped in as the whole of <body>. The regions must be
+    // top-level siblings.
     "a push must place the OOB regions at the top level, not inside a wrapper" {
       val frame = ProxyDashboardHtml.pushFragment(snapshot(), null, "/dashboard", DashboardLayout.AGENT).trimStart()
-      // The very first element is a real region carrying hx-swap-oob, not a bare <div> wrapper.
-      frame shouldStartWith """<div class="md-list""""
+      // The very first element is a real region carrying hx-swap-oob -- the status bar, which carries the
+      // frame's view stamp -- not a bare <div> wrapper.
+      frame shouldStartWith """<span class="bar-right""""
       frame shouldNotStartWith "<div><"
       // The first tag itself is the OOB target -- hx-swap-oob appears before the region's closing markup.
       frame.substringBefore(">") shouldContain "hx-swap-oob"
+    }
+
+    // A session that has not yet said which page it shows gets only the status bar. A guess at the rest
+    // (the agent layout, nothing selected) replaced the page's detail pane with the "select an agent"
+    // placeholder until the browser's message arrived, a flash on every connect and reconnect.
+    "a push for a session with no known layout should carry only the status bar" {
+      val frame = ProxyDashboardHtml.pushFragment(snapshot(), null, "/dashboard", layout = null)
+      frame shouldContain """id="${ProxyDashboardHtml.STATUS_ID}""""
+      frame shouldNotContain """id="${ProxyDashboardHtml.AGENT_LIST_ID}""""
+      frame shouldNotContain """id="${ProxyDashboardHtml.DETAIL_ID}""""
+      frame shouldNotContain """id="${ProxyDashboardHtml.PATH_TABLE_ID}""""
+      frame shouldNotContain "Select an agent"
+      // Still a frame of top-level OOB regions, like every other.
+      frame.trimStart().substringBefore(">") shouldContain "hx-swap-oob"
+    }
+
+    // The page drops a frame rendered from an older message than its latest, which closes the race between
+    // a row click and a tick rendered from the previous selection. It reads the stamp from the frame's first
+    // tag, so the status region must come first, in every layout.
+    "a push should stamp its view count on the frame's first tag" {
+      listOf(DashboardLayout.AGENT, DashboardLayout.PATH, null).forEach { layout ->
+        val frame = ProxyDashboardHtml.pushFragment(snapshot(), "1", "/dashboard", layout, viewSeq = 7)
+        VIEW_STAMP.find(frame)?.groupValues?.get(1) shouldBe "7"
+      }
+      // A session that has sent nothing yet is stamped 0.
+      VIEW_STAMP.find(ProxyDashboardHtml.pushFragment(snapshot(), null, "/dashboard", null))
+        ?.groupValues
+        ?.get(1) shouldBe "0"
+    }
+
+    // The match is anchored at the start of the frame, inside the status region's tag. An agent that names
+    // itself after the stamp lands in the agent list, after that tag, so it cannot stand in for the real
+    // one -- a forged 0 would otherwise make every page drop every frame and freeze.
+    "an agent-supplied value should not be read as the view stamp" {
+      val forged = snapshot(agents = [agent(name = """x" data-view="0" """)])
+      val frame = ProxyDashboardHtml.pushFragment(forged, "1", "/dashboard", DashboardLayout.AGENT, viewSeq = 9)
+      VIEW_STAMP.find(frame)?.groupValues?.get(1) shouldBe "9"
+    }
+
+    "view count parsing should tolerate anything a browser might send" {
+      ProxyDashboardService.parseSeq("""{"seq":12}""") shouldBe 12L
+      ProxyDashboardService.parseSeq("""{"select":"a1","layout":"AGENT","seq":3}""") shouldBe 3L
+      // Everything unexpected falls back to 0, which a page predating the field never compares against.
+      ProxyDashboardService.parseSeq("""{"seq":"12"}""") shouldBe 0L
+      ProxyDashboardService.parseSeq("""{"seq":-1}""") shouldBe 0L
+      ProxyDashboardService.parseSeq("""{"seq":1.5}""") shouldBe 0L
+      ProxyDashboardService.parseSeq("""{"seq":null}""") shouldBe 0L
+      ProxyDashboardService.parseSeq("""{"select":"a1"}""") shouldBe 0L
+      ProxyDashboardService.parseSeq("not json at all") shouldBe 0L
+    }
+
+    "the page script should count its messages and drop frames stamped below the count" {
+      val page = createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(), null, "/dashboard") } }
+      page shouldContain "seq: seq"
+      page shouldContain "addEventListener('htmx:ws:before:message:incoming'"
+      page shouldContain "evt.preventDefault()"
+      // Anchored at the start of the frame, on the attribute the server writes.
+      page shouldContain """/^<span[^>]*\s${ProxyDashboardHtml.VIEW_ATTR}="""
     }
 
     "an empty proxy should say so in the path layout too" {
@@ -368,8 +429,8 @@ class ProxyDashboardHtmlTest : StringSpec() {
     "a root-mounted dashboard should not emit protocol-relative links" {
       val page =
         createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(), null, "", DashboardLayout.AGENT) } }
-      page shouldContain """ws-connect="/events""""
-      page shouldContain """src="/assets/htmx.min.js""""
+      page shouldContain """hx-ws:connect="/events""""
+      page shouldContain """src="/${ProxyDashboardService.ASSET_DIR}/htmx.min.js""""
       page shouldContain """href="/paths""""
       page shouldContain """hx-get="/agents/1""""
       page shouldNotContain "\"//"
@@ -409,28 +470,98 @@ class ProxyDashboardHtmlTest : StringSpec() {
       status shouldContain "reconnecting"
     }
 
-    // The whole point: htmx-ext-ws reconnects on its own, and these handlers are what makes that effort
-    // visible. wsClose/wsError must mark the page down; wsOpen must clear it.
+    // The whole point: the WebSocket extension reconnects on its own, and these handlers are what makes
+    // that effort visible. A close must mark the page down; an open must clear it.
     "the page script should flip the connection state on the WebSocket lifecycle events" {
       val page = createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(), null, "/dashboard") } }
-      page shouldContain "htmx:wsClose"
-      page shouldContain "htmx:wsError"
-      page shouldContain "htmx:wsOpen"
+      page shouldContain "addEventListener('htmx:ws:close'"
+      page shouldContain "addEventListener('htmx:ws:after:connection'"
       page shouldContain "ws-down"
-      // wsConnecting also fires for the first connect on load; reacting to it would flash red before the
-      // initial open, so no listener may be wired for it. Asserted as the precise listener form rather
-      // than the bare event name, which the explaining comment legitimately mentions.
-      page shouldNotContain "addEventListener('htmx:wsConnecting'"
+      // before:connection also fires for the first connect on load; reacting to it would flash red before
+      // the initial open, so no listener may be wired for it. ws:error also reports a message that failed
+      // to send or swap on an open socket, so it may not mark the page down either. Asserted as the precise
+      // listener form rather than the bare event name, which the explaining comment legitimately mentions.
+      page shouldNotContain "addEventListener('htmx:ws:before:connection'"
+      page shouldNotContain "addEventListener('htmx:ws:error'"
     }
 
-    // The extension's default 'full-jitter' backoff grows the retry window to 64s and only resets on a
-    // successful open, so a brief outage can leave the page idle for tens of seconds after the proxy is
-    // already back. The page overrides it with a low cap; this guards that override against regressing to
-    // the default, which would silently reintroduce the long lag.
+    // htmx 4 renamed every WebSocket event and attribute. A listener left on an htmx 2 name never fires,
+    // so the page would keep claiming "live" through an outage; ws-connect still works but logs a
+    // deprecation warning on every load; and hx-ext no longer exists.
+    "the page should use no htmx 2 WebSocket names" {
+      val page = createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(), null, "/dashboard") } }
+      page shouldNotContain "htmx:wsOpen"
+      page shouldNotContain "htmx:wsClose"
+      page shouldNotContain "htmx:wsError"
+      page shouldNotContain "htmx:pushedIntoHistory"
+      page shouldNotContain " ws-connect="
+      page shouldNotContain "hx-ext="
+      page shouldNotContain "wsReconnectDelay"
+    }
+
+    // htmx 4 dispatches its history events on document, not <body>. A listener on the body would never
+    // hear a row click push its URL, so the server would keep pushing the previous agent's detail pane.
+    "the page should listen for history pushes on the document" {
+      val page = createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(), null, "/dashboard") } }
+      page shouldContain "document.addEventListener('htmx:after:history:push', announce)"
+      page shouldContain "window.addEventListener('popstate', announce)"
+    }
+
+    // The extension closes the socket of a hidden tab and reopens it when the tab is shown. That pause must
+    // not read as an outage, or every tab switch would turn the beacon red and announce a lost connection.
+    "the page should ignore a close made while the tab is hidden" {
+      val page = createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(), null, "/dashboard") } }
+      page shouldContain "if (!document.hidden) connected(false)"
+    }
+
+    // Each failed reconnect attempt closes the socket again. Writing the live region on every close would
+    // re-announce the outage every couple of seconds, so only the transition into it is announced.
+    "the page should announce a lost connection once per outage" {
+      val page = createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(), null, "/dashboard") } }
+      page shouldContain "if (!up && !wasDown) region.textContent = 'Connection to the proxy lost. Reconnecting.'"
+      page shouldContain "else if (up && wasDown) region.textContent = 'Connection to the proxy restored.'"
+    }
+
+    // htmx 4 refetches the page on every back or forward and runs the inline scripts of what it swaps in.
+    // Without the guard each navigation would stack another set of listeners.
+    "the page script should run only once per document" {
+      val page = createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(), null, "/dashboard") } }
+      page shouldContain "if (window.__proxyUiInit) return;"
+    }
+
+    // The extension's default backoff doubles up to a minute and only resets on a successful open, so a
+    // brief outage can leave the page idle for tens of seconds after the proxy is already back. The page
+    // caps it in htmx's config; this guards that cap against regressing to the default, which would
+    // silently reintroduce the long lag.
     "the page should cap the WebSocket reconnect backoff" {
       val page = createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(), null, "/dashboard") } }
-      page shouldContain "wsReconnectDelay"
-      page shouldContain "2000"
+      // kotlinx.html escapes the attribute's quotes, so match the names and values, not the JSON.
+      page shouldContain "reconnectMaxDelay&quot;:2000"
+      page shouldContain "reconnectDelay&quot;:500"
+    }
+
+    // htmx 4 swaps a 4xx or 5xx response in. A row click that failed would replace #detail with the error
+    // body, and the pushes, which address #detail, would have nothing left to update.
+    "the page should keep error responses from being swapped in" {
+      val page = createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(), null, "/dashboard") } }
+      page shouldContain "noSwap&quot;:[204,304,&quot;4xx&quot;,&quot;5xx&quot;]"
+    }
+
+    // htmx reads its config once, when htmx.min.js loads, so a meta tag after the script is ignored.
+    "the htmx config should precede the htmx script" {
+      val page = createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(), null, "/dashboard") } }
+      val config = page.indexOf("""name="htmx-config"""")
+      val script = page.indexOf("htmx.min.js")
+      (config in 0..<script) shouldBe true
+    }
+
+    // The assets are cached for a year, so their URLs must change when htmx does; a fixed URL would leave a
+    // browser running its cached htmx against the next version's markup.
+    "the page should load its scripts from the versioned asset directory" {
+      val page = createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(), null, "/dashboard") } }
+      ProxyDashboardService.ASSET_DIR shouldContain ProxyDashboardService.HTMX_VERSION
+      page shouldContain """src="/dashboard/${ProxyDashboardService.ASSET_DIR}/htmx.min.js""""
+      page shouldContain """src="/dashboard/${ProxyDashboardService.ASSET_DIR}/hx-ws.min.js""""
     }
 
     "the stylesheet should define the disconnected treatment and hide it by default" {
@@ -440,5 +571,10 @@ class ProxyDashboardHtmlTest : StringSpec() {
       page shouldContain "body.ws-down .conn .conn-down { display:inline; }"
       page shouldContain "body.ws-down .beacon"
     }
+  }
+
+  private companion object {
+    // What the page script matches: the stamp inside the frame's first tag.
+    val VIEW_STAMP = Regex("""^<span[^>]*\s${ProxyDashboardHtml.VIEW_ATTR}="(\d+)"""")
   }
 }

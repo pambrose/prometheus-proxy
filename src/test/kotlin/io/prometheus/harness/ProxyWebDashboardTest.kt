@@ -49,6 +49,7 @@ import io.prometheus.common.TestPorts
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml
+import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.ASSET_DIR
 import io.prometheus.proxy.dashboard.ProxySnapshot
 import kotlinx.coroutines.withTimeout
 import kotlin.time.Duration.Companion.seconds
@@ -176,17 +177,31 @@ class ProxyWebDashboardTest : StringSpec() {
 
         // htmx itself must be served from the classpath, not a CDN: the fat JAR has to work with no
         // outbound network access, which is the normal condition for a proxy bridging a firewall.
-        client.get("$base/dashboard/assets/htmx.min.js").also {
+        client.get("$base/dashboard/$ASSET_DIR/htmx.min.js").also {
           it.status shouldBe HttpStatusCode.OK
           it.bodyAsText() shouldContain "htmx"
         }
+        // The WebSocket extension lives inside the htmx.org WebJar, under its own path.
+        client.get("$base/dashboard/$ASSET_DIR/hx-ws.min.js").also {
+          it.status shouldBe HttpStatusCode.OK
+          it.bodyAsText() shouldContain "registerExtension"
+        }
 
         // The asset route is an allowlist, not a classpath lookup, so anything off it is a plain 404.
-        client.get("$base/dashboard/assets/nope.js").status shouldBe HttpStatusCode.NotFound
+        client.get("$base/dashboard/$ASSET_DIR/nope.js").status shouldBe HttpStatusCode.NotFound
+        // So is the unversioned path the assets were served at before. The assets are cached for a year, and
+        // only a URL that changes with the version keeps a browser from running a stale htmx.
+        client.get("$base/dashboard/assets/htmx.min.js").status shouldBe HttpStatusCode.NotFound
 
         client.webSocket(socketUrl) {
-          // The immediate frame on connect, so a browser renders without waiting for a tick.
-          nextText() shouldContain "hx-swap-oob"
+          // The immediate frame on connect, so a browser renders without waiting for a tick. It carries only
+          // the status bar, since the session has not yet said which page it shows.
+          nextText().also {
+            it shouldContain "hx-swap-oob"
+            it shouldNotContain """id="${ProxyDashboardHtml.AGENT_LIST_ID}""""
+          }
+          // What the page sends as soon as its socket opens.
+          send(Frame.Text("""{"select":null,"layout":"AGENT"}"""))
 
           // Connect an agent only NOW, with the socket already open, so the frame below can only have
           // been produced by the push path.
@@ -233,12 +248,12 @@ class ProxyWebDashboardTest : StringSpec() {
         val full = client.get(url).bodyAsText()
         full shouldContain "<body"
         full shouldContain "id=\"agent-list\""
-        full shouldContain "ws-connect"
+        full shouldContain "hx-ws:connect"
 
         // htmx's row click sends HX-Request -> just the detail pane, no shell.
         val fragment = client.get(url) { header("HX-Request", "true") }.bodyAsText()
         fragment shouldNotContain "<body"
-        fragment shouldNotContain "ws-connect"
+        fragment shouldNotContain "hx-ws:connect"
         fragment shouldContain "id=\"detail\""
 
         // A history-restore fetch carries HX-Request but expects the full page back.
@@ -306,12 +321,20 @@ class ProxyWebDashboardTest : StringSpec() {
         val agentId = connectAgent().agentId
 
         client.webSocket(socketUrl) {
-          // Nothing is selected on connect, so the first frame marks no row current.
-          nextText() shouldNotContain SELECTED_ROW
+          // The first frame comes before the session has said what its page shows, so it carries only the
+          // status bar: no agent list to mark a row in, and no detail pane to blank.
+          nextText().also {
+            it shouldContain """id="${ProxyDashboardHtml.STATUS_ID}""""
+            it shouldNotContain """id="${ProxyDashboardHtml.AGENT_LIST_ID}""""
+            it shouldNotContain """id="${ProxyDashboardHtml.DETAIL_ID}""""
+          }
 
           // A row click sends this exact message; the selection must show up in a pushed agent list.
-          send(Frame.Text("""{"select":"$agentId","layout":"AGENT"}"""))
+          send(Frame.Text("""{"select":"$agentId","layout":"AGENT","seq":1}"""))
           awaitFrame(SELECTED_ROW)
+          // Every frame rendered from that message carries its count, which the page compares against the
+          // count it has sent to drop a frame rendered from an older message.
+          awaitFrame("""${ProxyDashboardHtml.VIEW_ATTR}="1"""")
 
           // Switching layout the same way changes which regions the push carries.
           send(Frame.Text("""{"layout":"PATH"}"""))
@@ -339,7 +362,7 @@ class ProxyWebDashboardTest : StringSpec() {
         // the routes registered under a root base actually answer, rather than passing because Ktor happens
         // to discard an empty path segment.
         client.get("$base/paths").status shouldBe HttpStatusCode.OK
-        client.get("$base/assets/htmx.min.js").status shouldBe HttpStatusCode.OK
+        client.get("$base/$ASSET_DIR/htmx.min.js").status shouldBe HttpStatusCode.OK
         client.get("$base/agents/1").bodyAsText() shouldContain "<body"
       }
     }
@@ -376,7 +399,8 @@ class ProxyWebDashboardTest : StringSpec() {
     // other spec runs without it.
     "with allowedHosts set, a request naming an unknown Host should be refused on every route" {
       withDashboard(HOST_HTTP_PORT, HOST_GRPC_PORT, HOST_DASHBOARD_PORT, configFile = HOSTS_CONFIG_FILE) {
-        listOf("/dashboard", "/dashboard/paths", "/dashboard/events", "/dashboard/assets/htmx.min.js").forEach { path ->
+        val routes = listOf("/dashboard", "/dashboard/paths", "/dashboard/events", "/dashboard/$ASSET_DIR/htmx.min.js")
+        routes.forEach { path ->
           statusWithHost(path, "evil.example.com:$HOST_DASHBOARD_PORT") shouldBe HttpStatusCode.Forbidden
         }
         listOf(ALLOWED_HOST, "localhost:$HOST_DASHBOARD_PORT", "$LOOPBACK_HOST:$HOST_DASHBOARD_PORT").forEach { host ->
@@ -490,7 +514,9 @@ class ProxyWebDashboardTest : StringSpec() {
         ],
       ) {
         // An asset, which collects nothing, to wait for the listener before the spy starts counting.
-        eventually(20.seconds) { client.get("$base/dashboard/assets/htmx.min.js").status shouldBe HttpStatusCode.OK }
+        eventually(20.seconds) {
+          client.get("$base/dashboard/$ASSET_DIR/htmx.min.js").status shouldBe HttpStatusCode.OK
+        }
 
         mockkObject(ProxySnapshot.Companion)
         try {

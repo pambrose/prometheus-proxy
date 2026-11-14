@@ -71,6 +71,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 import java.net.URI
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.concurrent.atomics.AtomicInt
@@ -130,16 +131,34 @@ internal class ProxyDashboardService(
   // the same URLs, so a rule applied in only one of the two layers is a rule that can disagree with itself.
   private val routeBase = basePath.trimEnd('/')
 
-  /** One connected browser: how to reach it, which layout it is on, and which agent it is viewing. */
+  /**
+   * What a session's page shows: its layout and the agent selected in it, from the browser's latest message, and that
+   * message's [seq], the count of messages the page had sent.
+   *
+   * One value rather than separate fields, so a push reads all of them at once. Read separately, a push racing the
+   * first message could pair its layout with the selection from before it, and render the detail pane with nothing
+   * selected -- the flash [Session.view] being null exists to prevent.
+   *
+   * Every frame is stamped with [seq], and the page drops a frame stamped below the count it has sent (see
+   * ProxyDashboardHtml.pushFragment). That closes the race between a row click and the push loop: a tick rendered from
+   * the previous selection can reach the browser after the click's own swap, and without the stamp it put the previous
+   * agent back in the detail pane until the next frame.
+   */
+  private class View(
+    val layout: DashboardLayout,
+    val selectedId: String?,
+    val seq: Long,
+  )
+
+  /** One connected browser: how to reach it, and what its page shows. */
   private class Session(
     val send: suspend (String) -> Unit,
   ) {
-    // Both written by this session's socket coroutine and read by the shared push loop, hence @Volatile.
+    // Written by this session's socket coroutine and read by the shared push loop, hence @Volatile. Null until the
+    // browser's first message says which page it shows, and until then a push carries only the status bar (see
+    // ProxyDashboardHtml.pushFragment). The browser sends that message as soon as the socket opens.
     @Volatile
-    var selectedId: String? = null
-
-    @Volatile
-    var layout: DashboardLayout = DashboardLayout.AGENT
+    var view: View? = null
   }
 
   private val sessions = ConcurrentHashMap.newKeySet<Session>()
@@ -199,7 +218,7 @@ internal class ProxyDashboardService(
         }
       },
     ) {
-      // Shares the proxy's own Ktor configuration: compression (htmx.min.js is ~51 KB), StatusPages so
+      // Shares the proxy's own Ktor configuration: compression (htmx.min.js is ~37 KB), StatusPages so
       // a failure returns a logged 500 rather than a bare one, and DefaultHeaders. Request logging is
       // off -- a dashboard polling its own socket would drown the proxy's logs.
       configureKtorServer(isLoggingEnabled = false)
@@ -215,7 +234,8 @@ internal class ProxyDashboardService(
         channels { outgoing = bounded(OUTGOING_FRAME_BUFFER, ChannelOverflow.CLOSE) }
       }
       install(CachingHeaders) {
-        // Webjar paths are version-pinned, so their content is immutable by construction.
+        // The served asset URLs carry the WebJar version (ASSET_DIR), so a URL's content never changes and a year-long
+        // max-age is safe. An unversioned URL would let a browser keep running a cached htmx after an upgrade.
         options { _, outgoing ->
           if (outgoing.contentType?.match(ContentType.Application.JavaScript) == true)
             CachingOptions(CacheControl.MaxAge(ASSET_MAX_AGE_SECS, visibility = CacheControl.Visibility.Public))
@@ -236,7 +256,7 @@ internal class ProxyDashboardService(
         // Explicit allowlist rather than staticResources: the webjar layout embeds a version in the
         // path, and an allowlist means there is no path-traversal surface and no dependence on how Ktor
         // interprets a basePackage. Two entries is not worth a generic static handler.
-        get("$routeBase/assets/{file}") {
+        get("$routeBase/$ASSET_DIR/{file}") {
           val bytes = assetBytes[call.parameters["file"]]
           if (bytes == null)
             call.respondText("Not found", ContentType.Text.Plain, HttpStatusCode.NotFound)
@@ -288,13 +308,13 @@ internal class ProxyDashboardService(
             val session = Session { text -> outgoing.send(Frame.Text(text)) }
             sessions.add(session)
             try {
-              // Render immediately rather than making the browser wait for the first event or tick.
+              // The status bar at once, rather than making the browser wait for the first event or tick. The
+              // regions that depend on what the page shows follow its first message, below.
               push(session, snapshots.recent())
               for (frame in incoming) {
                 if (frame is Frame.Text) {
                   val text = frame.readText()
-                  session.selectedId = parseSelection(text)
-                  session.layout = parseLayout(text)
+                  session.view = View(parseLayout(text), parseSelection(text), parseSeq(text))
                   push(session, snapshots.recent())
                 }
               }
@@ -362,7 +382,10 @@ internal class ProxyDashboardService(
     snapshot: ProxySnapshot,
   ) {
     runCatching {
-      session.send(ProxyDashboardHtml.pushFragment(snapshot, session.selectedId, routeBase, session.layout))
+      val view = session.view
+      session.send(
+        ProxyDashboardHtml.pushFragment(snapshot, view?.selectedId, routeBase, view?.layout, view?.seq ?: 0L),
+      )
     }
       .onFailure { logger.debug { "Dropping dashboard session: ${it.simpleClassName}" } }
   }
@@ -389,7 +412,7 @@ internal class ProxyDashboardService(
    * The static assets, read from the classpath once.
    *
    * Read once rather than per request: the port has no authentication, so a request loop would
-   * otherwise make the proxy inflate ~51 KB out of the JAR without bound.
+   * otherwise make the proxy inflate ~37 KB out of the JAR without bound.
    */
   private val assetBytes: Map<String, ByteArray> by lazy {
     ASSETS.mapNotNull { (name, resource) ->
@@ -469,16 +492,23 @@ internal class ProxyDashboardService(
     private val json = Json { ignoreUnknownKeys = true }
 
     // Generated from libs.versions.toml, since the WebJar classpath layout embeds the version. Reading
-    // them rather than restating them means a dependency bump cannot leave the asset route pointing at
+    // it rather than restating it means a dependency bump cannot leave the asset route pointing at
     // a path that is no longer on the classpath.
     internal const val HTMX_VERSION = BuildConfig.HTMX_VERSION
-    internal const val HTMX_WS_VERSION = BuildConfig.HTMX_WS_VERSION
+
+    /**
+     * Where the assets are served under the route base. It carries the WebJar version because the assets are cached
+     * for a year: with a fixed URL, a browser that cached one htmx would keep running it against the markup of the
+     * next. The route and the page's script tags both read it, so they cannot disagree.
+     */
+    internal const val ASSET_DIR = "assets/$HTMX_VERSION"
 
     /** The only classpath resources this server will serve, by request filename. */
     internal val ASSETS =
       mapOf(
         "htmx.min.js" to "META-INF/resources/webjars/htmx.org/$HTMX_VERSION/dist/htmx.min.js",
-        "ws.js" to "META-INF/resources/webjars/htmx-ext-ws/$HTMX_WS_VERSION/dist/ws.js",
+        // htmx 4 ships its WebSocket extension in the same WebJar.
+        "hx-ws.min.js" to "META-INF/resources/webjars/htmx.org/$HTMX_VERSION/dist/ext/hx-ws.min.js",
       )
 
     private const val ASSET_MAX_AGE_SECS = 31_536_000
@@ -525,6 +555,23 @@ internal class ProxyDashboardService(
           ?.content
           ?.let { name -> DashboardLayout.entries.firstOrNull { it.name == name } }
       }.getOrNull() ?: DashboardLayout.AGENT
+
+    /**
+     * Reads `{"seq": 12}`, the count of messages the page has sent, from a session message, defaulting to 0.
+     *
+     * Same contract as [parseSelection]: anything unexpected -- garbage, a missing field, a string, a fraction, or a
+     * negative number -- resolves to 0 rather than throwing inside the WebSocket loop. A page that predates the field
+     * sends none and ignores the stamp, so 0 changes nothing for it.
+     */
+    internal fun parseSeq(text: String): Long =
+      runCatching {
+        json.parseToJsonElement(text)
+          .jsonObject["seq"]
+          ?.jsonPrimitive
+          ?.takeUnless { it.isString }
+          ?.longOrNull
+          ?.takeIf { it >= 0 }
+      }.getOrNull() ?: 0L
 
     /**
      * Whether a WebSocket handshake carrying [origin] may proceed, given the request's [host] header.

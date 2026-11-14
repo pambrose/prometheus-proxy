@@ -45,12 +45,11 @@ netty = "4.2.20.Final"
 ktor = "3.6.1"
 
 # WebJars (htmx client assets, served from the classpath -- no CDN, works airgapped).
-# Pinned to htmx 2.x: the dashboard's WebSocket layer is built on htmx-ext-ws and the
-# htmx:wsOpen/wsClose/wsError events, neither of which survives the htmx 4 rewrite. Bumping the major
-# means porting ProxyDashboardHtml's connection indicator and reconnect backoff, not just the version.
-# ProxyDashboardService reads these through BuildConfig, so the served asset paths follow them.
-htmx = "2.0.11"
-htmxWs = "2.0.4"
+# htmx 4 ships its WebSocket extension in this same WebJar (dist/ext/hx-ws.min.js), so there is no separate
+# htmx-ext-ws dependency. ProxyDashboardService reads the version through BuildConfig, so both the classpath paths it
+# reads and the URLs it serves the assets at follow it. A major bump means porting ProxyDashboardHtml's page shell
+# and script (attributes, event names, the WebSocket config), not just the version.
+htmx = "4.0.1"
 
 # Metrics
 # The version common-utils 5.2.0 is built against. build.gradle.kts imports this BOM so the Prometheus modules
@@ -134,7 +133,6 @@ ktor-server-websockets = { module = "io.ktor:ktor-server-websockets", version.re
 
 # WebJars
 webjar-htmx = { module = "org.webjars.npm:htmx.org", version.ref = "htmx" }
-webjar-htmx-ws = { module = "org.webjars.npm:htmx-ext-ws", version.ref = "htmxWs" }
 
 # Metrics
 prometheus-metrics-bom = { module = "io.prometheus:prometheus-metrics-bom", version.ref = "prometheus" }
@@ -222,8 +220,7 @@ jackson = [
 ]
 
 webjars = [
-  "webjar-htmx",
-  "webjar-htmx-ws"
+  "webjar-htmx"
 ]
 
 # Not common-utils-service, which build.gradle.kts declares as api, since the public Agent and Proxy extend its
