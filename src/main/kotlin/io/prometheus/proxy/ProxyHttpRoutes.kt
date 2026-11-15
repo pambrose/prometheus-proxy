@@ -141,25 +141,24 @@ internal object ProxyHttpRoutes {
     queryParams: String,
   ): ResponseResults {
     // One response per agent. The path map never holds an empty agent list, and the caller has already answered
-    // invalid_agent_context for one (isNotValid() is true for it), so there is always at least one.
-    val headers = ScrapeHeaders.of(call.request)
-    val results: List<ScrapeRequestResponse> =
-      executeScrapeRequests(agentContextInfo, proxy, path, queryParams, headers)
+    // invalid_agent_context for one (isNotValid() is true for it), so there is always at least one. The scrape is
+    // Prometheus's, ScrapeSpec's default origin, so the agent counts it in its own scrape metrics too.
+    val scrape = ScrapeSpec(path, queryParams, ScrapeHeaders.of(call.request))
+    val results: List<ScrapeRequestResponse> = executeScrapeRequests(agentContextInfo, proxy, scrape)
     return ScrapeDispatch.mergeResponseResults(results)
   }
 
   private suspend fun executeScrapeRequests(
     agentContextInfo: ProxyPathManager.AgentContextInfo,
     proxy: Proxy,
-    path: String,
-    queryParams: String,
-    headers: ScrapeHeaders,
+    scrape: ScrapeSpec,
   ): List<ScrapeRequestResponse> {
+    val path = scrape.path
     val started = TimeSource.Monotonic.markNow()
     return try {
       // submitScrapeRequests answers in the agents' order, so zipping recovers which agent produced which response.
       // That keeps provenance at the one site that needs it, rather than as a field on the response.
-      ScrapeDispatch.submitScrapeRequests(agentContextInfo, proxy, path, queryParams, headers)
+      ScrapeDispatch.submitScrapeRequests(agentContextInfo, proxy, scrape)
           .also { responses ->
             agentContextInfo.agentContexts.zip(responses).forEach { (agentContext, response) ->
               recordScrapeOutcome(path, agentContext, response, proxy)

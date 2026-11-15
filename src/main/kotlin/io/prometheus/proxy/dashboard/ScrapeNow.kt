@@ -18,15 +18,17 @@ package io.prometheus.proxy.dashboard
 
 import io.ktor.http.HttpStatusCode
 import io.prometheus.Proxy
+import io.prometheus.common.KeyedThrottle
 import io.prometheus.proxy.ActivityKind
 import io.prometheus.proxy.ProxyPathManager
 import io.prometheus.proxy.ProxyPathManager.AgentContextInfo
 import io.prometheus.proxy.ScrapeDispatch
 import io.prometheus.proxy.ScrapeHeaders
+import io.prometheus.proxy.ScrapeOrigin
 import io.prometheus.proxy.ScrapeRequestResponse
+import io.prometheus.proxy.ScrapeSpec
 import kotlinx.coroutines.sync.Semaphore
 import kotlin.time.Duration.Companion.seconds
-import kotlin.time.TimeMark
 import kotlin.time.TimeSource
 
 /**
@@ -36,8 +38,9 @@ import kotlin.time.TimeSource
  *
  * A scrape-now leaves no trace in what the proxy reports: not in its scrape metrics, the path's History, or the agent's
  * recent scrapes, which stay a record of Prometheus's own scrapes. It goes in the activity feed instead, with the
- * address it came from, so a scrape no one at Prometheus asked for can be traced to a browser. The agent can't tell it
- * from Prometheus's, so the agent's own scrape metrics do count it.
+ * address it came from, so a scrape no one at Prometheus asked for can be traced to a browser. The agent is told the
+ * dashboard asked for it ([ScrapeOrigin.DASHBOARD]), so it counts it in `agent_dashboard_scrapes_total` rather than
+ * its own scrape metrics; an agent older than that field can't tell, and counts it as Prometheus's.
  *
  * Bounded, so clicks can't take the in-flight slots Prometheus's scrapes need: at most [MAX_CONCURRENT] run at once, a
  * path is scraped at most once every [COOLDOWN], and each agent is waited on for at most [TIMEOUT] and a grace, the
@@ -47,19 +50,16 @@ import kotlin.time.TimeSource
  */
 internal class ScrapeNow(
   private val proxy: Proxy,
-  private val timeSource: TimeSource = TimeSource.Monotonic,
+  timeSource: TimeSource = TimeSource.Monotonic,
   private val submit: suspend (AgentContextInfo, String) -> List<ScrapeRequestResponse> = { info, path ->
-    ScrapeDispatch.submitScrapeRequests(info, proxy, path, "", HEADERS, TIMEOUT + TIMEOUT_GRACE)
+    ScrapeDispatch.submitScrapeRequests(info, proxy, scrapeOf(path))
   },
 ) {
   private val permits = Semaphore(MAX_CONCURRENT)
 
-  // When each path was last scraped from the dashboard. Access-ordered and capped, so the least recently scraped path
-  // goes once there are more than MAX_REMEMBERED_PATHS; one that old is long past its cooldown. Guarded by its monitor.
-  private val lastScrapes =
-    object : LinkedHashMap<String, TimeMark>(INITIAL_CAPACITY, LOAD_FACTOR, true) {
-      override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, TimeMark>) = size > MAX_REMEMBERED_PATHS
-    }
+  // Which paths may be scraped from the dashboard now: each at most once every COOLDOWN. It remembers the
+  // MAX_REMEMBERED_PATHS paths asked about most recently; one asked about less recently is long past its cooldown.
+  private val cooldowns = KeyedThrottle<String>(COOLDOWN, MAX_REMEMBERED_PATHS, timeSource)
 
   /** What a scrape-now came to: a [Done] scrape, or a request [Refused] before any scrape, and why. */
   sealed interface Result {
@@ -104,7 +104,7 @@ internal class ScrapeNow(
   // Holds one of the permits, which it gives back.
   private suspend fun scrapeWithin(request: Request): Result =
     try {
-      if (claimCooldown(request.key)) {
+      if (cooldowns.tryAcquire(request.key)) {
         Done(ScrapeSummary.of(request.key, submit(request.info, request.key))).also { record(request, it.summary) }
       } else {
         val shown = ProxyPathManager.shownPath(request.key)
@@ -112,16 +112,6 @@ internal class ScrapeNow(
       }
     } finally {
       permits.release()
-    }
-
-  // Whether [key] may be scraped now, marking it scraped when it may.
-  private fun claimCooldown(key: String): Boolean =
-    synchronized(lastScrapes) {
-      val last = lastScrapes[key]
-      if (last != null && last.elapsedNow() < COOLDOWN)
-        return false
-      lastScrapes[key] = timeSource.markNow()
-      true
     }
 
   private fun record(
@@ -150,8 +140,11 @@ internal class ScrapeNow(
     // Text, whatever Prometheus negotiates, since the panel shows the body.
     private val HEADERS = ScrapeHeaders(accept = "text/plain", scrapeTimeout = TIMEOUT)
 
+    // The scrape a scrape-now of [path] makes: no query, and marked as the dashboard's, so the agent leaves it out of
+    // the scrape metrics it reports to Prometheus.
+    internal fun scrapeOf(path: String) =
+      ScrapeSpec(path, headers = HEADERS, timeout = TIMEOUT + TIMEOUT_GRACE, origin = ScrapeOrigin.DASHBOARD)
+
     private const val MAX_REMEMBERED_PATHS = 1000
-    private const val INITIAL_CAPACITY = 16
-    private const val LOAD_FACTOR = 0.75f
   }
 }

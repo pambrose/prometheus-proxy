@@ -47,7 +47,8 @@ import kotlin.time.Duration.Companion.seconds
  *
  * Records no scrape: no scrape metric, `/debug` line, scrape record, or event. The scrape route ([ProxyHttpRoutes])
  * records Prometheus's scrapes around [submitScrapeRequests], and the scrape-now records only in the activity feed, so
- * a scrape no one at Prometheus asked for leaves no trace in what the proxy reports.
+ * a scrape no one at Prometheus asked for leaves no trace in what the proxy reports. Each scrape tells the agent who
+ * asked for it ([ScrapeSpec.origin]), so the agent's own scrape metrics leave a scrape-now out too.
  *
  * @see ProxyHttpRoutes
  * @see AgentContext
@@ -128,39 +129,32 @@ internal object ScrapeDispatch {
   }
 
   /**
-   * Scrapes [path] from every agent of [agentContextInfo] at once, as [submitScrapeRequest] does one, and returns their
-   * responses in the agents' order. The scrape route and the dashboard's scrape-now both scrape through here, so a
-   * scrape-now gets what Prometheus would; neither records anything here.
+   * Sends [scrape] to every agent of [agentContextInfo] at once, as [submitScrapeRequest] does to one, and returns
+   * their responses in the agents' order. The scrape route and the dashboard's scrape-now both scrape through here, so
+   * a scrape-now gets what Prometheus would; neither records anything here.
    */
   internal suspend fun submitScrapeRequests(
     agentContextInfo: ProxyPathManager.AgentContextInfo,
     proxy: Proxy,
-    path: String,
-    queryParams: String,
-    headers: ScrapeHeaders,
-    timeout: Duration = proxy.proxyConfigVals.internal.scrapeRequestTimeoutSecs.seconds,
+    scrape: ScrapeSpec,
   ): List<ScrapeRequestResponse> =
     coroutineScope {
       agentContextInfo.agentContexts
-        .map { agentContext -> async { submitScrapeRequest(agentContext, proxy, path, queryParams, headers, timeout) } }
+        .map { agentContext -> async { submitScrapeRequest(agentContext, proxy, scrape) } }
         .awaitAll()
     }
 
   /**
-   * Sends one scrape of [path] to [agentContext] and waits for its result, as [headers] asks for it, for at most
-   * [timeout]. Records nothing: the scrape route records what Prometheus sees, and the dashboard's scrape-now records
-   * only in its activity feed.
+   * Sends [scrape] to [agentContext] and waits for its result, for at most the scrape's timeout. Records nothing: the
+   * scrape route records what Prometheus sees, and the dashboard's scrape-now records only in its activity feed.
    */
   internal suspend fun submitScrapeRequest(
     agentContext: AgentContext,
     proxy: Proxy,
-    path: String,
-    encodedQueryParams: String,
-    headers: ScrapeHeaders,
-    timeout: Duration = proxy.proxyConfigVals.internal.scrapeRequestTimeoutSecs.seconds,
+    scrape: ScrapeSpec,
   ): ScrapeRequestResponse {
-    val scrapeRequest = createScrapeRequest(agentContext, proxy, path, encodedQueryParams, headers)
-    val timeoutTime = timeout
+    val scrapeRequest = createScrapeRequest(agentContext, proxy, scrape)
+    val timeoutTime = scrape.timeout ?: proxy.proxyConfigVals.internal.scrapeRequestTimeoutSecs.seconds
 
     // A terminal response here means the agent disconnected or the request timed out.
     dispatchScrapeRequest(agentContext, proxy, scrapeRequest, timeoutTime)?.let { return it }
@@ -175,8 +169,8 @@ internal object ScrapeDispatch {
           fetchDuration = scrapeRequest.ageDuration(),
         )
 
-    val statusCode = HttpStatusCode.fromValue(scrapeResults.srStatusCode)
-    val contentType = parseContentType(scrapeResults.srContentType, path)
+    val statusCode = scrapeResults.httpStatus
+    val contentType = parseContentType(scrapeResults.srContentType, scrape.path)
 
     // Do not return content on error status codes.
     return if (!statusCode.isSuccess())
@@ -190,7 +184,7 @@ internal object ScrapeDispatch {
         fetchDuration = scrapeRequest.ageDuration(),
       )
     else
-      buildSuccessResponse(proxy, scrapeRequest, scrapeResults, statusCode, contentType)
+      buildSuccessResponse(proxy, scrapeRequest, scrapeResults, contentType)
   }
 
   // Registers the request, sends it to the agent, and awaits completion, cleaning up the request map, and any chunked
@@ -280,13 +274,16 @@ internal object ScrapeDispatch {
         }
       }
 
+  // The status the target answered the agent with.
+  private val ScrapeResults.httpStatus: HttpStatusCode
+    get() = HttpStatusCode.fromValue(srStatusCode)
+
   // Decodes (and size-guards) a successful scrape body and assembles the response, returning a terminal
   // 413/502 response instead when the gzipped payload is a zip bomb or is corrupt.
   private fun buildSuccessResponse(
     proxy: Proxy,
     scrapeRequest: ScrapeRequestWrapper,
     scrapeResults: ScrapeResults,
-    statusCode: HttpStatusCode,
     contentType: ContentType,
   ): ScrapeRequestResponse {
     val maxSize = proxy.proxyConfigVals.internal.maxUnzippedContentSizeMBytes * 1024L * 1024L
@@ -317,7 +314,7 @@ internal object ScrapeDispatch {
       }
 
     return ScrapeRequestResponse(
-      statusCode = statusCode,
+      statusCode = scrapeResults.httpStatus,
       contentType = contentType,
       contentText = decoded.text,
       failureReason = scrapeResults.srFailureReason,
@@ -353,32 +350,64 @@ internal object ScrapeDispatch {
   private fun createScrapeRequest(
     agentContext: AgentContext,
     proxy: Proxy,
-    path: String,
-    encodedQueryParams: String,
-    headers: ScrapeHeaders,
+    scrape: ScrapeSpec,
   ): ScrapeRequestWrapper {
+    val headers = scrape.headers
     val authHeader = headers.authorization
 
-    if (authHeader.isNotEmpty() &&
-      !proxy.options.isTlsEnabled &&
-      authHeaderWithoutTlsWarned.compareAndSet(expectedValue = false, newValue = true)
-    )
-      logger.warn {
-        "Authorization header is being forwarded to agent over a non-TLS gRPC connection. " +
-          "Credentials may be exposed in transit. Configure TLS (--cert, --key) to secure the proxy-agent channel."
-      }
+    if (authHeader.isNotEmpty() && !proxy.options.isTlsEnabled)
+      warnOfAuthHeaderWithoutTls()
 
     return ScrapeRequestWrapper(
       agentContext = agentContext,
-      pathVal = path,
-      encodedQueryParamsVal = encodedQueryParams,
+      pathVal = scrape.path,
+      encodedQueryParamsVal = scrape.queryParams,
       authHeaderVal = authHeader,
       acceptVal = headers.accept,
       debugEnabledVal = proxy.options.debugEnabled,
       scrapeTimeoutVal = headers.scrapeTimeout,
+      dashboardScrapeVal = scrape.origin == ScrapeOrigin.DASHBOARD,
     )
   }
+
+  // The Authorization header is forwarded to the agent, so over a gRPC connection without TLS the credentials may be
+  // exposed in transit. Said once, not on every scrape.
+  private fun warnOfAuthHeaderWithoutTls() {
+    if (authHeaderWithoutTlsWarned.compareAndSet(expectedValue = false, newValue = true))
+      logger.warn {
+        "Authorization header is being forwarded to agent over a non-TLS gRPC connection. " +
+          "Credentials may be exposed in transit. Configure TLS (--cert, --key) to secure the proxy-agent channel."
+      }
+  }
 }
+
+/**
+ * Who asked for a scrape, which the agent is told: Prometheus, through the scrape route, or someone at the dashboard,
+ * through its scrape-now. The agent counts a dashboard scrape apart from its own scrape metrics, so they stay a record
+ * of Prometheus's scrapes, as the proxy's do.
+ */
+internal enum class ScrapeOrigin {
+  PROMETHEUS,
+  DASHBOARD,
+}
+
+/**
+ * One scrape of a path, as [ScrapeDispatch.submitScrapeRequests] sends it to each of the path's agents.
+ *
+ * @param path the path, as the path map keys it
+ * @param queryParams the scrape's query parameters, already encoded, which the agent adds to the target's URL; empty
+ *   for none
+ * @param headers what the request that started the scrape asks for
+ * @param timeout how long the proxy waits for each agent's answer; null for `proxy.internal.scrapeRequestTimeoutSecs`
+ * @param origin who asked for the scrape, which the agent is told
+ */
+internal data class ScrapeSpec(
+  val path: String,
+  val queryParams: String = "",
+  val headers: ScrapeHeaders = ScrapeHeaders(),
+  val timeout: Duration? = null,
+  val origin: ScrapeOrigin = ScrapeOrigin.PROMETHEUS,
+)
 
 /**
  * What a scrape asks the agent for, from the request that started it: the Prometheus scrape's headers on the scrape

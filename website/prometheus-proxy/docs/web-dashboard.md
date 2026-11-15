@@ -195,8 +195,10 @@ next scrape, or for a curl from a machine that can reach the scrape port.
 
 A scrape from the dashboard isn't one of Prometheus's, so it leaves no trace in what the proxy reports: not in the
 `proxy_scrape_*` metrics, the path's History, or the agent's recent scrapes. The [Activity](#the-activity-layout) view
-records it instead, with the address of the browser that asked. The agent can't tell it from Prometheus's, so it does
-count in the agent's own `agent_scrape_*` metrics, and the target sees it as any other scrape.
+records it instead, with the address of the browser that asked. The proxy tells the agent the scrape came from the
+dashboard, so the agent counts it in `agent_dashboard_scrapes_total` rather than its own `agent_scrape_*` counters and
+latency histogram. An agent older than this feature can't tell, and counts it as one of Prometheus's. The target sees
+it as any other scrape.
 
 So clicks can't crowd out Prometheus, at most four dashboard scrapes run at once, a path is scraped from the dashboard
 at most once every five seconds, and each waits at most ten seconds for its target. Past either limit the panel says

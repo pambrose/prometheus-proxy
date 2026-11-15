@@ -1037,6 +1037,39 @@ class AgentHttpServiceTest : StringSpec() {
       }
     }
 
+    // A scrape the proxy's dashboard asked for is counted only in agent_dashboard_scrapes_total, however it ends, and
+    // isn't timed: the agent_scrape_* metrics count only Prometheus's scrapes, whose rates they report. Its results are
+    // marked, so the result the agent sends isn't counted either. The same scrape from Prometheus is counted and timed.
+    "fetchScrapeUrl should count a scrape the dashboard asked for only as a dashboard scrape, and not time it" {
+      val closedPort = ServerSocket(0).use { it.localPort }
+      val mockAgent = createMockAgentWithPaths()
+      every { mockAgent.isMetricsEnabled } returns true
+      val service = AgentHttpService(mockAgent)
+      mockAgent.pathManager.registerPath("metrics", "http://localhost:$closedPort/metrics")
+
+      val dashboardScrapes =
+        listOf("unknown", "metrics").map { pathVal ->
+          service.fetchScrapeUrl(
+            scrapeRequest {
+              path = pathVal
+              dashboardScrape = true
+            },
+          )
+        }
+
+      dashboardScrapes.map { it.scrapeCounterMsg to it.dashboardScrape } shouldBe
+        listOf("invalid_path" to true, "failure" to true)
+      verify(exactly = 2) { mockAgent.updateDashboardScrapeCounter() }
+      verify(exactly = 0) { mockAgent.updateScrapeCounter(any()) }
+      verify(exactly = 0) { mockAgent.startTimer() }
+
+      service.fetchScrapeUrl(scrapeRequest { path = "metrics" }).dashboardScrape.shouldBeFalse()
+      verify(exactly = 1) { mockAgent.updateScrapeCounter("failure") }
+      verify(exactly = 1) { mockAgent.startTimer() }
+      verify(exactly = 2) { mockAgent.updateDashboardScrapeCounter() }
+      service.close()
+    }
+
     // ==================== Timeout Tests ====================
 
     "fetchScrapeUrl should handle timeout gracefully" {

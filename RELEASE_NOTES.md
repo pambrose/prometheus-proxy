@@ -125,9 +125,13 @@ most 10,000 agents connected with one identity, which is every agent when agent 
 - **Scrape a path from the dashboard.** Each live path in the Paths view has a Scrape button: the proxy scrapes
   the path at once, through its agent, as Prometheus would, and shows the status, timing, size, and the start of
   what came back. It answers "does it work now?" without waiting for Prometheus or finding a machine that can reach
-  the scrape port. It doesn't count as one of Prometheus's scrapes, in the proxy's metrics or the path's History,
-  and the Activity view records who asked. Anyone who can reach the dashboard can use it, so it reads the start of
-  any target's output; `proxy.dashboard.scrapeNowEnabled = false` turns it off.
+  the scrape port. It doesn't count as one of Prometheus's scrapes, in the proxy's metrics, the agent's, or the path's
+  History, and the Activity view records who asked. The proxy tells the agent the dashboard asked, so the agent counts
+  it in a new counter, `agent_dashboard_scrapes_total`, rather than its `agent_scrape_*` metrics. Proxy and agent
+  needn't be upgraded together: an agent from an earlier release counts a dashboard scrape as one of Prometheus's, as
+  it did, and an agent from this release talking to an earlier proxy, which has no dashboard scrape, counts every
+  scrape as it always has. Anyone who can reach the dashboard can use it, so it reads the start of any target's
+  output; `proxy.dashboard.scrapeNowEnabled = false` turns it off.
 - **Gone paths keep their identity and target, and appear even if never scraped.** A path whose agent has gone
   now shows the identity it was registered as, so a search for a team's identity finds its gone paths too, and the
   target URL its agent scraped, with its copy button. A path whose agent left before Prometheus scraped it, which

@@ -184,19 +184,22 @@ pins, and no jar on the classpath carries a `logback.xml`, which would replace t
 - **AgentTest** — Agent main class lifecycle, heartbeats, reconnection, scrape request processing; when one
   connection task ends, the others are cancelled, so an idle read stream cannot hold a dead connection open; and a
   gRPC shutdown that throws (a MockK constructor mock) still stops the admin and metrics servers and closes the client
-  cache
+  cache; and a scrape result is counted under its type unless the proxy's dashboard asked for its scrape, which
+  `agent_dashboard_scrapes_total` counts instead
 - **AgentGrpcServiceTest** — gRPC service: scrape request/response streaming, heartbeats, registration, error handling,
   channel shutdown; with Zipkin on, the channel is built before `zipkinReporterService` is assigned, and every channel
   a reconnect builds traces through one `Tracing`; a repeated connect failure logs one WARN, compared by gRPC status
   code (or class), including against a port that accepts TCP but never answers HTTP/2; a connect the proxy refuses
-  with `RESOURCE_EXHAUSTED` is a failed connect, which the agent retries
+  with `RESOURCE_EXHAUSTED` is a failed connect, which the agent retries; each result is counted under its type
+  (non-gzipped, gzipped, chunked, or dropped) through `Agent.updateScrapeResultCounter`
 - **AgentGrpcStreamRetentionTest** — a chunk the proxy has read is no longer reachable while the agent's chunked
   stream stays open, checked with weak references after 2 MiB of 1 KiB chunks. Over Netty, gRPC's retry buffer
   commits past its 1 MiB per-RPC limit and lets go; over the in-process transport, which reports no message sizes,
   it never committed, so the agent kept every chunk until it builds an in-process channel without retry (November
   #43, found while fixing #41)
 - **AgentHttpServiceTest** — HTTP service: scraping endpoints, compression support, response handling, timeout behavior,
-  error cases
+  error cases; a scrape the proxy's dashboard asked for is counted only in `agent_dashboard_scrapes_total`, however it
+  ends, isn't timed, and has its results marked, while the same scrape from Prometheus is counted and timed
 - **AgentHttpServiceHeaderTest** — HTTP Accept header handling per-request (prevents stale headers in cached clients)
 - **AgentContextTest** — Agent context unique ID generation, validity, invalidation, ScrapeRequestWrapper management
 - **AgentContextManagerTest** — Context management: add/remove, concurrent access, chunked contexts
@@ -221,7 +224,8 @@ pins, and no jar on the classpath carries a `logback.xml`, which would replace t
 - **AgentTokenClientInterceptorTest** — gRPC client interceptor that attaches the agent token header to outbound calls
 - **EndpointFailoverTest** — Proxy endpoint rotation: a failed connect or a rejected registration moves to the next
   endpoint, a dropped registered connection returns to the primary, and whether each case reuses or rebuilds the channel
-- **AgentMetricsTest** — Prometheus metrics registration and gauge/counter updates
+- **AgentMetricsTest** — Prometheus metrics registration and gauge/counter updates; `agent_dashboard_scrapes_total`
+  counts under `launch_id` alone, and an agent's series goes when its metrics close while another agent's stays
 - **AgentBacklogDriftTest** — scrapeRequestBacklogSize drift when sendScrapeRequestAction fails
 - **HttpClientCacheTest** — HTTP client caching with TTL/idle eviction, keyed by auth credentials
 - **HttpClientCacheCancellationTest** — a scrape cancelled while the client cache is busy still releases its client,
@@ -275,9 +279,9 @@ Two support helpers also live here (not test classes themselves):
   ensureLeadingSlash, and the service discovery route on and off; the scrape port's `nosniff` and sandbox headers;
   `recordScrapeOutcome`'s `/debug` line, scrape record, and event, each only while its consumer is on, with a huge
   failure reason and URL cut to one line, and a scrape record carries the agent's id, name, and identity; a scrape of
-  `//path` or `///path`, which Ktor routes as `/path`, is sent to the agent, labeled in the per-path metrics, and shown
-  on `/debug` and the dashboard under the path's registered key, with its query unchanged, and the blitz, favicon, and
-  unknown-path answers see it with one slash; a blitz path configured with a leading slash is answered at `/path`
+  `//path` or `///path`, which Ktor routes as `/path`, is sent to the agent as Prometheus's scrape, labeled in the
+  per-path metrics, and shown on `/debug` and the dashboard under the path's registered key, with its query unchanged,
+  and the blitz, favicon, and unknown-path answers see it with one slash; a blitz path configured with a leading slash is answered at `/path`
   and `//path` and can't be registered; the route logs a client's path and query cut and escaped; and the
   defaults of `ResponseResults`, the route's answer
 - **ScrapeDispatchTest** — sending a scrape to a path's agents and merging their answers, which the scrape route and
@@ -286,7 +290,8 @@ Two support helpers also live here (not test classes themselves):
   an invalid response, a target's 404 or 500, invalid gzip, a zip bomb, and a success, plain or gzipped), the labels a
   target's status maps to, and a non-exposition content type served as text/plain; a huge agent content type is logged
   cut and escaped; a handler that times out or is cancelled drops its scrape's unfinished chunked transfer;
-  `submitScrapeRequests` answers in the agents' order and records nothing the proxy reports; an Authorization header
+  `submitScrapeRequests` answers in the agents' order and records nothing the proxy reports; a scrape request carries
+  its `ScrapeSpec`'s query, headers, and origin (Prometheus or the dashboard) to the agent; an Authorization header
   sent without TLS is warned about once; `ScrapeHeaders` reads Prometheus's scrape timeout; and `mergeResponseResults`
   and `mergeContentTexts` pick the merged status and content type, keep one `# EOF` at the end, and add no blank line
   for a failed agent
@@ -362,7 +367,8 @@ Two support helpers also live here (not test classes themselves):
   its chunked transfer races a header opening one (store, then re-check the scrape) and a chunk dropping it; once the
   handler has returned, no transfer is left for its scrape. Every operation runs in the parallel part, since a
   `finish()` before it or after it would hide the race
-- **ScrapeRequestWrapperTest** — Scrape request lifecycle, timeout behavior, response delivery
+- **ScrapeRequestWrapperTest** — Scrape request lifecycle, timeout behavior, response delivery, and whether the
+  request tells the agent the dashboard asked for the scrape
 - **AgentAuthManagerTest** — Per-agent auth: path-glob matching, token resolution (including the legacy allow-all
   token), `isEnabled`, and fail-fast rejection of empty, duplicate or colliding identities and of the reserved name
   `legacy-agent-token`, with or without the legacy token set (a name that only resembles it is accepted); read from a
@@ -408,7 +414,8 @@ Two support helpers also live here (not test classes themselves):
   of a surrogate pair with none; and control characters escaped but for line breaks, tabs, and carriage returns
 - **ScrapeNowTest** (`dashboard/`) — scrape-now with its scrape stood in for: the summary and the activity feed's line
   naming the browser; a path not registered, without an agent, or on a proxy not running refused; a path at most once a
-  cooldown; at most a few at once; and a failed scrape-now kept apart from a successful one in the feed
+  cooldown; at most a few at once; a failed scrape-now kept apart from a successful one in the feed; and a scrape-now
+  asking for text and marked as the dashboard's, so the agent leaves it out of its scrape metrics
 - **ScrapeNowHtmlTest** (`dashboard/`) — the scrape-now result panel: the status, path, facts, and start of the body; a
   body's families and samples shown only when it is in a text format, its content type either way; a cut body and an
   EOF named; a failure's reason without a body; the body escaped; a refusal and why; and sizes in bytes, KB, or MB
@@ -473,7 +480,8 @@ One support helper also lives here (not a test class itself):
 - **MetricBuildersTest** — the metric builders keep no exemplars and only classic histogram buckets; a
   `sampledGauge` value that throws is reported as NaN instead of failing the scrape; and `setToCurrentTime` sets
   Unix seconds, which the dashboards' `time() - *_start_time_seconds` panels assume
-- **ScrapeResultsTest** — ScrapeResults data class, error code mapping, timeout handling, protobuf conversion
+- **ScrapeResultsTest** — ScrapeResults data class, error code mapping, timeout handling, protobuf conversion, and
+  `asDashboardScrape`, which marks results without changing any other field or what is sent to the proxy
 - **SharedCollectorsTest** — the collectors every agent (or proxy) in a JVM shares register on the first acquire
   and unregister, with their series cleared, on the last release; register again after a registry clear; and,
   when the registry rejects one, leave none of them registered
@@ -649,8 +657,9 @@ mechanism that the standard suite cannot reach:
   the retired recent-scrapes queue held, an agent's identity in both layouts with the path search filtering from the URL
   and over the socket, a path the agent's identity may not register in the Activity view, from a GET and a push, and
   a session kept open through a push that fails to render, and a scrape-now against a stub target returning what it
-  had while the scrape metrics, the History, and the agent's Recent scrapes stay as Prometheus's scrape left them,
-  refused within its cooldown, for an unknown path, without htmx's header, or from another origin, and absent when off
+  had while the proxy's and the agent's scrape metrics, the History, and the agent's Recent scrapes stay as
+  Prometheus's scrape left them and the agent counts it in `agent_dashboard_scrapes_total`, refused within its
+  cooldown, for an unknown path, without htmx's header, or from another origin, and absent when off
 - **TlsMutualAuthRejectionTest** — the negative mutual-TLS path over a real Netty handshake, which the
   in-process TLS specs cannot perform (item 28 in `docs/archive/CODE_REVIEW_JUNE_2026.md`)
 

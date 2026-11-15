@@ -665,8 +665,10 @@ class ProxyHttpRoutesTest : StringSpec() {
         }
       }
 
-      // The query is passed on as before.
-      sent.await().map { it.path to it.encodedQueryParams } shouldBe spellings.map { "test-metrics" to "collect=a" }
+      // The query is passed on as before, and the agent is told the scrape is Prometheus's, which it counts.
+      val requests = sent.await()
+      requests.map { it.path to it.encodedQueryParams } shouldBe spellings.map { "test-metrics" to "collect=a" }
+      requests.map { it.dashboardScrape } shouldBe [false, false]
       verify(exactly = 2) { metrics.observeLatency("test-metrics", "success", any()) }
       verify(exactly = 2) { metrics.observeResponseBytes("test-metrics", ProxyMetrics.ENCODING_PLAIN, any()) }
       verify(exactly = 2) { proxy.logActivity(match { it.startsWith("/test-metrics - success - 200") }) }

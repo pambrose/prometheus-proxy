@@ -60,6 +60,7 @@ import io.kotest.matchers.string.shouldNotContain
 import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.common.agentOptions
 import io.prometheus.common.ConfigLoadException
+import io.prometheus.common.ScrapeResults
 import io.prometheus.common.TestPorts.AGENT_FAILED_SHUTDOWN_ADMIN_PORT
 import io.prometheus.common.TestPorts.AGENT_FAILED_SHUTDOWN_METRICS_PORT
 import io.prometheus.common.TestPorts.AGENT_FAILED_START_METRICS_PORT
@@ -435,6 +436,28 @@ class AgentTest : StringSpec() {
 
       // With metrics disabled (default), non-empty type hits the metrics guard and exits
       agent.updateScrapeCounter("success")
+    }
+
+    // ==================== Dashboard scrape counting Tests ====================
+
+    // The result of a scrape the proxy's dashboard asked for isn't counted in agent_scrape_result_count_total, which
+    // counts only Prometheus's scrapes; agent_dashboard_scrapes_total counts the scrape instead. The agent isn't
+    // started, so its metrics are built but serve no port.
+    "updateScrapeResultCounter should count a result under its type, but not a dashboard scrape's" {
+      val agent = createTestAgent("-Dagent.metrics.enabled=true")
+      try {
+        val results = ScrapeResults(srAgentId = "agent", srScrapeId = 1L)
+        agent.updateScrapeResultCounter(results, "non-gzipped")
+        agent.updateScrapeResultCounter(results.asDashboardScrape(), "non-gzipped")
+        agent.updateScrapeResultCounter(results.asDashboardScrape(), "dropped")
+        agent.updateDashboardScrapeCounter()
+
+        agent.metrics.scrapeResultCount.collect().dataPoints.associate { it.labels.get("type") to it.value } shouldBe
+          mapOf("non-gzipped" to 1.0)
+        agent.metrics.dashboardScrapeCount.labelValues(agent.launchId).get() shouldBe 1.0
+      } finally {
+        agent.metrics.close()
+      }
     }
 
     // ==================== markMsgSent Tests ====================
