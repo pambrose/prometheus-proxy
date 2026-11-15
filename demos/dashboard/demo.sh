@@ -9,11 +9,14 @@ COMPOSE=(docker compose -f "$DEMO_DIR/compose.yml")
 IMAGES=(prometheus-proxy-demo/proxy:local prometheus-proxy-demo/agent:local)
 AGENTS=(agent-east agent-west-1 agent-west-2)
 PROXIES=(proxy proxy-standby)
+# The services only a scenario starts, so down and status cover them too.
+ON_DEMAND=(--profile rogue --profile duplicate)
 
 DASHBOARD_URL="http://localhost:${DEMO_DASHBOARD_PORT:-8094}/dashboard"
 STANDBY_DASHBOARD_URL="http://localhost:${DEMO_STANDBY_DASHBOARD_PORT:-8095}/dashboard"
 GRAFANA_URL="http://localhost:${DEMO_GRAFANA_PORT:-3000}"
 PROMETHEUS_URL="http://localhost:${DEMO_PROMETHEUS_PORT:-9090}"
+ZIPKIN_URL="http://localhost:${DEMO_ZIPKIN_PORT:-9411}"
 PROXY_URL="http://localhost:${DEMO_PROXY_PORT:-8080}"
 
 bold() { printf '\033[1m%s\033[0m\n' "$*"; }
@@ -33,6 +36,7 @@ Lifecycle:
   status                   Show the containers, the simulated services' state, and the URLs
   open                     Open the dashboard, Grafana, and Prometheus in the browser
   logs [service]           Follow the logs (proxy, agent-east, demo-app, ...)
+  tour [act]               Walk through the presenter's script, pausing before each step (from act 1, or the one given)
 
 Scenarios:
   outage [service]         Make a service answer 500 (default: payments)
@@ -50,6 +54,8 @@ Scenarios:
   unfilter                 Restart it without the filter
   rogue-agent              Start a contractor's agent that tries to register payments_metrics
   rogue-agent-stop         Stop and remove it
+  duplicate-agent          Start a second copy of agent-east, without consolidated mode
+  duplicate-agent-stop     Remove it, and restart agent-east so it registers its paths again
 
 Services: orders, payments, inventory, catalog, shipping (and search, recommendations, notifications once discovered)
 Agents:   ${AGENTS[*]}
@@ -64,9 +70,11 @@ print_urls() {
   echo "  Standby proxy:    $STANDBY_DASHBOARD_URL"
   echo "  Grafana:          $GRAFANA_URL"
   echo "  Prometheus:       $PROMETHEUS_URL"
+  echo "  Zipkin:           $ZIPKIN_URL/zipkin/"
   echo "  Proxy discovery:  $PROXY_URL/discovery"
   echo
-  echo "Scenarios: $0 outage | slow | recover | discover | agent-freeze | proxy-down | filter | rogue-agent ...  (no arguments for help)"
+  echo "Scenarios: $0 outage | slow | discover | agent-freeze | proxy-down | filter | rogue-agent ...  (no arguments for help)"
+  echo "Or walk through them all: $0 tour"
 }
 
 # POSTs to (or, with GET, reads) the simulated services' control API, from inside the demo-app container, so the API
@@ -113,6 +121,16 @@ proxy_arg() {
   die "unknown proxy '$proxy'; expected one of: ${PROXIES[*]}"
 }
 
+# Prints the proxy's latest log line matching an extended regex, waiting up to 30s for one; prints nothing if none comes.
+proxy_said() {
+  local deadline=$((SECONDS + 30)) line=""
+  until [[ -n "$line" ]] || ((SECONDS >= deadline)); do
+    sleep 2
+    line="$("${COMPOSE[@]}" logs --no-log-prefix proxy 2>/dev/null | grep -E "$1" | tail -1 || true)"
+  done
+  [[ -z "$line" ]] || printf '\033[36mThe proxy logged:\033[0m %s\n' "$line"
+}
+
 # Restarts agent-east on a config file in config/: compose recreates the container when AGENT_CONFIG changes.
 restart_east() {
   DEMO_EAST_CONFIG="$1" "${COMPOSE[@]}" up --detach --no-deps agent-east
@@ -148,16 +166,17 @@ cmd_up() {
   wait_for "$STANDBY_DASHBOARD_URL" "The standby proxy's dashboard"
   wait_for "$PROMETHEUS_URL/-/ready" "Prometheus"
   wait_for "$GRAFANA_URL/api/health" "Grafana"
+  wait_for "$ZIPKIN_URL/health" "Zipkin"
   print_urls
 }
 
 cmd_down() {
-  # With agent-rogue's profile, so a rogue agent left running goes too.
-  "${COMPOSE[@]}" --profile rogue down --volumes --remove-orphans
+  # With the on-demand services' profiles, so one left running goes too.
+  "${COMPOSE[@]}" "${ON_DEMAND[@]}" down --volumes --remove-orphans
 }
 
 cmd_status() {
-  "${COMPOSE[@]}" --profile rogue ps
+  "${COMPOSE[@]}" "${ON_DEMAND[@]}" ps
   if [[ -n "$("${COMPOSE[@]}" ps --status running --quiet demo-app 2>/dev/null)" ]]; then
     echo
     bold "Simulated services"
@@ -181,6 +200,91 @@ cmd_open() {
   done
 }
 
+# The tour: the presenter's script (README.md), one act at a time, pausing for Enter before each step.
+TOUR_FROM=1
+
+# Waits for Enter. At the end of input, as when the tour is piped, it doesn't wait.
+pause() { read -r -p "$(printf '\033[33m> %s\033[0m ' "$1")" _ || true; }
+
+# Starts act [n], unless the tour began after it: prints its title and what to show, then waits. Fails for a skipped act.
+act() {
+  local n="$1" title="$2" line
+  shift 2
+  ((n >= TOUR_FROM)) || return 1
+  echo
+  bold "Act $n: $title"
+  for line in "$@"; do printf '  %s\n' "$line"; done
+  pause "Enter to continue"
+}
+
+# Runs a scenario once the presenter presses Enter. Its stdin is closed, so docker compose can't take the tour's input.
+step() {
+  pause "Enter to run: demo.sh $*"
+  "$DEMO_DIR/demo.sh" "$@" </dev/null
+}
+
+cmd_tour() {
+  TOUR_FROM="${1:-1}"
+  [[ "$TOUR_FROM" =~ ^([1-9]|1[0-2])$ ]] || die "the act to start from is a number from 1 to 12"
+  curl -fsS -o /dev/null "$DASHBOARD_URL" 2>/dev/null || die "the demo isn't running; start it with 'make demo-up'"
+
+  act 1 "The problem, and the shape of the answer" \
+    "Prometheus pulls metrics, but the services sit behind a firewall that allows no inbound connections." \
+    "The agents inside connect out to the proxy over gRPC, and Prometheus scrapes the proxy as if it were each" \
+    "service." || true
+  act 2 "The proxy dashboard" \
+    "Open $DASHBOARD_URL. Agents: three connected, each with its paths. Click agent-east for its" \
+    "registered paths and its scrapes as they happen; then switch to Paths: every path, its agent, its target," \
+    "and its last scrape. /shipping_metrics shows agent-west-2 +1: two agents serve it." || true
+  act 3 "Grafana" \
+    "Open $GRAFANA_URL: the health of every target through the proxy, and the business metrics collected" \
+    "from behind the firewall. Prometheus's config lists no targets: it asks the proxy." || true
+  if act 4 "A service fails, and recovers" "Payments starts answering 500, then inventory hangs."; then
+    step outage
+    step slow
+    step recover
+  fi
+  if act 5 "Redundancy" "agent-west-2 stops; its consolidated partner keeps shipping_metrics up."; then
+    step agent-stop
+    step agent-start
+  fi
+  if act 6 "New services appear without a restart" "Three services join through agent-east's discovery file."; then
+    step discover
+    step undiscover
+  fi
+  if act 7 "An agent that goes silent" "agent-west-2 freezes; the proxy evicts it after 30 seconds of silence."; then
+    step agent-freeze
+    step agent-thaw
+  fi
+  if act 8 "The proxy isn't a single point of failure" "The primary proxy stops; the agents fail over to the standby."; then
+    step proxy-down
+    step proxy-up
+    pause "Wait until prometheus-proxy is green in Grafana, then press Enter"
+    step proxy-down proxy-standby
+    step proxy-up proxy-standby
+  fi
+  if act 9 "Filtering before the WAN" "agent-east restarts with a filter that drops the catalog's price list."; then
+    step filter
+    step unfilter
+  fi
+  if act 10 "One proxy, several teams" "A contractor's agent reaches for payments_metrics, and is refused."; then
+    step rogue-agent
+    step rogue-agent-stop
+  fi
+  if act 11 "A misconfiguration, handled calmly" \
+    "A second copy of agent-east starts, without consolidated mode."; then
+    step duplicate-agent
+    step duplicate-agent-stop
+  fi
+  act 12 "Following a call through the firewall" \
+    "Open $ZIPKIN_URL/zipkin/ and run a query for agent-west-2, which act 5 restarted. Each trace is one gRPC call," \
+    "the agent's and the proxy's sides of it in one span: connectagent, registeragent, and a registerpath for" \
+    "each path; and, as a connection closes, its scrape streams, lasting as long as it did." || true
+
+  echo
+  bold "That's the tour. $0 tour <act> starts again from an act."
+}
+
 main() {
   local cmd="${1:-}"
   [[ $# -gt 0 ]] && shift
@@ -190,6 +294,7 @@ main() {
   status) cmd_status ;;
   open) cmd_open ;;
   logs) "${COMPOSE[@]}" logs --follow --tail 50 "$@" ;;
+  tour) cmd_tour "$@" ;;
   outage)
     local service="${1:-payments}"
     control POST "/control/$service/error" >/dev/null
@@ -298,17 +403,26 @@ main() {
     bold "agent-rogue started with the contractor identity's token, which covers only contractor_* paths"
     hint "it registers contractor_metrics, and the proxy refuses its payments_metrics; payments keeps coming" \
       "from agent-east. The dashboard lists agent-rogue with its one path. Stop it with: $0 rogue-agent-stop"
-    local deadline=$((SECONDS + 30)) refusal=""
-    until [[ -n "$refusal" ]] || ((SECONDS >= deadline)); do
-      sleep 2
-      refusal="$("${COMPOSE[@]}" logs --no-log-prefix proxy 2>/dev/null | grep "denied registration of path /payments_metrics" | tail -1 || true)"
-    done
-    [[ -z "$refusal" ]] || printf '\033[36mThe proxy logged:\033[0m %s\n' "$refusal"
+    proxy_said "denied registration of path /payments_metrics"
     ;;
   rogue-agent-stop)
     "${COMPOSE[@]}" --profile rogue rm --stop --force agent-rogue
     bold "agent-rogue stopped and removed"
     hint "it leaves the dashboard at once; its contractor_metrics path goes with it."
+    ;;
+  duplicate-agent)
+    "${COMPOSE[@]}" --profile duplicate up --detach --no-deps agent-east-copy
+    bold "agent-east-copy started: agent-east's config, deployed a second time without consolidated mode"
+    hint "the newer registration takes each path, so agent-east-copy serves agent-east's static paths, and" \
+      "agent-east stays connected with 0 paths on the dashboard. The two settle, rather than taking the paths from" \
+      "each other every few seconds. Undo with: $0 duplicate-agent-stop"
+    proxy_said "keeps its connection without paths"
+    ;;
+  duplicate-agent-stop)
+    "${COMPOSE[@]}" --profile duplicate rm --stop --force agent-east-copy
+    "${COMPOSE[@]}" restart agent-east
+    bold "agent-east-copy removed, and agent-east restarted"
+    hint "the paths went with the copy, and agent-east, which kept none, registers them again as it starts."
     ;;
   "" | help | -h | --help) usage ;;
   *)

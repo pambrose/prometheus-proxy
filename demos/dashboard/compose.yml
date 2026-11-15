@@ -6,7 +6,8 @@
 #
 # Every published port binds to 127.0.0.1 only: the dashboard has no authentication, Grafana lets anyone view it
 # without signing in, and its admin password is the default, which suits a demo on a laptop and nothing else. Set DEMO_DASHBOARD_PORT, DEMO_GRAFANA_PORT,
-# DEMO_PROMETHEUS_PORT, DEMO_PROXY_PORT, or DEMO_STANDBY_DASHBOARD_PORT to move a host port that's already taken.
+# DEMO_PROMETHEUS_PORT, DEMO_PROXY_PORT, DEMO_STANDBY_DASHBOARD_PORT, or DEMO_ZIPKIN_PORT to move a host port that's
+# already taken.
 
 name: prometheus-proxy-demo
 
@@ -23,6 +24,9 @@ x-agent: &agent
       condition: service_started
     demo-app:
       condition: service_healthy
+    # Started once Zipkin answers, so the spans of the agent's first connection and registrations aren't dropped.
+    zipkin:
+      condition: service_healthy
   restart: on-failure
 
 # The two proxies share one image, built from this checkout's proxy jar.
@@ -31,6 +35,9 @@ x-proxy: &proxy
   build:
     context: ../..
     dockerfile: etc/docker/proxy.Dockerfile
+  depends_on:
+    zipkin:
+      condition: service_healthy
   restart: on-failure
 
 services:
@@ -88,6 +95,15 @@ services:
     profiles: [rogue]
     volumes:
       - ./config/agent-rogue.conf:/app/agent.conf:ro
+
+  # agent-east's config deployed a second time by mistake; started only by `demo.sh duplicate-agent`.
+  agent-east-copy:
+    <<: *agent
+    hostname: east-dc-02
+    profiles: [duplicate]
+    volumes:
+      - ./config/agent-east.conf:/app/agent-east.conf:ro
+      - ./config/agent-duplicate.conf:/app/agent.conf:ro
 
   # The applications behind the firewall, simulated; it also writes agent-east's discovery file (app/demo_app.py).
   demo-app:
@@ -149,6 +165,15 @@ services:
       interval: 2s
       timeout: 2s
       retries: 60
+    restart: on-failure
+
+  # Every proxy and agent reports a span for each gRPC call between them, so a presenter can follow one through the
+  # firewall.
+  zipkin:
+    # The image's own healthcheck reports it healthy once it accepts spans.
+    image: openzipkin/zipkin:3.6.1@sha256:d17e856dcbba7ffeefbbfc252f89ab78a4ab6faed47e646d46daad78f91b5ee2
+    ports:
+      - "127.0.0.1:${DEMO_ZIPKIN_PORT:-9411}:9411"
     restart: on-failure
 
 volumes:
