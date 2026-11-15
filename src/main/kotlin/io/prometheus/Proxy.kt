@@ -44,6 +44,7 @@ import io.prometheus.proxy.AgentAuthManager
 import io.prometheus.proxy.AgentContext
 import io.prometheus.proxy.AgentContextCleanupService
 import io.prometheus.proxy.AgentContextManager
+import io.prometheus.proxy.PathHistory
 import io.prometheus.proxy.ProxyEvent
 import io.prometheus.proxy.ProxyEventBus
 import io.prometheus.proxy.ProxyFailure
@@ -68,6 +69,7 @@ import kotlinx.serialization.json.putJsonObject
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Prometheus Proxy that enables metrics scraping across firewalls.
@@ -201,6 +203,14 @@ class Proxy(
   // thread-safe, so every access takes its own monitor -- see recordScrape / recentScrapes.
   private val recentScrapes: EvictingQueue<ScrapeRecord> =
     EvictingQueue.create(proxyConfigVals.dashboard.recentScrapesQueueSize)
+
+  // The same records again, kept per path, so the dashboard's path table can show each path's recent history and keep
+  // a path whose agent has gone for a set time rather than only until 200 newer scrapes push it out of the queue.
+  internal val pathHistory =
+    PathHistory(
+      historySize = proxyConfigVals.dashboard.pathHistorySize,
+      departedRetention = proxyConfigVals.dashboard.departedPathRetentionSecs.seconds,
+    )
 
   // Declared before grpcService: createGrpcServer() reads isEnabled to decide whether to install the auth
   // interceptor. Eager construction fail-fasts on invalid proxy.auth config at startup.
@@ -551,6 +561,7 @@ class Proxy(
     synchronized(recentScrapes) {
       recentScrapes.add(record)
     }
+    pathHistory.record(record)
   }
 
   /**

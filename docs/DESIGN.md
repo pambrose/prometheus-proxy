@@ -281,12 +281,13 @@ dimmed.
 Three levels, each shipping as a **solid** and a **soft** companion.
 
 - **Live Green** (`ok` / `ok-soft`): A valid agent's LED, the healthy connection beacon, 2xx scrape
-  pills, and healthy status counters.
+  pills, a successful scrape's dot in a history strip, and healthy status counters.
 - **Drift Amber** (`warn` / `warn-soft`): Reserved for conditions that are true but not yet failures —
   the `failed over` tag, and internal counters approaching their threshold. Notably it has **no LED
   form**; there is no amber dot in the system.
 - **Fault Red** (`crit` / `crit-soft`): An invalid agent's LED, the disconnected beacon, non-2xx scrape
-  pills, the `gone` tag, departed table rows, and the "agent no longer connected" empty state.
+  pills, a failed scrape's dot in a history strip, the `gone` tag, departed table rows, and the "agent no
+  longer connected" empty state.
 
 ### Named Rules
 
@@ -537,7 +538,7 @@ room for.
 
 ### Path Table
 
-The signature component. Seven columns: Path, Agent(s), Target, Src, Last scrape, Status, Duration.
+The signature component. Eight columns: Path, Agent(s), Target, Src, Last scrape, Status, Duration, History.
 
 - **Header:** `surface-2`, sticky at `top: 0`, Label type, `line` bottom border.
 - **Cells:** `8px 15px`, `line-soft` divider, `white-space: nowrap`.
@@ -548,9 +549,29 @@ The signature component. Seven columns: Path, Agent(s), Target, Src, Last scrape
 - **Path:** a Copy Button follows a registered path and copies its proxy URL.
 - **Target:** a Copy Button follows the URL in the same cell, showing the target of the agent the row
   names. A row with no target shows the en dash and no button, since there is nothing to copy.
+- **History:** a History Strip, then the share of those scrapes that succeeded in `ink-3`, rounded down so a
+  path with any failure never reads 100%. A path not yet scraped shows the en dash.
 - **Departed row:** the path cell turns `crit` and a `gone` tag follows the agent name. The row stays
   in place — a path whose agent vanished is the single most important thing this table shows, and
   removing it is how the old interface hid exactly that case.
+
+### History Strip
+
+A path's recent scrapes, oldest on the left: one `5px` dot per scrape on a `7px` pitch, `ok` for a 2xx and
+`crit` for anything else. Round, because it reports state (see The Square-or-Circle Rule), and binary, like
+the Status LED.
+
+- **Drawing:** one `<i>` per run of like results, painting its dots as a repeating radial-gradient
+  background `n × 7px` wide, rather than one element per scrape. The table is pushed whole every refresh, so
+  a healthy path's strip stays one element however long it is.
+- **Length:** `proxy.dashboard.pathHistorySize` dots at most (default 20). A path with fewer scrapes has a
+  shorter strip; the strip never pads with empty slots.
+- **Accessibility:** one `role="img"` whose `aria-label` and `title` say "N of M recent scrapes succeeded",
+  the figure the percentage beside it rounds.
+- **Forced colors:** `forced-color-adjust: none` on the dots, since forced colors drop backgrounds and the
+  gradient with them.
+- **Never a pill.** The strip doesn't use the Status Pill's class: the demo's screenshot script counts
+  `pill ok` in the table against the number of paths.
 
 ### Copy Button
 

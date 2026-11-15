@@ -30,6 +30,7 @@ import kotlinx.html.button
 import kotlinx.html.caption
 import kotlinx.html.div
 import kotlinx.html.head
+import kotlinx.html.i
 import kotlinx.html.main
 import kotlinx.html.meta
 import kotlinx.html.nav
@@ -212,6 +213,7 @@ internal object ProxyDashboardHtml {
           th(scope = ThScope.col) { +"Last scrape" }
           th(scope = ThScope.col, classes = "num") { +"Status" }
           th(scope = ThScope.col, classes = "num") { +"Duration" }
+          th(scope = ThScope.col) { +"History" }
         }
       }
       tbody {
@@ -236,6 +238,7 @@ internal object ProxyDashboardHtml {
                 span(if (scrape.isSuccess) "pill ok" else "pill crit") { +"${scrape.statusCode}" }
             }
             td("num dim") { +(path.lastScrape?.let { "${it.durationMillis} ms" } ?: DASH) }
+            historyCell(path)
           }
         }
       }
@@ -267,6 +270,35 @@ internal object ProxyDashboardHtml {
           attributes[COPY_ATTR] = path.targetUrl
         }
       }
+    }
+
+  /**
+   * The path's recent scrapes as a row of dots, oldest on the left, then the share that succeeded. Where the Status
+   * column says how the last scrape went, this says whether that is news: a target that fails every scrape and one
+   * that failed once in twenty read the same in Status alone.
+   *
+   * Drawn as one element per run of like results, each painting a dot per scrape as a repeating background, rather
+   * than an element per scrape: the table is pushed whole every refresh, so a healthy path's strip stays one element.
+   * The strip is one image to assistive tech, labelled with the same count the percentage gives.
+   */
+  private fun TR.historyCell(path: PathView) =
+    td("dim") {
+      val total = path.history.size
+      if (total == 0) {
+        +DASH
+        return@td
+      }
+      val summary = "${path.historySucceeded} of $total recent scrapes succeeded"
+      span("hist") {
+        attributes["role"] = "img"
+        attributes["aria-label"] = summary
+        attributes["title"] = summary
+        path.historyRuns.forEach { (ok, count) ->
+          i(if (ok) "ok" else "crit") { attributes["style"] = "--n:$count" }
+        }
+      }
+      // Floored, so a path with any failure never reads 100%.
+      +"${path.historySucceeded * 100 / total}%"
     }
 
   /**
@@ -385,7 +417,7 @@ internal object ProxyDashboardHtml {
         if (agent.agentId == selectedId) attributes["aria-current"] = "true"
         span {
           span(if (agent.isValid) "led ok" else "led crit") {}
-          +agent.displayName()
+          +agentLabel(agent.agentName)
         }
         span("host") { +"${agent.remoteAddr} · ${agent.paths.size} paths" }
       }
@@ -420,7 +452,7 @@ internal object ProxyDashboardHtml {
     div("hero") {
       div("hero-title") {
         span(if (agent.isValid) "led ok" else "led crit") {}
-        +agent.displayName()
+        +agentLabel(agent.agentName)
         if (agent.consolidated) span("tag") { +"consolidated" }
       }
       agent.failoverPosition?.also { position ->
@@ -536,8 +568,6 @@ internal object ProxyDashboardHtml {
     snapshot: ProxySnapshot,
     selectedId: String?,
   ): String = createHTML().div("md-detail") { detailInner(snapshot, selectedId, oob = false) }
-
-  private fun AgentView.displayName(): String = agentLabel(agentName)
 
   /**
    * Identity arrives at `registerAgent`, which is strictly after the transport filter created the

@@ -656,6 +656,24 @@ class ProxyOptionsTest : StringSpec() {
       proxyOptions(["-Dproxy.dashboard.refreshIntervalSecs=0"]).dashboardEnabled.shouldBeFalse()
     }
 
+    // At 0 the path table would keep no scrape for any path, so it would lose its gone paths, the thing it is for.
+    "a non-positive dashboard pathHistorySize or departedPathRetentionSecs should be rejected when enabled" {
+      for (name in ["pathHistorySize", "departedPathRetentionSecs"]) {
+        shouldThrow<IllegalArgumentException> {
+          proxyOptions(["--dashboard", "-Dproxy.dashboard.$name=0"])
+        }.message shouldContain name
+      }
+    }
+
+    "the dashboard's path history settings should be logged at startup when the dashboard is enabled" {
+      captureLogs<ProxyOptions>(Level.INFO) { proxyOptions(["--dashboard"]) }
+        .map { it.formattedMessage }
+        .apply {
+          this shouldContainElement "dashboard.pathHistorySize: 20"
+          this shouldContainElement "dashboard.departedPathRetentionSecs: 3600"
+        }
+    }
+
     // Generous safety nets, not quotas: about 80x the largest path count the harness registers per agent, a path far
     // longer than a single URL segment needs, and more label JSON than a target's labels plausibly take.
     "path limits should default to 20000 paths per agent, 512-character paths, and 8 KiB of labels" {

@@ -42,7 +42,8 @@ internal object DashboardFixtures {
     lastScrape: ScrapeRecord? = null,
     isDeparted: Boolean = false,
     agentNames: List<String> = agentIds.map { "agent-$it" },
-  ) = PathView(path, agentIds, labels, targetUrl, pathSource, lastScrape, isDeparted, agentNames)
+    history: List<ScrapeRecord> = listOfNotNull(lastScrape),
+  ) = PathView(path, agentIds, labels, targetUrl, pathSource, lastScrape, isDeparted, agentNames, history)
 
   fun agentView(
     agentId: String = "1",

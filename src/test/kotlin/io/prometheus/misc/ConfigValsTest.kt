@@ -103,6 +103,8 @@ class ConfigValsTest : StringSpec() {
         path shouldBe "dashboard"
         refreshIntervalSecs shouldBe 2
         recentScrapesQueueSize shouldBe 200
+        pathHistorySize shouldBe 20
+        departedPathRetentionSecs shouldBe 3600
       }
     }
 

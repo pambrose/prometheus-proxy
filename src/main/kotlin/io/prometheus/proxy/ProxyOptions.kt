@@ -322,6 +322,10 @@ class ProxyOptions internal constructor(
       logger.requirePositive("dashboard.maxSessions", dashboard.maxSessions)
       // The push loop waits this long between pushes; a wait of 0 returns at once, spinning a thread.
       logger.requirePositive("dashboard.refreshIntervalSecs", dashboard.refreshIntervalSecs)
+      // At 0 no path would keep a scrape, so the path table would lose its history, its last scrapes, and every path
+      // whose agent has gone; a retention of 0 would drop a gone path at the next refresh.
+      logger.requirePositive("dashboard.pathHistorySize", dashboard.pathHistorySize)
+      logger.requirePositive("dashboard.departedPathRetentionSecs", dashboard.departedPathRetentionSecs)
       logger.info { "dashboardHost: $dashboardHost, dashboardPort: $dashboardPort, dashboardPath: $dashboardPath" }
       if (isWildcardAddress(dashboardHost)) {
         val rebindingHint =

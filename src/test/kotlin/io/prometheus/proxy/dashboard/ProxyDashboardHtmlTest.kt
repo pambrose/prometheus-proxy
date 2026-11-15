@@ -572,6 +572,48 @@ class ProxyDashboardHtmlTest : StringSpec() {
       html shouldContain "<main"
     }
 
+    // ==================== History column ====================
+
+    "the path table should have a History column" {
+      renderFullPage(DashboardLayout.PATH) shouldContain """<th scope="col">History</th>"""
+    }
+
+    "the history strip should draw a path's scrapes oldest first, one element per run of like results" {
+      // Newest first, as PathHistory hands them over: oldest to newest this is ok, ok, crit, crit, ok.
+      val history =
+        [200, 503, 503, 200, 200].map { DashboardFixtures.scrapeRecord(path = "app_metrics", statusCode = it) }
+      val served = DashboardFixtures.pathView(path = "app_metrics", lastScrape = history.first(), history = history)
+      val html = ProxyDashboardHtml.pushFragment(snapshot(paths = [served]), null, "/dashboard", DashboardLayout.PATH)
+
+      html shouldContain
+        """<i class="ok" style="--n:2"></i><i class="crit" style="--n:2"></i><i class="ok" style="--n:1"></i>"""
+      html shouldContain """role="img" aria-label="3 of 5 recent scrapes succeeded""""
+      html shouldContain "</span>60%"
+    }
+
+    // 2 of 3 is 66.7%: rounding would be fine here, but 199 of 200 would round to a misleading 100%.
+    "a path with any failed scrape should never read 100%" {
+      val history = [200, 200, 503].map { DashboardFixtures.scrapeRecord(path = "app_metrics", statusCode = it) }
+      val served = DashboardFixtures.pathView(path = "app_metrics", lastScrape = history.first(), history = history)
+      val html = ProxyDashboardHtml.pushFragment(snapshot(paths = [served]), null, "/dashboard", DashboardLayout.PATH)
+
+      html shouldContain "</span>66%"
+    }
+
+    // demos/dashboard/screenshots.sh decides the demo is healthy by counting `class="pill ok"` in the path table
+    // against the number of paths, so the strip must not draw with the status pill.
+    "the history strip should leave the status pill as the row's only pill" {
+      val history = List(5) { DashboardFixtures.scrapeRecord(path = "app_metrics") }
+      val served = DashboardFixtures.pathView(path = "app_metrics", lastScrape = history.first(), history = history)
+      val html = ProxyDashboardHtml.pushFragment(snapshot(paths = [served]), null, "/dashboard", DashboardLayout.PATH)
+
+      Regex("""class="pill ok"""").findAll(html).count() shouldBe 1
+    }
+
+    "the history strip should stay visible under forced colours" {
+      ProxyDashboardCss.CSS shouldContain ".hist i { forced-color-adjust:none; }"
+    }
+
     "the path table should be captioned and its headers scoped" {
       val html = renderFullPage(DashboardLayout.PATH)
 
