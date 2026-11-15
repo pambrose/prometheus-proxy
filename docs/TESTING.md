@@ -300,7 +300,9 @@ Two support helpers also live here (not test classes themselves):
 - **ChunkedContextTest** — Chunk accumulation, CRC32 checksum validation, header/chunk/trailer sequencing
 - **ProxyOptionsTest** — CLI parsing, defaults, validation, TLS settings, gRPC options; an `http.idleTimeoutSecs`
   of 0 or a negative other than -1, and a configured `sdTargetPrefix` with a query or fragment, fail startup with an
-  `Invalid configuration:` message naming the setting
+  `Invalid configuration:` message naming the setting; `proxy.dashboard.links` parsed from a config file in order and
+  logged by name, and a link the dashboard can't render failing startup the same way, naming the link, while the
+  dashboard is on
 - **SdTargetTest** — `sdTargetPrefix` parsing: host:port as is; an http(s) URL split into the target, `__scheme__`,
   and a path prefix; anything else, including a host:port with a query or fragment, refused, naming the setting
 - **ProxyDynamicConfigTest** — Dynamic config overrides via -D flags (maxZippedContentSizeMBytes,
@@ -361,8 +363,18 @@ Two support helpers also live here (not test classes themselves):
   floored percentage, no status pill, visible under forced colours), the Identity column (shown while agent auth is
   on, the legacy token as a shared token), the search (matching rows, the match count, the empty states, the form
   outside the pushed table, an escaped query, the script sending the URL's query, and tolerant parsing of it from the
-  socket), the Scrape button on a live path and the result panel outside the pushed table, the failing count and
-  the tab's title, and a departed row's identity and target, with en dashes for the scrape cells of one never scraped
+  socket), the Scrape button on a live path and the result panel outside the pushed table, the Links column (last,
+  present while links are configured, each link opening its path in a new tab with an `aria-label` naming the path
+  and the tool, a dash for a row with none, a departed row keeping the links that use no label, no extra status pill,
+  and the links' quiet style and focus ring), the failing count and the tab's title, and a departed row's identity
+  and target, with en dashes for the scrape cells of one never scraped
+- **PathLinkTest** (`dashboard/`) — a dashboard link's URL template (`proxy.dashboard.links`): `{path}`, `{agent}`,
+  `{identity}`, and `{label.<name>}` filled from the path, each value percent-encoded as a URL component and the
+  template's own encoding kept; a path's labels read tolerantly (`PathView.labelValues`), keeping string, number, and
+  boolean values; no link for a path lacking a value (a missing or empty label, no identity, the legacy
+  shared token, no serving agent), and a departed path keeping the links that use no label; and the refusals, naming
+  the link: a blank name, an unknown placeholder, a URL that isn't absolute http or https or doesn't parse, and a
+  placeholder in the URL's scheme or host
 - **ActivityHtmlTest** (`dashboard/`) — the Activity view: each line's time, event, agent, path, and detail, newest
   first; problems as crit tags and take-overs as warn tags; a burst's count and first paths; dashes for a line with no
   agent; the Identity column while agent auth is on; escaped values; the search, its match count, and its empty
@@ -399,8 +411,8 @@ One support helper also lives here (not a test class itself):
 
 - **DashboardFixtures** (`dashboard/`) — builders for the dashboard view models (`pathView`, `departedPathView`,
   `departure`, `agentView`, `scrapeRecord`, `activityEntry`, `snapshot`) with every field defaulted, and `renderFullPage` for the
-  page a GET serves, shared by `ProxyDashboardHtmlTest`, `PathTableHtmlTest`, `ActivityHtmlTest`, `RowFilterTest`, and
-  `ProxySnapshotTest`, so a test names only the field it is about
+  page a GET serves, shared by `ProxyDashboardHtmlTest`, `PathTableHtmlTest`, `PathLinkTest`, `ActivityHtmlTest`,
+  `RowFilterTest`, and `ProxySnapshotTest`, so a test names only the field it is about
 
 ### Unit Tests — Common (`common/`)
 
@@ -480,7 +492,8 @@ These support helpers also live here (not test classes themselves):
   `proxy.auth` and `agent.pathConfigs`, and a discovery targets file's `paths` entries against `agent.pathConfigs`'. The
   same goes for every `proxy.` or `agent.` key a test source under `src/test/kotlin` passes as a `-D` setting in a
   string literal, which HOCON ignores just the same; a key built at run time isn't seen
-- **ConfigValsTest** — ConfigVals auto-generated from HOCON schema (validates default values)
+- **ConfigValsTest** — ConfigVals auto-generated from HOCON schema (validates default values, including the empty
+  `proxy.dashboard.links`)
 - **DashboardMetricNamesTest** — the Grafana dashboards, the alert rules, the docs' PromQL, and the metric names
   on the website's pages all name series the proxy and agent expose (a counter only with its `_total` suffix); proxy
   panels filter by the job and instance pickers and agent panels by the agent picker; every counter is declared
@@ -597,7 +610,8 @@ mechanism that the standard suite cannot reach:
   collector that can't be reached; with it on for both and a stand-in collector, the agent's client spans and the
   proxy's server spans arrive under their configured service names, in one trace
 - **ProxyWebDashboardTest** — the dashboard service rather than the renderer: page, WebSocket push,
-  selection round-trip, both layouts, a root-mounted base path, with `allowedHosts` set a 403 on every route
+  selection round-trip, both layouts, a registered path's target, source, and the config's link built from its job
+  label, a root-mounted base path, with `allowedHosts` set a 403 on every route
   for a request naming an unknown host, page GETs and WebSocket messages rendering the cached snapshot while a
   topology change still shows on the next page, a gone path staying in the path layout after more scrapes than
   the recent-scrapes queue holds, an agent's identity in both layouts with the path search filtering from the URL

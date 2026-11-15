@@ -124,6 +124,7 @@ proxy {
     maxSessions = 50                // Concurrent WebSocket sessions; more are closed
     allowedOrigins = []             // Browser origins allowed besides the dashboard's own host
     allowedHosts = []               // Host names the dashboard answers to; empty turns the check off
+    links = []                      // Links from each path into other tools: { name = "...", url = "..." }
   }
 }
 ```
@@ -138,6 +139,11 @@ set in a config file rather than with `-D`.
 `allowedHosts` (for example `["dash.internal"]`) lists the names you reach the dashboard by, which stops DNS rebinding.
 It is off while empty, the default, and like `allowedOrigins` must be set in a config file. See
 [Exposure](../web-dashboard.md#exposure) for what both lists guard against.
+
+`links` gives each row of the Paths table links into other tools, each a `name` and a `url` template whose
+placeholders (`{path}`, `{agent}`, `{identity}`, and `{label.<name>}`) every row fills from its path, for example
+`{ name = "Grafana", url = "http://grafana:3000/d/proxy-targets?var-job={label.job}" }`. It too must be set in a config
+file, and a link the dashboard can't use stops the proxy at startup. See [Links](../web-dashboard.md#links).
 
 It runs on its own port rather than the admin port, partly because the admin port is a servlet container
 that cannot host WebSockets, and partly so the dashboard can be firewalled without also cutting off the

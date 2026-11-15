@@ -40,6 +40,7 @@ and how recent scrapes actually went.
         departedPathRetentionSecs = 3600  // How long a path whose agent has gone stays listed
         activityLogSize = 500       // Lines kept in the Activity view
         scrapeNowEnabled = true     // A Scrape button on each path; false removes it and its route
+        links = []                  // Links from each path into other tools; see Links below
       }
     }
     ```
@@ -160,6 +161,7 @@ Every path on one row, with the endpoint behind it and how its last scrape went:
 | **Src** | `cfg` for a statically configured path, `disc` for one from [dynamic discovery](configuration/agent.md#dynamic-target-discovery) |
 | **Last scrape / Status / Duration** | the most recent result for that path |
 | **History** | the path's recent scrapes as a row of dots, oldest on the left, green for a success and red for a failure, then the share that succeeded |
+| **Links** | with [links](#links) configured, the path's links into other tools, such as Prometheus and Grafana |
 
 Status says how the last scrape went; History says whether that is news. A target that fails every scrape and one that
 failed once in twenty look the same in Status alone. Each path keeps its last `pathHistorySize` scrapes (default 20)
@@ -195,6 +197,65 @@ count in the agent's own `agent_scrape_*` metrics, and the target sees it as any
 So clicks can't crowd out Prometheus, at most four dashboard scrapes run at once, a path is scraped from the dashboard
 at most once every five seconds, and each waits at most ten seconds for its target. Past either limit the panel says
 why instead. `proxy.dashboard.scrapeNowEnabled = false` removes the button and its route.
+
+### Links
+
+Each row can carry links that open its path in other tools: a Prometheus query, a Grafana dashboard, a runbook, a log
+search. Write each as a URL template in `proxy.dashboard.links`, and each row fills in its own path's values. With any
+link configured, the table ends with a **Links** column naming each row's links; each opens in a new tab.
+
+```hocon
+proxy {
+  dashboard {
+    links = [
+      { name = "Prometheus", url = "http://prometheus:9090/graph?g0.expr=up%7Bjob%3D%22{label.job}%22%7D" }
+      { name = "Grafana", url = "http://grafana:3000/d/proxy-targets?var-job={label.job}" }
+      { name = "Runbook", url = "https://runbooks.example.com/proxy/{path}" }
+    ]
+  }
+}
+```
+
+Being a list, `proxy.dashboard.links` must be set in a config file rather than with `-D`. A template can use:
+
+| Placeholder | Filled with |
+|---|---|
+| `{path}` | the path, without its leading slash |
+| `{agent}` | the name of the agent serving the path, as the Agent(s) column shows it |
+| `{identity}` | the path's [auth identity](security/index.md); there is none with agent auth off or with the legacy shared `agentToken` |
+| `{label.<name>}` | the value of the label `<name>` the agent registered the path with, such as `{label.job}` |
+
+The proxy can't build a Prometheus link on its own. Service discovery gives every path the same target, the proxy's
+scrape address, and Prometheus drops `__metrics_path__` once relabeling is done, so what tells one path's series from
+another's is up to your deployment: usually a label the agent registers the path with, such as a job of its own, which
+is what `{label.job}` reads. To identify series by path instead, keep the path as a label when Prometheus relabels the
+proxy's targets:
+
+```yaml
+scrape_configs:
+  - job_name: prometheus-proxy
+    http_sd_configs:
+      - url: http://proxy:8080/discovery
+    relabel_configs:
+      - source_labels: [__metrics_path__]
+        target_label: path
+```
+
+The label holds the path with its leading slash, after any path prefix in `proxy.service.discovery.targetPrefix`, so
+with no prefix a link can query `up{path="/{path}"}`, written into the URL as
+`http://prometheus:9090/graph?g0.expr=up%7Bpath%3D%22%2F{path}%22%7D`.
+
+- **A missing value drops the link.** A row whose path lacks a value a template needs, such as a label it didn't
+  register, gets no link for that template, never one with an empty slot. A row left with no link shows a dash.
+- **Paths whose agent has gone** keep no labels, so they keep only the links that use no `{label.…}`. They keep
+  their identity, so an `{identity}` link still works on them.
+- **Values are encoded.** Each value is percent-encoded as a URL component, so a label can't add a path, query, or
+  fragment of its own, and a slash in a path becomes `%2F`. Write the rest of the template already encoded: PromQL's
+  braces and quotes as `%7B`, `%7D`, and `%22`, as above. A label reads as the agent registered it, including one
+  [service discovery](service-discovery.md#labels) keeps out, such as a job with `reserveJobAndInstanceLabels` on.
+- **Checked at startup.** A link needs a name and an absolute `http` or `https` URL, and may use only the placeholders
+  above, and only after the URL's host, so a label can't choose the site a link opens. A brace that isn't part of a
+  placeholder fails too. Any of these stops the proxy at startup with a message naming the link.
 
 ### Paths whose agent has gone
 

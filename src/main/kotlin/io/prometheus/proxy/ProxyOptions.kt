@@ -45,6 +45,7 @@ import io.prometheus.common.EnvVars.SD_PATH
 import io.prometheus.common.EnvVars.SD_TARGET_PREFIX
 import io.prometheus.common.requireDefaultOrPositive
 import io.prometheus.common.requirePositive
+import io.prometheus.proxy.dashboard.PathLink
 
 // The primary constructor is internal so parseOnly stays out of the public API, and the public constructor below keeps
 // the (args) signature that code compiled against earlier releases calls.
@@ -159,6 +160,12 @@ class ProxyOptions internal constructor(
    */
   @Parameter(names = ["--dashboard_host"], description = "Operational dashboard listen address")
   var dashboardHost = ""
+    private set
+
+  // The Paths table's links into other tools, proxy.dashboard.links, parsed here so a template the dashboard can't use
+  // fails startup. A list, so it can only be set in a config file. Declared above the init block that assigns it, or
+  // its initializer would run after and empty it again.
+  internal var dashboardLinks: List<PathLink> = emptyList()
     private set
 
   /**
@@ -328,6 +335,8 @@ class ProxyOptions internal constructor(
       logger.requirePositive("dashboard.departedPathRetentionSecs", dashboard.departedPathRetentionSecs)
       // At 0 the activity feed would keep nothing, so a refused path or a bad token would again reach only the log.
       logger.requirePositive("dashboard.activityLogSize", dashboard.activityLogSize)
+      dashboardLinks = PathLink.parseAll(dashboard.links.map { PathLink.Entry(it.name, it.url) })
+      logger.info { "dashboard.links: ${dashboardLinks.joinToString { it.name }.ifEmpty { "(none)" }}" }
       logger.info { "dashboardHost: $dashboardHost, dashboardPort: $dashboardPort, dashboardPath: $dashboardPath" }
       if (isWildcardAddress(dashboardHost)) {
         val rebindingHint =

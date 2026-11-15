@@ -51,7 +51,8 @@ meeting.**
 
 If a port is already taken, move it, for example with `DEMO_GRAFANA_PORT=3001 make demo-up`. The variables are
 `DEMO_DASHBOARD_PORT`, `DEMO_STANDBY_DASHBOARD_PORT`, `DEMO_GRAFANA_PORT`, `DEMO_PROMETHEUS_PORT`, `DEMO_PROXY_PORT`,
-and `DEMO_ZIPKIN_PORT`. Every port binds to `127.0.0.1` only. The dashboard has no authentication and Grafana uses its
+and `DEMO_ZIPKIN_PORT`; the dashboard's links into Prometheus and Grafana keep the default ports
+(`config/proxy.conf`). Every port binds to `127.0.0.1` only. The dashboard has no authentication and Grafana uses its
 default admin password, so this setup is for a laptop, not for anything shared.
 
 ## What's running
@@ -92,6 +93,8 @@ Open the dashboard on the **Agents** view.
   proxy to Prometheus, so the proxy monitors itself with the same path as everything else.
 - Switch to **Paths**: every path, the agent serving it, its target, its last scrape, and its status.
   `/shipping_metrics` shows `agent-west-1 +1`: two agents serve it.
+- Each row ends with links to its job in Prometheus and in Grafana, filled from the label the agent registered the
+  path with; the Grafana one is a way into the next act.
 
 ### 3. Grafana
 

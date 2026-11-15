@@ -107,6 +107,7 @@ class ConfigValsTest : StringSpec() {
         departedPathRetentionSecs shouldBe 3600
         activityLogSize shouldBe 500
         scrapeNowEnabled.shouldBeTrue()
+        links.shouldBeEmpty()
       }
     }
 

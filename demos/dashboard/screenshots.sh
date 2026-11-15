@@ -32,10 +32,10 @@ WAIT_SECS="${WAIT_SECS:-150}"
 SKIP_UPTIME_WAIT="${SKIP_UPTIME_WAIT:-}"
 
 # The CSS width every screenshot is taken at, and the themes each is taken in. The Paths views are taken wider: with the
-# Identity and History columns, and the discovered services' longer paths and a gone row's tag, the table is about
-# 1,400px wide in the eviction scene, so at 1280 it scrolls and its right edge is cut off.
+# Identity, History, and Links columns, and the discovered services' longer paths and a gone row's tag, the table is
+# about 1,600px wide in the eviction scene, so at 1280 it scrolls and its right edge is cut off.
 WIDTH=1280
-PATHS_WIDTH=1440
+PATHS_WIDTH=1680
 THEMES=(dark light)
 
 # The page color below the dashboard's last row in a theme, which the Paths views are trimmed to (--bg in

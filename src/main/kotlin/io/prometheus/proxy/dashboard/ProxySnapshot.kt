@@ -17,10 +17,14 @@
 package io.prometheus.proxy.dashboard
 
 import io.prometheus.Proxy
+import io.prometheus.common.Utils.toJsonElement
 import io.prometheus.proxy.ActivityEntry
 import io.prometheus.proxy.AgentAuthManager.Companion.LEGACY_IDENTITY_NAME
 import io.prometheus.proxy.PathHistory
 import io.prometheus.proxy.ScrapeRecord
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlin.time.Duration
 import kotlin.time.Instant
 
@@ -73,8 +77,8 @@ internal data class PathView(
   /** How many agents beyond the first back this path, for the `+N` marker on a consolidated row. */
   val additionalAgents: Int get() = (agentIds.size - 1).coerceAtLeast(0)
 
-  // The two below are computed once per snapshot, not on every read: a snapshot is rendered for every session and page
-  // that shows it.
+  // The three below are computed once per snapshot, not on every read: a snapshot is rendered for every session and
+  // page that shows it.
 
   /** How many of [history]'s scrapes succeeded. */
   val historySucceeded: Int by lazy(LazyThreadSafetyMode.PUBLICATION) { history.count { it.isSuccess } }
@@ -93,6 +97,20 @@ internal data class PathView(
           add(record.isSuccess to 1)
       }
     }
+  }
+
+  /**
+   * The labels the path registered with, by name, which fill a dashboard link's `{label.<name>}` placeholders (see
+   * [PathLink]); none for a departed path, whose labels went with its entry. Read tolerantly, since an agent supplied
+   * them: [labels] that aren't a JSON object give none, and a label whose value is null, an object, or an array is left
+   * out. Parsed only when a link uses a label.
+   */
+  val labelValues: Map<String, String> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+    val parsed = runCatching { labels.toJsonElement() }.getOrNull() as? JsonObject
+    parsed.orEmpty()
+      .mapNotNull { (name, value) ->
+        (value as? JsonPrimitive)?.takeUnless { it is JsonNull }?.let { name to it.content }
+      }.toMap()
   }
 }
 
@@ -181,6 +199,8 @@ internal data class ProxySnapshot(
   val activity: List<ActivityEntry> = emptyList(),
   // Whether each live path has a Scrape button, proxy.dashboard.scrapeNowEnabled.
   val scrapeNowEnabled: Boolean = false,
+  // Each path's links into other tools, proxy.dashboard.links, parsed at startup; none hides the Links column.
+  val links: List<PathLink> = emptyList(),
 ) {
   fun agent(agentId: String): AgentView? = agents.firstOrNull { it.agentId == agentId }
 
@@ -348,6 +368,7 @@ internal data class ProxySnapshot(
         authEnabled = proxy.agentAuthManager.isEnabled,
         activity = proxy.activityLog?.entries().orEmpty(),
         scrapeNowEnabled = proxy.proxyConfigVals.dashboard.scrapeNowEnabled,
+        links = proxy.options.dashboardLinks,
       )
     }
   }

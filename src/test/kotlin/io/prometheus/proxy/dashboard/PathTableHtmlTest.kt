@@ -27,9 +27,10 @@ import io.prometheus.proxy.dashboard.DashboardFixtures.renderFullPage
 import io.prometheus.proxy.dashboard.DashboardFixtures.scrapeRecord
 
 /**
- * The Paths view's table and search, [PathTableHtml]: the History column, the Identity column, the search, its empty
- * states, and how the socket carries it, and the problem counts the status bar and title take from the paths. The rest
- * of the page, and the table's long-standing columns, are in [ProxyDashboardHtmlTest].
+ * The Paths view's table and search, [PathTableHtml]: the History column, the Identity column, the Links column, the
+ * search, its empty states, and how the socket carries it, and the problem counts the status bar and title take from
+ * the paths. The rest of the page, and the table's long-standing columns, are in [ProxyDashboardHtmlTest]; how a link's
+ * template is filled is in [PathLinkTest].
  */
 class PathTableHtmlTest : StringSpec() {
   private fun path(name: String) = DashboardFixtures.pathView(path = name)
@@ -38,7 +39,13 @@ class PathTableHtmlTest : StringSpec() {
     paths: List<PathView> = [path("app_metrics")],
     authEnabled: Boolean = false,
     scrapeNowEnabled: Boolean = false,
-  ) = DashboardFixtures.snapshot(paths = paths, authEnabled = authEnabled, scrapeNowEnabled = scrapeNowEnabled)
+    links: List<PathLink> = emptyList(),
+  ) = DashboardFixtures.snapshot(
+    paths = paths,
+    authEnabled = authEnabled,
+    scrapeNowEnabled = scrapeNowEnabled,
+    links = links,
+  )
 
   // The Paths view's push for these paths, as a session with this filter receives it.
   private fun pathPush(
@@ -46,10 +53,27 @@ class PathTableHtmlTest : StringSpec() {
     filter: RowFilter = RowFilter.NONE,
     authEnabled: Boolean = false,
     scrapeNowEnabled: Boolean = false,
+    links: List<PathLink> = emptyList(),
   ): String {
-    val snapshot = snapshot(paths, authEnabled, scrapeNowEnabled)
+    val snapshot = snapshot(paths, authEnabled, scrapeNowEnabled, links)
     return ProxyDashboardHtml.pushFragment(snapshot, null, "/dashboard", DashboardLayout.PATH, 0, filter)
   }
+
+  // The demo's two links, one into Prometheus and one into Grafana, each for the path's job label, and a runbook that
+  // needs only the path.
+  private val demoLinks =
+    PathLink.parseAll(
+      [
+        PathLink.Entry("Prometheus", "http://localhost:9090/graph?g0.expr=up%7Bjob%3D%22{label.job}%22%7D"),
+        PathLink.Entry("Grafana", "http://localhost:3000/d/prometheus-proxy-demo?orgId=1&var-job={label.job}"),
+      ],
+    )
+  private val runbook = PathLink.parseAll([PathLink.Entry("Runbook", "https://runbooks.example.com/{path}")])
+
+  private fun pathWithJob(
+    name: String,
+    job: String,
+  ) = path(name).copy(labels = """{"job": "$job"}""")
 
   // The push for one path whose history has these status codes, newest first, as PathHistory hands them over.
   private fun historyTable(vararg codes: Int) =
@@ -159,6 +183,44 @@ class PathTableHtmlTest : StringSpec() {
 
       html shouldContain "shared token"
       html shouldNotContain "legacy-agent-token"
+    }
+
+    // ==================== Links ====================
+
+    // Last, so the columns read to find a row keep their places with links on or off; and from the config, not the
+    // rows, as the Identity column is, so it stays while no row has a link.
+    "the path table should end with a Links column while links are configured, though no row has one" {
+      pathPush(links = demoLinks) shouldContain Regex("""History</th>\s*<th scope="col">Links</th>\s*</tr>""")
+      pathPush([departedPathView()], links = demoLinks) shouldContain """<th scope="col">Links</th>"""
+      pathPush() shouldNotContain "Links</th>"
+    }
+
+    // demos/dashboard/screenshots.sh counts `class="pill ok"` in the path table against the number of paths.
+    "each link should open its path in a new tab, named for a screen reader, and add no status pill" {
+      val ok = pathWithJob("orders_metrics", "orders").copy(history = [scrapeRecord(statusCode = 200)])
+      val html = pathPush([ok], links = demoLinks)
+
+      html shouldContain
+        """<td class="dim links"><a href="http://localhost:9090/graph?g0.expr=up%7Bjob%3D%22orders%22%7D" """ +
+        """target="_blank" rel="noopener noreferrer" aria-label="Open /orders_metrics in Prometheus">Prometheus</a>""" +
+        """ · <a href="http://localhost:3000/d/prometheus-proxy-demo?orgId=1&amp;var-job=orders" target="_blank" """ +
+        """rel="noopener noreferrer" aria-label="Open /orders_metrics in Grafana">Grafana</a></td>"""
+      Regex("""class="pill ok"""").findAll(html).count() shouldBe 1
+    }
+
+    // A link with an empty slot would open the tool somewhere other than the path; the dash says there is none.
+    "a row lacking a value every link needs should show a dash, and a departed row keep the links that use no label" {
+      val html = pathPush([path("app_metrics"), departedPathView("orphan_metrics")], links = demoLinks + runbook)
+
+      html shouldContain """<td class="dim links"><a href="https://runbooks.example.com/app_metrics" target="_blank" """
+      html shouldContain """aria-label="Open /orphan_metrics in Runbook">Runbook</a></td>"""
+      html shouldNotContain "in Prometheus"
+      pathPush(links = demoLinks) shouldContain """<td class="dim links">${ProxyDashboardHtml.DASH}</td>"""
+    }
+
+    "the links should be quiet, and take focus as the nav does" {
+      ProxyDashboardCss.CSS shouldContain ".ptable td.links a { color:inherit;"
+      ProxyDashboardCss.CSS shouldContain ".ptable td.links a:focus-visible {"
     }
 
     // ==================== Search and filter ====================
