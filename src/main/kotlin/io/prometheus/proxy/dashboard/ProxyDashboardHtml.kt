@@ -20,6 +20,7 @@ import kotlinx.html.DIV
 import kotlinx.html.FlowContent
 import kotlinx.html.FlowOrPhrasingContent
 import kotlinx.html.FormMethod
+import io.prometheus.proxy.ScrapeRecord
 import io.prometheus.proxy.dashboard.ActivityHtml.activityTable
 import io.prometheus.proxy.dashboard.ActivityHtml.renderActivity
 import io.prometheus.proxy.dashboard.PathTableHtml.pathTable
@@ -129,6 +130,14 @@ internal object ProxyDashboardHtml {
   // No region id starts with it, so an agent id, which an agent behind nginx names itself, can't make a row's id
   // equal one.
   const val AGENT_ROW_ID_PREFIX = "agent-row-"
+
+  // What demos/dashboard/screenshots.sh needs about an agent, as data: on each agent-list row, its id, its name as the
+  // row shows it, and its path count, and on its detail's Recent scrapes header, their count. The script matched the
+  // row's text before, and every change to its look, a tag, an LED, or a word, broke a regex.
+  const val AGENT_ATTR = "data-agent"
+  const val AGENT_NAME_ATTR = "data-agent-name"
+  const val PATH_COUNT_ATTR = "data-path-count"
+  const val SCRAPE_COUNT_ATTR = "data-scrape-count"
 
   /** The full page. Only served on a real navigation; every later update arrives over the socket. */
   fun HTML.renderPage(
@@ -364,7 +373,9 @@ internal object ProxyDashboardHtml {
         // second #detail inside it (the fragment IS the element, not its inner content).
         attributes["hx-swap"] = "outerHTML"
         attributes["hx-push-url"] = "true"
-        attributes["data-agent"] = agent.agentId
+        attributes[AGENT_ATTR] = agent.agentId
+        attributes[AGENT_NAME_ATTR] = agentLabel(agent.agentName)
+        attributes[PATH_COUNT_ATTR] = "${agent.paths.size}"
         if (agent.agentId == selectedId) attributes["aria-current"] = "true"
         span {
           span(if (agent.isValid) "led ok" else "led crit") {}
@@ -445,8 +456,14 @@ internal object ProxyDashboardHtml {
       }
     }
 
-    val scrapes = snapshot.scrapes.filter { it.agentId == agent.agentId }
+    recentScrapes(snapshot.scrapes.filter { it.agentId == agent.agentId })
+  }
+
+  // The detail's Recent scrapes: a header carrying their count as data too, for demos/dashboard/screenshots.sh, then a
+  // row for each of the latest MAX_DETAIL_SCRAPES.
+  private fun DIV.recentScrapes(scrapes: List<ScrapeRecord>) {
     div("section") {
+      attributes[SCRAPE_COUNT_ATTR] = "${scrapes.size}"
       span { +"Recent scrapes" }
       span { +"${scrapes.size}" }
     }

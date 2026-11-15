@@ -7,6 +7,13 @@
 #
 # `make demo-screenshots` builds the demo from this checkout and starts it first, so the screenshots show the dashboard
 # as it is in the code. Needs Chrome or Chromium (set CHROME to choose one), ImageMagick 7 (`magick`), and `cwebp`.
+#
+# Two settings, for running it again and again while checking a change; the defaults take the site's screenshots:
+#   WAIT_SECS=<n>       how long each wait for the demo to reach a scene's state may take before the script fails
+#                       (default 150)
+#   SKIP_UPTIME_WAIT=1  skip the wait of up to a minute, after a fresh start, for the agents' uptimes to read in
+#                       minutes; the shots then show uptimes in seconds, so they're for checking a change, not for the
+#                       site
 set -euo pipefail
 
 DEMO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -19,6 +26,10 @@ STANDBY_DASHBOARD_URL="http://localhost:${DEMO_STANDBY_DASHBOARD_PORT:-8095}/das
 GRAFANA_URL="http://localhost:${DEMO_GRAFANA_PORT:-3000}"
 PROMETHEUS_URL="http://localhost:${DEMO_PROMETHEUS_PORT:-9090}"
 ZIPKIN_URL="http://localhost:${DEMO_ZIPKIN_PORT:-9411}"
+
+# The settings in the header. SKIP_UPTIME_WAIT takes exactly 1; any other value leaves the wait in.
+WAIT_SECS="${WAIT_SECS:-150}"
+SKIP_UPTIME_WAIT="${SKIP_UPTIME_WAIT:-}"
 
 # The CSS width every screenshot is taken at, and the themes each is taken in. The Paths views are taken wider: with the
 # Identity and History columns, and the discovered services' longer paths and a gone row's tag, the table is about
@@ -53,6 +64,7 @@ find_chrome() {
   die "Chrome or Chromium not found; set CHROME to its path"
 }
 
+[[ "$WAIT_SECS" =~ ^[1-9][0-9]*$ ]] || die "WAIT_SECS must be a whole number of seconds above 0, not '$WAIT_SECS'"
 CHROME_BIN="$(find_chrome)"
 command -v magick >/dev/null 2>&1 || die "ImageMagick 7 ('magick') is not on the PATH"
 command -v cwebp >/dev/null 2>&1 || die "cwebp is not on the PATH"
@@ -74,12 +86,15 @@ restore() {
 }
 trap restore EXIT
 
-# Waits until a command succeeds, checking every 2 seconds, or fails with what it was waiting for.
+# Waits until a command succeeds, checking every 2 seconds, or fails after WAIT_SECS with what it was waiting for. A
+# check may set UNMET to what it last found missing, which the failure adds.
 wait_until() {
-  local what="$1" deadline=$((SECONDS + 150))
+  local what="$1" deadline=$((SECONDS + WAIT_SECS))
   shift
+  UNMET=""
   until "$@"; do
-    ((SECONDS < deadline)) || die "timed out waiting for $what"
+    ((SECONDS < deadline)) ||
+      die "timed out after ${WAIT_SECS}s waiting for $what${UNMET:+: $UNMET}; WAIT_SECS raises the limit"
     sleep 2
   done
 }
@@ -89,24 +104,37 @@ page() { curl -fsS "$DASHBOARD_URL$1"; }
 # Counts the matches of an extended regex in a dashboard page.
 count_in() { page "$1" | grep -Eo "$2" | wc -l | tr -d ' '; }
 
-# The id of the connected agent with this name, from the agent list.
-agent_id() {
-  curl -fsS "${2:-$DASHBOARD_URL}" | grep -Eo "data-agent=\"[^\"]*\"[^>]*><span><span class=\"led [a-z]+\"></span>$1<" |
-    sed -E 's/^data-agent="([^"]*)".*/\1/' | head -1
+# The agent list's row for the connected agent with this name, at a dashboard's base URL (DASHBOARD_URL unless given):
+# its start tag, or nothing. The row carries the agent's id, name, and path count as data attributes (agentListInner in
+# ProxyDashboardHtml.kt), which the checks below read: they matched the row's text before, and every change to how the
+# row looks, a tag, an LED, or a word, broke one. The name's closing quote keeps agent-east from matching
+# agent-east-copy, and the proxy escapes every value, so no ">" ends a tag early.
+agent_row() {
+  local html
+  html="$(curl -fsS "${2:-$DASHBOARD_URL}" 2>/dev/null)" || return 0
+  grep -Eo '<[a-z]+ [^>]*data-agent-name="[^"]*"[^>]*>' <<<"$html" | grep -F "data-agent-name=\"$1\"" | head -1 || true
 }
 
+# An attribute's value in a start tag, or nothing.
+attr() { sed -nE "s/.* $1=\"([^\"]*)\".*/\1/p" <<<"$2"; }
+
+# The id of the connected agent with this name, at a dashboard's base URL (DASHBOARD_URL unless given), or nothing.
+agent_id() { attr data-agent "$(agent_row "$@")"; }
+
 # Whether an agent's detail page, by URL, counts at least this many recent scrapes: enough rows to fill a fixed crop.
+# The count is data on the detail's Recent scrapes header (detailInner in ProxyDashboardHtml.kt).
 has_scrapes() {
   local count
-  count="$(curl -fsS "$1" 2>/dev/null | grep -Eo '<span>Recent scrapes</span><span>[0-9]+</span>' | grep -Eo '[0-9]+')"
+  count="$(curl -fsS "$1" 2>/dev/null | grep -Eo 'data-scrape-count="[0-9]+"' | grep -Eo '[0-9]+' | head -1)"
   [[ -n "$count" ]] && ((count >= $2))
 }
 
 # Whether agent-east is listed with no paths, as once its copy has taken them.
-# The name may be followed by its identity's tag.
-east_has_no_paths() {
-  page "" | grep -Eq 'agent-east(<span class="tag">[^<]*</span>)?</span><span class="host">[^<]*· 0 paths'
-}
+east_has_no_paths() { [[ "$(attr data-path-count "$(agent_row agent-east)")" == 0 ]]; }
+
+# Whether the Paths view shows at least this many paths from service discovery, tagged "disc". A function, so each of
+# wait_until's checks counts again: a count passed as an argument was taken once, as the wait began.
+has_discovered_sources() { (($(count_in "/paths" '>disc<') >= $1)); }
 
 # The id of a recent registerpath trace of agent-east's, from Zipkin.
 registerpath_trace() {
@@ -125,8 +153,13 @@ east_up_a_minute() {
   [[ -n "$id" ]] && page "/agents/$id" | grep -Eq 'up [0-9]+[mhd]'
 }
 
-# Whether the dashboard at a base URL lists all three agents.
-has_all_agents() { curl -fsS "$1" 2>/dev/null | grep -q '<span>3 agents</span>'; }
+# Whether the dashboard at a base URL lists all three agents, each registered under its name.
+has_all_agents() {
+  local name
+  for name in agent-east agent-west-1 agent-west-2; do
+    [[ -n "$(agent_row "$name" "$1")" ]] || return 1
+  done
+}
 
 # Whether Prometheus scrapes the primary proxy's own metrics again: by then the agents look its name up again.
 primary_metrics_up() {
@@ -150,13 +183,54 @@ alerts_firing() {
     grep -q '"value"'
 }
 
-# Every path scraped, all of them answering 200, nothing departed: the state the first two screenshots show.
-healthy() {
+# The Last scrape times in a Paths view's HTML, one a line. Each is a <time datetime="…Z">, the view's only <time>, in
+# UTC to the second, so every one has the same width and they order as strings (ProxyDashboardHtmlTest pins this): no
+# date parsing, which differs between macOS's date and GNU's. Matched by that form, since the page's script mentions the
+# element in a comment.
+scrape_times() {
+  grep -Eo 'datetime="[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z"' | cut -d'"' -f2
+}
+
+# The newest Last scrape in the Paths view, or nothing while no path has one.
+newest_scrape() {
   local paths
-  paths="$(page "/paths")"
-  [[ "$(grep -Eo 'class="pill ok"' <<<"$paths" | wc -l | tr -d ' ')" -eq "$1" ]] &&
-    ! grep -q 'class="pill crit"' <<<"$paths" &&
-    ! grep -Eq '<span class="crit">[0-9]+ departed</span>' <<<"$paths"
+  paths="$(page "/paths" 2>/dev/null)" || return 1
+  scrape_times <<<"$paths" | LC_ALL=C sort | tail -1 || true
+}
+
+# This many paths, every one answering 200 on a scrape later than a stamp from newest_scrape, nothing departed: the
+# state the first two screenshots show. Sets UNMET to the first of those it finds missing.
+healthy() {
+  local count="$1" since="$2" paths ok fresh
+  if ! paths="$(page "/paths" 2>/dev/null)"; then
+    UNMET="the dashboard didn't answer"
+    return 1
+  fi
+  ok="$(grep -Eo 'class="pill ok"' <<<"$paths" | wc -l | tr -d ' ')"
+  fresh="$(scrape_times <<<"$paths" | LC_ALL=C awk -v since="$since" '$0 > since' | wc -l | tr -d ' ')"
+  if grep -q 'class="pill crit"' <<<"$paths"; then
+    UNMET="a path's last scrape failed"
+  elif grep -Eq '<span class="crit">[0-9]+ departed</span>' <<<"$paths"; then
+    UNMET="a path has departed"
+  elif ((ok != count)); then
+    UNMET="$ok of $count paths answer 200"
+  elif ((fresh != count)); then
+    UNMET="$fresh of $count were scraped after it"
+  else
+    return 0
+  fi
+  return 1
+}
+
+# Waits until healthy passes for this many paths on scrapes since the wait began: each path's last scrape later than the
+# newest one the Paths view showed as it began. Without that, the wait passed at once after an agent restarted, on its
+# paths' last scrapes from before the restart. The mark is the proxy's own time, not this machine's, which a
+# container's clock can be seconds apart from. Later rather than at the same time, since the scrapes that set the mark
+# were already in the view: a scrape in the mark's second waits for the path's next one, 5 seconds on.
+wait_healthy() {
+  local what="$1" count="$2" since
+  since="$(newest_scrape)" || die "the dashboard didn't answer at $DASHBOARD_URL/paths"
+  wait_until "$what, each scraped after ${since:-the wait began}" healthy "$count" "$since"
 }
 
 # Captures a page at the given CSS width (WIDTH unless given) x the given CSS height, at 2x, in a theme: the dashboard
@@ -205,17 +279,24 @@ step "Waiting for every path to answer 200"
 "$DEMO" agent-thaw >/dev/null 2>&1 || true
 "$DEMO" undiscover >/dev/null
 "$DEMO" recover >/dev/null
-wait_until "ten healthy paths" healthy 10
+wait_healthy "ten healthy paths" 10
 # make demo-screenshots starts the demo just before this, so every agent's uptime would read a few seconds. Waiting
-# until agent-east has been up a minute makes the first shots look like a demo that has been running, and gives its
-# Recent scrapes enough rows to fill the screenshot. Say why, since the script otherwise looks stuck.
+# until agent-east has been up a minute makes the first shots look like a demo that has been running. Say why, since
+# the script otherwise looks stuck, or that SKIP_UPTIME_WAIT skipped it.
 if ! east_up_a_minute; then
-  step "Waiting up to a minute so the agents' uptimes read in minutes, not seconds: the demo was just started"
-  wait_until "agent-east to be up a minute" east_up_a_minute
+  if [[ "$SKIP_UPTIME_WAIT" == 1 ]]; then
+    step "Skipping the wait for the agents' uptimes to read in minutes (SKIP_UPTIME_WAIT=1): the shots show them in" \
+      "seconds, so they're for checking a change, not for the site"
+  else
+    step "Waiting up to a minute so the agents' uptimes read in minutes, not seconds: the demo was just started"
+    wait_until "agent-east to be up a minute" east_up_a_minute
+  fi
 fi
 
 east="$(agent_id agent-east)"
 [[ -n "$east" ]] || die "agent-east isn't connected"
+# Enough of agent-east's Recent scrapes to fill the shot, which the minute's wait gives but SKIP_UPTIME_WAIT doesn't.
+wait_until "agent-east's scrapes" has_scrapes "$DASHBOARD_URL/agents/$east" 11
 step "The Agents and Paths views"
 shoot_fixed agents "$DASHBOARD_URL/agents/$east" 763
 shoot_paths paths
@@ -228,7 +309,7 @@ shoot_paths outage
 # Grafana is captured taller than kept: the bottom of its viewport carries a fixed "Powered by" footer.
 shoot_fixed grafana "$GRAFANA_URL/d/prometheus-proxy-demo?orgId=1&kiosk&from=now-15m&to=now&theme={theme}" 900 1000 15000
 "$DEMO" recover >/dev/null
-wait_until "the services to recover" healthy 10
+wait_healthy "the services to recover" 10
 
 step "The primary proxy fails over to the standby"
 "$DEMO" proxy-down >/dev/null 2>&1
@@ -242,7 +323,7 @@ wait_until "the primary's own metrics to answer again" primary_metrics_up
 "$DEMO" proxy-down proxy-standby >/dev/null 2>&1
 wait_until "every agent back on the primary" has_all_agents "$DASHBOARD_URL"
 "$DEMO" proxy-up proxy-standby >/dev/null 2>&1
-wait_until "ten healthy paths" healthy 10
+wait_healthy "ten healthy paths" 10
 
 step "A call traced through the firewall"
 # The failover reconnected every agent, so Zipkin has their registration calls. Zipkin's UI has one theme, so this is
@@ -257,24 +338,25 @@ east="$(agent_id agent-east)"
 wait_until "agent-east's scrapes since the restart" has_scrapes "$DASHBOARD_URL/agents/$east" 11
 shoot_fixed filtered "$DASHBOARD_URL/agents/$east" 763
 "$DEMO" unfilter >/dev/null 2>&1
-wait_until "ten healthy paths" healthy 10
+wait_healthy "ten healthy paths" 10
 
 step "A duplicate agent, without consolidated mode"
-# agent-east has to serve its scrapes before the copy starts. unfilter just restarted it, and "ten healthy paths" passes
-# on the paths' last scrapes from before the restart, so a copy started then took every path before agent-east served
-# four, and with no paths left it never served more. Its id stays the same once the copy has its paths.
+# agent-east has to serve its scrapes before the copy starts: the copy takes every path, and with none left agent-east
+# serves no more, so a copy started too soon left the shot's Recent scrapes all but empty. unfilter just restarted
+# agent-east, and the healthy wait above took only scrapes from after that, so by now it has served one for each of its
+# seven paths, rows for the shot. Its id stays the same once the copy has its paths.
 east="$(agent_id agent-east)"
-wait_until "agent-east's scrapes since the filter's restart" has_scrapes "$DASHBOARD_URL/agents/$east" 4
+[[ -n "$east" ]] || die "agent-east isn't connected"
 "$DEMO" duplicate-agent >/dev/null 2>&1
 wait_until "agent-east-copy to take agent-east's paths" east_has_no_paths
 shoot_fixed duplicate "$DASHBOARD_URL/agents/$east" 414
 "$DEMO" duplicate-agent-stop >/dev/null 2>&1
-wait_until "ten healthy paths" healthy 10
+wait_healthy "ten healthy paths" 10
 
 step "Three services discovered at runtime"
 "$DEMO" discover >/dev/null
-wait_until "three discovered paths" healthy 13
-wait_until "three 'disc' sources" test "$(count_in "/paths" '>disc<')" -ge 3
+wait_healthy "three discovered paths" 13
+wait_until "three 'disc' sources" has_discovered_sources 3
 shoot_paths discovered
 
 step "An agent that goes silent, and its eviction"

@@ -348,8 +348,10 @@ Two support helpers also live here (not test classes themselves):
   late subscriber, fan-out to multiple subscribers, and AgentContextManager emitting on connect only
 - **ProxyDashboardHtmlTest** (`dashboard/`) — Dashboard renderer: top-level out-of-band push regions, agent- and
   path-centric layouts, tolerant selection and layout parsing, departed paths, an agent's identity in its row and
-  detail, links at a root mount, the nav, the script's after-push work and scrape-now request, an agent's uptime,
-  failover markers, accessibility, and the WebSocket connection indicator
+  detail, the data `demos/dashboard/screenshots.sh` reads (an agent row's id, name, and path count, the name escaped and
+  through `agentLabel`, and the detail's scrape count) and the one width of a scrape time it orders as text, links at a
+  root mount, the nav, the script's after-push work and scrape-now request, an agent's uptime, failover markers,
+  accessibility, and the WebSocket connection indicator
 - **PathTableHtmlTest** (`dashboard/`) — the Paths view's table and search: the history strip (one element per run, a
   floored percentage, no status pill, visible under forced colours), the Identity column (shown while agent auth is
   on, the legacy token as a shared token), the search (matching rows, the match count, the empty states, the form
