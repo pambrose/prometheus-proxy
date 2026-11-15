@@ -82,6 +82,8 @@ every agent when agent auth is off.
   the URL, on a dashboard served over plain http too. It shows a check when the copy worked and a cross when it
   didn't, and tells a screen reader which.
 - The Agents view highlights the row under the pointer in an agent's registered paths and recent scrapes.
+- **Scrape times in your time zone.** The dashboard shows scrape times in your browser's time zone, as Grafana
+  does, rather than the proxy's. Hover over a time for its date and zone.
 
 ### Security
 
@@ -244,6 +246,7 @@ every agent when agent auth is off.
   `--sd_target_prefix` help text says the same.
 - The website has a **Live Demo** page, with screenshots of the dashboard and Grafana as the demo's scenarios play
   out: a failing service, new services found without a restart, and an agent evicted after it goes silent.
+- The website's menu has a single Operations section, with the Dashboard page in it.
 
 ### Build and tooling
 
@@ -299,6 +302,7 @@ every agent when agent auth is off.
   `~/.gradle/gradle.properties`. The publish targets stop before Gradle runs when either keychain entry is missing,
   and print the command that adds it. `make release-check` checks the entries too, so `make release` stops before
   running its tests, rather than at the publishing step after them.
+- `make demo-screenshots` retakes the Live Demo page's screenshots from a demo built from the checkout.
 
 ### Dependency updates
 
