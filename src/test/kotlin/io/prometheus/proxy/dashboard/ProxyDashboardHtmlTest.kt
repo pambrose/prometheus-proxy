@@ -29,7 +29,11 @@ import io.prometheus.common.TestPorts
 import io.prometheus.proxy.ScrapeRecord
 import kotlinx.html.html
 import kotlinx.html.stream.createHTML
-import java.time.Instant
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 class ProxyDashboardHtmlTest : StringSpec() {
   private fun path(
@@ -387,6 +391,18 @@ class ProxyDashboardHtmlTest : StringSpec() {
       listOf(pathFrame, detail).forEach { html ->
         html shouldContain """<time datetime="2026-11-15T01:24:23Z">"""
       }
+    }
+
+    "an agent's uptime should show its two largest units from a day up, then one" {
+      ProxyDashboardHtml.humanize(45.seconds) shouldBe "45s"
+      ProxyDashboardHtml.humanize(3.minutes + 59.seconds) shouldBe "3m"
+      ProxyDashboardHtml.humanize(2.hours + 5.minutes + 30.seconds) shouldBe "2h 5m"
+      ProxyDashboardHtml.humanize(1.days + 3.hours + 20.minutes) shouldBe "1d 3h"
+    }
+
+    "the agent detail should show how long the agent has been connected" {
+      val agent = DashboardFixtures.agentView(agentId = "1")
+      ProxyDashboardHtml.detailFragment(snapshot(agents = [agent]), selectedId = "1") shouldContain " · up 2m · "
     }
 
     "a path that was never scraped should show a dash rather than a time" {

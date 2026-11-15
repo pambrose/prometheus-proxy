@@ -18,8 +18,8 @@ package io.prometheus.proxy.dashboard
 
 import io.prometheus.Proxy
 import io.prometheus.proxy.ScrapeRecord
-import java.time.Instant
 import kotlin.time.Duration
+import kotlin.time.Instant
 
 /**
  * One path as the dashboard shows it, joined with the last scrape that ran against it.

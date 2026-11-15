@@ -29,13 +29,14 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
 import kotlinx.coroutines.channels.ClosedSendChannelException
-import java.time.Instant
 import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.AtomicLong
 import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.concurrent.atomics.minusAssign
+import kotlin.time.Clock
+import kotlin.time.Instant
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
 import kotlin.time.TimeSource.Monotonic
@@ -86,7 +87,7 @@ internal class AgentContext(
    * cannot be rendered as a time of day. Kept separate rather than replacing them: monotonic marks are
    * immune to clock adjustments and remain the right basis for eviction.
    */
-  val connectTime: Instant = Instant.now()
+  val connectTime: Instant = Clock.System.now()
   private var lastActivityTimeMark: TimeMark by nonNullableReference(clock.markNow())
   private var lastRequestTimeMark: TimeMark by nonNullableReference(clock.markNow())
   private var valid by atomicBoolean(true)

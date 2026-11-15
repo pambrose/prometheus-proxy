@@ -22,7 +22,7 @@ import ch.qos.logback.classic.Level
 import com.typesafe.config.ConfigFactory
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.core.spec.style.StringSpec
-import io.kotest.matchers.longs.shouldBeLessThan
+import io.kotest.matchers.comparables.shouldBeLessThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.mockk.every
@@ -33,6 +33,7 @@ import io.prometheus.Proxy
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.captureLogs
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.measureTime
 
 // Tests for AgentContextCleanupService which evicts inactive agents from the proxy.
 // The service runs periodically and removes agents that haven't had activity
@@ -258,13 +259,11 @@ class AgentContextCleanupServiceTest : StringSpec() {
       // Wait for a sweep to finish, so the thread is in, or entering, its 60s pause when the stop arrives
       awaitSweeps(agentContextManager, 1)
 
-      val stopStart = System.currentTimeMillis()
-      service.stopAsync().awaitTerminated()
-      val stopDuration = System.currentTimeMillis() - stopStart
+      val stopDuration = measureTime { service.stopAsync().awaitTerminated() }
 
       // Before the fix, this would block for up to 60 seconds.
       // With the CountDownLatch fix, it should stop within a few seconds.
-      stopDuration shouldBeLessThan 5000L
+      stopDuration shouldBeLessThan 5.seconds
     }
 
     // ==================== TOCTOU Re-check Tests ====================

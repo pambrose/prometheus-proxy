@@ -47,11 +47,12 @@ import kotlinx.html.TR
 import kotlinx.html.time
 import kotlinx.html.tr
 import kotlinx.html.unsafe
-import java.time.Duration
-import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.time.temporal.ChronoUnit
+import kotlin.time.Clock
+import kotlin.time.Duration
+import kotlin.time.Instant
+import kotlin.time.toJavaInstant
 
 /**
  * Which view a session is looking at.
@@ -278,8 +279,9 @@ internal object ProxyDashboardHtml {
       return
     }
     time {
-      attributes["datetime"] = at.truncatedTo(ChronoUnit.SECONDS).toString()
-      +timeFormat.format(at)
+      attributes["datetime"] = Instant.fromEpochSeconds(at.epochSeconds).toString()
+      // java.time's formatter, since the standard library has none that takes a zone.
+      +timeFormat.format(at.toJavaInstant())
     }
   }
 
@@ -432,7 +434,7 @@ internal object ProxyDashboardHtml {
           agent.remoteAddr,
           "host ${agent.hostName}",
           "launch ${agent.launchId}",
-          "up ${humanize(Duration.between(agent.connectTime, Instant.now()))}",
+          "up ${humanize(Clock.System.now() - agent.connectTime)}",
           "idle ${agent.inactivity.inWholeSeconds}s",
           "backlog ${agent.backlogSize}",
           "evicted in ${agent.evictionCountdownSecs(snapshot.maxAgentInactivitySecs)}s",
@@ -546,12 +548,15 @@ internal object ProxyDashboardHtml {
    */
   private fun agentLabel(name: String): String = if (name == UNASSIGNED) "(registering…)" else name
 
-  private fun humanize(duration: Duration): String =
-    when {
-      duration.toDays() > 0 -> "${duration.toDays()}d ${duration.toHoursPart()}h"
-      duration.toHours() > 0 -> "${duration.toHours()}h ${duration.toMinutesPart()}m"
-      duration.toMinutes() > 0 -> "${duration.toMinutes()}m"
-      else -> "${duration.seconds}s"
+  /** An agent's uptime at the precision the hero line wants: the two largest units from a day up, then one. */
+  internal fun humanize(duration: Duration): String =
+    duration.toComponents { days, hours, minutes, seconds, _ ->
+      when {
+        days > 0 -> "${days}d ${hours}h"
+        hours > 0 -> "${hours}h ${minutes}m"
+        minutes > 0 -> "${minutes}m"
+        else -> "${seconds}s"
+      }
     }
 
   // PathSource names are agent-side enum constants carried as free text, so an unrecognized value is

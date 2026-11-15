@@ -24,7 +24,7 @@ import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
-import io.kotest.matchers.longs.shouldBeLessThan
+import io.kotest.matchers.comparables.shouldBeLessThan
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -39,6 +39,7 @@ import io.prometheus.grpc.headerData
 import kotlinx.coroutines.async
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TestTimeSource
+import kotlin.time.TimeSource
 
 class AgentContextManagerTest : StringSpec() {
   init {
@@ -499,7 +500,7 @@ class AgentContextManagerTest : StringSpec() {
       val wrapper = ScrapeRequestWrapper(context, "/metrics", "", "", null, false)
       context.writeScrapeRequest(wrapper)
 
-      val startTime = System.currentTimeMillis()
+      val start = TimeSource.Monotonic.markNow()
       val deferred = async {
         wrapper.awaitCompleted(30.seconds)
       }
@@ -508,14 +509,14 @@ class AgentContextManagerTest : StringSpec() {
       manager.invalidateAllAgentContexts()
 
       val completed = deferred.await()
-      val elapsed = System.currentTimeMillis() - startTime
+      val elapsed = start.elapsedNow()
 
       // awaitCompleted returns true with a 503 result rather than a null that would read as timed_out.
       completed.shouldBeTrue()
       wrapper.scrapeResults?.srStatusCode shouldBe HttpStatusCode.ServiceUnavailable.value
       wrapper.proxyFailure shouldBe ProxyFailure.AGENT_DISCONNECTED
       // Should unblock well under the 30-second timeout
-      elapsed shouldBeLessThan 5000L
+      elapsed shouldBeLessThan 5.seconds
     }
 
     // Bug #9: Double removal should not throw or produce warn/error logs.

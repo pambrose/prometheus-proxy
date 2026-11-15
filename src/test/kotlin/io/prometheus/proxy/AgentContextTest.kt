@@ -22,7 +22,7 @@ import com.google.protobuf.LazyStringArrayList
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
-import io.kotest.matchers.longs.shouldBeLessThan
+import io.kotest.matchers.comparables.shouldBeLessThan
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -31,14 +31,15 @@ import io.kotest.matchers.string.shouldContain
 import io.ktor.http.HttpStatusCode
 import io.mockk.every
 import kotlin.time.TestTimeSource
+import kotlin.time.TimeSource
 import io.mockk.mockk
 import io.mockk.verify
 import io.prometheus.grpc.PathRejectionCause
 import io.prometheus.grpc.RegisterAgentRequest
-import java.time.Instant
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlin.concurrent.atomics.AtomicBoolean
+import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -154,7 +155,7 @@ class AgentContextTest : StringSpec() {
       context.writeScrapeRequest(wrapper)
 
       // Start awaiting completion in a separate coroutine with a long timeout
-      val startTime = System.currentTimeMillis()
+      val start = TimeSource.Monotonic.markNow()
       val deferred = async {
         wrapper.awaitCompleted(30.seconds)
       }
@@ -164,13 +165,13 @@ class AgentContextTest : StringSpec() {
       // awaitCompleted unblocks almost immediately, now returning TRUE with a 503 result so
       // submitScrapeRequest reports the truthful agent-disconnect instead of mislabeling it timed_out.
       val completed = deferred.await()
-      val elapsed = System.currentTimeMillis() - startTime
+      val elapsed = start.elapsedNow()
 
       completed.shouldBeTrue()
       wrapper.scrapeResults?.srStatusCode shouldBe HttpStatusCode.ServiceUnavailable.value
       wrapper.proxyFailure shouldBe ProxyFailure.AGENT_DISCONNECTED
       // Should unblock in well under the 30-second timeout
-      elapsed shouldBeLessThan 5000L
+      elapsed shouldBeLessThan 5.seconds
     }
 
     "invalidate with no buffered requests should not fail" {
@@ -571,12 +572,12 @@ class AgentContextTest : StringSpec() {
     // Every other timing field is a Monotonic TimeMark, which measures elapsed time correctly but
     // cannot be rendered as a time of day. connectTime exists solely so the dashboard can show "connected at".
     "connectTime should be a wall-clock instant set at construction" {
-      val before = Instant.now()
+      val before = Clock.System.now()
       val context = AgentContext("10.0.1.14:54321")
-      val after = Instant.now()
+      val after = Clock.System.now()
 
-      context.connectTime.isBefore(before).shouldBeFalse()
-      context.connectTime.isAfter(after).shouldBeFalse()
+      (context.connectTime < before).shouldBeFalse()
+      (context.connectTime > after).shouldBeFalse()
     }
   }
 }

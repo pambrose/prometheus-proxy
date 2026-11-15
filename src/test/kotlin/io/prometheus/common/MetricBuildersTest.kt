@@ -33,6 +33,7 @@ import io.prometheus.common.MetricBuilders.setToCurrentTime
 import io.prometheus.metrics.core.metrics.Gauge
 import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.metrics.model.snapshots.Labels
+import kotlin.time.Clock
 
 class MetricBuildersTest : StringSpec() {
   private val traceLabels = Labels.of("trace_id", "t")
@@ -103,9 +104,9 @@ class MetricBuildersTest : StringSpec() {
           .labelNames("id")
           .build()
 
-      val before = System.currentTimeMillis() / 1_000.0
+      val before = Clock.System.now().toEpochMilliseconds() / 1_000.0
       gauge.labelValues("a").setToCurrentTime()
-      val after = System.currentTimeMillis() / 1_000.0
+      val after = Clock.System.now().toEpochMilliseconds() / 1_000.0
 
       gauge.labelValues("a").get() shouldBeIn before..after
     }

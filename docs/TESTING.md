@@ -324,8 +324,8 @@ Two support helpers also live here (not test classes themselves):
 - **ProxyEventBusTest** — Dashboard event bus: ordered delivery, non-blocking emit with no subscriber, no replay to a
   late subscriber, fan-out to multiple subscribers, and AgentContextManager emitting on connect only
 - **ProxyDashboardHtmlTest** (`dashboard/`) — Dashboard renderer: top-level out-of-band push regions, agent- and
-  path-centric layouts, tolerant selection and layout parsing, departed paths, failover markers, accessibility, and
-  the WebSocket connection indicator
+  path-centric layouts, tolerant selection and layout parsing, departed paths, an agent's uptime, failover markers,
+  accessibility, and the WebSocket connection indicator
 - **ProxyDashboardServiceTest** (`dashboard/`) — Dashboard request guards: the WebSocket Origin check (own host,
   `allowedOrigins`, foreign or malformed origins refused), the opt-in `allowedHosts` Host check against DNS rebinding,
   and the snapshot cache pages and sessions render from: one collect per refresh interval however many reads, shared

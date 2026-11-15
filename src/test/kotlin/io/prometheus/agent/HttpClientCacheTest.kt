@@ -25,7 +25,7 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
-import io.kotest.matchers.longs.shouldBeLessThan
+import io.kotest.matchers.comparables.shouldBeLessThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
@@ -52,6 +52,8 @@ import java.util.concurrent.CountDownLatch
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TestTimeSource
+import kotlin.time.measureTime
+import kotlin.time.measureTimedValue
 
 class HttpClientCacheTest : StringSpec() {
   companion object {
@@ -661,13 +663,12 @@ class HttpClientCacheTest : StringSpec() {
         withTimeout(10.seconds) { closeStarted.await() }
 
         // While the slow close is blocked, other cache operations should NOT be blocked
-        val start = System.currentTimeMillis()
         val otherKey = ClientKey("concurrent", "access")
-        val otherEntry = slowCache.getOrCreateClient(otherKey) { mockk<HttpClient>(relaxed = true) }
-        val elapsed = System.currentTimeMillis() - start
+        val (otherEntry, elapsed) =
+          measureTimedValue { slowCache.getOrCreateClient(otherKey) { mockk<HttpClient>(relaxed = true) } }
 
         // Should complete quickly (well under 1 second)
-        elapsed shouldBeLessThan 500L
+        elapsed shouldBeLessThan 500.milliseconds
         slowCache.onFinishedWithClient(otherEntry)
 
         // Release the slow close and wait for completion
@@ -903,11 +904,7 @@ class HttpClientCacheTest : StringSpec() {
         // immediately, allowing close() to proceed without delay.
         // With the old runCatching, the CancellationException was caught, logged
         // as an error, and the coroutine finished the iteration before exiting.
-        val startMs = System.currentTimeMillis()
-        fastCache.close()
-        val elapsedMs = System.currentTimeMillis() - startMs
-
-        elapsedMs shouldBeLessThan 1000L
+        measureTime { fastCache.close() } shouldBeLessThan 1.seconds
         fastCache.currentCacheSize() shouldBe 0
       } catch (_: Exception) {
         fastCache.close()

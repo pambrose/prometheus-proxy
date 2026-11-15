@@ -18,9 +18,10 @@ package io.prometheus.proxy.dashboard
 
 import io.prometheus.common.TestPorts
 import io.prometheus.proxy.ScrapeRecord
-import java.time.Instant
+import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 /**
  * Shared builders for the dashboard view models.
@@ -58,7 +59,7 @@ internal object DashboardFixtures {
     launchId = "launch-abc",
     consolidated = false,
     isValid = true,
-    connectTime = Instant.now().minusSeconds(120),
+    connectTime = Clock.System.now() - 120.seconds,
     inactivity = inactivity,
     backlogSize = 0,
     paths = paths,
@@ -73,7 +74,7 @@ internal object DashboardFixtures {
     outcome: String = "success",
     durationMillis: Long = 41,
     contentLength: Int = 1800,
-    at: Instant = Instant.now(),
+    at: Instant = Clock.System.now(),
     agentName: String = "agent-$agentId",
   ) = ScrapeRecord(agentId, agentName, path, statusCode, outcome, durationMillis, contentLength, at)
 

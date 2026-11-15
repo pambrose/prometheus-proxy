@@ -16,7 +16,8 @@
 
 package io.prometheus.proxy
 
-import java.time.Instant
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 /**
  * One completed scrape, recorded structurally for the operational dashboard.
@@ -50,7 +51,7 @@ internal data class ScrapeRecord(
   val outcome: String,
   val durationMillis: Long,
   val contentLength: Int,
-  val at: Instant = Instant.now(),
+  val at: Instant = Clock.System.now(),
 ) {
   val isSuccess: Boolean get() = statusCode in 200..299
 }
