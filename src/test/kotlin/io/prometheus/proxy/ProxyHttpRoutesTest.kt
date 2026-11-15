@@ -34,6 +34,7 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeEmpty
 import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.types.shouldBeInstanceOf
+import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
@@ -61,8 +62,11 @@ import com.google.protobuf.ByteString
 import io.prometheus.grpc.chunkData
 import io.prometheus.grpc.chunkedScrapeResponse
 import io.prometheus.grpc.headerData
+import io.prometheus.grpc.ScrapeRequest
+import io.prometheus.metrics.core.metrics.Counter
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.flow.flow
@@ -285,6 +289,68 @@ class ProxyHttpRoutesTest : StringSpec() {
       handlerDone.complete(Unit)
       stream.join()
       Triple(result, openDuring, openAfter)
+    }
+
+  // Serves [proxy]'s routes on a loopback port the OS picks, for [block], which gets the port and a client.
+  private suspend fun <T> withScrapeRoutes(
+    proxy: Proxy,
+    block: suspend (port: Int, client: HttpClient) -> T,
+  ): T {
+    val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
+      routing {
+        val r = this
+        with(ProxyHttpRoutes) { r.handleRequests(proxy) }
+      }
+    }
+    return try {
+      val port = startServerAndGetPort(server)
+      newHttpClient().use { client -> block(port, client) }
+    } finally {
+      server.stop(0, 0)
+    }
+  }
+
+  // Turns on every consumer of a scrape's path on [proxy]: debug and the dashboard, so a scrape writes its /debug line,
+  // its dashboard record, and its event, which goes to the returned bus; and the metrics, whose proxy.metrics { }
+  // blocks run against the returned mock, so a test can verify the per-path labels.
+  private fun recordEverything(proxy: Proxy): Pair<ProxyMetrics, ProxyEventBus> {
+    val options = spyk(proxy.options)
+    every { options.debugEnabled } returns true
+    every { options.dashboardEnabled } returns true
+    every { proxy.options } returns options
+    val bus = mockk<ProxyEventBus>(relaxed = true)
+    every { proxy.eventBus } returns bus
+    val metrics = mockk<ProxyMetrics>(relaxed = true)
+    // A relaxed counter's labelValues() answers a plain DataPoint, which the route's count can't cast to a counter's; a
+    // real counter, never registered, takes the counts instead.
+    every { metrics.scrapeRequestCount } returns
+      Counter.builder().name("test_requests_total").labelNames("type").build()
+    every { proxy.metrics(any<ProxyMetrics.() -> Unit>()) } answers { firstArg<ProxyMetrics.() -> Unit>()(metrics) }
+    return metrics to bus
+  }
+
+  // Plays [agentContext]'s agent for [count] scrapes, answering each with a small plain-text body, and returns the
+  // scrape requests it was sent, in order.
+  private fun CoroutineScope.answerScrapes(
+    proxy: Proxy,
+    agentContext: AgentContext,
+    count: Int,
+  ): Deferred<List<ScrapeRequest>> =
+    async {
+      List(count) {
+        val wrapper = agentContext.readScrapeRequest()!!
+        proxy.scrapeRequestManager.assignScrapeResults(
+          ScrapeResults(
+            srAgentId = agentContext.agentId,
+            srScrapeId = wrapper.scrapeId,
+            srValidResponse = true,
+            srStatusCode = 200,
+            srContentType = "text/plain; charset=utf-8",
+            srContentAsText = "metric_value 1.0",
+          ),
+        ) { true }
+        wrapper.scrapeRequest
+      }
     }
 
   init {
@@ -1325,6 +1391,56 @@ class ProxyHttpRoutesTest : StringSpec() {
       } finally {
         server.stop(0, 0)
       }
+    }
+
+    // Ktor skips empty segments when it matches a route, so "//test-metrics" reaches the one-segment scrape route just
+    // as "/test-metrics" does, and the path map found it. But the route dropped only the first slash, so the rest of
+    // the scrape saw "/test-metrics": the agent, whose paths are keyed without a slash, was sent it and answered 404;
+    // the per-path histograms, which keep series only for a registered key, recorded nothing; and /debug and the
+    // dashboard showed the scrape under "//test-metrics". "///test-metrics" missed the path map altogether.
+    "a scrape of //path should be sent, recorded, and labeled under the path's registered key" {
+      val proxy = createSpyProxyForRoutes()
+      val (metrics, bus) = recordEverything(proxy)
+      val agentContext = AgentContext("test-remote")
+      proxy.pathManager.addPath("test-metrics", "", agentContext)
+      val spellings = ["//test-metrics", "///test-metrics"]
+      val sent = answerScrapes(proxy, agentContext, spellings.size)
+
+      withScrapeRoutes(proxy) { port, client ->
+        spellings.forEach { spelling ->
+          val response = client.get("http://localhost:$port$spelling?collect=a")
+          withClue(spelling) {
+            response.status shouldBe HttpStatusCode.OK
+            response.bodyAsText() shouldBe "metric_value 1.0"
+          }
+        }
+      }
+
+      // The query is passed on as before.
+      sent.await().map { it.path to it.encodedQueryParams } shouldBe spellings.map { "test-metrics" to "collect=a" }
+      verify(exactly = 2) { metrics.observeLatency("test-metrics", "success", any()) }
+      verify(exactly = 2) { metrics.observeResponseBytes("test-metrics", ProxyMetrics.ENCODING_PLAIN, any()) }
+      verify(exactly = 2) { proxy.logActivity(match { it.startsWith("/test-metrics - success - 200") }) }
+      verify(exactly = 2) { bus.emit(ProxyEvent.ScrapeCompleted(agentContext.agentId, "test-metrics", true)) }
+      proxy.recentScrapes().map { it.path } shouldBe ["test-metrics", "test-metrics"]
+    }
+
+    // The route's own answers compare the path as well, so they see it without its extra slashes too: "//blitz-test" is
+    // the blitz path, which no agent can register, and "//favicon.ico" and an unregistered path are logged with one.
+    "the route's own answers should see a //path without its extra slashes" {
+      val proxy = createSpyProxyForRoutes(
+        "-Dproxy.internal.blitz.enabled=true",
+        "-Dproxy.internal.blitz.path=blitz-test",
+      )
+
+      withScrapeRoutes(proxy) { port, client ->
+        client.get("http://localhost:$port//blitz-test").bodyAsText() shouldBe "42"
+        client.get("http://localhost:$port//favicon.ico").status shouldBe HttpStatusCode.NotFound
+        client.get("http://localhost:$port//unknown-metrics").status shouldBe HttpStatusCode.NotFound
+      }
+
+      verify(exactly = 1) { proxy.logActivity("Invalid path request /favicon.ico") }
+      verify(exactly = 1) { proxy.logActivity("Invalid path request /unknown-metrics") }
     }
 
     "handleServiceDiscoveryEndpoint should return JSON when enabled" {

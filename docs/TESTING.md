@@ -273,7 +273,10 @@ Two support helpers also live here (not test classes themselves):
   disconnect, or a write to one that has gone, is logged at DEBUG, while an unexpected exception still logs at WARN
 - **ProxyHttpRoutesTest** — HTTP routing: path resolution, query params, error responses, compression,
   ensureLeadingSlash; a handler that times out or is cancelled drops its scrape's unfinished chunked transfer; a scrape
-  times out at a timeout it is given rather than the proxy's
+  times out at a timeout it is given rather than the proxy's; a scrape of `//path` or `///path`, which Ktor routes as
+  `/path`, is sent to the agent, labeled in the per-path metrics, and shown on `/debug` and the dashboard under the
+  path's registered key, with its query unchanged, and the blitz, favicon, and unknown-path answers see it with one
+  slash
 - **ProxyPathManagerTest** — Path registration/unregistration, consolidated mode, agent selection, concurrent access;
   a live agent's path is taken over only by the same auth identity; the activity feed gets a new registration but not
   a repeat, a take-over as one naming the agent it displaced, a rejection the first time the agent is told it, a path

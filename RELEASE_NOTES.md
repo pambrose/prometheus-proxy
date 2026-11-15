@@ -251,6 +251,9 @@ most 10,000 agents connected with one identity, which is every agent when agent 
   it, and the Troubleshooting page says what to do.
 - On the dashboard, a path that several agents serve shows the target URL of the agent its row names, including
   after the first agent to register it leaves.
+- A scrape URL with more than one slash before the path, such as `http://proxy:8080//orders_metrics`, is served as
+  `/orders_metrics` is. The proxy found the path but asked the agent for `/orders_metrics`, which it answered with a
+  404, so the target looked down in Prometheus, and the scrape was missing from the proxy's latency and size metrics.
 
 ### Documentation
 

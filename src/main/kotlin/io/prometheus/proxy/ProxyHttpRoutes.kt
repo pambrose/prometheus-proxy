@@ -135,7 +135,13 @@ internal object ProxyHttpRoutes {
     get("/*") {
       // Cache-Control is set once, by respondWith() (the single response site); setting it here too
       // would make Ktor append a second identical header (finding 29).
-      val path = call.request.path().drop(1)
+      // Ktor skips empty segments when it matches a route, so "//orders_metrics" reaches this one-segment route as
+      // "/orders_metrics" does. Every leading slash goes, not only the first, so all that uses the path -- the favicon
+      // and blitz checks, the path map, the agent, the per-path metrics, /debug, the dashboard, and the logs -- sees
+      // the key it registered under. With one left, the agent, which keys its paths without a slash, answered 404, and
+      // the per-path histograms, which record only a registered key, missed the scrape. Registration refuses a key with
+      // a slash in it, so stripping them all can't match another path.
+      val path = call.request.path().trimStart('/')
       val queryParams = call.request.queryParameters.formUrlEncode()
 
       logger.debug {

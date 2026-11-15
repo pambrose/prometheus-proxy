@@ -65,8 +65,9 @@ internal class PathHistory(
    */
   fun record(record: ScrapeRecord) {
     if (historySize <= 0) return
-    // Keyed as the path map keys a path, so the snapshot's join to the registered paths holds for a request that
-    // reached the scrape route as //path. The get moves the path to the back.
+    // Keyed as the path map keys a path, so the snapshot's join to the registered paths holds even for a record whose
+    // path keeps a leading slash; the scrape route, which strips every one, records none. The get moves the path to the
+    // back.
     val key = pathKey(record.path)
     synchronized(rings) {
       rings[key]?.also {
