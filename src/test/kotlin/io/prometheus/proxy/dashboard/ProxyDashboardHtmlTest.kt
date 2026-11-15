@@ -20,6 +20,7 @@ package io.prometheus.proxy.dashboard
 
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
@@ -60,6 +61,16 @@ class ProxyDashboardHtmlTest : StringSpec() {
     scrapes: List<ScrapeRecord> = emptyList(),
     paths: List<PathView> = agents.flatMap { it.paths }.distinct(),
   ) = DashboardFixtures.snapshot(agents = agents, scrapes = scrapes, paths = paths)
+
+  // An agent row's start tag, which carries every attribute the row has.
+  private fun rowTag(
+    html: String,
+    agentId: String,
+  ): String =
+    Regex("""<button [^>]*id="${ProxyDashboardHtml.AGENT_ROW_ID_PREFIX}$agentId"[^>]*>""")
+      .find(html)
+      .shouldNotBeNull()
+      .value
 
   init {
     "the push fragment should carry out-of-band swaps for every live region" {
@@ -538,8 +549,7 @@ class ProxyDashboardHtmlTest : StringSpec() {
 
     // ==================== Agent identity ====================
 
-    // A tag after the name: demos/dashboard/screenshots.sh finds a row by its name, then an optional tag, then its
-    // "· N paths".
+    // A tag after the name, on the name's line rather than the address's, which the list's width wraps.
     "the agent list and detail should show the agent's identity" {
       val agent = DashboardFixtures.agentView(agentName = "agent-east", identity = "east")
       val snap = snapshot(agents = [agent])
@@ -551,6 +561,73 @@ class ProxyDashboardHtmlTest : StringSpec() {
 
     "an agent without an identity should show none" {
       ProxyDashboardHtml.detailFragment(snapshot(), selectedId = "1") shouldNotContain "identity"
+    }
+
+    // ==================== The demo's screenshot script ====================
+
+    // demos/dashboard/screenshots.sh finds an agent's row by its name and reads its id and path count from these, not
+    // from the row's text, which every change to the row's look broke. The page and every push render the row.
+    "an agent row should carry its id, name, and path count as data" {
+      val agents = [agent(id = "7", name = "agent-east", paths = [path("a_metrics"), path("b_metrics")])]
+      val page = renderFullPage(snapshot(agents = agents))
+      val frame = ProxyDashboardHtml.pushFragment(snapshot(agents = agents), null, "/dashboard")
+
+      listOf(page, frame).forEach { html ->
+        val row = rowTag(html, "7")
+        row shouldContain """${ProxyDashboardHtml.AGENT_ATTR}="7""""
+        row shouldContain """${ProxyDashboardHtml.AGENT_NAME_ATTR}="agent-east""""
+        row shouldContain """${ProxyDashboardHtml.PATH_COUNT_ATTR}="2""""
+      }
+    }
+
+    // The duplicate-agent scene waits for agent-east's row to say its copy has taken every path.
+    "an agent row with no paths should count 0" {
+      val html = ProxyDashboardHtml.pushFragment(snapshot(agents = [agent(paths = emptyList())]), null, "/dashboard")
+
+      rowTag(html, "1") shouldContain """${ProxyDashboardHtml.PATH_COUNT_ATTR}="0""""
+    }
+
+    // Through agentLabel, as the row's text names it, so the data and the text never name an agent differently.
+    "an agent row's name should be the label the row shows" {
+      val html = ProxyDashboardHtml.pushFragment(snapshot(agents = [agent(name = "Unassigned")]), null, "/dashboard")
+
+      rowTag(html, "1") shouldContain
+        """${ProxyDashboardHtml.AGENT_NAME_ATTR}="${ProxyDashboardHtml.agentLabel("Unassigned")}""""
+    }
+
+    // An agent names itself, so its name reaches the attribute escaped, and the script's match of a row's start tag, up
+    // to the first ">", ends at the tag's own end.
+    "an agent row's name should be escaped in its attribute" {
+      val html = ProxyDashboardHtml.pushFragment(snapshot(agents = [agent(name = "a\"b<c>&d")]), null, "/dashboard")
+
+      rowTag(html, "1") shouldContain """${ProxyDashboardHtml.AGENT_NAME_ATTR}="a&quot;b&lt;c&gt;&amp;d""""
+    }
+
+    // The script waits for an agent's detail to count enough recent scrapes to fill a fixed-height screenshot. The
+    // data sits on the header whose text gives the same count.
+    "the detail's Recent scrapes header should carry their count as data" {
+      val scrapes =
+        [DashboardFixtures.scrapeRecord(path = "a_metrics"), DashboardFixtures.scrapeRecord(path = "b_metrics")]
+
+      ProxyDashboardHtml.detailFragment(snapshot(scrapes = scrapes), selectedId = "1") shouldContain
+        """<div class="section" ${ProxyDashboardHtml.SCRAPE_COUNT_ATTR}="2"><span>Recent scrapes</span><span>2</span>"""
+      ProxyDashboardHtml.detailFragment(snapshot(), selectedId = "1") shouldContain
+        """${ProxyDashboardHtml.SCRAPE_COUNT_ATTR}="0""""
+    }
+
+    // The script tells a scrape since its wait began from an older one by ordering the Paths view's scrape times as
+    // strings, which holds only while every one has the same width: its seconds even at a whole minute, no fraction.
+    "a scrape time should keep its seconds at a whole minute" {
+      val at = Instant.parse("2026-01-05T00:00:00Z")
+      val scraped = DashboardFixtures.pathView(lastScrape = DashboardFixtures.scrapeRecord(at = at))
+
+      ProxyDashboardHtml.pushFragment(
+        snapshot(paths = [scraped]),
+        null,
+        "/dashboard",
+        DashboardLayout.PATH,
+      ) shouldContain
+        """<time datetime="2026-01-05T00:00:00Z">"""
     }
 
     // ==================== Page and navigation ====================
