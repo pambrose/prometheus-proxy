@@ -59,9 +59,8 @@ internal class ProxyPathManager(
     // Immutable: mutations replace the pathMap entry with a copy() carrying a new list, so a
     // data-class copy() can never share a still-mutating list with the stored entry.
     val agentContexts: List<AgentContext>,
-    // Reported by the agent at registration. On a consolidated path these describe the FIRST
-    // registrant only -- a later agent joining the path contributes its contexts but not its metadata,
-    // exactly as labels has always behaved. Empty when the agent predates the fields.
+    // Reported by the agent at registration: the target and source of the path's first agent, the one the dashboard
+    // names, which follow it when it leaves (see agentTargets). Empty when the agent predates the fields.
     val targetUrl: String = "",
     val pathSource: String = "",
     // The auth identity the path's first registrant connected as, empty when agent auth is disabled. On a
@@ -70,9 +69,33 @@ internal class ProxyPathManager(
     // [labels] as service discovery serves them, parsed and filtered once, when the path registered, which each
     // service-discovery request only copies (November #15). See Proxy.serviceDiscoveryLabels.
     val sdLabels: JsonObject = JsonObject(emptyMap()),
+    // Each agent's own target and source, by agentId, one per agent on the path: on a consolidated path every agent
+    // scrapes its own target. Kept so targetUrl and pathSource can follow the first agent when another becomes it,
+    // which they once didn't, leaving a departed agent's URL beside the agent still serving the path. Labels, which
+    // service discovery serves, stay the first registrant's.
+    val agentTargets: Map<String, PathTarget> = emptyMap(),
   ) {
     fun isNotValid() = agentContexts.all { it.isNotValid() }
+
+    // The data-class form without agentTargets. /debug prints every entry inside the pathMap lock, and every agent's
+    // target, each up to maxTargetUrlLength, would multiply what it prints; the first agent's is targetUrl already.
+    override fun toString() =
+      "AgentContextInfo(isConsolidated=$isConsolidated, labels=$labels, agentContexts=$agentContexts, " +
+        "targetUrl=$targetUrl, pathSource=$pathSource, identityName=$identityName, sdLabels=$sdLabels)"
+
+    // This entry with targetUrl and pathSource taken from its first agent. Unchanged when that agent's target isn't
+    // known, as for an entry built without agentTargets.
+    fun showingFirstAgent(): AgentContextInfo {
+      val target = agentContexts.firstOrNull()?.let { agentTargets[it.agentId] } ?: return this
+      return copy(targetUrl = target.targetUrl, pathSource = target.pathSource)
+    }
   }
+
+  // One agent's target URL and path source for a path, as its registration reported them, after bounding.
+  data class PathTarget(
+    val targetUrl: String,
+    val pathSource: String,
+  )
 
   // Why addPath refused a path: the reason, for people, and the cause, which the agent decides from whether to retry.
   data class PathRejection(
@@ -143,6 +166,7 @@ internal class ProxyPathManager(
         pathSource = bounded.pathSource,
         identityName = bounded.identityName,
         sdLabels = sdLabels.served,
+        agentTargets = mapOf(agentContext.agentId to PathTarget(bounded.targetUrl, bounded.pathSource)),
       )
     return addValidatedPath(key, agentContext, entry).also { rejection ->
       // Warned only once the path is stored, so an agent retrying a refused registration isn't warned about each time.
@@ -344,7 +368,7 @@ internal class ProxyPathManager(
           ?: if (alreadyServes) null else pathLimitRejection(agentContext, path)
       if (rejection == null) {
         if (entry.isConsolidated)
-          pathMap[path] = agentInfo?.joinedBy(agentContext, entry.identityName) ?: entry
+          pathMap[path] = agentInfo?.joinedBy(agentContext, entry) ?: entry
         else
           takeOverPath(path, agentContext, agentInfo, entry)
         recordRegistration(path, agentContext, alreadyServes)
@@ -398,20 +422,24 @@ internal class ProxyPathManager(
     return rejectPath(agentContext, path, reason, HELD_BY_ANOTHER_IDENTITY)
   }
 
-  // This consolidated path's entry with [agentContext] among its agents. The path takes the agent's identity, which
-  // differs only when every earlier agent is gone. An agent re-registering a path it already backs (a path listed twice
-  // in its config) replaces its own context: a second copy would send it two requests per scrape, and Prometheus
-  // rejects the duplicate samples.
+  // This consolidated path's entry with [agentContext] among its agents, as [entry] registers it. The path takes the
+  // agent's identity, which differs only when every earlier agent is gone, and the agent's target joins the others. An
+  // agent re-registering a path it already backs (a path listed twice in its config) replaces its own context and
+  // target: a second copy would send it two requests per scrape, and Prometheus rejects the duplicate samples.
   private fun AgentContextInfo.joinedBy(
     agentContext: AgentContext,
-    identityName: String,
+    entry: AgentContextInfo,
   ): AgentContextInfo {
     val updated =
       if (agentContexts.any { it.agentId == agentContext.agentId })
         agentContexts.map { if (it.agentId == agentContext.agentId) agentContext else it }
       else
         agentContexts + agentContext
-    return copy(agentContexts = updated, identityName = identityName)
+    return copy(
+      agentContexts = updated,
+      identityName = entry.identityName,
+      agentTargets = agentTargets + entry.agentTargets,
+    ).showingFirstAgent()
   }
 
   // Gives the exclusive [path], which [agentInfo] held, to [agentContext] alone as [entry]. Every other agent on the
@@ -572,7 +600,9 @@ internal class ProxyPathManager(
       if (!isTestMode)
         logger.info { "Removed path /$path for agentId $agentId" }
     } else {
-      pathMap[path] = agentInfo.copy(agentContexts = remaining)
+      // The departing agent's target goes with it, and the path shows the target of whichever agent is now first.
+      pathMap[path] =
+        agentInfo.copy(agentContexts = remaining, agentTargets = agentInfo.agentTargets - agentId).showingFirstAgent()
       if (!isTestMode)
         logger.info { "Removed agentId $agentId from consolidated path /$path" }
     }
