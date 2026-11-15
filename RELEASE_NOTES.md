@@ -12,13 +12,13 @@ TLS natives, and a setting the agent rejects throws a `ConfigLoadException` with
 longer lets one agent hold memory with chunked transfers that never finish or with huge target URLs, flood its log from
 service discovery, or forge lines in its log, and a dashboard client can no longer slow its scrapes. Behind nginx, an
 agent can no longer read or disconnect another identity's agent as it connects, or add agents without limit. Zipkin
-tracing can be turned on, and the Docker quick start connects. The dashboard moves to htmx 4. A standalone proxy or
-agent with a bad setting now exits with one redacted line instead of a stack trace. Read **Before you upgrade**: for
-embedders, the logging configuration, the exception a bad setting throws, and the protobuf version have changed; for
-everyone, the proxy now cuts a path's target URL to 2048 characters, refuses a path with whitespace, a control
-character, `?`, or `#`, and won't start with a scrape-port idle timeout of `0` or a service discovery target that has a
-query or fragment; and behind nginx, it allows at most 10,000 agents connected with one identity, which is every agent
-when agent auth is off.
+tracing can be turned on, and the Docker quick start connects. The dashboard moves to htmx 4 and can copy a target URL.
+A standalone proxy or agent with a bad setting now exits with one redacted line instead of a stack trace. Read **Before
+you upgrade**: for embedders, the logging configuration, the exception a bad setting throws, and the protobuf version
+have changed; for everyone, the proxy now cuts a path's target URL to 2048 characters, refuses a path with whitespace, a
+control character, `?`, or `#`, and won't start with a scrape-port idle timeout of `0` or a service discovery target
+that has a query or fragment; and behind nginx, it allows at most 10,000 agents connected with one identity, which is
+every agent when agent auth is off.
 
 ### Before you upgrade
 
@@ -78,6 +78,10 @@ when agent auth is off.
   your machine; `make demo-down` removes it. `demos/dashboard/README.md` walks through what to show: a failing or hung
   target, a redundant pair of agents, services discovered without a restart, and an agent evicted after it goes
   silent.
+- **Copy a target URL from the dashboard.** Each target URL in the Paths view has a button after it that copies
+  the URL, on a dashboard served over plain http too. It shows a check when the copy worked and a cross when it
+  didn't, and tells a screen reader which.
+- The Agents view highlights the row under the pointer in an agent's registered paths and recent scrapes.
 
 ### Security
 
@@ -236,6 +240,8 @@ when agent auth is off.
 - The API docs no longer list `all` as a log level, which fails startup, and describe the service discovery target
   as it now works: `host:port`, or an `http` or `https` URL, with no user info, query, or fragment. The
   `--sd_target_prefix` help text says the same.
+- The website has a **Live Demo** page, with screenshots of the dashboard and Grafana as the demo's scenarios play
+  out: a failing service, new services found without a restart, and an agent evicted after it goes silent.
 
 ### Build and tooling
 
