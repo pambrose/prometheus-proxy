@@ -18,6 +18,7 @@ DASHBOARD_URL="http://localhost:${DEMO_DASHBOARD_PORT:-8094}/dashboard"
 STANDBY_DASHBOARD_URL="http://localhost:${DEMO_STANDBY_DASHBOARD_PORT:-8095}/dashboard"
 GRAFANA_URL="http://localhost:${DEMO_GRAFANA_PORT:-3000}"
 PROMETHEUS_URL="http://localhost:${DEMO_PROMETHEUS_PORT:-9090}"
+ZIPKIN_URL="http://localhost:${DEMO_ZIPKIN_PORT:-9411}"
 
 # The CSS width every screenshot is taken at, and the themes each is taken in.
 WIDTH=1280
@@ -65,6 +66,7 @@ restore() {
   "$DEMO" proxy-up proxy-standby >/dev/null 2>&1 || true
   "$DEMO" unfilter >/dev/null 2>&1 || true
   "$DEMO" rogue-agent-stop >/dev/null 2>&1 || true
+  "$DEMO" duplicate-agent-stop >/dev/null 2>&1 || true
   rm -rf "$WORK"
 }
 trap restore EXIT
@@ -96,6 +98,19 @@ has_scrapes() {
   count="$(curl -fsS "$1" 2>/dev/null | grep -Eo '<span>Recent scrapes</span><span>[0-9]+</span>' | grep -Eo '[0-9]+')"
   [[ -n "$count" ]] && ((count >= $2))
 }
+
+# Whether agent-east is listed with no paths, as once its copy has taken them.
+east_has_no_paths() { page "" | grep -q 'agent-east</span><span class="host">[^<]*· 0 paths'; }
+
+# The id of a recent registerpath trace of agent-east's, from Zipkin.
+registerpath_trace() {
+  curl -fsS -G "$ZIPKIN_URL/zipkin/api/v2/traces" --data-urlencode serviceName=agent-east \
+    --data-urlencode spanName=proxyservice/registerpath --data-urlencode limit=1 |
+    grep -Eo '"traceId":"[0-9a-f]+"' | head -1 | cut -d'"' -f4
+}
+
+# Whether Zipkin has a registerpath trace of agent-east's.
+has_registerpath_trace() { [[ -n "$(registerpath_trace)" ]]; }
 
 # Whether the dashboard at a base URL lists all three agents.
 has_all_agents() { curl -fsS "$1" 2>/dev/null | grep -q '<span>3 agents</span>'; }
@@ -204,6 +219,12 @@ wait_until "every agent back on the primary" has_all_agents "$DASHBOARD_URL"
 "$DEMO" proxy-up proxy-standby >/dev/null 2>&1
 wait_until "ten healthy paths" healthy 10
 
+step "A call traced through the firewall"
+# The failover reconnected every agent, so Zipkin has their registration calls. Zipkin's UI has one theme, so this is
+# taken once and serves both of the site's.
+wait_until "agent-east's registerpath traces" has_registerpath_trace
+capture "$ZIPKIN_URL/zipkin/traces/$(registerpath_trace)" "$WORK/tracing.png" 496 light 8000
+
 step "A filter at the agent"
 "$DEMO" filter >/dev/null 2>&1
 wait_until "agent-east's filtered catalog scrapes" filtered_catalog
@@ -211,6 +232,15 @@ east="$(agent_id agent-east)"
 wait_until "agent-east's scrapes since the restart" has_scrapes "$DASHBOARD_URL/agents/$east" 11
 shoot_fixed filtered "$DASHBOARD_URL/agents/$east" 763
 "$DEMO" unfilter >/dev/null 2>&1
+wait_until "ten healthy paths" healthy 10
+
+step "A duplicate agent, without consolidated mode"
+"$DEMO" duplicate-agent >/dev/null 2>&1
+wait_until "agent-east-copy to take agent-east's paths" east_has_no_paths
+east="$(agent_id agent-east)"
+wait_until "agent-east's scrapes since the filter's restart" has_scrapes "$DASHBOARD_URL/agents/$east" 4
+shoot_fixed duplicate "$DASHBOARD_URL/agents/$east" 414
+"$DEMO" duplicate-agent-stop >/dev/null 2>&1
 wait_until "ten healthy paths" healthy 10
 
 step "Three services discovered at runtime"
@@ -233,11 +263,13 @@ shoot_paths evicted
 
 step "Writing WebP to ${OUT_DIR#"$REPO_DIR"/}"
 mkdir -p "$OUT_DIR"
-for name in agents paths outage grafana failover filtered discovered evicting evicted; do
+for name in agents paths outage grafana failover filtered duplicate discovered evicting evicted; do
   for theme in "${THEMES[@]}"; do
     file="$(named "$name" "$theme")"
     cwebp -quiet -lossless -z 9 "$WORK/$file.png" -o "$OUT_DIR/$file.webp"
     printf '  %-22s %s\n' "$file.webp" "$(magick identify -format '%wx%h' "$WORK/$file.png")"
   done
 done
+cwebp -quiet -lossless -z 9 "$WORK/tracing.png" -o "$OUT_DIR/tracing.webp"
+printf '  %-22s %s\n' "tracing.webp" "$(magick identify -format '%wx%h' "$WORK/tracing.png")"
 step "Done; the demo is back to normal"
