@@ -30,9 +30,6 @@ nav = [
     { "Docker" = "docker.md" },
     { "Kubernetes" = "kubernetes.md" },
   ]},
-  { "Operations" = [
-    { "Dashboard" = "web-dashboard.md" },
-  ]},
   { "Configuration" = [
     { "Overview" = "configuration/index.md" },
     { "Agent" = "configuration/agent.md" },
@@ -51,6 +48,7 @@ nav = [
     { "Grafana & Alerting" = "grafana.md" },
   ]},
   { "Operations" = [
+    { "Dashboard" = "web-dashboard.md" },
     { "Running in Production" = "production.md" },
     { "Troubleshooting" = "troubleshooting.md" },
   ]},
