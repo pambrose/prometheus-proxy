@@ -23,10 +23,17 @@ import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeSameInstanceAs
+import io.prometheus.Proxy
+import io.prometheus.proxy.ActivityKind
+import io.prometheus.proxy.AgentContext
 import io.prometheus.proxy.PathHistory
+import io.prometheus.proxy.ProxyOptions
 import io.prometheus.proxy.ScrapeRecord
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 class ProxySnapshotTest : StringSpec() {
   private fun agentView(
@@ -47,6 +54,16 @@ class ProxySnapshotTest : StringSpec() {
   // Departures alone, as PathHistory.snapshot hands over paths that left the path map before their first scrape.
   private fun departed(vararg departures: Pair<String, PathHistory.Departure>) =
     PathHistory.Snapshot(departures = departures.toMap())
+
+  // A moment [secs] seconds into a fixed minute, so a test orders scrapes by when they ran.
+  private fun at(secs: Int) = START + secs.seconds
+
+  // [agentId]'s scrape of [path] at [at] ([secs]).
+  private fun scrape(
+    agentId: String,
+    path: String,
+    secs: Int,
+  ) = DashboardFixtures.scrapeRecord(agentId = agentId, path = path, at = at(secs))
 
   init {
     "eviction countdown should be the remaining inactivity budget" {
@@ -360,5 +377,107 @@ class ProxySnapshotTest : StringSpec() {
       views.map { it.path } shouldBe ["a_departed", "b_live", "c_scraped"]
       views.map { it.isDeparted } shouldBe [true, false, true]
     }
+
+    // ==================== An agent's scrapes ====================
+
+    // The detail's Recent scrapes come from every path's history, live or gone: a consolidated path's holds each of its
+    // agents' scrapes, and an agent keeps its scrapes of a path it no longer serves.
+    "an agent's scrapes should be its latest across every path's history, newest first" {
+      val shared =
+        DashboardFixtures.pathView(
+          path = "shared_metrics",
+          agentIds = ["1", "2"],
+          history = [
+            scrape(
+            "2",
+            "shared_metrics",
+            5,
+          ), scrape("1", "shared_metrics", 4), scrape("1", "shared_metrics", 1),
+          ],
+        )
+      val own = DashboardFixtures.pathView(path = "own_metrics", history = [scrape("1", "own_metrics", 3)])
+      val gone = DashboardFixtures.departedPathView(path = "gone_metrics", lastScrape = scrape("1", "gone_metrics", 2))
+      val snapshot =
+        DashboardFixtures.snapshot(
+          agents =
+            [
+              DashboardFixtures.agentView(agentId = "1", paths = [own, shared]),
+              DashboardFixtures.agentView(agentId = "2", agentName = "team-b-01", paths = [shared]),
+            ],
+          paths = [gone, own, shared],
+        )
+
+      snapshot.scrapesOf("1").map { it.path to it.at } shouldBe
+        ["shared_metrics" to at(4), "own_metrics" to at(3), "gone_metrics" to at(2), "shared_metrics" to at(1)]
+      snapshot.scrapesOf("2").map { it.path to it.at } shouldBe ["shared_metrics" to at(5)]
+    }
+
+    "an agent's scrapes should stop at the cap, and an agent with none, or no longer connected, should have none" {
+      val busy =
+        DashboardFixtures.pathView(
+          path = "busy_metrics",
+          agentIds = ["1", "9"],
+          history = (ProxySnapshot.MAX_DETAIL_SCRAPES + 5 downTo 1).map { scrape("1", "busy_metrics", it) } +
+            scrape("9", "busy_metrics", 0),
+        )
+      val snapshot =
+        DashboardFixtures.snapshot(
+          agents =
+            [
+              DashboardFixtures.agentView(agentId = "1", paths = [busy]),
+              DashboardFixtures.agentView(agentId = "2", agentName = "idle-01", paths = emptyList()),
+            ],
+          paths = [busy],
+        )
+
+      snapshot.scrapesOf("1").map { it.at } shouldBe (ProxySnapshot.MAX_DETAIL_SCRAPES + 5 downTo 6).map { at(it) }
+      snapshot.scrapesOf("2").shouldBeEmpty()
+      // Agent 9 has gone, so the snapshot keeps none of its scrapes; its detail says it is no longer connected.
+      snapshot.scrapesOf("9").shouldBeEmpty()
+    }
+
+    // Every session showing the agent renders the same snapshot, so the walk over the histories runs once, at the first
+    // read.
+    "a snapshot should work out its agents' scrapes once, however many read them" {
+      val snapshot =
+        DashboardFixtures.snapshot(
+          agents = [
+            DashboardFixtures.agentView(
+            paths = [DashboardFixtures.pathView(lastScrape = scrape("1", "a", 1))],
+          ),
+          ],
+        )
+
+      snapshot.scrapesOf("1") shouldBeSameInstanceAs snapshot.scrapesOf("1")
+    }
+
+    // ==================== collect ====================
+
+    // The wiring the tests above can't see: a recorded scrape reaches its agent's scrapes through the path history, and
+    // the activity log's change count arrives with its lines. The proxy is built and never started, so binds nothing.
+    "a collect should read agents' scrapes from the path history, and the activity log with its change count" {
+      val proxy =
+        Proxy(
+          options = ProxyOptions(listOf("--dashboard")),
+          inProcessServerName = "snapshot-test-${System.nanoTime()}",
+          testMode = true,
+        )
+      val log = proxy.activityLog.shouldNotBeNull()
+      val agent = AgentContext("10.0.0.1").also { proxy.agentContextManager.addAgentContext(it) }
+      proxy.pathManager.addPath("orders_metrics", "{}", agent).shouldBeNull()
+      proxy.recordScrape(DashboardFixtures.scrapeRecord(agentId = agent.agentId, path = "orders_metrics"))
+
+      val first = ProxySnapshot.collect(proxy)
+      first.scrapesOf(agent.agentId).map { it.path } shouldBe ["orders_metrics"]
+      first.activity shouldBe log.entries()
+      first.activityChangeCount shouldBe log.snapshot().changeCount
+
+      log.record(ActivityKind.BAD_TOKEN, detail = "An unknown agent token")
+      ProxySnapshot.collect(proxy).activityChangeCount shouldBe first.activityChangeCount + 1
+    }
+  }
+
+  companion object {
+    private val START = Instant.parse("2026-11-15T01:00:00Z")
   }
 }

@@ -671,7 +671,8 @@ class ProxyHttpRoutesTest : StringSpec() {
       verify(exactly = 2) { metrics.observeResponseBytes("test-metrics", ProxyMetrics.ENCODING_PLAIN, any()) }
       verify(exactly = 2) { proxy.logActivity(match { it.startsWith("/test-metrics - success - 200") }) }
       verify(exactly = 2) { bus.emit(ProxyEvent.ScrapeCompleted(agentContext.agentId, "test-metrics", true)) }
-      proxy.recentScrapes().map { it.path } shouldBe ["test-metrics", "test-metrics"]
+      // The dashboard's record of each, which its path history keys and shows by path.
+      verify(exactly = 2) { proxy.recordScrape(match { it.path == "test-metrics" }) }
     }
 
     // The route's own answers compare the path as well, so they see it without its extra slashes too: "//blitz-test" is

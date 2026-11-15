@@ -108,6 +108,9 @@ internal data class ActivityEntry(
  *
  * Kept in memory only, so a restart empties it. Written only with the dashboard on, since nothing else reads it.
  *
+ * Every write, a burst's join included, adds one to a change count, which [snapshot] reads with the lines, so the
+ * dashboard can tell a feed that changed from one that didn't and send a page the table only when it did.
+ *
  * Thread-safe. Every access takes the log's own monitor, which is a leaf: nothing else is called while it is held, so a
  * caller holding the path map's lock may record.
  *
@@ -122,6 +125,17 @@ internal class ActivityLog(
     require(capacity > 0) { "capacity must be positive: $capacity" }
   }
 
+  /**
+   * The lines and the change count they were read at, in one read.
+   *
+   * @param changeCount how many writes the log had taken, a burst's join counting as one: equal counts mean equal lines
+   * @param entries the lines, newest first
+   */
+  data class Snapshot(
+    val changeCount: Long = 0L,
+    val entries: List<ActivityEntry> = emptyList(),
+  )
+
   // Oldest first, so a new line goes on the end and the oldest comes off the front.
   private val lines = ArrayDeque<ActivityEntry>()
 
@@ -129,6 +143,10 @@ internal class ActivityLog(
   // monitor.
   private var windowStart: Instant? = null
   private var windowSources = 0
+
+  // How many writes the log has taken, each append and each join. Guarded by lines' monitor, so a snapshot reads it at
+  // the same moment as the lines.
+  private var changeCount = 0L
 
   /**
    * Records [kind] for [agent], when there is one, about [path], when there is one. [identity] defaults to the one the
@@ -176,6 +194,13 @@ internal class ActivityLog(
   /** A copy of the lines, newest first. */
   fun entries(): List<ActivityEntry> = synchronized(lines) { lines.reversed() }
 
+  /**
+   * A copy of the lines, newest first, with the change count, read under one acquisition of the monitor. Read apart, a
+   * write landing between the two could pair the lines from before it with the count from after it, and a reader
+   * comparing counts would never see that write's line.
+   */
+  fun snapshot(): Snapshot = synchronized(lines) { Snapshot(changeCount, lines.reversed()) }
+
   private fun entry(
     kind: ActivityKind,
     agent: AgentContext?,
@@ -206,6 +231,8 @@ internal class ActivityLog(
     while (i >= 0 && entry.at - lines[i].at < window) {
       if (lines[i].isJoinedBy(entry, window)) {
         lines[i] = lines[i].joinedBy(entry)
+        // A join changes a line's count, and perhaps its paths, so it is a change like an append.
+        changeCount += 1
         return true
       }
       i -= 1
@@ -218,6 +245,7 @@ internal class ActivityLog(
     if (lines.size >= capacity)
       lines.removeFirst()
     lines.addLast(entry)
+    changeCount += 1
   }
 
   companion object {

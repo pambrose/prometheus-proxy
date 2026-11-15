@@ -25,12 +25,13 @@ import kotlin.time.Instant
 
 /**
  * The last few scrapes of each path, kept per path, and the paths that have left the path map, for the dashboard's path
- * table.
+ * table and each agent's Recent scrapes, which lists the agent's latest from every path's ring.
  *
- * Kept per path, not in one queue: the dashboard used to rebuild a path whose agent had gone from the recent-scrapes
- * queue, which every path shares. On a proxy with a hundred paths scraped every 15 seconds that queue's 200 records
- * span about 30 seconds, so a gone path left the table within a minute, at the moment an operator came looking for
- * it. Here each path keeps its own ring of [historySize] records.
+ * Kept per path, not in one queue: the dashboard used to rebuild a path whose agent had gone, and each agent's Recent
+ * scrapes, from a recent-scrapes queue that every path shared. On a proxy with a hundred paths scraped every 15
+ * seconds that queue's 200 records spanned about 30 seconds, so a gone path left the table within a minute, at the
+ * moment an operator came looking for it, and an agent's panel held only its last few scrapes. Here each path keeps its
+ * own ring of [historySize] records.
  *
  * A path's departure is kept too, from [recordDeparture], which the path manager calls as the path's last agent goes:
  * when it left, and the agent, identity, target URL, and source its entry showed. Gone rows were rebuilt from scrapes

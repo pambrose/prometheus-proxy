@@ -205,17 +205,12 @@ class Proxy(
   internal val activityLog: ActivityLog? =
     if (options.dashboardEnabled) ActivityLog(proxyConfigVals.dashboard.activityLogSize) else null
 
-  // Structured counterpart to recentReqs, for the operational dashboard. Separate queue rather than a
-  // replacement: the /debug servlet's text format is a stable operator-facing surface, and this one is
-  // sized independently because the dashboard shows more history than a debug dump needs. EvictingQueue is not
-  // thread-safe, so every access takes its own monitor -- see recordScrape / recentScrapes.
-  private val recentScrapes: EvictingQueue<ScrapeRecord> =
-    EvictingQueue.create(proxyConfigVals.dashboard.recentScrapesQueueSize)
-
-  // The same records again, kept per path, so the dashboard's path table can show each path's recent history and keep
-  // a path whose agent has gone for a set time rather than only until 200 newer scrapes push it out of the queue, with
-  // the paths that left the path map, which pathManager records into it. Null unless the dashboard is on, as
-  // activityLog is, so with the dashboard off no departure is kept that nothing would read.
+  // Structured counterpart to recentReqs, for the operational dashboard: each completed scrape, kept per path, so the
+  // path table can show each path's recent history and keep a path whose agent has gone for a set time, and each
+  // agent's panel its latest scrapes across the paths, with the paths that left the path map, which pathManager records
+  // into it. Kept per path rather than in one queue every path shared, which on a busy proxy held only seconds of
+  // history. Null unless the dashboard is on, as activityLog is, so with the dashboard off nothing is kept that nothing
+  // would read.
   internal val pathHistory: PathHistory? =
     if (options.dashboardEnabled)
       PathHistory(
@@ -591,21 +586,13 @@ class Proxy(
     }
   }
 
-  /** Records one completed scrape for the dashboard. Cheap and non-blocking; safe from any thread. */
+  /**
+   * Records one completed scrape for the dashboard, in its path's history, which the path table and each agent's
+   * Recent scrapes read. Cheap and non-blocking; safe from any thread. With the dashboard off, nothing is kept.
+   */
   internal fun recordScrape(record: ScrapeRecord) {
-    synchronized(recentScrapes) {
-      recentScrapes.add(record)
-    }
     pathHistory?.record(record)
   }
-
-  /**
-   * A point-in-time copy of the recent scrapes, newest first.
-   *
-   * Returns a copy rather than a view: [EvictingQueue] is not thread-safe, so a caller iterating the
-   * live queue while a scrape completes would race. Bounded by `proxy.dashboard.recentScrapesQueueSize`.
-   */
-  internal fun recentScrapes(): List<ScrapeRecord> = synchronized(recentScrapes) { recentScrapes.reversed() }
 
   /**
    * Checks if a request path corresponds to a Blitz verification request.

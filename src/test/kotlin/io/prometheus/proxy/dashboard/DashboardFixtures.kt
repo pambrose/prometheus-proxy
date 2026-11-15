@@ -151,25 +151,26 @@ internal object DashboardFixtures {
 
   /**
    * A snapshot whose `paths` defaults to the agents' own paths, matching what
-   * [ProxySnapshot.collect] produces for a proxy with no departed paths.
+   * [ProxySnapshot.collect] produces for a proxy with no departed paths. An agent's Recent scrapes come from the
+   * paths' histories, as [ProxySnapshot.scrapesOf] reads them, so a test gives a path a `history` to fill them.
    */
   fun snapshot(
     agents: List<AgentView> = [agentView()],
-    scrapes: List<ScrapeRecord> = emptyList(),
     paths: List<PathView> = agents.flatMap { it.paths }.distinct(),
     authEnabled: Boolean = false,
     activity: List<ActivityEntry> = emptyList(),
+    activityChangeCount: Long = 0L,
     scrapeNowEnabled: Boolean = false,
     links: List<PathLink> = emptyList(),
   ) = ProxySnapshot(
     agents = agents,
     paths = paths,
-    scrapes = scrapes,
     health = HealthView(agents.size, paths.size, 0, 25, 1, 25),
     maxAgentInactivitySecs = 60,
     scrapePort = TestPorts.PROXY_HTTP_PORT,
     authEnabled = authEnabled,
     activity = activity,
+    activityChangeCount = activityChangeCount,
     scrapeNowEnabled = scrapeNowEnabled,
     links = links,
   )

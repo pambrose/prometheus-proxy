@@ -23,8 +23,10 @@ import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.types.shouldBeSameInstanceAs
 import io.kotest.matchers.types.shouldNotBeSameInstanceAs
+import io.prometheus.proxy.dashboard.ProxyDashboardService.ActivityTable
 import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.hostAllowlist
 import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.isHostAllowed
 import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.isOriginAllowed
@@ -46,7 +48,8 @@ import kotlin.time.TestTimeSource
  * from a foreign one. The live refusal is covered by `ProxyWebDashboardTest`.
  *
  * Also the snapshot cache every page and WebSocket render reads from, which bounds how often a client can make the
- * proxy collect. `ProxyWebDashboardTest` covers the live routes reading through it.
+ * proxy collect. `ProxyWebDashboardTest` covers the live routes reading through it. And the value a push compares to
+ * leave out an Activity table the page already shows.
  */
 class ProxyDashboardServiceTest : StringSpec() {
   /** A collect that counts its calls, returns a new snapshot each time, and, given a [gate], waits on it first. */
@@ -68,6 +71,19 @@ class ProxyDashboardServiceTest : StringSpec() {
     allowedHosts: List<String>,
     allowedOrigins: List<String> = emptyList(),
   ) = isHostAllowed(host, hostAllowlist(allowedHosts, allowedOrigins))
+
+  // The table an Activity push renders from a snapshot whose activity log had taken [changeCount] writes, for the page
+  // message [seq] with [filter].
+  private fun activityTable(
+    changeCount: Long,
+    seq: Long,
+    filter: RowFilter,
+  ) = ActivityTable.of(
+      DashboardFixtures.snapshot(activityChangeCount = changeCount),
+      DashboardLayout.ACTIVITY,
+      seq,
+      filter,
+    )
 
   init {
     "a request with no Origin header should be allowed, since only browsers send one" {
@@ -235,6 +251,38 @@ class ProxyDashboardServiceTest : StringSpec() {
 
         source.count shouldBe 1
         snapshots.forEach { it shouldBeSameInstanceAs snapshots.first() }
+      }
+    }
+
+    // ==================== The Activity table a push sends ====================
+
+    // A push leaves the table out when its ActivityTable equals the one in the last frame the page was sent, so equal
+    // values must mean equal tables, and anything that changes the table must change the value.
+    "an Activity push of an unchanged feed, for the same message, should name the table the page already shows" {
+      val filter = RowFilter.of("east", problemsOnly = true)
+
+      // Two snapshots, as two refreshes collect them, with the feed unchanged in between.
+      activityTable(changeCount = 4, seq = 3, filter) shouldBe activityTable(changeCount = 4, seq = 3, filter)
+    }
+
+    "a change to the feed, the filter, or the page's message should name another table" {
+      val shown = activityTable(changeCount = 4, seq = 3, RowFilter.NONE)
+
+      // The log recorded something, a burst's join included.
+      activityTable(changeCount = 5, seq = 3, RowFilter.NONE) shouldNotBe shown
+      activityTable(changeCount = 4, seq = 3, RowFilter.of("east", problemsOnly = false)) shouldNotBe shown
+      activityTable(changeCount = 4, seq = 3, RowFilter.of("", problemsOnly = true)) shouldNotBe shown
+      // A new message, though its filter is the same: the page may have dropped the frame that carried the last table.
+      activityTable(changeCount = 4, seq = 4, RowFilter.NONE) shouldNotBe shown
+    }
+
+    // A frame for another layout carries no Activity table, so it leaves nothing to compare with, and a page that comes
+    // back to the Activity view, as a back or forward navigation does on the same socket, is sent the table again.
+    "a push for another layout, or before the page has said which it shows, should have no Activity table" {
+      val snapshot = DashboardFixtures.snapshot(activityChangeCount = 4)
+
+      listOf(DashboardLayout.AGENT, DashboardLayout.PATH, null).forEach { layout ->
+        ActivityTable.of(snapshot, layout, seq = 3, RowFilter.NONE).shouldBeNull()
       }
     }
   }

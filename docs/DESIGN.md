@@ -606,6 +606,10 @@ auth is on.
   rejection's reason is a sentence, and a row that scrolled sideways to read it would hide the event it explains.
 - **Time:** the Path Table's local time of day, its date and zone on hover.
 - **States:** the Empty States, for a feed with nothing yet, with no problems, or with no match.
+- **Pushes:** only on a change. Unlike the Path Table, pushed whole every refresh, a page is sent the table again
+  only when the feed has recorded something or the page's search has changed, so a row being read or selected stays
+  put between events. Nothing in it reads the clock as it renders, so the table a page keeps is the one a push would
+  have sent.
 
 ### History Strip
 

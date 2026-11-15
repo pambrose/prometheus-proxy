@@ -19,6 +19,7 @@ package io.prometheus.proxy.dashboard
 import io.prometheus.Proxy
 import io.prometheus.common.Utils.toJsonElement
 import io.prometheus.proxy.ActivityEntry
+import io.prometheus.proxy.ActivityLog
 import io.prometheus.proxy.AgentAuthManager.Companion.LEGACY_IDENTITY_NAME
 import io.prometheus.proxy.PathHistory
 import io.prometheus.proxy.ScrapeRecord
@@ -188,7 +189,6 @@ internal data class HealthView(
 internal data class ProxySnapshot(
   val agents: List<AgentView>,
   val paths: List<PathView>,
-  val scrapes: List<ScrapeRecord>,
   val health: HealthView,
   val maxAgentInactivitySecs: Long,
   // The port Prometheus scrapes, from which the page builds each path's proxy URL.
@@ -197,6 +197,9 @@ internal data class ProxySnapshot(
   val authEnabled: Boolean = false,
   // The activity feed, newest first; empty with the dashboard off, when nothing records.
   val activity: List<ActivityEntry> = emptyList(),
+  // The activity log's change count as [activity] was read with it: equal counts mean equal feeds, which is how the
+  // push loop knows a session's page already shows this feed (see ProxyDashboardService.ActivityTable).
+  val activityChangeCount: Long = 0L,
   // Whether each live path has a Scrape button, proxy.dashboard.scrapeNowEnabled.
   val scrapeNowEnabled: Boolean = false,
   // Each path's links into other tools, proxy.dashboard.links, parsed at startup; none hides the Links column.
@@ -204,7 +207,38 @@ internal data class ProxySnapshot(
 ) {
   fun agent(agentId: String): AgentView? = agents.firstOrNull { it.agentId == agentId }
 
+  /**
+   * Each connected agent's latest scrapes, newest first, at most [MAX_DETAIL_SCRAPES] of each, which its detail's
+   * Recent scrapes shows.
+   *
+   * Read from the paths' histories, every one the snapshot holds, live or gone. A path's history keeps each scrape of
+   * it, whichever agent served it, so a consolidated path's holds several agents' scrapes, and an agent's scrapes of a
+   * path another agent has since taken are still its own. They came from one queue every path shared, which on a busy
+   * proxy held only seconds of history, so an agent's panel could be nearly empty.
+   *
+   * Computed once per snapshot, at the first read, never per session or page: every session renders the same snapshot,
+   * and this walks every scrape it holds, at most the paths it shows times `proxy.dashboard.pathHistorySize`, then
+   * sorts each agent's. Lazily, so a snapshot no session shows an agent's detail from costs nothing more. It takes no
+   * lock: the histories are the copies [PathHistory.snapshot] made.
+   */
+  private val agentScrapes: Map<String, List<ScrapeRecord>> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+    // Only the agents still here: the detail of one that has gone says so rather than listing its scrapes.
+    val connected = agents.mapTo(HashSet()) { it.agentId }
+    paths
+      .asSequence()
+      .flatMap { it.history }
+      .filter { it.agentId in connected }
+      .groupBy { it.agentId }
+      .mapValues { (_, records) -> records.sortedByDescending { it.at }.take(MAX_DETAIL_SCRAPES) }
+  }
+
+  /** [agentId]'s latest scrapes, newest first, at most [MAX_DETAIL_SCRAPES]; none for an agent not connected. */
+  fun scrapesOf(agentId: String): List<ScrapeRecord> = agentScrapes[agentId].orEmpty()
+
   companion object {
+    /** The most scrapes an agent's detail lists, its latest. */
+    const val MAX_DETAIL_SCRAPES = 25
+
     /**
      * Joins each registered path to its recent scrapes, then adds a row for every path the history
      * remembers, by a departure or by scrapes, but the path map no longer holds.
@@ -285,7 +319,7 @@ internal data class ProxySnapshot(
      * That is acceptable only because collects are bounded by the refresh interval — which is why
      * scrape completions deliberately do not wake the push loop.
      *
-     * Cost is three monitor acquisitions per call (the path map, the recent scrapes, the path history),
+     * Cost is three monitor acquisitions per call (the path map, the path history, the activity log),
      * taken one after another and never nested, regardless of how many sessions are connected, which is
      * why the caller collects once and fans out rather than collecting per session.
      */
@@ -294,7 +328,6 @@ internal data class ProxySnapshot(
 
       // One monitor acquire; values are immutable so they are safe to hold onto.
       val pathInfos = proxy.pathManager.allPathContextInfos()
-      val scrapes = proxy.recentScrapes()
 
       val registered =
         pathInfos
@@ -348,10 +381,12 @@ internal data class ProxySnapshot(
           }
           .sortedBy { it.agentName }
 
+      // The lines and their change count in one read, so the count never claims lines the snapshot doesn't hold.
+      val activity = proxy.activityLog?.snapshot() ?: ActivityLog.Snapshot()
+
       return ProxySnapshot(
         agents = agents,
         paths = paths,
-        scrapes = scrapes,
         health =
           HealthView(
             agentCount = agents.size,
@@ -366,7 +401,8 @@ internal data class ProxySnapshot(
         maxAgentInactivitySecs = internal.maxAgentInactivitySecs.toLong(),
         scrapePort = proxy.scrapePort,
         authEnabled = proxy.agentAuthManager.isEnabled,
-        activity = proxy.activityLog?.entries().orEmpty(),
+        activity = activity.entries,
+        activityChangeCount = activity.changeCount,
         scrapeNowEnabled = proxy.proxyConfigVals.dashboard.scrapeNowEnabled,
         links = proxy.options.dashboardLinks,
       )

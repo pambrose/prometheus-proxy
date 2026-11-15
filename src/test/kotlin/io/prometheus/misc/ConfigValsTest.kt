@@ -102,7 +102,6 @@ class ConfigValsTest : StringSpec() {
         port shouldBe 8094
         path shouldBe "dashboard"
         refreshIntervalSecs shouldBe 2
-        recentScrapesQueueSize shouldBe 200
         pathHistorySize shouldBe 20
         departedPathRetentionSecs shouldBe 3600
         activityLogSize shouldBe 500
@@ -125,6 +124,21 @@ class ConfigValsTest : StringSpec() {
         http.port shouldBe 9999
         dashboard.enabled.shouldBeFalse()
         dashboard.port shouldBe 8094
+      }
+    }
+
+    // proxy.dashboard.recentScrapesQueueSize shipped from 4.0.0 until each agent's Recent scrapes moved to the paths'
+    // histories, so a config may still set it. HOCON and tscfg ignore a key the schema doesn't declare, which the
+    // release notes promise: such a config starts as before.
+    "a config that still sets the retired recentScrapesQueueSize should load, ignoring it" {
+      val config =
+        ConfigFactory.parseString("proxy { dashboard { enabled = true, recentScrapesQueueSize = 500 } }")
+          .withFallback(ConfigFactory.load())
+          .resolve()
+
+      ConfigVals(config).proxy.dashboard.apply {
+        enabled.shouldBeTrue()
+        pathHistorySize shouldBe 20
       }
     }
 

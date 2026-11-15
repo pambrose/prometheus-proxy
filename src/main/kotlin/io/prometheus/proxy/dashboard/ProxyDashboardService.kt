@@ -109,7 +109,8 @@ import kotlin.time.TimeSource
  *
  * One shared push loop, not one per session. It wakes on either a topology
  * [io.prometheus.proxy.ProxyEvent] or a timer tick, collects a single [ProxySnapshot], and fans the same
- * rendered fragments out to every connected session.
+ * rendered fragments out to every connected session. An Activity page is sent its table only when the feed or
+ * the page's filter has changed since the last one it was sent (see [ActivityTable]).
  *
  * **Scrape completions deliberately do not wake it.** They arrive at scrape rate — tens per second on a
  * busy proxy — and waking on each would run a snapshot collect that often, taking the same path-map
@@ -174,6 +175,15 @@ internal class ProxyDashboardService(
     // Whether a push for this session has failed to render, which is logged once rather than every refresh.
     @Volatile
     var renderFailed = false
+
+    // Held for the whole of a push to this session, from reading its view to recording what was sent. The push loop
+    // and the session's own socket coroutine both push, and without it the two could record in one order and send in
+    // the other, leaving activityShown naming a table the page never got.
+    val pushing = Mutex()
+
+    // The Activity table in the last frame sent to this page, or null when that frame had none, being for another
+    // layout. Guarded by pushing.
+    var activityShown: ActivityTable? = null
   }
 
   private val sessions = ConcurrentHashMap.newKeySet<Session>()
@@ -436,32 +446,41 @@ internal class ProxyDashboardService(
     session: Session,
     snapshot: ProxySnapshot,
   ) {
-    val view = session.view
-    // Rendered apart from the send. A send fails when the browser has gone, which is routine, but a render that throws
-    // is a bug in this page; caught with the sends, it froze every session on that layout with nothing logged above
-    // DEBUG.
-    val fragment =
-      runCatching {
-        ProxyDashboardHtml.pushFragment(
-          snapshot,
-          view?.selectedId,
-          routeBase,
-          view?.layout,
-          view?.seq ?: 0L,
-          view?.filter ?: RowFilter.NONE,
-        )
-      }.onFailure { e ->
-        if (!session.renderFailed) logger.error(e) { "Failed to render a dashboard push" }
-        session.renderFailed = true
-      }.getOrNull() ?: return
-    // A send fails when the browser has gone, which is routine. Only this coroutine's own cancellation, as the
-    // service stops, is passed on: a gone browser's cancelled channel fails a send with a CancellationException too,
-    // and passing that on would end the loop that pushes to every other session.
-    runCatching { session.send(fragment) }
-      .onFailure {
-        currentCoroutineContext().ensureActive()
-        logger.debug { "Dashboard push not sent: ${it.simpleClassName}" }
-      }
+    session.pushing.withLock {
+      val view = session.view
+      val seq = view?.seq ?: 0L
+      val filter = view?.filter ?: RowFilter.NONE
+      // The Activity table goes only when it differs from the one the page shows; see ActivityTable. For another
+      // layout there is no table, and the flag changes nothing.
+      val activity = ActivityTable.of(snapshot, view?.layout, seq, filter)
+      // Rendered apart from the send. A send fails when the browser has gone, which is routine, but a render that
+      // throws is a bug in this page; caught with the sends, it froze every session on that layout with nothing logged
+      // above DEBUG.
+      val fragment =
+        runCatching {
+          ProxyDashboardHtml.pushFragment(
+            snapshot,
+            view?.selectedId,
+            routeBase,
+            view?.layout,
+            seq,
+            filter,
+            withActivity = activity != session.activityShown,
+          )
+        }.onFailure { e ->
+          if (!session.renderFailed) logger.error(e) { "Failed to render a dashboard push" }
+          session.renderFailed = true
+        }.getOrNull() ?: return
+      // A send fails when the browser has gone, which is routine. Only this coroutine's own cancellation, as the
+      // service stops, is passed on: a gone browser's cancelled channel fails a send with a CancellationException too,
+      // and passing that on would end the loop that pushes to every other session.
+      runCatching { session.send(fragment) }
+        .onSuccess { session.activityShown = activity }
+        .onFailure {
+          currentCoroutineContext().ensureActive()
+          logger.debug { "Dashboard push not sent: ${it.simpleClassName}" }
+        }
+    }
   }
 
   /**
@@ -550,6 +569,44 @@ internal class ProxyDashboardService(
       val collectedIn = generation.load()
       val taken = clock.markNow()
       return collect().also { latest = Entry(it, taken, collectedIn) }
+    }
+  }
+
+  /**
+   * What a push's Activity table is rendered from. A frame for the Activity view carries the table only when this
+   * differs from what the last frame sent to the page carried; otherwise it carries the status bar alone.
+   *
+   * The table went to every Activity page on every refresh, though the feed changes only when the proxy records
+   * something, so a page rewrote the table someone was reading every couple of seconds, undoing a text selection, to
+   * show the same rows. Nothing in the table depends on when it is rendered: each time is the event's own, which the
+   * page converts to the viewer's zone as the frame arrives, and the Identity column follows `proxy.auth`, fixed at
+   * startup. So a table that isn't sent again shows what one sent again would.
+   *
+   * Equal values render equal tables: the change count covers every line and its count, and the rest is what the
+   * page's view contributes. A frame for another layout has no value ([of] returns null), so a page that comes back to
+   * the Activity view, as a back or forward navigation does without a new socket, is sent the table again.
+   *
+   * @param changeCount the activity log's change count, as the snapshot read it with the lines
+   * @param seq the count of the message the page's view came from. A new message, even one asking for the same filter,
+   *   is sent the table again: the page drops a frame stamped below the count it has sent (see
+   *   ProxyDashboardHtml.pushFragment), so the frame that carried the last table may never have been shown, and a back
+   *   or forward navigation replaces the page's table with the one its GET rendered before the page says so
+   * @param filter the search and "Problems only" the table is filtered by
+   */
+  internal data class ActivityTable(
+    val changeCount: Long,
+    val seq: Long,
+    val filter: RowFilter,
+  ) {
+    companion object {
+      /** The table a push for [layout] renders from [snapshot], or null when [layout] has no Activity table. */
+      fun of(
+        snapshot: ProxySnapshot,
+        layout: DashboardLayout?,
+        seq: Long,
+        filter: RowFilter,
+      ): ActivityTable? =
+        if (layout == DashboardLayout.ACTIVITY) ActivityTable(snapshot.activityChangeCount, seq, filter) else null
     }
   }
 

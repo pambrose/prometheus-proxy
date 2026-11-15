@@ -42,7 +42,7 @@ import io.ktor.server.cio.CIO as ServerCIO
 
 // Prometheus gives up on a scrape at its own timeout, which is usually well below the proxy's. A target slower than
 // Prometheus but faster than the proxy is the most common real failure, so it has to show up where operators look:
-// the scrape metrics, /debug, and the dashboard's recent scrapes.
+// the scrape metrics, /debug, and the dashboard's history of the path.
 class InProcessClientCancelledScrapeTest : StringSpec() {
   init {
     "a scrape the client abandons should still be recorded, as client_cancelled" {
@@ -62,7 +62,7 @@ class InProcessClientCancelledScrapeTest : StringSpec() {
         }
       val stubPort = stub.startAndAwaitReady()
 
-      // The assertion reads the dashboard's recent scrapes, which the proxy records only while the dashboard is on.
+      // The assertion reads the path's dashboard history, which the proxy keeps only while the dashboard is on.
       val proxy =
         startProxy(
           serverName = serverName,
@@ -82,8 +82,10 @@ class InProcessClientCancelledScrapeTest : StringSpec() {
 
           runCatchingCancellable { client.get("http://localhost:$HTTP_PORT/$PATH") }.isFailure.shouldBeTrue()
 
+          // What the Paths view's History and the agent's Recent scrapes show for the path.
           eventually(10.seconds) {
-            proxy.recentScrapes().map { it.path to it.outcome } shouldContain (PATH to "client_cancelled")
+            val history = proxy.pathHistory.shouldNotBeNull().snapshot(setOf(PATH)).scrapes[PATH].orEmpty()
+            history.map { it.outcome } shouldContain "client_cancelled"
           }
         } finally {
           if (agent.isRunning) runCatching { agent.stopSync(10.seconds) }

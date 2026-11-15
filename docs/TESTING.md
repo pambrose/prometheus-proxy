@@ -334,7 +334,8 @@ Two support helpers also live here (not test classes themselves):
   dropped once full, a burst from one agent folded into one line that counts it and names its first paths, bursts from
   agents registering at once each one line, a burst ending at its window or at another agent, kind, or group, a source's
   events within its window counted on one line, past its most sources a window the rest counted on one, every value cut,
-  a log with no room refused, and which kinds are problems
+  a log with no room refused, and which kinds are problems; every write, a burst's join and a source's repeat included,
+  adding one to the change count a snapshot reads with the lines, and a read leaving it as it was
 - **PathHistoryTest** — the dashboard's per-path scrape history and departures: each path keeps only its newest
   records, newest first, and a busy path can't push another's out; recording alone holds the history to the live paths
   plus the gone-path cap, evicting the path scraped least recently, with no snapshot to prune it; a registered path
@@ -374,9 +375,10 @@ Two support helpers also live here (not test classes themselves):
 - **ProxyDashboardHtmlTest** (`dashboard/`) — Dashboard renderer: top-level out-of-band push regions, agent- and
   path-centric layouts, tolerant selection and layout parsing, departed paths, an agent's identity in its row and
   detail, the data `demos/dashboard/screenshots.sh` reads (an agent row's id, name, and path count, the name escaped and
-  through `agentLabel`, and the detail's scrape count) and the one width of a scrape time it orders as text, links at a
-  root mount, the nav, the script's after-push work and scrape-now request, an agent's uptime, failover markers,
-  accessibility, and the WebSocket connection indicator
+  through `agentLabel`, and the detail's scrape count) and the one width of a scrape time it orders as text, the
+  detail's Recent scrapes (the selected agent's alone from a shared path's history, its latest across its paths, newest
+  first, at most the cap, which the header counts), links at a root mount, the nav, the script's after-push work and
+  scrape-now request, an agent's uptime, failover markers, accessibility, and the WebSocket connection indicator
 - **PathTableHtmlTest** (`dashboard/`) — the Paths view's table and search: the history strip (one element per run, a
   floored percentage, no status pill, visible under forced colours), the Identity column (shown while agent auth is
   on, the legacy token as a shared token), the search (matching rows, the match count, the empty states, the form
@@ -396,7 +398,8 @@ Two support helpers also live here (not test classes themselves):
 - **ActivityHtmlTest** (`dashboard/`) — the Activity view: each line's time, event, agent, path, and detail, newest
   first; problems as crit tags and take-overs as warn tags; a burst's count and first paths; dashes for a line with no
   agent; the Identity column while agent auth is on; escaped values; the search, its match count, and its empty
-  states; the form at the view's own route; and the push carrying the status bar and the table, out of band
+  states; the form at the view's own route; and the push carrying the status bar and the table, out of band, or the
+  status bar alone, still the frame's first tag, when the page already shows the table
 - **ScrapeSummaryTest** (`dashboard/`) — a scrape-now's summary: status, outcome, time, size, content type, families,
   samples, and `# EOF`; families and samples counted as the agent's metric filter reads them: a quoted name whole, a
   tab after the keyword, a HELP or UNIT line with no TYPE, an indented comment, and lines split at line feeds alone; an
@@ -418,12 +421,18 @@ Two support helpers also live here (not test classes themselves):
 - **ProxyDashboardServiceTest** (`dashboard/`) — Dashboard request guards: the WebSocket Origin check (own host,
   `allowedOrigins`, foreign or malformed origins refused), the opt-in `allowedHosts` Host check against DNS rebinding,
   and the snapshot cache pages and sessions render from: one collect per refresh interval however many reads, shared
-  by concurrent reads, and none reused across a topology change, even one landing mid-collect
+  by concurrent reads, and none reused across a topology change, even one landing mid-collect; and the value a push
+  compares to leave out an Activity table the page already shows (`ActivityTable`): equal for an unchanged feed and the
+  same message, different on a change of the feed, the search, "Problems only", or the message, and none for another
+  layout
 - **ProxySnapshotTest** (`dashboard/`) — Dashboard view models: eviction countdown, health thresholds, failover
   position, a path's history as runs of like results, oldest first, and `buildPathViews` joining registered paths to
   their history and latest scrape and surfacing departed ones with theirs: a path that departed before its first scrape,
   with its departure's agent, identity, target, and source; a departure's attribution over the last scrape's, which
-  names the agent and identity when there is no departure; and no gone row for a path the path map still holds
+  names the agent and identity when there is no departure; and no gone row for a path the path map still holds; an
+  agent's scrapes (`scrapesOf`), its latest across every path's history, live or gone, newest first and at most the
+  cap, none for an agent with none or no longer connected, and worked out once per snapshot; and `collect`, from a proxy
+  built but never started, reading them from the path history and the activity log's lines with their change count
 
 One support helper also lives here (not a test class itself):
 
@@ -516,7 +525,7 @@ These support helpers also live here (not test classes themselves):
   same goes for every `proxy.` or `agent.` key a test source under `src/test/kotlin` passes as a `-D` setting in a
   string literal, which HOCON ignores just the same; a key built at run time isn't seen
 - **ConfigValsTest** — ConfigVals auto-generated from HOCON schema (validates default values, including the empty
-  `proxy.dashboard.links`)
+  `proxy.dashboard.links`); a config that still sets the retired `proxy.dashboard.recentScrapesQueueSize` loads
 - **DashboardMetricNamesTest** — the Grafana dashboards, the alert rules, the docs' PromQL, and the metric names
   on the website's pages all name series the proxy and agent expose (a counter only with its `_total` suffix); proxy
   panels filter by the job and instance pickers and agent panels by the agent picker; every counter is declared
@@ -637,11 +646,11 @@ mechanism that the standard suite cannot reach:
   label, a root-mounted base path, with `allowedHosts` set a 403 on every route
   for a request naming an unknown host, page GETs and WebSocket messages rendering the cached snapshot while a
   topology change still shows on the next page, a gone path staying in the path layout after more scrapes than
-  the recent-scrapes queue holds, an agent's identity in both layouts with the path search filtering from the URL
+  the retired recent-scrapes queue held, an agent's identity in both layouts with the path search filtering from the URL
   and over the socket, a path the agent's identity may not register in the Activity view, from a GET and a push, and
   a session kept open through a push that fails to render, and a scrape-now against a stub target returning what it
-  had while the scrape metrics, the History, and the recent scrapes stay as Prometheus's scrape left them, refused
-  within its cooldown, for an unknown path, without htmx's header, or from another origin, and absent when off
+  had while the scrape metrics, the History, and the agent's Recent scrapes stay as Prometheus's scrape left them,
+  refused within its cooldown, for an unknown path, without htmx's header, or from another origin, and absent when off
 - **TlsMutualAuthRejectionTest** — the negative mutual-TLS path over a real Netty handshake, which the
   in-process TLS specs cannot perform (item 28 in `docs/archive/CODE_REVIEW_JUNE_2026.md`)
 

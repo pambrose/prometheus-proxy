@@ -35,8 +35,7 @@ and how recent scrapes actually went.
         path = "dashboard"          // Served at http://<proxy>:8094/dashboard
         host = "0.0.0.0"            // "127.0.0.1" keeps it on the proxy host
         refreshIntervalSecs = 2     // How often drifting counters are re-pushed
-        recentScrapesQueueSize = 200  // Recent scrapes across all agents, for each agent's panel
-        pathHistorySize = 20        // Scrapes kept per path, for the History column
+        pathHistorySize = 20        // Scrapes kept per path, for History and each agent's Recent scrapes
         departedPathRetentionSecs = 3600  // How long a path whose agent has gone stays listed
         activityLogSize = 500       // Lines kept in the Activity view
         scrapeNowEnabled = true     // A Scrape button on each path; false removes it and its route
@@ -135,7 +134,11 @@ Agents are listed on the left. Selecting one shows, on the right:
 | **Identity** | agent name, remote address, host name, the [auth identity](security/index.md) it connected as, launch ID, consolidated flag |
 | **Liveness** | uptime, idle time, scrape backlog depth, seconds until stale-agent eviction |
 | **Paths** | every path this agent has registered, and whether a path is shared with other agents |
-| **Recent scrapes** | this agent's own scrapes, with status, duration and payload size |
+| **Recent scrapes** | this agent's latest 25 scrapes across its paths, newest first, with status, duration and payload size |
+
+An agent's recent scrapes come from each path's own history, the one behind the [History](#the-paths-layout) column, so
+other agents' busy paths can't push them out. A path several agents share keeps all of their scrapes, and each agent's
+panel lists its own.
 
 The remote address is the `host:port` the agent's connection came from, without a reverse DNS lookup. With the
 transport filter disabled, as behind an nginx reverse proxy, it reads `Unknown`: the connection there comes from the
@@ -303,7 +306,8 @@ three paths, so an agent registering two thousand paths takes one row rather tha
 the first time the agent is told it, not on each retry. Bad tokens from one host within a minute are counted on one
 row, and at most ten hosts a minute get a row of their own; the rest of that minute's are counted on one, so a flood
 from many addresses can't push everything else out of the feed. A connect or a path change appears at once; a refusal
-or a bad token, which changes nothing else on the page, by the next refresh.
+or a bad token, which changes nothing else on the page, by the next refresh. The table is sent to your page again only
+when the feed has changed, or your search has, so a row you are reading or selecting isn't replaced on every refresh.
 
 The feed keeps the last `activityLogSize` rows (default 500), in memory only, so a restart empties it. It is a view of
 the recent past, for finding out why something didn't appear, not an audit log; the proxy's log has every event.
@@ -345,7 +349,8 @@ State is collected once per update and shared across every connected browser, so
 with the number of open dashboards. Loading or reloading a page reuses that collection too, as long as it is
 less than `refreshIntervalSecs` old and no agent or path has changed since, so requesting pages in a loop
 can't make the proxy collect any faster. Counters that drift rather than change — backlog depth, map sizes,
-eviction countdowns — refresh on `refreshIntervalSecs` rather than on every event.
+eviction countdowns — refresh on `refreshIntervalSecs` rather than on every event, and an Activity page is sent its
+table only when the feed or its search has changed.
 
 ## Running an HA pair
 
@@ -412,5 +417,8 @@ Both are lists, so set them in a config file; see [Dashboard configuration](conf
   discovery serves, stay the first registrant's.
 - **Departed paths age out.** A gone path stays for `departedPathRetentionSecs` (default 3600) after its agent
   left or its last scrape, whichever is later, at most 1,000 of them at once, and none survives a proxy restart.
+- **An agent's recent scrapes are what its paths keep.** Its panel lists its latest 25 from the `pathHistorySize`
+  scrapes (default 20) each path keeps, so an agent with one path lists at most 20, and a path shared with other agents
+  holds theirs in the same 20. They go as their paths' histories do, and none survives a proxy restart.
 - **The activity feed is short-lived.** It keeps the last `activityLogSize` rows (default 500), and none survives a
   proxy restart.

@@ -26,7 +26,6 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeTrue
-import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.ints.shouldBeLessThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
@@ -1380,7 +1379,6 @@ class ScrapeDispatchTest : StringSpec() {
       verify(exactly = 0) { proxy.recordScrape(any()) }
       verify(exactly = 0) { proxy.metrics(any<ProxyMetrics.() -> Unit>()) }
       verify(exactly = 0) { bus.emit(any()) }
-      proxy.recentScrapes().shouldBeEmpty()
     }
 
     // The Authorization header is forwarded to the agent, so over a gRPC connection without TLS the proxy says that

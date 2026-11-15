@@ -18,7 +18,8 @@ you upgrade**: for embedders, the logging configuration, the exception a bad set
 have changed; for everyone, the proxy now cuts a path's target URL to 2048 characters, refuses a path with whitespace, a
 control character, `?`, or `#`, and won't start with a scrape-port idle timeout of `0`, a service discovery target
 that has a query or fragment, or a `proxy.auth` identity named `legacy-agent-token`; and behind nginx, it allows at
-most 10,000 agents connected with one identity, which is every agent when agent auth is off.
+most 10,000 agents connected with one identity, which is every agent when agent auth is off. The dashboard now ignores
+`proxy.dashboard.recentScrapesQueueSize`.
 
 ### Before you upgrade
 
@@ -75,6 +76,11 @@ most 10,000 agents connected with one identity, which is every agent when agent 
   for the shared token. The proxy now refuses to start with one, with `Invalid configuration:`, whether or not
   `proxy.agentToken` is set. Rename the identity before you upgrade; its agents need no change, since they present
   only its token.
+- **`proxy.dashboard.recentScrapesQueueSize` is ignored.** It sized one queue of recent scrapes that every agent
+  shared, from which each agent's panel on the dashboard listed its own; on a busy proxy the queue held only seconds
+  of them, so a panel could be nearly empty. A panel now lists the agent's latest 25 from each path's own history,
+  `proxy.dashboard.pathHistorySize` (20) scrapes per path, so the queue and its setting are gone. A config that still
+  sets it starts as before, since the proxy ignores a setting it doesn't know; you can remove it.
 
 ### New Features
 

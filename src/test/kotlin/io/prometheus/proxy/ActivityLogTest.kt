@@ -209,6 +209,58 @@ class ActivityLogTest : StringSpec() {
       shouldThrow<IllegalArgumentException> { log(capacity = 0) }
     }
 
+    // ==================== The change count ====================
+
+    // The dashboard sends an Activity page its table only when the count has moved, so every write has to move it: a
+    // join changes only a line's count, and a page that missed it would show the burst short until the next new line.
+    "every write should add one to the change count, a burst's join and a source's repeat too" {
+      val log = log(capacity = 2)
+      val east = agent("agent-east")
+
+      log.snapshot().changeCount shouldBe 0L
+      log.record(AGENT_CONNECTED, east)
+      log.snapshot().changeCount shouldBe 1L
+      log.record(PATH_REGISTERED, east, "p1")
+      log.record(PATH_REGISTERED, east, "p2")
+      log.snapshot().apply {
+        changeCount shouldBe 3L
+        entries.first().count shouldBe 2
+      }
+      log.recordFromSource("host-1", BAD_TOKEN, "An unknown agent token, from host-1")
+      log.recordFromSource("host-1", BAD_TOKEN, "An unknown agent token, from host-1")
+      // The third line pushed the first out, which is one write, not two.
+      log.snapshot().apply {
+        changeCount shouldBe 5L
+        entries.map { it.kind } shouldBe [BAD_TOKEN, PATH_REGISTERED]
+      }
+    }
+
+    // Past MAX_SOURCES_PER_WINDOW sources a window, the rest are counted on one line, and each one counted is a write.
+    "a source counted on the line for the rest should add one to the change count" {
+      val log = log()
+
+      (1..ActivityLog.MAX_SOURCES_PER_WINDOW + 2).forEach {
+        log.recordFromSource("host-$it", BAD_TOKEN, "From host-$it")
+      }
+
+      log.snapshot().changeCount shouldBe (ActivityLog.MAX_SOURCES_PER_WINDOW + 2).toLong()
+      log.entries() shouldHaveSize ActivityLog.MAX_SOURCES_PER_WINDOW + 1
+    }
+
+    "a read should leave the change count as it was, and a snapshot should hold the lines entries() lists" {
+      val log = log()
+      log.record(AGENT_CONNECTED, agent("agent-east"))
+      now += 10.seconds
+      log.record(PATH_REGISTERED, agent("agent-west"), "p1")
+
+      val first = log.snapshot()
+      log.entries()
+      val second = log.snapshot()
+
+      second shouldBe first
+      second.entries shouldBe log.entries()
+    }
+
     "only refusals, rejections, bad tokens, and evictions should be problems" {
       ActivityKind.entries.filter { it.isProblem } shouldBe
         [ActivityKind.AGENT_EVICTED, ActivityKind.AGENT_REFUSED, BAD_TOKEN, PATH_REJECTED]

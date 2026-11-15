@@ -21,7 +21,9 @@ package io.prometheus.proxy.dashboard
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldEndWith
 import io.kotest.matchers.string.shouldNotContain
+import io.kotest.matchers.string.shouldStartWith
 import io.prometheus.proxy.ActivityEntry
 import io.prometheus.proxy.ActivityKind
 import io.prometheus.proxy.dashboard.DashboardFixtures.activityEntry
@@ -159,6 +161,24 @@ class ActivityHtmlTest : StringSpec() {
       html shouldNotContain ProxyDashboardHtml.PATH_TABLE_ID
       html shouldNotContain ProxyDashboardHtml.AGENT_LIST_ID
       html shouldContain ProxyDashboardHtml.STATUS_ID
+    }
+
+    // The push loop leaves the table out when the page already shows it. The frame is then the status bar alone, still
+    // its first tag, so the page's stale-frame filter reads its stamp as before; the other layouts' regions don't
+    // depend on the flag.
+    "a push without the activity table should carry the status bar alone, and leave the other layouts' regions" {
+      val snap = snapshot()
+      val bare =
+        ProxyDashboardHtml.pushFragment(snap, null, "/dashboard", DashboardLayout.ACTIVITY, 7, withActivity = false)
+
+      bare shouldStartWith """<span class="bar-right" id="${ProxyDashboardHtml.STATUS_ID}" hx-swap-oob="true" """
+      bare shouldContain """${ProxyDashboardHtml.VIEW_ATTR}="7""""
+      bare shouldNotContain ProxyDashboardHtml.ACTIVITY_ID
+      bare shouldEndWith "</span>"
+      listOf(DashboardLayout.AGENT, DashboardLayout.PATH).forEach { layout ->
+        ProxyDashboardHtml.pushFragment(snap, null, "/dashboard", layout, withActivity = false) shouldBe
+          ProxyDashboardHtml.pushFragment(snap, null, "/dashboard", layout)
+      }
     }
 
     "the Detail column should wrap where the rest of the row doesn't" {

@@ -456,11 +456,12 @@ internal object ProxyDashboardHtml {
       }
     }
 
-    recentScrapes(snapshot.scrapes.filter { it.agentId == agent.agentId })
+    recentScrapes(snapshot.scrapesOf(agent.agentId))
   }
 
   // The detail's Recent scrapes: a header carrying their count as data too, for demos/dashboard/screenshots.sh, then a
-  // row for each of the latest MAX_DETAIL_SCRAPES.
+  // row for each. The snapshot has already cut them to the agent's latest ProxySnapshot.MAX_DETAIL_SCRAPES, so the
+  // count is the rows shown.
   private fun DIV.recentScrapes(scrapes: List<ScrapeRecord>) {
     div("section") {
       attributes[SCRAPE_COUNT_ATTR] = "${scrapes.size}"
@@ -470,7 +471,7 @@ internal object ProxyDashboardHtml {
     if (scrapes.isEmpty()) {
       div("empty pad") { +"No scrapes recorded for this agent yet" }
     } else {
-      scrapes.take(MAX_DETAIL_SCRAPES).forEach { record ->
+      scrapes.forEach { record ->
         div("kv scrape") {
           span("t") { scrapeTime(record.at) }
           span("k") { +"/${record.path}" }
@@ -503,6 +504,10 @@ internal object ProxyDashboardHtml {
    * status region; the page drops a frame stamped below the count it has sent since, which describes a
    * page it no longer shows. The status region goes first, so the stamp is on the frame's first tag: the
    * page matches it there, anchored at the start, which no agent-supplied value can reach.
+   *
+   * [withActivity] false leaves the Activity table out of an Activity frame, which then carries the status bar alone:
+   * the push loop passes it when the session's page already shows the table this frame would render (see
+   * ProxyDashboardService.ActivityTable). Every other region is rendered whatever it says.
    */
   fun pushFragment(
     snapshot: ProxySnapshot,
@@ -511,6 +516,7 @@ internal object ProxyDashboardHtml {
     layout: DashboardLayout? = DashboardLayout.AGENT,
     viewSeq: Long = 0L,
     filter: RowFilter = RowFilter.NONE,
+    withActivity: Boolean = true,
   ): String =
     buildString {
       append(createHTML().span("bar-right") { statusInner(snapshot, oob = true, viewSeq) })
@@ -525,7 +531,7 @@ internal object ProxyDashboardHtml {
         }
 
         DashboardLayout.ACTIVITY -> {
-          append(createHTML().div("scroller") { activityTable(snapshot, filter, oob = true) })
+          if (withActivity) append(createHTML().div("scroller") { activityTable(snapshot, filter, oob = true) })
         }
 
         null -> {}
@@ -581,7 +587,6 @@ internal object ProxyDashboardHtml {
 
   private const val UNASSIGNED = "Unassigned"
   private const val BRAND = "prometheus-proxy"
-  private const val MAX_DETAIL_SCRAPES = 25
 
   // An en dash for "the agent never told us", kept distinct from an empty cell, which would read as a
   // rendering bug rather than as absent data.
