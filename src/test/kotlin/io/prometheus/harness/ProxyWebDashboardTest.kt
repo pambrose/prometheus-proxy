@@ -335,7 +335,8 @@ class ProxyWebDashboardTest : StringSpec() {
     }
 
     // Identities and the search, end to end: the proxy records the identity the agent's token resolves to, at
-    // registerAgent and on its path; the Paths view shows it, and filters by the URL's search and by the socket's.
+    // registerAgent and on its path; the Paths view shows it, and filters by the URL's search and by the socket's. The
+    // agent is refused a path its identity's glob doesn't match, which only the Activity view shows.
     "the path layout should show identities and filter by the URL's search and the socket's" {
       withDashboard(
         IDENTITY_HTTP_PORT,
@@ -358,11 +359,23 @@ class ProxyWebDashboardTest : StringSpec() {
         client.get("$base/dashboard").bodyAsText() shouldContain
           """web-ui-identity-agent<span class="tag">team_a</span>"""
 
+        eventually(30.seconds) {
+          val feed = client.get("$base/dashboard/activity").bodyAsText()
+
+          feed shouldContain """<td class="event">connected</td>"""
+          feed shouldContain """<td class="event"><span class="tag crit">rejected</span></td>"""
+          feed shouldContain "/ui_forbidden_metrics"
+          feed shouldContain "is not authorized to register path /ui_forbidden_metrics"
+        }
+        client.get("$base/dashboard/activity?problems=1").bodyAsText() shouldNotContain "connected</td>"
+
         client.webSocket(socketUrl) {
           send(Frame.Text("""{"layout":"PATH","seq":1,"search":"?q=nothing-like-this"}"""))
           awaitFrame("No paths match the filter")
           send(Frame.Text("""{"layout":"PATH","seq":2,"search":"?q=ui_identity"}"""))
           awaitFrame("/ui_identity_metrics")
+          send(Frame.Text("""{"layout":"ACTIVITY","seq":3,"search":"?problems=1"}"""))
+          awaitFrame("""id="${ProxyDashboardHtml.ACTIVITY_ID}" hx-swap-oob="true" data-match-count="Showing 1 of""")
         }
       }
     }

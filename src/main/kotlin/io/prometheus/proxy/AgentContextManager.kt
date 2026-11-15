@@ -45,6 +45,8 @@ internal class AgentContextManager(
   // Proxy passes its shared instance explicitly.
   private val eventBus: ProxyEventBus = ProxyEventBus(),
   private val clock: TimeSource = Monotonic,
+  // The dashboard's activity feed, where a refused connect goes; null with the dashboard off.
+  private val activityLog: ActivityLog? = null,
 ) {
   // Map agent_id to AgentContext
   private val agentContextMap = ConcurrentHashMap<String, AgentContext>()
@@ -137,7 +139,8 @@ internal class AgentContextManager(
   }
 
   // A refused connect is logged at WARN at most once a minute for each identity, and at DEBUG otherwise: a client that
-  // calls in a loop is refused on every call, and a WARN each time would flood the log.
+  // calls in a loop is refused on every call, and a WARN each time would flood the log. The activity feed gets the
+  // same once a minute.
   private fun logRefusal(
     identity: String,
     maxPerIdentity: Int,
@@ -154,10 +157,16 @@ internal class AgentContextManager(
     val message =
       "Refused a connect: $maxPerIdentity agents are already connected ${identityDesc(identity)}, the " +
         "proxy.internal.maxAgentsPerIdentity limit, until one disconnects or is evicted"
-    if (warn)
+    if (warn) {
       logger.warn { message }
-    else
+      activityLog?.record(
+        ActivityKind.AGENT_REFUSED,
+        identity = identity,
+        detail = "Already at its proxy.internal.maxAgentsPerIdentity limit ($maxPerIdentity)",
+      )
+    } else {
       logger.debug { message }
+    }
   }
 
   /** Announces a pending context as a connected agent; called on its first authenticated call. Idempotent. */

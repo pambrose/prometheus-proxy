@@ -202,6 +202,9 @@ class ProxyServiceImplTest : StringSpec() {
     return proxy to agentContext
   }
 
+  // A real activity feed for this mock proxy, which it returns.
+  private fun Proxy.withActivityLog() = ActivityLog(100).also { every { activityLog } returns it }
+
   // Runs [block] with [identity] on the gRPC Context, as AgentAuthServerInterceptor attaches it.
   private fun <T> withIdentity(
     identity: AgentIdentity,
@@ -320,6 +323,53 @@ class ProxyServiceImplTest : StringSpec() {
       response.valid.shouldBeTrue()
       agentContext.identityName shouldBe "east"
       agentContext.authIdentityName shouldBe ""
+    }
+
+    "registerAgent should put the agent's connect in the activity feed, with where it came from" {
+      val (proxy, agentContext) = proxyWithRealAgentContext()
+      val log = proxy.withActivityLog()
+      val request =
+        registerAgentRequest {
+          agentId = agentContext.agentId
+          agentName = "agent-east"
+          hostName = "worker-3"
+        }
+
+      withIdentity(AgentIdentity("east", ByteArray(0), emptyList())) {
+        runBlocking { ProxyServiceImpl(proxy).registerAgent(request) }
+      }.valid.shouldBeTrue()
+
+      log.entries().single().apply {
+        kind shouldBe ActivityKind.AGENT_CONNECTED
+        agentName shouldBe "agent-east"
+        identity shouldBe "east"
+        detail shouldBe "From remote-addr, host worker-3"
+      }
+    }
+
+    // A denied path goes in the activity feed through the path manager's noteRejection, as every rejection does, which
+    // says each once however often the agent retries.
+    "a path an identity may not register should be noted as a rejection" {
+      val (proxy, agentContext) = proxyWithRealAgentContext()
+      val pathManager = proxy.pathManager
+      val request =
+        registerPathRequest {
+          agentId = agentContext.agentId
+          path = "team_b_metrics"
+        }
+
+      withIdentity(AgentIdentity("team_a", ByteArray(0), ["team_a_*"])) {
+        runBlocking { ProxyServiceImpl(proxy).registerPath(request) }
+      }.rejectionCause shouldBe PathRejectionCause.NOT_AUTHORIZED
+
+      verify {
+        pathManager.noteRejection(
+          agentContext,
+          "team_b_metrics",
+          "Agent identity 'team_a' is not authorized to register path /team_b_metrics",
+          PathRejectionCause.NOT_AUTHORIZED,
+        )
+      }
     }
 
     "registerAgent with agent auth off should record no identity" {

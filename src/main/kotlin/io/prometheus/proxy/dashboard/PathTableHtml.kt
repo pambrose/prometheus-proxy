@@ -24,13 +24,12 @@ import io.prometheus.proxy.dashboard.ProxyDashboardHtml.PATH_TABLE_ID
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.PROXY_PATH_ATTR
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SCRAPE_PORT_ATTR
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.agentLabel
+import io.prometheus.proxy.dashboard.ProxyDashboardHtml.renderFilters
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.scrapeTime
 import kotlinx.html.BUTTON
 import kotlinx.html.ButtonType
 import kotlinx.html.DIV
 import kotlinx.html.FlowContent
-import kotlinx.html.FormMethod
-import kotlinx.html.InputType
 import kotlinx.html.TBODY
 import kotlinx.html.THEAD
 import kotlinx.html.TR
@@ -38,10 +37,7 @@ import kotlinx.html.ThScope
 import kotlinx.html.button
 import kotlinx.html.caption
 import kotlinx.html.div
-import kotlinx.html.form
 import kotlinx.html.i
-import kotlinx.html.input
-import kotlinx.html.label
 import kotlinx.html.span
 import kotlinx.html.table
 import kotlinx.html.tbody
@@ -60,82 +56,40 @@ import kotlinx.html.tr
  * helpers both layouts need: [agentLabel], which both must name an agent through, and [scrapeTime].
  */
 internal object PathTableHtml {
-  const val FILTER_QUERY_ID = "path-q"
-  const val FILTER_PROBLEMS_ID = "path-problems"
-
-  // On #path-table: how many rows the filter left, which the page's script says aloud once per change of filter.
-  const val MATCH_COUNT_ATTR = "data-match-count"
-
-  /**
-   * The search and the table, as the page first renders them.
-   *
-   * The search sits outside the table's out-of-band region, so a push never replaces the input someone is typing in.
-   * It is a plain GET form, so it works without the page's script, by navigating to `/paths?q=…&problems=1`; the
-   * script applies a change as it is typed instead, and keeps the URL in step (see ProxyDashboardHtml's SELECTION_JS).
-   */
+  /** The search and the table, as the page first renders them; see [ProxyDashboardHtml.renderFilters]. */
   fun FlowContent.renderPathTable(
     snapshot: ProxySnapshot,
     routeBase: String,
-    filter: PathFilter,
+    filter: RowFilter,
   ) {
-    form(action = "$routeBase/paths", method = FormMethod.get, classes = "filters") {
-      attributes["role"] = "search"
-      input(type = InputType.search, name = PathFilter.QUERY_PARAM) {
-        attributes["id"] = FILTER_QUERY_ID
-        attributes["aria-label"] = "Filter paths"
-        attributes["placeholder"] = "Filter by path, agent, target, or identity"
-        attributes["maxlength"] = "${PathFilter.MAX_QUERY_LENGTH}"
-        attributes["autocomplete"] = "off"
-        value = filter.query
-      }
-      label {
-        input(type = InputType.checkBox, name = PathFilter.PROBLEMS_PARAM) {
-          attributes["id"] = FILTER_PROBLEMS_ID
-          value = PathFilter.PROBLEMS_ON
-          checked = filter.problemsOnly
-        }
-        +"Problems only"
-      }
-    }
+    renderFilters(routeBase, DashboardLayout.PATH, filter)
     div("scroller") { pathTable(snapshot, filter, oob = false) }
   }
 
   /** The table region, `#path-table`, which every push for the Paths view replaces. */
   fun DIV.pathTable(
     snapshot: ProxySnapshot,
-    filter: PathFilter,
+    filter: RowFilter,
     oob: Boolean,
   ) {
     attributes["id"] = PATH_TABLE_ID
     if (oob) attributes["hx-swap-oob"] = "true"
     val rows = if (filter.isActive) snapshot.paths.filter(filter::matches) else snapshot.paths
-    val matchCount = "Showing ${rows.size} of ${snapshot.paths.size} paths"
-    attributes[MATCH_COUNT_ATTR] = matchCount
-    when {
-      snapshot.paths.isEmpty() -> {
-        div("empty pad") { +"No paths registered" }
-      }
-
-      rows.isEmpty() && filter.problemsOnly && filter.query.isEmpty() -> {
-        div("empty pad") { +"No problems: every path's last scrape succeeded" }
-      }
-
-      rows.isEmpty() -> {
-        div("empty pad") { +"No paths match the filter" }
-      }
-
-      else -> {
-        pathRows(snapshot, rows, matchCount.takeIf { filter.isActive })
-      }
-    }
+    if (filteredTableStart(TEXT, filter, rows.size, snapshot.paths.size)) pathRows(snapshot, rows)
   }
+
+  private val TEXT =
+    TableText(
+      noun = "paths",
+      empty = "No paths registered",
+      noProblems = "No problems: every path's last scrape succeeded",
+      noMatch = "No paths match the filter",
+    )
 
   private fun DIV.pathRows(
     snapshot: ProxySnapshot,
     rows: List<PathView>,
-    matchCount: String?,
   ) {
-    matchCount?.also { div("match-count") { +it } }
     // From the config, not the rows, so the column doesn't come and go as a search narrows or the last live path goes.
     // With agent auth off no path has an identity, and the column would only ever hold dashes.
     val showIdentity = snapshot.authEnabled

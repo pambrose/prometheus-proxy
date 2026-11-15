@@ -19,15 +19,23 @@ package io.prometheus.proxy.dashboard
 import kotlinx.html.DIV
 import kotlinx.html.FlowContent
 import kotlinx.html.FlowOrPhrasingContent
+import kotlinx.html.FormMethod
+import io.prometheus.proxy.dashboard.ActivityHtml.activityTable
+import io.prometheus.proxy.dashboard.ActivityHtml.renderActivity
 import io.prometheus.proxy.dashboard.PathTableHtml.pathTable
 import io.prometheus.proxy.dashboard.PathTableHtml.renderPathTable
 import kotlinx.html.HTML
+import kotlinx.html.InputType
+import kotlinx.html.NAV
 import kotlinx.html.SPAN
 import kotlinx.html.a
 import kotlinx.html.body
 import kotlinx.html.button
 import kotlinx.html.div
+import kotlinx.html.form
 import kotlinx.html.head
+import kotlinx.html.input
+import kotlinx.html.label
 import kotlinx.html.main
 import kotlinx.html.meta
 import kotlinx.html.nav
@@ -48,13 +56,27 @@ import kotlin.time.toJavaInstant
 /**
  * Which view a session is looking at.
  *
- * Carried per session rather than configured per proxy, because the two layouts answer different
+ * Carried per session rather than configured per proxy, because the layouts answer different
  * questions and an operator switches between them mid-incident: the agent view asks "what is this agent
- * doing", the path view asks "why isn't this target scraping".
+ * doing", the path view asks "why isn't this target scraping", and the activity view asks "what just happened",
+ * which is where a refusal shows, since a refused agent or path is in neither of the others.
+ *
+ * @param segment the layout's route below the dashboard's base, which the agent layout is served at itself
+ * @param title the layout's name in the nav
+ * @param searchFields what the search above the layout's table matches, for its placeholder; the agent layout has none
  */
-internal enum class DashboardLayout {
-  AGENT,
-  PATH,
+internal enum class DashboardLayout(
+  val segment: String,
+  val title: String,
+  val searchFields: String = "",
+) {
+  AGENT("", "Agents"),
+  PATH("paths", "Paths", "path, agent, target, or identity"),
+  ACTIVITY("activity", "Activity", "event, agent, identity, path, or detail"),
+  ;
+
+  /** The layout's URL, under [routeBase]; the agent layout's is the base itself, which at a root mount is "/". */
+  fun href(routeBase: String): String = if (segment.isEmpty()) routeBase.ifEmpty { "/" } else "$routeBase/$segment"
 }
 
 /**
@@ -72,11 +94,20 @@ internal object ProxyDashboardHtml {
   const val DETAIL_ID = "detail"
   const val STATUS_ID = "status-bar"
   const val PATH_TABLE_ID = "path-table"
+  const val ACTIVITY_ID = "activity"
   const val ANNOUNCER_ID = "conn-announce"
   const val VIEW_ATTR = "data-view"
   const val COPY_ATTR = "data-copy"
   const val PROXY_PATH_ATTR = "data-proxy-path"
   const val SCRAPE_PORT_ATTR = "data-scrape-port"
+
+  // The search above the Paths and Activity tables. One set of ids for both: the two never show on one page.
+  const val FILTER_QUERY_ID = "filter-q"
+  const val FILTER_PROBLEMS_ID = "filter-problems"
+
+  // On the table region a push replaces: how many rows the filter left, which the page's script says aloud once per
+  // change of filter.
+  const val MATCH_COUNT_ATTR = "data-match-count"
 
   // On the status bar: the page's title, which counts the paths failing or gone, for the page's script to put in the
   // tab.
@@ -97,7 +128,7 @@ internal object ProxyDashboardHtml {
     selectedId: String?,
     routeBase: String,
     layout: DashboardLayout = DashboardLayout.AGENT,
-    filter: PathFilter = PathFilter.NONE,
+    filter: RowFilter = RowFilter.NONE,
   ) {
     // Declared so assistive tech pronounces agent names, paths, and status text as English rather than
     // falling back to the listener's system locale.
@@ -145,6 +176,12 @@ internal object ProxyDashboardHtml {
             renderPathTable(snapshot, routeBase, filter)
           }
         }
+
+        DashboardLayout.ACTIVITY -> {
+          main {
+            renderActivity(snapshot, routeBase, filter)
+          }
+        }
       }
       // The one piece htmx does not model: telling the server which agent THIS session is viewing, so
       // the push loop knows whether to send a detail pane. hx-push-url already puts the selection in
@@ -154,9 +191,9 @@ internal object ProxyDashboardHtml {
   }
 
   /**
-   * The layout switcher: two plain links, no htmx.
+   * The layout switcher: a plain link per [DashboardLayout], no htmx.
    *
-   * Deliberately a real navigation rather than a swap. The two layouts have disjoint region ids, so
+   * Deliberately a real navigation rather than a swap. The layouts have disjoint region ids, so
    * swapping one in would leave the push loop addressing elements that no longer exist; a page load
    * makes that impossible by construction. It also costs nothing worth saving — this fires on an
    * explicit click, not on an update, and the socket re-announces the new layout as soon as it opens.
@@ -164,14 +201,53 @@ internal object ProxyDashboardHtml {
   fun FlowContent.renderNav(
     routeBase: String,
     layout: DashboardLayout,
-  ) = nav("nav") {
-    a(href = routeBase.ifEmpty { "/" }, classes = if (layout == DashboardLayout.AGENT) "on" else null) {
-      if (layout == DashboardLayout.AGENT) attributes["aria-current"] = "page"
-      +"Agents"
+  ) {
+    nav("nav") {
+      DashboardLayout.entries.forEach { navLink(routeBase, it, current = it == layout) }
     }
-    a(href = "$routeBase/paths", classes = if (layout == DashboardLayout.PATH) "on" else null) {
-      if (layout == DashboardLayout.PATH) attributes["aria-current"] = "page"
-      +"Paths"
+  }
+
+  private fun NAV.navLink(
+    routeBase: String,
+    layout: DashboardLayout,
+    current: Boolean,
+  ) {
+    a(href = layout.href(routeBase), classes = if (current) "on" else null) {
+      if (current) attributes["aria-current"] = "page"
+      +layout.title
+    }
+  }
+
+  /**
+   * The search above [layout]'s table, which submits to the layout's own route.
+   *
+   * It sits outside the table's out-of-band region, so a push never replaces the input someone is typing in. It is a
+   * plain GET form, so it works without the page's script, by navigating to `?q=…&problems=1`; the script applies a
+   * change as it is typed instead, and keeps the URL in step (see SELECTION_JS).
+   */
+  internal fun FlowContent.renderFilters(
+    routeBase: String,
+    layout: DashboardLayout,
+    filter: RowFilter,
+  ) {
+    form(action = layout.href(routeBase), method = FormMethod.get, classes = "filters") {
+      attributes["role"] = "search"
+      input(type = InputType.search, name = RowFilter.QUERY_PARAM) {
+        attributes["id"] = FILTER_QUERY_ID
+        attributes["aria-label"] = "Filter ${layout.title.lowercase()}"
+        attributes["placeholder"] = "Filter by ${layout.searchFields}"
+        attributes["maxlength"] = "${RowFilter.MAX_QUERY_LENGTH}"
+        attributes["autocomplete"] = "off"
+        value = filter.query
+      }
+      label {
+        input(type = InputType.checkBox, name = RowFilter.PROBLEMS_PARAM) {
+          attributes["id"] = FILTER_PROBLEMS_ID
+          value = RowFilter.PROBLEMS_ON
+          checked = filter.problemsOnly
+        }
+        +"Problems only"
+      }
     }
   }
 
@@ -401,7 +477,7 @@ internal object ProxyDashboardHtml {
     routeBase: String,
     layout: DashboardLayout? = DashboardLayout.AGENT,
     viewSeq: Long = 0L,
-    filter: PathFilter = PathFilter.NONE,
+    filter: RowFilter = RowFilter.NONE,
   ): String =
     buildString {
       append(createHTML().span("bar-right") { statusInner(snapshot, oob = true, viewSeq) })
@@ -413,6 +489,10 @@ internal object ProxyDashboardHtml {
 
         DashboardLayout.PATH -> {
           append(createHTML().div("scroller") { pathTable(snapshot, filter, oob = true) })
+        }
+
+        DashboardLayout.ACTIVITY -> {
+          append(createHTML().div("scroller") { activityTable(snapshot, filter, oob = true) })
         }
 
         null -> {}
@@ -503,6 +583,12 @@ internal object ProxyDashboardHtml {
   // push loop knows whether this session wants a detail pane. Also runs the connection indicator, the path table's
   // copy buttons, and the scrape times' conversion to the viewer's zone, the only things on the page that htmx does not
   // model; everything else is htmx.
+  // The layouts with a route of their own, by its segment, for the page's script: {"paths":"PATH",...}.
+  private val LAYOUTS_JS =
+    DashboardLayout.entries
+      .filter { it.segment.isNotEmpty() }
+      .joinToString(",", "{", "}") { "\"${it.segment}\":\"${it.name}\"" }
+
   private val SELECTION_JS =
     """
     (function () {
@@ -516,8 +602,11 @@ internal object ProxyDashboardHtml {
         var m = window.location.pathname.match(/\/agents\/([^/]+)$/);
         return m ? m[1] : null;
       }
+      // Each layout's name by its route's last segment, from DashboardLayout; the agent layout is the base itself.
+      var LAYOUTS = $LAYOUTS_JS;
       function layout() {
-        return /\/paths\/?$/.test(window.location.pathname) ? 'PATH' : 'AGENT';
+        var m = window.location.pathname.match(/\/([^/]+)\/?$/);
+        return m && Object.prototype.hasOwnProperty.call(LAYOUTS, m[1]) ? LAYOUTS[m[1]] : 'AGENT';
       }
       // The extension's connection, which outlives its socket: each reconnect replaces connection.socket,
       // so this keeps the connection and reads the socket when it sends.
@@ -624,24 +713,24 @@ internal object ProxyDashboardHtml {
       var countDue = 0;
       var filterTimer = 0;
       function applyFilter() {
-        var q = document.getElementById('${PathTableHtml.FILTER_QUERY_ID}');
-        var problems = document.getElementById('${PathTableHtml.FILTER_PROBLEMS_ID}');
+        var q = document.getElementById('$FILTER_QUERY_ID');
+        var problems = document.getElementById('$FILTER_PROBLEMS_ID');
         if (!q || !problems) return;
         var params = new URLSearchParams();
-        if (q.value.trim()) params.set('${PathFilter.QUERY_PARAM}', q.value.trim());
-        if (problems.checked) params.set('${PathFilter.PROBLEMS_PARAM}', '${PathFilter.PROBLEMS_ON}');
+        if (q.value.trim()) params.set('${RowFilter.QUERY_PARAM}', q.value.trim());
+        if (problems.checked) params.set('${RowFilter.PROBLEMS_PARAM}', '${RowFilter.PROBLEMS_ON}');
         var search = params.toString();
         history.replaceState(history.state, '', window.location.pathname + (search ? '?' + search : ''));
         // The first frame rendered from this filter says how many rows it left.
         if (announce()) countDue = seq;
       }
       document.body.addEventListener('input', function (evt) {
-        if (evt.target.id !== '${PathTableHtml.FILTER_QUERY_ID}') return;
+        if (evt.target.id !== '$FILTER_QUERY_ID') return;
         clearTimeout(filterTimer);
         filterTimer = setTimeout(applyFilter, $FILTER_DEBOUNCE_MILLIS);
       });
       document.body.addEventListener('change', function (evt) {
-        if (evt.target.id === '${PathTableHtml.FILTER_PROBLEMS_ID}') applyFilter();
+        if (evt.target.id === '$FILTER_PROBLEMS_ID') applyFilter();
       });
       document.body.addEventListener('submit', function (evt) {
         if (!evt.target.matches || !evt.target.matches('form.filters')) return;
@@ -653,10 +742,11 @@ internal object ProxyDashboardHtml {
       // shown, whose stamp the status bar carries, is one rendered from the change.
       function sayCount() {
         var bar = document.getElementById('$STATUS_ID');
-        var table = document.getElementById('$PATH_TABLE_ID');
+        // The Paths or the Activity table, whichever the page shows.
+        var table = document.querySelector('[$MATCH_COUNT_ATTR]');
         if (!countDue || !bar || !table || Number(bar.getAttribute('$VIEW_ATTR')) < countDue) return;
         countDue = 0;
-        say(table.getAttribute('${PathTableHtml.MATCH_COUNT_ATTR}') + '.');
+        say(table.getAttribute('$MATCH_COUNT_ATTR') + '.');
       }
       document.body.addEventListener('htmx:ws:after:message:incoming', function () {
         applyMark();

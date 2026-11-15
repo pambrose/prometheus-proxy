@@ -18,9 +18,10 @@ package io.prometheus.proxy.dashboard
 
 import io.ktor.http.Parameters
 import io.prometheus.common.AgentValues
+import io.prometheus.proxy.ActivityEntry
 
 /**
- * Which rows the Paths view shows: those matching a search, and optionally only the problems.
+ * Which rows the Paths and Activity views show: those matching a search, and optionally only the problems.
  *
  * Applied on the server, to the table each push renders, rather than in the browser: the push replaces the table every
  * refresh, so a filter applied to the page would be undone by the next frame. It lives in the page's URL
@@ -28,27 +29,40 @@ import io.prometheus.common.AgentValues
  * both read by [of]: the URL a page is opened at, and that URL's query in each WebSocket message, so a change applies
  * at once without a reload.
  *
- * @param query matched case-insensitively against the path, its agents' names, its target URL, and its identity
- * @param problemsOnly keep only the paths [PathView.isProblem] picks out: a failing last scrape, or an agent gone
+ * @param query matched case-insensitively against what a row shows: for a path, the path, its agents' names, its target
+ *   URL, and its identity; for an activity line, the event, the agent's name, the identity, the paths, and the detail
+ * @param problemsOnly keep only the problems: a path whose last scrape failed or whose agent has gone
+ *   ([PathView.isProblem]), and an event an operator has to act on ([io.prometheus.proxy.ActivityKind.isProblem])
  */
-internal data class PathFilter(
+internal data class RowFilter(
   val query: String = "",
   val problemsOnly: Boolean = false,
 ) {
   /** Whether any row could be hidden, which is when the table says how many it shows. */
   val isActive: Boolean get() = query.isNotEmpty() || problemsOnly
 
-  fun matches(path: PathView): Boolean =
-    (!problemsOnly || path.isProblem) &&
-      (query.isEmpty() || path.searchFields().any { it.contains(query, ignoreCase = true) })
+  fun matches(path: PathView): Boolean = matches(path.isProblem) { path.searchFields() }
+
+  fun matches(entry: ActivityEntry): Boolean = matches(entry.kind.isProblem) { entry.searchFields() }
+
+  // A row that is a problem, if only problems are kept, and that shows the query in one of its [fields], if there is
+  // one.
+  private fun matches(
+    isProblem: Boolean,
+    fields: () -> List<String>,
+  ): Boolean =
+    (!problemsOnly || isProblem) && (query.isEmpty() || fields().any { it.contains(query, ignoreCase = true) })
 
   // What the row shows: an identity as its label reads, and for a departed path, which has no agents, the agent its
   // last scrape names (servingAgent, which is otherwise the first of agentNames).
   private fun PathView.searchFields(): List<String> =
     listOfNotNull(path, targetUrl, servingAgent, identityLabel(identity)) + agentNames
 
+  private fun ActivityEntry.searchFields(): List<String> =
+    listOfNotNull(kind.label, agentName, identityLabel(identity), detail) + paths
+
   companion object {
-    val NONE = PathFilter()
+    val NONE = RowFilter()
 
     // The filter's URL parameters, which the search form submits and the page's script writes.
     const val QUERY_PARAM = "q"
@@ -62,7 +76,7 @@ internal data class PathFilter(
     fun of(
       query: String?,
       problemsOnly: Boolean,
-    ) = PathFilter(AgentValues.truncate(query.orEmpty().trim(), MAX_QUERY_LENGTH), problemsOnly)
+    ) = RowFilter(AgentValues.truncate(query.orEmpty().trim(), MAX_QUERY_LENGTH), problemsOnly)
 
     /** A filter from a URL's query parameters, as the search form writes them. */
     fun of(parameters: Parameters) = of(parameters[QUERY_PARAM], parameters[PROBLEMS_PARAM] == PROBLEMS_ON)

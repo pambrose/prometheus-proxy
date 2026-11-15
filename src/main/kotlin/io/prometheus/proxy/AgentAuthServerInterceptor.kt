@@ -18,6 +18,7 @@ package io.prometheus.proxy
 
 import io.grpc.Context
 import io.grpc.Contexts
+import io.grpc.Grpc
 import io.grpc.Metadata
 import io.grpc.ServerCall
 import io.grpc.ServerCallHandler
@@ -25,6 +26,8 @@ import io.grpc.ServerInterceptor
 import io.grpc.Status
 import io.prometheus.common.GrpcConstants.META_AGENT_TOKEN_KEY
 import io.prometheus.proxy.AgentAuthManager.Companion.AGENT_IDENTITY_KEY
+import io.prometheus.proxy.ProxyServerTransportFilter.Companion.displayHost
+import io.prometheus.proxy.ProxyServiceImpl.Companion.UNKNOWN_ADDRESS
 
 /**
  * Authenticates agent RPCs against the configured identities and attaches the resolved identity.
@@ -36,11 +39,17 @@ import io.prometheus.proxy.AgentAuthManager.Companion.AGENT_IDENTITY_KEY
  * enforce per-agent path authorization. When no identities are configured this interceptor is not
  * installed and the agent port preserves its historical open behavior.
  *
+ * A refused call goes in the dashboard's activity feed, by the host it came from, each host's calls within a minute
+ * counted on one line: a wrong token is the usual reason a new agent never appears, and the proxy logs nothing about
+ * it.
+ *
  * @param authManager resolves presented tokens to identities
+ * @param activityLog where a refused call is recorded; null with the dashboard off
  * @see io.prometheus.agent.AgentTokenClientInterceptor
  */
 internal class AgentAuthServerInterceptor(
   private val authManager: AgentAuthManager,
+  private val activityLog: ActivityLog? = null,
 ) : ServerInterceptor {
   override fun <ReqT, RespT> interceptCall(
     call: ServerCall<ReqT, RespT>,
@@ -50,11 +59,24 @@ internal class AgentAuthServerInterceptor(
     val provided = requestHeaders.get(META_AGENT_TOKEN_KEY)
     val identity = if (provided == null) null else authManager.resolveToken(provided)
     if (identity == null) {
+      recordBadToken(call, missing = provided == null)
       call.close(Status.UNAUTHENTICATED.withDescription("Missing or invalid agent token"), Metadata())
       // Return a no-op listener: the call is already closed, so no messages must be delivered.
       return object : ServerCall.Listener<ReqT>() {}
     }
     val context = Context.current().withValue(AGENT_IDENTITY_KEY, identity)
     return Contexts.interceptCall(context, call, requestHeaders, handler)
+  }
+
+  // By host, since anyone who can reach the agent port can send a bad token as often as they like. The port is left
+  // out: each new connection comes from a new one.
+  private fun recordBadToken(
+    call: ServerCall<*, *>,
+    missing: Boolean,
+  ) {
+    val log = activityLog ?: return
+    val host = call.attributes.get(Grpc.TRANSPORT_ATTR_REMOTE_ADDR)?.let(::displayHost) ?: UNKNOWN_ADDRESS
+    val token = if (missing) "No agent token" else "An unknown agent token"
+    log.recordFromSource(host, ActivityKind.BAD_TOKEN, "$token, from $host")
   }
 }

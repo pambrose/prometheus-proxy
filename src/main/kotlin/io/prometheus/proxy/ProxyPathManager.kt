@@ -243,7 +243,10 @@ internal class ProxyPathManager(
       return rejectPath(agentContext, shown, "Invalid path: /$shown (a path segment is required)", INVALID_PATH)
     return sizeRejection(key, shown, labels, agentContext)
       ?: characterRejection(key, shown, agentContext)
-      ?: multiSegmentPathError(key, shown)?.let { PathRejection(it, INVALID_PATH) }
+      ?: multiSegmentPathError(key, shown)?.let { reason ->
+        noteRejection(agentContext, shown, reason, INVALID_PATH)
+        PathRejection(reason, INVALID_PATH)
+      }
       ?: reservedPathRejection(key, shown, agentContext)
   }
 
@@ -334,17 +337,33 @@ internal class ProxyPathManager(
   }
 
   // Logs why a path was refused and returns the rejection. The first time this connection is told a cause for a
-  // path it is logged at WARN; an identical repeat -- an agent retrying a rejection that can clear -- at DEBUG, so
-  // a lasting conflict is reported once rather than on every retry. Mirrors AgentPathManager.logRejection.
+  // path it is logged at WARN; an identical repeat -- an agent retrying a rejection that can clear -- at DEBUG, so a
+  // lasting conflict is reported once rather than on every retry. Mirrors AgentPathManager.logRejection.
   private fun rejectPath(
     agentContext: AgentContext,
     path: String,
     reason: String,
     cause: PathRejectionCause,
   ): PathRejection {
-    if (agentContext.recordRejection(path, cause)) logger.warn { reason } else logger.debug { reason }
+    if (noteRejection(agentContext, path, reason, cause)) logger.warn { reason } else logger.debug { reason }
     return PathRejection(reason, cause)
   }
+
+  /**
+   * Notes that [agentContext] is told [cause] for [path], and returns whether that is news: the first time, or a cause
+   * other than last time (see [AgentContext.recordRejection]). News goes in the activity feed, so the feed shows each
+   * rejection once, however often the agent retries. Every rejection of a path passes through here, those made outside
+   * this class included, though each logs as it always has.
+   */
+  internal fun noteRejection(
+    agentContext: AgentContext,
+    path: String,
+    reason: String,
+    cause: PathRejectionCause,
+  ): Boolean =
+    agentContext.recordRejection(path, cause).also { news ->
+      if (news) proxy.activityLog?.record(ActivityKind.PATH_REJECTED, agentContext, path, reason, group = cause.name)
+    }
 
   // Registers [path] for [agentContext] unless a check made under the lock refuses it. [entry] is what addPath built
   // from the registration: the path's entry when the agent is its only one.
@@ -362,11 +381,14 @@ internal class ProxyPathManager(
           ?: agentInfo?.let { conflictRejection(path, agentContext, it, entry) }
           ?: if (alreadyServes) null else pathLimitRejection(agentContext, path)
       if (rejection == null) {
-        if (entry.isConsolidated)
-          pathMap[path] = agentInfo?.joinedBy(agentContext, entry) ?: entry
-        else
-          takeOverPath(path, agentContext, agentInfo, entry)
-        recordRegistration(path, agentContext, alreadyServes)
+        val displaced =
+          if (entry.isConsolidated) {
+            pathMap[path] = agentInfo?.joinedBy(agentContext, entry) ?: entry
+            null
+          } else {
+            takeOverPath(path, agentContext, agentInfo, entry)
+          }
+        recordRegistration(path, agentContext, alreadyServes, displaced)
       }
       rejection
     }
@@ -437,17 +459,19 @@ internal class ProxyPathManager(
     ).showingFirstAgent()
   }
 
-  // Gives the exclusive [path], which [agentInfo] held, to [agentContext] alone as [entry]. Every other agent on the
-  // path is displaced; re-registering its own path is neither logged nor counted. Callers MUST hold pathMap.
+  // Gives the exclusive [path], which [agentInfo] held, to [agentContext] alone as [entry], and returns the agent it
+  // displaced, or null. Every other agent on the path is displaced; re-registering its own path is neither logged nor
+  // counted. Callers MUST hold pathMap.
   private fun takeOverPath(
     path: String,
     agentContext: AgentContext,
     agentInfo: AgentContextInfo?,
     entry: AgentContextInfo,
-  ) {
+  ): AgentContext? {
     val displacedContexts = agentInfo?.agentContexts.orEmpty().filterNot { it.agentId == agentContext.agentId }
-    if (displacedContexts.isNotEmpty()) {
-      logger.info { "Overwriting path /$path for agentId ${displacedContexts.first().agentId}" }
+    val displaced = displacedContexts.firstOrNull()
+    if (displaced != null) {
+      logger.info { "Overwriting path /$path for agentId ${displaced.agentId}" }
       proxy.metrics { agentDisplacementCount.inc() }
     }
     pathMap[path] = entry
@@ -473,18 +497,27 @@ internal class ProxyPathManager(
         }
       }
     }
+    return displaced
   }
 
-  // Counts, reports, and announces [agentContext]'s registration of [path], once pathMap holds it. Callers MUST hold
+  // Counts, reports, and announces [agentContext]'s registration of [path], once pathMap holds it. The activity feed
+  // has it as a take-over when it [displaced] another agent, and as a registration when it is new. Callers MUST hold
   // pathMap.
   private fun recordRegistration(
     path: String,
     agentContext: AgentContext,
     alreadyServes: Boolean,
+    displaced: AgentContext?,
   ) {
     if (!alreadyServes) {
       countPaths(agentContext.agentId, 1)
       warnNearPathLimit(agentContext)
+    }
+    proxy.activityLog?.also { log ->
+      when {
+        displaced != null -> log.record(ActivityKind.PATH_TAKEN_OVER, agentContext, path, "From ${displaced.agentName}")
+        !alreadyServes -> log.record(ActivityKind.PATH_REGISTERED, agentContext, path)
+      }
     }
     agentContext.forgetRejection(path)
     proxy.metrics { pathRegistered(path) }
@@ -525,12 +558,13 @@ internal class ProxyPathManager(
     val failure =
       synchronized(pathMap) {
         val agentInfo = pathMap[key]
+        val agentContext = agentInfo?.agentContexts?.firstOrNull { it.agentId == agentId }
         when {
           agentInfo == null -> {
             "Unable to remove path /$shown - path not found"
           }
 
-          agentInfo.agentContexts.none { it.agentId == agentId } -> {
+          agentContext == null -> {
             val agentIds = agentInfo.agentContexts.joinToString(", ") { it.agentId }
             "Unable to remove path /$shown - invalid agentId: $agentId -- [$agentIds]"
           }
@@ -538,6 +572,7 @@ internal class ProxyPathManager(
           else -> {
             countPaths(agentId, -1)
             dropAgentFromPath(key, agentInfo, agentId)
+            proxy.activityLog?.record(ActivityKind.PATH_UNREGISTERED, agentContext, key)
             null
           }
         }
@@ -550,11 +585,11 @@ internal class ProxyPathManager(
     }
   }
 
-  // This is called on agent disconnects
+  // This is called on agent disconnects. Returns how many paths the agent served, which the activity feed reports.
   fun removeFromPathManager(
     agentId: String,
     reason: String,
-  ) {
+  ): Int {
     require(agentId.isNotBlank()) { BLANK_AGENT_ID_MSG }
 
     // Always sweep the pathMap by agentId, even when the context is already gone from the manager: a
@@ -563,21 +598,22 @@ internal class ProxyPathManager(
     // context before calling this, so the context is normally already absent from the manager here —
     // report on what the sweep actually removed rather than on a manager lookup that no longer
     // distinguishes a live disconnect from a repeat call.
-    val removedPathCount =
+    // The paths the agent served, and those no agent is left on.
+    val (servedPathCount, removedPathCount) =
       synchronized(pathMap) {
         // Snapshot the agent's entries first, since dropping it from a path changes pathMap.
         val served = pathMap.filterValues { info -> info.agentContexts.any { it.agentId == agentId } }
         served.forEach { dropAgentFromPath(it.key, it.value, agentId) }
         // The sweep took every path the agent served.
         pathCounts.remove(agentId)
-        // The paths no agent is left on.
-        served.keys.count { it !in pathMap }
+        served.size to served.keys.count { it !in pathMap }
       }
 
     if (removedPathCount == 0)
       logger.debug { "No paths registered for agentId: $agentId ($reason)" }
     else
       logger.info { "Removed $removedPathCount path(s) for agentId: $agentId ($reason)" }
+    return servedPathCount
   }
 
   // Takes [agentId] off [path], whose entry is [agentInfo], removing the path once no agent is left on it. Leaves

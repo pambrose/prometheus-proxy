@@ -17,6 +17,8 @@
 package io.prometheus.proxy.dashboard
 
 import io.prometheus.common.TestPorts
+import io.prometheus.proxy.ActivityEntry
+import io.prometheus.proxy.ActivityKind
 import io.prometheus.proxy.ScrapeRecord
 import kotlinx.html.html
 import kotlinx.html.stream.createHTML
@@ -91,6 +93,16 @@ internal object DashboardFixtures {
     agentName: String = "agent-$agentId",
   ) = ScrapeRecord(agentId, agentName, path, statusCode, outcome, durationMillis, contentLength, at)
 
+  fun activityEntry(
+    kind: ActivityKind = ActivityKind.PATH_REGISTERED,
+    agentName: String = "agent-east",
+    identity: String = "",
+    paths: List<String> = ["orders_metrics"],
+    count: Int = 1,
+    detail: String = "",
+    at: Instant = Clock.System.now(),
+  ) = ActivityEntry(at, kind, "1", agentName, identity, paths, count, detail)
+
   /**
    * A snapshot whose `paths` defaults to the agents' own paths, matching what
    * [ProxySnapshot.collect] produces for a proxy with no departed paths.
@@ -100,6 +112,7 @@ internal object DashboardFixtures {
     scrapes: List<ScrapeRecord> = emptyList(),
     paths: List<PathView> = agents.flatMap { it.paths }.distinct(),
     authEnabled: Boolean = false,
+    activity: List<ActivityEntry> = emptyList(),
   ) = ProxySnapshot(
     agents = agents,
     paths = paths,
@@ -108,6 +121,7 @@ internal object DashboardFixtures {
     maxAgentInactivitySecs = 60,
     scrapePort = TestPorts.PROXY_HTTP_PORT,
     authEnabled = authEnabled,
+    activity = activity,
   )
 
   /** The whole page for [snapshot], as the dashboard serves it to a GET. */
@@ -115,6 +129,6 @@ internal object DashboardFixtures {
     snapshot: ProxySnapshot,
     layout: DashboardLayout = DashboardLayout.AGENT,
     routeBase: String = "/dashboard",
-    filter: PathFilter = PathFilter.NONE,
+    filter: RowFilter = RowFilter.NONE,
   ) = createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot, null, routeBase, layout, filter) } }
 }

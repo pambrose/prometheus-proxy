@@ -50,6 +50,7 @@ import io.prometheus.grpc.pathMapSizeResponse
 import io.prometheus.grpc.registerAgentResponse
 import io.prometheus.grpc.registerPathResponse
 import io.prometheus.grpc.unregisterPathResponse
+import io.prometheus.proxy.ProxyConstants.STREAM_TERMINATED_REASON
 import io.prometheus.proxy.ProxyPathManager.PathMetadata
 import io.prometheus.proxy.ProxyPathManager.PathRejection
 import kotlinx.coroutines.CancellationException
@@ -186,6 +187,11 @@ internal class ProxyServiceImpl(
             agentContext.assignProperties(boundedRegistration(request, agentContext.agentId), callerIdentityName())
             agentContext.markActivityTime(false)
             logger.info { "Connected to $agentContext" }
+            proxy.activityLog?.record(
+              ActivityKind.AGENT_CONNECTED,
+              agentContext,
+              detail = "From ${agentContext.remoteAddr}, host ${agentContext.hostName}",
+            )
             // Identity is only populated here; AgentConnected fired at the connection's first authenticated call
             // (connectAgent, for the stock agent), before the agent had told us who it is.
             proxy.eventBus.emit(ProxyEvent.AgentRegistered(request.agentId))
@@ -285,7 +291,7 @@ internal class ProxyServiceImpl(
             // ever see a path of bounded length (October #22).
             val result =
               proxy.pathManager.formRejection(request.path, request.labels, agentContext)
-                ?: authorizationRejection(identity, request.path)
+                ?: authorizationRejection(identity, request.path, agentContext)
                 ?: proxy.pathManager.addPath(
                   request.path,
                   request.labels,
@@ -314,16 +320,21 @@ internal class ProxyServiceImpl(
   }
 
   // Why [identity] may not register [path], or null when it may, or when per-agent auth is off (no identity). The log
-  // line and the reason show the path as ProxyPathManager's rejections do, cut to its first characters.
+  // line and the reason show the path as ProxyPathManager's rejections do, cut to its first characters, and like them
+  // it goes in the activity feed the first time [agentContext] is told it (noteRejection); the WARN is logged every
+  // time.
   private fun authorizationRejection(
     identity: AgentIdentity?,
     path: String,
+    agentContext: AgentContext,
   ): PathRejection? {
     if (identity == null || identity.isAuthorized(path))
       return null
     val shown = ProxyPathManager.shownPath(path.removePrefix("/"))
     logger.warn { "Agent identity '${identity.name}' denied registration of path /$shown" }
-    return PathRejection("Agent identity '${identity.name}' is not authorized to register path /$shown", NOT_AUTHORIZED)
+    val reason = "Agent identity '${identity.name}' is not authorized to register path /$shown"
+    proxy.pathManager.noteRejection(agentContext, shown, reason, NOT_AUTHORIZED)
+    return PathRejection(reason, NOT_AUTHORIZED)
   }
 
   override suspend fun unregisterPath(request: UnregisterPathRequest): UnregisterPathResponse {
@@ -404,7 +415,7 @@ internal class ProxyServiceImpl(
         // When transportFilterDisabled is true, there is no ProxyServerTransportFilter to
         // detect agent disconnect and clean up. Handle cleanup here on stream termination.
         if (proxy.options.transportFilterDisabled)
-          proxy.removeAgentContextIfCurrent(agentContext, "Stream terminated (transport filter disabled)")
+          proxy.removeAgentContextIfCurrent(agentContext, STREAM_TERMINATED_REASON)
       }
     }
 

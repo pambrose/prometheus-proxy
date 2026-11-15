@@ -42,7 +42,7 @@ class PathTableHtmlTest : StringSpec() {
   // The Paths view's push for these paths, as a session with this filter receives it.
   private fun pathPush(
     paths: List<PathView> = [path("app_metrics")],
-    filter: PathFilter = PathFilter.NONE,
+    filter: RowFilter = RowFilter.NONE,
     authEnabled: Boolean = false,
   ) = ProxyDashboardHtml.pushFragment(snapshot(paths, authEnabled), null, "/dashboard", DashboardLayout.PATH, 0, filter)
 
@@ -128,14 +128,14 @@ class PathTableHtmlTest : StringSpec() {
 
     "a filter should keep only the matching rows and say how many it shows" {
       val paths = [path("app_metrics"), path("node_metrics"), path("db_metrics")]
-      val html = pathPush(paths, PathFilter.of("node", problemsOnly = false))
+      val html = pathPush(paths, RowFilter.of("node", problemsOnly = false))
 
       html shouldContain "/node_metrics"
       html shouldNotContain "/app_metrics"
       html shouldNotContain "/db_metrics"
       html shouldContain """<div class="match-count">Showing 1 of 3 paths</div>"""
       // For the page's script, which says the count aloud once per change of filter.
-      html shouldContain """${PathTableHtml.MATCH_COUNT_ATTR}="Showing 1 of 3 paths""""
+      html shouldContain """${ProxyDashboardHtml.MATCH_COUNT_ATTR}="Showing 1 of 3 paths""""
     }
 
     "an unfiltered table should not say how many it shows" {
@@ -143,27 +143,27 @@ class PathTableHtmlTest : StringSpec() {
     }
 
     "a filter that leaves no rows should say so, and problems only with nothing wrong should say that" {
-      pathPush(filter = PathFilter.of("nothing-like-this", problemsOnly = false)) shouldContain
+      pathPush(filter = RowFilter.of("nothing-like-this", problemsOnly = false)) shouldContain
         "No paths match the filter"
-      pathPush(filter = PathFilter.of(null, problemsOnly = true)) shouldContain
+      pathPush(filter = RowFilter.of(null, problemsOnly = true)) shouldContain
         "No problems: every path's last scrape succeeded"
     }
 
     // The search is a plain GET form, so it works without the script; the page echoes the filter it was served with.
     "the Paths page should render the search with the filter it was opened with, outside the pushed table" {
-      val page = renderFullPage(snapshot(), DashboardLayout.PATH, filter = PathFilter.of("east", problemsOnly = true))
+      val page = renderFullPage(snapshot(), DashboardLayout.PATH, filter = RowFilter.of("east", problemsOnly = true))
 
       page shouldContain """<form action="/dashboard/paths" method="get" class="filters" role="search">"""
-      page shouldContain """id="${PathTableHtml.FILTER_QUERY_ID}" aria-label="Filter paths""""
-      page shouldContain """name="${PathFilter.QUERY_PARAM}""""
+      page shouldContain """id="${ProxyDashboardHtml.FILTER_QUERY_ID}" aria-label="Filter paths""""
+      page shouldContain """name="${RowFilter.QUERY_PARAM}""""
       page shouldContain """value="east""""
-      page shouldContain """id="${PathTableHtml.FILTER_PROBLEMS_ID}" value="1" checked="checked""""
+      page shouldContain """id="${ProxyDashboardHtml.FILTER_PROBLEMS_ID}" value="1" checked="checked""""
       // A push replaces #path-table, so the input someone is typing in must not be inside it.
       (page.indexOf("""<form action""") < page.indexOf("""id="${ProxyDashboardHtml.PATH_TABLE_ID}"""")) shouldBe true
     }
 
     "a search query should be escaped where the page echoes it" {
-      val filter = PathFilter.of("\"><script>", problemsOnly = false)
+      val filter = RowFilter.of("\"><script>", problemsOnly = false)
       val page = renderFullPage(snapshot(), DashboardLayout.PATH, filter = filter)
 
       page shouldNotContain "\"><script>"
@@ -179,20 +179,20 @@ class PathTableHtmlTest : StringSpec() {
     // The socket carries the URL's query as is, so it reads the same as the /paths route does.
     "filter parsing should read the URL's query and tolerate anything a browser might send" {
       ProxyDashboardService.parseFilter("""{"layout":"PATH","search":"?q=east&problems=1"}""") shouldBe
-        PathFilter("east", problemsOnly = true)
-      ProxyDashboardService.parseFilter("""{"search":"q=team%20a"}""") shouldBe PathFilter("team a")
-      ProxyDashboardService.parseFilter("""{"search":"?q=++west++"}""") shouldBe PathFilter("west")
+        RowFilter("east", problemsOnly = true)
+      ProxyDashboardService.parseFilter("""{"search":"q=team%20a"}""") shouldBe RowFilter("team a")
+      ProxyDashboardService.parseFilter("""{"search":"?q=++west++"}""") shouldBe RowFilter("west")
       // Cut, since every push matches it against every row.
       ProxyDashboardService.parseFilter("""{"search":"?q=${"x".repeat(500)}"}""").query.length shouldBe
-        PathFilter.MAX_QUERY_LENGTH
+        RowFilter.MAX_QUERY_LENGTH
       // Only "1" turns problems on, as the form's checkbox sends it.
-      ProxyDashboardService.parseFilter("""{"search":"?problems=true"}""") shouldBe PathFilter.NONE
+      ProxyDashboardService.parseFilter("""{"search":"?problems=true"}""") shouldBe RowFilter.NONE
       // Anything else is no filter.
-      ProxyDashboardService.parseFilter("""{"search":""}""") shouldBe PathFilter.NONE
-      ProxyDashboardService.parseFilter("""{"search":12}""") shouldBe PathFilter.NONE
-      ProxyDashboardService.parseFilter("""{"search":"?q=%zz"}""") shouldBe PathFilter.NONE
-      ProxyDashboardService.parseFilter("""{"select":"a1"}""") shouldBe PathFilter.NONE
-      ProxyDashboardService.parseFilter("not json at all") shouldBe PathFilter.NONE
+      ProxyDashboardService.parseFilter("""{"search":""}""") shouldBe RowFilter.NONE
+      ProxyDashboardService.parseFilter("""{"search":12}""") shouldBe RowFilter.NONE
+      ProxyDashboardService.parseFilter("""{"search":"?q=%zz"}""") shouldBe RowFilter.NONE
+      ProxyDashboardService.parseFilter("""{"select":"a1"}""") shouldBe RowFilter.NONE
+      ProxyDashboardService.parseFilter("not json at all") shouldBe RowFilter.NONE
     }
 
     // ==================== Problems in the status bar and title ====================

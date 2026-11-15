@@ -105,6 +105,7 @@ class ConfigValsTest : StringSpec() {
         recentScrapesQueueSize shouldBe 200
         pathHistorySize shouldBe 20
         departedPathRetentionSecs shouldBe 3600
+        activityLogSize shouldBe 500
       }
     }
 

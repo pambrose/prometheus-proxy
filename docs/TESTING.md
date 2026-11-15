@@ -253,9 +253,11 @@ Two support helpers also live here (not test classes themselves):
 ### Unit Tests — Proxy (`proxy/`)
 
 - **ProxyTest** — Proxy main class lifecycle, agent info retrieval, JSON serialization, stale agent cleanup;
-  `removeAgentContext` counts each chunked transfer it reclaims as abandoned, and never one the stream's sweep counted
+  `removeAgentContext` counts each chunked transfer it reclaims as abandoned, and never one the stream's sweep counted,
+  and puts the agent's departure in the activity feed, an eviction as a problem, with the paths it served
 - **ProxyServiceImplTest** — gRPC implementation: registerAgent (recording the identity the call authenticated as for
-  the dashboard, without binding the context to it), registerPath, heartbeat, scrape responses, chunked responses; a result or a chunked transfer for a scrape sent to another agent neither completes nor fails it, even
+  the dashboard, without binding the context to it, and the connect in the activity feed), registerPath (a path the
+  identity may not register noted as a rejection), heartbeat, scrape responses, chunked responses; a result or a chunked transfer for a scrape sent to another agent neither completes nor fails it, even
   when its `agentId` or `headerAgentId` names that agent; a transfer ends with its scrape, even one whose scrape ended
   just before it was stored, one stream has at most the agent's backlog cap of transfers under way, a header's strings
   are cut, and a late result or transfer logs nothing above DEBUG; with the transport filter disabled, a scrape-request
@@ -272,7 +274,9 @@ Two support helpers also live here (not test classes themselves):
 - **ProxyHttpRoutesTest** — HTTP routing: path resolution, query params, error responses, compression,
   ensureLeadingSlash; a handler that times out or is cancelled drops its scrape's unfinished chunked transfer
 - **ProxyPathManagerTest** — Path registration/unregistration, consolidated mode, agent selection, concurrent access;
-  a live agent's path is taken over only by the same auth identity
+  a live agent's path is taken over only by the same auth identity; the activity feed gets a new registration but not
+  a repeat, a take-over as one naming the agent it displaced, a rejection the first time the agent is told it, a path
+  with more than one segment among them, and an unregistration; removing an agent returns how many paths it served
 - **ProxyPathManagerLincheckTest** — Lincheck, stress only (tagged `Lincheck`): path registration, unregistration,
   and agent removal race on the real code the TLA+ `ProxyRegistry` spec models; no path is left on a removed agent,
   `pathCountFor` matches the path map and the limit, exclusive paths have one agent, modes never mix, and a
@@ -284,7 +288,8 @@ Two support helpers also live here (not test classes themselves):
   must fit a sequential order, and no accepted request may be stranded after invalidate
 - **AgentContextManagerTest** — Proxy's AgentContextManager: add/remove contexts, chunked context management, concurrent
   access; a conditional removal takes only the context it is given; concurrent adds never pass an identity's
-  agent limit, a removal frees a slot, and a refused add logs a WARN at most once a minute for each identity
+  agent limit, a removal frees a slot, and a refused add logs a WARN, and goes in the activity feed, at most once a
+  minute for each identity
 - **AgentContextCleanupServiceTest** — Stale agent eviction (removes agents inactive beyond maxAgentInactivitySecs)
 - **ChunkedContextTest** — Chunk accumulation, CRC32 checksum validation, header/chunk/trailer sequencing
 - **ProxyOptionsTest** — CLI parsing, defaults, validation, TLS settings, gRPC options; an `http.idleTimeoutSecs`
@@ -299,6 +304,11 @@ Two support helpers also live here (not test classes themselves):
   disconnect, and a transport that ends after its eviction logging at INFO only for an announced agent
 - **ProxyUtilsTest** — Helper functions: invalidAgentContextResponse, respondWith
 - **ProxyMetricsTest** — Prometheus metrics registration and gauge/counter updates
+- **ActivityLogTest** — the dashboard's activity feed: lines newest first with each event's agent and time, the oldest
+  dropped once full, a burst from one agent folded into one line that counts it and names its first paths, bursts from
+  agents registering at once each one line, a burst ending at its window or at another agent, kind, or group, a source's
+  events within its window counted on one line, past its most sources a window the rest counted on one, every value cut,
+  a log with no room refused, and which kinds are problems
 - **PathHistoryTest** — the dashboard's per-path scrape history: each path keeps only its newest records, newest
   first, and a busy path can't push another's out; recording alone holds the history to the live paths plus the
   gone-path cap, evicting the path scraped least recently, with no snapshot to prune it; a registered path keeps its
@@ -326,7 +336,8 @@ Two support helpers also live here (not test classes themselves):
 - **AgentAuthManagerTest** — Per-agent auth: path-glob matching, token resolution (including the legacy allow-all
   token), `isEnabled`, and fail-fast rejection of empty, duplicate or colliding identities
 - **AgentAuthServerInterceptorTest** — gRPC auth interceptor: a valid token exposes the resolved identity in the
-  context; a missing, unknown or same-length wrong token closes the call with UNAUTHENTICATED
+  context; a missing, unknown or same-length wrong token closes the call with UNAUTHENTICATED, and goes in the
+  activity feed, naming its host, a host's repeats counted on its line
 - **ProxyEventBusTest** — Dashboard event bus: ordered delivery, non-blocking emit with no subscriber, no replay to a
   late subscriber, fan-out to multiple subscribers, and AgentContextManager emitting on connect only
 - **ProxyDashboardHtmlTest** (`dashboard/`) — Dashboard renderer: top-level out-of-band push regions, agent- and
@@ -338,10 +349,15 @@ Two support helpers also live here (not test classes themselves):
   on, the legacy token as a shared token), the search (matching rows, the match count, the empty states, the form
   outside the pushed table, an escaped query, the script sending the URL's query, and tolerant parsing of it from the
   socket), and the failing count and the tab's title
-- **PathFilterTest** (`dashboard/`) — the Paths view's search: a query matching the path, any agent's name, the target
-  URL, or the identity (the legacy token by its label, not its internal name), ignoring case, and a departed path's
-  agent; "problems only" keeping failing and departed paths; both having to match; browser input trimmed and cut,
-  never inside a surrogate pair; a filter read from a URL's query; and identity labels
+- **ActivityHtmlTest** (`dashboard/`) — the Activity view: each line's time, event, agent, path, and detail, newest
+  first; problems as crit tags and take-overs as warn tags; a burst's count and first paths; dashes for a line with no
+  agent; the Identity column while agent auth is on; escaped values; the search, its match count, and its empty
+  states; the form at the view's own route; and the push carrying the status bar and the table, out of band
+- **RowFilterTest** (`dashboard/`) — the Paths and Activity views' search: a query matching the path, any agent's
+  name, the target URL, or the identity (the legacy token by its label, not its internal name), ignoring case, and a
+  departed path's agent; "problems only" keeping failing and departed paths; both having to match; browser input
+  trimmed and cut, never inside a surrogate pair; a filter read from a URL's query; an activity line matched by its
+  event, agent, identity, paths, or detail, and its problems kept; and identity labels
 - **ProxyDashboardServiceTest** (`dashboard/`) — Dashboard request guards: the WebSocket Origin check (own host,
   `allowedOrigins`, foreign or malformed origins refused), the opt-in `allowedHosts` Host check against DNS rebinding,
   and the snapshot cache pages and sessions render from: one collect per refresh interval however many reads, shared
@@ -353,9 +369,9 @@ Two support helpers also live here (not test classes themselves):
 One support helper also lives here (not a test class itself):
 
 - **DashboardFixtures** (`dashboard/`) — builders for the dashboard view models (`pathView`, `departedPathView`,
-  `agentView`, `scrapeRecord`, `snapshot`) with every field defaulted, and `renderFullPage` for the page a GET serves,
-  shared by `ProxyDashboardHtmlTest`, `PathTableHtmlTest`, `PathFilterTest`, and `ProxySnapshotTest`, so a test names
-  only the field it is about
+  `agentView`, `scrapeRecord`, `activityEntry`, `snapshot`) with every field defaulted, and `renderFullPage` for the
+  page a GET serves, shared by `ProxyDashboardHtmlTest`, `PathTableHtmlTest`, `ActivityHtmlTest`, `RowFilterTest`, and
+  `ProxySnapshotTest`, so a test names only the field it is about
 
 ### Unit Tests — Common (`common/`)
 
@@ -549,7 +565,8 @@ mechanism that the standard suite cannot reach:
   for a request naming an unknown host, page GETs and WebSocket messages rendering the cached snapshot while a
   topology change still shows on the next page, a gone path staying in the path layout after more scrapes than
   the recent-scrapes queue holds, an agent's identity in both layouts with the path search filtering from the URL
-  and over the socket, and a session kept open through a push that fails to render
+  and over the socket, a path the agent's identity may not register in the Activity view, from a GET and a push, and
+  a session kept open through a push that fails to render
 - **TlsMutualAuthRejectionTest** — the negative mutual-TLS path over a real Netty handshake, which the
   in-process TLS specs cannot perform (item 28 in `docs/archive/CODE_REVIEW_JUNE_2026.md`)
 

@@ -25,6 +25,7 @@ import io.grpc.Grpc
 import io.grpc.ServerTransportFilter
 import io.prometheus.Proxy
 import io.prometheus.common.GrpcConstants.AGENT_ID
+import io.prometheus.proxy.ProxyConstants.TERMINATION_REASON
 import io.prometheus.proxy.ProxyServiceImpl.Companion.UNKNOWN_ADDRESS
 import java.net.InetSocketAddress
 import java.net.SocketAddress
@@ -47,7 +48,7 @@ internal class ProxyServerTransportFilter(
 
   override fun transportTerminated(attributes: Attributes) {
     attributes.get(AGENT_ID_KEY)?.also { agentId ->
-      val context = proxy.removeAgentContext(agentId, "Termination")
+      val context = proxy.removeAgentContext(agentId, TERMINATION_REASON)
       when {
         context == null -> logAlreadyRemoved(agentId, attributes.get(AGENT_CONTEXT_KEY)?.announced == true)
 
@@ -78,14 +79,18 @@ internal class ProxyServerTransportFilter(
     // evicted it, the manager can't say whether it was announced. Calls find their context through AGENT_ID_KEY.
     private val AGENT_CONTEXT_KEY: Attributes.Key<AgentContext> = Attributes.Key.create("agent-context")
 
-    // host:port without a reverse DNS lookup (hostString, not hostName), an IPv6 host in brackets, and any other
-    // address type (the in-process transport's) as it prints itself.
+    // host:port without a reverse DNS lookup (see displayHost), an IPv6 host in brackets.
     private fun displayAddress(address: SocketAddress): String =
       if (address is InetSocketAddress) {
-        val host = address.hostString
+        val host = displayHost(address)
         if (':' in host) "[$host]:${address.port}" else "$host:${address.port}"
       } else {
-        address.toString()
+        displayHost(address)
       }
+
+    // The host alone, without a reverse DNS lookup (hostString, not hostName), and any other address type (the
+    // in-process transport's) as it prints itself.
+    internal fun displayHost(address: SocketAddress): String =
+      if (address is InetSocketAddress) address.hostString else address.toString()
   }
 }

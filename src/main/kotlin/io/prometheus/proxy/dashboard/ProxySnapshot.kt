@@ -17,6 +17,7 @@
 package io.prometheus.proxy.dashboard
 
 import io.prometheus.Proxy
+import io.prometheus.proxy.ActivityEntry
 import io.prometheus.proxy.AgentAuthManager.Companion.LEGACY_IDENTITY_NAME
 import io.prometheus.proxy.ScrapeRecord
 import kotlin.time.Duration
@@ -171,6 +172,8 @@ internal data class ProxySnapshot(
   val scrapePort: Int,
   // Whether agent auth is on, which is when a path has an identity to show.
   val authEnabled: Boolean = false,
+  // The activity feed, newest first; empty with the dashboard off, when nothing records.
+  val activity: List<ActivityEntry> = emptyList(),
 ) {
   fun agent(agentId: String): AgentView? = agents.firstOrNull { it.agentId == agentId }
 
@@ -310,6 +313,7 @@ internal data class ProxySnapshot(
         maxAgentInactivitySecs = internal.maxAgentInactivitySecs.toLong(),
         scrapePort = proxy.scrapePort,
         authEnabled = proxy.agentAuthManager.isEnabled,
+        activity = proxy.activityLog?.entries().orEmpty(),
       )
     }
   }
