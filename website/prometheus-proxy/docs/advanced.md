@@ -176,3 +176,15 @@ agent.internal.zipkin {
 Tracing covers the gRPC calls between agent and proxy: the agent reports a client span for each call, and the proxy
 a server span in the same trace, each under its own `serviceName`. Spans are sent in the background, so a Zipkin
 server that can't be reached costs the spans, not the agent or the proxy.
+
+What reaches Zipkin follows from how an agent talks to the proxy. Zipkin joins the agent's client side and the proxy's
+server side of each call into one span, so a trace names both services. Connecting and registering are unary calls
+(`connectAgent`, `registerAgent`, a `registerPath` for each path, and `sendHeartBeat` while the agent is idle), each
+traced as it completes. Scrapes travel over long-lived streams (`readRequestsFromProxy`, `writeResponsesToProxy`, and
+`writeChunkedResponsesToProxy`), and a stream's span completes only when the stream ends, so a healthy, connected agent
+reports little: its streams appear when its connection closes, lasting as long as it did. Tracing shows an agent's
+connections and registrations, not its individual scrapes.
+
+Start Zipkin before the proxy and agents. Spans sent while it can't be reached are dropped: the reporter warns once,
+then logs further failures only at the `FINE` level, so after that first warning, lost spans leave nothing in the
+logs.

@@ -260,6 +260,8 @@ every agent when agent auth is off.
   out: a failing service, new services found without a restart, and an agent evicted after it goes silent.
 - The website's menu has a single Operations section, with the Dashboard page in it.
 - The Live Demo page's screenshots match your light or dark theme.
+- The production guide explains what can slow an agent's switch between proxies, and the Zipkin section explains
+  why a healthy agent sends few spans and why Zipkin should start before the proxy and agents.
 
 ### Build and tooling
 
