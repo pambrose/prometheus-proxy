@@ -242,7 +242,7 @@ internal object ProxyHttpRoutes {
       submitScrapeRequests(agentContextInfo, proxy, path, queryParams, headers)
           .also { responses ->
             agentContextInfo.agentContexts.zip(responses).forEach { (agentContext, response) ->
-              recordScrapeOutcome(path, agentContext.agentId, agentContext.agentName, response, proxy)
+              recordScrapeOutcome(path, agentContext, response, proxy)
             }
           }
           .onEach { response ->
@@ -281,7 +281,7 @@ internal object ProxyHttpRoutes {
         fetchDuration = elapsed,
       )
     agentContextInfo.agentContexts.forEach { agentContext ->
-      recordScrapeOutcome(path, agentContext.agentId, agentContext.agentName, response, proxy)
+      recordScrapeOutcome(path, agentContext, response, proxy)
       incrementScrapeRequestCount(proxy, CLIENT_CANCELLED_LABEL)
       proxy.metrics {
         observeLatency(path, CLIENT_CANCELLED_LABEL, elapsed.toDouble(DurationUnit.SECONDS))
@@ -290,11 +290,11 @@ internal object ProxyHttpRoutes {
   }
 
   // Named for what it now does: this is where a completed scrape becomes observable -- as a text line
-  // on /debug, as a structured record for the dashboard, and as an event on the bus.
+  // on /debug, as a structured record for the dashboard, and as an event on the bus. Takes the agent's context, not
+  // its id and name, so the record carries all the dashboard shows of the agent after it has gone, its identity too.
   internal fun recordScrapeOutcome(
     path: String,
-    agentId: String,
-    agentName: String,
+    agentContext: AgentContext,
     response: ScrapeRequestResponse,
     proxy: Proxy,
   ) {
@@ -315,8 +315,9 @@ internal object ProxyHttpRoutes {
     if (proxy.options.dashboardEnabled) {
       proxy.recordScrape(
         ScrapeRecord(
-          agentId = agentId,
-          agentName = agentName,
+          agentId = agentContext.agentId,
+          agentName = agentContext.agentName,
+          identity = agentContext.identityName,
           path = path,
           statusCode = response.statusCode.value,
           outcome = response.updateMsg,
@@ -325,7 +326,7 @@ internal object ProxyHttpRoutes {
         ),
       )
       proxy.eventBus.emit(
-        ProxyEvent.ScrapeCompleted(agentId, path, response.statusCode.isSuccess()),
+        ProxyEvent.ScrapeCompleted(agentContext.agentId, path, response.statusCode.isSuccess()),
       )
     }
   }

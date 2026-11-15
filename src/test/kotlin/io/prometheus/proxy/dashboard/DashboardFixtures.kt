@@ -19,6 +19,7 @@ package io.prometheus.proxy.dashboard
 import io.prometheus.common.TestPorts
 import io.prometheus.proxy.ActivityEntry
 import io.prometheus.proxy.ActivityKind
+import io.prometheus.proxy.PathHistory
 import io.prometheus.proxy.ProxyMetrics
 import io.prometheus.proxy.ScrapeRecord
 import io.prometheus.proxy.ScrapeRequestResponse
@@ -57,11 +58,35 @@ internal object DashboardFixtures {
     identity: String = "",
   ) = PathView(path, agentIds, labels, targetUrl, pathSource, isDeparted, agentNames, history, identity)
 
-  /** A path whose agent has gone, as [ProxySnapshot.collect] builds one: no agents, named only by its last scrape. */
+  /**
+   * A path whose agent has gone, as [ProxySnapshot.buildPathViews] builds one: no agent ids, and named by its
+   * departure's [agentName] when given, otherwise only by its last scrape. A null [lastScrape] is a path that left
+   * before Prometheus scraped it.
+   */
   fun departedPathView(
     path: String = "orphan_metrics",
-    lastScrape: ScrapeRecord = scrapeRecord(path = path),
-  ) = pathView(path = path, agentIds = emptyList(), lastScrape = lastScrape, isDeparted = true)
+    lastScrape: ScrapeRecord? = scrapeRecord(path = path),
+    agentName: String? = null,
+    identity: String = "",
+    targetUrl: String = "",
+  ) = pathView(
+    path = path,
+    agentIds = emptyList(),
+    targetUrl = targetUrl,
+    lastScrape = lastScrape,
+    isDeparted = true,
+    agentNames = listOfNotNull(agentName),
+    identity = identity,
+  )
+
+  /** What [PathHistory] keeps of a path as it leaves the path map. */
+  fun departure(
+    agentName: String = "agent-1",
+    identity: String = "",
+    targetUrl: String = "",
+    pathSource: String = "",
+    at: Instant = Clock.System.now(),
+  ) = PathHistory.Departure(at, agentName, identity, targetUrl, pathSource)
 
   fun agentView(
     agentId: String = "1",
@@ -97,7 +122,8 @@ internal object DashboardFixtures {
     contentLength: Int = 1800,
     at: Instant = Clock.System.now(),
     agentName: String = "agent-$agentId",
-  ) = ScrapeRecord(agentId, agentName, path, statusCode, outcome, durationMillis, contentLength, at)
+    identity: String = "",
+  ) = ScrapeRecord(agentId, agentName, identity, path, statusCode, outcome, durationMillis, contentLength, at)
 
   /** An agent's successful answer to a scrape, with [text] as its plain body. */
   fun scrapeResponse(

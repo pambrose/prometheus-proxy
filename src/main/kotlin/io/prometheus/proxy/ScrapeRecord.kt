@@ -31,8 +31,11 @@ import kotlin.time.Instant
  *
  * @param agentId the agent that served the scrape, which is what makes a per-agent view possible
  * @param agentName the agent's configured name, captured here rather than looked up later because the
- *   record outlives the agent: a departed path's only remaining attribution is the last scrape that ran
- *   against it, and by then the `AgentContext` holding the name is gone
+ *   record outlives the agent: a departed path whose departure the proxy no longer holds is attributed by
+ *   the last scrape that ran against it, and by then the `AgentContext` holding the name is gone
+ * @param identity the auth identity the agent registered as (`AgentContext.identityName`), empty with agent
+ *   auth off; captured for the same reason as [agentName], so such a path's row, and a search for the
+ *   identity, still show whose it was
  * @param path the registered path scraped, without a leading slash
  * @param statusCode the status for this agent's leg of the scrape. On a consolidated path each
  *   participating agent yields its own record, so this is not necessarily the merged status
@@ -46,6 +49,7 @@ import kotlin.time.Instant
 internal data class ScrapeRecord(
   val agentId: String,
   val agentName: String,
+  val identity: String,
   val path: String,
   val statusCode: Int,
   val outcome: String,

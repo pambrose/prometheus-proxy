@@ -24,6 +24,7 @@ import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
+import io.prometheus.proxy.PathHistory
 import io.prometheus.proxy.ScrapeRecord
 import kotlin.time.Duration.Companion.seconds
 
@@ -39,8 +40,13 @@ class ProxySnapshotTest : StringSpec() {
       currentEndpointIndex = endpointIndex,
     )
 
-  // Each path's records, newest first, as PathHistory.snapshot hands them over. groupBy keeps the list's order.
-  private fun List<ScrapeRecord>.byPath() = groupBy { it.path }
+  // Each path's records, newest first, as PathHistory.snapshot hands them over, with no departures. groupBy keeps the
+  // list's order.
+  private fun List<ScrapeRecord>.byPath() = PathHistory.Snapshot(scrapes = groupBy { it.path })
+
+  // Departures alone, as PathHistory.snapshot hands over paths that left the path map before their first scrape.
+  private fun departed(vararg departures: Pair<String, PathHistory.Departure>) =
+    PathHistory.Snapshot(departures = departures.toMap())
 
   init {
     "eviction countdown should be the remaining inactivity budget" {
@@ -167,7 +173,7 @@ class ProxySnapshotTest : StringSpec() {
     }
 
     "a registered path with no scrapes yet should carry no scrape rather than being dropped" {
-      val views = ProxySnapshot.buildPathViews([DashboardFixtures.pathView(path = "brand_new")], emptyMap())
+      val views = ProxySnapshot.buildPathViews([DashboardFixtures.pathView(path = "brand_new")], PathHistory.Snapshot())
 
       views.single().path shouldBe "brand_new"
       views.single().lastScrape.shouldBeNull()
@@ -252,6 +258,107 @@ class ProxySnapshotTest : StringSpec() {
 
       view.isDeparted.shouldBeTrue()
       view.history shouldBe history
+    }
+
+    // ==================== buildPathViews: departures ====================
+
+    // Follow-up #5: gone rows came only from scrape history, so a path whose agent left before Prometheus ever scraped
+    // it vanished without a trace. Its departure is enough for a row.
+    "a path that departed before its first scrape should appear as gone, with no history" {
+      val departure =
+        DashboardFixtures.departure(
+          agentName = "warehouse-01",
+          identity = "team-a",
+          targetUrl = "http://warehouse/metrics",
+          pathSource = "DISCOVERED",
+        )
+
+      val view = ProxySnapshot.buildPathViews(emptyList(), departed("never_scraped" to departure)).single()
+
+      view.apply {
+        path shouldBe "never_scraped"
+        isDeparted.shouldBeTrue()
+        agentIds.shouldBeEmpty()
+        history.shouldBeEmpty()
+        lastScrape.shouldBeNull()
+        servingAgent shouldBe "warehouse-01"
+        identity shouldBe "team-a"
+        targetUrl shouldBe "http://warehouse/metrics"
+        pathSource shouldBe "DISCOVERED"
+      }
+    }
+
+    // The departure is what the path's entry showed as its last agent left, which on a consolidated path is that agent;
+    // the newest scrape may be another agent's leg.
+    "a gone path with a departure and scrapes should take its attribution from the departure, and keep its history" {
+      val history =
+        [
+          DashboardFixtures.scrapeRecord(path = "orphan_metrics", agentName = "other-02", identity = "team-a"),
+          DashboardFixtures.scrapeRecord(path = "orphan_metrics", statusCode = 503),
+        ]
+      val departure =
+        DashboardFixtures.departure(agentName = "last-01", identity = "team-a", targetUrl = "http://last/metrics")
+      val snapshot = history.byPath().copy(departures = mapOf("orphan_metrics" to departure))
+
+      val view = ProxySnapshot.buildPathViews(emptyList(), snapshot).single()
+
+      view.isDeparted.shouldBeTrue()
+      view.servingAgent shouldBe "last-01"
+      view.identity shouldBe "team-a"
+      view.targetUrl shouldBe "http://last/metrics"
+      view.history shouldBe history
+    }
+
+    // Follow-up #4: a departed row showed no identity, so a search for a team's identity missed its gone paths. When
+    // the proxy has kept only a path's scrapes, the last one carries it, as it carries the agent's name.
+    "a gone path with only scrapes should take its agent and identity from its last scrape, and have no target" {
+      val scrapes =
+        [
+          DashboardFixtures.scrapeRecord(path = "orphan_metrics", agentName = "newest-01", identity = "team-b"),
+          DashboardFixtures.scrapeRecord(path = "orphan_metrics", agentName = "older-01", identity = "team-c"),
+        ]
+
+      val view = ProxySnapshot.buildPathViews(emptyList(), scrapes.byPath()).single()
+
+      view.servingAgent shouldBe "newest-01"
+      view.identity shouldBe "team-b"
+      view.targetUrl shouldBe ""
+      view.agentNames.shouldBeEmpty()
+    }
+
+    // A departure from an agent that reported no name names no one; the last scrape's name is better than a blank.
+    "a departure with no agent name should leave the name to the last scrape" {
+      val snapshot =
+        [DashboardFixtures.scrapeRecord(path = "orphan_metrics", agentName = "scraped-01")]
+          .byPath()
+          .copy(departures = mapOf("orphan_metrics" to DashboardFixtures.departure(agentName = "")))
+
+      ProxySnapshot.buildPathViews(emptyList(), snapshot).single().servingAgent shouldBe "scraped-01"
+    }
+
+    // The dashboard reads the path map before the history, so a path can depart in between: it is still live in what
+    // the path map said, and reads as gone only from the next refresh, never as both.
+    "a departure for a path the path map still holds should add no gone row" {
+      val views =
+        ProxySnapshot.buildPathViews(
+          [DashboardFixtures.pathView(path = "app_metrics", targetUrl = "http://app/metrics")],
+          departed("app_metrics" to DashboardFixtures.departure()),
+        )
+
+      views.single().isDeparted.shouldBeFalse()
+      views.single().targetUrl shouldBe "http://app/metrics"
+    }
+
+    "departed-only, scraped-only, and live paths should be sorted together as one list" {
+      val snapshot =
+        [DashboardFixtures.scrapeRecord(path = "c_scraped")]
+          .byPath()
+          .copy(departures = mapOf("a_departed" to DashboardFixtures.departure()))
+
+      val views = ProxySnapshot.buildPathViews([DashboardFixtures.pathView(path = "b_live")], snapshot)
+
+      views.map { it.path } shouldBe ["a_departed", "b_live", "c_scraped"]
+      views.map { it.isDeparted } shouldBe [true, false, true]
     }
   }
 }

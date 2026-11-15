@@ -520,6 +520,8 @@ internal class ProxyPathManager(
       }
     }
     agentContext.forgetRejection(path)
+    // A path that comes back is live again, no longer one the dashboard shows as gone.
+    proxy.pathHistory?.forgetDeparture(path)
     proxy.metrics { pathRegistered(path) }
     // The agentId, not the context, whose name and host name the agent reports: this is logged for every path.
     if (!isTestMode) logger.info { "Added path /$path for agentId ${agentContext.agentId}" }
@@ -626,6 +628,10 @@ internal class ProxyPathManager(
     val remaining = agentInfo.agentContexts.filterNot { it.agentId == agentId }
     if (remaining.isEmpty()) {
       pathMap.remove(path)
+      // The dashboard keeps showing the path, marked gone, with what this entry showed: from its scrapes alone, a path
+      // never scraped had no row, and none had a target. Recorded under the lock, as the activity feed is, since the
+      // history's monitor is a leaf, so the departure is ordered with the path's next registration, which forgets it.
+      proxy.pathHistory?.recordDeparture(path, agentInfo)
       // The path's last registration is gone, so its per-path metric series go with it.
       proxy.metrics { removePathSeries(path) }
       if (!isTestMode)

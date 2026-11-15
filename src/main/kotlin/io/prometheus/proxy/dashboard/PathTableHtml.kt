@@ -193,7 +193,10 @@ internal object PathTableHtml {
     }
   }
 
-  /** A path's target URL and the button that copies it, or a dash for a path without one, such as a departed path. */
+  /**
+   * A path's target URL and the button that copies it, or a dash for a path without one: its agent didn't report one,
+   * or it departed and the proxy kept only its scrapes. A departed path otherwise shows the target it left with.
+   */
   private fun TR.targetCell(path: PathView) {
     td("dim") {
       if (path.targetUrl.isEmpty()) {

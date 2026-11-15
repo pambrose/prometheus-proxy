@@ -123,7 +123,7 @@ class ProxyHttpRoutesTest : StringSpec() {
     "recordScrapeOutcome should skip all bookkeeping when debug and the dashboard are both off" {
       val (proxy, bus) = bookkeepingProxy(debugEnabled = false, dashboardEnabled = false)
 
-      ProxyHttpRoutes.recordScrapeOutcome("metrics", "agent-1", "agent", scrapedResponse(), proxy)
+      ProxyHttpRoutes.recordScrapeOutcome("metrics", scrapingAgent(), scrapedResponse(), proxy)
 
       verify(exactly = 0) { proxy.logActivity(any()) }
       verify(exactly = 0) { proxy.recordScrape(any()) }
@@ -133,7 +133,7 @@ class ProxyHttpRoutesTest : StringSpec() {
     "recordScrapeOutcome should write only the activity log when only debug is on" {
       val (proxy, bus) = bookkeepingProxy(debugEnabled = true, dashboardEnabled = false)
 
-      ProxyHttpRoutes.recordScrapeOutcome("metrics", "agent-1", "agent", scrapedResponse(), proxy)
+      ProxyHttpRoutes.recordScrapeOutcome("metrics", scrapingAgent(), scrapedResponse(), proxy)
 
       verify(exactly = 1) { proxy.logActivity(match { it.contains("/metrics - success - 200") }) }
       verify(exactly = 0) { proxy.recordScrape(any()) }
@@ -143,13 +143,33 @@ class ProxyHttpRoutesTest : StringSpec() {
     "recordScrapeOutcome should record the scrape and emit its event when only the dashboard is on" {
       val (proxy, bus) = bookkeepingProxy(debugEnabled = false, dashboardEnabled = true)
 
-      ProxyHttpRoutes.recordScrapeOutcome("metrics", "agent-1", "agent", scrapedResponse(), proxy)
+      ProxyHttpRoutes.recordScrapeOutcome("metrics", scrapingAgent(), scrapedResponse(), proxy)
 
       verify(exactly = 0) { proxy.logActivity(any()) }
       verify(exactly = 1) { proxy.recordScrape(match { it.path == "metrics" && it.outcome == "success" }) }
       verify(exactly = 1) { bus.emit(ofType<ProxyEvent.ScrapeCompleted>()) }
     }
+
+    // A departed path's row is attributed by its last scrape when the proxy no longer holds its departure, so the
+    // record carries what the row and the search show of the agent: its name and the identity it registered as.
+    "recordScrapeOutcome should record the agent's id, name, and identity on the scrape" {
+      val (proxy, _) = bookkeepingProxy(debugEnabled = false, dashboardEnabled = true)
+
+      ProxyHttpRoutes.recordScrapeOutcome("metrics", scrapingAgent(), scrapedResponse(), proxy)
+
+      verify(exactly = 1) {
+        proxy.recordScrape(match { it.agentId == "agent-1" && it.agentName == "agent" && it.identity == "team-a" })
+      }
+    }
   }
+
+  // The agent a bookkeeping test's scrape went to, connected as the identity team-a.
+  private fun scrapingAgent(): AgentContext =
+    mockk {
+      every { agentId } returns "agent-1"
+      every { agentName } returns "agent"
+      every { identityName } returns "team-a"
+    }
 
   // Calls recordScrapeOutcome on [proxy] with debug switched on, so the /debug activity line these tests assert is
   // written.
@@ -161,7 +181,7 @@ class ProxyHttpRoutesTest : StringSpec() {
     val options = mockk<ProxyOptions>(relaxed = true)
     every { options.debugEnabled } returns true
     every { proxy.options } returns options
-    ProxyHttpRoutes.recordScrapeOutcome(path, "agent-1", "agent", response, proxy)
+    ProxyHttpRoutes.recordScrapeOutcome(path, scrapingAgent(), response, proxy)
   }
 
   private fun createSpyProxyForSubmit(

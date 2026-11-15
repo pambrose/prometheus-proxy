@@ -552,16 +552,18 @@ a ninth, Identity, after Agent(s) whenever agent auth is on.
 - **Row hover:** cells step to `surface-2`. No transition.
 - **Path:** a Copy Button follows a registered path and copies its proxy URL.
 - **Target:** a Copy Button follows the URL in the same cell, showing the target of the agent the row
-  names. A row with no target shows the en dash and no button, since there is nothing to copy.
+  names; a departed row keeps the target it had as its agent left. A row with no target shows the en dash
+  and no button, since there is nothing to copy.
 - **History:** a History Strip, then the share of those scrapes that succeeded in `ink-3`, rounded down so a
-  path with any failure never reads 100%. A path not yet scraped shows the en dash.
+  path with any failure never reads 100%. A path not yet scraped shows the en dash, as does a departed path
+  whose agent left before its first scrape.
 - **Identity:** the auth identity of the path's first registrant, which any agent joining the path must
-  share. The legacy shared `agentToken` reads *shared token*; a departed path has none and shows the en
-  dash. Shown or hidden by whether agent auth is on, never by the rows, so the column doesn't come and go as
-  a search narrows or the last live path goes.
+  share. The legacy shared `agentToken` reads *shared token*; a departed path keeps the identity it had as
+  its agent left, so a search for an identity finds its gone paths too. Shown or hidden by whether agent auth
+  is on, never by the rows, so the column doesn't come and go as a search narrows or the last live path goes.
 - **Departed row:** the path cell turns `crit` and a `gone` tag follows the agent name. The row stays
   in place — a path whose agent vanished is the single most important thing this table shows, and
-  removing it is how the old interface hid exactly that case.
+  removing it is how the old interface hid exactly that case. It appears as the path leaves, scraped or not.
 - **Match count:** while a search is active, a Meta-type line in `ink-3` above the header says
   `Showing N of M paths`; a search that leaves no row is an Empty State instead (*No paths match the
   filter*, or *No problems: every path's last scrape succeeded* for "Problems only" alone).

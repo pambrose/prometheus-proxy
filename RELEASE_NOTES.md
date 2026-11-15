@@ -102,7 +102,7 @@ most 10,000 agents connected with one identity, which is every agent when agent 
 - **Paths whose agent has gone stay on the dashboard for an hour.** The Paths view used to lose a gone path within
   a minute on a busy proxy, since it rebuilt it from the 200 most recent scrapes across all paths. Each path now
   keeps its own history, and a gone path stays for `proxy.dashboard.departedPathRetentionSecs` (default 3600) after
-  its last scrape.
+  its agent left or its last scrape, whichever is later.
 - **A History column on the dashboard.** Each path's last 20 scrapes (`proxy.dashboard.pathHistorySize`) show as a
   row of green and red dots with the share that succeeded, so a target that fails every scrape no longer looks like
   one that failed once.
@@ -122,6 +122,10 @@ most 10,000 agents connected with one identity, which is every agent when agent 
   the scrape port. It doesn't count as one of Prometheus's scrapes, in the proxy's metrics or the path's History,
   and the Activity view records who asked. Anyone who can reach the dashboard can use it, so it reads the start of
   any target's output; `proxy.dashboard.scrapeNowEnabled = false` turns it off.
+- **Gone paths keep their identity and target, and appear even if never scraped.** A path whose agent has gone
+  now shows the identity it was registered as, so a search for a team's identity finds its gone paths too, and the
+  target URL its agent scraped, with its copy button. A path whose agent left before Prometheus scraped it, which
+  left no trace on the dashboard, now stays on the Paths view as gone.
 
 ### Security
 

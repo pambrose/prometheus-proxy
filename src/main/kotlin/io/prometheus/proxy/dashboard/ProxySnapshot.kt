@@ -19,6 +19,7 @@ package io.prometheus.proxy.dashboard
 import io.prometheus.Proxy
 import io.prometheus.proxy.ActivityEntry
 import io.prometheus.proxy.AgentAuthManager.Companion.LEGACY_IDENTITY_NAME
+import io.prometheus.proxy.PathHistory
 import io.prometheus.proxy.ScrapeRecord
 import kotlin.time.Duration
 import kotlin.time.Instant
@@ -26,15 +27,18 @@ import kotlin.time.Instant
 /**
  * One path as the dashboard shows it, joined with the recent scrapes that ran against it.
  *
- * A view may be **departed** — a path that is no longer registered but whose history the proxy still
- * keeps. Those exist because the proxy deletes a path the moment its last agent goes
- * ([io.prometheus.proxy.ProxyPathManager.removeFromPathManager]), so an agent-backed view of state can
- * only ever show what is currently live. A path that stopped serving is the single most useful thing an
- * operator can be shown, and without this it is the one thing that silently disappears.
+ * A view may be **departed** — a path that is no longer registered but that the proxy still remembers,
+ * by its departure, its scrapes, or both. Those exist because the proxy deletes a path the moment its
+ * last agent goes ([io.prometheus.proxy.ProxyPathManager.removeFromPathManager]), so an agent-backed view
+ * of state can only ever show what is currently live. A path that stopped serving is the single most
+ * useful thing an operator can be shown, and without this it is the one thing that silently disappears.
  *
+ * @param targetUrl the URL the path's agent scrapes; for a departed path, the one it scraped as it left
+ * @param agentNames the names of the agents backing the path; for a departed path, the agent its departure names, or
+ *   none, when the proxy kept only its scrapes
  * @param history the path's recent scrapes, newest first, at most `proxy.dashboard.pathHistorySize` of them
  * @param identity the auth identity of the path's first registrant, which any agent joining it must share; empty with
- *   agent auth off, and for a departed path, whose entry is gone
+ *   agent auth off. A departed path keeps the identity it left with, or failing that its last scrape's
  */
 internal data class PathView(
   val path: String,
@@ -61,8 +65,8 @@ internal data class PathView(
    *
    * Deliberately a name and not an [agentIds] entry: the two layouts are read together — an operator
    * finds a failing path here and then looks that agent up in the agent view — and an internal id would
-   * force them to translate between the two by hand. For a departed path the name comes from the last
-   * scrape, which is the only attribution that outlives the agent.
+   * force them to translate between the two by hand. For a departed path the name comes from its
+   * departure, or, when the proxy kept only its scrapes, from the last scrape, both of which outlive the agent.
    */
   val servingAgent: String? get() = agentNames.firstOrNull() ?: lastScrape?.agentName
 
@@ -131,10 +135,10 @@ internal data class AgentView(
 }
 
 /**
- * An auth identity as the dashboard names it, or null when there is none to show: agent auth is off, or the path is
- * departed. The legacy `proxy.agentToken` is an identity in name only, one token every agent shares, so it reads as
- * that rather than as its internal name, which [io.prometheus.proxy.AgentAuthManager.create] keeps any `proxy.auth`
- * identity from taking.
+ * An auth identity as the dashboard names it, or null when there is none to show, which is when agent auth is off. The
+ * legacy `proxy.agentToken` is an identity in name only, one token every agent shares, so it reads as that rather than
+ * as its internal name, which [io.prometheus.proxy.AgentAuthManager.create] keeps any `proxy.auth` identity from
+ * taking.
  */
 internal fun identityLabel(identity: String): String? =
   when (identity) {
@@ -183,39 +187,64 @@ internal data class ProxySnapshot(
   companion object {
     /**
      * Joins each registered path to its recent scrapes, then adds a row for every path the history
-     * remembers but the path map no longer holds.
+     * remembers, by a departure or by scrapes, but the path map no longer holds.
      *
      * Those extra rows are the point of the path-centric layout. `ProxyPathManager` deletes a path the
      * instant its last agent goes, so a view built only from live registrations cannot show a target
      * that *stopped* working — the moment an operator most needs to see it. The history outlives the
-     * agent, and [io.prometheus.proxy.PathHistory] bounds it, by `proxy.dashboard.departedPathRetentionSecs`
+     * agent, and [PathHistory] bounds it, by `proxy.dashboard.departedPathRetentionSecs`
      * and a cap on gone paths, so this cannot grow without limit.
      *
      * Pure and separated from [collect] so it is testable without standing up a proxy.
      *
      * @param registered live path registrations, without their scrape join
-     * @param history each path's recent scrapes, **newest first** — as [io.prometheus.proxy.PathHistory.snapshot]
+     * @param history each path's recent scrapes, **newest first**, and each departure — as [PathHistory.snapshot]
      *   returns them
      */
     internal fun buildPathViews(
       registered: List<PathView>,
-      history: Map<String, List<ScrapeRecord>>,
+      history: PathHistory.Snapshot,
     ): List<PathView> {
       val registeredPaths = registered.mapTo(mutableSetOf()) { it.path }
 
-      val live = registered.map { it.copy(history = history[it.path].orEmpty()) }
+      val live = registered.map { it.copy(history = history.scrapes[it.path].orEmpty()) }
+      // A path the path map held as it was read is live, though it may have departed before the history was read; the
+      // next refresh shows it gone.
       val departed =
-        history
-          .filterKeys { it !in registeredPaths }
-          .map { (path, records) ->
-            // agentNames stays empty: the agent is gone, so servingAgent falls through to the name the
-            // scrape record captured while it was still here.
-            PathView(path = path, agentIds = emptyList(), labels = "", isDeparted = true, history = records)
-          }
+        (history.scrapes.keys + history.departures.keys)
+          .filterNot { it in registeredPaths }
+          .map { departedView(it, history.scrapes[it].orEmpty(), history.departures[it]) }
 
       // One sorted list rather than two sections, so a departed path sits where the eye expects to find
       // it instead of somewhere an operator has to think to look.
       return (live + departed).sortedBy { it.path }
+    }
+
+    /**
+     * The row for [path], whose agent has gone, with its [records], newest first, and its [departure], if the history
+     * still holds it. The departure, what the path's entry showed as it left, names the agent, the identity, the
+     * target, and the source; without one, the row names the agent and identity its last scrape recorded while the
+     * agent was still here, and has no target. A path that left before its first scrape has no records, so its History
+     * and last-scrape cells show the en dash.
+     */
+    private fun departedView(
+      path: String,
+      records: List<ScrapeRecord>,
+      departure: PathHistory.Departure?,
+    ): PathView {
+      val lastScrape = records.firstOrNull()
+      return PathView(
+        path = path,
+        agentIds = emptyList(),
+        labels = "",
+        targetUrl = departure?.targetUrl.orEmpty(),
+        pathSource = departure?.pathSource.orEmpty(),
+        isDeparted = true,
+        // Left empty without a departure's name, so servingAgent falls through to the last scrape's.
+        agentNames = listOfNotNull(departure?.agentName?.ifEmpty { null }),
+        history = records,
+        identity = departure?.identity ?: lastScrape?.identity.orEmpty(),
+      )
     }
 
     /**
@@ -264,7 +293,8 @@ internal data class ProxySnapshot(
 
       // Taken after the path map, so a path registered in between reads as gone for one refresh rather than a path
       // that went reading as live.
-      val history = proxy.pathHistory.snapshot(pathInfos.keys)
+      // Null only with the dashboard off, when nothing collects.
+      val history = proxy.pathHistory?.snapshot(pathInfos.keys) ?: PathHistory.Snapshot()
       val paths = buildPathViews(registered, history)
 
       // Derived from the registered list only: a departed path has no agent to attribute it to, and the
