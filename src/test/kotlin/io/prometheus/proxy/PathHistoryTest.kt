@@ -38,14 +38,15 @@ import kotlin.time.Instant
 class PathHistoryTest : StringSpec() {
   private val start: Instant = Instant.parse("2026-11-14T12:00:00Z")
 
-  // A history whose clock reads whatever `now` holds, so a test moves time instead of sleeping.
-  private class Fixture(
-    historySize: Int,
-    retention: Duration,
-    maxDeparted: Int,
-    var livePaths: Int,
-    var now: Instant,
+  // A history whose clock reads whatever `now` holds, so a test moves time instead of sleeping, and whose count of
+  // registered paths is whatever `livePaths` holds.
+  private inner class Fixture(
+    historySize: Int = 3,
+    retention: Duration = 1.hours,
+    maxDeparted: Int = PathHistory.MAX_DEPARTED_PATHS,
+    var livePaths: Int = 0,
   ) {
+    var now = start
     val history =
       PathHistory(
         historySize = historySize,
@@ -54,17 +55,12 @@ class PathHistoryTest : StringSpec() {
         clock = mockk<Clock> { every { now() } answers { now } },
         maxDepartedPaths = maxDeparted,
       )
+
+    // The paths the history holds, read with [registered] registered, so none of those is pruned as gone.
+    fun heldPaths(registered: Collection<String>): Set<String> = history.snapshot(registered.toSet()).keys
   }
 
-  private fun fixture(
-    historySize: Int = 3,
-    retention: Duration = 1.hours,
-    maxDeparted: Int = PathHistory.MAX_DEPARTED_PATHS,
-    livePaths: Int = 0,
-  ) = Fixture(historySize, retention, maxDeparted, livePaths, start)
-
-  // Every path the history holds, read without pruning any as gone.
-  private fun Fixture.heldPaths(): Set<String> = history.snapshot(registered = (1..1000).map { "p$it" }.toSet()).keys
+  private fun names(range: IntRange) = range.map { "p$it" }
 
   // A scrape at [offset] past the start.
   private fun record(
@@ -81,7 +77,7 @@ class PathHistoryTest : StringSpec() {
 
   init {
     "a path should keep only its most recent records, newest first" {
-      val f = fixture(historySize = 3)
+      val f = Fixture(historySize = 3)
       val records = (1..5).map { record("app", durationMillis = it.toLong()) }
       records.forEach(f.history::record)
 
@@ -91,7 +87,7 @@ class PathHistoryTest : StringSpec() {
     // The bug this class exists to fix: one queue shared by every path let a busy path push a quiet one out within
     // seconds, and with it every gone path.
     "a busy path should not push another path's history out" {
-      val f = fixture(historySize = 3)
+      val f = Fixture(historySize = 3)
       f.history.record(record("gone", statusCode = 503))
       repeat(500) { f.history.record(record("busy")) }
 
@@ -102,7 +98,7 @@ class PathHistoryTest : StringSpec() {
     }
 
     "a registered path should keep its history however old it is" {
-      val f = fixture(retention = 5.minutes)
+      val f = Fixture(retention = 5.minutes)
       f.history.record(record("app"))
       f.now = start + 2.days
 
@@ -110,7 +106,7 @@ class PathHistoryTest : StringSpec() {
     }
 
     "a gone path should stay until its retention has passed since its last scrape" {
-      val f = fixture(retention = 60.minutes)
+      val f = Fixture(retention = 60.minutes)
       f.history.record(record("gone"))
       f.history.record(record("gone", offset = 10.minutes))
 
@@ -126,7 +122,7 @@ class PathHistoryTest : StringSpec() {
     // this for the whole retention window.
     "gone paths beyond the cap should be dropped oldest first" {
       // Room for live paths, so record's own bound leaves all four and this is snapshot's cap at work.
-      val f = fixture(maxDeparted = 2, livePaths = 10)
+      val f = Fixture(maxDeparted = 2, livePaths = 10)
       f.history.record(record("oldest"))
       f.history.record(record("middle", offset = 1.seconds))
       f.history.record(record("newest", offset = 2.seconds))
@@ -138,14 +134,14 @@ class PathHistoryTest : StringSpec() {
     // The write path enforces the bound itself: snapshot(), the only other pruning, runs only while a dashboard is
     // open, so a proxy nobody watched grew a ring for every path ever scraped.
     "record should hold at most the live paths plus the gone-path cap, with no snapshot in between" {
-      val f = fixture(maxDeparted = 3, livePaths = 2)
+      val f = Fixture(maxDeparted = 3, livePaths = 2)
       (1..100).forEach { f.history.record(record("p$it")) }
 
-      f.heldPaths() shouldBe setOf("p96", "p97", "p98", "p99", "p100")
+      f.heldPaths(names(1..100)) shouldBe setOf("p96", "p97", "p98", "p99", "p100")
     }
 
     "record should evict the path scraped least recently, not the one added first" {
-      val f = fixture(maxDeparted = 3)
+      val f = Fixture(maxDeparted = 3)
       f.history.record(record("p1"))
       f.history.record(record("p2"))
       f.history.record(record("p3"))
@@ -153,22 +149,22 @@ class PathHistoryTest : StringSpec() {
       f.history.record(record("p1"))
       f.history.record(record("p4"))
 
-      f.heldPaths() shouldBe setOf("p1", "p3", "p4")
+      f.heldPaths(names(1..4)) shouldBe setOf("p1", "p3", "p4")
     }
 
     "record should make room for every registered path" {
-      val f = fixture(maxDeparted = 1, livePaths = 4)
+      val f = Fixture(maxDeparted = 1, livePaths = 4)
       (1..5).forEach { f.history.record(record("p$it")) }
-      f.heldPaths().size shouldBe 5
+      f.heldPaths(names(1..6)).size shouldBe 5
 
       f.livePaths = 2
       f.history.record(record("p6"))
 
-      f.heldPaths() shouldBe setOf("p4", "p5", "p6")
+      f.heldPaths(names(1..6)) shouldBe setOf("p4", "p5", "p6")
     }
 
     "a path that comes back should keep the history it had while gone" {
-      val f = fixture(historySize = 5)
+      val f = Fixture(historySize = 5)
       f.history.record(record("app", statusCode = 503))
       f.history.snapshot(emptySet()) shouldContainKey "app"
 
@@ -179,21 +175,21 @@ class PathHistoryTest : StringSpec() {
 
     // A request for //app reaches the scrape route as path "/app"; the path map keys it as "app".
     "a leading slash should key a scrape under the path map's key" {
-      val f = fixture()
+      val f = Fixture()
       f.history.record(record("/app"))
 
       f.history.snapshot(setOf("app")).keys shouldBe setOf("app")
     }
 
     "a history size of zero should keep nothing" {
-      val f = fixture(historySize = 0)
+      val f = Fixture(historySize = 0)
       f.history.record(record("app"))
 
       f.history.snapshot(setOf("app")).entries.shouldBeEmpty()
     }
 
     "a snapshot should be a copy that later scrapes do not change" {
-      val f = fixture(historySize = 3)
+      val f = Fixture(historySize = 3)
       f.history.record(record("app"))
       val before = f.history.snapshot(setOf("app"))
 

@@ -22,6 +22,7 @@ import com.google.protobuf.LazyStringArrayList
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.ranges.shouldBeIn
 import io.kotest.matchers.comparables.shouldBeLessThan
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
@@ -576,8 +577,7 @@ class AgentContextTest : StringSpec() {
       val context = AgentContext("10.0.1.14:54321")
       val after = Clock.System.now()
 
-      (context.connectTime < before).shouldBeFalse()
-      (context.connectTime > after).shouldBeFalse()
+      context.connectTime shouldBeIn before..after
     }
   }
 }

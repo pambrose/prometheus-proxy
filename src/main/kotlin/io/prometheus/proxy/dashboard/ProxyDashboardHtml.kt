@@ -286,19 +286,20 @@ internal object ProxyDashboardHtml {
       val total = path.history.size
       if (total == 0) {
         +DASH
-        return@td
-      }
-      val summary = "${path.historySucceeded} of $total recent scrapes succeeded"
-      span("hist") {
-        attributes["role"] = "img"
-        attributes["aria-label"] = summary
-        attributes["title"] = summary
-        path.historyRuns.forEach { (ok, count) ->
-          i(if (ok) "ok" else "crit") { attributes["style"] = "--n:$count" }
+      } else {
+        val succeeded = path.historySucceeded
+        val summary = "$succeeded of $total recent scrapes succeeded"
+        span("hist") {
+          attributes["role"] = "img"
+          attributes["aria-label"] = summary
+          attributes["title"] = summary
+          path.historyRuns.forEach { (ok, count) ->
+            i(if (ok) "ok" else "crit") { attributes["style"] = "--n:$count" }
+          }
         }
+        // Floored, so a path with any failure never reads 100%.
+        +"${succeeded * 100 / total}%"
       }
-      // Floored, so a path with any failure never reads 100%.
-      +"${path.historySucceeded * 100 / total}%"
     }
 
   /**

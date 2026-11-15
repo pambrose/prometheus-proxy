@@ -175,7 +175,7 @@ shoot_paths() {
   local name="$1" theme png
   for theme in "${THEMES[@]}"; do
     png="$WORK/$(named "$name" "$theme").png"
-    capture "$DASHBOARD_URL/paths" "$png" 900 "$theme" 3000 "$PATHS_WIDTH"
+    capture "$DASHBOARD_URL/paths" "$png" 900 "$theme" "" "$PATHS_WIDTH"
     magick "$png" -background "$(background "$theme")" -fuzz 2% -define trim:edges=south -trim +repage "$png"
   done
 }

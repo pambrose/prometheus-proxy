@@ -16,6 +16,8 @@
 
 package io.prometheus.proxy
 
+import com.google.common.collect.EvictingQueue
+import io.prometheus.proxy.ProxyPathManager.Companion.pathKey
 import kotlin.time.Clock
 import kotlin.time.Duration
 
@@ -53,9 +55,9 @@ internal class PathHistory(
   private val clock: Clock = Clock.System,
   private val maxDepartedPaths: Int = MAX_DEPARTED_PATHS,
 ) {
-  // Oldest record first in each ring, so adding is addLast and evicting is removeFirst. Access-ordered, so the path
-  // scraped least recently is always first, and record() evicts from the front without searching.
-  private val rings = LinkedHashMap<String, ArrayDeque<ScrapeRecord>>(INITIAL_CAPACITY, LOAD_FACTOR, true)
+  // Each ring evicts its oldest record itself. Access-ordered, so the path scraped least recently is always first, and
+  // both record() and prune() evict from the front without sorting.
+  private val rings = LinkedHashMap<String, EvictingQueue<ScrapeRecord>>(INITIAL_CAPACITY, LOAD_FACTOR, true)
 
   /**
    * Adds one completed scrape to its path's history, evicting the path's oldest record once it holds [historySize], and
@@ -63,14 +65,21 @@ internal class PathHistory(
    */
   fun record(record: ScrapeRecord) {
     if (historySize <= 0) return
-    // Read before taking the monitor, which stays a leaf: the path map has its own.
+    // Keyed as the path map keys a path, so the snapshot's join to the registered paths holds for a request that
+    // reached the scrape route as //path. The get moves the path to the back.
+    val key = pathKey(record.path)
+    synchronized(rings) {
+      rings[key]?.also {
+        it.add(record)
+        return
+      }
+    }
+    // A path's first scrape, the only time the map grows, so the only time the bound is read: livePathCount takes the
+    // path map's lock, which a scrape of a path already here shouldn't pay for. Read before taking the monitor, which
+    // stays a leaf.
     val maxPaths = livePathCount() + maxDepartedPaths
     synchronized(rings) {
-      // Keyed as the path map keys a path, without a leading slash, so the snapshot's join to registered paths holds
-      // for a request that reached the scrape route as //path. getOrPut's get moves the path to the back.
-      val ring = rings.getOrPut(record.path.removePrefix("/")) { ArrayDeque(historySize) }
-      if (ring.size >= historySize) ring.removeFirst()
-      ring.addLast(record)
+      rings.getOrPut(key) { EvictingQueue.create(historySize) }.add(record)
       // The path just recorded is at the back, so it is never the one evicted.
       val leastRecent = rings.keys.iterator()
       while (rings.size > maxPaths) {
@@ -91,21 +100,16 @@ internal class PathHistory(
       rings.mapValues { (_, ring) -> ring.reversed() }
     }
 
-  // Callers hold the monitor. A ring is never empty: record() creates one only to add to it.
+  // Callers hold the monitor. A ring is never empty: record() creates one only to add to it. Neither filtering nor
+  // removing reorders the map, so the gone paths left after the first pass are still least recently scraped first.
   private fun prune(registered: Set<String>) {
     val cutoff = clock.now() - departedRetention
-    val departed = rings.filterKeys { it !in registered }
-    val (expired, kept) = departed.entries.partition { it.value.last().at < cutoff }
-    expired.forEach { rings.remove(it.key) }
-    if (kept.size > maxDepartedPaths)
-      kept
-        .sortedBy { it.value.last().at }
-        .take(kept.size - maxDepartedPaths)
-        .forEach { rings.remove(it.key) }
+    rings.entries.removeIf { (path, ring) -> path !in registered && ring.last().at < cutoff }
+    rings.keys.filter { it !in registered }.dropLast(maxDepartedPaths).forEach(rings::remove)
   }
 
   companion object {
-    /** Gone paths kept at most at once; about 2 MB at the default 20 records each. */
+    /** Gone paths kept at most at once: at the default 20 records each, a few MB with their path strings. */
     internal const val MAX_DEPARTED_PATHS = 1000
 
     private const val INITIAL_CAPACITY = 16

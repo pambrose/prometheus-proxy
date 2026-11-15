@@ -38,11 +38,13 @@ internal data class PathView(
   val labels: String,
   val targetUrl: String = "",
   val pathSource: String = "",
-  val lastScrape: ScrapeRecord? = null,
   val isDeparted: Boolean = false,
   val agentNames: List<String> = emptyList(),
   val history: List<ScrapeRecord> = emptyList(),
 ) {
+  /** The path's most recent scrape, or null for one not yet scraped. */
+  val lastScrape: ScrapeRecord? get() = history.firstOrNull()
+
   /**
    * The agent that last served this path, named the way the agent list names it.
    *
@@ -56,24 +58,27 @@ internal data class PathView(
   /** How many agents beyond the first back this path, for the `+N` marker on a consolidated row. */
   val additionalAgents: Int get() = (agentIds.size - 1).coerceAtLeast(0)
 
+  // The two below are computed once per snapshot, not on every read: a snapshot is rendered for every session and page
+  // that shows it.
+
   /** How many of [history]'s scrapes succeeded. */
-  val historySucceeded: Int get() = history.count { it.isSuccess }
+  val historySucceeded: Int by lazy(LazyThreadSafetyMode.PUBLICATION) { history.count { it.isSuccess } }
 
   /**
    * [history] as runs of consecutive like results, **oldest first**, each a `(succeeded, count)` pair: what the path
    * table's history strip draws, one element per run.
    */
-  val historyRuns: List<Pair<Boolean, Int>>
-    get() =
-      buildList {
-        history.asReversed().forEach { record ->
-          val last = lastOrNull()
-          if (last != null && last.first == record.isSuccess)
-            set(lastIndex, last.first to last.second + 1)
-          else
-            add(record.isSuccess to 1)
-        }
+  val historyRuns: List<Pair<Boolean, Int>> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+    buildList {
+      history.asReversed().forEach { record ->
+        val last = lastOrNull()
+        if (last != null && last.first == record.isSuccess)
+          set(lastIndex, last.first to last.second + 1)
+        else
+          add(record.isSuccess to 1)
       }
+    }
+  }
 }
 
 /** One connected agent as the dashboard shows it. */
@@ -167,26 +172,14 @@ internal data class ProxySnapshot(
     ): List<PathView> {
       val registeredPaths = registered.mapTo(mutableSetOf()) { it.path }
 
-      // Newest-first input means the first record per path is already the latest: no sort, no max-by.
-      val live =
-        registered.map { view ->
-          val records = history[view.path].orEmpty()
-          view.copy(lastScrape = records.firstOrNull(), history = records)
-        }
+      val live = registered.map { it.copy(history = history[it.path].orEmpty()) }
       val departed =
         history
-          .filter { (path, records) -> path !in registeredPaths && records.isNotEmpty() }
+          .filterKeys { it !in registeredPaths }
           .map { (path, records) ->
             // agentNames stays empty: the agent is gone, so servingAgent falls through to the name the
             // scrape record captured while it was still here.
-            PathView(
-              path = path,
-              agentIds = emptyList(),
-              labels = "",
-              lastScrape = records.first(),
-              isDeparted = true,
-              history = records,
-            )
+            PathView(path = path, agentIds = emptyList(), labels = "", isDeparted = true, history = records)
           }
 
       // One sorted list rather than two sections, so a departed path sits where the eye expects to find

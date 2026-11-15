@@ -33,6 +33,7 @@ import kotlin.time.Instant
  * about — which is what makes the assertions readable.
  */
 internal object DashboardFixtures {
+  // lastScrape is shorthand for a one-record history, since a path view's last scrape is its history's newest.
   fun pathView(
     path: String = "app_metrics",
     agentIds: List<String> = ["1"],
@@ -43,7 +44,7 @@ internal object DashboardFixtures {
     isDeparted: Boolean = false,
     agentNames: List<String> = agentIds.map { "agent-$it" },
     history: List<ScrapeRecord> = listOfNotNull(lastScrape),
-  ) = PathView(path, agentIds, labels, targetUrl, pathSource, lastScrape, isDeparted, agentNames, history)
+  ) = PathView(path, agentIds, labels, targetUrl, pathSource, isDeparted, agentNames, history)
 
   fun agentView(
     agentId: String = "1",

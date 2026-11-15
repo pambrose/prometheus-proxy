@@ -333,11 +333,6 @@ internal class ProxyPathManager(
       }
   }
 
-  // The key a path is stored and looked up under: without its leading slash, as the scrape route (get("/*") with the
-  // slash dropped) looks it up. Stored with the slash, a path was advertised in service discovery yet 404ed on every
-  // scrape, and "/foo" and "foo" were separate paths that the identity and consolidation checks never compared.
-  private fun pathKey(path: String) = path.removePrefix("/")
-
   // Logs why a path was refused and returns the rejection. The first time this connection is told a cause for a
   // path it is logged at WARN; an identical repeat -- an agent retrying a rejection that can clear -- at DEBUG, so
   // a lasting conflict is reported once rather than on every retry. Mirrors AgentPathManager.logRejection.
@@ -634,5 +629,11 @@ internal class ProxyPathManager(
     // [key] as a rejection or a log line shows it: whole up to SHOWN_PATH_CHARS characters, and otherwise cut there and
     // marked "...", with its control characters escaped (November #16). See AgentValues.shownValue.
     internal fun shownPath(key: String): String = shownValue(key, SHOWN_PATH_CHARS)
+
+    // The key a path is stored and looked up under: without its leading slash, as the scrape route (get("/*") with the
+    // slash dropped) looks it up. Stored with the slash, a path was advertised in service discovery yet 404ed on every
+    // scrape, and "/foo" and "foo" were separate paths that the identity and consolidation checks never compared.
+    // PathHistory keys its rings with it too, so its join to the registered paths holds.
+    internal fun pathKey(path: String) = path.removePrefix("/")
   }
 }

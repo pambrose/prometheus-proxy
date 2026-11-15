@@ -49,7 +49,7 @@ import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.common.TestPorts
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
-import io.prometheus.proxy.ScrapeRecord
+import io.prometheus.proxy.dashboard.DashboardFixtures.scrapeRecord
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml
 import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.ASSET_DIR
 import io.prometheus.proxy.dashboard.ProxySnapshot
@@ -316,8 +316,10 @@ class ProxyWebDashboardTest : StringSpec() {
     // pushed it out of the table; it must now stay, with its history strip.
     "a gone path should stay in the path layout after more scrapes than the recent-scrapes queue holds" {
       withDashboard(HISTORY_HTTP_PORT, HISTORY_GRPC_PORT, HISTORY_DASHBOARD_PORT) {
-        proxy.recordScrape(ScrapeRecord("9", "warehouse-01", "orphan_metrics", 503, "path_not_found", 12, 0))
-        repeat(250) { proxy.recordScrape(ScrapeRecord("7", "busy-01", "busy_metrics", 200, "success", 4, 900)) }
+        proxy.recordScrape(
+          scrapeRecord(agentId = "9", agentName = "warehouse-01", path = "orphan_metrics", statusCode = 503),
+        )
+        repeat(250) { proxy.recordScrape(scrapeRecord(agentId = "7", agentName = "busy-01", path = "busy_metrics")) }
 
         eventually(20.seconds) {
           val table = client.get("$base/dashboard/paths").bodyAsText()

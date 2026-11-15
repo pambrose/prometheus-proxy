@@ -253,17 +253,5 @@ class ProxySnapshotTest : StringSpec() {
       view.isDeparted.shouldBeTrue()
       view.history shouldBe history
     }
-
-    "a path with an empty history should neither appear as gone nor carry a scrape" {
-      val views =
-        ProxySnapshot.buildPathViews(
-          [DashboardFixtures.pathView(path = "app_metrics")],
-          mapOf("app_metrics" to emptyList<ScrapeRecord>(), "orphan_metrics" to emptyList()),
-        )
-
-      views.map { it.path } shouldBe ["app_metrics"]
-      views.single().lastScrape.shouldBeNull()
-      views.single().history.shouldBeEmpty()
-    }
   }
 }

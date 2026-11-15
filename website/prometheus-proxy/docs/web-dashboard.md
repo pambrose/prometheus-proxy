@@ -35,7 +35,7 @@ and how recent scrapes actually went.
         path = "dashboard"          // Served at http://<proxy>:8094/dashboard
         host = "0.0.0.0"            // "127.0.0.1" keeps it on the proxy host
         refreshIntervalSecs = 2     // How often drifting counters are re-pushed
-        recentScrapesQueueSize = 200  // Recent scrapes in an agent's detail panel
+        recentScrapesQueueSize = 200  // Recent scrapes across all agents, for each agent's panel
         pathHistorySize = 20        // Scrapes kept per path, for the History column
         departedPathRetentionSecs = 3600  // How long a path whose agent has gone stays listed
       }

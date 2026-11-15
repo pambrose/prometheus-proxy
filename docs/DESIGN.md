@@ -564,9 +564,8 @@ the Status LED.
 - **Drawing:** one `<i>` per run of like results, painting its dots as a repeating radial-gradient
   background `n × 6px` wide, rather than one element per scrape. The table is pushed whole every refresh, so
   a healthy path's strip stays one element however long it is.
-- **Length:** `proxy.dashboard.pathHistorySize` dots at most (default 20), so `120px` at the default, which
-  keeps the eight-column table within a `1280px` window. A path with fewer scrapes has a shorter strip; the
-  strip never pads with empty slots. A consolidated path records one scrape per agent, so its strip fills
+- **Length:** `proxy.dashboard.pathHistorySize` dots at most (default 20), so `120px` at the default. A path
+  with fewer scrapes has a shorter strip; the strip never pads with empty slots. A consolidated path records one scrape per agent, so its strip fills
   that many times faster.
 - **Accessibility:** one `role="img"` whose `aria-label` and `title` say "N of M recent scrapes succeeded",
   the figure the percentage beside it rounds.
