@@ -128,6 +128,13 @@ class ProxyOptions internal constructor(
   internal var chunkContextMapUnhealthySize = 0
     private set
 
+  // proxy.internal.blitz.path in the form the scrape route compares, a registered path's key: without its leading
+  // slashes. Config-only. The route drops every leading slash from a request's path (#416), so a path configured as
+  // "/mu-....txt" was never answered, and registration reserved a spelling no agent's key has. Declared above the init
+  // block that assigns it, as dashboardLinks is.
+  internal var blitzPath = ""
+    private set
+
   /**
    * Enables the Proxy's operational dashboard, served from its **own** port ([dashboardPort]) rather
    * than the admin or scrape port. Off by default, matching the admin and metrics posture.
@@ -271,6 +278,7 @@ class ProxyOptions internal constructor(
     }
 
     validateInternalConfigVals(proxyConfigVals.internal)
+    assignBlitzPath(proxyConfigVals.internal.blitz)
 
     // Resolved after assignCommonOptions so trustCertCollectionFilePath reflects the CLI/env/config value.
     agentToken = resolveStringOption(agentToken, AGENT_TOKEN, proxyConfigVals.agentToken)
@@ -416,6 +424,17 @@ class ProxyOptions internal constructor(
       "internal.maxZippedContentSizeMBytes must be >= 0: ${internal.maxZippedContentSizeMBytes}"
     }
     logger.info { "internal.maxZippedContentSizeMBytes: ${internal.maxZippedContentSizeMBytes}" }
+  }
+
+  // Normalized once here, so the scrape route's answer and registration's reservation compare the same key. With blitz
+  // on, a path of slashes alone, or a blank one, names nothing the route can reach, so it fails startup, as an empty
+  // sdPath does with service discovery on, rather than leave blitz silently unanswered.
+  private fun assignBlitzPath(blitz: ConfigVals.Proxy2.Internal2.Blitz) {
+    blitzPath = blitz.path.trimStart('/')
+    if (blitz.enabled) {
+      require(blitzPath.isNotBlank()) { "internal.blitz.path names no path: '${blitz.path}'" }
+      logger.info { "internal.blitz.path: $blitzPath" }
+    }
   }
 
   // Checks for the scrape port's bind address and idle timeout, the in-flight limit and the map health checks'

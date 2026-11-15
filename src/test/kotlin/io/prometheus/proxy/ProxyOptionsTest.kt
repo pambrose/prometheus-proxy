@@ -796,6 +796,38 @@ class ProxyOptionsTest : StringSpec() {
       }.message shouldStartWith "Invalid configuration: http.idleTimeoutSecs"
     }
 
+    // ==================== Blitz Path ====================
+
+    // The scrape route drops every leading slash from a request's path (#416), and registration compares a path's key,
+    // which has none, so a blitz path configured as "/mu-....txt" was never answered and never reserved. It is kept in
+    // that key form however it was written, with blitz on or off, and logged in it while blitz is on.
+    "a blitz path should be kept without its leading slashes, and logged while blitz is on" {
+      listOf("mu-test.txt", "/mu-test.txt", "//mu-test.txt").forEach { path ->
+        listOf(true, false).forEach { enabled ->
+          captureLogs<ProxyOptions>(Level.INFO) {
+            val args = ["-Dproxy.internal.blitz.enabled=$enabled", "-Dproxy.internal.blitz.path=$path"]
+            proxyOptions(args).blitzPath shouldBe "mu-test.txt"
+          }.map { it.formattedMessage }.filter { it.startsWith("internal.blitz") } shouldBe
+            listOfNotNull("internal.blitz.path: mu-test.txt".takeIf { enabled })
+        }
+      }
+      proxyOptions([]).blitzPath shouldBe "mu-dd4bffbb-ff2e9926-5a80952c-1c6cb64d.txt"
+    }
+
+    // "/" alone, or a blank path, leaves nothing the scrape route can be asked for, so with blitz on it fails startup,
+    // which failOnInvalidConfig reports for a standalone proxy as one Invalid configuration line. With blitz off it is
+    // harmless, as an empty sdPath is with service discovery off.
+    "a blitz path of slashes alone, or a blank one, should fail startup while blitz is on, and only then" {
+      listOf("/", "//", "", " ").forEach { path ->
+        shouldThrow<ConfigLoadException> {
+          failOnInvalidConfig(embedded = true) {
+            proxyOptionsFromConfig("proxy.internal.blitz { enabled = true, path = \"$path\" }")
+          }
+        }.message shouldBe "Invalid configuration: internal.blitz.path names no path: '$path'"
+        proxyOptionsFromConfig("proxy.internal.blitz.path = \"$path\"").blitzPath.isBlank().shouldBeTrue()
+      }
+    }
+
     // ==================== Parse-only Options ====================
 
     // Proxy.main first builds parse-only options, just to handle -u and -v before the banner is logged. That pass must

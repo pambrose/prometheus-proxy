@@ -622,12 +622,13 @@ class Proxy(
    * Checks if a request path corresponds to a Blitz verification request.
    *
    * Blitz is a service that verifies website ownership. This method checks if
-   * the requested path matches the configured Blitz verification path.
+   * the requested path matches the configured Blitz verification path, which [ProxyOptions.blitzPath] holds without
+   * its leading slashes, however it was configured.
    *
-   * @param path The request path to check
+   * @param path The request path to check, as a registered path's key: without its leading slashes
    * @return true if this is a Blitz verification request, false otherwise
    */
-  internal fun isBlitzRequest(path: String) = with(proxyConfigVals.internal) { blitz.enabled && path == blitz.path }
+  internal fun isBlitzRequest(path: String) = proxyConfigVals.internal.blitz.enabled && path == options.blitzPath
 
   /**
    * Builds a Prometheus-compatible service discovery JSON response.

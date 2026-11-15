@@ -34,7 +34,8 @@ import kotlin.time.Duration
  * @param duration the slowest agent's
  * @param bytes the body's size before decoding, across the agents
  * @param families the metric families the body's `# HELP`, `# TYPE`, and `# UNIT` lines open, read as the agent's
- *   metric filter reads them (see [Exposition]), or 0 for a body in neither text format, such as protobuf
+ *   metric filter reads them (see [Exposition]), or 0 for a body in neither text format, such as protobuf (see
+ *   [isText])
  * @param samples its sample lines, or 0 for a body in neither text format
  * @param failure the first agent's failure reason, cut and escaped, or empty
  * @param excerpt the start of the body, at most [MAX_EXCERPT_CHARS] characters, ending at a line break where it is cut,
@@ -56,6 +57,11 @@ internal data class ScrapeSummary(
   val isWhole: Boolean,
 ) {
   val isSuccess: Boolean get() = statusCode.isSuccess()
+
+  // Whether the body is in one of the text formats, the only ones whose lines [families] and [samples] count. Derived
+  // from the content type, as [of] decides what to count, so a summary can't hold counts and a flag that disagree; the
+  // result panel shows the counts only for such a body, since 0 of each reads as an empty text body.
+  val isText: Boolean get() = Exposition.isTextContentType(contentType)
 
   val durationMillis: Long get() = duration.inWholeMilliseconds
 

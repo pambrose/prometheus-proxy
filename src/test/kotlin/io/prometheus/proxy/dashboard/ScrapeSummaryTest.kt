@@ -53,6 +53,7 @@ class ScrapeSummaryTest : StringSpec() {
         duration shouldBe 120.milliseconds
         bytes shouldBe body.length.toLong()
         contentType shouldBe "text/plain"
+        isText.shouldBeTrue()
         families shouldBe 2
         samples shouldBe 3
         hasEof.shouldBeFalse()
@@ -123,17 +124,20 @@ class ScrapeSummaryTest : StringSpec() {
 
       ScrapeSummary.of("om_metrics", [ok().copy(contentType = openMetrics)]).apply {
         contentType shouldBe "application/openmetrics-text"
+        isText.shouldBeTrue()
         families shouldBe 2
         samples shouldBe 3
       }
     }
 
-    // A protobuf body reaches the dashboard decoded as text, where its bytes would read as sample lines.
-    "a body in neither text format should count no families or samples" {
+    // A protobuf body reaches the dashboard decoded as text, where its bytes would read as sample lines. isText says
+    // the counts weren't taken, so the result panel leaves them out rather than show 0 of each.
+    "a body in neither text format should count no families or samples, and say it isn't text" {
       val protobuf = ContentType("application", "vnd.google.protobuf").withParameter("encoding", "delimited")
 
       ScrapeSummary.of("protobuf_metrics", [ok().copy(contentType = protobuf)]).apply {
         contentType shouldBe "application/vnd.google.protobuf"
+        isText.shouldBeFalse()
         families shouldBe 0
         samples shouldBe 0
         excerpt shouldBe body

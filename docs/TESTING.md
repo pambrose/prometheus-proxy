@@ -276,13 +276,15 @@ Two support helpers also live here (not test classes themselves):
   times out at a timeout it is given rather than the proxy's; a scrape of `//path` or `///path`, which Ktor routes as
   `/path`, is sent to the agent, labeled in the per-path metrics, and shown on `/debug` and the dashboard under the
   path's registered key, with its query unchanged, and the blitz, favicon, and unknown-path answers see it with one
-  slash; a scrape record carries the agent's id, name, and identity
+  slash; a blitz path configured with a leading slash is answered at `/path` and `//path` and can't be registered; a
+  scrape record carries the agent's id, name, and identity
 - **ProxyPathManagerTest** — Path registration/unregistration, consolidated mode, agent selection, concurrent access;
   a live agent's path is taken over only by the same auth identity; the activity feed gets a new registration but not
   a repeat, a take-over as one naming the agent it displaced, a rejection the first time the agent is told it, a path
   with more than one segment among them, and an unregistration; removing an agent returns how many paths it served;
   a path whose last agent unregisters it or disconnects is recorded as departed, with the agent, identity, target, and
-  source its entry showed, a consolidated path only once its last agent goes, and a registration forgets it
+  source its entry showed, a consolidated path only once its last agent goes, and a registration forgets it; a path
+  the scrape port serves itself is refused, the blitz path also when it was configured with leading slashes
 - **ProxyPathManagerLincheckTest** — Lincheck, stress only (tagged `Lincheck`): path registration, unregistration,
   and agent removal race on the real code the TLA+ `ProxyRegistry` spec models; no path is left on a removed agent,
   `pathCountFor` matches the path map and the limit, exclusive paths have one agent, modes never mix, and a
@@ -302,7 +304,8 @@ Two support helpers also live here (not test classes themselves):
   of 0 or a negative other than -1, and a configured `sdTargetPrefix` with a query or fragment, fail startup with an
   `Invalid configuration:` message naming the setting; `proxy.dashboard.links` parsed from a config file in order and
   logged by name, and a link the dashboard can't render failing startup the same way, naming the link, while the
-  dashboard is on
+  dashboard is on; the blitz path kept without its leading slashes, and one of slashes alone or blank failing startup
+  while blitz is on
 - **SdTargetTest** — `sdTargetPrefix` parsing: host:port as is; an http(s) URL split into the target, `__scheme__`,
   and a path prefix; anything else, including a host:port with a query or fragment, refused, naming the setting
 - **ProxyDynamicConfigTest** — Dynamic config overrides via -D flags (maxZippedContentSizeMBytes,
@@ -382,15 +385,15 @@ Two support helpers also live here (not test classes themselves):
 - **ScrapeSummaryTest** (`dashboard/`) — a scrape-now's summary: status, outcome, time, size, content type, families,
   samples, and `# EOF`; families and samples counted as the agent's metric filter reads them: a quoted name whole, a
   tab after the keyword, a HELP or UNIT line with no TYPE, an indented comment, and lines split at line feeds alone; an
-  OpenMetrics body counted and a protobuf one not; a consolidated path's agents merged as Prometheus sees them; a
-  failure's reason cut and escaped; a long body cut at its last line break, or short of a surrogate pair with none; and
-  control characters escaped but for line breaks, tabs, and carriage returns
+  OpenMetrics body counted and a protobuf one not, and said not to be text (`isText`); a consolidated path's agents
+  merged as Prometheus sees them; a failure's reason cut and escaped; a long body cut at its last line break, or short
+  of a surrogate pair with none; and control characters escaped but for line breaks, tabs, and carriage returns
 - **ScrapeNowTest** (`dashboard/`) — scrape-now with its scrape stood in for: the summary and the activity feed's line
   naming the browser; a path not registered, without an agent, or on a proxy not running refused; a path at most once a
   cooldown; at most a few at once; and a failed scrape-now kept apart from a successful one in the feed
 - **ScrapeNowHtmlTest** (`dashboard/`) — the scrape-now result panel: the status, path, facts, and start of the body; a
-  cut body and an EOF named; a failure's reason without a body; the body escaped; a refusal and why; and sizes in bytes,
-  KB, or MB
+  body's families and samples shown only when it is in a text format, its content type either way; a cut body and an
+  EOF named; a failure's reason without a body; the body escaped; a refusal and why; and sizes in bytes, KB, or MB
 - **RowFilterTest** (`dashboard/`) — the Paths and Activity views' search: a query matching the path, any agent's
   name, the target URL, or the identity (the legacy token by its label, not its internal name), ignoring case, and a
   departed path's agent and identity, from its departure or its last scrape; "problems only" keeping failing and
