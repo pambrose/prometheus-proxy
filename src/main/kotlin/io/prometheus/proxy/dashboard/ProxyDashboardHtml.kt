@@ -20,6 +20,7 @@ import kotlinx.html.DIV
 import kotlinx.html.FlowContent
 import kotlinx.html.FlowOrPhrasingContent
 import kotlinx.html.FormMethod
+import io.prometheus.proxy.ScrapeRecord
 import io.prometheus.proxy.dashboard.ActivityHtml.activityTable
 import io.prometheus.proxy.dashboard.ActivityHtml.renderActivity
 import io.prometheus.proxy.dashboard.PathTableHtml.pathTable
@@ -455,7 +456,12 @@ internal object ProxyDashboardHtml {
       }
     }
 
-    val scrapes = snapshot.scrapes.filter { it.agentId == agent.agentId }
+    recentScrapes(snapshot.scrapes.filter { it.agentId == agent.agentId })
+  }
+
+  // The detail's Recent scrapes: a header carrying their count as data too, for demos/dashboard/screenshots.sh, then a
+  // row for each of the latest MAX_DETAIL_SCRAPES.
+  private fun DIV.recentScrapes(scrapes: List<ScrapeRecord>) {
     div("section") {
       attributes[SCRAPE_COUNT_ATTR] = "${scrapes.size}"
       span { +"Recent scrapes" }
