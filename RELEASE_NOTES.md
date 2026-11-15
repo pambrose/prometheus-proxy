@@ -200,6 +200,9 @@ when agent auth is off.
 - **Selecting an agent on the dashboard sticks.** A refresh that crossed your click could put the previously selected
   agent back in the detail pane for up to the refresh interval (2 seconds by default). The dashboard now ignores an
   update rendered before your selection.
+- Two agents that register the same path without consolidated mode no longer take it from each other every few
+  seconds. The later one serves the path and the other stays connected without it; the proxy logs which agent took
+  it, and the Troubleshooting page says what to do.
 
 ### Documentation
 

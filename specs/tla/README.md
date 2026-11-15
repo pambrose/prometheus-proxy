@@ -2,7 +2,7 @@
 
 Two independent specs: `ProxyRegistry.tla` for the proxy side and `AgentFailover.tla` for the agent's failover.
 
-`make tla-checks` (from the repo root) model-checks both with their quick configs in about 25 seconds, and fails if
+`make tla-checks` (from the repo root) model-checks both with their quick configs in under a minute, and fails if
 either finds a violation; CI's `tla` job runs it on every pull request and push to `master`. It downloads the TLA+
 tools jar (pinned in the Makefile's `TLA_VERSION`) into this directory, and refuses a download whose SHA-256 doesn't
 match `TLA_SHA256`; the jar is git-ignored. It checks the jar on every run, so after a version bump the old one is
@@ -19,6 +19,11 @@ transport filter disabled, a stream that names another connection's agentId, whi
 Heartbeats, chunking, metrics, and the event bus are abstracted away. Agent-side failover is in `AgentFailover.tla`.
 
 It is a model of the code, not the code: when you change one of those classes, update the matching action.
+
+Each connection belongs to one of `Launches`, as an agent keeps its launch id across reconnects. A registration that
+displaces a connection and leaves it with no paths invalidates it only when it is of the registering connection's
+launch, a stale connection of the same agent; one of another launch stays connected without paths. `Init` fixes one
+connection's launch, so the others cover both cases without relabelings that check nothing new.
 
 ### Properties
 
@@ -39,7 +44,7 @@ With `tla2tools.jar` in this directory (`make tla-checks` fetches it, or downloa
 [TLA+ releases](https://github.com/tlaplus/tlaplus/releases)):
 
 ```bash
-# Safety and liveness, 2 connections (about 25s)
+# Safety and liveness, 2 connections (under a minute)
 java -cp tla2tools.jar tlc2.TLC -workers auto -deadlock -config ProxyRegistry.cfg ProxyRegistry.tla
 
 # Safety only, 3 connections, 2 paths, 2 scrapes (hours; not yet run to completion)

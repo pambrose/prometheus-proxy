@@ -28,6 +28,7 @@ CONSTANTS
     Conns,          \* agent connections; each gets its own AgentContext / agentId
     Paths,          \* scrape paths agents may register
     Identities,     \* per-agent auth identities
+    Launches,       \* agent launch ids; a reconnect keeps its launch, so two connections of one launch are one agent
     Scrapes,        \* scrape requests; one HTTP handler each
     NoConn,         \* model value: "no connection"
     UseTimeout,     \* FALSE disables the HTTP handler's timeout, so liveness proves no scrape is stranded
@@ -43,6 +44,7 @@ VARIABLES
     \* Fixed per connection at Init, so TLC explores every mix of identities and modes.
     ident,          \* [Conns -> Identities]
     consol,         \* [Conns -> BOOLEAN]  RegisterAgentRequest.consolidated
+    launch,         \* [Conns -> Launches] RegisterAgentRequest.launchId
 
     \* AgentContext and its lifecycle
     phase,          \* [Conns -> {"unborn","live","ctxRemoved","swept","gone"}]
@@ -75,7 +77,7 @@ connVars  == <<phase, inMgr, valid, draining, queue, tokens, reading, agentHas>>
 pathVars  == <<regPending, pathMap, pathCount>>
 scrapeVars == <<hstate, target, tracked, result, completedBy, checked>>
 streamVars == <<rsPhase, rsOf>>
-vars == <<ident, consol, connVars, pathVars, scrapeVars, streamVars>>
+vars == <<ident, consol, launch, connVars, pathVars, scrapeVars, streamVars>>
 
 Absent == [consolidated |-> FALSE, identity |-> CHOOSE i \in Identities : TRUE, ctxs |-> {}]
 
@@ -109,7 +111,7 @@ Connect(c) ==
     /\ phase' = [phase EXCEPT ![c] = "live"]
     /\ inMgr' = inMgr \cup {c}
     /\ valid' = [valid EXCEPT ![c] = TRUE]
-    /\ UNCHANGED <<ident, consol, streamVars, draining, queue, tokens, reading, agentHas, pathVars, scrapeVars>>
+    /\ UNCHANGED <<ident, consol, launch, streamVars, draining, queue, tokens, reading, agentHas, pathVars, scrapeVars>>
 
 \* removeAgentContext step 1: removeFromContextManager, which invalidates the context. Losing the transport also
 \* loses whatever the agent was scraping.
@@ -123,7 +125,7 @@ RemoveCtx(c) ==
 Disconnect(c) ==
     /\ phase[c] = "live"
     /\ RemoveCtx(c)
-    /\ UNCHANGED <<ident, consol, streamVars, queue, tokens, reading, pathVars, scrapeVars>>
+    /\ UNCHANGED <<ident, consol, launch, streamVars, queue, tokens, reading, pathVars, scrapeVars>>
 
 \* removeAgentContext step 2: removeFromPathManager sweeps every path by agentId.
 SweepPaths(c) ==
@@ -135,14 +137,14 @@ SweepPaths(c) ==
                          ELSE [pathMap[p] EXCEPT !.ctxs = @ \ {c}]
                     ELSE pathMap[p]]
     /\ pathCount' = [pathCount EXCEPT ![c] = 0]
-    /\ UNCHANGED <<ident, consol, streamVars, inMgr, valid, draining, queue, tokens, reading, agentHas, regPending, scrapeVars>>
+    /\ UNCHANGED <<ident, consol, launch, streamVars, inMgr, valid, draining, queue, tokens, reading, agentHas, regPending, scrapeVars>>
 
 \* removeAgentContext step 3: failAllScrapeRequests for the agent's tracked scrapes.
 FailScrapes(c) ==
     /\ phase[c] = "swept"
     /\ phase' = [phase EXCEPT ![c] = "gone"]
     /\ FailAll({s \in tracked : target[s] = c}, "disconnected")
-    /\ UNCHANGED <<ident, consol, streamVars, inMgr, valid, draining, queue, tokens, reading, agentHas, pathVars,
+    /\ UNCHANGED <<ident, consol, launch, streamVars, inMgr, valid, draining, queue, tokens, reading, agentHas, pathVars,
                    hstate, target, tracked, checked>>
 
 \* invalidate()'s drain loop: poll a queued request and fail it with agent-disconnected.
@@ -151,14 +153,14 @@ Drain(c) ==
     /\ queue[c] # << >>
     /\ queue' = [queue EXCEPT ![c] = Tail(@)]
     /\ Complete(Head(queue[c]), "disconnected", NoConn)
-    /\ UNCHANGED <<ident, consol, streamVars, phase, inMgr, valid, draining, tokens, reading, agentHas, pathVars,
+    /\ UNCHANGED <<ident, consol, launch, streamVars, phase, inMgr, valid, draining, tokens, reading, agentHas, pathVars,
                    hstate, target, tracked, checked>>
 
 DrainEnd(c) ==
     /\ draining[c]
     /\ queue[c] = << >>
     /\ draining' = [draining EXCEPT ![c] = FALSE]
-    /\ UNCHANGED <<ident, consol, streamVars, phase, inMgr, valid, queue, tokens, reading, agentHas, pathVars, scrapeVars>>
+    /\ UNCHANGED <<ident, consol, launch, streamVars, phase, inMgr, valid, queue, tokens, reading, agentHas, pathVars, scrapeVars>>
 
 -----------------------------------------------------------------------------
 (* Path registration *)
@@ -168,7 +170,7 @@ RegisterStart(c, p) ==
     /\ c \in inMgr
     /\ <<c, p>> \notin regPending
     /\ regPending' = regPending \cup {<<c, p>>}
-    /\ UNCHANGED <<ident, consol, streamVars, connVars, pathMap, pathCount, scrapeVars>>
+    /\ UNCHANGED <<ident, consol, launch, streamVars, connVars, pathMap, pathCount, scrapeVars>>
 
 \* addValidatedPath: the synchronized(pathMap) block, which may run after the context was torn down.
 RegisterLocked(c, p) ==
@@ -181,12 +183,14 @@ RegisterLocked(c, p) ==
                \/ ~valid[c]
                \/ e.ctxs # {} /\ e.consolidated # consol[c]
                \/ e.ctxs # {} /\ e.identity # ident[c] /\ \E o \in others : valid[o]
-           \* Displaced agents left with no paths are invalidated inside the lock.
+           \* A displaced agent left with no paths is invalidated inside the lock when it is a stale connection of the
+           \* registering agent's launch. One of another launch stays connected without paths: invalidating it only
+           \* made it reconnect and displace the registering agent in turn.
            newCount == [x \in Conns |->
                           IF x = c THEN IF already THEN pathCount[x] ELSE pathCount[x] + 1
                           ELSE IF ~consol[c] /\ x \in others THEN pathCount[x] - 1
                           ELSE pathCount[x]]
-           orphans == IF consol[c] THEN {} ELSE {o \in others : newCount[o] = 0 /\ valid[o]}
+           orphans == IF consol[c] THEN {} ELSE {o \in others : newCount[o] = 0 /\ valid[o] /\ launch[o] = launch[c]}
        IN IF rejected
           THEN UNCHANGED <<connVars, pathMap, pathCount>>
           ELSE /\ pathMap' = [pathMap EXCEPT ![p] =
@@ -197,7 +201,7 @@ RegisterLocked(c, p) ==
                /\ valid' = [x \in Conns |-> IF x \in orphans THEN FALSE ELSE valid[x]]
                /\ draining' = [x \in Conns |-> IF x \in orphans THEN TRUE ELSE draining[x]]
                /\ UNCHANGED <<phase, inMgr, queue, tokens, reading, agentHas>>
-    /\ UNCHANGED <<ident, consol, streamVars, scrapeVars>>
+    /\ UNCHANGED <<ident, consol, launch, streamVars, scrapeVars>>
 
 \* unregisterPath from a connected agent (ProxyPathManager.removePath). It drops the agent from the path the way
 \* SweepPaths does (dropAgentFromPath), so an exclusive path, which only ever holds one context, goes with it.
@@ -206,7 +210,7 @@ Unregister(c, p) ==
     /\ c \in pathMap[p].ctxs
     /\ pathMap' = [pathMap EXCEPT ![p] = IF @.ctxs = {c} THEN Absent ELSE [@ EXCEPT !.ctxs = @ \ {c}]]
     /\ pathCount' = [pathCount EXCEPT ![c] = @ - 1]
-    /\ UNCHANGED <<ident, consol, streamVars, connVars, regPending, scrapeVars>>
+    /\ UNCHANGED <<ident, consol, launch, streamVars, connVars, regPending, scrapeVars>>
 
 -----------------------------------------------------------------------------
 (* One HTTP scrape handler per scrape id *)
@@ -219,21 +223,21 @@ HttpStart(s) ==
         /\ \E c \in pathMap[p].ctxs :
             /\ target' = [target EXCEPT ![s] = c]
             /\ hstate' = [hstate EXCEPT ![s] = "picked"]
-    /\ UNCHANGED <<ident, consol, streamVars, connVars, pathVars, tracked, result, completedBy, checked>>
+    /\ UNCHANGED <<ident, consol, launch, streamVars, connVars, pathVars, tracked, result, completedBy, checked>>
 
 \* tryAddToScrapeRequestMap (the in-flight limit is not modeled).
 HttpTrack(s) ==
     /\ hstate[s] = "picked"
     /\ hstate' = [hstate EXCEPT ![s] = "tracked"]
     /\ tracked' = tracked \cup {s}
-    /\ UNCHANGED <<ident, consol, streamVars, connVars, pathVars, target, result, completedBy, checked>>
+    /\ UNCHANGED <<ident, consol, launch, streamVars, connVars, pathVars, target, result, completedBy, checked>>
 
 \* writeScrapeRequest part 1: scrapeRequestQueue.add (the backlog cap is not modeled).
 HttpEnqueue(s) ==
     /\ hstate[s] = "tracked"
     /\ queue' = [queue EXCEPT ![target[s]] = Append(@, s)]
     /\ hstate' = [hstate EXCEPT ![s] = "enqueued"]
-    /\ UNCHANGED <<ident, consol, streamVars, phase, inMgr, valid, draining, tokens, reading, agentHas, pathVars,
+    /\ UNCHANGED <<ident, consol, launch, streamVars, phase, inMgr, valid, draining, tokens, reading, agentHas, pathVars,
                    target, tracked, result, completedBy, checked>>
 
 \* writeScrapeRequest part 2: notifier.send. On a closed channel it takes the request back out of the queue (if the
@@ -249,7 +253,7 @@ HttpSend(s) ==
               /\ hstate' = [hstate EXCEPT ![s] = "done"]
               /\ tracked' = tracked \ {s}
               /\ UNCHANGED tokens
-    /\ UNCHANGED <<ident, consol, streamVars, phase, inMgr, valid, draining, reading, agentHas, pathVars,
+    /\ UNCHANGED <<ident, consol, launch, streamVars, phase, inMgr, valid, draining, reading, agentHas, pathVars,
                    target, result, completedBy, checked>>
 
 \* awaitCompleted returns because the request completed; the finally untracks it.
@@ -258,7 +262,7 @@ HttpFinish(s) ==
     /\ result[s] # "none"
     /\ hstate' = [hstate EXCEPT ![s] = "done"]
     /\ tracked' = tracked \ {s}
-    /\ UNCHANGED <<ident, consol, streamVars, connVars, pathVars, target, result, completedBy, checked>>
+    /\ UNCHANGED <<ident, consol, launch, streamVars, connVars, pathVars, target, result, completedBy, checked>>
 
 \* awaitCompleted times out.
 HttpTimeout(s) ==
@@ -267,7 +271,7 @@ HttpTimeout(s) ==
     /\ result[s] = "none"
     /\ hstate' = [hstate EXCEPT ![s] = "done"]
     /\ tracked' = tracked \ {s}
-    /\ UNCHANGED <<ident, consol, streamVars, connVars, pathVars, target, result, completedBy, checked>>
+    /\ UNCHANGED <<ident, consol, launch, streamVars, connVars, pathVars, target, result, completedBy, checked>>
 
 -----------------------------------------------------------------------------
 (* readRequestsFromProxy and the agent *)
@@ -284,7 +288,7 @@ Read(c) ==
             /\ reading' = IF Head(queue[c]) \in tracked
                           THEN [reading EXCEPT ![c] = @ \cup {Head(queue[c])}]
                           ELSE reading
-    /\ UNCHANGED <<ident, consol, streamVars, phase, inMgr, valid, draining, agentHas, pathVars, scrapeVars>>
+    /\ UNCHANGED <<ident, consol, launch, streamVars, phase, inMgr, valid, draining, agentHas, pathVars, scrapeVars>>
 
 \* emit() reaches the agent.
 Emit(c, s) ==
@@ -292,14 +296,14 @@ Emit(c, s) ==
     /\ phase[c] = "live"
     /\ reading' = [reading EXCEPT ![c] = @ \ {s}]
     /\ agentHas' = [agentHas EXCEPT ![c] = @ \cup {s}]
-    /\ UNCHANGED <<ident, consol, streamVars, phase, inMgr, valid, draining, queue, tokens, pathVars, scrapeVars>>
+    /\ UNCHANGED <<ident, consol, launch, streamVars, phase, inMgr, valid, draining, queue, tokens, pathVars, scrapeVars>>
 
 \* emit() is cancelled: the reader fails the request (finding 14).
 EmitCancelled(c, s) ==
     /\ s \in reading[c]
     /\ reading' = [reading EXCEPT ![c] = @ \ {s}]
     /\ IF s \in tracked THEN Complete(s, "cancelled", NoConn) ELSE UNCHANGED <<result, completedBy>>
-    /\ UNCHANGED <<ident, consol, streamVars, phase, inMgr, valid, draining, queue, tokens, agentHas, pathVars,
+    /\ UNCHANGED <<ident, consol, launch, streamVars, phase, inMgr, valid, draining, queue, tokens, agentHas, pathVars,
                    hstate, target, tracked, checked>>
 
 \* The agent answers a scrape it was sent (writeResponsesToProxy -> assignScrapeResults, which checks the owner on the
@@ -309,7 +313,7 @@ Respond(c, s) ==
     /\ s \in agentHas[c]
     /\ agentHas' = [agentHas EXCEPT ![c] = @ \ {s}]
     /\ IF s \in tracked /\ OwnedBy(s, c) THEN Complete(s, "agent", c) ELSE UNCHANGED <<result, completedBy>>
-    /\ UNCHANGED <<ident, consol, streamVars, phase, inMgr, valid, draining, queue, tokens, reading, pathVars,
+    /\ UNCHANGED <<ident, consol, launch, streamVars, phase, inMgr, valid, draining, queue, tokens, reading, pathVars,
                    hstate, target, tracked, checked>>
 
 \* A connected agent answers a scrape id it was never sent. Scrape ids come from one process-wide counter, so any
@@ -321,7 +325,7 @@ Forge(c, s) ==
     /\ s \in tracked
     /\ s \notin agentHas[c]
     /\ IF OwnedBy(s, c) THEN Complete(s, "agent", c) ELSE UNCHANGED <<result, completedBy>>
-    /\ UNCHANGED <<ident, consol, streamVars, connVars, pathVars, hstate, target, tracked, checked>>
+    /\ UNCHANGED <<ident, consol, launch, streamVars, connVars, pathVars, hstate, target, tracked, checked>>
 
 \* Before October #21's fix, the check and the completion were two lookups. The check read the scrape map on its own,
 \* and let an id it didn't find through...
@@ -332,14 +336,14 @@ ForgeCheck(c, s) ==
     /\ <<c, s>> \notin checked
     /\ s \notin tracked \/ OwnedBy(s, c)
     /\ checked' = checked \cup {<<c, s>>}
-    /\ UNCHANGED <<ident, consol, streamVars, connVars, pathVars, hstate, target, tracked, result, completedBy>>
+    /\ UNCHANGED <<ident, consol, launch, streamVars, connVars, pathVars, hstate, target, tracked, result, completedBy>>
 
 \* ...and assignScrapeResults looked the id up again, completing whatever scrape was tracked under it by then.
 ForgeApply(c, s) ==
     /\ <<c, s>> \in checked
     /\ checked' = checked \ {<<c, s>>}
     /\ IF s \in tracked THEN Complete(s, "agent", c) ELSE UNCHANGED <<result, completedBy>>
-    /\ UNCHANGED <<ident, consol, streamVars, connVars, pathVars, hstate, target, tracked>>
+    /\ UNCHANGED <<ident, consol, launch, streamVars, connVars, pathVars, hstate, target, tracked>>
 
 -----------------------------------------------------------------------------
 (* readRequestsFromProxy with the transport filter disabled, naming another connection's agentId *)
@@ -364,7 +368,7 @@ StreamOpen(a, b) ==
     /\ ident[b] = ident[a]
     /\ rsPhase' = [rsPhase EXCEPT ![a] = "open"]
     /\ rsOf' = [rsOf EXCEPT ![a] = b]
-    /\ UNCHANGED <<ident, consol, connVars, pathVars, scrapeVars>>
+    /\ UNCHANGED <<ident, consol, launch, connVars, pathVars, scrapeVars>>
 
 \* Before November #14's fix, readRequestsDenial checked the identity on a lookup of its own, and let an agentId it
 \* didn't find through...
@@ -376,14 +380,14 @@ StreamCheck(a, b) ==
     /\ b \notin inMgr \/ ident[b] = ident[a]
     /\ rsPhase' = [rsPhase EXCEPT ![a] = "checked"]
     /\ rsOf' = [rsOf EXCEPT ![a] = b]
-    /\ UNCHANGED <<ident, consol, connVars, pathVars, scrapeVars>>
+    /\ UNCHANGED <<ident, consol, launch, connVars, pathVars, scrapeVars>>
 
 \* ...and the try looked it up again, streaming whatever context it found then, or throwing NOT_FOUND, after which the
 \* finally still removed the agentId.
 StreamLookup(a) ==
     /\ rsPhase[a] = "checked"
     /\ rsPhase' = [rsPhase EXCEPT ![a] = IF rsOf[a] \in inMgr THEN "open" ELSE "notFound"]
-    /\ UNCHANGED <<ident, consol, connVars, pathVars, scrapeVars, rsOf>>
+    /\ UNCHANGED <<ident, consol, launch, connVars, pathVars, scrapeVars, rsOf>>
 
 \* The stream ends, and with the transport filter disabled its finally removes the context it named, if that is still
 \* registered: removeAgentContextIfCurrent on the context streamed, or, before the fix, removeAgentContext on the
@@ -395,13 +399,16 @@ StreamClose(a) ==
        ELSE UNCHANGED connVars
     /\ rsPhase' = [rsPhase EXCEPT ![a] = "idle"]
     /\ rsOf' = [rsOf EXCEPT ![a] = NoConn]
-    /\ UNCHANGED <<ident, consol, pathVars, scrapeVars>>
+    /\ UNCHANGED <<ident, consol, launch, pathVars, scrapeVars>>
 
 -----------------------------------------------------------------------------
 
 Init ==
     /\ ident \in [Conns -> Identities]
     /\ consol \in [Conns -> BOOLEAN]
+    \* One connection's launch is fixed: the others' then cover being of its launch or not, and a relabeling of
+    \* Launches checks nothing new. (TLC's symmetry reduction would do the same but is unsound for liveness.)
+    /\ launch \in {f \in [Conns -> Launches] : f[CHOOSE c \in Conns : TRUE] = CHOOSE l \in Launches : TRUE}
     /\ phase = [c \in Conns |-> "unborn"]
     /\ inMgr = {}
     /\ valid = [c \in Conns |-> FALSE]
@@ -454,6 +461,7 @@ Spec == Init /\ [][Next]_vars /\ Fairness
 (* Properties *)
 
 TypeOK ==
+    /\ launch \in [Conns -> Launches]
     /\ phase \in [Conns -> {"unborn", "live", "ctxRemoved", "swept", "gone"}]
     /\ inMgr \subseteq Conns
     /\ valid \in [Conns -> BOOLEAN]

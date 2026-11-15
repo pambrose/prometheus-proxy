@@ -165,6 +165,19 @@ DEBUG -- an agent retries a rejection that can clear, and a lasting conflict wou
 To see every attempt, set `io.prometheus.proxy.ProxyPathManager` to DEBUG. The agent logs its own side of
 the same conflict, so its log shows whether it is still retrying.
 
+### An agent is connected but serves no paths
+
+Another agent registered the same paths without consolidated mode and took them over: the later registration
+serves a path, and the agent it displaced stays connected without it. The proxy logs it at INFO:
+
+```
+agentId 1 keeps its connection without paths after agentId 2, of another launch, took over /orders_metrics; ...
+```
+
+If both agents should serve the paths, set `agent.consolidated = true` on each. If only one should, remove the
+paths from the other's config, or stop it. Earlier versions disconnected the displaced agent, so the two took the
+paths from each other in turn, each reconnecting every few seconds.
+
 ---
 
 ## TLS handshake failures
