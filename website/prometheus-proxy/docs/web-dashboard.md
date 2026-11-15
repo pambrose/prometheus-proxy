@@ -215,9 +215,10 @@ same way.
 
 A burst of like events from one agent within five seconds is one row, counted (`registered ×40`) and naming its first
 three paths, so an agent registering two thousand paths takes one row rather than the whole feed. A rejection appears
-the first time the agent is told it, not on each retry, and a bad token at most once a minute for each host. A
-connect or a path change appears at once; a refusal or a bad token, which changes nothing else on the page, by the
-next refresh.
+the first time the agent is told it, not on each retry. Bad tokens from one host within a minute are counted on one
+row, and at most ten hosts a minute get a row of their own; the rest of that minute's are counted on one, so a flood
+from many addresses can't push everything else out of the feed. A connect or a path change appears at once; a refusal
+or a bad token, which changes nothing else on the page, by the next refresh.
 
 The feed keeps the last `activityLogSize` rows (default 500), in memory only, so a restart empties it. It is a view of
 the recent past, for finding out why something didn't appear, not an audit log; the proxy's log has every event.

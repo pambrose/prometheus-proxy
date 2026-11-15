@@ -191,9 +191,9 @@ internal object ProxyDashboardHtml {
   }
 
   /**
-   * The layout switcher: two plain links, no htmx.
+   * The layout switcher: a plain link per [DashboardLayout], no htmx.
    *
-   * Deliberately a real navigation rather than a swap. The two layouts have disjoint region ids, so
+   * Deliberately a real navigation rather than a swap. The layouts have disjoint region ids, so
    * swapping one in would leave the push loop addressing elements that no longer exist; a page load
    * makes that impossible by construction. It also costs nothing worth saving — this fires on an
    * explicit click, not on an update, and the socket re-announces the new layout as soon as it opens.
@@ -583,6 +583,12 @@ internal object ProxyDashboardHtml {
   // push loop knows whether this session wants a detail pane. Also runs the connection indicator, the path table's
   // copy buttons, and the scrape times' conversion to the viewer's zone, the only things on the page that htmx does not
   // model; everything else is htmx.
+  // The layouts with a route of their own, by its segment, for the page's script: {"paths":"PATH",...}.
+  private val LAYOUTS_JS =
+    DashboardLayout.entries
+      .filter { it.segment.isNotEmpty() }
+      .joinToString(",", "{", "}") { "\"${it.segment}\":\"${it.name}\"" }
+
   private val SELECTION_JS =
     """
     (function () {
@@ -596,9 +602,11 @@ internal object ProxyDashboardHtml {
         var m = window.location.pathname.match(/\/agents\/([^/]+)$/);
         return m ? m[1] : null;
       }
+      // Each layout's name by its route's last segment, from DashboardLayout; the agent layout is the base itself.
+      var LAYOUTS = $LAYOUTS_JS;
       function layout() {
-        var m = window.location.pathname.match(/\/(paths|activity)\/?$/);
-        return !m ? 'AGENT' : m[1] === 'paths' ? 'PATH' : 'ACTIVITY';
+        var m = window.location.pathname.match(/\/([^/]+)\/?$/);
+        return m && Object.prototype.hasOwnProperty.call(LAYOUTS, m[1]) ? LAYOUTS[m[1]] : 'AGENT';
       }
       // The extension's connection, which outlives its socket: each reconnect replaces connection.socket,
       // so this keeps the connection and reads the socket when it sends.

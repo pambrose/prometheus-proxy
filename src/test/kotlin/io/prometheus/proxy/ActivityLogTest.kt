@@ -18,8 +18,8 @@
 
 package io.prometheus.proxy
 
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
-import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.mockk.every
@@ -137,34 +137,47 @@ class ActivityLogTest : StringSpec() {
     }
 
     // Anyone who can reach the agent port can send a bad token, as often as they like.
-    "a throttled event should be recorded at most once an interval for each key" {
+    "a source's events within its window should be counted on one line" {
       val log = log()
 
-      repeat(5) { log.recordThrottled("10.9.9.9", BAD_TOKEN, "An unknown agent token, from 10.9.9.9") }
-      log.recordThrottled("10.8.8.8", BAD_TOKEN, "An unknown agent token, from 10.8.8.8")
-      now += ActivityLog.THROTTLE_INTERVAL - 1.seconds
-      log.recordThrottled("10.9.9.9", BAD_TOKEN, "An unknown agent token, from 10.9.9.9")
+      fun badToken(host: String) = log.recordFromSource(host, BAD_TOKEN, "An unknown agent token, from $host")
 
-      log.entries().map { it.group } shouldBe ["10.8.8.8", "10.9.9.9"]
+      repeat(5) { badToken("10.9.9.9") }
+      badToken("10.8.8.8")
+      now += ActivityLog.SOURCE_WINDOW - 1.seconds
+      badToken("10.9.9.9")
 
+      log.entries().map { it.group to it.count } shouldBe ["10.8.8.8" to 1, "10.9.9.9" to 6]
+
+      // Past its window, a source starts a line again.
       now += 1.seconds
-      log.recordThrottled("10.9.9.9", BAD_TOKEN, "An unknown agent token, from 10.9.9.9")
+      badToken("10.9.9.9")
       log.entries() shouldHaveSize 3
     }
 
-    // A caller cycling through source addresses could otherwise grow the throttle's memory without end.
-    "the throttle should forget its least recent key once it holds its most" {
-      val log = log(capacity = ActivityLog.MAX_THROTTLE_KEYS + 10)
+    // Anyone with many source addresses could otherwise push everything else out of the log, one line per address.
+    "past its most sources a window, the rest of the window's should be counted on one line" {
+      val log = log()
 
-      (0..ActivityLog.MAX_THROTTLE_KEYS).forEach { log.recordThrottled("host-$it", BAD_TOKEN, "") }
-      // Past the burst window, so a line recorded now is a line of its own, and well within the throttle's interval.
-      now += ActivityLog.COALESCE_WINDOW
-      // host-0 is forgotten, so it records again within the interval, which makes room by forgetting host-1. host-2 is
-      // still remembered.
-      log.recordThrottled("host-0", BAD_TOKEN, "")
-      log.recordThrottled("host-2", BAD_TOKEN, "")
+      fun badToken(host: String) = log.recordFromSource(host, BAD_TOKEN, "An unknown agent token, from $host")
 
-      log.entries() shouldHaveSize ActivityLog.MAX_THROTTLE_KEYS + 2
+      (1..25).forEach { badToken("host-$it") }
+      now += 30.seconds
+      badToken("host-26")
+      // A source with a line of its own still counts there.
+      badToken("host-1")
+
+      log.entries() shouldHaveSize ActivityLog.MAX_SOURCES_PER_WINDOW + 1
+      log.entries().first().apply {
+        count shouldBe 26 - ActivityLog.MAX_SOURCES_PER_WINDOW
+        detail shouldBe ActivityLog.MORE_SOURCES_DETAIL
+      }
+      log.entries().last().count shouldBe 2
+
+      // A new window lists its sources again.
+      now += 30.seconds
+      badToken("host-27")
+      log.entries().first().detail shouldBe "An unknown agent token, from host-27"
     }
 
     "an event with no agent should name its own identity" {
@@ -192,8 +205,8 @@ class ActivityLogTest : StringSpec() {
       }
     }
 
-    "a log with no room should keep nothing" {
-      log(capacity = 0).apply { record(AGENT_CONNECTED, agent("agent-east")) }.entries().shouldBeEmpty()
+    "a log with no room should be refused" {
+      shouldThrow<IllegalArgumentException> { log(capacity = 0) }
     }
 
     "only refusals, rejections, bad tokens, and evictions should be problems" {

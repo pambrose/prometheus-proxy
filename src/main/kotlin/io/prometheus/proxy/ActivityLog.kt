@@ -98,9 +98,10 @@ internal data class ActivityEntry(
  * - A burst of like events from one agent within [COALESCE_WINDOW] is one line, counting them and naming the first
  *   [MAX_SAMPLE_PATHS] paths, however other agents' events interleave with it: an agent registering two thousand paths
  *   is one line, not the whole log, and so is each agent of a fleet reconnecting at once.
- * - [recordThrottled] takes at most one event per key per [THROTTLE_INTERVAL], for what anyone who can reach the agent
- *   port can cause, a bad token, keyed by its source. The keys it remembers are capped too, the least recent going
- *   first.
+ * - [recordFromSource] is for what anyone who can reach the agent port can cause, as often as they like: a bad token,
+ *   by the host it came from. Every event from one source within [SOURCE_WINDOW] is counted on one line, and at most
+ *   [MAX_SOURCES_PER_WINDOW] sources a window get a line of their own; the rest of the window's are counted on one, so
+ *   a caller with many source addresses can't push everything else out either.
  *
  * Kept in memory only, so a restart empties it. Written only with the dashboard on, since nothing else reads it.
  *
@@ -114,15 +115,17 @@ internal class ActivityLog(
   private val capacity: Int,
   private val clock: Clock = Clock.System,
 ) {
+  init {
+    require(capacity > 0) { "capacity must be positive: $capacity" }
+  }
+
   // Oldest first, so a new line goes on the end and the oldest comes off the front.
   private val lines = ArrayDeque<ActivityEntry>()
 
-  // When each throttled key last recorded. Access-ordered, so the least recently used key is first, and the eldest goes
-  // once there are more than MAX_THROTTLE_KEYS. Guarded by lines' monitor.
-  private val throttled =
-    object : LinkedHashMap<String, Instant>(INITIAL_CAPACITY, LOAD_FACTOR, true) {
-      override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Instant>) = size > MAX_THROTTLE_KEYS
-    }
+  // When the current source window began, and how many sources have a line of their own in it. Guarded by lines'
+  // monitor.
+  private var windowStart: Instant? = null
+  private var windowSources = 0
 
   /**
    * Records [kind] for [agent], when there is one, about [path], when there is one. [identity] defaults to the one the
@@ -138,22 +141,32 @@ internal class ActivityLog(
   ) {
     // Built before taking the monitor, which stays a leaf: the agent's fields are its own atomics.
     val entry = entry(kind, agent, path, detail, group, identity)
-    synchronized(lines) { add(entry) }
+    synchronized(lines) {
+      if (!join(entry, COALESCE_WINDOW)) append(entry)
+    }
   }
 
-  /** Records [kind] as [record] does, unless [key] recorded within the last [THROTTLE_INTERVAL]. */
-  fun recordThrottled(
+  /** Records [kind] from the source [key], such as a bad token from a host; see the class's account of the bounds. */
+  fun recordFromSource(
     key: String,
     kind: ActivityKind,
     detail: String,
   ) {
     val entry = entry(kind, agent = null, path = "", detail, group = key, identity = "")
     synchronized(lines) {
-      val last = throttled[entry.group]
-      if (last != null && entry.at - last < THROTTLE_INTERVAL)
-        return
-      throttled[entry.group] = entry.at
-      add(entry)
+      if (join(entry, SOURCE_WINDOW)) return
+      val start = windowStart
+      if (start == null || entry.at - start >= SOURCE_WINDOW) {
+        windowStart = entry.at
+        windowSources = 0
+      }
+      windowSources += 1
+      if (windowSources <= MAX_SOURCES_PER_WINDOW) {
+        append(entry)
+      } else {
+        val more = entry.copy(detail = MORE_SOURCES_DETAIL, group = MORE_SOURCES_GROUP)
+        if (!join(more, SOURCE_WINDOW)) append(more)
+      }
     }
   }
 
@@ -178,20 +191,27 @@ internal class ActivityLog(
     group = truncate(group, MAX_FIELD_CHARS),
   )
 
-  // Folds [entry] into the line of its burst, or adds it. The burst's line needn't be the newest: when a fleet
-  // reconnects at once, every agent's registrations interleave, and joining only the newest line would give each
-  // registration its own, the flood this exists to prevent. Only lines within the window can be joined, so the search
-  // stops at the first older one. Callers MUST hold lines' monitor.
-  private fun add(entry: ActivityEntry) {
-    if (capacity <= 0) return
-    val burst =
-      lines.indices.reversed().asSequence()
-        .takeWhile { entry.at - lines[it].at < COALESCE_WINDOW }
-        .firstOrNull { lines[it].isJoinedBy(entry, COALESCE_WINDOW) }
-    if (burst != null) {
-      lines[burst] = lines[burst].joinedBy(entry)
-      return
+  // Folds [entry] into the line of its burst, the newest line it can join within [window], and returns whether there
+  // was one. The line needn't be the newest: when a fleet reconnects at once, every agent's registrations interleave,
+  // and joining only the newest line would give each registration its own, the flood this exists to prevent. The search
+  // stops at the first line older than the window. Callers MUST hold lines' monitor.
+  private fun join(
+    entry: ActivityEntry,
+    window: Duration,
+  ): Boolean {
+    var i = lines.lastIndex
+    while (i >= 0 && entry.at - lines[i].at < window) {
+      if (lines[i].isJoinedBy(entry, window)) {
+        lines[i] = lines[i].joinedBy(entry)
+        return true
+      }
+      i -= 1
     }
+    return false
+  }
+
+  // Callers MUST hold lines' monitor.
+  private fun append(entry: ActivityEntry) {
     if (lines.size >= capacity)
       lines.removeFirst()
     lines.addLast(entry)
@@ -200,17 +220,22 @@ internal class ActivityLog(
   companion object {
     // A burst: an agent registering its paths as it starts, or retrying them all, takes about this long.
     val COALESCE_WINDOW = 5.seconds
-    val THROTTLE_INTERVAL = 1.minutes
+
+    // How long one source's events share a line, and the period MAX_SOURCES_PER_WINDOW counts over.
+    val SOURCE_WINDOW = 1.minutes
+
+    // Sources a window that get a line each: enough for a few misconfigured agents to show by host.
+    const val MAX_SOURCES_PER_WINDOW = 10
+
+    // The line counting the rest. Its group can't be a source: a source is a host, which has no "*".
+    const val MORE_SOURCES_DETAIL = "From more addresses than the feed lists one by one in a minute"
+    const val MORE_SOURCES_GROUP = "*"
 
     // Enough to say which paths a burst was about without the line growing with it.
     const val MAX_SAMPLE_PATHS = 3
-    const val MAX_THROTTLE_KEYS = 1000
 
     // What a line keeps of each value. A path or name past this is cut; the proxy's own bounds are usually tighter.
     const val MAX_FIELD_CHARS = 256
     const val MAX_DETAIL_CHARS = 512
-
-    private const val INITIAL_CAPACITY = 16
-    private const val LOAD_FACTOR = 0.75f
   }
 }

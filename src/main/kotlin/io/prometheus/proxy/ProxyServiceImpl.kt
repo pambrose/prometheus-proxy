@@ -320,8 +320,9 @@ internal class ProxyServiceImpl(
   }
 
   // Why [identity] may not register [path], or null when it may, or when per-agent auth is off (no identity). The log
-  // line and the reason show the path as ProxyPathManager's rejections do, cut to its first characters. Goes in the
-  // activity feed the first time [agentContext] is told it for the path, as ProxyPathManager's rejections do.
+  // line and the reason show the path as ProxyPathManager's rejections do, cut to its first characters, and like them
+  // it goes in the activity feed the first time [agentContext] is told it (noteRejection); the WARN is logged every
+  // time.
   private fun authorizationRejection(
     identity: AgentIdentity?,
     path: String,
@@ -332,8 +333,7 @@ internal class ProxyServiceImpl(
     val shown = ProxyPathManager.shownPath(path.removePrefix("/"))
     logger.warn { "Agent identity '${identity.name}' denied registration of path /$shown" }
     val reason = "Agent identity '${identity.name}' is not authorized to register path /$shown"
-    if (agentContext.recordRejection(shown, NOT_AUTHORIZED))
-      proxy.activityLog?.record(ActivityKind.PATH_REJECTED, agentContext, shown, reason, group = NOT_AUTHORIZED.name)
+    proxy.pathManager.noteRejection(agentContext, shown, reason, NOT_AUTHORIZED)
     return PathRejection(reason, NOT_AUTHORIZED)
   }
 

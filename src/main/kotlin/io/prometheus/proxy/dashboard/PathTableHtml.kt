@@ -20,7 +20,6 @@ import io.prometheus.proxy.dashboard.ProxyDashboardHtml.COPY_ATTR
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.COPY_PROXY_ID_PREFIX
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.COPY_TARGET_ID_PREFIX
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.DASH
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.MATCH_COUNT_ATTR
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.PATH_TABLE_ID
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.PROXY_PATH_ATTR
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SCRAPE_PORT_ATTR
@@ -76,33 +75,21 @@ internal object PathTableHtml {
     attributes["id"] = PATH_TABLE_ID
     if (oob) attributes["hx-swap-oob"] = "true"
     val rows = if (filter.isActive) snapshot.paths.filter(filter::matches) else snapshot.paths
-    val matchCount = "Showing ${rows.size} of ${snapshot.paths.size} paths"
-    attributes[MATCH_COUNT_ATTR] = matchCount
-    when {
-      snapshot.paths.isEmpty() -> {
-        div("empty pad") { +"No paths registered" }
-      }
-
-      rows.isEmpty() && filter.problemsOnly && filter.query.isEmpty() -> {
-        div("empty pad") { +"No problems: every path's last scrape succeeded" }
-      }
-
-      rows.isEmpty() -> {
-        div("empty pad") { +"No paths match the filter" }
-      }
-
-      else -> {
-        pathRows(snapshot, rows, matchCount.takeIf { filter.isActive })
-      }
-    }
+    if (filteredTableStart(TEXT, filter, rows.size, snapshot.paths.size)) pathRows(snapshot, rows)
   }
+
+  private val TEXT =
+    TableText(
+      noun = "paths",
+      empty = "No paths registered",
+      noProblems = "No problems: every path's last scrape succeeded",
+      noMatch = "No paths match the filter",
+    )
 
   private fun DIV.pathRows(
     snapshot: ProxySnapshot,
     rows: List<PathView>,
-    matchCount: String?,
   ) {
-    matchCount?.also { div("match-count") { +it } }
     // From the config, not the rows, so the column doesn't come and go as a search narrows or the last live path goes.
     // With agent auth off no path has an identity, and the column would only ever hold dashes.
     val showIdentity = snapshot.authEnabled

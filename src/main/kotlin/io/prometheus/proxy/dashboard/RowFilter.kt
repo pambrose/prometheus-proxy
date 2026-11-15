@@ -41,13 +41,17 @@ internal data class RowFilter(
   /** Whether any row could be hidden, which is when the table says how many it shows. */
   val isActive: Boolean get() = query.isNotEmpty() || problemsOnly
 
-  fun matches(path: PathView): Boolean =
-    (!problemsOnly || path.isProblem) && (query.isEmpty() || path.searchFields().any(::found))
+  fun matches(path: PathView): Boolean = matches(path.isProblem) { path.searchFields() }
 
-  fun matches(entry: ActivityEntry): Boolean =
-    (!problemsOnly || entry.kind.isProblem) && (query.isEmpty() || entry.searchFields().any(::found))
+  fun matches(entry: ActivityEntry): Boolean = matches(entry.kind.isProblem) { entry.searchFields() }
 
-  private fun found(field: String) = field.contains(query, ignoreCase = true)
+  // A row that is a problem, if only problems are kept, and that shows the query in one of its [fields], if there is
+  // one.
+  private fun matches(
+    isProblem: Boolean,
+    fields: () -> List<String>,
+  ): Boolean =
+    (!problemsOnly || isProblem) && (query.isEmpty() || fields().any { it.contains(query, ignoreCase = true) })
 
   // What the row shows: an identity as its label reads, and for a departed path, which has no agents, the agent its
   // last scrape names (servingAgent, which is otherwise the first of agentNames).

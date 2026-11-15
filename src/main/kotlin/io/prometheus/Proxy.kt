@@ -548,27 +548,23 @@ class Proxy(
     servedPaths: Int,
   ) {
     val log = activityLog ?: return
-    val evicted = reason == EVICTION_REASON
-    val cause =
+    val (kind, cause) =
       when (reason) {
         EVICTION_REASON -> {
-          "No contact within proxy.internal.maxAgentInactivitySecs (${proxyConfigVals.internal.maxAgentInactivitySecs}s)"
+          val maxSecs = proxyConfigVals.internal.maxAgentInactivitySecs
+          ActivityKind.AGENT_EVICTED to "No contact within proxy.internal.maxAgentInactivitySecs (${maxSecs}s)"
         }
 
         TERMINATION_REASON -> {
-          "Connection closed"
+          ActivityKind.AGENT_DISCONNECTED to "Connection closed"
         }
 
         else -> {
-          reason
+          ActivityKind.AGENT_DISCONNECTED to reason
         }
       }
     val paths = if (servedPaths == 1) "1 path" else "$servedPaths paths"
-    log.record(
-      if (evicted) ActivityKind.AGENT_EVICTED else ActivityKind.AGENT_DISCONNECTED,
-      agentContext,
-      detail = "$cause; released $paths",
-    )
+    log.record(kind, agentContext, detail = "$cause; released $paths")
   }
 
   /**

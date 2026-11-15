@@ -257,7 +257,7 @@ Two support helpers also live here (not test classes themselves):
   and puts the agent's departure in the activity feed, an eviction as a problem, with the paths it served
 - **ProxyServiceImplTest** — gRPC implementation: registerAgent (recording the identity the call authenticated as for
   the dashboard, without binding the context to it, and the connect in the activity feed), registerPath (a path the
-  identity may not register in the activity feed once), heartbeat, scrape responses, chunked responses; a result or a chunked transfer for a scrape sent to another agent neither completes nor fails it, even
+  identity may not register noted as a rejection), heartbeat, scrape responses, chunked responses; a result or a chunked transfer for a scrape sent to another agent neither completes nor fails it, even
   when its `agentId` or `headerAgentId` names that agent; a transfer ends with its scrape, even one whose scrape ended
   just before it was stored, one stream has at most the agent's backlog cap of transfers under way, a header's strings
   are cut, and a late result or transfer logs nothing above DEBUG; with the transport filter disabled, a scrape-request
@@ -275,8 +275,8 @@ Two support helpers also live here (not test classes themselves):
   ensureLeadingSlash; a handler that times out or is cancelled drops its scrape's unfinished chunked transfer
 - **ProxyPathManagerTest** — Path registration/unregistration, consolidated mode, agent selection, concurrent access;
   a live agent's path is taken over only by the same auth identity; the activity feed gets a new registration but not
-  a repeat, a take-over as one naming the agent it displaced, a rejection the first time the agent is told it, and an
-  unregistration; removing an agent returns how many paths it served
+  a repeat, a take-over as one naming the agent it displaced, a rejection the first time the agent is told it, a path
+  with more than one segment among them, and an unregistration; removing an agent returns how many paths it served
 - **ProxyPathManagerLincheckTest** — Lincheck, stress only (tagged `Lincheck`): path registration, unregistration,
   and agent removal race on the real code the TLA+ `ProxyRegistry` spec models; no path is left on a removed agent,
   `pathCountFor` matches the path map and the limit, exclusive paths have one agent, modes never mix, and a
@@ -305,9 +305,10 @@ Two support helpers also live here (not test classes themselves):
 - **ProxyUtilsTest** — Helper functions: invalidAgentContextResponse, respondWith
 - **ProxyMetricsTest** — Prometheus metrics registration and gauge/counter updates
 - **ActivityLogTest** — the dashboard's activity feed: lines newest first with each event's agent and time, the oldest
-  dropped once full, a burst from one agent folded into one line that counts it and names its first paths, bursts
-  from agents registering at once each one line, a burst ending at its window or at another agent, kind, or group, a throttled event once an interval for each key, the
-  throttle forgetting its least recent key once full, every value cut, and which kinds are problems
+  dropped once full, a burst from one agent folded into one line that counts it and names its first paths, bursts from
+  agents registering at once each one line, a burst ending at its window or at another agent, kind, or group, a source's
+  events within its window counted on one line, past its most sources a window the rest counted on one, every value cut,
+  a log with no room refused, and which kinds are problems
 - **PathHistoryTest** — the dashboard's per-path scrape history: each path keeps only its newest records, newest
   first, and a busy path can't push another's out; recording alone holds the history to the live paths plus the
   gone-path cap, evicting the path scraped least recently, with no snapshot to prune it; a registered path keeps its
@@ -336,7 +337,7 @@ Two support helpers also live here (not test classes themselves):
   token), `isEnabled`, and fail-fast rejection of empty, duplicate or colliding identities
 - **AgentAuthServerInterceptorTest** — gRPC auth interceptor: a valid token exposes the resolved identity in the
   context; a missing, unknown or same-length wrong token closes the call with UNAUTHENTICATED, and goes in the
-  activity feed, naming its host, once a minute for each host
+  activity feed, naming its host, a host's repeats counted on its line
 - **ProxyEventBusTest** — Dashboard event bus: ordered delivery, non-blocking emit with no subscriber, no replay to a
   late subscriber, fan-out to multiple subscribers, and AgentContextManager emitting on connect only
 - **ProxyDashboardHtmlTest** (`dashboard/`) — Dashboard renderer: top-level out-of-band push regions, agent- and

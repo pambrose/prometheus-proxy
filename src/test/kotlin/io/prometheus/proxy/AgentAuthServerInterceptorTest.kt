@@ -111,7 +111,7 @@ class AgentAuthServerInterceptorTest : StringSpec() {
     }
 
     // A wrong token is the usual reason a new agent never appears, and nothing else on the dashboard shows it.
-    "a bad token should go in the activity feed, naming the host it came from, once a minute for each host" {
+    "a bad token should go in the activity feed, naming the host it came from, a host's repeats counted on its line" {
       val log = ActivityLog(100)
       val interceptor = AgentAuthServerInterceptor(authManager, log)
 
@@ -125,10 +125,10 @@ class AgentAuthServerInterceptorTest : StringSpec() {
       interceptor.interceptCall(callFrom("10.8.8.8"), headersWithToken(null), mockk(relaxed = true))
       interceptor.interceptCall(callFrom("10.7.7.7"), headersWithToken("s3cret"), mockk(relaxed = true))
 
-      log.entries().map { it.kind to it.detail } shouldBe
+      log.entries().map { Triple(it.kind, it.detail, it.count) } shouldBe
         [
-          ActivityKind.BAD_TOKEN to "No agent token, from 10.8.8.8",
-          ActivityKind.BAD_TOKEN to "An unknown agent token, from 10.9.9.9",
+          Triple(ActivityKind.BAD_TOKEN, "No agent token, from 10.8.8.8", 1),
+          Triple(ActivityKind.BAD_TOKEN, "An unknown agent token, from 10.9.9.9", 3),
         ]
     }
 
@@ -139,7 +139,7 @@ class AgentAuthServerInterceptorTest : StringSpec() {
 
       AgentAuthServerInterceptor(authManager, log).interceptCall(call, headersWithToken("nope"), mockk(relaxed = true))
 
-      log.entries().single().detail shouldBe "An unknown agent token, from an unknown address"
+      log.entries().single().detail shouldBe "An unknown agent token, from Unknown"
     }
   }
 }

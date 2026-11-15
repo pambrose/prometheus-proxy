@@ -20,7 +20,6 @@ import io.prometheus.proxy.ActivityEntry
 import io.prometheus.proxy.ActivityKind
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.ACTIVITY_ID
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.DASH
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.MATCH_COUNT_ATTR
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.agentLabel
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.renderFilters
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.scrapeTime
@@ -69,33 +68,21 @@ internal object ActivityHtml {
     attributes["id"] = ACTIVITY_ID
     if (oob) attributes["hx-swap-oob"] = "true"
     val rows = if (filter.isActive) snapshot.activity.filter(filter::matches) else snapshot.activity
-    val matchCount = "Showing ${rows.size} of ${snapshot.activity.size} events"
-    attributes[MATCH_COUNT_ATTR] = matchCount
-    when {
-      snapshot.activity.isEmpty() -> {
-        div("empty pad") { +"No activity yet: agents connecting, paths registering, and anything refused show here" }
-      }
-
-      rows.isEmpty() && filter.problemsOnly && filter.query.isEmpty() -> {
-        div("empty pad") { +"No problems: nothing refused, rejected, or evicted" }
-      }
-
-      rows.isEmpty() -> {
-        div("empty pad") { +"No activity matches the filter" }
-      }
-
-      else -> {
-        activityRows(snapshot, rows, matchCount.takeIf { filter.isActive })
-      }
-    }
+    if (filteredTableStart(TEXT, filter, rows.size, snapshot.activity.size)) activityRows(snapshot, rows)
   }
+
+  private val TEXT =
+    TableText(
+      noun = "events",
+      empty = "No activity yet: agents connecting, paths registering, and anything refused show here",
+      noProblems = "No problems: nothing refused, rejected, or evicted",
+      noMatch = "No activity matches the filter",
+    )
 
   private fun DIV.activityRows(
     snapshot: ProxySnapshot,
     rows: List<ActivityEntry>,
-    matchCount: String?,
   ) {
-    matchCount?.also { div("match-count") { +it } }
     // As in the Paths view: from the config, so the column doesn't come and go as the lines do.
     val showIdentity = snapshot.authEnabled
     table("ptable") {

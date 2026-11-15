@@ -279,7 +279,7 @@ internal class ProxyDashboardService(
         // fresh document whose region ids match the layout it is now showing.
         // The filter is in the URL, so a filtered view can be bookmarked or shared; the page sends it back over the
         // socket, which is what keeps the pushed table filtered.
-        for (layout in [DashboardLayout.PATH, DashboardLayout.ACTIVITY]) {
+        for (layout in DashboardLayout.entries.filter { it.segment.isNotEmpty() }) {
           get(layout.href(routeBase)) {
             val snapshot = snapshots.recent()
             val filter = RowFilter.of(call.request.queryParameters)

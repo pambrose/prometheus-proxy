@@ -1942,6 +1942,20 @@ class ProxyPathManagerTest : StringSpec() {
       }
     }
 
+    // A path with a slash is refused before the checks that log through rejectPath; the feed has it all the same.
+    "a path with more than one segment should go in the activity feed once" {
+      val (manager, log) = managerWithActivity()
+      val agent = launched("remote-a", "launch-a", name = "agent-east")
+
+      repeat(2) { manager.addPath("app/metrics", "{}", agent).shouldNotBeNull() }
+
+      log.entries().single().apply {
+        kind shouldBe ActivityKind.PATH_REJECTED
+        paths shouldBe ["app/metrics"]
+        detail shouldContain "Multi-segment path not supported"
+      }
+    }
+
     "an agent removing a path should go in the activity feed" {
       val (manager, log) = managerWithActivity()
       val agent = launched("remote-a", "launch-a", name = "agent-east")
