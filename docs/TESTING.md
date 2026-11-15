@@ -358,9 +358,11 @@ Two support helpers also live here (not test classes themselves):
   agent; the Identity column while agent auth is on; escaped values; the search, its match count, and its empty
   states; the form at the view's own route; and the push carrying the status bar and the table, out of band
 - **ScrapeSummaryTest** (`dashboard/`) — a scrape-now's summary: status, outcome, time, size, content type, families,
-  samples, and `# EOF`; a consolidated path's agents merged as Prometheus sees them; a failure's reason cut and escaped;
-  a long body cut at its last line break, or short of a surrogate pair with none; and control characters escaped but for
-  line breaks, tabs, and carriage returns
+  samples, and `# EOF`; families and samples counted as the agent's metric filter reads them: a quoted name whole, a
+  tab after the keyword, a HELP or UNIT line with no TYPE, an indented comment, and lines split at line feeds alone; an
+  OpenMetrics body counted and a protobuf one not; a consolidated path's agents merged as Prometheus sees them; a
+  failure's reason cut and escaped; a long body cut at its last line break, or short of a surrogate pair with none; and
+  control characters escaped but for line breaks, tabs, and carriage returns
 - **ScrapeNowTest** (`dashboard/`) — scrape-now with its scrape stood in for: the summary and the activity feed's line
   naming the browser; a path not registered, without an agent, or on a proxy not running refused; a path at most once a
   cooldown; at most a few at once; and a failed scrape-now kept apart from a successful one in the feed
@@ -405,6 +407,12 @@ One support helper also lives here (not a test class itself):
   and again on a later call if building it failed, which lets the Zipkin tracing interceptors be installed before the
   reporter they need exists
 - **EnvVarsTest** — Environment variable mappings and fallback defaults
+- **ExpositionTest** — how the agent's metric filter and the dashboard's scrape-now both read a text exposition body:
+  `isTextContentType` takes a blank, `text/plain`, or OpenMetrics content type, whatever its parameters and case, and
+  nothing else; `firstNonBlank` finds a line's first token within its range; `commentFamily` opens a family on a HELP,
+  TYPE, or UNIT line, with a tab or several blanks between the tokens and a quoted name unquoted, spaces and all, and
+  on nothing else: another comment, a keyword with no name, a quote left open, or a line that doesn't start with `#`;
+  and `unquote` unescapes a backslash, a quote, and a line feed, and returns null for a quote its range doesn't close
 - **MetricBuildersTest** — the metric builders keep no exemplars and only classic histogram buckets; a
   `sampledGauge` value that throws is reported as NaN instead of failing the scrape; and `setToCurrentTime` sets
   Unix seconds, which the dashboards' `time() - *_start_time_seconds` panels assume

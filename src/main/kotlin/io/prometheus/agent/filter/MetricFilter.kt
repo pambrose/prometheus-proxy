@@ -17,6 +17,7 @@
 package io.prometheus.agent.filter
 
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
+import io.prometheus.common.Exposition
 import java.nio.charset.CharacterCodingException
 import kotlin.concurrent.atomics.AtomicBoolean
 
@@ -156,7 +157,7 @@ internal class MetricFilter private constructor(
       // Inspect without a trailing \r, but emit the original line verbatim so CRLF survives.
       val inspectEnd = if (end > start && text[end - 1] == '\r') end - 1 else end
       // The text format allows blanks before a line's first token.
-      val first = firstNonBlank(text, start, inspectEnd)
+      val first = Exposition.firstNonBlank(text, start, inspectEnd)
 
       val keep =
         when {
@@ -165,7 +166,7 @@ internal class MetricFilter private constructor(
           }
 
           text[first] == '#' -> {
-            val family = parseCommentFamily(text.substring(first, inspectEnd))
+            val family = Exposition.commentFamily(text.substring(first, inspectEnd))
             if (family == null) {
               true // Unrecognized comment (e.g. "# EOF") passes through untouched.
             } else {
@@ -240,24 +241,10 @@ internal class MetricFilter private constructor(
     /**
      * Whether a payload of [contentType] is safe to filter line-by-line. Blank, `text/plain`, and
      * `application/openmetrics-text` are; anything else (protobuf, an HTML error body) is passed
-     * through untouched so a misconfigured filter can never corrupt a payload.
+     * through untouched so a misconfigured filter can never corrupt a payload. The dashboard's
+     * scrape-now counts families and samples only in the same bodies.
      */
-    internal fun isFilterableContentType(contentType: String): Boolean =
-      contentType.substringBefore(';').trim().lowercase()
-        .let { it.isEmpty() || it == "text/plain" || it == "application/openmetrics-text" }
-
-    // The index of the first non-blank character in text[start, end), or end when the range is blank, without
-    // materializing the range.
-    private fun firstNonBlank(
-      text: String,
-      start: Int,
-      end: Int,
-    ): Int {
-      for (i in start until end) {
-        if (!text[i].isWhitespace()) return i
-      }
-      return end
-    }
+    internal fun isFilterableContentType(contentType: String): Boolean = Exposition.isTextContentType(contentType)
 
     // The name of a sample line that starts at text[start] with a quoted name, such as {"a.b",job="x"} 1, or null for
     // a line with a plain name. Prometheus 3 writes a name outside the legacy character set this way.
@@ -267,38 +254,9 @@ internal class MetricFilter private constructor(
       end: Int,
     ): String? =
       if (text[start] == '{' && start + 1 < end && text[start + 1] == '"')
-        unquote(text, start + 1, end)
+        Exposition.unquote(text, start + 1, end)
       else
         null
-
-    // The quoted string that opens at text[quote], unescaped as the text format escapes a name (\\, \", and \n), or
-    // null when the quote is never closed.
-    private fun unquote(
-      text: String,
-      quote: Int,
-      end: Int = text.length,
-    ): String? {
-      val name = StringBuilder()
-      var i = quote + 1
-      while (i < end) {
-        when (val c = text[i]) {
-          '"' -> {
-            return name.toString()
-          }
-
-          '\\' if i + 1 < end -> {
-            name.append(if (text[i + 1] == 'n') '\n' else text[i + 1])
-            i++
-          }
-
-          else -> {
-            name.append(c)
-          }
-        }
-        i++
-      }
-      return null
-    }
 
     // Metric name is everything before the first '{' or whitespace, so label values -- which may
     // contain '}' or '#' -- can never influence matching. Returns the exclusive end index of the name
@@ -319,25 +277,6 @@ internal class MetricFilter private constructor(
     // Suffixes a histogram, summary, or OpenMetrics counter family appends to its family name.
     private val FAMILY_SUFFIXES =
       setOf("_bucket", "_sum", "_count", "_created", "_total", "_gsum", "_gcount", "_info")
-
-    // Keywords whose comment line opens a metric family.
-    private val FAMILY_KEYWORDS = listOf("HELP", "TYPE", "UNIT")
-
-    // "# HELP foo help text" / "# TYPE foo counter" / "# UNIT foo seconds" -> "foo". Any other
-    // comment -> null. The keyword terminator matches either a space or a tab, symmetric with the
-    // name terminator below, so "# TYPE\tfoo counter" opens the family just like "# TYPE foo counter".
-    // A quoted name, such as "# TYPE \"a.b\" counter", is unquoted, so it matches as written in the config.
-    private fun parseCommentFamily(line: String): String? {
-      val body = line.removePrefix("#").trimStart()
-      val keyword = FAMILY_KEYWORDS.firstOrNull { body.startsWith("$it ") || body.startsWith("$it\t") } ?: return null
-      val rest = body.substring(keyword.length + 1).trimStart()
-      val name =
-        if (rest.startsWith('"'))
-          unquote(rest, 0)
-        else
-          rest.substringBefore(' ').substringBefore('\t')
-      return name?.takeIf { it.isNotEmpty() }
-    }
 
     // Whether the metric name at text[start, nameEnd) is the exact family name, or the family plus one
     // of its recognized suffixes. Deliberately NOT a startsWith() test: that would fold
