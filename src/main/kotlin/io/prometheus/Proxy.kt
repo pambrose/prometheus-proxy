@@ -40,15 +40,12 @@ import io.prometheus.common.Utils.getVersionDesc
 import io.prometheus.common.Utils.toJsonElement
 import io.prometheus.common.AgentValues.isValidLabelName
 import io.prometheus.common.AgentValues.labelsProblem
-import io.prometheus.proxy.ActivityKind
 import io.prometheus.proxy.ActivityLog
 import io.prometheus.proxy.AgentAuthManager
 import io.prometheus.proxy.AgentContext
 import io.prometheus.proxy.AgentContextCleanupService
 import io.prometheus.proxy.AgentContextManager
 import io.prometheus.proxy.PathHistory
-import io.prometheus.proxy.ProxyConstants.EVICTION_REASON
-import io.prometheus.proxy.ProxyConstants.TERMINATION_REASON
 import io.prometheus.proxy.ProxyEvent
 import io.prometheus.proxy.ProxyEventBus
 import io.prometheus.proxy.ProxyFailure
@@ -58,6 +55,7 @@ import io.prometheus.proxy.ProxyMetrics
 import io.prometheus.proxy.SdTarget
 import io.prometheus.proxy.ProxyOptions
 import io.prometheus.proxy.ProxyPathManager
+import io.prometheus.proxy.RemovalReason
 import io.prometheus.proxy.ScrapeRecord
 import io.prometheus.proxy.ScrapeRequestManager
 import io.prometheus.proxy.dashboard.ProxyDashboardService
@@ -473,13 +471,13 @@ class Proxy(
    * (to free up resources).
    *
    * @param agentId Unique identifier of the agent that disconnected. Must not be empty.
-   * @param reason Human-readable description of why the agent was removed (for logging)
+   * @param reason Why the agent was removed, which the logs, its failed scrapes, and the activity feed report
    * @return The removed AgentContext, or null if the agent was not found
    * @throws IllegalArgumentException if agentId is empty
    */
   internal fun removeAgentContext(
     agentId: String,
-    reason: String,
+    reason: RemovalReason,
   ): AgentContext? {
     require(agentId.isNotBlank()) { BLANK_AGENT_ID_MSG }
 
@@ -505,7 +503,7 @@ class Proxy(
    */
   internal fun removeAgentContextIfCurrent(
     agentContext: AgentContext,
-    reason: String,
+    reason: RemovalReason,
   ): Boolean =
     agentContextManager.removeFromContextManagerIfCurrent(agentContext, reason).also { removed ->
       if (removed)
@@ -518,7 +516,7 @@ class Proxy(
   private fun releaseRemovedAgent(
     agentId: String,
     agentContext: AgentContext?,
-    reason: String,
+    reason: RemovalReason,
   ) {
     val servedPaths = pathManager.removeFromPathManager(agentId, reason)
     // Emitted here rather than inside removeFromContextManager so the event's happens-before edge
@@ -537,39 +535,30 @@ class Proxy(
     agentContextManager.removeChunkedContextsForAgent(agentId)
       .also { reclaimed ->
         if (reclaimed.isNotEmpty()) {
-          logger.info { "Reclaimed ${reclaimed.size} in-flight chunked context(s) for agentId: $agentId ($reason)" }
+          logger.info {
+            "Reclaimed ${reclaimed.size} in-flight chunked context(s) for agentId: $agentId (${reason.logText})"
+          }
           metrics { chunkedTransfersAbandoned.inc(reclaimed.size.toDouble()) }
         }
       }
-    scrapeRequestManager.failAllScrapeRequests(agentId, "Agent disconnected: $reason", ProxyFailure.AGENT_DISCONNECTED)
+    scrapeRequestManager.failAllScrapeRequests(
+      agentId,
+      "Agent disconnected: ${reason.logText}",
+      ProxyFailure.AGENT_DISCONNECTED,
+    )
   }
 
-  // The activity feed's line for an agent that has gone, with the paths it served. An eviction is the agent going
-  // quiet, which is a problem; the rest are an agent stopping or losing its connection, which the proxy can't tell
-  // apart.
+  // The activity feed's line for an agent that has gone, with the paths it served. The reason says how the feed names
+  // the departure, an eviction as a problem, and what caused it.
   private fun recordDeparture(
     agentContext: AgentContext,
-    reason: String,
+    reason: RemovalReason,
     servedPaths: Int,
   ) {
     val log = activityLog ?: return
-    val (kind, cause) =
-      when (reason) {
-        EVICTION_REASON -> {
-          val maxSecs = proxyConfigVals.internal.maxAgentInactivitySecs
-          ActivityKind.AGENT_EVICTED to "No contact within proxy.internal.maxAgentInactivitySecs (${maxSecs}s)"
-        }
-
-        TERMINATION_REASON -> {
-          ActivityKind.AGENT_DISCONNECTED to "Connection closed"
-        }
-
-        else -> {
-          ActivityKind.AGENT_DISCONNECTED to reason
-        }
-      }
+    val cause = reason.activityCause(proxyConfigVals.internal.maxAgentInactivitySecs)
     val paths = if (servedPaths == 1) "1 path" else "$servedPaths paths"
-    log.record(kind, agentContext, detail = "$cause; released $paths")
+    log.record(reason.activityKind, agentContext, detail = "$cause; released $paths")
   }
 
   /**

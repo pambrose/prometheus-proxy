@@ -430,7 +430,7 @@ class ProxyTest : StringSpec() {
       val proxy = createTestProxy()
 
       shouldThrow<IllegalArgumentException> {
-        proxy.removeAgentContext("", "test reason")
+        proxy.removeAgentContext("", RemovalReason.TERMINATION)
       }
     }
 
@@ -440,7 +440,7 @@ class ProxyTest : StringSpec() {
       proxy.agentContextManager.addAgentContext(agentContext)
       proxy.pathManager.addPath("metrics", "", agentContext)
 
-      val removed = proxy.removeAgentContext(agentContext.agentId, "disconnect")
+      val removed = proxy.removeAgentContext(agentContext.agentId, RemovalReason.TERMINATION)
 
       removed.shouldNotBeNull()
       removed.agentId shouldBe agentContext.agentId
@@ -486,7 +486,7 @@ class ProxyTest : StringSpec() {
         headerRead.await()
         proxy.agentContextManager.chunkedContextSize shouldBe 1
 
-        proxy.removeAgentContext(owner.agentId, "disconnect")
+        proxy.removeAgentContext(owner.agentId, RemovalReason.TERMINATION)
 
         proxy.agentContextManager.chunkedContextMapView.shouldBeEmpty()
         agentRemoved.complete(Unit)
@@ -501,7 +501,7 @@ class ProxyTest : StringSpec() {
     "removeAgentContext should count a transfer it reclaims as abandoned, once" {
       val abandoned =
         abandonedTransfers { proxy, owner, endStream ->
-          proxy.removeAgentContext(owner.agentId, "disconnect")
+          proxy.removeAgentContext(owner.agentId, RemovalReason.TERMINATION)
           endStream()
         }
 
@@ -512,7 +512,7 @@ class ProxyTest : StringSpec() {
       val abandoned =
         abandonedTransfers { proxy, owner, endStream ->
           endStream()
-          proxy.removeAgentContext(owner.agentId, "disconnect")
+          proxy.removeAgentContext(owner.agentId, RemovalReason.TERMINATION)
         }
 
       abandoned shouldBe 1.0
@@ -521,7 +521,7 @@ class ProxyTest : StringSpec() {
     "removeAgentContext should return null for unknown agentId" {
       val proxy = createTestProxy()
 
-      val removed = proxy.removeAgentContext("nonexistent-id", "test")
+      val removed = proxy.removeAgentContext("nonexistent-id", RemovalReason.TERMINATION)
 
       removed.shouldBeNull()
     }
@@ -585,23 +585,23 @@ class ProxyTest : StringSpec() {
       val proxy = createTestProxy("--dashboard")
       val log = proxy.activityLog.shouldNotBeNull()
 
-      fun leave(reason: String): ActivityEntry {
+      fun leave(reason: RemovalReason): ActivityEntry {
         val agent = createAgentContext(name = "agent-east").also { proxy.agentContextManager.addAgentContext(it) }
         proxy.pathManager.addPath("orders_metrics", "{}", agent).shouldBeNull()
         proxy.removeAgentContext(agent.agentId, reason)
         return log.entries().first()
       }
 
-      leave(ProxyConstants.EVICTION_REASON).apply {
+      leave(RemovalReason.EVICTION).apply {
         kind shouldBe ActivityKind.AGENT_EVICTED
         agentName shouldBe "agent-east"
         detail shouldBe "No contact within proxy.internal.maxAgentInactivitySecs (60s); released 1 path"
       }
-      leave(ProxyConstants.TERMINATION_REASON).apply {
+      leave(RemovalReason.TERMINATION).apply {
         kind shouldBe ActivityKind.AGENT_DISCONNECTED
         detail shouldBe "Connection closed; released 1 path"
       }
-      leave(ProxyConstants.STREAM_TERMINATED_REASON).detail shouldBe
+      leave(RemovalReason.STREAM_TERMINATED).detail shouldBe
         "Stream terminated (transport filter disabled); released 1 path"
     }
 
@@ -616,7 +616,7 @@ class ProxyTest : StringSpec() {
           val subscribed = CompletableDeferred<Unit>()
           val collected = async { proxy.eventBus.flow.onSubscription { subscribed.complete(Unit) }.take(1).toList() }
           subscribed.await()
-          proxy.removeAgentContext(pending.agentId, "Termination")
+          proxy.removeAgentContext(pending.agentId, RemovalReason.TERMINATION)
           proxy.eventBus.emit(marker)
           collected.await()
         }
@@ -725,7 +725,7 @@ class ProxyTest : StringSpec() {
       proxy.pathManager.addPath("metrics", "", agentContext)
       proxy.pathManager.pathMapSize shouldBe 1
 
-      proxy.removeAgentContext(agentContext.agentId, "test disconnect")
+      proxy.removeAgentContext(agentContext.agentId, RemovalReason.TERMINATION)
 
       // If the sweep ran first this is 0, which leaves an unguarded window: a registerPath blocked on
       // the pathMap monitor during the sweep is released into it and strands a path pointing at a
@@ -739,7 +739,7 @@ class ProxyTest : StringSpec() {
       val agentContext = createAgentContext()
       proxy.agentContextManager.addAgentContext(agentContext)
 
-      proxy.removeAgentContext(agentContext.agentId, "test disconnect")
+      proxy.removeAgentContext(agentContext.agentId, RemovalReason.TERMINATION)
       val error = proxy.pathManager.addPath("metrics", "", agentContext)?.reason
 
       error.shouldNotBeNull()

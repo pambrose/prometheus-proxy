@@ -50,7 +50,6 @@ import io.prometheus.grpc.pathMapSizeResponse
 import io.prometheus.grpc.registerAgentResponse
 import io.prometheus.grpc.registerPathResponse
 import io.prometheus.grpc.unregisterPathResponse
-import io.prometheus.proxy.ProxyConstants.STREAM_TERMINATED_REASON
 import io.prometheus.proxy.ProxyPathManager.PathMetadata
 import io.prometheus.proxy.ProxyPathManager.PathRejection
 import kotlinx.coroutines.CancellationException
@@ -415,7 +414,7 @@ internal class ProxyServiceImpl(
         // When transportFilterDisabled is true, there is no ProxyServerTransportFilter to
         // detect agent disconnect and clean up. Handle cleanup here on stream termination.
         if (proxy.options.transportFilterDisabled)
-          proxy.removeAgentContextIfCurrent(agentContext, STREAM_TERMINATED_REASON)
+          proxy.removeAgentContextIfCurrent(agentContext, RemovalReason.STREAM_TERMINATED)
       }
     }
 

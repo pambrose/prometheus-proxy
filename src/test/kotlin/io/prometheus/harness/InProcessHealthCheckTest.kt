@@ -30,6 +30,7 @@ import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.harness.support.withPrefix
 import io.prometheus.proxy.AgentContext
+import io.prometheus.proxy.RemovalReason
 import io.prometheus.proxy.ScrapeRequestWrapper
 
 // The backlog health checks on both sides exist so Kubernetes can take an overloaded agent or proxy out
@@ -129,7 +130,7 @@ class InProcessHealthCheckTest : StringSpec() {
         }
         healthCheck(PROXY_ADMIN_PORT, HttpStatusCode.InternalServerError, "Large agent scrape request backlog")
       } finally {
-        proxy.removeAgentContext(backlogged.agentId, "test cleanup")
+        proxy.removeAgentContext(backlogged.agentId, RemovalReason.TERMINATION)
       }
 
       healthCheck(PROXY_ADMIN_PORT, HttpStatusCode.OK)
@@ -149,7 +150,7 @@ class InProcessHealthCheckTest : StringSpec() {
         healthCheck(PROXY_ADMIN_PORT, HttpStatusCode.OK, "\"scrape_response_map_check\"")
       } finally {
         scrapeIds.forEach { proxy.scrapeRequestManager.removeFromScrapeRequestMap(it) }
-        proxy.removeAgentContext(context.agentId, "test cleanup")
+        proxy.removeAgentContext(context.agentId, RemovalReason.TERMINATION)
       }
     }
   }

@@ -20,9 +20,4 @@ internal object ProxyConstants {
   const val MISSING_PATH_MSG = "Request missing path"
   const val CACHE_CONTROL_VALUE = "must-revalidate,no-store"
   const val FAVICON_FILENAME = "favicon.ico"
-
-  // Why an agent's context was removed, as the log gives it; the activity feed tells an eviction from the rest by it.
-  const val EVICTION_REASON = "Eviction"
-  const val TERMINATION_REASON = "Termination"
-  const val STREAM_TERMINATED_REASON = "Stream terminated (transport filter disabled)"
 }

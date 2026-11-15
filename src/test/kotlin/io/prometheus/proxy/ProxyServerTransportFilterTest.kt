@@ -135,7 +135,7 @@ class ProxyServerTransportFilterTest : StringSpec() {
       // Terminate transport
       filter.transportTerminated(resultAttrs)
 
-      verify { mockProxy.removeAgentContext(agentId, "Termination") }
+      verify { mockProxy.removeAgentContext(agentId, RemovalReason.TERMINATION) }
     }
 
     "transportTerminated should handle missing agent-id gracefully" {
@@ -190,7 +190,7 @@ class ProxyServerTransportFilterTest : StringSpec() {
       agentContextManager.getAgentContext(agentId).shouldNotBeNull()
 
       // Simulate cleanup service removing the agent first
-      agentContextManager.removeFromContextManager(agentId, "Eviction")
+      agentContextManager.removeFromContextManager(agentId, RemovalReason.EVICTION)
       agentContextManager.getAgentContext(agentId).shouldBeNull()
 
       // removeAgentContext returns null for already-removed agents
@@ -200,7 +200,7 @@ class ProxyServerTransportFilterTest : StringSpec() {
       filter.transportTerminated(resultAttrs)
 
       // Verify removeAgentContext was still called
-      verify { mockProxy.removeAgentContext(agentId, "Termination") }
+      verify { mockProxy.removeAgentContext(agentId, RemovalReason.TERMINATION) }
     }
 
     // A connection that never authenticates -- a bad token on a long-lived channel, an L7 load balancer's health
@@ -222,7 +222,7 @@ class ProxyServerTransportFilterTest : StringSpec() {
         val events =
           captureLogs("io.prometheus.proxy", Level.DEBUG) {
             // As AgentContextCleanupService evicts it.
-            mockProxy.removeAgentContext(agentId, "Eviction").shouldNotBeNull()
+            mockProxy.removeAgentContext(agentId, RemovalReason.EVICTION).shouldNotBeNull()
             filter.transportTerminated(attrs)
           }
 
@@ -248,7 +248,7 @@ class ProxyServerTransportFilterTest : StringSpec() {
 
       filter.transportTerminated(resultAttrs)
 
-      verify { mockProxy.removeAgentContext(agentId, "Termination") }
+      verify { mockProxy.removeAgentContext(agentId, RemovalReason.TERMINATION) }
       agentContextManager.agentContextSize shouldBe 0
     }
   }

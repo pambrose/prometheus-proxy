@@ -24,7 +24,6 @@ import com.pambrose.common.concurrent.await
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Proxy
 import io.prometheus.common.ConfigVals
-import io.prometheus.proxy.ProxyConstants.EVICTION_REASON
 import java.util.concurrent.CountDownLatch
 import kotlin.time.Duration.Companion.seconds
 
@@ -68,7 +67,7 @@ internal class AgentContextCleanupService(
           val message =
             "Evicting agentId $agentId after $inactiveTime (max $maxAgentInactivityTime) of inactivity: $agentContext"
           if (announced) logger.info { message } else logger.debug { message }
-          proxy.removeAgentContext(agentId, EVICTION_REASON)
+          proxy.removeAgentContext(agentId, RemovalReason.EVICTION)
           if (announced)
             proxy.metrics { agentEvictionCount.inc() }
         } else {
