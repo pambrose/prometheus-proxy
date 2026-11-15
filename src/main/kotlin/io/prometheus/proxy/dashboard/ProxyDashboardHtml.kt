@@ -280,8 +280,12 @@ internal object ProxyDashboardHtml {
    * Drawn as one element per run of like results, each painting a dot per scrape as a repeating background, rather
    * than an element per scrape: the table is pushed whole every refresh, so a healthy path's strip stays one element.
    * The strip is one image to assistive tech, labelled with the same count the percentage gives.
+   *
+   * A block body, not `= td(...) { }` as the other cells are written: CodeScene doesn't count the conditionals
+   * inside an expression-bodied function's trailing lambda as the function's own, and with this one the file crossed
+   * its Global Conditionals threshold.
    */
-  private fun TR.historyCell(path: PathView) =
+  private fun TR.historyCell(path: PathView) {
     td("dim") {
       val total = path.history.size
       if (total == 0) {
@@ -301,6 +305,7 @@ internal object ProxyDashboardHtml {
         +"${succeeded * 100 / total}%"
       }
     }
+  }
 
   /**
    * A scrape's time, or a dash when there is none. Rendered as `<time datetime="…Z">` with the time of day in the
