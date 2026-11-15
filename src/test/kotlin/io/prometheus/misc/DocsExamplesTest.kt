@@ -101,9 +101,11 @@ class DocsExamplesTest : StringSpec() {
       .getString("url")
 
   private fun docFiles(): List<File> =
-    listOf(File(README), File(LLMS_TXT)) +
-      File(WEBSITE_DOCS_DIR).walkTopDown().filter { it.isFile && it.extension == "md" }.sortedBy { it.path } +
-      File(WEBSITE_SNIPPETS_DIR).listFiles { file -> file.extension == "txt" }.orEmpty().sortedBy { it.name }
+    buildList {
+      addAll(listOf(File(README), File(LLMS_TXT)))
+      addAll(File(WEBSITE_DOCS_DIR).walkTopDown().filter { it.isFile && it.extension == "md" }.sortedBy { it.path })
+      addAll(File(WEBSITE_SNIPPETS_DIR).listFiles { file -> file.extension == "txt" }.orEmpty().sortedBy { it.name })
+    }
 
   private fun String.hasFlag(flag: String) = split(WHITESPACE).any { it == flag || it.startsWith("$flag=") }
 

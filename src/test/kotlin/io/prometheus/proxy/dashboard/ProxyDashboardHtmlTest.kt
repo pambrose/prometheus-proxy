@@ -591,6 +591,17 @@ class ProxyDashboardHtmlTest : StringSpec() {
       agentPage shouldNotContain "aria-current=\"page\""
     }
 
+    // A request of the script's own, carrying the header the route requires, so another site's page can't send it.
+    "the page script should post a scrape-now with htmx's header and put the result in the panel" {
+      val page = renderFullPage(snapshot())
+
+      page shouldContain "closest('button.scrape')"
+      page shouldContain "method: 'POST', headers: { '${ProxyDashboardService.HX_REQUEST_HEADER}': 'true' }"
+      page shouldContain "panel.innerHTML = html;"
+      // Closing the panel hands focus back to the button that filled it.
+      page shouldContain "function closeScrapeResult(panel)"
+    }
+
     // The script tells the server which layout the page shows, from its URL, on every announce. The map comes from
     // DashboardLayout, so a new layout can't be left out of it.
     "the page script should name each layout by its route" {

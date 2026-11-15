@@ -186,6 +186,7 @@ class AgentGrpcStreamRetentionTest : StringSpec() {
     private const val GC_ATTEMPTS = 10
     private const val GC_PAUSE_MILLIS = 50L
     private val STREAM_TIMEOUT = 30.seconds
-    private val REACHABLE_CLUE = "Chunks, of the $CHUNK_COUNT sent, still reachable once the proxy has read them all"
+    private const val REACHABLE_CLUE =
+      "Chunks, of the $CHUNK_COUNT sent, still reachable once the proxy has read them all"
   }
 }

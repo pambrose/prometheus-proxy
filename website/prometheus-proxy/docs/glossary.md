@@ -93,7 +93,7 @@ anchored, and a family's `_bucket`/`_sum`/`_count` series are kept or dropped to
 
 ### Dashboard
 
-The proxy's read-only, live-updating web page (`proxy.dashboard`, default port `8094`) showing
+The proxy's live-updating web page (`proxy.dashboard`, default port `8094`) showing
 connected agents, registered paths — including paths whose agent has gone — and recent scrape
 results. Off by default and unauthenticated. See [Dashboard](web-dashboard.md).
 

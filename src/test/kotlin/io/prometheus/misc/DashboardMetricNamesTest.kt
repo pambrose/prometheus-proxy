@@ -228,13 +228,13 @@ class DashboardMetricNamesTest : StringSpec() {
     // With two proxies (or two environments) in one Prometheus, a proxy panel that ignores the pickers mixes them.
     "every proxy dashboard query should filter by the job and instance pickers" {
       selectors(PROXY_DASHBOARD, "proxy_")
-        .filterNot { "job=~\"\$job\"" in it && "instance=~\"\$instance\"" in it }
+        .filterNot { $$"job=~\"$job\"" in it && $$"instance=~\"$instance\"" in it }
         .shouldBeEmpty()
     }
 
     "every agents dashboard query should filter by the agent picker" {
       selectors(AGENTS_DASHBOARD, "agent_")
-        .filterNot { "job=~\"\$agent\"" in it }
+        .filterNot { $$"job=~\"$agent\"" in it }
         .shouldBeEmpty()
     }
 
@@ -293,10 +293,12 @@ class DashboardMetricNamesTest : StringSpec() {
     // outcomes the proxy records in proxy_scrape_requests_total's type label, taken from the code that records them,
     // and the label agent_scrape_request_latency_seconds carries the agent's name in.
     private val NOT_SERIES =
-      ProxyFailure.entries.map { it.label }.toSet() +
-        ProxyHttpRoutes.IN_FLIGHT_LIMIT_LABEL +
-        ProxyHttpRoutes.BACKLOG_FULL_LABEL +
-        "agent_name"
+      buildSet {
+        addAll(ProxyFailure.entries.map { it.label }.toSet())
+        add(ProxyHttpRoutes.IN_FLIGHT_LIMIT_LABEL)
+        add(ProxyHttpRoutes.BACKLOG_FULL_LABEL)
+        add("agent_name")
+      }
 
     private val SNIPPET =
       Regex("""; --8<-- \[start:promql-[^\]]+]\n(.*?)\n; --8<-- \[end:""", RegexOption.DOT_MATCHES_ALL)

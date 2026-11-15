@@ -281,13 +281,12 @@ internal class MetricFilter private constructor(
       val name = StringBuilder()
       var i = quote + 1
       while (i < end) {
-        val c = text[i]
-        when {
-          c == '"' -> {
+        when (val c = text[i]) {
+          '"' -> {
             return name.toString()
           }
 
-          c == '\\' && i + 1 < end -> {
+          '\\' if i + 1 < end -> {
             name.append(if (text[i + 1] == 'n') '\n' else text[i + 1])
             i++
           }

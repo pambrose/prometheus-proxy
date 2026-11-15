@@ -34,7 +34,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.concurrent.CountDownLatch
-import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.decrementAndFetch
 import kotlin.concurrent.atomics.incrementAndFetch
@@ -272,22 +271,17 @@ class AgentConnectionContextTest : StringSpec() {
       // independently.
       val context = AgentConnectionContext(128)
       val completedCount = AtomicInt(0)
-      val threwException = AtomicBoolean(false)
 
       coroutineScope {
         // Launch several "scrape" coroutines that will try to send results
         (1..5).forEach { i ->
           launch(Dispatchers.IO) {
-            try {
-              // Simulate scrape work
-              delay(50.milliseconds)
-              context.sendScrapeResults(
-                ScrapeResults(srAgentId = "agent-1", srScrapeId = i.toLong(), srValidResponse = true),
-              )
-              completedCount.incrementAndFetch()
-            } catch (e: Exception) {
-              threwException.store(true)
-            }
+            // Simulate scrape work
+            delay(50.milliseconds)
+            context.sendScrapeResults(
+              ScrapeResults(srAgentId = "agent-1", srScrapeId = i.toLong(), srValidResponse = true),
+            )
+            completedCount.incrementAndFetch()
           }
         }
 
@@ -296,9 +290,8 @@ class AgentConnectionContextTest : StringSpec() {
         context.close()
       }
 
-      // All coroutines should complete without throwing
-      threwException.load().shouldBeFalse()
-      // All coroutines should have completed (even though some results were dropped)
+      // None threw, or coroutineScope would have rethrown it here, failing the test; and none was cancelled by a
+      // sibling's failure, which is what the old send() did. All should have completed (some results were dropped).
       completedCount.load() shouldBe 5
     }
 

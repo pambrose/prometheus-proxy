@@ -1398,7 +1398,7 @@ class ProxyPathManagerTest : StringSpec() {
     "formRejection should accept the path characters a scrape can carry" {
       val manager = ProxyPathManager(createLimitedProxy(maxPathLength = 512), isTestMode = true)
 
-      val paths = ["app1_metrics", "team-a.metrics~1", "a!b\$c&d'e(f)g*h+i,j;k=l:m@n", "m%C3%A9triques", "métriques"]
+      val paths = ["app1_metrics", "team-a.metrics~1", $$"a!b$c&d'e(f)g*h+i,j;k=l:m@n", "m%C3%A9triques", "métriques"]
       for (path in paths) {
         withClue(path) { manager.formRejection(path, "{}", createMockAgentContext()).shouldBeNull() }
       }

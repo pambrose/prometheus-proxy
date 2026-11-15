@@ -19,11 +19,17 @@ package io.prometheus.proxy.dashboard
 import io.prometheus.common.TestPorts
 import io.prometheus.proxy.ActivityEntry
 import io.prometheus.proxy.ActivityKind
+import io.prometheus.proxy.ProxyMetrics
 import io.prometheus.proxy.ScrapeRecord
+import io.prometheus.proxy.ScrapeRequestResponse
+import io.ktor.http.ContentType
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.withCharset
 import kotlinx.html.html
 import kotlinx.html.stream.createHTML
 import kotlin.time.Clock
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
@@ -93,6 +99,20 @@ internal object DashboardFixtures {
     agentName: String = "agent-$agentId",
   ) = ScrapeRecord(agentId, agentName, path, statusCode, outcome, durationMillis, contentLength, at)
 
+  /** An agent's successful answer to a scrape, with [text] as its plain body. */
+  fun scrapeResponse(
+    text: String = "# TYPE up gauge\nup 1\n",
+    durationMillis: Long = 120,
+  ) = ScrapeRequestResponse(
+    statusCode = HttpStatusCode.OK,
+    updateMsg = "success",
+    contentType = ContentType.Text.Plain.withCharset(Charsets.UTF_8),
+    contentText = text,
+    fetchDuration = durationMillis.milliseconds,
+    byteCount = text.length.toLong(),
+    encoding = ProxyMetrics.ENCODING_PLAIN,
+  )
+
   fun activityEntry(
     kind: ActivityKind = ActivityKind.PATH_REGISTERED,
     agentName: String = "agent-east",
@@ -113,6 +133,7 @@ internal object DashboardFixtures {
     paths: List<PathView> = agents.flatMap { it.paths }.distinct(),
     authEnabled: Boolean = false,
     activity: List<ActivityEntry> = emptyList(),
+    scrapeNowEnabled: Boolean = false,
   ) = ProxySnapshot(
     agents = agents,
     paths = paths,
@@ -122,6 +143,7 @@ internal object DashboardFixtures {
     scrapePort = TestPorts.PROXY_HTTP_PORT,
     authEnabled = authEnabled,
     activity = activity,
+    scrapeNowEnabled = scrapeNowEnabled,
   )
 
   /** The whole page for [snapshot], as the dashboard serves it to a GET. */

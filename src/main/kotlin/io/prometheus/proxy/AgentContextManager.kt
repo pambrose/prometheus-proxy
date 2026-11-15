@@ -117,7 +117,7 @@ internal class AgentContextManager(
     var count = 0
     agentIdsByIdentity.compute(identity) { _, agentIds ->
       (agentIds ?: HashSet()).apply {
-        if (maxPerIdentity <= 0 || size < maxPerIdentity) {
+        if (maxPerIdentity !in 1..size) {
           add(agentContext.agentId)
           count = size
         }

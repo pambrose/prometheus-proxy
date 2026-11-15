@@ -72,7 +72,7 @@ internal object ProxyHttpRoutes {
   private val authHeaderWithoutTlsWarned = AtomicBoolean(false)
 
   // OpenMetrics end-of-stream marker, stripped from each consolidated agent's body and re-appended once.
-  private const val EOF_MARKER = "# EOF"
+  internal const val EOF_MARKER = "# EOF"
 
   // The proxy waited out scrapeRequestTimeoutSecs without the agent answering. Distinct from
   // upstream_timed_out, which is the agent answering promptly to report that its own fetch of the
@@ -178,7 +178,9 @@ internal object ProxyHttpRoutes {
   ): ResponseResults {
     // One response per agent. The path map never holds an empty agent list, and the caller has already answered
     // invalid_agent_context for one (isNotValid() is true for it), so there is always at least one.
-    val results: List<ScrapeRequestResponse> = executeScrapeRequests(agentContextInfo, proxy, path, queryParams)
+    val headers = ScrapeHeaders.of(call.request)
+    val results: List<ScrapeRequestResponse> =
+      executeScrapeRequests(agentContextInfo, proxy, path, queryParams, headers)
     return mergeResponseResults(results)
   }
 
@@ -220,22 +222,18 @@ internal object ProxyHttpRoutes {
     return if (hasEof) "$joined\n$EOF_MARKER" else joined
   }
 
-  private suspend fun RoutingContext.executeScrapeRequests(
+  private suspend fun executeScrapeRequests(
     agentContextInfo: ProxyPathManager.AgentContextInfo,
     proxy: Proxy,
     path: String,
     queryParams: String,
+    headers: ScrapeHeaders,
   ): List<ScrapeRequestResponse> {
     val started = TimeSource.Monotonic.markNow()
     return try {
-      coroutineScope {
-        // map and awaitAll both preserve order, so zipping recovers which agent produced which response.
-        // That keeps provenance at the one site that needs it, rather than as a field on the response.
-        agentContextInfo.agentContexts
-          .map { agentContext ->
-            async { submitScrapeRequest(agentContext, proxy, path, queryParams, call.request) }
-          }
-          .awaitAll()
+      // submitScrapeRequests answers in the agents' order, so zipping recovers which agent produced which response.
+      // That keeps provenance at the one site that needs it, rather than as a field on the response.
+      submitScrapeRequests(agentContextInfo, proxy, path, queryParams, headers)
           .also { responses ->
             agentContextInfo.agentContexts.zip(responses).forEach { (agentContext, response) ->
               recordScrapeOutcome(path, agentContext.agentId, agentContext.agentName, response, proxy)
@@ -248,9 +246,11 @@ internal object ProxyHttpRoutes {
             proxy.metrics {
               val elapsedSecs = response.fetchDuration.toDouble(DurationUnit.SECONDS)
               observeLatency(path, response.updateMsg, elapsedSecs)
+              // Here rather than where the body is decoded, so a scrape made from the dashboard, which submits through
+              // the same code, adds nothing to the metrics Prometheus reads.
+              response.encoding?.also { observeResponseBytes(path, it, response.byteCount.toDouble()) }
             }
           }
-      }
     } catch (e: CancellationException) {
       // Ktor cancels the call when Prometheus hangs up, usually at a scrape timeout shorter than the proxy's. The
       // bookkeeping above runs only after awaitAll() returns, so without this the most common real failure -- a
@@ -324,15 +324,40 @@ internal object ProxyHttpRoutes {
     }
   }
 
+  /**
+   * Scrapes [path] from every agent of [agentContextInfo] at once, as [submitScrapeRequest] does one, and returns their
+   * responses in the agents' order. The scrape route and the dashboard's scrape-now both scrape through here, so a
+   * scrape-now gets what Prometheus would; neither records anything here.
+   */
+  internal suspend fun submitScrapeRequests(
+    agentContextInfo: ProxyPathManager.AgentContextInfo,
+    proxy: Proxy,
+    path: String,
+    queryParams: String,
+    headers: ScrapeHeaders,
+    timeout: Duration = proxy.proxyConfigVals.internal.scrapeRequestTimeoutSecs.seconds,
+  ): List<ScrapeRequestResponse> =
+    coroutineScope {
+      agentContextInfo.agentContexts
+        .map { agentContext -> async { submitScrapeRequest(agentContext, proxy, path, queryParams, headers, timeout) } }
+        .awaitAll()
+    }
+
+  /**
+   * Sends one scrape of [path] to [agentContext] and waits for its result, as [headers] asks for it, for at most
+   * [timeout]. Records nothing: the scrape route records what Prometheus sees, and the dashboard's scrape-now records
+   * only in its activity feed.
+   */
   internal suspend fun submitScrapeRequest(
     agentContext: AgentContext,
     proxy: Proxy,
     path: String,
     encodedQueryParams: String,
-    request: ApplicationRequest,
+    headers: ScrapeHeaders,
+    timeout: Duration = proxy.proxyConfigVals.internal.scrapeRequestTimeoutSecs.seconds,
   ): ScrapeRequestResponse {
-    val scrapeRequest = createScrapeRequest(agentContext, proxy, path, encodedQueryParams, request)
-    val timeoutTime = proxy.proxyConfigVals.internal.scrapeRequestTimeoutSecs.seconds
+    val scrapeRequest = createScrapeRequest(agentContext, proxy, path, encodedQueryParams, headers)
+    val timeoutTime = timeout
 
     // A terminal response here means the agent disconnected or the request timed out.
     dispatchScrapeRequest(agentContext, proxy, scrapeRequest, timeoutTime)?.let { return it }
@@ -362,7 +387,7 @@ internal object ProxyHttpRoutes {
         fetchDuration = scrapeRequest.ageDuration(),
       )
     else
-      buildSuccessResponse(proxy, path, scrapeRequest, scrapeResults, statusCode, contentType)
+      buildSuccessResponse(proxy, scrapeRequest, scrapeResults, statusCode, contentType)
   }
 
   // Registers the request, sends it to the agent, and awaits completion, cleaning up the request map, and any chunked
@@ -456,7 +481,6 @@ internal object ProxyHttpRoutes {
   // 413/502 response instead when the gzipped payload is a zip bomb or is corrupt.
   private fun buildSuccessResponse(
     proxy: Proxy,
-    path: String,
     scrapeRequest: ScrapeRequestWrapper,
     scrapeResults: ScrapeResults,
     statusCode: HttpStatusCode,
@@ -489,13 +513,6 @@ internal object ProxyHttpRoutes {
         )
       }
 
-    proxy.metrics {
-      // Observe the byte count already computed during unzip (gzipped) or the small plain payload's
-      // length, instead of re-encoding the decoded text just to measure it.
-      val encoding = if (scrapeResults.srZipped) ProxyMetrics.ENCODING_GZIPPED else ProxyMetrics.ENCODING_PLAIN
-      observeResponseBytes(path, encoding, decoded.byteCount.toDouble())
-    }
-
     return ScrapeRequestResponse(
       statusCode = statusCode,
       contentType = contentType,
@@ -504,6 +521,10 @@ internal object ProxyHttpRoutes {
       url = scrapeResults.srUrl,
       updateMsg = "success",
       fetchDuration = scrapeRequest.ageDuration(),
+      // The byte count already computed during unzip (gzipped) or the small plain payload's length, so the size need
+      // not be measured again by re-encoding the decoded text.
+      byteCount = decoded.byteCount,
+      encoding = if (scrapeResults.srZipped) ProxyMetrics.ENCODING_GZIPPED else ProxyMetrics.ENCODING_PLAIN,
     )
   }
 
@@ -526,19 +547,14 @@ internal object ProxyHttpRoutes {
       else -> "upstream_error"
     }
 
-  // Prometheus sends its scrape timeout as a decimal number of seconds. A missing, malformed, or non-positive value
-  // means the client set no limit.
-  internal fun scrapeTimeoutFromHeader(value: String?): Duration? =
-    value?.trim()?.toDoubleOrNull()?.takeIf { it.isFinite() && it > 0.0 }?.seconds
-
   private fun createScrapeRequest(
     agentContext: AgentContext,
     proxy: Proxy,
     path: String,
     encodedQueryParams: String,
-    request: ApplicationRequest,
+    headers: ScrapeHeaders,
   ): ScrapeRequestWrapper {
-    val authHeader = request.header(HttpHeaders.Authorization).orEmpty()
+    val authHeader = headers.authorization
 
     if (authHeader.isNotEmpty() &&
       !proxy.options.isTlsEnabled &&
@@ -554,10 +570,38 @@ internal object ProxyHttpRoutes {
       pathVal = path,
       encodedQueryParamsVal = encodedQueryParams,
       authHeaderVal = authHeader,
-      acceptVal = request.header(HttpHeaders.Accept),
+      acceptVal = headers.accept,
       debugEnabledVal = proxy.options.debugEnabled,
-      scrapeTimeoutVal = scrapeTimeoutFromHeader(request.header(SCRAPE_TIMEOUT_HEADER)),
+      scrapeTimeoutVal = headers.scrapeTimeout,
     )
+  }
+}
+
+/**
+ * What a scrape asks the agent for, from the request that started it: the Prometheus scrape's headers on the scrape
+ * route, or the dashboard's own for a scrape-now, which has no request of its own to forward.
+ *
+ * @param authorization the Authorization header, forwarded to the target; empty for none
+ * @param accept the Accept header, which picks the exposition format
+ * @param scrapeTimeout how long the client waits, which the agent stops the target's fetch at; null for no limit
+ */
+internal data class ScrapeHeaders(
+  val authorization: String = "",
+  val accept: String? = null,
+  val scrapeTimeout: Duration? = null,
+) {
+  companion object {
+    fun of(request: ApplicationRequest) =
+      ScrapeHeaders(
+        authorization = request.header(HttpHeaders.Authorization).orEmpty(),
+        accept = request.header(HttpHeaders.Accept),
+        scrapeTimeout = scrapeTimeoutFromHeader(request.header(ProxyHttpRoutes.SCRAPE_TIMEOUT_HEADER)),
+      )
+
+    // Prometheus sends its scrape timeout as a decimal number of seconds. A missing, malformed, or non-positive value
+    // means the client set no limit.
+    internal fun scrapeTimeoutFromHeader(value: String?): Duration? =
+      value?.trim()?.toDoubleOrNull()?.takeIf { it.isFinite() && it > 0.0 }?.seconds
   }
 }
 
@@ -569,6 +613,9 @@ internal data class ScrapeRequestResponse(
   val failureReason: String = "",
   val url: String = "",
   val fetchDuration: Duration,
+  // For a body that was decoded: its size, and whether it came gzipped (ProxyMetrics.ENCODING_GZIPPED) or plain.
+  val byteCount: Long = 0,
+  val encoding: String? = null,
 )
 
 internal data class ResponseResults(

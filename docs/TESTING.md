@@ -272,7 +272,8 @@ Two support helpers also live here (not test classes themselves):
 - **ProxyHttpConfigTest** — HTTP server config: Ktor compression, status pages, CORS; a call cancelled by a client
   disconnect, or a write to one that has gone, is logged at DEBUG, while an unexpected exception still logs at WARN
 - **ProxyHttpRoutesTest** — HTTP routing: path resolution, query params, error responses, compression,
-  ensureLeadingSlash; a handler that times out or is cancelled drops its scrape's unfinished chunked transfer
+  ensureLeadingSlash; a handler that times out or is cancelled drops its scrape's unfinished chunked transfer; a scrape
+  times out at a timeout it is given rather than the proxy's
 - **ProxyPathManagerTest** — Path registration/unregistration, consolidated mode, agent selection, concurrent access;
   a live agent's path is taken over only by the same auth identity; the activity feed gets a new registration but not
   a repeat, a take-over as one naming the agent it displaced, a rejection the first time the agent is told it, a path
@@ -342,17 +343,28 @@ Two support helpers also live here (not test classes themselves):
   late subscriber, fan-out to multiple subscribers, and AgentContextManager emitting on connect only
 - **ProxyDashboardHtmlTest** (`dashboard/`) — Dashboard renderer: top-level out-of-band push regions, agent- and
   path-centric layouts, tolerant selection and layout parsing, departed paths, an agent's identity in its row and
-  detail, links at a root mount, the nav, the script's after-push work, an agent's uptime, failover markers,
-  accessibility, and the WebSocket connection indicator
+  detail, links at a root mount, the nav, the script's after-push work and scrape-now request, an agent's uptime,
+  failover markers, accessibility, and the WebSocket connection indicator
 - **PathTableHtmlTest** (`dashboard/`) — the Paths view's table and search: the history strip (one element per run, a
   floored percentage, no status pill, visible under forced colours), the Identity column (shown while agent auth is
   on, the legacy token as a shared token), the search (matching rows, the match count, the empty states, the form
   outside the pushed table, an escaped query, the script sending the URL's query, and tolerant parsing of it from the
-  socket), and the failing count and the tab's title
+  socket), the Scrape button on a live path and the result panel outside the pushed table, and the failing count and
+  the tab's title
 - **ActivityHtmlTest** (`dashboard/`) — the Activity view: each line's time, event, agent, path, and detail, newest
   first; problems as crit tags and take-overs as warn tags; a burst's count and first paths; dashes for a line with no
   agent; the Identity column while agent auth is on; escaped values; the search, its match count, and its empty
   states; the form at the view's own route; and the push carrying the status bar and the table, out of band
+- **ScrapeSummaryTest** (`dashboard/`) — a scrape-now's summary: status, outcome, time, size, content type, families,
+  samples, and `# EOF`; a consolidated path's agents merged as Prometheus sees them; a failure's reason cut and escaped;
+  a long body cut at its last line break, or short of a surrogate pair with none; and control characters escaped but for
+  line breaks, tabs, and carriage returns
+- **ScrapeNowTest** (`dashboard/`) — scrape-now with its scrape stood in for: the summary and the activity feed's line
+  naming the browser; a path not registered, without an agent, or on a proxy not running refused; a path at most once a
+  cooldown; at most a few at once; and a failed scrape-now kept apart from a successful one in the feed
+- **ScrapeNowHtmlTest** (`dashboard/`) — the scrape-now result panel: the status, path, facts, and start of the body; a
+  cut body and an EOF named; a failure's reason without a body; the body escaped; a refusal and why; and sizes in bytes,
+  KB, or MB
 - **RowFilterTest** (`dashboard/`) — the Paths and Activity views' search: a query matching the path, any agent's
   name, the target URL, or the identity (the legacy token by its label, not its internal name), ignoring case, and a
   departed path's agent; "problems only" keeping failing and departed paths; both having to match; browser input
@@ -375,11 +387,12 @@ One support helper also lives here (not a test class itself):
 
 ### Unit Tests — Common (`common/`)
 
-- **AgentValuesTest** — what the proxy does to a value an agent supplies before keeping or logging it: `truncate`
-  never splits a surrogate pair; `shownValue` cuts and marks a long value and escapes every control character and line
-  separator, so a value can't forge a log line; `pathCharacterProblem` names a control character, whitespace, `?`, or
-  `#`, which no scrape's request path can carry, and accepts every other character; and `labelsProblem` names a label
-  service discovery can't serve, with the name escaped
+- **AgentValuesTest** — what the proxy does to a value an agent supplies before keeping or logging it: `truncate` never
+  splits a surrogate pair; `shownValue` cuts and marks a long value and escapes every control character and line
+  separator, so a value can't forge a log line, and `escaped` does the same but for the characters it is told to keep;
+  `pathCharacterProblem` names a control character, whitespace, `?`, or `#`, which no scrape's request path can carry,
+  and accepts every other character; and `labelsProblem` names a label service discovery can't serve, with the name
+  escaped
 - **BaseOptionsTest** — Shared CLI argument parsing, config loading, boolean resolution; in a forked JVM, a
   standalone agent or proxy whose config URL carries credentials exits 1 on a setting it rejects, with one log line
   and no credentials or uncaught stack trace
@@ -566,7 +579,9 @@ mechanism that the standard suite cannot reach:
   topology change still shows on the next page, a gone path staying in the path layout after more scrapes than
   the recent-scrapes queue holds, an agent's identity in both layouts with the path search filtering from the URL
   and over the socket, a path the agent's identity may not register in the Activity view, from a GET and a push, and
-  a session kept open through a push that fails to render
+  a session kept open through a push that fails to render, and a scrape-now against a stub target returning what it
+  had while the scrape metrics, the History, and the recent scrapes stay as Prometheus's scrape left them, refused
+  within its cooldown, for an unknown path, without htmx's header, or from another origin, and absent when off
 - **TlsMutualAuthRejectionTest** — the negative mutual-TLS path over a real Netty handshake, which the
   in-process TLS specs cannot perform (item 28 in `docs/archive/CODE_REVIEW_JUNE_2026.md`)
 

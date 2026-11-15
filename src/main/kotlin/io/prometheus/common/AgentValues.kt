@@ -66,21 +66,32 @@ internal object AgentValues {
     maxChars: Int = SHOWN_VALUE_CHARS,
   ): String {
     val cut = truncate(value, maxChars).let { if (it.length < value.length) "$it..." else it }
-    return if (cut.none { it.isUnsafeInLog() })
-      cut
+    return escaped(cut)
+  }
+
+  /**
+   * [value] with each control character and line or paragraph separator escaped, as [shownValue] escapes them
+   * (`\n`, `\r`, `\t`, or `\uXXXX`), but for those [kept], which are left as they are: the dashboard's scrape-now
+   * keeps a body's line breaks, tabs, and carriage returns, the whitespace it is laid out with.
+   */
+  fun escaped(
+    value: String,
+    kept: (Char) -> Boolean = { false },
+  ): String =
+    if (value.none { it.isUnsafeInLog() && !kept(it) })
+      value
     else
-      buildString(cut.length + ESCAPE_ALLOWANCE) {
-        cut.forEach { c ->
+      buildString(value.length + ESCAPE_ALLOWANCE) {
+        value.forEach { c ->
           when {
+            kept(c) || !c.isUnsafeInLog() -> append(c)
             c == '\n' -> append("\\n")
             c == '\r' -> append("\\r")
             c == '\t' -> append("\\t")
-            c.isUnsafeInLog() -> append("\\u%04x".format(c.code))
-            else -> append(c)
+            else -> append("\\u%04x".format(c.code))
           }
         }
       }
-  }
 
   // A control character (U+0000-U+001F, U+007F-U+009F, NEL among them), or a line or paragraph separator, which some
   // log viewers also break lines at.

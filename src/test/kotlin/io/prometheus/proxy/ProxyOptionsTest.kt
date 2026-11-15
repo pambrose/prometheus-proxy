@@ -582,9 +582,9 @@ class ProxyOptionsTest : StringSpec() {
       val home = System.getenv("HOME").shouldNotBeNull()
       val options =
         proxyOptionsFromConfig(
-          """
+          $$"""
           proxy.auth = [
-            { name = "team-a", token = ${'$'}{HOME}, paths = ["team_a_*"] }
+            { name = "team-a", token = ${HOME}, paths = ["team_a_*"] }
           ]
           """,
         )

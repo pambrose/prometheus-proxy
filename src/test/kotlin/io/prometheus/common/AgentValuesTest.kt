@@ -68,7 +68,7 @@ class AgentValuesTest : StringSpec() {
     // Every other character is left to the scrape route, as before: RFC 3986's unreserved and sub-delims, and also
     // percent-encoded or non-ASCII paths, which a client that sends the path as registered can still scrape.
     "pathCharacterProblem should accept the characters a path could be scraped with before" {
-      val paths = ["app1_metrics", "team-a.metrics~1", "a!b\$c&d'e(f)g*h+i,j;k=l:m@n", "m%C3%A9triques", "métriques"]
+      val paths = ["app1_metrics", "team-a.metrics~1", $$"a!b$c&d'e(f)g*h+i,j;k=l:m@n", "m%C3%A9triques", "métriques"]
       for (path in paths) {
         withClue(path) { pathCharacterProblem(path).shouldBeNull() }
       }
@@ -100,6 +100,13 @@ class AgentValuesTest : StringSpec() {
 
       problem shouldContain "'a\\r\\nb'"
       problem.none { it == '\r' || it == '\n' }.shouldBeTrue()
+    }
+
+    // The dashboard's scrape-now shows a body laid out with line breaks, tabs, and carriage returns, which it keeps.
+    "escaped should keep the characters it is told to and escape the rest as shownValue does" {
+      AgentValues.escaped("a\r\nb\u001b[2Jc\u2028") shouldBe "a\\r\\nb\\u001b[2Jc\\u2028"
+      AgentValues.escaped("a\r\nb\u001b[2Jc") { it == '\n' || it == '\r' } shouldBe "a\r\nb\\u001b[2Jc"
+      AgentValues.escaped("plain") shouldBe "plain"
     }
   }
 }

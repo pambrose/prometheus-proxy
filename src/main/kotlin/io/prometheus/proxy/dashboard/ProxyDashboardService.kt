@@ -29,9 +29,11 @@ import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.http.CacheControl
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.CachingOptions
 import io.ktor.http.parseQueryString
+import io.ktor.http.withCharset
 import io.ktor.server.application.createApplicationPlugin
 import io.ktor.server.application.createRouteScopedPlugin
 import io.ktor.server.application.install
@@ -43,7 +45,11 @@ import io.ktor.server.plugins.cachingheaders.CachingHeaders
 import io.ktor.server.response.respondBytes
 import io.ktor.server.response.respondRedirect
 import io.ktor.server.response.respondText
+import io.ktor.server.plugins.origin
+import io.ktor.server.request.ApplicationRequest
+import io.ktor.server.request.httpMethod
 import io.ktor.server.routing.get
+import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
@@ -62,6 +68,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -85,7 +93,8 @@ import kotlin.time.TimeMark
 import kotlin.time.TimeSource
 
 /**
- * Read-only operational dashboard, served from its own Ktor server on its own port.
+ * Operational dashboard, served from its own Ktor server on its own port. It reads the proxy's state and changes none
+ * of it; its one action, scrape-now ([ScrapeNow]), scrapes a path as Prometheus would.
  *
  * Deliberately **not** the admin port: that one is a Jetty servlet container created inside
  * `common-utils`, whose only extension point is a `path -> Servlet` map — Ktor routing, the HTML DSL,
@@ -185,19 +194,34 @@ internal class ProxyDashboardService(
   // What every page and session renders from; the push loop refills it on each wake. See SnapshotCache.
   private val snapshots = SnapshotCache(refreshInterval) { snapshot() }
 
-  // Runs before the WebSocket upgrade, so a refused page never receives a frame. See isOriginAllowed.
-  private val originCheck =
-    createRouteScopedPlugin("DashboardOriginCheck") {
+  // Null unless proxy.dashboard.scrapeNowEnabled, which leaves the route unregistered, so it answers 404.
+  private val scrapeNow = if (proxy.proxyConfigVals.dashboard.scrapeNowEnabled) ScrapeNow(proxy) else null
+
+  // The guard on every route the page's script calls, the WebSocket and the actions, so a page on another site can't
+  // use one through a viewer's browser. It refuses a foreign Origin (see isOriginAllowed). An action, any request but
+  // a GET (the WebSocket handshake is one), must also carry the header htmx and the page's script send, which another
+  // site's page can't add without a CORS preflight the dashboard never answers; the origin check alone lets through a
+  // request with no Origin. Runs before the WebSocket upgrade, so a refused page never receives a frame.
+  private val pageGuard =
+    createRouteScopedPlugin("DashboardPageGuard") {
       onCall { call ->
-        val origin = call.request.headers[HttpHeaders.Origin]
-        if (!isOriginAllowed(origin, call.request.headers[HttpHeaders.Host], allowedOrigins)) {
-          logger.info {
-            "Refused a dashboard WebSocket from origin $origin; add it to proxy.dashboard.allowedOrigins if expected"
-          }
-          call.respondText("Origin not allowed", ContentType.Text.Plain, HttpStatusCode.Forbidden)
-        }
+        pageRefusal(call.request)?.also { call.respondText(it, ContentType.Text.Plain, HttpStatusCode.Forbidden) }
       }
     }
+
+  // Why pageGuard refuses [request], or null when it may proceed.
+  private fun pageRefusal(request: ApplicationRequest): String? {
+    val origin = request.headers[HttpHeaders.Origin]
+    if (!isOriginAllowed(origin, request.headers[HttpHeaders.Host], allowedOrigins)) {
+      logger.info {
+        "Refused a dashboard request from origin $origin; add it to proxy.dashboard.allowedOrigins if expected"
+      }
+      return "Origin not allowed"
+    }
+    if (request.httpMethod != HttpMethod.Get && request.headers[HX_REQUEST_HEADER] != "true")
+      return "Only the dashboard's page may ask for this"
+    return null
+  }
 
   // Application-wide rather than route-scoped, so it runs before routing and covers every page, asset, and the
   // WebSocket. See isHostAllowed.
@@ -297,7 +321,7 @@ internal class ProxyDashboardService(
           // URL wants the whole dashboard with the agent selected. htmx marks its own requests with
           // HX-Request -- except a history-restore, which fetches the full URL expecting a full page.
           val htmxSwap =
-            call.request.headers["HX-Request"] == "true" &&
+            call.request.headers[HX_REQUEST_HEADER] == "true" &&
               call.request.headers["HX-History-Restore-Request"] != "true"
           if (htmxSwap)
             call.respondText(
@@ -311,8 +335,26 @@ internal class ProxyDashboardService(
             }
         }
 
+        scrapeNow?.also { scrapes ->
+          route("$routeBase/scrape") {
+            install(pageGuard)
+            post {
+              // The address, not the host name, which could cost a reverse DNS lookup on every click.
+              val result = scrapes.scrape(
+                call.request.queryParameters["path"].orEmpty(),
+                call.request.origin.remoteAddress,
+              )
+              call.respondText(
+                ScrapeNowHtml.render(result),
+                ContentType.Text.Html.withCharset(Charsets.UTF_8),
+                result.status,
+              )
+            }
+          }
+        }
+
         route("$routeBase/events") {
-          install(originCheck)
+          install(pageGuard)
           webSocket {
             if (!reserveSession()) {
               close(CloseReason(CloseReason.Codes.TRY_AGAIN_LATER, "Too many dashboard sessions"))
@@ -412,8 +454,14 @@ internal class ProxyDashboardService(
         if (!session.renderFailed) logger.error(e) { "Failed to render a dashboard push" }
         session.renderFailed = true
       }.getOrNull() ?: return
+    // A send fails when the browser has gone, which is routine. Only this coroutine's own cancellation, as the
+    // service stops, is passed on: a gone browser's cancelled channel fails a send with a CancellationException too,
+    // and passing that on would end the loop that pushes to every other session.
     runCatching { session.send(fragment) }
-      .onFailure { logger.debug { "Dashboard push not sent: ${it.simpleClassName}" } }
+      .onFailure {
+        currentCoroutineContext().ensureActive()
+        logger.debug { "Dashboard push not sent: ${it.simpleClassName}" }
+      }
   }
 
   /**
@@ -544,6 +592,9 @@ internal class ProxyDashboardService(
     private const val PING_TIMEOUT_MILLIS = 15_000L
     private const val MAX_INCOMING_FRAME_BYTES = 64L * 1024
 
+    // Sent by htmx, and by the page's script with each scrape-now.
+    internal const val HX_REQUEST_HEADER = "HX-Request"
+
     // Frames a session may have waiting before it is closed. A reading browser drains each push long before the next.
     private const val OUTGOING_FRAME_BUFFER = 32
 
@@ -618,11 +669,11 @@ internal class ProxyDashboardService(
       }.getOrNull() ?: RowFilter.NONE
 
     /**
-     * Whether a WebSocket handshake carrying [origin] may proceed, given the request's [host] header.
+     * Whether a WebSocket handshake or an action carrying [origin] may proceed, given the request's [host] header.
      *
-     * No Origin is allowed: browsers send one on every WebSocket handshake, so its absence means a non-browser
-     * client, and this check exists to stop a browser being turned against the dashboard. Otherwise the origin
-     * must name the host the request was addressed to -- the dashboard's own page -- or match an [allowedOrigins]
+     * No Origin is allowed: browsers send one on every WebSocket handshake and every POST, so its absence means a
+     * non-browser client, and this check exists to stop a browser being turned against the dashboard. Otherwise the
+     * origin must name the host the request was addressed to -- the dashboard's own page -- or match an [allowedOrigins]
      * entry, for a dashboard behind a reverse proxy that rewrites Host. Anything unparseable, including the opaque
      * `null` origin, is refused.
      *

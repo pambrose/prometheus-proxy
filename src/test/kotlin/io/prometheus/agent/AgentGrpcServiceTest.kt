@@ -24,7 +24,6 @@ import brave.Span
 import brave.Tracing
 import brave.handler.MutableSpan
 import brave.handler.SpanHandler
-import brave.handler.SpanHandler.Cause
 import brave.propagation.TraceContext
 import com.pambrose.common.concurrent.await
 import com.pambrose.common.service.ZipkinReporterService
@@ -77,6 +76,7 @@ import io.prometheus.grpc.registerPathResponse
 import io.prometheus.grpc.scrapeRequest
 import io.prometheus.grpc.unregisterPathResponse
 import io.prometheus.common.captureLogs
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
@@ -1568,8 +1568,10 @@ class AgentGrpcServiceTest : StringSpec() {
             channel.send(20)
             // Simulate producer error (e.g., processScrapeResults throws)
             error("simulated producer error")
-          } catch (_: IllegalStateException) {
-            // Error handled (mirrors runCatchingCancellable + onFailure)
+          } catch (e: IllegalStateException) {
+            // Error handled (mirrors runCatchingCancellable + onFailure): a cancellation, an IllegalStateException too,
+            // is passed on.
+            if (e is CancellationException) throw e
           } finally {
             channel.close()
           }

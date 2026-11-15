@@ -18,6 +18,7 @@
 
 package io.prometheus.harness
 
+import com.pambrose.common.util.runCatchingCancellable
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeTrue
@@ -31,11 +32,17 @@ import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocket
+import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.get
 import io.ktor.client.request.header
+import io.ktor.client.request.post
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.engine.embeddedServer
+import io.ktor.server.response.respondText
+import io.ktor.server.routing.get
+import io.ktor.server.routing.routing
 import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
@@ -47,15 +54,20 @@ import io.prometheus.Agent
 import io.prometheus.Proxy
 import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.common.LOOPBACK_HOST
+import io.prometheus.common.startAndAwaitReady
+import io.prometheus.metrics.model.snapshots.CounterSnapshot
+import io.prometheus.metrics.model.snapshots.HistogramSnapshot
 import io.prometheus.common.TestPorts
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.proxy.dashboard.DashboardFixtures.scrapeRecord
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml
 import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.ASSET_DIR
+import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.HX_REQUEST_HEADER
 import io.prometheus.proxy.dashboard.ProxySnapshot
 import kotlinx.coroutines.withTimeout
 import kotlin.time.Duration.Companion.seconds
+import io.ktor.server.cio.CIO as ServerCIO
 
 /**
  * The operational dashboard (Feature 5) over the Netty transport.
@@ -113,6 +125,7 @@ class ProxyWebDashboardTest : StringSpec() {
     configFile: String = CONFIG_FILE,
     dashboardArgs: List<String> = ["--dashboard", "--dashboard_port", "$dashboardPort"],
     newClient: () -> HttpClient = { HttpClient(CIO) },
+    metricsEnabled: Boolean = false,
     block: suspend DashboardEnv.() -> Unit,
   ) {
     PrometheusRegistry.defaultRegistry.clear()
@@ -123,6 +136,7 @@ class ProxyWebDashboardTest : StringSpec() {
         args = ["--agent_port", "$grpcPort"] + dashboardArgs,
         proxyPort = httpPort,
         configArgs = ["--config", configFile],
+        metricsEnabled = metricsEnabled,
       )
     val t1 = System.nanoTime()
 
@@ -151,6 +165,16 @@ class ProxyWebDashboardTest : StringSpec() {
   }
 
   private suspend fun DefaultClientWebSocketSession.nextText() = (incoming.receive() as Frame.Text).readText()
+
+  // Every series of [name] in the default registry, summed: a counter's values, or a histogram's observation counts.
+  private fun counted(name: String): Double =
+    PrometheusRegistry.defaultRegistry.scrape().find { it.metadata.name == name }?.dataPoints.orEmpty().sumOf { point ->
+      when (point) {
+        is CounterSnapshot.CounterDataPointSnapshot -> point.value
+        is HistogramSnapshot.HistogramDataPointSnapshot -> point.count.toDouble()
+        else -> 0.0
+      }
+    }
 
   // The status of a GET for [path] on this dashboard whose Host header names [host] rather than the address it
   // connects to.
@@ -219,7 +243,7 @@ class ProxyWebDashboardTest : StringSpec() {
     "the dashboard must stay off unless enabled" {
       withDashboard(OFF_HTTP_PORT, OFF_GRPC_PORT, OFF_DASHBOARD_PORT, dashboardArgs = []) {
         // Nothing should be listening on the dashboard port: the feature is opt-in, matching admin and metrics.
-        runCatching { client.get("$base/dashboard") }
+        runCatchingCancellable { client.get("$base/dashboard") }
           .isFailure
           .shouldBeTrue()
       }
@@ -255,7 +279,7 @@ class ProxyWebDashboardTest : StringSpec() {
         full shouldContain "hx-ws:connect"
 
         // htmx's row click sends HX-Request -> just the detail pane, no shell.
-        val fragment = client.get(url) { header("HX-Request", "true") }.bodyAsText()
+        val fragment = client.get(url) { header(HX_REQUEST_HEADER, "true") }.bodyAsText()
         fragment shouldNotContain "<body"
         fragment shouldNotContain "hx-ws:connect"
         fragment shouldContain "id=\"detail\""
@@ -263,7 +287,7 @@ class ProxyWebDashboardTest : StringSpec() {
         // A history-restore fetch carries HX-Request but expects the full page back.
         val restore =
           client.get(url) {
-            header("HX-Request", "true")
+            header(HX_REQUEST_HEADER, "true")
             header("HX-History-Restore-Request", "true")
           }.bodyAsText()
         restore shouldContain "<body"
@@ -451,7 +475,7 @@ class ProxyWebDashboardTest : StringSpec() {
         newClient = { HttpClient(CIO) { install(WebSockets) } },
       ) {
         val refused =
-          runCatching {
+          runCatchingCancellable {
             client.webSocket(socketUrl, request = { header(HttpHeaders.Origin, "https://evil.example.com") }) {
               nextText()
             }
@@ -606,6 +630,96 @@ class ProxyWebDashboardTest : StringSpec() {
       }
     }
 
+    // A scrape from the dashboard end to end, against a target the test serves. It returns what the target had, and
+    // leaves no trace in what Prometheus reads: the scrape metrics, the path's History, and the recent scrapes, which a
+    // scrape through the scrape port does change. The route refuses the same path again within its cooldown, a path no
+    // agent serves, a request without htmx's header, and one from another origin. Off, it isn't there at all.
+    "a scrape-now should return what the target had, leaving what Prometheus reads untouched" {
+      val stub =
+        embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
+          routing { get("/metrics") { call.respondText(SCRAPE_STUB_BODY) } }
+        }
+      val stubPort = stub.startAndAwaitReady()
+      try {
+        withDashboard(
+          SCRAPE_HTTP_PORT,
+          SCRAPE_GRPC_PORT,
+          SCRAPE_DASHBOARD_PORT,
+          dashboardArgs = [
+            "--dashboard",
+            "--dashboard_port",
+            "$SCRAPE_DASHBOARD_PORT",
+            "-Dproxy.metrics.port=$SCRAPE_METRICS_PORT",
+          ],
+          metricsEnabled = true,
+        ) {
+          connectAgent().pathManager.registerPath("ui_scrape_metrics", "http://$LOOPBACK_HOST:$stubPort/metrics")
+          eventually(30.seconds) {
+            client.get("$base/dashboard/paths").bodyAsText() shouldContain
+              """id="${ProxyDashboardHtml.SCRAPE_ID_PREFIX}ui_scrape_metrics""""
+          }
+
+          // A Prometheus scrape, through the scrape port, which the metrics, History, and recent scrapes record.
+          client.get("http://$LOOPBACK_HOST:$SCRAPE_HTTP_PORT/ui_scrape_metrics").bodyAsText() shouldContain "demo_up 1"
+          val requests = counted("proxy_scrape_requests")
+          val bytes = counted("proxy_scrape_response_bytes")
+          val recent = proxy.recentScrapes().size
+          requests shouldBe 1.0
+          bytes shouldBe 1.0
+
+          suspend fun scrapeNow(
+            path: String = "ui_scrape_metrics",
+            headers: HttpRequestBuilder.() -> Unit = { header(HX_REQUEST_HEADER, "true") },
+          ) = client.post("$base/dashboard/scrape?path=$path", headers)
+
+          scrapeNow().apply {
+            status shouldBe HttpStatusCode.OK
+            bodyAsText().apply {
+              this shouldContain """<span class="pill ok">200</span>"""
+              this shouldContain "2 families · 2 samples"
+              this shouldContain "demo_up 1"
+            }
+          }
+          scrapeNow().status shouldBe HttpStatusCode.TooManyRequests
+          scrapeNow("nothing_here").status shouldBe HttpStatusCode.NotFound
+          scrapeNow { }.status shouldBe HttpStatusCode.Forbidden
+          scrapeNow {
+            header(HX_REQUEST_HEADER, "true")
+            header(HttpHeaders.Origin, "http://elsewhere.example")
+          }.status shouldBe HttpStatusCode.Forbidden
+
+          counted("proxy_scrape_requests") shouldBe requests
+          counted("proxy_scrape_response_bytes") shouldBe bytes
+          proxy.recentScrapes().size shouldBe recent
+          // A page renders the snapshot of the last refresh, which may predate the scrapes above.
+          eventually(10.seconds) {
+            client.get("$base/dashboard/paths").bodyAsText() shouldContain
+              """aria-label="1 of 1 recent scrapes succeeded""""
+            client.get("$base/dashboard/activity").bodyAsText() shouldContain "scraped now"
+          }
+        }
+
+        withDashboard(
+          SCRAPE_HTTP_PORT,
+          SCRAPE_GRPC_PORT,
+          SCRAPE_DASHBOARD_PORT,
+          dashboardArgs = [
+            "--dashboard",
+            "--dashboard_port",
+            "$SCRAPE_DASHBOARD_PORT",
+            "-Dproxy.dashboard.scrapeNowEnabled=false",
+          ],
+        ) {
+          client.post("$base/dashboard/scrape?path=ui_scrape_metrics") { header(HX_REQUEST_HEADER, "true") }
+            .status shouldBe HttpStatusCode.NotFound
+          client.get("$base/dashboard/paths").bodyAsText() shouldNotContain
+            """id="${ProxyDashboardHtml.SCRAPE_RESULT_ID}""""
+        }
+      } finally {
+        stub.stop(0, 0)
+      }
+    }
+
     // The same coupling through the page routes, which need no WebSocket at all: each GET used to collect a snapshot,
     // so a client looping GETs held the path-map lock as often as it liked (November #18). A page now renders the
     // recent snapshot. No agent connects, no session opens, and the refresh interval outlasts the spec, so the first
@@ -634,7 +748,8 @@ class ProxyWebDashboardTest : StringSpec() {
             listOf("$base/dashboard", "$base/dashboard/paths", "$base/dashboard/agents/1").forEach { url ->
               client.get(url).status shouldBe HttpStatusCode.OK
             }
-            client.get("$base/dashboard/agents/1") { header("HX-Request", "true") }.status shouldBe HttpStatusCode.OK
+            client.get("$base/dashboard/agents/1") { header(HX_REQUEST_HEADER, "true") }.status shouldBe
+              HttpStatusCode.OK
           }
           verify(exactly = 1) { ProxySnapshot.collect(any()) }
         } finally {
@@ -773,6 +888,20 @@ class ProxyWebDashboardTest : StringSpec() {
     private const val RENDER_FAILURE_HTTP_PORT = TestPorts.DASHBOARD_UI_RENDER_FAILURE_HTTP_PORT
     private const val RENDER_FAILURE_GRPC_PORT = TestPorts.DASHBOARD_UI_RENDER_FAILURE_GRPC_PORT
     private const val RENDER_FAILURE_DASHBOARD_PORT = TestPorts.DASHBOARD_UI_RENDER_FAILURE_DASHBOARD_PORT
+
+    private const val SCRAPE_HTTP_PORT = TestPorts.DASHBOARD_UI_SCRAPE_HTTP_PORT
+    private const val SCRAPE_GRPC_PORT = TestPorts.DASHBOARD_UI_SCRAPE_GRPC_PORT
+    private const val SCRAPE_DASHBOARD_PORT = TestPorts.DASHBOARD_UI_SCRAPE_DASHBOARD_PORT
+    private const val SCRAPE_METRICS_PORT = TestPorts.DASHBOARD_UI_SCRAPE_METRICS_PORT
+    private val SCRAPE_STUB_BODY =
+      """
+      # HELP demo_up Whether the demo is up.
+      # TYPE demo_up gauge
+      demo_up 1
+      # TYPE demo_requests counter
+      demo_requests_total 42
+
+      """.trimIndent()
 
     private const val PAGE_CACHE_HTTP_PORT = TestPorts.DASHBOARD_UI_PAGE_CACHE_HTTP_PORT
     private const val PAGE_CACHE_GRPC_PORT = TestPorts.DASHBOARD_UI_PAGE_CACHE_GRPC_PORT

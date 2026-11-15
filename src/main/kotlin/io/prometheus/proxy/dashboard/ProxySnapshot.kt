@@ -174,6 +174,8 @@ internal data class ProxySnapshot(
   val authEnabled: Boolean = false,
   // The activity feed, newest first; empty with the dashboard off, when nothing records.
   val activity: List<ActivityEntry> = emptyList(),
+  // Whether each live path has a Scrape button, proxy.dashboard.scrapeNowEnabled.
+  val scrapeNowEnabled: Boolean = false,
 ) {
   fun agent(agentId: String): AgentView? = agents.firstOrNull { it.agentId == agentId }
 
@@ -314,6 +316,7 @@ internal data class ProxySnapshot(
         scrapePort = proxy.scrapePort,
         authEnabled = proxy.agentAuthManager.isEnabled,
         activity = proxy.activityLog?.entries().orEmpty(),
+        scrapeNowEnabled = proxy.proxyConfigVals.dashboard.scrapeNowEnabled,
       )
     }
   }
