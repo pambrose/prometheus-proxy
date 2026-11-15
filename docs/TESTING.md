@@ -335,7 +335,9 @@ Two support helpers also live here (not test classes themselves):
   `finish()` before it or after it would hide the race
 - **ScrapeRequestWrapperTest** — Scrape request lifecycle, timeout behavior, response delivery
 - **AgentAuthManagerTest** — Per-agent auth: path-glob matching, token resolution (including the legacy allow-all
-  token), `isEnabled`, and fail-fast rejection of empty, duplicate or colliding identities
+  token), `isEnabled`, and fail-fast rejection of empty, duplicate or colliding identities and of the reserved name
+  `legacy-agent-token`, with or without the legacy token set (a name that only resembles it is accepted); read from a
+  config file through a MockK `Proxy`, the reserved name fails startup as `Invalid configuration:`
 - **AgentAuthServerInterceptorTest** — gRPC auth interceptor: a valid token exposes the resolved identity in the
   context; a missing, unknown or same-length wrong token closes the call with UNAUTHENTICATED, and goes in the
   activity feed, naming its host, a host's repeats counted on its line

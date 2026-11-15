@@ -25,7 +25,13 @@ import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
+import io.mockk.every
+import io.mockk.mockk
+import io.prometheus.Proxy
+import io.prometheus.common.BaseOptions.Companion.failOnInvalidConfig
+import io.prometheus.common.ConfigLoadException
 import io.prometheus.common.awaitOnDaemonThread
+import io.prometheus.common.proxyOptionsFromConfig
 import io.prometheus.proxy.AgentAuthManager.AuthEntry
 import io.prometheus.proxy.AgentAuthManager.Companion.LEGACY_IDENTITY_NAME
 import kotlin.random.Random
@@ -33,6 +39,10 @@ import kotlin.time.Duration.Companion.seconds
 
 class AgentAuthManagerTest : StringSpec() {
   private fun identity(vararg patterns: String): AgentIdentity = AgentIdentity("test", ByteArray(0), patterns.toList())
+
+  // The refusal, in full: it names the entry and why, and holds no token value.
+  private val reservedNameMessage =
+    "proxy.auth identity name '$LEGACY_IDENTITY_NAME' is reserved for the legacy proxy.agentToken"
 
   // The regex the glob matcher replaced: `*` as `.*`, `?` as `.`, anything else literal. Correct, but it backtracks,
   // so it serves only as a reference on short inputs.
@@ -237,13 +247,53 @@ class AgentAuthManagerTest : StringSpec() {
       }
     }
 
-    "a per-agent identity named like the legacy identity collides with the legacy token" {
+    "a per-agent identity named like the legacy identity is refused as reserved alongside the legacy token" {
       shouldThrow<IllegalArgumentException> {
         AgentAuthManager.create(
           [AuthEntry(LEGACY_IDENTITY_NAME, "tok", emptyList())],
           legacyToken = "legacy-secret",
         )
-      }
+      }.message shouldBe reservedNameMessage
+    }
+
+    // With no proxy.agentToken there was nothing for the name to collide with, so the entry loaded, and the dashboard
+    // then showed that real identity as "shared token". The name is reserved whether or not the token is set.
+    "a per-agent identity named like the legacy identity is refused without a legacy token" {
+      shouldThrow<IllegalArgumentException> {
+        AgentAuthManager.create([AuthEntry(LEGACY_IDENTITY_NAME, "tok", ["team_a_*"])], legacyToken = "")
+      }.message shouldBe reservedNameMessage
+    }
+
+    // The dashboard's identityLabel matches the name exactly, so only the exact name is reserved.
+    "a name that only resembles the legacy identity's is accepted" {
+      val manager =
+        AgentAuthManager.create(
+          [
+            AuthEntry("$LEGACY_IDENTITY_NAME-2", "tok_a", emptyList()),
+            AuthEntry(LEGACY_IDENTITY_NAME.uppercase(), "tok_b", emptyList()),
+          ],
+          legacyToken = "legacy-secret",
+        )
+      manager.resolveToken("tok_a")?.name shouldBe "$LEGACY_IDENTITY_NAME-2"
+      manager.resolveToken("tok_b")?.name shouldBe LEGACY_IDENTITY_NAME.uppercase()
+      manager.resolveToken("legacy-secret")?.name shouldBe LEGACY_IDENTITY_NAME
+    }
+
+    // How a standalone proxy reports it: Proxy.main builds the Proxy, and with it the manager, under
+    // failOnInvalidConfig, which logs one "Invalid configuration:" line and exits 1; embedded = true throws that line
+    // as a ConfigLoadException instead, so the test can read it. Read from a config file through the production
+    // factory, so the entry reaches the check as written.
+    "the reserved name in a config file fails startup as an invalid configuration" {
+      val fileOptions =
+        proxyOptionsFromConfig("""proxy.auth = [{ name = "$LEGACY_IDENTITY_NAME", token = "tok", paths = [] }]""")
+      val proxy =
+        mockk<Proxy> {
+          every { proxyConfigVals } returns fileOptions.configVals.proxy
+          every { options } returns fileOptions
+        }
+      val message =
+        shouldThrow<ConfigLoadException> { failOnInvalidConfig(embedded = true) { AgentAuthManager(proxy) } }.message
+      message shouldBe "Invalid configuration: $reservedNameMessage"
     }
 
     // resolveToken() takes the first digest match, so two identities sharing a token silently

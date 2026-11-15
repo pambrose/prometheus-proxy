@@ -16,9 +16,9 @@ tracing can be turned on, and the Docker quick start connects. The dashboard mov
 A standalone proxy or agent with a bad setting now exits with one redacted line instead of a stack trace. Read **Before
 you upgrade**: for embedders, the logging configuration, the exception a bad setting throws, and the protobuf version
 have changed; for everyone, the proxy now cuts a path's target URL to 2048 characters, refuses a path with whitespace, a
-control character, `?`, or `#`, and won't start with a scrape-port idle timeout of `0` or a service discovery target
-that has a query or fragment; and behind nginx, it allows at most 10,000 agents connected with one identity, which is
-every agent when agent auth is off.
+control character, `?`, or `#`, and won't start with a scrape-port idle timeout of `0`, a service discovery target
+that has a query or fragment, or a `proxy.auth` identity named `legacy-agent-token`; and behind nginx, it allows at
+most 10,000 agents connected with one identity, which is every agent when agent auth is off.
 
 ### Before you upgrade
 
@@ -70,6 +70,11 @@ every agent when agent auth is off.
   `proxy.service.discovery.targetPrefix` such as `proxy:8080?x` or `proxy:8080#f` was accepted and given to
   Prometheus as the target, which built broken scrape URLs from it. It now fails the proxy's startup, as a URL with a
   query or fragment already did; remove the `?` or `#` and what follows it.
+- **A `proxy.auth` identity can't be named `legacy-agent-token`.** That is the name the proxy gives the legacy
+  `proxy.agentToken` in its logs, and the dashboard shows it as *shared token*, so an identity of that name would pass
+  for the shared token. The proxy now refuses to start with one, with `Invalid configuration:`, whether or not
+  `proxy.agentToken` is set. Rename the identity before you upgrade; its agents need no change, since they present
+  only its token.
 
 ### New Features
 

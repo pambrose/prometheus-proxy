@@ -124,7 +124,9 @@ legacy token and a `proxy.auth` identity cannot take over each other's live path
 
     `proxy.auth` is a list of objects, so it can only be set in a config file — there is no
     equivalent CLI flag or environment variable, and the `-D` property override (parsed as Java
-    properties) cannot express a list. Identity names must be unique and tokens non-empty; the proxy
+    properties) cannot express a list. Identity names must be unique and tokens non-empty, and no
+    identity may be named `legacy-agent-token`, the name the proxy gives the legacy shared token in its
+    logs (the dashboard shows it as *shared token*), even when `proxy.agentToken` isn't set; the proxy
     fails fast at startup otherwise.
 
     A token can still come from the environment, through HOCON substitution: `token = ${TEAM_A_TOKEN}`
