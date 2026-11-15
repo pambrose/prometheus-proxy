@@ -143,7 +143,7 @@ Every path on one row, with the endpoint behind it and how its last scrape went:
 
 | | |
 |---|---|
-| **Path** | the registered path Prometheus scrapes |
+| **Path** | the registered path Prometheus scrapes, with a button beside it that copies its URL on the proxy, the one to curl, built from the address you opened the dashboard at and the proxy's scrape port |
 | **Agent(s)** | the agent serving it; a consolidated path shows the first plus a `+N` count |
 | **Target** | the URL the agent actually fetches, with a button beside it that copies it to the clipboard |
 | **Src** | `cfg` for a statically configured path, `disc` for one from [dynamic discovery](configuration/agent.md#dynamic-target-discovery) |
@@ -253,10 +253,10 @@ Both are lists, so set them in a config file; see [Dashboard configuration](conf
 - **Read-only.** There is nothing to click that changes proxy state.
 - **No authentication.** Rely on network isolation, as with the admin port; see [Exposure](#exposure) for
   what the dashboard itself guards against.
-- **Consolidated paths report one agent's metadata.** When several agents register the same path, the
-  target URL and source shown are the **first registrant's**. Later agents contribute their contexts —
-  they are counted in the `+N` — but not their own target URL, which matches how path labels have
-  always behaved.
+- **Consolidated paths show one agent's target.** When several agents register the same path, the row
+  names one of them, with the others counted in the `+N`, and shows that agent's target URL and source.
+  When it leaves, the row names the next agent and shows its target. The path's labels, which service
+  discovery serves, stay the first registrant's.
 - **Departed paths age out.** They survive only as long as their last scrape stays in the recent-scrape
   window (`recentScrapesQueueSize`, default 200).
 - **Per-agent identities** from [agent authentication](security/index.md) are not shown. The proxy

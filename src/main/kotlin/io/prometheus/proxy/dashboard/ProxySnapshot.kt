@@ -117,6 +117,8 @@ internal data class ProxySnapshot(
   val scrapes: List<ScrapeRecord>,
   val health: HealthView,
   val maxAgentInactivitySecs: Long,
+  // The port Prometheus scrapes, from which the page builds each path's proxy URL.
+  val scrapePort: Int,
 ) {
   fun agent(agentId: String): AgentView? = agents.firstOrNull { it.agentId == agentId }
 
@@ -248,6 +250,7 @@ internal data class ProxySnapshot(
             scrapeMapThreshold = proxy.options.scrapeRequestMapUnhealthySize,
           ),
         maxAgentInactivitySecs = internal.maxAgentInactivitySecs.toLong(),
+        scrapePort = proxy.scrapePort,
       )
     }
   }

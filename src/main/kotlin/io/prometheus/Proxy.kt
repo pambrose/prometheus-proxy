@@ -183,6 +183,9 @@ class Proxy(
 ) {
   private val httpService = ProxyHttpService(this, proxyPort, isTestMode)
 
+  // The port Prometheus scrapes, for the dashboard's proxy URLs.
+  internal val scrapePort: Int get() = httpService.httpPort
+
   // Null unless proxy.dashboard.enabled. Off by default, matching the admin and metrics posture: the dashboard shows
   // agent names, hostnames, target URLs and recent activity in one place, on a port with no auth.
   private val dashboardService =

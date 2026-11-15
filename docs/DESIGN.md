@@ -545,18 +545,21 @@ The signature component. Seven columns: Path, Agent(s), Target, Src, Last scrape
 - **Dimmed columns:** Target, Src, Last scrape, and Duration render in `ink-3` — supporting facts,
   scanned only after the row is located by path or status.
 - **Row hover:** cells step to `surface-2`. No transition.
-- **Target:** a Copy Button follows the URL in the same cell. A row with no target shows the en dash
-  and no button, since there is nothing to copy.
+- **Path:** a Copy Button follows a registered path and copies its proxy URL.
+- **Target:** a Copy Button follows the URL in the same cell, showing the target of the agent the row
+  names. A row with no target shows the en dash and no button, since there is nothing to copy.
 - **Departed row:** the path cell turns `crit` and a `gone` tag follows the agent name. The row stays
   in place — a path whose agent vanished is the single most important thing this table shows, and
   removing it is how the old interface hid exactly that case.
 
 ### Copy Button
 
-A `24px` icon-only `<button type="button">` that copies the target URL beside it. The only button that
-is not a list row, and still not an action button: it reads the page, not the proxy.
+A `24px` icon-only `<button type="button">` that copies the URL of the cell it sits in: a path's proxy
+URL after the path, a target URL after the target. The only buttons that are not list rows, and still
+not action buttons: they read the page, not the proxy.
 
-- **Rest:** transparent, a `13px` copy glyph in `ink-3`, matching the dimmed Target text it sits in.
+- **Rest:** transparent, a `13px` copy glyph in `ink-3`, quieter than the path it follows and matching
+  the dimmed Target text.
 - **Hover:** fully round `surface-3` background, glyph in `ink`.
 - **Focus:** `2px solid accent`, `outline-offset: 1px` — outside, as on the nav pill.
 - **Copied:** the glyph becomes a check in `ok` for 1.5s. **Failed:** a cross in `crit`, as briefly.
@@ -567,8 +570,11 @@ is not a list row, and still not an action button: it reads the page, not the pr
   nothing is fetched.
 - **Size:** `24px` meets the WCAG 2.2 minimum target size; negative vertical margins keep it from
   making the row taller.
-- **Survives pushes:** the button's id is built from its path, so htmx gives focus back to it after
-  each swap, and the page puts the result back on the new button until it expires.
+- **Survives pushes:** the button's id is built from its kind and its path, so htmx gives focus back to
+  it after each swap, and the page puts the result back on the new button until it expires.
+- **Proxy URL:** the proxy can't know the name the viewer reaches it by, so the button carries the path
+  and the page builds the URL from the host it was opened at and the scrape port the proxy renders onto
+  `<body>`. A departed path has none: the proxy no longer serves it.
 
 ### Connection Beacon
 

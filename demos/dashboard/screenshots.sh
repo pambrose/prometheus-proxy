@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Retakes the screenshots on the website's Live Demo page (website/prometheus-proxy/docs/demo.md) from the running demo:
-# it plays the page's scenarios, captures the dashboard and Grafana in headless Chrome at twice the pixel density in the
-# dark theme, crops each, and writes lossless WebP to website/prometheus-proxy/docs/images/demo/. It puts the demo back
-# to normal when it finishes, or when it fails.
+# it plays the page's scenarios, captures the dashboard and Grafana in headless Chrome at twice the pixel density in both
+# themes, crops each, and writes lossless WebP to website/prometheus-proxy/docs/images/demo/: <name>.webp in the dark
+# theme and <name>-light.webp in the light one, which the page shows by the reader's theme. It puts the demo back to
+# normal when it finishes, or when it fails.
 #
 # `make demo-screenshots` builds the demo from this checkout and starts it first, so the screenshots show the dashboard
 # as it is in the code. Needs Chrome or Chromium (set CHROME to choose one), ImageMagick 7 (`magick`), and `cwebp`.
@@ -17,10 +18,16 @@ DASHBOARD_URL="http://localhost:${DEMO_DASHBOARD_PORT:-8094}/dashboard"
 GRAFANA_URL="http://localhost:${DEMO_GRAFANA_PORT:-3000}"
 PROMETHEUS_URL="http://localhost:${DEMO_PROMETHEUS_PORT:-9090}"
 
-# The CSS width every screenshot is taken at, and the page color below the dashboard's last row, which the Paths views
-# are trimmed to (--bg in ProxyDashboardCss.kt's dark theme).
+# The CSS width every screenshot is taken at, and the themes each is taken in.
 WIDTH=1280
-DARK_BG="#0d1015"
+THEMES=(dark light)
+
+# The page color below the dashboard's last row in a theme, which the Paths views are trimmed to (--bg in
+# ProxyDashboardCss.kt).
+background() { if [[ "$1" == dark ]]; then echo "#0d1015"; else echo "#f2f5f8"; fi; }
+
+# A screenshot's file name in a theme: the dark one keeps the plain name.
+named() { if [[ "$2" == dark ]]; then echo "$1"; else echo "$1-$2"; fi; }
 
 die() {
   echo "Error: $*" >&2
@@ -94,31 +101,39 @@ healthy() {
     ! grep -Eq '<span class="crit">[0-9]+ departed</span>' <<<"$paths"
 }
 
-# Captures a page at WIDTH x the given CSS height, in the dark theme at 2x. Grafana renders after loading its data, so
-# its captures get a longer virtual-time budget.
+# Captures a page at WIDTH x the given CSS height, at 2x, in a theme: the dashboard follows the browser's preferred color
+# scheme. Grafana renders after loading its data, so its captures get a longer virtual-time budget.
 capture() {
-  local url="$1" png="$2" height="$3" budget="${4:-3000}" profile
+  local url="$1" png="$2" height="$3" theme="$4" budget="${5:-3000}" scheme=0 profile
+  [[ "$theme" == dark ]] || scheme=1
   profile="$(mktemp -d)"
   "$CHROME_BIN" --headless=new --disable-gpu --hide-scrollbars --no-first-run --no-default-browser-check \
-    --user-data-dir="$profile" --force-device-scale-factor=2 --blink-settings=preferredColorScheme=0 \
+    --user-data-dir="$profile" --force-device-scale-factor=2 --blink-settings=preferredColorScheme=$scheme \
     --window-size="$WIDTH,$height" --virtual-time-budget="$budget" --screenshot="$png" "$url" >/dev/null 2>&1
   rm -rf "$profile"
   [[ -s "$png" ]] || die "Chrome wrote no screenshot for $url"
 }
 
-# A Paths view: captured taller than the table, then trimmed to its last row.
+# A Paths view in each theme: captured taller than the table, then trimmed to its last row.
 shoot_paths() {
-  local name="$1"
-  capture "$DASHBOARD_URL/paths" "$WORK/$name.png" 900
-  magick "$WORK/$name.png" -background "$DARK_BG" -fuzz 2% -define trim:edges=south -trim +repage "$WORK/$name.png"
+  local name="$1" theme png
+  for theme in "${THEMES[@]}"; do
+    png="$WORK/$(named "$name" "$theme").png"
+    capture "$DASHBOARD_URL/paths" "$png" 900 "$theme"
+    magick "$png" -background "$(background "$theme")" -fuzz 2% -define trim:edges=south -trim +repage "$png"
+  done
 }
 
-# A page cut at a fixed CSS height. The agent detail heights end on a row boundary for the demo's layout: change them
-# with the dashboard's row metrics.
+# A page in each theme, cut at a fixed CSS height. The agent detail heights end on a row boundary for the demo's layout:
+# change them with the dashboard's row metrics. A {theme} in the URL becomes the theme's name, for Grafana, which
+# doesn't follow the browser's scheme.
 shoot_fixed() {
-  local name="$1" url="$2" height="$3" capture_height="${4:-$3}" budget="${5:-3000}"
-  capture "$url" "$WORK/$name.png" "$capture_height" "$budget"
-  magick "$WORK/$name.png" -crop "$((WIDTH * 2))x$((height * 2))+0+0" +repage "$WORK/$name.png"
+  local name="$1" url="$2" height="$3" capture_height="${4:-$3}" budget="${5:-3000}" theme png
+  for theme in "${THEMES[@]}"; do
+    png="$WORK/$(named "$name" "$theme").png"
+    capture "${url//\{theme\}/$theme}" "$png" "$capture_height" "$theme" "$budget"
+    magick "$png" -crop "$((WIDTH * 2))x$((height * 2))+0+0" +repage "$png"
+  done
 }
 
 step "Waiting for every path to answer 200"
@@ -141,7 +156,7 @@ step "A failing service and a hung one"
 wait_until "DemoTargetDown to fire for payments and inventory" alerts_firing 2
 shoot_paths outage
 # Grafana is captured taller than kept: the bottom of its viewport carries a fixed "Powered by" footer.
-shoot_fixed grafana "$GRAFANA_URL/d/prometheus-proxy-demo?orgId=1&kiosk&from=now-15m&to=now" 900 1000 15000
+shoot_fixed grafana "$GRAFANA_URL/d/prometheus-proxy-demo?orgId=1&kiosk&from=now-15m&to=now&theme={theme}" 900 1000 15000
 "$DEMO" recover >/dev/null
 wait_until "the services to recover" healthy 9
 
@@ -166,7 +181,10 @@ shoot_paths evicted
 step "Writing WebP to ${OUT_DIR#"$REPO_DIR"/}"
 mkdir -p "$OUT_DIR"
 for name in agents paths outage grafana discovered evicting evicted; do
-  cwebp -quiet -lossless -z 9 "$WORK/$name.png" -o "$OUT_DIR/$name.webp"
-  printf '  %-11s %s\n' "$name.webp" "$(magick identify -format '%wx%h' "$WORK/$name.png")"
+  for theme in "${THEMES[@]}"; do
+    file="$(named "$name" "$theme")"
+    cwebp -quiet -lossless -z 9 "$WORK/$file.png" -o "$OUT_DIR/$file.webp"
+    printf '  %-22s %s\n' "$file.webp" "$(magick identify -format '%wx%h' "$WORK/$file.png")"
+  done
 done
 step "Done; the demo is back to normal"

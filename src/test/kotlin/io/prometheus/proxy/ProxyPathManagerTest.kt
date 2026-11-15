@@ -371,6 +371,48 @@ class ProxyPathManagerTest : StringSpec() {
       info.agentContexts.map { it.agentId } shouldBe [context1.agentId, context2.agentId]
     }
 
+    // Each agent on a consolidated path scrapes its own target. The entry showed the first registrant's even after that
+    // agent left, so the dashboard named the agent still serving the path beside another agent's URL.
+    "a consolidated path's target should be its first agent's and follow it when that agent leaves" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val west2 = createMockAgentContext(consolidated = true)
+      val west1 = createMockAgentContext(consolidated = true)
+
+      manager.addPath("/shipping", "{}", west2, PathMetadata("http://app/west-2/metrics", "STATIC"))
+      manager.addPath("/shipping", "{}", west1, PathMetadata("http://app/west-1/metrics", "DISCOVERED"))
+      manager.getAgentContextInfo("/shipping").shouldNotBeNull().run {
+        targetUrl shouldBe "http://app/west-2/metrics"
+        pathSource shouldBe "STATIC"
+      }
+
+      manager.removeFromPathManager(west2.agentId, "disconnect")
+
+      manager.getAgentContextInfo("/shipping").shouldNotBeNull().run {
+        agentContexts.map { it.agentId } shouldBe [west1.agentId]
+        targetUrl shouldBe "http://app/west-1/metrics"
+        pathSource shouldBe "DISCOVERED"
+        // An agent's target goes with it, so the entry holds one per agent on the path, never more.
+        agentTargets.keys shouldBe setOf(west1.agentId)
+      }
+    }
+
+    // The agent the dashboard names re-registering with a new target, as after its config changed, shows the new one.
+    "a consolidated path's first agent re-registering should show its new target" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val first = createMockAgentContext(consolidated = true)
+      val second = createMockAgentContext(consolidated = true)
+
+      manager.addPath("/shipping", "{}", first, PathMetadata("http://app/old/metrics"))
+      manager.addPath("/shipping", "{}", second, PathMetadata("http://app/second/metrics"))
+      manager.addPath("/shipping", "{}", first, PathMetadata("http://app/new/metrics"))
+
+      manager.getAgentContextInfo("/shipping").shouldNotBeNull().run {
+        targetUrl shouldBe "http://app/new/metrics"
+        agentTargets.mapValues { it.value.targetUrl } shouldBe
+          mapOf(first.agentId to "http://app/new/metrics", second.agentId to "http://app/second/metrics")
+      }
+    }
+
     // In non-consolidated mode the same re-registration "displaced" the agent from its own path, counting a
     // displacement in proxy_agent_displacement_total that never happened.
     "a non-consolidated agent re-registering its own path should not count as a displacement" {

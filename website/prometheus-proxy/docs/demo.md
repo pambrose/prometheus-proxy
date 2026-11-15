@@ -77,7 +77,8 @@ The dashboard has two views of the same state: one organized by agent, one by pa
 page to see it full size.
 
 <figure markdown="span">
-  [![The Agents view, with agent-east selected](images/demo/agents.webp){ loading=lazy }](images/demo/agents.webp)
+  [![The Agents view, with agent-east selected](images/demo/agents.webp#only-dark){ loading=lazy }](images/demo/agents.webp)
+  [![The Agents view, with agent-east selected](images/demo/agents-light.webp#only-light){ loading=lazy }](images/demo/agents-light.webp)
   <figcaption>The Agents view, with agent-east selected</figcaption>
 </figure>
 
@@ -89,12 +90,14 @@ characters, large enough that the agent sends it to the proxy in chunks.
 proxy to Prometheus, so the proxy monitors itself the same way it serves everything else.
 
 <figure markdown="span">
-  [![The Paths view](images/demo/paths.webp){ loading=lazy }](images/demo/paths.webp)
+  [![The Paths view](images/demo/paths.webp#only-dark){ loading=lazy }](images/demo/paths.webp)
+  [![The Paths view](images/demo/paths-light.webp#only-light){ loading=lazy }](images/demo/paths-light.webp)
   <figcaption>The Paths view</figcaption>
 </figure>
 
 The Paths view lists every path with the agent serving it, its target, and how its last scrape went. `/shipping_metrics`
-shows `agent-west-2 +1`, since two agents serve it. The button beside each target copies the URL.
+shows `agent-west-2 +1`, since two agents serve it. The button after a path copies its URL on the proxy, the one
+to curl, and the one after a target copies the target's URL.
 
 ## Scenarios
 
@@ -109,7 +112,8 @@ watch, and a minute between them lets the graphs catch up.
 ```
 
 <figure markdown="span">
-  [![The Paths view during an outage](images/demo/outage.webp){ loading=lazy }](images/demo/outage.webp)
+  [![The Paths view during an outage](images/demo/outage.webp#only-dark){ loading=lazy }](images/demo/outage.webp)
+  [![The Paths view during an outage](images/demo/outage-light.webp#only-light){ loading=lazy }](images/demo/outage-light.webp)
   <figcaption>payments failing with 500, and inventory timing out</figcaption>
 </figure>
 
@@ -118,7 +122,8 @@ reports a 408 (`upstream_timed_out`), so Prometheus gets a clear answer instead 
 working: one failing target never affects the rest.
 
 <figure markdown="span">
-  [![The demo's Grafana dashboard during the outage](images/demo/grafana.webp){ loading=lazy }](images/demo/grafana.webp)
+  [![The demo's Grafana dashboard during the outage](images/demo/grafana.webp#only-dark){ loading=lazy }](images/demo/grafana.webp)
+  [![The demo's Grafana dashboard during the outage](images/demo/grafana-light.webp#only-light){ loading=lazy }](images/demo/grafana-light.webp)
   <figcaption>The same outage in Grafana</figcaption>
 </figure>
 
@@ -136,7 +141,8 @@ two.
 ```
 
 <figure markdown="span">
-  [![The Paths view with three discovered services](images/demo/discovered.webp){ loading=lazy }](images/demo/discovered.webp)
+  [![The Paths view with three discovered services](images/demo/discovered.webp#only-dark){ loading=lazy }](images/demo/discovered.webp)
+  [![The Paths view with three discovered services](images/demo/discovered-light.webp#only-light){ loading=lazy }](images/demo/discovered-light.webp)
   <figcaption>Three services added through dynamic discovery</figcaption>
 </figure>
 
@@ -153,7 +159,8 @@ just as quietly.
 ```
 
 <figure markdown="span">
-  [![agent-west-2 frozen, counting down to its eviction](images/demo/evicting.webp){ loading=lazy }](images/demo/evicting.webp)
+  [![agent-west-2 frozen, counting down to its eviction](images/demo/evicting.webp#only-dark){ loading=lazy }](images/demo/evicting.webp)
+  [![agent-west-2 frozen, counting down to its eviction](images/demo/evicting-light.webp#only-light){ loading=lazy }](images/demo/evicting-light.webp)
   <figcaption>A frozen agent, counting down to its eviction</figcaption>
 </figure>
 
@@ -162,13 +169,14 @@ silence. A consolidated path waits for every agent that serves it, so `/shipping
 scrapes of both paths give up at its 4-second timeout, recorded as 499 (`client_cancelled`).
 
 <figure markdown="span">
-  [![The Paths view after the eviction](images/demo/evicted.webp){ loading=lazy }](images/demo/evicted.webp)
+  [![The Paths view after the eviction](images/demo/evicted.webp#only-dark){ loading=lazy }](images/demo/evicted.webp)
+  [![The Paths view after the eviction](images/demo/evicted-light.webp#only-light){ loading=lazy }](images/demo/evicted-light.webp)
   <figcaption>After the eviction: a departed path, marked gone</figcaption>
 </figure>
 
 Once the proxy evicts it, agent-west-2's own `/agent_west_2_metrics` stays in the Paths view marked `gone`, the status
-bar counts it as departed, and agent-west-1 carries `/shipping_metrics` alone. That path still shows agent-west-2's
-target, because a consolidated path shows its [first registrant's](web-dashboard.md#limits).
+bar counts it as departed, and agent-west-1 carries `/shipping_metrics` alone, which now shows agent-west-1's own
+target.
 `./demos/dashboard/demo.sh agent-thaw` unfreezes the agent, and it reconnects and registers again.
 
 ### Redundancy

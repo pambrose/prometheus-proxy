@@ -25,6 +25,7 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.string.shouldNotStartWith
 import io.kotest.matchers.string.shouldStartWith
+import io.prometheus.common.TestPorts
 import io.prometheus.proxy.ScrapeRecord
 import kotlinx.html.html
 import kotlinx.html.stream.createHTML
@@ -295,16 +296,56 @@ class ProxyDashboardHtmlTest : StringSpec() {
       html shouldContain """${ProxyDashboardHtml.COPY_ATTR}="http://app1:9090/metrics""""
       html shouldContain """aria-label="Copy the target URL of /app_metrics""""
       // After the URL it copies, in the same cell.
-      (html.indexOf("http://app1:9090/metrics<") in 0..<html.indexOf("<button")) shouldBe true
+      val button = html.indexOf("""id="${ProxyDashboardHtml.COPY_TARGET_ID_PREFIX}app_metrics"""")
+      (html.indexOf("http://app1:9090/metrics<") in 0..<button) shouldBe true
     }
 
     // A dash is the absence of a target, not a value to copy.
-    "a path without a target should have no copy button" {
+    "a path without a target should have no target copy button" {
       val bare = DashboardFixtures.pathView(path = "new_path")
       val html = ProxyDashboardHtml.pushFragment(snapshot(paths = [bare]), null, "/dashboard", DashboardLayout.PATH)
 
       html shouldNotContain ProxyDashboardHtml.COPY_ATTR
-      html shouldNotContain "<button"
+      html shouldNotContain ProxyDashboardHtml.COPY_TARGET_ID_PREFIX
+    }
+
+    // The URL to curl to check a path through the proxy. The proxy can't know the name the viewer reaches it by, so the
+    // button carries the path and the page builds the URL from its own host and the scrape port (see SCRAPE_PORT_ATTR).
+    "each registered path should be followed by a button that copies its proxy URL" {
+      val served = DashboardFixtures.pathView(path = "app_metrics", targetUrl = "http://app1:9090/metrics")
+      val html = ProxyDashboardHtml.pushFragment(snapshot(paths = [served]), null, "/dashboard", DashboardLayout.PATH)
+
+      html shouldContain """id="${ProxyDashboardHtml.COPY_PROXY_ID_PREFIX}app_metrics""""
+      html shouldContain """${ProxyDashboardHtml.PROXY_PATH_ATTR}="/app_metrics""""
+      html shouldContain """aria-label="Copy the proxy URL of /app_metrics""""
+      // After the path it copies, in the same cell, and before the target's button.
+      val proxyButton = html.indexOf("""id="${ProxyDashboardHtml.COPY_PROXY_ID_PREFIX}app_metrics"""")
+      val targetButton = html.indexOf("""id="${ProxyDashboardHtml.COPY_TARGET_ID_PREFIX}app_metrics"""")
+      (html.indexOf(">/app_metrics<") in 0..<proxyButton) shouldBe true
+      (proxyButton < targetButton) shouldBe true
+    }
+
+    // The proxy no longer serves a departed path, so its URL would only return 404.
+    "a departed path should have no proxy URL button" {
+      val departed =
+        DashboardFixtures.pathView(
+          path = "redis_metrics",
+          agentIds = emptyList(),
+          lastScrape = DashboardFixtures.scrapeRecord(path = "redis_metrics"),
+          isDeparted = true,
+        )
+      val html =
+        ProxyDashboardHtml.pushFragment(snapshot(paths = [departed]), null, "/dashboard", DashboardLayout.PATH)
+
+      html shouldNotContain ProxyDashboardHtml.PROXY_PATH_ATTR
+    }
+
+    // On the page, not in the pushes: the port is the proxy's and doesn't change, and <body> is never swapped.
+    "the page should carry the proxy's scrape port, and the pushes should not" {
+      val page = createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(), null, "/dashboard") } }
+      page shouldContain """${ProxyDashboardHtml.SCRAPE_PORT_ATTR}="${TestPorts.PROXY_HTTP_PORT}""""
+      ProxyDashboardHtml.pushFragment(snapshot(), null, "/dashboard", DashboardLayout.PATH) shouldNotContain
+        ProxyDashboardHtml.SCRAPE_PORT_ATTR
     }
 
     // The push loop replaces the whole table every frame. htmx refocuses the element carrying the id the
@@ -323,8 +364,10 @@ class ProxyDashboardHtmlTest : StringSpec() {
       val frame = ProxyDashboardHtml.pushFragment(snapshot(paths = paths), null, "/dashboard", DashboardLayout.PATH)
 
       listOf(page, frame).forEach { html ->
-        html shouldContain """id="${ProxyDashboardHtml.COPY_ID_PREFIX}app_metrics""""
-        html shouldContain """id="${ProxyDashboardHtml.COPY_ID_PREFIX}node_metrics""""
+        for (path in ["app_metrics", "node_metrics"]) {
+          html shouldContain """id="${ProxyDashboardHtml.COPY_TARGET_ID_PREFIX}$path""""
+          html shouldContain """id="${ProxyDashboardHtml.COPY_PROXY_ID_PREFIX}$path""""
+        }
       }
     }
 
@@ -636,6 +679,15 @@ class ProxyDashboardHtmlTest : StringSpec() {
       page shouldContain "document.execCommand('copy')"
     }
 
+    // The proxy URL's host is the one the viewer opened the dashboard at, which the proxy can't know: a name or address
+    // it is reached by from outside, or through a port forward. The scrape port is plain HTTP.
+    "the page should build a proxy URL from its own host and the proxy's scrape port" {
+      val page = createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(), null, "/dashboard") } }
+      page shouldContain "'http://' + window.location.hostname + ':'"
+      page shouldContain "document.body.getAttribute('${ProxyDashboardHtml.SCRAPE_PORT_ATTR}')"
+      page shouldContain "btn.getAttribute('${ProxyDashboardHtml.PROXY_PATH_ATTR}')"
+    }
+
     // A push that lands while the mark is showing replaces the marked button with an unmarked one.
     "the page should put a copy result back on the button after each push" {
       val page = createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(), null, "/dashboard") } }
@@ -654,8 +706,8 @@ class ProxyDashboardHtmlTest : StringSpec() {
     // The mark is an icon and a colour, neither of which reaches a screen reader.
     "the page should announce the result of a copy" {
       val page = createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(), null, "/dashboard") } }
-      page shouldContain "say('Target URL copied.')"
-      page shouldContain "say('Could not copy the target URL.')"
+      page shouldContain "say(what + ' copied.')"
+      page shouldContain "say('Could not copy the ' + what.toLowerCase() + '.')"
     }
 
     // htmx 4 refetches the page on every back or forward and runs the inline scripts of what it swaps in.
