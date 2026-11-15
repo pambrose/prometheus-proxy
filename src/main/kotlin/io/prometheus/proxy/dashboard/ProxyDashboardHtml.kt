@@ -80,6 +80,10 @@ internal object ProxyDashboardHtml {
   const val COPY_ATTR = "data-copy"
   const val COPY_ID_PREFIX = "copy-"
 
+  // No region id starts with it, so an agent id, which an agent behind nginx names itself, can't make a row's id
+  // equal one.
+  const val AGENT_ROW_ID_PREFIX = "agent-row-"
+
   /** The full page. Only served on a real navigation; every later update arrives over the socket. */
   fun HTML.renderPage(
     snapshot: ProxySnapshot,
@@ -313,6 +317,9 @@ internal object ProxyDashboardHtml {
     }
     snapshot.agents.forEach { agent ->
       button(classes = "md-row") {
+        // The push loop replaces this list every frame, and htmx gives focus back only to the element with the id
+        // the focused one had, so without an id a keyboard user lost their place in the list on every refresh.
+        attributes["id"] = "$AGENT_ROW_ID_PREFIX${agent.agentId}"
         attributes["hx-get"] = "$routeBase/agents/${agent.agentId}"
         attributes["hx-target"] = "#$DETAIL_ID"
         // outerHTML, so the returned #detail element replaces the old one in place rather than nesting a

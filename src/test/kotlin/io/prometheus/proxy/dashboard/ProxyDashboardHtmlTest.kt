@@ -79,6 +79,28 @@ class ProxyDashboardHtmlTest : StringSpec() {
       html shouldContain """hx-push-url="true""""
     }
 
+    // The push loop replaces the agent list every frame, and htmx gives focus back only to an element with the id the
+    // focused one had. Without an id on each row, a keyboard user lost their place in the list on every refresh.
+    "an agent row should keep one id per agent across the page and its pushes" {
+      val agents = [agent(id = "1", name = "team-a-01"), agent(id = "2", name = "team-b-01")]
+      val page =
+        createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(agents = agents), null, "/dashboard") } }
+      val frame = ProxyDashboardHtml.pushFragment(snapshot(agents = agents), null, "/dashboard")
+
+      listOf(page, frame).forEach { html ->
+        html shouldContain """id="${ProxyDashboardHtml.AGENT_ROW_ID_PREFIX}1""""
+        html shouldContain """id="${ProxyDashboardHtml.AGENT_ROW_ID_PREFIX}2""""
+      }
+    }
+
+    // Behind nginx an agent names its own agent id, so a row id must not be able to equal a region's: an agent called
+    // "list" would otherwise take #agent-list, which every push addresses.
+    "an agent row's id should never equal a region's id" {
+      val html = ProxyDashboardHtml.pushFragment(snapshot(agents = [agent(id = "list")]), null, "/dashboard")
+
+      Regex("""id="${ProxyDashboardHtml.AGENT_LIST_ID}"""").findAll(html).count() shouldBe 1
+    }
+
     "the selected agent should be marked current" {
       ProxyDashboardHtml.pushFragment(snapshot(), "1", "/dashboard") shouldContain """aria-current="true""""
       ProxyDashboardHtml.pushFragment(snapshot(), null, "/dashboard") shouldNotContain "aria-current"

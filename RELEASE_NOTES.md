@@ -204,6 +204,8 @@ every agent when agent auth is off.
 - **Selecting an agent on the dashboard sticks.** A refresh that crossed your click could put the previously selected
   agent back in the detail pane for up to the refresh interval (2 seconds by default). The dashboard now ignores an
   update rendered before your selection.
+- The dashboard's agent list keeps keyboard focus. Each refresh, every 2 seconds by default, dropped it, so the
+  next Tab started again from the top of the page.
 
 ### Documentation
 

@@ -485,7 +485,8 @@ A `<button>` styled as a full-width list row, so it is keyboard-operable by cons
 - **Rest:** transparent background.
 - **Hover:** background steps to `surface-3`. No transition.
 - **Focus:** `2px solid accent` outline, `outline-offset: -2px` so the ring sits *inside* the row and
-  never overlaps its neighbors.
+  never overlaps its neighbors. The row's id is built from its agent id, so htmx gives focus back after
+  each push replaces the list.
 - **Current:** background lifts to `surface` (the reading plane, matching the detail pane it controls)
   and the 3px left border becomes `accent`. Marked `aria-current="true"`.
 

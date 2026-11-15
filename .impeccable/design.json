@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-15T01:34:22Z",
+  "generatedAt": "2026-11-15T01:59:09Z",
   "title": "Design System: prometheus-proxy Dashboard",
   "extensions": {
     "colorMeta": {
@@ -241,7 +241,7 @@
       "name": "Agent Row Item",
       "kind": "custom",
       "refersTo": "row-item",
-      "description": "Full-width list row rendered as a real button, so it is keyboard-operable by construction. Shown at rest and in the current state.",
+      "description": "Full-width list row rendered as a real button, so it is keyboard-operable by construction. Shown at rest and in the current state. Each row's id is built from its agent id, so htmx gives focus back after a push replaces the list.",
       "html": "<div class=\"ds-rows\"><button class=\"ds-row\"><span><span class=\"ds-led ds-led-ok\"></span>agent-us-east-1</span><span class=\"ds-row-sub\">10.4.2.19:41022 &middot; 6 paths</span></button><button class=\"ds-row\" aria-current=\"true\"><span><span class=\"ds-led ds-led-ok\"></span>agent-eu-west-2</span><span class=\"ds-row-sub\">10.9.1.7:52880 &middot; 3 paths</span></button><button class=\"ds-row\"><span><span class=\"ds-led ds-led-crit\"></span>(registering&hellip;)</span><span class=\"ds-row-sub\">10.4.2.31:38104 &middot; 0 paths</span></button></div>",
       "css": ".ds-rows { --surface:#fff; --surface-2:#e9edf2; --surface-3:#dde3ea; --line-soft:#e3e9ef; --ink:#131820; --ink-3:#626b77; --accent:#c8461f; --ok:#1a7a42; --crit:#c02a20; --mono:ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace; background:var(--surface-2); width:262px; font-family:var(--mono); font-size:12.5px; line-height:1.5; } @media (prefers-color-scheme: dark) { .ds-rows { --surface:#151a21; --surface-2:#1c222b; --surface-3:#242c37; --line-soft:#212934; --ink:#e7ebf1; --ink-3:#858f9d; --accent:#ff7043; --ok:#3fb950; --crit:#f85149; } } .ds-row { display:block; width:100%; text-align:left; font:inherit; cursor:pointer; background:none; border:0; border-bottom:1px solid var(--line-soft); border-left:3px solid transparent; padding:10px 15px; color:var(--ink); } .ds-row:hover { background:var(--surface-3); } .ds-row:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; } .ds-row[aria-current=\"true\"] { background:var(--surface); border-left-color:var(--accent); } .ds-row-sub { display:block; color:var(--ink-3); font-size:11.5px; margin-top:2px; } .ds-led { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:7px; } .ds-led-ok { background:var(--ok); } .ds-led-crit { background:var(--crit); }"
     },
