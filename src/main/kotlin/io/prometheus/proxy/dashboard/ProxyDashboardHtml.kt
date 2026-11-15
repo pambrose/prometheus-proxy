@@ -109,12 +109,11 @@ internal object ProxyDashboardHtml {
   // change of filter.
   const val MATCH_COUNT_ATTR = "data-match-count"
 
-  // Scrape-now (ScrapeNow): the panel a result shows in, the route the page's script posts to, on the panel, a
-  // button's path, and the sentence a result's heading carries for the script to say aloud. A button's id starts with
-  // the prefix, which no region id does, so no path can give a button the id of the panel or a region.
+  // Scrape-now (ScrapeNow): the panel a result shows in, the route the page's script posts to, on the panel, the
+  // prefix of a button's id, which the path follows, and the sentence a result's heading carries for the script to say
+  // aloud. No region id starts with the prefix, so no path can give a button the id of the panel or a region.
   const val SCRAPE_RESULT_ID = "scrape-result"
   const val SCRAPE_URL_ATTR = "data-scrape-url"
-  const val SCRAPE_PATH_ATTR = "data-scrape-path"
   const val SCRAPE_ID_PREFIX = "scrape-path-"
   const val SAY_ATTR = "data-say"
 
@@ -258,6 +257,14 @@ internal object ProxyDashboardHtml {
         +"Problems only"
       }
     }
+  }
+
+  /** A scrape's status code as a pill, `ok` for a success and `crit` for anything else, as every view shows one. */
+  internal fun FlowOrPhrasingContent.statusPill(
+    statusCode: Int,
+    isSuccess: Boolean,
+  ) {
+    span(if (isSuccess) "pill ok" else "pill crit") { +"$statusCode" }
   }
 
   /**
@@ -450,7 +457,7 @@ internal object ProxyDashboardHtml {
         div("kv scrape") {
           span("t") { scrapeTime(record.at) }
           span("k") { +"/${record.path}" }
-          span(if (record.isSuccess) "pill ok" else "pill crit") { +"${record.statusCode}" }
+          statusPill(record.statusCode, record.isSuccess)
           span("v") { +"${record.durationMillis} ms · ${record.contentLength} chars · ${record.outcome}" }
         }
       }

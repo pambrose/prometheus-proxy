@@ -21,6 +21,7 @@ package io.prometheus.agent
 import ch.qos.logback.classic.Level
 import com.google.common.util.concurrent.RateLimiter
 import com.google.common.util.concurrent.Service
+import com.pambrose.common.util.runCatchingCancellable
 import io.grpc.Status
 import io.grpc.StatusException
 import io.grpc.StatusRuntimeException
@@ -102,7 +103,7 @@ class AgentTest : StringSpec() {
       // runCatching: a test that started and stopped its agent has already released these.
       createdAgents.forEach { agent ->
         runCatching { agent.grpcService.shutDown() }
-        runCatching { agent.agentHttpService.close() }
+        runCatchingCancellable { agent.agentHttpService.close() }
       }
       createdAgents.clear()
     }
@@ -222,7 +223,7 @@ class AgentTest : StringSpec() {
         // Captured as values first, so each check below reports on its own inside assertSoftly.
         val state = agent.state()
         val cacheFailure =
-          runCatching {
+          runCatchingCancellable {
             agent.agentHttpService.httpClientCache.getOrCreateClient(HttpClientCache.ClientKey(null, null)) {
               HttpClient(CIO)
             }
@@ -262,7 +263,7 @@ class AgentTest : StringSpec() {
         // Captured as values first, so each check below reports on its own inside assertSoftly.
         val stopFailure = runCatching { agent.stopSync() }.exceptionOrNull()
         val cacheFailure =
-          runCatching {
+          runCatchingCancellable {
             agent.agentHttpService.httpClientCache.getOrCreateClient(HttpClientCache.ClientKey(null, null)) {
               HttpClient(CIO)
             }

@@ -22,10 +22,7 @@ import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldEndWith
-import io.kotest.matchers.string.shouldNotContain
-import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
-import io.ktor.http.withCharset
 import io.prometheus.proxy.ScrapeRequestResponse
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -44,15 +41,7 @@ class ScrapeSummaryTest : StringSpec() {
   private fun ok(
     text: String = body,
     durationMs: Long = 120,
-  ) = ScrapeRequestResponse(
-    statusCode = HttpStatusCode.OK,
-    updateMsg = "success",
-    contentType = ContentType.Text.Plain.withCharset(Charsets.UTF_8),
-    contentText = text,
-    fetchDuration = durationMs.milliseconds,
-    byteCount = text.length.toLong(),
-    encoding = "plain",
-  )
+  ) = DashboardFixtures.scrapeResponse(text, durationMs)
 
   init {
     "a summary should say how the scrape went and count what came back" {
@@ -122,9 +111,8 @@ class ScrapeSummaryTest : StringSpec() {
     }
 
     // A target's body is shown to whoever opens the dashboard; a control character could hide what follows it.
-    "control characters in the body should be escaped, but not its line breaks and tabs" {
-      ScrapeSummary.escaped("a\tb\nc\u001b[2Jd\u2028e") shouldBe "a\tb\nc\\u001b[2Jd\\u2028e"
-      ScrapeSummary.of("x", [ok("up 1\u0007\n")]).excerpt shouldNotContain "\u0007"
+    "control characters in the body should be escaped, but not its line breaks, tabs, and carriage returns" {
+      ScrapeSummary.of("x", [ok("a\tb\r\nc\u001b[2Jd\u2028e\n")]).excerpt shouldBe "a\tb\r\nc\\u001b[2Jd\\u2028e\n"
     }
   }
 }

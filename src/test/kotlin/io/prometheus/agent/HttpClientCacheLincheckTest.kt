@@ -29,6 +29,7 @@ import io.ktor.client.request.HttpResponseData
 import io.ktor.utils.io.InternalAPI
 import io.prometheus.agent.HttpClientCache.ClientKey
 import io.prometheus.common.Lincheck
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.lincheck.datastructures.IntGen
 import org.jetbrains.lincheck.datastructures.Operation
@@ -116,7 +117,9 @@ class HttpClientCacheOps {
     val entry =
       try {
         cache.getOrCreateClient(key) { newClient() }
-      } catch (_: IllegalStateException) {
+      } catch (e: IllegalStateException) {
+        // A closed cache refuses with one; a cancellation is one too, and is passed on.
+        if (e is CancellationException) throw e
         return
       }
     // As AgentHttpService.fetchContent does, release the client in a finally, which also runs when the scrape is

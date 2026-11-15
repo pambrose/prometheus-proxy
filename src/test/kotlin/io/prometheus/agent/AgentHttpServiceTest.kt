@@ -1407,7 +1407,7 @@ class AgentHttpServiceTest : StringSpec() {
         throw CancellationException("System shutdown")
       }
 
-      io.kotest.assertions.throwables.shouldThrow<CancellationException> {
+      shouldThrow<CancellationException> {
         spiedService.fetchScrapeUrl(request)
       }
     }
@@ -1437,7 +1437,7 @@ class AgentHttpServiceTest : StringSpec() {
         throw OutOfMemoryError("test OOM")
       }
 
-      io.kotest.assertions.throwables.shouldThrow<OutOfMemoryError> {
+      shouldThrow<OutOfMemoryError> {
         spiedService.fetchScrapeUrl(request)
       }
 
@@ -1462,7 +1462,7 @@ class AgentHttpServiceTest : StringSpec() {
         throw StackOverflowError("test stack overflow")
       }
 
-      io.kotest.assertions.throwables.shouldThrow<StackOverflowError> {
+      shouldThrow<StackOverflowError> {
         spiedService.fetchScrapeUrl(request)
       }
 

@@ -24,12 +24,7 @@ import io.prometheus.proxy.ProxyPathManager
 import io.prometheus.proxy.ProxyPathManager.AgentContextInfo
 import io.prometheus.proxy.ScrapeHeaders
 import io.prometheus.proxy.ScrapeRequestResponse
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.withTimeoutOrNull
-import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
@@ -39,22 +34,22 @@ import kotlin.time.TimeSource
  * result is what Prometheus would get. A consolidated path is scraped from every agent and merged, as Prometheus sees
  * it.
  *
- * A scrape-now leaves no trace in what Prometheus reads: not in the scrape metrics, the path's History, or the agent's
+ * A scrape-now leaves no trace in what the proxy reports: not in its scrape metrics, the path's History, or the agent's
  * recent scrapes, which stay a record of Prometheus's own scrapes. It goes in the activity feed instead, with the
- * address it came from, so a scrape no one at Prometheus asked for can be traced to a browser.
+ * address it came from, so a scrape no one at Prometheus asked for can be traced to a browser. The agent can't tell it
+ * from Prometheus's, so the agent's own scrape metrics do count it.
  *
  * Bounded, so clicks can't take the in-flight slots Prometheus's scrapes need: at most [MAX_CONCURRENT] run at once, a
- * path is scraped at most once every [COOLDOWN], and each waits at most [TIMEOUT], which the agent is told too.
+ * path is scraped at most once every [COOLDOWN], and each agent is waited on for at most [TIMEOUT] and a grace, the
+ * timeout the agent is told too.
  *
- * @param wait how long a scrape-now waits for its agents before it gives up on them
- * @param scrape how a path's agents are scraped; the real scrape unless a test stands in for it
+ * @param submit how a path's agents are scraped; the real scrape unless a test stands in for it
  */
 internal class ScrapeNow(
   private val proxy: Proxy,
   private val timeSource: TimeSource = TimeSource.Monotonic,
-  private val wait: Duration = TIMEOUT + TIMEOUT_GRACE,
-  private val scrape: suspend (AgentContextInfo, String) -> List<ScrapeRequestResponse> = { info, path ->
-    scrapeAgents(proxy, info, path)
+  private val submit: suspend (AgentContextInfo, String) -> List<ScrapeRequestResponse> = { info, path ->
+    ProxyHttpRoutes.submitScrapeRequests(info, proxy, path, "", HEADERS, TIMEOUT + TIMEOUT_GRACE)
   },
 ) {
   private val permits = Semaphore(MAX_CONCURRENT)
@@ -89,7 +84,7 @@ internal class ScrapeNow(
   ): Result {
     val key = ProxyPathManager.pathKey(path)
     val shown = ProxyPathManager.shownPath(key)
-    val info = if (proxy.isRunning) proxy.pathManager.getAgentContextInfo(key) else null
+    val info = proxy.pathManager.getAgentContextInfo(key)
     return when {
       !proxy.isRunning -> Refused(HttpStatusCode.ServiceUnavailable, "The proxy isn't running")
       info == null -> Refused(HttpStatusCode.NotFound, "/$shown isn't registered")
@@ -110,8 +105,7 @@ internal class ScrapeNow(
   private suspend fun scrapeWithin(request: Request): Result =
     try {
       if (claimCooldown(request.key)) {
-        val responses = withTimeoutOrNull(wait) { scrape(request.info, request.key) } ?: [timedOut()]
-        Done(ScrapeSummary.of(request.key, responses)).also { record(request, it.summary) }
+        Done(ScrapeSummary.of(request.key, submit(request.info, request.key))).also { record(request, it.summary) }
       } else {
         val shown = ProxyPathManager.shownPath(request.key)
         Refused(HttpStatusCode.TooManyRequests, "/$shown was scraped from the dashboard less than $COOLDOWN ago")
@@ -134,24 +128,16 @@ internal class ScrapeNow(
     request: Request,
     summary: ScrapeSummary,
   ) {
-    val ms = summary.duration.inWholeMilliseconds
+    val status = summary.statusCode.value
     proxy.activityLog?.record(
       ActivityKind.SCRAPED_NOW,
       request.info.agentContexts.firstOrNull(),
       request.key,
-      "${summary.statusCode.value} ${summary.outcome} in $ms ms, from ${request.client}",
-      group = request.client,
+      "$status ${summary.outcome} in ${summary.durationMillis} ms, from ${request.client}",
+      // A burst of a browser's scrapes is one line only while they end alike: a failure never folds into a success.
+      group = "$status ${request.client}",
     )
   }
-
-  // The answer for an agent that didn't answer at all, which the agent's own timeout would otherwise have given.
-  private fun timedOut() =
-    ScrapeRequestResponse(
-      statusCode = HttpStatusCode.GatewayTimeout,
-      updateMsg = ProxyHttpRoutes.PROXY_TIMEOUT_LABEL,
-      failureReason = "No answer from the agent within $wait",
-      fetchDuration = wait,
-    )
 
   companion object {
     const val MAX_CONCURRENT = 4
@@ -167,17 +153,5 @@ internal class ScrapeNow(
     private const val MAX_REMEMBERED_PATHS = 1000
     private const val INITIAL_CAPACITY = 16
     private const val LOAD_FACTOR = 0.75f
-
-    // Every agent of the path, at once, as the scrape route asks them.
-    private suspend fun scrapeAgents(
-      proxy: Proxy,
-      info: AgentContextInfo,
-      path: String,
-    ): List<ScrapeRequestResponse> =
-      coroutineScope {
-        info.agentContexts
-          .map { agent -> async { ProxyHttpRoutes.submitScrapeRequest(agent, proxy, path, "", HEADERS) } }
-          .awaitAll()
-      }
   }
 }

@@ -380,7 +380,11 @@ fun Project.configureJars() {
     // ShadowJar's default DuplicatesStrategy (EXCLUDE) drops duplicate entries before the
     // merging transformers run, so allow duplicates through on the transformer-matched
     // paths only; everything else keeps first-wins EXCLUDE semantics.
-    filesMatching(listOf("META-INF/services/**", "META-INF/*.kotlin_module") + noticePaths + licensePaths) {
+    filesMatching(buildList {
+      addAll(listOf("META-INF/services/**", "META-INF/*.kotlin_module"))
+      addAll(noticePaths)
+      addAll(licensePaths)
+    }) {
       duplicatesStrategy = DuplicatesStrategy.INCLUDE
     }
     from(mainOutput)

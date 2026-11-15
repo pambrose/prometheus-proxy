@@ -301,7 +301,7 @@ internal class ProxyPathManager(
     }
     val maxLabels = proxy.maxLabelsSizeBytes
     val labelsSize = labels.encodeToByteArray().size
-    if (maxLabels > 0 && labelsSize > maxLabels) {
+    if (maxLabels in 1..<labelsSize) {
       val reason = "Labels for path /$shown are $labelsSize bytes, over proxy.internal.maxLabelsSizeBytes ($maxLabels)"
       return rejectPath(agentContext, shown, reason, INVALID_PATH)
     }
@@ -317,7 +317,7 @@ internal class ProxyPathManager(
   ): PathRejection? {
     val max = proxy.maxPathsPerAgent
     val count = pathCountFor(agentContext.agentId)
-    if (max <= 0 || count < max)
+    if (max !in 1..count)
       return null
     val reason =
       "Agent ${agentContext.agentId} already serves $count paths, the proxy.internal.maxPathsPerAgent limit ($max); " +

@@ -19,6 +19,7 @@
 package io.prometheus.common
 
 import ch.qos.logback.classic.Level
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.string.shouldNotContain
 import io.ktor.client.network.sockets.ConnectTimeoutException
@@ -36,6 +37,7 @@ import io.prometheus.common.ScrapeResults.Companion.toScrapeResults
 import io.prometheus.common.TestPorts.PROMETHEUS_PORT
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.grpc.scrapeResponse
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
 import java.io.IOException
@@ -270,15 +272,13 @@ class ScrapeResultsTest : StringSpec() {
 
     "errorCode should return RequestTimeout for TimeoutCancellationException" {
       // TimeoutCancellationException constructor is internal, so we generate it via withTimeout
-      val exception = try {
-        withTimeout(1.milliseconds) {
-          // Use delay instead of Thread.sleep to properly suspend and timeout
-          delay(1000.milliseconds)
+      val exception =
+        shouldThrow<TimeoutCancellationException> {
+          withTimeout(1.milliseconds) {
+            // Use delay instead of Thread.sleep to properly suspend and timeout
+            delay(1000.milliseconds)
+          }
         }
-        null
-      } catch (e: Exception) {
-        e
-      }!!
       val code = errorCode(exception, "http://test.com")
 
       code shouldBe HttpStatusCode.RequestTimeout.value

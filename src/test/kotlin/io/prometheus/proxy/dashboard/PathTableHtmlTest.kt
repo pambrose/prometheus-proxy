@@ -37,14 +37,19 @@ class PathTableHtmlTest : StringSpec() {
   private fun snapshot(
     paths: List<PathView> = [path("app_metrics")],
     authEnabled: Boolean = false,
-  ) = DashboardFixtures.snapshot(paths = paths, authEnabled = authEnabled)
+    scrapeNowEnabled: Boolean = false,
+  ) = DashboardFixtures.snapshot(paths = paths, authEnabled = authEnabled, scrapeNowEnabled = scrapeNowEnabled)
 
   // The Paths view's push for these paths, as a session with this filter receives it.
   private fun pathPush(
     paths: List<PathView> = [path("app_metrics")],
     filter: RowFilter = RowFilter.NONE,
     authEnabled: Boolean = false,
-  ) = ProxyDashboardHtml.pushFragment(snapshot(paths, authEnabled), null, "/dashboard", DashboardLayout.PATH, 0, filter)
+    scrapeNowEnabled: Boolean = false,
+  ): String {
+    val snapshot = snapshot(paths, authEnabled, scrapeNowEnabled)
+    return ProxyDashboardHtml.pushFragment(snapshot, null, "/dashboard", DashboardLayout.PATH, 0, filter)
+  }
 
   // The push for one path whose history has these status codes, newest first, as PathHistory hands them over.
   private fun historyTable(vararg codes: Int) =
@@ -197,27 +202,22 @@ class PathTableHtmlTest : StringSpec() {
 
     // ==================== Scrape now ====================
 
-    "a live path should have a Scrape button, carrying its path, when scrape-now is on" {
-      val snap = DashboardFixtures.snapshot(paths = [path("orders_metrics")], scrapeNowEnabled = true)
-      val html = ProxyDashboardHtml.pushFragment(snap, null, "/dashboard", DashboardLayout.PATH)
-
-      html shouldContain
+    // The id carries the path, which the page's script reads back out of it.
+    "a live path should have a Scrape button, carrying its path in its id, when scrape-now is on" {
+      pathPush([path("orders_metrics")], scrapeNowEnabled = true) shouldContain
         """<button type="button" class="scrape" id="${ProxyDashboardHtml.SCRAPE_ID_PREFIX}orders_metrics" """ +
-        """${ProxyDashboardHtml.SCRAPE_PATH_ATTR}="orders_metrics" aria-label="Scrape /orders_metrics now""""
+        """aria-label="Scrape /orders_metrics now""""
     }
 
     // The proxy serves a departed path no more, so there is nothing to scrape.
     "a departed path, or any path with scrape-now off, should have no Scrape button" {
-      val departed = DashboardFixtures.snapshot(paths = [departedPathView()], scrapeNowEnabled = true)
-
-      ProxyDashboardHtml.pushFragment(departed, null, "/dashboard", DashboardLayout.PATH) shouldNotContain
-        """class="scrape""""
+      pathPush([departedPathView()], scrapeNowEnabled = true) shouldNotContain """class="scrape""""
       pathPush() shouldNotContain """class="scrape""""
     }
 
     // The panel is outside the pushed table, so a push never clears a result someone is reading.
     "the Paths page should have a hidden result panel, naming the route to post to, outside the pushed table" {
-      val page = renderFullPage(DashboardFixtures.snapshot(scrapeNowEnabled = true), DashboardLayout.PATH)
+      val page = renderFullPage(snapshot(scrapeNowEnabled = true), DashboardLayout.PATH)
 
       page shouldContain
         """<div class="scrape-result" id="${ProxyDashboardHtml.SCRAPE_RESULT_ID}" """ +

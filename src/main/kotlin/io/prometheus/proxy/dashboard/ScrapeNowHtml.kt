@@ -16,7 +16,9 @@
 
 package io.prometheus.proxy.dashboard
 
+import io.prometheus.proxy.ProxyHttpRoutes
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SAY_ATTR
+import io.prometheus.proxy.dashboard.ProxyDashboardHtml.statusPill
 import kotlinx.html.ButtonType
 import kotlinx.html.DIV
 import kotlinx.html.button
@@ -37,7 +39,7 @@ internal object ScrapeNowHtml {
   fun render(result: ScrapeNow.Result): String {
     // Block-bodied, as the other renderers are: CodeScene counts a conditional in an expression body's trailing lambda
     // as a Global Conditional.
-    return createHTML().div("sr") {
+    return createHTML().div {
       when (result) {
         is ScrapeNow.Done -> done(result.summary)
         is ScrapeNow.Refused -> refused(result.reason)
@@ -48,9 +50,8 @@ internal object ScrapeNowHtml {
   private fun DIV.done(summary: ScrapeSummary) {
     val status = summary.statusCode.value
     div("sr-head") {
-      attributes[SAY_ATTR] =
-        "Scrape of /${summary.path} finished: $status in ${summary.duration.inWholeMilliseconds} ms."
-      span(if (summary.isSuccess) "pill ok" else "pill crit") { +"$status" }
+      attributes[SAY_ATTR] = "Scrape of /${summary.path} finished: $status in ${summary.durationMillis} ms."
+      statusPill(status, summary.isSuccess)
       span("sr-path") { +"/${summary.path}" }
       span("dim") { +facts(summary).joinToString(" · ") }
       closeButton()
@@ -83,12 +84,12 @@ internal object ScrapeNowHtml {
     val body = summary.isSuccess
     return listOfNotNull(
       summary.outcome,
-      "${summary.duration.inWholeMilliseconds} ms",
+      "${summary.durationMillis} ms",
       size(summary.bytes).takeIf { summary.bytes > 0 },
       summary.contentType.takeIf { body },
       "${summary.families} families".takeIf { body },
       "${summary.samples} samples".takeIf { body },
-      "# EOF".takeIf { summary.hasEof },
+      ProxyHttpRoutes.EOF_MARKER.takeIf { summary.hasEof },
     )
   }
 

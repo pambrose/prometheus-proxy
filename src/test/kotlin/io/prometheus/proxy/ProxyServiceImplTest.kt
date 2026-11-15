@@ -21,6 +21,7 @@ package io.prometheus.proxy
 import ch.qos.logback.classic.Level
 import com.google.protobuf.ByteString
 import io.grpc.Context
+import io.grpc.kotlin.GrpcContextElement
 import io.grpc.Status
 import io.grpc.StatusException
 import io.kotest.assertions.throwables.shouldThrow
@@ -75,6 +76,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import java.util.zip.CRC32
 import kotlin.time.Duration.Companion.seconds
 
@@ -205,18 +207,15 @@ class ProxyServiceImplTest : StringSpec() {
   // A real activity feed for this mock proxy, which it returns.
   private fun Proxy.withActivityLog() = ActivityLog(100).also { every { activityLog } returns it }
 
-  // Runs [block] with [identity] on the gRPC Context, as AgentAuthServerInterceptor attaches it.
-  private fun <T> withIdentity(
+  // Runs [block] with [identity] on the gRPC Context, as AgentAuthServerInterceptor attaches it. GrpcContextElement
+  // carries the Context, which is thread-local, across the block's suspensions, as it does for a server call, so the
+  // block can call the service directly rather than through runBlocking.
+  private suspend fun <T> withIdentity(
     identity: AgentIdentity,
-    block: () -> T,
+    block: suspend () -> T,
   ): T {
     val context = Context.current().withValue(AgentAuthManager.AGENT_IDENTITY_KEY, identity)
-    val previous = context.attach()
-    return try {
-      block()
-    } finally {
-      context.detach(previous)
-    }
+    return withContext(GrpcContextElement(context)) { block() }
   }
 
   init {
@@ -318,7 +317,7 @@ class ProxyServiceImplTest : StringSpec() {
       val identity = AgentIdentity("east", ByteArray(0), emptyList())
       val request = registerAgentRequest { agentId = agentContext.agentId }
 
-      val response = withIdentity(identity) { runBlocking { ProxyServiceImpl(proxy).registerAgent(request) } }
+      val response = withIdentity(identity) { ProxyServiceImpl(proxy).registerAgent(request) }
 
       response.valid.shouldBeTrue()
       agentContext.identityName shouldBe "east"
@@ -336,7 +335,7 @@ class ProxyServiceImplTest : StringSpec() {
         }
 
       withIdentity(AgentIdentity("east", ByteArray(0), emptyList())) {
-        runBlocking { ProxyServiceImpl(proxy).registerAgent(request) }
+        ProxyServiceImpl(proxy).registerAgent(request)
       }.valid.shouldBeTrue()
 
       log.entries().single().apply {
@@ -359,7 +358,7 @@ class ProxyServiceImplTest : StringSpec() {
         }
 
       withIdentity(AgentIdentity("team_a", ByteArray(0), ["team_a_*"])) {
-        runBlocking { ProxyServiceImpl(proxy).registerPath(request) }
+        ProxyServiceImpl(proxy).registerPath(request)
       }.rejectionCause shouldBe PathRejectionCause.NOT_AUTHORIZED
 
       verify {
@@ -413,16 +412,14 @@ class ProxyServiceImplTest : StringSpec() {
       val longName = "agent-name-" + "x".repeat(5_000)
       val warnings =
         captureLogs<ProxyServiceImpl> {
-          runBlocking {
-            ProxyServiceImpl(proxy).registerAgent(
-              registerAgentRequest {
-                agentId = agentContext.agentId
-                agentName = longName
-                hostName = "short"
-                proxyEndpoints += ["a:1", "b:2", "c:3"]
-              },
-            )
-          }
+          ProxyServiceImpl(proxy).registerAgent(
+            registerAgentRequest {
+              agentId = agentContext.agentId
+              agentName = longName
+              hostName = "short"
+              proxyEndpoints += ["a:1", "b:2", "c:3"]
+            },
+          )
         }.filter { it.level == Level.WARN }.map { it.formattedMessage }
 
       val warning = warnings.single()
@@ -440,16 +437,14 @@ class ProxyServiceImplTest : StringSpec() {
       val (proxy, agentContext) = proxyWithRealAgentContext(maxAgentFieldLength = 256)
       val messages =
         captureLogs("io.prometheus.proxy") {
-          runBlocking {
-            ProxyServiceImpl(proxy).registerAgent(
-              registerAgentRequest {
-                agentId = agentContext.agentId
-                agentName = "agent\r\n12:00:00.000 INFO  [ProxyServiceImpl.kt:177] - Connected to forged"
-                hostName = "host\nforged"
-                launchId = "launch\rforged"
-              },
-            )
-          }
+          ProxyServiceImpl(proxy).registerAgent(
+            registerAgentRequest {
+              agentId = agentContext.agentId
+              agentName = "agent\r\n12:00:00.000 INFO  [ProxyServiceImpl.kt:177] - Connected to forged"
+              hostName = "host\nforged"
+              launchId = "launch\rforged"
+            },
+          )
         }.map { it.formattedMessage }
 
       messages.single { it.startsWith("Connected to") } shouldContain "agent\\r\\n12:00:00.000"
@@ -478,17 +473,15 @@ class ProxyServiceImplTest : StringSpec() {
         )
         val warnings =
           captureLogs<ProxyServiceImpl> {
-            runBlocking {
-              ProxyServiceImpl(proxy).registerAgent(
-                registerAgentRequest {
-                  agentId = agentContext.agentId
-                  agentName = within
-                  hostName = within
-                  launchId = within
-                  proxyEndpoints += List(16) { within }
-                },
-              )
-            }
+            ProxyServiceImpl(proxy).registerAgent(
+              registerAgentRequest {
+                agentId = agentContext.agentId
+                agentName = within
+                hostName = within
+                launchId = within
+                proxyEndpoints += List(16) { within }
+              },
+            )
           }.filter { it.level == Level.WARN }
 
         agentContext.agentName shouldBe within
@@ -710,7 +703,7 @@ class ProxyServiceImplTest : StringSpec() {
         }
 
       val response =
-        awaitOnDaemonThread { withIdentity(identity) { runBlocking { ProxyServiceImpl(proxy).registerPath(request) } } }
+        awaitOnDaemonThread { runBlocking { withIdentity(identity) { ProxyServiceImpl(proxy).registerPath(request) } } }
 
       response.valid.shouldBeFalse()
       response.rejectionCause shouldBe PathRejectionCause.INVALID_PATH
@@ -724,14 +717,12 @@ class ProxyServiceImplTest : StringSpec() {
       val identity = AgentIdentity("team_a", ByteArray(0), ["team_a_*"])
       val response =
         withIdentity(identity) {
-          runBlocking {
-            ProxyServiceImpl(proxy).registerPath(
-              registerPathRequest {
-                agentId = agentContext.agentId
-                path = "team_b/metrics"
-              },
-            )
-          }
+          ProxyServiceImpl(proxy).registerPath(
+            registerPathRequest {
+              agentId = agentContext.agentId
+              path = "team_b/metrics"
+            },
+          )
         }
 
       response.rejectionCause shouldBe PathRejectionCause.INVALID_PATH
@@ -771,14 +762,12 @@ class ProxyServiceImplTest : StringSpec() {
         captureLogs("io.prometheus.proxy") {
           response =
             withIdentity(identity) {
-              runBlocking {
-                ProxyServiceImpl(proxy).registerPath(
-                  registerPathRequest {
-                    agentId = agentContext.agentId
-                    path = "team_a_x\n12:00:00.000 WARN forged"
-                  },
-                )
-              }
+              ProxyServiceImpl(proxy).registerPath(
+                registerPathRequest {
+                  agentId = agentContext.agentId
+                  path = "team_a_x\n12:00:00.000 WARN forged"
+                },
+              )
             }
         }.map { it.formattedMessage }
 
@@ -816,14 +805,12 @@ class ProxyServiceImplTest : StringSpec() {
         captureLogs<ProxyServiceImpl> {
           response =
             withIdentity(identity) {
-              runBlocking {
-                ProxyServiceImpl(proxy).registerPath(
-                  registerPathRequest {
-                    agentId = agentContext.agentId
-                    path = deniedPath
-                  },
-                )
-              }
+              ProxyServiceImpl(proxy).registerPath(
+                registerPathRequest {
+                  agentId = agentContext.agentId
+                  path = deniedPath
+                },
+              )
             }
         }.map { it.formattedMessage }.filter { "denied registration" in it }
 
@@ -1621,7 +1608,7 @@ class ProxyServiceImplTest : StringSpec() {
       // A stopping proxy fails every open stream, so those failures are noise.
       val errors =
         captureLogs<ProxyServiceImpl> {
-          runBlocking { service.writeResponsesToProxy(errorFlow) shouldBe EMPTY_INSTANCE }
+          service.writeResponsesToProxy(errorFlow) shouldBe EMPTY_INSTANCE
         }.filter { it.level == Level.ERROR }
       errors shouldBe emptyList()
     }
@@ -1638,7 +1625,7 @@ class ProxyServiceImplTest : StringSpec() {
 
       val errors =
         captureLogs<ProxyServiceImpl> {
-          runBlocking { service.writeResponsesToProxy(errorFlow) shouldBe EMPTY_INSTANCE }
+          service.writeResponsesToProxy(errorFlow) shouldBe EMPTY_INSTANCE
         }.filter { it.level == Level.ERROR }.map { it.formattedMessage }
       errors.single() shouldContain "Error in writeResponsesToProxy()"
     }

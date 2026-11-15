@@ -272,7 +272,8 @@ Two support helpers also live here (not test classes themselves):
 - **ProxyHttpConfigTest** — HTTP server config: Ktor compression, status pages, CORS; a call cancelled by a client
   disconnect, or a write to one that has gone, is logged at DEBUG, while an unexpected exception still logs at WARN
 - **ProxyHttpRoutesTest** — HTTP routing: path resolution, query params, error responses, compression,
-  ensureLeadingSlash; a handler that times out or is cancelled drops its scrape's unfinished chunked transfer
+  ensureLeadingSlash; a handler that times out or is cancelled drops its scrape's unfinished chunked transfer; a scrape
+  times out at a timeout it is given rather than the proxy's
 - **ProxyPathManagerTest** — Path registration/unregistration, consolidated mode, agent selection, concurrent access;
   a live agent's path is taken over only by the same auth identity; the activity feed gets a new registration but not
   a repeat, a take-over as one naming the agent it displaced, a rejection the first time the agent is told it, a path
@@ -357,10 +358,10 @@ Two support helpers also live here (not test classes themselves):
 - **ScrapeSummaryTest** (`dashboard/`) — a scrape-now's summary: status, outcome, time, size, content type, families,
   samples, and `# EOF`; a consolidated path's agents merged as Prometheus sees them; a failure's reason cut and escaped;
   a long body cut at its last line break, or short of a surrogate pair with none; and control characters escaped but for
-  line breaks and tabs
+  line breaks, tabs, and carriage returns
 - **ScrapeNowTest** (`dashboard/`) — scrape-now with its scrape stood in for: the summary and the activity feed's line
   naming the browser; a path not registered, without an agent, or on a proxy not running refused; a path at most once a
-  cooldown; at most a few at once; and agents that don't answer ending as a timeout
+  cooldown; at most a few at once; and a failed scrape-now kept apart from a successful one in the feed
 - **ScrapeNowHtmlTest** (`dashboard/`) — the scrape-now result panel: the status, path, facts, and start of the body; a
   cut body and an EOF named; a failure's reason without a body; the body escaped; a refusal and why; and sizes in bytes,
   KB, or MB
@@ -386,11 +387,12 @@ One support helper also lives here (not a test class itself):
 
 ### Unit Tests — Common (`common/`)
 
-- **AgentValuesTest** — what the proxy does to a value an agent supplies before keeping or logging it: `truncate`
-  never splits a surrogate pair; `shownValue` cuts and marks a long value and escapes every control character and line
-  separator, so a value can't forge a log line; `pathCharacterProblem` names a control character, whitespace, `?`, or
-  `#`, which no scrape's request path can carry, and accepts every other character; and `labelsProblem` names a label
-  service discovery can't serve, with the name escaped
+- **AgentValuesTest** — what the proxy does to a value an agent supplies before keeping or logging it: `truncate` never
+  splits a surrogate pair; `shownValue` cuts and marks a long value and escapes every control character and line
+  separator, so a value can't forge a log line, and `escaped` does the same but for the characters it is told to keep;
+  `pathCharacterProblem` names a control character, whitespace, `?`, or `#`, which no scrape's request path can carry,
+  and accepts every other character; and `labelsProblem` names a label service discovery can't serve, with the name
+  escaped
 - **BaseOptionsTest** — Shared CLI argument parsing, config loading, boolean resolution; in a forked JVM, a
   standalone agent or proxy whose config URL carries credentials exits 1 on a setting it rejects, with one log line
   and no credentials or uncaught stack trace

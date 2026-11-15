@@ -36,7 +36,7 @@ import kotlin.time.Duration
  * @param samples its sample lines
  * @param failure the first agent's failure reason, cut and escaped, or empty
  * @param excerpt the start of the body, at most [MAX_EXCERPT_CHARS] characters, ending at a line break where it is cut,
- *   with each control character but a line break and a tab escaped
+ *   with each control character but a line break, a tab, and a carriage return escaped
  * @param isWhole whether [excerpt] is the whole body
  */
 internal data class ScrapeSummary(
@@ -55,13 +55,14 @@ internal data class ScrapeSummary(
 ) {
   val isSuccess: Boolean get() = statusCode.isSuccess()
 
+  val durationMillis: Long get() = duration.inWholeMilliseconds
+
   companion object {
     // Enough to recognize a payload and read its first families, little enough to show in a panel.
     const val MAX_EXCERPT_CHARS = 2048
 
     // As much of an agent's failure reason as a log line shows.
     private const val MAX_FAILURE_CHARS = 512
-    private const val EOF_MARKER = "# EOF"
     private const val TYPE_PREFIX = "# TYPE "
 
     fun of(
@@ -74,17 +75,18 @@ internal data class ScrapeSummary(
       return ScrapeSummary(
         path = path,
         statusCode = merged.statusCode,
-        outcome = responses.map { it.updateMsg }.distinct().joinToString(", "),
+        outcome = merged.updateMsgs.distinct().joinToString(", "),
         duration = responses.maxOf { it.fetchDuration },
         bytes = responses.sumOf { it.byteCount },
         contentType = merged.contentType.withoutParameters().toString(),
         families = families(text),
         samples = samples(text),
-        hasEof = text.trimEnd().endsWith(EOF_MARKER),
+        hasEof = endsWithEof(text),
         failure = responses.firstOrNull { it.failureReason.isNotEmpty() }
           ?.let { AgentValues.shownValue(it.failureReason, MAX_FAILURE_CHARS) }
           .orEmpty(),
-        excerpt = escaped(excerpt),
+        // A body's own layout kept, and every other control character escaped, as a log line escapes it.
+        excerpt = AgentValues.escaped(excerpt) { it == '\n' || it == '\t' || it == '\r' },
         isWhole = excerpt.length == text.length,
       )
     }
@@ -108,21 +110,11 @@ internal data class ScrapeSummary(
       return if (lineEnd > 0) text.substring(0, lineEnd + 1) else AgentValues.truncate(text, MAX_EXCERPT_CHARS)
     }
 
-    // [text] with each control character, and each line or paragraph separator, written as \uXXXX, but for the line
-    // breaks and tabs the exposition format is laid out with. A target's body is shown to whoever opens the
-    // dashboard, and a control character in it could otherwise hide what follows it on the page.
-    internal fun escaped(text: String): String =
-      buildString(text.length) {
-        text.forEach { c ->
-          if (isHidden(c))
-            append("\\u").append(c.code.toString(16).padStart(4, '0'))
-          else
-            append(c)
-        }
-      }
-
-    private fun isHidden(c: Char): Boolean = c != '\n' && c != '\t' && (c.isISOControl() || c in LINE_SEPARATORS)
-
-    private val LINE_SEPARATORS = setOf('\u2028', '\u2029')
+    // Whether the body's last line is the OpenMetrics end marker, without copying a body of several MB to trim it.
+    private fun endsWithEof(text: String): Boolean {
+      val end = text.indexOfLast { !it.isWhitespace() } + 1
+      val marker = ProxyHttpRoutes.EOF_MARKER
+      return end >= marker.length && text.regionMatches(end - marker.length, marker, 0, marker.length)
+    }
   }
 }

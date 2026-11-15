@@ -20,6 +20,7 @@ package io.prometheus.proxy
 
 import ch.qos.logback.classic.spi.ILoggingEvent
 import com.pambrose.common.dsl.KtorDsl.newHttpClient
+import com.pambrose.common.util.runCatchingCancellable
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContain
@@ -484,7 +485,7 @@ class ProxyHttpConfigTest : StringSpec() {
     "configureKtorServer should log a write to a disconnected client at DEBUG, not WARN" {
       val events =
         captureProxyHttpConfigLogs { client, baseUrl ->
-          runCatching { client.get("$baseUrl/write-failed") }
+          runCatchingCancellable { client.get("$baseUrl/write-failed") }
         }
 
       events.map { it.formattedMessage }.filter { "ChannelWriteException" in it }.shouldNotBeEmpty()
@@ -508,7 +509,7 @@ class ProxyHttpConfigTest : StringSpec() {
     "configureKtorServer should log a call cancelled by a client disconnect at DEBUG, not WARN" {
       val events =
         captureProxyHttpConfigLogs { client, baseUrl ->
-          runCatching { client.get("$baseUrl/cancelled") }
+          runCatchingCancellable { client.get("$baseUrl/cancelled") }
         }
 
       events.map { it.formattedMessage }.filter { "CancellationException" in it }.shouldNotBeEmpty()

@@ -22,7 +22,6 @@ import brave.Span
 import brave.Tracing
 import brave.handler.MutableSpan
 import brave.handler.SpanHandler
-import brave.handler.SpanHandler.Cause
 import brave.propagation.TraceContext
 import com.pambrose.common.dsl.GrpcDsl.channel
 import com.pambrose.common.service.ZipkinReporterService

@@ -25,14 +25,10 @@ import io.kotest.matchers.doubles.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.ranges.shouldBeIn
 import io.kotest.matchers.shouldBe
-import io.mockk.every
-import io.mockk.mockk
-import io.prometheus.Agent
 import io.prometheus.common.mockAgentForMetrics
 import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.metrics.model.snapshots.GaugeSnapshot
 import io.prometheus.metrics.model.snapshots.Labels
-import kotlin.concurrent.atomics.AtomicInt
 import kotlin.time.Clock
 
 // Tests for AgentMetrics which manages Prometheus metrics for the agent component.

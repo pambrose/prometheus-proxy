@@ -906,7 +906,8 @@ class HttpClientCacheTest : StringSpec() {
         // as an error, and the coroutine finished the iteration before exiting.
         measureTime { fastCache.close() } shouldBeLessThan 1.seconds
         fastCache.currentCacheSize() shouldBe 0
-      } catch (_: Exception) {
+      } finally {
+        // Closed again whatever happened above; a second close finds nothing left to close.
         fastCache.close()
       }
     }

@@ -18,6 +18,7 @@
 
 package io.prometheus.harness
 
+import com.pambrose.common.util.runCatchingCancellable
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeTrue
@@ -242,7 +243,7 @@ class ProxyWebDashboardTest : StringSpec() {
     "the dashboard must stay off unless enabled" {
       withDashboard(OFF_HTTP_PORT, OFF_GRPC_PORT, OFF_DASHBOARD_PORT, dashboardArgs = []) {
         // Nothing should be listening on the dashboard port: the feature is opt-in, matching admin and metrics.
-        runCatching { client.get("$base/dashboard") }
+        runCatchingCancellable { client.get("$base/dashboard") }
           .isFailure
           .shouldBeTrue()
       }
@@ -278,7 +279,7 @@ class ProxyWebDashboardTest : StringSpec() {
         full shouldContain "hx-ws:connect"
 
         // htmx's row click sends HX-Request -> just the detail pane, no shell.
-        val fragment = client.get(url) { header("HX-Request", "true") }.bodyAsText()
+        val fragment = client.get(url) { header(HX_REQUEST_HEADER, "true") }.bodyAsText()
         fragment shouldNotContain "<body"
         fragment shouldNotContain "hx-ws:connect"
         fragment shouldContain "id=\"detail\""
@@ -286,7 +287,7 @@ class ProxyWebDashboardTest : StringSpec() {
         // A history-restore fetch carries HX-Request but expects the full page back.
         val restore =
           client.get(url) {
-            header("HX-Request", "true")
+            header(HX_REQUEST_HEADER, "true")
             header("HX-History-Restore-Request", "true")
           }.bodyAsText()
         restore shouldContain "<body"
@@ -474,7 +475,7 @@ class ProxyWebDashboardTest : StringSpec() {
         newClient = { HttpClient(CIO) { install(WebSockets) } },
       ) {
         val refused =
-          runCatching {
+          runCatchingCancellable {
             client.webSocket(socketUrl, request = { header(HttpHeaders.Origin, "https://evil.example.com") }) {
               nextText()
             }
@@ -635,16 +636,15 @@ class ProxyWebDashboardTest : StringSpec() {
     // agent serves, a request without htmx's header, and one from another origin. Off, it isn't there at all.
     "a scrape-now should return what the target had, leaving what Prometheus reads untouched" {
       val stub =
-        embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = SCRAPE_STUB_PORT) {
+        embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
           routing { get("/metrics") { call.respondText(SCRAPE_STUB_BODY) } }
         }
-      stub.startAndAwaitReady()
+      val stubPort = stub.startAndAwaitReady()
       try {
         withDashboard(
           SCRAPE_HTTP_PORT,
           SCRAPE_GRPC_PORT,
           SCRAPE_DASHBOARD_PORT,
-          configFile = SCRAPE_CONFIG_FILE,
           dashboardArgs = [
             "--dashboard",
             "--dashboard_port",
@@ -653,7 +653,7 @@ class ProxyWebDashboardTest : StringSpec() {
           ],
           metricsEnabled = true,
         ) {
-          connectAgent()
+          connectAgent().pathManager.registerPath("ui_scrape_metrics", "http://$LOOPBACK_HOST:$stubPort/metrics")
           eventually(30.seconds) {
             client.get("$base/dashboard/paths").bodyAsText() shouldContain
               """id="${ProxyDashboardHtml.SCRAPE_ID_PREFIX}ui_scrape_metrics""""
@@ -703,7 +703,6 @@ class ProxyWebDashboardTest : StringSpec() {
           SCRAPE_HTTP_PORT,
           SCRAPE_GRPC_PORT,
           SCRAPE_DASHBOARD_PORT,
-          configFile = SCRAPE_CONFIG_FILE,
           dashboardArgs = [
             "--dashboard",
             "--dashboard_port",
@@ -749,7 +748,8 @@ class ProxyWebDashboardTest : StringSpec() {
             listOf("$base/dashboard", "$base/dashboard/paths", "$base/dashboard/agents/1").forEach { url ->
               client.get(url).status shouldBe HttpStatusCode.OK
             }
-            client.get("$base/dashboard/agents/1") { header("HX-Request", "true") }.status shouldBe HttpStatusCode.OK
+            client.get("$base/dashboard/agents/1") { header(HX_REQUEST_HEADER, "true") }.status shouldBe
+              HttpStatusCode.OK
           }
           verify(exactly = 1) { ProxySnapshot.collect(any()) }
         } finally {
@@ -889,11 +889,9 @@ class ProxyWebDashboardTest : StringSpec() {
     private const val RENDER_FAILURE_GRPC_PORT = TestPorts.DASHBOARD_UI_RENDER_FAILURE_GRPC_PORT
     private const val RENDER_FAILURE_DASHBOARD_PORT = TestPorts.DASHBOARD_UI_RENDER_FAILURE_DASHBOARD_PORT
 
-    private const val SCRAPE_CONFIG_FILE = "config/test-configs/web-ui-scrape.conf"
     private const val SCRAPE_HTTP_PORT = TestPorts.DASHBOARD_UI_SCRAPE_HTTP_PORT
     private const val SCRAPE_GRPC_PORT = TestPorts.DASHBOARD_UI_SCRAPE_GRPC_PORT
     private const val SCRAPE_DASHBOARD_PORT = TestPorts.DASHBOARD_UI_SCRAPE_DASHBOARD_PORT
-    private const val SCRAPE_STUB_PORT = TestPorts.DASHBOARD_UI_SCRAPE_STUB_PORT
     private const val SCRAPE_METRICS_PORT = TestPorts.DASHBOARD_UI_SCRAPE_METRICS_PORT
     private val SCRAPE_STUB_BODY =
       """

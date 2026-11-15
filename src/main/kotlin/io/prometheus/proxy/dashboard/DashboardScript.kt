@@ -23,7 +23,7 @@ import io.prometheus.proxy.dashboard.ProxyDashboardHtml.FILTER_QUERY_ID
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.MATCH_COUNT_ATTR
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.PROXY_PATH_ATTR
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SAY_ATTR
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SCRAPE_PATH_ATTR
+import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SCRAPE_ID_PREFIX
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SCRAPE_PORT_ATTR
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SCRAPE_RESULT_ID
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SCRAPE_URL_ATTR
@@ -249,9 +249,7 @@ internal object DashboardScript {
         var region = document.getElementById('$ANNOUNCER_ID');
         if (region) region.textContent = text;
       }
-      document.body.addEventListener('click', function (evt) {
-        var btn = evt.target.closest && evt.target.closest('button.copy');
-        if (!btn) return;
+      function copyFrom(btn) {
         // The id, not the element: a push can replace the button before the clipboard write settles.
         var id = btn.id;
         var path = btn.getAttribute('$PROXY_PATH_ATTR');
@@ -263,7 +261,7 @@ internal object DashboardScript {
           showMark(id, 'copy-failed');
           say('Could not copy the ' + what.toLowerCase() + '.');
         });
-      });
+      }
       // Scrape now: a path's Scrape button has the proxy scrape it at once, and the result shows in the panel above the
       // table. A request of the script's own, not hx-post: the push loop replaces the table every frame, which would
       // drop a request its button made. The panel is outside every pushed region, so a push never clears a result.
@@ -273,7 +271,8 @@ internal object DashboardScript {
       function scrapeNow(btn) {
         var panel = document.getElementById('$SCRAPE_RESULT_ID');
         if (!panel) return;
-        var path = btn.getAttribute('$SCRAPE_PATH_ATTR');
+        // The path is in the button's id, after the prefix.
+        var path = btn.id.slice('$SCRAPE_ID_PREFIX'.length);
         scrapedFrom = btn.id;
         panel.hidden = false;
         panel.textContent = 'Scraping /' + path + '…';
@@ -283,26 +282,29 @@ internal object DashboardScript {
           .then(function (html) {
             panel.innerHTML = html;
             var heading = panel.querySelector('[$SAY_ATTR]');
-            say(heading ? heading.getAttribute('$SAY_ATTR') : 'The scrape of /' + path + ' finished.');
+            // A refusal the guard answers in plain text has no heading; it is said as the panel shows it.
+            say(heading ? heading.getAttribute('$SAY_ATTR') : panel.textContent);
           }, function () {
             panel.textContent = 'No answer from the proxy for the scrape of /' + path + '.';
             say(panel.textContent);
           });
       }
-      function closeScrapeResult() {
-        var panel = document.getElementById('$SCRAPE_RESULT_ID');
-        if (panel) {
-          panel.hidden = true;
-          panel.textContent = '';
-        }
+      function closeScrapeResult(panel) {
+        panel.hidden = true;
+        panel.textContent = '';
         var btn = scrapedFrom && document.getElementById(scrapedFrom);
         if (btn) btn.focus();
       }
+      // One listener on <body> for every button in the table and the result panel: the push loop replaces the table
+      // every frame, so a button's own listener would last one frame.
       document.body.addEventListener('click', function (evt) {
         if (!evt.target.closest) return;
+        var copy = evt.target.closest('button.copy');
         var scrape = evt.target.closest('button.scrape');
-        if (scrape) scrapeNow(scrape);
-        else if (evt.target.closest('#$SCRAPE_RESULT_ID button.close')) closeScrapeResult();
+        var panel = evt.target.closest('#$SCRAPE_RESULT_ID');
+        if (copy) copyFrom(copy);
+        else if (scrape) scrapeNow(scrape);
+        else if (panel && evt.target.closest('button.close')) closeScrapeResult(panel);
       });
       // A path's proxy URL, the one to curl to check it through the proxy: the host this page was opened at, which the
       // proxy can't know, and the port Prometheus scrapes, which is plain HTTP. An IPv6 host keeps its brackets.

@@ -72,6 +72,7 @@ import kotlinx.coroutines.launch
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.measureTime
 import kotlin.time.TimeSource.Monotonic
 import io.ktor.server.cio.CIO as ServerCIO
 import kotlinx.coroutines.async
@@ -638,6 +639,26 @@ class ProxyHttpRoutesTest : StringSpec() {
       response.updateMsg shouldBe "timed_out"
     }
 
+    // The dashboard's scrape-now waits less than the proxy's scrape timeout, each agent on its own, so on a
+    // consolidated path one slow agent leaves the others' answers standing, as Prometheus would get them.
+    "submitScrapeRequest should time out at a timeout it is given rather than the proxy's" {
+      val proxy = createSpyProxyForSubmit(timeoutSecs = 30)
+
+      val elapsed =
+        measureTime {
+          ProxyHttpRoutes.submitScrapeRequest(
+            AgentContext("test-remote"),
+            proxy,
+            "metrics",
+            "",
+            ScrapeHeaders(),
+            timeout = 100.milliseconds,
+          ).updateMsg shouldBe "timed_out"
+        }
+
+      (elapsed < 10.seconds) shouldBe true
+    }
+
     // Beyond maxInFlightScrapeRequests across all agents, a scrape is refused at once with a 503 rather than
     // queued, and the refused request is not left tracked.
     "submitScrapeRequest should return 503 when the proxy's in-flight limit is reached" {
@@ -1105,13 +1126,13 @@ class ProxyHttpRoutesTest : StringSpec() {
 
     // Prometheus sends its scrape timeout in X-Prometheus-Scrape-Timeout-Seconds as a decimal number of seconds.
     "scrapeTimeoutFromHeader should parse whole and fractional seconds" {
-      ProxyHttpRoutes.scrapeTimeoutFromHeader("10") shouldBe 10.seconds
-      ProxyHttpRoutes.scrapeTimeoutFromHeader(" 2.5 ") shouldBe 2500.milliseconds
+      ScrapeHeaders.scrapeTimeoutFromHeader("10") shouldBe 10.seconds
+      ScrapeHeaders.scrapeTimeoutFromHeader(" 2.5 ") shouldBe 2500.milliseconds
     }
 
     "scrapeTimeoutFromHeader should ignore a missing, malformed, or non-positive value" {
       listOf(null, "", " ", "abc", "0", "-1", "NaN", "Infinity").forEach { value ->
-        ProxyHttpRoutes.scrapeTimeoutFromHeader(value) shouldBe null
+        ScrapeHeaders.scrapeTimeoutFromHeader(value) shouldBe null
       }
     }
 

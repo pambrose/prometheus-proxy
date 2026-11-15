@@ -26,9 +26,6 @@ import io.kotest.matchers.doubles.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.ranges.shouldBeIn
 import io.kotest.matchers.shouldBe
-import io.mockk.every
-import io.mockk.mockk
-import io.prometheus.Proxy
 import io.prometheus.common.mockProxyForMetrics
 import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.metrics.model.snapshots.GaugeSnapshot

@@ -23,13 +23,12 @@ import io.prometheus.proxy.dashboard.ProxyDashboardHtml.DASH
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.PATH_TABLE_ID
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.PROXY_PATH_ATTR
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SCRAPE_ID_PREFIX
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SCRAPE_PATH_ATTR
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SCRAPE_PORT_ATTR
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SCRAPE_RESULT_ID
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SCRAPE_URL_ATTR
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.agentLabel
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.renderFilters
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.scrapeTime
+import io.prometheus.proxy.dashboard.ProxyDashboardHtml.statusPill
 import kotlinx.html.BUTTON
 import kotlinx.html.ButtonType
 import kotlinx.html.DIV
@@ -152,7 +151,8 @@ internal object PathTableHtml {
   /**
    * A path, and while the proxy serves it, the button that copies its proxy URL, the one to curl to check the path
    * through the proxy. The proxy can't know the name the viewer reaches it by, so the button carries the path, and the
-   * page's script joins it to the host the page was opened at and the scrape port, [SCRAPE_PORT_ATTR] on `<body>`. With
+   * page's script joins it to the host the page was opened at and the scrape port,
+   * [io.prometheus.proxy.dashboard.ProxyDashboardHtml.SCRAPE_PORT_ATTR] on `<body>`. With
    * [scrapeNow], the button that scrapes it at once follows.
    */
   private fun TR.pathCell(
@@ -176,8 +176,8 @@ internal object PathTableHtml {
    */
   private fun FlowContent.scrapeButton(path: PathView) {
     button(type = ButtonType.button, classes = "scrape") {
+      // The page's script reads the path back out of the id.
       attributes["id"] = "$SCRAPE_ID_PREFIX${path.path}"
-      attributes[SCRAPE_PATH_ATTR] = path.path
       attributes["aria-label"] = "Scrape /${path.path} now"
       attributes["title"] = "Scrape now"
     }
@@ -213,7 +213,7 @@ internal object PathTableHtml {
       if (scrape == null)
         span("dim") { +DASH }
       else
-        span(if (scrape.isSuccess) "pill ok" else "pill crit") { +"${scrape.statusCode}" }
+        statusPill(scrape.statusCode, scrape.isSuccess)
     }
   }
 

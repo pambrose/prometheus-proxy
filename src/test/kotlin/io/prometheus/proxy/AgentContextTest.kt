@@ -19,6 +19,7 @@
 package io.prometheus.proxy
 
 import com.google.protobuf.LazyStringArrayList
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
@@ -302,14 +303,7 @@ class AgentContextTest : StringSpec() {
 
       // Attempting to write to a closed channel should throw,
       // but the backlog counter should remain at 0 (not increment without a matching decrement)
-      val threw = try {
-        context.writeScrapeRequest(mockk(relaxed = true))
-        false
-      } catch (_: Exception) {
-        true
-      }
-
-      threw.shouldBeTrue()
+      shouldThrow<ClosedSendChannelException> { context.writeScrapeRequest(mockk(relaxed = true)) }
       context.scrapeRequestBacklogSize shouldBe 0
     }
 
@@ -348,11 +342,7 @@ class AgentContextTest : StringSpec() {
       // Each should throw ClosedSendChannelException. The counter must stay at 0:
       // it must not increment without a matching decrement on ANY exception type.
       repeat(10) {
-        try {
-          context.writeScrapeRequest(mockk(relaxed = true))
-        } catch (_: Exception) {
-          // Expected
-        }
+        shouldThrow<ClosedSendChannelException> { context.writeScrapeRequest(mockk(relaxed = true)) }
       }
 
       context.scrapeRequestBacklogSize shouldBe 0

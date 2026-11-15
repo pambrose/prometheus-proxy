@@ -16,6 +16,7 @@
 
 package io.prometheus.harness
 
+import com.pambrose.common.util.runCatchingCancellable
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeTrue
@@ -79,7 +80,7 @@ class InProcessClientCancelledScrapeTest : StringSpec() {
           agent.pathManager.registerPath(PATH, "http://localhost:$stubPort/metrics")
           eventually(10.seconds) { proxy.pathManager.getAgentContextInfo(PATH).shouldNotBeNull() }
 
-          runCatching { client.get("http://localhost:$HTTP_PORT/$PATH") }.isFailure.shouldBeTrue()
+          runCatchingCancellable { client.get("http://localhost:$HTTP_PORT/$PATH") }.isFailure.shouldBeTrue()
 
           eventually(10.seconds) {
             proxy.recentScrapes().map { it.path to it.outcome } shouldContain (PATH to "client_cancelled")

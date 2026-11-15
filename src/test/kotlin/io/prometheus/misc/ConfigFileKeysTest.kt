@@ -166,9 +166,9 @@ class ConfigFileKeysTest : StringSpec() {
     "the -D scan should find a key spelled out in a string literal, and skip one built at run time or in a comment" {
       val source =
         listOf(
-          "add(\"-Dagent.chunkContentSizeBytes=\$size\")",
-          "proxyOptions([\"-Dproxy.internal.\$key=-1\"])",
-          "add(\"-D\$side.internal.zipkin.enabled=true\")",
+          $$"add(\"-Dagent.chunkContentSizeBytes=$size\")",
+          $$"proxyOptions([\"-Dproxy.internal.$key=-1\"])",
+          $$"add(\"-D$side.internal.zipkin.enabled=true\")",
           "// passes -Dagent.admin.port=1",
         ).joinToString("\n")
 

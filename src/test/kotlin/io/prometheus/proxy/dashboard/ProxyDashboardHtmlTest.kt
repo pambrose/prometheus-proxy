@@ -599,7 +599,7 @@ class ProxyDashboardHtmlTest : StringSpec() {
       page shouldContain "method: 'POST', headers: { '${ProxyDashboardService.HX_REQUEST_HEADER}': 'true' }"
       page shouldContain "panel.innerHTML = html;"
       // Closing the panel hands focus back to the button that filled it.
-      page shouldContain "function closeScrapeResult()"
+      page shouldContain "function closeScrapeResult(panel)"
     }
 
     // The script tells the server which layout the page shows, from its URL, on every announce. The map comes from

@@ -126,13 +126,13 @@ internal object ProxyDashboardCss {
       border-bottom:1px solid var(--line); position:sticky; top:0; }
     .ptable td { padding:8px 15px; border-bottom:1px solid var(--line-soft); }
     .ptable .num { text-align:right; font-variant-numeric:tabular-nums; }
-    .ptable .dim { color:var(--ink-3); }
+    .ptable .dim, .scrape-result .dim { color:var(--ink-3); }
     .ptable tr:hover td { background:var(--surface-2); }
     .ptable tr.departed td:first-child { color:var(--crit); }
     /* The Activity table's Detail column, which holds a sentence, so it wraps where the rest of the row doesn't. */
     .ptable td.wrap { white-space:normal; min-width:280px; }
     /* An event's tag opens its cell, so it takes none of the gap that sets a tag apart from a name before it. */
-    .ptable td.event .tag { margin-left:0; }
+    .ptable td.event .tag, .sr-head span.tag { margin-left:0; }
     /* The icon buttons: copy beside a path or target URL, scrape-now beside a path, and close on the scrape result.
        Their icons are CSS masks painted in currentColor rather than inline SVG: the table is pushed whole every
        refresh, and an SVG in every row would grow every frame. 24px meets the minimum target size, and the negative
@@ -144,14 +144,14 @@ internal object ProxyDashboardCss {
       --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linejoin='round'><rect x='5.25' y='5.25' width='8.5' height='8.5' rx='1.5'/><path d='M10.75 5.25v-2a1 1 0 0 0-1-1h-6.5a1 1 0 0 0-1 1v6.5a1 1 0 0 0 1 1h2'/></svg>"); }
     .scrape {
       --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M13 8a5 5 0 1 1-1.46-3.54'/><path d='M12.5 2.25v2.5H10'/></svg>"); }
-    .close {
-      --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round'><path d='M4 4l8 8M12 4l-8 8'/></svg>"); }
     .copy::before, .scrape::before, .close::before { content:""; width:13px; height:13px; background:currentColor;
       -webkit-mask:var(--icon) center/contain no-repeat; mask:var(--icon) center/contain no-repeat; }
     .copy:hover, .scrape:hover, .close:hover { background:var(--surface-3); color:var(--ink); }
     .copy.copied { color:var(--ok);
       --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M3 8.5l3.25 3.25L13 5'/></svg>"); }
-    .copy.copy-failed { color:var(--crit);
+    .copy.copy-failed { color:var(--crit); }
+    /* A cross, for a copy that failed and for closing the scrape result. */
+    .copy.copy-failed, .close {
       --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round'><path d='M4 4l8 8M12 4l-8 8'/></svg>"); }
     /* Forced colours replace every background, the mask's paint included, so the icon would vanish. */
     @media (forced-colors: active) {
@@ -160,10 +160,8 @@ internal object ProxyDashboardCss {
        block of a target's own text on the page, in a bounded box that scrolls rather than pushing the table away. */
     .scrape-result { padding:10px 15px; background:var(--surface); border-bottom:1px solid var(--line); }
     .sr-head { display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
-    .sr-head .tag { margin-left:0; }
-    .sr-head .close { margin:-4px 0 -4px auto; }
+    .sr-head .close { margin-left:auto; }
     .sr-path { font-weight:600; }
-    .scrape-result .dim { color:var(--ink-3); }
     .sr-failure { margin-top:7px; color:var(--crit); }
     .scrape-result pre { margin:9px 0 0; padding:8px 10px; max-height:240px; overflow:auto; font:inherit;
       font-size:11.5px; color:var(--ink-2); background:var(--surface-2); border:1px solid var(--line-soft);
