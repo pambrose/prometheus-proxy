@@ -4,6 +4,9 @@ A self-contained demo of Prometheus Proxy for customers. It runs the proxy with 
 simulated firewall, a set of simulated services, and Prometheus and Grafana. A presenter can show live traffic, failures
 and recovery, redundancy, dynamic discovery, and stale-agent eviction, all on one laptop.
 
+The website's [Live Demo](https://pambrose.github.io/prometheus-proxy/demo/) page walks through the same scenarios with
+screenshots of the dashboard and Grafana.
+
 ```
  demo-app  (simulated services: orders, payments, inventory, catalog, shipping, and three discoverable ones)
      ▲  scraped from inside the "firewall"
@@ -188,6 +191,7 @@ The services are `orders`, `payments`, `inventory`, `catalog`, and `shipping`, p
 | `grafana/` | The provisioned datasource, dashboard folder, and demo dashboard |
 | `app/demo_app.py` | The simulated services and their control API |
 | `demo.sh` | Starting, stopping, and the scenarios |
+| `screenshots.sh` | The Live Demo page's screenshots. `make demo-screenshots` builds and starts the demo, plays the scenarios, and writes them to `website/prometheus-proxy/docs/images/demo/` (needs Chrome, ImageMagick 7, and `cwebp`) |
 
 `make check-rules` validates the Prometheus config and both rule files with promtool, and `ConfigFileKeysTest` checks
 every key in `config/*.conf` against `config/config.conf`.

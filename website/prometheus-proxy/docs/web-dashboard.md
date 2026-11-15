@@ -20,8 +20,8 @@ and how recent scrapes actually went.
 
     The repository's [`demos/dashboard`](https://github.com/pambrose/prometheus-proxy/tree/master/demos/dashboard)
     runs the dashboard with three agents, a set of simulated services, Prometheus, and Grafana, all on one machine:
-    `make demo-up` in a clone starts it, and `make demo-down` removes it. Its README walks through a failing target,
-    a redundant pair of agents, paths discovered at runtime, and an evicted agent, as the dashboard shows them.
+    `make demo-up` in a clone starts it, and `make demo-down` removes it. The [Live Demo](demo.md) page walks
+    through a failing target, paths discovered at runtime, and an evicted agent, with screenshots of each.
 
 ## Enabling it
 
@@ -65,6 +65,9 @@ The top bar switches between them, and each is a real URL you can bookmark or sh
 
 Start from **Paths** when Prometheus reports a target failing — that is the view organized the way the
 alert is. Use **Agents** when you already know which agent you care about.
+
+Both show scrape times in your browser's time zone, as Grafana does, whatever zone the proxy runs in, so a failed
+scrape here and the spike it caused in a Grafana panel read the same clock. Hover over a time for its date and zone.
 
 ## The status bar
 
@@ -142,9 +145,13 @@ Every path on one row, with the endpoint behind it and how its last scrape went:
 |---|---|
 | **Path** | the registered path Prometheus scrapes |
 | **Agent(s)** | the agent serving it; a consolidated path shows the first plus a `+N` count |
-| **Target** | the URL the agent actually fetches |
+| **Target** | the URL the agent actually fetches, with a button beside it that copies it to the clipboard |
 | **Src** | `cfg` for a statically configured path, `disc` for one from [dynamic discovery](configuration/agent.md#dynamic-target-discovery) |
 | **Last scrape / Status / Duration** | the most recent result for that path |
+
+The copy button copies the URL as the table shows it. The agent [redacts](security/index.md#credentials-in-urls) a target
+URL's user info and query values before sending it to the proxy, so a URL that carries either is copied with
+`***` in their place.
 
 ### Paths whose agent has gone
 

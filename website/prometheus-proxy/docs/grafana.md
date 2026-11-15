@@ -44,7 +44,7 @@ What each dashboard section watches is described under
 
     `make demo-up` in a clone of the repository starts Prometheus and Grafana with both dashboards and the alerting
     rules below already loaded, against a proxy, three agents, and a set of simulated services; `make demo-down`
-    removes it. See [`demos/dashboard`](https://github.com/pambrose/prometheus-proxy/tree/master/demos/dashboard).
+    removes it. See the [Live Demo](demo.md) page.
 
 ## Alerting rules
 
