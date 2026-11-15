@@ -175,7 +175,7 @@ internal object PathTableHtml {
    * id is built from the path, as a copy button's is, so the push that replaces the table hands focus back to it.
    */
   private fun FlowContent.scrapeButton(path: PathView) {
-    button(type = ButtonType.button, classes = "scrape") {
+    button(type = ButtonType.button, classes = "scrape-now") {
       // The page's script reads the path back out of the id.
       attributes["id"] = "$SCRAPE_ID_PREFIX${path.path}"
       attributes["aria-label"] = "Scrape /${path.path} now"

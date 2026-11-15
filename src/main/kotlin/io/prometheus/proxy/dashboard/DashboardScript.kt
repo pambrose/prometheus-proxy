@@ -300,7 +300,7 @@ internal object DashboardScript {
       document.body.addEventListener('click', function (evt) {
         if (!evt.target.closest) return;
         var copy = evt.target.closest('button.copy');
-        var scrape = evt.target.closest('button.scrape');
+        var scrape = evt.target.closest('button.scrape-now');
         var panel = evt.target.closest('#$SCRAPE_RESULT_ID');
         if (copy) copyFrom(copy);
         else if (scrape) scrapeNow(scrape);

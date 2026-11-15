@@ -19,6 +19,8 @@
 package io.prometheus.proxy.dashboard
 
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -386,6 +388,37 @@ class ProxyDashboardHtmlTest : StringSpec() {
       }
     }
 
+    // The icon buttons' rule makes an element a 24px inline box with negative margins. When the scrape-now button was
+    // given the class "scrape", which each of the detail's Recent scrapes rows already had, every row became such a
+    // box, and the list collapsed onto one line.
+    "no button should share a class with a row of the detail's recent scrapes" {
+      val scraped =
+        DashboardFixtures.pathView(
+          path = "app_metrics",
+          lastScrape = DashboardFixtures.scrapeRecord(path = "app_metrics"),
+        )
+      val snap =
+        DashboardFixtures.snapshot(
+          agents = [agent(paths = [scraped])],
+          scrapes = [DashboardFixtures.scrapeRecord(agentId = "1", path = "app_metrics")],
+          scrapeNowEnabled = true,
+        )
+
+      fun classesOf(
+        html: String,
+        tag: Regex,
+      ) = tag.findAll(html).flatMap { it.groupValues[1].split(' ') }.toSet()
+
+      val detail = ProxyDashboardHtml.detailFragment(snap, selectedId = "1")
+      val pathFrame = ProxyDashboardHtml.pushFragment(snap, null, "/dashboard", DashboardLayout.PATH)
+      val rowClasses = classesOf(detail, Regex("""<div class="([^"]*)"><span class="t">"""))
+      val buttonClasses = classesOf(pathFrame, Regex("""<button[^>]* class="([^"]*)""""))
+
+      rowClasses shouldBe setOf("kv", "scrape")
+      buttonClasses shouldContain "scrape-now"
+      buttonClasses.intersect(rowClasses).shouldBeEmpty()
+    }
+
     "an agent's uptime should show its two largest units from a day up, then one" {
       ProxyDashboardHtml.humanize(45.seconds) shouldBe "45s"
       ProxyDashboardHtml.humanize(3.minutes + 59.seconds) shouldBe "3m"
@@ -672,7 +705,7 @@ class ProxyDashboardHtmlTest : StringSpec() {
     "the page script should post a scrape-now with htmx's header and put the result in the panel" {
       val page = renderFullPage(snapshot())
 
-      page shouldContain "closest('button.scrape')"
+      page shouldContain "closest('button.scrape-now')"
       page shouldContain "method: 'POST', headers: { '${ProxyDashboardService.HX_REQUEST_HEADER}': 'true' }"
       page shouldContain "panel.innerHTML = html;"
       // Closing the panel hands focus back to the button that filled it.
