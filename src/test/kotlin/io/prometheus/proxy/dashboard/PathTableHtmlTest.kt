@@ -205,14 +205,14 @@ class PathTableHtmlTest : StringSpec() {
     // The id carries the path, which the page's script reads back out of it.
     "a live path should have a Scrape button, carrying its path in its id, when scrape-now is on" {
       pathPush([path("orders_metrics")], scrapeNowEnabled = true) shouldContain
-        """<button type="button" class="scrape" id="${ProxyDashboardHtml.SCRAPE_ID_PREFIX}orders_metrics" """ +
+        """<button type="button" class="scrape-now" id="${ProxyDashboardHtml.SCRAPE_ID_PREFIX}orders_metrics" """ +
         """aria-label="Scrape /orders_metrics now""""
     }
 
     // The proxy serves a departed path no more, so there is nothing to scrape.
     "a departed path, or any path with scrape-now off, should have no Scrape button" {
-      pathPush([departedPathView()], scrapeNowEnabled = true) shouldNotContain """class="scrape""""
-      pathPush() shouldNotContain """class="scrape""""
+      pathPush([departedPathView()], scrapeNowEnabled = true) shouldNotContain """class="scrape-now""""
+      pathPush() shouldNotContain """class="scrape-now""""
     }
 
     // The panel is outside the pushed table, so a push never clears a result someone is reading.
