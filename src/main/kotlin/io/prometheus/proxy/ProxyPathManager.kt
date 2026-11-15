@@ -666,10 +666,11 @@ internal class ProxyPathManager(
     // marked "...", with its control characters escaped (November #16). See AgentValues.shownValue.
     internal fun shownPath(key: String): String = shownValue(key, SHOWN_PATH_CHARS)
 
-    // The key a path is stored and looked up under: without its leading slash, as the scrape route (get("/*") with the
-    // slash dropped) looks it up. Stored with the slash, a path was advertised in service discovery yet 404ed on every
-    // scrape, and "/foo" and "foo" were separate paths that the identity and consolidation checks never compared.
-    // PathHistory keys its rings with it too, so its join to the registered paths holds.
+    // The key a path is stored and looked up under: without its leading slash, as the scrape route (get("/*") with its
+    // leading slashes dropped) looks it up. Stored with the slash, a path was advertised in service discovery yet 404ed
+    // on every scrape, and "/foo" and "foo" were separate paths that the identity and consolidation checks never
+    // compared. PathHistory keys its rings with it too, so its join to the registered paths holds. Only one slash is
+    // stripped, unlike the route: "//foo" must reach multiSegmentPathError with a slash left, to be refused.
     internal fun pathKey(path: String) = path.removePrefix("/")
   }
 }
