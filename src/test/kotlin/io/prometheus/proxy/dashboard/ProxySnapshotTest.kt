@@ -24,6 +24,7 @@ import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
+import io.prometheus.proxy.ScrapeRecord
 import kotlin.time.Duration.Companion.seconds
 
 class ProxySnapshotTest : StringSpec() {
@@ -37,6 +38,9 @@ class ProxySnapshotTest : StringSpec() {
       proxyEndpoints = endpoints,
       currentEndpointIndex = endpointIndex,
     )
+
+  // Each path's records, newest first, as PathHistory.snapshot hands them over. groupBy keeps the list's order.
+  private fun List<ScrapeRecord>.byPath() = groupBy { it.path }
 
   init {
     "eviction countdown should be the remaining inactivity budget" {
@@ -122,6 +126,16 @@ class ProxySnapshotTest : StringSpec() {
       ).servingAgent shouldBe "edge-eu-west-2"
     }
 
+    // Newest first in, oldest first out: the strip reads left to right in time.
+    "history runs should group consecutive like results, oldest first" {
+      val history = [200, 503, 200, 200].map { DashboardFixtures.scrapeRecord(statusCode = it) }
+      DashboardFixtures.pathView(history = history).apply {
+        historyRuns shouldBe [true to 2, false to 1, true to 1]
+        historySucceeded shouldBe 3
+      }
+      DashboardFixtures.pathView().historyRuns shouldBe emptyList()
+    }
+
     "additional agent count should drive the consolidated marker and never go negative" {
       DashboardFixtures.pathView(agentIds = ["a1", "a2", "a3"]).additionalAgents shouldBe 2
       DashboardFixtures.pathView(agentIds = ["a1"]).additionalAgents shouldBe 0
@@ -136,7 +150,7 @@ class ProxySnapshotTest : StringSpec() {
         path = "app_metrics",
       ), DashboardFixtures.pathView(path = "node_metrics"),
       ]
-      // Newest-first, as Proxy.recentScrapes() returns them.
+      // Newest-first, as PathHistory.snapshot returns them.
       val scrapes =
         [
           DashboardFixtures.scrapeRecord(path = "app_metrics", statusCode = 503),
@@ -144,7 +158,7 @@ class ProxySnapshotTest : StringSpec() {
           DashboardFixtures.scrapeRecord(path = "node_metrics", durationMillis = 12),
         ]
 
-      val views = ProxySnapshot.buildPathViews(registered, scrapes)
+      val views = ProxySnapshot.buildPathViews(registered, scrapes.byPath())
 
       views.map { it.path } shouldBe ["app_metrics", "node_metrics"]
       // The 503 is first in the newest-first list, so it must win over the older 200.
@@ -153,7 +167,7 @@ class ProxySnapshotTest : StringSpec() {
     }
 
     "a registered path with no scrapes yet should carry no scrape rather than being dropped" {
-      val views = ProxySnapshot.buildPathViews([DashboardFixtures.pathView(path = "brand_new")], emptyList())
+      val views = ProxySnapshot.buildPathViews([DashboardFixtures.pathView(path = "brand_new")], emptyMap())
 
       views.single().path shouldBe "brand_new"
       views.single().lastScrape.shouldBeNull()
@@ -173,7 +187,7 @@ class ProxySnapshotTest : StringSpec() {
           ),
         ]
 
-      val views = ProxySnapshot.buildPathViews(emptyList(), scrapes)
+      val views = ProxySnapshot.buildPathViews(emptyList(), scrapes.byPath())
 
       views.single().apply {
         path shouldBe "orphan_metrics"
@@ -190,7 +204,7 @@ class ProxySnapshotTest : StringSpec() {
       val views =
         ProxySnapshot.buildPathViews(
           [DashboardFixtures.pathView(path = "app_metrics")],
-          [DashboardFixtures.scrapeRecord(path = "app_metrics")],
+          [DashboardFixtures.scrapeRecord(path = "app_metrics")].byPath(),
         )
 
       views.single().isDeparted.shouldBeFalse()
@@ -203,10 +217,41 @@ class ProxySnapshotTest : StringSpec() {
       val scrapes =
         [DashboardFixtures.scrapeRecord(path = "c_gone"), DashboardFixtures.scrapeRecord(path = "a_gone")]
 
-      val views = ProxySnapshot.buildPathViews(registered, scrapes)
+      val views = ProxySnapshot.buildPathViews(registered, scrapes.byPath())
 
       views.map { it.path } shouldBe ["a_gone", "b_live", "c_gone", "d_live"]
       views.filter { it.isDeparted }.map { it.path } shouldBe ["a_gone", "c_gone"]
+    }
+
+    // ==================== buildPathViews: history ====================
+
+    "a registered path should carry its whole history, newest first" {
+      val history =
+        [
+          DashboardFixtures.scrapeRecord(path = "app_metrics", statusCode = 503),
+          DashboardFixtures.scrapeRecord(path = "app_metrics", statusCode = 200),
+          DashboardFixtures.scrapeRecord(path = "app_metrics", statusCode = 200),
+        ]
+
+      val view =
+        ProxySnapshot.buildPathViews([DashboardFixtures.pathView(path = "app_metrics")], history.byPath()).single()
+
+      view.history shouldBe history
+      view.lastScrape shouldBe history.first()
+    }
+
+    // The history strip is most useful on a gone row: it shows whether the target was failing before its agent left.
+    "a gone path should carry its history too" {
+      val history =
+        [
+          DashboardFixtures.scrapeRecord(path = "orphan_metrics", statusCode = 503),
+          DashboardFixtures.scrapeRecord(path = "orphan_metrics", statusCode = 200),
+        ]
+
+      val view = ProxySnapshot.buildPathViews(emptyList(), history.byPath()).single()
+
+      view.isDeparted.shouldBeTrue()
+      view.history shouldBe history
     }
   }
 }

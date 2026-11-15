@@ -20,8 +20,11 @@ GRAFANA_URL="http://localhost:${DEMO_GRAFANA_PORT:-3000}"
 PROMETHEUS_URL="http://localhost:${DEMO_PROMETHEUS_PORT:-9090}"
 ZIPKIN_URL="http://localhost:${DEMO_ZIPKIN_PORT:-9411}"
 
-# The CSS width every screenshot is taken at, and the themes each is taken in.
+# The CSS width every screenshot is taken at, and the themes each is taken in. The Paths views are taken wider: with the
+# History column, and the discovered services' longer paths and a gone row's tag, the table is about 1,315px wide in the
+# eviction scene, so at 1280 it scrolls and its right edge is cut off.
 WIDTH=1280
+PATHS_WIDTH=1360
 THEMES=(dark light)
 
 # The page color below the dashboard's last row in a theme, which the Paths views are trimmed to (--bg in
@@ -153,25 +156,26 @@ healthy() {
     ! grep -Eq '<span class="crit">[0-9]+ departed</span>' <<<"$paths"
 }
 
-# Captures a page at WIDTH x the given CSS height, at 2x, in a theme: the dashboard follows the browser's preferred color
-# scheme. Grafana renders after loading its data, so its captures get a longer virtual-time budget.
+# Captures a page at the given CSS width (WIDTH unless given) x the given CSS height, at 2x, in a theme: the dashboard
+# follows the browser's preferred color scheme. Grafana renders after loading its data, so its captures get a longer
+# virtual-time budget.
 capture() {
-  local url="$1" png="$2" height="$3" theme="$4" budget="${5:-3000}" scheme=0 profile
+  local url="$1" png="$2" height="$3" theme="$4" budget="${5:-3000}" width="${6:-$WIDTH}" scheme=0 profile
   [[ "$theme" == dark ]] || scheme=1
   profile="$(mktemp -d)"
   "$CHROME_BIN" --headless=new --disable-gpu --hide-scrollbars --no-first-run --no-default-browser-check \
     --user-data-dir="$profile" --force-device-scale-factor=2 --blink-settings=preferredColorScheme=$scheme \
-    --window-size="$WIDTH,$height" --virtual-time-budget="$budget" --screenshot="$png" "$url" >/dev/null 2>&1
+    --window-size="$width,$height" --virtual-time-budget="$budget" --screenshot="$png" "$url" >/dev/null 2>&1
   rm -rf "$profile"
   [[ -s "$png" ]] || die "Chrome wrote no screenshot for $url"
 }
 
-# A Paths view in each theme: captured taller than the table, then trimmed to its last row.
+# A Paths view in each theme, at PATHS_WIDTH: captured taller than the table, then trimmed to its last row.
 shoot_paths() {
   local name="$1" theme png
   for theme in "${THEMES[@]}"; do
     png="$WORK/$(named "$name" "$theme").png"
-    capture "$DASHBOARD_URL/paths" "$png" 900 "$theme"
+    capture "$DASHBOARD_URL/paths" "$png" 900 "$theme" "" "$PATHS_WIDTH"
     magick "$png" -background "$(background "$theme")" -fuzz 2% -define trim:edges=south -trim +repage "$png"
   done
 }
@@ -247,10 +251,13 @@ shoot_fixed filtered "$DASHBOARD_URL/agents/$east" 763
 wait_until "ten healthy paths" healthy 10
 
 step "A duplicate agent, without consolidated mode"
-"$DEMO" duplicate-agent >/dev/null 2>&1
-wait_until "agent-east-copy to take agent-east's paths" east_has_no_paths
+# agent-east has to serve its scrapes before the copy starts. unfilter just restarted it, and "ten healthy paths" passes
+# on the paths' last scrapes from before the restart, so a copy started then took every path before agent-east served
+# four, and with no paths left it never served more. Its id stays the same once the copy has its paths.
 east="$(agent_id agent-east)"
 wait_until "agent-east's scrapes since the filter's restart" has_scrapes "$DASHBOARD_URL/agents/$east" 4
+"$DEMO" duplicate-agent >/dev/null 2>&1
+wait_until "agent-east-copy to take agent-east's paths" east_has_no_paths
 shoot_fixed duplicate "$DASHBOARD_URL/agents/$east" 414
 "$DEMO" duplicate-agent-stop >/dev/null 2>&1
 wait_until "ten healthy paths" healthy 10

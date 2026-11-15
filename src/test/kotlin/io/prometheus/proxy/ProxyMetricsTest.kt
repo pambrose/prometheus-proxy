@@ -33,6 +33,7 @@ import io.prometheus.common.mockProxyForMetrics
 import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.metrics.model.snapshots.GaugeSnapshot
 import io.prometheus.metrics.model.snapshots.Labels
+import kotlin.time.Clock
 
 // Tests for ProxyMetrics which manages Prometheus metrics for the proxy component.
 // Metrics include counters for scrape requests, connects, evictions, heartbeats,
@@ -227,9 +228,9 @@ class ProxyMetricsTest : StringSpec() {
     // ==================== Gauge Tests ====================
 
     "proxy start time gauge should hold the start time in Unix seconds" {
-      val before = System.currentTimeMillis() / 1_000.0
+      val before = Clock.System.now().toEpochMilliseconds() / 1_000.0
       opened(ProxyMetrics(mockProxyForMetrics()))
-      val after = System.currentTimeMillis() / 1_000.0
+      val after = Clock.System.now().toEpochMilliseconds() / 1_000.0
 
       val gauge =
         PrometheusRegistry.defaultRegistry.scrape()

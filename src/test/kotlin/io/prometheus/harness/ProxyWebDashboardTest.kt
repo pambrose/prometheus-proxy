@@ -43,11 +43,13 @@ import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import io.mockk.verify
 import io.prometheus.Agent
+import io.prometheus.Proxy
 import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.common.TestPorts
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
+import io.prometheus.proxy.dashboard.DashboardFixtures.scrapeRecord
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml
 import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.ASSET_DIR
 import io.prometheus.proxy.dashboard.ProxySnapshot
@@ -64,6 +66,7 @@ import kotlin.time.Duration.Companion.seconds
 class ProxyWebDashboardTest : StringSpec() {
   /** The proxy, client and optional agent one spec runs against. Torn down by [withDashboard]. */
   private class DashboardEnv(
+    val proxy: Proxy,
     val client: HttpClient,
     private val grpcPort: Int,
     private val configFile: String,
@@ -122,7 +125,7 @@ class ProxyWebDashboardTest : StringSpec() {
       )
     val t1 = System.nanoTime()
 
-    val env = DashboardEnv(newClient(), grpcPort, configFile, dashboardPort)
+    val env = DashboardEnv(proxy, newClient(), grpcPort, configFile, dashboardPort)
     val t2 = System.nanoTime()
     try {
       env.block()
@@ -305,6 +308,28 @@ class ProxyWebDashboardTest : StringSpec() {
         // The agent layout must still be the default, so the new route is additive rather than a
         // redirect that changes what an existing bookmark to /dashboard does.
         client.get("$base/dashboard").bodyAsText() shouldContain "Agents"
+      }
+    }
+
+    // The full chain for a path whose agent has gone: Proxy.recordScrape, PathHistory, the snapshot, the table. The
+    // gone path's one scrape is followed by more than the recent-scrapes queue holds (200), which before PathHistory
+    // pushed it out of the table; it must now stay, with its history strip.
+    "a gone path should stay in the path layout after more scrapes than the recent-scrapes queue holds" {
+      withDashboard(HISTORY_HTTP_PORT, HISTORY_GRPC_PORT, HISTORY_DASHBOARD_PORT) {
+        proxy.recordScrape(
+          scrapeRecord(agentId = "9", agentName = "warehouse-01", path = "orphan_metrics", statusCode = 503),
+        )
+        repeat(250) { proxy.recordScrape(scrapeRecord(agentId = "7", agentName = "busy-01", path = "busy_metrics")) }
+
+        eventually(20.seconds) {
+          val table = client.get("$base/dashboard/paths").bodyAsText()
+
+          table shouldContain "/orphan_metrics"
+          table shouldContain "warehouse-01"
+          table shouldContain """aria-label="0 of 1 recent scrapes succeeded""""
+          // Each path keeps only pathHistorySize (20) records, however many it had.
+          table shouldContain """aria-label="20 of 20 recent scrapes succeeded""""
+        }
       }
     }
 
@@ -633,6 +658,10 @@ class ProxyWebDashboardTest : StringSpec() {
     private const val CAP_HTTP_PORT = TestPorts.DASHBOARD_UI_CAP_HTTP_PORT
     private const val CAP_GRPC_PORT = TestPorts.DASHBOARD_UI_CAP_GRPC_PORT
     private const val CAP_DASHBOARD_PORT = TestPorts.DASHBOARD_UI_CAP_DASHBOARD_PORT
+
+    private const val HISTORY_HTTP_PORT = TestPorts.DASHBOARD_UI_HISTORY_HTTP_PORT
+    private const val HISTORY_GRPC_PORT = TestPorts.DASHBOARD_UI_HISTORY_GRPC_PORT
+    private const val HISTORY_DASHBOARD_PORT = TestPorts.DASHBOARD_UI_HISTORY_DASHBOARD_PORT
 
     private const val FRAME_HTTP_PORT = TestPorts.DASHBOARD_UI_FRAME_HTTP_PORT
     private const val FRAME_GRPC_PORT = TestPorts.DASHBOARD_UI_FRAME_GRPC_PORT

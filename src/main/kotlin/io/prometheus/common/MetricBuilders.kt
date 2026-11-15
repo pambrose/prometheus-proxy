@@ -22,6 +22,7 @@ import io.prometheus.metrics.core.metrics.Counter
 import io.prometheus.metrics.core.metrics.Gauge
 import io.prometheus.metrics.core.metrics.GaugeWithCallback
 import io.prometheus.metrics.core.metrics.Histogram
+import kotlin.time.Clock
 
 /**
  * Builds the proxy's and agent's metrics with the settings they all share. They aren't registered: every agent, and
@@ -86,5 +87,5 @@ internal object MetricBuilders {
   }
 
   /** Sets this gauge to the current Unix time in seconds, as the 0.x client's `setToCurrentTime()` did. */
-  fun GaugeDataPoint.setToCurrentTime() = set(System.currentTimeMillis() / MILLIS_PER_SECOND)
+  fun GaugeDataPoint.setToCurrentTime() = set(Clock.System.now().toEpochMilliseconds() / MILLIS_PER_SECOND)
 }

@@ -94,6 +94,13 @@ every agent when agent auth is off.
 - **A guided tour of the demo.** `demos/dashboard/demo.sh tour` walks a presenter through every scenario, one step
   at a time. Two new ones show an agent's config deployed twice by mistake, which now settles instead of the two
   fighting over their paths, and Zipkin tracing of the calls between the agents and the proxies.
+- **Paths whose agent has gone stay on the dashboard for an hour.** The Paths view used to lose a gone path within
+  a minute on a busy proxy, since it rebuilt it from the 200 most recent scrapes across all paths. Each path now
+  keeps its own history, and a gone path stays for `proxy.dashboard.departedPathRetentionSecs` (default 3600) after
+  its last scrape.
+- **A History column on the dashboard.** Each path's last 20 scrapes (`proxy.dashboard.pathHistorySize`) show as a
+  row of green and red dots with the share that succeeded, so a target that fails every scrape no longer looks like
+  one that failed once.
 
 ### Security
 

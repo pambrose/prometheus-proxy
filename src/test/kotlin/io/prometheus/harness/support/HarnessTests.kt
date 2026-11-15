@@ -69,6 +69,7 @@ import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.plusAssign
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeSource
 
 data class ProxyCallTestArgs(
   val agent: Agent,
@@ -101,8 +102,8 @@ internal object HarnessTests {
     port: Int,
     timeout: kotlin.time.Duration = 5.seconds,
   ) {
-    val deadline = System.currentTimeMillis() + timeout.inWholeMilliseconds
-    while (System.currentTimeMillis() < deadline) {
+    val deadline = TimeSource.Monotonic.markNow() + timeout
+    while (deadline.hasNotPassedNow()) {
       try {
         java.net.Socket().use { socket ->
           socket.connect(java.net.InetSocketAddress("localhost", port), 250)

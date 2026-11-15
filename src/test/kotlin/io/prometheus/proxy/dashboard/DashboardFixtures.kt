@@ -18,9 +18,10 @@ package io.prometheus.proxy.dashboard
 
 import io.prometheus.common.TestPorts
 import io.prometheus.proxy.ScrapeRecord
-import java.time.Instant
+import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 /**
  * Shared builders for the dashboard view models.
@@ -32,6 +33,7 @@ import kotlin.time.Duration.Companion.seconds
  * about — which is what makes the assertions readable.
  */
 internal object DashboardFixtures {
+  // lastScrape is shorthand for a one-record history, since a path view's last scrape is its history's newest.
   fun pathView(
     path: String = "app_metrics",
     agentIds: List<String> = ["1"],
@@ -41,7 +43,8 @@ internal object DashboardFixtures {
     lastScrape: ScrapeRecord? = null,
     isDeparted: Boolean = false,
     agentNames: List<String> = agentIds.map { "agent-$it" },
-  ) = PathView(path, agentIds, labels, targetUrl, pathSource, lastScrape, isDeparted, agentNames)
+    history: List<ScrapeRecord> = listOfNotNull(lastScrape),
+  ) = PathView(path, agentIds, labels, targetUrl, pathSource, isDeparted, agentNames, history)
 
   fun agentView(
     agentId: String = "1",
@@ -58,7 +61,7 @@ internal object DashboardFixtures {
     launchId = "launch-abc",
     consolidated = false,
     isValid = true,
-    connectTime = Instant.now().minusSeconds(120),
+    connectTime = Clock.System.now() - 120.seconds,
     inactivity = inactivity,
     backlogSize = 0,
     paths = paths,
@@ -73,7 +76,7 @@ internal object DashboardFixtures {
     outcome: String = "success",
     durationMillis: Long = 41,
     contentLength: Int = 1800,
-    at: Instant = Instant.now(),
+    at: Instant = Clock.System.now(),
     agentName: String = "agent-$agentId",
   ) = ScrapeRecord(agentId, agentName, path, statusCode, outcome, durationMillis, contentLength, at)
 

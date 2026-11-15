@@ -143,6 +143,15 @@ internal object ProxyDashboardCss {
     /* Forced colours replace every background, the mask's paint included, so the icon would vanish. */
     @media (forced-colors: active) { .copy::before { forced-color-adjust:none; background:ButtonText; } }
     .tag.crit { background:var(--crit-soft); color:var(--crit); margin-left:7px; }
+    /* A path's recent scrapes, oldest first. Each <i> is a run of like results and paints a 4px dot every 6px, so a
+       healthy strip is one element however long it is. Round, as everything that reports state is. A full strip, at
+       the default 20 scrapes, is 120px. */
+    .hist { display:inline-flex; vertical-align:middle; margin:-2px 7px 0 0; }
+    .hist i { display:block; height:6px; width:calc(var(--n) * 6px);
+      background:radial-gradient(circle at 3px 3px, var(--dot) 2px, transparent 2.5px) 0 0 / 6px 6px repeat-x; }
+    .hist i.ok { --dot:var(--ok); } .hist i.crit { --dot:var(--crit); }
+    /* Forced colours drop backgrounds, the dots included. */
+    @media (forced-colors: active) { .hist i { forced-color-adjust:none; } }
     @media (max-width:720px) { .md { grid-template-columns:1fr; } .md-list { border-right:0; border-bottom:1px solid var(--line); } }
     /* Touch, not width: a 25px pill is a comfortable mouse target and a poor thumb one, and the two do
        not correlate with viewport size -- a tablet is wide and touch-driven. The dense bar is kept for

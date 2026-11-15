@@ -30,6 +30,7 @@ import kotlinx.html.button
 import kotlinx.html.caption
 import kotlinx.html.div
 import kotlinx.html.head
+import kotlinx.html.i
 import kotlinx.html.main
 import kotlinx.html.meta
 import kotlinx.html.nav
@@ -47,11 +48,12 @@ import kotlinx.html.TR
 import kotlinx.html.time
 import kotlinx.html.tr
 import kotlinx.html.unsafe
-import java.time.Duration
-import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.time.temporal.ChronoUnit
+import kotlin.time.Clock
+import kotlin.time.Duration
+import kotlin.time.Instant
+import kotlin.time.toJavaInstant
 
 /**
  * Which view a session is looking at.
@@ -211,6 +213,7 @@ internal object ProxyDashboardHtml {
           th(scope = ThScope.col) { +"Last scrape" }
           th(scope = ThScope.col, classes = "num") { +"Status" }
           th(scope = ThScope.col, classes = "num") { +"Duration" }
+          th(scope = ThScope.col) { +"History" }
         }
       }
       tbody {
@@ -235,6 +238,7 @@ internal object ProxyDashboardHtml {
                 span(if (scrape.isSuccess) "pill ok" else "pill crit") { +"${scrape.statusCode}" }
             }
             td("num dim") { +(path.lastScrape?.let { "${it.durationMillis} ms" } ?: DASH) }
+            historyCell(path)
           }
         }
       }
@@ -269,6 +273,41 @@ internal object ProxyDashboardHtml {
     }
 
   /**
+   * The path's recent scrapes as a row of dots, oldest on the left, then the share that succeeded. Where the Status
+   * column says how the last scrape went, this says whether that is news: a target that fails every scrape and one
+   * that failed once in twenty read the same in Status alone.
+   *
+   * Drawn as one element per run of like results, each painting a dot per scrape as a repeating background, rather
+   * than an element per scrape: the table is pushed whole every refresh, so a healthy path's strip stays one element.
+   * The strip is one image to assistive tech, labelled with the same count the percentage gives.
+   *
+   * A block body, not `= td(...) { }` as the other cells are written: CodeScene doesn't count the conditionals
+   * inside an expression-bodied function's trailing lambda as the function's own, and with this one the file crossed
+   * its Global Conditionals threshold.
+   */
+  private fun TR.historyCell(path: PathView) {
+    td("dim") {
+      val total = path.history.size
+      if (total == 0) {
+        +DASH
+      } else {
+        val succeeded = path.historySucceeded
+        val summary = "$succeeded of $total recent scrapes succeeded"
+        span("hist") {
+          attributes["role"] = "img"
+          attributes["aria-label"] = summary
+          attributes["title"] = summary
+          path.historyRuns.forEach { (ok, count) ->
+            i(if (ok) "ok" else "crit") { attributes["style"] = "--n:$count" }
+          }
+        }
+        // Floored, so a path with any failure never reads 100%.
+        +"${succeeded * 100 / total}%"
+      }
+    }
+  }
+
+  /**
    * A scrape's time, or a dash when there is none. Rendered as `<time datetime="…Z">` with the time of day in the
    * proxy's zone, which the page's script replaces with the viewer's (see SELECTION_JS).
    */
@@ -278,8 +317,9 @@ internal object ProxyDashboardHtml {
       return
     }
     time {
-      attributes["datetime"] = at.truncatedTo(ChronoUnit.SECONDS).toString()
-      +timeFormat.format(at)
+      attributes["datetime"] = Instant.fromEpochSeconds(at.epochSeconds).toString()
+      // java.time's formatter, since the standard library has none that takes a zone.
+      +timeFormat.format(at.toJavaInstant())
     }
   }
 
@@ -383,7 +423,7 @@ internal object ProxyDashboardHtml {
         if (agent.agentId == selectedId) attributes["aria-current"] = "true"
         span {
           span(if (agent.isValid) "led ok" else "led crit") {}
-          +agent.displayName()
+          +agentLabel(agent.agentName)
         }
         span("host") { +"${agent.remoteAddr} · ${agent.paths.size} paths" }
       }
@@ -418,7 +458,7 @@ internal object ProxyDashboardHtml {
     div("hero") {
       div("hero-title") {
         span(if (agent.isValid) "led ok" else "led crit") {}
-        +agent.displayName()
+        +agentLabel(agent.agentName)
         if (agent.consolidated) span("tag") { +"consolidated" }
       }
       agent.failoverPosition?.also { position ->
@@ -432,7 +472,7 @@ internal object ProxyDashboardHtml {
           agent.remoteAddr,
           "host ${agent.hostName}",
           "launch ${agent.launchId}",
-          "up ${humanize(Duration.between(agent.connectTime, Instant.now()))}",
+          "up ${humanize(Clock.System.now() - agent.connectTime)}",
           "idle ${agent.inactivity.inWholeSeconds}s",
           "backlog ${agent.backlogSize}",
           "evicted in ${agent.evictionCountdownSecs(snapshot.maxAgentInactivitySecs)}s",
@@ -535,8 +575,6 @@ internal object ProxyDashboardHtml {
     selectedId: String?,
   ): String = createHTML().div("md-detail") { detailInner(snapshot, selectedId, oob = false) }
 
-  private fun AgentView.displayName(): String = agentLabel(agentName)
-
   /**
    * Identity arrives at `registerAgent`, which is strictly after the transport filter created the
    * context — so a just-connected agent legitimately has none yet. Showing the raw placeholder would
@@ -546,12 +584,15 @@ internal object ProxyDashboardHtml {
    */
   private fun agentLabel(name: String): String = if (name == UNASSIGNED) "(registering…)" else name
 
-  private fun humanize(duration: Duration): String =
-    when {
-      duration.toDays() > 0 -> "${duration.toDays()}d ${duration.toHoursPart()}h"
-      duration.toHours() > 0 -> "${duration.toHours()}h ${duration.toMinutesPart()}m"
-      duration.toMinutes() > 0 -> "${duration.toMinutes()}m"
-      else -> "${duration.seconds}s"
+  /** An agent's uptime at the precision the hero line wants: the two largest units from a day up, then one. */
+  internal fun humanize(duration: Duration): String =
+    duration.toComponents { days, hours, minutes, seconds, _ ->
+      when {
+        days > 0 -> "${days}d ${hours}h"
+        hours > 0 -> "${hours}h ${minutes}m"
+        minutes > 0 -> "${minutes}m"
+        else -> "${seconds}s"
+      }
     }
 
   // PathSource names are agent-side enum constants carried as free text, so an unrecognized value is

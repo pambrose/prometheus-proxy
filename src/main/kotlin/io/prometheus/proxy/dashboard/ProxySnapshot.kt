@@ -18,17 +18,19 @@ package io.prometheus.proxy.dashboard
 
 import io.prometheus.Proxy
 import io.prometheus.proxy.ScrapeRecord
-import java.time.Instant
 import kotlin.time.Duration
+import kotlin.time.Instant
 
 /**
- * One path as the dashboard shows it, joined with the last scrape that ran against it.
+ * One path as the dashboard shows it, joined with the recent scrapes that ran against it.
  *
- * A view may be **departed** — a path that is no longer registered but that [lastScrape] still
- * remembers. Those exist because the proxy deletes a path the moment its last agent goes
+ * A view may be **departed** — a path that is no longer registered but whose history the proxy still
+ * keeps. Those exist because the proxy deletes a path the moment its last agent goes
  * ([io.prometheus.proxy.ProxyPathManager.removeFromPathManager]), so an agent-backed view of state can
  * only ever show what is currently live. A path that stopped serving is the single most useful thing an
  * operator can be shown, and without this it is the one thing that silently disappears.
+ *
+ * @param history the path's recent scrapes, newest first, at most `proxy.dashboard.pathHistorySize` of them
  */
 internal data class PathView(
   val path: String,
@@ -36,10 +38,13 @@ internal data class PathView(
   val labels: String,
   val targetUrl: String = "",
   val pathSource: String = "",
-  val lastScrape: ScrapeRecord? = null,
   val isDeparted: Boolean = false,
   val agentNames: List<String> = emptyList(),
+  val history: List<ScrapeRecord> = emptyList(),
 ) {
+  /** The path's most recent scrape, or null for one not yet scraped. */
+  val lastScrape: ScrapeRecord? get() = history.firstOrNull()
+
   /**
    * The agent that last served this path, named the way the agent list names it.
    *
@@ -52,6 +57,28 @@ internal data class PathView(
 
   /** How many agents beyond the first back this path, for the `+N` marker on a consolidated row. */
   val additionalAgents: Int get() = (agentIds.size - 1).coerceAtLeast(0)
+
+  // The two below are computed once per snapshot, not on every read: a snapshot is rendered for every session and page
+  // that shows it.
+
+  /** How many of [history]'s scrapes succeeded. */
+  val historySucceeded: Int by lazy(LazyThreadSafetyMode.PUBLICATION) { history.count { it.isSuccess } }
+
+  /**
+   * [history] as runs of consecutive like results, **oldest first**, each a `(succeeded, count)` pair: what the path
+   * table's history strip draws, one element per run.
+   */
+  val historyRuns: List<Pair<Boolean, Int>> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+    buildList {
+      history.asReversed().forEach { record ->
+        val last = lastOrNull()
+        if (last != null && last.first == record.isSuccess)
+          set(lastIndex, last.first to last.second + 1)
+        else
+          add(record.isSuccess to 1)
+      }
+    }
+  }
 }
 
 /** One connected agent as the dashboard shows it. */
@@ -124,35 +151,35 @@ internal data class ProxySnapshot(
 
   companion object {
     /**
-     * Joins each registered path to its most recent scrape, then adds a row for every path the scrape
-     * history remembers but the path map no longer holds.
+     * Joins each registered path to its recent scrapes, then adds a row for every path the history
+     * remembers but the path map no longer holds.
      *
      * Those extra rows are the point of the path-centric layout. `ProxyPathManager` deletes a path the
      * instant its last agent goes, so a view built only from live registrations cannot show a target
-     * that *stopped* working — the moment an operator most needs to see it. The scrape history outlives
-     * the agent, and is bounded by `proxy.dashboard.recentScrapesQueueSize`, so this cannot grow without limit.
+     * that *stopped* working — the moment an operator most needs to see it. The history outlives the
+     * agent, and [io.prometheus.proxy.PathHistory] bounds it, by `proxy.dashboard.departedPathRetentionSecs`
+     * and a cap on gone paths, so this cannot grow without limit.
      *
      * Pure and separated from [collect] so it is testable without standing up a proxy.
      *
      * @param registered live path registrations, without their scrape join
-     * @param scrapes recent scrapes, **newest first** — as [Proxy.recentScrapes] returns them
+     * @param history each path's recent scrapes, **newest first** — as [io.prometheus.proxy.PathHistory.snapshot]
+     *   returns them
      */
     internal fun buildPathViews(
       registered: List<PathView>,
-      scrapes: List<ScrapeRecord>,
+      history: Map<String, List<ScrapeRecord>>,
     ): List<PathView> {
-      // Newest-first input means the first record per path is already the latest: no sort, no max-by.
-      val latestByPath = scrapes.groupBy { it.path }.mapValues { (_, records) -> records.first() }
       val registeredPaths = registered.mapTo(mutableSetOf()) { it.path }
 
-      val live = registered.map { it.copy(lastScrape = latestByPath[it.path]) }
+      val live = registered.map { it.copy(history = history[it.path].orEmpty()) }
       val departed =
-        latestByPath
+        history
           .filterKeys { it !in registeredPaths }
-          .map { (path, record) ->
+          .map { (path, records) ->
             // agentNames stays empty: the agent is gone, so servingAgent falls through to the name the
             // scrape record captured while it was still here.
-            PathView(path = path, agentIds = emptyList(), labels = "", lastScrape = record, isDeparted = true)
+            PathView(path = path, agentIds = emptyList(), labels = "", isDeparted = true, history = records)
           }
 
       // One sorted list rather than two sections, so a departed path sits where the eye expects to find
@@ -178,7 +205,8 @@ internal data class ProxySnapshot(
      * That is acceptable only because collects are bounded by the refresh interval — which is why
      * scrape completions deliberately do not wake the push loop.
      *
-     * Cost is two monitor acquisitions per call regardless of how many sessions are connected, which is
+     * Cost is three monitor acquisitions per call (the path map, the recent scrapes, the path history),
+     * taken one after another and never nested, regardless of how many sessions are connected, which is
      * why the caller collects once and fans out rather than collecting per session.
      */
     fun collect(proxy: Proxy): ProxySnapshot {
@@ -202,7 +230,10 @@ internal data class ProxySnapshot(
           }
           .sortedBy { it.path }
 
-      val paths = buildPathViews(registered, scrapes)
+      // Taken after the path map, so a path registered in between reads as gone for one refresh rather than a path
+      // that went reading as live.
+      val history = proxy.pathHistory.snapshot(pathInfos.keys)
+      val paths = buildPathViews(registered, history)
 
       // Derived from the registered list only: a departed path has no agent to attribute it to, and the
       // agent-centric layout is by definition showing agents that are still here.

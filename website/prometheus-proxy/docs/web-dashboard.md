@@ -35,7 +35,9 @@ and how recent scrapes actually went.
         path = "dashboard"          // Served at http://<proxy>:8094/dashboard
         host = "0.0.0.0"            // "127.0.0.1" keeps it on the proxy host
         refreshIntervalSecs = 2     // How often drifting counters are re-pushed
-        recentScrapesQueueSize = 200
+        recentScrapesQueueSize = 200  // Recent scrapes across all agents, for each agent's panel
+        pathHistorySize = 20        // Scrapes kept per path, for the History column
+        departedPathRetentionSecs = 3600  // How long a path whose agent has gone stays listed
       }
     }
     ```
@@ -148,6 +150,11 @@ Every path on one row, with the endpoint behind it and how its last scrape went:
 | **Target** | the URL the agent actually fetches, with a button beside it that copies it to the clipboard |
 | **Src** | `cfg` for a statically configured path, `disc` for one from [dynamic discovery](configuration/agent.md#dynamic-target-discovery) |
 | **Last scrape / Status / Duration** | the most recent result for that path |
+| **History** | the path's recent scrapes as a row of dots, oldest on the left, green for a success and red for a failure, then the share that succeeded |
+
+Status says how the last scrape went; History says whether that is news. A target that fails every scrape and one that
+failed once in twenty look the same in Status alone. Each path keeps its last `pathHistorySize` scrapes (default 20)
+whatever the other paths are doing, and the percentage is rounded down, so a path with any failure never reads 100%.
 
 The copy button copies the URL as the table shows it. The agent [redacts](security/index.md#credentials-in-urls) a target
 URL's user info and query values before sending it to the proxy, so a URL that carries either is copied with
@@ -160,10 +167,14 @@ serving it. This is the layout's main reason to exist.
 
 The proxy deletes a path the moment its last agent departs, so the Agents layout cannot show it — a
 target that *stopped* working simply disappears from that view, at exactly the moment you are looking
-for it. The Paths layout reconstructs those rows from recent scrape history, which outlives the agent.
+for it. The Paths layout rebuilds those rows from each path's scrape history, which outlives the agent, and
+the row keeps its History column, so you can see whether the target was failing before its agent went.
 
-That history is bounded by `recentScrapesQueueSize` (default 200 records), so a path that departed long
-enough ago eventually ages out. It is a recent-past view, not an audit log.
+A gone path stays for `departedPathRetentionSecs` (default 3600, an hour) after its last scrape. That is measured
+in time, not in scrapes, so a busy proxy keeps a gone path as long as a quiet one does. Earlier versions rebuilt
+these rows from the 200 most recent scrapes across all paths, which on a proxy with a hundred paths scraped every
+15 seconds is about 30 seconds of history. At most 1,000 gone paths are kept, oldest dropped first, and none
+survives a proxy restart. It is a recent-past view, not an audit log.
 
 ## Why it is on its own port
 
@@ -257,8 +268,8 @@ Both are lists, so set them in a config file; see [Dashboard configuration](conf
   names one of them, with the others counted in the `+N`, and shows that agent's target URL and source.
   When it leaves, the row names the next agent and shows its target. The path's labels, which service
   discovery serves, stay the first registrant's.
-- **Departed paths age out.** They survive only as long as their last scrape stays in the recent-scrape
-  window (`recentScrapesQueueSize`, default 200).
+- **Departed paths age out.** A gone path stays for `departedPathRetentionSecs` (default 3600) after its last
+  scrape, at most 1,000 of them at once, and none survives a proxy restart.
 - **Per-agent identities** from [agent authentication](security/index.md) are not shown. The proxy
   checks an agent's identity on its calls and records it with each non-consolidated path it registers,
   to decide whether another agent may take that path over, but the dashboard does not display it.

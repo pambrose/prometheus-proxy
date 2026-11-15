@@ -197,6 +197,11 @@ object TestPorts {
   const val DASHBOARD_UI_PAGE_FRESH_GRPC_PORT = 9724
   const val DASHBOARD_UI_PAGE_FRESH_DASHBOARD_PORT = 9725
 
+  // ProxyWebDashboardTest: a gone path outliving the recent-scrapes queue.
+  const val DASHBOARD_UI_HISTORY_HTTP_PORT = 9726
+  const val DASHBOARD_UI_HISTORY_GRPC_PORT = 9727
+  const val DASHBOARD_UI_HISTORY_DASHBOARD_PORT = 9728
+
   // ProxyTest and AgentTest: what a real proxy or agent binds in the garbage-collection and failed-startup cases.
   // These came from ServerSocket(0), released and bound again later, so another connection could take one in between
   // (October #46). The port each failed-startup case holds open as taken still does.

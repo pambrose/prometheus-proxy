@@ -33,6 +33,7 @@ import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.metrics.model.snapshots.GaugeSnapshot
 import io.prometheus.metrics.model.snapshots.Labels
 import kotlin.concurrent.atomics.AtomicInt
+import kotlin.time.Clock
 
 // Tests for AgentMetrics which manages Prometheus metrics for the agent component.
 // Metrics include counters for scrape requests and results, connect counts,
@@ -191,9 +192,9 @@ class AgentMetricsTest : StringSpec() {
     // ==================== Gauge Tests ====================
 
     "start time gauge should hold the start time in Unix seconds" {
-      val before = System.currentTimeMillis() / 1_000.0
+      val before = Clock.System.now().toEpochMilliseconds() / 1_000.0
       opened(AgentMetrics(mockAgentForMetrics()))
-      val after = System.currentTimeMillis() / 1_000.0
+      val after = Clock.System.now().toEpochMilliseconds() / 1_000.0
 
       val gauge =
         PrometheusRegistry.defaultRegistry.scrape()

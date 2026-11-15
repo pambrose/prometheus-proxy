@@ -299,6 +299,12 @@ Two support helpers also live here (not test classes themselves):
   disconnect, and a transport that ends after its eviction logging at INFO only for an announced agent
 - **ProxyUtilsTest** — Helper functions: invalidAgentContextResponse, respondWith
 - **ProxyMetricsTest** — Prometheus metrics registration and gauge/counter updates
+- **PathHistoryTest** — the dashboard's per-path scrape history: each path keeps only its newest records, newest
+  first, and a busy path can't push another's out; recording alone holds the history to the live paths plus the
+  gone-path cap, evicting the path scraped least recently, with no snapshot to prune it; a registered path keeps its
+  history however old, a gone one only until its retention has passed since its last scrape, and gone paths past the
+  cap go oldest first; a path that comes back keeps its history, a `//path` scrape keys under the path map's key, and a
+  snapshot is a copy
 - **ProxyMetricsLincheckTest** — Lincheck, stress only (tagged `Lincheck`): a path registering, scrapes recording its
   latency and response size, and its removal race; no per-path histogram series outlives the path's removal
 - **RecentReqsSynchronizationTest** — Synchronized access to recentReqs EvictingQueue (prevents
@@ -324,14 +330,16 @@ Two support helpers also live here (not test classes themselves):
 - **ProxyEventBusTest** — Dashboard event bus: ordered delivery, non-blocking emit with no subscriber, no replay to a
   late subscriber, fan-out to multiple subscribers, and AgentContextManager emitting on connect only
 - **ProxyDashboardHtmlTest** (`dashboard/`) — Dashboard renderer: top-level out-of-band push regions, agent- and
-  path-centric layouts, tolerant selection and layout parsing, departed paths, failover markers, accessibility, and
-  the WebSocket connection indicator
+  path-centric layouts, tolerant selection and layout parsing, departed paths, the path table's history strip (one
+  element per run, a floored percentage, no status pill, visible under forced colours), an agent's uptime, failover
+  markers, accessibility, and the WebSocket connection indicator
 - **ProxyDashboardServiceTest** (`dashboard/`) — Dashboard request guards: the WebSocket Origin check (own host,
   `allowedOrigins`, foreign or malformed origins refused), the opt-in `allowedHosts` Host check against DNS rebinding,
   and the snapshot cache pages and sessions render from: one collect per refresh interval however many reads, shared
   by concurrent reads, and none reused across a topology change, even one landing mid-collect
 - **ProxySnapshotTest** (`dashboard/`) — Dashboard view models: eviction countdown, health thresholds, failover
-  position, and `buildPathViews` joining registered paths to their latest scrape and surfacing departed ones
+  position, a path's history as runs of like results, oldest first, and `buildPathViews` joining registered paths to
+  their history and latest scrape and surfacing departed ones with theirs
 
 One support helper also lives here (not a test class itself):
 
@@ -528,8 +536,9 @@ mechanism that the standard suite cannot reach:
   proxy's server spans arrive under their configured service names, in one trace
 - **ProxyWebDashboardTest** — the dashboard service rather than the renderer: page, WebSocket push,
   selection round-trip, both layouts, a root-mounted base path, with `allowedHosts` set a 403 on every route
-  for a request naming an unknown host, and page GETs and WebSocket messages rendering the cached snapshot while a
-  topology change still shows on the next page
+  for a request naming an unknown host, page GETs and WebSocket messages rendering the cached snapshot while a
+  topology change still shows on the next page, and a gone path staying in the path layout after more scrapes than
+  the recent-scrapes queue holds
 - **TlsMutualAuthRejectionTest** — the negative mutual-TLS path over a real Netty handshake, which the
   in-process TLS specs cannot perform (item 28 in `docs/archive/CODE_REVIEW_JUNE_2026.md`)
 

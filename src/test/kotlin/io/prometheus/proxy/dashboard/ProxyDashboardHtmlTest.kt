@@ -29,7 +29,11 @@ import io.prometheus.common.TestPorts
 import io.prometheus.proxy.ScrapeRecord
 import kotlinx.html.html
 import kotlinx.html.stream.createHTML
-import java.time.Instant
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 class ProxyDashboardHtmlTest : StringSpec() {
   private fun path(
@@ -56,6 +60,14 @@ class ProxyDashboardHtmlTest : StringSpec() {
     scrapes: List<ScrapeRecord> = emptyList(),
     paths: List<PathView> = agents.flatMap { it.paths }.distinct(),
   ) = DashboardFixtures.snapshot(agents = agents, scrapes = scrapes, paths = paths)
+
+  // The path layout's push for one path whose history has these status codes, newest first, as PathHistory hands
+  // them over.
+  private fun historyTable(vararg codes: Int): String {
+    val history = codes.map { DashboardFixtures.scrapeRecord(path = "app_metrics", statusCode = it) }
+    val served = DashboardFixtures.pathView(path = "app_metrics", history = history)
+    return ProxyDashboardHtml.pushFragment(snapshot(paths = [served]), null, "/dashboard", DashboardLayout.PATH)
+  }
 
   private fun renderFullPage(layout: DashboardLayout = DashboardLayout.AGENT) =
     createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(), null, "/dashboard", layout) } }
@@ -389,6 +401,18 @@ class ProxyDashboardHtmlTest : StringSpec() {
       }
     }
 
+    "an agent's uptime should show its two largest units from a day up, then one" {
+      ProxyDashboardHtml.humanize(45.seconds) shouldBe "45s"
+      ProxyDashboardHtml.humanize(3.minutes + 59.seconds) shouldBe "3m"
+      ProxyDashboardHtml.humanize(2.hours + 5.minutes + 30.seconds) shouldBe "2h 5m"
+      ProxyDashboardHtml.humanize(1.days + 3.hours + 20.minutes) shouldBe "1d 3h"
+    }
+
+    "the agent detail should show how long the agent has been connected" {
+      val agent = DashboardFixtures.agentView(agentId = "1")
+      ProxyDashboardHtml.detailFragment(snapshot(agents = [agent]), selectedId = "1") shouldContain " · up 2m · "
+    }
+
     "a path that was never scraped should show a dash rather than a time" {
       val bare = DashboardFixtures.pathView(path = "new_path")
       val html = ProxyDashboardHtml.pushFragment(snapshot(paths = [bare]), null, "/dashboard", DashboardLayout.PATH)
@@ -554,6 +578,37 @@ class ProxyDashboardHtmlTest : StringSpec() {
 
       html shouldContain """lang="en""""
       html shouldContain "<main"
+    }
+
+    // ==================== History column ====================
+
+    "the path table should have a History column" {
+      renderFullPage(DashboardLayout.PATH) shouldContain """<th scope="col">History</th>"""
+    }
+
+    "the history strip should draw a path's scrapes oldest first, one element per run of like results" {
+      // Oldest to newest this is ok, ok, crit, crit, ok.
+      val html = historyTable(200, 503, 503, 200, 200)
+
+      html shouldContain
+        """<i class="ok" style="--n:2"></i><i class="crit" style="--n:2"></i><i class="ok" style="--n:1"></i>"""
+      html shouldContain """role="img" aria-label="3 of 5 recent scrapes succeeded""""
+      html shouldContain "</span>60%"
+    }
+
+    // 2 of 3 is 66.7%: rounding would be fine here, but 199 of 200 would round to a misleading 100%.
+    "a path with any failed scrape should never read 100%" {
+      historyTable(200, 200, 503) shouldContain "</span>66%"
+    }
+
+    // demos/dashboard/screenshots.sh decides the demo is healthy by counting `class="pill ok"` in the path table
+    // against the number of paths, so the strip must not draw with the status pill.
+    "the history strip should leave the status pill as the row's only pill" {
+      Regex("""class="pill ok"""").findAll(historyTable(200, 200, 200, 200, 200)).count() shouldBe 1
+    }
+
+    "the history strip should stay visible under forced colours" {
+      ProxyDashboardCss.CSS shouldContain ".hist i { forced-color-adjust:none; }"
     }
 
     "the path table should be captioned and its headers scoped" {
