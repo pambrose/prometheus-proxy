@@ -61,7 +61,10 @@ proxy {
 ```
 
 Because `auth` is a list of objects, it is config-file-only — there is no CLI/env equivalent, and the
-`-D` override cannot express a list. Identity names must be unique and tokens non-empty.
+`-D` override cannot express a list. Identity names must be unique and tokens non-empty. The name
+`legacy-agent-token` is reserved for the legacy `proxy.agentToken`, which the logs name that way and the
+dashboard shows as *shared token*, so the proxy refuses to start with an entry of that name, whether or
+not `proxy.agentToken` is set.
 
 ## Service Discovery
 

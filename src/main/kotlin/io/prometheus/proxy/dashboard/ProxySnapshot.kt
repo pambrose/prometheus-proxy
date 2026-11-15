@@ -133,7 +133,8 @@ internal data class AgentView(
 /**
  * An auth identity as the dashboard names it, or null when there is none to show: agent auth is off, or the path is
  * departed. The legacy `proxy.agentToken` is an identity in name only, one token every agent shares, so it reads as
- * that rather than as its internal name.
+ * that rather than as its internal name, which [io.prometheus.proxy.AgentAuthManager.create] keeps any `proxy.auth`
+ * identity from taking.
  */
 internal fun identityLabel(identity: String): String? =
   when (identity) {

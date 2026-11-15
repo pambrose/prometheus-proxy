@@ -83,7 +83,10 @@ internal class AgentAuthManager private constructor(
   companion object {
     private val logger = logger {}
 
-    /** Synthetic identity name for the legacy shared `proxy.agentToken` when it is honored as allow-all. */
+    /**
+     * Synthetic identity name for the legacy shared `proxy.agentToken` when it is honored as allow-all. Reserved:
+     * [create] refuses a `proxy.auth` entry with this name.
+     */
     internal const val LEGACY_IDENTITY_NAME = "legacy-agent-token"
 
     /** gRPC context key carrying the resolved identity from the interceptor to the RPC handler. */
@@ -99,8 +102,9 @@ internal class AgentAuthManager private constructor(
     /**
      * Builds the manager from raw entries, validating up front (fail-fast at startup).
      *
-     * Rejects empty names/tokens and duplicate identity names. A non-empty [legacyToken] is appended
-     * as an allow-all identity named [LEGACY_IDENTITY_NAME].
+     * Rejects empty names/tokens, an entry named [LEGACY_IDENTITY_NAME], duplicate identity names, and
+     * identities that share a token. A non-empty [legacyToken] is appended as an allow-all identity named
+     * [LEGACY_IDENTITY_NAME].
      */
     internal fun create(
       authEntries: List<AuthEntry>,
@@ -109,6 +113,12 @@ internal class AgentAuthManager private constructor(
       val configured =
         authEntries.map { entry ->
           require(entry.name.isNotEmpty()) { "proxy.auth entry has an empty name" }
+          // The dashboard shows this name as "shared token" (identityLabel), and the logs name the legacy token by it,
+          // so a real identity with it would pass for the shared token in both. Refused with no proxy.agentToken set
+          // too: the dashboard would mislabel it all the same, and setting the token later would fail on a duplicate.
+          require(entry.name != LEGACY_IDENTITY_NAME) {
+            "proxy.auth identity name '${entry.name}' is reserved for the legacy proxy.agentToken"
+          }
           require(entry.token.isNotEmpty()) { "proxy.auth identity '${entry.name}' has an empty token" }
           AgentIdentity(entry.name, sha256(entry.token), entry.paths.toList())
         }
