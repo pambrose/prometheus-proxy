@@ -1,7 +1,6 @@
 # Operational Dashboard
 
-A read-only dashboard for answering the question this system raises most often: **why isn't this target
-scraping?**
+A dashboard for answering the question this system raises most often: **why isn't this target scraping?**
 
 Without it, that answer lives in the logs of two different machines, or in a JSON debug servlet. The
 proxy already holds everything needed to answer it — which agents are connected, which paths they back,
@@ -10,8 +9,9 @@ and how recent scrapes actually went.
 !!! warning "Off by default, and unauthenticated"
 
     The dashboard has **no authentication and no TLS**, the same posture as the admin and metrics endpoints. It
-    shows agent names, hostnames, target URLs, labels and recent activity in one place, so treat its
-    port as internal and do not expose it publicly.
+    shows agent names, hostnames, target URLs, labels and recent activity in one place, and anyone who can reach it
+    can have the proxy scrape a path and read the start of what it returns, so treat its port as internal and do
+    not expose it publicly.
 
     It listens on all interfaces by default, and the proxy logs a warning at startup when it does. Set
     `proxy.dashboard.host` (or `--dashboard_host`) to `127.0.0.1` to keep it on the proxy host.
@@ -39,6 +39,7 @@ and how recent scrapes actually went.
         pathHistorySize = 20        // Scrapes kept per path, for the History column
         departedPathRetentionSecs = 3600  // How long a path whose agent has gone stays listed
         activityLogSize = 500       // Lines kept in the Activity view
+        scrapeNowEnabled = true     // A Scrape button on each path; false removes it and its route
       }
     }
     ```
@@ -152,7 +153,7 @@ Every path on one row, with the endpoint behind it and how its last scrape went:
 
 | | |
 |---|---|
-| **Path** | the registered path Prometheus scrapes, with a button beside it that copies its URL on the proxy, the one to curl, built from the address you opened the dashboard at and the proxy's scrape port |
+| **Path** | the registered path Prometheus scrapes, with a button beside it that copies its URL on the proxy, the one to curl, built from the address you opened the dashboard at and the proxy's scrape port, and one that [scrapes it now](#scrape-now) |
 | **Agent(s)** | the agent serving it; a consolidated path shows the first plus a `+N` count |
 | **Identity** | with [agent authentication](security/index.md) on, the identity that registered the path, which any other agent joining it must share; the legacy shared `agentToken` reads *shared token* |
 | **Target** | the URL the agent actually fetches, with a button beside it that copies it to the clipboard |
@@ -177,6 +178,22 @@ agent has gone. Both apply as you type, and while either is on, the table says h
 The search goes into the page's URL, as `/dashboard/paths?q=team-a&problems=1`, so a filtered view is a link you can
 bookmark or send. Pressing Enter in the box does the same as typing, and the form works as a plain link without the
 page's script.
+
+### Scrape now
+
+The button after a path's copy button scrapes it at once, through its agent, exactly as Prometheus would, and shows
+the result above the table: the status, how long it took, the size, how many metric families and samples came back,
+and the first 2 KB of the body. A failed scrape shows the agent's reason instead. A consolidated path is scraped from
+every agent and merged, as Prometheus sees it. Use it to check a fix without waiting for Prometheus's next scrape, or
+for a curl from a machine that can reach the scrape port.
+
+A scrape from the dashboard isn't one of Prometheus's, so it leaves no trace in what Prometheus reads: not in the
+`proxy_scrape_*` metrics, the path's History, or the agent's recent scrapes. The [Activity](#the-activity-layout) view
+records it instead, with the address of the browser that asked. The agent and the target see it as any other scrape.
+
+So clicks can't crowd out Prometheus, at most four dashboard scrapes run at once, a path is scraped from the dashboard
+at most once every five seconds, and each waits at most ten seconds for its target. Past either limit the panel says
+why instead. `proxy.dashboard.scrapeNowEnabled = false` removes the button and its route.
 
 ### Paths whose agent has gone
 
@@ -305,13 +322,20 @@ web page can do that:
 The Activity layout shows the address each call with a bad token came from, so anyone who can read the dashboard
 can see who has tried the agent port.
 
+Anyone who can reach the dashboard can also have the proxy [scrape a path](#scrape-now) and read the first 2 KB of what
+it returns, even with the scrape port firewalled to Prometheus. The route takes a request only from the dashboard's own
+page: it applies the same Origin check as the WebSocket, and requires the header the page's script sends, which a page on
+another site can't add without the proxy's permission, so a link or form elsewhere can't make it scrape. Set
+`proxy.dashboard.scrapeNowEnabled = false` where that is more than the dashboard's readers should have.
+
 Sessions are also capped at `proxy.dashboard.maxSessions` (default 50), and a client that stops reading or
 sends an oversized message is disconnected. Neither list stops someone who can reach the port directly.
 Both are lists, so set them in a config file; see [Dashboard configuration](configuration/proxy.md#dashboard).
 
 ## Limits
 
-- **Read-only.** There is nothing to click that changes proxy state.
+- **One action.** Nothing on the dashboard changes the proxy's state. Its one action, [scrape now](#scrape-now),
+  scrapes a target as Prometheus would.
 - **No authentication.** Rely on network isolation, as with the admin port; see [Exposure](#exposure) for
   what the dashboard itself guards against.
 - **Consolidated paths show one agent's target.** When several agents register the same path, the row

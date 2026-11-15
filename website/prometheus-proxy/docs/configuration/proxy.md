@@ -103,7 +103,7 @@ When enabled, the following endpoints are available:
 
 ## Dashboard
 
-A read-only operational dashboard on its own port. Off by default.
+An operational dashboard on its own port. Off by default.
 
 ```hocon
 proxy {
@@ -117,6 +117,7 @@ proxy {
     pathHistorySize = 20            // Scrapes kept per path, for the path table's History column
     departedPathRetentionSecs = 3600  // How long a path whose agent has gone stays in the path table
     activityLogSize = 500           // Lines kept in the Activity view: agents and paths coming, going, and refused
+    scrapeNowEnabled = true         // A Scrape button on each path, which scrapes it at once and shows the result
     maxSessions = 50                // Concurrent WebSocket sessions; more are closed
     allowedOrigins = []             // Browser origins allowed besides the dashboard's own host
     allowedHosts = []               // Host names the dashboard answers to; empty turns the check off

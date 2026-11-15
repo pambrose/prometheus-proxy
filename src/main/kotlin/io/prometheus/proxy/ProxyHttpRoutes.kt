@@ -178,7 +178,9 @@ internal object ProxyHttpRoutes {
   ): ResponseResults {
     // One response per agent. The path map never holds an empty agent list, and the caller has already answered
     // invalid_agent_context for one (isNotValid() is true for it), so there is always at least one.
-    val results: List<ScrapeRequestResponse> = executeScrapeRequests(agentContextInfo, proxy, path, queryParams)
+    val headers = ScrapeHeaders.of(call.request)
+    val results: List<ScrapeRequestResponse> =
+      executeScrapeRequests(agentContextInfo, proxy, path, queryParams, headers)
     return mergeResponseResults(results)
   }
 
@@ -220,11 +222,12 @@ internal object ProxyHttpRoutes {
     return if (hasEof) "$joined\n$EOF_MARKER" else joined
   }
 
-  private suspend fun RoutingContext.executeScrapeRequests(
+  private suspend fun executeScrapeRequests(
     agentContextInfo: ProxyPathManager.AgentContextInfo,
     proxy: Proxy,
     path: String,
     queryParams: String,
+    headers: ScrapeHeaders,
   ): List<ScrapeRequestResponse> {
     val started = TimeSource.Monotonic.markNow()
     return try {
@@ -233,7 +236,7 @@ internal object ProxyHttpRoutes {
         // That keeps provenance at the one site that needs it, rather than as a field on the response.
         agentContextInfo.agentContexts
           .map { agentContext ->
-            async { submitScrapeRequest(agentContext, proxy, path, queryParams, call.request) }
+            async { submitScrapeRequest(agentContext, proxy, path, queryParams, headers) }
           }
           .awaitAll()
           .also { responses ->
@@ -248,6 +251,9 @@ internal object ProxyHttpRoutes {
             proxy.metrics {
               val elapsedSecs = response.fetchDuration.toDouble(DurationUnit.SECONDS)
               observeLatency(path, response.updateMsg, elapsedSecs)
+              // Here rather than where the body is decoded, so a scrape made from the dashboard, which submits through
+              // the same code, adds nothing to the metrics Prometheus reads.
+              response.encoding?.also { observeResponseBytes(path, it, response.byteCount.toDouble()) }
             }
           }
       }
@@ -324,14 +330,18 @@ internal object ProxyHttpRoutes {
     }
   }
 
+  /**
+   * Sends one scrape of [path] to [agentContext] and waits for its result, as [headers] asks for it. Records nothing:
+   * the scrape route records what Prometheus sees, and the dashboard's scrape-now records only in its activity feed.
+   */
   internal suspend fun submitScrapeRequest(
     agentContext: AgentContext,
     proxy: Proxy,
     path: String,
     encodedQueryParams: String,
-    request: ApplicationRequest,
+    headers: ScrapeHeaders,
   ): ScrapeRequestResponse {
-    val scrapeRequest = createScrapeRequest(agentContext, proxy, path, encodedQueryParams, request)
+    val scrapeRequest = createScrapeRequest(agentContext, proxy, path, encodedQueryParams, headers)
     val timeoutTime = proxy.proxyConfigVals.internal.scrapeRequestTimeoutSecs.seconds
 
     // A terminal response here means the agent disconnected or the request timed out.
@@ -362,7 +372,7 @@ internal object ProxyHttpRoutes {
         fetchDuration = scrapeRequest.ageDuration(),
       )
     else
-      buildSuccessResponse(proxy, path, scrapeRequest, scrapeResults, statusCode, contentType)
+      buildSuccessResponse(proxy, scrapeRequest, scrapeResults, statusCode, contentType)
   }
 
   // Registers the request, sends it to the agent, and awaits completion, cleaning up the request map, and any chunked
@@ -456,7 +466,6 @@ internal object ProxyHttpRoutes {
   // 413/502 response instead when the gzipped payload is a zip bomb or is corrupt.
   private fun buildSuccessResponse(
     proxy: Proxy,
-    path: String,
     scrapeRequest: ScrapeRequestWrapper,
     scrapeResults: ScrapeResults,
     statusCode: HttpStatusCode,
@@ -489,13 +498,6 @@ internal object ProxyHttpRoutes {
         )
       }
 
-    proxy.metrics {
-      // Observe the byte count already computed during unzip (gzipped) or the small plain payload's
-      // length, instead of re-encoding the decoded text just to measure it.
-      val encoding = if (scrapeResults.srZipped) ProxyMetrics.ENCODING_GZIPPED else ProxyMetrics.ENCODING_PLAIN
-      observeResponseBytes(path, encoding, decoded.byteCount.toDouble())
-    }
-
     return ScrapeRequestResponse(
       statusCode = statusCode,
       contentType = contentType,
@@ -504,6 +506,10 @@ internal object ProxyHttpRoutes {
       url = scrapeResults.srUrl,
       updateMsg = "success",
       fetchDuration = scrapeRequest.ageDuration(),
+      // The byte count already computed during unzip (gzipped) or the small plain payload's length, so the size need
+      // not be measured again by re-encoding the decoded text.
+      byteCount = decoded.byteCount,
+      encoding = if (scrapeResults.srZipped) ProxyMetrics.ENCODING_GZIPPED else ProxyMetrics.ENCODING_PLAIN,
     )
   }
 
@@ -536,9 +542,9 @@ internal object ProxyHttpRoutes {
     proxy: Proxy,
     path: String,
     encodedQueryParams: String,
-    request: ApplicationRequest,
+    headers: ScrapeHeaders,
   ): ScrapeRequestWrapper {
-    val authHeader = request.header(HttpHeaders.Authorization).orEmpty()
+    val authHeader = headers.authorization
 
     if (authHeader.isNotEmpty() &&
       !proxy.options.isTlsEnabled &&
@@ -554,10 +560,33 @@ internal object ProxyHttpRoutes {
       pathVal = path,
       encodedQueryParamsVal = encodedQueryParams,
       authHeaderVal = authHeader,
-      acceptVal = request.header(HttpHeaders.Accept),
+      acceptVal = headers.accept,
       debugEnabledVal = proxy.options.debugEnabled,
-      scrapeTimeoutVal = scrapeTimeoutFromHeader(request.header(SCRAPE_TIMEOUT_HEADER)),
+      scrapeTimeoutVal = headers.scrapeTimeout,
     )
+  }
+}
+
+/**
+ * What a scrape asks the agent for, from the request that started it: the Prometheus scrape's headers on the scrape
+ * route, or the dashboard's own for a scrape-now, which has no request of its own to forward.
+ *
+ * @param authorization the Authorization header, forwarded to the target; empty for none
+ * @param accept the Accept header, which picks the exposition format
+ * @param scrapeTimeout how long the client waits, which the agent stops the target's fetch at; null for no limit
+ */
+internal data class ScrapeHeaders(
+  val authorization: String = "",
+  val accept: String? = null,
+  val scrapeTimeout: Duration? = null,
+) {
+  companion object {
+    fun of(request: ApplicationRequest) =
+      ScrapeHeaders(
+        authorization = request.header(HttpHeaders.Authorization).orEmpty(),
+        accept = request.header(HttpHeaders.Accept),
+        scrapeTimeout = ProxyHttpRoutes.scrapeTimeoutFromHeader(request.header(ProxyHttpRoutes.SCRAPE_TIMEOUT_HEADER)),
+      )
   }
 }
 
@@ -569,6 +598,9 @@ internal data class ScrapeRequestResponse(
   val failureReason: String = "",
   val url: String = "",
   val fetchDuration: Duration,
+  // For a body that was decoded: its size, and whether it came gzipped (ProxyMetrics.ENCODING_GZIPPED) or plain.
+  val byteCount: Long = 0,
+  val encoding: String? = null,
 )
 
 internal data class ResponseResults(

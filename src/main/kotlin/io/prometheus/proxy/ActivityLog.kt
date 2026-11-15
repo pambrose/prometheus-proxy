@@ -43,6 +43,9 @@ internal enum class ActivityKind(
   PATH_UNREGISTERED("unregistered"),
   PATH_TAKEN_OVER("taken over"),
   PATH_REJECTED("rejected", isProblem = true),
+
+  // A scrape made from the dashboard, named so a scrape no one at Prometheus asked for can be traced to a browser.
+  SCRAPED_NOW("scraped now"),
 }
 
 /**

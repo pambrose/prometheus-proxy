@@ -41,7 +41,6 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.withCharset
 import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.embeddedServer
-import io.ktor.server.request.ApplicationRequest
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
@@ -231,7 +230,7 @@ class ProxyHttpRoutesTest : StringSpec() {
           ),
         ) { true }
       }
-      ProxyHttpRoutes.submitScrapeRequest(agentContext, proxy, "metrics", "", mockk<ApplicationRequest>(relaxed = true))
+      ProxyHttpRoutes.submitScrapeRequest(agentContext, proxy, "metrics", "", ScrapeHeaders())
     }
 
   // Runs [handler] while [agentContext]'s agent opens a chunked transfer for the scrape it is sent, a header and one
@@ -616,7 +615,7 @@ class ProxyHttpRoutesTest : StringSpec() {
         proxy,
         "metrics",
         "",
-        mockk<ApplicationRequest>(relaxed = true),
+        ScrapeHeaders(),
       )
 
       response.statusCode shouldBe HttpStatusCode.ServiceUnavailable
@@ -632,7 +631,7 @@ class ProxyHttpRoutesTest : StringSpec() {
         proxy,
         "metrics",
         "",
-        mockk<ApplicationRequest>(relaxed = true),
+        ScrapeHeaders(),
       )
 
       response.statusCode shouldBe HttpStatusCode.ServiceUnavailable
@@ -646,10 +645,10 @@ class ProxyHttpRoutesTest : StringSpec() {
       val agentContext = AgentContext("test-remote")
 
       val first =
-        async { ProxyHttpRoutes.submitScrapeRequest(agentContext, proxy, "metrics", "", mockk(relaxed = true)) }
+        async { ProxyHttpRoutes.submitScrapeRequest(agentContext, proxy, "metrics", "", ScrapeHeaders()) }
       eventually(2.seconds) { proxy.scrapeRequestManager.scrapeMapSize shouldBe 1 }
 
-      val refused = ProxyHttpRoutes.submitScrapeRequest(agentContext, proxy, "metrics", "", mockk(relaxed = true))
+      val refused = ProxyHttpRoutes.submitScrapeRequest(agentContext, proxy, "metrics", "", ScrapeHeaders())
 
       refused.statusCode shouldBe HttpStatusCode.ServiceUnavailable
       refused.updateMsg shouldBe "proxy_in_flight_limit"
@@ -666,11 +665,11 @@ class ProxyHttpRoutesTest : StringSpec() {
 
       val queued =
         List(2) {
-          async { ProxyHttpRoutes.submitScrapeRequest(agentContext, proxy, "metrics", "", mockk(relaxed = true)) }
+          async { ProxyHttpRoutes.submitScrapeRequest(agentContext, proxy, "metrics", "", ScrapeHeaders()) }
         }
       eventually(2.seconds) { agentContext.scrapeRequestBacklogSize shouldBe 2 }
 
-      val refused = ProxyHttpRoutes.submitScrapeRequest(agentContext, proxy, "metrics", "", mockk(relaxed = true))
+      val refused = ProxyHttpRoutes.submitScrapeRequest(agentContext, proxy, "metrics", "", ScrapeHeaders())
 
       refused.statusCode shouldBe HttpStatusCode.ServiceUnavailable
       refused.updateMsg shouldBe "agent_backlog_full"
@@ -693,7 +692,7 @@ class ProxyHttpRoutesTest : StringSpec() {
         proxy,
         "metrics",
         "",
-        mockk<ApplicationRequest>(relaxed = true),
+        ScrapeHeaders(),
       )
 
       // invalidate() fails the buffered wrapper as the proxy's own AGENT_DISCONNECTED failure. It was reported as a
@@ -720,7 +719,7 @@ class ProxyHttpRoutesTest : StringSpec() {
         proxy,
         "metrics",
         "",
-        mockk<ApplicationRequest>(relaxed = true),
+        ScrapeHeaders(),
       )
 
       response.statusCode shouldBe HttpStatusCode.ServiceUnavailable
@@ -742,7 +741,7 @@ class ProxyHttpRoutesTest : StringSpec() {
         proxy,
         "metrics",
         "",
-        mockk<ApplicationRequest>(relaxed = true),
+        ScrapeHeaders(),
       )
 
       // Proxy.removeAgentContext fails the agent's in-flight scrapes as AGENT_DISCONNECTED, the same outcome as a
@@ -759,7 +758,7 @@ class ProxyHttpRoutesTest : StringSpec() {
 
       val (response, openDuring, openAfter) =
         withUnfinishedTransfer(proxy, agentContext) {
-          ProxyHttpRoutes.submitScrapeRequest(agentContext, proxy, "metrics", "", mockk(relaxed = true))
+          ProxyHttpRoutes.submitScrapeRequest(agentContext, proxy, "metrics", "", ScrapeHeaders())
         }
 
       response.updateMsg shouldBe "timed_out"
@@ -774,7 +773,7 @@ class ProxyHttpRoutesTest : StringSpec() {
       val (_, openDuring, openAfter) =
         withUnfinishedTransfer(proxy, agentContext) { transferOpen ->
           val handler =
-            async { ProxyHttpRoutes.submitScrapeRequest(agentContext, proxy, "metrics", "", mockk(relaxed = true)) }
+            async { ProxyHttpRoutes.submitScrapeRequest(agentContext, proxy, "metrics", "", ScrapeHeaders()) }
           transferOpen.await()
           handler.cancelAndJoin()
         }
@@ -800,7 +799,7 @@ class ProxyHttpRoutesTest : StringSpec() {
         proxy,
         "metrics",
         "",
-        mockk<ApplicationRequest>(relaxed = true),
+        ScrapeHeaders(),
       )
 
       // The same outcome as a scrape that arrives once the proxy has stopped.
@@ -828,7 +827,7 @@ class ProxyHttpRoutesTest : StringSpec() {
         proxy,
         "metrics",
         "",
-        mockk<ApplicationRequest>(relaxed = true),
+        ScrapeHeaders(),
       )
 
       response.statusCode shouldBe HttpStatusCode.BadGateway
@@ -859,7 +858,7 @@ class ProxyHttpRoutesTest : StringSpec() {
         proxy,
         "metrics",
         "",
-        mockk<ApplicationRequest>(relaxed = true),
+        ScrapeHeaders(),
       )
 
       response.statusCode shouldBe HttpStatusCode.OK
@@ -893,7 +892,7 @@ class ProxyHttpRoutesTest : StringSpec() {
         proxy,
         "metrics",
         "",
-        mockk<ApplicationRequest>(relaxed = true),
+        ScrapeHeaders(),
       )
 
       response.statusCode shouldBe HttpStatusCode.OK
@@ -925,7 +924,7 @@ class ProxyHttpRoutesTest : StringSpec() {
         proxy,
         "metrics",
         "",
-        mockk<ApplicationRequest>(relaxed = true),
+        ScrapeHeaders(),
       )
 
       response.statusCode shouldBe HttpStatusCode.BadGateway
@@ -963,7 +962,7 @@ class ProxyHttpRoutesTest : StringSpec() {
         proxy,
         "metrics",
         "",
-        mockk<ApplicationRequest>(relaxed = true),
+        ScrapeHeaders(),
       )
 
       response.statusCode shouldBe HttpStatusCode.PayloadTooLarge
@@ -994,7 +993,7 @@ class ProxyHttpRoutesTest : StringSpec() {
         proxy,
         "metrics",
         "",
-        mockk<ApplicationRequest>(relaxed = true),
+        ScrapeHeaders(),
       )
 
       response.statusCode shouldBe HttpStatusCode.OK
@@ -1139,7 +1138,7 @@ class ProxyHttpRoutesTest : StringSpec() {
         proxy,
         "metrics",
         "",
-        mockk<ApplicationRequest>(relaxed = true),
+        ScrapeHeaders(),
       )
 
       response.statusCode shouldBe HttpStatusCode.InternalServerError
@@ -1171,7 +1170,7 @@ class ProxyHttpRoutesTest : StringSpec() {
         proxy,
         "metrics",
         "",
-        mockk<ApplicationRequest>(relaxed = true),
+        ScrapeHeaders(),
       )
 
       response.statusCode shouldBe HttpStatusCode.NotFound

@@ -32,6 +32,7 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.CachingOptions
 import io.ktor.http.parseQueryString
+import io.ktor.http.withCharset
 import io.ktor.server.application.createApplicationPlugin
 import io.ktor.server.application.createRouteScopedPlugin
 import io.ktor.server.application.install
@@ -43,7 +44,9 @@ import io.ktor.server.plugins.cachingheaders.CachingHeaders
 import io.ktor.server.response.respondBytes
 import io.ktor.server.response.respondRedirect
 import io.ktor.server.response.respondText
+import io.ktor.server.plugins.origin
 import io.ktor.server.routing.get
+import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.WebSockets
@@ -85,7 +88,8 @@ import kotlin.time.TimeMark
 import kotlin.time.TimeSource
 
 /**
- * Read-only operational dashboard, served from its own Ktor server on its own port.
+ * Operational dashboard, served from its own Ktor server on its own port. It reads the proxy's state and changes none
+ * of it; its one action, scrape-now ([ScrapeNow]), scrapes a path as Prometheus would.
  *
  * Deliberately **not** the admin port: that one is a Jetty servlet container created inside
  * `common-utils`, whose only extension point is a `path -> Servlet` map — Ktor routing, the HTML DSL,
@@ -185,14 +189,18 @@ internal class ProxyDashboardService(
   // What every page and session renders from; the push loop refills it on each wake. See SnapshotCache.
   private val snapshots = SnapshotCache(refreshInterval) { snapshot() }
 
-  // Runs before the WebSocket upgrade, so a refused page never receives a frame. See isOriginAllowed.
+  // Null unless proxy.dashboard.scrapeNowEnabled, which leaves the route unregistered, so it answers 404.
+  private val scrapeNow = if (proxy.proxyConfigVals.dashboard.scrapeNowEnabled) ScrapeNow(proxy) else null
+
+  // Runs before the WebSocket upgrade, so a refused page never receives a frame, and before a scrape-now. See
+  // isOriginAllowed.
   private val originCheck =
     createRouteScopedPlugin("DashboardOriginCheck") {
       onCall { call ->
         val origin = call.request.headers[HttpHeaders.Origin]
         if (!isOriginAllowed(origin, call.request.headers[HttpHeaders.Host], allowedOrigins)) {
           logger.info {
-            "Refused a dashboard WebSocket from origin $origin; add it to proxy.dashboard.allowedOrigins if expected"
+            "Refused a dashboard request from origin $origin; add it to proxy.dashboard.allowedOrigins if expected"
           }
           call.respondText("Origin not allowed", ContentType.Text.Plain, HttpStatusCode.Forbidden)
         }
@@ -309,6 +317,34 @@ internal class ProxyDashboardService(
             call.respondHtml {
               with(ProxyDashboardHtml) { renderPage(snapshot, agentId, routeBase, DashboardLayout.AGENT) }
             }
+        }
+
+        scrapeNow?.also { scrapes ->
+          route("$routeBase/scrape") {
+            install(originCheck)
+            post {
+              // The header htmx sends, which a page on another site can't add to a request without asking the proxy
+              // first, as a CORS preflight, which it never allows: so no link or form elsewhere can make it scrape.
+              // The origin check alone would let through a request with no Origin, as some clients send.
+              if (call.request.headers[HX_REQUEST_HEADER] != "true") {
+                call.respondText(
+                  "Scrape-now needs the dashboard's page",
+                  ContentType.Text.Plain,
+                  HttpStatusCode.Forbidden,
+                )
+                return@post
+              }
+              val result = scrapes.scrape(
+                call.request.queryParameters["path"].orEmpty(),
+                call.request.origin.remoteHost,
+              )
+              call.respondText(
+                ScrapeNowHtml.render(result),
+                ContentType.Text.Html.withCharset(Charsets.UTF_8),
+                result.status,
+              )
+            }
+          }
         }
 
         route("$routeBase/events") {
@@ -543,6 +579,9 @@ internal class ProxyDashboardService(
     private const val PING_PERIOD_MILLIS = 15_000L
     private const val PING_TIMEOUT_MILLIS = 15_000L
     private const val MAX_INCOMING_FRAME_BYTES = 64L * 1024
+
+    // Sent by htmx, and by the page's script with each scrape-now.
+    internal const val HX_REQUEST_HEADER = "HX-Request"
 
     // Frames a session may have waiting before it is closed. A reading browser drains each push long before the next.
     private const val OUTGOING_FRAME_BUFFER = 32

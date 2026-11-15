@@ -61,8 +61,8 @@ The system comprises two components:
 - **Bandwidth-conscious** -- optional per-path
   [metric filtering](configuration/agent.md#metric-filtering) drops unwanted families at the agent,
   before they cross the WAN
-- **Observable** -- a read-only [live dashboard](web-dashboard.md) shows every agent, path, and
-  recent scrape in one place
+- **Observable** -- a [live dashboard](web-dashboard.md) shows every agent, path, and recent
+  scrape in one place, and scrapes a path on demand
 - **Zero changes** to existing Prometheus configuration patterns
 
 ## Quick Start

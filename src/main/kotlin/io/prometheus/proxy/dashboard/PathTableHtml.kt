@@ -22,7 +22,11 @@ import io.prometheus.proxy.dashboard.ProxyDashboardHtml.COPY_TARGET_ID_PREFIX
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.DASH
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.PATH_TABLE_ID
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.PROXY_PATH_ATTR
+import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SCRAPE_ID_PREFIX
+import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SCRAPE_PATH_ATTR
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SCRAPE_PORT_ATTR
+import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SCRAPE_RESULT_ID
+import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SCRAPE_URL_ATTR
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.agentLabel
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.renderFilters
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.scrapeTime
@@ -63,7 +67,18 @@ internal object PathTableHtml {
     filter: RowFilter,
   ) {
     renderFilters(routeBase, DashboardLayout.PATH, filter)
+    if (snapshot.scrapeNowEnabled) scrapeResultPanel(routeBase)
     div("scroller") { pathTable(snapshot, filter, oob = false) }
+  }
+
+  // Where a scrape-now's result shows, filled by the page's script from the route it names. Outside the table's
+  // out-of-band region, so a push never clears a result someone is reading.
+  private fun FlowContent.scrapeResultPanel(routeBase: String) {
+    div("scrape-result") {
+      attributes["id"] = SCRAPE_RESULT_ID
+      attributes[SCRAPE_URL_ATTR] = "$routeBase/scrape"
+      attributes["hidden"] = "hidden"
+    }
   }
 
   /** The table region, `#path-table`, which every push for the Paths view replaces. */
@@ -96,7 +111,7 @@ internal object PathTableHtml {
     table("ptable") {
       caption("sr-only") { +"Registered paths and the most recent scrape against each" }
       thead { headerRow(showIdentity) }
-      tbody { rows.forEach { pathRow(it, showIdentity) } }
+      tbody { rows.forEach { pathRow(it, showIdentity, snapshot.scrapeNowEnabled) } }
     }
   }
 
@@ -119,9 +134,10 @@ internal object PathTableHtml {
   private fun TBODY.pathRow(
     path: PathView,
     showIdentity: Boolean,
+    scrapeNow: Boolean,
   ) {
     tr(if (path.isDeparted) "departed" else null) {
-      pathCell(path)
+      pathCell(path, scrapeNow)
       agentCell(path)
       if (showIdentity) td("dim") { +(identityLabel(path.identity) ?: DASH) }
       targetCell(path)
@@ -136,15 +152,34 @@ internal object PathTableHtml {
   /**
    * A path, and while the proxy serves it, the button that copies its proxy URL, the one to curl to check the path
    * through the proxy. The proxy can't know the name the viewer reaches it by, so the button carries the path, and the
-   * page's script joins it to the host the page was opened at and the scrape port, [SCRAPE_PORT_ATTR] on `<body>`.
+   * page's script joins it to the host the page was opened at and the scrape port, [SCRAPE_PORT_ATTR] on `<body>`. With
+   * [scrapeNow], the button that scrapes it at once follows.
    */
-  private fun TR.pathCell(path: PathView) {
+  private fun TR.pathCell(
+    path: PathView,
+    scrapeNow: Boolean,
+  ) {
     td {
       +"/${path.path}"
-      if (!path.isDeparted)
+      if (!path.isDeparted) {
         copyButton("$COPY_PROXY_ID_PREFIX${path.path}", "proxy URL", path) {
           attributes[PROXY_PATH_ATTR] = "/${path.path}"
         }
+        if (scrapeNow) scrapeButton(path)
+      }
+    }
+  }
+
+  /**
+   * The button that scrapes [path] now, through its agent, and shows the result above the table (see [ScrapeNow]). Its
+   * id is built from the path, as a copy button's is, so the push that replaces the table hands focus back to it.
+   */
+  private fun FlowContent.scrapeButton(path: PathView) {
+    button(type = ButtonType.button, classes = "scrape") {
+      attributes["id"] = "$SCRAPE_ID_PREFIX${path.path}"
+      attributes[SCRAPE_PATH_ATTR] = path.path
+      attributes["aria-label"] = "Scrape /${path.path} now"
+      attributes["title"] = "Scrape now"
     }
   }
 
@@ -216,7 +251,7 @@ internal object PathTableHtml {
   /**
    * A button that copies [what] for [path] to the clipboard; [value] puts what it copies in an attribute.
    *
-   * The page's script does the copying (see SELECTION_JS). The [id] is built from the path, which is unique in the
+   * The page's script does the copying (see DashboardScript). The [id] is built from the path, which is unique in the
    * table, because the push loop replaces the whole table every frame: htmx gives focus back to the element whose id
    * the focused one had, so a keyboard user keeps their place, and the script puts the copied mark back on the button
    * with that id until the mark expires.

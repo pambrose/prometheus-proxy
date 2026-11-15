@@ -111,6 +111,12 @@ every agent when agent auth is off.
   identity may not register, a connect over an identity's limit, or a bad agent token. Until now a refusal reached
   only the proxy's log, so an agent whose paths never appeared looked like one that never started. The last 500
   events are kept, in memory (`proxy.dashboard.activityLogSize`).
+- **Scrape a path from the dashboard.** Each live path in the Paths view has a Scrape button: the proxy scrapes
+  the path at once, through its agent, as Prometheus would, and shows the status, timing, size, and the start of
+  what came back. It answers "does it work now?" without waiting for Prometheus or finding a machine that can reach
+  the scrape port. It doesn't count as one of Prometheus's scrapes, in the proxy's metrics or the path's History,
+  and the Activity view records who asked. Anyone who can reach the dashboard can use it, so it reads the start of
+  any target's output; `proxy.dashboard.scrapeNowEnabled = false` turns it off.
 
 ### Security
 

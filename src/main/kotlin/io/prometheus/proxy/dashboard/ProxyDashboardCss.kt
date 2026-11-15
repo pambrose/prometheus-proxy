@@ -113,7 +113,8 @@ internal object ProxyDashboardCss {
     .nav a { color:var(--ink-3); text-decoration:none; padding:3px 10px; border-radius:20px; }
     .nav a:hover { background:var(--surface-3); color:var(--ink); }
     /* The focus ring of every control but a list row, whose ring is inset (above). */
-    .nav a:focus-visible, .copy:focus-visible, .filters input:focus-visible {
+    .nav a:focus-visible, .copy:focus-visible, .scrape:focus-visible, .close:focus-visible,
+    .filters input:focus-visible {
       outline:2px solid var(--accent); outline-offset:1px; }
     .nav a.on { background:var(--surface-3); color:var(--ink); font-weight:600; }
     /* The table is the one region that can outgrow a narrow viewport, so it scrolls inside its own
@@ -132,22 +133,42 @@ internal object ProxyDashboardCss {
     .ptable td.wrap { white-space:normal; min-width:280px; }
     /* An event's tag opens its cell, so it takes none of the gap that sets a tag apart from a name before it. */
     .ptable td.event .tag { margin-left:0; }
-    /* The copy button beside a target URL. Its icons are CSS masks painted in currentColor rather than inline
-       SVG: the table is pushed whole every refresh, and an SVG in every row would grow every frame. 24px meets
-       the minimum target size, and the negative margins keep it from making the row taller. */
-    .copy { display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px;
-      margin:-4px 0 -4px 6px; padding:0; vertical-align:middle; border:0; border-radius:20px; background:none;
-      color:var(--ink-3); cursor:pointer;
+    /* The icon buttons: copy beside a path or target URL, scrape-now beside a path, and close on the scrape result.
+       Their icons are CSS masks painted in currentColor rather than inline SVG: the table is pushed whole every
+       refresh, and an SVG in every row would grow every frame. 24px meets the minimum target size, and the negative
+       margins keep one from making the row taller. */
+    .copy, .scrape, .close { display:inline-flex; align-items:center; justify-content:center; width:24px;
+      height:24px; margin:-4px 0 -4px 6px; padding:0; vertical-align:middle; border:0; border-radius:20px;
+      background:none; color:var(--ink-3); cursor:pointer; }
+    .copy {
       --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linejoin='round'><rect x='5.25' y='5.25' width='8.5' height='8.5' rx='1.5'/><path d='M10.75 5.25v-2a1 1 0 0 0-1-1h-6.5a1 1 0 0 0-1 1v6.5a1 1 0 0 0 1 1h2'/></svg>"); }
-    .copy::before { content:""; width:13px; height:13px; background:currentColor;
+    .scrape {
+      --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M13 8a5 5 0 1 1-1.46-3.54'/><path d='M12.5 2.25v2.5H10'/></svg>"); }
+    .close {
+      --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round'><path d='M4 4l8 8M12 4l-8 8'/></svg>"); }
+    .copy::before, .scrape::before, .close::before { content:""; width:13px; height:13px; background:currentColor;
       -webkit-mask:var(--icon) center/contain no-repeat; mask:var(--icon) center/contain no-repeat; }
-    .copy:hover { background:var(--surface-3); color:var(--ink); }
+    .copy:hover, .scrape:hover, .close:hover { background:var(--surface-3); color:var(--ink); }
     .copy.copied { color:var(--ok);
       --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M3 8.5l3.25 3.25L13 5'/></svg>"); }
     .copy.copy-failed { color:var(--crit);
       --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round'><path d='M4 4l8 8M12 4l-8 8'/></svg>"); }
     /* Forced colours replace every background, the mask's paint included, so the icon would vanish. */
-    @media (forced-colors: active) { .copy::before { forced-color-adjust:none; background:ButtonText; } }
+    @media (forced-colors: active) {
+      .copy::before, .scrape::before, .close::before { forced-color-adjust:none; background:ButtonText; } }
+    /* A scrape-now's result, above the Paths table: a heading line, then the start of the body. The body is the one
+       block of a target's own text on the page, in a bounded box that scrolls rather than pushing the table away. */
+    .scrape-result { padding:10px 15px; background:var(--surface); border-bottom:1px solid var(--line); }
+    .sr-head { display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
+    .sr-head .tag { margin-left:0; }
+    .sr-head .close { margin:-4px 0 -4px auto; }
+    .sr-path { font-weight:600; }
+    .scrape-result .dim { color:var(--ink-3); }
+    .sr-failure { margin-top:7px; color:var(--crit); }
+    .scrape-result pre { margin:9px 0 0; padding:8px 10px; max-height:240px; overflow:auto; font:inherit;
+      font-size:11.5px; color:var(--ink-2); background:var(--surface-2); border:1px solid var(--line-soft);
+      white-space:pre; }
+    .sr-note { margin-top:5px; font-size:11.5px; }
     .tag.crit { background:var(--crit-soft); color:var(--crit); margin-left:7px; }
     /* The Paths view's search, on the recessed plane like the table header below it. The input holds content, so it
        is square; it takes focus as the rest of the page does. A checked box is neutral ink: the accent is kept for

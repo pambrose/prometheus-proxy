@@ -342,17 +342,28 @@ Two support helpers also live here (not test classes themselves):
   late subscriber, fan-out to multiple subscribers, and AgentContextManager emitting on connect only
 - **ProxyDashboardHtmlTest** (`dashboard/`) — Dashboard renderer: top-level out-of-band push regions, agent- and
   path-centric layouts, tolerant selection and layout parsing, departed paths, an agent's identity in its row and
-  detail, links at a root mount, the nav, the script's after-push work, an agent's uptime, failover markers,
-  accessibility, and the WebSocket connection indicator
+  detail, links at a root mount, the nav, the script's after-push work and scrape-now request, an agent's uptime,
+  failover markers, accessibility, and the WebSocket connection indicator
 - **PathTableHtmlTest** (`dashboard/`) — the Paths view's table and search: the history strip (one element per run, a
   floored percentage, no status pill, visible under forced colours), the Identity column (shown while agent auth is
   on, the legacy token as a shared token), the search (matching rows, the match count, the empty states, the form
   outside the pushed table, an escaped query, the script sending the URL's query, and tolerant parsing of it from the
-  socket), and the failing count and the tab's title
+  socket), the Scrape button on a live path and the result panel outside the pushed table, and the failing count and
+  the tab's title
 - **ActivityHtmlTest** (`dashboard/`) — the Activity view: each line's time, event, agent, path, and detail, newest
   first; problems as crit tags and take-overs as warn tags; a burst's count and first paths; dashes for a line with no
   agent; the Identity column while agent auth is on; escaped values; the search, its match count, and its empty
   states; the form at the view's own route; and the push carrying the status bar and the table, out of band
+- **ScrapeSummaryTest** (`dashboard/`) — a scrape-now's summary: status, outcome, time, size, content type, families,
+  samples, and `# EOF`; a consolidated path's agents merged as Prometheus sees them; a failure's reason cut and escaped;
+  a long body cut at its last line break, or short of a surrogate pair with none; and control characters escaped but for
+  line breaks and tabs
+- **ScrapeNowTest** (`dashboard/`) — scrape-now with its scrape stood in for: the summary and the activity feed's line
+  naming the browser; a path not registered, without an agent, or on a proxy not running refused; a path at most once a
+  cooldown; at most a few at once; and agents that don't answer ending as a timeout
+- **ScrapeNowHtmlTest** (`dashboard/`) — the scrape-now result panel: the status, path, facts, and start of the body; a
+  cut body and an EOF named; a failure's reason without a body; the body escaped; a refusal and why; and sizes in bytes,
+  KB, or MB
 - **RowFilterTest** (`dashboard/`) — the Paths and Activity views' search: a query matching the path, any agent's
   name, the target URL, or the identity (the legacy token by its label, not its internal name), ignoring case, and a
   departed path's agent; "problems only" keeping failing and departed paths; both having to match; browser input
@@ -566,7 +577,9 @@ mechanism that the standard suite cannot reach:
   topology change still shows on the next page, a gone path staying in the path layout after more scrapes than
   the recent-scrapes queue holds, an agent's identity in both layouts with the path search filtering from the URL
   and over the socket, a path the agent's identity may not register in the Activity view, from a GET and a push, and
-  a session kept open through a push that fails to render
+  a session kept open through a push that fails to render, and a scrape-now against a stub target returning what it
+  had while the scrape metrics, the History, and the recent scrapes stay as Prometheus's scrape left them, refused
+  within its cooldown, for an unknown path, without htmx's header, or from another origin, and absent when off
 - **TlsMutualAuthRejectionTest** — the negative mutual-TLS path over a real Netty handshake, which the
   in-process TLS specs cannot perform (item 28 in `docs/archive/CODE_REVIEW_JUNE_2026.md`)
 

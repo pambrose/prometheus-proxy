@@ -55,7 +55,7 @@ enum class EnvVars {
    */
   SD_TARGET_PREFIX,
 
-  /** Enables the Proxy's read-only operational dashboard on its own port. Default `false`. */
+  /** Enables the Proxy's operational dashboard on its own port. Default `false`. */
   DASHBOARD_ENABLED,
 
   /** Listen port for the Proxy's operational dashboard. Default `8094`. */

@@ -619,8 +619,8 @@ the Status LED.
 ### Copy Button
 
 A `24px` icon-only `<button type="button">` that copies the URL of the cell it sits in: a path's proxy
-URL after the path, a target URL after the target. The only buttons that are not list rows, and still
-not action buttons: they read the page, not the proxy.
+URL after the path, a target URL after the target. They read the page, not the proxy; the Scrape Button,
+which shares their look, is the one that acts.
 
 - **Rest:** transparent, a `13px` copy glyph in `ink-3`, quieter than the path it follows and matching
   the dimmed Target text.
@@ -639,6 +639,32 @@ not action buttons: they read the page, not the proxy.
 - **Proxy URL:** the proxy can't know the name the viewer reaches it by, so the button carries the path
   and the page builds the URL from the host it was opened at and the scrape port the proxy renders onto
   `<body>`. A departed path has none: the proxy no longer serves it.
+
+### Scrape Button
+
+The Copy Button's shape, after a live path's proxy-URL button, with a circular-arrow glyph: it has the proxy
+scrape the path at once and shows the result in the Scrape Result above the table. Rest, hover, focus, glyph,
+and size are the Copy Button's, so the row's two buttons read as a pair. It names its path in its
+`aria-label` (*Scrape /orders_metrics now*), and its id is built from the path, so focus survives a push. A
+departed path has none, since the proxy no longer serves it. It needs no confirmation: a scrape changes
+nothing on the proxy, and the activity feed records who asked.
+
+### Scrape Result
+
+A panel between the Path Search and the Path Table, on `surface` with a `line` bottom border, hidden until a
+Scrape Button fills it. Outside every out-of-band region, so a push never clears a result being read.
+
+- **Heading:** a Status Pill, the path in weight 600, then the facts in `ink-3`, joined with ` · `: the
+  outcome, the time, the size, and for a body, its content type, families, samples, and `# EOF` when the
+  body ends with one. A close button, the Copy Button's shape with a cross, ends the line and hands focus
+  back to the Scrape Button that filled the panel. A refused scrape shows a Crit Tag, *not scraped*, and
+  why.
+- **Failure:** the agent's reason in `crit`, on its own line.
+- **Body:** the first 2 KB, cut at a line break, in a `<pre>` on `surface-2` with a `line-soft` border,
+  at most `240px` tall, scrolling inside itself. Meta size in `ink-2`. When cut, a note in `ink-3` gives
+  the whole body's size.
+- **Announced:** the heading carries a sentence the page speaks through the Connection Announcer once
+  the result arrives (*Scrape of /orders_metrics finished: 200 in 120 ms.*).
 
 ### Connection Beacon
 
@@ -693,12 +719,12 @@ longer connected." Copy states the fact and, where useful, the next action in th
 
 ### Not yet in the system
 
-Recorded so future work doesn't assume otherwise: there are **no dialogs, no toasts, and no true
-action buttons**, and the Path Search is the only form — the only `<button>`s are a list row and the Copy
-Button, and neither acts on the proxy. PRODUCT.md records that control
-actions are a planned direction; when they arrive they will need a genuinely new component vocabulary
-(destructive confirmation, action button, disabled state), and inventing it is a design decision, not
-an extraction.
+Recorded so future work doesn't assume otherwise: there are **no dialogs, no toasts, and no
+destructive actions**, and the Path Search is the only form. The one action, the Scrape Button, changes
+nothing on the proxy, so it borrowed the Copy Button's shape rather than defining an action button. PRODUCT.md
+records that control actions that do change the proxy are a planned direction; when they arrive they will
+need a genuinely new component vocabulary (destructive confirmation, action button, disabled state), and
+inventing it is a design decision, not an extraction.
 
 ### Named Rules
 

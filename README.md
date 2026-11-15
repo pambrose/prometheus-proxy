@@ -96,7 +96,7 @@ Version 4.0.0 (released 2026-07-25) added five features focused on running the p
 infrastructure:
 
 - **[Operational Dashboard](https://pambrose.github.io/prometheus-proxy/web-dashboard/)** — A
-  read-only, live-updating web page that answers "why isn't this target scraping?" without log-diving
+  live-updating web page that answers "why isn't this target scraping?" without log-diving
   on two machines. It shows every connected agent, every registered path — including paths whose agent
   has **gone**, precisely the case that used to vanish from view — and how recent scrapes went.
 - **[Proxy High Availability](https://pambrose.github.io/prometheus-proxy/production/#high-availability)** —
@@ -160,7 +160,7 @@ agents.
 - ✅ **Highly available** - Agents fail over across an ordered list of proxies, and back again
 - ✅ **Dynamic** - Agents pick up target changes from a watched file, no restart needed
 - ✅ **Bandwidth-conscious** - Optional per-path metric filtering drops unwanted families at the agent
-- ✅ **Observable** - A read-only live dashboard shows every agent, path, and recent scrape in one place
+- ✅ **Observable** - A live dashboard shows every agent, path, and recent scrape in one place, and scrapes a path on demand
 - ✅ **Zero changes** to existing Prometheus configuration patterns
 
 ## 🚀 Quick Start
@@ -659,7 +659,7 @@ java -jar prometheus-agent.jar \
 
 ### Operational Dashboard
 
-The proxy ships a read-only, live-updating dashboard that answers the question this system raises most
+The proxy ships a live-updating dashboard that answers the question this system raises most
 often — *why isn't this target scraping?* — without log-diving on two machines. It shows every
 connected agent, every registered path (including paths whose agent has **gone**, which would otherwise
 vanish exactly when you go looking), and how recent scrapes went:
@@ -729,7 +729,7 @@ Typesafe Config highlights include:
 | **Both**  | `--agent_token`    | `AGENT_TOKEN`                   | Pre-shared agent auth token; both sides must match (Default: disabled). For per-agent identities see `proxy.auth` |
 | **Proxy** | `--port, -p`       | `PROXY_PORT`                    | Port for Prometheus to scrape (Default: 8080)        |
 | **Proxy** | `--agent_port, -a` | `AGENT_PORT`                    | Port for Agents to connect via gRPC (Default: 50051) |
-| **Proxy** | `--dashboard`      | `DASHBOARD_ENABLED`             | Enable the read-only operational dashboard (Default: disabled) |
+| **Proxy** | `--dashboard`      | `DASHBOARD_ENABLED`             | Enable the operational dashboard (Default: disabled) |
 | **Proxy** | `--dashboard_port` | `DASHBOARD_PORT`                | Port for the operational dashboard (Default: 8094)      |
 | **Proxy** | `--dashboard_host` | `DASHBOARD_HOST`                | Listen address for the dashboard (Default: 0.0.0.0)     |
 | **Agent** | `--proxy, -p`      | `PROXY_HOSTNAME`                | Hostname/IP of the Proxy. Accepts a comma-separated failover list (e.g. `proxy-a:50051,proxy-b:50051`); see `agent.proxy.endpoints` |

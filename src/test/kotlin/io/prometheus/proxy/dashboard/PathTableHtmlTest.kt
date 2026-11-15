@@ -195,6 +195,41 @@ class PathTableHtmlTest : StringSpec() {
       ProxyDashboardService.parseFilter("not json at all") shouldBe RowFilter.NONE
     }
 
+    // ==================== Scrape now ====================
+
+    "a live path should have a Scrape button, carrying its path, when scrape-now is on" {
+      val snap = DashboardFixtures.snapshot(paths = [path("orders_metrics")], scrapeNowEnabled = true)
+      val html = ProxyDashboardHtml.pushFragment(snap, null, "/dashboard", DashboardLayout.PATH)
+
+      html shouldContain
+        """<button type="button" class="scrape" id="${ProxyDashboardHtml.SCRAPE_ID_PREFIX}orders_metrics" """ +
+        """${ProxyDashboardHtml.SCRAPE_PATH_ATTR}="orders_metrics" aria-label="Scrape /orders_metrics now""""
+    }
+
+    // The proxy serves a departed path no more, so there is nothing to scrape.
+    "a departed path, or any path with scrape-now off, should have no Scrape button" {
+      val departed = DashboardFixtures.snapshot(paths = [departedPathView()], scrapeNowEnabled = true)
+
+      ProxyDashboardHtml.pushFragment(departed, null, "/dashboard", DashboardLayout.PATH) shouldNotContain
+        """class="scrape""""
+      pathPush() shouldNotContain """class="scrape""""
+    }
+
+    // The panel is outside the pushed table, so a push never clears a result someone is reading.
+    "the Paths page should have a hidden result panel, naming the route to post to, outside the pushed table" {
+      val page = renderFullPage(DashboardFixtures.snapshot(scrapeNowEnabled = true), DashboardLayout.PATH)
+
+      page shouldContain
+        """<div class="scrape-result" id="${ProxyDashboardHtml.SCRAPE_RESULT_ID}" """ +
+        """${ProxyDashboardHtml.SCRAPE_URL_ATTR}="/dashboard/scrape" hidden="hidden"></div>"""
+      (
+        page.indexOf("""id="${ProxyDashboardHtml.SCRAPE_RESULT_ID}"""") <
+        page.indexOf("""id="${ProxyDashboardHtml.PATH_TABLE_ID}"""")
+      ) shouldBe true
+      renderFullPage(snapshot(), DashboardLayout.PATH) shouldNotContain
+        """id="${ProxyDashboardHtml.SCRAPE_RESULT_ID}""""
+    }
+
     // ==================== Problems in the status bar and title ====================
 
     "the status bar should count failing paths, and the title every problem" {

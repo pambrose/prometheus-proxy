@@ -109,11 +109,12 @@ must render identically there.
 templating, no build step, no JS framework. The user did **not** mark this as binding, so a future
 change of approach is permitted; it is recorded here as the incumbent reality, not a rule.
 
-**Planned direction — control actions.** The dashboard is read-only today, but this is explicitly
-temporary. Mutating operations (evicting a stale agent, triggering a discovery reload, toggling a path)
-are a real future direction. Future design should anticipate destructive-action patterns —
-confirmation, undo where possible, clear attribution of who acted — rather than assuming an
-observe-only surface.
+**Planned direction — control actions.** The dashboard changes none of the proxy's state today. Its one
+action, scrape-now, scrapes a path as Prometheus would and shows the result: it touches the target, not the
+proxy, so it needs no confirmation, and the activity feed records who asked for each one. Mutating
+operations (evicting a stale agent, triggering a discovery reload, toggling a path) are a real future
+direction. Future design should anticipate destructive-action patterns — confirmation, undo where
+possible, clear attribution of who acted — rather than assuming an observe-only surface.
 
 **Undecided:** the exact set of control actions and their authorization model; where the landing page
 lives relative to the docs site.

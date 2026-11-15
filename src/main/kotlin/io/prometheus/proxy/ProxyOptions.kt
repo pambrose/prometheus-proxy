@@ -128,7 +128,7 @@ class ProxyOptions internal constructor(
     private set
 
   /**
-   * Enables the Proxy's read-only operational dashboard, served from its **own** port ([dashboardPort]) rather
+   * Enables the Proxy's operational dashboard, served from its **own** port ([dashboardPort]) rather
    * than the admin or scrape port. Off by default, matching the admin and metrics posture.
    * Resolved from CLI → [DASHBOARD_ENABLED] env var → `proxy.dashboard.enabled` config.
    */

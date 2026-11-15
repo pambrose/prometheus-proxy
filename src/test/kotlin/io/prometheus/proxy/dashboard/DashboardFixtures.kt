@@ -113,6 +113,7 @@ internal object DashboardFixtures {
     paths: List<PathView> = agents.flatMap { it.paths }.distinct(),
     authEnabled: Boolean = false,
     activity: List<ActivityEntry> = emptyList(),
+    scrapeNowEnabled: Boolean = false,
   ) = ProxySnapshot(
     agents = agents,
     paths = paths,
@@ -122,6 +123,7 @@ internal object DashboardFixtures {
     scrapePort = TestPorts.PROXY_HTTP_PORT,
     authEnabled = authEnabled,
     activity = activity,
+    scrapeNowEnabled = scrapeNowEnabled,
   )
 
   /** The whole page for [snapshot], as the dashboard serves it to a GET. */
