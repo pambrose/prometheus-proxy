@@ -95,7 +95,7 @@ class ChunkedTransferLifetimeOps {
       }
     }
 
-  // ProxyHttpRoutes.dispatchScrapeRequest's finally: the request, and then its transfer.
+  // ScrapeDispatch.dispatchScrapeRequest's finally: the request, and then its transfer.
   @Operation
   fun finish() {
     scrapes.removeFromScrapeRequestMap(scrape.scrapeId)
@@ -105,7 +105,7 @@ class ChunkedTransferLifetimeOps {
   // ProxyServiceImpl's readHeader once the owner check has passed: one lookup, the store, and the check after it. A
   // copy, since readHeader is a private member of a service that needs a Proxy, which this spec can't build without
   // MockK; ProxyServiceImplTest checks the product's, with the handler's removal injected between the lookup and the
-  // store, and ProxyHttpRoutesTest checks that the handler removes the transfer.
+  // store, and ScrapeDispatchTest checks that the handler removes the transfer.
   @Operation
   fun openTransfer() {
     val wrapper = scrapes.getScrapeRequest(scrape.scrapeId) ?: return

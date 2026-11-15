@@ -272,12 +272,24 @@ Two support helpers also live here (not test classes themselves):
 - **ProxyHttpConfigTest** — HTTP server config: Ktor compression, status pages, CORS; a call cancelled by a client
   disconnect, or a write to one that has gone, is logged at DEBUG, while an unexpected exception still logs at WARN
 - **ProxyHttpRoutesTest** — HTTP routing: path resolution, query params, error responses, compression,
-  ensureLeadingSlash; a handler that times out or is cancelled drops its scrape's unfinished chunked transfer; a scrape
-  times out at a timeout it is given rather than the proxy's; a scrape of `//path` or `///path`, which Ktor routes as
-  `/path`, is sent to the agent, labeled in the per-path metrics, and shown on `/debug` and the dashboard under the
-  path's registered key, with its query unchanged, and the blitz, favicon, and unknown-path answers see it with one
-  slash; a blitz path configured with a leading slash is answered at `/path` and `//path` and can't be registered; a
-  scrape record carries the agent's id, name, and identity
+  ensureLeadingSlash, and the service discovery route on and off; the scrape port's `nosniff` and sandbox headers;
+  `recordScrapeOutcome`'s `/debug` line, scrape record, and event, each only while its consumer is on, with a huge
+  failure reason and URL cut to one line, and a scrape record carries the agent's id, name, and identity; a scrape of
+  `//path` or `///path`, which Ktor routes as `/path`, is sent to the agent, labeled in the per-path metrics, and shown
+  on `/debug` and the dashboard under the path's registered key, with its query unchanged, and the blitz, favicon, and
+  unknown-path answers see it with one slash; a blitz path configured with a leading slash is answered at `/path`
+  and `//path` and can't be registered; the route logs a client's path and query cut and escaped; and the
+  defaults of `ResponseResults`, the route's answer
+- **ScrapeDispatchTest** — sending a scrape to a path's agents and merging their answers, which the scrape route and
+  the dashboard's scrape-now share: each outcome `submitScrapeRequest` labels (the agent disconnecting before or during
+  the scrape, the proxy's timeout or one it is given, the in-flight limit, the agent's backlog cap, the proxy stopping,
+  an invalid response, a target's 404 or 500, invalid gzip, a zip bomb, and a success, plain or gzipped), the labels a
+  target's status maps to, and a non-exposition content type served as text/plain; a huge agent content type is logged
+  cut and escaped; a handler that times out or is cancelled drops its scrape's unfinished chunked transfer;
+  `submitScrapeRequests` answers in the agents' order and records nothing the proxy reports; an Authorization header
+  sent without TLS is warned about once; `ScrapeHeaders` reads Prometheus's scrape timeout; and `mergeResponseResults`
+  and `mergeContentTexts` pick the merged status and content type, keep one `# EOF` at the end, and add no blank line
+  for a failed agent
 - **ProxyPathManagerTest** — Path registration/unregistration, consolidated mode, agent selection, concurrent access;
   a live agent's path is taken over only by the same auth identity; the activity feed gets a new registration but not
   a repeat, a take-over as one naming the agent it displaced, a rejection the first time the agent is told it, a path

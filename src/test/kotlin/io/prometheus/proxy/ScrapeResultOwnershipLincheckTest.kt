@@ -92,7 +92,7 @@ class ScrapeResultOwnershipOps {
   // Built before any operation runs, so the intruder can name its scrapeId before the handler tracks it.
   private val scrape = ScrapeRequestWrapper(owner, "metrics", "", "", null, false)
 
-  // ProxyHttpRoutes.dispatchScrapeRequest's admission.
+  // ScrapeDispatch.dispatchScrapeRequest's admission.
   @Operation
   fun track() {
     manager.tryAddToScrapeRequestMap(scrape, MAX_IN_FLIGHT)

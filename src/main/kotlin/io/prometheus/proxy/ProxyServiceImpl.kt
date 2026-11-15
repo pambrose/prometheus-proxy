@@ -568,7 +568,7 @@ internal class ProxyServiceImpl(
 
     // The most transfers this stream may have under way: the cap on one agent's queue of scrape requests. The stock
     // agent sends each transfer whole before the next, so it has one at a time (November #13).
-    private val maxTransfers = ProxyHttpRoutes.maxAgentBacklog(proxy)
+    private val maxTransfers = ScrapeDispatch.maxAgentBacklog(proxy)
 
     // The scrapeId of the last chunk that found no transfer, so a late transfer's chunks log that once, not each time.
     private var lastMissingChunkScrapeId: Long? = null
@@ -777,7 +777,7 @@ internal class ProxyServiceImpl(
 
     // The most characters a chunked transfer keeps of each string in its header; see boundedHeader. A fixed bound, not
     // proxy.internal.maxTargetUrlLength: it caps what a transfer holds while it lasts (November #13), so a limit an
-    // operator can turn off mustn't lift it. A result's strings are cut again where they're shown; see ProxyHttpRoutes.
+    // operator can turn off mustn't lift it. A result's strings are cut again where they're shown; see ScrapeDispatch.
     internal const val MAX_CHUNKED_HEADER_FIELD_LENGTH = 4096
 
     // [response] with each string in its header cut to MAX_CHUNKED_HEADER_FIELD_LENGTH characters. A transfer keeps

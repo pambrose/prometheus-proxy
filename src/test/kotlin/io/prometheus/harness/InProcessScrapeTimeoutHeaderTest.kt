@@ -38,7 +38,7 @@ import io.prometheus.common.TestPorts
 import io.prometheus.common.startAndAwaitReady
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
-import io.prometheus.proxy.ProxyHttpRoutes
+import io.prometheus.proxy.ScrapeHeaders
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.measureTimedValue
@@ -80,7 +80,7 @@ class InProcessScrapeTimeoutHeaderTest : StringSpec() {
           val (status, elapsed) =
             measureTimedValue {
               client.get("http://localhost:$HTTP_PORT/$PATH") {
-                header(ProxyHttpRoutes.SCRAPE_TIMEOUT_HEADER, "$HEADER_TIMEOUT_SECS")
+                header(ScrapeHeaders.SCRAPE_TIMEOUT_HEADER, "$HEADER_TIMEOUT_SECS")
               }.status
             }
 

@@ -36,8 +36,8 @@ import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.metrics.model.snapshots.CounterSnapshot
 import io.prometheus.metrics.model.snapshots.HistogramSnapshot
 import io.prometheus.proxy.ProxyFailure
-import io.prometheus.proxy.ProxyHttpRoutes
 import io.prometheus.proxy.ProxyMetrics
+import io.prometheus.proxy.ScrapeDispatch
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -295,8 +295,8 @@ class DashboardMetricNamesTest : StringSpec() {
     private val NOT_SERIES =
       buildSet {
         addAll(ProxyFailure.entries.map { it.label }.toSet())
-        add(ProxyHttpRoutes.IN_FLIGHT_LIMIT_LABEL)
-        add(ProxyHttpRoutes.BACKLOG_FULL_LABEL)
+        add(ScrapeDispatch.IN_FLIGHT_LIMIT_LABEL)
+        add(ScrapeDispatch.BACKLOG_FULL_LABEL)
         add("agent_name")
       }
 

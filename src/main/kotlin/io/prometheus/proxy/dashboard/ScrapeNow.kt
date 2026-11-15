@@ -19,9 +19,9 @@ package io.prometheus.proxy.dashboard
 import io.ktor.http.HttpStatusCode
 import io.prometheus.Proxy
 import io.prometheus.proxy.ActivityKind
-import io.prometheus.proxy.ProxyHttpRoutes
 import io.prometheus.proxy.ProxyPathManager
 import io.prometheus.proxy.ProxyPathManager.AgentContextInfo
+import io.prometheus.proxy.ScrapeDispatch
 import io.prometheus.proxy.ScrapeHeaders
 import io.prometheus.proxy.ScrapeRequestResponse
 import kotlinx.coroutines.sync.Semaphore
@@ -49,7 +49,7 @@ internal class ScrapeNow(
   private val proxy: Proxy,
   private val timeSource: TimeSource = TimeSource.Monotonic,
   private val submit: suspend (AgentContextInfo, String) -> List<ScrapeRequestResponse> = { info, path ->
-    ProxyHttpRoutes.submitScrapeRequests(info, proxy, path, "", HEADERS, TIMEOUT + TIMEOUT_GRACE)
+    ScrapeDispatch.submitScrapeRequests(info, proxy, path, "", HEADERS, TIMEOUT + TIMEOUT_GRACE)
   },
 ) {
   private val permits = Semaphore(MAX_CONCURRENT)

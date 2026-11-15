@@ -2790,7 +2790,7 @@ class ProxyServiceImplTest : StringSpec() {
       openAfterChunk.await() shouldBe 0
     }
 
-    // The handler's finally (ProxyHttpRoutes.dispatchScrapeRequest) runs between the header's lookup of the scrape and
+    // The handler's finally (ScrapeDispatch.dispatchScrapeRequest) runs between the header's lookup of the scrape and
     // the store of its transfer: it stops tracking the scrape, then finds no transfer to remove.
     "writeChunkedResponsesToProxy should not keep a transfer whose scrape ended just before it was stored" {
       val owner = AgentContext("owner-host")

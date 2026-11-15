@@ -12,7 +12,7 @@
 (*   ScrapeRequestManager -- tracked scrapes, the ownership check on the   *)
 (*                           lookup that completes, CAS completion        *)
 (*   Proxy.removeAgentContext -- the three-step teardown                   *)
-(*   ProxyHttpRoutes      -- one HTTP handler per scrape                   *)
+(*   ScrapeDispatch       -- one HTTP handler per scrape                   *)
 (*   ProxyServiceImpl.readRequestsFromProxy -- the per-agent reader loop,  *)
 (*                           and, with the transport filter disabled, a    *)
 (*                           stream naming another agent's agentId, its    *)

@@ -39,16 +39,17 @@ Comprehensive KDoc (~85 lines) covering:
 
 ### Documented Internal Classes
 
-All 15 internal service/manager classes have concise KDoc (5–15 lines each) covering purpose,
+All 16 internal service/manager classes have concise KDoc (5–15 lines each) covering purpose,
 responsibilities, constructor parameters, and cross-references:
 
-#### Proxy-side (10 classes)
+#### Proxy-side (11 classes)
 
 | Class                        | Summary                                                                  |
 |:-----------------------------|:-------------------------------------------------------------------------|
 | `ProxyGrpcService`           | gRPC server lifecycle, TLS, interceptors, keepalive                      |
 | `ProxyHttpService`           | Ktor HTTP server for Prometheus scrape requests                          |
-| `ProxyHttpRoutes`            | HTTP routing, service discovery, scrape dispatch                         |
+| `ProxyHttpRoutes`            | HTTP routing, service discovery, scrape recording                        |
+| `ScrapeDispatch`             | Sends a scrape to a path's agents over gRPC and merges their answers     |
 | `ProxyServiceImpl`           | gRPC `ProxyService` implementation (registration, streaming, heartbeats) |
 | `ProxyPathManager`           | Path-to-agent mapping, consolidated/exclusive modes                      |
 | `AgentContextManager`        | Agent context and chunked context registries                             |
