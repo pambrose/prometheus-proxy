@@ -16,6 +16,7 @@
 
 package io.prometheus.proxy.dashboard
 
+import io.prometheus.common.TestPorts
 import io.prometheus.proxy.ScrapeRecord
 import java.time.Instant
 import kotlin.time.Duration
@@ -90,5 +91,6 @@ internal object DashboardFixtures {
     scrapes = scrapes,
     health = HealthView(agents.size, paths.size, 0, 25, 1, 25),
     maxAgentInactivitySecs = 60,
+    scrapePort = TestPorts.PROXY_HTTP_PORT,
   )
 }

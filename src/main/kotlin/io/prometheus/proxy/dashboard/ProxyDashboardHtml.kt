@@ -16,6 +16,7 @@
 
 package io.prometheus.proxy.dashboard
 
+import kotlinx.html.BUTTON
 import kotlinx.html.ButtonType
 import kotlinx.html.DIV
 import kotlinx.html.FlowContent
@@ -82,7 +83,13 @@ internal object ProxyDashboardHtml {
   const val ANNOUNCER_ID = "conn-announce"
   const val VIEW_ATTR = "data-view"
   const val COPY_ATTR = "data-copy"
-  const val COPY_ID_PREFIX = "copy-"
+  const val PROXY_PATH_ATTR = "data-proxy-path"
+  const val SCRAPE_PORT_ATTR = "data-scrape-port"
+
+  // The two kinds of copy button, by row. Their ids differ before the path does ("copy-t..." and "copy-p..."), so no
+  // path can give one kind the id of the other.
+  const val COPY_TARGET_ID_PREFIX = "copy-target-"
+  const val COPY_PROXY_ID_PREFIX = "copy-proxy-"
 
   // No region id starts with it, so an agent id, which an agent behind nginx names itself, can't make a row's id
   // equal one.
@@ -110,6 +117,9 @@ internal object ProxyDashboardHtml {
     body {
       // Loading hx-ws.min.js is what enables the extension; htmx 4 has no hx-ext.
       attributes["hx-ws:connect"] = "$routeBase/events"
+      // For the proxy URLs the page builds (see pathCell). On <body>, which no push replaces, since the port doesn't
+      // change.
+      attributes[SCRAPE_PORT_ATTR] = "${snapshot.scrapePort}"
 
       div("bar") {
         span("brand") { +"prometheus-proxy" }
@@ -206,7 +216,7 @@ internal object ProxyDashboardHtml {
       tbody {
         snapshot.paths.forEach { path ->
           tr(if (path.isDeparted) "departed" else null) {
-            td { +"/${path.path}" }
+            pathCell(path)
             td {
               // A departed path still names who was serving it -- that is usually the whole answer.
               // Named the way the agent list names it, so the two layouts can be read against each other.
@@ -231,6 +241,20 @@ internal object ProxyDashboardHtml {
     }
   }
 
+  /**
+   * A path, and while the proxy serves it, the button that copies its proxy URL, the one to curl to check the path
+   * through the proxy. The proxy can't know the name the viewer reaches it by, so the button carries the path, and the
+   * page's script joins it to the host the page was opened at and the scrape port, [SCRAPE_PORT_ATTR] on `<body>`.
+   */
+  private fun TR.pathCell(path: PathView) =
+    td {
+      +"/${path.path}"
+      if (!path.isDeparted)
+        copyButton("$COPY_PROXY_ID_PREFIX${path.path}", "proxy URL", path) {
+          attributes[PROXY_PATH_ATTR] = "/${path.path}"
+        }
+    }
+
   /** A path's target URL and the button that copies it, or a dash for a path without one, such as a departed path. */
   private fun TR.targetCell(path: PathView) =
     td("dim") {
@@ -238,7 +262,9 @@ internal object ProxyDashboardHtml {
         +DASH
       } else {
         +path.targetUrl
-        copyButton(path)
+        copyButton("$COPY_TARGET_ID_PREFIX${path.path}", "target URL", path) {
+          attributes[COPY_ATTR] = path.targetUrl
+        }
       }
     }
 
@@ -258,21 +284,25 @@ internal object ProxyDashboardHtml {
   }
 
   /**
-   * The button beside a path's target URL that copies the URL to the clipboard.
+   * A button that copies [what] for [path] to the clipboard; [value] puts what it copies in an attribute.
    *
-   * The URL rides in [COPY_ATTR] and the page's script does the copying (see SELECTION_JS). The id is built from
-   * the path, which is unique in the table, because the push loop replaces the whole table every frame: htmx
-   * gives focus back to the element whose id the focused one had, so a keyboard user keeps their place, and the
-   * script puts the copied mark back on the button with that id until the mark expires.
+   * The page's script does the copying (see SELECTION_JS). The [id] is built from the path, which is unique in the
+   * table, because the push loop replaces the whole table every frame: htmx gives focus back to the element whose id
+   * the focused one had, so a keyboard user keeps their place, and the script puts the copied mark back on the button
+   * with that id until the mark expires.
    */
-  private fun FlowContent.copyButton(path: PathView) =
-    button(type = ButtonType.button, classes = "copy") {
-      attributes["id"] = "$COPY_ID_PREFIX${path.path}"
-      attributes[COPY_ATTR] = path.targetUrl
-      // Names the path, so a screen reader listing the page's buttons can tell one row's from another's.
-      attributes["aria-label"] = "Copy the target URL of /${path.path}"
-      attributes["title"] = "Copy target URL"
-    }
+  private fun FlowContent.copyButton(
+    id: String,
+    what: String,
+    path: PathView,
+    value: BUTTON.() -> Unit,
+  ) = button(type = ButtonType.button, classes = "copy") {
+    attributes["id"] = id
+    value()
+    // Names the path, so a screen reader listing the page's buttons can tell one row's from another's.
+    attributes["aria-label"] = "Copy the $what of /${path.path}"
+    attributes["title"] = "Copy $what"
+  }
 
   /** Status counters. Driven by the timer rather than the event bus -- these drift, they do not change. */
   fun FlowContent.renderStatus(
@@ -708,14 +738,21 @@ internal object ProxyDashboardHtml {
         if (!btn) return;
         // The id, not the element: a push can replace the button before the clipboard write settles.
         var id = btn.id;
-        writeClipboard(btn.getAttribute('$COPY_ATTR')).then(function () {
+        var path = btn.getAttribute('$PROXY_PATH_ATTR');
+        var what = path ? 'Proxy URL' : 'Target URL';
+        writeClipboard(path ? proxyUrl(path) : btn.getAttribute('$COPY_ATTR')).then(function () {
           showMark(id, 'copied');
-          say('Target URL copied.');
+          say(what + ' copied.');
         }, function () {
           showMark(id, 'copy-failed');
-          say('Could not copy the target URL.');
+          say('Could not copy the ' + what.toLowerCase() + '.');
         });
       });
+      // A path's proxy URL, the one to curl to check it through the proxy: the host this page was opened at, which the
+      // proxy can't know, and the port Prometheus scrapes, which is plain HTTP. An IPv6 host keeps its brackets.
+      function proxyUrl(path) {
+        return 'http://' + window.location.hostname + ':' + document.body.getAttribute('$SCRAPE_PORT_ATTR') + path;
+      }
       // Scrape times arrive as <time datetime="...Z"> showing the proxy's zone, and are shown in the viewer's, the
       // zone Grafana uses, so a failure here and the spike it caused there read the same clock. Every frame and row
       // click is converted in its fragment before htmx swaps it in, so no frame shows the proxy's zone first. The
