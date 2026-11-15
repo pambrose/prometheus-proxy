@@ -87,6 +87,10 @@ every agent when agent auth is off.
 - **Copy a path's proxy URL from the dashboard.** Each registered path in the Paths view has a button that copies
   its URL on the proxy, the one to curl to check the path through the proxy, built from the address you opened the
   dashboard at.
+- **The demo shows failover, filtering, and teams.** `make demo-up` now also starts a standby proxy, and three new
+  scenarios show the agents failing over to it when the primary stops, a filter at the agent cutting the catalog's
+  payload by more than half before it crosses the firewall, and a contractor's agent refused a path its identity
+  doesn't cover. The Live Demo page walks through each.
 
 ### Security
 

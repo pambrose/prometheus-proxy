@@ -1,8 +1,15 @@
 # Prometheus config for the dashboard demo (demos/dashboard/compose.yml).
 #
-# It names no target: one job discovers every path the agents register through the proxy's HTTP service discovery
-# endpoint, and scrapes each through the proxy. A path the agents add, such as the ones `demo.sh discover` lists,
-# is scraped within a few seconds with no change here. `make check-rules` validates this file with promtool.
+# It names no target: one job discovers every path the agents register through each proxy's HTTP service discovery
+# endpoint, and scrapes each through the proxy that advertised it. A path the agents add, such as the ones
+# `demo.sh discover` lists, is scraped within a few seconds with no change here. `make check-rules` validates this file
+# with promtool.
+#
+# The agents are connected to one proxy at a time, so one proxy advertises every path and the other none. When the
+# primary goes (`demo.sh proxy-down`), its discovery stops answering and Prometheus keeps the targets it last listed,
+# which go down, while the standby's discovery lists the same paths, which come up. Each job is then down through one
+# proxy and up through the other, so the demo's dashboard and alerts count a job as down only when no proxy reaches it
+# (max by job).
 
 global:
   # Short intervals so the dashboard and Grafana move visibly during a demo.
@@ -19,6 +26,8 @@ scrape_configs:
   - job_name: proxy-discovered
     http_sd_configs:
       - url: http://proxy:8080/discovery
+        refresh_interval: 5s
+      - url: http://proxy-standby:8080/discovery
         refresh_interval: 5s
     relabel_configs:
       # Each agent's path labels include a job (prometheus-proxy, agent-east, orders, ...), which replaces this

@@ -52,7 +52,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Paths Prometheus scraped successfully through the proxy on its last scrape.",
+      "description": "Jobs Prometheus scraped successfully through either proxy on its last scrape.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -99,7 +99,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(up)",
+          "expr": "count(max by (job) (up) == 1) or vector(0)",
           "legendFormat": "",
           "refId": "A"
         }
@@ -112,7 +112,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Paths whose last scrape through the proxy failed. Try ./demos/dashboard/demo.sh outage.",
+      "description": "Jobs no proxy could scrape on the last try: a failover (./demos/dashboard/demo.sh proxy-down) leaves them up. Try ./demos/dashboard/demo.sh outage.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -163,7 +163,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "count(up == 0) or vector(0)",
+          "expr": "count(max by (job) (up) == 0) or vector(0)",
           "legendFormat": "",
           "refId": "A"
         }

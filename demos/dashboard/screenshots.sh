@@ -15,6 +15,7 @@ DEMO="$DEMO_DIR/demo.sh"
 OUT_DIR="$REPO_DIR/website/prometheus-proxy/docs/images/demo"
 
 DASHBOARD_URL="http://localhost:${DEMO_DASHBOARD_PORT:-8094}/dashboard"
+STANDBY_DASHBOARD_URL="http://localhost:${DEMO_STANDBY_DASHBOARD_PORT:-8095}/dashboard"
 GRAFANA_URL="http://localhost:${DEMO_GRAFANA_PORT:-3000}"
 PROMETHEUS_URL="http://localhost:${DEMO_PROMETHEUS_PORT:-9090}"
 
@@ -60,6 +61,10 @@ restore() {
   "$DEMO" agent-thaw >/dev/null 2>&1 || true
   "$DEMO" undiscover >/dev/null 2>&1 || true
   "$DEMO" recover >/dev/null 2>&1 || true
+  "$DEMO" proxy-up >/dev/null 2>&1 || true
+  "$DEMO" proxy-up proxy-standby >/dev/null 2>&1 || true
+  "$DEMO" unfilter >/dev/null 2>&1 || true
+  "$DEMO" rogue-agent-stop >/dev/null 2>&1 || true
   rm -rf "$WORK"
 }
 trap restore EXIT
@@ -81,8 +86,33 @@ count_in() { page "$1" | grep -Eo "$2" | wc -l | tr -d ' '; }
 
 # The id of the connected agent with this name, from the agent list.
 agent_id() {
-  page "" | grep -Eo "data-agent=\"[^\"]*\"[^>]*><span><span class=\"led [a-z]+\"></span>$1<" |
+  curl -fsS "${2:-$DASHBOARD_URL}" | grep -Eo "data-agent=\"[^\"]*\"[^>]*><span><span class=\"led [a-z]+\"></span>$1<" |
     sed -E 's/^data-agent="([^"]*)".*/\1/' | head -1
+}
+
+# Whether an agent's detail page, by URL, counts at least this many recent scrapes: enough rows to fill a fixed crop.
+has_scrapes() {
+  local count
+  count="$(curl -fsS "$1" 2>/dev/null | grep -Eo '<span>Recent scrapes</span><span>[0-9]+</span>' | grep -Eo '[0-9]+')"
+  [[ -n "$count" ]] && ((count >= $2))
+}
+
+# Whether the dashboard at a base URL lists all three agents.
+has_all_agents() { curl -fsS "$1" 2>/dev/null | grep -q '<span>3 agents</span>'; }
+
+# Whether Prometheus scrapes the primary proxy's own metrics again: by then the agents look its name up again.
+primary_metrics_up() {
+  curl -fsS -G "$PROMETHEUS_URL/api/v1/query" --data-urlencode 'query=max(up{job="prometheus-proxy"}) == 1' |
+    grep -q '"value"'
+}
+
+# Whether agent-east's recent scrapes show at least three filtered catalog payloads, under 300,000 characters.
+filtered_catalog() {
+  local id
+  id="$(agent_id agent-east)"
+  [[ -n "$id" ]] || return 1
+  [[ "$(curl -fsS "$DASHBOARD_URL/agents/$id" | grep -Eo '/catalog_metrics</span>.{0,120}· [0-9]+ chars' |
+    grep -Eo '[0-9]+ chars' | awk '$1 < 300000' | wc -l | tr -d ' ')" -ge 3 ]]
 }
 
 # Whether Prometheus has DemoTargetDown firing for at least this many targets.
@@ -140,14 +170,14 @@ step "Waiting for every path to answer 200"
 "$DEMO" agent-thaw >/dev/null 2>&1 || true
 "$DEMO" undiscover >/dev/null
 "$DEMO" recover >/dev/null
-wait_until "nine healthy paths" healthy 9
+wait_until "ten healthy paths" healthy 10
 # Enough history for agent-east's Recent scrapes to fill its screenshot.
 sleep 10
 
 east="$(agent_id agent-east)"
 [[ -n "$east" ]] || die "agent-east isn't connected"
 step "The Agents and Paths views"
-shoot_fixed agents "$DASHBOARD_URL/agents/$east" 776
+shoot_fixed agents "$DASHBOARD_URL/agents/$east" 763
 shoot_paths paths
 
 step "A failing service and a hung one"
@@ -158,11 +188,34 @@ shoot_paths outage
 # Grafana is captured taller than kept: the bottom of its viewport carries a fixed "Powered by" footer.
 shoot_fixed grafana "$GRAFANA_URL/d/prometheus-proxy-demo?orgId=1&kiosk&from=now-15m&to=now&theme={theme}" 900 1000 15000
 "$DEMO" recover >/dev/null
-wait_until "the services to recover" healthy 9
+wait_until "the services to recover" healthy 10
+
+step "The primary proxy fails over to the standby"
+"$DEMO" proxy-down >/dev/null 2>&1
+wait_until "every agent on the standby" has_all_agents "$STANDBY_DASHBOARD_URL"
+east="$(agent_id agent-east "$STANDBY_DASHBOARD_URL")"
+[[ -n "$east" ]] || die "agent-east isn't on the standby"
+wait_until "agent-east's scrapes through the standby" has_scrapes "$STANDBY_DASHBOARD_URL/agents/$east" 11
+shoot_fixed failover "$STANDBY_DASHBOARD_URL/agents/$east" 763
+"$DEMO" proxy-up >/dev/null 2>&1
+wait_until "the primary's own metrics to answer again" primary_metrics_up
+"$DEMO" proxy-down proxy-standby >/dev/null 2>&1
+wait_until "every agent back on the primary" has_all_agents "$DASHBOARD_URL"
+"$DEMO" proxy-up proxy-standby >/dev/null 2>&1
+wait_until "ten healthy paths" healthy 10
+
+step "A filter at the agent"
+"$DEMO" filter >/dev/null 2>&1
+wait_until "agent-east's filtered catalog scrapes" filtered_catalog
+east="$(agent_id agent-east)"
+wait_until "agent-east's scrapes since the restart" has_scrapes "$DASHBOARD_URL/agents/$east" 11
+shoot_fixed filtered "$DASHBOARD_URL/agents/$east" 763
+"$DEMO" unfilter >/dev/null 2>&1
+wait_until "ten healthy paths" healthy 10
 
 step "Three services discovered at runtime"
 "$DEMO" discover >/dev/null
-wait_until "three discovered paths" healthy 12
+wait_until "three discovered paths" healthy 13
 wait_until "three 'disc' sources" test "$(count_in "/paths" '>disc<')" -ge 3
 shoot_paths discovered
 
@@ -180,7 +233,7 @@ shoot_paths evicted
 
 step "Writing WebP to ${OUT_DIR#"$REPO_DIR"/}"
 mkdir -p "$OUT_DIR"
-for name in agents paths outage grafana discovered evicting evicted; do
+for name in agents paths outage grafana failover filtered discovered evicting evicted; do
   for theme in "${THEMES[@]}"; do
     file="$(named "$name" "$theme")"
     cwebp -quiet -lossless -z 9 "$WORK/$file.png" -o "$OUT_DIR/$file.webp"
