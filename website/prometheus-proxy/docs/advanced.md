@@ -49,6 +49,10 @@ the same path, it displaces the first agent, provided both connected with the sa
 With [per-agent identities](security/index.md#per-agent-identities-and-path-authorization), another
 identity's registration is rejected while the first agent is connected.
 
+The displaced agent stays connected without the path, so two agents configured with the same path settle with
+the later one serving it. Only a connection the agent itself has since replaced, one of the same launch, is
+disconnected when it loses its last path. To serve a path from both agents, make them consolidated.
+
 In **consolidated mode**, multiple agents can register the same path for redundancy:
 
 ```hocon

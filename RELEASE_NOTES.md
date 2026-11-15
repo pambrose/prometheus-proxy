@@ -208,6 +208,9 @@ every agent when agent auth is off.
   update rendered before your selection.
 - The dashboard's agent list keeps keyboard focus. Each refresh, every 2 seconds by default, dropped it, so the
   next Tab started again from the top of the page.
+- Two agents that register the same path without consolidated mode no longer take it from each other every few
+  seconds. The later one serves the path and the other stays connected without it; the proxy logs which agent took
+  it, and the Troubleshooting page says what to do.
 
 ### Documentation
 

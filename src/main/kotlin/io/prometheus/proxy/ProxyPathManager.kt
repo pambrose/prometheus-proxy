@@ -429,15 +429,25 @@ internal class ProxyPathManager(
     }
     pathMap[path] = entry
 
-    // Invalidate displaced agent contexts that have no other registered paths.
-    // Even live agents are invalidated here — a displaced agent with zero paths
-    // would otherwise stay alive indefinitely via heartbeats, consuming resources.
-    // The agent will reconnect and re-register its paths if needed.
+    // A displaced context left with no paths is invalidated only when it is a stale copy of the agent that took the
+    // path: an agent keeps its launch id across reconnects, so a context of the same launch is one the agent has
+    // already left. An agent of another launch stays connected without paths. Invalidating it freed nothing, since it
+    // reconnected within seconds, registered its paths again, and displaced this agent in turn: two agents configured
+    // with the same exclusive path displaced each other every few seconds without end. A dead context of another
+    // launch is evicted for inactivity.
     displacedContexts.forEach { displacedContext ->
       countPaths(displacedContext.agentId, -1)
       if (pathCountFor(displacedContext.agentId) == 0) {
-        logger.info { "Invalidating orphaned agentId ${displacedContext.agentId} after path /$path was overwritten" }
-        displacedContext.invalidate()
+        if (displacedContext.launchId == agentContext.launchId) {
+          logger.info { "Invalidating orphaned agentId ${displacedContext.agentId} after path /$path was overwritten" }
+          displacedContext.invalidate()
+        } else {
+          logger.info {
+            "agentId ${displacedContext.agentId} keeps its connection without paths after agentId " +
+              "${agentContext.agentId}, of another launch, took over /$path; to serve a path from both agents, " +
+              "set agent.consolidated = true on each"
+          }
+        }
       }
     }
   }

@@ -95,6 +95,22 @@ class ProxyPathManagerTest : StringSpec() {
       assignProperties(registerAgentRequest { this.consolidated = consolidated })
     }
 
+  // A real context of the agent launch [launch], as an agent's registration assigns it. An agent keeps its launch id
+  // across reconnects, so two contexts of one launch are the same agent.
+  private fun launched(
+    remote: String,
+    launch: String,
+    name: String = "agent",
+  ): AgentContext =
+    AgentContext(remote).apply {
+      assignProperties(
+        registerAgentRequest {
+          launchId = launch
+          agentName = name
+        },
+      )
+    }
+
   // The rejections ProxyPathManager logged during [block] whose message contains [marker], at every level.
   private fun rejectionLogs(
     marker: String,
@@ -1617,16 +1633,15 @@ class ProxyPathManagerTest : StringSpec() {
       info.agentContexts[0].agentId shouldBe newAgent.agentId
     }
 
-    // Bug #8 fix: A live (valid) agent displaced from its only path IS now
-    // invalidated. Without this, the displaced agent stays alive indefinitely
-    // via heartbeats, consuming resources with zero paths. The agent will
-    // reconnect and re-register its paths if needed.
-    "overwriting path should invalidate displaced agent even if still connected" {
+    // Bug #8 fix: a displaced context left with no paths is invalidated when it is a stale copy of the agent that took
+    // the path over. An agent keeps its launch id across reconnects, so the old context of the same launch is one the
+    // agent has already left, which would otherwise stay registered until evicted.
+    "overwriting path should invalidate a displaced context of the same launch even if still connected" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
 
-      val oldAgent = AgentContext("remote-old")
-      val newAgent = AgentContext("remote-new")
+      val oldAgent = launched("remote-old", "launch-1")
+      val newAgent = launched("remote-new", "launch-1")
 
       oldAgent.isValid().shouldBeTrue()
 
@@ -1644,6 +1659,62 @@ class ProxyPathManagerTest : StringSpec() {
       info.shouldNotBeNull()
       info.agentContexts.shouldHaveSize(1)
       info.agentContexts[0].agentId shouldBe newAgent.agentId
+    }
+
+    // Invalidating a live agent of another launch freed nothing: it reconnected within seconds, registered its paths
+    // again, and displaced the agent that had taken them, which was invalidated in turn. Two agents configured with the
+    // same exclusive path displaced each other every few seconds without end. The later registration now keeps the
+    // path, and the agent it displaced stays connected without it.
+    "a live agent displaced by another launch should keep its connection without paths" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val oldAgent = launched("remote-old", "launch-old")
+      val newAgent = launched("remote-new", "launch-new")
+
+      manager.addPath("/metrics", """{"job":"test"}""", oldAgent)
+      manager.addPath("/metrics", """{"job":"test"}""", newAgent)
+
+      oldAgent.isValid().shouldBeTrue()
+      newAgent.isValid().shouldBeTrue()
+      manager.getAgentContextInfo("/metrics").shouldNotBeNull().agentContexts.map { it.agentId } shouldBe
+        listOf(newAgent.agentId)
+
+      // It is not displaced again, by its own registration or the other's, so the two settle.
+      manager.addPath("/metrics", """{"job":"test"}""", newAgent)
+      oldAgent.isValid().shouldBeTrue()
+      newAgent.isValid().shouldBeTrue()
+    }
+
+    // The agent left without paths still answers what it was sent before the path moved.
+    "a live agent displaced by another launch should keep its backlog" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val oldAgent = launched("remote-old", "launch-old")
+      val newAgent = launched("remote-new", "launch-new")
+
+      manager.addPath("/metrics", """{"job":"test"}""", oldAgent)
+      oldAgent.writeScrapeRequest(mockk(relaxed = true))
+      manager.addPath("/metrics", """{"job":"test"}""", newAgent)
+
+      oldAgent.scrapeRequestBacklogSize shouldBe 1
+    }
+
+    // One line per displaced agent, naming both agentIds and none of either agent's own fields (October #23), so an
+    // operator can tell an agent with no paths from one that never registered any.
+    "an agent left without paths by another launch should be logged by agentId" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = false)
+      val oldAgent = launched("remote-old", "launch-old", name = "OLD-NAME")
+      val newAgent = launched("remote-new", "launch-new", name = "NEW-NAME")
+
+      val messages =
+        captureLogs<ProxyPathManager>(Level.INFO) {
+          manager.addPath("metrics", """{"job":"test"}""", oldAgent)
+          manager.addPath("metrics", """{"job":"test"}""", newAgent)
+        }.map { it.formattedMessage }
+
+      val line = messages.single { it.startsWith("agentId ${oldAgent.agentId} ") }
+      line shouldContain "agentId ${newAgent.agentId}"
+      line shouldContain "consolidated"
+      messages.filter { it.startsWith("Invalidating orphaned") }.shouldBeEmpty()
+      messages.filter { "OLD-NAME" in it || "NEW-NAME" in it }.shouldBeEmpty()
     }
 
     "overwriting path should not invalidate displaced agent that has other paths" {
