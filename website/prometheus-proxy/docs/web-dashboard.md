@@ -199,18 +199,23 @@ why instead. `proxy.dashboard.scrapeNowEnabled = false` removes the button and i
 ### Paths whose agent has gone
 
 A path whose agent disconnected **stays on this screen**, marked `gone`, still naming the agent that was
-serving it. This is the layout's main reason to exist.
+serving it, the identity it was registered as, and the target URL that agent scraped, with its copy button.
+This is the layout's main reason to exist.
 
 The proxy deletes a path the moment its last agent departs, so the Agents layout cannot show it — a
 target that *stopped* working simply disappears from that view, at exactly the moment you are looking
-for it. The Paths layout rebuilds those rows from each path's scrape history, which outlives the agent, and
-the row keeps its History column, so you can see whether the target was failing before its agent went.
+for it. The Paths layout keeps those rows from what the proxy recorded as each path left, and from its
+scrape history, both of which outlive the agent. A path whose agent left before Prometheus ever scraped it
+still gets its row, with an en dash for its scrape columns. Otherwise the row keeps its History column, so
+you can see whether the target was failing before its agent went. The search finds a gone path by its
+identity as it does a live one, so `?q=team-a` shows a team's gone paths too.
 
-A gone path stays for `departedPathRetentionSecs` (default 3600, an hour) after its last scrape. That is measured
-in time, not in scrapes, so a busy proxy keeps a gone path as long as a quiet one does. Earlier versions rebuilt
-these rows from the 200 most recent scrapes across all paths, which on a proxy with a hundred paths scraped every
-15 seconds is about 30 seconds of history. At most 1,000 gone paths are kept, oldest dropped first, and none
-survives a proxy restart. It is a recent-past view, not an audit log.
+A gone path stays for `departedPathRetentionSecs` (default 3600, an hour) after it was last seen: when its agent
+left, or its last scrape, if that came later. That is measured in time, not in scrapes, so a busy proxy keeps a
+gone path as long as a quiet one does. Earlier versions rebuilt these rows from the 200 most recent scrapes
+across all paths, which on a proxy with a hundred paths scraped every 15 seconds is about 30 seconds of history.
+At most 1,000 gone paths are kept, the one seen least recently dropped first, and none survives a proxy restart.
+It is a recent-past view, not an audit log.
 
 ## The Activity layout
 
@@ -343,9 +348,7 @@ Both are lists, so set them in a config file; see [Dashboard configuration](conf
   names one of them, with the others counted in the `+N`, and shows that agent's target URL and source.
   When it leaves, the row names the next agent and shows its target. The path's labels, which service
   discovery serves, stay the first registrant's.
-- **Departed paths age out.** A gone path stays for `departedPathRetentionSecs` (default 3600) after its last
-  scrape, at most 1,000 of them at once, and none survives a proxy restart.
+- **Departed paths age out.** A gone path stays for `departedPathRetentionSecs` (default 3600) after its agent
+  left or its last scrape, whichever is later, at most 1,000 of them at once, and none survives a proxy restart.
 - **The activity feed is short-lived.** It keeps the last `activityLogSize` rows (default 500), and none survives a
   proxy restart.
-- **A departed path shows no identity.** The proxy records a path's identity with its entry, which goes when the
-  path's last agent does; the row still names that agent, from its last scrape.

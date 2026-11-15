@@ -787,7 +787,10 @@ class ProxyWebDashboardTest : StringSpec() {
         agent.stopSync(10.seconds)
         eventually(TOPOLOGY_PATIENCE) {
           client.get("$base/dashboard").bodyAsText() shouldContain "No agents connected"
-          client.get("$base/dashboard/paths").bodyAsText() shouldNotContain PATHS_PATH
+          // The path stays, marked gone, though nothing scraped it: its departure is recorded as its agent leaves. A
+          // gone row's path cell holds the path alone, without the live row's copy button. A page GET is indented.
+          client.get("$base/dashboard/paths").bodyAsText() shouldContain
+            Regex("""<tr class="departed">\s*<td>$PATHS_PATH</td>""")
         }
       }
     }

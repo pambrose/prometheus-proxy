@@ -25,8 +25,10 @@ import io.kotest.matchers.shouldBe
 import io.ktor.http.parametersOf
 import io.prometheus.proxy.ActivityKind
 import io.prometheus.proxy.AgentAuthManager.Companion.LEGACY_IDENTITY_NAME
+import io.prometheus.proxy.PathHistory
 import io.prometheus.proxy.dashboard.DashboardFixtures.activityEntry
 import io.prometheus.proxy.dashboard.DashboardFixtures.departedPathView
+import io.prometheus.proxy.dashboard.DashboardFixtures.departure
 import io.prometheus.proxy.dashboard.DashboardFixtures.pathView
 import io.prometheus.proxy.dashboard.DashboardFixtures.scrapeRecord
 
@@ -65,11 +67,27 @@ class RowFilterTest : StringSpec() {
         .shouldBeTrue()
     }
 
-    // A gone path has no agentNames; its row names the agent from its last scrape, so a search should find it there.
+    // A gone path the proxy kept only the scrapes of has no agentNames; its row names the agent from its last scrape,
+    // so a search should find it there.
     "a query should match the agent a departed path names" {
       val gone = departedPathView(lastScrape = scrapeRecord(agentName = "warehouse-01", path = "orphan_metrics"))
 
       matches("warehouse", gone).shouldBeTrue()
+    }
+
+    // Follow-up #4: a gone path showed no identity, so a search for a team's identity missed its gone paths, the
+    // problem rows that matter most. Built the way the dashboard builds them, from a departure and from scrapes alone.
+    "a query should match a departed path's identity, from its departure or its last scrape" {
+      val departed =
+        PathHistory.Snapshot(
+          scrapes = mapOf("scraped_metrics" to [scrapeRecord(path = "scraped_metrics", identity = "team-a")]),
+          departures = mapOf("never_scraped" to departure(identity = "team-a")),
+        )
+      val gone = ProxySnapshot.buildPathViews(emptyList(), departed)
+
+      gone.map { it.path } shouldBe ["never_scraped", "scraped_metrics"]
+      gone.all { RowFilter.of("TEAM-A", problemsOnly = true).matches(it) }.shouldBeTrue()
+      gone.none { matches("team-b", it) }.shouldBeTrue()
     }
 
     // The legacy token's identity reads as "shared token" on the page, so a search finds what is shown, not what isn't.

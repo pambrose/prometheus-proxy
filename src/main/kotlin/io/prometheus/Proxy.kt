@@ -215,13 +215,18 @@ class Proxy(
     EvictingQueue.create(proxyConfigVals.dashboard.recentScrapesQueueSize)
 
   // The same records again, kept per path, so the dashboard's path table can show each path's recent history and keep
-  // a path whose agent has gone for a set time rather than only until 200 newer scrapes push it out of the queue.
-  internal val pathHistory =
-    PathHistory(
-      historySize = proxyConfigVals.dashboard.pathHistorySize,
-      departedRetention = proxyConfigVals.dashboard.departedPathRetentionSecs.seconds,
-      livePathCount = { pathManager.pathMapSize },
-    )
+  // a path whose agent has gone for a set time rather than only until 200 newer scrapes push it out of the queue, with
+  // the paths that left the path map, which pathManager records into it. Null unless the dashboard is on, as
+  // activityLog is, so with the dashboard off no departure is kept that nothing would read.
+  internal val pathHistory: PathHistory? =
+    if (options.dashboardEnabled)
+      PathHistory(
+        historySize = proxyConfigVals.dashboard.pathHistorySize,
+        departedRetention = proxyConfigVals.dashboard.departedPathRetentionSecs.seconds,
+        livePathCount = { pathManager.pathMapSize },
+      )
+    else
+      null
 
   // Declared before grpcService: createGrpcServer() reads isEnabled to decide whether to install the auth
   // interceptor. Eager construction fail-fasts on invalid proxy.auth config at startup.
@@ -602,7 +607,7 @@ class Proxy(
     synchronized(recentScrapes) {
       recentScrapes.add(record)
     }
-    pathHistory.record(record)
+    pathHistory?.record(record)
   }
 
   /**

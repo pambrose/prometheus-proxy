@@ -53,8 +53,8 @@ internal data class RowFilter(
   ): Boolean =
     (!problemsOnly || isProblem) && (query.isEmpty() || fields().any { it.contains(query, ignoreCase = true) })
 
-  // What the row shows: an identity as its label reads, and for a departed path, which has no agents, the agent its
-  // last scrape names (servingAgent, which is otherwise the first of agentNames).
+  // What the row shows: an identity as its label reads, and the agent the row names (servingAgent): the first of
+  // agentNames, or for a departed path with none, the one its last scrape names.
   private fun PathView.searchFields(): List<String> =
     listOfNotNull(path, targetUrl, servingAgent, identityLabel(identity)) + agentNames
 

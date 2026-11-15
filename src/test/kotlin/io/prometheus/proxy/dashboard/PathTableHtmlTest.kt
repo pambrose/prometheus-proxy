@@ -110,11 +110,43 @@ class PathTableHtmlTest : StringSpec() {
       html shouldContain """<td class="dim">west</td>"""
     }
 
-    // A departed path has no identity, so with only those left the column would vanish under an operator reading them.
+    // The column follows the config, not the rows, so it never vanishes under an operator reading the rows left.
     "the Identity column should stay while agent auth is on, though no path left has an identity" {
       val html = pathPush([departedPathView()], authEnabled = true)
 
       html shouldContain """<th scope="col">Identity</th>"""
+    }
+
+    // Follow-ups #4 and #5: a gone row showed a dash for both, though the identity says whose path it was and the
+    // target is the first thing to check, with a curl, when a path's agent has gone.
+    "a departed path should show the identity and target it had as its agent left" {
+      val gone =
+        departedPathView(
+          path = "orphan_metrics",
+          lastScrape = null,
+          agentName = "warehouse-01",
+          identity = "team-a",
+          targetUrl = "http://warehouse/metrics",
+        )
+      val html = pathPush([gone], authEnabled = true)
+
+      html shouldContain """<td class="dim">team-a</td>"""
+      html shouldContain "http://warehouse/metrics"
+      html shouldContain """id="${ProxyDashboardHtml.COPY_TARGET_ID_PREFIX}orphan_metrics""""
+      html shouldContain "warehouse-01"
+      html shouldContain "gone"
+    }
+
+    // A path whose agent left before Prometheus scraped it now has a row, from its departure, and nothing to put in its
+    // scrape cells.
+    "a path that departed before its first scrape should show the en dash for its scrapes" {
+      val dash = ProxyDashboardHtml.DASH
+      val html = pathPush([departedPathView(lastScrape = null, agentName = "warehouse-01")])
+
+      html shouldContain "warehouse-01"
+      html shouldContain """<span class="dim">$dash</span>"""
+      html shouldContain """<td class="num dim">$dash</td>"""
+      html shouldNotContain """class="hist""""
     }
 
     // With agent auth off no path has an identity, and a column of dashes would only take width from the target.

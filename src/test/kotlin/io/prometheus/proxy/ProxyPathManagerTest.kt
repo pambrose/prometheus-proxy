@@ -47,6 +47,7 @@ import io.prometheus.grpc.registerAgentRequest
 import io.prometheus.proxy.ProxyPathManager.PathMetadata
 import kotlin.concurrent.atomics.AtomicLong
 import kotlin.concurrent.atomics.incrementAndFetch
+import kotlin.time.Duration.Companion.hours
 import io.kotest.matchers.maps.shouldHaveSize as mapShouldHaveSize
 
 @Suppress("LargeClass")
@@ -108,15 +109,25 @@ class ProxyPathManagerTest : StringSpec() {
     remote: String,
     launch: String,
     name: String = "agent",
+    consolidated: Boolean = false,
   ): AgentContext =
     AgentContext(remote).apply {
       assignProperties(
         registerAgentRequest {
           launchId = launch
           agentName = name
+          this.consolidated = consolidated
         },
       )
     }
+
+  // A manager whose proxy records departures into a real path history, which it returns beside it, as a proxy with the
+  // dashboard on does.
+  private fun managerWithHistory(): Pair<ProxyPathManager, PathHistory> {
+    val history = PathHistory(historySize = 5, departedRetention = 1.hours, livePathCount = { 0 })
+    val proxy = createMockProxy().also { every { it.pathHistory } returns history }
+    return ProxyPathManager(proxy, isTestMode = true) to history
+  }
 
   // The rejections ProxyPathManager logged during [block] whose message contains [marker], at every level.
   private fun rejectionLogs(
@@ -1977,6 +1988,76 @@ class ProxyPathManagerTest : StringSpec() {
 
       manager.removeFromPathManager(agent.agentId, "test") shouldBe 2
       manager.removeFromPathManager(agent.agentId, "test") shouldBe 0
+    }
+
+    // ==================== Departures for the dashboard ====================
+
+    // Follow-up #5: the dashboard's gone rows came only from scrapes, so a path that left before its first scrape had
+    // no row, and none had a target. The path manager records the departure from the entry as it leaves.
+    "a path whose last agent unregisters it should be recorded as departed, with what its entry showed" {
+      val (manager, history) = managerWithHistory()
+      val agent = launched("remote-a", "launch-a", name = "warehouse-01")
+      val metadata = PathMetadata("http://warehouse/metrics", "STATIC", "team-a")
+
+      manager.addPath("orders_metrics", "{}", agent, metadata).shouldBeNull()
+      history.snapshot(emptySet()).departures.keys.shouldBeEmpty()
+      manager.removePath("orders_metrics", agent.agentId).valid.shouldBeTrue()
+
+      history.snapshot(emptySet()).departures.getValue("orders_metrics").apply {
+        agentName shouldBe "warehouse-01"
+        identity shouldBe "team-a"
+        targetUrl shouldBe "http://warehouse/metrics"
+        pathSource shouldBe "STATIC"
+      }
+    }
+
+    // A consolidated path that loses one of its agents is still served, so it isn't gone; it is once the last one goes,
+    // and it names that agent.
+    "a disconnect should leave departed each path no other agent serves, naming the agent that left last" {
+      val (manager, history) = managerWithHistory()
+      val leaving = launched("remote-a", "launch-a", name = "agent-leaving", consolidated = true)
+      val staying = launched("remote-b", "launch-b", name = "agent-staying", consolidated = true)
+      manager.addPath("solo_metrics", "{}", leaving).shouldBeNull()
+      manager.addPath("shared_metrics", "{}", leaving).shouldBeNull()
+      manager.addPath("shared_metrics", "{}", staying).shouldBeNull()
+
+      manager.removeFromPathManager(leaving.agentId, "test") shouldBe 2
+      history.snapshot(emptySet()).departures.keys shouldBe setOf("solo_metrics")
+
+      manager.removeFromPathManager(staying.agentId, "test") shouldBe 1
+      history.snapshot(emptySet()).departures.mapValues { it.value.agentName } shouldBe
+        mapOf("solo_metrics" to "agent-leaving", "shared_metrics" to "agent-staying")
+    }
+
+    "a departed path that registers again should no longer be departed" {
+      val (manager, history) = managerWithHistory()
+      val first = launched("remote-a", "launch-a")
+      manager.addPath("orders_metrics", "{}", first).shouldBeNull()
+      manager.removePath("orders_metrics", first.agentId).valid.shouldBeTrue()
+
+      manager.addPath("orders_metrics", "{}", launched("remote-b", "launch-b")).shouldBeNull()
+
+      history.snapshot(setOf("orders_metrics")).departures.keys.shouldBeEmpty()
+    }
+
+    // Both are called under the pathMap lock, which is what orders a departure with the path's next registration. A
+    // consolidated path losing one of its agents hasn't departed.
+    "the path manager should record a departure only as a path's last agent goes, and forget one on each registration" {
+      val history = mockk<PathHistory>(relaxed = true)
+      val manager = ProxyPathManager(createMockProxy().also { every { it.pathHistory } returns history }, true)
+      val first = createAgentContext(consolidated = true)
+      val second = createAgentContext(consolidated = true)
+      manager.addPath("shared_metrics", "{}", first).shouldBeNull()
+      manager.addPath("shared_metrics", "{}", second).shouldBeNull()
+
+      manager.removePath("shared_metrics", first.agentId).valid.shouldBeTrue()
+      verify(exactly = 0) { history.recordDeparture(any(), any()) }
+
+      manager.removePath("shared_metrics", second.agentId).valid.shouldBeTrue()
+      verify(exactly = 2) { history.forgetDeparture("shared_metrics") }
+      verify(exactly = 1) {
+        history.recordDeparture("shared_metrics", match { it.agentContexts.single().agentId == second.agentId })
+      }
     }
   }
 }

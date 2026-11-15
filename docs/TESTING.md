@@ -276,11 +276,13 @@ Two support helpers also live here (not test classes themselves):
   times out at a timeout it is given rather than the proxy's; a scrape of `//path` or `///path`, which Ktor routes as
   `/path`, is sent to the agent, labeled in the per-path metrics, and shown on `/debug` and the dashboard under the
   path's registered key, with its query unchanged, and the blitz, favicon, and unknown-path answers see it with one
-  slash
+  slash; a scrape record carries the agent's id, name, and identity
 - **ProxyPathManagerTest** — Path registration/unregistration, consolidated mode, agent selection, concurrent access;
   a live agent's path is taken over only by the same auth identity; the activity feed gets a new registration but not
   a repeat, a take-over as one naming the agent it displaced, a rejection the first time the agent is told it, a path
-  with more than one segment among them, and an unregistration; removing an agent returns how many paths it served
+  with more than one segment among them, and an unregistration; removing an agent returns how many paths it served;
+  a path whose last agent unregisters it or disconnects is recorded as departed, with the agent, identity, target, and
+  source its entry showed, a consolidated path only once its last agent goes, and a registration forgets it
 - **ProxyPathManagerLincheckTest** — Lincheck, stress only (tagged `Lincheck`): path registration, unregistration,
   and agent removal race on the real code the TLA+ `ProxyRegistry` spec models; no path is left on a removed agent,
   `pathCountFor` matches the path map and the limit, exclusive paths have one agent, modes never mix, and a
@@ -313,12 +315,15 @@ Two support helpers also live here (not test classes themselves):
   agents registering at once each one line, a burst ending at its window or at another agent, kind, or group, a source's
   events within its window counted on one line, past its most sources a window the rest counted on one, every value cut,
   a log with no room refused, and which kinds are problems
-- **PathHistoryTest** — the dashboard's per-path scrape history: each path keeps only its newest records, newest
-  first, and a busy path can't push another's out; recording alone holds the history to the live paths plus the
-  gone-path cap, evicting the path scraped least recently, with no snapshot to prune it; a registered path keeps its
-  history however old, a gone one only until its retention has passed since its last scrape, and gone paths past the
-  cap go oldest first; a path that comes back keeps its history, a `//path` scrape keys under the path map's key, and a
-  snapshot is a copy
+- **PathHistoryTest** — the dashboard's per-path scrape history and departures: each path keeps only its newest
+  records, newest first, and a busy path can't push another's out; recording alone holds the history to the live paths
+  plus the gone-path cap, evicting the path scraped least recently, with no snapshot to prune it; a registered path
+  keeps its history however old, a gone one only until its retention has passed since its last scrape, or since it
+  departed if that was later, and gone paths past the cap go oldest first, a path with scrapes and a departure counted
+  once; a path that comes back keeps its history, a `//path` scrape keys under the path map's key, and a snapshot is a
+  copy; a departure keeps what the path's entry showed, though the path was never scraped, recording alone holds
+  departures to the cap, earliest dropped first, a path that departs again counts as the latest, a registration forgets
+  its departure, and a path the snapshot reads as registered keeps it
 - **ProxyMetricsLincheckTest** — Lincheck, stress only (tagged `Lincheck`): a path registering, scrapes recording its
   latency and response size, and its removal race; no per-path histogram series outlives the path's removal
 - **RecentReqsSynchronizationTest** — Synchronized access to recentReqs EvictingQueue (prevents
@@ -356,8 +361,8 @@ Two support helpers also live here (not test classes themselves):
   floored percentage, no status pill, visible under forced colours), the Identity column (shown while agent auth is
   on, the legacy token as a shared token), the search (matching rows, the match count, the empty states, the form
   outside the pushed table, an escaped query, the script sending the URL's query, and tolerant parsing of it from the
-  socket), the Scrape button on a live path and the result panel outside the pushed table, and the failing count and
-  the tab's title
+  socket), the Scrape button on a live path and the result panel outside the pushed table, the failing count and
+  the tab's title, and a departed row's identity and target, with en dashes for the scrape cells of one never scraped
 - **ActivityHtmlTest** (`dashboard/`) — the Activity view: each line's time, event, agent, path, and detail, newest
   first; problems as crit tags and take-overs as warn tags; a burst's count and first paths; dashes for a line with no
   agent; the Identity column while agent auth is on; escaped values; the search, its match count, and its empty
@@ -376,7 +381,8 @@ Two support helpers also live here (not test classes themselves):
   KB, or MB
 - **RowFilterTest** (`dashboard/`) — the Paths and Activity views' search: a query matching the path, any agent's
   name, the target URL, or the identity (the legacy token by its label, not its internal name), ignoring case, and a
-  departed path's agent; "problems only" keeping failing and departed paths; both having to match; browser input
+  departed path's agent and identity, from its departure or its last scrape; "problems only" keeping failing and
+  departed paths; both having to match; browser input
   trimmed and cut, never inside a surrogate pair; a filter read from a URL's query; an activity line matched by its
   event, agent, identity, paths, or detail, and its problems kept; and identity labels
 - **ProxyDashboardServiceTest** (`dashboard/`) — Dashboard request guards: the WebSocket Origin check (own host,
@@ -385,12 +391,14 @@ Two support helpers also live here (not test classes themselves):
   by concurrent reads, and none reused across a topology change, even one landing mid-collect
 - **ProxySnapshotTest** (`dashboard/`) — Dashboard view models: eviction countdown, health thresholds, failover
   position, a path's history as runs of like results, oldest first, and `buildPathViews` joining registered paths to
-  their history and latest scrape and surfacing departed ones with theirs
+  their history and latest scrape and surfacing departed ones with theirs: a path that departed before its first scrape,
+  with its departure's agent, identity, target, and source; a departure's attribution over the last scrape's, which
+  names the agent and identity when there is no departure; and no gone row for a path the path map still holds
 
 One support helper also lives here (not a test class itself):
 
 - **DashboardFixtures** (`dashboard/`) — builders for the dashboard view models (`pathView`, `departedPathView`,
-  `agentView`, `scrapeRecord`, `activityEntry`, `snapshot`) with every field defaulted, and `renderFullPage` for the
+  `departure`, `agentView`, `scrapeRecord`, `activityEntry`, `snapshot`) with every field defaulted, and `renderFullPage` for the
   page a GET serves, shared by `ProxyDashboardHtmlTest`, `PathTableHtmlTest`, `ActivityHtmlTest`, `RowFilterTest`, and
   `ProxySnapshotTest`, so a test names only the field it is about
 
