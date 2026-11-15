@@ -1463,6 +1463,33 @@ class ProxyHttpRoutesTest : StringSpec() {
       verify(exactly = 1) { proxy.logActivity("Invalid path request /unknown-metrics") }
     }
 
+    // Since the route drops every leading slash (#416), a blitz path configured with one, compared as configured, was
+    // answered at no spelling at all, and an agent could register it. ProxyOptions keeps it without its slashes, so the
+    // route answers it however the request spells it, and registration reserves it.
+    "a blitz path configured with a leading slash should be answered and reserved" {
+      val proxy = createSpyProxyForRoutes(
+        "-Dproxy.internal.blitz.enabled=true",
+        "-Dproxy.internal.blitz.path=/blitz-test",
+      )
+
+      withScrapeRoutes(proxy) { port, client ->
+        listOf("/blitz-test", "//blitz-test").forEach { spelling ->
+          withClue(spelling) {
+            val response = client.get("http://localhost:$port$spelling")
+            response.status shouldBe HttpStatusCode.OK
+            response.bodyAsText() shouldBe "42"
+          }
+        }
+      }
+
+      listOf("blitz-test", "/blitz-test").forEach { path ->
+        withClue(path) {
+          proxy.pathManager.addPath(path, "", AgentContext("test-remote"))?.reason.orEmpty() shouldContain "blitz path"
+        }
+      }
+      proxy.pathManager.pathMapSize shouldBe 0
+    }
+
     "handleServiceDiscoveryEndpoint should return JSON when enabled" {
       val proxy = createSpyProxyForRoutes(
         "--sd_enabled",

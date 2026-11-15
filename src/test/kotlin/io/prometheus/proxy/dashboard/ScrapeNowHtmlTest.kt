@@ -17,6 +17,7 @@
 
 package io.prometheus.proxy.dashboard
 
+import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -34,15 +35,18 @@ class ScrapeNowHtmlTest : StringSpec() {
     excerpt: String = "# TYPE up gauge\nup 1\n",
     isWhole: Boolean = true,
     hasEof: Boolean = false,
+    contentType: String = "text/plain",
+    families: Int = 1,
+    samples: Int = 1,
   ) = ScrapeSummary(
     path = "orders_metrics",
     statusCode = statusCode,
     outcome = outcome,
     duration = 120.milliseconds,
     bytes = bytes,
-    contentType = "text/plain",
-    families = 1,
-    samples = 1,
+    contentType = contentType,
+    families = families,
+    samples = samples,
     hasEof = hasEof,
     failure = failure,
     excerpt = excerpt,
@@ -78,6 +82,27 @@ class ScrapeNowHtmlTest : StringSpec() {
         this shouldContain """<div class="sr-failure">Connection refused</div>"""
         this shouldContain "upstream_error · 120 ms</span>"
         this shouldNotContain "<pre>"
+      }
+    }
+
+    // ScrapeSummary counts a body's lines only in a text format, so of a protobuf body "0 families · 0 samples" read as
+    // an empty text body. The panel leaves both out, keeps the facts around them, and the content type says what it is.
+    "a body in neither text format should show its content type, and no families or samples" {
+      val protobuf = "application/vnd.google.protobuf"
+
+      done(summary(contentType = protobuf, families = 0, samples = 0, hasEof = true)).apply {
+        this shouldContain "success · 120 ms · 4.2 KB · $protobuf · # EOF</span>"
+        this shouldNotContain "families"
+        this shouldNotContain "samples"
+        this shouldContain "<pre>"
+      }
+    }
+
+    "a body in either text format should show its families and samples" {
+      listOf("text/plain", "application/openmetrics-text").forEach { contentType ->
+        withClue(contentType) {
+          done(summary(contentType = contentType, families = 2, samples = 3)) shouldContain "2 families · 3 samples"
+        }
       }
     }
 

@@ -41,6 +41,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import io.prometheus.Proxy
 import io.prometheus.common.captureLogs
+import io.prometheus.common.proxyOptions
 import io.prometheus.grpc.PathRejectionCause
 import io.prometheus.grpc.RegisterAgentRequest
 import io.prometheus.grpc.registerAgentRequest
@@ -330,6 +331,29 @@ class ProxyPathManagerTest : StringSpec() {
         manager.addPath(path, "", context).shouldNotBeNull().cause shouldBe PathRejectionCause.INVALID_PATH
       }
       manager.pathMapSize shouldBe 0
+    }
+
+    // Registration compares a path's key, which has no leading slash, with the blitz path. Compared as configured, a
+    // blitz path written with one was never reserved, so an agent could register it; ProxyOptions now keeps it without
+    // its slashes. The real options and Proxy.isBlitzRequest are used here, so the whole comparison is covered.
+    "addPath should reject a blitz path that was configured with a leading slash" {
+      val options =
+        proxyOptions(["-Dproxy.internal.blitz.enabled=true", "-Dproxy.internal.blitz.path=//blitz-check"])
+      val proxy = createMockProxy()
+      every { proxy.options } returns options
+      every { proxy.proxyConfigVals } returns options.configVals.proxy
+      every { proxy.isBlitzRequest(any()) } answers { callOriginal() }
+      val manager = ProxyPathManager(proxy, isTestMode = true)
+      val context = createMockAgentContext()
+
+      listOf("blitz-check", "/blitz-check").forEach { path ->
+        manager.addPath(path, "", context).shouldNotBeNull().apply {
+          cause shouldBe PathRejectionCause.INVALID_PATH
+          reason shouldBe "Invalid path: /blitz-check is the blitz path, which the proxy serves itself"
+        }
+      }
+      manager.addPath("blitz-check-2", "", context).shouldBeNull()
+      manager.pathMapSize shouldBe 1
     }
 
     "addPath should reject a multi-segment path" {

@@ -184,10 +184,11 @@ page's script.
 ### Scrape now
 
 The button after a path's copy button scrapes it at once, through its agent, exactly as Prometheus would, and shows
-the result above the table: the status, how long it took, the size, how many metric families and samples came back,
-and the first 2 KB of the body. A failed scrape shows the agent's reason instead. A consolidated path is scraped from
-every agent and merged, as Prometheus sees it. Use it to check a fix without waiting for Prometheus's next scrape, or
-for a curl from a machine that can reach the scrape port.
+the result above the table: the status, how long it took, the size, the content type, how many metric families and
+samples came back, and the first 2 KB of the body. Only a body in the Prometheus text or OpenMetrics format is counted,
+so a protobuf one shows no families or samples. A failed scrape shows the agent's reason instead. A consolidated path
+is scraped from every agent and merged, as Prometheus sees it. Use it to check a fix without waiting for Prometheus's
+next scrape, or for a curl from a machine that can reach the scrape port.
 
 A scrape from the dashboard isn't one of Prometheus's, so it leaves no trace in what the proxy reports: not in the
 `proxy_scrape_*` metrics, the path's History, or the agent's recent scrapes. The [Activity](#the-activity-layout) view

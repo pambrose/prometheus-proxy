@@ -79,16 +79,19 @@ internal object ScrapeNowHtml {
     }
   }
 
-  // The heading's facts, the ones the scrape has: what came back is only worth saying of a body that did.
+  // The heading's facts, the ones the scrape has: what came back is only worth saying of a body that did, and its
+  // families and samples only of a body in a text format, the only kind whose lines are counted. Of any other, such as
+  // protobuf, "0 families · 0 samples" read as an empty text body; its content type alone says what it is.
   private fun facts(summary: ScrapeSummary): List<String> {
     val body = summary.isSuccess
+    val counted = body && summary.isText
     return listOfNotNull(
       summary.outcome,
       "${summary.durationMillis} ms",
       size(summary.bytes).takeIf { summary.bytes > 0 },
       summary.contentType.takeIf { body },
-      "${summary.families} families".takeIf { body },
-      "${summary.samples} samples".takeIf { body },
+      "${summary.families} families".takeIf { counted },
+      "${summary.samples} samples".takeIf { counted },
       ProxyHttpRoutes.EOF_MARKER.takeIf { summary.hasEof },
     )
   }

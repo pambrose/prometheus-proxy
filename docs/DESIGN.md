@@ -665,10 +665,11 @@ A panel between the Path Search and the Path Table, on `surface` with a `line` b
 Scrape Button fills it. Outside every out-of-band region, so a push never clears a result being read.
 
 - **Heading:** a Status Pill, the path in weight 600, then the facts in `ink-3`, joined with ` · `: the
-  outcome, the time, the size, and for a body, its content type, families, samples, and `# EOF` when the
-  body ends with one. A close button, the Copy Button's shape with a cross, ends the line and hands focus
-  back to the Scrape Button that filled the panel. A refused scrape shows a Crit Tag, *not scraped*, and
-  why.
+  outcome, the time, the size, and for a body, its content type, its families and samples when it is in a
+  text format, and `# EOF` when the body ends with one. A body in no text format, such as protobuf, shows
+  no counts rather than zeros, which would read as an empty text body. A close button, the Copy Button's
+  shape with a cross, ends the line and hands focus back to the Scrape Button that filled the panel. A
+  refused scrape shows a Crit Tag, *not scraped*, and why.
 - **Failure:** the agent's reason in `crit`, on its own line.
 - **Body:** the first 2 KB, cut at a line break, in a `<pre>` on `surface-2` with a `line-soft` border,
   at most `240px` tall, scrolling inside itself. Meta size in `ink-2`. When cut, a note in `ink-3` gives
