@@ -22,6 +22,7 @@ import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldEndWith
+import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.prometheus.proxy.ScrapeRequestResponse
 import kotlin.time.Duration.Companion.milliseconds
@@ -71,6 +72,71 @@ class ScrapeSummaryTest : StringSpec() {
         families shouldBe 1
         samples shouldBe 2
         excerpt shouldEndWith "# EOF"
+      }
+    }
+
+    // Prometheus 3 writes a name outside the legacy character set quoted. Cut at its first space, both names below read
+    // as `"a`, one family.
+    "a quoted family name should be counted whole, as the agent's metric filter reads it" {
+      val quoted =
+        "# HELP \"a b\" A spaced counter.\n# TYPE \"a b\" counter\n{\"a b\"} 1\n" +
+          "# TYPE \"a c\" counter\n{\"a c\"} 2\n"
+
+      ScrapeSummary.of("quoted_metrics", [ok(quoted)]).apply {
+        families shouldBe 2
+        samples shouldBe 2
+      }
+    }
+
+    // The agent's metric filter opens a family on any of the three, and ends the keyword at a space or a tab.
+    "a tab after the keyword, and a HELP or UNIT line with no TYPE, should each open a family" {
+      val text = "# TYPE\tfoo counter\nfoo_total 1\n# HELP bar Bar.\nbar 2\n# UNIT baz_seconds seconds\nbaz_seconds 3\n"
+
+      ScrapeSummary.of("mixed_metrics", [ok(text)]).apply {
+        families shouldBe 3
+        samples shouldBe 3
+      }
+    }
+
+    // The text format allows blanks before a line's first token, so an indented comment is still a comment.
+    "an indented comment should open its family and not be counted as a sample" {
+      val indented = "  # HELP up Whether it is up.\n\t# TYPE up gauge\n  up 1\n \t\n"
+
+      ScrapeSummary.of("indented_metrics", [ok(indented)]).apply {
+        families shouldBe 1
+        samples shouldBe 1
+      }
+    }
+
+    // A carriage return that ends a line is not part of its last token, but one inside a line doesn't end the line.
+    "lines should be split at line feeds alone, as the agent's metric filter splits them" {
+      val text = "# HELP up Up.\r\n# TYPE up\r\nup 1\r\nfirst 1\rsecond 2\n"
+
+      ScrapeSummary.of("crlf_metrics", [ok(text)]).apply {
+        families shouldBe 1
+        samples shouldBe 2
+      }
+    }
+
+    "an OpenMetrics body should be counted" {
+      val openMetrics = ContentType("application", "openmetrics-text").withParameter("version", "1.0.0")
+
+      ScrapeSummary.of("om_metrics", [ok().copy(contentType = openMetrics)]).apply {
+        contentType shouldBe "application/openmetrics-text"
+        families shouldBe 2
+        samples shouldBe 3
+      }
+    }
+
+    // A protobuf body reaches the dashboard decoded as text, where its bytes would read as sample lines.
+    "a body in neither text format should count no families or samples" {
+      val protobuf = ContentType("application", "vnd.google.protobuf").withParameter("encoding", "delimited")
+
+      ScrapeSummary.of("protobuf_metrics", [ok().copy(contentType = protobuf)]).apply {
+        contentType shouldBe "application/vnd.google.protobuf"
+        families shouldBe 0
+        samples shouldBe 0
+        excerpt shouldBe body
       }
     }
 

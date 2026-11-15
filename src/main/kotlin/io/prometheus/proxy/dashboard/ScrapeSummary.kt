@@ -19,6 +19,7 @@ package io.prometheus.proxy.dashboard
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.isSuccess
 import io.prometheus.common.AgentValues
+import io.prometheus.common.Exposition
 import io.prometheus.proxy.ProxyHttpRoutes
 import io.prometheus.proxy.ScrapeRequestResponse
 import kotlin.time.Duration
@@ -32,8 +33,9 @@ import kotlin.time.Duration
  * @param outcome each agent's outcome label, as the proxy's scrape metrics name it ("success", "upstream_error", ...)
  * @param duration the slowest agent's
  * @param bytes the body's size before decoding, across the agents
- * @param families the metric families the body declares (`# TYPE` lines)
- * @param samples its sample lines
+ * @param families the metric families the body's `# HELP`, `# TYPE`, and `# UNIT` lines open, read as the agent's
+ *   metric filter reads them (see [Exposition]), or 0 for a body in neither text format, such as protobuf
+ * @param samples its sample lines, or 0 for a body in neither text format
  * @param failure the first agent's failure reason, cut and escaped, or empty
  * @param excerpt the start of the body, at most [MAX_EXCERPT_CHARS] characters, ending at a line break where it is cut,
  *   with each control character but a line break, a tab, and a carriage return escaped
@@ -63,7 +65,6 @@ internal data class ScrapeSummary(
 
     // As much of an agent's failure reason as a log line shows.
     private const val MAX_FAILURE_CHARS = 512
-    private const val TYPE_PREFIX = "# TYPE "
 
     fun of(
       path: String,
@@ -72,15 +73,19 @@ internal data class ScrapeSummary(
       val merged = ProxyHttpRoutes.mergeResponseResults(responses)
       val text = merged.contentText
       val excerpt = excerpt(text)
+      val contentType = merged.contentType.withoutParameters().toString()
+      // Only a body in one of the text formats, the ones the agent's metric filter reads, has lines to count; a
+      // protobuf body read as text would count its bytes as samples.
+      val counted = if (Exposition.isTextContentType(contentType)) text else ""
       return ScrapeSummary(
         path = path,
         statusCode = merged.statusCode,
         outcome = merged.updateMsgs.distinct().joinToString(", "),
         duration = responses.maxOf { it.fetchDuration },
         bytes = responses.sumOf { it.byteCount },
-        contentType = merged.contentType.withoutParameters().toString(),
-        families = families(text),
-        samples = samples(text),
+        contentType = contentType,
+        families = families(counted),
+        samples = samples(counted),
         hasEof = endsWithEof(text),
         failure = responses.firstOrNull { it.failureReason.isNotEmpty() }
           ?.let { AgentValues.shownValue(it.failureReason, MAX_FAILURE_CHARS) }
@@ -91,16 +96,25 @@ internal data class ScrapeSummary(
       )
     }
 
-    // The distinct metric names the body's `# TYPE` lines declare.
+    // The distinct metric families the body's HELP, TYPE, and UNIT lines open, named as the agent's metric filter
+    // names them: a quoted name unquoted, so `# TYPE "a b" counter` opens "a b", and a tab after the keyword as good
+    // as a space.
     internal fun families(text: String): Int =
-      text.lineSequence()
-        .filter { it.startsWith(TYPE_PREFIX) }
-        .map { it.removePrefix(TYPE_PREFIX).substringBefore(' ') }
-        .distinct()
-        .count()
+      nonBlankLines(text).mapNotNullTo(HashSet(), Exposition::commentFamily).size
 
     // Lines that are neither blank nor a comment: one sample each.
-    internal fun samples(text: String): Int = text.lineSequence().count { it.isNotBlank() && !it.startsWith("#") }
+    internal fun samples(text: String): Int = nonBlankLines(text).count { !it.startsWith('#') }
+
+    // The body's non-blank lines, each cut from its first token to before a carriage return that ends it, as the
+    // agent's metric filter reads a line, so an indented comment is a comment and a carriage return never ends up in a
+    // family's name. Split at line feeds rather than by lineSequence(), which also splits at a lone carriage return;
+    // the filter doesn't.
+    private fun nonBlankLines(text: String): Sequence<String> =
+      text.splitToSequence('\n')
+        .map { line ->
+          val end = if (line.endsWith('\r')) line.length - 1 else line.length
+          line.substring(Exposition.firstNonBlank(line, 0, end), end)
+        }.filter { it.isNotEmpty() }
 
     // The body whole, or its first MAX_EXCERPT_CHARS characters cut at the last line break, and never inside a
     // surrogate pair when it has none.
