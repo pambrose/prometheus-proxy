@@ -24,6 +24,7 @@ nav = [
   ]},
   { "Getting Started" = [
     { "Quick Start" = "getting-started.md" },
+    { "Live Demo" = "demo.md" },
   ]},
   { "Deployment" = [
     { "Docker" = "docker.md" },
