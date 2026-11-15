@@ -362,6 +362,13 @@ most 10,000 agents connected with one identity, which is every agent when agent 
   running its tests, rather than at the publishing step after them.
 - `make demo-screenshots` retakes the Live Demo page's screenshots from a demo built from the checkout.
 
+### Also in this release
+
+- Inside the proxy, why an agent was removed -- evicted, its connection closed, or its stream ended -- is a type
+  rather than a string, which the activity feed reads to tell an eviction from a disconnect, and the once-a-minute
+  limit on the refused-connect warning is a small shared throttle whose memory is bounded. The logs, the feed, and the
+  warning read as they would have.
+
 ### Dependency updates
 
 Runtime: kotlinx-serialization 1.12.0 → 1.13.0, which reverts 1.12.0's change to the exceptions JSON errors are

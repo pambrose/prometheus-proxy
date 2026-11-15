@@ -299,6 +299,9 @@ Two support helpers also live here (not test classes themselves):
   agent limit, a removal frees a slot, and a refused add logs a WARN, and goes in the activity feed, at most once a
   minute for each identity
 - **AgentContextCleanupServiceTest** — Stale agent eviction (removes agents inactive beyond maxAgentInactivitySecs)
+- **RemovalReasonTest** — why the proxy removed an agent's context: each reason logs as its string always did, only an
+  eviction is a problem in the activity feed, and each gives the feed its cause, an eviction naming
+  `proxy.internal.maxAgentInactivitySecs`
 - **ChunkedContextTest** — Chunk accumulation, CRC32 checksum validation, header/chunk/trailer sequencing
 - **ProxyOptionsTest** — CLI parsing, defaults, validation, TLS settings, gRPC options; an `http.idleTimeoutSecs`
   of 0 or a negative other than -1, and a configured `sdTargetPrefix` with a query or fragment, fail startup with an
@@ -441,6 +444,11 @@ One support helper also lives here (not a test class itself):
   TYPE, or UNIT line, with a tab or several blanks between the tokens and a quoted name unquoted, spaces and all, and
   on nothing else: another comment, a keyword with no name, a quote left open, or a line that doesn't start with `#`;
   and `unquote` unescapes a backslash, a quote, and a line feed, and returns null for a quote its range doesn't close
+- **KeyedThrottleTest** — the at-most-once-an-interval throttle behind the refused-connect WARN: a key passes once and
+  not again until its interval is over, a refused call neither restarts the interval nor takes a new mark (a MockK
+  time source), each key has its own interval, past its cap the key asked about least recently is forgotten and passes
+  as a new one, an interval or cap that isn't positive is refused, and of concurrent calls for one key exactly one
+  passes
 - **MetricBuildersTest** — the metric builders keep no exemplars and only classic histogram buckets; a
   `sampledGauge` value that throws is reported as NaN instead of failing the scrape; and `setToCurrentTime` sets
   Unix seconds, which the dashboards' `time() - *_start_time_seconds` panels assume

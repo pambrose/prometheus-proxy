@@ -32,6 +32,7 @@ import io.prometheus.harness.support.HarnessSetup
 import io.prometheus.harness.support.HarnessTests
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
+import io.prometheus.proxy.RemovalReason
 import kotlin.time.Duration.Companion.seconds
 
 // Exercises the agent's full disconnect -> reconnect -> re-register cycle entirely in-process (no
@@ -79,7 +80,7 @@ class InProcessReconnectTest : StringSpec() {
 
       // Drop this agent's context on the proxy. The agent's next heartbeat returns valid=false, which
       // it surfaces as NOT_FOUND, closing the connection and forcing the run loop to reconnect.
-      proxy.removeAgentContext(originalAgentId, "test: forced reconnect")
+      proxy.removeAgentContext(originalAgentId, RemovalReason.TERMINATION)
 
       // After reconnecting, the agent registers a fresh agentId and re-registers agent1_metrics.
       eventually(30.seconds) {

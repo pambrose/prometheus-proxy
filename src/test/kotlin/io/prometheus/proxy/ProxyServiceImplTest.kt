@@ -2127,7 +2127,7 @@ class ProxyServiceImplTest : StringSpec() {
       service.readRequestsFromProxy(request).collect { results.add(it) }
 
       // Verify cleanup was called because transportFilterDisabled is true
-      verify { proxy.removeAgentContextIfCurrent(agentContext, match { it.contains("transport filter disabled") }) }
+      verify { proxy.removeAgentContextIfCurrent(agentContext, RemovalReason.STREAM_TERMINATED) }
     }
 
     // Bug #20: When transportFilterDisabled is false, readRequestsFromProxy should NOT
@@ -3088,7 +3088,7 @@ class ProxyServiceImplTest : StringSpec() {
       // Another identity isn't held up by team-a's agents.
       connectAs("team-b").isSuccess.shouldBeTrue()
 
-      contextManager.removeFromContextManager(teamA.first().getOrThrow().agentId, "test disconnect")
+      contextManager.removeFromContextManager(teamA.first().getOrThrow().agentId, RemovalReason.TERMINATION)
 
       connectAs("team-a").isSuccess.shouldBeTrue()
       contextManager.agentContextSize shouldBe 3

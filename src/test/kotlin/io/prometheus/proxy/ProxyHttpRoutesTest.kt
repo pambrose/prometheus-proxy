@@ -840,7 +840,7 @@ class ProxyHttpRoutesTest : StringSpec() {
 
       launch {
         delay(200.milliseconds)
-        proxy.removeAgentContext(agentContext.agentId, "test disconnect")
+        proxy.removeAgentContext(agentContext.agentId, RemovalReason.TERMINATION)
       }
 
       val response = ProxyHttpRoutes.submitScrapeRequest(

@@ -58,7 +58,7 @@ internal sealed interface ProxyEvent {
   /** An agent's context was removed, whether it disconnected or was evicted as stale. */
   data class AgentDisconnected(
     val agentId: String,
-    val reason: String,
+    val reason: RemovalReason,
   ) : ProxyEvent
 
   /** A path became servable by an agent. */

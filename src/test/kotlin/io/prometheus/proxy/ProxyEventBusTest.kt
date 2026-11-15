@@ -54,7 +54,7 @@ class ProxyEventBusTest : StringSpec() {
           bus.emit(ProxyEvent.PathRegistered("app_metrics", "agent-1"))
           bus.emit(ProxyEvent.ScrapeCompleted("agent-1", "app_metrics", true))
           bus.emit(ProxyEvent.PathUnregistered("app_metrics", "agent-1"))
-          bus.emit(ProxyEvent.AgentDisconnected("agent-1", "stale"))
+          bus.emit(ProxyEvent.AgentDisconnected("agent-1", RemovalReason.EVICTION))
         }
 
       seen shouldContainExactly
@@ -63,7 +63,7 @@ class ProxyEventBusTest : StringSpec() {
           ProxyEvent.PathRegistered("app_metrics", "agent-1"),
           ProxyEvent.ScrapeCompleted("agent-1", "app_metrics", true),
           ProxyEvent.PathUnregistered("app_metrics", "agent-1"),
-          ProxyEvent.AgentDisconnected("agent-1", "stale"),
+          ProxyEvent.AgentDisconnected("agent-1", RemovalReason.EVICTION),
         ]
     }
 
@@ -116,7 +116,7 @@ class ProxyEventBusTest : StringSpec() {
 
       val seen =
         collect(bus, 1) {
-          manager.removeFromContextManager(context.agentId, "not registered yet")
+          manager.removeFromContextManager(context.agentId, RemovalReason.TERMINATION)
           manager.addAgentContext(context)
         }
 

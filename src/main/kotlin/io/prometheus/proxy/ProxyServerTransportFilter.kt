@@ -25,7 +25,6 @@ import io.grpc.Grpc
 import io.grpc.ServerTransportFilter
 import io.prometheus.Proxy
 import io.prometheus.common.GrpcConstants.AGENT_ID
-import io.prometheus.proxy.ProxyConstants.TERMINATION_REASON
 import io.prometheus.proxy.ProxyServiceImpl.Companion.UNKNOWN_ADDRESS
 import java.net.InetSocketAddress
 import java.net.SocketAddress
@@ -48,7 +47,7 @@ internal class ProxyServerTransportFilter(
 
   override fun transportTerminated(attributes: Attributes) {
     attributes.get(AGENT_ID_KEY)?.also { agentId ->
-      val context = proxy.removeAgentContext(agentId, TERMINATION_REASON)
+      val context = proxy.removeAgentContext(agentId, RemovalReason.TERMINATION)
       when {
         context == null -> logAlreadyRemoved(agentId, attributes.get(AGENT_CONTEXT_KEY)?.announced == true)
 

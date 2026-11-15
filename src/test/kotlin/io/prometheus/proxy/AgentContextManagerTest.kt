@@ -152,7 +152,7 @@ class AgentContextManagerTest : StringSpec() {
       manager.addAgentContext(context)
       manager.agentContextSize shouldBe 1
 
-      val removed = manager.removeFromContextManager(context.agentId, "test removal")
+      val removed = manager.removeFromContextManager(context.agentId, RemovalReason.TERMINATION)
 
       removed.shouldNotBeNull()
       removed shouldBe context
@@ -171,10 +171,14 @@ class AgentContextManagerTest : StringSpec() {
       manager.announceAgentContext(announced.agentId)
 
       val pendingEvents =
-        captureLogs<AgentContextManager>(Level.DEBUG) { manager.removeFromContextManager(pending.agentId, "test") }
+        captureLogs<AgentContextManager>(Level.DEBUG) {
+          manager.removeFromContextManager(pending.agentId, RemovalReason.TERMINATION)
+        }
           .filter { "Removed" in it.formattedMessage }
       val announcedEvents =
-        captureLogs<AgentContextManager>(Level.DEBUG) { manager.removeFromContextManager(announced.agentId, "test") }
+        captureLogs<AgentContextManager>(Level.DEBUG) {
+          manager.removeFromContextManager(announced.agentId, RemovalReason.TERMINATION)
+        }
           .filter { "Removed" in it.formattedMessage }
 
       pendingEvents.map { it.level } shouldBe listOf(Level.DEBUG)
@@ -185,7 +189,7 @@ class AgentContextManagerTest : StringSpec() {
     "removeFromContextManager should return null for non-existent agentId" {
       val manager = AgentContextManager(isTestMode = true)
 
-      val removed = manager.removeFromContextManager("non-existent", "test")
+      val removed = manager.removeFromContextManager("non-existent", RemovalReason.TERMINATION)
 
       removed.shouldBeNull()
     }
@@ -198,7 +202,7 @@ class AgentContextManagerTest : StringSpec() {
       manager.addAgentContext(context1)
       manager.addAgentContext(context2)
 
-      manager.removeFromContextManager(context1.agentId, "test")
+      manager.removeFromContextManager(context1.agentId, RemovalReason.TERMINATION)
 
       manager.agentContextSize shouldBe 1
       manager.getAgentContext(context2.agentId).shouldNotBeNull()
@@ -230,7 +234,7 @@ class AgentContextManagerTest : StringSpec() {
       manager.agentContextSize shouldBe 100
 
       // Remove half
-      contexts.take(50).forEach { manager.removeFromContextManager(it.agentId, "test") }
+      contexts.take(50).forEach { manager.removeFromContextManager(it.agentId, RemovalReason.TERMINATION) }
       manager.agentContextSize shouldBe 50
     }
 
@@ -241,7 +245,7 @@ class AgentContextManagerTest : StringSpec() {
       val context = AgentContext("remote-addr")
 
       manager.addAgentContext(context)
-      val removed = manager.removeFromContextManager(context.agentId, "test")
+      val removed = manager.removeFromContextManager(context.agentId, RemovalReason.TERMINATION)
 
       removed.shouldNotBeNull()
       removed.isNotValid() shouldBe true
@@ -257,14 +261,14 @@ class AgentContextManagerTest : StringSpec() {
       val registered = AgentContext("remote-addr").also { manager.addAgentContext(it) }
       val other = mockk<AgentContext>(relaxed = true) { every { agentId } returns registered.agentId }
 
-      manager.removeFromContextManagerIfCurrent(other, "test").shouldBeFalse()
+      manager.removeFromContextManagerIfCurrent(other, RemovalReason.TERMINATION).shouldBeFalse()
       manager.getAgentContext(registered.agentId) shouldBeSameInstanceAs registered
       registered.isValid().shouldBeTrue()
 
-      manager.removeFromContextManagerIfCurrent(registered, "test").shouldBeTrue()
+      manager.removeFromContextManagerIfCurrent(registered, RemovalReason.TERMINATION).shouldBeTrue()
       manager.getAgentContext(registered.agentId).shouldBeNull()
       registered.isNotValid().shouldBeTrue()
-      manager.removeFromContextManagerIfCurrent(registered, "test").shouldBeFalse()
+      manager.removeFromContextManagerIfCurrent(registered, RemovalReason.TERMINATION).shouldBeFalse()
     }
 
     // ==================== addAgentContextWithinLimit Tests ====================
@@ -289,9 +293,9 @@ class AgentContextManagerTest : StringSpec() {
       manager.addAgentContextWithinLimit(second, 2).shouldBeTrue()
       manager.addAgentContextWithinLimit(AgentContext("remote-3", authIdentityName = "team-a"), 2).shouldBeFalse()
 
-      manager.removeFromContextManager(first.agentId, "test")
+      manager.removeFromContextManager(first.agentId, RemovalReason.TERMINATION)
       manager.addAgentContextWithinLimit(AgentContext("remote-4", authIdentityName = "team-a"), 2).shouldBeTrue()
-      manager.removeFromContextManagerIfCurrent(second, "test")
+      manager.removeFromContextManagerIfCurrent(second, RemovalReason.TERMINATION)
       manager.addAgentContextWithinLimit(AgentContext("remote-5", authIdentityName = "team-a"), 2).shouldBeTrue()
 
       manager.agentContextSize shouldBe 2
@@ -556,13 +560,13 @@ class AgentContextManagerTest : StringSpec() {
       manager.agentContextSize shouldBe 1
 
       // First removal succeeds
-      val first = manager.removeFromContextManager(context.agentId, "Eviction")
+      val first = manager.removeFromContextManager(context.agentId, RemovalReason.EVICTION)
       first.shouldNotBeNull()
       first shouldBe context
       manager.agentContextSize shouldBe 0
 
       // Second removal returns null (already removed) — no exception
-      val second = manager.removeFromContextManager(context.agentId, "Termination")
+      val second = manager.removeFromContextManager(context.agentId, RemovalReason.TERMINATION)
       second.shouldBeNull()
       manager.agentContextSize shouldBe 0
     }

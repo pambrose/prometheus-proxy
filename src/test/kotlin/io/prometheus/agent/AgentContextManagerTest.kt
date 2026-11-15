@@ -28,6 +28,7 @@ import io.prometheus.grpc.ChunkedScrapeResponse
 import io.prometheus.proxy.AgentContext
 import io.prometheus.proxy.AgentContextManager
 import io.prometheus.proxy.ChunkedContext
+import io.prometheus.proxy.RemovalReason
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
@@ -71,7 +72,7 @@ class AgentContextManagerTest : StringSpec() {
       manager.addAgentContext(context)
       manager.agentContextSize shouldBe 1
 
-      val removed = manager.removeFromContextManager(context.agentId, "test removal")
+      val removed = manager.removeFromContextManager(context.agentId, RemovalReason.TERMINATION)
 
       removed.shouldNotBeNull()
       removed shouldBe context
@@ -82,7 +83,7 @@ class AgentContextManagerTest : StringSpec() {
     "removeFromContextManager should return null for non-existent agent" {
       val manager = AgentContextManager(isTestMode = true)
 
-      val removed = manager.removeFromContextManager("non-existent-id", "test removal")
+      val removed = manager.removeFromContextManager("non-existent-id", RemovalReason.TERMINATION)
 
       removed.shouldBeNull()
       manager.agentContextSize shouldBe 0
@@ -101,10 +102,10 @@ class AgentContextManagerTest : StringSpec() {
       manager.addAgentContext(context2)
       manager.agentContextSize shouldBe 2
 
-      manager.removeFromContextManager(context1.agentId, "test")
+      manager.removeFromContextManager(context1.agentId, RemovalReason.TERMINATION)
       manager.agentContextSize shouldBe 1
 
-      manager.removeFromContextManager(context2.agentId, "test")
+      manager.removeFromContextManager(context2.agentId, RemovalReason.TERMINATION)
       manager.agentContextSize shouldBe 0
     }
 
@@ -159,7 +160,7 @@ class AgentContextManagerTest : StringSpec() {
       // Remove contexts concurrently
       val removeJobs = contexts.map { context ->
         launch(Dispatchers.IO) {
-          manager.removeFromContextManager(context.agentId, "concurrent test")
+          manager.removeFromContextManager(context.agentId, RemovalReason.TERMINATION)
         }
       }
 
@@ -196,12 +197,12 @@ class AgentContextManagerTest : StringSpec() {
       manager.addAgentContext(context2)
       manager.agentContextSize shouldBe 2
 
-      manager.removeFromContextManager(context1.agentId, "cleanup")
+      manager.removeFromContextManager(context1.agentId, RemovalReason.TERMINATION)
       manager.agentContextSize shouldBe 1
       manager.getAgentContext(context1.agentId).shouldBeNull()
       manager.getAgentContext(context2.agentId).shouldNotBeNull()
 
-      manager.removeFromContextManager(context2.agentId, "cleanup")
+      manager.removeFromContextManager(context2.agentId, RemovalReason.TERMINATION)
       manager.agentContextSize shouldBe 0
     }
   }

@@ -130,8 +130,8 @@ class ProxyPathManagerOps {
     @Param(name = "agent") agent: Int,
   ) {
     val agentId = agents[agent].agentId
-    contextManager.removeFromContextManager(agentId, "disconnected")
-    pathManager.removeFromPathManager(agentId, "disconnected")
+    contextManager.removeFromContextManager(agentId, RemovalReason.TERMINATION)
+    pathManager.removeFromPathManager(agentId, RemovalReason.TERMINATION)
   }
 
   @Validate

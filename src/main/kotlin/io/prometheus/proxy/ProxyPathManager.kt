@@ -590,7 +590,7 @@ internal class ProxyPathManager(
   // This is called on agent disconnects. Returns how many paths the agent served, which the activity feed reports.
   fun removeFromPathManager(
     agentId: String,
-    reason: String,
+    reason: RemovalReason,
   ): Int {
     require(agentId.isNotBlank()) { BLANK_AGENT_ID_MSG }
 
@@ -612,9 +612,9 @@ internal class ProxyPathManager(
       }
 
     if (removedPathCount == 0)
-      logger.debug { "No paths registered for agentId: $agentId ($reason)" }
+      logger.debug { "No paths registered for agentId: $agentId (${reason.logText})" }
     else
-      logger.info { "Removed $removedPathCount path(s) for agentId: $agentId ($reason)" }
+      logger.info { "Removed $removedPathCount path(s) for agentId: $agentId (${reason.logText})" }
     return servedPathCount
   }
 

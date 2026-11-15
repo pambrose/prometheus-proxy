@@ -123,7 +123,7 @@ class AgentContextCleanupServiceTest : StringSpec() {
         block(mockMetrics)
       }
       every { mockProxy.removeAgentContext(any(), any()) } answers {
-        agentContextManager.removeFromContextManager(firstArg<String>(), secondArg<String>())
+        agentContextManager.removeFromContextManager(firstArg<String>(), secondArg<RemovalReason>())
       }
 
       val service = AgentContextCleanupService(mockProxy, configVals)
@@ -132,7 +132,7 @@ class AgentContextCleanupServiceTest : StringSpec() {
       // slows the test and risks a false failure on a loaded CI host).
       service.startAsync()
       eventually(5.seconds) {
-        verify(atLeast = 1) { mockProxy.removeAgentContext("stale-agent-123", "Eviction") }
+        verify(atLeast = 1) { mockProxy.removeAgentContext("stale-agent-123", RemovalReason.EVICTION) }
       }
       service.stopAsync().awaitTerminated()
     }
@@ -155,7 +155,7 @@ class AgentContextCleanupServiceTest : StringSpec() {
           firstArg<ProxyMetrics.() -> Unit>().invoke(mockMetrics)
         }
         every { mockProxy.removeAgentContext(any(), any()) } answers {
-          agentContextManager.removeFromContextManager(firstArg<String>(), secondArg<String>())
+          agentContextManager.removeFromContextManager(firstArg<String>(), secondArg<RemovalReason>())
         }
 
         val service =
@@ -166,7 +166,9 @@ class AgentContextCleanupServiceTest : StringSpec() {
         val events =
           captureLogs<AgentContextCleanupService>(Level.DEBUG) {
             service.startAsync()
-            eventually(5.seconds) { verify(exactly = 1) { mockProxy.removeAgentContext("stale-agent", "Eviction") } }
+            eventually(5.seconds) {
+              verify(exactly = 1) { mockProxy.removeAgentContext("stale-agent", RemovalReason.EVICTION) }
+            }
             service.stopAsync().awaitTerminated()
           }.filter { "Evicting" in it.formattedMessage }
 
@@ -321,14 +323,14 @@ class AgentContextCleanupServiceTest : StringSpec() {
         block(mockMetrics)
       }
       every { mockProxy.removeAgentContext(any(), any()) } answers {
-        agentContextManager.removeFromContextManager(firstArg<String>(), secondArg<String>())
+        agentContextManager.removeFromContextManager(firstArg<String>(), secondArg<RemovalReason>())
       }
 
       val service = AgentContextCleanupService(mockProxy, configVals)
 
       service.startAsync()
       eventually(5.seconds) {
-        verify(atLeast = 1) { mockProxy.removeAgentContext("still-stale", "Eviction") }
+        verify(atLeast = 1) { mockProxy.removeAgentContext("still-stale", RemovalReason.EVICTION) }
       }
       service.stopAsync().awaitTerminated()
     }
@@ -368,7 +370,7 @@ class AgentContextCleanupServiceTest : StringSpec() {
         block(mockMetrics)
       }
       every { mockProxy.removeAgentContext(any(), any()) } answers {
-        agentContextManager.removeFromContextManager(firstArg<String>(), secondArg<String>())
+        agentContextManager.removeFromContextManager(firstArg<String>(), secondArg<RemovalReason>())
       }
 
       val service = AgentContextCleanupService(mockProxy, configVals)
@@ -376,9 +378,9 @@ class AgentContextCleanupServiceTest : StringSpec() {
       service.startAsync()
       eventually(5.seconds) {
         // All three stale agents should have been evicted
-        verify(atLeast = 1) { mockProxy.removeAgentContext("stale-1", "Eviction") }
-        verify(atLeast = 1) { mockProxy.removeAgentContext("stale-2", "Eviction") }
-        verify(atLeast = 1) { mockProxy.removeAgentContext("stale-3", "Eviction") }
+        verify(atLeast = 1) { mockProxy.removeAgentContext("stale-1", RemovalReason.EVICTION) }
+        verify(atLeast = 1) { mockProxy.removeAgentContext("stale-2", RemovalReason.EVICTION) }
+        verify(atLeast = 1) { mockProxy.removeAgentContext("stale-3", RemovalReason.EVICTION) }
       }
       service.stopAsync().awaitTerminated()
     }

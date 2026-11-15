@@ -427,7 +427,7 @@ class ProxyPathManagerTest : StringSpec() {
         pathSource shouldBe "STATIC"
       }
 
-      manager.removeFromPathManager(west2.agentId, "disconnect")
+      manager.removeFromPathManager(west2.agentId, RemovalReason.TERMINATION)
 
       manager.getAgentContextInfo("/shipping").shouldNotBeNull().run {
         agentContexts.map { it.agentId } shouldBe [west1.agentId]
@@ -927,7 +927,7 @@ class ProxyPathManagerTest : StringSpec() {
       manager.addPath("/metrics2", """{"job":"test"}""", context)
       manager.pathMapSize shouldBe 2
 
-      manager.removeFromPathManager(context.agentId, "disconnect")
+      manager.removeFromPathManager(context.agentId, RemovalReason.TERMINATION)
 
       manager.pathMapSize shouldBe 0
     }
@@ -950,7 +950,7 @@ class ProxyPathManagerTest : StringSpec() {
       }
       manager.pathMapSize shouldBe pathCount
 
-      manager.removeFromPathManager(context.agentId, "disconnect")
+      manager.removeFromPathManager(context.agentId, RemovalReason.TERMINATION)
 
       manager.pathMapSize shouldBe 0
     }
@@ -974,7 +974,7 @@ class ProxyPathManagerTest : StringSpec() {
       manager.pathMapSize shouldBe 30
 
       // Remove only agent1's paths
-      manager.removeFromPathManager(agent1.agentId, "disconnect")
+      manager.removeFromPathManager(agent1.agentId, RemovalReason.TERMINATION)
 
       // Only agent2's paths should remain
       manager.pathMapSize shouldBe 10
@@ -1002,7 +1002,7 @@ class ProxyPathManagerTest : StringSpec() {
       manager.pathMapSize shouldBe 10
 
       // Remove agent1 -- paths should remain with only agent2
-      manager.removeFromPathManager(agent1.agentId, "disconnect")
+      manager.removeFromPathManager(agent1.agentId, RemovalReason.TERMINATION)
 
       manager.pathMapSize shouldBe 10
       for (i in 1..10) {
@@ -1310,7 +1310,7 @@ class ProxyPathManagerTest : StringSpec() {
       manager.addPath("b", "{}", createMockAgentContext()).shouldBeNull()
       manager.addPath("d", "{}", agent).shouldBeNull()
 
-      manager.removeFromPathManager(agent.agentId, "disconnect")
+      manager.removeFromPathManager(agent.agentId, RemovalReason.TERMINATION)
       manager.addPath("e", "{}", agent).shouldBeNull()
       manager.addPath("f", "{}", agent).shouldBeNull()
     }
@@ -1385,7 +1385,7 @@ class ProxyPathManagerTest : StringSpec() {
         captureLogs<ProxyPathManager>(Level.INFO) {
           manager.addPath("metrics", labels, first)
           manager.addPath("metrics", labels, second)
-          manager.removeFromPathManager(second.agentId, "disconnect")
+          manager.removeFromPathManager(second.agentId, RemovalReason.TERMINATION)
         }.map { it.formattedMessage }
 
       fun line(start: String) = messages.single { it.startsWith(start) }
@@ -1458,7 +1458,7 @@ class ProxyPathManagerTest : StringSpec() {
       manager.addPath("b", "{}", leaving)
       manager.addPath("c", "{}", staying)
 
-      manager.removeFromPathManager(leaving.agentId, "disconnect")
+      manager.removeFromPathManager(leaving.agentId, RemovalReason.TERMINATION)
 
       verify(exactly = 1) { metrics.removePathSeries("a") }
       verify(exactly = 1) { metrics.removePathSeries("b") }
@@ -1470,7 +1470,7 @@ class ProxyPathManagerTest : StringSpec() {
       val manager = ProxyPathManager(proxy, isTestMode = true)
 
       val exception = shouldThrow<IllegalArgumentException> {
-        manager.removeFromPathManager("", "test")
+        manager.removeFromPathManager("", RemovalReason.TERMINATION)
       }
 
       exception.message shouldContain "Blank agentId"
@@ -1483,7 +1483,7 @@ class ProxyPathManagerTest : StringSpec() {
       every { proxy.agentContextManager.getAgentContext("missing-agent") } returns null
 
       // Should not throw
-      manager.removeFromPathManager("missing-agent", "disconnect")
+      manager.removeFromPathManager("missing-agent", RemovalReason.TERMINATION)
     }
 
     // Finding 7: registerPath checks the agent context validity outside the pathMap lock, so agent
@@ -1518,7 +1518,7 @@ class ProxyPathManagerTest : StringSpec() {
       // The context has already been removed from the manager (raced disconnect).
       every { proxy.agentContextManager.getAgentContext(agentId) } returns null
 
-      manager.removeFromPathManager(agentId, "disconnect")
+      manager.removeFromPathManager(agentId, RemovalReason.TERMINATION)
 
       manager.pathMapSize shouldBe 0
       manager.getAgentContextInfo("/metrics").shouldBeNull()
@@ -1616,7 +1616,7 @@ class ProxyPathManagerTest : StringSpec() {
 
       // Remove agent1 via disconnect path — previously required
       // (v.agentContexts as MutableList).removeIf { it.agentId == agentId }
-      manager.removeFromPathManager(agent1.agentId, "disconnect")
+      manager.removeFromPathManager(agent1.agentId, RemovalReason.TERMINATION)
 
       val info = manager.getAgentContextInfo("/metrics")
       info.shouldNotBeNull()
@@ -2010,8 +2010,8 @@ class ProxyPathManagerTest : StringSpec() {
       manager.addPath("a_metrics", "{}", agent).shouldBeNull()
       manager.addPath("b_metrics", "{}", agent).shouldBeNull()
 
-      manager.removeFromPathManager(agent.agentId, "test") shouldBe 2
-      manager.removeFromPathManager(agent.agentId, "test") shouldBe 0
+      manager.removeFromPathManager(agent.agentId, RemovalReason.TERMINATION) shouldBe 2
+      manager.removeFromPathManager(agent.agentId, RemovalReason.TERMINATION) shouldBe 0
     }
 
     // ==================== Departures for the dashboard ====================
@@ -2045,10 +2045,10 @@ class ProxyPathManagerTest : StringSpec() {
       manager.addPath("shared_metrics", "{}", leaving).shouldBeNull()
       manager.addPath("shared_metrics", "{}", staying).shouldBeNull()
 
-      manager.removeFromPathManager(leaving.agentId, "test") shouldBe 2
+      manager.removeFromPathManager(leaving.agentId, RemovalReason.TERMINATION) shouldBe 2
       history.snapshot(emptySet()).departures.keys shouldBe setOf("solo_metrics")
 
-      manager.removeFromPathManager(staying.agentId, "test") shouldBe 1
+      manager.removeFromPathManager(staying.agentId, RemovalReason.TERMINATION) shouldBe 1
       history.snapshot(emptySet()).departures.mapValues { it.value.agentName } shouldBe
         mapOf("solo_metrics" to "agent-leaving", "shared_metrics" to "agent-staying")
     }
