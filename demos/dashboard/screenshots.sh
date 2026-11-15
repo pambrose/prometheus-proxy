@@ -112,6 +112,13 @@ registerpath_trace() {
 # Whether Zipkin has a registerpath trace of agent-east's.
 has_registerpath_trace() { [[ -n "$(registerpath_trace)" ]]; }
 
+# Whether agent-east has been connected a minute, which its detail shows as "up 1m" rather than in seconds.
+east_up_a_minute() {
+  local id
+  id="$(agent_id agent-east)"
+  [[ -n "$id" ]] && page "/agents/$id" | grep -Eq 'up [0-9]+[mhd]'
+}
+
 # Whether the dashboard at a base URL lists all three agents.
 has_all_agents() { curl -fsS "$1" 2>/dev/null | grep -q '<span>3 agents</span>'; }
 
@@ -186,8 +193,13 @@ step "Waiting for every path to answer 200"
 "$DEMO" undiscover >/dev/null
 "$DEMO" recover >/dev/null
 wait_until "ten healthy paths" healthy 10
-# Enough history for agent-east's Recent scrapes to fill its screenshot.
-sleep 10
+# make demo-screenshots starts the demo just before this, so every agent's uptime would read a few seconds. Waiting
+# until agent-east has been up a minute makes the first shots look like a demo that has been running, and gives its
+# Recent scrapes enough rows to fill the screenshot. Say why, since the script otherwise looks stuck.
+if ! east_up_a_minute; then
+  step "Waiting up to a minute so the agents' uptimes read in minutes, not seconds: the demo was just started"
+  wait_until "agent-east to be up a minute" east_up_a_minute
+fi
 
 east="$(agent_id agent-east)"
 [[ -n "$east" ]] || die "agent-east isn't connected"
