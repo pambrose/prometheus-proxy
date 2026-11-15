@@ -57,6 +57,12 @@ Each path config entry has these fields:
     with one at startup, naming it, and the proxy refuses such a path at registration. Every other
     character is allowed, including `.`, `-`, `~`, and `:`.
 
+    The proxy matches a scrape's path as the client sends it, without decoding percent-escapes, so
+    keep a `path` to characters a client sends as they are. A client that percent-encodes one, such
+    as `%5F` for `_`, asks for a different path and gets a 404, and Prometheus encodes some
+    characters itself, such as a non-ASCII letter. A `path` of ASCII letters, digits, `_`, `.`, `-`,
+    and `~` is never encoded by anyone.
+
 ## Dynamic Target Discovery
 
 By default `pathConfigs` is read once at startup, so adding or removing a target means editing the

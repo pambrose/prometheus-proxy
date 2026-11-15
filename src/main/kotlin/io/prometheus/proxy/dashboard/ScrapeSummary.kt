@@ -20,7 +20,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.isSuccess
 import io.prometheus.common.AgentValues
 import io.prometheus.common.Exposition
-import io.prometheus.proxy.ProxyHttpRoutes
+import io.prometheus.proxy.ScrapeDispatch
 import io.prometheus.proxy.ScrapeRequestResponse
 import kotlin.time.Duration
 
@@ -76,7 +76,7 @@ internal data class ScrapeSummary(
       path: String,
       responses: List<ScrapeRequestResponse>,
     ): ScrapeSummary {
-      val merged = ProxyHttpRoutes.mergeResponseResults(responses)
+      val merged = ScrapeDispatch.mergeResponseResults(responses)
       val text = merged.contentText
       val excerpt = excerpt(text)
       val contentType = merged.contentType.withoutParameters().toString()
@@ -133,7 +133,7 @@ internal data class ScrapeSummary(
     // Whether the body's last line is the OpenMetrics end marker, without copying a body of several MB to trim it.
     private fun endsWithEof(text: String): Boolean {
       val end = text.indexOfLast { !it.isWhitespace() } + 1
-      val marker = ProxyHttpRoutes.EOF_MARKER
+      val marker = ScrapeDispatch.EOF_MARKER
       return end >= marker.length && text.regionMatches(end - marker.length, marker, 0, marker.length)
     }
   }

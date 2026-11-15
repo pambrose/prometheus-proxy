@@ -16,7 +16,7 @@
 
 package io.prometheus.proxy.dashboard
 
-import io.prometheus.proxy.ProxyHttpRoutes
+import io.prometheus.proxy.ScrapeDispatch
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SAY_ATTR
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.statusPill
 import kotlinx.html.ButtonType
@@ -92,7 +92,7 @@ internal object ScrapeNowHtml {
       summary.contentType.takeIf { body },
       "${summary.families} families".takeIf { counted },
       "${summary.samples} samples".takeIf { counted },
-      ProxyHttpRoutes.EOF_MARKER.takeIf { summary.hasEof },
+      ScrapeDispatch.EOF_MARKER.takeIf { summary.hasEof },
     )
   }
 

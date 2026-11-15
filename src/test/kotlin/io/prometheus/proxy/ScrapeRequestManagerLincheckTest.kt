@@ -107,7 +107,7 @@ class ScrapeRequestManagerOps {
   // they saw go wrong and validate reports it.
   private val violations = ConcurrentLinkedQueue<String>()
 
-  // ProxyHttpRoutes.dispatchScrapeRequest's admission.
+  // ScrapeDispatch.dispatchScrapeRequest's admission.
   @Operation
   fun admit(toAgentB: Boolean) {
     val wrapper = newWrapper(if (toAgentB) agentB else agentA)
