@@ -39,6 +39,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
+import io.mockk.every
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import io.mockk.verify
@@ -333,6 +334,39 @@ class ProxyWebDashboardTest : StringSpec() {
       }
     }
 
+    // Identities and the search, end to end: the proxy records the identity the agent's token resolves to, at
+    // registerAgent and on its path; the Paths view shows it, and filters by the URL's search and by the socket's.
+    "the path layout should show identities and filter by the URL's search and the socket's" {
+      withDashboard(
+        IDENTITY_HTTP_PORT,
+        IDENTITY_GRPC_PORT,
+        IDENTITY_DASHBOARD_PORT,
+        configFile = IDENTITY_CONFIG_FILE,
+        newClient = { HttpClient(CIO) { install(WebSockets) } },
+      ) {
+        connectAgent()
+
+        eventually(30.seconds) {
+          val table = client.get("$base/dashboard/paths?q=team_a").bodyAsText()
+
+          table shouldContain "/ui_identity_metrics"
+          table shouldContain """<td class="dim">team_a</td>"""
+          // The page echoes the search it was opened with.
+          table shouldContain """value="team_a""""
+        }
+        client.get("$base/dashboard/paths?q=nothing-like-this").bodyAsText() shouldContain "No paths match the filter"
+        client.get("$base/dashboard").bodyAsText() shouldContain
+          """web-ui-identity-agent<span class="tag">team_a</span>"""
+
+        client.webSocket(socketUrl) {
+          send(Frame.Text("""{"layout":"PATH","seq":1,"search":"?q=nothing-like-this"}"""))
+          awaitFrame("No paths match the filter")
+          send(Frame.Text("""{"layout":"PATH","seq":2,"search":"?q=ui_identity"}"""))
+          awaitFrame("/ui_identity_metrics")
+        }
+      }
+    }
+
     // The browser-to-proxy half of the socket. A row click and a layout switch each send one JSON message;
     // the service must parse it, record it on the session, and re-render at once rather than on the next
     // tick. The parsers are unit-tested; this is the only place the session state they feed is exercised.
@@ -521,6 +555,44 @@ class ProxyWebDashboardTest : StringSpec() {
       }
     }
 
+    // A send fails when the browser has gone, which is routine, but a render that throws is a bug in the page. Caught
+    // with the sends, it froze the page with nothing logged above DEBUG. It is logged now, apart from the send, and the
+    // session stays open, so the next push that renders reaches it. Two failures, so the second takes the path that has
+    // already logged. The refresh interval outlasts the spec, so only the messages render.
+    "a push that fails to render should leave the session open for the next one" {
+      withDashboard(
+        RENDER_FAILURE_HTTP_PORT,
+        RENDER_FAILURE_GRPC_PORT,
+        RENDER_FAILURE_DASHBOARD_PORT,
+        dashboardArgs = [
+          "--dashboard",
+          "--dashboard_port",
+          "$RENDER_FAILURE_DASHBOARD_PORT",
+          "-Dproxy.dashboard.refreshIntervalSecs=60",
+        ],
+        newClient = { HttpClient(CIO) { install(WebSockets) } },
+      ) {
+        client.webSocket(socketUrl) {
+          nextText() shouldContain "hx-swap-oob"
+
+          mockkObject(ProxyDashboardHtml)
+          try {
+            every { ProxyDashboardHtml.pushFragment(any(), any(), any(), any(), any(), any()) } throws
+              IllegalStateException("a render bug")
+            send(Frame.Text("""{"layout":"AGENT","seq":1}"""))
+            send(Frame.Text("""{"layout":"AGENT","seq":2}"""))
+            verify(timeout = 10_000, atLeast = 2) {
+              ProxyDashboardHtml.pushFragment(any(), any(), any(), any(), any(), any())
+            }
+          } finally {
+            unmockkObject(ProxyDashboardHtml)
+          }
+          send(Frame.Text("""{"layout":"AGENT","seq":3}"""))
+          nextText() shouldContain """${ProxyDashboardHtml.VIEW_ATTR}="3""""
+        }
+      }
+    }
+
     // The same coupling through the page routes, which need no WebSocket at all: each GET used to collect a snapshot,
     // so a client looping GETs held the path-map lock as often as it liked (November #18). A page now renders the
     // recent snapshot. No agent connects, no session opens, and the refresh interval outlasts the spec, so the first
@@ -659,6 +731,12 @@ class ProxyWebDashboardTest : StringSpec() {
     private const val CAP_GRPC_PORT = TestPorts.DASHBOARD_UI_CAP_GRPC_PORT
     private const val CAP_DASHBOARD_PORT = TestPorts.DASHBOARD_UI_CAP_DASHBOARD_PORT
 
+    // An agent that connects as an identity and registers one path, so it needs its own config and ports.
+    private const val IDENTITY_CONFIG_FILE = "config/test-configs/web-ui-identity.conf"
+    private const val IDENTITY_HTTP_PORT = TestPorts.DASHBOARD_UI_IDENTITY_HTTP_PORT
+    private const val IDENTITY_GRPC_PORT = TestPorts.DASHBOARD_UI_IDENTITY_GRPC_PORT
+    private const val IDENTITY_DASHBOARD_PORT = TestPorts.DASHBOARD_UI_IDENTITY_DASHBOARD_PORT
+
     private const val HISTORY_HTTP_PORT = TestPorts.DASHBOARD_UI_HISTORY_HTTP_PORT
     private const val HISTORY_GRPC_PORT = TestPorts.DASHBOARD_UI_HISTORY_GRPC_PORT
     private const val HISTORY_DASHBOARD_PORT = TestPorts.DASHBOARD_UI_HISTORY_DASHBOARD_PORT
@@ -678,6 +756,10 @@ class ProxyWebDashboardTest : StringSpec() {
     private const val CACHE_GRPC_PORT = TestPorts.DASHBOARD_UI_CACHE_GRPC_PORT
     private const val CACHE_DASHBOARD_PORT = TestPorts.DASHBOARD_UI_CACHE_DASHBOARD_PORT
     private const val MESSAGE_COUNT = 5
+
+    private const val RENDER_FAILURE_HTTP_PORT = TestPorts.DASHBOARD_UI_RENDER_FAILURE_HTTP_PORT
+    private const val RENDER_FAILURE_GRPC_PORT = TestPorts.DASHBOARD_UI_RENDER_FAILURE_GRPC_PORT
+    private const val RENDER_FAILURE_DASHBOARD_PORT = TestPorts.DASHBOARD_UI_RENDER_FAILURE_DASHBOARD_PORT
 
     private const val PAGE_CACHE_HTTP_PORT = TestPorts.DASHBOARD_UI_PAGE_CACHE_HTTP_PORT
     private const val PAGE_CACHE_GRPC_PORT = TestPorts.DASHBOARD_UI_PAGE_CACHE_GRPC_PORT

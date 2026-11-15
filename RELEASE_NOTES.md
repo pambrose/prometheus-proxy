@@ -101,6 +101,11 @@ every agent when agent auth is off.
 - **A History column on the dashboard.** Each path's last 20 scrapes (`proxy.dashboard.pathHistorySize`) show as a
   row of green and red dots with the share that succeeded, so a target that fails every scrape no longer looks like
   one that failed once.
+- **Identities on the dashboard.** With agent authentication on, the Paths view shows the identity that registered
+  each path, and each agent's row and detail panel the identity it connected as.
+- **Search the Paths view.** A search box keeps the paths whose path, agent, target or identity matches, and
+  **Problems only** keeps those failing or gone. The search goes into the URL, so a filtered view is a link you can
+  share, and the browser tab's title counts the problem paths.
 
 ### Security
 

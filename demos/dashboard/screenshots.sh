@@ -21,10 +21,10 @@ PROMETHEUS_URL="http://localhost:${DEMO_PROMETHEUS_PORT:-9090}"
 ZIPKIN_URL="http://localhost:${DEMO_ZIPKIN_PORT:-9411}"
 
 # The CSS width every screenshot is taken at, and the themes each is taken in. The Paths views are taken wider: with the
-# History column, and the discovered services' longer paths and a gone row's tag, the table is about 1,315px wide in the
-# eviction scene, so at 1280 it scrolls and its right edge is cut off.
+# Identity and History columns, and the discovered services' longer paths and a gone row's tag, the table is about
+# 1,400px wide in the eviction scene, so at 1280 it scrolls and its right edge is cut off.
 WIDTH=1280
-PATHS_WIDTH=1360
+PATHS_WIDTH=1440
 THEMES=(dark light)
 
 # The page color below the dashboard's last row in a theme, which the Paths views are trimmed to (--bg in
@@ -103,7 +103,10 @@ has_scrapes() {
 }
 
 # Whether agent-east is listed with no paths, as once its copy has taken them.
-east_has_no_paths() { page "" | grep -q 'agent-east</span><span class="host">[^<]*· 0 paths'; }
+# The name may be followed by its identity's tag.
+east_has_no_paths() {
+  page "" | grep -Eq 'agent-east(<span class="tag">[^<]*</span>)?</span><span class="host">[^<]*· 0 paths'
+}
 
 # The id of a recent registerpath trace of agent-east's, from Zipkin.
 registerpath_trace() {

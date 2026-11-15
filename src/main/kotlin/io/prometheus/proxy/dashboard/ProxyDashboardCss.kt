@@ -89,6 +89,7 @@ internal object ProxyDashboardCss {
     /* 11.5px, matching .bar-right and .hero-meta: this is the same job -- quiet supporting metadata --
        and a separate 11px step for it was a size the hierarchy never used. */
     .md-row .host { display:block; color:var(--ink-3); font-size:11.5px; margin-top:2px; }
+    .md-row .tag { margin-left:7px; }
     .md-detail { background:var(--surface); }
     .hero { padding:14px 18px; border-bottom:1px solid var(--line); }
     .hero-title { font-size:15px; font-weight:640; display:flex; align-items:center; gap:9px; }
@@ -111,7 +112,9 @@ internal object ProxyDashboardCss {
     .nav { display:flex; gap:4px; margin-right:auto; margin-left:18px; }
     .nav a { color:var(--ink-3); text-decoration:none; padding:3px 10px; border-radius:20px; }
     .nav a:hover { background:var(--surface-3); color:var(--ink); }
-    .nav a:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+    /* The focus ring of every control but a list row, whose ring is inset (above). */
+    .nav a:focus-visible, .copy:focus-visible, .filters input:focus-visible {
+      outline:2px solid var(--accent); outline-offset:1px; }
     .nav a.on { background:var(--surface-3); color:var(--ink); font-weight:600; }
     /* The table is the one region that can outgrow a narrow viewport, so it scrolls inside its own
        container rather than letting the page body scroll sideways. */
@@ -135,7 +138,6 @@ internal object ProxyDashboardCss {
     .copy::before { content:""; width:13px; height:13px; background:currentColor;
       -webkit-mask:var(--icon) center/contain no-repeat; mask:var(--icon) center/contain no-repeat; }
     .copy:hover { background:var(--surface-3); color:var(--ink); }
-    .copy:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
     .copy.copied { color:var(--ok);
       --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M3 8.5l3.25 3.25L13 5'/></svg>"); }
     .copy.copy-failed { color:var(--crit);
@@ -143,6 +145,17 @@ internal object ProxyDashboardCss {
     /* Forced colours replace every background, the mask's paint included, so the icon would vanish. */
     @media (forced-colors: active) { .copy::before { forced-color-adjust:none; background:ButtonText; } }
     .tag.crit { background:var(--crit-soft); color:var(--crit); margin-left:7px; }
+    /* The Paths view's search, on the recessed plane like the table header below it. The input holds content, so it
+       is square; it takes focus as the rest of the page does. A checked box is neutral ink: the accent is kept for
+       focus and the current row. */
+    .filters { display:flex; flex-wrap:wrap; align-items:center; gap:16px; padding:9px 15px;
+      background:var(--surface-2); border-bottom:1px solid var(--line); }
+    .filters input[type=search] { font:inherit; color:var(--ink); background:var(--surface);
+      border:1px solid var(--line); border-radius:0; padding:5px 9px; width:min(440px, 100%); }
+    .filters input[type=search]::placeholder { color:var(--ink-3); }
+    .filters label { display:inline-flex; align-items:center; gap:7px; color:var(--ink-2); cursor:pointer; }
+    .filters input[type=checkbox] { accent-color:var(--ink-2); margin:0; }
+    .match-count { padding:7px 15px; color:var(--ink-3); font-size:11.5px; border-bottom:1px solid var(--line-soft); }
     /* A path's recent scrapes, oldest first. Each <i> is a run of like results and paints a 4px dot every 6px, so a
        healthy strip is one element however long it is. Round, as everything that reports state is. A full strip, at
        the default 20 scrapes, is 120px. */

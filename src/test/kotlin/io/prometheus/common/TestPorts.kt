@@ -202,6 +202,16 @@ object TestPorts {
   const val DASHBOARD_UI_HISTORY_GRPC_PORT = 9727
   const val DASHBOARD_UI_HISTORY_DASHBOARD_PORT = 9728
 
+  // ProxyWebDashboardTest: identities and the path search.
+  const val DASHBOARD_UI_IDENTITY_HTTP_PORT = 9729
+  const val DASHBOARD_UI_IDENTITY_GRPC_PORT = 9730
+  const val DASHBOARD_UI_IDENTITY_DASHBOARD_PORT = 9731
+
+  // ProxyWebDashboardTest: a push that fails to render.
+  const val DASHBOARD_UI_RENDER_FAILURE_HTTP_PORT = 9732
+  const val DASHBOARD_UI_RENDER_FAILURE_GRPC_PORT = 9733
+  const val DASHBOARD_UI_RENDER_FAILURE_DASHBOARD_PORT = 9734
+
   // ProxyTest and AgentTest: what a real proxy or agent binds in the garbage-collection and failed-startup cases.
   // These came from ServerSocket(0), released and bound again later, so another connection could take one in between
   // (October #46). The port each failed-startup case holds open as taken still does.

@@ -31,6 +31,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.CachingOptions
+import io.ktor.http.parseQueryString
 import io.ktor.server.application.createApplicationPlugin
 import io.ktor.server.application.createRouteScopedPlugin
 import io.ktor.server.application.install
@@ -148,6 +149,7 @@ internal class ProxyDashboardService(
     val layout: DashboardLayout,
     val selectedId: String?,
     val seq: Long,
+    val filter: PathFilter,
   )
 
   /** One connected browser: how to reach it, and what its page shows. */
@@ -159,6 +161,10 @@ internal class ProxyDashboardService(
     // ProxyDashboardHtml.pushFragment). The browser sends that message as soon as the socket opens.
     @Volatile
     var view: View? = null
+
+    // Whether a push for this session has failed to render, which is logged once rather than every refresh.
+    @Volatile
+    var renderFailed = false
   }
 
   private val sessions = ConcurrentHashMap.newKeySet<Session>()
@@ -271,9 +277,14 @@ internal class ProxyDashboardService(
 
         // A real page rather than a fragment: switching layout is a navigation, so the browser gets a
         // fresh document whose region ids match the layout it is now showing.
+        // The filter is in the URL, so a filtered view can be bookmarked or shared; the page sends it back over the
+        // socket, which is what keeps the pushed table filtered.
         get("$routeBase/paths") {
           val snapshot = snapshots.recent()
-          call.respondHtml { with(ProxyDashboardHtml) { renderPage(snapshot, null, routeBase, DashboardLayout.PATH) } }
+          val filter = PathFilter.of(call.request.queryParameters)
+          call.respondHtml {
+            with(ProxyDashboardHtml) { renderPage(snapshot, null, routeBase, DashboardLayout.PATH, filter) }
+          }
         }
 
         get("$routeBase/agents/{agentId}") {
@@ -314,7 +325,7 @@ internal class ProxyDashboardService(
               for (frame in incoming) {
                 if (frame is Frame.Text) {
                   val text = frame.readText()
-                  session.view = View(parseLayout(text), parseSelection(text), parseSeq(text))
+                  session.view = View(parseLayout(text), parseSelection(text), parseSeq(text), parseFilter(text))
                   push(session, snapshots.recent())
                 }
               }
@@ -381,13 +392,26 @@ internal class ProxyDashboardService(
     session: Session,
     snapshot: ProxySnapshot,
   ) {
-    runCatching {
-      val view = session.view
-      session.send(
-        ProxyDashboardHtml.pushFragment(snapshot, view?.selectedId, routeBase, view?.layout, view?.seq ?: 0L),
-      )
-    }
-      .onFailure { logger.debug { "Dropping dashboard session: ${it.simpleClassName}" } }
+    val view = session.view
+    // Rendered apart from the send. A send fails when the browser has gone, which is routine, but a render that throws
+    // is a bug in this page; caught with the sends, it froze every session on that layout with nothing logged above
+    // DEBUG.
+    val fragment =
+      runCatching {
+        ProxyDashboardHtml.pushFragment(
+          snapshot,
+          view?.selectedId,
+          routeBase,
+          view?.layout,
+          view?.seq ?: 0L,
+          view?.filter ?: PathFilter.NONE,
+        )
+      }.onFailure { e ->
+        if (!session.renderFailed) logger.error(e) { "Failed to render a dashboard push" }
+        session.renderFailed = true
+      }.getOrNull() ?: return
+    runCatching { session.send(fragment) }
+      .onFailure { logger.debug { "Dashboard push not sent: ${it.simpleClassName}" } }
   }
 
   /**
@@ -572,6 +596,24 @@ internal class ProxyDashboardService(
           ?.longOrNull
           ?.takeIf { it >= 0 }
       }.getOrNull() ?: 0L
+
+    /**
+     * Reads `{"search": "?q=team-a&problems=1"}`, the query of the page's URL, which holds the Paths view's filter,
+     * from a session message, defaulting to [PathFilter.NONE].
+     *
+     * The URL's own query rather than fields of its own, so the filter has one format, which the `/paths` route reads
+     * too. Same contract as [parseSelection]: anything unexpected -- garbage, a missing field, a value of the wrong
+     * type, or a query that won't decode -- resolves to no filter rather than throwing inside the WebSocket loop.
+     */
+    internal fun parseFilter(text: String): PathFilter =
+      runCatching {
+        json.parseToJsonElement(text)
+          .jsonObject["search"]
+          ?.jsonPrimitive
+          ?.takeIf { it.isString }
+          ?.content
+          ?.let { PathFilter.of(parseQueryString(it.removePrefix("?"))) }
+      }.getOrNull() ?: PathFilter.NONE
 
     /**
      * Whether a WebSocket handshake carrying [origin] may proceed, given the request's [host] header.

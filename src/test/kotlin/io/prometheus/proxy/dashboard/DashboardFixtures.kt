@@ -18,6 +18,8 @@ package io.prometheus.proxy.dashboard
 
 import io.prometheus.common.TestPorts
 import io.prometheus.proxy.ScrapeRecord
+import kotlinx.html.html
+import kotlinx.html.stream.createHTML
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
@@ -44,7 +46,14 @@ internal object DashboardFixtures {
     isDeparted: Boolean = false,
     agentNames: List<String> = agentIds.map { "agent-$it" },
     history: List<ScrapeRecord> = listOfNotNull(lastScrape),
-  ) = PathView(path, agentIds, labels, targetUrl, pathSource, isDeparted, agentNames, history)
+    identity: String = "",
+  ) = PathView(path, agentIds, labels, targetUrl, pathSource, isDeparted, agentNames, history, identity)
+
+  /** A path whose agent has gone, as [ProxySnapshot.collect] builds one: no agents, named only by its last scrape. */
+  fun departedPathView(
+    path: String = "orphan_metrics",
+    lastScrape: ScrapeRecord = scrapeRecord(path = path),
+  ) = pathView(path = path, agentIds = emptyList(), lastScrape = lastScrape, isDeparted = true)
 
   fun agentView(
     agentId: String = "1",
@@ -53,6 +62,7 @@ internal object DashboardFixtures {
     paths: List<PathView> = [pathView()],
     proxyEndpoints: List<String> = emptyList(),
     currentEndpointIndex: Int = 0,
+    identity: String = "",
   ) = AgentView(
     agentId = agentId,
     agentName = agentName,
@@ -67,6 +77,7 @@ internal object DashboardFixtures {
     paths = paths,
     proxyEndpoints = proxyEndpoints,
     currentEndpointIndex = currentEndpointIndex,
+    identity = identity,
   )
 
   fun scrapeRecord(
@@ -88,6 +99,7 @@ internal object DashboardFixtures {
     agents: List<AgentView> = [agentView()],
     scrapes: List<ScrapeRecord> = emptyList(),
     paths: List<PathView> = agents.flatMap { it.paths }.distinct(),
+    authEnabled: Boolean = false,
   ) = ProxySnapshot(
     agents = agents,
     paths = paths,
@@ -95,5 +107,14 @@ internal object DashboardFixtures {
     health = HealthView(agents.size, paths.size, 0, 25, 1, 25),
     maxAgentInactivitySecs = 60,
     scrapePort = TestPorts.PROXY_HTTP_PORT,
+    authEnabled = authEnabled,
   )
+
+  /** The whole page for [snapshot], as the dashboard serves it to a GET. */
+  fun renderFullPage(
+    snapshot: ProxySnapshot,
+    layout: DashboardLayout = DashboardLayout.AGENT,
+    routeBase: String = "/dashboard",
+    filter: PathFilter = PathFilter.NONE,
+  ) = createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot, null, routeBase, layout, filter) } }
 }
