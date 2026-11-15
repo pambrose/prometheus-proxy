@@ -86,8 +86,8 @@ for example `DEMO_GRAFANA_PORT=3001 make demo-up`.
 
 ## The dashboard
 
-The dashboard has two views of the same state: one organized by agent, one by path. Select any screenshot on this
-page to see it full size.
+The dashboard has three views: one organized by agent, one by path, and one of what has happened, newest first. Select
+any screenshot on this page to see it full size.
 
 <figure markdown="span">
   [![The Agents view, with agent-east selected](images/demo/agents.webp#only-dark){ loading=lazy }](images/demo/agents.webp)
@@ -189,8 +189,8 @@ scrapes of both paths give up at its 4-second timeout, recorded as 499 (`client_
 
 Once the proxy evicts it, agent-west-2's own `/agent_west_2_metrics` stays in the Paths view marked `gone`, the status
 bar counts it as departed, and agent-west-1 carries `/shipping_metrics` alone, which now shows agent-west-1's own
-target.
-`./demos/dashboard/demo.sh agent-thaw` unfreezes the agent, and it reconnects and registers again.
+target. The Activity view lists the eviction as a problem, with how long the proxy waited and the paths the agent
+served. `./demos/dashboard/demo.sh agent-thaw` unfreezes the agent, and it reconnects and registers again.
 
 ### Redundancy
 
@@ -254,10 +254,19 @@ center's agents connect with their own token, and an identity may register only 
 ```
 
 The contractor's agent appears on the dashboard with the one path its identity allows, `/contractor_metrics`. Its
-`/payments_metrics` is refused, and the command prints the proxy's log line:
+`/payments_metrics` is refused, which no list of agents or paths can show, since nothing was added. The Activity view
+shows it, searched here for the contractor's agent:
+
+<figure markdown="span">
+  [![The Activity view, searched for agent-rogue](images/demo/activity.webp#only-dark){ loading=lazy }](images/demo/activity.webp)
+  [![The Activity view, searched for agent-rogue](images/demo/activity-light.webp#only-light){ loading=lazy }](images/demo/activity-light.webp)
+  <figcaption>The Activity view, searched for agent-rogue</figcaption>
+</figure>
+
+The command also prints the proxy's log line:
 
 ```
-WARN  [ProxyServiceImpl.kt:322] - Agent identity 'contractor' denied registration of path /payments_metrics
+WARN  [ProxyServiceImpl.kt:333] - Agent identity 'contractor' denied registration of path /payments_metrics
 ```
 
 Payments keeps coming from agent-east, untouched. With a shared token, the newer agent would have taken the path

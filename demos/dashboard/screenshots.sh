@@ -173,14 +173,20 @@ capture() {
   [[ -s "$png" ]] || die "Chrome wrote no screenshot for $url"
 }
 
-# A Paths view in each theme, at PATHS_WIDTH: captured taller than the table, then trimmed to its last row.
-shoot_paths() {
-  local name="$1" theme png
+# A dashboard table in each theme, at a dashboard path and a CSS width (WIDTH unless given): captured taller than the
+# table, then trimmed to its last row.
+shoot_table() {
+  local name="$1" path="$2" width="${3:-$WIDTH}" theme png
   for theme in "${THEMES[@]}"; do
     png="$WORK/$(named "$name" "$theme").png"
-    capture "$DASHBOARD_URL/paths" "$png" 900 "$theme" "" "$PATHS_WIDTH"
+    capture "$DASHBOARD_URL$path" "$png" 900 "$theme" "" "$width"
     magick "$png" -background "$(background "$theme")" -fuzz 2% -define trim:edges=south -trim +repage "$png"
   done
+}
+
+# A Paths view in each theme, at PATHS_WIDTH.
+shoot_paths() {
+  shoot_table "$1" /paths "$PATHS_WIDTH"
 }
 
 # A page in each theme, cut at a fixed CSS height. The agent detail heights end on a row boundary for the demo's layout:
@@ -283,9 +289,16 @@ wait_until "the proxy to evict agent-west-2" \
 sleep 4
 shoot_paths evicted
 
+step "A contractor's agent refused another team's path"
+"$DEMO" rogue-agent >/dev/null 2>&1
+wait_until "the proxy to refuse agent-rogue's payments path" \
+  bash -c "curl -fsS '$DASHBOARD_URL/activity?q=agent-rogue' | grep -q 'not authorized to register path /payments_metrics'"
+shoot_table activity "/activity?q=agent-rogue"
+"$DEMO" rogue-agent-stop >/dev/null 2>&1
+
 step "Writing WebP to ${OUT_DIR#"$REPO_DIR"/}"
 mkdir -p "$OUT_DIR"
-for name in agents paths outage grafana failover filtered duplicate discovered evicting evicted; do
+for name in agents paths outage grafana failover filtered duplicate discovered evicting evicted activity; do
   for theme in "${THEMES[@]}"; do
     file="$(named "$name" "$theme")"
     cwebp -quiet -lossless -z 9 "$WORK/$file.png" -o "$OUT_DIR/$file.webp"

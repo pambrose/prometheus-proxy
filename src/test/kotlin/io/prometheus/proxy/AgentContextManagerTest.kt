@@ -37,7 +37,9 @@ import io.prometheus.common.captureLogs
 import io.prometheus.grpc.chunkedScrapeResponse
 import io.prometheus.grpc.headerData
 import kotlinx.coroutines.async
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 import kotlin.time.TestTimeSource
 import kotlin.time.TimeSource
 
@@ -317,6 +319,30 @@ class AgentContextManagerTest : StringSpec() {
       refusalLevels { add("team-a").shouldBeFalse() } shouldBe [Level.DEBUG]
       clock += 1.seconds
       refusalLevels { add("team-a").shouldBeFalse() } shouldBe [Level.WARN]
+    }
+
+    // The activity feed is where an operator sees a team's agents refused, at the rate the log warns of it.
+    "a refused connect should go in the activity feed at most once a minute for each identity" {
+      val clock = TestTimeSource()
+      // The feed's lines carry wall-clock times, which move with the manager's clock here.
+      var now = Instant.parse("2026-11-15T12:00:00Z")
+      val log = ActivityLog(100, clock = mockk<Clock> { every { now() } answers { now } })
+      val manager = AgentContextManager(isTestMode = true, clock = clock, activityLog = log)
+
+      fun add() = manager.addAgentContextWithinLimit(AgentContext("remote", "team-a"), 1)
+
+      add().shouldBeTrue()
+      repeat(3) { add().shouldBeFalse() }
+      log.entries().single().apply {
+        kind shouldBe ActivityKind.AGENT_REFUSED
+        identity shouldBe "team-a"
+        detail shouldBe "Already at its proxy.internal.maxAgentsPerIdentity limit (1)"
+      }
+
+      clock += 60.seconds
+      now += 60.seconds
+      add().shouldBeFalse()
+      log.entries() shouldHaveSize 2
     }
 
     "an identity reaching 80% of its limit should log one WARN" {

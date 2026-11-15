@@ -128,6 +128,10 @@ internal object ProxyDashboardCss {
     .ptable .dim { color:var(--ink-3); }
     .ptable tr:hover td { background:var(--surface-2); }
     .ptable tr.departed td:first-child { color:var(--crit); }
+    /* The Activity table's Detail column, which holds a sentence, so it wraps where the rest of the row doesn't. */
+    .ptable td.wrap { white-space:normal; min-width:280px; }
+    /* An event's tag opens its cell, so it takes none of the gap that sets a tag apart from a name before it. */
+    .ptable td.event .tag { margin-left:0; }
     /* The copy button beside a target URL. Its icons are CSS masks painted in currentColor rather than inline
        SVG: the table is pushed whole every refresh, and an SVG in every row would grow every frame. 24px meets
        the minimum target size, and the negative margins keep it from making the row taller. */

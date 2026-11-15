@@ -74,6 +74,13 @@ class ProxyPathManagerTest : StringSpec() {
       every { proxy.maxAgentFieldLength } returns maxAgentFieldLength
     }
 
+  // A manager whose proxy records into a real activity feed, which it returns beside it.
+  private fun managerWithActivity(): Pair<ProxyPathManager, ActivityLog> {
+    val log = ActivityLog(100)
+    val proxy = createMockProxy().also { every { it.activityLog } returns log }
+    return ProxyPathManager(proxy, isTestMode = true) to log
+  }
+
   // Counter-based like AgentContext.AGENT_ID_GENERATOR; a timestamp+random id can collide
   // when two mocks are created in the same millisecond, and duplicate agentIds make
   // removeFromPathManager() drop every agent's registrations instead of one agent's.
@@ -1887,6 +1894,75 @@ class ProxyPathManagerTest : StringSpec() {
       oldAgent.isValid().shouldBeFalse()
       // Backlog should be drained by invalidation
       oldAgent.scrapeRequestBacklogSize shouldBe 0
+    }
+
+    // ==================== Activity feed ====================
+
+    // An agent re-registers a path it already serves after every reconnect hiccup, which is not news.
+    "a new registration, but not a repeat of it, should go in the activity feed" {
+      val (manager, log) = managerWithActivity()
+      val agent = launched("remote-a", "launch-a", name = "agent-east")
+
+      manager.addPath("orders_metrics", "{}", agent).shouldBeNull()
+      manager.addPath("orders_metrics", "{}", agent).shouldBeNull()
+
+      log.entries().single().apply {
+        kind shouldBe ActivityKind.PATH_REGISTERED
+        agentName shouldBe "agent-east"
+        paths shouldBe ["orders_metrics"]
+        count shouldBe 1
+      }
+    }
+
+    "a take-over should go in the activity feed as one, naming the agent it displaced, rather than as a registration" {
+      val (manager, log) = managerWithActivity()
+
+      manager.addPath("orders_metrics", "{}", launched("remote-a", "launch-a", name = "agent-old")).shouldBeNull()
+      manager.addPath("orders_metrics", "{}", launched("remote-b", "launch-b", name = "agent-new")).shouldBeNull()
+
+      log.entries().map { it.kind } shouldBe [ActivityKind.PATH_TAKEN_OVER, ActivityKind.PATH_REGISTERED]
+      log.entries().first().apply {
+        agentName shouldBe "agent-new"
+        detail shouldBe "From agent-old"
+      }
+    }
+
+    // A rejection that can clear is retried on every registration attempt; the feed, like the log's WARN, says it once.
+    "a rejection should go in the activity feed the first time the agent is told it" {
+      val (manager, log) = managerWithActivity()
+      val agent = launched("remote-a", "launch-a", name = "agent-east")
+
+      repeat(3) { manager.addPath("bad path", "{}", agent).shouldNotBeNull() }
+
+      log.entries().single().apply {
+        kind shouldBe ActivityKind.PATH_REJECTED
+        paths shouldBe ["bad path"]
+        detail shouldContain "Invalid path: /bad path"
+        group shouldBe PathRejectionCause.INVALID_PATH.name
+      }
+    }
+
+    "an agent removing a path should go in the activity feed" {
+      val (manager, log) = managerWithActivity()
+      val agent = launched("remote-a", "launch-a", name = "agent-east")
+
+      manager.addPath("orders_metrics", "{}", agent).shouldBeNull()
+      manager.removePath("orders_metrics", agent.agentId).valid.shouldBeTrue()
+
+      log.entries().map { it.kind } shouldBe [ActivityKind.PATH_UNREGISTERED, ActivityKind.PATH_REGISTERED]
+      log.entries().first().paths shouldBe ["orders_metrics"]
+    }
+
+    // The activity feed reports how many paths a departing agent served, consolidated ones included.
+    "removing an agent should return how many paths it served" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val agent = launched("remote-a", "launch-a")
+
+      manager.addPath("a_metrics", "{}", agent).shouldBeNull()
+      manager.addPath("b_metrics", "{}", agent).shouldBeNull()
+
+      manager.removeFromPathManager(agent.agentId, "test") shouldBe 2
+      manager.removeFromPathManager(agent.agentId, "test") shouldBe 0
     }
   }
 }

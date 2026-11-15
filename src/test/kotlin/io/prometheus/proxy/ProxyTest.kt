@@ -579,6 +579,32 @@ class ProxyTest : StringSpec() {
       invoked.shouldBeTrue()
     }
 
+    // An eviction is the agent going quiet, the problem the feed exists to show; a closed connection is an agent
+    // stopping or losing its link, which the proxy can't tell apart, so it is only news.
+    "an agent that leaves should go in the activity feed, an eviction as a problem, with the paths it served" {
+      val proxy = createTestProxy("--dashboard")
+      val log = proxy.activityLog.shouldNotBeNull()
+
+      fun leave(reason: String): ActivityEntry {
+        val agent = createAgentContext(name = "agent-east").also { proxy.agentContextManager.addAgentContext(it) }
+        proxy.pathManager.addPath("orders_metrics", "{}", agent).shouldBeNull()
+        proxy.removeAgentContext(agent.agentId, reason)
+        return log.entries().first()
+      }
+
+      leave(ProxyConstants.EVICTION_REASON).apply {
+        kind shouldBe ActivityKind.AGENT_EVICTED
+        agentName shouldBe "agent-east"
+        detail shouldBe "No contact within proxy.internal.maxAgentInactivitySecs (60s); released 1 path"
+      }
+      leave(ProxyConstants.TERMINATION_REASON).apply {
+        kind shouldBe ActivityKind.AGENT_DISCONNECTED
+        detail shouldBe "Connection closed; released 1 path"
+      }
+      leave(ProxyConstants.STREAM_TERMINATED_REASON).detail shouldBe
+        "Stream terminated (transport filter disabled); released 1 path"
+    }
+
     // A connection that closed before it authenticated was never shown as connected, so it mustn't be shown leaving.
     "removing a context that was never announced should not emit AgentDisconnected" {
       val proxy = createTestProxy()

@@ -40,11 +40,15 @@ import io.prometheus.common.Utils.getVersionDesc
 import io.prometheus.common.Utils.toJsonElement
 import io.prometheus.common.AgentValues.isValidLabelName
 import io.prometheus.common.AgentValues.labelsProblem
+import io.prometheus.proxy.ActivityKind
+import io.prometheus.proxy.ActivityLog
 import io.prometheus.proxy.AgentAuthManager
 import io.prometheus.proxy.AgentContext
 import io.prometheus.proxy.AgentContextCleanupService
 import io.prometheus.proxy.AgentContextManager
 import io.prometheus.proxy.PathHistory
+import io.prometheus.proxy.ProxyConstants.EVICTION_REASON
+import io.prometheus.proxy.ProxyConstants.TERMINATION_REASON
 import io.prometheus.proxy.ProxyEvent
 import io.prometheus.proxy.ProxyEventBus
 import io.prometheus.proxy.ProxyFailure
@@ -197,6 +201,12 @@ class Proxy(
       null
   private val recentReqs: EvictingQueue<String> = EvictingQueue.create(proxyConfigVals.admin.recentRequestsQueueSize)
 
+  // The dashboard's activity feed: agents and paths coming, going, and refused. Null unless the dashboard is on, since
+  // nothing else reads it, so with the dashboard off nothing records. Declared before grpcService, whose auth
+  // interceptor records bad tokens, and agentContextManager, which records refused connects.
+  internal val activityLog: ActivityLog? =
+    if (options.dashboardEnabled) ActivityLog(proxyConfigVals.dashboard.activityLogSize) else null
+
   // Structured counterpart to recentReqs, for the operational dashboard. Separate queue rather than a
   // replacement: the /debug servlet's text format is a stable operator-facing surface, and this one is
   // sized independently because the dashboard shows more history than a debug dump needs. EvictingQueue is not
@@ -242,7 +252,7 @@ class Proxy(
   internal val eventBus = ProxyEventBus()
 
   internal val pathManager by lazy { ProxyPathManager(this, isTestMode) }
-  internal val agentContextManager = AgentContextManager(isTestMode, eventBus)
+  internal val agentContextManager = AgentContextManager(isTestMode, eventBus, activityLog = activityLog)
   internal val scrapeRequestManager = ScrapeRequestManager()
 
   // Per-Proxy-instance id (mirrors Agent.launchId). Intentionally used to label only proxy_start_time_seconds,
@@ -505,13 +515,15 @@ class Proxy(
     agentContext: AgentContext?,
     reason: String,
   ) {
-    pathManager.removeFromPathManager(agentId, reason)
+    val servedPaths = pathManager.removeFromPathManager(agentId, reason)
     // Emitted here rather than inside removeFromContextManager so the event's happens-before edge
     // covers BOTH managers. Emitting at removal time let a consumer wake between the two calls and
     // snapshot a path map that still listed the departed agent.
     // A context that was never announced was never shown as connected, so it isn't shown leaving either.
-    if (agentContext?.announced == true)
+    if (agentContext?.announced == true) {
       eventBus.emit(ProxyEvent.AgentDisconnected(agentId, reason))
+      recordDeparture(agentContext, reason, servedPaths)
+    }
     // Proactively reclaim any in-flight chunked-transfer buffers for this agent rather than waiting for each stream's
     // orphan sweep, and count them as abandoned, as the sweep does (November #2). Each transfer has one remover --
     // this, the stream's sweep, a chunk or summary that finds its scrape gone, or the scrape's HTTP handler -- so none
@@ -525,6 +537,38 @@ class Proxy(
         }
       }
     scrapeRequestManager.failAllScrapeRequests(agentId, "Agent disconnected: $reason", ProxyFailure.AGENT_DISCONNECTED)
+  }
+
+  // The activity feed's line for an agent that has gone, with the paths it served. An eviction is the agent going
+  // quiet, which is a problem; the rest are an agent stopping or losing its connection, which the proxy can't tell
+  // apart.
+  private fun recordDeparture(
+    agentContext: AgentContext,
+    reason: String,
+    servedPaths: Int,
+  ) {
+    val log = activityLog ?: return
+    val evicted = reason == EVICTION_REASON
+    val cause =
+      when (reason) {
+        EVICTION_REASON -> {
+          "No contact within proxy.internal.maxAgentInactivitySecs (${proxyConfigVals.internal.maxAgentInactivitySecs}s)"
+        }
+
+        TERMINATION_REASON -> {
+          "Connection closed"
+        }
+
+        else -> {
+          reason
+        }
+      }
+    val paths = if (servedPaths == 1) "1 path" else "$servedPaths paths"
+    log.record(
+      if (evicted) ActivityKind.AGENT_EVICTED else ActivityKind.AGENT_DISCONNECTED,
+      agentContext,
+      detail = "$cause; released $paths",
+    )
   }
 
   /**

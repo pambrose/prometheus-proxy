@@ -106,6 +106,11 @@ every agent when agent auth is off.
 - **Search the Paths view.** A search box keeps the paths whose path, agent, target or identity matches, and
   **Problems only** keeps those failing or gone. The search goes into the URL, so a filtered view is a link you can
   share, and the browser tab's title counts the problem paths.
+- **An Activity view on the dashboard.** What the proxy did with its agents and their paths, newest first: connects,
+  disconnects, and evictions; paths registered, taken over, and removed; and what it refused, such as a path an
+  identity may not register, a connect over an identity's limit, or a bad agent token. Until now a refusal reached
+  only the proxy's log, so an agent whose paths never appeared looked like one that never started. The last 500
+  events are kept, in memory (`proxy.dashboard.activityLogSize`).
 
 ### Security
 

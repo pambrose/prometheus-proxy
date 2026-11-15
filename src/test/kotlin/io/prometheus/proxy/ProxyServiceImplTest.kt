@@ -322,6 +322,54 @@ class ProxyServiceImplTest : StringSpec() {
       agentContext.authIdentityName shouldBe ""
     }
 
+    "registerAgent should put the agent's connect in the activity feed, with where it came from" {
+      val (proxy, agentContext) = proxyWithRealAgentContext()
+      val log = ActivityLog(100)
+      every { proxy.activityLog } returns log
+      val request =
+        registerAgentRequest {
+          agentId = agentContext.agentId
+          agentName = "agent-east"
+          hostName = "worker-3"
+        }
+
+      withIdentity(AgentIdentity("east", ByteArray(0), emptyList())) {
+        runBlocking { ProxyServiceImpl(proxy).registerAgent(request) }
+      }.valid.shouldBeTrue()
+
+      log.entries().single().apply {
+        kind shouldBe ActivityKind.AGENT_CONNECTED
+        agentName shouldBe "agent-east"
+        identity shouldBe "east"
+        detail shouldBe "From remote-addr, host worker-3"
+      }
+    }
+
+    // A denied path is retried on every registration attempt, and a team's agent may be denied many; the feed says
+    // each once, as ProxyPathManager's rejections do, though the log still warns on every denial.
+    "a path an identity may not register should go in the activity feed once" {
+      val (proxy, agentContext) = proxyWithRealAgentContext()
+      val log = ActivityLog(100)
+      every { proxy.activityLog } returns log
+      val request =
+        registerPathRequest {
+          agentId = agentContext.agentId
+          path = "team_b_metrics"
+        }
+
+      repeat(2) {
+        withIdentity(AgentIdentity("team_a", ByteArray(0), ["team_a_*"])) {
+          runBlocking { ProxyServiceImpl(proxy).registerPath(request) }
+        }.rejectionCause shouldBe PathRejectionCause.NOT_AUTHORIZED
+      }
+
+      log.entries().single().apply {
+        kind shouldBe ActivityKind.PATH_REJECTED
+        paths shouldBe ["team_b_metrics"]
+        detail shouldBe "Agent identity 'team_a' is not authorized to register path /team_b_metrics"
+      }
+    }
+
     "registerAgent with agent auth off should record no identity" {
       val (proxy, agentContext) = proxyWithRealAgentContext()
 

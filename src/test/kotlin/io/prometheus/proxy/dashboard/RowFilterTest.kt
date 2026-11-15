@@ -23,12 +23,14 @@ import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
 import io.ktor.http.parametersOf
+import io.prometheus.proxy.ActivityKind
 import io.prometheus.proxy.AgentAuthManager.Companion.LEGACY_IDENTITY_NAME
+import io.prometheus.proxy.dashboard.DashboardFixtures.activityEntry
 import io.prometheus.proxy.dashboard.DashboardFixtures.departedPathView
 import io.prometheus.proxy.dashboard.DashboardFixtures.pathView
 import io.prometheus.proxy.dashboard.DashboardFixtures.scrapeRecord
 
-class PathFilterTest : StringSpec() {
+class RowFilterTest : StringSpec() {
   private val payments =
     pathView(
       path = "payments_metrics",
@@ -41,12 +43,12 @@ class PathFilterTest : StringSpec() {
   private fun matches(
     query: String,
     path: PathView = payments,
-  ) = PathFilter.of(query, problemsOnly = false).matches(path)
+  ) = RowFilter.of(query, problemsOnly = false).matches(path)
 
   init {
     "no filter should match every path" {
-      PathFilter.NONE.matches(payments).shouldBeTrue()
-      PathFilter.NONE.isActive.shouldBeFalse()
+      RowFilter.NONE.matches(payments).shouldBeTrue()
+      RowFilter.NONE.isActive.shouldBeFalse()
     }
 
     "a query should match the path, an agent's name, the target URL, or the identity, ignoring case" {
@@ -77,7 +79,7 @@ class PathFilterTest : StringSpec() {
     }
 
     "problems only should keep a failing or departed path and drop a healthy or unscraped one" {
-      val problems = PathFilter.of(null, problemsOnly = true)
+      val problems = RowFilter.of(null, problemsOnly = true)
 
       problems.matches(pathView(lastScrape = scrapeRecord(statusCode = 503))).shouldBeTrue()
       problems.matches(pathView(isDeparted = true, lastScrape = scrapeRecord())).shouldBeTrue()
@@ -87,7 +89,7 @@ class PathFilterTest : StringSpec() {
 
     "a query and problems only should both have to match" {
       val failingEast = payments.copy(history = [scrapeRecord(statusCode = 500)])
-      val filter = PathFilter.of("east", problemsOnly = true)
+      val filter = RowFilter.of("east", problemsOnly = true)
 
       filter.matches(failingEast).shouldBeTrue()
       filter.matches(payments).shouldBeFalse()
@@ -96,25 +98,56 @@ class PathFilterTest : StringSpec() {
 
     // Browser input, on a port with no auth, matched against every row on every push.
     "a filter from browser input should be trimmed and cut to its maximum length" {
-      PathFilter.of("  east  ", problemsOnly = false).query shouldBe "east"
-      PathFilter.of(null, problemsOnly = false) shouldBe PathFilter.NONE
-      PathFilter.of("x".repeat(500), problemsOnly = false).query.length shouldBe PathFilter.MAX_QUERY_LENGTH
+      RowFilter.of("  east  ", problemsOnly = false).query shouldBe "east"
+      RowFilter.of(null, problemsOnly = false) shouldBe RowFilter.NONE
+      RowFilter.of("x".repeat(500), problemsOnly = false).query.length shouldBe RowFilter.MAX_QUERY_LENGTH
       // Never between the halves of a surrogate pair, which the page would echo as a broken character.
-      val emoji = "x".repeat(PathFilter.MAX_QUERY_LENGTH - 1) + "\uD83D\uDE00"
-      PathFilter.of(emoji, problemsOnly = false).query shouldBe "x".repeat(PathFilter.MAX_QUERY_LENGTH - 1)
+      val emoji = "x".repeat(RowFilter.MAX_QUERY_LENGTH - 1) + "\uD83D\uDE00"
+      RowFilter.of(emoji, problemsOnly = false).query shouldBe "x".repeat(RowFilter.MAX_QUERY_LENGTH - 1)
     }
 
     // The /paths route reads the URL's query, and the socket the same query from the page.
     "a filter from a URL's query should read the search and the problems box as the form submits them" {
-      PathFilter.of(parametersOf("q" to ["east"], "problems" to ["1"])) shouldBe PathFilter("east", problemsOnly = true)
-      PathFilter.of(parametersOf("problems" to ["on"])) shouldBe PathFilter.NONE
-      PathFilter.of(parametersOf()) shouldBe PathFilter.NONE
+      RowFilter.of(parametersOf("q" to ["east"], "problems" to ["1"])) shouldBe RowFilter("east", problemsOnly = true)
+      RowFilter.of(parametersOf("problems" to ["on"])) shouldBe RowFilter.NONE
+      RowFilter.of(parametersOf()) shouldBe RowFilter.NONE
     }
 
     "a filter should be active once it could hide a row" {
-      PathFilter.of("east", problemsOnly = false).isActive.shouldBeTrue()
-      PathFilter.of("", problemsOnly = true).isActive.shouldBeTrue()
-      PathFilter.of("   ", problemsOnly = false).isActive.shouldBeFalse()
+      RowFilter.of("east", problemsOnly = false).isActive.shouldBeTrue()
+      RowFilter.of("", problemsOnly = true).isActive.shouldBeTrue()
+      RowFilter.of("   ", problemsOnly = false).isActive.shouldBeFalse()
+    }
+
+    // ==================== Activity lines ====================
+
+    "a query should match an activity line's event, agent, identity, paths, or detail, ignoring case" {
+      val line =
+        activityEntry(
+          ActivityKind.PATH_REJECTED,
+          agentName = "agent-east",
+          identity = LEGACY_IDENTITY_NAME,
+          paths = ["team_b_metrics", "team_c_metrics"],
+          detail = "Agent identity 'east' is not authorized",
+        )
+
+      fun matches(query: String) = RowFilter.of(query, problemsOnly = false).matches(line)
+
+      matches("REJECTED").shouldBeTrue()
+      matches("agent-east").shouldBeTrue()
+      matches("shared token").shouldBeTrue()
+      matches("team_c").shouldBeTrue()
+      matches("not authorized").shouldBeTrue()
+      matches("west").shouldBeFalse()
+    }
+
+    "problems only should keep the activity an operator has to act on" {
+      val problems = RowFilter.of(null, problemsOnly = true)
+
+      problems.matches(activityEntry(ActivityKind.BAD_TOKEN)).shouldBeTrue()
+      problems.matches(activityEntry(ActivityKind.AGENT_EVICTED)).shouldBeTrue()
+      problems.matches(activityEntry(ActivityKind.AGENT_DISCONNECTED)).shouldBeFalse()
+      problems.matches(activityEntry(ActivityKind.PATH_TAKEN_OVER)).shouldBeFalse()
     }
 
     "an identity should read as the page shows it" {

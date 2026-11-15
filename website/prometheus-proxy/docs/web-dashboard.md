@@ -38,6 +38,7 @@ and how recent scrapes actually went.
         recentScrapesQueueSize = 200  // Recent scrapes across all agents, for each agent's panel
         pathHistorySize = 20        // Scrapes kept per path, for the History column
         departedPathRetentionSecs = 3600  // How long a path whose agent has gone stays listed
+        activityLogSize = 500       // Lines kept in the Activity view
       }
     }
     ```
@@ -56,7 +57,7 @@ and how recent scrapes actually went.
 
 Then open `http://<proxy-host>:8094/dashboard`.
 
-## Two layouts
+## Three layouts
 
 The top bar switches between them, and each is a real URL you can bookmark or share:
 
@@ -64,16 +65,18 @@ The top bar switches between them, and each is a real URL you can bookmark or sh
 |---|---|---|
 | **Agents** (`/dashboard`) | "what is this agent doing?" | agent list, drill into one |
 | **Paths** (`/dashboard/paths`) | "why isn't this target scraping?" | one flat row per path |
+| **Activity** (`/dashboard/activity`) | "what just happened?" | one row per event, newest first |
 
 Start from **Paths** when Prometheus reports a target failing — that is the view organized the way the
-alert is. Use **Agents** when you already know which agent you care about.
+alert is. Use **Agents** when you already know which agent you care about. Use **Activity** when an agent's paths
+never appeared, or the agent never did: what the proxy refused is in no other view, since nothing was added.
 
-Both show scrape times in your browser's time zone, as Grafana does, whatever zone the proxy runs in, so a failed
+All three show times in your browser's time zone, as Grafana does, whatever zone the proxy runs in, so a failed
 scrape here and the spike it caused in a Grafana panel read the same clock. Hover over a time for its date and zone.
 
 ## The status bar
 
-The bar across the top appears in both layouts. Left to right it shows the connection's **live**
+The bar across the top appears in every layout. Left to right it shows the connection's **live**
 indicator, the current **agents** and **paths** counts, how many paths are **failing** (their last scrape failed)
 or **departed** (their agent has gone) when there are any, and two health gauges, **chunks** and **scrapes**.
 
@@ -191,6 +194,34 @@ these rows from the 200 most recent scrapes across all paths, which on a proxy w
 15 seconds is about 30 seconds of history. At most 1,000 gone paths are kept, oldest dropped first, and none
 survives a proxy restart. It is a recent-past view, not an audit log.
 
+## The Activity layout
+
+What the proxy did with its agents and their paths, newest first:
+
+| Event | When |
+|---|---|
+| `connected` | an agent registered, with the address it connected from and its host name |
+| `disconnected` | an agent's connection closed or its stream ended, with how many paths it served |
+| `evicted` | the proxy removed an agent it hadn't heard from within `proxy.internal.maxAgentInactivitySecs` |
+| `registered` / `unregistered` | an agent added a path, or removed one; re-registering a path it already serves isn't news |
+| `taken over` | an agent took a path another agent of the same identity was serving, as a redeploy does |
+| `rejected` | the proxy refused a path, with its reason: one its identity may not register, a malformed or overlong path, a path another identity holds, a consolidated agent and a path that isn't (or the reverse), or one past the agent's `maxPathsPerAgent` |
+| `refused` | an identity was already at `proxy.internal.maxAgentsPerIdentity`, so a connect was turned away |
+| `bad token` | a call came with no agent token or an unknown one, naming the host it came from |
+
+The last four, and `evicted`, are what **Problems only** keeps, marked in red; a take-over is marked in amber. The
+search works as on the Paths layout, matching the event, agent, identity, paths, and detail, and goes into the URL the
+same way.
+
+A burst of like events from one agent within five seconds is one row, counted (`registered ×40`) and naming its first
+three paths, so an agent registering two thousand paths takes one row rather than the whole feed. A rejection appears
+the first time the agent is told it, not on each retry, and a bad token at most once a minute for each host. A
+connect or a path change appears at once; a refusal or a bad token, which changes nothing else on the page, by the
+next refresh.
+
+The feed keeps the last `activityLogSize` rows (default 500), in memory only, so a restart empties it. It is a view of
+the recent past, for finding out why something didn't appear, not an audit log; the proxy's log has every event.
+
 ## Why it is on its own port
 
 The proxy's admin port (8092) is a servlet container that cannot host WebSockets, so the dashboard could not
@@ -270,6 +301,9 @@ web page can do that:
   route; IP addresses, `localhost`, and the hosts in `allowedOrigins` are always allowed. This check is off
   until you set it.
 
+The Activity layout shows the address each call with a bad token came from, so anyone who can read the dashboard
+can see who has tried the agent port.
+
 Sessions are also capped at `proxy.dashboard.maxSessions` (default 50), and a client that stops reading or
 sends an oversized message is disconnected. Neither list stops someone who can reach the port directly.
 Both are lists, so set them in a config file; see [Dashboard configuration](configuration/proxy.md#dashboard).
@@ -285,5 +319,7 @@ Both are lists, so set them in a config file; see [Dashboard configuration](conf
   discovery serves, stay the first registrant's.
 - **Departed paths age out.** A gone path stays for `departedPathRetentionSecs` (default 3600) after its last
   scrape, at most 1,000 of them at once, and none survives a proxy restart.
+- **The activity feed is short-lived.** It keeps the last `activityLogSize` rows (default 500), and none survives a
+  proxy restart.
 - **A departed path shows no identity.** The proxy records a path's identity with its entry, which goes when the
   path's last agent does; the row still names that agent, from its last scrape.

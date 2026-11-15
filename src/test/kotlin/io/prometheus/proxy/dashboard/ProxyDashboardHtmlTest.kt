@@ -572,6 +572,7 @@ class ProxyDashboardHtmlTest : StringSpec() {
     "layout parsing should tolerate anything a browser might send" {
       ProxyDashboardService.parseLayout("""{"layout":"PATH"}""") shouldBe DashboardLayout.PATH
       ProxyDashboardService.parseLayout("""{"layout":"AGENT"}""") shouldBe DashboardLayout.AGENT
+      ProxyDashboardService.parseLayout("""{"layout":"ACTIVITY"}""") shouldBe DashboardLayout.ACTIVITY
       // Everything unexpected falls back to the layout the page served before layouts existed.
       ProxyDashboardService.parseLayout("""{"layout":"SIDEWAYS"}""") shouldBe DashboardLayout.AGENT
       ProxyDashboardService.parseLayout("""{"select":"a1"}""") shouldBe DashboardLayout.AGENT
@@ -579,13 +580,20 @@ class ProxyDashboardHtmlTest : StringSpec() {
       ProxyDashboardService.parseLayout("") shouldBe DashboardLayout.AGENT
     }
 
-    "the nav should mark the current layout" {
+    "the nav should link every layout and mark the current one" {
       val agentPage = ProxyDashboardHtml.pushFragment(snapshot(), null, "/dashboard", DashboardLayout.AGENT)
       // The nav lives on the page shell rather than in a pushed region, so assert it where it renders.
       val page = renderFullPage(snapshot(), DashboardLayout.PATH)
-      page shouldContain """href="/dashboard/paths""""
-      page shouldContain """aria-current="page""""
+      page shouldContain """href="/dashboard/paths" class="on" aria-current="page">Paths</a>"""
+      page shouldContain """<a href="/dashboard/activity">Activity</a>"""
+      renderFullPage(snapshot(), DashboardLayout.ACTIVITY) shouldContain
+        """href="/dashboard/activity" class="on" aria-current="page">Activity</a>"""
       agentPage shouldNotContain "aria-current=\"page\""
+    }
+
+    // The script tells the server which layout the page shows, from its URL, on every announce.
+    "the page script should name each layout by its route" {
+      renderFullPage(snapshot()) shouldContain "match(/\\/(paths|activity)\\/?$/)"
     }
 
     // ==================== Connection indicator ====================

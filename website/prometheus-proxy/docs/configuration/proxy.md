@@ -116,6 +116,7 @@ proxy {
     recentScrapesQueueSize = 200    // Recent scrapes across all agents; each agent's panel shows its own
     pathHistorySize = 20            // Scrapes kept per path, for the path table's History column
     departedPathRetentionSecs = 3600  // How long a path whose agent has gone stays in the path table
+    activityLogSize = 500           // Lines kept in the Activity view: agents and paths coming, going, and refused
     maxSessions = 50                // Concurrent WebSocket sessions; more are closed
     allowedOrigins = []             // Browser origins allowed besides the dashboard's own host
     allowedHosts = []               // Host names the dashboard answers to; empty turns the check off

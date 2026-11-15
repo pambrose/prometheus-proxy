@@ -656,21 +656,23 @@ class ProxyOptionsTest : StringSpec() {
       proxyOptions(["-Dproxy.dashboard.refreshIntervalSecs=0"]).dashboardEnabled.shouldBeFalse()
     }
 
-    // At 0 the path table would keep no scrape for any path, so it would lose its gone paths, the thing it is for.
-    "a non-positive dashboard pathHistorySize or departedPathRetentionSecs should be rejected when enabled" {
-      for (name in ["pathHistorySize", "departedPathRetentionSecs"]) {
+    // At 0 the path table would keep no scrape for any path, so it would lose its gone paths, the thing it is for, and
+    // the activity feed would keep no line.
+    "a non-positive dashboard pathHistorySize, departedPathRetentionSecs, or activityLogSize should be rejected" {
+      for (name in ["pathHistorySize", "departedPathRetentionSecs", "activityLogSize"]) {
         shouldThrow<IllegalArgumentException> {
           proxyOptions(["--dashboard", "-Dproxy.dashboard.$name=0"])
         }.message shouldContain name
       }
     }
 
-    "the dashboard's path history settings should be logged at startup when the dashboard is enabled" {
+    "the dashboard's path history and activity settings should be logged at startup when the dashboard is enabled" {
       captureLogs<ProxyOptions>(Level.INFO) { proxyOptions(["--dashboard"]) }
         .map { it.formattedMessage }
         .apply {
           this shouldContainElement "dashboard.pathHistorySize: 20"
           this shouldContainElement "dashboard.departedPathRetentionSecs: 3600"
+          this shouldContainElement "dashboard.activityLogSize: 500"
         }
     }
 

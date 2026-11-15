@@ -504,8 +504,9 @@ A `<button>` styled as a full-width list row, so it is keyboard-operable by cons
   uppercase Label treatment, despite the shared 10px size.
 - **Neutral:** `surface-3` background, `ink-2` text — used for `consolidated`, and for an agent's identity in
   the agent list.
-- **Warn:** `warn-soft` / `warn` — used for `failed over`.
-- **Crit:** `crit-soft` / `crit` — used for `gone`.
+- **Warn:** `warn-soft` / `warn` — used for `failed over`, and for a `taken over` event in the Activity Table.
+- **Crit:** `crit-soft` / `crit` — used for `gone`, and for the problem events in the Activity Table (`rejected`,
+  `refused`, `bad token`, `evicted`). A tag after a name sits `7px` from it; one that opens a cell takes no gap.
 
 ### Status LED
 
@@ -515,12 +516,12 @@ relative position in both panes.
 
 ### Navigation
 
-- **Style:** two plain links in pill form (`20px`), `3px 10px`, `ink-3` at rest.
+- **Style:** three plain links in pill form (`20px`), `3px 10px`, `ink-3` at rest: Agents, Paths, Activity.
 - **Hover:** `surface-3` background, `ink` text.
 - **Active:** `surface-3` background, `ink` text, weight 600, plus `aria-current="page"`.
 - **Focus:** `2px solid accent`, `outline-offset: 1px` — *outside* the pill here, unlike the row item,
   because a pill has no neighbor to collide with.
-- **Behavior:** real navigation, not a swap. The two layouts are bookmarkable URLs.
+- **Behavior:** real navigation, not a swap. The three layouts are bookmarkable URLs.
 
 ### Section Header
 
@@ -567,8 +568,9 @@ a ninth, Identity, after Agent(s) whenever agent auth is on.
 
 ### Path Search
 
-The one form in the system, above the Path Table on `surface-2` with a `line` bottom border, so it
-reads as part of the table's header rather than a separate panel.
+The one form in the system, above the Path Table and the Activity Table on `surface-2` with a `line` bottom border,
+so it reads as part of the table's header rather than a separate panel. One component on both: the label and the
+placeholder name what it filters, and the form submits to its own layout's route.
 
 - **Input:** a `type="search"` field, square (it holds content), `surface` ground, `line` border, Body
   type in `ink` with an `ink-3` placeholder. Focus is the standard `2px solid accent` ring.
@@ -578,6 +580,22 @@ reads as part of the table's header rather than a separate panel.
   (`/paths?q=…&problems=1`), so a filtered view is a link. It sits outside the table's out-of-band
   region, so a push never replaces the field someone is typing in. Without the script it is a plain GET
   form. The match count is spoken through the Connection Announcer once per change.
+
+### Activity Table
+
+The Activity layout's one component: the Path Table's surface, header, cells, and hover, listing the proxy's
+recent events newest first. Six columns: Time, Event, Agent, Path, Detail, and Identity after Agent whenever agent
+auth is on.
+
+- **Event:** the ordinary coming and going (`connected`, `registered`, …) in plain `ink`; a problem as a Crit Tag and
+  a take-over as a Warn Tag, so a scan for red finds what needs acting on. A burst folded into one row is counted
+  after it in `ink-3` (`registered ×40`).
+- **Path:** the paths the event concerns, each with its slash, a burst's first three then `and N more` in `ink-3`;
+  the en dash for an event with none.
+- **Detail:** `ink-3`, and the one cell in any table that wraps (`white-space: normal`, at least `280px`): a
+  rejection's reason is a sentence, and a row that scrolled sideways to read it would hide the event it explains.
+- **Time:** the Path Table's local time of day, its date and zone on hover.
+- **States:** the Empty States, for a feed with nothing yet, with no problems, or with no match.
 
 ### History Strip
 
@@ -657,7 +675,7 @@ carries `white-space: nowrap` so a narrow viewport wraps between stats rather th
 A visually-hidden `role="status" aria-live="polite"` region, written by the WebSocket lifecycle
 handlers: *"Connection to the proxy lost. Reconnecting."* and, on recovery from a real outage,
 *"Connection to the proxy restored."* The Copy Button writes its result there too, once per click, and
-the Path Search its match count, once per change of filter.
+the Path Search its match count, on either table, once per change of filter.
 
 It exists because the beacon reports connection state through color and a change of rhythm, and
 neither reaches a screen reader — without it the page simply goes silently stale, which is the exact

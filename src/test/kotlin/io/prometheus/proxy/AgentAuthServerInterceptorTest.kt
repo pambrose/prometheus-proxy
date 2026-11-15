@@ -18,6 +18,8 @@
 
 package io.prometheus.proxy
 
+import io.grpc.Attributes
+import io.grpc.Grpc
 import io.grpc.Metadata
 import io.grpc.ServerCall
 import io.grpc.ServerCallHandler
@@ -25,10 +27,12 @@ import io.grpc.Status
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
 import io.prometheus.common.GrpcConstants.META_AGENT_TOKEN_KEY
+import java.net.InetSocketAddress
 import io.prometheus.proxy.AgentAuthManager.AuthEntry
 
 class AgentAuthServerInterceptorTest : StringSpec() {
@@ -104,6 +108,38 @@ class AgentAuthServerInterceptorTest : StringSpec() {
 
       verify { mockCall.close(any(), any()) }
       verify(exactly = 0) { mockHandler.startCall(any(), any()) }
+    }
+
+    // A wrong token is the usual reason a new agent never appears, and nothing else on the dashboard shows it.
+    "a bad token should go in the activity feed, naming the host it came from, once a minute for each host" {
+      val log = ActivityLog(100)
+      val interceptor = AgentAuthServerInterceptor(authManager, log)
+
+      fun callFrom(host: String) =
+        mockk<ServerCall<Any, Any>>(relaxed = true).also {
+          every { it.attributes } returns
+            Attributes.newBuilder().set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, InetSocketAddress(host, 40000)).build()
+        }
+
+      repeat(3) { interceptor.interceptCall(callFrom("10.9.9.9"), headersWithToken("nope"), mockk(relaxed = true)) }
+      interceptor.interceptCall(callFrom("10.8.8.8"), headersWithToken(null), mockk(relaxed = true))
+      interceptor.interceptCall(callFrom("10.7.7.7"), headersWithToken("s3cret"), mockk(relaxed = true))
+
+      log.entries().map { it.kind to it.detail } shouldBe
+        [
+          ActivityKind.BAD_TOKEN to "No agent token, from 10.8.8.8",
+          ActivityKind.BAD_TOKEN to "An unknown agent token, from 10.9.9.9",
+        ]
+    }
+
+    "a bad token with no remote address should still go in the activity feed" {
+      val log = ActivityLog(100)
+
+      val call = mockk<ServerCall<Any, Any>>(relaxed = true).also { every { it.attributes } returns Attributes.EMPTY }
+
+      AgentAuthServerInterceptor(authManager, log).interceptCall(call, headersWithToken("nope"), mockk(relaxed = true))
+
+      log.entries().single().detail shouldBe "An unknown agent token, from an unknown address"
     }
   }
 }

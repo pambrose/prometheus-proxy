@@ -326,6 +326,8 @@ class ProxyOptions internal constructor(
       // whose agent has gone; a retention of 0 would drop a gone path at the next refresh.
       logger.requirePositive("dashboard.pathHistorySize", dashboard.pathHistorySize)
       logger.requirePositive("dashboard.departedPathRetentionSecs", dashboard.departedPathRetentionSecs)
+      // At 0 the activity feed would keep nothing, so a refused path or a bad token would again reach only the log.
+      logger.requirePositive("dashboard.activityLogSize", dashboard.activityLogSize)
       logger.info { "dashboardHost: $dashboardHost, dashboardPort: $dashboardPort, dashboardPath: $dashboardPath" }
       if (isWildcardAddress(dashboardHost)) {
         val rebindingHint =
