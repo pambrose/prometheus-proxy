@@ -142,9 +142,13 @@ Every path on one row, with the endpoint behind it and how its last scrape went:
 |---|---|
 | **Path** | the registered path Prometheus scrapes |
 | **Agent(s)** | the agent serving it; a consolidated path shows the first plus a `+N` count |
-| **Target** | the URL the agent actually fetches |
+| **Target** | the URL the agent actually fetches, with a button beside it that copies it to the clipboard |
 | **Src** | `cfg` for a statically configured path, `disc` for one from [dynamic discovery](configuration/agent.md#dynamic-target-discovery) |
 | **Last scrape / Status / Duration** | the most recent result for that path |
+
+The copy button copies the URL as the table shows it. The agent [redacts](security/index.md#credentials-in-urls) a target
+URL's user info and query values before sending it to the proxy, so a URL that carries either is copied with
+`***` in their place.
 
 ### Paths whose agent has gone
 

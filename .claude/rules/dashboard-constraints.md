@@ -6,7 +6,7 @@ paths:
 
 # Dashboard Design Constraints
 
-`docs/DESIGN.md` is the visual contract (color tokens, typography roles, components) and `docs/PRODUCT.md` the product one; both are tracked, while the tooling that generated them is gitignored. These constraints in `ProxyDashboardHtml.kt` and `ProxyDashboardService.kt` are load-bearing and easy to undo by accident:
+`docs/DESIGN.md` is the visual contract (color tokens, typography roles, components) and `docs/PRODUCT.md` the product one; both are tracked, while the tooling that generated them is gitignored. These constraints in `ProxyDashboardHtml.kt`, `ProxyDashboardCss.kt`, and `ProxyDashboardService.kt` are load-bearing and easy to undo by accident:
 
 - **The live region must stay outside every `hx-swap-oob` region.** A region the push loop rewrites re-announces itself on every frame. `ProxyDashboardHtmlTest` pins this.
 - **Check a color against `--surface-2`, not `--surface`.** Every token also lands on the tighter ground under tables and section headers, which is where all 29 of the contrast failures fixed in 4.0.1 lived. The measured AA floor is 4.59:1 — `docs/DESIGN.md` records the per-token values.

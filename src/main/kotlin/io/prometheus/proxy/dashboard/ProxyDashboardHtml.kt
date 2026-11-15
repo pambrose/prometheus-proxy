@@ -16,6 +16,7 @@
 
 package io.prometheus.proxy.dashboard
 
+import kotlinx.html.ButtonType
 import kotlinx.html.DIV
 import kotlinx.html.FlowContent
 import kotlinx.html.HTML
@@ -76,6 +77,8 @@ internal object ProxyDashboardHtml {
   const val PATH_TABLE_ID = "path-table"
   const val ANNOUNCER_ID = "conn-announce"
   const val VIEW_ATTR = "data-view"
+  const val COPY_ATTR = "data-copy"
+  const val COPY_ID_PREFIX = "copy-"
 
   /** The full page. Only served on a real navigation; every later update arrives over the socket. */
   fun HTML.renderPage(
@@ -90,7 +93,7 @@ internal object ProxyDashboardHtml {
     head {
       title("prometheus-proxy")
       meta(name = "viewport", content = "width=device-width, initial-scale=1")
-      style { unsafe { raw(CSS) } }
+      style { unsafe { raw(ProxyDashboardCss.CSS) } }
       // Ahead of the scripts: htmx reads its config once, when htmx.min.js loads.
       meta(name = "htmx-config", content = HTMX_CONFIG)
       script(src = "$routeBase/${ProxyDashboardService.ASSET_DIR}/htmx.min.js") {}
@@ -203,7 +206,14 @@ internal object ProxyDashboardHtml {
               if (path.isDeparted) span("tag crit") { +"gone" }
               if (path.additionalAgents > 0) span("dim") { +" +${path.additionalAgents}" }
             }
-            td("dim") { +path.targetUrl.ifEmpty { DASH } }
+            td("dim") {
+              if (path.targetUrl.isEmpty()) {
+                +DASH
+              } else {
+                +path.targetUrl
+                copyButton(path)
+              }
+            }
             td("dim") { +sourceLabel(path.pathSource) }
             td("dim") { +(path.lastScrape?.let { timeFormat.format(it.at) } ?: DASH) }
             td("num") {
@@ -219,6 +229,23 @@ internal object ProxyDashboardHtml {
       }
     }
   }
+
+  /**
+   * The button beside a path's target URL that copies the URL to the clipboard.
+   *
+   * The URL rides in [COPY_ATTR] and the page's script does the copying (see SELECTION_JS). The id is built from
+   * the path, which is unique in the table, because the push loop replaces the whole table every frame: htmx
+   * gives focus back to the element whose id the focused one had, so a keyboard user keeps their place, and the
+   * script puts the copied mark back on the button with that id until the mark expires.
+   */
+  private fun FlowContent.copyButton(path: PathView) =
+    button(type = ButtonType.button, classes = "copy") {
+      attributes["id"] = "$COPY_ID_PREFIX${path.path}"
+      attributes[COPY_ATTR] = path.targetUrl
+      // Names the path, so a screen reader listing the page's buttons can tell one row's from another's.
+      attributes["aria-label"] = "Copy the target URL of /${path.path}"
+      attributes["title"] = "Copy target URL"
+    }
 
   /** Status counters. Driven by the timer rather than the event bus -- these drift, they do not change. */
   fun FlowContent.renderStatus(
@@ -480,6 +507,10 @@ internal object ProxyDashboardHtml {
   private const val UNASSIGNED = "Unassigned"
   private const val MAX_DETAIL_SCRAPES = 25
 
+  // How long a copy button shows its result: long enough to notice after the click, brief enough that it reads
+  // as the click's answer rather than as a state of the row.
+  private const val COPY_MARK_MILLIS = 1500
+
   // An en dash for "the agent never told us", kept distinct from an empty cell, which would read as a
   // rendering bug rather than as absent data.
   private const val DASH = "\u2013"
@@ -502,8 +533,8 @@ internal object ProxyDashboardHtml {
     """{"noSwap":[204,304,"4xx","5xx"],"ws":{"reconnectDelay":500,"reconnectMaxDelay":2000,"reconnectJitter":0.125}}"""
 
   // Reads the selection back out of the URL that hx-push-url already set, and tells the server, so the
-  // push loop knows whether this session wants a detail pane. Kept deliberately tiny: everything else
-  // on the page is htmx.
+  // push loop knows whether this session wants a detail pane. Also runs the connection indicator and the
+  // path table's copy buttons, the only things on the page that htmx does not model; everything else is htmx.
   private val SELECTION_JS =
     """
     (function () {
@@ -561,7 +592,8 @@ internal object ProxyDashboardHtml {
       // The same transition is spoken into the live region. The beacon reports this visually with colour
       // and a change of rhythm, neither of which reaches a screen reader; without this the page goes
       // silently stale, which is the one failure this dashboard exists to make impossible to miss.
-      // Scoped to the connection alone -- announcing every pushed counter would make the region unusable.
+      // Scoped to the connection and the result of a copy click -- announcing every pushed counter would
+      // make the region unusable.
       var wasDown = false;
       function announceConn(up) {
         var region = document.getElementById('$ANNOUNCER_ID');
@@ -589,116 +621,70 @@ internal object ProxyDashboardHtml {
       // htmx 4 dispatches its history events on document, which a listener on <body> never hears.
       document.addEventListener('htmx:after:history:push', announce);
       window.addEventListener('popstate', announce);
-    })();
-    """.trimIndent()
-
-  private val CSS =
-    """
-    /* Every quiet colour is set so its *worst* pairing still clears 4.5:1, not just its pairing with
-       --surface. --ink-3 is the binding case: it lands on --surface-2 under the table and section
-       headers, which is a full step closer than the reading plane. */
-    :root {
-      --bg:#f2f5f8; --surface:#fff; --surface-2:#e9edf2; --surface-3:#dde3ea;
-      --line:#cfd7e0; --line-soft:#e3e9ef; --ink:#131820; --ink-2:#48525f; --ink-3:#626b77;
-      --accent:#c8461f; --ok:#1a7a42; --ok-soft:#e3f4ea; --warn:#8a5d08; --warn-soft:#f9f0da;
-      --crit:#c02a20; --crit-soft:#fbe6e4;
-      --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
-    }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg:#0d1015; --surface:#151a21; --surface-2:#1c222b; --surface-3:#242c37;
-        --line:#2b333f; --line-soft:#212934; --ink:#e7ebf1; --ink-2:#a4aebc; --ink-3:#858f9d;
-        --accent:#ff7043; --ok:#3fb950; --ok-soft:#12251a; --warn:#d29922; --warn-soft:#2a2110;
-        --crit:#f85149; --crit-soft:#2d1512;
+      // The copy buttons beside the path table's target URLs. One listener on <body> rather than one per
+      // button: the push loop replaces the table every frame, so a button's own listener would last one
+      // frame. The result mark is kept here for the same reason, by button id, and put back on that id's
+      // new button after each frame until it expires.
+      var mark = null;
+      var markTimer = 0;
+      function applyMark() {
+        var btn = mark && document.getElementById(mark.id);
+        if (btn) btn.classList.add(mark.cls);
       }
-    }
-    /* Visible to assistive tech, absent from the render. Used for the connection announcer and the
-       table caption, both of which duplicate something the layout already says visually. */
-    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden;
-      clip-path:inset(50%); white-space:nowrap; border:0; }
-    * { box-sizing:border-box; margin:0; padding:0; }
-    /* Column flex rather than a `calc(100vh - 44px)` on the content: the bar's height is set by its own
-       content and changes with the touch-target rules below, so any hard-coded number is wrong on some
-       viewport. This makes the content region exactly the remaining space, whatever the bar measures. */
-    body { background:var(--bg); color:var(--ink); font-family:var(--mono); font-size:12.5px; line-height:1.5;
-           display:flex; flex-direction:column; min-height:100vh; }
-    body > main { flex:1; }
-    .bar { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;
-           padding:11px 15px; border-bottom:1px solid var(--line); background:var(--surface); }
-    .brand { font-weight:600; }
-    .bar-right { display:flex; align-items:center; flex-wrap:wrap; gap:14px; color:var(--ink-3); font-size:11.5px; }
-    /* Each stat stays whole; the row wraps between them rather than mid-phrase, which at 390px was
-       splitting "0 agents" across two lines. */
-    .bar-right > span { white-space:nowrap; }
-    .bar-right .ok { color:var(--ok); } .bar-right .warn { color:var(--warn); } .bar-right .crit { color:var(--crit); }
-    .conn { display:inline-flex; align-items:center; gap:6px; color:var(--ok); }
-    .conn .conn-down { display:none; }
-    .beacon { width:7px; height:7px; border-radius:50%; background:var(--ok); animation:pulse 2.4s ease-out infinite; }
-    @keyframes pulse { 0%{opacity:1} 70%{opacity:.4} 100%{opacity:1} }
-    /* Disconnected: green calm becomes red blink, and the label swaps to name the effort. The faster,
-       harder blink reads as "trying" rather than the solid dot of something simply dead. Driven off the
-       body class so a frozen status bar still flips, and it wins over the healthy rules by specificity. */
-    body.ws-down .conn { color:var(--crit); }
-    body.ws-down .conn .conn-live { display:none; }
-    body.ws-down .conn .conn-down { display:inline; }
-    body.ws-down .beacon { background:var(--crit); animation:blink 1s steps(2, start) infinite; }
-    @keyframes blink { 0%{opacity:1} 50%{opacity:.25} 100%{opacity:1} }
-    @media (prefers-reduced-motion: reduce) { .beacon, body.ws-down .beacon { animation:none } }
-    .md { display:grid; grid-template-columns:262px 1fr; }
-    .md-list { border-right:1px solid var(--line); background:var(--surface-2); }
-    .md-head, .section { display:flex; justify-content:space-between; padding:9px 15px; font-size:10px;
-      letter-spacing:.09em; text-transform:uppercase; color:var(--ink-3); font-weight:600;
-      border-bottom:1px solid var(--line); background:var(--surface-2); }
-    .md-row { display:block; width:100%; text-align:left; font:inherit; cursor:pointer; background:none;
-      border:0; border-bottom:1px solid var(--line-soft); border-left:3px solid transparent;
-      padding:10px 15px; color:var(--ink); }
-    .md-row:hover { background:var(--surface-3); }
-    .md-row:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
-    .md-row[aria-current="true"] { background:var(--surface); border-left-color:var(--accent); }
-    /* 11.5px, matching .bar-right and .hero-meta: this is the same job -- quiet supporting metadata --
-       and a separate 11px step for it was a size the hierarchy never used. */
-    .md-row .host { display:block; color:var(--ink-3); font-size:11.5px; margin-top:2px; }
-    .md-detail { background:var(--surface); }
-    .hero { padding:14px 18px; border-bottom:1px solid var(--line); }
-    .hero-title { font-size:15px; font-weight:640; display:flex; align-items:center; gap:9px; }
-    .hero-meta { color:var(--ink-3); font-size:11.5px; margin-top:5px; }
-    .hero-failover { font-size:11.5px; margin-top:5px; display:flex; align-items:center; gap:8px; }
-    .tag.warn { background:var(--warn-soft); color:var(--warn); }
-    .tag { font-size:10px; background:var(--surface-3); color:var(--ink-2); padding:2px 7px; border-radius:20px; }
-    .kv { display:flex; gap:10px; padding:7px 18px; border-bottom:1px solid var(--line-soft); align-items:center; }
-    .kv .k { min-width:220px; } .kv .v { color:var(--ink-3); } .kv .t { color:var(--ink-3); min-width:64px; }
-    .led { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:7px; }
-    .led.ok { background:var(--ok); } .led.crit { background:var(--crit); }
-    .pill { font-size:10.5px; font-weight:600; padding:2px 7px; border-radius:20px; }
-    .pill.ok { background:var(--ok-soft); color:var(--ok); }
-    .pill.crit { background:var(--crit-soft); color:var(--crit); }
-    .empty { color:var(--ink-3); padding:14px 15px; }
-    .empty.pad { padding:22px 18px; }
-    .empty.gone { color:var(--crit); }
-    .nav { display:flex; gap:4px; margin-right:auto; margin-left:18px; }
-    .nav a { color:var(--ink-3); text-decoration:none; padding:3px 10px; border-radius:20px; }
-    .nav a:hover { background:var(--surface-3); color:var(--ink); }
-    .nav a:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
-    .nav a.on { background:var(--surface-3); color:var(--ink); font-weight:600; }
-    /* The table is the one region that can outgrow a narrow viewport, so it scrolls inside its own
-       container rather than letting the page body scroll sideways. */
-    .scroller { overflow-x:auto; background:var(--surface); }
-    .ptable { width:100%; border-collapse:collapse; white-space:nowrap; }
-    .ptable th { text-align:left; font-size:10px; letter-spacing:.09em; text-transform:uppercase;
-      color:var(--ink-3); font-weight:600; padding:9px 15px; background:var(--surface-2);
-      border-bottom:1px solid var(--line); position:sticky; top:0; }
-    .ptable td { padding:8px 15px; border-bottom:1px solid var(--line-soft); }
-    .ptable .num { text-align:right; font-variant-numeric:tabular-nums; }
-    .ptable .dim { color:var(--ink-3); }
-    .ptable tr:hover td { background:var(--surface-2); }
-    .ptable tr.departed td:first-child { color:var(--crit); }
-    .tag.crit { background:var(--crit-soft); color:var(--crit); margin-left:7px; }
-    @media (max-width:720px) { .md { grid-template-columns:1fr; } .md-list { border-right:0; border-bottom:1px solid var(--line); } }
-    /* Touch, not width: a 25px pill is a comfortable mouse target and a poor thumb one, and the two do
-       not correlate with viewport size -- a tablet is wide and touch-driven. The dense bar is kept for
-       pointer devices rather than spending vertical space everyone pays for. */
-    @media (pointer: coarse) {
-      .nav a { min-height:44px; display:inline-flex; align-items:center; padding:0 14px; }
-    }
+      function showMark(id, cls) {
+        var prev = mark && document.getElementById(mark.id);
+        if (prev) prev.classList.remove(mark.cls);
+        mark = { id: id, cls: cls };
+        applyMark();
+        clearTimeout(markTimer);
+        markTimer = setTimeout(function () {
+          var btn = document.getElementById(id);
+          if (btn) btn.classList.remove(cls);
+          mark = null;
+        }, $COPY_MARK_MILLIS);
+      }
+      document.body.addEventListener('htmx:ws:after:message:incoming', applyMark);
+      // navigator.clipboard exists only in a secure context, and the dashboard is usually plain http on a
+      // LAN address, where it is undefined. There the copy goes through a hidden textarea and execCommand,
+      // deprecated but still the only way to write the clipboard outside a secure context.
+      function writeClipboard(text) {
+        if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
+        var focused = document.activeElement;
+        var area = document.createElement('textarea');
+        area.value = text;
+        area.setAttribute('readonly', '');
+        area.style.position = 'fixed';
+        area.style.top = '0';
+        area.style.opacity = '0';
+        document.body.appendChild(area);
+        area.select();
+        area.setSelectionRange(0, text.length);
+        var ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) {}
+        document.body.removeChild(area);
+        // Selecting the textarea took focus; hand it back so a keyboard user stays on the button.
+        if (focused && focused.focus) focused.focus({ preventScroll: true });
+        return ok ? Promise.resolve() : Promise.reject();
+      }
+      // The result goes to the live region too: the mark is an icon and a colour, which a screen reader
+      // does not report. A click is the user's own act, so this speaks once per click, never per push.
+      function say(text) {
+        var region = document.getElementById('$ANNOUNCER_ID');
+        if (region) region.textContent = text;
+      }
+      document.body.addEventListener('click', function (evt) {
+        var btn = evt.target.closest && evt.target.closest('button.copy');
+        if (!btn) return;
+        // The id, not the element: a push can replace the button before the clipboard write settles.
+        var id = btn.id;
+        writeClipboard(btn.getAttribute('$COPY_ATTR')).then(function () {
+          showMark(id, 'copied');
+          say('Target URL copied.');
+        }, function () {
+          showMark(id, 'copy-failed');
+          say('Could not copy the target URL.');
+        });
+      });
+    })();
     """.trimIndent()
 }

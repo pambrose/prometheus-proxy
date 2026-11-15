@@ -174,6 +174,21 @@ components:
     typography: "{typography.body}"
     rounded: "{rounded.none}"
     padding: "7px 18px"
+  kv-row-hover:
+    backgroundColor: "{colors.surface-2}"
+  copy-button:
+    backgroundColor: "transparent"
+    textColor: "{colors.ink-3}"
+    rounded: "{rounded.pill}"
+    width: "24px"
+    height: "24px"
+  copy-button-hover:
+    backgroundColor: "{colors.surface-3}"
+    textColor: "{colors.ink}"
+  copy-button-copied:
+    textColor: "{colors.ok}"
+  copy-button-failed:
+    textColor: "{colors.crit}"
   top-bar:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.ink}"
@@ -513,6 +528,8 @@ the left, a bare count on the right. The count is never decorated — no pill, n
 `7px 18px`, `line-soft` divider, `220px` minimum label column. Key in `ink`, value in `ink-3`. The
 scrape variant prepends a fixed `64px` timestamp column so times align down the pane.
 
+- **Hover:** the row steps to `surface-2`, the same step the path table's rows take. No transition.
+
 ### Path Table
 
 The signature component. Seven columns: Path, Agent(s), Target, Src, Last scrape, Status, Duration.
@@ -523,9 +540,30 @@ The signature component. Seven columns: Path, Agent(s), Target, Src, Last scrape
 - **Dimmed columns:** Target, Src, Last scrape, and Duration render in `ink-3` — supporting facts,
   scanned only after the row is located by path or status.
 - **Row hover:** cells step to `surface-2`. No transition.
+- **Target:** a Copy Button follows the URL in the same cell. A row with no target shows the en dash
+  and no button, since there is nothing to copy.
 - **Departed row:** the path cell turns `crit` and a `gone` tag follows the agent name. The row stays
   in place — a path whose agent vanished is the single most important thing this table shows, and
   removing it is how the old interface hid exactly that case.
+
+### Copy Button
+
+A `24px` icon-only `<button type="button">` that copies the target URL beside it. The only button that
+is not a list row, and still not an action button: it reads the page, not the proxy.
+
+- **Rest:** transparent, a `13px` copy glyph in `ink-3`, matching the dimmed Target text it sits in.
+- **Hover:** fully round `surface-3` background, glyph in `ink`.
+- **Focus:** `2px solid accent`, `outline-offset: 1px` — outside, as on the nav pill.
+- **Copied:** the glyph becomes a check in `ok` for 1.5s. **Failed:** a cross in `crit`, as briefly.
+  Either result is also spoken through the Connection Announcer, since the glyph and its color do not
+  reach a screen reader.
+- **Glyphs:** CSS masks painted in `currentColor`, not inline SVG, because the table is pushed whole on
+  every refresh and an SVG per row would grow every frame. They are data URIs in the page's own CSS, so
+  nothing is fetched.
+- **Size:** `24px` meets the WCAG 2.2 minimum target size; negative vertical margins keep it from
+  making the row taller.
+- **Survives pushes:** the button's id is built from its path, so htmx gives focus back to it after
+  each swap, and the page puts the result back on the new button until it expires.
 
 ### Connection Beacon
 
@@ -554,15 +592,16 @@ carries `white-space: nowrap` so a narrow viewport wraps between stats rather th
 
 ### Connection Announcer
 
-A visually-hidden `role="status" aria-live="polite"` region, written only by the WebSocket lifecycle
+A visually-hidden `role="status" aria-live="polite"` region, written by the WebSocket lifecycle
 handlers: *"Connection to the proxy lost. Reconnecting."* and, on recovery from a real outage,
-*"Connection to the proxy restored."*
+*"Connection to the proxy restored."* The Copy Button writes its result there too, once per click.
 
 It exists because the beacon reports connection state through color and a change of rhythm, and
 neither reaches a screen reader — without it the page simply goes silently stale, which is the exact
 failure this dashboard exists to make impossible to miss. Deliberately **outside every out-of-band
 region**: a live region the push loop rewrote would re-announce itself on every frame. Scoped to the
-connection alone for the same reason — announcing pushed counters would make it unusable.
+connection and the result of a copy click for the same reason — announcing pushed counters would make
+it unusable.
 
 ### Empty States
 
@@ -574,7 +613,8 @@ longer connected." Copy states the fact and, where useful, the next action in th
 ### Not yet in the system
 
 Recorded so future work doesn't assume otherwise: there are **no form inputs, no dialogs, no toasts,
-and no true action buttons** — the only `<button>` is a list row. PRODUCT.md records that control
+and no true action buttons** — the only `<button>`s are a list row and the Copy Button, and neither
+acts on the proxy. PRODUCT.md records that control
 actions are a planned direction; when they arrive they will need a genuinely new component vocabulary
 (destructive confirmation, action button, disabled state), and inventing it is a design decision, not
 an extraction.
