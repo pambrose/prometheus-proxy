@@ -557,15 +557,17 @@ The signature component. Eight columns: Path, Agent(s), Target, Src, Last scrape
 
 ### History Strip
 
-A path's recent scrapes, oldest on the left: one `5px` dot per scrape on a `7px` pitch, `ok` for a 2xx and
+A path's recent scrapes, oldest on the left: one `4px` dot per scrape on a `6px` pitch, `ok` for a 2xx and
 `crit` for anything else. Round, because it reports state (see The Square-or-Circle Rule), and binary, like
 the Status LED.
 
 - **Drawing:** one `<i>` per run of like results, painting its dots as a repeating radial-gradient
-  background `n × 7px` wide, rather than one element per scrape. The table is pushed whole every refresh, so
+  background `n × 6px` wide, rather than one element per scrape. The table is pushed whole every refresh, so
   a healthy path's strip stays one element however long it is.
-- **Length:** `proxy.dashboard.pathHistorySize` dots at most (default 20). A path with fewer scrapes has a
-  shorter strip; the strip never pads with empty slots.
+- **Length:** `proxy.dashboard.pathHistorySize` dots at most (default 20), so `120px` at the default, which
+  keeps the eight-column table within a `1280px` window. A path with fewer scrapes has a shorter strip; the
+  strip never pads with empty slots. A consolidated path records one scrape per agent, so its strip fills
+  that many times faster.
 - **Accessibility:** one `role="img"` whose `aria-label` and `title` say "N of M recent scrapes succeeded",
   the figure the percentage beside it rounds.
 - **Forced colors:** `forced-color-adjust: none` on the dots, since forced colors drop backgrounds and the

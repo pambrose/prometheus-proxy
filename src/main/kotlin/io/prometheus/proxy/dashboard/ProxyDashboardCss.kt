@@ -143,11 +143,12 @@ internal object ProxyDashboardCss {
     /* Forced colours replace every background, the mask's paint included, so the icon would vanish. */
     @media (forced-colors: active) { .copy::before { forced-color-adjust:none; background:ButtonText; } }
     .tag.crit { background:var(--crit-soft); color:var(--crit); margin-left:7px; }
-    /* A path's recent scrapes, oldest first. Each <i> is a run of like results and paints a 5px dot every 7px, so a
-       healthy strip is one element however long it is. Round, as everything that reports state is. */
+    /* A path's recent scrapes, oldest first. Each <i> is a run of like results and paints a 4px dot every 6px, so a
+       healthy strip is one element however long it is. Round, as everything that reports state is. At 6px a full
+       strip is 120px, which keeps the table within a 1280px window. */
     .hist { display:inline-flex; vertical-align:middle; margin:-2px 7px 0 0; }
-    .hist i { display:block; height:7px; width:calc(var(--n) * 7px);
-      background:radial-gradient(circle at 3.5px 3.5px, var(--dot) 2.5px, transparent 3px) 0 0 / 7px 7px repeat-x; }
+    .hist i { display:block; height:6px; width:calc(var(--n) * 6px);
+      background:radial-gradient(circle at 3px 3px, var(--dot) 2px, transparent 2.5px) 0 0 / 6px 6px repeat-x; }
     .hist i.ok { --dot:var(--ok); } .hist i.crit { --dot:var(--crit); }
     /* Forced colours drop backgrounds, the dots included. */
     @media (forced-colors: active) { .hist i { forced-color-adjust:none; } }
