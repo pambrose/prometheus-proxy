@@ -300,9 +300,11 @@ Two support helpers also live here (not test classes themselves):
 - **ProxyUtilsTest** — Helper functions: invalidAgentContextResponse, respondWith
 - **ProxyMetricsTest** — Prometheus metrics registration and gauge/counter updates
 - **PathHistoryTest** — the dashboard's per-path scrape history: each path keeps only its newest records, newest
-  first, and a busy path can't push another's out; a registered path keeps its history however old, a gone one only
-  until its retention has passed since its last scrape, and gone paths past the cap go oldest first; a path that comes
-  back keeps its history, a `//path` scrape keys under the path map's key, and a snapshot is a copy
+  first, and a busy path can't push another's out; recording alone holds the history to the live paths plus the
+  gone-path cap, evicting the path scraped least recently, with no snapshot to prune it; a registered path keeps its
+  history however old, a gone one only until its retention has passed since its last scrape, and gone paths past the
+  cap go oldest first; a path that comes back keeps its history, a `//path` scrape keys under the path map's key, and a
+  snapshot is a copy
 - **ProxyMetricsLincheckTest** — Lincheck, stress only (tagged `Lincheck`): a path registering, scrapes recording its
   latency and response size, and its removal race; no per-path histogram series outlives the path's removal
 - **RecentReqsSynchronizationTest** — Synchronized access to recentReqs EvictingQueue (prevents

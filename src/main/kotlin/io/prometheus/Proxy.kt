@@ -210,6 +210,7 @@ class Proxy(
     PathHistory(
       historySize = proxyConfigVals.dashboard.pathHistorySize,
       departedRetention = proxyConfigVals.dashboard.departedPathRetentionSecs.seconds,
+      livePathCount = { pathManager.pathMapSize },
     )
 
   // Declared before grpcService: createGrpcServer() reads isEnabled to decide whether to install the auth
