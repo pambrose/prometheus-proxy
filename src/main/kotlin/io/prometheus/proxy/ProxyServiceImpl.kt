@@ -99,8 +99,7 @@ internal class ProxyServiceImpl(
     proxy.metrics { connectCount.inc() }
     // With no transport filter there is no connection-assigned agentId to bind later calls to, so bind them
     // to the auth identity this call presented instead (see identityMismatchReason). Empty when auth is off.
-    val identityName = AgentAuthManager.AGENT_IDENTITY_KEY.get()?.name.orEmpty()
-    val agentContext = AgentContext(UNKNOWN_ADDRESS, identityName)
+    val agentContext = AgentContext(UNKNOWN_ADDRESS, callerIdentityName())
     // Every call creates a context, which lasts until its stream ends or it is evicted, so the contexts one identity
     // may hold are limited (November #17). A connect past the limit is refused rather than evicting another context:
     // after a proxy restart a whole fleet reconnects at once, and evicting would drop agents that just connected. The
@@ -140,6 +139,9 @@ internal class ProxyServiceImpl(
       "agentId $shown does not match the connection's agentId ($rpcName)"
     }
   }
+
+  // The name of the auth identity this call presented; empty when per-agent auth is off.
+  private fun callerIdentityName(): String = AgentAuthManager.AGENT_IDENTITY_KEY.get()?.name.orEmpty()
 
   /**
    * Rejects a call acting on [agentContext] when that agent connected as a different auth identity.
@@ -181,10 +183,7 @@ internal class ProxyServiceImpl(
         } else {
           identityMismatchReason(agentContext, "registerAgent") ?: run {
             // The identity is the operator's name for a token, not an agent-supplied value.
-            agentContext.assignProperties(
-              boundedRegistration(request, agentContext.agentId),
-              AgentAuthManager.AGENT_IDENTITY_KEY.get()?.name.orEmpty(),
-            )
+            agentContext.assignProperties(boundedRegistration(request, agentContext.agentId), callerIdentityName())
             agentContext.markActivityTime(false)
             logger.info { "Connected to $agentContext" }
             // Identity is only populated here; AgentConnected fired at the connection's first authenticated call

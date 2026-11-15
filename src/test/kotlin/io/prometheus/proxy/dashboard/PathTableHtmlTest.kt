@@ -22,35 +22,39 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
-import kotlinx.html.html
-import kotlinx.html.stream.createHTML
+import io.prometheus.proxy.dashboard.DashboardFixtures.departedPathView
+import io.prometheus.proxy.dashboard.DashboardFixtures.renderFullPage
+import io.prometheus.proxy.dashboard.DashboardFixtures.scrapeRecord
 
 /**
- * The Paths view's table and search, [PathTableHtml]: the History column, the Identity column, the search and its
- * empty states, and the problem counts the status bar takes from the paths. The rest of the page, and the table's
- * long-standing columns, are in [ProxyDashboardHtmlTest].
+ * The Paths view's table and search, [PathTableHtml]: the History column, the Identity column, the search, its empty
+ * states, and how the socket carries it, and the problem counts the status bar and title take from the paths. The rest
+ * of the page, and the table's long-standing columns, are in [ProxyDashboardHtmlTest].
  */
 class PathTableHtmlTest : StringSpec() {
   private fun path(name: String) = DashboardFixtures.pathView(path = name)
 
-  private fun snapshot(paths: List<PathView> = [path("app_metrics")]) = DashboardFixtures.snapshot(paths = paths)
+  private fun snapshot(
+    paths: List<PathView> = [path("app_metrics")],
+    authEnabled: Boolean = false,
+  ) = DashboardFixtures.snapshot(paths = paths, authEnabled = authEnabled)
 
-  // The path layout's push for one path whose history has these status codes, newest first, as PathHistory hands
-  // them over.
-  private fun historyTable(vararg codes: Int): String {
-    val history = codes.map { DashboardFixtures.scrapeRecord(path = "app_metrics", statusCode = it) }
-    val served = DashboardFixtures.pathView(path = "app_metrics", history = history)
-    return ProxyDashboardHtml.pushFragment(snapshot(paths = [served]), null, "/dashboard", DashboardLayout.PATH)
-  }
+  // The Paths view's push for these paths, as a session with this filter receives it.
+  private fun pathPush(
+    paths: List<PathView> = [path("app_metrics")],
+    filter: PathFilter = PathFilter.NONE,
+    authEnabled: Boolean = false,
+  ) = ProxyDashboardHtml.pushFragment(snapshot(paths, authEnabled), null, "/dashboard", DashboardLayout.PATH, 0, filter)
 
-  private fun renderFullPage(layout: DashboardLayout = DashboardLayout.AGENT) =
-    createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(), null, "/dashboard", layout) } }
+  // The push for one path whose history has these status codes, newest first, as PathHistory hands them over.
+  private fun historyTable(vararg codes: Int) =
+    pathPush([DashboardFixtures.pathView(history = codes.map { scrapeRecord(statusCode = it) })])
 
   init {
     // ==================== History column ====================
 
     "the path table should have a History column" {
-      renderFullPage(DashboardLayout.PATH) shouldContain """<th scope="col">History</th>"""
+      renderFullPage(snapshot(), DashboardLayout.PATH) shouldContain """<th scope="col">History</th>"""
     }
 
     "the history strip should draw a path's scrapes oldest first, one element per run of like results" {
@@ -78,26 +82,43 @@ class PathTableHtmlTest : StringSpec() {
       ProxyDashboardCss.CSS shouldContain ".hist i { forced-color-adjust:none; }"
     }
 
+    "the path table should be captioned and its headers scoped" {
+      val html = renderFullPage(snapshot(), DashboardLayout.PATH)
+
+      html shouldContain """scope="col""""
+      html shouldContain "<caption"
+      html shouldContain "Registered paths"
+    }
+
+    "an empty proxy should say so in the path layout too" {
+      pathPush(paths = emptyList()) shouldContain "No paths registered"
+    }
+
     // ==================== Identities ====================
 
     "the path table should show each path's identity when agent auth is on" {
       val paths = [path("app_metrics").copy(identity = "east"), path("node_metrics").copy(identity = "west")]
-      val html = ProxyDashboardHtml.pushFragment(snapshot(paths = paths), null, "/dashboard", DashboardLayout.PATH)
+      val html = pathPush(paths, authEnabled = true)
 
       html shouldContain """<th scope="col">Identity</th>"""
       html shouldContain """<td class="dim">east</td>"""
       html shouldContain """<td class="dim">west</td>"""
     }
 
+    // A departed path has no identity, so with only those left the column would vanish under an operator reading them.
+    "the Identity column should stay while agent auth is on, though no path left has an identity" {
+      val html = pathPush([departedPathView()], authEnabled = true)
+
+      html shouldContain """<th scope="col">Identity</th>"""
+    }
+
     // With agent auth off no path has an identity, and a column of dashes would only take width from the target.
-    "the path table should have no Identity column when no path has an identity" {
-      ProxyDashboardHtml.pushFragment(snapshot(), null, "/dashboard", DashboardLayout.PATH) shouldNotContain
-        "Identity</th>"
+    "the path table should have no Identity column with agent auth off" {
+      pathPush() shouldNotContain "Identity</th>"
     }
 
     "the legacy shared token should read as a shared token, not its internal name" {
-      val legacy = path("app_metrics").copy(identity = "legacy-agent-token")
-      val html = ProxyDashboardHtml.pushFragment(snapshot(paths = [legacy]), null, "/dashboard", DashboardLayout.PATH)
+      val html = pathPush([path("app_metrics").copy(identity = "legacy-agent-token")], authEnabled = true)
 
       html shouldContain "shared token"
       html shouldNotContain "legacy-agent-token"
@@ -107,46 +128,34 @@ class PathTableHtmlTest : StringSpec() {
 
     "a filter should keep only the matching rows and say how many it shows" {
       val paths = [path("app_metrics"), path("node_metrics"), path("db_metrics")]
-      val html =
-        ProxyDashboardHtml.pushFragment(
-          snapshot(paths = paths),
-          null,
-          "/dashboard",
-          DashboardLayout.PATH,
-          filter = PathFilter.of("node", problemsOnly = false),
-        )
+      val html = pathPush(paths, PathFilter.of("node", problemsOnly = false))
 
       html shouldContain "/node_metrics"
       html shouldNotContain "/app_metrics"
       html shouldNotContain "/db_metrics"
-      html shouldContain "Showing 1 of 3 paths"
+      html shouldContain """<div class="match-count">Showing 1 of 3 paths</div>"""
       // For the page's script, which says the count aloud once per change of filter.
-      html shouldContain """${PathTableHtml.SHOWN_ATTR}="1" ${PathTableHtml.TOTAL_ATTR}="3""""
+      html shouldContain """${PathTableHtml.MATCH_COUNT_ATTR}="Showing 1 of 3 paths""""
     }
 
     "an unfiltered table should not say how many it shows" {
-      ProxyDashboardHtml.pushFragment(snapshot(), null, "/dashboard", DashboardLayout.PATH) shouldNotContain "Showing"
+      pathPush() shouldNotContain """class="match-count""""
     }
 
     "a filter that leaves no rows should say so, and problems only with nothing wrong should say that" {
-      fun table(filter: PathFilter) =
-        ProxyDashboardHtml.pushFragment(snapshot(), null, "/dashboard", DashboardLayout.PATH, filter = filter)
-
-      table(PathFilter.of("nothing-like-this", problemsOnly = false)) shouldContain "No paths match the filter"
-      table(PathFilter.of(null, problemsOnly = true)) shouldContain "No problems: every path's last scrape succeeded"
+      pathPush(filter = PathFilter.of("nothing-like-this", problemsOnly = false)) shouldContain
+        "No paths match the filter"
+      pathPush(filter = PathFilter.of(null, problemsOnly = true)) shouldContain
+        "No problems: every path's last scrape succeeded"
     }
 
     // The search is a plain GET form, so it works without the script; the page echoes the filter it was served with.
     "the Paths page should render the search with the filter it was opened with, outside the pushed table" {
-      val page =
-        createHTML().html {
-          with(ProxyDashboardHtml) {
-            renderPage(snapshot(), null, "/dashboard", DashboardLayout.PATH, PathFilter.of("east", problemsOnly = true))
-          }
-        }
+      val page = renderFullPage(snapshot(), DashboardLayout.PATH, filter = PathFilter.of("east", problemsOnly = true))
 
       page shouldContain """<form action="/dashboard/paths" method="get" class="filters" role="search">"""
       page shouldContain """id="${PathTableHtml.FILTER_QUERY_ID}" aria-label="Filter paths""""
+      page shouldContain """name="${PathFilter.QUERY_PARAM}""""
       page shouldContain """value="east""""
       page shouldContain """id="${PathTableHtml.FILTER_PROBLEMS_ID}" value="1" checked="checked""""
       // A push replaces #path-table, so the input someone is typing in must not be inside it.
@@ -154,92 +163,64 @@ class PathTableHtmlTest : StringSpec() {
     }
 
     "a search query should be escaped where the page echoes it" {
-      val page =
-        createHTML().html {
-          with(ProxyDashboardHtml) {
-            renderPage(snapshot(), null, "", DashboardLayout.PATH, PathFilter.of("\"><script>", problemsOnly = false))
-          }
-        }
+      val filter = PathFilter.of("\"><script>", problemsOnly = false)
+      val page = renderFullPage(snapshot(), DashboardLayout.PATH, filter = filter)
 
       page shouldNotContain "\"><script>"
     }
 
-    "the page script should send the URL's filter with every announce" {
-      val page = createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(), null, "/dashboard") } }
+    "the page script should send the URL's query, which holds the filter, with every announce" {
+      val page = renderFullPage(snapshot())
 
-      page shouldContain "q: f.q, problems: f.problems"
+      page shouldContain "search: window.location.search"
       page shouldContain "history.replaceState"
+    }
+
+    // The socket carries the URL's query as is, so it reads the same as the /paths route does.
+    "filter parsing should read the URL's query and tolerate anything a browser might send" {
+      ProxyDashboardService.parseFilter("""{"layout":"PATH","search":"?q=east&problems=1"}""") shouldBe
+        PathFilter("east", problemsOnly = true)
+      ProxyDashboardService.parseFilter("""{"search":"q=team%20a"}""") shouldBe PathFilter("team a")
+      ProxyDashboardService.parseFilter("""{"search":"?q=++west++"}""") shouldBe PathFilter("west")
+      // Cut, since every push matches it against every row.
+      ProxyDashboardService.parseFilter("""{"search":"?q=${"x".repeat(500)}"}""").query.length shouldBe
+        PathFilter.MAX_QUERY_LENGTH
+      // Only "1" turns problems on, as the form's checkbox sends it.
+      ProxyDashboardService.parseFilter("""{"search":"?problems=true"}""") shouldBe PathFilter.NONE
+      // Anything else is no filter.
+      ProxyDashboardService.parseFilter("""{"search":""}""") shouldBe PathFilter.NONE
+      ProxyDashboardService.parseFilter("""{"search":12}""") shouldBe PathFilter.NONE
+      ProxyDashboardService.parseFilter("""{"search":"?q=%zz"}""") shouldBe PathFilter.NONE
+      ProxyDashboardService.parseFilter("""{"select":"a1"}""") shouldBe PathFilter.NONE
+      ProxyDashboardService.parseFilter("not json at all") shouldBe PathFilter.NONE
     }
 
     // ==================== Problems in the status bar and title ====================
 
-    "the status bar should count failing paths, and carry every problem for the tab's title" {
-      val failing = path("app_metrics").copy(history = [DashboardFixtures.scrapeRecord(statusCode = 503)])
-      val departed =
-        DashboardFixtures.pathView(
-          path = "orphan_metrics",
-          agentIds = emptyList(),
-          isDeparted = true,
-          lastScrape = DashboardFixtures.scrapeRecord(path = "orphan_metrics", statusCode = 503),
-        )
-      val html =
-        ProxyDashboardHtml.pushFragment(snapshot(paths = [failing, departed]), null, "/dashboard", DashboardLayout.PATH)
+    "the status bar should count failing paths, and the title every problem" {
+      val failing = path("app_metrics").copy(history = [scrapeRecord(statusCode = 503)])
+      val departed = departedPathView(lastScrape = scrapeRecord(path = "orphan_metrics", statusCode = 503))
+      val html = pathPush([failing, departed])
 
       // A departed path counts once, as departed, not again as failing.
       html shouldContain "<span class=\"crit\">1 failing</span>"
       html shouldContain "<span class=\"crit\">1 departed</span>"
-      html shouldContain """${ProxyDashboardHtml.PROBLEMS_ATTR}="2""""
+      html shouldContain """${ProxyDashboardHtml.TITLE_ATTR}="(2 problems) prometheus-proxy""""
+      renderFullPage(snapshot([failing, departed])) shouldContain "<title>(2 problems) prometheus-proxy</title>"
     }
 
-    "a healthy proxy's status bar should name no failing paths" {
-      val html = ProxyDashboardHtml.pushFragment(snapshot(), null, "/dashboard", DashboardLayout.PATH)
+    "a single problem should read in the singular" {
+      val failing = path("app_metrics").copy(history = [scrapeRecord(statusCode = 503)])
+
+      pathPush([failing]) shouldContain """${ProxyDashboardHtml.TITLE_ATTR}="(1 problem) prometheus-proxy""""
+    }
+
+    "a healthy proxy's status bar should name no failing paths, and its title no problems" {
+      val html = pathPush()
 
       html shouldNotContain "failing"
-      html shouldContain """${ProxyDashboardHtml.PROBLEMS_ATTR}="0""""
-    }
-
-    "the path table should be captioned and its headers scoped" {
-      val html = renderFullPage(DashboardLayout.PATH)
-
-      html shouldContain """scope="col""""
-      html shouldContain "<caption"
-      html shouldContain "Registered paths"
-    }
-
-    // ProxyDashboardService hands the renderer a base with no trailing slash, which is empty at a root
-    // mount. Every sub-route must still join with exactly one separator: "//events" is a
-    // protocol-relative URL, which sends the browser to a host named "events".
-    "a root-mounted dashboard should not emit protocol-relative links" {
-      val page =
-        createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(), null, "", DashboardLayout.AGENT) } }
-      page shouldContain """hx-ws:connect="/events""""
-      page shouldContain """src="/${ProxyDashboardService.ASSET_DIR}/htmx.min.js""""
-      page shouldContain """href="/paths""""
-      page shouldContain """hx-get="/agents/1""""
-      page shouldNotContain "\"//"
-      // The Agents link is the root itself, which must stay "/" rather than collapse to an empty href.
-      page shouldContain """href="/" class="on""""
-    }
-
-    "layout parsing should tolerate anything a browser might send" {
-      ProxyDashboardService.parseLayout("""{"layout":"PATH"}""") shouldBe DashboardLayout.PATH
-      ProxyDashboardService.parseLayout("""{"layout":"AGENT"}""") shouldBe DashboardLayout.AGENT
-      // Everything unexpected falls back to the layout the page served before layouts existed.
-      ProxyDashboardService.parseLayout("""{"layout":"SIDEWAYS"}""") shouldBe DashboardLayout.AGENT
-      ProxyDashboardService.parseLayout("""{"select":"a1"}""") shouldBe DashboardLayout.AGENT
-      ProxyDashboardService.parseLayout("not json at all") shouldBe DashboardLayout.AGENT
-      ProxyDashboardService.parseLayout("") shouldBe DashboardLayout.AGENT
-    }
-
-    "the nav should mark the current layout" {
-      val agentPage = ProxyDashboardHtml.pushFragment(snapshot(), null, "/dashboard", DashboardLayout.AGENT)
-      // The nav lives on the page shell rather than in a pushed region, so assert it where it renders.
-      val page = createHTML().html {
-        with(ProxyDashboardHtml) { renderPage(snapshot(), null, "/dashboard", DashboardLayout.PATH) }
-      }
-      page shouldContain """href="/dashboard/paths""""
-      page shouldContain """aria-current="page""""
-      agentPage shouldNotContain "aria-current=\"page\""
+      html shouldContain """${ProxyDashboardHtml.TITLE_ATTR}="prometheus-proxy""""
+      renderFullPage(snapshot()) shouldContain "<title>prometheus-proxy</title>"
     }
   }
 }

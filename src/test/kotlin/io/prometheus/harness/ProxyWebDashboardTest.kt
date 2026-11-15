@@ -39,6 +39,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
+import io.mockk.every
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import io.mockk.verify
@@ -358,9 +359,9 @@ class ProxyWebDashboardTest : StringSpec() {
           """web-ui-identity-agent<span class="tag">team_a</span>"""
 
         client.webSocket(socketUrl) {
-          send(Frame.Text("""{"layout":"PATH","seq":1,"q":"nothing-like-this"}"""))
+          send(Frame.Text("""{"layout":"PATH","seq":1,"search":"?q=nothing-like-this"}"""))
           awaitFrame("No paths match the filter")
-          send(Frame.Text("""{"layout":"PATH","seq":2,"q":"ui_identity"}"""))
+          send(Frame.Text("""{"layout":"PATH","seq":2,"search":"?q=ui_identity"}"""))
           awaitFrame("/ui_identity_metrics")
         }
       }
@@ -554,6 +555,44 @@ class ProxyWebDashboardTest : StringSpec() {
       }
     }
 
+    // A send fails when the browser has gone, which is routine, but a render that throws is a bug in the page. Caught
+    // with the sends, it froze the page with nothing logged above DEBUG. It is logged now, apart from the send, and the
+    // session stays open, so the next push that renders reaches it. Two failures, so the second takes the path that has
+    // already logged. The refresh interval outlasts the spec, so only the messages render.
+    "a push that fails to render should leave the session open for the next one" {
+      withDashboard(
+        RENDER_FAILURE_HTTP_PORT,
+        RENDER_FAILURE_GRPC_PORT,
+        RENDER_FAILURE_DASHBOARD_PORT,
+        dashboardArgs = [
+          "--dashboard",
+          "--dashboard_port",
+          "$RENDER_FAILURE_DASHBOARD_PORT",
+          "-Dproxy.dashboard.refreshIntervalSecs=60",
+        ],
+        newClient = { HttpClient(CIO) { install(WebSockets) } },
+      ) {
+        client.webSocket(socketUrl) {
+          nextText() shouldContain "hx-swap-oob"
+
+          mockkObject(ProxyDashboardHtml)
+          try {
+            every { ProxyDashboardHtml.pushFragment(any(), any(), any(), any(), any(), any()) } throws
+              IllegalStateException("a render bug")
+            send(Frame.Text("""{"layout":"AGENT","seq":1}"""))
+            send(Frame.Text("""{"layout":"AGENT","seq":2}"""))
+            verify(timeout = 10_000, atLeast = 2) {
+              ProxyDashboardHtml.pushFragment(any(), any(), any(), any(), any(), any())
+            }
+          } finally {
+            unmockkObject(ProxyDashboardHtml)
+          }
+          send(Frame.Text("""{"layout":"AGENT","seq":3}"""))
+          nextText() shouldContain """${ProxyDashboardHtml.VIEW_ATTR}="3""""
+        }
+      }
+    }
+
     // The same coupling through the page routes, which need no WebSocket at all: each GET used to collect a snapshot,
     // so a client looping GETs held the path-map lock as often as it liked (November #18). A page now renders the
     // recent snapshot. No agent connects, no session opens, and the refresh interval outlasts the spec, so the first
@@ -717,6 +756,10 @@ class ProxyWebDashboardTest : StringSpec() {
     private const val CACHE_GRPC_PORT = TestPorts.DASHBOARD_UI_CACHE_GRPC_PORT
     private const val CACHE_DASHBOARD_PORT = TestPorts.DASHBOARD_UI_CACHE_DASHBOARD_PORT
     private const val MESSAGE_COUNT = 5
+
+    private const val RENDER_FAILURE_HTTP_PORT = TestPorts.DASHBOARD_UI_RENDER_FAILURE_HTTP_PORT
+    private const val RENDER_FAILURE_GRPC_PORT = TestPorts.DASHBOARD_UI_RENDER_FAILURE_GRPC_PORT
+    private const val RENDER_FAILURE_DASHBOARD_PORT = TestPorts.DASHBOARD_UI_RENDER_FAILURE_DASHBOARD_PORT
 
     private const val PAGE_CACHE_HTTP_PORT = TestPorts.DASHBOARD_UI_PAGE_CACHE_HTTP_PORT
     private const val PAGE_CACHE_GRPC_PORT = TestPorts.DASHBOARD_UI_PAGE_CACHE_GRPC_PORT

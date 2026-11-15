@@ -16,21 +16,18 @@
 
 package io.prometheus.proxy.dashboard
 
-import kotlinx.html.BUTTON
-import kotlinx.html.ButtonType
 import kotlinx.html.DIV
 import kotlinx.html.FlowContent
 import kotlinx.html.FlowOrPhrasingContent
+import io.prometheus.proxy.dashboard.PathTableHtml.pathTable
+import io.prometheus.proxy.dashboard.PathTableHtml.renderPathTable
 import kotlinx.html.HTML
 import kotlinx.html.SPAN
 import kotlinx.html.a
-import kotlinx.html.ThScope
 import kotlinx.html.body
 import kotlinx.html.button
-import kotlinx.html.caption
 import kotlinx.html.div
 import kotlinx.html.head
-import kotlinx.html.i
 import kotlinx.html.main
 import kotlinx.html.meta
 import kotlinx.html.nav
@@ -38,15 +35,8 @@ import kotlinx.html.script
 import kotlinx.html.span
 import kotlinx.html.stream.createHTML
 import kotlinx.html.style
-import kotlinx.html.table
-import kotlinx.html.tbody
-import kotlinx.html.td
-import kotlinx.html.th
-import kotlinx.html.thead
 import kotlinx.html.title
-import kotlinx.html.TR
 import kotlinx.html.time
-import kotlinx.html.tr
 import kotlinx.html.unsafe
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -88,8 +78,9 @@ internal object ProxyDashboardHtml {
   const val PROXY_PATH_ATTR = "data-proxy-path"
   const val SCRAPE_PORT_ATTR = "data-scrape-port"
 
-  // On the status bar: how many paths are failing or gone, which the page's script puts in the tab's title.
-  const val PROBLEMS_ATTR = "data-problems"
+  // On the status bar: the page's title, which counts the paths failing or gone, for the page's script to put in the
+  // tab.
+  const val TITLE_ATTR = "data-title"
 
   // The two kinds of copy button, by row. Their ids differ before the path does ("copy-t..." and "copy-p..."), so no
   // path can give one kind the id of the other.
@@ -112,7 +103,7 @@ internal object ProxyDashboardHtml {
     // falling back to the listener's system locale.
     attributes["lang"] = "en"
     head {
-      title("prometheus-proxy")
+      title(pageTitle(snapshot))
       meta(name = "viewport", content = "width=device-width, initial-scale=1")
       style { unsafe { raw(ProxyDashboardCss.CSS) } }
       // Ahead of the scripts: htmx reads its config once, when htmx.min.js loads.
@@ -123,12 +114,12 @@ internal object ProxyDashboardHtml {
     body {
       // Loading hx-ws.min.js is what enables the extension; htmx 4 has no hx-ext.
       attributes["hx-ws:connect"] = "$routeBase/events"
-      // For the proxy URLs the page builds (see pathCell). On <body>, which no push replaces, since the port doesn't
-      // change.
+      // For the proxy URLs the page builds (see PathTableHtml's pathCell). On <body>, which no push replaces, since
+      // the port doesn't change.
       attributes[SCRAPE_PORT_ATTR] = "${snapshot.scrapePort}"
 
       div("bar") {
-        span("brand") { +"prometheus-proxy" }
+        span("brand") { +BRAND }
         renderNav(routeBase, layout)
         renderStatus(snapshot)
       }
@@ -151,7 +142,7 @@ internal object ProxyDashboardHtml {
 
         DashboardLayout.PATH -> {
           main {
-            with(PathTableHtml) { renderPathTable(snapshot, routeBase, filter) }
+            renderPathTable(snapshot, routeBase, filter)
           }
         }
       }
@@ -217,11 +208,11 @@ internal object ProxyDashboardHtml {
       // The frame's view stamp; see pushFragment.
       attributes[VIEW_ATTR] = "$viewSeq"
     }
-    val departed = snapshot.paths.count { it.isDeparted }
-    val failing = snapshot.paths.count { it.isFailing }
     // Every page has the bar and every push renders it, so the tab's title can follow on any layout. Set before the
     // first child: the HTML streams out as it is built, so a tag's attributes can't change once its content has begun.
-    attributes[PROBLEMS_ATTR] = "${departed + failing}"
+    attributes[TITLE_ATTR] = pageTitle(snapshot)
+    val departed = snapshot.paths.count { it.isDeparted }
+    val failing = snapshot.paths.count { it.isFailing }
     // Both labels are always rendered; which one shows is driven by the `ws-down` class on <body>,
     // which the WebSocket lifecycle handlers toggle. Body-level rather than here because this region
     // is overwritten by every push -- and a push can only happen while connected, so the server never
@@ -421,7 +412,7 @@ internal object ProxyDashboardHtml {
         }
 
         DashboardLayout.PATH -> {
-          append(createHTML().div("scroller") { with(PathTableHtml) { pathTable(snapshot, filter, oob = true) } })
+          append(createHTML().div("scroller") { pathTable(snapshot, filter, oob = true) })
         }
 
         null -> {}
@@ -450,6 +441,20 @@ internal object ProxyDashboardHtml {
    */
   internal fun agentLabel(name: String): String = if (name == UNASSIGNED) "(registering…)" else name
 
+  /**
+   * The page's title: the product's name, after a count of the paths failing or gone while there are any, so a
+   * dashboard left in a background tab still says when something is wrong. Counted by [PathView.isProblem], as the
+   * "Problems only" filter counts them, so the title and the filtered table agree.
+   */
+  private fun pageTitle(snapshot: ProxySnapshot): String {
+    val problems = snapshot.paths.count { it.isProblem }
+    return when (problems) {
+      0 -> BRAND
+      1 -> "(1 problem) $BRAND"
+      else -> "($problems problems) $BRAND"
+    }
+  }
+
   /** An agent's uptime at the precision the hero line wants: the two largest units from a day up, then one. */
   internal fun humanize(duration: Duration): String =
     duration.toComponents { days, hours, minutes, seconds, _ ->
@@ -462,6 +467,7 @@ internal object ProxyDashboardHtml {
     }
 
   private const val UNASSIGNED = "Unassigned"
+  private const val BRAND = "prometheus-proxy"
   private const val MAX_DETAIL_SCRAPES = 25
 
   // How long the path search waits after a keystroke before applying the filter: long enough not to push a new table
@@ -513,12 +519,6 @@ internal object ProxyDashboardHtml {
       function layout() {
         return /\/paths\/?$/.test(window.location.pathname) ? 'PATH' : 'AGENT';
       }
-      // The Paths view's filter, which the URL keeps (see applyFilter), so a reload or a shared link shows the same
-      // rows. The server filters the table each push renders, so every announce carries it.
-      function filter() {
-        var p = new URLSearchParams(window.location.search);
-        return { q: p.get('q') || '', problems: p.get('problems') === '1' };
-      }
       // The extension's connection, which outlives its socket: each reconnect replaces connection.socket,
       // so this keeps the connection and reads the socket when it sends.
       var conn = null;
@@ -527,15 +527,14 @@ internal object ProxyDashboardHtml {
       // shows. Without it a row click raced the push loop: a tick rendered from the previous selection could
       // land after the click's own swap and put the previous agent back until the next frame.
       var seq = 0;
-      // The stamp of the last frame shown, which says when a frame reflects a new filter (see afterFrame).
-      var shownSeq = 0;
       function announce() {
         var s = conn && conn.socket;
         // Only on an open socket. Nothing is lost by skipping: every open announces again from the URL.
         if (!s || s.readyState !== WebSocket.OPEN) return false;
         seq += 1;
-        var f = filter();
-        s.send(JSON.stringify({ select: selectedId(), layout: layout(), seq: seq, q: f.q, problems: f.problems }));
+        // The URL's query carries the Paths view's filter (see applyFilter), which the server applies to the table
+        // each push renders, so a reload or a shared link shows the same rows.
+        s.send(JSON.stringify({ select: selectedId(), layout: layout(), seq: seq, search: window.location.search }));
         return true;
       }
       // Drops a frame rendered from an older message. The stamp is on the frame's first tag, the status
@@ -544,9 +543,7 @@ internal object ProxyDashboardHtml {
       document.body.addEventListener('htmx:ws:before:message:incoming', function (evt) {
         var data = evt.detail.message.data;
         var m = typeof data === 'string' && /^<span[^>]*\s$VIEW_ATTR="(\d+)"/.exec(data);
-        var stamp = m ? Number(m[1]) : 0;
-        if (stamp < seq) evt.preventDefault();
-        else shownSeq = stamp;
+        if ((m ? Number(m[1]) : 0) < seq) evt.preventDefault();
       });
       // The connection indicator. The extension reconnects on its own (with the backoff capped in the
       // htmx-config meta tag); this only reflects that effort so the page does not keep claiming "live"
@@ -616,14 +613,12 @@ internal object ProxyDashboardHtml {
           mark = null;
         }, $COPY_MARK_MILLIS);
       }
-      // The tab's title counts the paths failing or gone, from the status bar, which every page and push renders, so a
-      // dashboard left in a background tab still says when something is wrong.
+      // The tab's title, which counts the paths failing or gone, from the status bar, which every push renders.
       function updateTitle() {
         var bar = document.getElementById('$STATUS_ID');
-        var n = bar ? Number(bar.getAttribute('$PROBLEMS_ATTR')) : 0;
-        document.title = (n > 0 ? '(' + n + (n === 1 ? ' problem) ' : ' problems) ') : '') + 'prometheus-proxy';
+        var title = bar && bar.getAttribute('$TITLE_ATTR');
+        if (title && document.title !== title) document.title = title;
       }
-      updateTitle();
       // The search above the path table. A change applies as it is typed: it goes into the URL, and the socket is
       // told, so the next frame's table is filtered. Without this script the form still works, as a plain GET.
       var countDue = 0;
@@ -633,8 +628,8 @@ internal object ProxyDashboardHtml {
         var problems = document.getElementById('${PathTableHtml.FILTER_PROBLEMS_ID}');
         if (!q || !problems) return;
         var params = new URLSearchParams();
-        if (q.value.trim()) params.set('q', q.value.trim());
-        if (problems.checked) params.set('problems', '1');
+        if (q.value.trim()) params.set('${PathFilter.QUERY_PARAM}', q.value.trim());
+        if (problems.checked) params.set('${PathFilter.PROBLEMS_PARAM}', '${PathFilter.PROBLEMS_ON}');
         var search = params.toString();
         history.replaceState(history.state, '', window.location.pathname + (search ? '?' + search : ''));
         // The first frame rendered from this filter says how many rows it left.
@@ -654,13 +649,14 @@ internal object ProxyDashboardHtml {
         clearTimeout(filterTimer);
         applyFilter();
       });
-      // Spoken once per change of filter, the user's own act, as a copy's result is; never per push.
+      // Spoken once per change of filter, the user's own act, as a copy's result is; never per push. Once the frame
+      // shown, whose stamp the status bar carries, is one rendered from the change.
       function sayCount() {
+        var bar = document.getElementById('$STATUS_ID');
         var table = document.getElementById('$PATH_TABLE_ID');
-        if (!countDue || shownSeq < countDue || !table) return;
+        if (!countDue || !bar || !table || Number(bar.getAttribute('$VIEW_ATTR')) < countDue) return;
         countDue = 0;
-        say('Showing ' + table.getAttribute('${PathTableHtml.SHOWN_ATTR}') + ' of ' +
-          table.getAttribute('${PathTableHtml.TOTAL_ATTR}') + ' paths.');
+        say(table.getAttribute('${PathTableHtml.MATCH_COUNT_ATTR}') + '.');
       }
       document.body.addEventListener('htmx:ws:after:message:incoming', function () {
         applyMark();

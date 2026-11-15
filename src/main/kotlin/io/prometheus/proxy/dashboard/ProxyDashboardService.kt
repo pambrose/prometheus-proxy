@@ -31,6 +31,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.CachingOptions
+import io.ktor.http.parseQueryString
 import io.ktor.server.application.createApplicationPlugin
 import io.ktor.server.application.createRouteScopedPlugin
 import io.ktor.server.application.install
@@ -69,7 +70,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
@@ -161,6 +161,10 @@ internal class ProxyDashboardService(
     // ProxyDashboardHtml.pushFragment). The browser sends that message as soon as the socket opens.
     @Volatile
     var view: View? = null
+
+    // Whether a push for this session has failed to render, which is logged once rather than every refresh.
+    @Volatile
+    var renderFailed = false
   }
 
   private val sessions = ConcurrentHashMap.newKeySet<Session>()
@@ -277,8 +281,7 @@ internal class ProxyDashboardService(
         // socket, which is what keeps the pushed table filtered.
         get("$routeBase/paths") {
           val snapshot = snapshots.recent()
-          val params = call.request.queryParameters
-          val filter = PathFilter.of(params["q"], params["problems"] == "1")
+          val filter = PathFilter.of(call.request.queryParameters)
           call.respondHtml {
             with(ProxyDashboardHtml) { renderPage(snapshot, null, routeBase, DashboardLayout.PATH, filter) }
           }
@@ -389,9 +392,12 @@ internal class ProxyDashboardService(
     session: Session,
     snapshot: ProxySnapshot,
   ) {
-    runCatching {
-      val view = session.view
-      session.send(
+    val view = session.view
+    // Rendered apart from the send. A send fails when the browser has gone, which is routine, but a render that throws
+    // is a bug in this page; caught with the sends, it froze every session on that layout with nothing logged above
+    // DEBUG.
+    val fragment =
+      runCatching {
         ProxyDashboardHtml.pushFragment(
           snapshot,
           view?.selectedId,
@@ -399,10 +405,13 @@ internal class ProxyDashboardService(
           view?.layout,
           view?.seq ?: 0L,
           view?.filter ?: PathFilter.NONE,
-        ),
-      )
-    }
-      .onFailure { logger.debug { "Dropping dashboard session: ${it.simpleClassName}" } }
+        )
+      }.onFailure { e ->
+        if (!session.renderFailed) logger.error(e) { "Failed to render a dashboard push" }
+        session.renderFailed = true
+      }.getOrNull() ?: return
+    runCatching { session.send(fragment) }
+      .onFailure { logger.debug { "Dashboard push not sent: ${it.simpleClassName}" } }
   }
 
   /**
@@ -589,20 +598,21 @@ internal class ProxyDashboardService(
       }.getOrNull() ?: 0L
 
     /**
-     * Reads `{"q": "team-a", "problems": true}`, the Paths view's filter, from a session message, defaulting to
-     * [PathFilter.NONE].
+     * Reads `{"search": "?q=team-a&problems=1"}`, the query of the page's URL, which holds the Paths view's filter,
+     * from a session message, defaulting to [PathFilter.NONE].
      *
-     * Same contract as [parseSelection]: anything unexpected -- garbage, a missing field, or a value of the wrong
-     * type -- resolves to no filter on that field rather than throwing inside the WebSocket loop. The query is cut to
-     * [PathFilter.MAX_QUERY_LENGTH], since every push matches it against every row.
+     * The URL's own query rather than fields of its own, so the filter has one format, which the `/paths` route reads
+     * too. Same contract as [parseSelection]: anything unexpected -- garbage, a missing field, a value of the wrong
+     * type, or a query that won't decode -- resolves to no filter rather than throwing inside the WebSocket loop.
      */
     internal fun parseFilter(text: String): PathFilter =
       runCatching {
-        val message = json.parseToJsonElement(text).jsonObject
-        PathFilter.of(
-          message["q"]?.jsonPrimitive?.takeIf { it.isString }?.content,
-          message["problems"]?.jsonPrimitive?.takeUnless { it.isString }?.booleanOrNull == true,
-        )
+        json.parseToJsonElement(text)
+          .jsonObject["search"]
+          ?.jsonPrimitive
+          ?.takeIf { it.isString }
+          ?.content
+          ?.let { PathFilter.of(parseQueryString(it.removePrefix("?"))) }
       }.getOrNull() ?: PathFilter.NONE
 
     /**

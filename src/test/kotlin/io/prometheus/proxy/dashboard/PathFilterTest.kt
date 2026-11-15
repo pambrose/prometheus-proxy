@@ -22,7 +22,9 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
+import io.ktor.http.parametersOf
 import io.prometheus.proxy.AgentAuthManager.Companion.LEGACY_IDENTITY_NAME
+import io.prometheus.proxy.dashboard.DashboardFixtures.departedPathView
 import io.prometheus.proxy.dashboard.DashboardFixtures.pathView
 import io.prometheus.proxy.dashboard.DashboardFixtures.scrapeRecord
 
@@ -63,20 +65,15 @@ class PathFilterTest : StringSpec() {
 
     // A gone path has no agentNames; its row names the agent from its last scrape, so a search should find it there.
     "a query should match the agent a departed path names" {
-      val gone =
-        pathView(
-          path = "orphan_metrics",
-          agentIds = emptyList(),
-          isDeparted = true,
-          lastScrape = scrapeRecord(agentName = "warehouse-01", path = "orphan_metrics"),
-        )
+      val gone = departedPathView(lastScrape = scrapeRecord(agentName = "warehouse-01", path = "orphan_metrics"))
 
       matches("warehouse", gone).shouldBeTrue()
     }
 
-    // The legacy token's identity reads as "shared token" on the page, so searching for what is shown has to work.
-    "a query should match the legacy token by the label the page shows" {
+    // The legacy token's identity reads as "shared token" on the page, so a search finds what is shown, not what isn't.
+    "a query should match the legacy token by the label the page shows, not its internal name" {
       matches("shared token", pathView(identity = LEGACY_IDENTITY_NAME)).shouldBeTrue()
+      matches("legacy", pathView(identity = LEGACY_IDENTITY_NAME)).shouldBeFalse()
     }
 
     "problems only should keep a failing or departed path and drop a healthy or unscraped one" {
@@ -102,6 +99,16 @@ class PathFilterTest : StringSpec() {
       PathFilter.of("  east  ", problemsOnly = false).query shouldBe "east"
       PathFilter.of(null, problemsOnly = false) shouldBe PathFilter.NONE
       PathFilter.of("x".repeat(500), problemsOnly = false).query.length shouldBe PathFilter.MAX_QUERY_LENGTH
+      // Never between the halves of a surrogate pair, which the page would echo as a broken character.
+      val emoji = "x".repeat(PathFilter.MAX_QUERY_LENGTH - 1) + "\uD83D\uDE00"
+      PathFilter.of(emoji, problemsOnly = false).query shouldBe "x".repeat(PathFilter.MAX_QUERY_LENGTH - 1)
+    }
+
+    // The /paths route reads the URL's query, and the socket the same query from the page.
+    "a filter from a URL's query should read the search and the problems box as the form submits them" {
+      PathFilter.of(parametersOf("q" to ["east"], "problems" to ["1"])) shouldBe PathFilter("east", problemsOnly = true)
+      PathFilter.of(parametersOf("problems" to ["on"])) shouldBe PathFilter.NONE
+      PathFilter.of(parametersOf()) shouldBe PathFilter.NONE
     }
 
     "a filter should be active once it could hide a row" {

@@ -63,9 +63,8 @@ internal object PathTableHtml {
   const val FILTER_QUERY_ID = "path-q"
   const val FILTER_PROBLEMS_ID = "path-problems"
 
-  // On #path-table, for the page's script, which says how many rows a new filter left.
-  const val SHOWN_ATTR = "data-shown"
-  const val TOTAL_ATTR = "data-total"
+  // On #path-table: how many rows the filter left, which the page's script says aloud once per change of filter.
+  const val MATCH_COUNT_ATTR = "data-match-count"
 
   /**
    * The search and the table, as the page first renders them.
@@ -81,7 +80,7 @@ internal object PathTableHtml {
   ) {
     form(action = "$routeBase/paths", method = FormMethod.get, classes = "filters") {
       attributes["role"] = "search"
-      input(type = InputType.search, name = "q") {
+      input(type = InputType.search, name = PathFilter.QUERY_PARAM) {
         attributes["id"] = FILTER_QUERY_ID
         attributes["aria-label"] = "Filter paths"
         attributes["placeholder"] = "Filter by path, agent, target, or identity"
@@ -90,9 +89,9 @@ internal object PathTableHtml {
         value = filter.query
       }
       label {
-        input(type = InputType.checkBox, name = "problems") {
+        input(type = InputType.checkBox, name = PathFilter.PROBLEMS_PARAM) {
           attributes["id"] = FILTER_PROBLEMS_ID
-          value = "1"
+          value = PathFilter.PROBLEMS_ON
           checked = filter.problemsOnly
         }
         +"Problems only"
@@ -109,9 +108,9 @@ internal object PathTableHtml {
   ) {
     attributes["id"] = PATH_TABLE_ID
     if (oob) attributes["hx-swap-oob"] = "true"
-    val rows = snapshot.paths.filter(filter::matches)
-    attributes[SHOWN_ATTR] = "${rows.size}"
-    attributes[TOTAL_ATTR] = "${snapshot.paths.size}"
+    val rows = if (filter.isActive) snapshot.paths.filter(filter::matches) else snapshot.paths
+    val matchCount = "Showing ${rows.size} of ${snapshot.paths.size} paths"
+    attributes[MATCH_COUNT_ATTR] = matchCount
     when {
       snapshot.paths.isEmpty() -> {
         div("empty pad") { +"No paths registered" }
@@ -126,7 +125,7 @@ internal object PathTableHtml {
       }
 
       else -> {
-        pathRows(snapshot, rows, filter)
+        pathRows(snapshot, rows, matchCount.takeIf { filter.isActive })
       }
     }
   }
@@ -134,12 +133,12 @@ internal object PathTableHtml {
   private fun DIV.pathRows(
     snapshot: ProxySnapshot,
     rows: List<PathView>,
-    filter: PathFilter,
+    matchCount: String?,
   ) {
-    if (filter.isActive) div("match-count") { +"Showing ${rows.size} of ${snapshot.paths.size} paths" }
-    // Judged on every path, not the rows a filter leaves, so the column doesn't come and go as a search narrows. With
-    // agent auth off no path has an identity, and the column would only ever hold dashes.
-    val showIdentity = snapshot.paths.any { it.identity.isNotEmpty() }
+    matchCount?.also { div("match-count") { +it } }
+    // From the config, not the rows, so the column doesn't come and go as a search narrows or the last live path goes.
+    // With agent auth off no path has an identity, and the column would only ever hold dashes.
+    val showIdentity = snapshot.authEnabled
     table("ptable") {
       caption("sr-only") { +"Registered paths and the most recent scrape against each" }
       thead { headerRow(showIdentity) }

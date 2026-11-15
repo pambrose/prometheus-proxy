@@ -169,6 +169,8 @@ internal data class ProxySnapshot(
   val maxAgentInactivitySecs: Long,
   // The port Prometheus scrapes, from which the page builds each path's proxy URL.
   val scrapePort: Int,
+  // Whether agent auth is on, which is when a path has an identity to show.
+  val authEnabled: Boolean = false,
 ) {
   fun agent(agentId: String): AgentView? = agents.firstOrNull { it.agentId == agentId }
 
@@ -307,6 +309,7 @@ internal data class ProxySnapshot(
           ),
         maxAgentInactivitySecs = internal.maxAgentInactivitySecs.toLong(),
         scrapePort = proxy.scrapePort,
+        authEnabled = proxy.agentAuthManager.isEnabled,
       )
     }
   }

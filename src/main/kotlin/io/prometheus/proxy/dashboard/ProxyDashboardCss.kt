@@ -112,7 +112,9 @@ internal object ProxyDashboardCss {
     .nav { display:flex; gap:4px; margin-right:auto; margin-left:18px; }
     .nav a { color:var(--ink-3); text-decoration:none; padding:3px 10px; border-radius:20px; }
     .nav a:hover { background:var(--surface-3); color:var(--ink); }
-    .nav a:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+    /* The focus ring of every control but a list row, whose ring is inset (above). */
+    .nav a:focus-visible, .copy:focus-visible, .filters input:focus-visible {
+      outline:2px solid var(--accent); outline-offset:1px; }
     .nav a.on { background:var(--surface-3); color:var(--ink); font-weight:600; }
     /* The table is the one region that can outgrow a narrow viewport, so it scrolls inside its own
        container rather than letting the page body scroll sideways. */
@@ -136,7 +138,6 @@ internal object ProxyDashboardCss {
     .copy::before { content:""; width:13px; height:13px; background:currentColor;
       -webkit-mask:var(--icon) center/contain no-repeat; mask:var(--icon) center/contain no-repeat; }
     .copy:hover { background:var(--surface-3); color:var(--ink); }
-    .copy:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
     .copy.copied { color:var(--ok);
       --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M3 8.5l3.25 3.25L13 5'/></svg>"); }
     .copy.copy-failed { color:var(--crit);
@@ -152,7 +153,6 @@ internal object ProxyDashboardCss {
     .filters input[type=search] { font:inherit; color:var(--ink); background:var(--surface);
       border:1px solid var(--line); border-radius:0; padding:5px 9px; width:min(440px, 100%); }
     .filters input[type=search]::placeholder { color:var(--ink-3); }
-    .filters input:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
     .filters label { display:inline-flex; align-items:center; gap:7px; color:var(--ink-2); cursor:pointer; }
     .filters input[type=checkbox] { accent-color:var(--ink-2); margin:0; }
     .match-count { padding:7px 15px; color:var(--ink-3); font-size:11.5px; border-bottom:1px solid var(--line-soft); }

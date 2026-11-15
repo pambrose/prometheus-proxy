@@ -541,7 +541,7 @@ room for.
 ### Path Table
 
 The signature component. Eight columns: Path, Agent(s), Target, Src, Last scrape, Status, Duration, History, and
-a ninth, Identity, after Agent(s) whenever any path has one, which is whenever agent auth is on.
+a ninth, Identity, after Agent(s) whenever agent auth is on.
 
 - **Header:** `surface-2`, sticky at `top: 0`, Label type, `line` bottom border.
 - **Cells:** `8px 15px`, `line-soft` divider, `white-space: nowrap`.
@@ -556,8 +556,8 @@ a ninth, Identity, after Agent(s) whenever any path has one, which is whenever a
   path with any failure never reads 100%. A path not yet scraped shows the en dash.
 - **Identity:** the auth identity of the path's first registrant, which any agent joining the path must
   share. The legacy shared `agentToken` reads *shared token*; a departed path has none and shows the en
-  dash. Shown or hidden for the whole table, never per filter, so the column doesn't come and go as a
-  search narrows.
+  dash. Shown or hidden by whether agent auth is on, never by the rows, so the column doesn't come and go as
+  a search narrows or the last live path goes.
 - **Departed row:** the path cell turns `crit` and a `gone` tag follows the agent name. The row stays
   in place — a path whose agent vanished is the single most important thing this table shows, and
   removing it is how the old interface hid exactly that case.
@@ -643,8 +643,9 @@ connection beacon and a run of counters — agents, paths, and the internal chun
 turn `warn` as they approach their thresholds.
 
 A **failing count** joins the run in `crit` whenever a registered path's last scrape failed (`2 failing`),
-and the bar carries the number of paths failing or departed for the tab's title, which reads
-`(3 problems) prometheus-proxy`, so a dashboard in a background tab still says something is wrong.
+and the bar carries the tab's title, which counts the paths failing or departed, the ones "Problems only"
+keeps, and reads `(3 problems) prometheus-proxy`, so a dashboard in a background tab still says something is
+wrong.
 
 A **departed count** joins the run in `crit` whenever any path is departed (`3 departed`). It exists
 because the paths counter reports *registrations*, so a departed path is deliberately absent from it —

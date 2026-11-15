@@ -16,13 +16,17 @@
 
 package io.prometheus.proxy.dashboard
 
+import io.ktor.http.Parameters
+import io.prometheus.common.AgentValues
+
 /**
  * Which rows the Paths view shows: those matching a search, and optionally only the problems.
  *
  * Applied on the server, to the table each push renders, rather than in the browser: the push replaces the table every
- * refresh, so a filter applied to the page would be undone by the next frame. It reaches the server two ways, which
- * carry the same two values: the page's URL (`/paths?q=team-a&problems=1`), so a filtered view can be bookmarked or
- * shared, and each WebSocket message, so a change applies at once without a reload.
+ * refresh, so a filter applied to the page would be undone by the next frame. It lives in the page's URL
+ * (`/paths?q=team-a&problems=1`), so a filtered view can be bookmarked or shared, and reaches the server two ways,
+ * both read by [of]: the URL a page is opened at, and that URL's query in each WebSocket message, so a change applies
+ * at once without a reload.
  *
  * @param query matched case-insensitively against the path, its agents' names, its target URL, and its identity
  * @param problemsOnly keep only the paths [PathView.isProblem] picks out: a failing last scrape, or an agent gone
@@ -38,11 +42,18 @@ internal data class PathFilter(
     (!problemsOnly || path.isProblem) &&
       (query.isEmpty() || path.searchFields().any { it.contains(query, ignoreCase = true) })
 
+  // What the row shows: an identity as its label reads, and for a departed path, which has no agents, the agent its
+  // last scrape names (servingAgent, which is otherwise the first of agentNames).
   private fun PathView.searchFields(): List<String> =
-    listOf(path, targetUrl, identity) + agentNames + listOfNotNull(servingAgent, identityLabel(identity))
+    listOfNotNull(path, targetUrl, servingAgent, identityLabel(identity)) + agentNames
 
   companion object {
     val NONE = PathFilter()
+
+    // The filter's URL parameters, which the search form submits and the page's script writes.
+    const val QUERY_PARAM = "q"
+    const val PROBLEMS_PARAM = "problems"
+    const val PROBLEMS_ON = "1"
 
     // A search box's worth: the query is browser input, on a port with no auth, matched against every row each push.
     internal const val MAX_QUERY_LENGTH = 200
@@ -51,6 +62,9 @@ internal data class PathFilter(
     fun of(
       query: String?,
       problemsOnly: Boolean,
-    ) = PathFilter(query.orEmpty().trim().take(MAX_QUERY_LENGTH), problemsOnly)
+    ) = PathFilter(AgentValues.truncate(query.orEmpty().trim(), MAX_QUERY_LENGTH), problemsOnly)
+
+    /** A filter from a URL's query parameters, as the search form writes them. */
+    fun of(parameters: Parameters) = of(parameters[QUERY_PARAM], parameters[PROBLEMS_PARAM] == PROBLEMS_ON)
   }
 }

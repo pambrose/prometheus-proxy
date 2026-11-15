@@ -330,16 +330,18 @@ Two support helpers also live here (not test classes themselves):
 - **ProxyEventBusTest** — Dashboard event bus: ordered delivery, non-blocking emit with no subscriber, no replay to a
   late subscriber, fan-out to multiple subscribers, and AgentContextManager emitting on connect only
 - **ProxyDashboardHtmlTest** (`dashboard/`) — Dashboard renderer: top-level out-of-band push regions, agent- and
-  path-centric layouts, tolerant selection, layout, and filter parsing, departed paths, an agent's identity in its row
-  and detail, the script's after-push work, an agent's uptime, failover markers, accessibility, and the WebSocket
-  connection indicator
+  path-centric layouts, tolerant selection and layout parsing, departed paths, an agent's identity in its row and
+  detail, links at a root mount, the nav, the script's after-push work, an agent's uptime, failover markers,
+  accessibility, and the WebSocket connection indicator
 - **PathTableHtmlTest** (`dashboard/`) — the Paths view's table and search: the history strip (one element per run, a
-  floored percentage, no status pill, visible under forced colours), the Identity column (shown only with an identity,
-  the legacy token as a shared token), the search (matching rows, the match count, the empty states, the form outside
-  the pushed table, an escaped query, the script sending the URL's filter), and the failing and problem counts
+  floored percentage, no status pill, visible under forced colours), the Identity column (shown while agent auth is
+  on, the legacy token as a shared token), the search (matching rows, the match count, the empty states, the form
+  outside the pushed table, an escaped query, the script sending the URL's query, and tolerant parsing of it from the
+  socket), and the failing count and the tab's title
 - **PathFilterTest** (`dashboard/`) — the Paths view's search: a query matching the path, any agent's name, the target
-  URL, or the identity (the legacy token by its label), ignoring case, and a departed path's agent; "problems only"
-  keeping failing and departed paths; both having to match; browser input trimmed and cut; and identity labels
+  URL, or the identity (the legacy token by its label, not its internal name), ignoring case, and a departed path's
+  agent; "problems only" keeping failing and departed paths; both having to match; browser input trimmed and cut,
+  never inside a surrogate pair; a filter read from a URL's query; and identity labels
 - **ProxyDashboardServiceTest** (`dashboard/`) — Dashboard request guards: the WebSocket Origin check (own host,
   `allowedOrigins`, foreign or malformed origins refused), the opt-in `allowedHosts` Host check against DNS rebinding,
   and the snapshot cache pages and sessions render from: one collect per refresh interval however many reads, shared
@@ -350,9 +352,10 @@ Two support helpers also live here (not test classes themselves):
 
 One support helper also lives here (not a test class itself):
 
-- **DashboardFixtures** (`dashboard/`) — builders for the dashboard view models (`pathView`, `agentView`,
-  `scrapeRecord`, `snapshot`) with every field defaulted, shared by `ProxyDashboardHtmlTest` and
-  `ProxySnapshotTest`, so a test names only the field it is about
+- **DashboardFixtures** (`dashboard/`) — builders for the dashboard view models (`pathView`, `departedPathView`,
+  `agentView`, `scrapeRecord`, `snapshot`) with every field defaulted, and `renderFullPage` for the page a GET serves,
+  shared by `ProxyDashboardHtmlTest`, `PathTableHtmlTest`, `PathFilterTest`, and `ProxySnapshotTest`, so a test names
+  only the field it is about
 
 ### Unit Tests — Common (`common/`)
 
@@ -545,8 +548,8 @@ mechanism that the standard suite cannot reach:
   selection round-trip, both layouts, a root-mounted base path, with `allowedHosts` set a 403 on every route
   for a request naming an unknown host, page GETs and WebSocket messages rendering the cached snapshot while a
   topology change still shows on the next page, a gone path staying in the path layout after more scrapes than
-  the recent-scrapes queue holds, and an agent's identity in both layouts with the path search filtering from the URL
-  and over the socket
+  the recent-scrapes queue holds, an agent's identity in both layouts with the path search filtering from the URL
+  and over the socket, and a session kept open through a push that fails to render
 - **TlsMutualAuthRejectionTest** — the negative mutual-TLS path over a real Netty handshake, which the
   in-process TLS specs cannot perform (item 28 in `docs/archive/CODE_REVIEW_JUNE_2026.md`)
 
