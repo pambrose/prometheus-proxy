@@ -91,6 +91,9 @@ every agent when agent auth is off.
   scenarios show the agents failing over to it when the primary stops, a filter at the agent cutting the catalog's
   payload by more than half before it crosses the firewall, and a contractor's agent refused a path its identity
   doesn't cover. The Live Demo page walks through each.
+- **A guided tour of the demo.** `demos/dashboard/demo.sh tour` walks a presenter through every scenario, one step
+  at a time. Two new ones show an agent's config deployed twice by mistake, which now settles instead of the two
+  fighting over their paths, and Zipkin tracing of the calls between the agents and the proxies.
 
 ### Security
 
