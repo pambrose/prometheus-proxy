@@ -4,14 +4,16 @@
 groups:
   - name: prometheus-proxy-demo
     rules:
+      # Down only when no proxy reaches the job: during a failover each job is down through the proxy that went and up
+      # through the standby, and that isn't an outage (see prometheus.yml).
       - alert: DemoTargetDown
-        expr: up == 0
+        expr: max by (job) (up) == 0
         for: 15s
         labels:
           severity: critical
         annotations:
-          summary: "{{ $labels.job }} behind the firewall is not answering"
-          description: "Prometheus could not scrape {{ $labels.job }} through the proxy for 15s."
+          summary: "{{ $labels.job }} is not answering through either proxy"
+          description: "Prometheus could not scrape {{ $labels.job }} through any proxy for 15s."
 
       - alert: DemoAgentEvicted
         expr: increase(proxy_eviction_count_total[2m]) > 0

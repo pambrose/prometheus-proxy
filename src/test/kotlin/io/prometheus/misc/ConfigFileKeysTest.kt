@@ -25,7 +25,9 @@ import com.typesafe.config.ConfigResolveOptions
 import com.typesafe.config.ConfigValue
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldContain
+import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.shouldBe
+import io.prometheus.common.ConfigVals
 import java.io.File
 
 // HOCON ignores a key it doesn't know, so a misnamed key in a config the repo ships or its tests load does nothing, and
@@ -48,6 +50,11 @@ class ConfigFileKeysTest : StringSpec() {
   }
 
   private fun confFiles(dir: String) = File(dir).listFiles { file -> file.extension == "conf" }.orEmpty().toList()
+
+  // The configs a user runs, as opposed to ones only the tests load.
+  private val shippedConfigs by lazy {
+    SHIPPED_CONFIG_DIRS.flatMap(::confFiles).sortedBy { it.invariantSeparatorsPath }
+  }
 
   // The settings [value] gives under [path] that [schema] doesn't declare, or gives with another shape, such as a value
   // where the schema has an object. tscfg describes a list's entries by its schema's one element: an object of an
@@ -112,6 +119,20 @@ class ConfigFileKeysTest : StringSpec() {
         }.filterValues { it.isNotEmpty() } shouldBe emptyMap()
     }
 
+    // Declared keys aren't enough: a list entry's fields have no defaults, so an agent.filters entry without
+    // metricNameAllow failed ConfigVals at startup, and the demo's agent-east, started on such a file, restarted in a
+    // loop. Every config a user runs must load as BaseOptions loads it: the file over the bundled defaults, resolved.
+    "every config the repo ships should load as the proxy and agent load it" {
+      shippedConfigs.shouldNotBeEmpty()
+
+      shippedConfigs
+        .associate { file ->
+          val load =
+            runCatching { ConfigVals(ConfigFactory.parseFile(file).withFallback(ConfigFactory.load()).resolve()) }
+          file.invariantSeparatorsPath to load.exceptionOrNull()?.message
+        }.filterValues { it != null } shouldBe emptyMap()
+    }
+
     // The check is only as good as its walk: a misplaced key, a field a list's entries don't take, and a value where
     // the schema has an object must each be found, and well-formed entries of a list of objects or strings must not.
     "the check should find a setting the schema doesn't declare, in an object or in a list's entries" {
@@ -172,6 +193,8 @@ class ConfigFileKeysTest : StringSpec() {
         "demos/dashboard/config",
         "src/test/resources/containers",
       )
+
+    private val SHIPPED_CONFIG_DIRS = listOf("examples", "demos/dashboard/config", "etc/compose")
 
     private const val TEST_SOURCES = "src/test/kotlin"
     private const val TEST_UTILS = "src/test/kotlin/io/prometheus/harness/support/TestUtils.kt"

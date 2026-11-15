@@ -8,8 +8,10 @@ REPO_DIR="$(cd "$DEMO_DIR/../.." && pwd)"
 COMPOSE=(docker compose -f "$DEMO_DIR/compose.yml")
 IMAGES=(prometheus-proxy-demo/proxy:local prometheus-proxy-demo/agent:local)
 AGENTS=(agent-east agent-west-1 agent-west-2)
+PROXIES=(proxy proxy-standby)
 
 DASHBOARD_URL="http://localhost:${DEMO_DASHBOARD_PORT:-8094}/dashboard"
+STANDBY_DASHBOARD_URL="http://localhost:${DEMO_STANDBY_DASHBOARD_PORT:-8095}/dashboard"
 GRAFANA_URL="http://localhost:${DEMO_GRAFANA_PORT:-3000}"
 PROMETHEUS_URL="http://localhost:${DEMO_PROMETHEUS_PORT:-9090}"
 PROXY_URL="http://localhost:${DEMO_PROXY_PORT:-8080}"
@@ -42,9 +44,16 @@ Scenarios:
   agent-start [agent]      Start it again
   agent-freeze [agent]     Freeze an agent so it goes silent and the proxy evicts it (default: agent-west-2)
   agent-thaw [agent]       Unfreeze it; it reconnects
+  proxy-down [proxy]       Stop a proxy; its agents fail over to the other (default: proxy, the primary)
+  proxy-up [proxy]         Start it again
+  filter                   Restart agent-east with a filter that drops the catalog's per-item prices
+  unfilter                 Restart it without the filter
+  rogue-agent              Start a contractor's agent that tries to register payments_metrics
+  rogue-agent-stop         Stop and remove it
 
 Services: orders, payments, inventory, catalog, shipping (and search, recommendations, notifications once discovered)
 Agents:   ${AGENTS[*]}
+Proxies:  ${PROXIES[*]}
 EOF
 }
 
@@ -52,11 +61,12 @@ print_urls() {
   echo
   bold "Prometheus Proxy dashboard demo"
   echo "  Proxy dashboard:  $DASHBOARD_URL"
+  echo "  Standby proxy:    $STANDBY_DASHBOARD_URL"
   echo "  Grafana:          $GRAFANA_URL"
   echo "  Prometheus:       $PROMETHEUS_URL"
   echo "  Proxy discovery:  $PROXY_URL/discovery"
   echo
-  echo "Scenarios: $0 outage | slow | recover | discover | agent-stop | agent-freeze ...  (no arguments for help)"
+  echo "Scenarios: $0 outage | slow | recover | discover | agent-freeze | proxy-down | filter | rogue-agent ...  (no arguments for help)"
 }
 
 # POSTs to (or, with GET, reads) the simulated services' control API, from inside the demo-app container, so the API
@@ -92,6 +102,22 @@ agent_arg() {
   die "unknown agent '$agent'; expected one of: ${AGENTS[*]}"
 }
 
+proxy_arg() {
+  local proxy="${1:-proxy}" known
+  for known in "${PROXIES[@]}"; do
+    if [[ "$proxy" == "$known" ]]; then
+      echo "$proxy"
+      return
+    fi
+  done
+  die "unknown proxy '$proxy'; expected one of: ${PROXIES[*]}"
+}
+
+# Restarts agent-east on a config file in config/: compose recreates the container when AGENT_CONFIG changes.
+restart_east() {
+  DEMO_EAST_CONFIG="$1" "${COMPOSE[@]}" up --detach --no-deps agent-east
+}
+
 cmd_up() {
   local jar old_ids id
   for jar in prometheus-proxy prometheus-agent; do
@@ -106,6 +132,11 @@ cmd_up() {
   old_ids="$(docker image inspect -f '{{.Id}}' "${IMAGES[@]}" 2>/dev/null || true)"
 
   "${COMPOSE[@]}" up --detach --build --wait --wait-timeout 180
+  # Compose recreates a container when its own config changes, not when a file it mounts does, and neither Prometheus
+  # nor Grafana reliably notices a changed file on its own. Reload Prometheus's config and rules (SIGHUP), and restart
+  # Grafana for its dashboards, so a demo started from an older checkout runs this one's.
+  "${COMPOSE[@]}" kill --signal SIGHUP prometheus >/dev/null
+  "${COMPOSE[@]}" restart grafana >/dev/null
 
   for id in $old_ids; do
     if [[ -z "$(docker image inspect -f '{{join .RepoTags ""}}' "$id" 2>/dev/null)" ]]; then
@@ -114,17 +145,19 @@ cmd_up() {
   done
 
   wait_for "$DASHBOARD_URL" "The proxy dashboard"
+  wait_for "$STANDBY_DASHBOARD_URL" "The standby proxy's dashboard"
   wait_for "$PROMETHEUS_URL/-/ready" "Prometheus"
   wait_for "$GRAFANA_URL/api/health" "Grafana"
   print_urls
 }
 
 cmd_down() {
-  "${COMPOSE[@]}" down --volumes --remove-orphans
+  # With agent-rogue's profile, so a rogue agent left running goes too.
+  "${COMPOSE[@]}" --profile rogue down --volumes --remove-orphans
 }
 
 cmd_status() {
-  "${COMPOSE[@]}" ps
+  "${COMPOSE[@]}" --profile rogue ps
   if [[ -n "$("${COMPOSE[@]}" ps --status running --quiet demo-app 2>/dev/null)" ]]; then
     echo
     bold "Simulated services"
@@ -218,6 +251,64 @@ main() {
     "${COMPOSE[@]}" unpause "$agent"
     bold "$agent unfrozen"
     hint "it finds its connection gone, reconnects, and registers its paths again."
+    ;;
+  proxy-down)
+    local proxy
+    proxy="$(proxy_arg "${1:-}")"
+    "${COMPOSE[@]}" stop "$proxy"
+    bold "$proxy stopped"
+    if [[ "$proxy" == proxy ]]; then
+      hint "within seconds every agent fails over to proxy-standby, with no manual step: its dashboard," \
+        "$STANDBY_DASHBOARD_URL, shows each one 'via proxy-standby:50051 (2 of 2)', marked failed over. In" \
+        "Grafana every service stays up, served through the standby; only prometheus-proxy, the primary's own" \
+        "metrics, goes down, and DemoTargetDown fires for it. Bring it back with: $0 proxy-up"
+    else
+      hint "agents connected to the standby return to the head of their list, the primary." \
+        "Bring it back with: $0 proxy-up proxy-standby"
+    fi
+    ;;
+  proxy-up)
+    local proxy
+    proxy="$(proxy_arg "${1:-}")"
+    "${COMPOSE[@]}" start "$proxy"
+    bold "$proxy started"
+    if [[ "$proxy" == proxy ]]; then
+      hint "the primary is back, but connected agents stay on the standby until their connection drops; an agent" \
+        "returns to the head of its list only when it reconnects. Once prometheus-proxy is green again in Grafana" \
+        "(the agents have looked the primary up again by then), send them back with: $0 proxy-down proxy-standby," \
+        "then $0 proxy-up proxy-standby"
+    else
+      hint "the standby is ready again, with no agents until the primary goes."
+    fi
+    ;;
+  filter)
+    restart_east agent-east-filtered.conf
+    bold "agent-east restarted with a filter that drops catalog_item_price_dollars"
+    hint "the agent drops the family before gzip and chunking, so the catalog payload falls from about 480,000" \
+      "characters to under half that: watch agent-east's Recent scrapes on the dashboard, and 'Payload size' in" \
+      "Grafana. The paths come back once the agent has registered them again. Undo with: $0 unfilter"
+    ;;
+  unfilter)
+    restart_east agent-east.conf
+    bold "agent-east restarted without the filter"
+    hint "the catalog payload returns to about 480,000 characters."
+    ;;
+  rogue-agent)
+    "${COMPOSE[@]}" --profile rogue up --detach --no-deps agent-rogue
+    bold "agent-rogue started with the contractor identity's token, which covers only contractor_* paths"
+    hint "it registers contractor_metrics, and the proxy refuses its payments_metrics; payments keeps coming" \
+      "from agent-east. The dashboard lists agent-rogue with its one path. Stop it with: $0 rogue-agent-stop"
+    local deadline=$((SECONDS + 30)) refusal=""
+    until [[ -n "$refusal" ]] || ((SECONDS >= deadline)); do
+      sleep 2
+      refusal="$("${COMPOSE[@]}" logs --no-log-prefix proxy 2>/dev/null | grep "denied registration of path /payments_metrics" | tail -1 || true)"
+    done
+    [[ -z "$refusal" ]] || printf '\033[36mThe proxy logged:\033[0m %s\n' "$refusal"
+    ;;
+  rogue-agent-stop)
+    "${COMPOSE[@]}" --profile rogue rm --stop --force agent-rogue
+    bold "agent-rogue stopped and removed"
+    hint "it leaves the dashboard at once; its contractor_metrics path goes with it."
     ;;
   "" | help | -h | --help) usage ;;
   *)

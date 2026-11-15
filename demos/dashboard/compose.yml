@@ -6,7 +6,7 @@
 #
 # Every published port binds to 127.0.0.1 only: the dashboard has no authentication, Grafana lets anyone view it
 # without signing in, and its admin password is the default, which suits a demo on a laptop and nothing else. Set DEMO_DASHBOARD_PORT, DEMO_GRAFANA_PORT,
-# DEMO_PROMETHEUS_PORT, or DEMO_PROXY_PORT to move a host port that's already taken.
+# DEMO_PROMETHEUS_PORT, DEMO_PROXY_PORT, or DEMO_STANDBY_DASHBOARD_PORT to move a host port that's already taken.
 
 name: prometheus-proxy-demo
 
@@ -25,12 +25,17 @@ x-agent: &agent
       condition: service_healthy
   restart: on-failure
 
+# The two proxies share one image, built from this checkout's proxy jar.
+x-proxy: &proxy
+  image: prometheus-proxy-demo/proxy:local
+  build:
+    context: ../..
+    dockerfile: etc/docker/proxy.Dockerfile
+  restart: on-failure
+
 services:
   proxy:
-    image: prometheus-proxy-demo/proxy:local
-    build:
-      context: ../..
-      dockerfile: etc/docker/proxy.Dockerfile
+    <<: *proxy
     hostname: proxy
     environment:
       PROXY_CONFIG: /app/proxy.conf
@@ -39,13 +44,29 @@ services:
     ports:
       - "127.0.0.1:${DEMO_DASHBOARD_PORT:-8094}:8094"  # Dashboard
       - "127.0.0.1:${DEMO_PROXY_PORT:-8080}:8080"      # Scrape port: /discovery and each path, for curl
-    restart: on-failure
+
+  # The standby every agent fails over to when the primary is gone (`demo.sh proxy-down`). Its own dashboard shows
+  # which proxy each agent is connected through.
+  proxy-standby:
+    <<: *proxy
+    hostname: proxy-standby
+    environment:
+      PROXY_CONFIG: /app/proxy-standby.conf
+    volumes:
+      - ./config/proxy.conf:/app/proxy.conf:ro
+      - ./config/proxy-standby.conf:/app/proxy-standby.conf:ro
+    ports:
+      - "127.0.0.1:${DEMO_STANDBY_DASHBOARD_PORT:-8095}:8094"  # The standby's dashboard
 
   agent-east:
     <<: *agent
     hostname: east-dc-01
+    environment:
+      # `demo.sh filter` starts it on agent-east-filtered.conf, which includes agent-east.conf, so both are mounted.
+      AGENT_CONFIG: /app/${DEMO_EAST_CONFIG:-agent-east.conf}
     volumes:
-      - ./config/agent-east.conf:/app/agent.conf:ro
+      - ./config/agent-east.conf:/app/agent-east.conf:ro
+      - ./config/agent-east-filtered.conf:/app/agent-east-filtered.conf:ro
       - discovery:/discovery:ro
 
   agent-west-1:
@@ -59,6 +80,14 @@ services:
     hostname: west-dc-02
     volumes:
       - ./config/agent-west-2.conf:/app/agent.conf:ro
+
+  # A contractor's agent reaching for a path its identity may not register; started only by `demo.sh rogue-agent`.
+  agent-rogue:
+    <<: *agent
+    hostname: contractor-01
+    profiles: [rogue]
+    volumes:
+      - ./config/agent-rogue.conf:/app/agent.conf:ro
 
   # The applications behind the firewall, simulated; it also writes agent-east's discovery file (app/demo_app.py).
   demo-app:
