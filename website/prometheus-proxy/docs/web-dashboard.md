@@ -66,6 +66,9 @@ The top bar switches between them, and each is a real URL you can bookmark or sh
 Start from **Paths** when Prometheus reports a target failing — that is the view organized the way the
 alert is. Use **Agents** when you already know which agent you care about.
 
+Both show scrape times in your browser's time zone, as Grafana does, whatever zone the proxy runs in, so a failed
+scrape here and the spike it caused in a Grafana panel read the same clock. Hover over a time for its date and zone.
+
 ## The status bar
 
 The bar across the top appears in both layouts. Left to right it shows the connection's **live**

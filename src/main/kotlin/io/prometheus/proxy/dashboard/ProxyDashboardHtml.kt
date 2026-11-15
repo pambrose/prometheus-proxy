@@ -19,6 +19,7 @@ package io.prometheus.proxy.dashboard
 import kotlinx.html.ButtonType
 import kotlinx.html.DIV
 import kotlinx.html.FlowContent
+import kotlinx.html.FlowOrPhrasingContent
 import kotlinx.html.HTML
 import kotlinx.html.SPAN
 import kotlinx.html.a
@@ -41,12 +42,15 @@ import kotlinx.html.td
 import kotlinx.html.th
 import kotlinx.html.thead
 import kotlinx.html.title
+import kotlinx.html.TR
+import kotlinx.html.time
 import kotlinx.html.tr
 import kotlinx.html.unsafe
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 
 /**
  * Which view a session is looking at.
@@ -210,16 +214,9 @@ internal object ProxyDashboardHtml {
               if (path.isDeparted) span("tag crit") { +"gone" }
               if (path.additionalAgents > 0) span("dim") { +" +${path.additionalAgents}" }
             }
-            td("dim") {
-              if (path.targetUrl.isEmpty()) {
-                +DASH
-              } else {
-                +path.targetUrl
-                copyButton(path)
-              }
-            }
+            targetCell(path)
             td("dim") { +sourceLabel(path.pathSource) }
-            td("dim") { +(path.lastScrape?.let { timeFormat.format(it.at) } ?: DASH) }
+            td("dim") { scrapeTime(path.lastScrape?.at) }
             td("num") {
               val scrape = path.lastScrape
               if (scrape == null)
@@ -231,6 +228,32 @@ internal object ProxyDashboardHtml {
           }
         }
       }
+    }
+  }
+
+  /** A path's target URL and the button that copies it, or a dash for a path without one, such as a departed path. */
+  private fun TR.targetCell(path: PathView) =
+    td("dim") {
+      if (path.targetUrl.isEmpty()) {
+        +DASH
+      } else {
+        +path.targetUrl
+        copyButton(path)
+      }
+    }
+
+  /**
+   * A scrape's time, or a dash when there is none. Rendered as `<time datetime="…Z">` with the time of day in the
+   * proxy's zone, which the page's script replaces with the viewer's (see SELECTION_JS).
+   */
+  private fun FlowOrPhrasingContent.scrapeTime(at: Instant?) {
+    if (at == null) {
+      +DASH
+      return
+    }
+    time {
+      attributes["datetime"] = at.truncatedTo(ChronoUnit.SECONDS).toString()
+      +timeFormat.format(at)
     }
   }
 
@@ -414,7 +437,7 @@ internal object ProxyDashboardHtml {
     } else {
       scrapes.take(MAX_DETAIL_SCRAPES).forEach { record ->
         div("kv scrape") {
-          span("t") { +timeFormat.format(record.at) }
+          span("t") { scrapeTime(record.at) }
           span("k") { +"/${record.path}" }
           span(if (record.isSuccess) "pill ok" else "pill crit") { +"${record.statusCode}" }
           span("v") { +"${record.durationMillis} ms · ${record.contentLength} chars · ${record.outcome}" }
@@ -540,8 +563,9 @@ internal object ProxyDashboardHtml {
     """{"noSwap":[204,304,"4xx","5xx"],"ws":{"reconnectDelay":500,"reconnectMaxDelay":2000,"reconnectJitter":0.125}}"""
 
   // Reads the selection back out of the URL that hx-push-url already set, and tells the server, so the
-  // push loop knows whether this session wants a detail pane. Also runs the connection indicator and the
-  // path table's copy buttons, the only things on the page that htmx does not model; everything else is htmx.
+  // push loop knows whether this session wants a detail pane. Also runs the connection indicator, the path table's
+  // copy buttons, and the scrape times' conversion to the viewer's zone, the only things on the page that htmx does not
+  // model; everything else is htmx.
   private val SELECTION_JS =
     """
     (function () {
@@ -690,6 +714,27 @@ internal object ProxyDashboardHtml {
         }, function () {
           showMark(id, 'copy-failed');
           say('Could not copy the target URL.');
+        });
+      });
+      // Scrape times arrive as <time datetime="...Z"> showing the proxy's zone, and are shown in the viewer's, the
+      // zone Grafana uses, so a failure here and the spike it caused there read the same clock. Every frame and row
+      // click is converted in its fragment before htmx swaps it in, so no frame shows the proxy's zone first. The
+      // title gives the date and the zone's name, which the column has no room for.
+      function pad(n) {
+        return (n < 10 ? '0' : '') + n;
+      }
+      function localTimes(root) {
+        root.querySelectorAll('time[datetime]').forEach(function (el) {
+          var at = new Date(el.getAttribute('datetime'));
+          if (isNaN(at.getTime())) return;
+          el.textContent = pad(at.getHours()) + ':' + pad(at.getMinutes()) + ':' + pad(at.getSeconds());
+          el.title = at.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'long' });
+        });
+      }
+      localTimes(document);
+      document.addEventListener('htmx:before:swap', function (evt) {
+        (evt.detail.tasks || []).forEach(function (task) {
+          if (task.fragment) localTimes(task.fragment);
         });
       });
     })();

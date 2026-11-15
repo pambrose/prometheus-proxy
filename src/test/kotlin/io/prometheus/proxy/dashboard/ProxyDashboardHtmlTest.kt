@@ -28,6 +28,7 @@ import io.kotest.matchers.string.shouldStartWith
 import io.prometheus.proxy.ScrapeRecord
 import kotlinx.html.html
 import kotlinx.html.stream.createHTML
+import java.time.Instant
 
 class ProxyDashboardHtmlTest : StringSpec() {
   private fun path(
@@ -327,6 +328,31 @@ class ProxyDashboardHtmlTest : StringSpec() {
       }
     }
 
+    // The page shows each scrape time in the viewer's zone, the one Grafana uses, from the instant in datetime. The
+    // text is in the proxy's zone, so it depends on the JVM running the test and is not asserted.
+    "a scrape time should carry its instant, to the second, in both layouts" {
+      val at = Instant.parse("2026-11-15T01:24:23.456Z")
+      val scraped =
+        DashboardFixtures.pathView(
+          path = "app_metrics",
+          lastScrape = DashboardFixtures.scrapeRecord(path = "app_metrics", at = at),
+        )
+      val snap = snapshot(paths = [scraped], scrapes = [DashboardFixtures.scrapeRecord(path = "app_metrics", at = at)])
+
+      val pathFrame = ProxyDashboardHtml.pushFragment(snap, null, "/dashboard", DashboardLayout.PATH)
+      val detail = ProxyDashboardHtml.detailFragment(snap, selectedId = "1")
+      listOf(pathFrame, detail).forEach { html ->
+        html shouldContain """<time datetime="2026-11-15T01:24:23Z">"""
+      }
+    }
+
+    "a path that was never scraped should show a dash rather than a time" {
+      val bare = DashboardFixtures.pathView(path = "new_path")
+      val html = ProxyDashboardHtml.pushFragment(snapshot(paths = [bare]), null, "/dashboard", DashboardLayout.PATH)
+
+      html shouldNotContain "<time"
+    }
+
     // The target URL is agent-supplied, and the button carries it in an attribute.
     "a target URL should be escaped in the copy attribute" {
       val served = DashboardFixtures.pathView(path = "q_metrics", targetUrl = "http://h:9100/m?a=1&b=\"x\"")
@@ -614,6 +640,15 @@ class ProxyDashboardHtmlTest : StringSpec() {
     "the page should put a copy result back on the button after each push" {
       val page = createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(), null, "/dashboard") } }
       page shouldContain "document.body.addEventListener('htmx:ws:after:message:incoming', applyMark)"
+    }
+
+    // Converted in the fragment before the swap rather than in the page after it, so no frame shows the proxy's zone
+    // between the two, and once for the times the page was served with.
+    "the page should show scrape times in the viewer's zone before each swap" {
+      val page = createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(), null, "/dashboard") } }
+      page shouldContain "localTimes(document);"
+      page shouldContain "document.addEventListener('htmx:before:swap'"
+      page shouldContain "if (task.fragment) localTimes(task.fragment);"
     }
 
     // The mark is an icon and a colour, neither of which reaches a screen reader.

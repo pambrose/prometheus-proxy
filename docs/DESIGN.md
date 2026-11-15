@@ -531,6 +531,10 @@ scrape variant prepends a fixed `64px` timestamp column so times align down the 
 
 - **Hover:** the row steps to `surface-2`, the same step the path table's rows take. No transition.
 
+Every scrape time, here and in the Path Table, is `HH:mm:ss` on a 24-hour clock in the viewer's zone, the one
+Grafana uses, whatever zone the proxy runs in. Its title gives the date and the zone's name, which the column has no
+room for.
+
 ### Path Table
 
 The signature component. Seven columns: Path, Agent(s), Target, Src, Last scrape, Status, Duration.
