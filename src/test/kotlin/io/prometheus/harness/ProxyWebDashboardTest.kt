@@ -313,10 +313,11 @@ class ProxyWebDashboardTest : StringSpec() {
       }
     }
 
-    // The full chain in one assertion: the agent reports its target URL and path source at registration,
-    // the proxy stores them on the path map, the snapshot joins them, and the table renders them. A break
-    // anywhere between the .proto and the CSS fails here.
-    "the path layout should show a registered path with its target and source" {
+    // The full chain in one assertion: the agent reports its target URL, path source, and labels at
+    // registration, the proxy stores them on the path map, the snapshot joins them, and the table renders
+    // them, the labels through the config's dashboard link. A break anywhere between the .proto and the CSS
+    // fails here.
+    "the path layout should show a registered path with its target, source, and link" {
       withDashboard(PATHS_HTTP_PORT, PATHS_GRPC_PORT, PATHS_DASHBOARD_PORT, configFile = PATHS_CONFIG_FILE) {
         connectAgent()
 
@@ -328,6 +329,8 @@ class ProxyWebDashboardTest : StringSpec() {
           table shouldContain "http://ui-path-target.invalid/metrics"
           // STATIC renders as "cfg" -- proving path_source crossed the wire, not just target_url.
           table shouldContain "cfg"
+          // The link the config's template builds from the path's job label.
+          table shouldContain """<a href="http://prometheus.invalid/graph?job=ui-path-job" target="_blank""""
         }
 
         // The agent layout must still be the default, so the new route is additive rather than a

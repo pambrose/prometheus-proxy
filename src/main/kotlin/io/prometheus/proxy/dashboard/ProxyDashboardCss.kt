@@ -114,7 +114,7 @@ internal object ProxyDashboardCss {
     .nav a:hover { background:var(--surface-3); color:var(--ink); }
     /* The focus ring of every control but a list row, whose ring is inset (above). */
     .nav a:focus-visible, .copy:focus-visible, .scrape-now:focus-visible, .close:focus-visible,
-    .filters input:focus-visible {
+    .filters input:focus-visible, .ptable td.links a:focus-visible {
       outline:2px solid var(--accent); outline-offset:1px; }
     .nav a.on { background:var(--surface-3); color:var(--ink); font-weight:600; }
     /* The table is the one region that can outgrow a narrow viewport, so it scrolls inside its own
@@ -131,6 +131,10 @@ internal object ProxyDashboardCss {
     .ptable tr.departed td:first-child { color:var(--crit); }
     /* The Activity table's Detail column, which holds a sentence, so it wraps where the rest of the row doesn't. */
     .ptable td.wrap { white-space:normal; min-width:280px; }
+    /* A path's links into other tools: the dimmed column's ink-3, underlined so they read as links, and ink on hover,
+       as the nav's are. */
+    .ptable td.links a { color:inherit; text-underline-offset:2px; }
+    .ptable td.links a:hover { color:var(--ink); }
     /* An event's tag opens its cell, so it takes none of the gap that sets a tag apart from a name before it. */
     .ptable td.event .tag, .sr-head span.tag { margin-left:0; }
     /* The icon buttons: copy beside a path or target URL, scrape-now beside a path, and close on the scrape result.

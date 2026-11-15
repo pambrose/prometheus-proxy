@@ -24,6 +24,7 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContain as shouldContainElement
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -674,6 +675,35 @@ class ProxyOptionsTest : StringSpec() {
           this shouldContainElement "dashboard.departedPathRetentionSecs: 3600"
           this shouldContainElement "dashboard.activityLogSize: 500"
         }
+    }
+
+    // ==================== Dashboard links ====================
+
+    // A list, so only a config file sets it. Parsed once, here, so ProxyOptions must keep what it parsed: a property
+    // initializer below the init block would empty it again.
+    "dashboard links should be parsed from the config file in order, and logged by name" {
+      val config =
+        """
+        proxy.dashboard.links = [
+          { name = "Prometheus", url = "http://prometheus:9090/graph?g0.expr=up%7Bjob%3D%22{label.job}%22%7D" }
+          { name = "Runbook", url = "https://runbooks.example.com/{path}" }
+        ]
+        """
+      var options: ProxyOptions? = null
+      captureLogs<ProxyOptions>(Level.INFO) { options = proxyOptionsFromConfig(config, extraArgs = ["--dashboard"]) }
+        .map { it.formattedMessage } shouldContainElement "dashboard.links: Prometheus, Runbook"
+      options.shouldNotBeNull().dashboardLinks.map { it.name } shouldBe ["Prometheus", "Runbook"]
+      proxyOptions(["--dashboard"]).dashboardLinks.shouldBeEmpty()
+    }
+
+    // Config-only, so failOnInvalidConfig is how a standalone proxy reports it: one Invalid configuration line, naming
+    // the link (PathLinkTest has each refusal). Unchecked with the dashboard off, as its other settings are.
+    "a dashboard link the dashboard can't render should fail startup, naming it, while the dashboard is on" {
+      val links = """proxy.dashboard.links = [{ name = "Grafana", url = "https://g.example.com/d?job={foo}" }]"""
+      shouldThrow<ConfigLoadException> {
+        failOnInvalidConfig(embedded = true) { proxyOptionsFromConfig(links, extraArgs = ["--dashboard"]) }
+      }.message shouldStartWith "Invalid configuration: proxy.dashboard.links link 'Grafana' has an unknown placeholder"
+      proxyOptionsFromConfig(links).dashboardLinks.shouldBeEmpty()
     }
 
     // Generous safety nets, not quotas: about 80x the largest path count the harness registers per agent, a path far

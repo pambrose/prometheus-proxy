@@ -37,6 +37,7 @@ import kotlinx.html.TBODY
 import kotlinx.html.THEAD
 import kotlinx.html.TR
 import kotlinx.html.ThScope
+import kotlinx.html.a
 import kotlinx.html.button
 import kotlinx.html.caption
 import kotlinx.html.div
@@ -104,27 +105,28 @@ internal object PathTableHtml {
     snapshot: ProxySnapshot,
     rows: List<PathView>,
   ) {
-    // From the config, not the rows, so the column doesn't come and go as a search narrows or the last live path goes.
-    // With agent auth off no path has an identity, and the column would only ever hold dashes.
-    val showIdentity = snapshot.authEnabled
     table("ptable") {
       caption("sr-only") { +"Registered paths and the most recent scrape against each" }
-      thead { headerRow(showIdentity) }
-      tbody { rows.forEach { pathRow(it, showIdentity, snapshot.scrapeNowEnabled) } }
+      thead { headerRow(snapshot) }
+      tbody { rows.forEach { pathRow(it, snapshot) } }
     }
   }
 
-  private fun THEAD.headerRow(showIdentity: Boolean) {
+  // The Identity and Links columns come from the config, not the rows, so neither comes and goes as a search narrows or
+  // the last live path goes. With agent auth off no path has an identity, and without proxy.dashboard.links no path has
+  // a link, so either column would only ever hold dashes.
+  private fun THEAD.headerRow(snapshot: ProxySnapshot) {
     tr {
       th(scope = ThScope.col) { +"Path" }
       th(scope = ThScope.col) { +"Agent(s)" }
-      if (showIdentity) th(scope = ThScope.col) { +"Identity" }
+      if (snapshot.authEnabled) th(scope = ThScope.col) { +"Identity" }
       th(scope = ThScope.col) { +"Target" }
       th(scope = ThScope.col) { +"Src" }
       th(scope = ThScope.col) { +"Last scrape" }
       th(scope = ThScope.col, classes = "num") { +"Status" }
       th(scope = ThScope.col, classes = "num") { +"Duration" }
       th(scope = ThScope.col) { +"History" }
+      if (snapshot.links.isNotEmpty()) th(scope = ThScope.col) { +"Links" }
     }
   }
 
@@ -132,19 +134,19 @@ internal object PathTableHtml {
   // expression-bodied function's trailing lambda as the function's own, and calls them Global Conditionals.
   private fun TBODY.pathRow(
     path: PathView,
-    showIdentity: Boolean,
-    scrapeNow: Boolean,
+    snapshot: ProxySnapshot,
   ) {
     tr(if (path.isDeparted) "departed" else null) {
-      pathCell(path, scrapeNow)
+      pathCell(path, snapshot.scrapeNowEnabled)
       agentCell(path)
-      if (showIdentity) td("dim") { +(identityLabel(path.identity) ?: DASH) }
+      if (snapshot.authEnabled) td("dim") { +(identityLabel(path.identity) ?: DASH) }
       targetCell(path)
       td("dim") { +sourceLabel(path.pathSource) }
       td("dim") { scrapeTime(path.lastScrape?.at) }
       statusCell(path)
       td("num dim") { +(path.lastScrape?.let { "${it.durationMillis} ms" } ?: DASH) }
       historyCell(path)
+      if (snapshot.links.isNotEmpty()) linksCell(path, snapshot.links)
     }
   }
 
@@ -247,6 +249,31 @@ internal object PathTableHtml {
         }
         // Floored, so a path with any failure never reads 100%.
         +"${succeeded * 100 / total}%"
+      }
+    }
+  }
+
+  /**
+   * The path's links into other tools, `proxy.dashboard.links`, each opening [path] in a new tab, or a dash for a path
+   * with none. A link whose template needs a value the path lacks is left out (see [PathLink.urlFor]), so a departed
+   * path, whose labels are gone, keeps only the links that use none.
+   */
+  private fun TR.linksCell(
+    path: PathView,
+    links: List<PathLink>,
+  ) {
+    td("dim links") {
+      val urls = links.mapNotNull { link -> link.urlFor(path)?.let { link to it } }
+      if (urls.isEmpty()) +DASH
+      urls.forEachIndexed { index, (link, url) ->
+        if (index > 0) +" · "
+        // noopener so the tool's page can't reach back into this one; noreferrer so it isn't told the dashboard's URL.
+        a(href = url, target = "_blank") {
+          attributes["rel"] = "noopener noreferrer"
+          // Names the path, so a screen reader listing the page's links can tell one row's from another's.
+          attributes["aria-label"] = "Open /${path.path} in ${link.name}"
+          +link.name
+        }
       }
     }
   }

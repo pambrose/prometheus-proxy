@@ -421,7 +421,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Each job's scrape health through the proxy. A failing or hung target turns red; discovered services appear as new rows.",
+      "description": "Each job's scrape health through the proxy, or only the job the Job variable picks. A failing or hung target turns red; discovered services appear as new rows.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -492,7 +492,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "max by (job) (up)",
+          "expr": "max by (job) (up{job=~\"$job\"})",
           "legendFormat": "{{job}}",
           "refId": "A"
         }
@@ -1475,6 +1475,35 @@
         "regex": "",
         "skipUrlSync": false,
         "type": "datasource"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "definition": "label_values(up, job)",
+        "description": "The job the health timeline shows. The proxy dashboard's Grafana link on each path opens this dashboard with the path's job picked.",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Job",
+        "multi": false,
+        "name": "job",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(up, job)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
       }
     ]
   },

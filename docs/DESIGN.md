@@ -189,6 +189,12 @@ components:
     textColor: "{colors.ok}"
   copy-button-failed:
     textColor: "{colors.crit}"
+  row-link:
+    backgroundColor: "transparent"
+    textColor: "{colors.ink-3}"
+    typography: "{typography.body}"
+  row-link-hover:
+    textColor: "{colors.ink}"
   top-bar:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.ink}"
@@ -541,13 +547,13 @@ room for.
 
 ### Path Table
 
-The signature component. Eight columns: Path, Agent(s), Target, Src, Last scrape, Status, Duration, History, and
-a ninth, Identity, after Agent(s) whenever agent auth is on.
+The signature component. Eight columns: Path, Agent(s), Target, Src, Last scrape, Status, Duration, History; a
+ninth, Identity, after Agent(s) whenever agent auth is on; and Links last whenever `proxy.dashboard.links` names any.
 
 - **Header:** `surface-2`, sticky at `top: 0`, Label type, `line` bottom border.
 - **Cells:** `8px 15px`, `line-soft` divider, `white-space: nowrap`.
 - **Numeric columns:** right-aligned with `tabular-nums`.
-- **Dimmed columns:** Identity, Target, Src, Last scrape, and Duration render in `ink-3` — supporting facts,
+- **Dimmed columns:** Identity, Target, Src, Last scrape, Duration, and Links render in `ink-3` — supporting facts,
   scanned only after the row is located by path or status.
 - **Row hover:** cells step to `surface-2`. No transition.
 - **Path:** a Copy Button follows a registered path and copies its proxy URL.
@@ -561,6 +567,8 @@ a ninth, Identity, after Agent(s) whenever agent auth is on.
   share. The legacy shared `agentToken` reads *shared token*; a departed path keeps the identity it had as
   its agent left, so a search for an identity finds its gone paths too. Shown or hidden by whether agent auth
   is on, never by the rows, so the column doesn't come and go as a search narrows or the last live path goes.
+- **Links:** the row's Row Links. Shown or hidden by the config, never by the rows, as Identity is, and last, so the
+  columns read to find a row keep their places with links on or off.
 - **Departed row:** the path cell turns `crit` and a `gone` tag follows the agent name. The row stays
   in place — a path whose agent vanished is the single most important thing this table shows, and
   removing it is how the old interface hid exactly that case. It appears as the path leaves, scraped or not.
@@ -667,6 +675,24 @@ Scrape Button fills it. Outside every out-of-band region, so a push never clears
   the whole body's size.
 - **Announced:** the heading carries a sentence the page speaks through the Connection Announcer once
   the result arrives (*Scrape of /orders_metrics finished: 200 in 120 ms.*).
+
+### Row Links
+
+The Links column's content: each link the operator configured (`proxy.dashboard.links`) that the row's path can fill,
+by its configured name, joined with ` · `. They open the path in another tool — Prometheus, Grafana, a runbook — and
+change nothing, so they are links, not buttons.
+
+- **Rest:** the dimmed column's `ink-3`, underlined `2px` below the text so a link reads as one among plain supporting
+  facts. Not the accent, which stays on focus rings and the current row (see The Two Places Rule).
+- **Hover:** the text steps to `ink`, as the nav's does. No background, no transition.
+- **Focus:** `2px solid accent`, `outline-offset: 1px`, as on the nav pill.
+- **Behavior:** each opens in a new tab, with `rel="noopener noreferrer"`, and names its path and tool in its
+  `aria-label` (*Open /orders_metrics in Grafana*), so a screen reader's list of the page's links tells one row's from
+  another's.
+- **Absence:** a link whose template needs a value the path lacks (a label, an identity) is left out, never shown with
+  an empty slot, so a departed row, whose labels went with its entry, keeps only the links that use none. A row
+  left with no link shows the en dash (see The Named Absence Rule).
+- **Never a pill.** Plain text, so the demo's screenshot script's count of `pill ok` stays one per row.
 
 ### Connection Beacon
 

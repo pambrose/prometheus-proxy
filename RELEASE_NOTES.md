@@ -126,6 +126,11 @@ most 10,000 agents connected with one identity, which is every agent when agent 
   now shows the identity it was registered as, so a search for a team's identity finds its gone paths too, and the
   target URL its agent scraped, with its copy button. A path whose agent left before Prometheus scraped it, which
   left no trace on the dashboard, now stays on the Paths view as gone.
+- **Links from the dashboard into Prometheus, Grafana, and runbooks.** List links in
+  `proxy.dashboard.links`, each a name and a URL template, and the Paths view gets a Links column that opens each path
+  in those tools. A template fills in the path, its agent, its identity, or any label the agent registered it with,
+  such as `{label.job}`; a path missing a value gets no link rather than a broken one. A link the dashboard can't use
+  stops the proxy at startup, naming it.
 
 ### Security
 

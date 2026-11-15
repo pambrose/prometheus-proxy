@@ -160,6 +160,7 @@ internal object DashboardFixtures {
     authEnabled: Boolean = false,
     activity: List<ActivityEntry> = emptyList(),
     scrapeNowEnabled: Boolean = false,
+    links: List<PathLink> = emptyList(),
   ) = ProxySnapshot(
     agents = agents,
     paths = paths,
@@ -170,6 +171,7 @@ internal object DashboardFixtures {
     authEnabled = authEnabled,
     activity = activity,
     scrapeNowEnabled = scrapeNowEnabled,
+    links = links,
   )
 
   /** The whole page for [snapshot], as the dashboard serves it to a GET. */
