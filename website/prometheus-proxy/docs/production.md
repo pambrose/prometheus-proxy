@@ -111,6 +111,21 @@ its admin and metrics ports, so no restart policy ever fired. See
     [Scraping an HA pair](#scraping-an-ha-pair) below, which has a requirement that is easy to get
     wrong.
 
+    Failing over is quick: a refused connection, or a name that doesn't resolve, moves the agent to the
+    next endpoint at once. Two things can slow a switch:
+
+    - An endpoint whose host is gone, rather than refusing connections, isn't known to be down until the
+      connection attempt times out. That takes `agent.grpc.unaryDeadlineSecs` (`--unary_deadline_secs`,
+      30 seconds by default), the deadline on every unary call, the connection's first among them.
+      Lowering it shortens the wait, at the cost of patience with a slow proxy.
+    - The JVM remembers a failed name lookup for 10 seconds (`networkaddress.cache.negative.ttl`, set in
+      the JDK's `java.security`). Where a proxy's name stops resolving while it is down, as a stopped
+      container's does on a Docker network, an agent that looked the primary up during the outage skips
+      it for up to 10 seconds after it returns. If the agent's connection to the standby drops in that
+      window, as when the standby is taken down moments after the primary comes back, it skips the
+      primary, waits out the deadline above on the departed standby, and only then reaches the primary.
+      Give a recovered primary a few seconds before stopping the standby.
+
     All endpoints must share the same TLS configuration. The agent builds one TLS context and one
     authority override for the whole list, so endpoints with different CAs or certificate SANs fail
     with an opaque handshake error rather than a clear configuration error.
