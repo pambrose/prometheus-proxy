@@ -1,7 +1,7 @@
 .PHONY: default help stop clean clean-all stubs build tibuild refresh jars \
         tests mini-tests xxl-tests nh-tests ip-tests netty-tests tls-tests lincheck-tests tla-checks check-rules helm-lint zizmor \
         container-tests scaling-tests all-tests ci ci-build consumer-check regen-certs \
-        docker-clean docker-clean-dry demo-up demo-down \
+        docker-clean docker-clean-dry demo-up demo-down demo-screenshots \
         all-scaling scaling-paths scaling-agents scaling-payload scaling-consolidated scaling-concurrency scaling-soak \
         coverage coverage-html coverage-xml coverage-log coverage-verify \
         coverage-open coverage-packages coverage-clean reports site-version gh-docs \
@@ -284,6 +284,10 @@ demo-up: jars  ## Start the dashboard + Grafana demo, built from this checkout (
 
 demo-down:  ## Stop the dashboard demo and remove its containers, network, and volume
 	@./$(DEMO_DIR)/demo.sh down
+
+# Retakes the website's Live Demo screenshots from a demo built from this checkout, so they show the current dashboard.
+demo-screenshots: demo-up  ## Retake the website's Live Demo screenshots (needs Docker, Chrome, ImageMagick, cwebp)
+	@./$(DEMO_DIR)/screenshots.sh
 
 docker-clean-dry:  ## Preview what `make docker-clean` would reclaim (removes nothing)
 	@./bin/docker-clean-tests.sh --dry-run --cache
