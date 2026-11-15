@@ -28,6 +28,7 @@ import io.kotest.matchers.string.shouldStartWith
 import io.prometheus.proxy.ScrapeRecord
 import kotlinx.html.html
 import kotlinx.html.stream.createHTML
+import java.time.Instant
 
 class ProxyDashboardHtmlTest : StringSpec() {
   private fun path(
@@ -77,6 +78,28 @@ class ProxyDashboardHtmlTest : StringSpec() {
       html shouldContain """hx-get="/dashboard/agents/1""""
       html shouldContain """hx-target="#${ProxyDashboardHtml.DETAIL_ID}""""
       html shouldContain """hx-push-url="true""""
+    }
+
+    // The push loop replaces the agent list every frame, and htmx gives focus back only to an element with the id the
+    // focused one had. Without an id on each row, a keyboard user lost their place in the list on every refresh.
+    "an agent row should keep one id per agent across the page and its pushes" {
+      val agents = [agent(id = "1", name = "team-a-01"), agent(id = "2", name = "team-b-01")]
+      val page =
+        createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(agents = agents), null, "/dashboard") } }
+      val frame = ProxyDashboardHtml.pushFragment(snapshot(agents = agents), null, "/dashboard")
+
+      listOf(page, frame).forEach { html ->
+        html shouldContain """id="${ProxyDashboardHtml.AGENT_ROW_ID_PREFIX}1""""
+        html shouldContain """id="${ProxyDashboardHtml.AGENT_ROW_ID_PREFIX}2""""
+      }
+    }
+
+    // Behind nginx an agent names its own agent id, so a row id must not be able to equal a region's: an agent called
+    // "list" would otherwise take #agent-list, which every push addresses.
+    "an agent row's id should never equal a region's id" {
+      val html = ProxyDashboardHtml.pushFragment(snapshot(agents = [agent(id = "list")]), null, "/dashboard")
+
+      Regex("""id="${ProxyDashboardHtml.AGENT_LIST_ID}"""").findAll(html).count() shouldBe 1
     }
 
     "the selected agent should be marked current" {
@@ -261,6 +284,81 @@ class ProxyDashboardHtmlTest : StringSpec() {
 
       html shouldNotContain "null"
       html shouldContain "\u2013"
+    }
+
+    "each target URL should be followed by a button that copies it" {
+      val served = DashboardFixtures.pathView(path = "app_metrics", targetUrl = "http://app1:9090/metrics")
+      val html = ProxyDashboardHtml.pushFragment(snapshot(paths = [served]), null, "/dashboard", DashboardLayout.PATH)
+
+      // type="button", so a click can never submit anything should the table ever sit inside a form.
+      html shouldContain """<button type="button" class="copy""""
+      html shouldContain """${ProxyDashboardHtml.COPY_ATTR}="http://app1:9090/metrics""""
+      html shouldContain """aria-label="Copy the target URL of /app_metrics""""
+      // After the URL it copies, in the same cell.
+      (html.indexOf("http://app1:9090/metrics<") in 0..<html.indexOf("<button")) shouldBe true
+    }
+
+    // A dash is the absence of a target, not a value to copy.
+    "a path without a target should have no copy button" {
+      val bare = DashboardFixtures.pathView(path = "new_path")
+      val html = ProxyDashboardHtml.pushFragment(snapshot(paths = [bare]), null, "/dashboard", DashboardLayout.PATH)
+
+      html shouldNotContain ProxyDashboardHtml.COPY_ATTR
+      html shouldNotContain "<button"
+    }
+
+    // The push loop replaces the whole table every frame. htmx refocuses the element carrying the id the
+    // focused one had, and the page puts the copied mark back by id, so the id must be the same in the page
+    // and in every frame, and distinct per row.
+    "a copy button should keep one id per path across the page and its pushes" {
+      val paths =
+        [
+          DashboardFixtures.pathView(path = "app_metrics", targetUrl = "http://app1:9090/metrics"),
+          DashboardFixtures.pathView(path = "node_metrics", targetUrl = "http://app1:9090/metrics"),
+        ]
+      val page =
+        createHTML().html {
+          with(ProxyDashboardHtml) { renderPage(snapshot(paths = paths), null, "/dashboard", DashboardLayout.PATH) }
+        }
+      val frame = ProxyDashboardHtml.pushFragment(snapshot(paths = paths), null, "/dashboard", DashboardLayout.PATH)
+
+      listOf(page, frame).forEach { html ->
+        html shouldContain """id="${ProxyDashboardHtml.COPY_ID_PREFIX}app_metrics""""
+        html shouldContain """id="${ProxyDashboardHtml.COPY_ID_PREFIX}node_metrics""""
+      }
+    }
+
+    // The page shows each scrape time in the viewer's zone, the one Grafana uses, from the instant in datetime. The
+    // text is in the proxy's zone, so it depends on the JVM running the test and is not asserted.
+    "a scrape time should carry its instant, to the second, in both layouts" {
+      val at = Instant.parse("2026-11-15T01:24:23.456Z")
+      val scraped =
+        DashboardFixtures.pathView(
+          path = "app_metrics",
+          lastScrape = DashboardFixtures.scrapeRecord(path = "app_metrics", at = at),
+        )
+      val snap = snapshot(paths = [scraped], scrapes = [DashboardFixtures.scrapeRecord(path = "app_metrics", at = at)])
+
+      val pathFrame = ProxyDashboardHtml.pushFragment(snap, null, "/dashboard", DashboardLayout.PATH)
+      val detail = ProxyDashboardHtml.detailFragment(snap, selectedId = "1")
+      listOf(pathFrame, detail).forEach { html ->
+        html shouldContain """<time datetime="2026-11-15T01:24:23Z">"""
+      }
+    }
+
+    "a path that was never scraped should show a dash rather than a time" {
+      val bare = DashboardFixtures.pathView(path = "new_path")
+      val html = ProxyDashboardHtml.pushFragment(snapshot(paths = [bare]), null, "/dashboard", DashboardLayout.PATH)
+
+      html shouldNotContain "<time"
+    }
+
+    // The target URL is agent-supplied, and the button carries it in an attribute.
+    "a target URL should be escaped in the copy attribute" {
+      val served = DashboardFixtures.pathView(path = "q_metrics", targetUrl = "http://h:9100/m?a=1&b=\"x\"")
+      val html = ProxyDashboardHtml.pushFragment(snapshot(paths = [served]), null, "/dashboard", DashboardLayout.PATH)
+
+      html shouldContain """${ProxyDashboardHtml.COPY_ATTR}="http://h:9100/m?a=1&amp;b=&quot;x&quot;""""
     }
 
     // Each layout owns disjoint region ids, so a frame carrying the other layout's regions would be
@@ -520,6 +618,44 @@ class ProxyDashboardHtmlTest : StringSpec() {
       val page = createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(), null, "/dashboard") } }
       page shouldContain "if (!up && !wasDown) region.textContent = 'Connection to the proxy lost. Reconnecting.'"
       page shouldContain "else if (up && wasDown) region.textContent = 'Connection to the proxy restored.'"
+    }
+
+    // The table is replaced on every push, so a listener attached to a copy button would last one frame.
+    "the page should handle copy clicks from one listener on the body" {
+      val page = createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(), null, "/dashboard") } }
+      page shouldContain "document.body.addEventListener('click'"
+      page shouldContain "evt.target.closest('button.copy')"
+      page shouldContain "btn.getAttribute('${ProxyDashboardHtml.COPY_ATTR}')"
+    }
+
+    // navigator.clipboard is undefined outside a secure context, and the dashboard is usually plain http on
+    // a LAN address. Without the fallback the button would do nothing on exactly the pages that use it most.
+    "the page should copy without the clipboard API outside a secure context" {
+      val page = createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(), null, "/dashboard") } }
+      page shouldContain "if (navigator.clipboard && window.isSecureContext) return"
+      page shouldContain "document.execCommand('copy')"
+    }
+
+    // A push that lands while the mark is showing replaces the marked button with an unmarked one.
+    "the page should put a copy result back on the button after each push" {
+      val page = createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(), null, "/dashboard") } }
+      page shouldContain "document.body.addEventListener('htmx:ws:after:message:incoming', applyMark)"
+    }
+
+    // Converted in the fragment before the swap rather than in the page after it, so no frame shows the proxy's zone
+    // between the two, and once for the times the page was served with.
+    "the page should show scrape times in the viewer's zone before each swap" {
+      val page = createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(), null, "/dashboard") } }
+      page shouldContain "localTimes(document);"
+      page shouldContain "document.addEventListener('htmx:before:swap'"
+      page shouldContain "if (task.fragment) localTimes(task.fragment);"
+    }
+
+    // The mark is an icon and a colour, neither of which reaches a screen reader.
+    "the page should announce the result of a copy" {
+      val page = createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(), null, "/dashboard") } }
+      page shouldContain "say('Target URL copied.')"
+      page shouldContain "say('Could not copy the target URL.')"
     }
 
     // htmx 4 refetches the page on every back or forward and runs the inline scripts of what it swaps in.

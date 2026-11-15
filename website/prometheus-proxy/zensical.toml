@@ -24,13 +24,11 @@ nav = [
   ]},
   { "Getting Started" = [
     { "Quick Start" = "getting-started.md" },
+    { "Live Demo" = "demo.md" },
   ]},
   { "Deployment" = [
     { "Docker" = "docker.md" },
     { "Kubernetes" = "kubernetes.md" },
-  ]},
-  { "Operations" = [
-    { "Dashboard" = "web-dashboard.md" },
   ]},
   { "Configuration" = [
     { "Overview" = "configuration/index.md" },
@@ -50,6 +48,7 @@ nav = [
     { "Grafana & Alerting" = "grafana.md" },
   ]},
   { "Operations" = [
+    { "Dashboard" = "web-dashboard.md" },
     { "Running in Production" = "production.md" },
     { "Troubleshooting" = "troubleshooting.md" },
   ]},
