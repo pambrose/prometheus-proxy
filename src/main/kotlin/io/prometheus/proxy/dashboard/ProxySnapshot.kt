@@ -17,6 +17,7 @@
 package io.prometheus.proxy.dashboard
 
 import io.prometheus.Proxy
+import io.prometheus.proxy.AgentAuthManager.Companion.LEGACY_IDENTITY_NAME
 import io.prometheus.proxy.ScrapeRecord
 import kotlin.time.Duration
 import kotlin.time.Instant
@@ -31,6 +32,8 @@ import kotlin.time.Instant
  * operator can be shown, and without this it is the one thing that silently disappears.
  *
  * @param history the path's recent scrapes, newest first, at most `proxy.dashboard.pathHistorySize` of them
+ * @param identity the auth identity of the path's first registrant, which any agent joining it must share; empty with
+ *   agent auth off, and for a departed path, whose entry is gone
  */
 internal data class PathView(
   val path: String,
@@ -41,9 +44,16 @@ internal data class PathView(
   val isDeparted: Boolean = false,
   val agentNames: List<String> = emptyList(),
   val history: List<ScrapeRecord> = emptyList(),
+  val identity: String = "",
 ) {
   /** The path's most recent scrape, or null for one not yet scraped. */
   val lastScrape: ScrapeRecord? get() = history.firstOrNull()
+
+  /** Whether the last scrape of this registered path failed. A departed path counts separately. */
+  val isFailing: Boolean get() = !isDeparted && lastScrape?.isSuccess == false
+
+  /** What the "problems only" filter keeps: a path whose last scrape failed, or whose agent has gone. */
+  val isProblem: Boolean get() = isFailing || isDeparted
 
   /**
    * The agent that last served this path, named the way the agent list names it.
@@ -96,6 +106,7 @@ internal data class AgentView(
   val paths: List<PathView>,
   val proxyEndpoints: List<String> = emptyList(),
   val currentEndpointIndex: Int = 0,
+  val identity: String = "",
 ) {
   /**
    * How this agent reached this proxy, when it has failover configured — for example
@@ -117,6 +128,18 @@ internal data class AgentView(
   fun evictionCountdownSecs(maxInactivitySecs: Long): Long =
     (maxInactivitySecs - inactivity.inWholeSeconds).coerceAtLeast(0)
 }
+
+/**
+ * An auth identity as the dashboard names it, or null when there is none to show: agent auth is off, or the path is
+ * departed. The legacy `proxy.agentToken` is an identity in name only, one token every agent shares, so it reads as
+ * that rather than as its internal name.
+ */
+internal fun identityLabel(identity: String): String? =
+  when (identity) {
+    "" -> null
+    LEGACY_IDENTITY_NAME -> "shared token"
+    else -> identity
+  }
 
 /** Counters that drift rather than change at an identifiable moment, sampled on a timer. */
 internal data class HealthView(
@@ -226,6 +249,7 @@ internal data class ProxySnapshot(
               targetUrl = info.targetUrl,
               pathSource = info.pathSource,
               agentNames = info.agentContexts.map { it.agentName },
+              identity = info.identityName,
             )
           }
           .sortedBy { it.path }
@@ -261,6 +285,7 @@ internal data class ProxySnapshot(
               paths = pathsByAgent[agentId].orEmpty(),
               proxyEndpoints = context.proxyEndpoints,
               currentEndpointIndex = context.currentEndpointIndex,
+              identity = context.identityName,
             )
           }
           .sortedBy { it.agentName }

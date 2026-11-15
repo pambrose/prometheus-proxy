@@ -308,6 +308,32 @@ class ProxyServiceImplTest : StringSpec() {
     // October #23: the name, host name, launch ID, and endpoint list an agent reports were stored whole, bounded only
     // by gRPC's 4 MiB message limit, and repeated for every path the agent serves: in logs, service discovery, the
     // dashboard, and /debug. They are now cut to proxy.internal limits; the agent stays registered.
+    // The dashboard names the identity an agent registered as. Recorded in either transport-filter mode, apart from
+    // authIdentityName, which binds the context and is set only with the filter disabled.
+    "registerAgent should record the identity the call authenticated as, without binding the context to it" {
+      val (proxy, agentContext) = proxyWithRealAgentContext()
+      val identity = AgentIdentity("east", ByteArray(0), emptyList())
+      val request = registerAgentRequest { agentId = agentContext.agentId }
+
+      val response = withIdentity(identity) { runBlocking { ProxyServiceImpl(proxy).registerAgent(request) } }
+
+      response.valid.shouldBeTrue()
+      agentContext.identityName shouldBe "east"
+      agentContext.authIdentityName shouldBe ""
+    }
+
+    "registerAgent with agent auth off should record no identity" {
+      val (proxy, agentContext) = proxyWithRealAgentContext()
+
+      ProxyServiceImpl(proxy).registerAgent(
+        registerAgentRequest {
+        agentId = agentContext.agentId
+      },
+      ).valid.shouldBeTrue()
+
+      agentContext.identityName shouldBe ""
+    }
+
     "registerAgent should cut over-long agent-reported fields to the proxy.internal limits" {
       val (proxy, agentContext) = proxyWithRealAgentContext(maxAgentFieldLength = 256, maxAgentProxyEndpoints = 4)
       val request =

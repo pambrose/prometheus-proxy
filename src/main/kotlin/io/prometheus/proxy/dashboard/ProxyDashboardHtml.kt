@@ -88,6 +88,9 @@ internal object ProxyDashboardHtml {
   const val PROXY_PATH_ATTR = "data-proxy-path"
   const val SCRAPE_PORT_ATTR = "data-scrape-port"
 
+  // On the status bar: how many paths are failing or gone, which the page's script puts in the tab's title.
+  const val PROBLEMS_ATTR = "data-problems"
+
   // The two kinds of copy button, by row. Their ids differ before the path does ("copy-t..." and "copy-p..."), so no
   // path can give one kind the id of the other.
   const val COPY_TARGET_ID_PREFIX = "copy-target-"
@@ -103,6 +106,7 @@ internal object ProxyDashboardHtml {
     selectedId: String?,
     routeBase: String,
     layout: DashboardLayout = DashboardLayout.AGENT,
+    filter: PathFilter = PathFilter.NONE,
   ) {
     // Declared so assistive tech pronounces agent names, paths, and status text as English rather than
     // falling back to the listener's system locale.
@@ -147,7 +151,7 @@ internal object ProxyDashboardHtml {
 
         DashboardLayout.PATH -> {
           main {
-            renderPathTable(snapshot)
+            with(PathTableHtml) { renderPathTable(snapshot, routeBase, filter) }
           }
         }
       }
@@ -181,137 +185,10 @@ internal object ProxyDashboardHtml {
   }
 
   /**
-   * Every path on one row, joined with its last scrape.
-   *
-   * Flat on purpose: no selection, no drill-in, no per-session state, so the whole table is a single
-   * out-of-band swap and the push path stays the cheapest of any layout. The row IS the answer, which is
-   * the reason to have this view at all.
-   */
-  fun FlowContent.renderPathTable(
-    snapshot: ProxySnapshot,
-    oob: Boolean = false,
-  ) = div("scroller") { pathTableInner(snapshot, oob) }
-
-  private fun DIV.pathTableInner(
-    snapshot: ProxySnapshot,
-    oob: Boolean,
-  ) {
-    attributes["id"] = PATH_TABLE_ID
-    if (oob) attributes["hx-swap-oob"] = "true"
-    if (snapshot.paths.isEmpty()) {
-      div("empty pad") { +"No paths registered" }
-      return
-    }
-    table("ptable") {
-      caption("sr-only") { +"Registered paths and the most recent scrape against each" }
-      thead {
-        tr {
-          th(scope = ThScope.col) { +"Path" }
-          th(scope = ThScope.col) { +"Agent(s)" }
-          th(scope = ThScope.col) { +"Target" }
-          th(scope = ThScope.col) { +"Src" }
-          th(scope = ThScope.col) { +"Last scrape" }
-          th(scope = ThScope.col, classes = "num") { +"Status" }
-          th(scope = ThScope.col, classes = "num") { +"Duration" }
-          th(scope = ThScope.col) { +"History" }
-        }
-      }
-      tbody {
-        snapshot.paths.forEach { path ->
-          tr(if (path.isDeparted) "departed" else null) {
-            pathCell(path)
-            td {
-              // A departed path still names who was serving it -- that is usually the whole answer.
-              // Named the way the agent list names it, so the two layouts can be read against each other.
-              +(path.servingAgent?.let(::agentLabel) ?: DASH)
-              if (path.isDeparted) span("tag crit") { +"gone" }
-              if (path.additionalAgents > 0) span("dim") { +" +${path.additionalAgents}" }
-            }
-            targetCell(path)
-            td("dim") { +sourceLabel(path.pathSource) }
-            td("dim") { scrapeTime(path.lastScrape?.at) }
-            td("num") {
-              val scrape = path.lastScrape
-              if (scrape == null)
-                span("dim") { +DASH }
-              else
-                span(if (scrape.isSuccess) "pill ok" else "pill crit") { +"${scrape.statusCode}" }
-            }
-            td("num dim") { +(path.lastScrape?.let { "${it.durationMillis} ms" } ?: DASH) }
-            historyCell(path)
-          }
-        }
-      }
-    }
-  }
-
-  /**
-   * A path, and while the proxy serves it, the button that copies its proxy URL, the one to curl to check the path
-   * through the proxy. The proxy can't know the name the viewer reaches it by, so the button carries the path, and the
-   * page's script joins it to the host the page was opened at and the scrape port, [SCRAPE_PORT_ATTR] on `<body>`.
-   */
-  private fun TR.pathCell(path: PathView) =
-    td {
-      +"/${path.path}"
-      if (!path.isDeparted)
-        copyButton("$COPY_PROXY_ID_PREFIX${path.path}", "proxy URL", path) {
-          attributes[PROXY_PATH_ATTR] = "/${path.path}"
-        }
-    }
-
-  /** A path's target URL and the button that copies it, or a dash for a path without one, such as a departed path. */
-  private fun TR.targetCell(path: PathView) =
-    td("dim") {
-      if (path.targetUrl.isEmpty()) {
-        +DASH
-      } else {
-        +path.targetUrl
-        copyButton("$COPY_TARGET_ID_PREFIX${path.path}", "target URL", path) {
-          attributes[COPY_ATTR] = path.targetUrl
-        }
-      }
-    }
-
-  /**
-   * The path's recent scrapes as a row of dots, oldest on the left, then the share that succeeded. Where the Status
-   * column says how the last scrape went, this says whether that is news: a target that fails every scrape and one
-   * that failed once in twenty read the same in Status alone.
-   *
-   * Drawn as one element per run of like results, each painting a dot per scrape as a repeating background, rather
-   * than an element per scrape: the table is pushed whole every refresh, so a healthy path's strip stays one element.
-   * The strip is one image to assistive tech, labelled with the same count the percentage gives.
-   *
-   * A block body, not `= td(...) { }` as the other cells are written: CodeScene doesn't count the conditionals
-   * inside an expression-bodied function's trailing lambda as the function's own, and with this one the file crossed
-   * its Global Conditionals threshold.
-   */
-  private fun TR.historyCell(path: PathView) {
-    td("dim") {
-      val total = path.history.size
-      if (total == 0) {
-        +DASH
-      } else {
-        val succeeded = path.historySucceeded
-        val summary = "$succeeded of $total recent scrapes succeeded"
-        span("hist") {
-          attributes["role"] = "img"
-          attributes["aria-label"] = summary
-          attributes["title"] = summary
-          path.historyRuns.forEach { (ok, count) ->
-            i(if (ok) "ok" else "crit") { attributes["style"] = "--n:$count" }
-          }
-        }
-        // Floored, so a path with any failure never reads 100%.
-        +"${succeeded * 100 / total}%"
-      }
-    }
-  }
-
-  /**
    * A scrape's time, or a dash when there is none. Rendered as `<time datetime="…Z">` with the time of day in the
    * proxy's zone, which the page's script replaces with the viewer's (see SELECTION_JS).
    */
-  private fun FlowOrPhrasingContent.scrapeTime(at: Instant?) {
+  internal fun FlowOrPhrasingContent.scrapeTime(at: Instant?) {
     if (at == null) {
       +DASH
       return
@@ -321,27 +198,6 @@ internal object ProxyDashboardHtml {
       // java.time's formatter, since the standard library has none that takes a zone.
       +timeFormat.format(at.toJavaInstant())
     }
-  }
-
-  /**
-   * A button that copies [what] for [path] to the clipboard; [value] puts what it copies in an attribute.
-   *
-   * The page's script does the copying (see SELECTION_JS). The [id] is built from the path, which is unique in the
-   * table, because the push loop replaces the whole table every frame: htmx gives focus back to the element whose id
-   * the focused one had, so a keyboard user keeps their place, and the script puts the copied mark back on the button
-   * with that id until the mark expires.
-   */
-  private fun FlowContent.copyButton(
-    id: String,
-    what: String,
-    path: PathView,
-    value: BUTTON.() -> Unit,
-  ) = button(type = ButtonType.button, classes = "copy") {
-    attributes["id"] = id
-    value()
-    // Names the path, so a screen reader listing the page's buttons can tell one row's from another's.
-    attributes["aria-label"] = "Copy the $what of /${path.path}"
-    attributes["title"] = "Copy $what"
   }
 
   /** Status counters. Driven by the timer rather than the event bus -- these drift, they do not change. */
@@ -361,6 +217,11 @@ internal object ProxyDashboardHtml {
       // The frame's view stamp; see pushFragment.
       attributes[VIEW_ATTR] = "$viewSeq"
     }
+    val departed = snapshot.paths.count { it.isDeparted }
+    val failing = snapshot.paths.count { it.isFailing }
+    // Every page has the bar and every push renders it, so the tab's title can follow on any layout. Set before the
+    // first child: the HTML streams out as it is built, so a tag's attributes can't change once its content has begun.
+    attributes[PROBLEMS_ATTR] = "${departed + failing}"
     // Both labels are always rendered; which one shows is driven by the `ws-down` class on <body>,
     // which the WebSocket lifecycle handlers toggle. Body-level rather than here because this region
     // is overwritten by every push -- and a push can only happen while connected, so the server never
@@ -376,7 +237,8 @@ internal object ProxyDashboardHtml {
     // health.pathCount counts registrations, so a departed path is deliberately absent from it -- which
     // read as the bar contradicting the table it sits above ("0 paths" over three visible rows). Naming
     // the departed count separately keeps both numbers true and explains the difference.
-    val departed = snapshot.paths.count { it.isDeparted }
+    if (failing > 0)
+      span("crit") { +"$failing failing" }
     if (departed > 0)
       span("crit") { +"$departed departed" }
     val h = snapshot.health
@@ -424,6 +286,8 @@ internal object ProxyDashboardHtml {
         span {
           span(if (agent.isValid) "led ok" else "led crit") {}
           +agentLabel(agent.agentName)
+          // A tag on the name's line rather than text on the address's, which the list's width wraps.
+          identityLabel(agent.identity)?.also { span("tag") { +it } }
         }
         span("host") { +"${agent.remoteAddr} · ${agent.paths.size} paths" }
       }
@@ -468,9 +332,10 @@ internal object ProxyDashboardHtml {
         }
       }
       div("hero-meta") {
-        +listOf(
+        +listOfNotNull(
           agent.remoteAddr,
           "host ${agent.hostName}",
+          identityLabel(agent.identity)?.let { "identity $it" },
           "launch ${agent.launchId}",
           "up ${humanize(Clock.System.now() - agent.connectTime)}",
           "idle ${agent.inactivity.inWholeSeconds}s",
@@ -545,6 +410,7 @@ internal object ProxyDashboardHtml {
     routeBase: String,
     layout: DashboardLayout? = DashboardLayout.AGENT,
     viewSeq: Long = 0L,
+    filter: PathFilter = PathFilter.NONE,
   ): String =
     buildString {
       append(createHTML().span("bar-right") { statusInner(snapshot, oob = true, viewSeq) })
@@ -555,7 +421,7 @@ internal object ProxyDashboardHtml {
         }
 
         DashboardLayout.PATH -> {
-          append(createHTML().div("scroller") { pathTableInner(snapshot, oob = true) })
+          append(createHTML().div("scroller") { with(PathTableHtml) { pathTable(snapshot, filter, oob = true) } })
         }
 
         null -> {}
@@ -582,7 +448,7 @@ internal object ProxyDashboardHtml {
    *
    * Shared by both layouts so one agent never appears under two different labels.
    */
-  private fun agentLabel(name: String): String = if (name == UNASSIGNED) "(registering…)" else name
+  internal fun agentLabel(name: String): String = if (name == UNASSIGNED) "(registering…)" else name
 
   /** An agent's uptime at the precision the hero line wants: the two largest units from a day up, then one. */
   internal fun humanize(duration: Duration): String =
@@ -595,18 +461,12 @@ internal object ProxyDashboardHtml {
       }
     }
 
-  // PathSource names are agent-side enum constants carried as free text, so an unrecognized value is
-  // shown verbatim rather than swallowed -- an agent newer than the proxy stays legible.
-  private fun sourceLabel(source: String): String =
-    when (source) {
-      "STATIC" -> "cfg"
-      "DISCOVERED" -> "disc"
-      "" -> DASH
-      else -> source.lowercase()
-    }
-
   private const val UNASSIGNED = "Unassigned"
   private const val MAX_DETAIL_SCRAPES = 25
+
+  // How long the path search waits after a keystroke before applying the filter: long enough not to push a new table
+  // per letter, short enough to read as typing into a live view.
+  private const val FILTER_DEBOUNCE_MILLIS = 250
 
   // How long a copy button shows its result: long enough to notice after the click, brief enough that it reads
   // as the click's answer rather than as a state of the row.
@@ -614,7 +474,7 @@ internal object ProxyDashboardHtml {
 
   // An en dash for "the agent never told us", kept distinct from an empty cell, which would read as a
   // rendering bug rather than as absent data.
-  private const val DASH = "\u2013"
+  const val DASH = "\u2013"
 
   /**
    * htmx's config, read from a `<meta>` tag.
@@ -653,6 +513,12 @@ internal object ProxyDashboardHtml {
       function layout() {
         return /\/paths\/?$/.test(window.location.pathname) ? 'PATH' : 'AGENT';
       }
+      // The Paths view's filter, which the URL keeps (see applyFilter), so a reload or a shared link shows the same
+      // rows. The server filters the table each push renders, so every announce carries it.
+      function filter() {
+        var p = new URLSearchParams(window.location.search);
+        return { q: p.get('q') || '', problems: p.get('problems') === '1' };
+      }
       // The extension's connection, which outlives its socket: each reconnect replaces connection.socket,
       // so this keeps the connection and reads the socket when it sends.
       var conn = null;
@@ -661,13 +527,16 @@ internal object ProxyDashboardHtml {
       // shows. Without it a row click raced the push loop: a tick rendered from the previous selection could
       // land after the click's own swap and put the previous agent back until the next frame.
       var seq = 0;
+      // The stamp of the last frame shown, which says when a frame reflects a new filter (see afterFrame).
+      var shownSeq = 0;
       function announce() {
         var s = conn && conn.socket;
         // Only on an open socket. Nothing is lost by skipping: every open announces again from the URL.
-        if (s && s.readyState === WebSocket.OPEN) {
-          seq += 1;
-          s.send(JSON.stringify({ select: selectedId(), layout: layout(), seq: seq }));
-        }
+        if (!s || s.readyState !== WebSocket.OPEN) return false;
+        seq += 1;
+        var f = filter();
+        s.send(JSON.stringify({ select: selectedId(), layout: layout(), seq: seq, q: f.q, problems: f.problems }));
+        return true;
       }
       // Drops a frame rendered from an older message. The stamp is on the frame's first tag, the status
       // region, which the server writes whole; the match is anchored there, so no agent-supplied value can
@@ -675,7 +544,9 @@ internal object ProxyDashboardHtml {
       document.body.addEventListener('htmx:ws:before:message:incoming', function (evt) {
         var data = evt.detail.message.data;
         var m = typeof data === 'string' && /^<span[^>]*\s$VIEW_ATTR="(\d+)"/.exec(data);
-        if ((m ? Number(m[1]) : 0) < seq) evt.preventDefault();
+        var stamp = m ? Number(m[1]) : 0;
+        if (stamp < seq) evt.preventDefault();
+        else shownSeq = stamp;
       });
       // The connection indicator. The extension reconnects on its own (with the backoff capped in the
       // htmx-config meta tag); this only reflects that effort so the page does not keep claiming "live"
@@ -745,7 +616,57 @@ internal object ProxyDashboardHtml {
           mark = null;
         }, $COPY_MARK_MILLIS);
       }
-      document.body.addEventListener('htmx:ws:after:message:incoming', applyMark);
+      // The tab's title counts the paths failing or gone, from the status bar, which every page and push renders, so a
+      // dashboard left in a background tab still says when something is wrong.
+      function updateTitle() {
+        var bar = document.getElementById('$STATUS_ID');
+        var n = bar ? Number(bar.getAttribute('$PROBLEMS_ATTR')) : 0;
+        document.title = (n > 0 ? '(' + n + (n === 1 ? ' problem) ' : ' problems) ') : '') + 'prometheus-proxy';
+      }
+      updateTitle();
+      // The search above the path table. A change applies as it is typed: it goes into the URL, and the socket is
+      // told, so the next frame's table is filtered. Without this script the form still works, as a plain GET.
+      var countDue = 0;
+      var filterTimer = 0;
+      function applyFilter() {
+        var q = document.getElementById('${PathTableHtml.FILTER_QUERY_ID}');
+        var problems = document.getElementById('${PathTableHtml.FILTER_PROBLEMS_ID}');
+        if (!q || !problems) return;
+        var params = new URLSearchParams();
+        if (q.value.trim()) params.set('q', q.value.trim());
+        if (problems.checked) params.set('problems', '1');
+        var search = params.toString();
+        history.replaceState(history.state, '', window.location.pathname + (search ? '?' + search : ''));
+        // The first frame rendered from this filter says how many rows it left.
+        if (announce()) countDue = seq;
+      }
+      document.body.addEventListener('input', function (evt) {
+        if (evt.target.id !== '${PathTableHtml.FILTER_QUERY_ID}') return;
+        clearTimeout(filterTimer);
+        filterTimer = setTimeout(applyFilter, $FILTER_DEBOUNCE_MILLIS);
+      });
+      document.body.addEventListener('change', function (evt) {
+        if (evt.target.id === '${PathTableHtml.FILTER_PROBLEMS_ID}') applyFilter();
+      });
+      document.body.addEventListener('submit', function (evt) {
+        if (!evt.target.matches || !evt.target.matches('form.filters')) return;
+        evt.preventDefault();
+        clearTimeout(filterTimer);
+        applyFilter();
+      });
+      // Spoken once per change of filter, the user's own act, as a copy's result is; never per push.
+      function sayCount() {
+        var table = document.getElementById('$PATH_TABLE_ID');
+        if (!countDue || shownSeq < countDue || !table) return;
+        countDue = 0;
+        say('Showing ' + table.getAttribute('${PathTableHtml.SHOWN_ATTR}') + ' of ' +
+          table.getAttribute('${PathTableHtml.TOTAL_ATTR}') + ' paths.');
+      }
+      document.body.addEventListener('htmx:ws:after:message:incoming', function () {
+        applyMark();
+        updateTitle();
+        sayCount();
+      });
       // navigator.clipboard exists only in a secure context, and the dashboard is usually plain http on a
       // LAN address, where it is undefined. There the copy goes through a hidden textarea and execCommand,
       // deprecated but still the only way to write the clipboard outside a secure context.

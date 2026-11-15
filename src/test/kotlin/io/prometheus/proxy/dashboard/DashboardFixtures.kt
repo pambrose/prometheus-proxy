@@ -44,7 +44,8 @@ internal object DashboardFixtures {
     isDeparted: Boolean = false,
     agentNames: List<String> = agentIds.map { "agent-$it" },
     history: List<ScrapeRecord> = listOfNotNull(lastScrape),
-  ) = PathView(path, agentIds, labels, targetUrl, pathSource, isDeparted, agentNames, history)
+    identity: String = "",
+  ) = PathView(path, agentIds, labels, targetUrl, pathSource, isDeparted, agentNames, history, identity)
 
   fun agentView(
     agentId: String = "1",
@@ -53,6 +54,7 @@ internal object DashboardFixtures {
     paths: List<PathView> = [pathView()],
     proxyEndpoints: List<String> = emptyList(),
     currentEndpointIndex: Int = 0,
+    identity: String = "",
   ) = AgentView(
     agentId = agentId,
     agentName = agentName,
@@ -67,6 +69,7 @@ internal object DashboardFixtures {
     paths = paths,
     proxyEndpoints = proxyEndpoints,
     currentEndpointIndex = currentEndpointIndex,
+    identity = identity,
   )
 
   fun scrapeRecord(

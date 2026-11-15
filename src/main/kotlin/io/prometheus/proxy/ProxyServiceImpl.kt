@@ -180,7 +180,11 @@ internal class ProxyServiceImpl(
           "Invalid agentId: $shown (registerAgent)"
         } else {
           identityMismatchReason(agentContext, "registerAgent") ?: run {
-            agentContext.assignProperties(boundedRegistration(request, agentContext.agentId))
+            // The identity is the operator's name for a token, not an agent-supplied value.
+            agentContext.assignProperties(
+              boundedRegistration(request, agentContext.agentId),
+              AgentAuthManager.AGENT_IDENTITY_KEY.get()?.name.orEmpty(),
+            )
             agentContext.markActivityTime(false)
             logger.info { "Connected to $agentContext" }
             // Identity is only populated here; AgentConnected fired at the connection's first authenticated call

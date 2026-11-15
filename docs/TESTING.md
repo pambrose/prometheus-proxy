@@ -254,8 +254,8 @@ Two support helpers also live here (not test classes themselves):
 
 - **ProxyTest** — Proxy main class lifecycle, agent info retrieval, JSON serialization, stale agent cleanup;
   `removeAgentContext` counts each chunked transfer it reclaims as abandoned, and never one the stream's sweep counted
-- **ProxyServiceImplTest** — gRPC implementation: registerAgent, registerPath, heartbeat, scrape responses, chunked
-  responses; a result or a chunked transfer for a scrape sent to another agent neither completes nor fails it, even
+- **ProxyServiceImplTest** — gRPC implementation: registerAgent (recording the identity the call authenticated as for
+  the dashboard, without binding the context to it), registerPath, heartbeat, scrape responses, chunked responses; a result or a chunked transfer for a scrape sent to another agent neither completes nor fails it, even
   when its `agentId` or `headerAgentId` names that agent; a transfer ends with its scrape, even one whose scrape ended
   just before it was stored, one stream has at most the agent's backlog cap of transfers under way, a header's strings
   are cut, and a late result or transfer logs nothing above DEBUG; with the transport filter disabled, a scrape-request
@@ -330,9 +330,16 @@ Two support helpers also live here (not test classes themselves):
 - **ProxyEventBusTest** — Dashboard event bus: ordered delivery, non-blocking emit with no subscriber, no replay to a
   late subscriber, fan-out to multiple subscribers, and AgentContextManager emitting on connect only
 - **ProxyDashboardHtmlTest** (`dashboard/`) — Dashboard renderer: top-level out-of-band push regions, agent- and
-  path-centric layouts, tolerant selection and layout parsing, departed paths, the path table's history strip (one
-  element per run, a floored percentage, no status pill, visible under forced colours), an agent's uptime, failover
-  markers, accessibility, and the WebSocket connection indicator
+  path-centric layouts, tolerant selection, layout, and filter parsing, departed paths, an agent's identity in its row
+  and detail, the script's after-push work, an agent's uptime, failover markers, accessibility, and the WebSocket
+  connection indicator
+- **PathTableHtmlTest** (`dashboard/`) — the Paths view's table and search: the history strip (one element per run, a
+  floored percentage, no status pill, visible under forced colours), the Identity column (shown only with an identity,
+  the legacy token as a shared token), the search (matching rows, the match count, the empty states, the form outside
+  the pushed table, an escaped query, the script sending the URL's filter), and the failing and problem counts
+- **PathFilterTest** (`dashboard/`) — the Paths view's search: a query matching the path, any agent's name, the target
+  URL, or the identity (the legacy token by its label), ignoring case, and a departed path's agent; "problems only"
+  keeping failing and departed paths; both having to match; browser input trimmed and cut; and identity labels
 - **ProxyDashboardServiceTest** (`dashboard/`) — Dashboard request guards: the WebSocket Origin check (own host,
   `allowedOrigins`, foreign or malformed origins refused), the opt-in `allowedHosts` Host check against DNS rebinding,
   and the snapshot cache pages and sessions render from: one collect per refresh interval however many reads, shared
@@ -537,8 +544,9 @@ mechanism that the standard suite cannot reach:
 - **ProxyWebDashboardTest** — the dashboard service rather than the renderer: page, WebSocket push,
   selection round-trip, both layouts, a root-mounted base path, with `allowedHosts` set a 403 on every route
   for a request naming an unknown host, page GETs and WebSocket messages rendering the cached snapshot while a
-  topology change still shows on the next page, and a gone path staying in the path layout after more scrapes than
-  the recent-scrapes queue holds
+  topology change still shows on the next page, a gone path staying in the path layout after more scrapes than
+  the recent-scrapes queue holds, and an agent's identity in both layouts with the path search filtering from the URL
+  and over the socket
 - **TlsMutualAuthRejectionTest** — the negative mutual-TLS path over a real Netty handshake, which the
   in-process TLS specs cannot perform (item 28 in `docs/archive/CODE_REVIEW_JUNE_2026.md`)
 

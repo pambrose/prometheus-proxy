@@ -482,7 +482,8 @@ refinement, and no component earns visual weight it doesn't need to do its job.
 A `<button>` styled as a full-width list row, so it is keyboard-operable by construction.
 
 - **Shape:** square (`0`), full-bleed, `10px 15px` padding, `line-soft` bottom divider.
-- **Structure:** two lines — an LED plus the agent name, then `address · N paths` in Caption/`ink-3`.
+- **Structure:** two lines — an LED plus the agent name, followed by a neutral Tag naming its identity when
+  it registered as one, then `address · N paths` in Caption/`ink-3`.
 - **Rest:** transparent background.
 - **Hover:** background steps to `surface-3`. No transition.
 - **Focus:** `2px solid accent` outline, `outline-offset: -2px` so the ring sits *inside* the row and
@@ -501,7 +502,8 @@ A `<button>` styled as a full-width list row, so it is keyboard-operable by cons
 
 - **Style:** fully round, `2px 7px`, Micro type (400/10px, normal spacing, mixed case) — *not* the
   uppercase Label treatment, despite the shared 10px size.
-- **Neutral:** `surface-3` background, `ink-2` text — used for `consolidated`.
+- **Neutral:** `surface-3` background, `ink-2` text — used for `consolidated`, and for an agent's identity in
+  the agent list.
 - **Warn:** `warn-soft` / `warn` — used for `failed over`.
 - **Crit:** `crit-soft` / `crit` — used for `gone`.
 
@@ -538,12 +540,13 @@ room for.
 
 ### Path Table
 
-The signature component. Eight columns: Path, Agent(s), Target, Src, Last scrape, Status, Duration, History.
+The signature component. Eight columns: Path, Agent(s), Target, Src, Last scrape, Status, Duration, History, and
+a ninth, Identity, after Agent(s) whenever any path has one, which is whenever agent auth is on.
 
 - **Header:** `surface-2`, sticky at `top: 0`, Label type, `line` bottom border.
 - **Cells:** `8px 15px`, `line-soft` divider, `white-space: nowrap`.
 - **Numeric columns:** right-aligned with `tabular-nums`.
-- **Dimmed columns:** Target, Src, Last scrape, and Duration render in `ink-3` — supporting facts,
+- **Dimmed columns:** Identity, Target, Src, Last scrape, and Duration render in `ink-3` — supporting facts,
   scanned only after the row is located by path or status.
 - **Row hover:** cells step to `surface-2`. No transition.
 - **Path:** a Copy Button follows a registered path and copies its proxy URL.
@@ -551,9 +554,30 @@ The signature component. Eight columns: Path, Agent(s), Target, Src, Last scrape
   names. A row with no target shows the en dash and no button, since there is nothing to copy.
 - **History:** a History Strip, then the share of those scrapes that succeeded in `ink-3`, rounded down so a
   path with any failure never reads 100%. A path not yet scraped shows the en dash.
+- **Identity:** the auth identity of the path's first registrant, which any agent joining the path must
+  share. The legacy shared `agentToken` reads *shared token*; a departed path has none and shows the en
+  dash. Shown or hidden for the whole table, never per filter, so the column doesn't come and go as a
+  search narrows.
 - **Departed row:** the path cell turns `crit` and a `gone` tag follows the agent name. The row stays
   in place — a path whose agent vanished is the single most important thing this table shows, and
   removing it is how the old interface hid exactly that case.
+- **Match count:** while a search is active, a Meta-type line in `ink-3` above the header says
+  `Showing N of M paths`; a search that leaves no row is an Empty State instead (*No paths match the
+  filter*, or *No problems: every path's last scrape succeeded* for "Problems only" alone).
+
+### Path Search
+
+The one form in the system, above the Path Table on `surface-2` with a `line` bottom border, so it
+reads as part of the table's header rather than a separate panel.
+
+- **Input:** a `type="search"` field, square (it holds content), `surface` ground, `line` border, Body
+  type in `ink` with an `ink-3` placeholder. Focus is the standard `2px solid accent` ring.
+- **Problems only:** a checkbox and its label in `ink-2`. The checked box is neutral `ink-2`, not the
+  accent, which stays on focus rings and the current row (see The Two Places Rule).
+- **Behavior:** a change applies as it is typed (debounced 250ms) and lands in the URL
+  (`/paths?q=…&problems=1`), so a filtered view is a link. It sits outside the table's out-of-band
+  region, so a push never replaces the field someone is typing in. Without the script it is a plain GET
+  form. The match count is spoken through the Connection Announcer once per change.
 
 ### History Strip
 
@@ -618,6 +642,10 @@ label, both in the top bar.
 connection beacon and a run of counters — agents, paths, and the internal chunk/scrape gauges, which
 turn `warn` as they approach their thresholds.
 
+A **failing count** joins the run in `crit` whenever a registered path's last scrape failed (`2 failing`),
+and the bar carries the number of paths failing or departed for the tab's title, which reads
+`(3 problems) prometheus-proxy`, so a dashboard in a background tab still says something is wrong.
+
 A **departed count** joins the run in `crit` whenever any path is departed (`3 departed`). It exists
 because the paths counter reports *registrations*, so a departed path is deliberately absent from it —
 which without explanation reads as the bar contradicting the table directly beneath it. Every stat
@@ -627,7 +655,8 @@ carries `white-space: nowrap` so a narrow viewport wraps between stats rather th
 
 A visually-hidden `role="status" aria-live="polite"` region, written by the WebSocket lifecycle
 handlers: *"Connection to the proxy lost. Reconnecting."* and, on recovery from a real outage,
-*"Connection to the proxy restored."* The Copy Button writes its result there too, once per click.
+*"Connection to the proxy restored."* The Copy Button writes its result there too, once per click, and
+the Path Search its match count, once per change of filter.
 
 It exists because the beacon reports connection state through color and a change of rhythm, and
 neither reaches a screen reader — without it the page simply goes silently stale, which is the exact
@@ -645,9 +674,9 @@ longer connected." Copy states the fact and, where useful, the next action in th
 
 ### Not yet in the system
 
-Recorded so future work doesn't assume otherwise: there are **no form inputs, no dialogs, no toasts,
-and no true action buttons** — the only `<button>`s are a list row and the Copy Button, and neither
-acts on the proxy. PRODUCT.md records that control
+Recorded so future work doesn't assume otherwise: there are **no dialogs, no toasts, and no true
+action buttons**, and the Path Search is the only form — the only `<button>`s are a list row and the Copy
+Button, and neither acts on the proxy. PRODUCT.md records that control
 actions are a planned direction; when they arrive they will need a genuinely new component vocabulary
 (destructive confirmation, action button, disabled state), and inventing it is a design decision, not
 an extraction.

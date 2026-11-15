@@ -69,6 +69,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
@@ -148,6 +149,7 @@ internal class ProxyDashboardService(
     val layout: DashboardLayout,
     val selectedId: String?,
     val seq: Long,
+    val filter: PathFilter,
   )
 
   /** One connected browser: how to reach it, and what its page shows. */
@@ -271,9 +273,15 @@ internal class ProxyDashboardService(
 
         // A real page rather than a fragment: switching layout is a navigation, so the browser gets a
         // fresh document whose region ids match the layout it is now showing.
+        // The filter is in the URL, so a filtered view can be bookmarked or shared; the page sends it back over the
+        // socket, which is what keeps the pushed table filtered.
         get("$routeBase/paths") {
           val snapshot = snapshots.recent()
-          call.respondHtml { with(ProxyDashboardHtml) { renderPage(snapshot, null, routeBase, DashboardLayout.PATH) } }
+          val params = call.request.queryParameters
+          val filter = PathFilter.of(params["q"], params["problems"] == "1")
+          call.respondHtml {
+            with(ProxyDashboardHtml) { renderPage(snapshot, null, routeBase, DashboardLayout.PATH, filter) }
+          }
         }
 
         get("$routeBase/agents/{agentId}") {
@@ -314,7 +322,7 @@ internal class ProxyDashboardService(
               for (frame in incoming) {
                 if (frame is Frame.Text) {
                   val text = frame.readText()
-                  session.view = View(parseLayout(text), parseSelection(text), parseSeq(text))
+                  session.view = View(parseLayout(text), parseSelection(text), parseSeq(text), parseFilter(text))
                   push(session, snapshots.recent())
                 }
               }
@@ -384,7 +392,14 @@ internal class ProxyDashboardService(
     runCatching {
       val view = session.view
       session.send(
-        ProxyDashboardHtml.pushFragment(snapshot, view?.selectedId, routeBase, view?.layout, view?.seq ?: 0L),
+        ProxyDashboardHtml.pushFragment(
+          snapshot,
+          view?.selectedId,
+          routeBase,
+          view?.layout,
+          view?.seq ?: 0L,
+          view?.filter ?: PathFilter.NONE,
+        ),
       )
     }
       .onFailure { logger.debug { "Dropping dashboard session: ${it.simpleClassName}" } }
@@ -572,6 +587,23 @@ internal class ProxyDashboardService(
           ?.longOrNull
           ?.takeIf { it >= 0 }
       }.getOrNull() ?: 0L
+
+    /**
+     * Reads `{"q": "team-a", "problems": true}`, the Paths view's filter, from a session message, defaulting to
+     * [PathFilter.NONE].
+     *
+     * Same contract as [parseSelection]: anything unexpected -- garbage, a missing field, or a value of the wrong
+     * type -- resolves to no filter on that field rather than throwing inside the WebSocket loop. The query is cut to
+     * [PathFilter.MAX_QUERY_LENGTH], since every push matches it against every row.
+     */
+    internal fun parseFilter(text: String): PathFilter =
+      runCatching {
+        val message = json.parseToJsonElement(text).jsonObject
+        PathFilter.of(
+          message["q"]?.jsonPrimitive?.takeIf { it.isString }?.content,
+          message["problems"]?.jsonPrimitive?.takeUnless { it.isString }?.booleanOrNull == true,
+        )
+      }.getOrNull() ?: PathFilter.NONE
 
     /**
      * Whether a WebSocket handshake carrying [origin] may proceed, given the request's [host] header.

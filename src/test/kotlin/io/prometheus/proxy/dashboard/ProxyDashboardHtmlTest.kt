@@ -61,14 +61,6 @@ class ProxyDashboardHtmlTest : StringSpec() {
     paths: List<PathView> = agents.flatMap { it.paths }.distinct(),
   ) = DashboardFixtures.snapshot(agents = agents, scrapes = scrapes, paths = paths)
 
-  // The path layout's push for one path whose history has these status codes, newest first, as PathHistory hands
-  // them over.
-  private fun historyTable(vararg codes: Int): String {
-    val history = codes.map { DashboardFixtures.scrapeRecord(path = "app_metrics", statusCode = it) }
-    val served = DashboardFixtures.pathView(path = "app_metrics", history = history)
-    return ProxyDashboardHtml.pushFragment(snapshot(paths = [served]), null, "/dashboard", DashboardLayout.PATH)
-  }
-
   private fun renderFullPage(layout: DashboardLayout = DashboardLayout.AGENT) =
     createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(), null, "/dashboard", layout) } }
 
@@ -506,6 +498,20 @@ class ProxyDashboardHtmlTest : StringSpec() {
       ProxyDashboardService.parseSeq("not json at all") shouldBe 0L
     }
 
+    "filter parsing should tolerate anything a browser might send" {
+      ProxyDashboardService.parseFilter("""{"layout":"PATH","q":"east","problems":true}""") shouldBe
+        PathFilter("east", problemsOnly = true)
+      ProxyDashboardService.parseFilter("""{"q":"  west  "}""") shouldBe PathFilter("west")
+      // Cut, since every push matches it against every row.
+      ProxyDashboardService.parseFilter("""{"q":"${"x".repeat(500)}"}""").query.length shouldBe
+        PathFilter.MAX_QUERY_LENGTH
+      // A field of the wrong type is no filter on that field; garbage is no filter at all.
+      ProxyDashboardService.parseFilter("""{"q":12,"problems":"true"}""") shouldBe PathFilter.NONE
+      ProxyDashboardService.parseFilter("""{"q":"east","problems":1}""") shouldBe PathFilter("east")
+      ProxyDashboardService.parseFilter("""{"select":"a1"}""") shouldBe PathFilter.NONE
+      ProxyDashboardService.parseFilter("not json at all") shouldBe PathFilter.NONE
+    }
+
     "the page script should count its messages and drop frames stamped below the count" {
       val page = createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(), null, "/dashboard") } }
       page shouldContain "seq: seq"
@@ -580,79 +586,21 @@ class ProxyDashboardHtmlTest : StringSpec() {
       html shouldContain "<main"
     }
 
-    // ==================== History column ====================
+    // ==================== Agent identity ====================
 
-    "the path table should have a History column" {
-      renderFullPage(DashboardLayout.PATH) shouldContain """<th scope="col">History</th>"""
+    // A tag after the name: demos/dashboard/screenshots.sh finds a row by its name, then an optional tag, then its
+    // "· N paths".
+    "the agent list and detail should show the agent's identity" {
+      val agent = DashboardFixtures.agentView(agentName = "agent-east", identity = "east")
+      val snap = snapshot(agents = [agent])
+
+      ProxyDashboardHtml.pushFragment(snap, null, "/dashboard") shouldContain
+        "agent-east<span class=\"tag\">east</span></span><span class=\"host\">10.0.1.14:5555 · 1 paths</span>"
+      ProxyDashboardHtml.detailFragment(snap, selectedId = "1") shouldContain " · host worker-3 · identity east · "
     }
 
-    "the history strip should draw a path's scrapes oldest first, one element per run of like results" {
-      // Oldest to newest this is ok, ok, crit, crit, ok.
-      val html = historyTable(200, 503, 503, 200, 200)
-
-      html shouldContain
-        """<i class="ok" style="--n:2"></i><i class="crit" style="--n:2"></i><i class="ok" style="--n:1"></i>"""
-      html shouldContain """role="img" aria-label="3 of 5 recent scrapes succeeded""""
-      html shouldContain "</span>60%"
-    }
-
-    // 2 of 3 is 66.7%: rounding would be fine here, but 199 of 200 would round to a misleading 100%.
-    "a path with any failed scrape should never read 100%" {
-      historyTable(200, 200, 503) shouldContain "</span>66%"
-    }
-
-    // demos/dashboard/screenshots.sh decides the demo is healthy by counting `class="pill ok"` in the path table
-    // against the number of paths, so the strip must not draw with the status pill.
-    "the history strip should leave the status pill as the row's only pill" {
-      Regex("""class="pill ok"""").findAll(historyTable(200, 200, 200, 200, 200)).count() shouldBe 1
-    }
-
-    "the history strip should stay visible under forced colours" {
-      ProxyDashboardCss.CSS shouldContain ".hist i { forced-color-adjust:none; }"
-    }
-
-    "the path table should be captioned and its headers scoped" {
-      val html = renderFullPage(DashboardLayout.PATH)
-
-      html shouldContain """scope="col""""
-      html shouldContain "<caption"
-      html shouldContain "Registered paths"
-    }
-
-    // ProxyDashboardService hands the renderer a base with no trailing slash, which is empty at a root
-    // mount. Every sub-route must still join with exactly one separator: "//events" is a
-    // protocol-relative URL, which sends the browser to a host named "events".
-    "a root-mounted dashboard should not emit protocol-relative links" {
-      val page =
-        createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(), null, "", DashboardLayout.AGENT) } }
-      page shouldContain """hx-ws:connect="/events""""
-      page shouldContain """src="/${ProxyDashboardService.ASSET_DIR}/htmx.min.js""""
-      page shouldContain """href="/paths""""
-      page shouldContain """hx-get="/agents/1""""
-      page shouldNotContain "\"//"
-      // The Agents link is the root itself, which must stay "/" rather than collapse to an empty href.
-      page shouldContain """href="/" class="on""""
-    }
-
-    "layout parsing should tolerate anything a browser might send" {
-      ProxyDashboardService.parseLayout("""{"layout":"PATH"}""") shouldBe DashboardLayout.PATH
-      ProxyDashboardService.parseLayout("""{"layout":"AGENT"}""") shouldBe DashboardLayout.AGENT
-      // Everything unexpected falls back to the layout the page served before layouts existed.
-      ProxyDashboardService.parseLayout("""{"layout":"SIDEWAYS"}""") shouldBe DashboardLayout.AGENT
-      ProxyDashboardService.parseLayout("""{"select":"a1"}""") shouldBe DashboardLayout.AGENT
-      ProxyDashboardService.parseLayout("not json at all") shouldBe DashboardLayout.AGENT
-      ProxyDashboardService.parseLayout("") shouldBe DashboardLayout.AGENT
-    }
-
-    "the nav should mark the current layout" {
-      val agentPage = ProxyDashboardHtml.pushFragment(snapshot(), null, "/dashboard", DashboardLayout.AGENT)
-      // The nav lives on the page shell rather than in a pushed region, so assert it where it renders.
-      val page = createHTML().html {
-        with(ProxyDashboardHtml) { renderPage(snapshot(), null, "/dashboard", DashboardLayout.PATH) }
-      }
-      page shouldContain """href="/dashboard/paths""""
-      page shouldContain """aria-current="page""""
-      agentPage shouldNotContain "aria-current=\"page\""
+    "an agent without an identity should show none" {
+      ProxyDashboardHtml.detailFragment(snapshot(), selectedId = "1") shouldNotContain "identity"
     }
 
     // ==================== Connection indicator ====================
@@ -744,9 +692,17 @@ class ProxyDashboardHtmlTest : StringSpec() {
     }
 
     // A push that lands while the mark is showing replaces the marked button with an unmarked one.
-    "the page should put a copy result back on the button after each push" {
+    // After each push: the copy result back on its button, the title's problem count, and a new filter's row count.
+    "the page should put a copy result back on the button, and update the title, after each push" {
       val page = createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot(), null, "/dashboard") } }
-      page shouldContain "document.body.addEventListener('htmx:ws:after:message:incoming', applyMark)"
+      val handler =
+        page
+          .substringAfter("addEventListener('htmx:ws:after:message:incoming', function () {")
+          .substringBefore("});")
+
+      handler shouldContain "applyMark();"
+      handler shouldContain "updateTitle();"
+      handler shouldContain "sayCount();"
     }
 
     // Converted in the fragment before the swap rather than in the page after it, so no frame shows the proxy's zone

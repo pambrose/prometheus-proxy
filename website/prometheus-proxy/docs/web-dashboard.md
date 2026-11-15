@@ -74,7 +74,11 @@ scrape here and the spike it caused in a Grafana panel read the same clock. Hove
 ## The status bar
 
 The bar across the top appears in both layouts. Left to right it shows the connection's **live**
-indicator, the current **agents** and **paths** counts, and two health gauges, **chunks** and **scrapes**.
+indicator, the current **agents** and **paths** counts, how many paths are **failing** (their last scrape failed)
+or **departed** (their agent has gone) when there are any, and two health gauges, **chunks** and **scrapes**.
+
+The browser tab's title counts the failing and departed paths too, as `(3 problems) prometheus-proxy`, so a
+dashboard left in a background tab still says when something is wrong.
 
 ### The live indicator
 
@@ -123,7 +127,7 @@ Agents are listed on the left. Selecting one shows, on the right:
 
 | | |
 |---|---|
-| **Identity** | agent name, remote address, host name, launch ID, consolidated flag |
+| **Identity** | agent name, remote address, host name, the [auth identity](security/index.md) it connected as, launch ID, consolidated flag |
 | **Liveness** | uptime, idle time, scrape backlog depth, seconds until stale-agent eviction |
 | **Paths** | every path this agent has registered, and whether a path is shared with other agents |
 | **Recent scrapes** | this agent's own scrapes, with status, duration and payload size |
@@ -147,6 +151,7 @@ Every path on one row, with the endpoint behind it and how its last scrape went:
 |---|---|
 | **Path** | the registered path Prometheus scrapes, with a button beside it that copies its URL on the proxy, the one to curl, built from the address you opened the dashboard at and the proxy's scrape port |
 | **Agent(s)** | the agent serving it; a consolidated path shows the first plus a `+N` count |
+| **Identity** | with [agent authentication](security/index.md) on, the identity that registered the path, which any other agent joining it must share; the legacy shared `agentToken` reads *shared token* |
 | **Target** | the URL the agent actually fetches, with a button beside it that copies it to the clipboard |
 | **Src** | `cfg` for a statically configured path, `disc` for one from [dynamic discovery](configuration/agent.md#dynamic-target-discovery) |
 | **Last scrape / Status / Duration** | the most recent result for that path |
@@ -159,6 +164,16 @@ whatever the other paths are doing, and the percentage is rounded down, so a pat
 The copy button copies the URL as the table shows it. The agent [redacts](security/index.md#credentials-in-urls) a target
 URL's user info and query values before sending it to the proxy, so a URL that carries either is copied with
 `***` in their place.
+
+### Searching and filtering
+
+A search box above the table keeps only the rows whose path, agent, target URL or identity contains what you type,
+ignoring case, so `team-a` shows one team's paths. **Problems only** keeps the paths whose last scrape failed or whose
+agent has gone. Both apply as you type, and while either is on, the table says how many of the paths it is showing.
+
+The search goes into the page's URL, as `/dashboard/paths?q=team-a&problems=1`, so a filtered view is a link you can
+bookmark or send. Pressing Enter in the box does the same as typing, and the form works as a plain link without the
+page's script.
 
 ### Paths whose agent has gone
 
@@ -270,6 +285,5 @@ Both are lists, so set them in a config file; see [Dashboard configuration](conf
   discovery serves, stay the first registrant's.
 - **Departed paths age out.** A gone path stays for `departedPathRetentionSecs` (default 3600) after its last
   scrape, at most 1,000 of them at once, and none survives a proxy restart.
-- **Per-agent identities** from [agent authentication](security/index.md) are not shown. The proxy
-  checks an agent's identity on its calls and records it with each non-consolidated path it registers,
-  to decide whether another agent may take that path over, but the dashboard does not display it.
+- **A departed path shows no identity.** The proxy records a path's identity with its entry, which goes when the
+  path's last agent does; the row still names that agent, from its last scrape.

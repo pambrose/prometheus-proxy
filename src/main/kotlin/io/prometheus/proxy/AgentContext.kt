@@ -113,6 +113,16 @@ internal class AgentContext(
     private set
 
   /**
+   * The auth identity the agent registered as, for the dashboard; empty with agent auth off.
+   *
+   * Display only, and separate from [authIdentityName]: that one is set only with the transport filter disabled, and a
+   * non-empty value there binds the context to the identity, which a filter-enabled context must not be. This one is
+   * recorded at `registerAgent` in either mode, from the identity that call authenticated as.
+   */
+  var identityName: String by nonNullableReference("")
+    private set
+
+  /**
    * The agent's configured failover endpoints and which one this connection uses.
    *
    * Reported at registration, which is exactly when it changes: a failover is a reconnect, so an agent
@@ -140,7 +150,11 @@ internal class AgentContext(
 
   // Copies the fields as given: ProxyServiceImpl.registerAgent first cuts them to the proxy.internal limits, since each
   // is repeated for every path the agent serves (October #23).
-  fun assignProperties(request: RegisterAgentRequest) {
+  fun assignProperties(
+    request: RegisterAgentRequest,
+    identityName: String = "",
+  ) {
+    this.identityName = identityName
     launchId = request.launchId
     agentName = request.agentName
     hostName = request.hostName
