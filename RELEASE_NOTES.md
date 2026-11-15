@@ -84,6 +84,9 @@ every agent when agent auth is off.
 - The Agents view highlights the row under the pointer in an agent's registered paths and recent scrapes.
 - **Scrape times in your time zone.** The dashboard shows scrape times in your browser's time zone, as Grafana
   does, rather than the proxy's. Hover over a time for its date and zone.
+- **Copy a path's proxy URL from the dashboard.** Each registered path in the Paths view has a button that copies
+  its URL on the proxy, the one to curl to check the path through the proxy, built from the address you opened the
+  dashboard at.
 
 ### Security
 
@@ -211,6 +214,8 @@ every agent when agent auth is off.
 - Two agents that register the same path without consolidated mode no longer take it from each other every few
   seconds. The later one serves the path and the other stays connected without it; the proxy logs which agent took
   it, and the Troubleshooting page says what to do.
+- On the dashboard, a path that several agents serve shows the target URL of the agent its row names, including
+  after the first agent to register it leaves.
 
 ### Documentation
 
@@ -250,6 +255,7 @@ every agent when agent auth is off.
 - The website has a **Live Demo** page, with screenshots of the dashboard and Grafana as the demo's scenarios play
   out: a failing service, new services found without a restart, and an agent evicted after it goes silent.
 - The website's menu has a single Operations section, with the Dashboard page in it.
+- The Live Demo page's screenshots match your light or dark theme.
 
 ### Build and tooling
 
