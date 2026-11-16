@@ -195,6 +195,15 @@ class ProxyWebDashboardTest : StringSpec() {
   private suspend fun DefaultClientWebSocketSession.awaitFrame(marker: String) =
     (1..MAX_FRAMES).any { nextText().contains(marker) }.shouldBeTrue()
 
+  /** Reads frames until one [matches], and returns it; MAX_FRAMES and FRAME_PATIENCE bound the wait. */
+  private suspend fun DefaultClientWebSocketSession.firstFrame(matches: (String) -> Boolean): String =
+    withTimeout(FRAME_PATIENCE) {
+      (1..MAX_FRAMES).firstNotNullOfOrNull { nextText().takeIf(matches) }
+    }.shouldNotBeNull()
+
+  // The stamp of a frame rendered from the browser's message [seq] (see ProxyDashboardHtml.pushFragment).
+  private fun viewOf(seq: Long) = """${ProxyDashboardHtml.VIEW_ATTR}="$seq""""
+
   init {
     "the dashboard serves a page and pushes updates over the WebSocket" {
       withDashboard(
@@ -825,6 +834,47 @@ class ProxyWebDashboardTest : StringSpec() {
         }
       }
     }
+
+    // The push loop leaves the Activity table out of a frame when the page already shows the table that frame would
+    // carry (ProxyDashboardService.ActivityTable), so a reader's table isn't rewritten every refresh to show the same
+    // rows. The comparison has unit tests; this runs it through the real loop and socket, at the config's 1s refresh.
+    // A tick can land on either side of a browser's message, so each step reads frames until the one it is about,
+    // rather than counting them, and then the next QUIET_FRAMES, at least one of which is a tick.
+    "an Activity page should be sent its table again only when the feed changes or the page sends a message" {
+      withDashboard(
+        ACTIVITY_PUSH_HTTP_PORT,
+        ACTIVITY_PUSH_GRPC_PORT,
+        ACTIVITY_PUSH_DASHBOARD_PORT,
+        newClient = { HttpClient(CIO) { install(WebSockets) } },
+      ) {
+        client.webSocket(socketUrl) {
+          // Each frame after a table must carry the status bar and leave the table out: with no agent connected,
+          // nothing is recorded in the activity log, and the page's message hasn't changed.
+          suspend fun expectQuiet() =
+            repeat(QUIET_FRAMES) {
+              withTimeout(FRAME_PATIENCE) { nextText() }.also {
+                it shouldContain """id="${ProxyDashboardHtml.STATUS_ID}""""
+                it shouldNotContain ACTIVITY_TABLE
+              }
+            }
+
+          // The page hasn't been sent a table, so the first frame rendered from its message carries one.
+          send(Frame.Text("""{"layout":"ACTIVITY","seq":1}"""))
+          firstFrame { viewOf(1L) in it } shouldContain ACTIVITY_TABLE
+          expectQuiet()
+
+          // A new message, here asking for the same view, is sent the table again: the page drops a frame stamped
+          // below the count it has sent, so it may never have shown the frame that carried the last one.
+          send(Frame.Text("""{"layout":"ACTIVITY","seq":2}"""))
+          firstFrame { viewOf(2L) in it } shouldContain ACTIVITY_TABLE
+          expectQuiet()
+
+          // The agent's connection is recorded in the activity log, which changes the feed, so it is sent again.
+          connectAgent()
+          firstFrame { ACTIVITY_TABLE in it } shouldContain CONNECTED_EVENT
+        }
+      }
+    }
   }
 
   companion object {
@@ -964,5 +1014,20 @@ class ProxyWebDashboardTest : StringSpec() {
 
     // The agent-list row marker for the session's selected agent (the nav uses aria-current="page").
     private const val SELECTED_ROW = """aria-current="true""""
+
+    private const val ACTIVITY_PUSH_HTTP_PORT = TestPorts.DASHBOARD_UI_ACTIVITY_PUSH_HTTP_PORT
+    private const val ACTIVITY_PUSH_GRPC_PORT = TestPorts.DASHBOARD_UI_ACTIVITY_PUSH_GRPC_PORT
+    private const val ACTIVITY_PUSH_DASHBOARD_PORT = TestPorts.DASHBOARD_UI_ACTIVITY_PUSH_DASHBOARD_PORT
+
+    // The Activity table's region as a frame carries it, and the line an agent's connection adds to it.
+    private const val ACTIVITY_TABLE = """id="${ProxyDashboardHtml.ACTIVITY_ID}""""
+    private const val CONNECTED_EVENT = """<td class="event">connected</td>"""
+
+    // Two, so that at least one is a tick: the frame before them may be the tick that rendered the browser's message
+    // just before the socket's own push of it, which comes next.
+    private const val QUIET_FRAMES = 2
+
+    // Far longer than MAX_FRAMES ticks at the 1s refresh, so it ends only a wait that is already failing.
+    private val FRAME_PATIENCE = 30.seconds
   }
 }

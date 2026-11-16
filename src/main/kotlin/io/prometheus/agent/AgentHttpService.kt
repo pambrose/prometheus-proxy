@@ -293,9 +293,10 @@ internal class AgentHttpService(
       // no metrics are recorded and the raw bytes are used verbatim.
       val outcome = filter?.filterBytes(contentBytes, contentType)
       outcome?.also {
-        // Only paths whose filter actually ran ever create series here, so cardinality stays bounded.
+        // Only paths whose filter actually ran ever create series here, so cardinality stays bounded. Labeled by the
+        // path's key, which fetchScrapeUrl looked the path up by, so a path's series is the same whichever proxy asked.
         agent.metrics {
-          val path = scrapeRequest.path
+          val path = AgentPathManager.requestedPathKey(scrapeRequest.path)
           filterLinesDropped.labelValues(agent.launchId, path).inc(it.linesDropped.toDouble())
           filterBytesSaved.labelValues(agent.launchId, path).inc(it.bytesSaved.toDouble())
         }
