@@ -54,10 +54,14 @@ internal object ProxyDashboardCss {
     body { background:var(--bg); color:var(--ink); font-family:var(--mono); font-size:12.5px; line-height:1.5;
            display:flex; flex-direction:column; min-height:100vh; }
     body > main { flex:1; }
-    .bar { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;
-           padding:11px 15px; border-bottom:1px solid var(--line); background:var(--surface); }
-    .brand { font-weight:600; }
-    .bar-right { display:flex; align-items:center; flex-wrap:wrap; gap:14px; color:var(--ink-3); font-size:11.5px; }
+    /* The tabs stand on the bar's bottom rule, so the bar has no bottom padding and sets its items on its floor; the
+       brand and the status carry their own, which puts their text on the tabs' line. One row above 720px: the status
+       wraps inside itself, so it never pushes the tabs off the rule. */
+    .bar { display:flex; align-items:flex-end; gap:10px; padding:8px 15px 0; border-bottom:1px solid var(--line);
+           background:var(--surface); }
+    .brand { font-weight:600; flex:none; padding-bottom:6px; }
+    .bar-right { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:2px 14px;
+      margin-left:auto; min-width:0; padding-bottom:6px; color:var(--ink-3); font-size:11.5px; }
     /* Each stat stays whole; the row wraps between them rather than mid-phrase, which at 390px was
        splitting "0 agents" across two lines. */
     .bar-right > span { white-space:nowrap; }
@@ -84,7 +88,8 @@ internal object ProxyDashboardCss {
       border:0; border-bottom:1px solid var(--line-soft); border-left:3px solid transparent;
       padding:10px 15px; color:var(--ink); }
     .md-row:hover { background:var(--surface-3); }
-    .md-row:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
+    /* Inside the row, and inside a tab, which meets the strip below it. */
+    .md-row:focus-visible, .nav a:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
     .md-row[aria-current="true"] { background:var(--surface); border-left-color:var(--accent); }
     /* 11.5px, matching .bar-right and .hero-meta: this is the same job -- quiet supporting metadata --
        and a separate 11px step for it was a size the hierarchy never used. */
@@ -109,14 +114,31 @@ internal object ProxyDashboardCss {
     .empty { color:var(--ink-3); padding:14px 15px; }
     .empty.pad { padding:22px 18px; }
     .empty.gone { color:var(--crit); }
-    .nav { display:flex; gap:4px; margin-right:auto; margin-left:18px; }
-    .nav a { color:var(--ink-3); text-decoration:none; padding:3px 10px; border-radius:20px; }
-    .nav a:hover { background:var(--surface-3); color:var(--ink); }
-    /* The focus ring of every control but a list row, whose ring is inset (above). */
-    .nav a:focus-visible, .copy:focus-visible, .scrape-now:focus-visible, .close:focus-visible,
+    /* Folder tabs. The nav reaches 1px below the bar into its rule, so a tab's bottom edge lies on the rule: a tab
+       at rest leaves it showing through its transparent border, and the current tab paints it the strip's colour, so
+       the tab opens into the strip below it. Every view's first strip is --surface-2 (the search, or the agent list
+       under the Agents tab). Rectangles, as everything that holds content is, with the current item's accent edge
+       on top, as the current agent row has it on the left. */
+    .nav { display:flex; align-items:flex-end; gap:2px; flex:none; margin:0 0 -1px 18px; }
+    .nav a { color:var(--ink-3); text-decoration:none; padding:5px 14px 6px; border:1px solid transparent;
+      border-top-width:3px; background-clip:padding-box; }
+    .nav a:hover { background-color:var(--surface-2); color:var(--ink); }
+    .nav a.on { background-color:var(--surface-2); color:var(--ink); font-weight:600; border-color:var(--line);
+      border-top-color:var(--accent); border-bottom-color:var(--surface-2); }
+    /* Forced colours paint every border, the transparent ones too, which boxed every tab alike and left the current
+       one told apart by its weight alone. Here the tabs keep their own paint, in system colours: a link at rest, and
+       the current tab outlined, its top edge in Highlight and its bottom open onto the content. */
+    @media (forced-colors: active) {
+      .nav a { forced-color-adjust:none; color:LinkText; background-color:Canvas; border-color:transparent; }
+      .nav a:hover { background-color:Canvas; text-decoration:underline; }
+      .nav a.on { color:CanvasText; background-color:Canvas; border-color:CanvasText; border-top-color:Highlight;
+        border-bottom-color:Canvas; }
+      .nav a:focus-visible { outline-color:Highlight; }
+    }
+    /* The focus ring of every control but a list row and a tab, whose rings are inset (above). */
+    .copy:focus-visible, .scrape-now:focus-visible, .close:focus-visible,
     .filters input:focus-visible, .ptable td.links a:focus-visible {
       outline:2px solid var(--accent); outline-offset:1px; }
-    .nav a.on { background:var(--surface-3); color:var(--ink); font-weight:600; }
     /* The table is the one region that can outgrow a narrow viewport, so it scrolls inside its own
        container rather than letting the page body scroll sideways. */
     .scroller { overflow-x:auto; background:var(--surface); }
@@ -192,12 +214,18 @@ internal object ProxyDashboardCss {
     .hist i.ok { --dot:var(--ok); } .hist i.crit { --dot:var(--crit); }
     /* Forced colours drop backgrounds, the dots included. */
     @media (forced-colors: active) { .hist i { forced-color-adjust:none; } }
-    @media (max-width:720px) { .md { grid-template-columns:1fr; } .md-list { border-right:0; border-bottom:1px solid var(--line); } }
-    /* Touch, not width: a 25px pill is a comfortable mouse target and a poor thumb one, and the two do
+    /* Narrow, the tabs take a row of their own, the bar's last, so they still stand on its rule and open into the strip
+       below; the brand and the status share the rows above. */
+    @media (max-width:720px) {
+      .md { grid-template-columns:1fr; } .md-list { border-right:0; border-bottom:1px solid var(--line); }
+      .bar { flex-wrap:wrap; row-gap:4px; }
+      .nav { order:1; flex-basis:100%; margin-left:0; }
+    }
+    /* Touch, not width: a 34px tab is a comfortable mouse target and a poor thumb one, and the two do
        not correlate with viewport size -- a tablet is wide and touch-driven. The dense bar is kept for
        pointer devices rather than spending vertical space everyone pays for. */
     @media (pointer: coarse) {
-      .nav a { min-height:44px; display:inline-flex; align-items:center; padding:0 14px; }
+      .nav a { min-height:44px; display:inline-flex; align-items:center; padding-top:0; padding-bottom:0; }
     }
     """.trimIndent()
 }

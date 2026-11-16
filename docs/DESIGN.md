@@ -103,17 +103,17 @@ components:
   row-item-current:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.ink}"
-  nav-link:
+  nav-tab:
     backgroundColor: "transparent"
     textColor: "{colors.ink-3}"
     typography: "{typography.body}"
-    rounded: "{rounded.pill}"
-    padding: "3px 10px"
-  nav-link-hover:
-    backgroundColor: "{colors.surface-3}"
+    rounded: "{rounded.none}"
+    padding: "5px 14px 6px"
+  nav-tab-hover:
+    backgroundColor: "{colors.surface-2}"
     textColor: "{colors.ink}"
-  nav-link-active:
-    backgroundColor: "{colors.surface-3}"
+  nav-tab-active:
+    backgroundColor: "{colors.surface-2}"
     textColor: "{colors.ink}"
     typography: "{typography.body-emphasis}"
   pill-ok:
@@ -200,7 +200,7 @@ components:
     textColor: "{colors.ink}"
     typography: "{typography.body}"
     rounded: "{rounded.none}"
-    padding: "11px 15px"
+    padding: "8px 15px 0"
   empty-state:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.ink-3}"
@@ -232,8 +232,8 @@ to do.
 
 The system's discipline shows most in what it refuses. There are no shadows, anywhere. There are no
 transitions, anywhere — hover, selection, and live swaps all land instantly, which is itself a claim
-about latency the interface then has to keep. The accent color appears in exactly two places on the
-entire surface. The only thing that moves is a 7px dot reporting whether the socket is alive. This is
+about latency the interface then has to keep. The accent color has exactly two jobs on the entire
+surface: focus, and the current item. The only thing that moves is a 7px dot reporting whether the socket is alive. This is
 a system built by subtraction, and the remaining elements are load-bearing.
 
 **Key Characteristics:**
@@ -241,7 +241,7 @@ a system built by subtraction, and the remaining elements are load-bearing.
 - One typeface — monospace — at 12.5px base, for every role from title to micro-label.
 - Zero shadows. Depth is four tonal planes plus two hairline weights.
 - Two radii: `0` and fully round. Rectangles hold content; circles report status.
-- The accent is used twice: focus rings and the current-row edge. It never fills a surface.
+- The accent is used twice: focus rings and the current item's edge. It never fills a surface.
 - No CSS transitions. The only animation in the system is the connection beacon.
 - Full-bleed layout — no centered container, no max-width, no page margins.
 - Complete light/dark parity via `prefers-color-scheme`; neither theme is the afterthought.
@@ -259,8 +259,8 @@ dimmed.
 ### Primary
 
 - **Burnt Orange** (`accent`): The only warm hue on the surface, and deliberately the rarest. It draws
-  the 3px left edge of the currently-selected row and the 2px focus-visible outline. That is the
-  complete list. It brightens to a coral (`accent-dark`) in dark mode, which is the one place the two
+  the 3px edge of the current item (the selected row's left edge and the current tab's top edge) and
+  the 2px focus-visible outline. That is the complete list. It brightens to a coral (`accent-dark`) in dark mode, which is the one place the two
   themes differ in character rather than only in value — against black it reads as a lit filament
   rather than as rust.
 
@@ -270,10 +270,11 @@ dimmed.
   plane, so panels sit forward on it. In dark mode it is the darkest value in the system.
 - **Reading Plane** (`surface`): Pure white in light, near-black in dark. Where content that must be
   read carefully lives — the detail pane, the table body, the top bar.
-- **Recessed Plane** (`surface-2`): The agent list, section headers, and sticky table headers.
-  Structurally *behind* the reading plane in both themes.
-- **Pressed Plane** (`surface-3`): The furthest step from the reading plane. Row hover, neutral tag
-  backgrounds, active nav pill.
+- **Recessed Plane** (`surface-2`): The agent list, section headers, sticky table headers, the
+  search strip, and the current tab, which opens into whichever of them lies below it. Structurally
+  *behind* the reading plane in both themes.
+- **Pressed Plane** (`surface-3`): The furthest step from the reading plane. Row hover and neutral tag
+  backgrounds.
 - **Structural Rule** (`line`): 1px hairlines that separate regions — bar from body, list from detail.
 - **Soft Rule** (`line-soft`): 1px hairlines that separate rows *within* a region. Always lower
   contrast than `line`, so the eye reads region boundaries before it reads row boundaries.
@@ -297,8 +298,8 @@ Three levels, each shipping as a **solid** and a **soft** companion.
 
 ### Named Rules
 
-**The Two Places Rule.** The accent appears on focus rings and the current-row left edge. Nowhere
-else. It never fills a background, never sets body type, never becomes a button, never appears in a
+**The Two Places Rule.** The accent appears on focus rings and the current item's 3px edge: the
+selected row's left edge and the current tab's top edge, which mean the same thing. Nowhere else. It never fills a background, never sets body type, never becomes a button, never appears in a
 chart. Its rarity is what makes selection findable in a field of monospace at a glance.
 
 **The Paired Status Rule.** Solid status colors carry meaning on type, dots, and borders. Soft status
@@ -328,7 +329,8 @@ clears 3:1.
 | `ink` on `surface` | 17.81:1 | 14.61:1 |
 
 Non-text: LEDs and the beacon measure 4.57–6.88:1 against every ground they sit on, and the `accent`
-current-row edge 4.83:1 light / 6.37:1 dark.
+current-item edge 4.83:1 light / 6.37:1 dark against `surface`, and 4.10:1 / 5.83:1 against the
+`surface-2` the current tab's fill puts beneath it.
 
 **The binding constraint is `surface-2`, not `surface`.** Every quiet color lands on the recessed plane
 somewhere — `ink-3` under every table and section header — and that pairing is a full tonal step
@@ -356,7 +358,7 @@ from size, weight, case, and color — never from a second family, because there
   anchor the pane, light enough not to shout.
 - **Body** (weight 400, 12.5px, lh 1.5): The base. Agent names in the list, paths, table cells, kv
   labels. Nearly everything.
-- **Body Emphasis** (weight 600, 12.5px): The brand mark and the active nav link. Weight, not size,
+- **Body Emphasis** (weight 600, 12.5px): The brand mark and the current tab. Weight, not size,
   carries the difference.
 - **Meta** (weight 400, 11.5px, `ink-3`): The hero metadata strip, failover line, status bar, and the
   second line of an agent row (`address · N paths`) — facts that support the primary reading without
@@ -407,20 +409,21 @@ wrapped path destroys the column scan the table exists for.
 **Two gutters, deliberately.** List and table regions use a **15px** horizontal gutter; the detail
 pane uses **18px**. This is not drift — the wider gutter marks the detail pane as the reading surface
 and the narrower one keeps the scanning surfaces dense. Vertical rhythm follows the region: 9px for
-label rows, 10px for list rows, 8px for table cells, 7px for kv rows, 11px for the top bar.
+label rows, 10px for list rows, 8px for table cells, 7px for kv rows, and 8px above the tabs in the top bar, which stand on its bottom rule.
 
 **The kv row.** Inside the detail pane, key/value pairs use a fixed `220px` minimum label column so
 values align down the pane without a table.
 
 **Responsive.** One width breakpoint: **720px**. Below it the master–detail grid collapses to a single
-column and the list's right border becomes a bottom border. Nothing else changes — no hamburger, no
-drawer, no reflowed table. The table keeps its horizontal scroller, which is the correct mobile
+column and the list's right border becomes a bottom border, and the tabs take a row of their own, the
+top bar's last, so they still stand on its rule and open into the strip below. Nothing else changes —
+no hamburger, no drawer, no reflowed table. The table keeps its horizontal scroller, which is the correct mobile
 behavior for tabular data.
 
-**One input-mode breakpoint: `pointer: coarse`.** Nav links grow to a 44px minimum height on touch
+**One input-mode breakpoint: `pointer: coarse`.** Tabs grow to a 44px minimum height on touch
 devices only. Target size is a property of the *input*, not the viewport — a tablet is wide and
 touch-driven, a narrow desktop window is neither — so this is deliberately not folded into the 720px
-rule, and pointer devices keep the dense 25px pill rather than paying for vertical space they cannot
+rule, and pointer devices keep the dense 34px tab rather than paying for vertical space they cannot
 use.
 
 ### Named Rules
@@ -458,19 +461,19 @@ plane it belongs, not whether it is lighter or darker in absolute terms.
 
 The form language is **two radii and nothing between them.**
 
-- **`0` — everything structural.** Panels, rows, cells, the top bar, section headers, empty states,
-  the table. No rounded corners on any container, anywhere.
+- **`0` — everything structural.** Panels, rows, cells, the top bar, its tabs, section headers, empty
+  states, the table. No rounded corners on any container, anywhere.
 - **Fully round (`20px` on short elements, `50%` on dots) — everything that reports state.** Status
-  pills, tags, nav links, LEDs, the connection beacon.
+  pills, tags, LEDs, the connection beacon.
 
 The split is semantic, not decorative: **rectangles hold content, round things report status.** A
 7px circle is a lamp. A 20px-radius capsule is a badge. Neither shape is ever used for a container,
 and no container is ever softened toward them. There is no `4px`, no `6px`, no `8px` radius in the
 system, and introducing one would blur a distinction that currently does real work.
 
-Borders carry the remaining form language: 1px hairlines for structure, and one 3px left border on the
-row item — transparent at rest, `accent` when current — which is the only border in the system thicker
-than a hairline.
+Borders carry the remaining form language: 1px hairlines for structure, and the 3px edge of the
+current item — the row item's left border and the tab's top border, transparent at rest and `accent`
+when current — which are the only borders in the system thicker than a hairline.
 
 ### Named Rules
 
@@ -522,12 +525,29 @@ relative position in both panes.
 
 ### Navigation
 
-- **Style:** three plain links in pill form (`20px`), `3px 10px`, `ink-3` at rest: Agents, Paths, Activity.
-- **Hover:** `surface-3` background, `ink` text.
-- **Active:** `surface-3` background, `ink` text, weight 600, plus `aria-current="page"`.
-- **Focus:** `2px solid accent`, `outline-offset: 1px` — *outside* the pill here, unlike the row item,
-  because a pill has no neighbor to collide with.
-- **Behavior:** real navigation, not a swap. The three layouts are bookmarkable URLs.
+Folder tabs, one per layout: Agents, Paths, Activity.
+
+- **Style:** square (`0`), `5px 14px 6px`, `ink-3` at rest, with a transparent `1px` border and a
+  transparent `3px` top. The tabs stand on the top bar's bottom rule: the nav reaches 1px into it, so a
+  tab at rest lets the rule show through its border.
+- **Hover:** `surface-2` background, `ink` text. The rule still shows below it.
+- **Active:** `surface-2` background, `ink` text, weight 600, `line` sides, an `accent` top edge, and a
+  `surface-2` bottom that covers the rule, so the tab opens into the strip below it. Every layout's
+  first strip is `surface-2`: the search on Paths and Activity, the agent list under the Agents tab.
+  Marked `aria-current="page"`.
+- **Focus:** `2px solid accent`, `outline-offset: -2px`, *inside* the tab, as on the row item: the tab
+  meets the strip below it, which an outside ring would cross.
+- **Forced colors:** the tabs paint themselves in system colors (`forced-color-adjust: none`), since
+  forced colors draw transparent borders too and would box every tab alike: `LinkText` at rest, and the
+  current tab in `CanvasText` with `CanvasText` sides, a `Highlight` top edge, and a `Canvas` bottom that
+  still opens it onto the content. Its focus ring is `Highlight`.
+- **Behavior:** real navigation, not a swap. The three layouts are bookmarkable URLs, so they are links
+  in a `<nav>`, not ARIA tabs. **Keyboard:** Tab reaches each one; Left and Right open the layout before
+  or after the current one, wrapping at the ends, from anywhere on the page but a text field, where they
+  still move the caret. Not only from a focused tab: a click on a tab loads a page whose focus is on
+  `<body>`, and Safari never focuses a link on a click or a Tab. From a focused tab they step from that
+  tab, and the page that opens focuses its own, so a keyboard user's next arrow keeps going. A key held
+  with a modifier is left alone (Alt+Left is the browser's Back).
 
 ### Section Header
 
@@ -585,7 +605,7 @@ placeholder name what it filters, and the form submits to its own layout's route
 - **Input:** a `type="search"` field, square (it holds content), `surface` ground, `line` border, Body
   type in `ink` with an `ink-3` placeholder. Focus is the standard `2px solid accent` ring.
 - **Problems only:** a checkbox and its label in `ink-2`. The checked box is neutral `ink-2`, not the
-  accent, which stays on focus rings and the current row (see The Two Places Rule).
+  accent, which stays on focus rings and the current item (see The Two Places Rule).
 - **Behavior:** a change applies as it is typed (debounced 250ms) and lands in the URL
   (`/paths?q=…&problems=1`), so a filtered view is a link. It sits outside the table's out-of-band
   region, so a push never replaces the field someone is typing in. Without the script it is a plain GET
@@ -639,7 +659,7 @@ which shares their look, is the one that acts.
 - **Rest:** transparent, a `13px` copy glyph in `ink-3`, quieter than the path it follows and matching
   the dimmed Target text.
 - **Hover:** fully round `surface-3` background, glyph in `ink`.
-- **Focus:** `2px solid accent`, `outline-offset: 1px` — outside, as on the nav pill.
+- **Focus:** `2px solid accent`, `outline-offset: 1px` — outside, as on the search input.
 - **Copied:** the glyph becomes a check in `ok` for 1.5s. **Failed:** a cross in `crit`, as briefly.
   Either result is also spoken through the Connection Announcer, since the glyph and its color do not
   reach a screen reader.
@@ -688,9 +708,9 @@ by its configured name, joined with ` · `. They open the path in another tool �
 change nothing, so they are links, not buttons.
 
 - **Rest:** the dimmed column's `ink-3`, underlined `2px` below the text so a link reads as one among plain supporting
-  facts. Not the accent, which stays on focus rings and the current row (see The Two Places Rule).
+  facts. Not the accent, which stays on focus rings and the current item (see The Two Places Rule).
 - **Hover:** the text steps to `ink`, as the nav's does. No background, no transition.
-- **Focus:** `2px solid accent`, `outline-offset: 1px`, as on the nav pill.
+- **Focus:** `2px solid accent`, `outline-offset: 1px`, as on the Copy Button.
 - **Behavior:** each opens in a new tab, with `rel="noopener noreferrer"`, and names its path and tool in its
   `aria-label` (*Open /orders_metrics in Grafana*), so a screen reader's list of the page's links tells one row's from
   another's.
@@ -715,7 +735,10 @@ label, both in the top bar.
 
 ### Status Bar
 
-`surface`, `11px 15px`, Meta type in `ink-3`. Left to right: the brand mark, the layout nav, then the
+`surface`, `8px 15px 0`, Meta type in `ink-3`: no bottom padding, because the tabs stand on the bar's rule,
+and the brand mark and the counters carry `6px` of their own, which sets their text on the tabs' line. One
+row above 720px, where the counters wrap within themselves rather than push the tabs off the rule. Left to
+right: the brand mark, the layout's tabs, then the
 connection beacon and a run of counters — agents, paths, and the internal chunk/scrape gauges, which
 turn `warn` as they approach their thresholds.
 
@@ -788,8 +811,8 @@ in the table with a `gone` tag. A silently frozen dashboard is what makes an ope
 - **Do** render absent data as an en dash and departed state as visible-and-labeled.
 - **Do** pair every animation with a `prefers-reduced-motion: reduce` override, and make sure color
   and text still carry the full signal when motion is off.
-- **Do** put focus rings *inside* full-bleed rows (`outline-offset: -2px`) and *outside* pills
-  (`outline-offset: 1px`).
+- **Do** put focus rings *inside* full-bleed rows and tabs (`outline-offset: -2px`) and *outside* icon
+  buttons, links, and inputs (`outline-offset: 1px`).
 - **Do** ship every new color as a light/dark pair. Neither theme is the fallback.
 - **Do** check a new color against the *worst* ground it touches, not the reading plane. `surface-2` is
   the binding case for anything quiet; a value tuned against white alone fails under the table headers.
@@ -807,7 +830,7 @@ in the table with a `gone` tag. A silently frozen dashboard is what makes an ope
 - **Don't** add a `box-shadow`. There are zero in the system and that is the elevation strategy, not
   an oversight.
 - **Don't** add a radius between `0` and fully round. No `4px`, no `8px`, no `12px`.
-- **Don't** fill anything with the accent. It draws focus rings and the current-row edge; that is the
+- **Don't** fill anything with the accent. It draws focus rings and the current item's edge; that is the
   complete list.
 - **Don't** use a soft status color as a region or row background. Soft colors back pills and tags only.
 - **Don't** add a third LED color. Warning is a tag, not a lamp.
