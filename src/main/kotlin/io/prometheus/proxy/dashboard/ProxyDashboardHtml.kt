@@ -97,6 +97,10 @@ internal object ProxyDashboardHtml {
   const val PATH_TABLE_ID = "path-table"
   const val ACTIVITY_ID = "activity"
   const val ANNOUNCER_ID = "conn-announce"
+
+  // The tabs, which the page's script moves between with the arrow keys. No path or agent can give an element this id:
+  // every id built from one starts with a prefix (agent-row-, copy-, scrape-path-).
+  const val NAV_ID = "layout-nav"
   const val VIEW_ATTR = "data-view"
   const val COPY_ATTR = "data-copy"
   const val PROXY_PATH_ATTR = "data-proxy-path"
@@ -208,18 +212,22 @@ internal object ProxyDashboardHtml {
   }
 
   /**
-   * The layout switcher: a plain link per [DashboardLayout], no htmx.
+   * The layout switcher: a plain link per [DashboardLayout], no htmx, drawn as tabs.
    *
    * Deliberately a real navigation rather than a swap. The layouts have disjoint region ids, so
    * swapping one in would leave the push loop addressing elements that no longer exist; a page load
    * makes that impossible by construction. It also costs nothing worth saving — this fires on an
    * explicit click, not on an update, and the socket re-announces the new layout as soon as it opens.
+   *
+   * Links in a `<nav>` with `aria-current`, not ARIA tabs: each opens a page of its own, which `role="tab"` would
+   * misstate. The page's script adds the arrow keys (see DashboardScript).
    */
   fun FlowContent.renderNav(
     routeBase: String,
     layout: DashboardLayout,
   ) {
     nav("nav") {
+      attributes["id"] = NAV_ID
       DashboardLayout.entries.forEach { navLink(routeBase, it, current = it == layout) }
     }
   }

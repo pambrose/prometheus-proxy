@@ -60,7 +60,8 @@ Then open `http://<proxy-host>:8094/dashboard`.
 
 ## Three layouts
 
-The top bar switches between them, and each is a real URL you can bookmark or share:
+The tabs in the top bar switch between them, and each is a real URL you can bookmark or share. The Left and Right
+arrow keys open the view before or after the current one, except while you're typing in the search.
 
 | | Answers | Shape |
 |---|---|---|

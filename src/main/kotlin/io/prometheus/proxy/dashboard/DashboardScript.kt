@@ -21,6 +21,7 @@ import io.prometheus.proxy.dashboard.ProxyDashboardHtml.COPY_ATTR
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.FILTER_PROBLEMS_ID
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.FILTER_QUERY_ID
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.MATCH_COUNT_ATTR
+import io.prometheus.proxy.dashboard.ProxyDashboardHtml.NAV_ID
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.PROXY_PATH_ATTR
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SAY_ATTR
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SCRAPE_ID_PREFIX
@@ -54,8 +55,8 @@ internal object DashboardScript {
   /**
    * The page's script. It reads the selection back out of the URL that hx-push-url already set, and tells the server,
    * so the push loop knows whether this session wants a detail pane. It also runs the connection indicator, the path
-   * search, the copy and scrape-now buttons, and the scrape times' conversion to the viewer's zone, the only things on
-   * the page that htmx does not model; everything else is htmx.
+   * search, the copy and scrape-now buttons, the tabs' arrow keys, and the scrape times' conversion to the viewer's
+   * zone, the only things on the page that htmx does not model; everything else is htmx.
    */
   val JS =
     """
@@ -306,6 +307,48 @@ internal object DashboardScript {
         else if (scrape) scrapeNow(scrape);
         else if (panel && evt.target.closest('button.close')) closeScrapeResult(panel);
       });
+      // The tabs. Left and Right open the view before or after the current one, wrapping at the ends, from anywhere on
+      // the page: not only from a focused tab, since a click on a tab loads a page whose focus is on <body>, and Safari
+      // never focuses a link on a click or a Tab. Not while typing, so the arrows still move the caret in the search.
+      // A bare key only: Alt+Left is the browser's Back, and a held key would start a page load per repeat. On <body>,
+      // as the other listeners are: a back or forward swaps a new nav in.
+      var TAB_FOCUS_KEY = 'proxy-dashboard-tab-focus';
+      function typingIn(el) {
+        if (el.isContentEditable) return true;
+        var tag = el.tagName;
+        return tag === 'TEXTAREA' || tag === 'SELECT' || (tag === 'INPUT' && el.type !== 'checkbox');
+      }
+      document.body.addEventListener('keydown', function (evt) {
+        if (evt.key !== 'ArrowLeft' && evt.key !== 'ArrowRight') return;
+        if (evt.altKey || evt.ctrlKey || evt.metaKey || evt.shiftKey || evt.repeat || !evt.target.closest) return;
+        if (typingIn(evt.target)) return;
+        // From the focused tab when one is, else from the current view's.
+        var focusedTab = evt.target.closest('#$NAV_ID a');
+        var from = focusedTab || document.querySelector('#$NAV_ID a[aria-current="page"]');
+        if (!from) return;
+        var tabs = Array.prototype.slice.call(document.querySelectorAll('#$NAV_ID a'));
+        var step = evt.key === 'ArrowRight' ? 1 : -1;
+        var next = tabs[(tabs.indexOf(from) + step + tabs.length) % tabs.length];
+        evt.preventDefault();
+        // A keyboard user on a tab keeps their place: the page that opens focuses its own tab (below). Storage can throw
+        // (a sandboxed frame, storage turned off); the view still opens, without the focus.
+        if (focusedTab) {
+          try { sessionStorage.setItem(TAB_FOCUS_KEY, next.pathname); } catch (e) {}
+        }
+        window.location.assign(next.href);
+      });
+      // A page an arrow opened focuses its own tab. Only the page the arrow named: a load that failed leaves the key
+      // behind, and the next page this browser tab opens may be another view, which no arrow asked to focus.
+      (function () {
+        var arrowedTo = null;
+        try {
+          arrowedTo = sessionStorage.getItem(TAB_FOCUS_KEY);
+          sessionStorage.removeItem(TAB_FOCUS_KEY);
+        } catch (e) {}
+        var current = arrowedTo === window.location.pathname &&
+          document.querySelector('#$NAV_ID a[aria-current="page"]');
+        if (current) current.focus({ focusVisible: true });
+      })();
       // A path's proxy URL, the one to curl to check it through the proxy: the host this page was opened at, which the
       // proxy can't know, and the port Prometheus scrapes, which is plain HTTP. An IPv6 host keeps its brackets.
       function proxyUrl(path) {

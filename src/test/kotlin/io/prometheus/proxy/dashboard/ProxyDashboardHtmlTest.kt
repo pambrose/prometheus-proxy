@@ -701,6 +701,27 @@ class ProxyDashboardHtmlTest : StringSpec() {
       agentPage shouldNotContain "aria-current=\"page\""
     }
 
+    // Left and Right open the neighbouring view from anywhere on the page, not only from a focused tab: a click on a
+    // tab loads a page whose focus is on <body>, and Safari never focuses a link on a click or a Tab. Typing is left
+    // alone, so the arrows still move the caret in the search, as is a modified key: Alt+Left is the browser's Back.
+    // A tab that had focus gets it back on the page that opens, so a keyboard user's next arrow keeps going from it.
+    "the page script should switch views with the arrow keys from anywhere but a text field" {
+      val page = renderFullPage(snapshot(), DashboardLayout.PATH)
+
+      page shouldContain """<nav class="nav" id="${ProxyDashboardHtml.NAV_ID}">"""
+      page shouldContain "evt.key !== 'ArrowLeft' && evt.key !== 'ArrowRight'"
+      page shouldContain "evt.altKey || evt.ctrlKey || evt.metaKey || evt.shiftKey || evt.repeat"
+      page shouldContain "if (typingIn(evt.target)) return;"
+      page shouldContain
+        "var from = focusedTab || document.querySelector('#${ProxyDashboardHtml.NAV_ID} a[aria-current=\"page\"]');"
+      page shouldContain "(tabs.indexOf(from) + step + tabs.length) % tabs.length"
+      // The gate that left the arrows working only from a focused tab.
+      page shouldNotContain
+        "var tab = evt.target.closest('#${ProxyDashboardHtml.NAV_ID} a');\n        if (!tab) return;"
+      page shouldContain "window.location.assign(next.href);"
+      page shouldContain "arrowedTo === window.location.pathname"
+    }
+
     // A request of the script's own, carrying the header the route requires, so another site's page can't send it.
     "the page script should post a scrape-now with htmx's header and put the result in the panel" {
       val page = renderFullPage(snapshot())
