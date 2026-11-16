@@ -24,6 +24,7 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeIn
 import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
@@ -340,9 +341,9 @@ class ProxyWebDashboardTest : StringSpec() {
     }
 
     // The full chain for a path whose agent has gone: Proxy.recordScrape, PathHistory, the snapshot, the table. The
-    // gone path's one scrape is followed by more than the recent-scrapes queue holds (200), which before PathHistory
-    // pushed it out of the table; it must now stay, with its history strip.
-    "a gone path should stay in the path layout after more scrapes than the recent-scrapes queue holds" {
+    // gone path's one scrape is followed by more than the recent-scrapes queue, since retired, held (200), which before
+    // PathHistory pushed it out of the table; it must now stay, with its history strip.
+    "a gone path should stay in the path layout after more scrapes than the recent-scrapes queue held" {
       withDashboard(HISTORY_HTTP_PORT, HISTORY_GRPC_PORT, HISTORY_DASHBOARD_PORT) {
         proxy.recordScrape(
           scrapeRecord(agentId = "9", agentName = "warehouse-01", path = "orphan_metrics", statusCode = 503),
@@ -617,12 +618,12 @@ class ProxyWebDashboardTest : StringSpec() {
 
           mockkObject(ProxyDashboardHtml)
           try {
-            every { ProxyDashboardHtml.pushFragment(any(), any(), any(), any(), any(), any()) } throws
+            every { ProxyDashboardHtml.pushFragment(any(), any(), any(), any(), any(), any(), any()) } throws
               IllegalStateException("a render bug")
             send(Frame.Text("""{"layout":"AGENT","seq":1}"""))
             send(Frame.Text("""{"layout":"AGENT","seq":2}"""))
             verify(timeout = 10_000, atLeast = 2) {
-              ProxyDashboardHtml.pushFragment(any(), any(), any(), any(), any(), any())
+              ProxyDashboardHtml.pushFragment(any(), any(), any(), any(), any(), any(), any())
             }
           } finally {
             unmockkObject(ProxyDashboardHtml)
@@ -634,9 +635,10 @@ class ProxyWebDashboardTest : StringSpec() {
     }
 
     // A scrape from the dashboard end to end, against a target the test serves. It returns what the target had, and
-    // leaves no trace in what Prometheus reads: the scrape metrics, the path's History, and the recent scrapes, which a
-    // scrape through the scrape port does change. The route refuses the same path again within its cooldown, a path no
-    // agent serves, a request without htmx's header, and one from another origin. Off, it isn't there at all.
+    // leaves no trace in what Prometheus reads: the scrape metrics, and the path's History, which the agent's Recent
+    // scrapes are read from, both of which a scrape through the scrape port does change. The route refuses the same
+    // path again within its cooldown, a path no agent serves, a request without htmx's header, and one from another
+    // origin. Off, it isn't there at all.
     "a scrape-now should return what the target had, leaving what Prometheus reads untouched" {
       val stub =
         embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
@@ -656,17 +658,24 @@ class ProxyWebDashboardTest : StringSpec() {
           ],
           metricsEnabled = true,
         ) {
-          connectAgent().pathManager.registerPath("ui_scrape_metrics", "http://$LOOPBACK_HOST:$stubPort/metrics")
+          val agent = connectAgent()
+          agent.pathManager.registerPath("ui_scrape_metrics", "http://$LOOPBACK_HOST:$stubPort/metrics")
           eventually(30.seconds) {
             client.get("$base/dashboard/paths").bodyAsText() shouldContain
               """id="${ProxyDashboardHtml.SCRAPE_ID_PREFIX}ui_scrape_metrics""""
           }
 
-          // A Prometheus scrape, through the scrape port, which the metrics, History, and recent scrapes record.
+          // The path's History as the proxy holds it, which the Paths view and the agent's Recent scrapes show.
+          fun recorded() =
+            proxy.pathHistory.shouldNotBeNull().snapshot(setOf("ui_scrape_metrics")).scrapes["ui_scrape_metrics"]
+              .orEmpty()
+              .size
+
+          // A Prometheus scrape, through the scrape port, which the metrics and the History record.
           client.get("http://$LOOPBACK_HOST:$SCRAPE_HTTP_PORT/ui_scrape_metrics").bodyAsText() shouldContain "demo_up 1"
           val requests = counted("proxy_scrape_requests")
           val bytes = counted("proxy_scrape_response_bytes")
-          val recent = proxy.recentScrapes().size
+          val recent = recorded()
           requests shouldBe 1.0
           bytes shouldBe 1.0
 
@@ -693,11 +702,14 @@ class ProxyWebDashboardTest : StringSpec() {
 
           counted("proxy_scrape_requests") shouldBe requests
           counted("proxy_scrape_response_bytes") shouldBe bytes
-          proxy.recentScrapes().size shouldBe recent
+          recorded() shouldBe recent
           // A page renders the snapshot of the last refresh, which may predate the scrapes above.
           eventually(10.seconds) {
             client.get("$base/dashboard/paths").bodyAsText() shouldContain
               """aria-label="1 of 1 recent scrapes succeeded""""
+            // The agent's Recent scrapes, read from the same History, count Prometheus's scrape alone.
+            client.get("$base/dashboard/agents/${agent.agentId}").bodyAsText() shouldContain
+              """${ProxyDashboardHtml.SCRAPE_COUNT_ATTR}="1""""
             client.get("$base/dashboard/activity").bodyAsText() shouldContain "scraped now"
           }
         }

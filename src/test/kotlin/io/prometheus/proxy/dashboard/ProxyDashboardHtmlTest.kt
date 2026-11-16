@@ -60,9 +60,15 @@ class ProxyDashboardHtmlTest : StringSpec() {
 
   private fun snapshot(
     agents: List<AgentView> = [agent()],
-    scrapes: List<ScrapeRecord> = emptyList(),
     paths: List<PathView> = agents.flatMap { it.paths }.distinct(),
-  ) = DashboardFixtures.snapshot(agents = agents, scrapes = scrapes, paths = paths)
+  ) = DashboardFixtures.snapshot(agents = agents, paths = paths)
+
+  // Agent "1" serving a path for each of [scrapes]' paths, each path's history its records, in the order given.
+  private fun scraped(scrapes: List<ScrapeRecord>): ProxySnapshot {
+    val paths =
+      scrapes.groupBy { it.path }.map { (name, records) -> DashboardFixtures.pathView(path = name, history = records) }
+    return snapshot(agents = [agent(paths = paths)])
+  }
 
   // An agent row's start tag, which carries every attribute the row has.
   private fun rowTag(
@@ -144,23 +150,17 @@ class ProxyDashboardHtmlTest : StringSpec() {
       html shouldContain "registering"
     }
 
+    // A consolidated path's history holds every agent's scrapes of it, so the detail picks out the selected agent's.
     "the detail pane should show only the selected agent's scrapes" {
-      val scrapes =
-        [
-          DashboardFixtures.scrapeRecord(agentId = "1", path = "app_metrics"),
-          DashboardFixtures.scrapeRecord(
-            agentId = "2",
-            path = "other_metrics",
-            statusCode = 503,
-            outcome = "agent_disconnected",
-            durationMillis = 0,
-            contentLength = 0,
-          ),
-        ]
-      val html = ProxyDashboardHtml.detailFragment(snapshot(scrapes = scrapes), selectedId = "1")
+      val ours = DashboardFixtures.scrapeRecord(agentId = "1")
+      val theirs = DashboardFixtures.scrapeRecord(agentId = "2", outcome = "agent_disconnected")
+      val shared = DashboardFixtures.pathView(agentIds = ["1", "2"], history = [theirs, ours])
+      val agents = [agent(paths = [shared]), agent(id = "2", name = "team-a-02", paths = [shared])]
+      val html = ProxyDashboardHtml.detailFragment(snapshot(agents = agents), selectedId = "1")
 
-      html shouldContain "app_metrics"
-      html shouldNotContain "other_metrics"
+      Regex("""class="kv scrape"""").findAll(html).count() shouldBe 1
+      html shouldContain " · success</span>"
+      html shouldNotContain "agent_disconnected"
     }
 
     "an empty proxy should say so rather than render an empty list" {
@@ -379,7 +379,7 @@ class ProxyDashboardHtmlTest : StringSpec() {
           path = "app_metrics",
           lastScrape = DashboardFixtures.scrapeRecord(path = "app_metrics", at = at),
         )
-      val snap = snapshot(paths = [scraped], scrapes = [DashboardFixtures.scrapeRecord(path = "app_metrics", at = at)])
+      val snap = snapshot(paths = [scraped])
 
       val pathFrame = ProxyDashboardHtml.pushFragment(snap, null, "/dashboard", DashboardLayout.PATH)
       val detail = ProxyDashboardHtml.detailFragment(snap, selectedId = "1")
@@ -397,12 +397,7 @@ class ProxyDashboardHtmlTest : StringSpec() {
           path = "app_metrics",
           lastScrape = DashboardFixtures.scrapeRecord(path = "app_metrics"),
         )
-      val snap =
-        DashboardFixtures.snapshot(
-          agents = [agent(paths = [scraped])],
-          scrapes = [DashboardFixtures.scrapeRecord(agentId = "1", path = "app_metrics")],
-          scrapeNowEnabled = true,
-        )
+      val snap = DashboardFixtures.snapshot(agents = [agent(paths = [scraped])], scrapeNowEnabled = true)
 
       fun classesOf(
         html: String,
@@ -642,10 +637,15 @@ class ProxyDashboardHtmlTest : StringSpec() {
       val scrapes =
         [DashboardFixtures.scrapeRecord(path = "a_metrics"), DashboardFixtures.scrapeRecord(path = "b_metrics")]
 
-      ProxyDashboardHtml.detailFragment(snapshot(scrapes = scrapes), selectedId = "1") shouldContain
+      ProxyDashboardHtml.detailFragment(scraped(scrapes), selectedId = "1") shouldContain
         """<div class="section" ${ProxyDashboardHtml.SCRAPE_COUNT_ATTR}="2"><span>Recent scrapes</span><span>2</span>"""
       ProxyDashboardHtml.detailFragment(snapshot(), selectedId = "1") shouldContain
         """${ProxyDashboardHtml.SCRAPE_COUNT_ATTR}="0""""
+      // Past the cap the snapshot keeps the agent's latest, so the count is the rows the script can crop.
+      val many = (0..ProxySnapshot.MAX_DETAIL_SCRAPES).map { DashboardFixtures.scrapeRecord(path = "p${it % 3}") }
+      val html = ProxyDashboardHtml.detailFragment(scraped(many), selectedId = "1")
+      html shouldContain """${ProxyDashboardHtml.SCRAPE_COUNT_ATTR}="${ProxySnapshot.MAX_DETAIL_SCRAPES}""""
+      Regex("""class="kv scrape"""").findAll(html).count() shouldBe ProxySnapshot.MAX_DETAIL_SCRAPES
     }
 
     // The script tells a scrape since its wait began from an older one by ordering the Paths view's scrape times as

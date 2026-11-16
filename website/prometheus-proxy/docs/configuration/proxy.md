@@ -116,8 +116,7 @@ proxy {
     path = "dashboard"              // Served at http://<proxy>:8094/dashboard
     host = "0.0.0.0"                // Listen address; "127.0.0.1" keeps it on the proxy host
     refreshIntervalSecs = 2         // Re-push interval for drifting counters
-    recentScrapesQueueSize = 200    // Recent scrapes across all agents; each agent's panel shows its own
-    pathHistorySize = 20            // Scrapes kept per path, for the path table's History column
+    pathHistorySize = 20            // Scrapes kept per path, for the History column and each agent's Recent scrapes
     departedPathRetentionSecs = 3600  // How long a path whose agent has gone stays in the path table
     activityLogSize = 500           // Lines kept in the Activity view: agents and paths coming, going, and refused
     scrapeNowEnabled = true         // A Scrape button on each path, which scrapes it at once and shows the result
