@@ -353,11 +353,15 @@ internal object PathTableHtml {
       val urls = links.withIndex().mapNotNull { (place, link) -> link.urlFor(path)?.let { Triple(place, link, it) } }
       if (urls.isEmpty()) +DASH
       urls.forEachIndexed { index, (place, link, url) ->
-        if (index > 0 && link.icon == null && urls[index - 1].second.icon == null) +" · "
+        val previous = urls.getOrNull(index - 1)?.second
+        if (previous.isName && link.isName) +" · "
         pathLink(path, place, link, url)
       }
     }
   }
+
+  // Whether a link shows its name rather than a brand mark; no link, as before the first, is neither.
+  private val PathLink?.isName: Boolean get() = this != null && icon == null
 
   /**
    * One of [path]'s links, the one at [place] in `proxy.dashboard.links`: its name, or its brand mark, whose look the
