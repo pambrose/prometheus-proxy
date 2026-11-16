@@ -247,6 +247,13 @@ most 10,000 agents connected with one identity, which is every agent when agent 
   usually arrives just after, and the proxy logged a WARN for it, and one for each chunk of a large result. It now logs
   these at DEBUG; the `client_cancelled` and `timed_out` outcomes in `proxy_scrape_requests_total` still count each
   such scrape.
+- **An agent on a slow link is no longer disconnected while it's sending.** When an agent's link to the proxy is too
+  slow for Prometheus's scrape timeout, each answer arrives after Prometheus has given up on it, and the proxy didn't
+  count such a late answer, or any piece of a large one, as a sign the agent was alive. An agent that is always sending
+  sends no heartbeats either, so the proxy evicted it every `proxy.internal.maxAgentInactivitySecs` (60 seconds by
+  default), and it reconnected at once, again and again. The proxy now counts everything an agent sends. Its scrapes
+  still fail until the link keeps up, and still count as `client_cancelled` or `timed_out` in
+  `proxy_scrape_requests_total`.
 - **A standalone agent or proxy with a bad setting exits cleanly.** It logs `Invalid configuration:` and the reason,
   and exits with code 1, as it does for a config it can't load, instead of ending with an uncaught exception's stack
   trace.

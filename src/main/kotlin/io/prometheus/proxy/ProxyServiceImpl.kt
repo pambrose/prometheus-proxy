@@ -157,19 +157,21 @@ internal class ProxyServiceImpl(
     agentContext: AgentContext,
     rpcName: String,
   ): String? {
-    val boundIdentityName = agentContext.authIdentityName
-    if (boundIdentityName.isEmpty())
+    if (isCallerBoundTo(agentContext))
       return null
     val callerIdentityName = AgentAuthManager.AGENT_IDENTITY_KEY.get()?.name
-    return if (callerIdentityName == boundIdentityName) {
-      null
-    } else {
-      logger.warn {
-        "Identity '$callerIdentityName' sent $rpcName() for agentId ${agentContext.agentId}, " +
-          "which connected as identity '$boundIdentityName'; rejecting"
-      }
-      "agentId ${agentContext.agentId} is bound to a different agent identity ($rpcName)"
+    logger.warn {
+      "Identity '$callerIdentityName' sent $rpcName() for agentId ${agentContext.agentId}, " +
+        "which connected as identity '${agentContext.authIdentityName}'; rejecting"
     }
+    return "agentId ${agentContext.agentId} is bound to a different agent identity ($rpcName)"
+  }
+
+  // Whether this call may act on [agentContext]: it has no bound identity, or the call presented that one. The check
+  // identityMismatchReason makes, without its warning.
+  private fun isCallerBoundTo(agentContext: AgentContext): Boolean {
+    val boundIdentityName = agentContext.authIdentityName
+    return boundIdentityName.isEmpty() || AgentAuthManager.AGENT_IDENTITY_KEY.get()?.name == boundIdentityName
   }
 
   override suspend fun registerAgent(request: RegisterAgentRequest): RegisterAgentResponse {
@@ -499,11 +501,51 @@ internal class ProxyServiceImpl(
   ): (ScrapeRequestWrapper) -> Boolean =
     { wrapper -> isScrapeOwnedByConnection(connectionAgentId, wrapper.agentContext, wrapper.scrapeId, rpcName) }
 
+  /**
+   * The agent sending one response stream, which each message the stream delivers marks active.
+   *
+   * Every message counts, whether or not the scrape it answers is still tracked: a result that arrives after
+   * Prometheus's timeout, or a chunk of one, still proves the agent is alive. ScrapeRequestManager marks only a result
+   * for a tracked scrape, and the agent heartbeats only once it has sent nothing for `heartbeatMaxInactivitySecs`,
+   * so an agent on a link too slow for the scrape timeout, always sending and never in time, was evicted every
+   * `maxAgentInactivitySecs` while its data kept arriving. A late result isn't a completed request, so the mark
+   * leaves the agent's last request time alone.
+   *
+   * With the transport filter, the connection names the agent. Without it, a result or a chunked header names one,
+   * which is marked only when the call presents the identity that agent connected as, the check [sendHeartBeat]
+   * makes, so one identity can't keep another's agents connected. A chunk or a summary names no agent, so it marks
+   * the one the stream's last accepted message named. Confined to one coroutine, as [ChunkedResponseReader] is.
+   */
+  private inner class StreamSender(
+    private val connectionAgentId: String?,
+  ) {
+    // The agent the stream's last accepted naming message named; null until one is accepted.
+    private var lastNamed: AgentContext? = null
+
+    // Marks the agent that sent a message naming [namedAgentId], or naming none when it's null. Marks nothing for an
+    // agent whose context is gone, or one the call may not act on. The identity is checked quietly: for a tracked
+    // scrape the owner check logs the mismatch already, and once is enough.
+    fun markActive(namedAgentId: String?) {
+      val contextManager = proxy.agentContextManager
+      val sender =
+        when {
+          connectionAgentId != null -> contextManager.getAgentContext(connectionAgentId)
+          namedAgentId == null -> lastNamed
+          else -> contextManager.getAgentContext(namedAgentId)?.takeIf { isCallerBoundTo(it) }?.also { lastNamed = it }
+        }
+      sender?.markActivityTime(false)
+    }
+  }
+
   @Suppress("TooGenericExceptionCaught")
   override suspend fun writeResponsesToProxy(requests: Flow<ScrapeResponse>): Empty {
-    val isOwner = ownedByConnection(ProxyServerInterceptor.CONNECTION_AGENT_ID_KEY.get(), "writeResponsesToProxy")
+    val connectionAgentId = ProxyServerInterceptor.CONNECTION_AGENT_ID_KEY.get()
+    val isOwner = ownedByConnection(connectionAgentId, "writeResponsesToProxy")
+    val sender = StreamSender(connectionAgentId)
     runCatchingCancellable {
       requests.collect { response ->
+        // Whatever becomes of the result: one whose scrape is no longer tracked still proves the agent is alive.
+        sender.markActive(response.agentId)
         try {
           proxy.scrapeRequestManager.assignScrapeResults(response.toScrapeResults(), isOwner)
         } catch (e: CancellationException) {
@@ -565,6 +607,7 @@ internal class ProxyServiceImpl(
     private val activeScrapeIds = mutableSetOf<Long>()
     private val contextManager get() = proxy.agentContextManager
     private val isOwner = ownedByConnection(connectionAgentId, RPC_NAME)
+    private val sender = StreamSender(connectionAgentId)
 
     // The most transfers this stream may have under way: the cap on one agent's queue of scrape requests. The stock
     // agent sends each transfer whole before the next, so it has one at a time (November #13).
@@ -574,6 +617,9 @@ internal class ProxyServiceImpl(
     private var lastMissingChunkScrapeId: Long? = null
 
     fun read(response: ChunkedScrapeResponse) {
+      // Whatever becomes of the message: a transfer whose scrape is no longer tracked still proves the agent is alive,
+      // and on a slow link one transfer can take longer than maxAgentInactivitySecs. Only a header names the agent.
+      sender.markActive(if (response.hasHeader()) response.header.headerAgentId else null)
       when (response.chunkOneOfCase) {
         ChunkOneOfCase.HEADER -> readHeader(response)
 
