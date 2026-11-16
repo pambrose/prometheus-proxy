@@ -29,8 +29,8 @@ import io.prometheus.proxy.dashboard.DashboardFixtures.scrapeRecord
 /**
  * The Paths view's table and search, [PathTableHtml]: the History column, the Identity column, the Links column, the
  * search, its empty states, and how the socket carries it, and the problem counts the status bar and title take from
- * the paths. The rest of the page, and the table's long-standing columns, are in [ProxyDashboardHtmlTest]; how a link's
- * template is filled is in [PathLinkTest].
+ * the paths. The table's long-standing columns are in [PathColumnsHtmlTest], the rest of the page in
+ * [ProxyDashboardHtmlTest] and [DashboardScriptTest]; how a link's template is filled is in [PathLinkTest].
  */
 class PathTableHtmlTest : StringSpec() {
   private fun path(name: String) = DashboardFixtures.pathView(path = name)

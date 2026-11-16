@@ -386,13 +386,34 @@ Two support helpers also live here (not test classes themselves):
   activity feed, naming its host, a host's repeats counted on its line
 - **ProxyEventBusTest** — Dashboard event bus: ordered delivery, non-blocking emit with no subscriber, no replay to a
   late subscriber, fan-out to multiple subscribers, and AgentContextManager emitting on connect only
-- **ProxyDashboardHtmlTest** (`dashboard/`) — Dashboard renderer: top-level out-of-band push regions, agent- and
-  path-centric layouts, tolerant selection and layout parsing, departed paths, an agent's identity in its row and
-  detail, the data `demos/dashboard/screenshots.sh` reads (an agent row's id, name, and path count, the name escaped and
-  through `agentLabel`, and the detail's scrape count) and the one width of a scrape time it orders as text, the
-  detail's Recent scrapes (the selected agent's alone from a shared path's history, its latest across its paths, newest
-  first, at most the cap, which the header counts), links at a root mount, the nav, the script's after-push work and
-  scrape-now request, an agent's uptime, failover markers, accessibility, and the WebSocket connection indicator
+- **ProxyDashboardHtmlTest** (`dashboard/`) — Dashboard renderer: the Agents view (an agent row's htmx attributes and
+  its one id across the page and the pushes, never a region's; the selected agent marked current; an explicit gone state
+  for a selected agent that disconnected, a prompt when none is selected, and a placeholder for one not yet registered;
+  failover markers; an agent's uptime; an empty proxy said to be empty), the detail's Recent scrapes (the selected
+  agent's alone from a shared path's history, its latest across its paths, newest first, at most the cap, which the
+  header counts), the pushes (top-level out-of-band regions, only those of the session's layout, the status bar alone
+  for a session with no known layout, and the view stamp on the frame's first tag, which an agent-supplied value can't
+  stand in for), tolerant selection, layout, and view count parsing, the status bar's departed count, an agent's
+  identity in its row and detail, the data `demos/dashboard/screenshots.sh` reads (an agent row's id, name, and path
+  count, the name escaped and through `agentLabel`, and the detail's scrape count) and the one width of a scrape time it
+  orders as text, links at a root mount, the nav, and accessibility (the connection live region, outside every push, and
+  the page's language and main region)
+- **DashboardScriptTest** (`dashboard/`) — the page's script and the htmx it runs on: frames stamped below its message
+  count dropped, the arrow keys switching views from anywhere but a text field, the scrape-now request with htmx's
+  header, each layout named by its route, the WebSocket connection indicator (both labels in the status region, the
+  lifecycle events it flips on and the ones it must not, a close while the tab is hidden ignored, a lost connection
+  announced once per outage, the capped reconnect backoff, and the stylesheet's disconnected treatment), no htmx 2
+  WebSocket names, history pushes heard on the document, copy clicks from one listener on the body (the clipboard
+  fallback outside a secure context, a proxy URL from the page's own host and the scrape port, and the result announced
+  and put back after each push), scrape times in the viewer's zone before each swap, one run per document, error
+  responses kept from being swapped in, and the htmx config ahead of the versioned htmx script
+- **PathColumnsHtmlTest** (`dashboard/`) — the Paths view's long-standing columns: a row per path with its target,
+  source, and last scrape, and dashes for what a path lacks (no time for one never scraped); its agent named as the
+  agent list names it, never by internal id, with the same placeholder before it registers and a consolidated path's
+  other agents as a count; a departed path kept, marked gone, and attributed to its last agent; the buttons that copy a
+  path's proxy URL (none for a departed path, and the scrape port on the page, not in the pushes) and its target (none
+  without one, the URL escaped), each with one id per path across the page and the pushes; a scrape time's instant, to
+  the second, in both layouts; and no button sharing a class with a row of the detail's Recent scrapes
 - **PathTableHtmlTest** (`dashboard/`) — the Paths view's table and search: the history strip (one element per run, a
   floored percentage, no status pill, visible under forced colours), the Identity column (shown while agent auth is
   on, the legacy token as a shared token), the search (matching rows, the match count, the empty states, the form
@@ -453,8 +474,9 @@ One support helper also lives here (not a test class itself):
 
 - **DashboardFixtures** (`dashboard/`) — builders for the dashboard view models (`pathView`, `departedPathView`,
   `departure`, `agentView`, `scrapeRecord`, `activityEntry`, `snapshot`) with every field defaulted, and `renderFullPage` for the
-  page a GET serves, shared by `ProxyDashboardHtmlTest`, `PathTableHtmlTest`, `PathLinkTest`, `ActivityHtmlTest`,
-  `RowFilterTest`, and `ProxySnapshotTest`, so a test names only the field it is about
+  page a GET serves, shared by `ProxyDashboardHtmlTest`, `DashboardScriptTest`, `PathColumnsHtmlTest`,
+  `PathTableHtmlTest`, `PathLinkTest`, `ActivityHtmlTest`, `RowFilterTest`, and `ProxySnapshotTest`, so a test names
+  only the field it is about
 
 ### Unit Tests — Common (`common/`)
 
