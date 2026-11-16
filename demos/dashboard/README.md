@@ -1,13 +1,15 @@
 # Dashboard demo
 
-A self-contained demo of Prometheus Proxy for customers. It runs a proxy and its standby, each with its web dashboard,
-three agents behind a simulated firewall, a set of simulated services, and Prometheus, Grafana, and Zipkin. A presenter
-can show live traffic, failures and recovery, redundancy, dynamic discovery, stale-agent eviction, proxy failover,
-metric filtering at the agent, per-team identities, a misconfigured duplicate agent, and tracing through the firewall,
-all on one laptop.
+A self-contained demo of Prometheus Proxy for customers. It runs the proxy with its web dashboard, three agents behind a
+simulated firewall, a set of simulated services, and Prometheus and Grafana. A presenter can show live traffic,
+failures and recovery, redundancy, dynamic discovery, stale-agent eviction, per-team identities, and a misconfigured
+duplicate agent, all on one laptop.
 
 The website's [Live Demo](https://pambrose.github.io/prometheus-proxy/demo/) page walks through the same scenarios with
 screenshots of the dashboard and Grafana.
+
+Proxy failover, filtering at the agent, and tracing through the firewall are in the [network demo](../network), which
+follows this one and puts a simulated WAN between the agents and the proxies.
 
 ```
  demo-app  (simulated services: orders, payments, inventory, catalog, shipping, and three discoverable ones)
@@ -15,10 +17,9 @@ screenshots of the dashboard and Grafana.
  agent-east ────────┐  static paths, dynamic discovery, and the proxy's own metrics (the proxy monitors itself)
  agent-west-1 ──────┤  a consolidated pair: both serve shipping_metrics
  agent-west-2 ──────┘
-     │  gRPC, outbound only; each agent lists both proxies and fails over to the standby
+     │  gRPC, outbound only
    proxy ── dashboard :8094 (live agents, paths, and scrapes)
-   proxy-standby ── dashboard :8095
-     ▲  HTTP service discovery (/discovery) and scrapes through :8080, on each proxy
+     ▲  HTTP service discovery (/discovery) and scrapes through :8080
  Prometheus :9090 (5s scrapes, alerting rules) ──► Grafana :3000 (three dashboards)
 ```
 
@@ -36,40 +37,35 @@ make tour    # walks through the presenter's script below, pausing before each s
 make down    # stops it and removes its containers, network, and volume
 ```
 
-The first `make up` pulls the Prometheus, Grafana, Zipkin, and Python images and builds the jars, which takes a few
-minutes. After that it starts in under a minute, and runs without a network connection. **Run it once before the
-meeting.**
+The first `make up` pulls the Prometheus, Grafana, and Python images and builds the jars, which takes a few minutes.
+After that it starts in under a minute, and runs without a network connection. **Run it once before the meeting.**
 
 | What | URL |
 |---|---|
 | Proxy dashboard | <http://localhost:8094/dashboard> |
-| Standby proxy's dashboard | <http://localhost:8095/dashboard> |
 | Grafana (no sign-in needed; admin / admin to edit) | <http://localhost:3000> |
 | Prometheus | <http://localhost:9090> (alerts at `/alerts`) |
 | The proxy's service discovery | <http://localhost:8080/discovery> |
-| Zipkin | <http://localhost:9411/zipkin/> |
 
 `make open` opens the proxy dashboard, Grafana, and Prometheus's alerts in your browser.
 
 If a port is already taken, move it, for example with `DEMO_GRAFANA_PORT=3001 make up`. The variables are
-`DEMO_DASHBOARD_PORT`, `DEMO_STANDBY_DASHBOARD_PORT`, `DEMO_GRAFANA_PORT`, `DEMO_PROMETHEUS_PORT`, `DEMO_PROXY_PORT`,
-and `DEMO_ZIPKIN_PORT`; the dashboard's links into Prometheus and Grafana keep the default ports
-(`config/proxy.conf`). Every port binds to `127.0.0.1` only. The dashboard has no authentication and Grafana uses its
-default admin password, so this setup is for a laptop, not for anything shared.
+`DEMO_DASHBOARD_PORT`, `DEMO_GRAFANA_PORT`, `DEMO_PROMETHEUS_PORT`, and `DEMO_PROXY_PORT`; the dashboard's links into
+Prometheus and Grafana keep the default ports (`config/proxy.conf`). Every port binds to `127.0.0.1` only. The
+dashboard has no authentication and Grafana uses its default admin password, so this setup is for a laptop, not for
+anything shared.
 
 ## What's running
 
 | Service | Role |
 |---|---|
 | `proxy` | The proxy, outside the firewall. Its dashboard is on; service discovery tells Prometheus about every path the agents register. |
-| `proxy-standby` | The standby: the same config, with its own dashboard. Every agent lists it second, so it serves nothing until the primary goes (`demo.sh proxy-down`). |
 | `agent-east` | The agent in the "east" data center. It scrapes the orders, payments, inventory, and catalog services, the proxy's own metrics, its own, and whatever its discovery file lists. |
 | `agent-west-1`, `agent-west-2` | A redundant pair in the "west" data center. Both run consolidated and serve `shipping_metrics`, and the proxy merges their two replicas. |
 | `agent-rogue` | Not started by default. `demo.sh rogue-agent` starts a contractor's agent whose identity may register only `contractor_*` paths, and which tries to register `payments_metrics` too. |
 | `agent-east-copy` | Not started by default. `demo.sh duplicate-agent` starts a second copy of agent-east's config, without consolidated mode. |
 | `demo-app` | The simulated services (`app/demo_app.py`). Traffic follows a 5-minute "day", so the graphs move. It also writes agent-east's discovery file. |
 | `prometheus` | Scrapes every path through the proxy every 5s, with no target in its config. It loads the project's alerting rules (`grafana/alerts.yml`) and the demo's fast ones (`prometheus/demo-alerts.yml`). |
-| `zipkin` | Every proxy and agent reports a span for each gRPC call between them, under its own name. |
 | `grafana` | Opens on the **Prometheus Proxy Demo** dashboard. The project's own **Prometheus Proxy** and **Prometheus Agents** dashboards (`grafana/*.json`) are linked from its top bar. |
 
 ## Presenter's script
@@ -178,45 +174,7 @@ In the Paths view, a removed path that had been scraped stays listed as `gone`, 
 ./demo.sh agent-thaw      # it reconnects and registers again
 ```
 
-### 8. The proxy isn't a single point of failure
-
-Every agent lists two proxy endpoints, the primary and a standby, in order.
-
-```bash
-./demo.sh proxy-down      # stops the primary proxy
-```
-
-- The primary's dashboard goes away. Open the standby's, <http://localhost:8095/dashboard>: within seconds all three
-  agents are there, and clicking one shows **via proxy-standby:50051 (2 of 2)**, marked **failed over**. Nobody touched
-  the agents.
-- Grafana: every service stays green on **Target health**. Prometheus discovers through both proxies, so each path is
-  now scraped through the standby. Only `prometheus-proxy`, the primary's own metrics, goes red, and **DemoTargetDown**
-  fires for it alone: the alert says which proxy failed, and nothing else does.
-
-```bash
-./demo.sh proxy-up        # the primary returns; the agents stay on the standby
-```
-
-An agent goes back to the head of its list only when its connection drops. Once `prometheus-proxy` is green again,
-`demo.sh proxy-down proxy-standby` sends the agents back to the primary within seconds, and
-`demo.sh proxy-up proxy-standby` restores the standby.
-
-### 9. Filtering before the WAN
-
-```bash
-./demo.sh filter          # restarts agent-east with a metric filter for the catalog
-```
-
-- The catalog's payload is about 480,000 characters, most of it a per-item price list no dashboard uses. The filter
-  (`config/agent-east-filtered.conf`) drops that family at the agent, before it is compressed and sent to the proxy.
-- In agent-east's **Recent scrapes**, the catalog falls to about 190,000 characters, and Grafana's **Payload size**
-  drops with it. The data that never crosses the firewall costs nothing to send, store, or query.
-
-```bash
-./demo.sh unfilter        # back to the full payload
-```
-
-### 10. One proxy, several teams
+### 8. One proxy, several teams
 
 The proxy has per-agent identities: each data center's agents connect with their own token, and an identity may
 register only the paths its patterns allow.
@@ -234,14 +192,14 @@ register only the paths its patterns allow.
 ./demo.sh rogue-agent-stop
 ```
 
-### 11. A misconfiguration, handled calmly
+### 9. A misconfiguration, handled calmly
 
 ```bash
 ./demo.sh duplicate-agent    # a second copy of agent-east, without consolidated mode
 ```
 
 - Someone deployed agent-east's config twice. The copy registers the same paths, with the same identity, and the
-  newer registration takes each one: the dashboard shows agent-east-copy with 7 paths and agent-east with 0.
+  newer registration takes each one: the dashboard shows agent-east-copy with 6 paths and agent-east with 0.
 - They settle. agent-east stays connected without paths rather than reconnecting and taking them back, which used to
   make two such agents swap the paths every few seconds. The command prints the proxy's log line, which names both
   agents and says the fix: `agent.consolidated = true` on each, if both should serve the paths.
@@ -250,16 +208,8 @@ register only the paths its patterns allow.
 ./demo.sh duplicate-agent-stop   # removes the copy, and restarts agent-east to register again
 ```
 
-### 12. Following a call through the firewall
-
-Every proxy and agent reports a span to Zipkin for each gRPC call between them. Open <http://localhost:9411/zipkin/>,
-pick an agent that reconnected in an earlier act (agent-west-2 after act 5, or any agent after act 8), and run a query.
-
-- Each trace is one call. Zipkin joins the agent's client side and the proxy's server side of it into one span, so the
-  trace names both services, and its annotations mark when the agent sent the call and the proxy answered it.
-- A connection starts with `connectagent`, `registeragent`, and a `registerpath` for each path. Its scrape streams
-  (`readrequestsfromproxy`, `writeresponsestoproxy`) are traced too, and appear as the connection closes, lasting as
-  long as it did.
+That's the script. For proxy failover, filtering at the agent, and tracing through the firewall, go on to the
+[network demo](../network).
 
 ## Scenario reference
 
@@ -271,8 +221,6 @@ pick an agent that reconnected in an earlier act (agent-west-2 after act 5, or a
 | `demo.sh discover` / `undiscover` | Adds or removes the search, recommendations, and notifications services through agent-east's discovery file |
 | `demo.sh agent-stop` / `agent-start [agent]` | Stops or starts an agent (default `agent-west-2`) |
 | `demo.sh agent-freeze` / `agent-thaw [agent]` | Pauses or resumes an agent's container (default `agent-west-2`) |
-| `demo.sh proxy-down` / `proxy-up [proxy]` | Stops or starts a proxy (default `proxy`, the primary; or `proxy-standby`) |
-| `demo.sh filter` / `unfilter` | Restarts agent-east with or without the catalog filter |
 | `demo.sh rogue-agent` / `rogue-agent-stop` | Starts or removes the contractor's agent |
 | `demo.sh duplicate-agent` / `duplicate-agent-stop` | Starts a second copy of agent-east, or removes it and restarts agent-east |
 | `make tour [ACT=n]` | Walks through the presenter's script, from act 1 or the one given, pausing before each step |
@@ -288,10 +236,9 @@ The services are `orders`, `payments`, `inventory`, `catalog`, and `shipping`, p
 |---|---|
 | `docker/compose.yml` | The services, their ports, and the images built from this checkout |
 | `config/proxy.conf` | The dashboard, service discovery, the per-agent identities, and a 30-second eviction limit, so act 7 fits a demo |
-| `config/proxy-standby.conf` | The standby: `proxy.conf`, with its own scrape address for service discovery |
-| `config/agent-duplicate.conf` | agent-east's config under another name, for act 11 |
-| `config/agent-*.conf` | Each agent's proxy endpoints, identity token, tracing, paths, and their labels (the `job` Prometheus uses), discovery for agent-east, consolidated mode for the west pair, and a 3-second scrape timeout |
-| `prometheus/prometheus.yml` | One HTTP service discovery job against both proxies |
+| `config/agent-duplicate.conf` | agent-east's config under another name, for act 9 |
+| `config/agent-*.conf` | Each agent's proxy endpoint, identity token, paths, and their labels (the `job` Prometheus uses), discovery for agent-east, consolidated mode for the west pair, and a 3-second scrape timeout |
+| `prometheus/prometheus.yml` | One HTTP service discovery job against the proxy |
 | `prometheus/demo-alerts.yml` | The fast demo alerts |
 | `grafana/` | The provisioned datasource, dashboard folder, and demo dashboard |
 | `app/demo_app.py` | The simulated services and their control API |
@@ -313,9 +260,6 @@ and Prometheus doesn't notice one at all, so `make up` reloads Prometheus's conf
 - **The dashboard is empty, or shows only some agents**: the agents connect a few seconds after the proxy starts.
   Give it ten seconds, or check `make logs SERVICE=agent-east`.
 - **A scenario left things in an odd state**: `./demo.sh recover`, `undiscover`, `agent-thaw`, `agent-start`,
-  `proxy-up` (for each proxy), `unfilter`, `rogue-agent-stop`, and `duplicate-agent-stop` undo every scenario. For a
-  clean slate, `make down && make up`.
-- **The primary's dashboard doesn't load during act 8**: that's the point; use the standby's at
-  <http://localhost:8095/dashboard>.
+  `rogue-agent-stop`, and `duplicate-agent-stop` undo every scenario. For a clean slate, `make down && make up`.
 - The proxy logs a warning at startup that the dashboard has no authentication. That's expected here, and is why
   every port binds to `127.0.0.1`.

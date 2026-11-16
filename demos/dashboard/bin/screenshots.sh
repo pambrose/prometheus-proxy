@@ -24,10 +24,8 @@ DEMO="$DEMO_DIR/demo.sh"
 OUT_DIR="$REPO_DIR/website/prometheus-proxy/docs/images/demo"
 
 DASHBOARD_URL="http://localhost:${DEMO_DASHBOARD_PORT:-8094}/dashboard"
-STANDBY_DASHBOARD_URL="http://localhost:${DEMO_STANDBY_DASHBOARD_PORT:-8095}/dashboard"
 GRAFANA_URL="http://localhost:${DEMO_GRAFANA_PORT:-3000}"
 PROMETHEUS_URL="http://localhost:${DEMO_PROMETHEUS_PORT:-9090}"
-ZIPKIN_URL="http://localhost:${DEMO_ZIPKIN_PORT:-9411}"
 
 # The settings in the header. SKIP_UPTIME_WAIT takes exactly 1; any other value leaves the wait in.
 WAIT_SECS="${WAIT_SECS:-150}"
@@ -80,9 +78,6 @@ restore() {
   "$DEMO" agent-thaw >/dev/null 2>&1 || true
   "$DEMO" undiscover >/dev/null 2>&1 || true
   "$DEMO" recover >/dev/null 2>&1 || true
-  "$DEMO" proxy-up >/dev/null 2>&1 || true
-  "$DEMO" proxy-up proxy-standby >/dev/null 2>&1 || true
-  "$DEMO" unfilter >/dev/null 2>&1 || true
   "$DEMO" rogue-agent-stop >/dev/null 2>&1 || true
   "$DEMO" duplicate-agent-stop >/dev/null 2>&1 || true
   rm -rf "$WORK"
@@ -107,22 +102,22 @@ page() { curl -fsS "$DASHBOARD_URL$1"; }
 # Counts the matches of an extended regex in a dashboard page.
 count_in() { page "$1" | grep -Eo "$2" | wc -l | tr -d ' '; }
 
-# The agent list's row for the connected agent with this name, at a dashboard's base URL (DASHBOARD_URL unless given):
-# its start tag, or nothing. The row carries the agent's id, name, and path count as data attributes (agentListInner in
-# ProxyDashboardHtml.kt), which the checks below read: they matched the row's text before, and every change to how the
-# row looks, a tag, an LED, or a word, broke one. The name's closing quote keeps agent-east from matching
-# agent-east-copy, and the proxy escapes every value, so no ">" ends a tag early.
+# The agent list's row for the connected agent with this name: its start tag, or nothing. The row carries the agent's
+# id, name, and path count as data attributes (agentListInner in ProxyDashboardHtml.kt), which the checks below read:
+# they matched the row's text before, and every change to how the row looks, a tag, an LED, or a word, broke one. The
+# name's closing quote keeps agent-east from matching agent-east-copy, and the proxy escapes every value, so no ">" ends
+# a tag early.
 agent_row() {
   local html
-  html="$(curl -fsS "${2:-$DASHBOARD_URL}" 2>/dev/null)" || return 0
+  html="$(curl -fsS "$DASHBOARD_URL" 2>/dev/null)" || return 0
   grep -Eo '<[a-z]+ [^>]*data-agent-name="[^"]*"[^>]*>' <<<"$html" | grep -F "data-agent-name=\"$1\"" | head -1 || true
 }
 
 # An attribute's value in a start tag, or nothing.
 attr() { sed -nE "s/.* $1=\"([^\"]*)\".*/\1/p" <<<"$2"; }
 
-# The id of the connected agent with this name, at a dashboard's base URL (DASHBOARD_URL unless given), or nothing.
-agent_id() { attr data-agent "$(agent_row "$@")"; }
+# The id of the connected agent with this name, or nothing.
+agent_id() { attr data-agent "$(agent_row "$1")"; }
 
 # Whether an agent's detail page, by URL, counts at least this many recent scrapes: enough rows to fill a fixed crop.
 # The count is data on the detail's Recent scrapes header (detailInner in ProxyDashboardHtml.kt).
@@ -139,44 +134,11 @@ east_has_no_paths() { [[ "$(attr data-path-count "$(agent_row agent-east)")" == 
 # wait_until's checks counts again: a count passed as an argument was taken once, as the wait began.
 has_discovered_sources() { (($(count_in "/paths" '>disc<') >= $1)); }
 
-# The id of a recent registerpath trace of agent-east's, from Zipkin.
-registerpath_trace() {
-  curl -fsS -G "$ZIPKIN_URL/zipkin/api/v2/traces" --data-urlencode serviceName=agent-east \
-    --data-urlencode spanName=proxyservice/registerpath --data-urlencode limit=1 |
-    grep -Eo '"traceId":"[0-9a-f]+"' | head -1 | cut -d'"' -f4
-}
-
-# Whether Zipkin has a registerpath trace of agent-east's.
-has_registerpath_trace() { [[ -n "$(registerpath_trace)" ]]; }
-
 # Whether agent-east has been connected a minute, which its detail shows as "up 1m" rather than in seconds.
 east_up_a_minute() {
   local id
   id="$(agent_id agent-east)"
   [[ -n "$id" ]] && page "/agents/$id" | grep -Eq 'up [0-9]+[mhd]'
-}
-
-# Whether the dashboard at a base URL lists all three agents, each registered under its name.
-has_all_agents() {
-  local name
-  for name in agent-east agent-west-1 agent-west-2; do
-    [[ -n "$(agent_row "$name" "$1")" ]] || return 1
-  done
-}
-
-# Whether Prometheus scrapes the primary proxy's own metrics again: by then the agents look its name up again.
-primary_metrics_up() {
-  curl -fsS -G "$PROMETHEUS_URL/api/v1/query" --data-urlencode 'query=max(up{job="prometheus-proxy"}) == 1' |
-    grep -q '"value"'
-}
-
-# Whether agent-east's recent scrapes show at least three filtered catalog payloads, under 300,000 characters.
-filtered_catalog() {
-  local id
-  id="$(agent_id agent-east)"
-  [[ -n "$id" ]] || return 1
-  [[ "$(curl -fsS "$DASHBOARD_URL/agents/$id" | grep -Eo '/catalog_metrics</span>.{0,120}· [0-9]+ chars' |
-    grep -Eo '[0-9]+ chars' | awk '$1 < 300000' | wc -l | tr -d ' ')" -ge 3 ]]
 }
 
 # Whether Prometheus has DemoTargetDown firing for at least this many targets.
@@ -282,7 +244,7 @@ step "Waiting for every path to answer 200"
 "$DEMO" agent-thaw >/dev/null 2>&1 || true
 "$DEMO" undiscover >/dev/null
 "$DEMO" recover >/dev/null
-wait_healthy "ten healthy paths" 10
+wait_healthy "nine healthy paths" 9
 # make screenshots starts the demo just before this, so every agent's uptime would read a few seconds. Waiting until
 # agent-east has been up a minute makes the first shots look like a demo that has been running. Say why, since the
 # script otherwise looks stuck, or that SKIP_UPTIME_WAIT skipped it.
@@ -301,7 +263,7 @@ east="$(agent_id agent-east)"
 # Enough of agent-east's Recent scrapes to fill the shot, which the minute's wait gives but SKIP_UPTIME_WAIT doesn't.
 wait_until "agent-east's scrapes" has_scrapes "$DASHBOARD_URL/agents/$east" 11
 step "The Agents and Paths views"
-shoot_fixed agents "$DASHBOARD_URL/agents/$east" 763
+shoot_fixed agents "$DASHBOARD_URL/agents/$east" 769
 shoot_paths paths
 
 step "A failing service and a hung one"
@@ -312,53 +274,24 @@ shoot_paths outage
 # Grafana is captured taller than kept: the bottom of its viewport carries a fixed "Powered by" footer.
 shoot_fixed grafana "$GRAFANA_URL/d/prometheus-proxy-demo?orgId=1&kiosk&from=now-15m&to=now&theme={theme}" 900 1000 15000
 "$DEMO" recover >/dev/null
-wait_healthy "the services to recover" 10
-
-step "The primary proxy fails over to the standby"
-"$DEMO" proxy-down >/dev/null 2>&1
-wait_until "every agent on the standby" has_all_agents "$STANDBY_DASHBOARD_URL"
-east="$(agent_id agent-east "$STANDBY_DASHBOARD_URL")"
-[[ -n "$east" ]] || die "agent-east isn't on the standby"
-wait_until "agent-east's scrapes through the standby" has_scrapes "$STANDBY_DASHBOARD_URL/agents/$east" 11
-shoot_fixed failover "$STANDBY_DASHBOARD_URL/agents/$east" 763
-"$DEMO" proxy-up >/dev/null 2>&1
-wait_until "the primary's own metrics to answer again" primary_metrics_up
-"$DEMO" proxy-down proxy-standby >/dev/null 2>&1
-wait_until "every agent back on the primary" has_all_agents "$DASHBOARD_URL"
-"$DEMO" proxy-up proxy-standby >/dev/null 2>&1
-wait_healthy "ten healthy paths" 10
-
-step "A call traced through the firewall"
-# The failover reconnected every agent, so Zipkin has their registration calls. Zipkin's UI has one theme, so this is
-# taken once and serves both of the site's.
-wait_until "agent-east's registerpath traces" has_registerpath_trace
-capture "$ZIPKIN_URL/zipkin/traces/$(registerpath_trace)" "$WORK/tracing.png" 496 light 8000
-
-step "A filter at the agent"
-"$DEMO" filter >/dev/null 2>&1
-wait_until "agent-east's filtered catalog scrapes" filtered_catalog
-east="$(agent_id agent-east)"
-wait_until "agent-east's scrapes since the restart" has_scrapes "$DASHBOARD_URL/agents/$east" 11
-shoot_fixed filtered "$DASHBOARD_URL/agents/$east" 763
-"$DEMO" unfilter >/dev/null 2>&1
-wait_healthy "ten healthy paths" 10
+wait_healthy "the services to recover" 9
 
 step "A duplicate agent, without consolidated mode"
 # agent-east has to serve its scrapes before the copy starts: the copy takes every path, and with none left agent-east
-# serves no more, so a copy started too soon left the shot's Recent scrapes all but empty. unfilter just restarted
-# agent-east, and the healthy wait above took only scrapes from after that, so by now it has served one for each of its
-# seven paths, rows for the shot. Its id stays the same once the copy has its paths.
+# serves no more, so a copy started too soon left the shot's Recent scrapes all but empty. The healthy wait above took
+# only scrapes from after the recovery, so by now it has served one for each of its six paths, rows for the shot. Its
+# id stays the same once the copy has its paths.
 east="$(agent_id agent-east)"
 [[ -n "$east" ]] || die "agent-east isn't connected"
 "$DEMO" duplicate-agent >/dev/null 2>&1
 wait_until "agent-east-copy to take agent-east's paths" east_has_no_paths
-shoot_fixed duplicate "$DASHBOARD_URL/agents/$east" 414
+shoot_fixed duplicate "$DASHBOARD_URL/agents/$east" 420
 "$DEMO" duplicate-agent-stop >/dev/null 2>&1
-wait_healthy "ten healthy paths" 10
+wait_healthy "nine healthy paths" 9
 
 step "Three services discovered at runtime"
 "$DEMO" discover >/dev/null
-wait_healthy "three discovered paths" 13
+wait_healthy "three discovered paths" 12
 wait_until "three 'disc' sources" has_discovered_sources 3
 shoot_paths discovered
 
@@ -368,7 +301,7 @@ west2="$(agent_id agent-west-2)"
 "$DEMO" agent-freeze >/dev/null 2>&1
 wait_until "agent-west-2 to be idle for 16 seconds" \
   bash -c "curl -fsS '$DASHBOARD_URL/agents/$west2' | grep -Eq 'idle (1[6-9]|2[0-9])s'"
-shoot_fixed evicting "$DASHBOARD_URL/agents/$west2" 536
+shoot_fixed evicting "$DASHBOARD_URL/agents/$west2" 529
 wait_until "the proxy to evict agent-west-2" \
   bash -c "curl -fsS '$DASHBOARD_URL/paths' | grep -Eq '<span class=\"crit\">[0-9]+ departed</span>'"
 sleep 4
@@ -383,13 +316,11 @@ shoot_table activity "/activity?q=agent-rogue"
 
 step "Writing WebP to ${OUT_DIR#"$REPO_DIR"/}"
 mkdir -p "$OUT_DIR"
-for name in agents paths outage grafana failover filtered duplicate discovered evicting evicted activity; do
+for name in agents paths outage grafana duplicate discovered evicting evicted activity; do
   for theme in "${THEMES[@]}"; do
     file="$(named "$name" "$theme")"
     cwebp -quiet -lossless -z 9 "$WORK/$file.png" -o "$OUT_DIR/$file.webp"
     printf '  %-22s %s\n' "$file.webp" "$(magick identify -format '%wx%h' "$WORK/$file.png")"
   done
 done
-cwebp -quiet -lossless -z 9 "$WORK/tracing.png" -o "$OUT_DIR/tracing.webp"
-printf '  %-22s %s\n' "tracing.webp" "$(magick identify -format '%wx%h' "$WORK/tracing.png")"
 step "Done; the demo is back to normal"

@@ -52,7 +52,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Jobs Prometheus scraped successfully through either proxy on its last scrape.",
+      "description": "Jobs Prometheus scraped successfully through the proxy on its last scrape.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -112,7 +112,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Jobs no proxy could scrape on the last try: a failover (./demo.sh proxy-down) leaves them up. Try ./demo.sh outage.",
+      "description": "Jobs whose last scrape through the proxy failed. Try ./demo.sh outage.",
       "fieldConfig": {
         "defaults": {
           "color": {

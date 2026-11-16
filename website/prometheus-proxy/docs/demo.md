@@ -1,8 +1,8 @@
 # Live Demo
 
-The repository ships a demo that runs the whole system on one machine: a proxy and its standby, each with its
-[dashboard](web-dashboard.md), three agents behind a simulated firewall, a set of simulated services, and Prometheus,
-Grafana, and Zipkin. It is the quickest way to watch the proxy work, and every screenshot on this page comes from it.
+The repository ships a demo that runs the whole system on one machine: the proxy with its
+[dashboard](web-dashboard.md), three agents behind a simulated firewall, a set of simulated services, and Prometheus
+and Grafana in front. It is the quickest way to watch the proxy work, and every screenshot on this page comes from it.
 
 The proxy and agent images are built from your clone, so the demo shows the dashboard as it is in the code.
 
@@ -11,7 +11,6 @@ The proxy and agent images are built from your clone, so the demo shows the dash
 graph LR
   G[Grafana :3000] --> P[Prometheus :9090]
   P -->|discovery and scrapes| Proxy[Proxy, dashboard :8094]
-  P -->|discovery and scrapes| Standby[Standby proxy, dashboard :8095]
   %% Each agent connects out to the proxy, so its arrow points back. The invisible links keep the agents to
   %% the right of the proxy, as on the home page.
   Proxy ~~~ East
@@ -20,9 +19,6 @@ graph LR
   East[agent-east] -->|gRPC| Proxy
   West1[agent-west-1] -->|gRPC| Proxy
   West2[agent-west-2] -->|gRPC| Proxy
-  East -.->|failover| Standby
-  West1 -.-> Standby
-  West2 -.-> Standby
   East -->|HTTP fetch| App[demo-app: simulated services]
   West1 -->|HTTP fetch| App
   West2 -->|HTTP fetch| App
@@ -31,7 +27,6 @@ graph LR
     G
     P
     Proxy
-    Standby
   end
 
   subgraph Inside Firewall
@@ -54,36 +49,31 @@ make tour    # walks through every scenario below, pausing before each step
 make down    # stops it and removes its containers, network, and volume
 ```
 
-The first `make up` pulls the Prometheus, Grafana, Zipkin, and Python images and builds the jars, which takes a few
-minutes. After that it starts in under a minute, and runs without a network connection.
+The first `make up` pulls the Prometheus, Grafana, and Python images and builds the jars, which takes a few minutes.
+After that it starts in under a minute, and runs without a network connection.
 
 | What | URL |
 |---|---|
 | Proxy dashboard | <http://localhost:8094/dashboard> |
-| Standby proxy's dashboard | <http://localhost:8095/dashboard> |
 | Grafana (no sign-in needed; admin / admin to edit) | <http://localhost:3000> |
 | Prometheus | <http://localhost:9090> (alerts at `/alerts`) |
 | The proxy's service discovery | <http://localhost:8080/discovery> |
-| Zipkin | <http://localhost:9411/zipkin/> |
 
 Every port binds to `127.0.0.1` only: the dashboard has no authentication and Grafana keeps its default admin
 password, which suits a laptop and nothing shared. To move a port that is already taken, set `DEMO_DASHBOARD_PORT`,
-`DEMO_STANDBY_DASHBOARD_PORT`, `DEMO_GRAFANA_PORT`, `DEMO_PROMETHEUS_PORT`, `DEMO_PROXY_PORT`, or `DEMO_ZIPKIN_PORT`,
-for example `DEMO_GRAFANA_PORT=3001 make up`.
+`DEMO_GRAFANA_PORT`, `DEMO_PROMETHEUS_PORT`, or `DEMO_PROXY_PORT`, for example `DEMO_GRAFANA_PORT=3001 make up`.
 
 ## What's running
 
 | Service | Role |
 |---|---|
 | `proxy` | The proxy, outside the firewall. Its dashboard is on, and its service discovery tells Prometheus about every path the agents register. |
-| `proxy-standby` | The standby: the same config, with its own dashboard. Every agent lists it second, so it serves nothing until the primary goes. |
 | `agent-east` | Scrapes the orders, payments, inventory, and catalog services, the proxy's own metrics, its own, and whatever its discovery file lists. |
 | `agent-west-1`, `agent-west-2` | A redundant pair. Both run [consolidated](glossary.md#consolidated-mode) and serve `/shipping_metrics`, and the proxy merges their two replicas. |
 | `agent-rogue` | Started only by `demo.sh rogue-agent`: a contractor's agent whose identity may register only `contractor_*` paths. |
 | `agent-east-copy` | Started only by `demo.sh duplicate-agent`: agent-east's config, deployed a second time. |
 | `demo-app` | The simulated services. Their traffic follows a 5-minute "day", so the graphs move. It also writes agent-east's discovery file. |
-| `prometheus` | Scrapes every path through whichever proxy advertises it, every 5 seconds, with no targets in its config, and loads the project's alerting rules and a few fast demo ones. |
-| `zipkin` | Receives a span from every proxy and agent for each gRPC call between them. |
+| `prometheus` | Scrapes every path through the proxy every 5 seconds, with no targets in its config, and loads the project's alerting rules and a few fast demo ones. |
 | `grafana` | Opens on the demo's dashboard, which links to the two dashboards the project ships. |
 
 ## The dashboard
@@ -202,47 +192,6 @@ served. `./demo.sh agent-thaw` unfreezes the agent, and it reconnects and regist
 A stopped agent leaves the dashboard at once, and `/shipping_metrics` drops from `+1` to agent-west-1 alone. In
 Grafana, **Shipping by replica** keeps west-1 flowing, and shipping stays green on **Target health**.
 
-### The proxy fails over
-
-Every agent lists two [proxy endpoints](production.md#high-availability), the primary and a standby, in order.
-
-```bash
-./demo.sh proxy-down      # stops the primary proxy
-```
-
-<figure markdown="span">
-  [![agent-east on the standby, after failing over](images/demo/failover.webp#only-dark){ loading=lazy }](images/demo/failover.webp)
-  [![agent-east on the standby, after failing over](images/demo/failover-light.webp#only-light){ loading=lazy }](images/demo/failover-light.webp)
-  <figcaption>The standby's dashboard, seconds after the primary stopped</figcaption>
-</figure>
-
-Within seconds every agent is on the standby, with no manual step: its dashboard shows each one
-**via proxy-standby:50051 (2 of 2)**, marked **failed over**. Prometheus discovers through both proxies, so every
-service stays up in Grafana, scraped through the standby; only `prometheus-proxy`, the primary's own metrics, goes
-down, and **DemoTargetDown** fires for it alone.
-
-`./demo.sh proxy-up` brings the primary back, but the agents stay on the standby: an agent returns to the head of its
-list only when its connection drops. Once `prometheus-proxy` is green again, `./demo.sh proxy-down proxy-standby`
-sends them back within seconds, and `./demo.sh proxy-up proxy-standby` restores the standby.
-
-### Filtering before the WAN
-
-```bash
-./demo.sh filter          # restarts agent-east with a metric filter for the catalog
-```
-
-<figure markdown="span">
-  [![agent-east's recent scrapes, with the catalog filtered](images/demo/filtered.webp#only-dark){ loading=lazy }](images/demo/filtered.webp)
-  [![agent-east's recent scrapes, with the catalog filtered](images/demo/filtered-light.webp#only-light){ loading=lazy }](images/demo/filtered-light.webp)
-  <figcaption>The catalog after the filter: about 190,000 characters, down from 480,000</figcaption>
-</figure>
-
-Most of the catalog's payload is a per-item price list no dashboard uses. The
-[filter](configuration/agent.md#metric-filtering) drops that family at the agent, before the payload is compressed and
-sent to the proxy, so the catalog falls from about 480,000 characters to about 190,000, and Grafana's **Payload size**
-drops with it. What never crosses the firewall costs nothing to send, store, or query. `./demo.sh unfilter` restores
-the full payload.
-
 ### One proxy, several teams
 
 The proxy has [per-agent identities](security/index.md#per-agent-identities-and-path-authorization): each data
@@ -284,26 +233,11 @@ over. `./demo.sh rogue-agent-stop` removes it.
 </figure>
 
 Someone deployed agent-east's config twice. The copy registers the same paths with the same identity, and the newer
-registration takes each one: agent-east-copy serves all seven, and agent-east stays connected with none. The two
+registration takes each one: agent-east-copy serves all six, and agent-east stays connected with none. The two
 settle; agent-east doesn't reconnect and take the paths back, which used to make two such agents swap them every few
 seconds. The command prints the proxy's log line, which names both agents and gives the fix: `agent.consolidated =
 true` on each, if both should serve the paths. `./demo.sh duplicate-agent-stop` removes the copy and restarts
 agent-east, which registers its paths again.
-
-### Following a call through the firewall
-
-Every proxy and agent reports a [Zipkin](advanced.md#zipkin-tracing) span for each gRPC call between them. Open
-<http://localhost:9411/zipkin/>, choose an agent that has reconnected in an earlier scenario, and run a query.
-
-<figure markdown="span">
-  [![A registerpath call, traced from agent-east to the proxy](images/demo/tracing.webp){ loading=lazy }](images/demo/tracing.webp)
-  <figcaption>One registerpath call, from agent-east to the proxy</figcaption>
-</figure>
-
-Each trace is one call. Zipkin joins the agent's client side and the proxy's server side of it into one span, so the
-trace names both services, and its annotations mark when the agent sent the call and when the proxy received and
-answered it. A connection starts with `connectagent`, `registeragent`, and a `registerpath` for each path; its scrape
-streams are traced too, and appear as the connection closes, lasting as long as it did.
 
 ## Scenario reference
 
@@ -315,8 +249,6 @@ streams are traced too, and appear as the connection closes, lasting as long as 
 | `demo.sh discover` / `undiscover` | Adds or removes the search, recommendations, and notifications services through agent-east's discovery file |
 | `demo.sh agent-stop` / `agent-start [agent]` | Stops or starts an agent (default `agent-west-2`) |
 | `demo.sh agent-freeze` / `agent-thaw [agent]` | Pauses or resumes an agent's container (default `agent-west-2`) |
-| `demo.sh proxy-down` / `proxy-up [proxy]` | Stops or starts a proxy (default `proxy`, the primary; or `proxy-standby`) |
-| `demo.sh filter` / `unfilter` | Restarts agent-east with or without the catalog filter |
 | `demo.sh rogue-agent` / `rogue-agent-stop` | Starts or removes the contractor's agent |
 | `demo.sh duplicate-agent` / `duplicate-agent-stop` | Starts a second copy of agent-east, or removes it and restarts agent-east |
 | `make tour [ACT=n]` | Walks through every scenario, from act 1 or the one given, pausing before each step |
@@ -324,14 +256,16 @@ streams are traced too, and appear as the connection closes, lasting as long as 
 | `make logs [SERVICE=name]` | Follows the logs, of every service or the one given |
 | `make open` | Opens the dashboard, Grafana, and Prometheus's alerts in the browser |
 
-`recover`, `undiscover`, `agent-thaw`, `agent-start`, `proxy-up` (for each proxy), `unfilter`, and `rogue-agent-stop`,
-and `duplicate-agent-stop` undo every scenario. For a clean slate, `make down && make up`.
+`recover`, `undiscover`, `agent-thaw`, `agent-start`, `rogue-agent-stop`, and `duplicate-agent-stop` undo every
+scenario. For a clean slate, `make down && make up`.
 
 ## Going further
 
 - The demo's [README](https://github.com/pambrose/prometheus-proxy/tree/master/demos/dashboard) lays these scenarios
   out as a presenter's script, with what each one means for the audience, and lists the files that set the demo up.
 - The [Network Demo](network-demo.md) puts a simulated WAN between the agents and the proxies, and shows what a far,
-  thin, dead, flaky, or missing link does.
+  thin, dead, flaky, or missing link does. It also covers what this demo leaves out: the agents failing over to a
+  standby proxy, a filter at the agent that keeps a payload from crossing the firewall, and a call followed through
+  the firewall in Zipkin.
 - [Dashboard](web-dashboard.md) covers every part of the dashboard, and how to turn it on for your own proxy.
 - [Grafana & Alerting](grafana.md) covers the dashboards and alerting rules the project ships.
