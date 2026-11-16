@@ -20,11 +20,13 @@ import io.prometheus.proxy.dashboard.ProxyDashboardHtml.COPY_ATTR
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.COPY_PROXY_ID_PREFIX
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.COPY_TARGET_ID_PREFIX
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.DASH
+import io.prometheus.proxy.dashboard.ProxyDashboardHtml.LINK_ID_PREFIX
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.PATH_TABLE_ID
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.PROXY_PATH_ATTR
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SCRAPE_ID_PREFIX
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SCRAPE_RESULT_ID
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SCRAPE_URL_ATTR
+import io.prometheus.proxy.dashboard.ProxyDashboardHtml.TIP_ATTR
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.agentLabel
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.renderFilters
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.scrapeTime
@@ -33,6 +35,7 @@ import kotlinx.html.BUTTON
 import kotlinx.html.ButtonType
 import kotlinx.html.DIV
 import kotlinx.html.FlowContent
+import kotlinx.html.HEAD
 import kotlinx.html.TBODY
 import kotlinx.html.TR
 import kotlinx.html.a
@@ -41,11 +44,13 @@ import kotlinx.html.caption
 import kotlinx.html.div
 import kotlinx.html.i
 import kotlinx.html.span
+import kotlinx.html.style
 import kotlinx.html.table
 import kotlinx.html.tbody
 import kotlinx.html.td
 import kotlinx.html.thead
 import kotlinx.html.tr
+import kotlinx.html.unsafe
 
 /**
  * The Paths view: every path on one row, joined with its recent scrapes, and the search above it.
@@ -66,6 +71,20 @@ internal object PathTableHtml {
     renderFilters(routeBase, DashboardLayout.PATH, filter, columns(snapshot))
     if (snapshot.scrapeNowEnabled) scrapeResultPanel(routeBase)
     div("scroller") { pathTable(snapshot, filter, oob = false) }
+  }
+
+  /**
+   * The stylesheet that gives each brand mark the configured [links] show its URL and colours
+   * ([ProxyDashboardCss.linkIconCss]), for the page's head, or nothing when no link shows one. In the head, which no
+   * push reaches, so every frame's links carry only their classes; the links are fixed at startup, so it never goes
+   * stale.
+   */
+  fun HEAD.linkIconStyle(
+    links: List<PathLink>,
+    routeBase: String,
+  ) {
+    val icons = links.mapNotNull { it.icon }.distinct()
+    if (icons.isNotEmpty()) style { unsafe { raw(ProxyDashboardCss.linkIconCss(routeBase, icons)) } }
   }
 
   // Where a scrape-now's result shows, filled by the page's script from the route it names. Outside the table's
@@ -191,7 +210,9 @@ internal object PathTableHtml {
   private val LINKS =
     TableColumn(
       label = "Links",
-      help = "The path's links into other tools, from proxy.dashboard.links; each opens in a new tab.",
+      help = "The path's links into other tools, from proxy.dashboard.links, by name or brand icon; hover over an " +
+        "icon for its name. Each opens in a new tab.",
+      centered = true,
     )
 
   // Block bodies throughout this object, not `= td(...) { }`: CodeScene doesn't count the conditionals inside an
@@ -320,25 +341,48 @@ internal object PathTableHtml {
   /**
    * The path's links into other tools, `proxy.dashboard.links`, each opening [path] in a new tab, or a dash for a path
    * with none. A link whose template needs a value the path lacks is left out (see [PathLink.urlFor]), so a departed
-   * path, whose labels are gone, keeps only the links that use none.
+   * path, whose labels are gone, keeps only the links that use none. Two names in a row take a separator; an icon
+   * stands apart by its own margin.
    */
   private fun TR.linksCell(
     path: PathView,
     links: List<PathLink>,
   ) {
-    td("dim links") {
-      val urls = links.mapNotNull { link -> link.urlFor(path)?.let { link to it } }
+    td("dim links ${LINKS.alignment}") {
+      // Each link keeps its place in proxy.dashboard.links, which its id carries, though an earlier one is left out.
+      val urls = links.withIndex().mapNotNull { (place, link) -> link.urlFor(path)?.let { Triple(place, link, it) } }
       if (urls.isEmpty()) +DASH
-      urls.forEachIndexed { index, (link, url) ->
-        if (index > 0) +" · "
-        // noopener so the tool's page can't reach back into this one; noreferrer so it isn't told the dashboard's URL.
-        a(href = url, target = "_blank") {
-          attributes["rel"] = "noopener noreferrer"
-          // Names the path, so a screen reader listing the page's links can tell one row's from another's.
-          attributes["aria-label"] = "Open /${path.path} in ${link.name}"
-          +link.name
-        }
+      urls.forEachIndexed { index, (place, link, url) ->
+        if (index > 0 && link.icon == null && urls[index - 1].second.icon == null) +" · "
+        pathLink(path, place, link, url)
       }
+    }
+  }
+
+  /**
+   * One of [path]'s links, the one at [place] in `proxy.dashboard.links`: its name, or its brand mark, whose look the
+   * page's icon stylesheet gives its class (see [ProxyDashboardCss.linkIconCss]), with a tooltip saying what it does,
+   * *Open in Grafana*. Either way its `aria-label` names the path and the tool.
+   *
+   * Its id is built from [place] and the path, which is unique in the table, so the push that replaces the table every
+   * refresh hands focus back to it, as a copy button's id does; without one, a keyboard user lost their place, and a
+   * mark its tooltip, on every refresh. The stylesheet draws the tooltip from [TIP_ATTR] rather than the browser from a
+   * `title`, which it shows only after a pause that outlasts the push, so a title's tooltip never appeared.
+   */
+  private fun FlowContent.pathLink(
+    path: PathView,
+    place: Int,
+    link: PathLink,
+    url: String,
+  ) {
+    val icon = link.icon
+    // noopener so the tool's page can't reach back into this one; noreferrer so it isn't told the dashboard's URL.
+    a(href = url, target = "_blank", classes = icon?.let { "icon icon-${it.slug}" }) {
+      attributes["id"] = "$LINK_ID_PREFIX$place-${path.path}"
+      attributes["rel"] = "noopener noreferrer"
+      // Names the path, so a screen reader listing the page's links can tell one row's from another's.
+      attributes["aria-label"] = "Open /${path.path} in ${link.name}"
+      if (icon == null) +link.name else attributes[TIP_ATTR] = "Open in ${link.name}"
     }
   }
 

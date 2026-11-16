@@ -148,6 +148,9 @@ internal object ProxyDashboardCss {
       border-bottom:1px solid var(--line); position:sticky; top:0; }
     .ptable td { padding:8px 15px; border-bottom:1px solid var(--line-soft); }
     .ptable .num { text-align:right; font-variant-numeric:tabular-nums; }
+    /* A column of marks, the Links column, centered under its header, which stands over the marks rather than at their
+       left. */
+    .ptable .center { text-align:center; }
     .ptable .dim, .scrape-result .dim { color:var(--ink-3); }
     .ptable tr:hover td { background:var(--surface-2); }
     .ptable tr.departed td:first-child { color:var(--crit); }
@@ -157,6 +160,31 @@ internal object ProxyDashboardCss {
        as the nav's are. */
     .ptable td.links a { color:inherit; text-underline-offset:2px; }
     .ptable td.links a:hover { color:var(--ink); }
+    /* A link drawn as its tool's brand mark (LinkIcon) rather than its name, which its tooltip and aria-label carry: a
+       24px target, as the icon buttons are, its 16px mark painted in the brand's colour (--brand) through the mark as
+       a mask (--icon). The page's second stylesheet (linkIconCss) sets both per icon, so a push carries only the class.
+       An icon stands 4px from its neighbours, where two names take a separator. */
+    .ptable td.links a.icon { position:relative; display:inline-flex; align-items:center; justify-content:center;
+      width:24px; height:24px; margin:-4px 0; vertical-align:middle; border-radius:20px; text-decoration:none; }
+    .ptable td.links a.icon + a, .ptable td.links a + a.icon { margin-left:4px; }
+    .ptable td.links a.icon::before { content:""; width:16px; height:16px; background:var(--brand);
+      -webkit-mask:var(--icon) center/contain no-repeat; mask:var(--icon) center/contain no-repeat; }
+    /* Hover rings the target rather than filling it as the icon buttons do: on surface-3 the light theme's marks fall
+       below 3:1 (2.90:1 and 2.75:1), where on surface-2, the hovered row's ground, they hold it. */
+    .ptable td.links a.icon:hover { box-shadow:inset 0 0 0 1px var(--ink-3); }
+    /* The mark's name, above it on hover or keyboard focus, ink on surface: drawn here from data-tip rather than left
+       to a title, whose tooltip waits longer than the push that replaces the table, so it never showed. Anchored at
+       the mark's right edge, since the Links column is the table's last and the scroller would clip one hanging past
+       it, and displayed only while shown, so a hidden one adds nothing to the scroller's width. */
+    .ptable td.links a.icon::after { content:attr(data-tip); display:none; position:absolute; right:0;
+      bottom:calc(100% + 4px); z-index:1; padding:3px 7px; border:1px solid transparent; border-radius:4px;
+      background:var(--ink); color:var(--surface); font-size:11.5px; line-height:1.3; white-space:nowrap;
+      pointer-events:none; }
+    .ptable td.links a.icon:hover::after, .ptable td.links a.icon:focus-visible::after { display:block; }
+    /* Forced colours replace the mark's paint, as they do the icon buttons', which would leave the link blank; LinkText
+       keeps it visible and reading as a link. */
+    @media (forced-colors: active) {
+      .ptable td.links a.icon::before { forced-color-adjust:none; background:LinkText; } }
     /* An event's tag opens its cell, so it takes none of the gap that sets a tag apart from a name before it. */
     .ptable td.event .tag, .sr-head span.tag { margin-left:0; }
     /* The icon buttons: copy beside a path or target URL, scrape-now beside a path, and close on the scrape result.
@@ -248,4 +276,30 @@ internal object ProxyDashboardCss {
       .nav a { min-height:44px; display:inline-flex; align-items:center; padding-top:0; padding-bottom:0; }
     }
     """.trimIndent()
+
+  /**
+   * The rules that give each of [icons] its mark and its colour in each theme, for a second `<style>` in the page's
+   * head, which [PathTableHtml.linkIconStyle] renders only when a link shows an icon.
+   *
+   * Apart from [CSS] because the mark's URL is under [routeBase], which the static sheet can't know, and in the head
+   * rather than on each link, so a push carries only the link's class. [routeBase] arrives normalized, as every route
+   * does, and joins by plain interpolation.
+   */
+  fun linkIconCss(
+    routeBase: String,
+    icons: Collection<LinkIcon>,
+  ): String =
+    buildString {
+      for (icon in icons) {
+        val url = "$routeBase/${ProxyDashboardService.ICON_DIR}/${icon.fileName}"
+        appendLine(".links a.icon-${icon.slug} { --icon:url(\"$url\"); --brand:${icon.lightColor}; }")
+      }
+      // Only the icons whose colour changes with the theme need a rule in the dark one.
+      val perTheme = icons.filter { it.darkColor != it.lightColor }
+      if (perTheme.isNotEmpty()) {
+        appendLine("@media (prefers-color-scheme: dark) {")
+        for (icon in perTheme) appendLine("  .links a.icon-${icon.slug} { --brand:${icon.darkColor}; }")
+        appendLine("}")
+      }
+    }.trimEnd()
 }

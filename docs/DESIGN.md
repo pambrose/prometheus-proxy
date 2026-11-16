@@ -250,6 +250,7 @@ a system built by subtraction, and the remaining elements are load-bearing.
 
 A cool blue-grey neutral family carrying a single warm accent and a three-tier status palette — the
 accent is the only warm hue in the system, which is why it can be used so sparingly and still be seen.
+(The Row Links' brand marks carry their tools' own colors, which are not tokens and stay inside the mark.)
 
 Every token exists as a light/dark pair; the frontmatter carries both (`accent` / `accent-dark`). The
 light theme is `:root`; the dark theme is a `prefers-color-scheme: dark` override. Neither is a tinted
@@ -734,20 +735,39 @@ result being read.
 ### Row Links
 
 The Links column's content: each link the operator configured (`proxy.dashboard.links`) that the row's path can fill,
-by its configured name, joined with ` · `. They open the path in another tool — Prometheus, Grafana, a runbook — and
-change nothing, so they are links, not buttons.
+by its configured name or, with an `icon`, by its tool's brand mark. Two names in a row are joined with ` · `; a mark
+stands `4px` from its neighbours instead. Centered in the column, under a centered header, so the header stands over
+the marks rather than at their left. They open the path in another tool — Prometheus, Grafana, a runbook — and change
+nothing, so they are links, not buttons.
 
-- **Rest:** the dimmed column's `ink-3`, underlined `2px` below the text so a link reads as one among plain supporting
-  facts. Not the accent, which stays on focus rings and the current item (see The Two Places Rule).
-- **Hover:** the text steps to `ink`, as the nav's does. No background, no transition.
+- **Rest:** a name is the dimmed column's `ink-3`, underlined `2px` below the text so a link reads as one among plain
+  supporting facts. Not the accent, which stays on focus rings and the current item (see The Two Places Rule).
+- **Mark:** the tool's own, a `16px` Simple Icons mark in a `24px` target like the Copy Button's, in the brand's color
+  rather than a token: the one warm hue on the page besides the accent, confined to the mark. Painted through the mark
+  as a CSS mask, as the Copy Button's glyphs are, but fetched from the proxy rather than inlined, so a push carries only
+  the link's class. Measured against `surface-2`, a hovered row's ground, at WCAG 1.4.11's 3:1 for a non-text mark,
+  since the name is also in the link's tooltip and `aria-label`: Prometheus `#E6522C` at 3.18:1 light and 4.27:1
+  dark; Grafana's `#F46800` at 5.20:1 dark but 2.62:1 light, so the light theme takes `#E26000`, at 3.02:1.
+- **Hover:** a name steps to `ink`, as the nav's does. A mark's round target takes a `1px` `ink-3` ring rather than
+  the Copy Button's `surface-3` fill, on which the light theme's marks would measure 2.90:1 and 2.75:1; on the hovered
+  row's `surface-2` they hold 3:1. No transition.
+- **Tooltip:** what the mark does, *Open in Grafana*, on hover or keyboard focus: `11.5px` `surface` text on `ink`, `3px
+  7px`, radius `4px`, `4px` above the mark and flush with its right edge, since the column is the table's last and the
+  scroller would clip one hanging past it. Drawn by the stylesheet from `data-tip` rather than a `title`, whose tooltip
+  a browser shows only after a pause that outlasts the push replacing the table, so it never appeared. Not displayed
+  until shown, so a hidden one adds nothing to the scroller's width. Under forced colors its transparent border draws in
+  the system's color.
 - **Focus:** `2px solid accent`, `outline-offset: 1px`, as on the Copy Button.
+- **Forced colors:** a mark is painted `LinkText`, since forced colors would otherwise replace its paint and leave the
+  link blank.
 - **Behavior:** each opens in a new tab, with `rel="noopener noreferrer"`, and names its path and tool in its
   `aria-label` (*Open /orders_metrics in Grafana*), so a screen reader's list of the page's links tells one row's from
-  another's.
+  another's. Its id is its place in `proxy.dashboard.links` and its path (`link-1-orders_metrics`), so the push that
+  replaces the table every refresh hands focus back to it, as a Copy Button's id does.
 - **Absence:** a link whose template needs a value the path lacks (a label, an identity) is left out, never shown with
   an empty slot, so a departed row, whose labels went with its entry, keeps only the links that use none. A row
   left with no link shows the en dash (see The Named Absence Rule).
-- **Never a pill.** Plain text, so the demo's screenshot script's count of `pill ok` stays one per row.
+- **Never a pill.** Plain text or a mark, so the demo's screenshot script's count of `pill ok` stays one per row.
 
 ### Connection Beacon
 

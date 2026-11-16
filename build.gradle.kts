@@ -9,6 +9,7 @@ import com.vanniktech.maven.publish.SourcesJar
 import kotlinx.kover.gradle.plugin.dsl.AggregationType
 import kotlinx.kover.gradle.plugin.dsl.CoverageUnit
 import kotlinx.kover.gradle.plugin.dsl.GroupingEntityType
+import org.gradle.api.file.ArchiveOperations
 import org.gradle.api.provider.ValueSource
 import org.gradle.api.provider.ValueSourceParameters
 import org.gradle.kotlin.dsl.withType
@@ -18,6 +19,7 @@ import org.jmailen.gradle.kotlinter.tasks.FormatTask
 import org.jmailen.gradle.kotlinter.tasks.LintTask
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import javax.inject.Inject
 
 plugins {
   idea
@@ -81,6 +83,9 @@ buildConfig {
   // dependency exactly. Sourcing them from the version catalog makes that structural rather than a
   // hand-maintained constant that goes stale on the next dependency bump and 404s the asset route.
   buildConfigField("String", "HTMX_VERSION", "\"${libs.versions.htmx.get()}\"")
+  // The same for the Simple Icons WebJar the dashboard's brand icons are extracted from (configureDashboardIcons): the
+  // URL they are served at carries it, so a browser's year-long cache of one never outlives a change to it.
+  buildConfigField("String", "SIMPLE_ICONS_VERSION", "\"${libs.versions.simple.icons.get()}\"")
 }
 
 // By default the testing plugin also adds kotlin-test, kotest-runner-junit5, and logback-classic at its own versions,
@@ -191,6 +196,7 @@ check(libs.versions.jacksonAnnotations.get() == libs.versions.jackson.get().subs
 configureKotlin()
 configureTesting()
 configureGrpc()
+configureDashboardIcons()
 configureJars()
 configureDokka()
 configurePublishing()
@@ -327,6 +333,55 @@ fun Project.configureGrpc() {
       }
     }
   }
+}
+
+// The services the dashboard icons' extraction uses, injected, since its sources are read after configuration, when the
+// configuration cache leaves no Project to call.
+interface DashboardIconServices {
+  @get:Inject
+  val archives: ArchiveOperations
+}
+
+fun Project.configureDashboardIcons() {
+  // The brand marks the dashboard's Links column can show, by Simple Icons slug: one for each LinkIcon, which reads
+  // each from the resource path below. PathLinkTest fails on a LinkIcon whose mark isn't on the classpath.
+  val slugs = listOf("prometheus", "grafana")
+  val version = libs.versions.simple.icons.get()
+  val webJarDir = "META-INF/resources/webjars/simple-icons/$version/icons"
+  val resourceDir = "io/prometheus/proxy/dashboard/icons"
+  val outputDir = layout.buildDirectory.dir("generated/dashboard-icons")
+  val archives = objects.newInstance<DashboardIconServices>().archives
+
+  // The Simple Icons WebJar's own configurations: one to declare it in, and one to resolve it with, without its
+  // dependencies. Nothing extends or publishes them, so the 7.5 MB WebJar reaches neither the runtime classpath, the
+  // POM, nor the fat JARs; only the SVGs extracted below do, as main resources.
+  val iconWebJar = configurations.dependencyScope("dashboardIcons")
+  val iconWebJarFiles =
+    configurations.resolvable("dashboardIconsClasspath") {
+      extendsFrom(iconWebJar.get())
+      isTransitive = false
+    }
+  dependencies.add(iconWebJar.name, libs.webjar.simple.icons)
+
+  val extractDashboardIcons =
+    tasks.register<Sync>("extractDashboardIcons") {
+      description = "Extracts the dashboard's brand icons from the Simple Icons WebJar."
+      from(iconWebJarFiles.map { jars -> jars.map { archives.zipTree(it) } }) {
+        include(slugs.map { "$webJarDir/$it.svg" })
+        eachFile { path = "$resourceDir/$name" }
+      }
+      into(outputDir)
+      includeEmptyDirs = false
+      // Simple Icons removes brands in major versions, and a mark missing from the classpath would leave its links
+      // blank, so a bump that drops one fails here.
+      doLast {
+        val icons = outputDir.get().dir(resourceDir).asFile
+        val missing = slugs.filterNot { icons.resolve("$it.svg").isFile }
+        check(missing.isEmpty()) { "simple-icons $version has no icon for $missing; see LinkIcon" }
+      }
+    }
+
+  sourceSets.main { resources.srcDir(extractDashboardIcons) }
 }
 
 fun Project.configureJars() {

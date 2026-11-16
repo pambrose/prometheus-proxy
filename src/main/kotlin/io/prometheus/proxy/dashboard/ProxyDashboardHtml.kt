@@ -25,6 +25,7 @@ import kotlinx.html.FormMethod
 import io.prometheus.proxy.ScrapeRecord
 import io.prometheus.proxy.dashboard.ActivityHtml.activityTable
 import io.prometheus.proxy.dashboard.ActivityHtml.renderActivity
+import io.prometheus.proxy.dashboard.PathTableHtml.linkIconStyle
 import io.prometheus.proxy.dashboard.PathTableHtml.pathTable
 import io.prometheus.proxy.dashboard.PathTableHtml.renderPathTable
 import kotlinx.html.HTML
@@ -143,6 +144,14 @@ internal object ProxyDashboardHtml {
   const val COPY_TARGET_ID_PREFIX = "copy-target-"
   const val COPY_PROXY_ID_PREFIX = "copy-proxy-"
 
+  // A row's links (PathTableHtml): the prefix of each one's id, which the link's place in proxy.dashboard.links and
+  // then the path follow, so a link keeps its focus, and with it its tooltip, across the push that replaces the table.
+  const val LINK_ID_PREFIX = "link-"
+
+  // On an icon link: what its tooltip says, Open in and the link's name, which the stylesheet draws from this
+  // attribute.
+  const val TIP_ATTR = "data-tip"
+
   // No region id starts with it, so an agent id, which an agent behind nginx names itself, can't make a row's id
   // equal one.
   const val AGENT_ROW_ID_PREFIX = "agent-row-"
@@ -170,6 +179,7 @@ internal object ProxyDashboardHtml {
       title(pageTitle(snapshot))
       meta(name = "viewport", content = "width=device-width, initial-scale=1")
       style { unsafe { raw(ProxyDashboardCss.CSS) } }
+      linkIconStyle(snapshot.links, routeBase)
       // Ahead of the scripts: htmx reads its config once, when htmx.min.js loads.
       meta(name = "htmx-config", content = HTMX_CONFIG)
       script(src = "$routeBase/${ProxyDashboardService.ASSET_DIR}/htmx.min.js") {}

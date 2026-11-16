@@ -65,6 +65,7 @@ import io.prometheus.proxy.dashboard.DashboardFixtures.scrapeRecord
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml
 import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.ASSET_DIR
 import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.HX_REQUEST_HEADER
+import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.ICON_DIR
 import io.prometheus.proxy.dashboard.ProxySnapshot
 import kotlinx.coroutines.withTimeout
 import kotlin.time.Duration.Companion.seconds
@@ -208,6 +209,8 @@ class ProxyWebDashboardTest : StringSpec() {
         // outbound network access, which is the normal condition for a proxy bridging a firewall.
         client.get("$base/dashboard/$ASSET_DIR/htmx.min.js").also {
           it.status shouldBe HttpStatusCode.OK
+          // Kept for a year, which only a URL that changes with the version makes safe.
+          it.headers[HttpHeaders.CacheControl].shouldNotBeNull() shouldContain "max-age=$YEAR_SECS"
           it.bodyAsText() shouldContain "htmx"
         }
         // The WebSocket extension lives inside the htmx.org WebJar, under its own path.
@@ -221,6 +224,23 @@ class ProxyWebDashboardTest : StringSpec() {
         // So is the unversioned path the assets were served at before. The assets are cached for a year, and
         // only a URL that changes with the version keeps a browser from running a stale htmx.
         client.get("$base/dashboard/assets/htmx.min.js").status shouldBe HttpStatusCode.NotFound
+
+        // The Links column's brand marks, from the classpath too, by the same rules: kept for a year under a URL that
+        // carries the Simple Icons version, and an SVG, which can hold script, sandboxed when opened directly.
+        client.get("$base/dashboard/$ICON_DIR/grafana.svg").also {
+          it.status shouldBe HttpStatusCode.OK
+          it.headers[HttpHeaders.ContentType] shouldBe "image/svg+xml"
+          it.headers[HttpHeaders.CacheControl].shouldNotBeNull().apply {
+            this shouldContain "max-age=$YEAR_SECS"
+            this shouldContain "public"
+          }
+          it.headers["X-Content-Type-Options"] shouldBe "nosniff"
+          it.headers["Content-Security-Policy"] shouldBe "sandbox"
+          it.bodyAsText() shouldContain "<svg"
+        }
+        client.get("$base/dashboard/$ICON_DIR/prometheus.svg").status shouldBe HttpStatusCode.OK
+        client.get("$base/dashboard/$ICON_DIR/loki.svg").status shouldBe HttpStatusCode.NotFound
+        client.get("$base/dashboard/assets/icons/grafana.svg").status shouldBe HttpStatusCode.NotFound
 
         client.webSocket(socketUrl) {
           // The immediate frame on connect, so a browser renders without waiting for a tick. It carries only
@@ -332,6 +352,10 @@ class ProxyWebDashboardTest : StringSpec() {
           table shouldContain "cfg"
           // The link the config's template builds from the path's job label.
           table shouldContain """<a href="http://prometheus.invalid/graph?job=ui-path-job" target="_blank""""
+          // And the one the config shows as Grafana's icon, whose mark the page's head names, at the route serving it.
+          table shouldContain
+            """<a href="http://grafana.invalid/d/proxy?var-job=ui-path-job" target="_blank" class="icon icon-grafana""""
+          table shouldContain """.links a.icon-grafana { --icon:url("/dashboard/$ICON_DIR/grafana.svg")"""
         }
 
         // The agent layout must still be the default, so the new route is additive rather than a
@@ -1013,5 +1037,8 @@ class ProxyWebDashboardTest : StringSpec() {
 
     // Far longer than MAX_FRAMES ticks at the 1s refresh, so it ends only a wait that is already failing.
     private val FRAME_PATIENCE = 30.seconds
+
+    // The max-age of what the dashboard serves under a versioned URL.
+    private const val YEAR_SECS = 31_536_000
   }
 }

@@ -42,6 +42,7 @@ import io.ktor.server.engine.connector
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.html.respondHtml
 import io.ktor.server.plugins.cachingheaders.CachingHeaders
+import io.ktor.server.response.header
 import io.ktor.server.response.respondBytes
 import io.ktor.server.response.respondRedirect
 import io.ktor.server.response.respondText
@@ -274,10 +275,11 @@ internal class ProxyDashboardService(
         channels { outgoing = bounded(OUTGOING_FRAME_BUFFER, ChannelOverflow.CLOSE) }
       }
       install(CachingHeaders) {
-        // The served asset URLs carry the WebJar version (ASSET_DIR), so a URL's content never changes and a year-long
-        // max-age is safe. An unversioned URL would let a browser keep running a cached htmx after an upgrade.
+        // The served asset URLs carry their WebJar's version (ASSET_DIR, ICON_DIR), so a URL's content never changes
+        // and a year-long max-age is safe. An unversioned URL would let a browser keep running a cached htmx after an
+        // upgrade.
         options { _, outgoing ->
-          if (outgoing.contentType?.match(ContentType.Application.JavaScript) == true)
+          if (CACHED_TYPES.any { outgoing.contentType?.match(it) == true })
             CachingOptions(CacheControl.MaxAge(ASSET_MAX_AGE_SECS, visibility = CacheControl.Visibility.Public))
           else
             null
@@ -302,6 +304,20 @@ internal class ProxyDashboardService(
             call.respondText("Not found", ContentType.Text.Plain, HttpStatusCode.NotFound)
           else
             call.respondBytes(bytes, ContentType.Application.JavaScript, HttpStatusCode.OK)
+        }
+
+        // The Links column's brand marks (LinkIcon), the same way. An SVG is a document that can run script, so one
+        // opened directly runs sandboxed, with no access to the dashboard's origin, and a browser may not take it for
+        // another type; as a mask image, the page's only use of one, neither header changes anything.
+        get("$routeBase/$ICON_DIR/{file}") {
+          val bytes = iconBytes[call.parameters["file"]]
+          if (bytes == null) {
+            call.respondText("Not found", ContentType.Text.Plain, HttpStatusCode.NotFound)
+          } else {
+            call.response.header("X-Content-Type-Options", "nosniff")
+            call.response.header("Content-Security-Policy", "sandbox")
+            call.respondBytes(bytes, ContentType.Image.SVG, HttpStatusCode.OK)
+          }
         }
 
         get(basePath) {
@@ -513,6 +529,13 @@ internal class ProxyDashboardService(
     }.toMap()
   }
 
+  /** The brand marks (LinkIcon), by file name, read from the classpath once, for the reason [assetBytes] is. */
+  private val iconBytes: Map<String, ByteArray> by lazy {
+    LinkIcon.entries.mapNotNull { icon ->
+      javaClass.classLoader.getResourceAsStream(icon.resource)?.use { icon.fileName to it.readBytes() }
+    }.toMap()
+  }
+
   /**
    * The most recent [ProxySnapshot], served until it is [maxAge] old or the topology changes.
    *
@@ -641,6 +664,19 @@ internal class ProxyDashboardService(
         // htmx 4 ships its WebSocket extension in the same WebJar.
         "hx-ws.min.js" to "META-INF/resources/webjars/htmx.org/$HTMX_VERSION/dist/ext/hx-ws.min.js",
       )
+
+    // The version of the Simple Icons WebJar the build extracts the brand marks (LinkIcon) from; see HTMX_VERSION.
+    internal const val SIMPLE_ICONS_VERSION = BuildConfig.SIMPLE_ICONS_VERSION
+
+    /**
+     * Where the brand marks ([LinkIcon]) are served under the route base, by [LinkIcon.fileName]. It carries the Simple
+     * Icons version for the reason [ASSET_DIR] carries htmx's. The route and the page's icon stylesheet
+     * ([ProxyDashboardCss.linkIconCss]) both read it.
+     */
+    internal const val ICON_DIR = "assets/icons/$SIMPLE_ICONS_VERSION"
+
+    // The types of what ASSET_DIR and ICON_DIR serve, which CachingHeaders lets a browser keep for a year.
+    private val CACHED_TYPES = listOf(ContentType.Application.JavaScript, ContentType.Image.SVG)
 
     private const val ASSET_MAX_AGE_SECS = 31_536_000
     private const val GRACE_MILLIS = 2_000L

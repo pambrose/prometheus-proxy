@@ -24,6 +24,7 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldEndWith
 import io.kotest.matchers.string.shouldNotContain
 import io.prometheus.proxy.dashboard.DashboardFixtures.departedPathView
+import io.prometheus.proxy.dashboard.DashboardFixtures.iconLinks
 import io.prometheus.proxy.dashboard.DashboardFixtures.renderFullPage
 import io.prometheus.proxy.dashboard.DashboardFixtures.scrapeRecord
 
@@ -201,8 +202,9 @@ class PathTableHtmlTest : StringSpec() {
     // Last, so the columns read to find a row keep their places with links on or off; and from the config, not the
     // rows, as the Identity column is, so it stays while no row has a link.
     "the path table should end with a Links column while links are configured, though no row has one" {
-      pathPush(links = demoLinks) shouldContain Regex("""History</th>\s*<th scope="col">Links</th>\s*</tr>""")
-      pathPush([departedPathView()], links = demoLinks) shouldContain """<th scope="col">Links</th>"""
+      pathPush(links = demoLinks) shouldContain
+        Regex("""History</th>\s*<th scope="col" class="center">Links</th>\s*</tr>""")
+      pathPush([departedPathView()], links = demoLinks) shouldContain """<th scope="col" class="center">Links</th>"""
       pathPush() shouldNotContain "Links</th>"
     }
 
@@ -212,10 +214,12 @@ class PathTableHtmlTest : StringSpec() {
       val html = pathPush([ok], links = demoLinks)
 
       html shouldContain
-        """<td class="dim links"><a href="http://localhost:9090/graph?g0.expr=up%7Bjob%3D%22orders%22%7D" """ +
-        """target="_blank" rel="noopener noreferrer" aria-label="Open /orders_metrics in Prometheus">Prometheus</a>""" +
+        """<td class="dim links center"><a href="http://localhost:9090/graph?g0.expr=up%7Bjob%3D%22orders%22%7D" """ +
+        """target="_blank" id="link-0-orders_metrics" rel="noopener noreferrer" """ +
+        """aria-label="Open /orders_metrics in Prometheus">Prometheus</a>""" +
         """ · <a href="http://localhost:3000/d/prometheus-proxy-demo?orgId=1&amp;var-job=orders" target="_blank" """ +
-        """rel="noopener noreferrer" aria-label="Open /orders_metrics in Grafana">Grafana</a></td>"""
+        """id="link-1-orders_metrics" rel="noopener noreferrer" aria-label="Open /orders_metrics in Grafana">""" +
+        """Grafana</a></td>"""
       Regex("""class="pill ok"""").findAll(html).count() shouldBe 1
     }
 
@@ -223,15 +227,86 @@ class PathTableHtmlTest : StringSpec() {
     "a row lacking a value every link needs should show a dash, and a departed row keep the links that use no label" {
       val html = pathPush([path("app_metrics"), departedPathView("orphan_metrics")], links = demoLinks + runbook)
 
-      html shouldContain """<td class="dim links"><a href="https://runbooks.example.com/app_metrics" target="_blank" """
+      html shouldContain
+        """<td class="dim links center"><a href="https://runbooks.example.com/app_metrics" target="_blank" """
       html shouldContain """aria-label="Open /orphan_metrics in Runbook">Runbook</a></td>"""
       html shouldNotContain "in Prometheus"
-      pathPush(links = demoLinks) shouldContain """<td class="dim links">${ProxyDashboardHtml.DASH}</td>"""
+      pathPush(links = demoLinks) shouldContain """<td class="dim links center">${ProxyDashboardHtml.DASH}</td>"""
     }
 
     "the links should be quiet, and take focus as the nav does" {
       ProxyDashboardCss.CSS shouldContain ".ptable td.links a { color:inherit;"
       ProxyDashboardCss.CSS shouldContain ".ptable td.links a:focus-visible {"
+    }
+
+    // The mark and its colour come from the class, through the page's icon stylesheet, so a push carries no URL.
+    // The page's stylesheet draws the tooltip from data-tip: a title's waits longer than the push that replaces it.
+    "an icon link should show its brand mark alone, its name in its tooltip and its aria-label" {
+      val html = pathPush([pathWithJob("orders_metrics", "orders")], links = iconLinks)
+
+      html shouldContain
+        """<td class="dim links center"><a href="http://localhost:9090/graph?job=orders" target="_blank" """ +
+        """class="icon icon-prometheus" id="link-0-orders_metrics" rel="noopener noreferrer" """ +
+        """aria-label="Open /orders_metrics in Prometheus" data-tip="Open in Prometheus"></a>""" +
+        """<a href="http://localhost:3000/d/demo?var-job=orders" target="_blank" class="icon icon-grafana" """ +
+        """id="link-1-orders_metrics" rel="noopener noreferrer" aria-label="Open /orders_metrics in Grafana" """ +
+        """data-tip="Open in Grafana"></a></td>"""
+      html shouldNotContain ProxyDashboardService.ICON_DIR
+      html shouldNotContain """ title="Prometheus""""
+    }
+
+    // The push replaces the table every refresh, and htmx hands focus back only to the element with the id the focused
+    // one had; the id follows the link's place in the config, so it holds when a link before it is left out.
+    "each link's id should name its place in the config and its path, so it keeps its focus across a push" {
+      val html = pathPush([departedPathView("orphan_metrics")], links = iconLinks + runbook)
+
+      html shouldContain """id="link-2-orphan_metrics""""
+      html shouldNotContain "link-0-"
+      html shouldNotContain "link-1-"
+    }
+
+    // An icon stands apart by its own margin; a separator beside one would read as a stray dot.
+    "a separator should stand only between two names" {
+      val logs = PathLink.parseAll([PathLink.Entry("Logs", "https://logs.example.com/{path}")])
+      val links = [iconLinks[0]] + runbook + logs + iconLinks[1]
+      val html = pathPush([pathWithJob("orders_metrics", "orders")], links = links)
+
+      Regex(" · ").findAll(html.substringAfter("""<td class="dim links center">""")).count() shouldBe 1
+      html shouldContain """data-tip="Open in Prometheus"></a><a href="https://runbooks.example.com/orders_metrics""""
+      html shouldContain """>Runbook</a> · <a href="https://logs.example.com/orders_metrics""""
+      html shouldContain """>Logs</a><a href="http://localhost:3000/d/demo?var-job=orders""""
+    }
+
+    "a departed row should drop an icon link that needs a label, and keep a name's" {
+      val html = pathPush([departedPathView("orphan_metrics")], links = iconLinks + runbook)
+
+      html shouldContain """<td class="dim links center"><a href="https://runbooks.example.com/orphan_metrics" """
+      html shouldNotContain "icon-"
+    }
+
+    // On surface-3, the icon buttons' hover ground, the light theme's marks fall below 3:1, so hover rings the target.
+    "an icon link should be a 24px target painted in its brand's colour, and keep its mark in forced colours" {
+      ProxyDashboardCss.CSS shouldContain ".ptable td.links a.icon { position:relative; display:inline-flex; " +
+        "align-items:center; justify-content:center;"
+      ProxyDashboardCss.CSS shouldContain "width:24px; height:24px;"
+      ProxyDashboardCss.CSS shouldContain "text-decoration:none; }"
+      ProxyDashboardCss.CSS shouldContain ".ptable td.links a.icon::before { content:\"\"; width:16px; height:16px; " +
+        "background:var(--brand);"
+      ProxyDashboardCss.CSS shouldContain "mask:var(--icon) center/contain no-repeat; }"
+      ProxyDashboardCss.CSS shouldNotContain "a.icon:hover { background"
+      ProxyDashboardCss.CSS shouldContain ".ptable td.links a.icon:hover { box-shadow:inset 0 0 0 1px var(--ink-3); }"
+      ProxyDashboardCss.CSS shouldContain
+        ".ptable td.links a.icon::before { forced-color-adjust:none; background:LinkText; }"
+    }
+
+    // Anchored at the mark's right edge, since the Links column is the table's last and the scroller would clip one
+    // hanging past it, and not displayed until shown, so a hidden one adds nothing to the scroller's width.
+    "an icon link's tooltip should show its name above it on hover or keyboard focus, and the column center its marks" {
+      ProxyDashboardCss.CSS shouldContain ".ptable td.links a.icon::after { content:attr(data-tip); display:none; " +
+        "position:absolute; right:0;"
+      ProxyDashboardCss.CSS shouldContain
+        ".ptable td.links a.icon:hover::after, .ptable td.links a.icon:focus-visible::after { display:block; }"
+      ProxyDashboardCss.CSS shouldContain ".ptable .center { text-align:center; }"
     }
 
     // ==================== Search and filter ====================
@@ -328,6 +403,7 @@ class PathTableHtmlTest : StringSpec() {
       guideNames(pathsPage(snapshot(authEnabled = true))) shouldBe
         ["Path", "Agent(s)", "Identity", "Target", "Src", "Last scrape", "Status", "Duration", "History"]
       guideNames(pathsPage(snapshot(links = demoLinks))).last() shouldBe "Links"
+      guideHelp(pathsPage(snapshot(links = iconLinks))).last() shouldContain "brand icon; hover over an icon"
     }
 
     "the Path column's explanation should name the Scrape button only while scrape-now is on" {

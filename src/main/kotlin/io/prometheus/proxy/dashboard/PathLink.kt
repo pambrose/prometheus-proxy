@@ -23,7 +23,7 @@ import java.net.URISyntaxException
 
 /**
  * A link from each row of the Paths table into another tool, one entry of `proxy.dashboard.links`: its [name], which is
- * the link's text, and a URL template whose placeholders each row fills from its path.
+ * the link's text unless it has an [icon], and a URL template whose placeholders each row fills from its path.
  *
  * The proxy can't build such a link itself. Service discovery gives every path the same target, the proxy's own scrape
  * address, and Prometheus drops `__metrics_path__` after relabeling unless a deployment keeps it, so what identifies a
@@ -34,8 +34,10 @@ import java.net.URISyntaxException
  * broken link on every row, and each push only joins the parsed pieces.
  */
 internal class PathLink private constructor(
-  /** The link's text, and the tool its `aria-label` says the path opens in. */
+  /** The link's text, or with an [icon] its tooltip, and the tool its `aria-label` says the path opens in. */
   val name: String,
+  /** The brand mark the link shows in place of its [name], or null to show the name. */
+  val icon: LinkIcon?,
   // The template cut at its placeholders: literal text gives itself, and a placeholder gives its value for a path,
   // encoded, or null when the path has none.
   private val segments: List<(PathView) -> String?>,
@@ -50,10 +52,14 @@ internal class PathLink private constructor(
       for (segment in segments) append(segment(path) ?: return null)
     }
 
+  /** How the startup log names the link: by its name, and its icon when it has one. */
+  val logged: String get() = icon?.let { "$name (${it.slug} icon)" } ?: name
+
   /** One `proxy.dashboard.links` entry, apart from the generated `ConfigVals` type so [parseAll] is unit-testable. */
   data class Entry(
     val name: String,
     val url: String,
+    val icon: String = "",
   )
 
   companion object {
@@ -76,8 +82,8 @@ internal class PathLink private constructor(
 
     /**
      * Parses each of [entries], refusing a link the dashboard couldn't render: a blank name, a URL that isn't an
-     * absolute http or https URL, a placeholder it doesn't know, or a placeholder before the end of the URL's host,
-     * where a value an agent supplies could choose the site the link opens.
+     * absolute http or https URL, a placeholder it doesn't know, a placeholder before the end of the URL's host,
+     * where a value an agent supplies could choose the site the link opens, or an icon it doesn't have.
      *
      * @throws IllegalArgumentException naming the link and what is wrong with it
      */
@@ -109,7 +115,16 @@ internal class PathLink private constructor(
           }
           literal(template.substring(start))
         }
-      return PathLink(entry.name, segments)
+      return PathLink(entry.name, iconOf(entry), segments)
+    }
+
+    // The entry's icon, matched ignoring case, or null for a blank one, which shows the name.
+    private fun iconOf(entry: Entry): LinkIcon? {
+      val name = entry.icon.trim()
+      if (name.isEmpty()) return null
+      return requireNotNull(LinkIcon.of(name)) {
+        "${entry.described} has an unknown icon '${entry.icon}'; use ${LinkIcon.slugs}"
+      }
     }
 
     // How a refusal names the link.

@@ -175,6 +175,15 @@ internal object DashboardFixtures {
     links = links,
   )
 
+  /** Links into Prometheus and Grafana for the path's job label, each shown as its tool's brand icon, as the demo's. */
+  val iconLinks =
+    PathLink.parseAll(
+      [
+        PathLink.Entry("Prometheus", "http://localhost:9090/graph?job={label.job}", icon = "prometheus"),
+        PathLink.Entry("Grafana", "http://localhost:3000/d/demo?var-job={label.job}", icon = "grafana"),
+      ],
+    )
+
   /** The whole page for [snapshot], as the dashboard serves it to a GET. */
   fun renderFullPage(
     snapshot: ProxySnapshot,
