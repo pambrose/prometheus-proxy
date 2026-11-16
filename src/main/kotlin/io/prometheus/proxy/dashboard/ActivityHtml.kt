@@ -18,6 +18,7 @@ package io.prometheus.proxy.dashboard
 
 import io.prometheus.proxy.ActivityEntry
 import io.prometheus.proxy.ActivityKind
+import io.prometheus.proxy.ActivityLog
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.ACTIVITY_ID
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.DASH
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.agentLabel
@@ -26,16 +27,13 @@ import io.prometheus.proxy.dashboard.ProxyDashboardHtml.scrapeTime
 import kotlinx.html.DIV
 import kotlinx.html.FlowContent
 import kotlinx.html.TBODY
-import kotlinx.html.THEAD
 import kotlinx.html.TR
-import kotlinx.html.ThScope
 import kotlinx.html.caption
 import kotlinx.html.div
 import kotlinx.html.span
 import kotlinx.html.table
 import kotlinx.html.tbody
 import kotlinx.html.td
-import kotlinx.html.th
 import kotlinx.html.thead
 import kotlinx.html.tr
 
@@ -55,7 +53,7 @@ internal object ActivityHtml {
     routeBase: String,
     filter: RowFilter,
   ) {
-    renderFilters(routeBase, DashboardLayout.ACTIVITY, filter)
+    renderFilters(routeBase, DashboardLayout.ACTIVITY, filter, columns(snapshot.authEnabled))
     div("scroller") { activityTable(snapshot, filter, oob = false) }
   }
 
@@ -87,21 +85,52 @@ internal object ActivityHtml {
     val showIdentity = snapshot.authEnabled
     table("ptable") {
       caption("sr-only") { +"Agents and paths coming, going, and refused, newest first" }
-      thead { headerRow(showIdentity) }
+      thead { columnHeaders(columns(showIdentity)) }
       tbody { rows.forEach { activityRow(it, showIdentity) } }
     }
   }
 
-  private fun THEAD.headerRow(showIdentity: Boolean) {
-    tr {
-      th(scope = ThScope.col) { +"Time" }
-      th(scope = ThScope.col) { +"Event" }
-      th(scope = ThScope.col) { +"Agent" }
-      if (showIdentity) th(scope = ThScope.col) { +"Identity" }
-      th(scope = ThScope.col) { +"Path" }
-      th(scope = ThScope.col) { +"Detail" }
-    }
-  }
+  // The table's columns, in order, for its header row and its column guide alike; activityRow renders a cell for each.
+  private fun columns(showIdentity: Boolean): List<TableColumn> =
+    listOfNotNull(TIME, EVENT, AGENT, IDENTITY.takeIf { showIdentity }, PATH, DETAIL)
+
+  // What the column guide says of each column: one short sentence, in the words the website's dashboard page uses.
+  private val TIME =
+    TableColumn(
+      label = "Time",
+      help = "When it happened, or a burst began, in your time zone; hover over it for the date.",
+    )
+
+  // Read from ActivityKind, so a new problem kind can't be left out of the guide.
+  private val PROBLEM_KINDS = ActivityKind.entries.filter { it.isProblem }.joinToString { it.label }
+
+  // The tags eventCell draws: a problem's crit, a take-over's warn, and a burst's count.
+  private val EVENT =
+    TableColumn(
+      label = "Event",
+      help = "What happened; problems are red ($PROBLEM_KINDS), ${ActivityKind.PATH_TAKEN_OVER.label} is amber, " +
+        "and ×N counts a burst of like events.",
+    )
+  private val AGENT =
+    TableColumn(
+      label = "Agent",
+      help = "The agent it concerns, named as the Agents view names it, or a dash for none, as with a bad token.",
+    )
+  private val IDENTITY =
+    TableColumn(
+      label = "Identity",
+      help = "The auth identity the agent acted as; the legacy agentToken reads shared token.",
+    )
+  private val PATH =
+    TableColumn(
+      label = "Path",
+      help = "The paths it concerns; a burst names its first ${ActivityLog.MAX_SAMPLE_PATHS} and counts the rest.",
+    )
+  private val DETAIL =
+    TableColumn(
+      label = "Detail",
+      help = "What else to know, such as why a path was rejected or where a bad token came from.",
+    )
 
   // Block bodies throughout, as in PathTableHtml: CodeScene counts the conditionals inside an expression-bodied
   // function's trailing lambda as Global Conditionals.

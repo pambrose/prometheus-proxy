@@ -17,6 +17,8 @@
 package io.prometheus.proxy.dashboard
 
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.ANNOUNCER_ID
+import io.prometheus.proxy.dashboard.ProxyDashboardHtml.COLUMN_GUIDE_ID
+import io.prometheus.proxy.dashboard.ProxyDashboardHtml.COLUMN_GUIDE_TOGGLE_ID
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.COPY_ATTR
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.FILTER_PROBLEMS_ID
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.FILTER_QUERY_ID
@@ -55,8 +57,8 @@ internal object DashboardScript {
   /**
    * The page's script. It reads the selection back out of the URL that hx-push-url already set, and tells the server,
    * so the push loop knows whether this session wants a detail pane. It also runs the connection indicator, the path
-   * search, the copy and scrape-now buttons, the tabs' arrow keys, and the scrape times' conversion to the viewer's
-   * zone, the only things on the page that htmx does not model; everything else is htmx.
+   * search, the copy and scrape-now buttons, the column guide, the tabs' arrow keys, and the scrape times' conversion
+   * to the viewer's zone, the only things on the page that htmx does not model; everything else is htmx.
    */
   val JS =
     """
@@ -296,16 +298,38 @@ internal object DashboardScript {
         var btn = scrapedFrom && document.getElementById(scrapedFrom);
         if (btn) btn.focus();
       }
-      // One listener on <body> for every button in the table and the result panel: the push loop replaces the table
-      // every frame, so a button's own listener would last one frame.
+      // The column guide under the search, which its button opens and closes. Outside every pushed region, so it stays
+      // open as the table updates; the page renders it closed, so it starts closed on each load. Closing it from inside,
+      // with its close button or Escape, hands focus back to its button.
+      function guideOpen() {
+        var guide = document.getElementById('$COLUMN_GUIDE_ID');
+        return !!guide && !guide.hidden;
+      }
+      function showGuide(open) {
+        var guide = document.getElementById('$COLUMN_GUIDE_ID');
+        var toggle = document.getElementById('$COLUMN_GUIDE_TOGGLE_ID');
+        if (!guide || !toggle) return;
+        guide.hidden = !open;
+        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      }
+      function closeGuide() {
+        showGuide(false);
+        var toggle = document.getElementById('$COLUMN_GUIDE_TOGGLE_ID');
+        if (toggle) toggle.focus();
+      }
+      // One listener on <body> for every button in the table, the result panel, and the column guide: the push loop
+      // replaces the table every frame, so a button's own listener would last one frame.
       document.body.addEventListener('click', function (evt) {
         if (!evt.target.closest) return;
         var copy = evt.target.closest('button.copy');
         var scrape = evt.target.closest('button.scrape-now');
         var panel = evt.target.closest('#$SCRAPE_RESULT_ID');
+        var guide = evt.target.closest('#$COLUMN_GUIDE_ID');
         if (copy) copyFrom(copy);
         else if (scrape) scrapeNow(scrape);
+        else if (evt.target.closest('#$COLUMN_GUIDE_TOGGLE_ID')) showGuide(!guideOpen());
         else if (panel && evt.target.closest('button.close')) closeScrapeResult(panel);
+        else if (guide && evt.target.closest('button.close')) closeGuide();
       });
       // The tabs. Left and Right open the view before or after the current one, wrapping at the ends, from anywhere on
       // the page: not only from a focused tab, since a click on a tab loads a page whose focus is on <body>, and Safari
@@ -319,6 +343,13 @@ internal object DashboardScript {
         return tag === 'TEXTAREA' || tag === 'SELECT' || (tag === 'INPUT' && el.type !== 'checkbox');
       }
       document.body.addEventListener('keydown', function (evt) {
+        // Escape closes an open column guide from anywhere but a field being typed in, where it still clears the search.
+        // Not only from inside the guide or its button: Safari doesn't focus a button it clicks, so after opening the
+        // guide with the mouse, focus is on <body>.
+        if (evt.key === 'Escape') {
+          if (guideOpen() && !typingIn(evt.target)) closeGuide();
+          return;
+        }
         if (evt.key !== 'ArrowLeft' && evt.key !== 'ArrowRight') return;
         if (evt.altKey || evt.ctrlKey || evt.metaKey || evt.shiftKey || evt.repeat || !evt.target.closest) return;
         if (typingIn(evt.target)) return;

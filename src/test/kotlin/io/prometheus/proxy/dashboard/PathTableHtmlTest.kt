@@ -21,6 +21,7 @@ package io.prometheus.proxy.dashboard
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldEndWith
 import io.kotest.matchers.string.shouldNotContain
 import io.prometheus.proxy.dashboard.DashboardFixtures.departedPathView
 import io.prometheus.proxy.dashboard.DashboardFixtures.renderFullPage
@@ -28,9 +29,10 @@ import io.prometheus.proxy.dashboard.DashboardFixtures.scrapeRecord
 
 /**
  * The Paths view's table and search, [PathTableHtml]: the History column, the Identity column, the Links column, the
- * search, its empty states, and how the socket carries it, and the problem counts the status bar and title take from
- * the paths. The table's long-standing columns are in [PathColumnsHtmlTest], the rest of the page in
- * [ProxyDashboardHtmlTest] and [DashboardScriptTest]; how a link's template is filled is in [PathLinkTest].
+ * search, its empty states, and how the socket carries it, the column guide, whose button, panel, and script the
+ * Activity view shares, and the problem counts the status bar and title take from the paths. The table's long-standing
+ * columns are in [PathColumnsHtmlTest], the rest of the page in [ProxyDashboardHtmlTest] and [DashboardScriptTest];
+ * how a link's template is filled is in [PathLinkTest].
  */
 class PathTableHtmlTest : StringSpec() {
   private fun path(name: String) = DashboardFixtures.pathView(path = name)
@@ -78,6 +80,15 @@ class PathTableHtmlTest : StringSpec() {
   // The push for one path whose history has these status codes, newest first, as PathHistory hands them over.
   private fun historyTable(vararg codes: Int) =
     pathPush([DashboardFixtures.pathView(history = codes.map { scrapeRecord(statusCode = it) })])
+
+  // The table's headers, and the column guide's names and explanations, in order, as the Paths page renders them.
+  private fun headers(page: String) = Regex("<th[^>]*>([^<]*)</th>").findAll(page).map { it.groupValues[1] }.toList()
+
+  private fun guideNames(page: String) = Regex("<dt>([^<]*)</dt>").findAll(page).map { it.groupValues[1] }.toList()
+
+  private fun guideHelp(page: String) = Regex("<dd>([^<]*)</dd>").findAll(page).map { it.groupValues[1] }.toList()
+
+  private fun pathsPage(snapshot: ProxySnapshot) = renderFullPage(snapshot, DashboardLayout.PATH)
 
   init {
     // ==================== History column ====================
@@ -292,6 +303,84 @@ class PathTableHtmlTest : StringSpec() {
       ProxyDashboardService.parseFilter("""{"search":"?q=%zz"}""") shouldBe RowFilter.NONE
       ProxyDashboardService.parseFilter("""{"select":"a1"}""") shouldBe RowFilter.NONE
       ProxyDashboardService.parseFilter("not json at all") shouldBe RowFilter.NONE
+    }
+
+    // ==================== Column guide ====================
+
+    // The header row and the guide iterate one list, so a column can't reach the header without an explanation.
+    "the column guide should explain every header, in the header's order" {
+      val page = pathsPage(snapshot(authEnabled = true, scrapeNowEnabled = true, links = demoLinks))
+
+      headers(page) shouldBe
+        ["Path", "Agent(s)", "Identity", "Target", "Src", "Last scrape", "Status", "Duration", "History", "Links"]
+      guideNames(page) shouldBe headers(page)
+      guideHelp(page).size shouldBe headers(page).size
+      guideHelp(page).forEach { it.isNotBlank() shouldBe true }
+      // Status and Duration keep their right alignment.
+      page shouldContain
+        Regex("""<th scope="col" class="num">Status</th>\s*<th scope="col" class="num">Duration</th>""")
+    }
+
+    // From the config, as the columns are, so the guide never explains a column the table doesn't have.
+    "the column guide should list Identity only with agent auth on, and Links only with links configured" {
+      guideNames(pathsPage(snapshot())) shouldBe
+        ["Path", "Agent(s)", "Target", "Src", "Last scrape", "Status", "Duration", "History"]
+      guideNames(pathsPage(snapshot(authEnabled = true))) shouldBe
+        ["Path", "Agent(s)", "Identity", "Target", "Src", "Last scrape", "Status", "Duration", "History"]
+      guideNames(pathsPage(snapshot(links = demoLinks))).last() shouldBe "Links"
+    }
+
+    "the Path column's explanation should name the Scrape button only while scrape-now is on" {
+      guideHelp(pathsPage(snapshot(scrapeNowEnabled = true))).first() shouldContain "scrape it now"
+      guideHelp(pathsPage(snapshot())).first() shouldNotContain "scrape it now"
+    }
+
+    // A push replaces #path-table, header and all, every refresh; the guide below the search outlives every one.
+    "the column guide should follow the search, ahead of the scrape result and the pushed table, and no push carry it" {
+      val page = pathsPage(snapshot(scrapeNowEnabled = true))
+      val guide = page.indexOf("""<section class="column-guide" id="${ProxyDashboardHtml.COLUMN_GUIDE_ID}"""")
+
+      (page.indexOf("</form>") in 0..<guide) shouldBe true
+      (guide < page.indexOf("""id="${ProxyDashboardHtml.SCRAPE_RESULT_ID}"""")) shouldBe true
+      (guide < page.indexOf("""id="${ProxyDashboardHtml.PATH_TABLE_ID}"""")) shouldBe true
+      pathPush(scrapeNowEnabled = true, authEnabled = true, links = demoLinks).apply {
+        this shouldNotContain ProxyDashboardHtml.COLUMN_GUIDE_ID
+        this shouldNotContain "<dt>"
+      }
+    }
+
+    // A plain button, so it changes nothing the form sends, and a disclosure: it says whether the guide is open and
+    // which element it opens. The form's last item, so it sits at the search's right end. Both tables' pages share it.
+    "the column guide's button should be a plain button at the search's end that names the closed guide it opens" {
+      listOf(DashboardLayout.PATH, DashboardLayout.ACTIVITY).forEach { layout ->
+        val form = renderFullPage(snapshot(), layout).substringAfter("""class="filters"""").substringBefore("</form>")
+
+        form.trimEnd() shouldEndWith
+          """<button type="button" class="guide-toggle" id="${ProxyDashboardHtml.COLUMN_GUIDE_TOGGLE_ID}" """ +
+          """aria-expanded="false" aria-controls="${ProxyDashboardHtml.COLUMN_GUIDE_ID}">Column guide</button>"""
+      }
+    }
+
+    // Closed on each page load, as the page renders it; the page's script opens it. The Agents view has no table.
+    "the column guide should start hidden, with a close button, and the Agents page should have none" {
+      listOf(DashboardLayout.PATH, DashboardLayout.ACTIVITY).forEach { layout ->
+        renderFullPage(snapshot(), layout).apply {
+          this shouldContain
+            """<section class="column-guide" id="${ProxyDashboardHtml.COLUMN_GUIDE_ID}" aria-label="Column guide" """ +
+            """hidden="hidden">"""
+          this shouldContain """aria-label="Close the column guide""""
+        }
+      }
+      // The script names the ids, so look for the elements.
+      renderFullPage(snapshot()).apply {
+        this shouldNotContain """id="${ProxyDashboardHtml.COLUMN_GUIDE_ID}""""
+        this shouldNotContain """id="${ProxyDashboardHtml.COLUMN_GUIDE_TOGGLE_ID}""""
+      }
+    }
+
+    "the column guide's button should take focus as the other controls do, and keep its icon in forced colours" {
+      ProxyDashboardCss.CSS shouldContain ".close:focus-visible, .guide-toggle:focus-visible,"
+      ProxyDashboardCss.CSS shouldContain ".close::before, .guide-toggle::before { forced-color-adjust:none;"
     }
 
     // ==================== Scrape now ====================

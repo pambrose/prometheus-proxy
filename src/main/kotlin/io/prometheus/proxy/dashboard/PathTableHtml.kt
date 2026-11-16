@@ -34,9 +34,7 @@ import kotlinx.html.ButtonType
 import kotlinx.html.DIV
 import kotlinx.html.FlowContent
 import kotlinx.html.TBODY
-import kotlinx.html.THEAD
 import kotlinx.html.TR
-import kotlinx.html.ThScope
 import kotlinx.html.a
 import kotlinx.html.button
 import kotlinx.html.caption
@@ -46,7 +44,6 @@ import kotlinx.html.span
 import kotlinx.html.table
 import kotlinx.html.tbody
 import kotlinx.html.td
-import kotlinx.html.th
 import kotlinx.html.thead
 import kotlinx.html.tr
 
@@ -66,7 +63,7 @@ internal object PathTableHtml {
     routeBase: String,
     filter: RowFilter,
   ) {
-    renderFilters(routeBase, DashboardLayout.PATH, filter)
+    renderFilters(routeBase, DashboardLayout.PATH, filter, columns(snapshot))
     if (snapshot.scrapeNowEnabled) scrapeResultPanel(routeBase)
     div("scroller") { pathTable(snapshot, filter, oob = false) }
   }
@@ -107,28 +104,95 @@ internal object PathTableHtml {
   ) {
     table("ptable") {
       caption("sr-only") { +"Registered paths and the most recent scrape against each" }
-      thead { headerRow(snapshot) }
+      thead { columnHeaders(columns(snapshot)) }
       tbody { rows.forEach { pathRow(it, snapshot) } }
     }
   }
 
-  // The Identity and Links columns come from the config, not the rows, so neither comes and goes as a search narrows or
-  // the last live path goes. With agent auth off no path has an identity, and without proxy.dashboard.links no path has
-  // a link, so either column would only ever hold dashes.
-  private fun THEAD.headerRow(snapshot: ProxySnapshot) {
-    tr {
-      th(scope = ThScope.col) { +"Path" }
-      th(scope = ThScope.col) { +"Agent(s)" }
-      if (snapshot.authEnabled) th(scope = ThScope.col) { +"Identity" }
-      th(scope = ThScope.col) { +"Target" }
-      th(scope = ThScope.col) { +"Src" }
-      th(scope = ThScope.col) { +"Last scrape" }
-      th(scope = ThScope.col, classes = "num") { +"Status" }
-      th(scope = ThScope.col, classes = "num") { +"Duration" }
-      th(scope = ThScope.col) { +"History" }
-      if (snapshot.links.isNotEmpty()) th(scope = ThScope.col) { +"Links" }
-    }
+  /**
+   * The table's columns, in order, for its header row and its column guide alike; [pathRow] renders a cell for each.
+   *
+   * The Identity and Links columns come from the config, not the rows, so neither comes and goes as a search narrows or
+   * the last live path goes. With agent auth off no path has an identity, and without proxy.dashboard.links no path has
+   * a link, so either column would only ever hold dashes.
+   */
+  private fun columns(snapshot: ProxySnapshot): List<TableColumn> {
+    // Its explanation names the Scrape button only when there is one.
+    val path = if (snapshot.scrapeNowEnabled) PATH_WITH_SCRAPE_NOW else PATH
+    return listOfNotNull(
+      path,
+      AGENTS,
+      IDENTITY.takeIf { snapshot.authEnabled },
+      TARGET,
+      SOURCE,
+      LAST_SCRAPE,
+      STATUS,
+      DURATION,
+      HISTORY,
+      LINKS.takeIf { snapshot.links.isNotEmpty() },
+    )
   }
+
+  // What the column guide says of each column: one short sentence, in the words the website's dashboard page uses.
+  private val PATH =
+    TableColumn(
+      label = "Path",
+      help = "The path Prometheus scrapes on the proxy, with a button to copy its proxy URL.",
+    )
+  private val PATH_WITH_SCRAPE_NOW =
+    TableColumn(
+      label = "Path",
+      help = "The path Prometheus scrapes on the proxy, with buttons to copy its proxy URL and to scrape it now.",
+    )
+  private val AGENTS =
+    TableColumn(
+      label = "Agent(s)",
+      help = "The agent serving the path; +N counts the others sharing it, and gone marks a path whose agent left.",
+    )
+  private val IDENTITY =
+    TableColumn(
+      label = "Identity",
+      help = "The auth identity that registered the path, which any agent joining it must share; the legacy " +
+        "agentToken reads shared token.",
+    )
+  private val TARGET =
+    TableColumn(
+      label = "Target",
+      help = "The URL the agent fetches, its user info and query values redacted, with a button to copy it.",
+    )
+  private val SOURCE =
+    TableColumn(
+      label = "Src",
+      help = "cfg for a path in the agent's config, disc for one from dynamic discovery.",
+    )
+  private val LAST_SCRAPE =
+    TableColumn(
+      label = "Last scrape",
+      help = "When Prometheus last scraped the path, in your time zone; hover over it for the date.",
+    )
+  private val STATUS =
+    TableColumn(
+      label = "Status",
+      help = "The status code that scrape returned, green for a 2xx and red for anything else.",
+      numeric = true,
+    )
+  private val DURATION =
+    TableColumn(
+      label = "Duration",
+      help = "How long that scrape took, as the proxy measured it.",
+      numeric = true,
+    )
+  private val HISTORY =
+    TableColumn(
+      label = "History",
+      help = "The path's recent scrapes as dots, oldest on the left, colored as Status is, then the share that " +
+        "succeeded.",
+    )
+  private val LINKS =
+    TableColumn(
+      label = "Links",
+      help = "The path's links into other tools, from proxy.dashboard.links; each opens in a new tab.",
+    )
 
   // Block bodies throughout this object, not `= td(...) { }`: CodeScene doesn't count the conditionals inside an
   // expression-bodied function's trailing lambda as the function's own, and calls them Global Conditionals.

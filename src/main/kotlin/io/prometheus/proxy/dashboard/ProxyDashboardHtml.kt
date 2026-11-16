@@ -16,7 +16,9 @@
 
 package io.prometheus.proxy.dashboard
 
+import kotlinx.html.ButtonType
 import kotlinx.html.DIV
+import kotlinx.html.FORM
 import kotlinx.html.FlowContent
 import kotlinx.html.FlowOrPhrasingContent
 import kotlinx.html.FormMethod
@@ -32,7 +34,10 @@ import kotlinx.html.SPAN
 import kotlinx.html.a
 import kotlinx.html.body
 import kotlinx.html.button
+import kotlinx.html.dd
 import kotlinx.html.div
+import kotlinx.html.dl
+import kotlinx.html.dt
 import kotlinx.html.form
 import kotlinx.html.head
 import kotlinx.html.input
@@ -41,6 +46,7 @@ import kotlinx.html.main
 import kotlinx.html.meta
 import kotlinx.html.nav
 import kotlinx.html.script
+import kotlinx.html.section
 import kotlinx.html.span
 import kotlinx.html.stream.createHTML
 import kotlinx.html.style
@@ -109,6 +115,12 @@ internal object ProxyDashboardHtml {
   // The search above the Paths and Activity tables. One set of ids for both: the two never show on one page.
   const val FILTER_QUERY_ID = "filter-q"
   const val FILTER_PROBLEMS_ID = "filter-problems"
+
+  // The column guide under the search, and the button at the search's end that opens it; one pair for both tables, as
+  // the search's ids are. No path or agent can give an element either id: every id built from one starts with a prefix
+  // (agent-row-, copy-, scrape-path-).
+  const val COLUMN_GUIDE_ID = "column-guide"
+  const val COLUMN_GUIDE_TOGGLE_ID = "column-guide-toggle"
 
   // On the table region a push replaces: how many rows the filter left, which the page's script says aloud once per
   // change of filter.
@@ -244,16 +256,19 @@ internal object ProxyDashboardHtml {
   }
 
   /**
-   * The search above [layout]'s table, which submits to the layout's own route.
+   * The search above [layout]'s table, which submits to the layout's own route, and under it the guide to the table's
+   * [columns], which the button at the search's end opens.
    *
-   * It sits outside the table's out-of-band region, so a push never replaces the input someone is typing in. It is a
-   * plain GET form, so it works without the page's script, by navigating to `?q=…&problems=1`; the script applies a
-   * change as it is typed instead, and keeps the URL in step (see DashboardScript).
+   * Both sit outside the table's out-of-band region, so a push never replaces the input someone is typing in, nor
+   * closes the guide someone is reading. The search is a plain GET form, so it works without the page's script, by
+   * navigating to `?q=…&problems=1`; the script applies a change as it is typed instead, and keeps the URL in step, and
+   * opens and closes the guide (see DashboardScript).
    */
   internal fun FlowContent.renderFilters(
     routeBase: String,
     layout: DashboardLayout,
     filter: RowFilter,
+    columns: List<TableColumn>,
   ) {
     form(action = layout.href(routeBase), method = FormMethod.get, classes = "filters") {
       attributes["role"] = "search"
@@ -272,6 +287,44 @@ internal object ProxyDashboardHtml {
           checked = filter.problemsOnly
         }
         +"Problems only"
+      }
+      columnGuideToggle()
+    }
+    columnGuide(columns)
+  }
+
+  // A plain button, not a submit: it opens the guide and changes nothing the form sends.
+  private fun FORM.columnGuideToggle() {
+    button(type = ButtonType.button, classes = "guide-toggle") {
+      attributes["id"] = COLUMN_GUIDE_TOGGLE_ID
+      attributes["aria-expanded"] = "false"
+      attributes["aria-controls"] = COLUMN_GUIDE_ID
+      +"Column guide"
+    }
+  }
+
+  /**
+   * What each of the table's [columns] holds, one row a column, named as its header names it. A strip that pushes the
+   * table down rather than a layer over it, which would need a shadow and cover the columns it explains. Hidden until
+   * its button opens it, on each page load.
+   */
+  private fun FlowContent.columnGuide(columns: List<TableColumn>) {
+    section("column-guide") {
+      attributes["id"] = COLUMN_GUIDE_ID
+      attributes["aria-label"] = "Column guide"
+      attributes["hidden"] = "hidden"
+      div("cg-head") {
+        span { +"Columns" }
+        button(type = ButtonType.button, classes = "close") {
+          attributes["aria-label"] = "Close the column guide"
+          attributes["title"] = "Close"
+        }
+      }
+      dl {
+        columns.forEach { column ->
+          dt { +column.label }
+          dd { +column.help }
+        }
       }
     }
   }

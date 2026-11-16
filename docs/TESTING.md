@@ -399,7 +399,8 @@ Two support helpers also live here (not test classes themselves):
   orders as text, links at a root mount, the nav, and accessibility (the connection live region, outside every push, and
   the page's language and main region)
 - **DashboardScriptTest** (`dashboard/`) — the page's script and the htmx it runs on: frames stamped below its message
-  count dropped, the arrow keys switching views from anywhere but a text field, the scrape-now request with htmx's
+  count dropped, the arrow keys switching views from anywhere but a text field, the column guide opened and closed
+  from its button, its close button, and Escape from anywhere but a text field, the scrape-now request with htmx's
   header, each layout named by its route, the WebSocket connection indicator (both labels in the status region, the
   lifecycle events it flips on and the ones it must not, a close while the tab is hidden ignored, a lost connection
   announced once per outage, the capped reconnect backoff, and the stylesheet's disconnected treatment), no htmx 2
@@ -421,8 +422,10 @@ Two support helpers also live here (not test classes themselves):
   socket), the Scrape button on a live path and the result panel outside the pushed table, the Links column (last,
   present while links are configured, each link opening its path in a new tab with an `aria-label` naming the path
   and the tool, a dash for a row with none, a departed row keeping the links that use no label, no extra status pill,
-  and the links' quiet style and focus ring), the failing count and the tab's title, and a departed row's identity
-  and target, with en dashes for the scrape cells of one never scraped
+  and the links' quiet style and focus ring), the failing count and the tab's title, a departed row's identity
+  and target, with en dashes for the scrape cells of one never scraped, and the column guide both tables share (a
+  name and an explanation for every header, in its order, Identity and Links exactly when the table has them, the
+  button at the search's end, the panel hidden after the form and outside every push, and none on the Agents page)
 - **PathLinkTest** (`dashboard/`) — a dashboard link's URL template (`proxy.dashboard.links`): `{path}`, `{agent}`,
   `{identity}`, and `{label.<name>}` filled from the path, each value percent-encoded as a URL component and the
   template's own encoding kept; a path's labels read tolerantly (`PathView.labelValues`), keeping string, number, and
@@ -433,8 +436,10 @@ Two support helpers also live here (not test classes themselves):
 - **ActivityHtmlTest** (`dashboard/`) — the Activity view: each line's time, event, agent, path, and detail, newest
   first; problems as crit tags and take-overs as warn tags; a burst's count and first paths; dashes for a line with no
   agent; the Identity column while agent auth is on; escaped values; the search, its match count, and its empty
-  states; the form at the view's own route; and the push carrying the status bar and the table, out of band, or the
-  status bar alone, still the frame's first tag, when the page already shows the table
+  states; the form at the view's own route; the column guide (every header explained in its order, Identity only
+  while agent auth is on, every problem kind named in Event's explanation, and the panel outside every push); and the
+  push carrying the status bar and the table, out of band, or the status bar alone, still the frame's first tag, when
+  the page already shows the table
 - **ScrapeSummaryTest** (`dashboard/`) — a scrape-now's summary: status, outcome, time, size, content type, families,
   samples, and `# EOF`; families and samples counted as the agent's metric filter reads them: a quoted name whole, a
   tab after the keyword, a HELP or UNIT line with no TYPE, an indented comment, and lines split at line feeds alone; an

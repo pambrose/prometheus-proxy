@@ -167,6 +167,9 @@ Every path on one row, with the endpoint behind it and how its last scrape went:
 | **History** | the path's recent scrapes as a row of dots, oldest on the left, green for a success and red for a failure, then the share that succeeded |
 | **Links** | with [links](#links) configured, the path's links into other tools, such as Prometheus and Grafana |
 
+The dashboard explains the columns too: **Column guide**, at the right end of the search bar, opens a short
+explanation of each under the bar, which stays open as the table updates.
+
 Status says how the last scrape went; History says whether that is news. A target that fails every scrape and one that
 failed once in twenty look the same in Status alone. Each path keeps its last `pathHistorySize` scrapes (default 20)
 whatever the other paths are doing, and the percentage is rounded down, so a path with any failure never reads 100%.
@@ -302,7 +305,7 @@ What the proxy did with its agents and their paths, newest first:
 
 The last four, and `evicted`, are what **Problems only** keeps, marked in red; a take-over is marked in amber. The
 search works as on the Paths layout, matching the event, agent, identity, paths, and detail, and goes into the URL the
-same way.
+same way, and **Column guide** explains this table's columns as it does the Paths table's.
 
 A burst of like events from one agent within five seconds is one row, counted (`registered ×40`) and naming its first
 three paths, so an agent registering two thousand paths takes one row rather than the whole feed. A rejection appears

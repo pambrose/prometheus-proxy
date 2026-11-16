@@ -136,7 +136,7 @@ internal object ProxyDashboardCss {
       .nav a:focus-visible { outline-color:Highlight; }
     }
     /* The focus ring of every control but a list row and a tab, whose rings are inset (above). */
-    .copy:focus-visible, .scrape-now:focus-visible, .close:focus-visible,
+    .copy:focus-visible, .scrape-now:focus-visible, .close:focus-visible, .guide-toggle:focus-visible,
     .filters input:focus-visible, .ptable td.links a:focus-visible {
       outline:2px solid var(--accent); outline-offset:1px; }
     /* The table is the one region that can outgrow a narrow viewport, so it scrolls inside its own
@@ -170,8 +170,9 @@ internal object ProxyDashboardCss {
       --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linejoin='round'><rect x='5.25' y='5.25' width='8.5' height='8.5' rx='1.5'/><path d='M10.75 5.25v-2a1 1 0 0 0-1-1h-6.5a1 1 0 0 0-1 1v6.5a1 1 0 0 0 1 1h2'/></svg>"); }
     .scrape-now {
       --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M13 8a5 5 0 1 1-1.46-3.54'/><path d='M12.5 2.25v2.5H10'/></svg>"); }
-    .copy::before, .scrape-now::before, .close::before { content:""; width:13px; height:13px; background:currentColor;
-      -webkit-mask:var(--icon) center/contain no-repeat; mask:var(--icon) center/contain no-repeat; }
+    .copy::before, .scrape-now::before, .close::before, .guide-toggle::before { content:""; width:13px; height:13px;
+      background:currentColor; -webkit-mask:var(--icon) center/contain no-repeat;
+      mask:var(--icon) center/contain no-repeat; }
     .copy:hover, .scrape-now:hover, .close:hover { background:var(--surface-3); color:var(--ink); }
     .copy.copied { color:var(--ok);
       --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M3 8.5l3.25 3.25L13 5'/></svg>"); }
@@ -181,7 +182,8 @@ internal object ProxyDashboardCss {
       --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round'><path d='M4 4l8 8M12 4l-8 8'/></svg>"); }
     /* Forced colours replace every background, the mask's paint included, so the icon would vanish. */
     @media (forced-colors: active) {
-      .copy::before, .scrape-now::before, .close::before { forced-color-adjust:none; background:ButtonText; } }
+      .copy::before, .scrape-now::before, .close::before, .guide-toggle::before { forced-color-adjust:none;
+        background:ButtonText; } }
     /* A scrape-now's result, above the Paths table: a heading line, then the start of the body. The body is the one
        block of a target's own text on the page, in a bounded box that scrolls rather than pushing the table away. */
     .scrape-result { padding:10px 15px; background:var(--surface); border-bottom:1px solid var(--line); }
@@ -204,6 +206,24 @@ internal object ProxyDashboardCss {
     .filters input[type=search]::placeholder { color:var(--ink-3); }
     .filters label { display:inline-flex; align-items:center; gap:7px; color:var(--ink-2); cursor:pointer; }
     .filters input[type=checkbox] { accent-color:var(--ink-2); margin:0; }
+    /* The column guide's button, at the search's right end: a question mark and its name, in the checkbox label's ink-2
+       and ink on hover or while open, the accent kept for its focus ring. Named, since a bare "?" doesn't say what it
+       opens. */
+    .guide-toggle { display:inline-flex; align-items:center; gap:7px; min-height:24px; margin-left:auto; padding:0;
+      font:inherit; color:var(--ink-2); background:none; border:0; cursor:pointer;
+      --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><circle cx='8' cy='8' r='6.25'/><path d='M6.3 6.2a1.75 1.75 0 1 1 2.45 1.6c-.45.2-.75.55-.75 1.05v.4'/><circle cx='8' cy='11.4' r='.9' fill='black' stroke='none'/></svg>"); }
+    .guide-toggle:hover, .guide-toggle[aria-expanded="true"] { color:var(--ink); }
+    /* The column guide, under the search: what each of the table's columns holds. On the reading plane, as the scrape
+       result is, and a strip that pushes the table down rather than a layer over it, which would need a shadow and
+       cover the columns it explains. Each name is in the header's own Label type, so it reads as the header it
+       explains. */
+    .column-guide { padding:10px 15px; background:var(--surface); border-bottom:1px solid var(--line); }
+    .cg-head { display:flex; align-items:center; justify-content:space-between; }
+    .cg-head span, .column-guide dt { font-size:10px; letter-spacing:.09em; text-transform:uppercase;
+      color:var(--ink-3); font-weight:600; }
+    .column-guide dl { display:grid; grid-template-columns:max-content 1fr; align-items:baseline; gap:6px 18px;
+      margin-top:7px; }
+    .column-guide dd { color:var(--ink-2); }
     .match-count { padding:7px 15px; color:var(--ink-3); font-size:11.5px; border-bottom:1px solid var(--line-soft); }
     /* A path's recent scrapes, oldest first. Each <i> is a run of like results and paints a 4px dot every 6px, so a
        healthy strip is one element however long it is. Round, as everything that reports state is. A full strip, at

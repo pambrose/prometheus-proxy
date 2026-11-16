@@ -27,9 +27,9 @@ import io.prometheus.proxy.dashboard.DashboardFixtures.snapshot
 
 /**
  * The page's script, [DashboardScript], and the htmx it runs on: the frames it drops, the arrow keys between views,
- * the scrape-now request, the connection indicator (both its labels, the WebSocket lifecycle and its reconnect
- * backoff, and the stylesheet that switches them), the copy buttons, scrape times in the viewer's zone, and htmx's
- * config and assets.
+ * the column guide's button, close button, and Escape, the scrape-now request, the connection indicator (both its
+ * labels, the WebSocket lifecycle and its reconnect backoff, and the stylesheet that switches them), the copy buttons,
+ * scrape times in the viewer's zone, and htmx's config and assets.
  */
 class DashboardScriptTest : StringSpec() {
   init {
@@ -63,6 +63,20 @@ class DashboardScriptTest : StringSpec() {
         "var tab = evt.target.closest('#${ProxyDashboardHtml.NAV_ID} a');\n        if (!tab) return;"
       page shouldContain "window.location.assign(next.href);"
       page shouldContain "arrowedTo === window.location.pathname"
+    }
+
+    // From the listeners on <body>, as the other buttons are. Closing it hands focus back to its button. Escape closes
+    // it from anywhere but a field being typed in, so it works after a mouse click in Safari, which leaves focus on
+    // <body>, and Escape in the search still clears the search.
+    "the page script should open and close the column guide from its button, its close button, and Escape" {
+      val page = renderFullPage(snapshot(), DashboardLayout.PATH)
+      val toggle = ProxyDashboardHtml.COLUMN_GUIDE_TOGGLE_ID
+
+      page shouldContain "else if (evt.target.closest('#$toggle')) showGuide(!guideOpen());"
+      page shouldContain "toggle.setAttribute('aria-expanded', open ? 'true' : 'false');"
+      page shouldContain "else if (guide && evt.target.closest('button.close')) closeGuide();"
+      page shouldContain "if (guideOpen() && !typingIn(evt.target)) closeGuide();"
+      page.substringAfter("function closeGuide() {").substringBefore("}") shouldContain "toggle.focus();"
     }
 
     // A request of the script's own, carrying the header the route requires, so another site's page can't send it.

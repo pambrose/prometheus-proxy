@@ -141,6 +141,9 @@ most 10,000 agents connected with one identity, which is every agent when agent 
   in those tools. A template fills in the path, its agent, its identity, or any label the agent registered it with,
   such as `{label.job}`; a path missing a value gets no link rather than a broken one. A link the dashboard can't use
   stops the proxy at startup, naming it.
+- **A guide to the dashboard's columns.** The Paths and Activity views have a **Column guide** button at the right
+  end of the search bar. It opens a short explanation of each of the table's columns under the bar, which stays open
+  as the table updates, and closes with its × button or Escape.
 
 ### Security
 
