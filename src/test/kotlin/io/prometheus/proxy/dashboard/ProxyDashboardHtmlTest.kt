@@ -19,8 +19,6 @@
 package io.prometheus.proxy.dashboard
 
 import io.kotest.core.spec.style.StringSpec
-import io.kotest.matchers.collections.shouldBeEmpty
-import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -28,7 +26,6 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.string.shouldNotStartWith
 import io.kotest.matchers.string.shouldStartWith
-import io.prometheus.common.TestPorts
 import io.prometheus.proxy.ScrapeRecord
 import io.prometheus.proxy.dashboard.DashboardFixtures.departedPathView
 import io.prometheus.proxy.dashboard.DashboardFixtures.renderFullPage
@@ -38,6 +35,13 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
+/**
+ * The dashboard's renderer, [ProxyDashboardHtml]: the Agents view's list and detail pane, the pushes' out-of-band
+ * regions and view stamp, tolerant parsing of what a browser sends, the status bar, accessibility, an agent's
+ * identity, the data the demo's screenshot script reads, and the page's links and nav. The Paths view's long-standing
+ * columns are in [PathColumnsHtmlTest], its newer ones and its search in [PathTableHtmlTest], the Activity view in
+ * [ActivityHtmlTest], and the page's script in [DashboardScriptTest].
+ */
 class ProxyDashboardHtmlTest : StringSpec() {
   private fun path(
     name: String,
@@ -202,218 +206,6 @@ class ProxyDashboardHtmlTest : StringSpec() {
       ProxyDashboardHtml.detailFragment(snapshot(), selectedId = "1") shouldNotContain "via "
     }
 
-    // ==================== Path-centric layout ====================
-
-    "the path table should render a row per path with its target and source" {
-      val paths =
-        [
-          DashboardFixtures.pathView(
-            path = "app_metrics",
-            targetUrl = "app1:9090/metrics",
-            pathSource = "STATIC",
-            lastScrape = DashboardFixtures.scrapeRecord(path = "app_metrics", statusCode = 200, durationMillis = 41),
-          ),
-          DashboardFixtures.pathView(
-            path = "node_metrics",
-            targetUrl = "node-exporter:9100/metrics",
-            pathSource = "DISCOVERED",
-            lastScrape = DashboardFixtures.scrapeRecord(path = "node_metrics", statusCode = 200),
-          ),
-        ]
-      val html = ProxyDashboardHtml.pushFragment(snapshot(paths = paths), null, "/dashboard", DashboardLayout.PATH)
-
-      html shouldContain "/app_metrics"
-      html shouldContain "app1:9090/metrics"
-      html shouldContain "cfg"
-      html shouldContain "node-exporter:9100/metrics"
-      html shouldContain "disc"
-      html shouldContain "41 ms"
-    }
-
-    // The reason this layout exists. The agent-centric view filters by agent, so when the agent goes the
-    // path goes with it -- a target that stopped serving becomes invisible at the exact moment it matters.
-    "a departed path should still render, marked gone, attributed to its last agent" {
-      val lastScrape =
-        DashboardFixtures.scrapeRecord(
-          agentId = "9",
-          agentName = "cache-tier-01",
-          path = "redis_metrics",
-          statusCode = 503,
-        )
-      val departed = departedPathView(path = "redis_metrics", lastScrape = lastScrape)
-      val html = ProxyDashboardHtml.pushFragment(snapshot(paths = [departed]), null, "/dashboard", DashboardLayout.PATH)
-
-      html shouldContain "/redis_metrics"
-      html shouldContain "gone"
-      html shouldContain "cache-tier-01"
-      html shouldContain "503"
-    }
-
-    // The two layouts are read against each other -- find the failing path here, look the agent up
-    // there. Rendering the internal id in one view and the name in the other made that a manual
-    // translation step, and on a proxy with forty agents an unusable one.
-    "the path table should name its agent the way the agent list does, never by internal id" {
-      val served =
-        DashboardFixtures.pathView(path = "ledger_metrics", agentIds = ["17"], agentNames = ["edge-eu-west-2"])
-      val html = ProxyDashboardHtml.pushFragment(snapshot(paths = [served]), null, "/dashboard", DashboardLayout.PATH)
-
-      html shouldContain "edge-eu-west-2"
-      // The bare id must not appear as the cell's whole contents.
-      html shouldNotContain ">17<"
-    }
-
-    // An agent that has connected but not yet registered gets the same treatment in both layouts, so
-    // one agent never shows up under two different labels.
-    "a path served by a not-yet-registered agent should show the same placeholder as the agent list" {
-      val pending = DashboardFixtures.pathView(path = "new_metrics", agentIds = ["3"], agentNames = ["Unassigned"])
-      val html = ProxyDashboardHtml.pushFragment(snapshot(paths = [pending]), null, "/dashboard", DashboardLayout.PATH)
-
-      html shouldNotContain "Unassigned"
-      html shouldContain "registering"
-    }
-
-    "a consolidated path should collapse its extra agents into a count" {
-      val shared =
-        DashboardFixtures.pathView(
-          path = "shared_svc",
-          agentIds = ["a1", "a2", "a3"],
-          agentNames = ["team-a-01", "team-a-02", "team-a-03"],
-        )
-      val html = ProxyDashboardHtml.pushFragment(snapshot(paths = [shared]), null, "/dashboard", DashboardLayout.PATH)
-
-      html shouldContain "team-a-01"
-      html shouldContain "+2"
-    }
-
-    // An agent predating the proto fields sends neither, and a path may simply not have been scraped
-    // yet. Both must render as absent data, never as an empty cell or a literal null.
-    "a path missing target, source and scrape should render dashes rather than blanks" {
-      val bare = DashboardFixtures.pathView(path = "new_path")
-      val html = ProxyDashboardHtml.pushFragment(snapshot(paths = [bare]), null, "/dashboard", DashboardLayout.PATH)
-
-      html shouldNotContain "null"
-      html shouldContain "\u2013"
-    }
-
-    "each target URL should be followed by a button that copies it" {
-      val served = DashboardFixtures.pathView(path = "app_metrics", targetUrl = "http://app1:9090/metrics")
-      val html = ProxyDashboardHtml.pushFragment(snapshot(paths = [served]), null, "/dashboard", DashboardLayout.PATH)
-
-      // type="button", so a click can never submit anything should the table ever sit inside a form.
-      html shouldContain """<button type="button" class="copy""""
-      html shouldContain """${ProxyDashboardHtml.COPY_ATTR}="http://app1:9090/metrics""""
-      html shouldContain """aria-label="Copy the target URL of /app_metrics""""
-      // After the URL it copies, in the same cell.
-      val button = html.indexOf("""id="${ProxyDashboardHtml.COPY_TARGET_ID_PREFIX}app_metrics"""")
-      (html.indexOf("http://app1:9090/metrics<") in 0..<button) shouldBe true
-    }
-
-    // A dash is the absence of a target, not a value to copy.
-    "a path without a target should have no target copy button" {
-      val bare = DashboardFixtures.pathView(path = "new_path")
-      val html = ProxyDashboardHtml.pushFragment(snapshot(paths = [bare]), null, "/dashboard", DashboardLayout.PATH)
-
-      html shouldNotContain ProxyDashboardHtml.COPY_ATTR
-      html shouldNotContain ProxyDashboardHtml.COPY_TARGET_ID_PREFIX
-    }
-
-    // The URL to curl to check a path through the proxy. The proxy can't know the name the viewer reaches it by, so the
-    // button carries the path and the page builds the URL from its own host and the scrape port (see SCRAPE_PORT_ATTR).
-    "each registered path should be followed by a button that copies its proxy URL" {
-      val served = DashboardFixtures.pathView(path = "app_metrics", targetUrl = "http://app1:9090/metrics")
-      val html = ProxyDashboardHtml.pushFragment(snapshot(paths = [served]), null, "/dashboard", DashboardLayout.PATH)
-
-      html shouldContain """id="${ProxyDashboardHtml.COPY_PROXY_ID_PREFIX}app_metrics""""
-      html shouldContain """${ProxyDashboardHtml.PROXY_PATH_ATTR}="/app_metrics""""
-      html shouldContain """aria-label="Copy the proxy URL of /app_metrics""""
-      // After the path it copies, in the same cell, and before the target's button.
-      val proxyButton = html.indexOf("""id="${ProxyDashboardHtml.COPY_PROXY_ID_PREFIX}app_metrics"""")
-      val targetButton = html.indexOf("""id="${ProxyDashboardHtml.COPY_TARGET_ID_PREFIX}app_metrics"""")
-      (html.indexOf(">/app_metrics<") in 0..<proxyButton) shouldBe true
-      (proxyButton < targetButton) shouldBe true
-    }
-
-    // The proxy no longer serves a departed path, so its URL would only return 404.
-    "a departed path should have no proxy URL button" {
-      val departed = departedPathView(path = "redis_metrics")
-      val html =
-        ProxyDashboardHtml.pushFragment(snapshot(paths = [departed]), null, "/dashboard", DashboardLayout.PATH)
-
-      html shouldNotContain ProxyDashboardHtml.PROXY_PATH_ATTR
-    }
-
-    // On the page, not in the pushes: the port is the proxy's and doesn't change, and <body> is never swapped.
-    "the page should carry the proxy's scrape port, and the pushes should not" {
-      val page = renderFullPage(snapshot())
-      page shouldContain """${ProxyDashboardHtml.SCRAPE_PORT_ATTR}="${TestPorts.PROXY_HTTP_PORT}""""
-      ProxyDashboardHtml.pushFragment(snapshot(), null, "/dashboard", DashboardLayout.PATH) shouldNotContain
-        ProxyDashboardHtml.SCRAPE_PORT_ATTR
-    }
-
-    // The push loop replaces the whole table every frame. htmx refocuses the element carrying the id the
-    // focused one had, and the page puts the copied mark back by id, so the id must be the same in the page
-    // and in every frame, and distinct per row.
-    "a copy button should keep one id per path across the page and its pushes" {
-      val paths =
-        [
-          DashboardFixtures.pathView(path = "app_metrics", targetUrl = "http://app1:9090/metrics"),
-          DashboardFixtures.pathView(path = "node_metrics", targetUrl = "http://app1:9090/metrics"),
-        ]
-      val page = renderFullPage(snapshot(paths = paths), DashboardLayout.PATH)
-      val frame = ProxyDashboardHtml.pushFragment(snapshot(paths = paths), null, "/dashboard", DashboardLayout.PATH)
-
-      listOf(page, frame).forEach { html ->
-        for (path in ["app_metrics", "node_metrics"]) {
-          html shouldContain """id="${ProxyDashboardHtml.COPY_TARGET_ID_PREFIX}$path""""
-          html shouldContain """id="${ProxyDashboardHtml.COPY_PROXY_ID_PREFIX}$path""""
-        }
-      }
-    }
-
-    // The page shows each scrape time in the viewer's zone, the one Grafana uses, from the instant in datetime. The
-    // text is in the proxy's zone, so it depends on the JVM running the test and is not asserted.
-    "a scrape time should carry its instant, to the second, in both layouts" {
-      val at = Instant.parse("2026-11-15T01:24:23.456Z")
-      val scraped =
-        DashboardFixtures.pathView(
-          path = "app_metrics",
-          lastScrape = DashboardFixtures.scrapeRecord(path = "app_metrics", at = at),
-        )
-      val snap = snapshot(paths = [scraped])
-
-      val pathFrame = ProxyDashboardHtml.pushFragment(snap, null, "/dashboard", DashboardLayout.PATH)
-      val detail = ProxyDashboardHtml.detailFragment(snap, selectedId = "1")
-      listOf(pathFrame, detail).forEach { html ->
-        html shouldContain """<time datetime="2026-11-15T01:24:23Z">"""
-      }
-    }
-
-    // The icon buttons' rule makes an element a 24px inline box with negative margins. When the scrape-now button was
-    // given the class "scrape", which each of the detail's Recent scrapes rows already had, every row became such a
-    // box, and the list collapsed onto one line.
-    "no button should share a class with a row of the detail's recent scrapes" {
-      val scraped =
-        DashboardFixtures.pathView(
-          path = "app_metrics",
-          lastScrape = DashboardFixtures.scrapeRecord(path = "app_metrics"),
-        )
-      val snap = DashboardFixtures.snapshot(agents = [agent(paths = [scraped])], scrapeNowEnabled = true)
-
-      fun classesOf(
-        html: String,
-        tag: Regex,
-      ) = tag.findAll(html).flatMap { it.groupValues[1].split(' ') }.toSet()
-
-      val detail = ProxyDashboardHtml.detailFragment(snap, selectedId = "1")
-      val pathFrame = ProxyDashboardHtml.pushFragment(snap, null, "/dashboard", DashboardLayout.PATH)
-      val rowClasses = classesOf(detail, Regex("""<div class="([^"]*)"><span class="t">"""))
-      val buttonClasses = classesOf(pathFrame, Regex("""<button[^>]* class="([^"]*)""""))
-
-      rowClasses shouldBe setOf("kv", "scrape")
-      buttonClasses shouldContain "scrape-now"
-      buttonClasses.intersect(rowClasses).shouldBeEmpty()
-    }
-
     "an agent's uptime should show its two largest units from a day up, then one" {
       ProxyDashboardHtml.humanize(45.seconds) shouldBe "45s"
       ProxyDashboardHtml.humanize(3.minutes + 59.seconds) shouldBe "3m"
@@ -426,20 +218,7 @@ class ProxyDashboardHtmlTest : StringSpec() {
       ProxyDashboardHtml.detailFragment(snapshot(agents = [agent]), selectedId = "1") shouldContain " · up 2m · "
     }
 
-    "a path that was never scraped should show a dash rather than a time" {
-      val bare = DashboardFixtures.pathView(path = "new_path")
-      val html = ProxyDashboardHtml.pushFragment(snapshot(paths = [bare]), null, "/dashboard", DashboardLayout.PATH)
-
-      html shouldNotContain "<time"
-    }
-
-    // The target URL is agent-supplied, and the button carries it in an attribute.
-    "a target URL should be escaped in the copy attribute" {
-      val served = DashboardFixtures.pathView(path = "q_metrics", targetUrl = "http://h:9100/m?a=1&b=\"x\"")
-      val html = ProxyDashboardHtml.pushFragment(snapshot(paths = [served]), null, "/dashboard", DashboardLayout.PATH)
-
-      html shouldContain """${ProxyDashboardHtml.COPY_ATTR}="http://h:9100/m?a=1&amp;b=&quot;x&quot;""""
-    }
+    // ==================== Pushes ====================
 
     // Each layout owns disjoint region ids, so a frame carrying the other layout's regions would be
     // addressing elements that do not exist on that page.
@@ -517,15 +296,6 @@ class ProxyDashboardHtmlTest : StringSpec() {
       ProxyDashboardService.parseSeq("""{"seq":null}""") shouldBe 0L
       ProxyDashboardService.parseSeq("""{"select":"a1"}""") shouldBe 0L
       ProxyDashboardService.parseSeq("not json at all") shouldBe 0L
-    }
-
-    "the page script should count its messages and drop frames stamped below the count" {
-      val page = renderFullPage(snapshot())
-      page shouldContain "seq: seq"
-      page shouldContain "addEventListener('htmx:ws:before:message:incoming'"
-      page shouldContain "evt.preventDefault()"
-      // Anchored at the start of the frame, on the attribute the server writes.
-      page shouldContain """/^<span[^>]*\s${ProxyDashboardHtml.VIEW_ATTR}="""
     }
 
     // ==================== Status bar ====================
@@ -699,212 +469,6 @@ class ProxyDashboardHtmlTest : StringSpec() {
       renderFullPage(snapshot(), DashboardLayout.ACTIVITY) shouldContain
         """href="/dashboard/activity" class="on" aria-current="page">Activity</a>"""
       agentPage shouldNotContain "aria-current=\"page\""
-    }
-
-    // Left and Right open the neighbouring view from anywhere on the page, not only from a focused tab: a click on a
-    // tab loads a page whose focus is on <body>, and Safari never focuses a link on a click or a Tab. Typing is left
-    // alone, so the arrows still move the caret in the search, as is a modified key: Alt+Left is the browser's Back.
-    // A tab that had focus gets it back on the page that opens, so a keyboard user's next arrow keeps going from it.
-    "the page script should switch views with the arrow keys from anywhere but a text field" {
-      val page = renderFullPage(snapshot(), DashboardLayout.PATH)
-
-      page shouldContain """<nav class="nav" id="${ProxyDashboardHtml.NAV_ID}">"""
-      page shouldContain "evt.key !== 'ArrowLeft' && evt.key !== 'ArrowRight'"
-      page shouldContain "evt.altKey || evt.ctrlKey || evt.metaKey || evt.shiftKey || evt.repeat"
-      page shouldContain "if (typingIn(evt.target)) return;"
-      page shouldContain
-        "var from = focusedTab || document.querySelector('#${ProxyDashboardHtml.NAV_ID} a[aria-current=\"page\"]');"
-      page shouldContain "(tabs.indexOf(from) + step + tabs.length) % tabs.length"
-      // The gate that left the arrows working only from a focused tab.
-      page shouldNotContain
-        "var tab = evt.target.closest('#${ProxyDashboardHtml.NAV_ID} a');\n        if (!tab) return;"
-      page shouldContain "window.location.assign(next.href);"
-      page shouldContain "arrowedTo === window.location.pathname"
-    }
-
-    // A request of the script's own, carrying the header the route requires, so another site's page can't send it.
-    "the page script should post a scrape-now with htmx's header and put the result in the panel" {
-      val page = renderFullPage(snapshot())
-
-      page shouldContain "closest('button.scrape-now')"
-      page shouldContain "method: 'POST', headers: { '${ProxyDashboardService.HX_REQUEST_HEADER}': 'true' }"
-      page shouldContain "panel.innerHTML = html;"
-      // Closing the panel hands focus back to the button that filled it.
-      page shouldContain "function closeScrapeResult(panel)"
-    }
-
-    // The script tells the server which layout the page shows, from its URL, on every announce. The map comes from
-    // DashboardLayout, so a new layout can't be left out of it.
-    "the page script should name each layout by its route" {
-      renderFullPage(snapshot()) shouldContain """var LAYOUTS = {"paths":"PATH","activity":"ACTIVITY"};"""
-    }
-
-    // ==================== Connection indicator ====================
-
-    // The status region always ships both labels; CSS driven by the body's ws-down class decides which
-    // shows. Rendering only "live" and swapping text in JS would leave the disconnected label absent
-    // exactly when the server (which does the rendering) is unreachable.
-    "the status region should carry both the live and reconnecting labels" {
-      val status = ProxyDashboardHtml.pushFragment(snapshot(), null, "/dashboard")
-      status shouldContain "live"
-      status shouldContain "reconnecting"
-    }
-
-    // The whole point: the WebSocket extension reconnects on its own, and these handlers are what makes
-    // that effort visible. A close must mark the page down; an open must clear it.
-    "the page script should flip the connection state on the WebSocket lifecycle events" {
-      val page = renderFullPage(snapshot())
-      page shouldContain "addEventListener('htmx:ws:close'"
-      page shouldContain "addEventListener('htmx:ws:after:connection'"
-      page shouldContain "ws-down"
-      // before:connection also fires for the first connect on load; reacting to it would flash red before
-      // the initial open, so no listener may be wired for it. ws:error also reports a message that failed
-      // to send or swap on an open socket, so it may not mark the page down either. Asserted as the precise
-      // listener form rather than the bare event name, which the explaining comment legitimately mentions.
-      page shouldNotContain "addEventListener('htmx:ws:before:connection'"
-      page shouldNotContain "addEventListener('htmx:ws:error'"
-    }
-
-    // htmx 4 renamed every WebSocket event and attribute. A listener left on an htmx 2 name never fires,
-    // so the page would keep claiming "live" through an outage; ws-connect still works but logs a
-    // deprecation warning on every load; and hx-ext no longer exists.
-    "the page should use no htmx 2 WebSocket names" {
-      val page = renderFullPage(snapshot())
-      page shouldNotContain "htmx:wsOpen"
-      page shouldNotContain "htmx:wsClose"
-      page shouldNotContain "htmx:wsError"
-      page shouldNotContain "htmx:pushedIntoHistory"
-      page shouldNotContain " ws-connect="
-      page shouldNotContain "hx-ext="
-      page shouldNotContain "wsReconnectDelay"
-    }
-
-    // htmx 4 dispatches its history events on document, not <body>. A listener on the body would never
-    // hear a row click push its URL, so the server would keep pushing the previous agent's detail pane.
-    "the page should listen for history pushes on the document" {
-      val page = renderFullPage(snapshot())
-      page shouldContain "document.addEventListener('htmx:after:history:push', announce)"
-      page shouldContain "window.addEventListener('popstate', announce)"
-    }
-
-    // The extension closes the socket of a hidden tab and reopens it when the tab is shown. That pause must
-    // not read as an outage, or every tab switch would turn the beacon red and announce a lost connection.
-    "the page should ignore a close made while the tab is hidden" {
-      val page = renderFullPage(snapshot())
-      page shouldContain "if (!document.hidden) connected(false)"
-    }
-
-    // Each failed reconnect attempt closes the socket again. Writing the live region on every close would
-    // re-announce the outage every couple of seconds, so only the transition into it is announced.
-    "the page should announce a lost connection once per outage" {
-      val page = renderFullPage(snapshot())
-      page shouldContain "if (!up && !wasDown) region.textContent = 'Connection to the proxy lost. Reconnecting.'"
-      page shouldContain "else if (up && wasDown) region.textContent = 'Connection to the proxy restored.'"
-    }
-
-    // The table is replaced on every push, so a listener attached to a copy button would last one frame.
-    "the page should handle copy clicks from one listener on the body" {
-      val page = renderFullPage(snapshot())
-      page shouldContain "document.body.addEventListener('click'"
-      page shouldContain "evt.target.closest('button.copy')"
-      page shouldContain "btn.getAttribute('${ProxyDashboardHtml.COPY_ATTR}')"
-    }
-
-    // navigator.clipboard is undefined outside a secure context, and the dashboard is usually plain http on
-    // a LAN address. Without the fallback the button would do nothing on exactly the pages that use it most.
-    "the page should copy without the clipboard API outside a secure context" {
-      val page = renderFullPage(snapshot())
-      page shouldContain "if (navigator.clipboard && window.isSecureContext) return"
-      page shouldContain "document.execCommand('copy')"
-    }
-
-    // The proxy URL's host is the one the viewer opened the dashboard at, which the proxy can't know: a name or address
-    // it is reached by from outside, or through a port forward. The scrape port is plain HTTP.
-    "the page should build a proxy URL from its own host and the proxy's scrape port" {
-      val page = renderFullPage(snapshot())
-      page shouldContain "'http://' + window.location.hostname + ':'"
-      page shouldContain "document.body.getAttribute('${ProxyDashboardHtml.SCRAPE_PORT_ATTR}')"
-      page shouldContain "btn.getAttribute('${ProxyDashboardHtml.PROXY_PATH_ATTR}')"
-    }
-
-    // A push that lands while the mark is showing replaces the marked button with an unmarked one.
-    // After each push: the copy result back on its button, the title's problem count, and a new filter's row count.
-    "the page should put a copy result back on the button, and update the title, after each push" {
-      val page = renderFullPage(snapshot())
-      val handler =
-        page
-          .substringAfter("addEventListener('htmx:ws:after:message:incoming', function () {")
-          .substringBefore("});")
-
-      handler shouldContain "applyMark();"
-      handler shouldContain "updateTitle();"
-      handler shouldContain "sayCount();"
-    }
-
-    // Converted in the fragment before the swap rather than in the page after it, so no frame shows the proxy's zone
-    // between the two, and once for the times the page was served with.
-    "the page should show scrape times in the viewer's zone before each swap" {
-      val page = renderFullPage(snapshot())
-      page shouldContain "localTimes(document);"
-      page shouldContain "document.addEventListener('htmx:before:swap'"
-      page shouldContain "if (task.fragment) localTimes(task.fragment);"
-    }
-
-    // The mark is an icon and a colour, neither of which reaches a screen reader.
-    "the page should announce the result of a copy" {
-      val page = renderFullPage(snapshot())
-      page shouldContain "say(what + ' copied.')"
-      page shouldContain "say('Could not copy the ' + what.toLowerCase() + '.')"
-    }
-
-    // htmx 4 refetches the page on every back or forward and runs the inline scripts of what it swaps in.
-    // Without the guard each navigation would stack another set of listeners.
-    "the page script should run only once per document" {
-      val page = renderFullPage(snapshot())
-      page shouldContain "if (window.__proxyUiInit) return;"
-    }
-
-    // The extension's default backoff doubles up to a minute and only resets on a successful open, so a
-    // brief outage can leave the page idle for tens of seconds after the proxy is already back. The page
-    // caps it in htmx's config; this guards that cap against regressing to the default, which would
-    // silently reintroduce the long lag.
-    "the page should cap the WebSocket reconnect backoff" {
-      val page = renderFullPage(snapshot())
-      // kotlinx.html escapes the attribute's quotes, so match the names and values, not the JSON.
-      page shouldContain "reconnectMaxDelay&quot;:2000"
-      page shouldContain "reconnectDelay&quot;:500"
-    }
-
-    // htmx 4 swaps a 4xx or 5xx response in. A row click that failed would replace #detail with the error
-    // body, and the pushes, which address #detail, would have nothing left to update.
-    "the page should keep error responses from being swapped in" {
-      val page = renderFullPage(snapshot())
-      page shouldContain "noSwap&quot;:[204,304,&quot;4xx&quot;,&quot;5xx&quot;]"
-    }
-
-    // htmx reads its config once, when htmx.min.js loads, so a meta tag after the script is ignored.
-    "the htmx config should precede the htmx script" {
-      val page = renderFullPage(snapshot())
-      val config = page.indexOf("""name="htmx-config"""")
-      val script = page.indexOf("htmx.min.js")
-      (config in 0..<script) shouldBe true
-    }
-
-    // The assets are cached for a year, so their URLs must change when htmx does; a fixed URL would leave a
-    // browser running its cached htmx against the next version's markup.
-    "the page should load its scripts from the versioned asset directory" {
-      val page = renderFullPage(snapshot())
-      ProxyDashboardService.ASSET_DIR shouldContain ProxyDashboardService.HTMX_VERSION
-      page shouldContain """src="/dashboard/${ProxyDashboardService.ASSET_DIR}/htmx.min.js""""
-      page shouldContain """src="/dashboard/${ProxyDashboardService.ASSET_DIR}/hx-ws.min.js""""
-    }
-
-    "the stylesheet should define the disconnected treatment and hide it by default" {
-      val page = renderFullPage(snapshot())
-      // Hidden until the body carries ws-down.
-      page shouldContain ".conn .conn-down { display:none; }"
-      page shouldContain "body.ws-down .conn .conn-down { display:inline; }"
-      page shouldContain "body.ws-down .beacon"
     }
   }
 
