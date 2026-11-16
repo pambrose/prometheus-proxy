@@ -8,9 +8,9 @@
 # are one level up, and the repository root three.
 #
 # Every published port binds to 127.0.0.1 only: the dashboard has no authentication, Grafana lets anyone view it
-# without signing in, and its admin password is the default, which suits a demo on a laptop and nothing else. Set DEMO_DASHBOARD_PORT, DEMO_GRAFANA_PORT,
-# DEMO_PROMETHEUS_PORT, DEMO_PROXY_PORT, DEMO_STANDBY_DASHBOARD_PORT, or DEMO_ZIPKIN_PORT to move a host port that's
-# already taken.
+# without signing in, and its admin password is the default, which suits a demo on a laptop and nothing else. Set
+# DEMO_DASHBOARD_PORT, DEMO_GRAFANA_PORT, DEMO_PROMETHEUS_PORT, or DEMO_PROXY_PORT to move a host port that's already
+# taken.
 
 name: prometheus-proxy-demo
 
@@ -27,25 +27,15 @@ x-agent: &agent
       condition: service_started
     demo-app:
       condition: service_healthy
-    # Started once Zipkin answers, so the spans of the agent's first connection and registrations aren't dropped.
-    zipkin:
-      condition: service_healthy
-  restart: on-failure
-
-# The two proxies share one image, built from this checkout's proxy jar.
-x-proxy: &proxy
-  image: prometheus-proxy-demo/proxy:local
-  build:
-    context: ../../..
-    dockerfile: etc/docker/proxy.Dockerfile
-  depends_on:
-    zipkin:
-      condition: service_healthy
   restart: on-failure
 
 services:
+  # Built from this checkout's proxy jar.
   proxy:
-    <<: *proxy
+    image: prometheus-proxy-demo/proxy:local
+    build:
+      context: ../../..
+      dockerfile: etc/docker/proxy.Dockerfile
     hostname: proxy
     environment:
       PROXY_CONFIG: /app/proxy.conf
@@ -54,29 +44,13 @@ services:
     ports:
       - "127.0.0.1:${DEMO_DASHBOARD_PORT:-8094}:8094"  # Dashboard
       - "127.0.0.1:${DEMO_PROXY_PORT:-8080}:8080"      # Scrape port: /discovery and each path, for curl
-
-  # The standby every agent fails over to when the primary is gone (`demo.sh proxy-down`). Its own dashboard shows
-  # which proxy each agent is connected through.
-  proxy-standby:
-    <<: *proxy
-    hostname: proxy-standby
-    environment:
-      PROXY_CONFIG: /app/proxy-standby.conf
-    volumes:
-      - ../config/proxy.conf:/app/proxy.conf:ro
-      - ../config/proxy-standby.conf:/app/proxy-standby.conf:ro
-    ports:
-      - "127.0.0.1:${DEMO_STANDBY_DASHBOARD_PORT:-8095}:8094"  # The standby's dashboard
+    restart: on-failure
 
   agent-east:
     <<: *agent
     hostname: east-dc-01
-    environment:
-      # `demo.sh filter` starts it on agent-east-filtered.conf, which includes agent-east.conf, so both are mounted.
-      AGENT_CONFIG: /app/${DEMO_EAST_CONFIG:-agent-east.conf}
     volumes:
-      - ../config/agent-east.conf:/app/agent-east.conf:ro
-      - ../config/agent-east-filtered.conf:/app/agent-east-filtered.conf:ro
+      - ../config/agent-east.conf:/app/agent.conf:ro
       - discovery:/discovery:ro
 
   agent-west-1:
@@ -168,15 +142,6 @@ services:
       interval: 2s
       timeout: 2s
       retries: 60
-    restart: on-failure
-
-  # Every proxy and agent reports a span for each gRPC call between them, so a presenter can follow one through the
-  # firewall.
-  zipkin:
-    # The image's own healthcheck reports it healthy once it accepts spans.
-    image: openzipkin/zipkin:3.6.1@sha256:d17e856dcbba7ffeefbbfc252f89ab78a4ab6faed47e646d46daad78f91b5ee2
-    ports:
-      - "127.0.0.1:${DEMO_ZIPKIN_PORT:-9411}:9411"
     restart: on-failure
 
 volumes:

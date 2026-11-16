@@ -99,13 +99,13 @@ most 10,000 agents connected with one identity, which is every agent when agent 
 - **Copy a path's proxy URL from the dashboard.** Each registered path in the Paths view has a button that copies
   its URL on the proxy, the one to curl to check the path through the proxy, built from the address you opened the
   dashboard at.
-- **The demo shows failover, filtering, and teams.** `make up` now also starts a standby proxy, and three new
-  scenarios show the agents failing over to it when the primary stops, a filter at the agent cutting the catalog's
-  payload by more than half before it crosses the firewall, and a contractor's agent refused a path its identity
-  doesn't cover. The Live Demo page walks through each.
+- **The demo shows several teams on one proxy.** Each data center's agents connect with a token of their own, and a
+  new scenario shows a contractor's agent refused a path its identity doesn't cover. The Live Demo page walks
+  through it.
 - **A guided tour of the demo.** `make tour`, in `demos/dashboard`, walks a presenter through every scenario, one
-  step at a time. Two new ones show an agent's config deployed twice by mistake, which now settles instead of the two
-  fighting over their paths, and Zipkin tracing of the calls between the agents and the proxies.
+  step at a time. A new one shows an agent's config deployed twice by mistake, which now settles instead of the two
+  fighting over their paths. The tour ends by pointing to the network demo, below, for proxy failover, filtering at
+  the agent, and tracing.
 - **A demo of the network between the agents and the proxies.** From `demos/network`, `make up` starts a proxy and
   its standby, two agents, and a simulated WAN between them, with Prometheus, Grafana, and Zipkin, on ports that
   don't clash with the dashboard demo's, so both can run at once. Its presenter's script and `make tour` show a far
