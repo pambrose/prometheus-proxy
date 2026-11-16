@@ -381,6 +381,53 @@ class AgentHttpServiceTest : StringSpec() {
       }
     }
 
+    // A proxy older than #416 drops only the first of a request's leading slashes, so asked for //metrics it sends the
+    // agent /metrics, which the agent answered 404 though it serves the path. It is served now, filtered as a request
+    // for the path's key is, and its filter's series are the key's, so they are the same whichever proxy asked.
+    "fetchScrapeUrl should serve a path asked for with leading slashes as it serves the path's key" {
+      val (mockAgent, metrics) = createMockAgentWithFilterAndMetrics(
+        """{ path = "metrics", metricNameAllow = [], metricNameDeny = ["denied_metric"] }""",
+      )
+      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
+        routing {
+          get("/metrics") {
+            call.respondText(
+              "# TYPE allowed_metric counter\nallowed_metric 1\n# TYPE denied_metric counter\ndenied_metric 2\n",
+              ContentType.Text.Plain,
+            )
+          }
+        }
+      }
+
+      try {
+        val port = server.startAndAwaitReady()
+        val service = AgentHttpService(mockAgent)
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
+
+        fun request(requested: String) =
+          scrapeRequest {
+            agentId = "agent-1"
+            scrapeId = 11L
+            path = requested
+          }
+
+        listOf("metrics", "/metrics", "//metrics").forEach { requested ->
+          service.fetchScrapeUrl(request(requested)).apply {
+            srStatusCode shouldBe 200
+            srContentAsText shouldBe "# TYPE allowed_metric counter\nallowed_metric 1\n"
+          }
+        }
+        // Each scrape dropped the denied family's two lines, all three counted under the key.
+        metrics.filterLinesDropped.labelValues("test-launch-id", "metrics").get() shouldBe 6.0
+        // The slashes are stripped, not the path matched loosely: a path the agent doesn't serve is still a 404.
+        service.fetchScrapeUrl(request("//other_metrics")).srStatusCode shouldBe 404
+
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
     "fetchScrapeUrl should handle connection refused" {
       val mockAgent = createMockAgentWithPaths()
       val service = AgentHttpService(mockAgent)

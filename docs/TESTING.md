@@ -199,7 +199,9 @@ pins, and no jar on the classpath carries a `logback.xml`, which would replace t
   #43, found while fixing #41)
 - **AgentHttpServiceTest** — HTTP service: scraping endpoints, compression support, response handling, timeout behavior,
   error cases; a scrape the proxy's dashboard asked for is counted only in `agent_dashboard_scrapes_total`, however it
-  ends, isn't timed, and has its results marked, while the same scrape from Prometheus is counted and timed
+  ends, isn't timed, and has its results marked, while the same scrape from Prometheus is counted and timed; a path
+  asked for with leading slashes, as a proxy older than #416 asks, served and filtered as its key is, with its
+  filter's series under the key
 - **AgentHttpServiceHeaderTest** — HTTP Accept header handling per-request (prevents stale headers in cached clients)
 - **AgentContextTest** — Agent context unique ID generation, validity, invalidation, ScrapeRequestWrapper management
 - **AgentContextManagerTest** — Context management: add/remove, concurrent access, chunked contexts
@@ -213,7 +215,8 @@ pins, and no jar on the classpath carries a `logback.xml`, which would replace t
   only in the elapsed time log one, while a rejection for another reason is warned about again; so do a static path's
   repeating failed retry, until the proxy answers in between, and a stale discovered path's repeating failed
   unregister, until the path returns to the file; a static path whose retries fail in transport backs off as a
-  rejected one does, and still registers once the proxy accepts it
+  rejected one does, and still registers once the proxy accepts it; a lookup strips a requested path's leading
+  slashes, and only them
 - **AgentPathManagerLincheckTest** — Lincheck, stress only (tagged `Lincheck`): static registration, unregistration, and
   discovery reconciles race over a real in-process gRPC connection; once they finish, the agent's local path map and
   the proxy's registrations for it agree exactly
@@ -320,12 +323,17 @@ Two support helpers also live here (not test classes themselves):
   eviction is a problem in the activity feed, and each gives the feed its cause, an eviction naming
   `proxy.internal.maxAgentInactivitySecs`
 - **ChunkedContextTest** — Chunk accumulation, CRC32 checksum validation, header/chunk/trailer sequencing
-- **ProxyOptionsTest** — CLI parsing, defaults, validation, TLS settings, gRPC options; an `http.idleTimeoutSecs`
-  of 0 or a negative other than -1, and a configured `sdTargetPrefix` with a query or fragment, fail startup with an
-  `Invalid configuration:` message naming the setting; `proxy.dashboard.links` parsed from a config file in order and
-  logged by name, and a link the dashboard can't render failing startup the same way, naming the link, while the
-  dashboard is on; the blitz path kept without its leading slashes, and one of slashes alone, blank, or of more than
-  one segment failing startup while blitz is on
+- **ProxyOptionsTest** — CLI parsing, defaults, validation, TLS settings, gRPC options, the `proxy.internal` limits,
+  and the agent-port authentication warnings; an `http.idleTimeoutSecs` of 0 or a negative other than -1, and a
+  configured `sdTargetPrefix` with a query or fragment, fail startup with an `Invalid configuration:` message naming
+  the setting; the blitz path kept without its leading slashes, and one of slashes alone, blank, or of more than one
+  segment failing startup while blitz is on. The dashboard's options are ProxyDashboardOptionsTest's
+- **ProxyDashboardOptionsTest** — the dashboard's options, split from ProxyOptionsTest: off by default, on a port
+  apart from the admin port, set by its flags; its port refused out of range, and its path, host, session cap,
+  refresh interval, path history, and activity log size refused when unusable while the dashboard is on, and logged
+  at startup; only a wildcard address counted as listening on all interfaces; `proxy.dashboard.links` parsed from a
+  config file in order and logged by name, and a link the dashboard can't render failing startup with an
+  `Invalid configuration:` message, naming the link, while the dashboard is on
 - **SdTargetTest** — `sdTargetPrefix` parsing: host:port as is; an http(s) URL split into the target, `__scheme__`,
   and a path prefix; anything else, including a host:port with a query or fragment, refused, naming the setting
 - **ProxyDynamicConfigTest** — Dynamic config overrides via -D flags (maxZippedContentSizeMBytes,
@@ -659,7 +667,9 @@ mechanism that the standard suite cannot reach:
   a session kept open through a push that fails to render, and a scrape-now against a stub target returning what it
   had while the proxy's and the agent's scrape metrics, the History, and the agent's Recent scrapes stay as
   Prometheus's scrape left them and the agent counts it in `agent_dashboard_scrapes_total`, refused within its
-  cooldown, for an unknown path, without htmx's header, or from another origin, and absent when off
+  cooldown, for an unknown path, without htmx's header, or from another origin, and absent when off; and an Activity
+  page sent its table over a real socket in the first frame rendered from its message, left out of the ticks after it
+  while nothing is recorded, and sent again for a new message and once an agent's connection is recorded
 - **TlsMutualAuthRejectionTest** — the negative mutual-TLS path over a real Netty handshake, which the
   in-process TLS specs cannot perform (item 28 in `docs/archive/CODE_REVIEW_JUNE_2026.md`)
 

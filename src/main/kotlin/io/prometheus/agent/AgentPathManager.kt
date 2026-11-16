@@ -93,7 +93,10 @@ internal class AgentPathManager(
   // The discovered paths last reported for each kind of conflict; see reportConflict. Guarded by pathMutex.
   private val reportedConflicts = EnumMap<DiscoveryConflict, Set<String>>(DiscoveryConflict::class.java)
 
-  operator fun get(path: String): PathContext? = pathContextMap[path]
+  // Every scrape's lookup of the path it asks for comes through here, which looks it up by its key (see
+  // requestedPathKey), so an agent behind a proxy older than #416 serves a path asked for with extra leading slashes.
+  // Registration, unregistration, and the discovery reconcile read the map directly, by the keys they normalize.
+  operator fun get(path: String): PathContext? = pathContextMap[requestedPathKey(path)]
 
   // Routed through pathMutex so a dynamic registerPath racing a reconcile can't insert a stale
   // PathContext into the freshly-cleared map (finding 19). A reconnect clears first, which forgets every
@@ -560,6 +563,15 @@ internal class AgentPathManager(
 
     private val RequestFailureException.retryable: Boolean
       get() = rejectionCause in RETRYABLE_CAUSES
+
+    /**
+     * The key [path], a path a scrape asks for, is registered under: [path] without its leading slashes. A current
+     * proxy sends the key itself, since its scrape route drops every leading slash (#416). One older than that dropped
+     * only the first, so asked for `//orders_metrics` it sends `/orders_metrics`. No key starts with a slash:
+     * doRegisterPath drops one, and the proxy refuses a path with a slash left in it, so stripping them all loses no
+     * path a lookup as given would have found.
+     */
+    internal fun requestedPathKey(path: String): String = path.trimStart('/')
   }
 
   // The last failure to register a discovered entry. [retryable] says whether the entry stays in the desired set;

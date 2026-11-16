@@ -339,6 +339,19 @@ class AgentPathManagerTest : StringSpec() {
       context.labels shouldBe """{"env":"prod"}"""
     }
 
+    // A proxy older than #416 drops only the first of a request's leading slashes, so asked for //metrics it sends the
+    // agent /metrics. Keys have no leading slash, so the lookup strips them all, and only them.
+    "get operator should find a registered path asked for with leading slashes" {
+      val agent = createMockAgent()
+      val manager = AgentPathManager(agent)
+      manager.registerPath("metrics", "http://localhost:$PROXY_HTTP_PORT/metrics")
+
+      listOf("metrics", "/metrics", "//metrics", "///metrics").forEach { requested ->
+        manager[requested].shouldNotBeNull().path shouldBe "metrics"
+      }
+      listOf("/", "//", "metrics/", "/other_metrics").forEach { requested -> manager[requested].shouldBeNull() }
+    }
+
     "clear should remove all paths" {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
