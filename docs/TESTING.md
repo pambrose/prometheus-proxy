@@ -267,8 +267,10 @@ Two support helpers also live here (not test classes themselves):
   identity may not register noted as a rejection), heartbeat, scrape responses, chunked responses; a result or a chunked transfer for a scrape sent to another agent neither completes nor fails it, even
   when its `agentId` or `headerAgentId` names that agent; a transfer ends with its scrape, even one whose scrape ended
   just before it was stored, one stream has at most the agent's backlog cap of transfers under way, a header's strings
-  are cut, and a late result or transfer logs nothing above DEBUG; with the transport filter disabled, a scrape-request
-  stream that names an agentId before it is assigned neither streams nor removes the context another identity then
+  are cut, and a late result or transfer logs nothing above DEBUG; every result and chunked message, its scrape tracked
+  or not, marks the agent that sent it active (with the transport filter disabled, only when sent as the identity the
+  agent connected as), and a late result doesn't count as a completed request; with the transport filter disabled, a
+  scrape-request stream that names an agentId before it is assigned neither streams nor removes the context another identity then
   connects with under it, and 10,000 connects by one identity leave at most `maxAgentsPerIdentity` agents
 - **ProxyGrpcServiceTest** — gRPC server configuration: each handshake, keepalive, and connection-age option reaches
   the server builder (a MockK builder) and an unset one leaves gRPC's default, and the transport filter; reflection
@@ -563,17 +565,19 @@ These support helpers also live here (not test classes themselves):
 - **AdminNonDefaultPathTest** — Admin endpoints with custom paths
 - **CiHygieneTest** — every job in `.github/workflows` sets `timeout-minutes`, every tool image the `Makefile` runs
   (`*_IMAGE`) and every third-party image `ContainerTestSupport` gives the container suite is pinned by digest, in a
-  form Testcontainers pulls by digest, the suite's Prometheus is the `Makefile`'s, every image the dashboard demo
-  (`demos/dashboard/docker/compose.yml`) pulls is pinned by digest and its Prometheus is the `Makefile`'s, every
-  `astral-sh/setup-uv` step installs a pinned uv, the same one in each, and the CRD schemas `helm-lint` validates
-  against come from a fixed commit, so a hung job gives its check back and what CI runs changes only with a diff here
+  form Testcontainers pulls by digest, the suite's Prometheus is the `Makefile`'s, every image each demo's compose file
+  (`demos/*/docker/compose.yml`, the dashboard and network demos') pulls is pinned by digest and any Prometheus it runs
+  is the `Makefile`'s, every `astral-sh/setup-uv` step installs a pinned uv, the same one in each, and the CRD schemas
+  `helm-lint` validates against come from a fixed commit, so a hung job gives its check back and what CI runs changes
+  only with a diff here
 - **ConfigFileKeysTest** — every setting in a HOCON config the repo ships or its tests load (`config/test-configs`,
-  `examples`, `testing`, `etc/compose`, the dashboard demo's `demos/dashboard/config`, the container suite's agent
-  configs, and the bundled `reference.conf`) is one `config/config.conf` declares, with the same shape, since HOCON
-  ignores a key it doesn't know; a list's entries are checked against the fields its schema entry gives, as for
-  `proxy.auth` and `agent.pathConfigs`, and a discovery targets file's `paths` entries against `agent.pathConfigs`'. The
-  same goes for every `proxy.` or `agent.` key a test source under `src/test/kotlin` passes as a `-D` setting in a
-  string literal, which HOCON ignores just the same; a key built at run time isn't seen
+  `examples`, `testing`, `etc/compose`, the dashboard and network demos' `demos/dashboard/config` and
+  `demos/network/config`, the container suite's agent configs, and the bundled `reference.conf`) is one
+  `config/config.conf` declares, with the same shape, since HOCON ignores a key it doesn't know; a list's entries are
+  checked against the fields its schema entry gives, as for `proxy.auth` and `agent.pathConfigs`, and a discovery
+  targets file's `paths` entries against `agent.pathConfigs`'. The same goes for every `proxy.` or `agent.` key a test
+  source under `src/test/kotlin` passes as a `-D` setting in a string literal, which HOCON ignores just the same; a key
+  built at run time isn't seen
 - **ConfigValsTest** — ConfigVals auto-generated from HOCON schema (validates default values, including the empty
   `proxy.dashboard.links`); a config that still sets the retired `proxy.dashboard.recentScrapesQueueSize` loads
 - **DashboardMetricNamesTest** — the Grafana dashboards, the alert rules, the docs' PromQL, and the metric names

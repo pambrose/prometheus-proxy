@@ -1,0 +1,11 @@
+# Loads the dashboard docker/compose.yml mounts in /etc/grafana/dashboards: the network demo's overview.
+apiVersion: 1
+
+providers:
+  - name: prometheus-proxy-network-demo
+    folder: Prometheus Proxy
+    type: file
+    disableDeletion: true
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/dashboards

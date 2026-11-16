@@ -1,0 +1,52 @@
+# Prometheus config for the network demo (demos/network/docker/compose.yml).
+#
+# The agents' paths are found, not listed: one job discovers every path the agents register through each proxy's HTTP
+# service discovery endpoint, and scrapes each through the proxy that advertised it. A proxy's /discovery lists only
+# the paths of the agents connected to it, so when no agent is connected (`demo.sh wan-down`), their targets vanish
+# from Prometheus, after a scrape or two that fail, rather than staying red. `make check-rules`, from the repository
+# root, validates this file with promtool.
+#
+# The agents are each connected to one proxy at a time, so a path is listed by one proxy and not the other. When the
+# primary goes (`demo.sh proxy-down`), its discovery stops answering and Prometheus keeps the targets it last listed,
+# which go down, while the standby's discovery lists the same paths, which come up. The demo's dashboard and alerts
+# count a job as down only when no proxy reaches it (max by job).
+#
+# The two proxies' own metrics are scraped directly, from this side of the WAN, so Prometheus still sees the proxies,
+# and how many agents each has, when every link is down.
+
+global:
+  # Short intervals so the dashboards and Grafana move visibly during a demo.
+  scrape_interval: 5s
+  # Longer than the agents' 3s scrapeTimeoutSecs, so a hung target is reported by the agent, not cut off here. A path
+  # whose answer the WAN can't deliver in 4s is cut off here, and its scrape fails.
+  scrape_timeout: 4s
+  evaluation_interval: 5s
+
+rule_files:
+  # The demo's fast alerting rules (network-alerts.yml).
+  - /etc/prometheus/rules/*.yml
+
+scrape_configs:
+  - job_name: proxy-discovered
+    http_sd_configs:
+      - url: http://proxy:8080/discovery
+        refresh_interval: 5s
+      - url: http://proxy-standby:8080/discovery
+        refresh_interval: 5s
+    relabel_configs:
+      # Each agent's path labels include a job (orders, inventory, agent-branch, ...), which replaces this scrape
+      # config's job_name, since Prometheus applies job_name only to a target that has no job label. Keep the serving
+      # agent's name as an `agent` label, and drop the container host names.
+      - source_labels: [agentName]
+        target_label: agent
+      - action: labeldrop
+        regex: agentName|hostName
+
+  # The proxies' own metrics, under a job each: sharing one, the standby's series would collide with the primary's, and
+  # the standby being up would hide the primary being down.
+  - job_name: prometheus-proxy
+    static_configs:
+      - targets: ["proxy:8082"]
+  - job_name: prometheus-proxy-standby
+    static_configs:
+      - targets: ["proxy-standby:8082"]

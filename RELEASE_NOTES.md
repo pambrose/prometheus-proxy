@@ -106,6 +106,12 @@ most 10,000 agents connected with one identity, which is every agent when agent 
 - **A guided tour of the demo.** `make tour`, in `demos/dashboard`, walks a presenter through every scenario, one
   step at a time. Two new ones show an agent's config deployed twice by mistake, which now settles instead of the two
   fighting over their paths, and Zipkin tracing of the calls between the agents and the proxies.
+- **A demo of the network between the agents and the proxies.** From `demos/network`, `make up` starts a proxy and
+  its standby, two agents, and a simulated WAN between them, with Prometheus, Grafana, and Zipkin, on ports that
+  don't clash with the dashboard demo's, so both can run at once. Its presenter's script and `make tour` show a far
+  link, a thin one and filtering at the agent, a proxy that goes away, a link that dies silently, a flaky link
+  followed in Zipkin, and the whole WAN going down and coming back. The website's new Network Demo page walks
+  through each, with screenshots.
 - **Paths whose agent has gone stay on the dashboard for an hour.** The Paths view used to lose a gone path within
   a minute on a busy proxy, since it rebuilt it from the 200 most recent scrapes across all paths. Each path now
   keeps its own history, and a gone path stays for `proxy.dashboard.departedPathRetentionSecs` (default 3600) after
@@ -247,6 +253,13 @@ most 10,000 agents connected with one identity, which is every agent when agent 
   usually arrives just after, and the proxy logged a WARN for it, and one for each chunk of a large result. It now logs
   these at DEBUG; the `client_cancelled` and `timed_out` outcomes in `proxy_scrape_requests_total` still count each
   such scrape.
+- **An agent on a slow link is no longer disconnected while it's sending.** When an agent's link to the proxy is too
+  slow for Prometheus's scrape timeout, each answer arrives after Prometheus has given up on it, and the proxy didn't
+  count such a late answer, or any piece of a large one, as a sign the agent was alive. An agent that is always sending
+  sends no heartbeats either, so the proxy evicted it every `proxy.internal.maxAgentInactivitySecs` (60 seconds by
+  default), and it reconnected at once, again and again. The proxy now counts everything an agent sends. Its scrapes
+  still fail until the link keeps up, and still count as `client_cancelled` or `timed_out` in
+  `proxy_scrape_requests_total`.
 - **A standalone agent or proxy with a bad setting exits cleanly.** It logs `Invalid configuration:` and the reason,
   and exits with code 1, as it does for a config it can't load, instead of ending with an uncaught exception's stack
   trace.
