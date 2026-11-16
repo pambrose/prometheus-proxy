@@ -91,3 +91,19 @@ updates:
       # The demo runs the Prometheus the Makefile's PROMETHEUS_IMAGE pins, which check-rules validates its config with
       # and CiHygieneTest holds it to; it moves with that pin, by hand, not on its own.
       - dependency-name: "prom/prometheus"
+
+  # The network demo's third-party images (demos/network/docker/compose.yml): Toxiproxy, Grafana, Zipkin, and the
+  # Python image its simulated services run on, each pinned by tag and digest. Like the dashboard demo, it builds its
+  # proxy and agent images from this checkout.
+  - package-ecosystem: docker-compose
+    directory: /demos/network/docker
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      network-demo:
+        patterns: ["*"]
+    ignore:
+      # As in the dashboard demo, Prometheus moves with the Makefile's PROMETHEUS_IMAGE, by hand.
+      - dependency-name: "prom/prometheus"

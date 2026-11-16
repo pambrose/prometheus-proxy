@@ -1,0 +1,39 @@
+# Fast alerting rules for the network demo, so a scenario's alert fires within seconds rather than the minutes
+# production rules wait. `make check-rules`, from the repository root, validates this file with promtool.
+#
+# The project's own rules (grafana/alerts.yml) aren't loaded here: the standby has no agents until the primary goes,
+# so their ProxyNoAgentsConnected would fire for it a few minutes into every demo.
+
+groups:
+  - name: prometheus-proxy-network-demo
+    rules:
+      # Down only when no proxy reaches the job: during a failover each job is down through the proxy that went and up
+      # through the standby, and that isn't an outage (see prometheus.yml).
+      - alert: NetworkTargetDown
+        expr: max by (job) (up) == 0
+        for: 15s
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} is not answering through either proxy"
+          description: "Prometheus could not scrape {{ $labels.job }} through any proxy for 15s."
+
+      - alert: NetworkAgentEvicted
+        expr: increase(proxy_eviction_count_total[2m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.job }} evicted a silent agent"
+          description: "An agent stopped sending heartbeats and was evicted after the proxy's inactivity limit."
+
+      # Built on the proxies' own metrics, which Prometheus scrapes directly, so it fires when every link is down; an
+      # agent's own metrics come through its link, and would vanish with it. Summed over both proxies, since the
+      # standby has none until the primary goes.
+      - alert: NetworkNoAgentsConnected
+        expr: sum(proxy_agent_map_size) == 0
+        for: 10s
+        labels:
+          severity: critical
+        annotations:
+          summary: "No agent is connected to either proxy"
+          description: "Every agent's link to both proxies is down, so nothing behind the firewall can be scraped."

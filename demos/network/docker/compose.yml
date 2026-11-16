@@ -1,0 +1,183 @@
+# The Prometheus Proxy network demo: a proxy and its standby, each with its dashboard, two agents behind a simulated
+# firewall, a simulated WAN between them (Toxiproxy), a set of simulated services, and Prometheus, Grafana, and Zipkin
+# in front. See ../README.md. From demos/network:
+#
+#   make up      # builds the jars and the images from this checkout, then starts everything
+#   make down    # stops it and removes its containers and network
+#
+# Compose resolves every relative path here against this file's directory, demos/network/docker: the demo's configs
+# are one level up, and the repository root three.
+#
+# Every published port binds to 127.0.0.1 only: the dashboards have no authentication, Grafana lets anyone view it
+# without signing in, and its admin password is the default, which suits a demo on a laptop and nothing else. Each
+# default port is the dashboard demo's plus 100, so the two demos can run at once. Set NETWORK_DEMO_DASHBOARD_PORT,
+# NETWORK_DEMO_STANDBY_DASHBOARD_PORT, NETWORK_DEMO_PROXY_PORT, NETWORK_DEMO_PROMETHEUS_PORT,
+# NETWORK_DEMO_GRAFANA_PORT, or NETWORK_DEMO_ZIPKIN_PORT to move a host port that's already taken.
+
+name: prometheus-proxy-network-demo
+
+# The two agents share one image, built from this checkout's agent jar. The dashboard demo builds and runs the same
+# tag, so the two demos don't keep two copies of it.
+x-agent: &agent
+  image: prometheus-proxy-demo/agent:local
+  build:
+    context: ../../..
+    dockerfile: etc/docker/agent.Dockerfile
+  environment:
+    AGENT_CONFIG: /app/agent.conf
+  depends_on:
+    wan:
+      condition: service_healthy
+    network-app:
+      condition: service_healthy
+    # Started once Zipkin answers, so the spans of the agent's first connection and registrations aren't dropped.
+    zipkin:
+      condition: service_healthy
+  restart: on-failure
+
+# The two proxies share one image, built from this checkout's proxy jar.
+x-proxy: &proxy
+  image: prometheus-proxy-demo/proxy:local
+  build:
+    context: ../../..
+    dockerfile: etc/docker/proxy.Dockerfile
+  depends_on:
+    zipkin:
+      condition: service_healthy
+  restart: on-failure
+
+services:
+  proxy:
+    <<: *proxy
+    hostname: proxy
+    environment:
+      PROXY_CONFIG: /app/proxy.conf
+    volumes:
+      - ../config/proxy.conf:/app/proxy.conf:ro
+    ports:
+      - "127.0.0.1:${NETWORK_DEMO_DASHBOARD_PORT:-8194}:8094"  # Dashboard
+      - "127.0.0.1:${NETWORK_DEMO_PROXY_PORT:-8180}:8080"      # Scrape port: /discovery and each path, for curl
+
+  # The standby each agent fails over to when it can't connect to the primary (`demo.sh proxy-down`, `demo.sh cut`).
+  # Its own dashboard shows which link each agent connected through.
+  proxy-standby:
+    <<: *proxy
+    hostname: proxy-standby
+    environment:
+      PROXY_CONFIG: /app/proxy-standby.conf
+    volumes:
+      - ../config/proxy.conf:/app/proxy.conf:ro
+      - ../config/proxy-standby.conf:/app/proxy-standby.conf:ro
+    ports:
+      - "127.0.0.1:${NETWORK_DEMO_STANDBY_DASHBOARD_PORT:-8195}:8094"  # The standby's dashboard
+
+  # The WAN between the firewall and the proxies: Toxiproxy, with four links (config/toxiproxy.json), one per agent per
+  # proxy, each on its own port and reached by its own name, so the dashboards' "via" line names the link. demo.sh adds
+  # latency, a bandwidth cap, a silent cut, or resets to a link, and disables or enables them, through toxiproxy-cli.
+  # Each link dials its proxy afresh for every connection, so the proxies see every agent at this service's address,
+  # as they would behind a NAT. Its API (8474) is published nowhere: demo.sh runs the CLI inside the container.
+  wan:
+    image: ghcr.io/shopify/toxiproxy:2.13.0@sha256:5d3dae09bc185dcc5ff6cf43abf6062a4a720aff0c4306a471e773acdcd107aa
+    command: ["-host=0.0.0.0", "-config=/config/toxiproxy.json"]
+    volumes:
+      - ../config/toxiproxy.json:/config/toxiproxy.json:ro
+    networks:
+      default:
+        aliases:
+          - hq-to-proxy
+          - hq-to-standby
+          - branch-to-proxy
+          - branch-to-standby
+    depends_on:
+      - proxy
+      - proxy-standby
+    # The image is built FROM scratch, with no shell or wget: the CLI answers once the API, and the links, are up.
+    healthcheck:
+      test: ["CMD", "/toxiproxy-cli", "list"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+    restart: on-failure
+
+  agent-hq:
+    <<: *agent
+    hostname: hq-01
+    volumes:
+      - ../config/agent-hq.conf:/app/agent.conf:ro
+
+  agent-branch:
+    <<: *agent
+    hostname: branch-01
+    environment:
+      # `demo.sh filter` starts it on agent-branch-filtered.conf, which includes agent-branch.conf, so both are mounted.
+      AGENT_CONFIG: /app/${NETWORK_DEMO_BRANCH_CONFIG:-agent-branch.conf}
+    volumes:
+      - ../config/agent-branch.conf:/app/agent-branch.conf:ro
+      - ../config/agent-branch-filtered.conf:/app/agent-branch-filtered.conf:ro
+
+  # The applications behind the firewall, simulated (app/network_app.py).
+  network-app:
+    image: python:3.14-alpine@sha256:5862d971d1f0ae26b258cefa4e893556b1d3aba81bd2ff30888704ad378bab67
+    command: ["python", "-u", "/app/network_app.py"]
+    volumes:
+      - ../app:/app:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+    restart: on-failure
+
+  # The same image, digest included, as PROMETHEUS_IMAGE in the root Makefile.
+  prometheus:
+    image: prom/prometheus:v3.14.0@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0
+    volumes:
+      - ../prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../prometheus/network-alerts.yml:/etc/prometheus/rules/network-alerts.yml:ro
+    ports:
+      - "127.0.0.1:${NETWORK_DEMO_PROMETHEUS_PORT:-9190}:9090"
+    depends_on:
+      - proxy
+      - proxy-standby
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:9090/-/ready"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    restart: on-failure
+
+  grafana:
+    image: grafana/grafana:13.3.1@sha256:0615ec4fbd4072004b7d86b46ded63013a74b7d6eb1119273dd89e8fa25c13cf
+    environment:
+      # Anyone who opens Grafana sees the dashboard without signing in, as a Viewer, the only role Grafana gives
+      # anonymous users. To use Explore or change the dashboard, sign in as admin / admin.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/dashboards/network-overview.json
+      # Nothing phones home or downloads at startup, so the demo runs offline once the images are pulled.
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+    volumes:
+      - ../grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../grafana/dashboards/network-overview.json:/etc/grafana/dashboards/network-overview.json:ro
+    ports:
+      - "127.0.0.1:${NETWORK_DEMO_GRAFANA_PORT:-3100}:3000"
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:3000/api/health"]
+      interval: 2s
+      timeout: 2s
+      retries: 60
+    restart: on-failure
+
+  # Every proxy and agent reports a span for each gRPC call between them, so a presenter can follow a reconnect through
+  # the WAN.
+  zipkin:
+    # The image's own healthcheck reports it healthy once it accepts spans.
+    image: openzipkin/zipkin:3.6.1@sha256:d17e856dcbba7ffeefbbfc252f89ab78a4ab6faed47e646d46daad78f91b5ee2
+    ports:
+      - "127.0.0.1:${NETWORK_DEMO_ZIPKIN_PORT:-9511}:9411"
+    restart: on-failure

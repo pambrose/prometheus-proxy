@@ -60,6 +60,24 @@ class CiHygieneTest : StringSpec() {
     MAKE_ASSIGNMENT.findAll(File(MAKEFILE).readText()).associate { it.groupValues[1] to it.groupValues[2] }
   }
 
+  // Every demo's compose file, one per directory under demos/ that has one.
+  private val demoComposeFiles by lazy {
+    File(DEMOS_DIR)
+      .listFiles { file -> file.isDirectory }
+      .orEmpty()
+      .map { File(it, DEMO_COMPOSE) }
+      .filter { it.isFile }
+      .sortedBy { it.invariantSeparatorsPath }
+  }
+
+  // The images a compose file pulls: every service's, but the proxy and agent images built from this checkout.
+  private fun pulledImages(file: File) =
+    COMPOSE_IMAGE
+      .findAll(file.readText())
+      .map { it.groupValues[1] }
+      .filterNot { it.endsWith(":local") }
+      .toList()
+
   init {
     // Without one, a hung harness test would hold the required build check for GitHub's 6-hour default. A job that
     // calls a reusable workflow can't set it; that workflow's own jobs do.
@@ -106,20 +124,25 @@ class CiHygieneTest : StringSpec() {
       ContainerTestSupport.PROMETHEUS_IMAGE shouldBe makeVars["PROMETHEUS_IMAGE"]
     }
 
-    // The dashboard demo's compose file (demos/dashboard/docker/compose.yml) pulls its third-party images, and
-    // check-rules validates its Prometheus config with the Makefile's promtool, so the demo runs that Prometheus. Its
+    // Each demo's compose file (demos/<name>/docker/compose.yml) pulls its third-party images, and check-rules
+    // validates each demo's Prometheus config with the Makefile's promtool, so a demo runs that Prometheus. Their
     // proxy and agent images are built from this checkout, tagged :local, so have no digest.
-    "every image the dashboard demo pulls should be pinned by digest, its Prometheus the Makefile's" {
-      val images =
-        COMPOSE_IMAGE
-          .findAll(File(DEMO_COMPOSE).readText())
-          .map { it.groupValues[1] }
-          .filterNot { it.endsWith(":local") }
-          .toList()
-      images.map { it.substringBefore(":") } shouldContainAll listOf("prom/prometheus", "grafana/grafana")
+    "every image a demo pulls should be pinned by digest, its Prometheus the Makefile's" {
+      val composeFiles = demoComposeFiles.map { it.invariantSeparatorsPath }
+      composeFiles shouldContainAll listOf(DASHBOARD_DEMO_COMPOSE, NETWORK_DEMO_COMPOSE)
 
-      images.forEach { image -> withClue(image) { image shouldMatch DIGEST_PINNED } }
-      images.filter { it.startsWith("prom/prometheus:") } shouldBe listOf(makeVars["PROMETHEUS_IMAGE"])
+      demoComposeFiles.forEach { file ->
+        withClue(file.invariantSeparatorsPath) {
+          val images = pulledImages(file)
+          images.shouldNotBeEmpty()
+          images.forEach { image -> withClue(image) { image shouldMatch DIGEST_PINNED } }
+          images.filter { it.startsWith("prom/prometheus:") }.forEach { it shouldBe makeVars["PROMETHEUS_IMAGE"] }
+        }
+      }
+
+      // The dashboard demo runs both, so the walk above has a Prometheus and a Grafana to check.
+      pulledImages(File(DASHBOARD_DEMO_COMPOSE)).map { it.substringBefore(":") } shouldContainAll
+        listOf("prom/prometheus", "grafana/grafana")
     }
 
     // Without a version, setup-uv installs the newest uv, so what builds and deploys the docs site changed with each uv
@@ -161,7 +184,10 @@ class CiHygieneTest : StringSpec() {
     private const val MAKEFILE = "Makefile"
     private const val CONTAINER_TEST_SUPPORT =
       "src/test/kotlin/io/prometheus/containers/support/ContainerTestSupport.kt"
-    private const val DEMO_COMPOSE = "demos/dashboard/docker/compose.yml"
+    private const val DEMOS_DIR = "demos"
+    private const val DEMO_COMPOSE = "docker/compose.yml"
+    private const val DASHBOARD_DEMO_COMPOSE = "$DEMOS_DIR/dashboard/$DEMO_COMPOSE"
+    private const val NETWORK_DEMO_COMPOSE = "$DEMOS_DIR/network/$DEMO_COMPOSE"
     private const val SETUP_UV = "astral-sh/setup-uv@"
     private val MAKE_ASSIGNMENT = Regex("""(?m)^([A-Z][A-Z0-9_]*) :?= (.*)$""")
 

@@ -331,5 +331,7 @@ and `duplicate-agent-stop` undo every scenario. For a clean slate, `make down &&
 
 - The demo's [README](https://github.com/pambrose/prometheus-proxy/tree/master/demos/dashboard) lays these scenarios
   out as a presenter's script, with what each one means for the audience, and lists the files that set the demo up.
+- The [Network Demo](network-demo.md) puts a simulated WAN between the agents and the proxies, and shows what a far,
+  thin, dead, flaky, or missing link does.
 - [Dashboard](web-dashboard.md) covers every part of the dashboard, and how to turn it on for your own proxy.
 - [Grafana & Alerting](grafana.md) covers the dashboards and alerting rules the project ships.
