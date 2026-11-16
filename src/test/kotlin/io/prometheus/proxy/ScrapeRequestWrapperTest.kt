@@ -46,6 +46,7 @@ class ScrapeRequestWrapperTest : StringSpec() {
     accept: String? = null,
     debugEnabled: Boolean = false,
     scrapeTimeout: Duration? = null,
+    dashboardScrape: Boolean = false,
   ) = ScrapeRequestWrapper(
     agentContext = agentContext,
     pathVal = path,
@@ -54,6 +55,7 @@ class ScrapeRequestWrapperTest : StringSpec() {
     acceptVal = accept,
     debugEnabledVal = debugEnabled,
     scrapeTimeoutVal = scrapeTimeout,
+    dashboardScrapeVal = dashboardScrape,
   )
 
   init {
@@ -70,6 +72,13 @@ class ScrapeRequestWrapperTest : StringSpec() {
 
     "should round a positive sub-millisecond scrape timeout up to one millisecond" {
       createWrapper(scrapeTimeout = 400.microseconds).scrapeRequest.scrapeTimeoutMillis shouldBe 1L
+    }
+
+    // The agent leaves a scrape the dashboard asked for out of the scrape metrics it reports to Prometheus.
+    "should tell the agent whether the dashboard asked for the scrape" {
+      ScrapeRequestWrapper(createAgentContext(), "/metrics", "", "", null, false)
+        .scrapeRequest.dashboardScrape shouldBe false
+      createWrapper(dashboardScrape = true).scrapeRequest.dashboardScrape shouldBe true
     }
 
     "should create scrape request with correct path" {

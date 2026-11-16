@@ -20,11 +20,13 @@ package io.prometheus.agent
 
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
+import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldContainAll
 import io.kotest.matchers.doubles.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.ranges.shouldBeIn
 import io.kotest.matchers.shouldBe
+import io.mockk.every
 import io.prometheus.common.mockAgentForMetrics
 import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.metrics.model.snapshots.GaugeSnapshot
@@ -226,6 +228,23 @@ class AgentMetricsTest : StringSpec() {
         .observeWithExemplar(0.1, Labels.of("trace_id", "t"))
 
       metrics.scrapeRequestLatency.collect().dataPoints.single().exemplars.size() shouldBe 0
+    }
+
+    // A scrape the proxy's dashboard asked for is counted here rather than in the agent_scrape_* metrics, under the
+    // agent's launch_id alone. Its series goes when that agent's metrics close, while another agent's stays.
+    "dashboardScrapeCount should count under launch_id alone and go when its agent's metrics close" {
+      val first = opened(AgentMetrics(mockAgentForMetrics()))
+      val second = opened(AgentMetrics(mockAgentForMetrics().also { every { it.launchId } returns "other-launch-id" }))
+      first.dashboardScrapeCount.labelValues("test-launch-id").inc()
+      second.dashboardScrapeCount.labelValues("other-launch-id").inc(2.0)
+
+      fun series() = first.dashboardScrapeCount.collect().dataPoints.associate { it.labels to it.value }
+
+      PrometheusRegistry.defaultRegistry.scrape().map { it.metadata.name } shouldContain "agent_dashboard_scrapes"
+      series() shouldBe
+        mapOf(Labels.of("launch_id", "test-launch-id") to 1.0, Labels.of("launch_id", "other-launch-id") to 2.0)
+      first.close()
+      series() shouldBe mapOf(Labels.of("launch_id", "other-launch-id") to 2.0)
     }
 
     "filter counters should be registered with launch_id and path labels" {

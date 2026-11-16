@@ -100,15 +100,22 @@ class ProxyWebDashboardTest : StringSpec() {
      * which is what lets a spec start one mid-test without owning a `finally`.
      *
      * @param proxySpec overridable for the failover spec, which needs a dead endpoint ahead of the live one.
+     * @param metricsPort the port the agent serves its metrics on, for a spec that reads them; null leaves them off.
      */
-    fun connectAgent(proxySpec: String = "$LOOPBACK_HOST:$grpcPort"): Agent =
-      startAgent(configArgs = ["--config", configFile], args = ["--proxy", proxySpec])
-        .also {
-          agent = it
-          // A cap, not a wait: this returns as soon as the agent connects, so the generous value is only
-          // ever spent by a test that is already failing.
-          it.awaitInitialConnection(30.seconds).shouldBeTrue()
-        }
+    fun connectAgent(
+      proxySpec: String = "$LOOPBACK_HOST:$grpcPort",
+      metricsPort: Int? = null,
+    ): Agent =
+      startAgent(
+        metricsEnabled = metricsPort != null,
+        configArgs = ["--config", configFile],
+        args = ["--proxy", proxySpec] + metricsPort?.let { listOf("--metrics_port", "$it") }.orEmpty(),
+      ).also {
+        agent = it
+        // A cap, not a wait: this returns as soon as the agent connects, so the generous value is only
+        // ever spent by a test that is already failing.
+        it.awaitInitialConnection(30.seconds).shouldBeTrue()
+      }
   }
 
   /**
@@ -635,10 +642,11 @@ class ProxyWebDashboardTest : StringSpec() {
     }
 
     // A scrape from the dashboard end to end, against a target the test serves. It returns what the target had, and
-    // leaves no trace in what Prometheus reads: the scrape metrics, and the path's History, which the agent's Recent
-    // scrapes are read from, both of which a scrape through the scrape port does change. The route refuses the same
-    // path again within its cooldown, a path no agent serves, a request without htmx's header, and one from another
-    // origin. Off, it isn't there at all.
+    // leaves no trace in what Prometheus reads: the proxy's and the agent's scrape metrics, and the path's History,
+    // which the agent's Recent scrapes are read from, all of which a scrape through the scrape port does change. The
+    // agent counts it apart, in agent_dashboard_scrapes_total. The route refuses the same path again within its
+    // cooldown, a path no agent serves, a request without htmx's header, and one from another origin. Off, it isn't
+    // there at all.
     "a scrape-now should return what the target had, leaving what Prometheus reads untouched" {
       val stub =
         embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
@@ -658,7 +666,7 @@ class ProxyWebDashboardTest : StringSpec() {
           ],
           metricsEnabled = true,
         ) {
-          val agent = connectAgent()
+          val agent = connectAgent(metricsPort = SCRAPE_AGENT_METRICS_PORT)
           agent.pathManager.registerPath("ui_scrape_metrics", "http://$LOOPBACK_HOST:$stubPort/metrics")
           eventually(30.seconds) {
             client.get("$base/dashboard/paths").bodyAsText() shouldContain
@@ -678,6 +686,10 @@ class ProxyWebDashboardTest : StringSpec() {
           val recent = recorded()
           requests shouldBe 1.0
           bytes shouldBe 1.0
+          // The agent counts it in its own scrape metrics: the request, its result, and its latency. The result is
+          // counted once the agent has sent it, which can be after the proxy has answered.
+          eventually(10.seconds) { AGENT_SCRAPE_METRICS.map(::counted) shouldBe [1.0, 1.0, 1.0] }
+          counted(AGENT_DASHBOARD_SCRAPES) shouldBe 0.0
 
           suspend fun scrapeNow(
             path: String = "ui_scrape_metrics",
@@ -712,6 +724,10 @@ class ProxyWebDashboardTest : StringSpec() {
               """${ProxyDashboardHtml.SCRAPE_COUNT_ATTR}="1""""
             client.get("$base/dashboard/activity").bodyAsText() shouldContain "scraped now"
           }
+          // The agent was told the dashboard asked, so it counted the one scrape-now that reached it apart, and left
+          // its scrape metrics as Prometheus's scrape left them. Checked last, well after the agent sent its result.
+          counted(AGENT_DASHBOARD_SCRAPES) shouldBe 1.0
+          AGENT_SCRAPE_METRICS.map(::counted) shouldBe [1.0, 1.0, 1.0]
         }
 
         withDashboard(
@@ -911,6 +927,13 @@ class ProxyWebDashboardTest : StringSpec() {
     private const val SCRAPE_GRPC_PORT = TestPorts.DASHBOARD_UI_SCRAPE_GRPC_PORT
     private const val SCRAPE_DASHBOARD_PORT = TestPorts.DASHBOARD_UI_SCRAPE_DASHBOARD_PORT
     private const val SCRAPE_METRICS_PORT = TestPorts.DASHBOARD_UI_SCRAPE_METRICS_PORT
+    private const val SCRAPE_AGENT_METRICS_PORT = TestPorts.DASHBOARD_UI_SCRAPE_AGENT_METRICS_PORT
+
+    // The agent's per-scrape metrics, by the names their snapshots carry (a counter's without _total), which count only
+    // Prometheus's scrapes, and the counter that counts the dashboard's instead.
+    private val AGENT_SCRAPE_METRICS =
+      ["agent_scrape_request_count", "agent_scrape_result_count", "agent_scrape_request_latency_seconds"]
+    private const val AGENT_DASHBOARD_SCRAPES = "agent_dashboard_scrapes"
     private val SCRAPE_STUB_BODY =
       """
       # HELP demo_up Whether the demo is up.

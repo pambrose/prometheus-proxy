@@ -57,6 +57,7 @@ import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import io.prometheus.common.Utils.getVersionDesc
 import io.prometheus.common.Utils.logStreamFailure
 import io.prometheus.common.ScrapeRequestAction
+import io.prometheus.common.ScrapeResults
 import io.prometheus.common.Utils.sanitizeUrl
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -422,7 +423,7 @@ class Agent(
     // A false return means the result was dropped because the connection closed
     // mid-scrape; surface it as a metric so the loss is observable, not silent.
     if (!connectionContext.sendScrapeResults(scrapeResponse))
-      metrics { scrapeResultCount.labelValues(launchId, "dropped").inc() }
+      updateScrapeResultCounter(scrapeResponse, "dropped")
   }
 
   // Blocks on the reconnect rate limiter to pace reconnect attempts, then logs the wait.
@@ -622,6 +623,22 @@ class Agent(
     if (type.isNotEmpty())
       metrics { scrapeRequestCount.labelValues(launchId, type).inc() }
   }
+
+  /**
+   * Counts [results], which the agent sent or dropped, under [type], unless the proxy's dashboard asked for their
+   * scrape: `agent_scrape_result_count_total` counts only Prometheus's scrapes, and [updateDashboardScrapeCounter] the
+   * dashboard's.
+   */
+  internal fun updateScrapeResultCounter(
+    results: ScrapeResults,
+    type: String,
+  ) {
+    if (!results.dashboardScrape)
+      metrics { scrapeResultCount.labelValues(launchId, type).inc() }
+  }
+
+  /** Counts a scrape the proxy's dashboard asked for, which the `agent_scrape_*` metrics leave out. */
+  internal fun updateDashboardScrapeCounter() = metrics { dashboardScrapeCount.labelValues(launchId).inc() }
 
   /**
    * Marks the current time as when the last message was sent to the proxy.

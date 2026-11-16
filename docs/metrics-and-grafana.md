@@ -170,6 +170,7 @@ change.
 | `agent_connect_count_total`        | `launch_id`, `type` | Connection attempts to the proxy             |
 | `agent_filter_lines_dropped_total` | `launch_id`, `path` | Lines removed by the path's metric filter    |
 | `agent_filter_bytes_saved_total`   | `launch_id`, `path` | Bytes saved before gzip by the metric filter |
+| `agent_dashboard_scrapes_total`    | `launch_id`         | Scrapes the proxy's dashboard asked for      |
 
 **`agent_scrape_request_count_total` type labels:** `success`, `unsuccessful` (the target answered with a non-2xx
 status or a response over `agent.http.maxContentLengthMBytes`), `timed_out` (the target didn't answer within the
@@ -180,6 +181,11 @@ failure), `invalid_path` (the proxy asked for a path this agent doesn't serve)
 because the connection to the proxy closed before it was sent)
 
 **`agent_connect_count_total` type labels:** `success`, `failure`
+
+The `agent_scrape_*` counters and latency histogram count only Prometheus's scrapes. A scrape the proxy's dashboard
+asked for (its scrape-now), which the proxy marks with the scrape request's `dashboard_scrape` field, counts in
+`agent_dashboard_scrapes_total` instead, whatever its outcome: the person who asked sees that, and the proxy's
+activity feed records it. An agent that predates the field counts a dashboard scrape as Prometheus's.
 
 The `launch_id` label identifies each agent instance: an agent gets a new one each time it starts, and each of
 several agents embedded in one JVM has its own, so you can tell their series apart.

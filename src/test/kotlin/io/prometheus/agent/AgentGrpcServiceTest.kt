@@ -1010,6 +1010,8 @@ class AgentGrpcServiceTest : StringSpec() {
 
       // Chunked channel should be empty
       chunkedChannel.tryReceive().isSuccess.shouldBeFalse()
+      // Counted through the agent, which leaves out the result of a scrape the dashboard asked for.
+      verify(exactly = 1) { agent.updateScrapeResultCounter(any(), "non-gzipped") }
 
       service.shutDown()
     }
@@ -1048,6 +1050,7 @@ class AgentGrpcServiceTest : StringSpec() {
 
       // Chunked channel should be empty
       chunkedChannel.tryReceive().isSuccess.shouldBeFalse()
+      verify(exactly = 1) { agent.updateScrapeResultCounter(any(), "gzipped") }
 
       service.shutDown()
     }
@@ -1121,6 +1124,7 @@ class AgentGrpcServiceTest : StringSpec() {
         crc.update(chunk.chunk.chunkBytes.toByteArray())
       }
       summary.summary.summaryChecksum shouldBe crc.value
+      verify(exactly = 1) { agent.updateScrapeResultCounter(any(), "chunked") }
 
       service.shutDown()
     }
@@ -1424,9 +1428,10 @@ class AgentGrpcServiceTest : StringSpec() {
           }
         ((thrown as? InvocationTargetException)?.targetException ?: thrown)
           .shouldBeInstanceOf<ClosedSendChannelException>()
-        // The only metrics call is the "dropped" count: the non-gzipped success count sits after the
-        // send that failed, so it is never reached.
-        verify(exactly = 1) { service.agent.metrics(any<AgentMetrics.() -> Unit>()) }
+        // The only count is the "dropped" one: the non-gzipped success count sits after the send that
+        // failed, so it is never reached.
+        verify(exactly = 1) { service.agent.updateScrapeResultCounter(any(), any()) }
+        verify(exactly = 1) { service.agent.updateScrapeResultCounter(any(), "dropped") }
       }
     }
 

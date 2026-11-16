@@ -514,7 +514,7 @@ internal class AgentGrpcService(
         // triggered closeAll()). The fully-computed result can no longer be delivered on this
         // connection, so count it as dropped -- mirroring AgentConnectionContext.sendScrapeResults()
         // -- rather than losing it silently, then propagate so the producer stops.
-        agent.metrics { scrapeResultCount.labelValues(agent.launchId, "dropped").inc() }
+        agent.updateScrapeResultCounter(scrapeResults, "dropped")
         throw e
       }
       agent.markMsgSent()
@@ -532,7 +532,7 @@ internal class AgentGrpcService(
     if (!scrapeResults.srZipped) {
       logger.debug { "Writing non-chunked msg scrapeId: $scrapeId length: ${scrapeResults.srContentAsText.length}" }
       nonChunkedChannel.send(scrapeResults.toScrapeResponse())
-      agent.metrics { scrapeResultCount.labelValues(agent.launchId, "non-gzipped").inc() }
+      agent.updateScrapeResultCounter(scrapeResults, "non-gzipped")
     } else {
       val zipped = scrapeResults.srContentAsZipped
       val chunkContentSize = options.chunkContentSizeBytes
@@ -542,7 +542,7 @@ internal class AgentGrpcService(
       if (zipped.size < chunkContentSize) {
         logger.debug { "Writing zipped non-chunked msg scrapeId: $scrapeId length: ${zipped.size}" }
         nonChunkedChannel.send(scrapeResults.toScrapeResponse())
-        agent.metrics { scrapeResultCount.labelValues(agent.launchId, "gzipped").inc() }
+        agent.updateScrapeResultCounter(scrapeResults, "gzipped")
       } else {
         scrapeResults.toScrapeResponseHeader()
           .also {
@@ -588,7 +588,7 @@ internal class AgentGrpcService(
         }.also {
           logger.debug { "Writing summary totalChunkCount: $totalChunkCount for scrapeID: $scrapeId" }
           chunkedChannel.send(it)
-          agent.metrics { scrapeResultCount.labelValues(agent.launchId, "chunked").inc() }
+          agent.updateScrapeResultCounter(scrapeResults, "chunked")
         }
       }
     }

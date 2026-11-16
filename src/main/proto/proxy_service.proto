@@ -110,6 +110,11 @@ message ScrapeRequest {
   // How long the scraping client will wait, in milliseconds, from Prometheus's X-Prometheus-Scrape-Timeout-Seconds
   // header. 0 means the client sent none, and the agent uses only its own scrapeTimeoutSecs.
   int64 scrape_timeout_millis = 8;
+  // Whether someone asked for the scrape from the proxy's dashboard (its scrape-now) rather than Prometheus. The agent
+  // counts such a scrape in agent_dashboard_scrapes_total instead of its agent_scrape_* metrics, so those stay a record
+  // of Prometheus's scrapes. Additive both ways: an agent predating it ignores it and counts the scrape as
+  // Prometheus's, and a proxy predating it leaves it false.
+  bool dashboard_scrape = 9;
 }
 
 message ScrapeResponse {

@@ -45,6 +45,7 @@ internal class AgentMetrics(
   val scrapeRequestLatency: Histogram = SCRAPE_REQUEST_LATENCY
   val filterLinesDropped: Counter = FILTER_LINES_DROPPED
   val filterBytesSaved: Counter = FILTER_BYTES_SAVED
+  val dashboardScrapeCount: Counter = DASHBOARD_SCRAPE_COUNT
 
   init {
     SHARED.acquire(agent.launchId, agent)
@@ -106,6 +107,16 @@ internal class AgentMetrics(
         labelNames(LAUNCH_ID, PATH)
       }
 
+    // The scrapes the proxy's dashboard asked for (its scrape-now), which the agent_scrape_* metrics leave out, so they
+    // stay a record of Prometheus's scrapes. No outcome label: the person who asked sees the outcome, and the proxy's
+    // activity feed records it, so this counts only the load such scrapes put on the targets.
+    private val DASHBOARD_SCRAPE_COUNT =
+      counter {
+        name("agent_dashboard_scrapes_total")
+        help("Agent scrapes the proxy's dashboard asked for, which the agent_scrape_* metrics leave out")
+        labelNames(LAUNCH_ID)
+      }
+
     private val START_TIME =
       gauge {
         name(START_TIME_NAME)
@@ -136,6 +147,7 @@ internal class AgentMetrics(
         SCRAPE_REQUEST_LATENCY to listOf(LAUNCH_ID, AGENT_NAME),
         FILTER_LINES_DROPPED to listOf(LAUNCH_ID, PATH),
         FILTER_BYTES_SAVED to listOf(LAUNCH_ID, PATH),
+        DASHBOARD_SCRAPE_COUNT to listOf(LAUNCH_ID),
         START_TIME to listOf(LAUNCH_ID),
       )
 
@@ -159,6 +171,7 @@ internal class AgentMetrics(
             SCRAPE_REQUEST_LATENCY,
             FILTER_LINES_DROPPED,
             FILTER_BYTES_SAVED,
+            DASHBOARD_SCRAPE_COUNT,
             START_TIME,
             SCRAPE_BACKLOG_SIZE,
             CLIENT_CACHE_SIZE,

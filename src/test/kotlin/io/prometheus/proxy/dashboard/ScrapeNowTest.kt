@@ -30,7 +30,10 @@ import io.prometheus.proxy.ActivityKind
 import io.prometheus.proxy.ActivityLog
 import io.prometheus.proxy.AgentContext
 import io.prometheus.proxy.ProxyPathManager.AgentContextInfo
+import io.prometheus.proxy.ScrapeHeaders
+import io.prometheus.proxy.ScrapeOrigin
 import io.prometheus.proxy.ScrapeRequestResponse
+import io.prometheus.proxy.ScrapeSpec
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -87,6 +90,19 @@ class ScrapeNowTest : StringSpec() {
         paths shouldBe ["orders_metrics"]
         detail shouldBe "200 success in 120 ms, from 10.9.9.9"
       }
+    }
+
+    // The agent is told a scrape-now is the dashboard's, so it leaves it out of the scrape metrics it reports to
+    // Prometheus. It asks for text, with no query, and tells the agent its own timeout, which the proxy waits out with
+    // a grace for the agent's answer.
+    "a scrape-now should ask for text and be marked as the dashboard's" {
+      ScrapeNow.scrapeOf("orders_metrics") shouldBe
+        ScrapeSpec(
+          path = "orders_metrics",
+          headers = ScrapeHeaders(accept = "text/plain", scrapeTimeout = 10.seconds),
+          timeout = 15.seconds,
+          origin = ScrapeOrigin.DASHBOARD,
+        )
     }
 
     // Each is refused before any scrape, so no stand-in is needed.

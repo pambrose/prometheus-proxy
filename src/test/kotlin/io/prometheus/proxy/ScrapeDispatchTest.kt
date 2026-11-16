@@ -106,7 +106,7 @@ class ScrapeDispatchTest : StringSpec() {
           ),
         ) { true }
       }
-      ScrapeDispatch.submitScrapeRequest(agentContext, proxy, "metrics", "", ScrapeHeaders())
+      ScrapeDispatch.submitScrapeRequest(agentContext, proxy, ScrapeSpec("metrics"))
     }
 
   // Runs [handler] while [agentContext]'s agent opens a chunked transfer for the scrape it is sent, a header and one
@@ -305,13 +305,7 @@ class ScrapeDispatchTest : StringSpec() {
       val agentContext = AgentContext("test-remote")
       agentContext.invalidate()
 
-      val response = ScrapeDispatch.submitScrapeRequest(
-        agentContext,
-        proxy,
-        "metrics",
-        "",
-        ScrapeHeaders(),
-      )
+      val response = ScrapeDispatch.submitScrapeRequest(agentContext, proxy, ScrapeSpec("metrics"))
 
       response.statusCode shouldBe HttpStatusCode.ServiceUnavailable
       response.updateMsg shouldBe "agent_disconnected"
@@ -321,13 +315,7 @@ class ScrapeDispatchTest : StringSpec() {
       val proxy = createSpyProxyForSubmit(timeoutSecs = 1)
       val agentContext = AgentContext("test-remote")
 
-      val response = ScrapeDispatch.submitScrapeRequest(
-        agentContext,
-        proxy,
-        "metrics",
-        "",
-        ScrapeHeaders(),
-      )
+      val response = ScrapeDispatch.submitScrapeRequest(agentContext, proxy, ScrapeSpec("metrics"))
 
       response.statusCode shouldBe HttpStatusCode.ServiceUnavailable
       response.updateMsg shouldBe "timed_out"
@@ -343,10 +331,7 @@ class ScrapeDispatchTest : StringSpec() {
           ScrapeDispatch.submitScrapeRequest(
             AgentContext("test-remote"),
             proxy,
-            "metrics",
-            "",
-            ScrapeHeaders(),
-            timeout = 100.milliseconds,
+            ScrapeSpec("metrics", timeout = 100.milliseconds),
           ).updateMsg shouldBe "timed_out"
         }
 
@@ -360,10 +345,10 @@ class ScrapeDispatchTest : StringSpec() {
       val agentContext = AgentContext("test-remote")
 
       val first =
-        async { ScrapeDispatch.submitScrapeRequest(agentContext, proxy, "metrics", "", ScrapeHeaders()) }
+        async { ScrapeDispatch.submitScrapeRequest(agentContext, proxy, ScrapeSpec("metrics")) }
       eventually(2.seconds) { proxy.scrapeRequestManager.scrapeMapSize shouldBe 1 }
 
-      val refused = ScrapeDispatch.submitScrapeRequest(agentContext, proxy, "metrics", "", ScrapeHeaders())
+      val refused = ScrapeDispatch.submitScrapeRequest(agentContext, proxy, ScrapeSpec("metrics"))
 
       refused.statusCode shouldBe HttpStatusCode.ServiceUnavailable
       refused.updateMsg shouldBe "proxy_in_flight_limit"
@@ -380,11 +365,11 @@ class ScrapeDispatchTest : StringSpec() {
 
       val queued =
         List(2) {
-          async { ScrapeDispatch.submitScrapeRequest(agentContext, proxy, "metrics", "", ScrapeHeaders()) }
+          async { ScrapeDispatch.submitScrapeRequest(agentContext, proxy, ScrapeSpec("metrics")) }
         }
       eventually(2.seconds) { agentContext.scrapeRequestBacklogSize shouldBe 2 }
 
-      val refused = ScrapeDispatch.submitScrapeRequest(agentContext, proxy, "metrics", "", ScrapeHeaders())
+      val refused = ScrapeDispatch.submitScrapeRequest(agentContext, proxy, ScrapeSpec("metrics"))
 
       refused.statusCode shouldBe HttpStatusCode.ServiceUnavailable
       refused.updateMsg shouldBe "agent_backlog_full"
@@ -402,13 +387,7 @@ class ScrapeDispatchTest : StringSpec() {
         agentContext.invalidate()
       }
 
-      val response = ScrapeDispatch.submitScrapeRequest(
-        agentContext,
-        proxy,
-        "metrics",
-        "",
-        ScrapeHeaders(),
-      )
+      val response = ScrapeDispatch.submitScrapeRequest(agentContext, proxy, ScrapeSpec("metrics"))
 
       // invalidate() fails the buffered wrapper as the proxy's own AGENT_DISCONNECTED failure. It was reported as a
       // 502 upstream_error, which sent operators to the target instead of the agent connection.
@@ -429,13 +408,7 @@ class ScrapeDispatchTest : StringSpec() {
         proxyRunning = false
       }
 
-      val response = ScrapeDispatch.submitScrapeRequest(
-        agentContext,
-        proxy,
-        "metrics",
-        "",
-        ScrapeHeaders(),
-      )
+      val response = ScrapeDispatch.submitScrapeRequest(agentContext, proxy, ScrapeSpec("metrics"))
 
       response.statusCode shouldBe HttpStatusCode.ServiceUnavailable
       response.updateMsg shouldBe "timed_out"
@@ -451,13 +424,7 @@ class ScrapeDispatchTest : StringSpec() {
         proxy.removeAgentContext(agentContext.agentId, RemovalReason.TERMINATION)
       }
 
-      val response = ScrapeDispatch.submitScrapeRequest(
-        agentContext,
-        proxy,
-        "metrics",
-        "",
-        ScrapeHeaders(),
-      )
+      val response = ScrapeDispatch.submitScrapeRequest(agentContext, proxy, ScrapeSpec("metrics"))
 
       // Proxy.removeAgentContext fails the agent's in-flight scrapes as AGENT_DISCONNECTED, the same outcome as a
       // disconnect before the request was queued.
@@ -473,7 +440,7 @@ class ScrapeDispatchTest : StringSpec() {
 
       val (response, openDuring, openAfter) =
         withUnfinishedTransfer(proxy, agentContext) {
-          ScrapeDispatch.submitScrapeRequest(agentContext, proxy, "metrics", "", ScrapeHeaders())
+          ScrapeDispatch.submitScrapeRequest(agentContext, proxy, ScrapeSpec("metrics"))
         }
 
       response.updateMsg shouldBe "timed_out"
@@ -488,7 +455,7 @@ class ScrapeDispatchTest : StringSpec() {
       val (_, openDuring, openAfter) =
         withUnfinishedTransfer(proxy, agentContext) { transferOpen ->
           val handler =
-            async { ScrapeDispatch.submitScrapeRequest(agentContext, proxy, "metrics", "", ScrapeHeaders()) }
+            async { ScrapeDispatch.submitScrapeRequest(agentContext, proxy, ScrapeSpec("metrics")) }
           transferOpen.await()
           handler.cancelAndJoin()
         }
@@ -509,13 +476,7 @@ class ScrapeDispatchTest : StringSpec() {
         proxy.agentContextManager.invalidateAllAgentContexts()
       }
 
-      val response = ScrapeDispatch.submitScrapeRequest(
-        agentContext,
-        proxy,
-        "metrics",
-        "",
-        ScrapeHeaders(),
-      )
+      val response = ScrapeDispatch.submitScrapeRequest(agentContext, proxy, ScrapeSpec("metrics"))
 
       // The same outcome as a scrape that arrives once the proxy has stopped.
       response.statusCode shouldBe HttpStatusCode.ServiceUnavailable
@@ -537,13 +498,7 @@ class ScrapeDispatchTest : StringSpec() {
         )
       }
 
-      val response = ScrapeDispatch.submitScrapeRequest(
-        agentContext,
-        proxy,
-        "metrics",
-        "",
-        ScrapeHeaders(),
-      )
+      val response = ScrapeDispatch.submitScrapeRequest(agentContext, proxy, ScrapeSpec("metrics"))
 
       response.statusCode shouldBe HttpStatusCode.BadGateway
       response.updateMsg shouldBe "invalid_response"
@@ -568,13 +523,7 @@ class ScrapeDispatchTest : StringSpec() {
         proxy.scrapeRequestManager.assignScrapeResults(results) { true }
       }
 
-      val response = ScrapeDispatch.submitScrapeRequest(
-        agentContext,
-        proxy,
-        "metrics",
-        "",
-        ScrapeHeaders(),
-      )
+      val response = ScrapeDispatch.submitScrapeRequest(agentContext, proxy, ScrapeSpec("metrics"))
 
       response.statusCode shouldBe HttpStatusCode.OK
       response.updateMsg shouldBe "success"
@@ -602,13 +551,7 @@ class ScrapeDispatchTest : StringSpec() {
         proxy.scrapeRequestManager.assignScrapeResults(results) { true }
       }
 
-      val response = ScrapeDispatch.submitScrapeRequest(
-        agentContext,
-        proxy,
-        "metrics",
-        "",
-        ScrapeHeaders(),
-      )
+      val response = ScrapeDispatch.submitScrapeRequest(agentContext, proxy, ScrapeSpec("metrics"))
 
       response.statusCode shouldBe HttpStatusCode.OK
       response.updateMsg shouldBe "success"
@@ -634,13 +577,7 @@ class ScrapeDispatchTest : StringSpec() {
         proxy.scrapeRequestManager.assignScrapeResults(results) { true }
       }
 
-      val response = ScrapeDispatch.submitScrapeRequest(
-        agentContext,
-        proxy,
-        "metrics",
-        "",
-        ScrapeHeaders(),
-      )
+      val response = ScrapeDispatch.submitScrapeRequest(agentContext, proxy, ScrapeSpec("metrics"))
 
       response.statusCode shouldBe HttpStatusCode.BadGateway
       response.updateMsg shouldBe "invalid_gzip"
@@ -672,13 +609,7 @@ class ScrapeDispatchTest : StringSpec() {
         proxy.scrapeRequestManager.assignScrapeResults(results) { true }
       }
 
-      val response = ScrapeDispatch.submitScrapeRequest(
-        agentContext,
-        proxy,
-        "metrics",
-        "",
-        ScrapeHeaders(),
-      )
+      val response = ScrapeDispatch.submitScrapeRequest(agentContext, proxy, ScrapeSpec("metrics"))
 
       response.statusCode shouldBe HttpStatusCode.PayloadTooLarge
       response.updateMsg shouldBe "payload_too_large"
@@ -703,13 +634,7 @@ class ScrapeDispatchTest : StringSpec() {
         proxy.scrapeRequestManager.assignScrapeResults(results) { true }
       }
 
-      val response = ScrapeDispatch.submitScrapeRequest(
-        agentContext,
-        proxy,
-        "metrics",
-        "",
-        ScrapeHeaders(),
-      )
+      val response = ScrapeDispatch.submitScrapeRequest(agentContext, proxy, ScrapeSpec("metrics"))
 
       response.statusCode shouldBe HttpStatusCode.OK
       response.updateMsg shouldBe "success"
@@ -819,13 +744,7 @@ class ScrapeDispatchTest : StringSpec() {
         proxy.scrapeRequestManager.assignScrapeResults(results) { true }
       }
 
-      val response = ScrapeDispatch.submitScrapeRequest(
-        agentContext,
-        proxy,
-        "metrics",
-        "",
-        ScrapeHeaders(),
-      )
+      val response = ScrapeDispatch.submitScrapeRequest(agentContext, proxy, ScrapeSpec("metrics"))
 
       response.statusCode shouldBe HttpStatusCode.InternalServerError
       response.updateMsg shouldBe "upstream_error"
@@ -851,13 +770,7 @@ class ScrapeDispatchTest : StringSpec() {
         proxy.scrapeRequestManager.assignScrapeResults(results) { true }
       }
 
-      val response = ScrapeDispatch.submitScrapeRequest(
-        agentContext,
-        proxy,
-        "metrics",
-        "",
-        ScrapeHeaders(),
-      )
+      val response = ScrapeDispatch.submitScrapeRequest(agentContext, proxy, ScrapeSpec("metrics"))
 
       response.statusCode shouldBe HttpStatusCode.NotFound
       response.updateMsg shouldBe "path_not_found"
@@ -1348,7 +1261,7 @@ class ScrapeDispatchTest : StringSpec() {
         secondAnswered.complete(Unit)
       }
 
-      val responses = ScrapeDispatch.submitScrapeRequests(info, proxy, "metrics", "", ScrapeHeaders())
+      val responses = ScrapeDispatch.submitScrapeRequests(info, proxy, ScrapeSpec("metrics"))
 
       responses.map { it.contentText } shouldBe ["first_metric 1", "second_metric 2"]
     }
@@ -1372,13 +1285,42 @@ class ScrapeDispatchTest : StringSpec() {
         proxy.scrapeRequestManager.assignScrapeResults(plainResults(agentContext, wrapper, "metric_value 1.0")) { true }
       }
 
-      val responses = ScrapeDispatch.submitScrapeRequests(info, proxy, "metrics", "", ScrapeHeaders())
+      val responses = ScrapeDispatch.submitScrapeRequests(info, proxy, ScrapeSpec("metrics"))
 
       responses.single().updateMsg shouldBe "success"
       verify(exactly = 0) { proxy.logActivity(any()) }
       verify(exactly = 0) { proxy.recordScrape(any()) }
       verify(exactly = 0) { proxy.metrics(any<ProxyMetrics.() -> Unit>()) }
       verify(exactly = 0) { bus.emit(any()) }
+    }
+
+    // What a scrape asks for reaches the agent as it was given. So does who asked for it, which the agent leaves out of
+    // the scrape metrics it reports to Prometheus when it was the dashboard: false for Prometheus's scrapes, the
+    // default and what a proxy predating the field sends, and true for the dashboard's.
+    "a scrape request should carry the scrape's query, headers, and origin to the agent" {
+      val proxy = createSpyProxyForSubmit(timeoutSecs = 30)
+      val agentContext = AgentContext("test-remote")
+      val headers = ScrapeHeaders(accept = "text/plain", scrapeTimeout = 2.seconds)
+      val origins = [ScrapeOrigin.PROMETHEUS, ScrapeOrigin.DASHBOARD]
+      val sent =
+        async {
+          origins.map {
+            val wrapper = agentContext.readScrapeRequest()!!
+            proxy.scrapeRequestManager.assignScrapeResults(plainResults(agentContext, wrapper, "metric 1")) { true }
+            wrapper.scrapeRequest
+          }
+        }
+
+      origins.forEach { origin ->
+        ScrapeDispatch.submitScrapeRequest(agentContext, proxy, ScrapeSpec("metrics", "a=1", headers, origin = origin))
+          .updateMsg shouldBe "success"
+      }
+
+      sent.await().apply {
+        map { "${it.path}?${it.encodedQueryParams} ${it.accept}" } shouldBe List(2) { "metrics?a=1 text/plain" }
+        map { it.scrapeTimeoutMillis } shouldBe [2_000L, 2_000L]
+        map { it.dashboardScrape } shouldBe [false, true]
+      }
     }
 
     // The Authorization header is forwarded to the agent, so over a gRPC connection without TLS the proxy says that
@@ -1396,7 +1338,7 @@ class ScrapeDispatchTest : StringSpec() {
         captureLogs<ScrapeDispatch>(Level.WARN) {
           repeat(2) {
             val headers = ScrapeHeaders(authorization = "Bearer token")
-            ScrapeDispatch.submitScrapeRequest(agentContext, proxy, "metrics", "", headers)
+            ScrapeDispatch.submitScrapeRequest(agentContext, proxy, ScrapeSpec("metrics", headers = headers))
               .updateMsg shouldBe "agent_disconnected"
           }
         }.map { it.formattedMessage }

@@ -62,6 +62,7 @@ import io.prometheus.common.Utils.sanitizeUrl
 import io.prometheus.common.Utils.sanitizeUrlsInText
 import io.prometheus.common.hasTimeoutCause
 import io.prometheus.grpc.ScrapeRequest
+import io.prometheus.metrics.core.datapoints.Timer
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.withTimeout
@@ -127,16 +128,28 @@ internal class AgentHttpService(
         fetchContentFromUrl(scrapeRequest, pathContext)
       else
         handleInvalidPath(scrapeRequest)
-    // Counted here, so every scrape the proxy asks for is counted under its type, however it ends.
-    agent.updateScrapeCounter(results.scrapeCounterMsg)
-    return results
+    // Counted here, so every scrape the proxy asks for is counted under its type, however it ends. A scrape the proxy's
+    // dashboard asked for is counted only as one, and its results are marked so the agent doesn't count them either:
+    // the agent_scrape_* metrics count only Prometheus's scrapes, whose rates they report.
+    return if (scrapeRequest.dashboardScrape) {
+      agent.updateDashboardScrapeCounter()
+      results.asDashboardScrape()
+    } else {
+      agent.updateScrapeCounter(results.scrapeCounterMsg)
+      results
+    }
   }
+
+  // Times a scrape for agent_scrape_request_latency_seconds, unless the metrics are off or the proxy's dashboard asked
+  // for the scrape.
+  private fun latencyTimer(request: ScrapeRequest): Timer? =
+    if (agent.isMetricsEnabled && !request.dashboardScrape) agent.startTimer() else null
 
   private suspend fun fetchContentFromUrl(
     req: ScrapeRequest,
     pathContext: AgentPathManager.PathContext,
   ): ScrapeResults {
-    val requestTimer = if (agent.isMetricsEnabled) agent.startTimer() else null
+    val requestTimer = latencyTimer(req)
     // Add the incoming query params to the url
     val url = appendQueryParams(pathContext.url, req.encodedQueryParams)
     val logUrl = sanitizeUrl(url)

@@ -20,6 +20,7 @@ package io.prometheus.common
 
 import ch.qos.logback.classic.Level
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.string.shouldNotContain
 import io.ktor.client.network.sockets.ConnectTimeoutException
@@ -42,6 +43,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
 import java.io.IOException
 import java.net.http.HttpConnectTimeoutException
+import kotlin.reflect.full.memberProperties
+import kotlin.reflect.full.primaryConstructor
 import kotlin.time.Duration.Companion.milliseconds
 
 class ScrapeResultsTest : StringSpec() {
@@ -464,6 +467,38 @@ class ScrapeResultsTest : StringSpec() {
       val results = ScrapeResults("agent", 123L)
 
       results.scrapeCounterMsg.shouldBeEmpty()
+    }
+
+    // ==================== asDashboardScrape Tests ====================
+
+    // A scrape the proxy's dashboard asked for is marked, so the agent leaves its result out of
+    // agent_scrape_result_count_total. Nothing else about the results changes, and the mark isn't sent to the proxy.
+    "asDashboardScrape should mark the results and keep every other field" {
+      val results =
+        ScrapeResults(
+          srAgentId = "agent",
+          srScrapeId = 7L,
+          srValidResponse = true,
+          srStatusCode = 200,
+          srContentType = "text/plain",
+          srZipped = true,
+          srContentAsText = "text",
+          srContentAsZipped = byteArrayOf(1, 2, 3),
+          srFailureReason = "reason",
+          srUrl = "http://target/metrics",
+          scrapeCounterMsg = "success",
+        )
+      results.dashboardScrape.shouldBeFalse()
+
+      val marked = results.asDashboardScrape()
+
+      marked.dashboardScrape.shouldBeTrue()
+      ScrapeResults::class.memberProperties
+        .filterNot { it.name == "dashboardScrape" }
+        .forEach { property -> withClue(property.name) { property.get(marked) shouldBe property.get(results) } }
+      marked.toScrapeResponse() shouldBe results.toScrapeResponse()
+      // A field added to ScrapeResults must be carried over by asDashboardScrape too, and given a value above.
+      ScrapeResults::class.primaryConstructor!!.parameters.size shouldBe 12
     }
   }
 }
