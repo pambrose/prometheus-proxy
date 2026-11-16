@@ -395,11 +395,11 @@ Two support helpers also live here (not test classes themselves):
   header counts), the pushes (top-level out-of-band regions, only those of the session's layout, the status bar alone
   for a session with no known layout, and the view stamp on the frame's first tag, which an agent-supplied value can't
   stand in for), tolerant selection, layout, and view count parsing, the status bar's departed count, an agent's
-  identity in its row and detail, the data `demos/dashboard/screenshots.sh` reads (an agent row's id, name, and path
-  count, the name escaped and through `agentLabel`, and the detail's scrape count) and the one width of a scrape time it
-  orders as text, links at a root mount, the nav, accessibility (the connection live region, outside every push, and
-  the page's language and main region), and the link icons' stylesheet (in the head only while a link shows an icon,
-  with each mark's URL under the route base, at a root mount too, and each colour per theme, and in no push)
+  identity in its row and detail, the data `demos/dashboard/bin/screenshots.sh` reads (an agent row's id, name, and
+  path count, the name escaped and through `agentLabel`, and the detail's scrape count) and the one width of a scrape
+  time it orders as text, links at a root mount, the nav, accessibility (the connection live region, outside every
+  push, and the page's language and main region), and the link icons' stylesheet (in the head only while a link shows
+  an icon, with each mark's URL under the route base, at a root mount too, and each colour per theme, and in no push)
 - **DashboardScriptTest** (`dashboard/`) — the page's script and the htmx it runs on: frames stamped below its message
   count dropped, the arrow keys switching views from anywhere but a text field, the column guide opened and closed
   from its button, its close button, and Escape from anywhere but a text field, the scrape-now request with htmx's
@@ -564,7 +564,7 @@ These support helpers also live here (not test classes themselves):
 - **CiHygieneTest** — every job in `.github/workflows` sets `timeout-minutes`, every tool image the `Makefile` runs
   (`*_IMAGE`) and every third-party image `ContainerTestSupport` gives the container suite is pinned by digest, in a
   form Testcontainers pulls by digest, the suite's Prometheus is the `Makefile`'s, every image the dashboard demo
-  (`demos/dashboard/compose.yml`) pulls is pinned by digest and its Prometheus is the `Makefile`'s, every
+  (`demos/dashboard/docker/compose.yml`) pulls is pinned by digest and its Prometheus is the `Makefile`'s, every
   `astral-sh/setup-uv` step installs a pinned uv, the same one in each, and the CRD schemas `helm-lint` validates
   against come from a fixed commit, so a hung job gives its check back and what CI runs changes only with a diff here
 - **ConfigFileKeysTest** — every setting in a HOCON config the repo ships or its tests load (`config/test-configs`,

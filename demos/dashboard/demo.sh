@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Drives the Prometheus Proxy dashboard demo (see README.md): starts and stops it, and runs the scenarios a presenter
-# shows. `make demo-up` and `make demo-down` call the up and down commands. Run with no arguments for the list.
+# shows. The Makefile beside it wraps the lifecycle commands (`make up` builds the jars first, then runs `demo.sh up`).
+# Run with no arguments for the list.
 set -euo pipefail
 
 DEMO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$DEMO_DIR/../.." && pwd)"
-COMPOSE=(docker compose -f "$DEMO_DIR/compose.yml")
+COMPOSE=(docker compose -f "$DEMO_DIR/docker/compose.yml")
 IMAGES=(prometheus-proxy-demo/proxy:local prometheus-proxy-demo/agent:local)
 AGENTS=(agent-east agent-west-1 agent-west-2)
 PROXIES=(proxy proxy-standby)
@@ -140,7 +141,7 @@ cmd_up() {
   local jar old_ids id
   for jar in prometheus-proxy prometheus-agent; do
     [[ -f "$REPO_DIR/build/libs/$jar.jar" ]] ||
-      die "build/libs/$jar.jar is missing; start the demo with 'make demo-up', which builds the jars first"
+      die "build/libs/$jar.jar is missing; start the demo with 'make up' in demos/dashboard, which builds the jars"
   done
   command -v docker >/dev/null 2>&1 || die "docker is not on the PATH"
   docker info >/dev/null 2>&1 || die "Docker isn't running"
@@ -226,7 +227,8 @@ step() {
 cmd_tour() {
   TOUR_FROM="${1:-1}"
   [[ "$TOUR_FROM" =~ ^([1-9]|1[0-2])$ ]] || die "the act to start from is a number from 1 to 12"
-  curl -fsS -o /dev/null "$DASHBOARD_URL" 2>/dev/null || die "the demo isn't running; start it with 'make demo-up'"
+  curl -fsS -o /dev/null "$DASHBOARD_URL" 2>/dev/null ||
+    die "the demo isn't running; start it with 'make up' in demos/dashboard"
 
   act 1 "The problem, and the shape of the answer" \
     "Prometheus pulls metrics, but the services sit behind a firewall that allows no inbound connections." \

@@ -106,9 +106,9 @@ class CiHygieneTest : StringSpec() {
       ContainerTestSupport.PROMETHEUS_IMAGE shouldBe makeVars["PROMETHEUS_IMAGE"]
     }
 
-    // The dashboard demo (demos/dashboard) pulls its third-party images, and check-rules validates its Prometheus
-    // config with the Makefile's promtool, so the demo runs that Prometheus. Its proxy and agent images are built from
-    // this checkout, tagged :local, so have no digest.
+    // The dashboard demo's compose file (demos/dashboard/docker/compose.yml) pulls its third-party images, and
+    // check-rules validates its Prometheus config with the Makefile's promtool, so the demo runs that Prometheus. Its
+    // proxy and agent images are built from this checkout, tagged :local, so have no digest.
     "every image the dashboard demo pulls should be pinned by digest, its Prometheus the Makefile's" {
       val images =
         COMPOSE_IMAGE
@@ -161,7 +161,7 @@ class CiHygieneTest : StringSpec() {
     private const val MAKEFILE = "Makefile"
     private const val CONTAINER_TEST_SUPPORT =
       "src/test/kotlin/io/prometheus/containers/support/ContainerTestSupport.kt"
-    private const val DEMO_COMPOSE = "demos/dashboard/compose.yml"
+    private const val DEMO_COMPOSE = "demos/dashboard/docker/compose.yml"
     private const val SETUP_UV = "astral-sh/setup-uv@"
     private val MAKE_ASSIGNMENT = Regex("""(?m)^([A-Z][A-Z0-9_]*) :?= (.*)$""")
 

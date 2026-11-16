@@ -436,7 +436,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     write_discovery_file(False)
-    # All interfaces, so the agents reach it over the compose network; compose.yml publishes none of its ports.
+    # All interfaces, so the agents reach it over the compose network; docker/compose.yml publishes none of its ports.
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)  # nosec B104
     server.daemon_threads = True
     print(f"demo-app serving {', '.join(SERVICES)} on :{PORT}; discovery file {DISCOVERY_FILE}", flush=True)

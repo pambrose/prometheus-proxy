@@ -84,11 +84,12 @@ most 10,000 agents connected with one identity, which is every agent when agent 
 
 ### New Features
 
-- **A demo of the dashboard and Grafana.** From a clone of the repository, `make demo-up` starts a proxy with its
-  dashboard, three agents, a set of simulated services, Prometheus, and Grafana with the project's dashboards, all on
-  your machine; `make demo-down` removes it. `demos/dashboard/README.md` walks through what to show: a failing or hung
-  target, a redundant pair of agents, services discovered without a restart, and an agent evicted after it goes
-  silent.
+- **A demo of the dashboard and Grafana.** From `demos/dashboard` in a clone of the repository, `make up` starts a
+  proxy with its dashboard, three agents, a set of simulated services, Prometheus, and Grafana with the project's
+  dashboards, all on your machine; `make down` removes it. The demo has its own Makefile (`help`, `up`, `down`,
+  `status`, `open`, `tour`, `logs`, and `screenshots`), so each demo under `demos/` is self-contained.
+  `demos/dashboard/README.md` walks through what to show: a failing or hung target, a redundant pair of agents,
+  services discovered without a restart, and an agent evicted after it goes silent.
 - **Copy a target URL from the dashboard.** Each target URL in the Paths view has a button after it that copies
   the URL, on a dashboard served over plain http too. It shows a check when the copy worked and a cross when it
   didn't, and tells a screen reader which.
@@ -98,12 +99,12 @@ most 10,000 agents connected with one identity, which is every agent when agent 
 - **Copy a path's proxy URL from the dashboard.** Each registered path in the Paths view has a button that copies
   its URL on the proxy, the one to curl to check the path through the proxy, built from the address you opened the
   dashboard at.
-- **The demo shows failover, filtering, and teams.** `make demo-up` now also starts a standby proxy, and three new
+- **The demo shows failover, filtering, and teams.** `make up` now also starts a standby proxy, and three new
   scenarios show the agents failing over to it when the primary stops, a filter at the agent cutting the catalog's
   payload by more than half before it crosses the firewall, and a contractor's agent refused a path its identity
   doesn't cover. The Live Demo page walks through each.
-- **A guided tour of the demo.** `demos/dashboard/demo.sh tour` walks a presenter through every scenario, one step
-  at a time. Two new ones show an agent's config deployed twice by mistake, which now settles instead of the two
+- **A guided tour of the demo.** `make tour`, in `demos/dashboard`, walks a presenter through every scenario, one
+  step at a time. Two new ones show an agent's config deployed twice by mistake, which now settles instead of the two
   fighting over their paths, and Zipkin tracing of the calls between the agents and the proxies.
 - **Paths whose agent has gone stay on the dashboard for an hour.** The Paths view used to lose a gone path within
   a minute on a busy proxy, since it rebuilt it from the 200 most recent scrapes across all paths. Each path now
@@ -381,7 +382,8 @@ most 10,000 agents connected with one identity, which is every agent when agent 
   `~/.gradle/gradle.properties`. The publish targets stop before Gradle runs when either keychain entry is missing,
   and print the command that adds it. `make release-check` checks the entries too, so `make release` stops before
   running its tests, rather than at the publishing step after them.
-- `make demo-screenshots` retakes the Live Demo page's screenshots from a demo built from the checkout.
+- `make screenshots`, in `demos/dashboard`, retakes the Live Demo page's screenshots from a demo built from the
+  checkout.
 
 ### Also in this release
 

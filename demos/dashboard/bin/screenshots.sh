@@ -5,8 +5,9 @@
 # theme and <name>-light.webp in the light one, which the page shows by the reader's theme. It puts the demo back to
 # normal when it finishes, or when it fails.
 #
-# `make demo-screenshots` builds the demo from this checkout and starts it first, so the screenshots show the dashboard
-# as it is in the code. Needs Chrome or Chromium (set CHROME to choose one), ImageMagick 7 (`magick`), and `cwebp`.
+# `make screenshots`, in demos/dashboard, builds the demo from this checkout and starts it first, so the screenshots
+# show the dashboard as it is in the code. Needs Chrome or Chromium (set CHROME to choose one), ImageMagick 7
+# (`magick`), and `cwebp`.
 #
 # Two settings, for running it again and again while checking a change; the defaults take the site's screenshots:
 #   WAIT_SECS=<n>       how long each wait for the demo to reach a scene's state may take before the script fails
@@ -16,7 +17,8 @@
 #                       site
 set -euo pipefail
 
-DEMO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# This script is in the demo's bin/, and the demo two levels below the repository root.
+DEMO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_DIR="$(cd "$DEMO_DIR/../.." && pwd)"
 DEMO="$DEMO_DIR/demo.sh"
 OUT_DIR="$REPO_DIR/website/prometheus-proxy/docs/images/demo"
@@ -68,7 +70,8 @@ find_chrome() {
 CHROME_BIN="$(find_chrome)"
 command -v magick >/dev/null 2>&1 || die "ImageMagick 7 ('magick') is not on the PATH"
 command -v cwebp >/dev/null 2>&1 || die "cwebp is not on the PATH"
-curl -fsS -o /dev/null "$DASHBOARD_URL" 2>/dev/null || die "the demo isn't running at $DASHBOARD_URL; start it with 'make demo-up'"
+curl -fsS -o /dev/null "$DASHBOARD_URL" 2>/dev/null ||
+  die "the demo isn't running at $DASHBOARD_URL; start it with 'make up' in demos/dashboard"
 
 WORK="$(mktemp -d)"
 
@@ -280,9 +283,9 @@ step "Waiting for every path to answer 200"
 "$DEMO" undiscover >/dev/null
 "$DEMO" recover >/dev/null
 wait_healthy "ten healthy paths" 10
-# make demo-screenshots starts the demo just before this, so every agent's uptime would read a few seconds. Waiting
-# until agent-east has been up a minute makes the first shots look like a demo that has been running. Say why, since
-# the script otherwise looks stuck, or that SKIP_UPTIME_WAIT skipped it.
+# make screenshots starts the demo just before this, so every agent's uptime would read a few seconds. Waiting until
+# agent-east has been up a minute makes the first shots look like a demo that has been running. Say why, since the
+# script otherwise looks stuck, or that SKIP_UPTIME_WAIT skipped it.
 if ! east_up_a_minute; then
   if [[ "$SKIP_UPTIME_WAIT" == 1 ]]; then
     step "Skipping the wait for the agents' uptimes to read in minutes (SKIP_UPTIME_WAIT=1): the shots show them in" \
