@@ -73,12 +73,15 @@ import io.prometheus.grpc.unregisterPathRequest
 import io.prometheus.proxy.ProxyPathManager.PathRejection
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.util.zip.CRC32
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TestTimeSource
 
 @Suppress("LargeClass")
 class ProxyServiceImplTest : StringSpec() {
@@ -3386,6 +3389,279 @@ class ProxyServiceImplTest : StringSpec() {
 
       opened.await() shouldBe 0
       victim.scrapeResults.shouldBeNull()
+    }
+
+    // ==================== a busy agent stays connected ====================
+    //
+    // On a link too slow for Prometheus's scrape timeout, every result reached the proxy after its handler had stopped
+    // tracking the scrape, so nothing marked the agent active. The agent heartbeats only after 5s with nothing sent,
+    // and it was always sending, so the proxy evicted it after maxAgentInactivitySecs, over and over, while its data
+    // kept arriving. Each message on a response stream now marks the agent that sent it, its scrape tracked or not.
+
+    // How long an agent below has been idle when the next message arrives.
+    val idle = 40.seconds
+
+    fun resultFrom(
+      sender: String,
+      id: Long,
+    ) = scrapeResponse {
+      agentId = sender
+      scrapeId = id
+      validResponse = true
+      statusCode = 200
+      contentAsText = "metric 1"
+    }
+
+    // A whole chunked transfer for [id] from [sender]: its header, one chunk, and its summary.
+    fun transferFrom(
+      sender: String,
+      id: Long,
+    ): List<ChunkedScrapeResponse> {
+      val data = "metric 1".toByteArray()
+      return listOf(
+        chunkedHeaderFrom(sender, id),
+        chunkFor(id, data),
+        chunkedScrapeResponse {
+          summary = summaryData {
+            summaryScrapeId = id
+            summaryChunkCount = 1
+            summaryByteCount = data.size
+            summaryChecksum = CRC32().apply { update(data) }.value
+          }
+        },
+      )
+    }
+
+    // An agent context in [contextManager], as a connected agent's is, whose times are read on [clock].
+    fun registeredAgent(
+      contextManager: AgentContextManager,
+      clock: TestTimeSource,
+      authIdentityName: String = "",
+    ) = AgentContext("busy-host", authIdentityName, clock).also { contextManager.addAgentContext(it) }
+
+    // Sends [messages] on one writeChunkedResponsesToProxy stream, [idle] apart, and returns [agent]'s inactivity just
+    // after each was read.
+    suspend fun inactivityAfterEach(
+      proxy: Proxy,
+      clock: TestTimeSource,
+      agent: AgentContext,
+      messages: List<ChunkedScrapeResponse>,
+    ): List<Duration> {
+      val inactivity = mutableListOf<Duration>()
+      ProxyServiceImpl(proxy).writeChunkedResponsesToProxy(
+        flow {
+          messages.forEach { message ->
+            clock += idle
+            emit(message)
+            inactivity += agent.inactivityDuration
+          }
+        },
+      )
+      return inactivity
+    }
+
+    "writeResponsesToProxy should mark the connection's agent active for a result its scrape no longer awaits" {
+      val clock = TestTimeSource()
+      val contextManager = AgentContextManager(isTestMode = true)
+      val agent = registeredAgent(contextManager, clock)
+      val neighbor = registeredAgent(contextManager, clock)
+      // An empty ScrapeRequestManager tracks no scrape: Prometheus's timeout ended each one before its result arrived.
+      val proxy = createMockProxy(scrapeRequestManager = ScrapeRequestManager(), agentContextManager = contextManager)
+      clock += idle
+
+      onConnection(agent.agentId) {
+        // The second result names the neighbor, but the connection, not the result, says who sent it.
+        ProxyServiceImpl(proxy).writeResponsesToProxy(
+          flowOf(resultFrom(agent.agentId, 980L), resultFrom(neighbor.agentId, 981L)),
+        )
+      }
+
+      agent.inactivityDuration shouldBe Duration.ZERO
+      neighbor.inactivityDuration shouldBe idle
+    }
+
+    "writeChunkedResponsesToProxy should mark the connection's agent active for each part of a transfer not awaited" {
+      val clock = TestTimeSource()
+      val contextManager = AgentContextManager(isTestMode = true)
+      val agent = registeredAgent(contextManager, clock)
+      val proxy = createMockProxy(scrapeRequestManager = ScrapeRequestManager(), agentContextManager = contextManager)
+
+      val inactivity =
+        onConnection(agent.agentId) { inactivityAfterEach(proxy, clock, agent, transferFrom(agent.agentId, 982L)) }
+
+      // The header, the chunk, and the summary each marked it.
+      inactivity shouldBe List(3) { Duration.ZERO }
+    }
+
+    "with the transport filter disabled, a result should mark the agent it names when sent as that agent's identity" {
+      val clock = TestTimeSource()
+      val contextManager = AgentContextManager(isTestMode = true)
+      val agent = registeredAgent(contextManager, clock, authIdentityName = "team-a")
+      val proxy =
+        createMockProxy(
+          transportFilterDisabled = true,
+          scrapeRequestManager = ScrapeRequestManager(),
+          agentContextManager = contextManager,
+        )
+      clock += idle
+
+      asIdentity("team-a") {
+        ProxyServiceImpl(proxy).writeResponsesToProxy(flowOf(resultFrom(agent.agentId, 983L)))
+      }
+
+      agent.inactivityDuration shouldBe Duration.ZERO
+    }
+
+    "with the transport filter disabled, a result should not mark an agent of another identity, nor warn again" {
+      val clock = TestTimeSource()
+      val contextManager = AgentContextManager(isTestMode = true)
+      val victim = registeredAgent(contextManager, clock, authIdentityName = "team-a")
+      val scrape = victimScrape(victim)
+      val scrapeRequestManager = ScrapeRequestManager().apply { tryAddToScrapeRequestMap(scrape, Int.MAX_VALUE) }
+      val proxy =
+        createMockProxy(
+          transportFilterDisabled = true,
+          scrapeRequestManager = scrapeRequestManager,
+          agentContextManager = contextManager,
+        )
+      clock += idle
+
+      val events =
+        captureLogs("io.prometheus.proxy", Level.DEBUG) {
+          asIdentity("team-b") {
+            // One result for the victim's tracked scrape, and one for a scrape no longer awaited.
+            ProxyServiceImpl(proxy).writeResponsesToProxy(
+              flowOf(resultFrom(victim.agentId, scrape.scrapeId), resultFrom(victim.agentId, scrape.scrapeId + 1)),
+            )
+          }
+        }
+
+      victim.inactivityDuration shouldBe idle
+      scrape.scrapeResults.shouldBeNull()
+      // Only the owner check's warning for the tracked scrape: the check of who may be marked active logs nothing.
+      events.filter { it.level.isGreaterOrEqual(Level.WARN) }.size shouldBe 1
+    }
+
+    "with the transport filter disabled, a chunk and a summary should mark the agent an accepted header named" {
+      val clock = TestTimeSource()
+      val contextManager = AgentContextManager(isTestMode = true)
+      val agent = registeredAgent(contextManager, clock, authIdentityName = "team-a")
+      val proxy =
+        createMockProxy(
+          transportFilterDisabled = true,
+          scrapeRequestManager = ScrapeRequestManager(),
+          agentContextManager = contextManager,
+        )
+
+      val inactivity =
+        asIdentity("team-a") { inactivityAfterEach(proxy, clock, agent, transferFrom(agent.agentId, 984L)) }
+
+      inactivity shouldBe List(3) { Duration.ZERO }
+    }
+
+    "with the transport filter disabled, a chunk with no accepted header before it should mark nothing" {
+      val clock = TestTimeSource()
+      val contextManager = AgentContextManager(isTestMode = true)
+      val agent = registeredAgent(contextManager, clock, authIdentityName = "team-a")
+      val proxy =
+        createMockProxy(
+          transportFilterDisabled = true,
+          scrapeRequestManager = ScrapeRequestManager(),
+          agentContextManager = contextManager,
+        )
+      val (header, chunk, summary) = transferFrom(agent.agentId, 985L)
+
+      // Another identity's header is refused, so the chunk and the summary after it mark nobody.
+      val afterRefusedHeader =
+        asIdentity("team-b") { inactivityAfterEach(proxy, clock, agent, listOf(header, chunk, summary)) }
+      // Nor do a chunk and a summary on a stream with no header before them, even from the agent's own identity.
+      val withNoHeader = asIdentity("team-a") { inactivityAfterEach(proxy, clock, agent, listOf(chunk, summary)) }
+
+      afterRefusedHeader shouldBe listOf(idle, idle * 2, idle * 3)
+      withNoHeader shouldBe listOf(idle * 4, idle * 5)
+    }
+
+    // The connection's context was removed, by an eviction say, while its streams were still delivering, and the
+    // scrapes sent to it still await their results.
+    "a response stream should go on delivering when the connection's agent context is gone" {
+      val gone = AgentContext("gone-host")
+      val result = victimScrape(gone)
+      val transfer = victimScrape(gone)
+      val scrapeRequestManager =
+        ScrapeRequestManager().apply {
+          tryAddToScrapeRequestMap(result, Int.MAX_VALUE)
+          tryAddToScrapeRequestMap(transfer, Int.MAX_VALUE)
+        }
+      val proxy =
+        createMockProxy(
+          scrapeRequestManager = scrapeRequestManager,
+          agentContextManager = AgentContextManager(isTestMode = true),
+        )
+
+      onConnection(gone.agentId) {
+        val service = ProxyServiceImpl(proxy)
+        service.writeResponsesToProxy(flowOf(resultFrom(gone.agentId, result.scrapeId)))
+        service.writeChunkedResponsesToProxy(transferFrom(gone.agentId, transfer.scrapeId).asFlow())
+      }
+
+      result.scrapeResults?.srScrapeId shouldBe result.scrapeId
+      result.proxyFailure.shouldBeNull()
+      transfer.scrapeResults?.srScrapeId shouldBe transfer.scrapeId
+      transfer.proxyFailure.shouldBeNull()
+    }
+
+    "with the transport filter disabled, a response stream should go on delivering when the named agent is gone" {
+      val gone = AgentContext("gone-host", authIdentityName = "team-a")
+      val result = victimScrape(gone)
+      val transfer = victimScrape(gone)
+      val scrapeRequestManager =
+        ScrapeRequestManager().apply {
+          tryAddToScrapeRequestMap(result, Int.MAX_VALUE)
+          tryAddToScrapeRequestMap(transfer, Int.MAX_VALUE)
+        }
+      val proxy =
+        createMockProxy(
+          transportFilterDisabled = true,
+          scrapeRequestManager = scrapeRequestManager,
+          agentContextManager = AgentContextManager(isTestMode = true),
+        )
+
+      asIdentity("team-a") {
+        val service = ProxyServiceImpl(proxy)
+        service.writeResponsesToProxy(flowOf(resultFrom(gone.agentId, result.scrapeId)))
+        service.writeChunkedResponsesToProxy(transferFrom(gone.agentId, transfer.scrapeId).asFlow())
+      }
+
+      result.scrapeResults?.srScrapeId shouldBe result.scrapeId
+      result.proxyFailure.shouldBeNull()
+      transfer.scrapeResults?.srScrapeId shouldBe transfer.scrapeId
+      transfer.proxyFailure.shouldBeNull()
+    }
+
+    "a result its scrape no longer awaits should not count as a completed request, while a tracked one should" {
+      val clock = TestTimeSource()
+      val contextManager = AgentContextManager(isTestMode = true)
+      val agent = registeredAgent(contextManager, clock)
+      val scrape = victimScrape(agent)
+      val scrapeRequestManager = ScrapeRequestManager().apply { tryAddToScrapeRequestMap(scrape, Int.MAX_VALUE) }
+      val proxy = createMockProxy(scrapeRequestManager = scrapeRequestManager, agentContextManager = contextManager)
+      // The agent's inactivity and time since its last completed request, after each result.
+      val durations = mutableListOf<Pair<Duration, Duration>>()
+
+      onConnection(agent.agentId) {
+        ProxyServiceImpl(proxy).writeResponsesToProxy(
+          flow {
+            listOf(scrape.scrapeId + 1, scrape.scrapeId).forEach { id ->
+              clock += idle
+              emit(resultFrom(agent.agentId, id))
+              durations += agent.inactivityDuration to agent.lastRequestDuration
+            }
+          },
+        )
+      }
+
+      // The late result marked the agent active and left its last request where it was; the tracked one moved both.
+      durations shouldBe listOf(Duration.ZERO to idle, Duration.ZERO to Duration.ZERO)
     }
   }
 }

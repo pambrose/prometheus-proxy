@@ -267,8 +267,10 @@ Two support helpers also live here (not test classes themselves):
   identity may not register noted as a rejection), heartbeat, scrape responses, chunked responses; a result or a chunked transfer for a scrape sent to another agent neither completes nor fails it, even
   when its `agentId` or `headerAgentId` names that agent; a transfer ends with its scrape, even one whose scrape ended
   just before it was stored, one stream has at most the agent's backlog cap of transfers under way, a header's strings
-  are cut, and a late result or transfer logs nothing above DEBUG; with the transport filter disabled, a scrape-request
-  stream that names an agentId before it is assigned neither streams nor removes the context another identity then
+  are cut, and a late result or transfer logs nothing above DEBUG; every result and chunked message, its scrape tracked
+  or not, marks the agent that sent it active (with the transport filter disabled, only when sent as the identity the
+  agent connected as), and a late result doesn't count as a completed request; with the transport filter disabled, a
+  scrape-request stream that names an agentId before it is assigned neither streams nor removes the context another identity then
   connects with under it, and 10,000 connects by one identity leave at most `maxAgentsPerIdentity` agents
 - **ProxyGrpcServiceTest** — gRPC server configuration: each handshake, keepalive, and connection-age option reaches
   the server builder (a MockK builder) and an unset one leaves gRPC's default, and the transport filter; reflection
