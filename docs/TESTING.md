@@ -324,8 +324,8 @@ Two support helpers also live here (not test classes themselves):
   of 0 or a negative other than -1, and a configured `sdTargetPrefix` with a query or fragment, fail startup with an
   `Invalid configuration:` message naming the setting; `proxy.dashboard.links` parsed from a config file in order and
   logged by name, and a link the dashboard can't render failing startup the same way, naming the link, while the
-  dashboard is on; the blitz path kept without its leading slashes, and one of slashes alone or blank failing startup
-  while blitz is on
+  dashboard is on; the blitz path kept without its leading slashes, and one of slashes alone, blank, or of more than
+  one segment failing startup while blitz is on
 - **SdTargetTest** — `sdTargetPrefix` parsing: host:port as is; an http(s) URL split into the target, `__scheme__`,
   and a path prefix; anything else, including a host:port with a query or fragment, refused, naming the setting
 - **ProxyDynamicConfigTest** — Dynamic config overrides via -D flags (maxZippedContentSizeMBytes,
@@ -668,8 +668,9 @@ mechanism that the standard suite cannot reach:
 - **HarnessSetup** — Base class providing `setupProxyAndAgent()` / `takeDownProxyAndAgent()` lifecycle; before each
   spec it clears the default registry and has `SystemMetrics` forget it, so each spec's proxy and agent register the
   JVM metric groups again
-- **HarnessHelpersTest** — `awaitPortFree()` fails when a port stays taken, and `HarnessConstants.localConfigFile()`
-  fails for a missing test config rather than fetching one from GitHub
+- **HarnessHelpersTest** — `awaitPortFree()` fails when a port stays taken, `awaitPortReady()` fails on a port nothing
+  listens on, held for the test by a socket bound but not listening, so no other process can take it meanwhile, and
+  `HarnessConstants.localConfigFile()` fails for a missing test config rather than fetching one from GitHub
 - **TestUtils** — Utility functions: `startProxy()`, `startAgent()`, `exceptionHandler()`
 - **AbstractHarnessTests** — Abstract base defining the standard 8-test suite
 - **BasicHarnessTests** — Reusable test implementations (missing path, invalid path, add/remove paths, etc.)

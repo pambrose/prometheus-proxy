@@ -814,18 +814,21 @@ class ProxyOptionsTest : StringSpec() {
       proxyOptions([]).blitzPath shouldBe "mu-dd4bffbb-ff2e9926-5a80952c-1c6cb64d.txt"
     }
 
-    // "/" alone, or a blank path, leaves nothing the scrape route can be asked for, so with blitz on it fails startup,
-    // which failOnInvalidConfig reports for a standalone proxy as one Invalid configuration line. With blitz off it is
-    // harmless, as an empty sdPath is with service discovery off.
-    "a blitz path of slashes alone, or a blank one, should fail startup while blitz is on, and only then" {
-      listOf("/", "//", "", " ").forEach { path ->
-        shouldThrow<ConfigLoadException> {
-          failOnInvalidConfig(embedded = true) {
-            proxyOptionsFromConfig("proxy.internal.blitz { enabled = true, path = \"$path\" }")
-          }
-        }.message shouldBe "Invalid configuration: internal.blitz.path names no path: '$path'"
-        proxyOptionsFromConfig("proxy.internal.blitz.path = \"$path\"").blitzPath.isBlank().shouldBeTrue()
-      }
+    // "/" alone, or a blank path, leaves nothing the scrape route can be asked for, and the route serves one path
+    // segment, so it can't be asked for "a/b" either. With blitz on each fails startup, which failOnInvalidConfig
+    // reports for a standalone proxy as one Invalid configuration line. With blitz off it is harmless, as an empty
+    // sdPath is.
+    "a blitz path the scrape route can't be asked for should fail startup while blitz is on, and only then" {
+      val (noPath, oneSegment) = "names no path" to "must be one path segment"
+      listOf("/" to noPath, "//" to noPath, "" to noPath, " " to noPath, "a/b" to oneSegment, "/a/b" to oneSegment)
+        .forEach { (path, problem) ->
+          shouldThrow<ConfigLoadException> {
+            failOnInvalidConfig(embedded = true) {
+              proxyOptionsFromConfig("proxy.internal.blitz { enabled = true, path = \"$path\" }")
+            }
+          }.message shouldBe "Invalid configuration: internal.blitz.path $problem: '$path'"
+          proxyOptionsFromConfig("proxy.internal.blitz.path = \"$path\"").blitzPath shouldBe path.trimStart('/')
+        }
     }
 
     // ==================== Parse-only Options ====================

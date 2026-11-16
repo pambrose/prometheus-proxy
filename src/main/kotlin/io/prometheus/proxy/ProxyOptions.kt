@@ -427,12 +427,14 @@ class ProxyOptions internal constructor(
   }
 
   // Normalized once here, so the scrape route's answer and registration's reservation compare the same key. With blitz
-  // on, a path of slashes alone, or a blank one, names nothing the route can reach, so it fails startup, as an empty
-  // sdPath does with service discovery on, rather than leave blitz silently unanswered.
+  // on, a path of slashes alone, or a blank one, names nothing the route can reach, and one with a slash inside it,
+  // such as "a/b", can't be reached either, since the route serves one path segment; so each fails startup, as an
+  // empty sdPath does with service discovery on, rather than leave blitz silently unanswered.
   private fun assignBlitzPath(blitz: ConfigVals.Proxy2.Internal2.Blitz) {
     blitzPath = blitz.path.trimStart('/')
     if (blitz.enabled) {
       require(blitzPath.isNotBlank()) { "internal.blitz.path names no path: '${blitz.path}'" }
+      require('/' !in blitzPath) { "internal.blitz.path must be one path segment: '${blitz.path}'" }
       logger.info { "internal.blitz.path: $blitzPath" }
     }
   }

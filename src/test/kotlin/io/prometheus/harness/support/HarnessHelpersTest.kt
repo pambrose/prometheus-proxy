@@ -35,7 +35,9 @@ import io.prometheus.harness.HarnessConstants
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.harness.support.TestUtils.stopAll
+import java.net.InetSocketAddress
 import java.net.ServerSocket
+import java.net.Socket
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -43,6 +45,16 @@ import kotlin.time.Duration.Companion.seconds
 // on to fail at bind time, and a missing test config was silently fetched from GitHub master. Both now fail at once,
 // naming the port or file.
 class HarnessHelpersTest : StringSpec() {
+  // Runs [block] with a port nothing listens on, held by a socket bound to it but not listening: a connection to it is
+  // refused, and nothing else can listen on it until [block] returns. A port taken from ServerSocket(0) and closed is
+  // free only until something else binds it, which another test JVM on the same machine did, so a check that nothing
+  // listened there found a listener.
+  private inline fun <T> withPortNothingListensOn(block: (Int) -> T): T =
+    Socket().use { holder ->
+      holder.bind(InetSocketAddress(0))
+      block(holder.localPort)
+    }
+
   init {
     "awaitPortFree should return once the port is free" {
       val port = ServerSocket(0).use { it.localPort }
@@ -63,9 +75,10 @@ class HarnessHelpersTest : StringSpec() {
     }
 
     "awaitPortReady should fail when nothing listens on the port" {
-      val port = ServerSocket(0).use { it.localPort }
-      val e = shouldThrow<IllegalStateException> { HarnessTests.awaitPortReady(port, 300.milliseconds) }
-      e.message shouldContain "$port"
+      withPortNothingListensOn { port ->
+        val e = shouldThrow<IllegalStateException> { HarnessTests.awaitPortReady(port, 300.milliseconds) }
+        e.message shouldContain "$port"
+      }
     }
 
     // The launchers left the proxy's gRPC port and both sides' admin and metrics servers on the product defaults, so
@@ -92,30 +105,31 @@ class HarnessHelpersTest : StringSpec() {
 
     // Setup fails at once when the agent never connects, naming the cause, and stops what it started.
     "setupProxyAndAgent should fail, and stop both services, when the agent never connects" {
-      val unusedPort = ServerSocket(0).use { it.localPort }
-      val harness =
-        object : HarnessSetup() {
-          fun setUp() =
-            setupProxyAndAgent(
-              proxyPort = HARNESS_HELPERS_HTTP_PORT,
-              proxySetup = { startProxy(proxyPort = HARNESS_HELPERS_HTTP_PORT) },
-              // Nothing listens there, so the agent never connects. A 1s reconnect pause lets it stop without waiting
-              // out the 3s default.
-              agentSetup = {
-                startAgent(args = ["--proxy", "localhost:$unusedPort", "-Dagent.internal.reconnectPauseSecs=1"])
-              },
-              startupTimeout = 1.seconds,
-            )
+      withPortNothingListensOn { unusedPort ->
+        val harness =
+          object : HarnessSetup() {
+            fun setUp() =
+              setupProxyAndAgent(
+                proxyPort = HARNESS_HELPERS_HTTP_PORT,
+                proxySetup = { startProxy(proxyPort = HARNESS_HELPERS_HTTP_PORT) },
+                // Nothing listens there, so the agent never connects. A 1s reconnect pause lets it stop without waiting
+                // out the 3s default.
+                agentSetup = {
+                  startAgent(args = ["--proxy", "localhost:$unusedPort", "-Dagent.internal.reconnectPauseSecs=1"])
+                },
+                startupTimeout = 1.seconds,
+              )
 
-          fun tearDown() = takeDownProxyAndAgent()
+            fun tearDown() = takeDownProxyAndAgent()
+          }
+        try {
+          shouldThrow<IllegalStateException> { harness.setUp() }.message shouldContain "did not connect"
+          // Both were stopped, so their ports are free again.
+          awaitPortFree(HARNESS_HELPERS_HTTP_PORT, maxAttempts = 10, delayMs = 100)
+          awaitPortFree(HARNESS_PROXY_AGENT_PORT, maxAttempts = 10, delayMs = 100)
+        } finally {
+          runCatching { harness.tearDown() }
         }
-      try {
-        shouldThrow<IllegalStateException> { harness.setUp() }.message shouldContain "did not connect"
-        // Both were stopped, so their ports are free again.
-        awaitPortFree(HARNESS_HELPERS_HTTP_PORT, maxAttempts = 10, delayMs = 100)
-        awaitPortFree(HARNESS_PROXY_AGENT_PORT, maxAttempts = 10, delayMs = 100)
-      } finally {
-        runCatching { harness.tearDown() }
       }
     }
 
