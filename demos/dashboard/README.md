@@ -93,8 +93,8 @@ Open the dashboard on the **Agents** view.
   proxy to Prometheus, so the proxy monitors itself with the same path as everything else.
 - Switch to **Paths**: every path, the agent serving it, its target, its last scrape, and its status.
   `/shipping_metrics` shows `agent-west-1 +1`: two agents serve it.
-- Each row ends with links to its job in Prometheus and in Grafana, filled from the label the agent registered the
-  path with; the Grafana one is a way into the next act.
+- Each row ends with links to its job in Prometheus and in Grafana, shown as their brand icons and filled from the
+  label the agent registered the path with; the Grafana one is a way into the next act.
 
 ### 3. Grafana
 

@@ -123,7 +123,7 @@ proxy {
     maxSessions = 50                // Concurrent WebSocket sessions; more are closed
     allowedOrigins = []             // Browser origins allowed besides the dashboard's own host
     allowedHosts = []               // Host names the dashboard answers to; empty turns the check off
-    links = []                      // Links from each path into other tools: { name = "...", url = "..." }
+    links = []                      // Links from each path into other tools: { name = "...", url = "...", icon = "..." }
   }
 }
 ```

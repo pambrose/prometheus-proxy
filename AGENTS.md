@@ -84,6 +84,9 @@ aren't in the proto: a scrape result is sent in chunks once its gzipped size rea
 - **Shared metrics**: `AgentMetrics` / `ProxyMetrics` build their collectors once per JVM in their companion objects and share them through `SharedCollectors`, since the default registry rejects a second collector with the same name and label names, which kept a second agent in a JVM from connecting. Add a new metric to its companion's `SHARED` list; an agent metric takes `launch_id` as its first label and goes in `LABELED` too, so a stopped agent's series are removed.
 - **Metric filtering**: `MetricFilter` (per-path `agent.filters`) drops whole metric families in `AgentHttpService` before gzip/chunking; fails open on non-text or non-UTF-8 payloads.
 - **Dashboard**: Ktor + htmx (WebJar, no CDN) on its own port, fed by the `ProxyEvent` bus; see `proxy/dashboard/`.
+  The Links column's brand icons (`LinkIcon`) come from the Simple Icons WebJar, of which the build's
+  `extractDashboardIcons` copies only the SVGs `LinkIcon` names into the main resources, so the 7.5 MB WebJar stays off
+  the runtime classpath and out of the POM and the fat JARs; a new icon needs its slug in `configureDashboardIcons` too.
 
 Two load-bearing constraint sets live in `.claude/rules/` (Claude Code loads them when you touch the matching files; other agents should read them first): `dashboard-constraints.md` (dashboard live-region, contrast, and agent-label invariants) and `shadow-jar.md` (fat-JAR service-file merging).
 

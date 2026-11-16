@@ -343,8 +343,8 @@ class ProxyOptions internal constructor(
       logger.requirePositive("dashboard.departedPathRetentionSecs", dashboard.departedPathRetentionSecs)
       // At 0 the activity feed would keep nothing, so a refused path or a bad token would again reach only the log.
       logger.requirePositive("dashboard.activityLogSize", dashboard.activityLogSize)
-      dashboardLinks = PathLink.parseAll(dashboard.links.map { PathLink.Entry(it.name, it.url) })
-      logger.info { "dashboard.links: ${dashboardLinks.joinToString { it.name }.ifEmpty { "(none)" }}" }
+      dashboardLinks = PathLink.parseAll(dashboard.links.map { PathLink.Entry(it.name, it.url, it.icon) })
+      logger.info { "dashboard.links: ${dashboardLinks.joinToString { it.logged }.ifEmpty { "(none)" }}" }
       logger.info { "dashboardHost: $dashboardHost, dashboardPort: $dashboardPort, dashboardPath: $dashboardPath" }
       if (isWildcardAddress(dashboardHost)) {
         val rebindingHint =

@@ -36,6 +36,7 @@ import io.prometheus.common.TestPorts.PROXY_DASHBOARD_PORT
 import io.prometheus.common.captureLogs
 import io.prometheus.common.proxyOptions
 import io.prometheus.common.proxyOptionsFromConfig
+import io.prometheus.proxy.dashboard.LinkIcon
 
 /**
  * The dashboard's options, `proxy.dashboard` and the `--dashboard*` flags: their defaults, what they refuse while the
@@ -182,6 +183,29 @@ class ProxyDashboardOptionsTest : StringSpec() {
         failOnInvalidConfig(embedded = true) { proxyOptionsFromConfig(links, extraArgs = ["--dashboard"]) }
       }.message shouldStartWith "Invalid configuration: proxy.dashboard.links link 'Grafana' has an unknown placeholder"
       proxyOptionsFromConfig(links).dashboardLinks.shouldBeEmpty()
+    }
+
+    // The key is optional, as config/config.conf declares it; PathLinkTest has how it is matched.
+    "a dashboard link's icon should be read from the config file, and logged with the link" {
+      val config =
+        """
+        proxy.dashboard.links = [
+          { name = "Grafana", url = "https://g.example.com/d?job={label.job}", icon = "grafana" }
+          { name = "Runbook", url = "https://runbooks.example.com/{path}" }
+        ]
+        """
+      var options: ProxyOptions? = null
+      captureLogs<ProxyOptions>(Level.INFO) { options = proxyOptionsFromConfig(config, extraArgs = ["--dashboard"]) }
+        .map { it.formattedMessage } shouldContainElement "dashboard.links: Grafana (grafana icon), Runbook"
+      options.shouldNotBeNull().dashboardLinks.map { it.icon } shouldBe [LinkIcon.GRAFANA, null]
+    }
+
+    "a dashboard link with an icon the dashboard doesn't have should fail startup, naming it" {
+      val links = """proxy.dashboard.links = [{ name = "Logs", url = "https://logs.example.com", icon = "loki" }]"""
+      shouldThrow<ConfigLoadException> {
+        failOnInvalidConfig(embedded = true) { proxyOptionsFromConfig(links, extraArgs = ["--dashboard"]) }
+      }.message shouldStartWith
+        "Invalid configuration: proxy.dashboard.links link 'Logs' has an unknown icon 'loki'; use prometheus or grafana"
     }
   }
 }

@@ -55,6 +55,12 @@ ktor = "3.6.1"
 # reads and the URLs it serves the assets at follow it. A major bump means porting ProxyDashboardHtml's page shell
 # and script (attributes, event names, the WebSocket config), not just the version.
 htmx = "4.0.1"
+# Simple Icons (CC0), the brand marks the dashboard's Links column can show (LinkIcon). The WebJar holds every brand, in
+# 7.5 MB, so build.gradle.kts extracts only the SVGs LinkIcon names, through a configuration of its own, and the WebJar
+# stays out of the `webjars` bundle, the runtime classpath, the POM, and the fat JARs. ProxyDashboardService serves the
+# icons at a URL that carries this version, read through BuildConfig. Simple Icons removes brands in major versions, so
+# the extraction fails the build when one LinkIcon names is gone.
+simple-icons = "16.2.0"
 
 # Metrics
 # The version common-utils 5.2.0 is built against. build.gradle.kts imports this BOM so the Prometheus modules
@@ -140,6 +146,8 @@ ktor-server-websockets = { module = "io.ktor:ktor-server-websockets", version.re
 
 # WebJars
 webjar-htmx = { module = "org.webjars.npm:htmx.org", version.ref = "htmx" }
+# Not in the `webjars` bundle: only the build reads it; see `simple-icons` above
+webjar-simple-icons = { module = "org.webjars.npm:simple-icons", version.ref = "simple-icons" }
 
 # Metrics
 prometheus-metrics-bom = { module = "io.prometheus:prometheus-metrics-bom", version.ref = "prometheus" }

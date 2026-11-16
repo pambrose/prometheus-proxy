@@ -332,8 +332,9 @@ Two support helpers also live here (not test classes themselves):
   apart from the admin port, set by its flags; its port refused out of range, and its path, host, session cap,
   refresh interval, path history, and activity log size refused when unusable while the dashboard is on, and logged
   at startup; only a wildcard address counted as listening on all interfaces; `proxy.dashboard.links` parsed from a
-  config file in order and logged by name, and a link the dashboard can't render failing startup with an
-  `Invalid configuration:` message, naming the link, while the dashboard is on
+  config file in order and logged by name, with a link's `icon` read and logged too, and a link the dashboard can't
+  render, or one with an icon it doesn't have, failing startup with an `Invalid configuration:` message, naming the
+  link, while the dashboard is on
 - **SdTargetTest** — `sdTargetPrefix` parsing: host:port as is; an http(s) URL split into the target, `__scheme__`,
   and a path prefix; anything else, including a host:port with a query or fragment, refused, naming the setting
 - **ProxyDynamicConfigTest** — Dynamic config overrides via -D flags (maxZippedContentSizeMBytes,
@@ -396,8 +397,9 @@ Two support helpers also live here (not test classes themselves):
   stand in for), tolerant selection, layout, and view count parsing, the status bar's departed count, an agent's
   identity in its row and detail, the data `demos/dashboard/screenshots.sh` reads (an agent row's id, name, and path
   count, the name escaped and through `agentLabel`, and the detail's scrape count) and the one width of a scrape time it
-  orders as text, links at a root mount, the nav, and accessibility (the connection live region, outside every push, and
-  the page's language and main region)
+  orders as text, links at a root mount, the nav, accessibility (the connection live region, outside every push, and
+  the page's language and main region), and the link icons' stylesheet (in the head only while a link shows an icon,
+  with each mark's URL under the route base, at a root mount too, and each colour per theme, and in no push)
 - **DashboardScriptTest** (`dashboard/`) — the page's script and the htmx it runs on: frames stamped below its message
   count dropped, the arrow keys switching views from anywhere but a text field, the column guide opened and closed
   from its button, its close button, and Escape from anywhere but a text field, the scrape-now request with htmx's
@@ -422,7 +424,9 @@ Two support helpers also live here (not test classes themselves):
   socket), the Scrape button on a live path and the result panel outside the pushed table, the Links column (last,
   present while links are configured, each link opening its path in a new tab with an `aria-label` naming the path
   and the tool, a dash for a row with none, a departed row keeping the links that use no label, no extra status pill,
-  and the links' quiet style and focus ring), the failing count and the tab's title, a departed row's identity
+  and the links' quiet style and focus ring; an icon link's mark alone, named in its tooltip and `aria-label`, its 24px
+  target and forced-colours paint, a separator only between two names, and a departed row dropping an icon link that
+  needs a label), the failing count and the tab's title, a departed row's identity
   and target, with en dashes for the scrape cells of one never scraped, and the column guide both tables share (a
   name and an explanation for every header, in its order, Identity and Links exactly when the table has them, the
   button at the search's end, the panel hidden after the form and outside every push, and none on the Agents page)
@@ -432,7 +436,9 @@ Two support helpers also live here (not test classes themselves):
   boolean values; no link for a path lacking a value (a missing or empty label, no identity, the legacy
   shared token, no serving agent), and a departed path keeping the links that use no label; and the refusals, naming
   the link: a blank name, an unknown placeholder, a URL that isn't absolute http or https or doesn't parse, and a
-  placeholder in the URL's scheme or host
+  placeholder in the URL's scheme or host. Also a link's brand icon (`LinkIcon`): read ignoring case, a blank one
+  showing the name, an unknown one refused, the startup log naming it, each mark on the classpath (which catches a
+  Simple Icons bump that drops a brand), and each colour clearing 3:1 on `--surface-2` in both themes
 - **ActivityHtmlTest** (`dashboard/`) — the Activity view: each line's time, event, agent, path, and detail, newest
   first; problems as crit tags and take-overs as warn tags; a burst's count and first paths; dashes for a line with no
   agent; the Identity column while agent auth is on; escaped values; the search, its match count, and its empty
@@ -478,7 +484,8 @@ Two support helpers also live here (not test classes themselves):
 One support helper also lives here (not a test class itself):
 
 - **DashboardFixtures** (`dashboard/`) — builders for the dashboard view models (`pathView`, `departedPathView`,
-  `departure`, `agentView`, `scrapeRecord`, `activityEntry`, `snapshot`) with every field defaulted, and `renderFullPage` for the
+  `departure`, `agentView`, `scrapeRecord`, `activityEntry`, `snapshot`) with every field defaulted, `iconLinks` (a
+  Prometheus and a Grafana link shown as icons), and `renderFullPage` for the
   page a GET serves, shared by `ProxyDashboardHtmlTest`, `DashboardScriptTest`, `PathColumnsHtmlTest`,
   `PathTableHtmlTest`, `PathLinkTest`, `ActivityHtmlTest`, `RowFilterTest`, and `ProxySnapshotTest`, so a test names
   only the field it is about
@@ -685,8 +692,10 @@ mechanism that the standard suite cannot reach:
   collector that can't be reached; with it on for both and a stand-in collector, the agent's client spans and the
   proxy's server spans arrive under their configured service names, in one trace
 - **ProxyWebDashboardTest** — the dashboard service rather than the renderer: page, WebSocket push,
-  selection round-trip, both layouts, a registered path's target, source, and the config's link built from its job
-  label, a root-mounted base path, with `allowedHosts` set a 403 on every route
+  selection round-trip, both layouts, the versioned asset and brand icon routes (a year's `max-age`, an icon served as
+  `image/svg+xml` with `nosniff` and a `sandbox` CSP, and a 404 off the allowlist or without the version), a registered
+  path's target, source, and the config's links built from its job label, one of them an icon the page's head gives
+  its mark, a root-mounted base path, with `allowedHosts` set a 403 on every route
   for a request naming an unknown host, page GETs and WebSocket messages rendering the cached snapshot while a
   topology change still shows on the next page, a gone path staying in the path layout after more scrapes than
   the retired recent-scrapes queue held, an agent's identity in both layouts with the path search filtering from the URL

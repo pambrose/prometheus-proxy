@@ -144,6 +144,11 @@ most 10,000 agents connected with one identity, which is every agent when agent 
 - **A guide to the dashboard's columns.** The Paths and Activity views have a **Column guide** button at the right
   end of the search bar. It opens a short explanation of each of the table's columns under the bar, which stays open
   as the table updates, and closes with its × button or Escape.
+- **Brand icons for dashboard links.** A link in `proxy.dashboard.links` can show its tool's icon in place of its name:
+  add `icon = "prometheus"` or `icon = "grafana"` to its entry. The icon is drawn in the tool's own color; hovering over
+  it shows a tooltip such as *Open in Grafana*, and a screen reader reads its name. The proxy serves the icons itself,
+  so the dashboard still needs no access to the internet. An icon the dashboard doesn't have stops the proxy at startup,
+  naming the link.
 
 ### Security
 

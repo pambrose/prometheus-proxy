@@ -165,7 +165,7 @@ Every path on one row, with the endpoint behind it and how its last scrape went:
 | **Src** | `cfg` for a statically configured path, `disc` for one from [dynamic discovery](configuration/agent.md#dynamic-target-discovery) |
 | **Last scrape / Status / Duration** | the most recent result for that path |
 | **History** | the path's recent scrapes as a row of dots, oldest on the left, green for a success and red for a failure, then the share that succeeded |
-| **Links** | with [links](#links) configured, the path's links into other tools, such as Prometheus and Grafana |
+| **Links** | with [links](#links) configured, the path's links into other tools, such as Prometheus and Grafana, by name or by the tool's icon |
 
 The dashboard explains the columns too: **Column guide**, at the right end of the search bar, opens a short
 explanation of each under the bar, which stays open as the table updates.
@@ -212,21 +212,34 @@ why instead. `proxy.dashboard.scrapeNowEnabled = false` removes the button and i
 
 Each row can carry links that open its path in other tools: a Prometheus query, a Grafana dashboard, a runbook, a log
 search. Write each as a URL template in `proxy.dashboard.links`, and each row fills in its own path's values. With any
-link configured, the table ends with a **Links** column naming each row's links; each opens in a new tab.
+link configured, the table ends with a **Links** column naming each row's links, or showing their tools' icons; each
+opens in a new tab.
 
 ```hocon
 proxy {
   dashboard {
     links = [
-      { name = "Prometheus", url = "http://prometheus:9090/graph?g0.expr=up%7Bjob%3D%22{label.job}%22%7D" }
-      { name = "Grafana", url = "http://grafana:3000/d/proxy-targets?var-job={label.job}" }
+      {
+        name = "Prometheus"
+        url = "http://prometheus:9090/graph?g0.expr=up%7Bjob%3D%22{label.job}%22%7D"
+        icon = "prometheus"
+      }
+      { name = "Grafana", url = "http://grafana:3000/d/proxy-targets?var-job={label.job}", icon = "grafana" }
       { name = "Runbook", url = "https://runbooks.example.com/proxy/{path}" }
     ]
   }
 }
 ```
 
-Being a list, `proxy.dashboard.links` must be set in a config file rather than with `-D`. A template can use:
+Being a list, `proxy.dashboard.links` must be set in a config file rather than with `-D`.
+
+A link with an `icon` shows its tool's icon, in the tool's own color, in place of its name. Hovering over the icon, or
+tabbing to it, shows a tooltip such as *Open in Grafana*, and a screen reader says the name. The dashboard has two,
+`prometheus` and `grafana`, matched ignoring case; leave `icon` out, or empty, to show the name. The proxy serves the
+icons itself, so the dashboard still needs no access to the internet. The icons are from [Simple
+Icons](https://simpleicons.org) (CC0); the marks belong to their owners.
+
+A template can use:
 
 | Placeholder | Filled with |
 |---|---|
@@ -265,7 +278,8 @@ with no prefix a link can query `up{path="/{path}"}`, written into the URL as
   [service discovery](service-discovery.md#labels) keeps out, such as a job with `reserveJobAndInstanceLabels` on.
 - **Checked at startup.** A link needs a name and an absolute `http` or `https` URL, and may use only the placeholders
   above, and only after the URL's host, so a label can't choose the site a link opens. A brace that isn't part of a
-  placeholder fails too. Any of these stops the proxy at startup with a message naming the link.
+  placeholder fails too, as does an `icon` the dashboard doesn't have. Any of these stops the proxy at startup with a
+  message naming the link.
 
 ### Paths whose agent has gone
 

@@ -50,18 +50,29 @@ internal class TableText(
  * @param label the header's text, which the guide names the column by
  * @param help one short sentence on what the column holds
  * @param numeric whether its values are compared down the column, so right-aligned with tabular figures
+ * @param centered whether its cells are centered, as a column of marks is, so its header stands over them
  */
 internal class TableColumn(
   val label: String,
   val help: String,
   val numeric: Boolean = false,
+  val centered: Boolean = false,
 )
+
+/** The class that aligns a [TableColumn]'s header, and its cells, or null for the default, left. */
+internal val TableColumn.alignment: String?
+  get() =
+    when {
+      numeric -> "num"
+      centered -> "center"
+      else -> null
+    }
 
 /** The header row of a filtered table: a scoped `<th>` for each of [columns], in order. */
 internal fun THEAD.columnHeaders(columns: List<TableColumn>) {
   tr {
     columns.forEach { column ->
-      th(scope = ThScope.col, classes = if (column.numeric) "num" else null) { +column.label }
+      th(scope = ThScope.col, classes = column.alignment) { +column.label }
     }
   }
 }

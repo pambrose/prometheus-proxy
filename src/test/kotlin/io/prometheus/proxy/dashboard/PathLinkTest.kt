@@ -20,17 +20,22 @@ package io.prometheus.proxy.dashboard
 
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.doubles.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldStartWith
 import io.prometheus.proxy.AgentAuthManager.Companion.LEGACY_IDENTITY_NAME
 import io.prometheus.proxy.dashboard.DashboardFixtures.departedPathView
 import io.prometheus.proxy.dashboard.DashboardFixtures.pathView
 import io.prometheus.proxy.dashboard.DashboardFixtures.scrapeRecord
+import kotlin.math.pow
 
 /**
  * A dashboard link's template, [PathLink]: each placeholder filled from the path and encoded, a path's labels read
  * tolerantly ([PathView.labelValues]), no link for a path lacking a value, and the refusals at startup. How the Paths table shows the links is in [PathTableHtmlTest].
+ * Also a link's brand icon, [LinkIcon]: read from the config, its mark on the classpath, and its colours' contrast.
  */
 class PathLinkTest : StringSpec() {
   private fun link(
@@ -163,6 +168,80 @@ class PathLinkTest : StringSpec() {
       urlFor("HTTPS://g.example.com/{path}") shouldBe "HTTPS://g.example.com/orders_metrics"
       urlFor("https://g.example.com?p={path}") shouldBe "https://g.example.com?p=orders_metrics"
       urlFor("https://g.example.com#{path}") shouldBe "https://g.example.com#orders_metrics"
+    }
+
+    // ==================== Icons ====================
+
+    // A config is written by hand, so its case doesn't matter, and an empty icon, the default, shows the name.
+    "an icon should be read ignoring case and surrounding spaces, and a blank one show the name" {
+      PathLink.parseAll(
+        [
+          PathLink.Entry("Prometheus", "https://p.example.com", icon = "prometheus"),
+          PathLink.Entry("Grafana", "https://g.example.com", icon = " Grafana "),
+          PathLink.Entry("Runbook", "https://r.example.com", icon = " "),
+          PathLink.Entry("Logs", "https://l.example.com"),
+        ],
+      ).map { it.icon } shouldBe [LinkIcon.PROMETHEUS, LinkIcon.GRAFANA, null, null]
+    }
+
+    // An icon the dashboard doesn't have would leave the link with neither a mark nor a name.
+    "an unknown icon should be refused, naming the link and the icons there are" {
+      shouldThrow<IllegalArgumentException> {
+        PathLink.parseAll([PathLink.Entry("Logs", "https://l.example.com", icon = "loki")])
+      }.message shouldBe "proxy.dashboard.links link 'Logs' has an unknown icon 'loki'; use prometheus or grafana"
+    }
+
+    "the startup log should name a link with an icon by its name and its icon" {
+      PathLink.parseAll(
+        [
+          PathLink.Entry("Prometheus", "https://p.example.com", icon = "PROMETHEUS"),
+          PathLink.Entry("Runbook", "https://r.example.com"),
+        ],
+      ).map { it.logged } shouldBe ["Prometheus (prometheus icon)", "Runbook"]
+    }
+
+    // The build extracts each mark from the Simple Icons WebJar, which drops brands in major versions, and names the
+    // marks it extracts itself (configureDashboardIcons in build.gradle.kts), so an icon added here alone has no mark.
+    "every icon's mark should be on the classpath, an SVG, under the file name the dashboard serves it as" {
+      LinkIcon.entries.forEach { icon ->
+        javaClass.classLoader.getResource(icon.resource).shouldNotBeNull().readText() shouldStartWith "<svg"
+        icon.fileName shouldBe "${icon.slug}.svg"
+      }
+    }
+
+    // WCAG 1.4.11's 3:1 for a non-text mark, rather than text's 4.5:1, since the link's name is in its tooltip and its
+    // aria-label too; on --surface-2, a hovered row's ground and the tighter of the two a row has (see docs/DESIGN.md).
+    "every icon's colour should clear 3:1 against a hovered row in each theme" {
+      // The light theme's, then the dark theme's.
+      val grounds =
+        Regex("""--surface-2:(#[0-9a-f]{6})""").findAll(ProxyDashboardCss.CSS).map { it.groupValues[1] }.toList()
+      grounds.size shouldBe 2
+
+      LinkIcon.entries.forEach { icon ->
+        contrast(icon.lightColor, grounds[0]) shouldBeGreaterThanOrEqual 3.0
+        contrast(icon.darkColor, grounds[1]) shouldBeGreaterThanOrEqual 3.0
+      }
+    }
+  }
+
+  private companion object {
+    // WCAG's contrast ratio between two #rrggbb colours, from 1 to 21.
+    fun contrast(
+      first: String,
+      second: String,
+    ): Double {
+      val lighter = maxOf(luminance(first), luminance(second))
+      val darker = minOf(luminance(first), luminance(second))
+      return (lighter + 0.05) / (darker + 0.05)
+    }
+
+    // WCAG's relative luminance of a #rrggbb colour.
+    fun luminance(color: String): Double {
+      val channels =
+        listOf(1, 3, 5)
+          .map { color.substring(it, it + 2).toInt(16) / 255.0 }
+          .map { if (it <= 0.04045) it / 12.92 else ((it + 0.055) / 1.055).pow(2.4) }
+      return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
     }
   }
 }

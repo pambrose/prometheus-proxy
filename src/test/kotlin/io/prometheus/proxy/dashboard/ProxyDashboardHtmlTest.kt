@@ -67,6 +67,9 @@ class ProxyDashboardHtmlTest : StringSpec() {
     paths: List<PathView> = agents.flatMap { it.paths }.distinct(),
   ) = DashboardFixtures.snapshot(agents = agents, paths = paths)
 
+  // A snapshot whose links show Prometheus's and Grafana's icons.
+  private fun iconSnapshot() = DashboardFixtures.snapshot(agents = [agent()], links = DashboardFixtures.iconLinks)
+
   // Agent "1" serving a path for each of [scrapes]' paths, each path's history its records, in the order given.
   private fun scraped(scrapes: List<ScrapeRecord>): ProxySnapshot {
     val paths =
@@ -445,6 +448,49 @@ class ProxyDashboardHtmlTest : StringSpec() {
       page shouldNotContain "\"//"
       // The Agents link is the root itself, which must stay "/" rather than collapse to an empty href.
       page shouldContain """href="/" class="on""""
+    }
+
+    // ==================== Link icons ====================
+
+    // The marks' URLs are under the route base, which the static sheet can't know, so they have a sheet of their own.
+    "the page should give each brand icon a link shows its mark and colours, in a second stylesheet in its head" {
+      val head = renderFullPage(iconSnapshot(), DashboardLayout.PATH).substringBefore("</head>")
+      val dir = "/dashboard/${ProxyDashboardService.ICON_DIR}"
+
+      Regex("<style>").findAll(head).count() shouldBe 2
+      head shouldContain
+        """.links a.icon-prometheus { --icon:url("$dir/prometheus.svg"); --brand:${LinkIcon.PROMETHEUS.lightColor}; }"""
+      head shouldContain
+        """.links a.icon-grafana { --icon:url("$dir/grafana.svg"); --brand:${LinkIcon.GRAFANA.lightColor}; }"""
+      // Prometheus's colour is the same in both themes, so only Grafana's changes in the dark one.
+      head shouldContain
+        "@media (prefers-color-scheme: dark) {\n  .links a.icon-grafana { --brand:${LinkIcon.GRAFANA.darkColor}; }\n}"
+      head shouldNotContain "icon-prometheus { --brand"
+    }
+
+    "the page should have no icon stylesheet while no link shows an icon" {
+      val names = PathLink.parseAll([PathLink.Entry("Runbook", "https://runbooks.example.com/{path}")])
+
+      Regex("<style>").findAll(renderFullPage(snapshot(), DashboardLayout.PATH)).count() shouldBe 1
+      renderFullPage(DashboardFixtures.snapshot(links = names), DashboardLayout.PATH) shouldNotContain "a.icon-"
+    }
+
+    // In the head, so no push carries it and the links in a push carry only their classes.
+    "the icon stylesheet should be part of no pushed fragment" {
+      (DashboardLayout.entries + null).forEach { layout ->
+        ProxyDashboardHtml.pushFragment(iconSnapshot(), "1", "/dashboard", layout).apply {
+          this shouldNotContain "<style"
+          this shouldNotContain "a.icon-"
+        }
+      }
+    }
+
+    // Joined to the route base by plain interpolation, as every route is: a root mount must not give "//assets".
+    "a root-mounted dashboard should give the icons' URLs a single leading slash" {
+      val page = renderFullPage(iconSnapshot(), DashboardLayout.PATH, routeBase = "")
+
+      page shouldContain """--icon:url("/${ProxyDashboardService.ICON_DIR}/grafana.svg")"""
+      page shouldNotContain "url(\"//"
     }
 
     "layout parsing should tolerate anything a browser might send" {
