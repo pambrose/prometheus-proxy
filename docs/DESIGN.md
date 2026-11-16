@@ -366,8 +366,8 @@ from size, weight, case, and color — never from a second family, because there
   11.5px half a pixel apart, which is a distinction no reader can act on.
 - **Badge** (weight 600, 10.5px): Status-code pills. The only place a number is bolded.
 - **Label** (weight 600, 10px, `0.09em`, uppercase, `ink-3`): Section headers, list headers, table
-  column headers. Engraved rather than printed — the letterspacing does the work that a rule or a
-  heavier weight would otherwise have to.
+  column headers, and the Column Guide's names for them. Engraved rather than printed — the letterspacing does the
+  work that a rule or a heavier weight would otherwise have to.
 - **Micro** (weight 400, 10px, normal spacing, mixed case): Tag text only — `consolidated`, `failed
   over`, `gone`. Deliberately *not* the Label treatment despite sharing its 10px size: a tag reports a
   fact about one row, so it stays lowercase and unweighted rather than reading as a column heading.
@@ -606,10 +606,39 @@ placeholder name what it filters, and the form submits to its own layout's route
   type in `ink` with an `ink-3` placeholder. Focus is the standard `2px solid accent` ring.
 - **Problems only:** a checkbox and its label in `ink-2`. The checked box is neutral `ink-2`, not the
   accent, which stays on focus rings and the current item (see The Two Places Rule).
+- **Column guide:** the form's last item, pushed to the strip's right end, the button that opens the Column
+  Guide below it. On a narrow viewport it wraps with the checkbox onto a second row and keeps to the right.
 - **Behavior:** a change applies as it is typed (debounced 250ms) and lands in the URL
   (`/paths?q=…&problems=1`), so a filtered view is a link. It sits outside the table's out-of-band
   region, so a push never replaces the field someone is typing in. Without the script it is a plain GET
   form. The match count is spoken through the Connection Announcer once per change.
+
+### Column Guide
+
+What each of the table's columns holds, in one place: a strip between the Path Search and the table (above the
+Scrape Result, when that is open), on `surface` with a `line` bottom border, as the Scrape Result is. On the Paths and
+Activity layouts; the Agents layout has no table columns to explain.
+
+- **Button:** *Column guide*, at the search's right end, a `<button type="button">` with `aria-expanded` and
+  `aria-controls`: a disclosure, not a dialog. Body type in `ink-2`, like the Problems only label beside it, after a
+  `13px` question-mark glyph drawn as the Copy Button's are (a CSS mask in `currentColor`). No border and no
+  background, at least `24px` tall. **Hover** and **open:** `ink`. **Focus:** `2px solid accent`, `outline-offset:
+  1px`, the accent's only appearance on it (see The Two Places Rule). Named rather than a bare `?`, which wouldn't say
+  what it opens, and not *Columns*, which reads as a picker that shows and hides them.
+- **Head:** `COLUMNS` in Label type on the left, and the Scrape Result's close button on the right.
+- **Body:** a `<dl>` on a `max-content 1fr` grid, `6px 18px` gaps, baseline-aligned. Each `<dt>` is the column's name
+  in the header's own Label type, so it reads as the header it explains; each `<dd>` is one short sentence in `ink-2`.
+- **One list:** each view builds its columns once (`TableColumn`), and the header row and the guide both iterate them,
+  so a column can't reach the header without an explanation, and the guide lists Identity and Links exactly when the
+  table shows them. The Event explanation names the problem kinds from `ActivityKind`, so a new kind can't be left out.
+- **A strip, not a layer:** it pushes the table down. A floating panel would need a shadow (see The No-Shadow Rule)
+  and would cover the columns it explains.
+- **Survives pushes:** outside every out-of-band region, so it stays open as the table updates. Tooltips or a pop-up
+  per header were ruled out for this reason: the table's header is replaced with it every refresh, which would close
+  them; hover reaches neither touch nor the keyboard; and ten icons would crowd the engraved header.
+- **Behavior:** starts closed on every page load. The button opens and closes it; the close button, or Escape from
+  anywhere but a field being typed in, closes it and hands focus back to the button. Not only from inside it: Safari
+  doesn't focus a button it clicks, so after a mouse click focus is on `<body>`. Escape in the search still clears it.
 
 ### Activity Table
 
@@ -685,8 +714,9 @@ nothing on the proxy, and the activity feed records who asked.
 
 ### Scrape Result
 
-A panel between the Path Search and the Path Table, on `surface` with a `line` bottom border, hidden until a
-Scrape Button fills it. Outside every out-of-band region, so a push never clears a result being read.
+A panel between the Path Search and the Path Table, below the Column Guide when that is open, on `surface` with a
+`line` bottom border, hidden until a Scrape Button fills it. Outside every out-of-band region, so a push never clears a
+result being read.
 
 - **Heading:** a Status Pill, the path in weight 600, then the facts in `ink-3`, joined with ` · `: the
   outcome, the time, the size, and for a body, its content type, its families and samples when it is in a

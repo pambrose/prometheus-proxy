@@ -57,6 +57,17 @@ class ActivityHtmlTest : StringSpec() {
 
   private fun headers(html: String) = Regex("<th[^>]*>([^<]*)</th>").findAll(html).map { it.groupValues[1] }.toList()
 
+  // The column guide's names, and the explanation of the one named [name], as the Activity page renders them.
+  private fun guideNames(page: String) = Regex("<dt>([^<]*)</dt>").findAll(page).map { it.groupValues[1] }.toList()
+
+  private fun guideHelp(
+    page: String,
+    name: String,
+  ) = Regex("""<dt>$name</dt>\s*<dd>([^<]*)</dd>""").find(page)?.groupValues?.get(1).orEmpty()
+
+  private fun activityPage(authEnabled: Boolean = false) =
+    renderFullPage(snapshot(authEnabled = authEnabled), DashboardLayout.ACTIVITY)
+
   init {
     "the activity table should show each line's time, event, agent, path, and detail, newest first" {
       val html =
@@ -150,6 +161,41 @@ class ActivityHtmlTest : StringSpec() {
       page shouldContain """aria-label="Filter activity""""
       page shouldContain """value="east""""
       (page.indexOf("<form action") < page.indexOf("""id="${ProxyDashboardHtml.ACTIVITY_ID}"""")) shouldBe true
+    }
+
+    // ==================== Column guide ====================
+
+    // The header row and the guide iterate one list, so the guide lists a column exactly when the table shows it.
+    "the column guide should explain every header, in the header's order, Identity only with agent auth on" {
+      listOf(false, true).forEach { authEnabled ->
+        val page = activityPage(authEnabled)
+
+        guideNames(page) shouldBe headers(page)
+        guideNames(page).forEach { guideHelp(page, it).isNotBlank() shouldBe true }
+      }
+      guideNames(activityPage()) shouldBe ["Time", "Event", "Agent", "Path", "Detail"]
+      guideNames(activityPage(authEnabled = true)) shouldBe ["Time", "Event", "Agent", "Identity", "Path", "Detail"]
+    }
+
+    // Read from ActivityKind, so a new problem kind can't be left out of the guide.
+    "the Event column's explanation should name every problem kind, the take-over, and a burst's count" {
+      val event = guideHelp(activityPage(), "Event")
+
+      ActivityKind.entries.filter { it.isProblem }.forEach { event shouldContain it.label }
+      event shouldContain ActivityKind.PATH_TAKEN_OVER.label
+      event shouldContain "×N"
+    }
+
+    "the column guide should follow the search, ahead of the pushed table, and no push carry it" {
+      val page = activityPage()
+      val guide = page.indexOf("""<section class="column-guide" id="${ProxyDashboardHtml.COLUMN_GUIDE_ID}"""")
+
+      (page.indexOf("</form>") in 0..<guide) shouldBe true
+      (guide < page.indexOf("""id="${ProxyDashboardHtml.ACTIVITY_ID}"""")) shouldBe true
+      activityPush(authEnabled = true).apply {
+        this shouldNotContain ProxyDashboardHtml.COLUMN_GUIDE_ID
+        this shouldNotContain "<dt>"
+      }
     }
 
     // ==================== The push ====================

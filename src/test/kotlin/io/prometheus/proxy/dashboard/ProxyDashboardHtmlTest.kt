@@ -328,14 +328,12 @@ class ProxyDashboardHtmlTest : StringSpec() {
 
     // A region the push loop rewrites would re-announce itself on every frame; this one is written only
     // by the socket lifecycle handlers, so it must stay out of every out-of-band fragment.
+    // Every layout's push, now that the Paths and Activity pages carry a column guide outside their tables too.
     "the live region must not be part of any pushed fragment" {
-      ProxyDashboardHtml.pushFragment(snapshot(), "1", "/dashboard") shouldNotContain ProxyDashboardHtml.ANNOUNCER_ID
-      ProxyDashboardHtml.pushFragment(
-        snapshot(),
-        null,
-        "/dashboard",
-        DashboardLayout.PATH,
-      ) shouldNotContain ProxyDashboardHtml.ANNOUNCER_ID
+      (DashboardLayout.entries + null).forEach { layout ->
+        ProxyDashboardHtml.pushFragment(snapshot(), "1", "/dashboard", layout) shouldNotContain
+          ProxyDashboardHtml.ANNOUNCER_ID
+      }
     }
 
     "the page should declare its language and mark its main region" {

@@ -18,7 +18,11 @@ package io.prometheus.proxy.dashboard
 
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.MATCH_COUNT_ATTR
 import kotlinx.html.DIV
+import kotlinx.html.THEAD
+import kotlinx.html.ThScope
 import kotlinx.html.div
+import kotlinx.html.th
+import kotlinx.html.tr
 
 /**
  * What a filtered table says when it has no rows to show, and what its rows are: the Paths and Activity views' tables
@@ -35,6 +39,32 @@ internal class TableText(
   val noProblems: String,
   val noMatch: String,
 )
+
+/**
+ * One column of a filtered table: its header, and what the column guide says it holds.
+ *
+ * Each view builds its list of these once per render, and both the header row ([columnHeaders]) and the column guide
+ * ([ProxyDashboardHtml.renderFilters]) iterate it, so a column can't reach the header without an explanation, and the
+ * guide lists a column exactly when the table shows it.
+ *
+ * @param label the header's text, which the guide names the column by
+ * @param help one short sentence on what the column holds
+ * @param numeric whether its values are compared down the column, so right-aligned with tabular figures
+ */
+internal class TableColumn(
+  val label: String,
+  val help: String,
+  val numeric: Boolean = false,
+)
+
+/** The header row of a filtered table: a scoped `<th>` for each of [columns], in order. */
+internal fun THEAD.columnHeaders(columns: List<TableColumn>) {
+  tr {
+    columns.forEach { column ->
+      th(scope = ThScope.col, classes = if (column.numeric) "num" else null) { +column.label }
+    }
+  }
+}
 
 /**
  * The start of a filtered table's region, which the Paths and Activity views share: the match count, which the page's
