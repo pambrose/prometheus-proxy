@@ -1,0 +1,26 @@
+[
+  {
+    "name": "hq-to-proxy",
+    "listen": "0.0.0.0:50051",
+    "upstream": "proxy:50051",
+    "enabled": true
+  },
+  {
+    "name": "hq-to-standby",
+    "listen": "0.0.0.0:50052",
+    "upstream": "proxy-standby:50051",
+    "enabled": true
+  },
+  {
+    "name": "branch-to-proxy",
+    "listen": "0.0.0.0:50053",
+    "upstream": "proxy:50051",
+    "enabled": true
+  },
+  {
+    "name": "branch-to-standby",
+    "listen": "0.0.0.0:50054",
+    "upstream": "proxy-standby:50051",
+    "enabled": true
+  }
+]

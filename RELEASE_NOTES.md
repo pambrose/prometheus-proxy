@@ -106,6 +106,12 @@ most 10,000 agents connected with one identity, which is every agent when agent 
 - **A guided tour of the demo.** `make tour`, in `demos/dashboard`, walks a presenter through every scenario, one
   step at a time. Two new ones show an agent's config deployed twice by mistake, which now settles instead of the two
   fighting over their paths, and Zipkin tracing of the calls between the agents and the proxies.
+- **A demo of the network between the agents and the proxies.** From `demos/network`, `make up` starts a proxy and
+  its standby, two agents, and a simulated WAN between them, with Prometheus, Grafana, and Zipkin, on ports that
+  don't clash with the dashboard demo's, so both can run at once. Its presenter's script and `make tour` show a far
+  link, a thin one and filtering at the agent, a proxy that goes away, a link that dies silently, a flaky link
+  followed in Zipkin, and the whole WAN going down and coming back. The website's new Network Demo page walks
+  through each, with screenshots.
 - **Paths whose agent has gone stay on the dashboard for an hour.** The Paths view used to lose a gone path within
   a minute on a busy proxy, since it rebuilt it from the 200 most recent scrapes across all paths. Each path now
   keeps its own history, and a gone path stays for `proxy.dashboard.departedPathRetentionSecs` (default 3600) after
