@@ -138,7 +138,6 @@ class ProxyWebDashboardTest : StringSpec() {
   ) {
     PrometheusRegistry.defaultRegistry.clear()
 
-    val t0 = System.nanoTime()
     val proxy =
       startProxy(
         args = ["--agent_port", "$grpcPort"] + dashboardArgs,
@@ -146,29 +145,14 @@ class ProxyWebDashboardTest : StringSpec() {
         configArgs = ["--config", configFile],
         metricsEnabled = metricsEnabled,
       )
-    val t1 = System.nanoTime()
 
     val env = DashboardEnv(proxy, newClient(), grpcPort, configFile, dashboardPort)
-    val t2 = System.nanoTime()
     try {
       env.block()
     } finally {
-      val t3 = System.nanoTime()
       env.agent?.also { if (it.isRunning) runCatching { it.stopSync(10.seconds) } }
-      val t4 = System.nanoTime()
       env.client.close()
-      val t5 = System.nanoTime()
       runCatching { proxy.stopSync(10.seconds) }
-      val t6 = System.nanoTime()
-      println(
-        "TIMING port=" + dashboardPort +
-          " startProxy=" + (t1 - t0) / 1_000_000 +
-          " newClient=" + (t2 - t1) / 1_000_000 +
-          " block=" + (t3 - t2) / 1_000_000 +
-          " stopAgent=" + (t4 - t3) / 1_000_000 +
-          " closeClient=" + (t5 - t4) / 1_000_000 +
-          " stopProxy=" + (t6 - t5) / 1_000_000,
-      )
     }
   }
 
