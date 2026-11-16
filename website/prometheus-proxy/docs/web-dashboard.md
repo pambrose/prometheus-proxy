@@ -20,8 +20,8 @@ and how recent scrapes actually went.
 
     The repository's [`demos/dashboard`](https://github.com/pambrose/prometheus-proxy/tree/master/demos/dashboard)
     runs the dashboard with three agents, a set of simulated services, Prometheus, and Grafana, all on one machine:
-    `make demo-up` in a clone starts it, and `make demo-down` removes it. The [Live Demo](demo.md) page walks
-    through a failing target, paths discovered at runtime, and an evicted agent, with screenshots of each.
+    `make up` in a clone's `demos/dashboard` starts it, and `make down` removes it. The [Live Demo](demo.md) page
+    walks through a failing target, paths discovered at runtime, and an evicted agent, with screenshots of each.
 
 ## Enabling it
 

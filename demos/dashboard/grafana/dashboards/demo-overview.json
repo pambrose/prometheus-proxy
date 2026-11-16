@@ -112,7 +112,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Jobs no proxy could scrape on the last try: a failover (./demos/dashboard/demo.sh proxy-down) leaves them up. Try ./demos/dashboard/demo.sh outage.",
+      "description": "Jobs no proxy could scrape on the last try: a failover (./demo.sh proxy-down) leaves them up. Try ./demo.sh outage.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1398,7 +1398,7 @@
             ]
           },
           "unit": "short",
-          "noValue": "Nothing discovered yet: run ./demos/dashboard/demo.sh discover"
+          "noValue": "Nothing discovered yet: run ./demo.sh discover"
         },
         "overrides": []
       },

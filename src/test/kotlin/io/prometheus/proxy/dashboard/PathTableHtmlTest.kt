@@ -113,7 +113,7 @@ class PathTableHtmlTest : StringSpec() {
       historyTable(200, 200, 503) shouldContain "</span>66%"
     }
 
-    // demos/dashboard/screenshots.sh decides the demo is healthy by counting `class="pill ok"` in the path table
+    // demos/dashboard/bin/screenshots.sh decides the demo is healthy by counting `class="pill ok"` in the path table
     // against the number of paths, so the strip must not draw with the status pill.
     "the history strip should leave the status pill as the row's only pill" {
       Regex("""class="pill ok"""").findAll(historyTable(200, 200, 200, 200, 200)).count() shouldBe 1
@@ -208,7 +208,7 @@ class PathTableHtmlTest : StringSpec() {
       pathPush() shouldNotContain "Links</th>"
     }
 
-    // demos/dashboard/screenshots.sh counts `class="pill ok"` in the path table against the number of paths.
+    // demos/dashboard/bin/screenshots.sh counts `class="pill ok"` in the path table against the number of paths.
     "each link should open its path in a new tab, named for a screen reader, and add no status pill" {
       val ok = pathWithJob("orders_metrics", "orders").copy(history = [scrapeRecord(statusCode = 200)])
       val html = pathPush([ok], links = demoLinks)

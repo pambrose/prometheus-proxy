@@ -35,6 +35,9 @@ Always run lint and build before completing tasks:
 Run `make help` for the current target list with descriptions (auto-extracted from `## …` annotations in the
 `Makefile`). The container and scaling targets need Docker.
 
+Each demo under `demos/` is self-contained, with its own Makefile run from its directory (`make -C demos/<name> help`
+lists its targets), so the root `Makefile` has no demo targets.
+
 ## Architecture
 
 A **Prometheus Proxy** system enabling Prometheus to scrape metrics from endpoints behind firewalls.

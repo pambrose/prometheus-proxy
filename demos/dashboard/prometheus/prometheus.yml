@@ -1,4 +1,4 @@
-# Prometheus config for the dashboard demo (demos/dashboard/compose.yml).
+# Prometheus config for the dashboard demo (demos/dashboard/docker/compose.yml).
 #
 # It names no target: one job discovers every path the agents register through each proxy's HTTP service discovery
 # endpoint, and scrapes each through the proxy that advertised it. A path the agents add, such as the ones

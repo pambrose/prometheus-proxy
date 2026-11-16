@@ -42,9 +42,9 @@ What each dashboard section watches is described under
 
 !!! tip "Try them without importing"
 
-    `make demo-up` in a clone of the repository starts Prometheus and Grafana with both dashboards and the alerting
-    rules below already loaded, against a proxy, three agents, and a set of simulated services; `make demo-down`
-    removes it. See the [Live Demo](demo.md) page.
+    `make up` in the `demos/dashboard` directory of a clone of the repository starts Prometheus and Grafana with both
+    dashboards and the alerting rules below already loaded, against a proxy, three agents, and a set of simulated
+    services; `make down` removes it. See the [Live Demo](demo.md) page.
 
 ## Alerting rules
 

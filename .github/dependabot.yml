@@ -75,11 +75,11 @@ updates:
     cooldown:
       default-days: 7
 
-  # The dashboard demo's third-party images (demos/dashboard/compose.yml): Grafana and the Python image its simulated
-  # services run on, each pinned by tag and digest. The proxy and agent images it builds from this checkout aren't
-  # pulled, so there's nothing to update for them.
+  # The dashboard demo's third-party images (demos/dashboard/docker/compose.yml): Grafana and the Python image its
+  # simulated services run on, each pinned by tag and digest. The proxy and agent images it builds from this checkout
+  # aren't pulled, so there's nothing to update for them.
   - package-ecosystem: docker-compose
-    directory: /demos/dashboard
+    directory: /demos/dashboard/docker
     schedule:
       interval: weekly
     cooldown:

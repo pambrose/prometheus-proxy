@@ -1,8 +1,11 @@
 # The Prometheus Proxy dashboard demo: a proxy with its dashboard on, three agents behind a simulated firewall, a set
-# of simulated services, and Prometheus and Grafana in front. See README.md. From the repository root:
+# of simulated services, and Prometheus and Grafana in front. See ../README.md. From demos/dashboard:
 #
-#   make demo-up      # builds the jars and the images from this checkout, then starts everything
-#   make demo-down    # stops it and removes its containers, network, and volume
+#   make up      # builds the jars and the images from this checkout, then starts everything
+#   make down    # stops it and removes its containers, network, and volume
+#
+# Compose resolves every relative path here against this file's directory, demos/dashboard/docker: the demo's configs
+# are one level up, and the repository root three.
 #
 # Every published port binds to 127.0.0.1 only: the dashboard has no authentication, Grafana lets anyone view it
 # without signing in, and its admin password is the default, which suits a demo on a laptop and nothing else. Set DEMO_DASHBOARD_PORT, DEMO_GRAFANA_PORT,
@@ -15,7 +18,7 @@ name: prometheus-proxy-demo
 x-agent: &agent
   image: prometheus-proxy-demo/agent:local
   build:
-    context: ../..
+    context: ../../..
     dockerfile: etc/docker/agent.Dockerfile
   environment:
     AGENT_CONFIG: /app/agent.conf
@@ -33,7 +36,7 @@ x-agent: &agent
 x-proxy: &proxy
   image: prometheus-proxy-demo/proxy:local
   build:
-    context: ../..
+    context: ../../..
     dockerfile: etc/docker/proxy.Dockerfile
   depends_on:
     zipkin:
@@ -47,7 +50,7 @@ services:
     environment:
       PROXY_CONFIG: /app/proxy.conf
     volumes:
-      - ./config/proxy.conf:/app/proxy.conf:ro
+      - ../config/proxy.conf:/app/proxy.conf:ro
     ports:
       - "127.0.0.1:${DEMO_DASHBOARD_PORT:-8094}:8094"  # Dashboard
       - "127.0.0.1:${DEMO_PROXY_PORT:-8080}:8080"      # Scrape port: /discovery and each path, for curl
@@ -60,8 +63,8 @@ services:
     environment:
       PROXY_CONFIG: /app/proxy-standby.conf
     volumes:
-      - ./config/proxy.conf:/app/proxy.conf:ro
-      - ./config/proxy-standby.conf:/app/proxy-standby.conf:ro
+      - ../config/proxy.conf:/app/proxy.conf:ro
+      - ../config/proxy-standby.conf:/app/proxy-standby.conf:ro
     ports:
       - "127.0.0.1:${DEMO_STANDBY_DASHBOARD_PORT:-8095}:8094"  # The standby's dashboard
 
@@ -72,21 +75,21 @@ services:
       # `demo.sh filter` starts it on agent-east-filtered.conf, which includes agent-east.conf, so both are mounted.
       AGENT_CONFIG: /app/${DEMO_EAST_CONFIG:-agent-east.conf}
     volumes:
-      - ./config/agent-east.conf:/app/agent-east.conf:ro
-      - ./config/agent-east-filtered.conf:/app/agent-east-filtered.conf:ro
+      - ../config/agent-east.conf:/app/agent-east.conf:ro
+      - ../config/agent-east-filtered.conf:/app/agent-east-filtered.conf:ro
       - discovery:/discovery:ro
 
   agent-west-1:
     <<: *agent
     hostname: west-dc-01
     volumes:
-      - ./config/agent-west-1.conf:/app/agent.conf:ro
+      - ../config/agent-west-1.conf:/app/agent.conf:ro
 
   agent-west-2:
     <<: *agent
     hostname: west-dc-02
     volumes:
-      - ./config/agent-west-2.conf:/app/agent.conf:ro
+      - ../config/agent-west-2.conf:/app/agent.conf:ro
 
   # A contractor's agent reaching for a path its identity may not register; started only by `demo.sh rogue-agent`.
   agent-rogue:
@@ -94,7 +97,7 @@ services:
     hostname: contractor-01
     profiles: [rogue]
     volumes:
-      - ./config/agent-rogue.conf:/app/agent.conf:ro
+      - ../config/agent-rogue.conf:/app/agent.conf:ro
 
   # agent-east's config deployed a second time by mistake; started only by `demo.sh duplicate-agent`.
   agent-east-copy:
@@ -102,15 +105,15 @@ services:
     hostname: east-dc-02
     profiles: [duplicate]
     volumes:
-      - ./config/agent-east.conf:/app/agent-east.conf:ro
-      - ./config/agent-duplicate.conf:/app/agent.conf:ro
+      - ../config/agent-east.conf:/app/agent-east.conf:ro
+      - ../config/agent-duplicate.conf:/app/agent.conf:ro
 
   # The applications behind the firewall, simulated; it also writes agent-east's discovery file (app/demo_app.py).
   demo-app:
     image: python:3.14-alpine@sha256:5862d971d1f0ae26b258cefa4e893556b1d3aba81bd2ff30888704ad378bab67
     command: ["python", "-u", "/app/demo_app.py"]
     volumes:
-      - ./app:/app:ro
+      - ../app:/app:ro
       - discovery:/discovery
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
@@ -123,9 +126,9 @@ services:
   prometheus:
     image: prom/prometheus:v3.14.0@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./prometheus/demo-alerts.yml:/etc/prometheus/rules/demo-alerts.yml:ro
-      - ../../grafana/alerts.yml:/etc/prometheus/rules/alerts.yml:ro
+      - ../prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../prometheus/demo-alerts.yml:/etc/prometheus/rules/demo-alerts.yml:ro
+      - ../../../grafana/alerts.yml:/etc/prometheus/rules/alerts.yml:ro
     ports:
       - "127.0.0.1:${DEMO_PROMETHEUS_PORT:-9090}:9090"
     depends_on:
@@ -151,11 +154,11 @@ services:
       GF_NEWS_NEWS_FEED_ENABLED: "false"
       GF_PLUGINS_PREINSTALL_DISABLED: "true"
     volumes:
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./grafana/dashboards/demo-overview.json:/etc/grafana/dashboards/demo-overview.json:ro
+      - ../grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../grafana/dashboards/demo-overview.json:/etc/grafana/dashboards/demo-overview.json:ro
       # The project's own dashboards, from the repo, so the demo always shows the current ones.
-      - ../../grafana/prometheus-proxy.json:/etc/grafana/dashboards/prometheus-proxy.json:ro
-      - ../../grafana/prometheus-agents.json:/etc/grafana/dashboards/prometheus-agents.json:ro
+      - ../../../grafana/prometheus-proxy.json:/etc/grafana/dashboards/prometheus-proxy.json:ro
+      - ../../../grafana/prometheus-agents.json:/etc/grafana/dashboards/prometheus-agents.json:ro
     ports:
       - "127.0.0.1:${DEMO_GRAFANA_PORT:-3000}:3000"
     depends_on:

@@ -26,15 +26,17 @@ The proxy and agent images are built from this checkout, so the demo always show
 
 ## Quick start
 
-You need Docker with Compose v2, and a JDK 17 or later to run Gradle. From the repository root:
+You need Docker with Compose v2, and a JDK 17 or later to run Gradle. The demo's commands run from its own directory,
+where `make help` lists its targets. From the repository root:
 
 ```bash
-make demo-up                     # builds the jars and images, starts everything, and prints the URLs
-./demos/dashboard/demo.sh tour   # walks through the presenter's script below, pausing before each step
-make demo-down                   # stops it and removes its containers, network, and volume
+cd demos/dashboard
+make up      # builds the jars and images, starts everything, and prints the URLs
+make tour    # walks through the presenter's script below, pausing before each step
+make down    # stops it and removes its containers, network, and volume
 ```
 
-The first `make demo-up` pulls the Prometheus, Grafana, Zipkin, and Python images and builds the jars, which takes a few
+The first `make up` pulls the Prometheus, Grafana, Zipkin, and Python images and builds the jars, which takes a few
 minutes. After that it starts in under a minute, and runs without a network connection. **Run it once before the
 meeting.**
 
@@ -47,9 +49,9 @@ meeting.**
 | The proxy's service discovery | <http://localhost:8080/discovery> |
 | Zipkin | <http://localhost:9411/zipkin/> |
 
-`./demos/dashboard/demo.sh open` opens the proxy dashboard, Grafana, and Prometheus's alerts in your browser.
+`make open` opens the proxy dashboard, Grafana, and Prometheus's alerts in your browser.
 
-If a port is already taken, move it, for example with `DEMO_GRAFANA_PORT=3001 make demo-up`. The variables are
+If a port is already taken, move it, for example with `DEMO_GRAFANA_PORT=3001 make up`. The variables are
 `DEMO_DASHBOARD_PORT`, `DEMO_STANDBY_DASHBOARD_PORT`, `DEMO_GRAFANA_PORT`, `DEMO_PROMETHEUS_PORT`, `DEMO_PROXY_PORT`,
 and `DEMO_ZIPKIN_PORT`; the dashboard's links into Prometheus and Grafana keep the default ports
 (`config/proxy.conf`). Every port binds to `127.0.0.1` only. The dashboard has no authentication and Grafana uses its
@@ -72,7 +74,7 @@ default admin password, so this setup is for a laptop, not for anything shared.
 
 ## Presenter's script
 
-Each act lists what to show and what it means for the customer. Run the scenario commands from the repository root;
+Each act lists what to show and what it means for the customer. Run the scenario commands from `demos/dashboard`;
 each one prints what to watch. Leave about a minute between acts so the graphs catch up.
 
 ### 1. The problem, and the shape of the answer
@@ -111,7 +113,7 @@ Open Grafana. It lands on the **Prometheus Proxy Demo** dashboard.
 ### 4. A service fails, and recovers
 
 ```bash
-./demos/dashboard/demo.sh outage          # payments now answers 500
+./demo.sh outage          # payments now answers 500
 ```
 
 - The dashboard: `/payments_metrics` turns red with a 500 in the Paths view, and in agent-east's recent scrapes.
@@ -120,33 +122,33 @@ Open Grafana. It lands on the **Prometheus Proxy Demo** dashboard.
 - The other services keep working: one failing target never affects the rest.
 
 ```bash
-./demos/dashboard/demo.sh slow            # inventory now hangs
+./demo.sh slow            # inventory now hangs
 ```
 
 - The agent gives up after its 3-second scrape timeout and reports 408 (`upstream_timed_out`), so Prometheus gets a
   clear answer instead of waiting. **Scrape latency** spikes for inventory only.
 
 ```bash
-./demos/dashboard/demo.sh recover         # everything back to normal
+./demo.sh recover         # everything back to normal
 ```
 
 ### 5. Redundancy
 
 ```bash
-./demos/dashboard/demo.sh agent-stop      # stops agent-west-2
+./demo.sh agent-stop      # stops agent-west-2
 ```
 
 - agent-west-2 leaves the dashboard at once, and `/shipping_metrics` drops from `+1` to just agent-west-1.
 - Grafana: **Shipping by replica** keeps west-1 flowing, and shipping stays green on **Target health**.
 
 ```bash
-./demos/dashboard/demo.sh agent-start     # it reconnects and rejoins in seconds
+./demo.sh agent-start     # it reconnects and rejoins in seconds
 ```
 
 ### 6. New services appear without a restart
 
 ```bash
-./demos/dashboard/demo.sh discover
+./demo.sh discover
 ```
 
 - Within about 5 seconds, `/search_metrics`, `/recommendations_metrics`, and `/notifications_metrics` appear in the
@@ -155,7 +157,7 @@ Open Grafana. It lands on the **Prometheus Proxy Demo** dashboard.
   restart, and no change to Prometheus's config.
 
 ```bash
-./demos/dashboard/demo.sh undiscover      # they go away just as quietly
+./demo.sh undiscover      # they go away just as quietly
 ```
 
 In the Paths view, a removed path that had been scraped stays listed as `gone`, so it's clear what left.
@@ -163,7 +165,7 @@ In the Paths view, a removed path that had been scraped stays listed as `gone`, 
 ### 7. An agent that goes silent
 
 ```bash
-./demos/dashboard/demo.sh agent-freeze    # freezes agent-west-2: connected, but silent
+./demo.sh agent-freeze    # freezes agent-west-2: connected, but silent
 ```
 
 - In the dashboard, click agent-west-2. Its **idle** time climbs and the **evicted in** countdown runs.
@@ -173,7 +175,7 @@ In the Paths view, a removed path that had been scraped stays listed as `gone`, 
   the eviction, and agent-west-1 carries shipping alone.
 
 ```bash
-./demos/dashboard/demo.sh agent-thaw      # it reconnects and registers again
+./demo.sh agent-thaw      # it reconnects and registers again
 ```
 
 ### 8. The proxy isn't a single point of failure
@@ -181,7 +183,7 @@ In the Paths view, a removed path that had been scraped stays listed as `gone`, 
 Every agent lists two proxy endpoints, the primary and a standby, in order.
 
 ```bash
-./demos/dashboard/demo.sh proxy-down      # stops the primary proxy
+./demo.sh proxy-down      # stops the primary proxy
 ```
 
 - The primary's dashboard goes away. Open the standby's, <http://localhost:8095/dashboard>: within seconds all three
@@ -192,7 +194,7 @@ Every agent lists two proxy endpoints, the primary and a standby, in order.
   fires for it alone: the alert says which proxy failed, and nothing else does.
 
 ```bash
-./demos/dashboard/demo.sh proxy-up        # the primary returns; the agents stay on the standby
+./demo.sh proxy-up        # the primary returns; the agents stay on the standby
 ```
 
 An agent goes back to the head of its list only when its connection drops. Once `prometheus-proxy` is green again,
@@ -202,7 +204,7 @@ An agent goes back to the head of its list only when its connection drops. Once 
 ### 9. Filtering before the WAN
 
 ```bash
-./demos/dashboard/demo.sh filter          # restarts agent-east with a metric filter for the catalog
+./demo.sh filter          # restarts agent-east with a metric filter for the catalog
 ```
 
 - The catalog's payload is about 480,000 characters, most of it a per-item price list no dashboard uses. The filter
@@ -211,7 +213,7 @@ An agent goes back to the head of its list only when its connection drops. Once 
   drops with it. The data that never crosses the firewall costs nothing to send, store, or query.
 
 ```bash
-./demos/dashboard/demo.sh unfilter        # back to the full payload
+./demo.sh unfilter        # back to the full payload
 ```
 
 ### 10. One proxy, several teams
@@ -220,7 +222,7 @@ The proxy has per-agent identities: each data center's agents connect with their
 register only the paths its patterns allow.
 
 ```bash
-./demos/dashboard/demo.sh rogue-agent     # a contractor's agent tries to register payments_metrics
+./demo.sh rogue-agent     # a contractor's agent tries to register payments_metrics
 ```
 
 - agent-rogue appears in the dashboard with the one path its identity allows, `/contractor_metrics`.
@@ -229,13 +231,13 @@ register only the paths its patterns allow.
   newer agent would have taken the path over.
 
 ```bash
-./demos/dashboard/demo.sh rogue-agent-stop
+./demo.sh rogue-agent-stop
 ```
 
 ### 11. A misconfiguration, handled calmly
 
 ```bash
-./demos/dashboard/demo.sh duplicate-agent    # a second copy of agent-east, without consolidated mode
+./demo.sh duplicate-agent    # a second copy of agent-east, without consolidated mode
 ```
 
 - Someone deployed agent-east's config twice. The copy registers the same paths, with the same identity, and the
@@ -245,7 +247,7 @@ register only the paths its patterns allow.
   agents and says the fix: `agent.consolidated = true` on each, if both should serve the paths.
 
 ```bash
-./demos/dashboard/demo.sh duplicate-agent-stop   # removes the copy, and restarts agent-east to register again
+./demo.sh duplicate-agent-stop   # removes the copy, and restarts agent-east to register again
 ```
 
 ### 12. Following a call through the firewall
@@ -273,9 +275,9 @@ pick an agent that reconnected in an earlier act (agent-west-2 after act 5, or a
 | `demo.sh filter` / `unfilter` | Restarts agent-east with or without the catalog filter |
 | `demo.sh rogue-agent` / `rogue-agent-stop` | Starts or removes the contractor's agent |
 | `demo.sh duplicate-agent` / `duplicate-agent-stop` | Starts a second copy of agent-east, or removes it and restarts agent-east |
-| `demo.sh tour [act]` | Walks through the presenter's script, from act 1 or the one given, pausing before each step |
-| `demo.sh status` | The containers, the services' modes, and the URLs |
-| `demo.sh logs [service]` | Follows the logs |
+| `make tour [ACT=n]` | Walks through the presenter's script, from act 1 or the one given, pausing before each step |
+| `make status` | The containers, the services' modes, and the URLs |
+| `make logs [SERVICE=name]` | Follows the logs, of every service or the one given |
 
 The services are `orders`, `payments`, `inventory`, `catalog`, and `shipping`, plus `search`, `recommendations`, and
 `notifications` once discovered. Freezing `agent-east` also stops the proxy's own metrics, which travel through it.
@@ -284,7 +286,7 @@ The services are `orders`, `payments`, `inventory`, `catalog`, and `shipping`, p
 
 | File | What it sets up |
 |---|---|
-| `compose.yml` | The services, their ports, and the images built from this checkout |
+| `docker/compose.yml` | The services, their ports, and the images built from this checkout |
 | `config/proxy.conf` | The dashboard, service discovery, the per-agent identities, and a 30-second eviction limit, so act 7 fits a demo |
 | `config/proxy-standby.conf` | The standby: `proxy.conf`, with its own scrape address for service discovery |
 | `config/agent-duplicate.conf` | agent-east's config under another name, for act 11 |
@@ -293,25 +295,26 @@ The services are `orders`, `payments`, `inventory`, `catalog`, and `shipping`, p
 | `prometheus/demo-alerts.yml` | The fast demo alerts |
 | `grafana/` | The provisioned datasource, dashboard folder, and demo dashboard |
 | `app/demo_app.py` | The simulated services and their control API |
+| `Makefile` | The demo's targets: `make up` (which builds the jars first), `down`, `status`, `open`, `tour`, `logs`, and `screenshots`; `make help` lists them |
 | `demo.sh` | Starting, stopping, and the scenarios |
-| `screenshots.sh` | The Live Demo page's screenshots, in the dark and light themes. `make demo-screenshots` builds and starts the demo, waits a minute so the agents' uptimes read in minutes, plays the scenarios, and writes them to `website/prometheus-proxy/docs/images/demo/` (needs Chrome, ImageMagick 7, and `cwebp`). While checking a change, `SKIP_UPTIME_WAIT=1` skips the minute, so the shots show uptimes in seconds and aren't for the site, and `WAIT_SECS` sets how long each wait for a scene may take before the script fails (default 150): `make demo-screenshots SKIP_UPTIME_WAIT=1 WAIT_SECS=60` |
+| `bin/screenshots.sh` | The Live Demo page's screenshots, in the dark and light themes. `make screenshots` builds and starts the demo, waits a minute so the agents' uptimes read in minutes, plays the scenarios, and writes them to `website/prometheus-proxy/docs/images/demo/` (needs Chrome, ImageMagick 7, and `cwebp`). While checking a change, `SKIP_UPTIME_WAIT=1` skips the minute, so the shots show uptimes in seconds and aren't for the site, and `WAIT_SECS` sets how long each wait for a scene may take before the script fails (default 150): `make screenshots SKIP_UPTIME_WAIT=1 WAIT_SECS=60` |
 
-`make check-rules` validates the Prometheus config and both rule files with promtool, and `ConfigFileKeysTest` checks
-every key in `config/*.conf` against `config/config.conf`, and that each file loads as the proxy or agent loads it.
+From the repository root, `make check-rules` validates the Prometheus config and both rule files with promtool, and
+`ConfigFileKeysTest` checks every key in `config/*.conf` against `config/config.conf`, and that each file loads as the
+proxy or agent loads it.
 
 To change the demo dashboard, edit `grafana/dashboards/demo-overview.json` and run
-`docker compose -f demos/dashboard/compose.yml restart grafana`. Grafana doesn't reliably notice a change to a
-mounted file, and Prometheus doesn't notice one at all, so `make demo-up` reloads Prometheus's config and restarts
-Grafana each time.
+`docker compose -f docker/compose.yml restart grafana`. Grafana doesn't reliably notice a change to a mounted file,
+and Prometheus doesn't notice one at all, so `make up` reloads Prometheus's config and restarts Grafana each time.
 
 ## Troubleshooting
 
 - **`port is already allocated`**: another service holds the port. Move it with the variables above.
 - **The dashboard is empty, or shows only some agents**: the agents connect a few seconds after the proxy starts.
-  Give it ten seconds, or check `./demos/dashboard/demo.sh logs agent-east`.
-- **A scenario left things in an odd state**: `./demos/dashboard/demo.sh recover`, `undiscover`, `agent-thaw`,
-  `agent-start`, `proxy-up` (for each proxy), `unfilter`, `rogue-agent-stop`, and `duplicate-agent-stop` undo every
-  scenario. For a clean slate, `make demo-down && make demo-up`.
+  Give it ten seconds, or check `make logs SERVICE=agent-east`.
+- **A scenario left things in an odd state**: `./demo.sh recover`, `undiscover`, `agent-thaw`, `agent-start`,
+  `proxy-up` (for each proxy), `unfilter`, `rogue-agent-stop`, and `duplicate-agent-stop` undo every scenario. For a
+  clean slate, `make down && make up`.
 - **The primary's dashboard doesn't load during act 8**: that's the point; use the standby's at
   <http://localhost:8095/dashboard>.
 - The proxy logs a warning at startup that the dashboard has no authentication. That's expected here, and is why

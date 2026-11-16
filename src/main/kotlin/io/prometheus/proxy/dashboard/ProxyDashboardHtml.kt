@@ -156,9 +156,9 @@ internal object ProxyDashboardHtml {
   // equal one.
   const val AGENT_ROW_ID_PREFIX = "agent-row-"
 
-  // What demos/dashboard/screenshots.sh needs about an agent, as data: on each agent-list row, its id, its name as the
-  // row shows it, and its path count, and on its detail's Recent scrapes header, their count. The script matched the
-  // row's text before, and every change to its look, a tag, an LED, or a word, broke a regex.
+  // What demos/dashboard/bin/screenshots.sh needs about an agent, as data: on each agent-list row, its id, its name as
+  // the row shows it, and its path count, and on its detail's Recent scrapes header, their count. The script matched
+  // the row's text before, and every change to its look, a tag, an LED, or a word, broke a regex.
   const val AGENT_ATTR = "data-agent"
   const val AGENT_NAME_ATTR = "data-agent-name"
   const val PATH_COUNT_ATTR = "data-path-count"
@@ -530,9 +530,9 @@ internal object ProxyDashboardHtml {
     recentScrapes(snapshot.scrapesOf(agent.agentId))
   }
 
-  // The detail's Recent scrapes: a header carrying their count as data too, for demos/dashboard/screenshots.sh, then a
-  // row for each. The snapshot has already cut them to the agent's latest ProxySnapshot.MAX_DETAIL_SCRAPES, so the
-  // count is the rows shown.
+  // The detail's Recent scrapes: a header carrying their count as data too, for demos/dashboard/bin/screenshots.sh,
+  // then a row for each. The snapshot has already cut them to the agent's latest ProxySnapshot.MAX_DETAIL_SCRAPES, so
+  // the count is the rows shown.
   private fun DIV.recentScrapes(scrapes: List<ScrapeRecord>) {
     div("section") {
       attributes[SCRAPE_COUNT_ATTR] = "${scrapes.size}"
