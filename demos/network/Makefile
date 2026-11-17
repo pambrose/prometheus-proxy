@@ -39,8 +39,8 @@ status:  ## Show the containers, the WAN's links and their toxics, and the URLs
 open:  ## Open both proxy dashboards, Grafana, and Prometheus's alerts in the browser
 	@$(DEMO) open
 
-tour:  ## Walk through the presenter's script, pausing before each step (ACT=n starts from act n)
-	@$(DEMO) tour $(ACT)
+tour:  ## Walk through the presenter's script, pausing before each step (PART=n starts from part n)
+	@$(DEMO) tour $(PART)
 
 logs:  ## Follow the logs (SERVICE=name for one service: proxy, agent-branch, wan, ...)
 	@$(DEMO) logs $(SERVICE)

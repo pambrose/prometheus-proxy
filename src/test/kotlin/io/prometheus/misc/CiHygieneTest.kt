@@ -138,7 +138,7 @@ class CiHygieneTest : StringSpec() {
     // proxy and agent images are built from this checkout, tagged :local, so have no digest.
     "every image a demo pulls should be pinned by digest, its Prometheus the Makefile's" {
       val composeFiles = demoComposeFiles.map { it.invariantSeparatorsPath }
-      composeFiles shouldContainAll listOf(DASHBOARD_DEMO_COMPOSE, NETWORK_DEMO_COMPOSE)
+      composeFiles shouldContainAll listOf(BASICS_DEMO_COMPOSE, NETWORK_DEMO_COMPOSE)
 
       demoComposeFiles.forEach { file ->
         withClue(file.invariantSeparatorsPath) {
@@ -149,8 +149,8 @@ class CiHygieneTest : StringSpec() {
         }
       }
 
-      // The dashboard demo runs both, so the walk above has a Prometheus and a Grafana to check.
-      pulledImages(File(DASHBOARD_DEMO_COMPOSE)).map { it.substringBefore(":") } shouldContainAll
+      // The basics demo runs both, so the walk above has a Prometheus and a Grafana to check.
+      pulledImages(File(BASICS_DEMO_COMPOSE)).map { it.substringBefore(":") } shouldContainAll
         listOf("prom/prometheus", "grafana/grafana")
     }
 
@@ -209,7 +209,7 @@ class CiHygieneTest : StringSpec() {
       "src/test/kotlin/io/prometheus/containers/support/ContainerTestSupport.kt"
     private const val DEMOS_DIR = "demos"
     private const val DEMO_COMPOSE = "docker/compose.yml"
-    private const val DASHBOARD_DEMO_COMPOSE = "$DEMOS_DIR/dashboard/$DEMO_COMPOSE"
+    private const val BASICS_DEMO_COMPOSE = "$DEMOS_DIR/basics/$DEMO_COMPOSE"
     private const val NETWORK_DEMO_COMPOSE = "$DEMOS_DIR/network/$DEMO_COMPOSE"
     private val KUBERNETES_DEMO_IMAGE_DIRS = listOf("$DEMOS_DIR/kubernetes/k8s", "$DEMOS_DIR/kubernetes/kind")
     private val YAML_EXTENSIONS = setOf("yaml", "yml")

@@ -18,9 +18,9 @@ and how recent scrapes actually went.
 
 !!! tip "See it running"
 
-    The repository's [`demos/dashboard`](https://github.com/pambrose/prometheus-proxy/tree/master/demos/dashboard)
+    The repository's [`demos/basics`](https://github.com/pambrose/prometheus-proxy/tree/master/demos/basics)
     runs the dashboard with three agents, a set of simulated services, Prometheus, and Grafana, all on one machine:
-    `make up` in a clone's `demos/dashboard` starts it, and `make down` removes it. The [Live Demo](demo.md) page
+    `make up` in a clone's `demos/basics` starts it, and `make down` removes it. The [Basics Demo](demo.md) page
     walks through a failing target, paths discovered at runtime, and an evicted agent, with screenshots of each.
 
 ## Enabling it
@@ -233,11 +233,11 @@ proxy {
 
 Being a list, `proxy.dashboard.links` must be set in a config file rather than with `-D`.
 
-A link with an `icon` shows its tool's icon, in the tool's own color, in place of its name. Hovering over the icon, or
-tabbing to it, shows a tooltip such as *Open in Grafana*, and a screen reader says the name. The dashboard has two,
-`prometheus` and `grafana`, matched ignoring case; leave `icon` out, or empty, to show the name. The proxy serves the
-icons itself, so the dashboard still needs no access to the internet. The icons are from [Simple
-Icons](https://simpleicons.org) (CC0); the marks belong to their owners.
+A link with an `icon` shows its tool's icon, in the tool's own color, in place of its name. Hovering over the icon
+shows a tooltip such as *Open in Grafana*, and a screen reader says the name. The dashboard has two, `prometheus` and
+`grafana`, matched ignoring case; leave `icon` out, or empty, to show the name. The proxy serves the icons itself, so
+the dashboard still needs no access to the internet. The icons are from [Simple Icons](https://simpleicons.org) (CC0);
+the marks belong to their owners.
 
 A template can use:
 

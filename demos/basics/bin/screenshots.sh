@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Retakes the screenshots on the website's Live Demo page (website/prometheus-proxy/docs/demo.md) from the running demo:
-# it plays the page's scenarios, captures the dashboard and Grafana in headless Chrome at twice the pixel density in both
-# themes, crops each, and writes lossless WebP to website/prometheus-proxy/docs/images/demo/: <name>.webp in the dark
-# theme and <name>-light.webp in the light one, which the page shows by the reader's theme. It puts the demo back to
-# normal when it finishes, or when it fails.
+# Retakes the screenshots on the website's Basics Demo page (website/prometheus-proxy/docs/demo.md) from the running
+# demo: it plays the page's scenarios, captures the dashboard and Grafana in headless Chrome at twice the pixel density
+# in both themes, crops each, and writes lossless WebP to website/prometheus-proxy/docs/images/demo/: <name>.webp in the
+# dark theme and <name>-light.webp in the light one, which the page shows by the reader's theme. It puts the demo back
+# to normal when it finishes, or when it fails.
 #
-# `make screenshots`, in demos/dashboard, builds the demo from this checkout and starts it first, so the screenshots
+# `make screenshots`, in demos/basics, builds the demo from this checkout and starts it first, so the screenshots
 # show the dashboard as it is in the code. Needs Chrome or Chromium (set CHROME to choose one), ImageMagick 7
 # (`magick`), and `cwebp`.
 #
@@ -69,7 +69,7 @@ CHROME_BIN="$(find_chrome)"
 command -v magick >/dev/null 2>&1 || die "ImageMagick 7 ('magick') is not on the PATH"
 command -v cwebp >/dev/null 2>&1 || die "cwebp is not on the PATH"
 curl -fsS -o /dev/null "$DASHBOARD_URL" 2>/dev/null ||
-  die "the demo isn't running at $DASHBOARD_URL; start it with 'make up' in demos/dashboard"
+  die "the demo isn't running at $DASHBOARD_URL; start it with 'make up' in demos/basics"
 
 WORK="$(mktemp -d)"
 

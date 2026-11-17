@@ -26,7 +26,6 @@ import io.prometheus.proxy.dashboard.ProxyDashboardHtml.PROXY_PATH_ATTR
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SCRAPE_ID_PREFIX
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SCRAPE_RESULT_ID
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SCRAPE_URL_ATTR
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.TIP_ATTR
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.agentLabel
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.renderFilters
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.scrapeTime
@@ -365,13 +364,13 @@ internal object PathTableHtml {
 
   /**
    * One of [path]'s links, the one at [place] in `proxy.dashboard.links`: its name, or its brand mark, whose look the
-   * page's icon stylesheet gives its class (see [ProxyDashboardCss.linkIconCss]), with a tooltip saying what it does,
-   * *Open in Grafana*. Either way its `aria-label` names the path and the tool.
+   * page's icon stylesheet gives its class (see [ProxyDashboardCss.linkIconCss]), with a `title` saying what it does,
+   * *Open in Grafana*, which the browser shows as the copy and scrape-now buttons' titles. Either way its `aria-label`
+   * names the path and the tool.
    *
    * Its id is built from [place] and the path, which is unique in the table, so the push that replaces the table every
-   * refresh hands focus back to it, as a copy button's id does; without one, a keyboard user lost their place, and a
-   * mark its tooltip, on every refresh. The stylesheet draws the tooltip from [TIP_ATTR] rather than the browser from a
-   * `title`, which it shows only after a pause that outlasts the push, so a title's tooltip never appeared.
+   * refresh hands focus back to it, as a copy button's id does; without one, a keyboard user lost their place on every
+   * refresh.
    */
   private fun FlowContent.pathLink(
     path: PathView,
@@ -386,7 +385,7 @@ internal object PathTableHtml {
       attributes["rel"] = "noopener noreferrer"
       // Names the path, so a screen reader listing the page's links can tell one row's from another's.
       attributes["aria-label"] = "Open /${path.path} in ${link.name}"
-      if (icon == null) +link.name else attributes[TIP_ATTR] = "Open in ${link.name}"
+      if (icon == null) +link.name else attributes["title"] = "Open in ${link.name}"
     }
   }
 

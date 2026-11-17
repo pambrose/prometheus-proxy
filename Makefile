@@ -61,7 +61,7 @@ SITE_VERSION_SOURCES := $(SITE_DIR)/docs src/test/kotlin/website src/test/java/w
 # between the agents and the proxies, and the Helm charts deployed on two kind clusters. Each demo under demos/ is
 # self-contained, with its own Makefile for starting and stopping it (`make -C demos/<name> help`), so this one has no
 # demo targets.
-DASHBOARD_DEMO_DIR := demos/dashboard
+BASICS_DEMO_DIR := demos/basics
 NETWORK_DEMO_DIR := demos/network
 KUBERNETES_DEMO_DIR := demos/kubernetes
 
@@ -222,8 +222,8 @@ tla-checks: _tla-tools  ## Model-check the TLA+ specs in specs/tla (the quick co
 # Kubernetes demo's has no rules.
 check-rules:  ## Validate the alerting rules in grafana/alerts.yml, and each demo's Prometheus config and rules, with promtool (needs Docker)
 	docker run --rm -v "$(CURDIR)/grafana:/rules:ro" --entrypoint promtool $(PROMETHEUS_IMAGE) check rules /rules/alerts.yml
-	docker run --rm -v "$(CURDIR)/$(DASHBOARD_DEMO_DIR)/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
-		-v "$(CURDIR)/$(DASHBOARD_DEMO_DIR)/prometheus/demo-alerts.yml:/etc/prometheus/rules/demo-alerts.yml:ro" \
+	docker run --rm -v "$(CURDIR)/$(BASICS_DEMO_DIR)/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
+		-v "$(CURDIR)/$(BASICS_DEMO_DIR)/prometheus/demo-alerts.yml:/etc/prometheus/rules/demo-alerts.yml:ro" \
 		-v "$(CURDIR)/grafana/alerts.yml:/etc/prometheus/rules/alerts.yml:ro" \
 		--entrypoint promtool $(PROMETHEUS_IMAGE) check config /etc/prometheus/prometheus.yml
 	docker run --rm -v "$(CURDIR)/$(NETWORK_DEMO_DIR)/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \

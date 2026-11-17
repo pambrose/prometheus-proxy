@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "The Prometheus Proxy dashboard demo: what reaches Prometheus from behind the firewall.",
+  "description": "The Prometheus Proxy basics demo: what reaches Prometheus from behind the firewall.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -813,7 +813,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Alerts firing now. The demo rules (demos/dashboard/prometheus/demo-alerts.yml) fire within seconds; the project's own rules (grafana/alerts.yml) wait minutes.",
+      "description": "Alerts firing now. The demo rules (demos/basics/prometheus/demo-alerts.yml) fire within seconds; the project's own rules (grafana/alerts.yml) wait minutes.",
       "fieldConfig": {
         "defaults": {
           "custom": {

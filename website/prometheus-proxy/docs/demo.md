@@ -1,4 +1,4 @@
-# Live Demo
+# Basics Demo
 
 The repository ships a demo that runs the whole system on one machine: the proxy with its
 [dashboard](web-dashboard.md), three agents behind a simulated firewall, a set of simulated services, and Prometheus
@@ -43,7 +43,7 @@ You need Docker with Compose v2, a JDK 17 or later to run Gradle, and a clone of
 run from its own directory, where `make help` lists its targets. From the clone's root:
 
 ```bash
-cd demos/dashboard
+cd demos/basics
 make up      # builds the jars and images, starts everything, prints the URLs
 make tour    # walks through every scenario below, pausing before each step
 make down    # stops it and removes its containers, network, and volume
@@ -106,10 +106,10 @@ to curl, and the one after a target copies the target's URL.
 
 ## Scenarios
 
-`demo.sh`, in `demos/dashboard`, drives the scenarios below. Run it from that directory, where `make up` started
+`demo.sh`, in `demos/basics`, drives the scenarios below. Run it from that directory, where `make up` started
 the demo; each command prints what to watch, and a minute between them lets the graphs catch up.
 
-### A service fails
+### One service fails, another hangs, and the rest keep working
 
 ```bash
 ./demo.sh outage      # payments answers 500
@@ -155,7 +155,7 @@ source `disc` ([discovered](configuration/agent.md#dynamic-target-discovery)), b
 Prometheus finds them through the proxy's [service discovery](service-discovery.md), with no restart and no change to
 its config, and Grafana's **Discovered services** panel fills. `./demo.sh undiscover` removes them just as quietly.
 
-### An agent goes silent
+### The proxy evicts an agent that goes silent
 
 ```bash
 ./demo.sh agent-freeze    # agent-west-2: connected, but silent
@@ -182,7 +182,7 @@ bar counts it as departed, and agent-west-1 carries `/shipping_metrics` alone, w
 target. The Activity view lists the eviction as a problem, with how long the proxy waited and the paths the agent
 served. `./demo.sh agent-thaw` unfreezes the agent, and it reconnects and registers again.
 
-### Redundancy
+### A second agent keeps a path up when one stops
 
 ```bash
 ./demo.sh agent-stop      # stops agent-west-2
@@ -192,7 +192,7 @@ served. `./demo.sh agent-thaw` unfreezes the agent, and it reconnects and regist
 A stopped agent leaves the dashboard at once, and `/shipping_metrics` drops from `+1` to agent-west-1 alone. In
 Grafana, **Shipping by replica** keeps west-1 flowing, and shipping stays green on **Target health**.
 
-### One proxy, several teams
+### Per-team tokens restrict which paths an agent can register
 
 The proxy has [per-agent identities](security/index.md#per-agent-identities-and-path-authorization): each data
 center's agents connect with their own token, and an identity may register only the paths its patterns allow.
@@ -220,7 +220,7 @@ WARN  [ProxyServiceImpl.kt:333] - Agent identity 'contractor' denied registratio
 Payments keeps coming from agent-east, untouched. With a shared token, the newer agent would have taken the path
 over. `./demo.sh rogue-agent-stop` removes it.
 
-### A misconfiguration, handled calmly
+### A duplicate agent takes over the paths, and the proxy logs the fix
 
 ```bash
 ./demo.sh duplicate-agent    # a second copy of agent-east, without consolidated mode
@@ -241,27 +241,27 @@ agent-east, which registers its paths again.
 
 ## Scenario reference
 
-| Command | Effect |
-|---|---|
-| `demo.sh outage [service]` | The service answers 500 (default `payments`) |
-| `demo.sh slow [service]` | The service hangs past the agent's scrape timeout (default `inventory`) |
-| `demo.sh recover` | Every service returns to normal |
-| `demo.sh discover` / `undiscover` | Adds or removes the search, recommendations, and notifications services through agent-east's discovery file |
-| `demo.sh agent-stop` / `agent-start [agent]` | Stops or starts an agent (default `agent-west-2`) |
-| `demo.sh agent-freeze` / `agent-thaw [agent]` | Pauses or resumes an agent's container (default `agent-west-2`) |
-| `demo.sh rogue-agent` / `rogue-agent-stop` | Starts or removes the contractor's agent |
-| `demo.sh duplicate-agent` / `duplicate-agent-stop` | Starts a second copy of agent-east, or removes it and restarts agent-east |
-| `make tour [ACT=n]` | Walks through every scenario, from act 1 or the one given, pausing before each step |
-| `make status` | The containers, the services' modes, and the URLs |
-| `make logs [SERVICE=name]` | Follows the logs, of every service or the one given |
-| `make open` | Opens the dashboard, Grafana, and Prometheus's alerts in the browser |
+| Command | Effect | How it works |
+|---|---|---|
+| `demo.sh outage [service]` | The service answers 500 (default `payments`) | demo-app's control API: `POST /control/<service>/error` |
+| `demo.sh slow [service]` | The service hangs past the agent's scrape timeout (default `inventory`) | `POST /control/<service>/slow`: demo-app holds each request 10 seconds, past the agent's 3-second `scrapeTimeoutSecs` |
+| `demo.sh recover` | Every service returns to normal | `POST /control/all/ok` |
+| `demo.sh discover` / `undiscover` | Adds or removes the search, recommendations, and notifications services through agent-east's discovery file | demo-app rewrites `/discovery/targets.json`, which agent-east re-reads every 5 seconds |
+| `demo.sh agent-stop` / `agent-start [agent]` | Stops or starts an agent (default `agent-west-2`) | `docker compose stop` / `start`: the agent's connection closes as it exits |
+| `demo.sh agent-freeze` / `agent-thaw [agent]` | Pauses or resumes an agent's container (default `agent-west-2`) | `docker compose pause` / `unpause`: the connection stays open but silent, so the proxy evicts the agent after 30 seconds |
+| `demo.sh rogue-agent` / `rogue-agent-stop` | Starts or removes the contractor's agent | Starts or removes `agent-rogue` (compose profile `rogue`), which presents the contractor identity's token, allowed only `contractor_*` paths |
+| `demo.sh duplicate-agent` / `duplicate-agent-stop` | Starts a second copy of agent-east, or removes it and restarts agent-east | Starts or removes `agent-east-copy` (profile `duplicate`): agent-east's config under another name, not consolidated |
+| `make tour [PART=n]` | Walks through every scenario, from part 1 or the one given, pausing before each step |  |
+| `make status` | The containers, the services' modes, and the URLs |  |
+| `make logs [SERVICE=name]` | Follows the logs, of every service or the one given |  |
+| `make open` | Opens the dashboard, Grafana, and Prometheus's alerts in the browser |  |
 
 `recover`, `undiscover`, `agent-thaw`, `agent-start`, `rogue-agent-stop`, and `duplicate-agent-stop` undo every
 scenario. For a clean slate, `make down && make up`.
 
 ## Going further
 
-- The demo's [README](https://github.com/pambrose/prometheus-proxy/tree/master/demos/dashboard) lays these scenarios
+- The demo's [README](https://github.com/pambrose/prometheus-proxy/tree/master/demos/basics) lays these scenarios
   out as a presenter's script, with what each one means for the audience, and lists the files that set the demo up.
 - The [Network Demo](network-demo.md) puts a simulated WAN between the agents and the proxies, and shows what a far,
   thin, dead, flaky, or missing link does. It also covers what this demo leaves out: the agents failing over to a

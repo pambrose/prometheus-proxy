@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Retakes the screenshots on the website's Network Demo page (website/prometheus-proxy/docs/network-demo.md) from the
-# running demo: it plays the page's scenarios, acts 2 to 7, captures the dashboards, Grafana, and Zipkin in headless
+# running demo: it plays the page's scenarios, parts 2 to 7, captures the dashboards, Grafana, and Zipkin in headless
 # Chrome at twice the pixel density, crops each, and writes lossless WebP to
 # website/prometheus-proxy/docs/images/network-demo/: <name>.webp in the dark theme and <name>-light.webp in the light
 # one, which the page shows by the reader's theme. Zipkin's UI has one theme, so its shot is taken once. It puts the
@@ -257,7 +257,7 @@ fi
 DETAIL_HEIGHT=620
 FAILOVER_DETAIL_HEIGHT=621
 
-step "Act 2: a far link"
+step "Part 2: A high-latency link slows scrapes, but nothing fails"
 # Half a minute more of normal, so Grafana's two-minute window opens after the demo's start settled.
 wait_secs 30
 "$DEMO" far >/dev/null
@@ -266,7 +266,7 @@ wait_secs 60
 shoot_grafana far 120
 back_to_normal
 
-step "Act 3: a thin link, and filtering at the agent"
+step "Part 3: A low-bandwidth link fails scrapes; filtering at the agent fixes it"
 branch="$(agent_id agent-branch)"
 [[ -n "$branch" ]] || die "agent-branch isn't connected"
 "$DEMO" thin >/dev/null
@@ -284,7 +284,7 @@ shoot_fixed filtered "$DASHBOARD_URL/agents/$branch" "$DETAIL_HEIGHT"
 "$DEMO" unfilter >/dev/null 2>&1
 back_to_normal
 
-step "Act 4: the primary proxy goes away"
+step "Part 4: The primary proxy stops, and the agents fail over to the standby"
 "$DEMO" proxy-down >/dev/null 2>&1
 wait_until "both agents on the standby" has_both_agents "$STANDBY_DASHBOARD_URL"
 branch="$(agent_id agent-branch "$STANDBY_DASHBOARD_URL")"
@@ -294,7 +294,7 @@ shoot_fixed failover "$STANDBY_DASHBOARD_URL/agents/$branch" "$FAILOVER_DETAIL_H
 "$DEMO" proxy-up >/dev/null 2>&1
 back_to_normal
 
-step "Act 5: the link silently dies"
+step "Part 5: A link goes silent; the agent detects it and fails over"
 branch="$(agent_id agent-branch)"
 [[ -n "$branch" ]] || die "agent-branch isn't connected"
 "$DEMO" cut >/dev/null
@@ -303,7 +303,7 @@ shoot_fixed cut "$DASHBOARD_URL/agents/$branch" "$DETAIL_HEIGHT"
 wait_until "agent-branch on its standby link" branch_on_standby
 back_to_normal
 
-step "Act 6: a flaky link, followed in Zipkin"
+step "Part 6: A link that keeps dropping: the agent reconnects, traced in Zipkin"
 "$DEMO" flaky >/dev/null
 # Each connection through the link lasts about 15 seconds; three reconnects put three connectagent traces in Zipkin.
 wait_until "three reconnects of agent-branch's in Zipkin" has_connect_traces 3
@@ -313,9 +313,9 @@ wait_until "three reconnects of agent-branch's in Zipkin" has_connect_traces 3
 capture "$ZIPKIN_URL/zipkin/traces/$(connect_traces | head -1)" "$WORK/tracing.png" 496 light 8000
 back_to_normal
 
-step "Act 7: the WAN goes down"
+step "Part 7: The whole WAN goes down: an alert fires, and the agents reconnect"
 # A minute and a quarter of normal first, so Grafana's 90-second window shows the WAN going down from a quiet demo,
-# and act 5's NetworkAgentEvicted, which lasts two minutes, has resolved.
+# and part 5's NetworkAgentEvicted, which lasts two minutes, has resolved.
 wait_secs 75
 "$DEMO" wan-down >/dev/null
 wait_until "NetworkNoAgentsConnected to fire" \

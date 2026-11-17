@@ -1,7 +1,7 @@
 .PHONY: default help up down status open tour logs screenshots _jars
 
-# The dashboard demo's own targets (README.md), so the demo is self-contained; the root Makefile has none. Run them
-# from this directory (`make up`), with `make -C demos/dashboard up`, or with `make -f demos/dashboard/Makefile up`:
+# The basics demo's own targets (README.md), so the demo is self-contained; the root Makefile has none. Run them
+# from this directory (`make up`), with `make -C demos/basics up`, or with `make -f demos/basics/Makefile up`:
 # every path below comes from this Makefile's own location, not the directory make runs in. GNU Make 3.81, macOS's
 # make, runs it too.
 
@@ -39,13 +39,13 @@ status:  ## Show the containers, the simulated services' state, and the URLs
 open:  ## Open the dashboard, Grafana, and Prometheus's alerts in the browser
 	@$(DEMO) open
 
-tour:  ## Walk through the presenter's script, pausing before each step (ACT=n starts from act n)
-	@$(DEMO) tour $(ACT)
+tour:  ## Walk through the presenter's script, pausing before each step (PART=n starts from part n)
+	@$(DEMO) tour $(PART)
 
 logs:  ## Follow the logs (SERVICE=name for one service: proxy, agent-east, demo-app, ...)
 	@$(DEMO) logs $(SERVICE)
 
-# Retakes the website's Live Demo screenshots from a demo built from this checkout, so they show the current dashboard
+# Retakes the website's Basics Demo screenshots from a demo built from this checkout, so they show the current dashboard
 # (needs Docker, Chrome, ImageMagick, cwebp). It's for maintaining the site, not for presenting, so it has no `## `
 # description and `make help` leaves it out.
 screenshots: up

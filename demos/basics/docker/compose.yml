@@ -1,10 +1,10 @@
-# The Prometheus Proxy dashboard demo: a proxy with its dashboard on, three agents behind a simulated firewall, a set
-# of simulated services, and Prometheus and Grafana in front. See ../README.md. From demos/dashboard:
+# The Prometheus Proxy basics demo: a proxy with its dashboard on, three agents behind a simulated firewall, a set
+# of simulated services, and Prometheus and Grafana in front. See ../README.md. From demos/basics:
 #
 #   make up      # builds the jars and the images from this checkout, then starts everything
 #   make down    # stops it and removes its containers, network, and volume
 #
-# Compose resolves every relative path here against this file's directory, demos/dashboard/docker: the demo's configs
+# Compose resolves every relative path here against this file's directory, demos/basics/docker: the demo's configs
 # are one level up, and the repository root three.
 #
 # Every published port binds to 127.0.0.1 only: the dashboard has no authentication, Grafana lets anyone view it

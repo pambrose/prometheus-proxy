@@ -397,7 +397,7 @@ Two support helpers also live here (not test classes themselves):
   header counts), the pushes (top-level out-of-band regions, only those of the session's layout, the status bar alone
   for a session with no known layout, and the view stamp on the frame's first tag, which an agent-supplied value can't
   stand in for), tolerant selection, layout, and view count parsing, the status bar's departed count, an agent's
-  identity in its row and detail, the data `demos/dashboard/bin/screenshots.sh` reads (an agent row's id, name, and
+  identity in its row and detail, the data `demos/basics/bin/screenshots.sh` reads (an agent row's id, name, and
   path count, the name escaped and through `agentLabel`, and the detail's scrape count) and the one width of a scrape
   time it orders as text, links at a root mount, the nav, accessibility (the connection live region, outside every
   push, and the page's language and main region), and the link icons' stylesheet (in the head only while a link shows
@@ -426,7 +426,7 @@ Two support helpers also live here (not test classes themselves):
   socket), the Scrape button on a live path and the result panel outside the pushed table, the Links column (last,
   present while links are configured, each link opening its path in a new tab with an `aria-label` naming the path
   and the tool, a dash for a row with none, a departed row keeping the links that use no label, no extra status pill,
-  and the links' quiet style and focus ring; an icon link's mark alone, named in its tooltip and `aria-label`, its 24px
+  and the links' quiet style and focus ring; an icon link's mark alone, named in its `title` and `aria-label`, its 24px
   target and forced-colours paint, a separator only between two names, and a departed row dropping an icon link that
   needs a label), the failing count and the tab's title, a departed row's identity
   and target, with en dashes for the scrape cells of one never scraped, and the column guide both tables share (a
@@ -566,13 +566,13 @@ These support helpers also live here (not test classes themselves):
 - **CiHygieneTest** — every job in `.github/workflows` sets `timeout-minutes`, every tool image the `Makefile` runs
   (`*_IMAGE`) and every third-party image `ContainerTestSupport` gives the container suite is pinned by digest, in a
   form Testcontainers pulls by digest, the suite's Prometheus is the `Makefile`'s, every image each demo's compose file
-  (`demos/*/docker/compose.yml`, the dashboard and network demos') pulls is pinned by digest and any Prometheus it runs
+  (`demos/*/docker/compose.yml`, the basics and network demos') pulls is pinned by digest and any Prometheus it runs
   is the `Makefile`'s, as is every image the Kubernetes demo's manifests and kind configs (`demos/kubernetes/k8s` and
   `demos/kubernetes/kind`) name, the kind node image among them, every `astral-sh/setup-uv` step installs a pinned uv,
   the same one in each, and the CRD schemas `helm-lint` validates against come from a fixed commit, so a hung job gives
   its check back and what CI runs changes only with a diff here
 - **ConfigFileKeysTest** — every setting in a HOCON config the repo ships or its tests load (`config/test-configs`,
-  `examples`, `testing`, `etc/compose`, the dashboard, network, and Kubernetes demos' `demos/dashboard/config`,
+  `examples`, `testing`, `etc/compose`, the basics, network, and Kubernetes demos' `demos/basics/config`,
   `demos/network/config`, and `demos/kubernetes/config`, the container suite's agent configs, and the bundled
   `reference.conf`) is one `config/config.conf` declares, with the same shape, since HOCON ignores a key it doesn't
   know; a list's entries are checked against the fields its schema entry gives, as for `proxy.auth` and

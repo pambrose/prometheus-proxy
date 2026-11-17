@@ -22,7 +22,7 @@ PROXY_IMAGE=prometheus-proxy-demo/proxy:local
 AGENT_IMAGE=prometheus-proxy-demo/agent:local
 # The kind release the node image in kind/*.yaml was built for.
 MIN_KIND_VERSION=0.33.0
-# The services `make up` deploys (k8s/services.yaml); act 2 adds search (k8s/search.yaml).
+# The services `make up` deploys (k8s/services.yaml); part 2 adds search (k8s/search.yaml).
 SERVICES=(orders payments shipping)
 
 # The host ports kind publishes pp-monitoring's NodePorts on (kind/pp-monitoring.yaml), read as it creates the cluster.
@@ -34,11 +34,40 @@ PROMETHEUS_URL="http://localhost:$PROMETHEUS_PORT"
 PROXY_URL="http://localhost:$PROXY_PORT"
 
 bold() { printf '\033[1m%s\033[0m\n' "$*"; }
-hint() { printf '\033[36mWatch:\033[0m %s\n' "$*"; }
 die() {
   echo "Error: $*" >&2
   exit 1
 }
+
+# The width text is wrapped to: the terminal's, from 60 to 110 columns, or 100 with no terminal to ask.
+text_width() {
+  local cols
+  cols="$({ stty size </dev/tty | cut -d' ' -f2; } 2>/dev/null || true)"
+  [[ "$cols" =~ ^[0-9]+$ ]] || cols=100
+  ((cols >= 60)) || cols=60
+  echo $((cols < 110 ? cols : 110))
+}
+
+# Prints text wrapped to that width, its first line after $1 and the rest after $2, which is as wide as $1 shows:
+# wrap <first> <rest> <text>...
+wrap() {
+  local first="$1" rest="$2" line
+  while IFS= read -r line; do
+    printf '%s%s\n' "$first" "${line% }"
+    first="$rest"
+  done < <(fold -s -w $(($(text_width) - ${#rest})) <<<"${*:3}")
+}
+
+# What a scenario changed: a heading, then each thing to look for as a point of its own, its arguments joined.
+watch_for() { printf '\033[36m%s\033[0m\n' "What to watch:"; }
+point() { wrap "  - " "    " "$*"; }
+# How a scenario does what it does, under its own heading, before what to watch for.
+how_it_works() {
+  printf '\033[36m%s\033[0m\n' "How it works:"
+  wrap "  " "  " "$*"
+}
+# The command that undoes a scenario, or comes after it: follow_up <what> <command>
+follow_up() { printf '\033[36m%s:\033[0m %s\n' "$1" "$2"; }
 
 usage() {
   cat <<EOF
@@ -50,7 +79,7 @@ Lifecycle:
   status                   Show both clusters' pods and Services, the Helm releases, and the URLs
   open                     Open the proxy dashboard and Prometheus's targets in the browser
   logs [name]              Follow a workload's logs: agent (the default), proxy, prometheus, targets-sync, or a service
-  tour [act]               Walk through the presenter's script, pausing before each step (from act 1, or the one given)
+  tour [part]              Walk through the presenter's script, pausing before each step (from part 1, or the one given)
 
 Scenarios:
   clusters                 Show that pp-target exposes nothing, each cluster's Helm release, and Prometheus's one job
@@ -464,8 +493,12 @@ cmd_clusters() {
   "${MK[@]}" -n monitoring get configmap prometheus-config -o go-template='{{index .data "prometheus.yml"}}' |
     sed -n '/^scrape_configs:/,$p' | grep -v '^ *#'
   echo
-  hint "the agent dialed out of $TARGET to the proxy's NodePort in $MONITORING; nothing dialed in. On the" \
-    "dashboard, $DASHBOARD_URL, it is listed under its pod's name, $(agent_pod)."
+  watch_for
+  point "Every Service in $TARGET is ClusterIP, so nothing in it can be reached from outside the cluster. The" \
+    "agent dialed out of $TARGET to the proxy's NodePort in $MONITORING; nothing dialed in."
+  point "Each cluster runs one of the charts the project ships, installed with nothing but a values file."
+  point "Prometheus's one job asks the proxy's /discovery what to scrape, so its config names no target in $TARGET."
+  point "On the proxy dashboard the agent is listed under its pod's name, $(agent_pod): $DASHBOARD_URL"
 }
 
 # Deploys search, then creates its annotated Service once its pod is ready, as a team would deploy an app and then
@@ -486,9 +519,19 @@ cmd_add_service() {
   done
   echo "  search_metrics is in the proxy's /discovery $((SECONDS - start))s after the Service was created."
   echo "  The agent is still $agent, restarted $(restarts "$agent") times: nothing restarted."
-  hint "targets-sync saw the Service and wrote the agent's targets ConfigMap; the kubelet copied it into the agent's" \
-    "pod, and the agent registered the path. The dashboard's Paths view shows search_metrics with source disc, and" \
-    "Prometheus scrapes it within 5s, through the proxy: $PROMETHEUS_URL/targets. Undo with: $0 remove-service"
+  how_it_works "k8s/search.yaml holds a Deployment and a ClusterIP Service for a search service in the apps" \
+    "namespace, the Service annotated prometheus-proxy/path: search_metrics. This creates the Deployment first and" \
+    "waits for it, then the Service, so the time above is the Service's alone. targets-sync, a small controller this" \
+    "demo runs in the $TARGET cluster, watches the Services in apps and writes each annotated one into the agent's" \
+    "targets ConfigMap, agent-targets. The kubelet copies a changed ConfigMap into the pods that mount it every" \
+    "syncFrequency, a minute by default, which this demo lowers to 5 seconds: most of the time above. The agent" \
+    "re-reads the file and registers each new path."
+  watch_for
+  point "On the dashboard's Paths view, search_metrics appears with source 'disc'. The agent's pod is the same one," \
+    "with no restarts, and no other path missed a scrape."
+  point "Prometheus finds search_metrics within its 5-second discovery refresh, and scrapes it through the proxy." \
+    "Open its targets page to see it: $PROMETHEUS_URL/targets"
+  follow_up "To undo it, run" "$0 remove-service"
 }
 
 # Removes search's annotation first, and deletes search once the agent has let its path go, as a team would retire an
@@ -510,7 +553,13 @@ cmd_remove_service() {
   echo "  search_metrics left the proxy's /discovery $((SECONDS - start))s after the annotation was removed."
   "${TK[@]}" delete -f "$DEMO_DIR/k8s/search.yaml" --ignore-not-found >/dev/null
   bold "search deleted from $TARGET"
-  hint "the agent unregistered the path, again without restarting, and Prometheus drops the target at its next" \
+  how_it_works "This removes the prometheus-proxy/path annotation from search's Service with kubectl annotate." \
+    "targets-sync drops the Service from agent-targets, the kubelet copies the change into the agent's pod, and the" \
+    "agent unregisters the path. Only once the path has left the proxy's /discovery does this delete search's" \
+    "Deployment and Service: deleting a Service whose path is still registered would fail its scrapes until the" \
+    "agent heard."
+  watch_for
+  point "The agent unregistered the path, again without restarting, and Prometheus drops the target at its next" \
     "discovery refresh."
 }
 
@@ -521,8 +570,15 @@ cmd_delete_agent_pod() {
   start=$SECONDS
   show kubectl --context "kind-$TARGET" -n monitoring delete pod "$old" --wait=false
   watch_replacement "$old" "$start"
-  hint "the Deployment started a new pod as soon as the old one was deleted. The new agent connected out to the" \
-    "proxy and registered every path again, under its own name; the old one left the dashboard as it shut down."
+  how_it_works "This deletes the agent's pod with kubectl delete pod. The agent runs in a Deployment, from the" \
+    "prometheus-agent chart, so Kubernetes starts a replacement pod as soon as the old one goes. Meanwhile this" \
+    "scrapes /orders_metrics through the proxy every half second, which is how it measures the gap above."
+  watch_for
+  point "The new pod's agent connected out to the proxy and registered every path again, under its own pod's name," \
+    "and the old agent left the dashboard as it shut down."
+  point "A Prometheus scrape that landed in the gap measured above failed, and the next one succeeded."
+  point "In Prometheus, each target's agent label is the pod's name, so the new pod starts new series, as a pod" \
+    "label would."
 }
 
 cmd_change_config() {
@@ -531,76 +587,169 @@ cmd_change_config() {
   cat "$DEMO_DIR/config/agent.conf" "$DEMO_DIR/config/agent-change.conf" >"$config"
   bold "Upgrading the prometheus-agent chart with config/agent-change.conf added to its main config"
   if switch_agent_config "$config" "<(cat config/agent.conf config/agent-change.conf)"; then
-    hint "the config changed the chart's checksum/config annotation, so Kubernetes replaced the pod, and the" \
-      "chart's strategy: Recreate stopped the old one before starting the new: the gap. Compare act 2, where the" \
-      "targets changed and nothing restarted. The new pod's agent_metrics carries the JVM's metrics, so" \
-      "count({job=\"prometheus-agent\"}) climbs in Prometheus. Undo with: $0 restore-config"
+    how_it_works "This runs helm upgrade on the prometheus-agent chart with config/agent.conf followed by" \
+      "config/agent-change.conf as the agent's config. In HOCON a later setting overrides an earlier one, and" \
+      "agent-change.conf turns on the agent's JVM metrics. The chart stamps the agent's pod with a checksum of its" \
+      "config, so the new config changes the pod's template, and the Deployment replaces the pod. The chart's" \
+      "strategy is Recreate, which stops the old pod before starting the new one, since both would register the" \
+      "same paths."
+    watch_for
+    point "Scrapes failed for the gap measured above, between the old pod stopping and the new one registering its" \
+      "paths."
+    point "The new pod's agent_metrics carries the JVM's metrics, so count({job=\"prometheus-agent\"}) in Prometheus" \
+      "climbs from about 30 series to over 200."
+    point "Compare part 2, where the targets changed and nothing restarted. That's why the agent chart keeps its" \
+      "targets in a ConfigMap of their own, which the agent re-reads in place."
+    follow_up "To undo it, run" "$0 restore-config"
   fi
   rm -f "$config"
 }
 
 cmd_restore_config() {
   bold "Upgrading the prometheus-agent chart with config/agent.conf alone"
-  switch_agent_config "$DEMO_DIR/config/agent.conf" config/agent.conf || true
+  if switch_agent_config "$DEMO_DIR/config/agent.conf" config/agent.conf; then
+    how_it_works "This runs the same helm upgrade with config/agent.conf alone, so the config's checksum changes" \
+      "back, and the Deployment replaces the agent's pod again."
+  fi
 }
 
-# The tour: the presenter's script (README.md), one act at a time, pausing for Enter before each step.
+# The tour: the presenter's script (README.md), one part at a time. It numbers each part's steps, and waits for Enter
+# after each one, and before it runs a scenario.
 TOUR_FROM=1
+TOUR_STEP=0
 
 # Waits for Enter. At the end of input, as when the tour is piped, it doesn't wait.
 pause() { read -r -p "$(printf '\033[33m> %s\033[0m ' "$1")" _ || true; }
 
-# Starts act [n], unless the tour began after it: prints its title and what to show, then waits. Fails for a skipped
-# act.
-act() {
-  local n="$1" title="$2" line
-  shift 2
-  ((n >= TOUR_FROM)) || return 1
+# Lists the parts from the one the tour starts at, with about how long each takes and in all, then waits:
+# tour_contents <the demo's name>
+tour_contents() {
+  local n entry total=0
+  for ((n = TOUR_FROM; n <= ${#TOUR_PARTS[@]}; n++)); do
+    entry="${TOUR_PARTS[n - 1]}"
+    total=$((total + ${entry%% *}))
+  done
   echo
-  bold "Act $n: $title"
-  for line in "$@"; do printf '  %s\n' "$line"; done
-  pause "Enter to continue"
+  if ((TOUR_FROM == 1)); then
+    bold "A tour of the $1: ${#TOUR_PARTS[@]} parts, about $total minutes"
+  else
+    bold "A tour of the $1, from part $TOUR_FROM of ${#TOUR_PARTS[@]}: about $total minutes"
+  fi
+  for ((n = TOUR_FROM; n <= ${#TOUR_PARTS[@]}; n++)); do
+    entry="${TOUR_PARTS[n - 1]}"
+    printf '  %2d. %s (%s min)\n' "$n" "${entry#* }" "${entry%% *}"
+  done
+  echo
+  wrap "  " "  " "Each step waits for you to press Enter, so you set the pace. Leave about a minute between parts, so" \
+    "the graphs catch up. To start from another part, run make tour PART=<n>, or $0 tour <n>."
+  pause "Press Enter to start"
 }
 
-# Runs a scenario once the presenter presses Enter, from this directory, so the commands its hint prints read
-# `./demo.sh restore-config`, as the README's do. Its stdin is closed, so kubectl can't take the tour's input.
+# Starts part [n], unless the tour began after it: prints its title, from TOUR_PARTS, and what it shows. Fails for a
+# skipped part. part <n> <what it shows>...
+part() {
+  local n="$1"
+  shift
+  ((n >= TOUR_FROM)) || return 1
+  TOUR_STEP=0
+  echo
+  bold "Part $n of ${#TOUR_PARTS[@]}: ${TOUR_PARTS[n - 1]#* }"
+  wrap "  " "  " "$*"
+}
+
+# Prints the part's next step, numbered: what to do, then what it shows, its words joined.
+# number_step <what to do> [<what it shows>...]
+number_step() {
+  local indent
+  TOUR_STEP=$((TOUR_STEP + 1))
+  indent="$(printf '%*s' $((${#TOUR_STEP} + 4)) '')"
+  echo
+  wrap "  $TOUR_STEP. " "$indent" "$1"
+  shift
+  (($# == 0)) || wrap "$indent" "$indent" "$*"
+}
+
+# A step the presenter takes, such as opening a page, then waits: instruct <what to do> [<what it shows>...]
+instruct() {
+  number_step "$@"
+  pause "Press Enter to continue"
+}
+
+# A step that runs a scenario once the presenter presses Enter: step <what it does>... -- <command> [argument]. What
+# it does is joined into one paragraph. It runs as ./demo.sh from this directory, so the commands it prints read
+# ./demo.sh too, and its stdin is closed, so kubectl can't take the tour's input.
 step() {
-  pause "Enter to run: ./demo.sh $*"
+  local -a text=()
+  while [[ "$1" != -- ]]; do
+    text+=("$1")
+    shift
+  done
+  shift
+  number_step "${text[*]}"
+  pause "Press Enter to run ./demo.sh $*"
   (cd "$DEMO_DIR" && ./demo.sh "$@" </dev/null)
 }
 
-cmd_tour() {
+# Checks the part the tour starts from: check_tour_from <argument>
+check_tour_from() {
   TOUR_FROM="${1:-1}"
-  [[ "$TOUR_FROM" =~ ^[1-4]$ ]] || die "the act to start from is a number from 1 to 4"
+  if ! [[ "$TOUR_FROM" =~ ^[0-9]+$ ]] || ((TOUR_FROM < 1 || TOUR_FROM > ${#TOUR_PARTS[@]})); then
+    die "the part to start from is a number from 1 to ${#TOUR_PARTS[@]}"
+  fi
+}
+
+# Each part's title, after about how many minutes it takes to show.
+TOUR_PARTS=(
+  "3 The Helm charts on two clusters, with no inbound access"
+  "3 Annotate a Service, and Prometheus scrapes it"
+  "2 Kubernetes replaces a deleted agent pod in about a second"
+  "3 A config change restarts the agent; a targets change doesn't"
+)
+
+cmd_tour() {
+  check_tour_from "${1:-}"
   curl -fsS -o /dev/null "$DASHBOARD_URL" 2>/dev/null ||
     die "the demo isn't running; start it with 'make up' in demos/kubernetes"
+  tour_contents "Kubernetes demo"
 
-  if act 1 "Two clusters, one outbound link" \
-    "The proxy and agent of the other demos, deployed with their Helm charts: the proxy, its dashboard, and" \
-    "Prometheus in $MONITORING; the services and the agent in $TARGET, which exposes nothing."; then
-    step clusters
-    pause "Open $DASHBOARD_URL: the agent, named for its pod, connected from $TARGET. Then press Enter"
+  if part 1 "This demo runs the other demos' proxy and agent on Kubernetes, installed with the project's Helm" \
+    "charts, on two kind clusters. $MONITORING, outside the firewall, runs the proxy, its dashboard, and" \
+    "Prometheus. $TARGET, behind the firewall, runs the services and the agent, and exposes nothing."; then
+    step "List what runs in each cluster: $TARGET's Services, each cluster's Helm release, and Prometheus's" \
+      "scrape config." -- clusters
+    instruct "Open the proxy dashboard: $DASHBOARD_URL" \
+      "One agent is connected, named for its pod: the same name kubectl shows. It has four paths: its own" \
+      "metrics, with source 'cfg', from its config, and the three services, with source 'disc', from discovery."
+    instruct "Open Prometheus's targets page: $PROMETHEUS_URL/targets" \
+      "All four targets are up, each scraped through the proxy."
   fi
-  if act 2 "Annotate a Service, and Prometheus scrapes it" \
-    "targets-sync writes the agent's targets from every Service annotated prometheus-proxy/path. Deploy one."; then
-    step add-service
-    pause "Show search_metrics on the dashboard's Paths view (source disc) and in Prometheus, then press Enter"
-    step remove-service
+
+  if part 2 "targets-sync, a small controller in this demo, watches the Services in the apps namespace and writes" \
+    "each one annotated prometheus-proxy/path into the agent's targets ConfigMap, which the agent re-reads." \
+    "Here you deploy a new service, and see it scraped without restarting anything."; then
+    step "Deploy the search service, then create its Service, annotated prometheus-proxy/path: search_metrics." \
+      -- add-service
+    step "Once you've seen search_metrics on the dashboard and in Prometheus, remove the annotation, then" \
+      "delete search once its path has gone." -- remove-service
   fi
-  if act 3 "Kubernetes replaces the agent" \
-    "Delete the agent's pod; its Deployment starts another, which reconnects and registers under its own name."; then
-    step delete-agent-pod
-    pause "Show the dashboard's Activity view: the old pod disconnecting, the new one connecting. Then press Enter"
+
+  if part 3 "Here you delete the agent's pod, as a failed node or an eviction would, and see Kubernetes replace" \
+    "it with nobody touching the agent."; then
+    step "Delete the agent's pod." -- delete-agent-pod
+    instruct "Open the dashboard's Activity view." \
+      "It shows the old pod's paths leaving and the new pod's arriving."
   fi
-  if act 4 "A config change restarts the agent; a targets change doesn't" \
-    "A helm upgrade changes the agent's main config: Kubernetes replaces the pod, with a short gap."; then
-    step change-config
-    pause "Compare act 2, where nothing restarted. Then press Enter"
-    step restore-config
+
+  if part 4 "The agent chart keeps the agent's targets apart from its main config. Part 2 changed the targets," \
+    "and nothing restarted. Here you change the main config, which only a restart applies."; then
+    step "Upgrade the agent chart with a main config that also turns on the agent's JVM metrics." -- change-config
+    step "Upgrade the agent chart with the original config again, which replaces the pod once more." \
+      -- restore-config
   fi
 
   echo
-  bold "That's the tour. $0 tour <act> starts again from an act."
+  bold "That's the tour."
+  echo "To start again from a part, run make tour PART=<n>, or $0 tour <n>."
 }
 
 main() {

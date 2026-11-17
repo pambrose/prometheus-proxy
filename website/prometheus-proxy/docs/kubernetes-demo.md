@@ -1,6 +1,6 @@
 # Kubernetes Demo
 
-The [Live Demo](demo.md) and the [Network Demo](network-demo.md) show the proxy, its dashboard, and the link through
+The [Basics Demo](demo.md) and the [Network Demo](network-demo.md) show the proxy, its dashboard, and the link through
 the firewall. This third demo deploys the same proxy and agent the way a platform team would run them: on two
 [kind](https://kind.sigs.k8s.io/) clusters, with the project's own Helm charts, and Kubernetes doing the operating. It
 shows that the target cluster exposes nothing, that annotating a Service is all it takes for Prometheus to scrape it,
@@ -56,9 +56,9 @@ images, which takes a few minutes. After that, `make up` on running clusters tak
 | The proxy's service discovery | <http://localhost:8280/discovery> |
 | `kubectl` | `kubectl --context kind-pp-monitoring …` and `kubectl --context kind-pp-target …` |
 
-Each port is the Live Demo's plus 200, so all three demos can run side by side. kind publishes them on `127.0.0.1` only,
-through NodePort Services in the monitoring cluster: the dashboard has no authentication, which suits a laptop and
-nothing shared. To move a port that is already taken, set `KUBERNETES_DEMO_DASHBOARD_PORT`,
+Each port is the Basics Demo's plus 200, so all three demos can run side by side. kind publishes them on `127.0.0.1`
+only, through NodePort Services in the monitoring cluster: the dashboard has no authentication, which suits a laptop
+and nothing shared. To move a port that is already taken, set `KUBERNETES_DEMO_DASHBOARD_PORT`,
 `KUBERNETES_DEMO_PROMETHEUS_PORT`, or `KUBERNETES_DEMO_PROXY_PORT` when the cluster is created, for example
 `KUBERNETES_DEMO_PROMETHEUS_PORT=9291 make up`.
 
@@ -81,7 +81,7 @@ as it is. The charts get nothing but a values file each, a config file, and the 
 demo; each command prints what to watch, and how long it took. The times on this page were measured on an
 Apple-silicon laptop.
 
-### Two clusters, one outbound link
+### The Helm charts on two clusters, with no inbound access
 
 ```bash
 ./demo.sh clusters    # pp-target's Services, each cluster's Helm release, and Prometheus's one job
@@ -144,10 +144,10 @@ seconds, 1 to 7. The agent's own re-read, `agent.discovery.reconcileIntervalSecs
 `./demo.sh remove-service` removes the annotation, and the path leaves `/discovery` within about 10 seconds, again
 without a restart.
 
-The [Live Demo](demo.md) shows dynamic discovery itself, from a file; here Kubernetes drives it. targets-sync is the
+The [Basics Demo](demo.md) shows dynamic discovery itself, from a file; here Kubernetes drives it. targets-sync is the
 demo's: a discovery source in the agent that read Services itself would replace it.
 
-### Kubernetes replaces the agent
+### Kubernetes replaces a deleted agent pod in about a second
 
 ```bash
 ./demo.sh delete-agent-pod   # deletes the agent's pod; its Deployment starts another
@@ -194,16 +194,16 @@ which only a restart applies. `./demo.sh restore-config` puts the original confi
 
 ## Scenario reference
 
-| Command | Effect |
-|---|---|
-| `demo.sh clusters` | Shows the target cluster's Services, each cluster's Helm release, and Prometheus's scrape config |
-| `demo.sh add-service` / `remove-service` | Deploys the search service and then its annotated Service; or removes the annotation and then deletes both |
-| `demo.sh delete-agent-pod` | Deletes the agent's pod, and reports when its replacement registered and how long scrapes failed |
-| `demo.sh change-config` / `restore-config` | Upgrades the agent chart with or without the config change, and reports the replacement the same way |
-| `make tour [ACT=n]` | Walks through every scenario, from act 1 or the one given, pausing before each step |
-| `make status` | Both clusters' pods and Services, the Helm releases, and the URLs |
-| `make logs [SERVICE=name]` | Follows a workload's logs: `agent`, the default, `proxy`, `prometheus`, `targets-sync`, or a service |
-| `make open` | Opens the dashboard and Prometheus's targets in the browser |
+| Command | Effect | How it works |
+|---|---|---|
+| `demo.sh clusters` | Shows the target cluster's Services, each cluster's Helm release, and Prometheus's scrape config | `kubectl get services`, `helm list`, and Prometheus's ConfigMap |
+| `demo.sh add-service` / `remove-service` | Deploys the search service and then its annotated Service; or removes the annotation and then deletes both | `kubectl apply` / `kubectl annotate ... prometheus-proxy/path-`; targets-sync rewrites the `agent-targets` ConfigMap, which the kubelet copies into the agent's pod |
+| `demo.sh delete-agent-pod` | Deletes the agent's pod, and reports when its replacement registered and how long scrapes failed | `kubectl delete pod`; the agent's Deployment starts a replacement |
+| `demo.sh change-config` / `restore-config` | Upgrades the agent chart with or without the config change, and reports the replacement the same way | `helm upgrade --set-file config=...`; the config's checksum on the pod template makes the Deployment replace the pod |
+| `make tour [PART=n]` | Walks through every scenario, from part 1 or the one given, pausing before each step |  |
+| `make status` | Both clusters' pods and Services, the Helm releases, and the URLs |  |
+| `make logs [SERVICE=name]` | Follows a workload's logs: `agent`, the default, `proxy`, `prometheus`, `targets-sync`, or a service |  |
+| `make open` | Opens the dashboard and Prometheus's targets in the browser |  |
 
 `remove-service` and `restore-config` undo every scenario. For a clean slate, `make down && make up`.
 

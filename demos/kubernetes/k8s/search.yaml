@@ -1,4 +1,4 @@
-# Act 2's service (`demo.sh add-service`): search, deployed like the others in services.yaml, its Service annotated
+# Part 2's service (`demo.sh add-service`): search, deployed like the others in services.yaml, its Service annotated
 # prometheus-proxy/path. The Service is all it takes for Prometheus to scrape it through the proxy: targets-sync adds
 # it to the agent's targets, the kubelet copies the ConfigMap into the agent's pod, and the agent registers the path,
 # without restarting. add-service applies the Deployment first, selecting it by its label, which the Service doesn't
@@ -30,7 +30,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: search
-          # The dashboard demo's Python image, digest included.
+          # The basics demo's Python image, digest included.
           image: python:3.14-alpine@sha256:5862d971d1f0ae26b258cefa4e893556b1d3aba81bd2ff30888704ad378bab67
           command: ["python", "-u", "/app/services_app.py"]
           env:

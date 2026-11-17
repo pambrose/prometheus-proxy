@@ -84,11 +84,11 @@ most 10,000 agents connected with one identity, which is every agent when agent 
 
 ### New Features
 
-- **A demo of the dashboard and Grafana.** From `demos/dashboard` in a clone of the repository, `make up` starts a
+- **A demo of the dashboard and Grafana.** From `demos/basics` in a clone of the repository, `make up` starts a
   proxy with its dashboard, three agents, a set of simulated services, Prometheus, and Grafana with the project's
   dashboards, all on your machine; `make down` removes it. The demo has its own Makefile (`help`, `up`, `down`,
   `status`, `open`, `tour`, `logs`, and `screenshots`), so each demo under `demos/` is self-contained.
-  `demos/dashboard/README.md` walks through what to show: a failing or hung target, a redundant pair of agents,
+  `demos/basics/README.md` walks through what to show: a failing or hung target, a redundant pair of agents,
   services discovered without a restart, and an agent evicted after it goes silent.
 - **Copy a target URL from the dashboard.** Each target URL in the Paths view has a button after it that copies
   the URL, on a dashboard served over plain http too. It shows a check when the copy worked and a cross when it
@@ -100,15 +100,17 @@ most 10,000 agents connected with one identity, which is every agent when agent 
   its URL on the proxy, the one to curl to check the path through the proxy, built from the address you opened the
   dashboard at.
 - **The demo shows several teams on one proxy.** Each data center's agents connect with a token of their own, and a
-  new scenario shows a contractor's agent refused a path its identity doesn't cover. The Live Demo page walks
+  new scenario shows a contractor's agent refused a path its identity doesn't cover. The Basics Demo page walks
   through it.
-- **A guided tour of the demo.** `make tour`, in `demos/dashboard`, walks a presenter through every scenario, one
-  step at a time. A new one shows an agent's config deployed twice by mistake, which now settles instead of the two
-  fighting over their paths. The tour ends by pointing to the network demo, below, for proxy failover, filtering at
-  the agent, and tracing.
+- **A guided tour of the demo.** `make tour`, in `demos/basics`, lists its parts and about how long each takes, then
+  walks a presenter through every scenario one numbered step at a time: what to open, what to click, and what to
+  watch. Each scenario also says how it works: what it changed, and how, to cause what you see. The other two demos'
+  tours, below, work the same way. A new scenario shows an agent's config deployed twice by mistake, which now settles
+  instead of the two fighting over their paths. The tour ends by pointing to the network demo, below, for proxy
+  failover, filtering at the agent, and tracing, and to the Kubernetes demo.
 - **A demo of the network between the agents and the proxies.** From `demos/network`, `make up` starts a proxy and
   its standby, two agents, and a simulated WAN between them, with Prometheus, Grafana, and Zipkin, on ports that
-  don't clash with the dashboard demo's, so both can run at once. Its presenter's script and `make tour` show a far
+  don't clash with the basics demo's, so both can run at once. Its presenter's script and `make tour` show a far
   link, a thin one and filtering at the agent, a proxy that goes away, a link that dies silently, a flaky link
   followed in Zipkin, and the whole WAN going down and coming back. The website's new Network Demo page walks
   through each, with screenshots.
@@ -343,10 +345,10 @@ most 10,000 agents connected with one identity, which is every agent when agent 
 - The API docs no longer list `all` as a log level, which fails startup, and describe the service discovery target
   as it now works: `host:port`, or an `http` or `https` URL, with no user info, query, or fragment. The
   `--sd_target_prefix` help text says the same.
-- The website has a **Live Demo** page, with screenshots of the dashboard and Grafana as the demo's scenarios play
+- The website has a **Basics Demo** page, with screenshots of the dashboard and Grafana as the demo's scenarios play
   out: a failing service, new services found without a restart, and an agent evicted after it goes silent.
 - The website's menu has a single Operations section, with the Dashboard page in it.
-- The Live Demo page's screenshots match your light or dark theme.
+- The Basics Demo page's screenshots match your light or dark theme.
 - The production guide explains what can slow an agent's switch between proxies, and the Zipkin section explains
   why a healthy agent sends few spans and why Zipkin should start before the proxy and agents.
 
@@ -404,7 +406,7 @@ most 10,000 agents connected with one identity, which is every agent when agent 
   `~/.gradle/gradle.properties`. The publish targets stop before Gradle runs when either keychain entry is missing,
   and print the command that adds it. `make release-check` checks the entries too, so `make release` stops before
   running its tests, rather than at the publishing step after them.
-- `make screenshots`, in `demos/dashboard`, retakes the Live Demo page's screenshots from a demo built from the
+- `make screenshots`, in `demos/basics`, retakes the Basics Demo page's screenshots from a demo built from the
   checkout.
 
 ### Also in this release

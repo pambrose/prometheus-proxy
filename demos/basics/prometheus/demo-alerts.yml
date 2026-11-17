@@ -1,4 +1,4 @@
-# Fast alerting rules for the dashboard demo, so a scenario's alert fires within seconds rather than the minutes the
+# Fast alerting rules for the basics demo, so a scenario's alert fires within seconds rather than the minutes the
 # production rules in grafana/alerts.yml wait. `make check-rules` validates this file with promtool.
 
 groups:

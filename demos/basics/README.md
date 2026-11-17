@@ -1,26 +1,50 @@
-# Dashboard demo
+# Basics demo
 
 A self-contained demo of Prometheus Proxy for customers. It runs the proxy with its web dashboard, three agents behind a
 simulated firewall, a set of simulated services, and Prometheus and Grafana. A presenter can show live traffic,
 failures and recovery, redundancy, dynamic discovery, stale-agent eviction, per-team identities, and a misconfigured
 duplicate agent, all on one laptop.
 
-The website's [Live Demo](https://pambrose.github.io/prometheus-proxy/demo/) page walks through the same scenarios with
-screenshots of the dashboard and Grafana.
+The website's [Basics Demo](https://pambrose.github.io/prometheus-proxy/demo/) page walks through the same scenarios
+with screenshots of the dashboard and Grafana.
 
 Proxy failover, filtering at the agent, and tracing through the firewall are in the [network demo](../network), which
 follows this one and puts a simulated WAN between the agents and the proxies.
 
-```
- demo-app  (simulated services: orders, payments, inventory, catalog, shipping, and three discoverable ones)
-     ▲  scraped from inside the "firewall"
- agent-east ────────┐  static paths, dynamic discovery, and the proxy's own metrics (the proxy monitors itself)
- agent-west-1 ──────┤  a consolidated pair: both serve shipping_metrics
- agent-west-2 ──────┘
-     │  gRPC, outbound only
-   proxy ── dashboard :8094 (live agents, paths, and scrapes)
-     ▲  HTTP service discovery (/discovery) and scrapes through :8080
- Prometheus :9090 (5s scrapes, alerting rules) ──► Grafana :3000 (three dashboards)
+```mermaid
+flowchart TB
+  subgraph outside["Outside the firewall"]
+    grafana["Grafana :3000<br/>three dashboards"]
+    prometheus["Prometheus :9090<br/>no targets in its config"]
+    proxy["proxy<br/>scrapes :8080<br/>dashboard :8094"]
+  end
+
+  subgraph inside["Inside the firewall, which the demo simulates"]
+    subgraph east["East data center"]
+      agentEast["agent-east<br/>configured and<br/>discovered paths"]
+    end
+    subgraph west["West data center: a redundant pair"]
+      agentWest1["agent-west-1"]
+      agentWest2["agent-west-2"]
+    end
+    scenario["agent-rogue and<br/>agent-east-copy,<br/>started by scenarios"]
+    app[("demo-app<br/>the simulated services")]
+  end
+
+  grafana -->|queries| prometheus
+  prometheus -->|"discovers every path,<br/>and scrapes it through"| proxy
+  proxy ~~~ agentEast & agentWest1 & agentWest2 & scenario
+  agentEast ==>|"gRPC, outbound only"| proxy
+  agentWest1 ==> proxy
+  agentWest2 ==> proxy
+  scenario -.-> proxy
+  agentEast -->|scrapes| app
+  agentWest1 -->|"both scrape<br/>shipping"| app
+  agentWest2 --> app
+
+  classDef started stroke-dasharray: 5 5
+  class scenario started
+  style inside stroke:#c0392b,stroke-width:2px,stroke-dasharray:6 4
 ```
 
 The proxy and agent images are built from this checkout, so the demo always shows the dashboard as it is in the code.
@@ -31,7 +55,7 @@ You need Docker with Compose v2, and a JDK 17 or later to run Gradle. The demo's
 where `make help` lists its targets. From the repository root:
 
 ```bash
-cd demos/dashboard
+cd demos/basics
 make up      # builds the jars and images, starts everything, and prints the URLs
 make tour    # walks through the presenter's script below, pausing before each step
 make down    # stops it and removes its containers, network, and volume
@@ -70,16 +94,17 @@ anything shared.
 
 ## Presenter's script
 
-Each act lists what to show and what it means for the customer. Run the scenario commands from `demos/dashboard`;
-each one prints what to watch. Leave about a minute between acts so the graphs catch up.
+Each part lists what to show and what it means for the customer. Run the scenario commands from `demos/basics`;
+each one prints what to watch. Leave about a minute between parts so the graphs catch up.
 
-### 1. The problem, and the shape of the answer
+### 1. How Prometheus scrapes services behind a firewall
 
 Show the diagram above. Prometheus pulls metrics, but the services live behind a firewall that allows no inbound
 connections. The agents sit inside the firewall and connect *out* to the proxy over gRPC. Prometheus scrapes the proxy
-as if it were each service.
+as if it were each service. The demo simulates the firewall: its containers share one network, but Prometheus has no
+targets of its own, so it reaches each service only through the proxy.
 
-### 2. The proxy dashboard
+### 2. Agents, paths, and live scrapes on the proxy dashboard
 
 Open the dashboard on the **Agents** view.
 
@@ -92,21 +117,21 @@ Open the dashboard on the **Agents** view.
 - Switch to **Paths**: every path, the agent serving it, its target, its last scrape, and its status.
   `/shipping_metrics` shows `agent-west-1 +1`: two agents serve it.
 - Each row ends with links to its job in Prometheus and in Grafana, shown as their brand icons and filled from the
-  label the agent registered the path with; the Grafana one is a way into the next act.
+  label the agent registered the path with; the Grafana one is a way into the next part.
 
-### 3. Grafana
+### 3. Target health and business metrics in Grafana
 
 Open Grafana. It lands on the **Prometheus Proxy Demo** dashboard.
 
 - **Through the firewall** shows the health of every target, scrape outcomes, latency, and payload size per path.
 - **Business metrics from behind the firewall** shows orders, payments, inventory, and shipping. These are ordinary
   application metrics that Prometheus collected through the proxy.
-- Prometheus's config lists no targets. It asks the proxy (`/discovery`) what exists, and each agent's labels set the
-  `job`. Show <http://localhost:8080/discovery>.
 - The **Prometheus Proxy** and **Prometheus Agents** links open the dashboards the project ships for operating the
   proxy itself.
+- Prometheus's config lists no targets. It asks the proxy (`/discovery`) what exists, and each agent's labels set the
+  `job`. Show <http://localhost:8080/discovery>.
 
-### 4. A service fails, and recovers
+### 4. One service fails, another hangs, and the rest keep working
 
 ```bash
 ./demo.sh outage          # payments now answers 500
@@ -128,7 +153,7 @@ Open Grafana. It lands on the **Prometheus Proxy Demo** dashboard.
 ./demo.sh recover         # everything back to normal
 ```
 
-### 5. Redundancy
+### 5. A second agent keeps a path up when one stops
 
 ```bash
 ./demo.sh agent-stop      # stops agent-west-2
@@ -158,7 +183,7 @@ Open Grafana. It lands on the **Prometheus Proxy Demo** dashboard.
 
 In the Paths view, a removed path that had been scraped stays listed as `gone`, so it's clear what left.
 
-### 7. An agent that goes silent
+### 7. The proxy evicts an agent that goes silent
 
 ```bash
 ./demo.sh agent-freeze    # freezes agent-west-2: connected, but silent
@@ -174,7 +199,7 @@ In the Paths view, a removed path that had been scraped stays listed as `gone`, 
 ./demo.sh agent-thaw      # it reconnects and registers again
 ```
 
-### 8. One proxy, several teams
+### 8. Per-team tokens restrict which paths an agent can register
 
 The proxy has per-agent identities: each data center's agents connect with their own token, and an identity may
 register only the paths its patterns allow.
@@ -192,7 +217,7 @@ register only the paths its patterns allow.
 ./demo.sh rogue-agent-stop
 ```
 
-### 9. A misconfiguration, handled calmly
+### 9. A duplicate agent takes over the paths, and the proxy logs the fix
 
 ```bash
 ./demo.sh duplicate-agent    # a second copy of agent-east, without consolidated mode
@@ -209,23 +234,25 @@ register only the paths its patterns allow.
 ```
 
 That's the script. For proxy failover, filtering at the agent, and tracing through the firewall, go on to the
-[network demo](../network).
+[network demo](../network). The same proxy and agent, deployed on Kubernetes with their Helm charts, are in the
+[Kubernetes demo](../kubernetes). The demos use different ports, so they can run side by side, but each takes memory
+and CPU: `make down` stops this one and frees its resources.
 
 ## Scenario reference
 
-| Command | Effect |
-|---|---|
-| `demo.sh outage [service]` | The service answers 500 (default `payments`) |
-| `demo.sh slow [service]` | The service hangs past the agent's scrape timeout (default `inventory`) |
-| `demo.sh recover` | Every service returns to normal |
-| `demo.sh discover` / `undiscover` | Adds or removes the search, recommendations, and notifications services through agent-east's discovery file |
-| `demo.sh agent-stop` / `agent-start [agent]` | Stops or starts an agent (default `agent-west-2`) |
-| `demo.sh agent-freeze` / `agent-thaw [agent]` | Pauses or resumes an agent's container (default `agent-west-2`) |
-| `demo.sh rogue-agent` / `rogue-agent-stop` | Starts or removes the contractor's agent |
-| `demo.sh duplicate-agent` / `duplicate-agent-stop` | Starts a second copy of agent-east, or removes it and restarts agent-east |
-| `make tour [ACT=n]` | Walks through the presenter's script, from act 1 or the one given, pausing before each step |
-| `make status` | The containers, the services' modes, and the URLs |
-| `make logs [SERVICE=name]` | Follows the logs, of every service or the one given |
+| Command | Effect | How it works |
+|---|---|---|
+| `demo.sh outage [service]` | The service answers 500 (default `payments`) | demo-app's control API: `POST /control/<service>/error` |
+| `demo.sh slow [service]` | The service hangs past the agent's scrape timeout (default `inventory`) | `POST /control/<service>/slow`: demo-app holds each request 10 seconds, past the agent's 3-second `scrapeTimeoutSecs` |
+| `demo.sh recover` | Every service returns to normal | `POST /control/all/ok` |
+| `demo.sh discover` / `undiscover` | Adds or removes the search, recommendations, and notifications services through agent-east's discovery file | demo-app rewrites `/discovery/targets.json`, which agent-east re-reads every 5 seconds |
+| `demo.sh agent-stop` / `agent-start [agent]` | Stops or starts an agent (default `agent-west-2`) | `docker compose stop` / `start`: the agent's connection closes as it exits |
+| `demo.sh agent-freeze` / `agent-thaw [agent]` | Pauses or resumes an agent's container (default `agent-west-2`) | `docker compose pause` / `unpause`: the connection stays open but silent, so the proxy evicts the agent after 30 seconds |
+| `demo.sh rogue-agent` / `rogue-agent-stop` | Starts or removes the contractor's agent | Starts or removes `agent-rogue` (compose profile `rogue`), which presents the contractor identity's token, allowed only `contractor_*` paths |
+| `demo.sh duplicate-agent` / `duplicate-agent-stop` | Starts a second copy of agent-east, or removes it and restarts agent-east | Starts or removes `agent-east-copy` (profile `duplicate`): agent-east's config under another name, not consolidated |
+| `make tour [PART=n]` | Walks through the presenter's script, from part 1 or the one given, pausing before each step |  |
+| `make status` | The containers, the services' modes, and the URLs |  |
+| `make logs [SERVICE=name]` | Follows the logs, of every service or the one given |  |
 
 The services are `orders`, `payments`, `inventory`, `catalog`, and `shipping`, plus `search`, `recommendations`, and
 `notifications` once discovered. Freezing `agent-east` also stops the proxy's own metrics, which travel through it.
@@ -235,8 +262,8 @@ The services are `orders`, `payments`, `inventory`, `catalog`, and `shipping`, p
 | File | What it sets up |
 |---|---|
 | `docker/compose.yml` | The services, their ports, and the images built from this checkout |
-| `config/proxy.conf` | The dashboard, service discovery, the per-agent identities, and a 30-second eviction limit, so act 7 fits a demo |
-| `config/agent-duplicate.conf` | agent-east's config under another name, for act 9 |
+| `config/proxy.conf` | The dashboard, service discovery, the per-agent identities, and a 30-second eviction limit, so part 7 fits a demo |
+| `config/agent-duplicate.conf` | agent-east's config under another name, for part 9 |
 | `config/agent-*.conf` | Each agent's proxy endpoint, identity token, paths, and their labels (the `job` Prometheus uses), discovery for agent-east, consolidated mode for the west pair, and a 3-second scrape timeout |
 | `prometheus/prometheus.yml` | One HTTP service discovery job against the proxy |
 | `prometheus/demo-alerts.yml` | The fast demo alerts |
@@ -244,7 +271,7 @@ The services are `orders`, `payments`, `inventory`, `catalog`, and `shipping`, p
 | `app/demo_app.py` | The simulated services and their control API |
 | `Makefile` | The demo's targets: `make up` (which builds the jars first), `down`, `status`, `open`, `tour`, and `logs`, which `make help` lists, and `screenshots`, which it leaves out, since it's for maintaining the site |
 | `demo.sh` | Starting, stopping, and the scenarios |
-| `bin/screenshots.sh` | The Live Demo page's screenshots, in the dark and light themes. `make screenshots` builds and starts the demo, waits a minute so the agents' uptimes read in minutes, plays the scenarios, and writes them to `website/prometheus-proxy/docs/images/demo/` (needs Chrome, ImageMagick 7, and `cwebp`). While checking a change, `SKIP_UPTIME_WAIT=1` skips the minute, so the shots show uptimes in seconds and aren't for the site, and `WAIT_SECS` sets how long each wait for a scene may take before the script fails (default 150): `make screenshots SKIP_UPTIME_WAIT=1 WAIT_SECS=60` |
+| `bin/screenshots.sh` | The Basics Demo page's screenshots, in the dark and light themes. `make screenshots` builds and starts the demo, waits a minute so the agents' uptimes read in minutes, plays the scenarios, and writes them to `website/prometheus-proxy/docs/images/demo/` (needs Chrome, ImageMagick 7, and `cwebp`). While checking a change, `SKIP_UPTIME_WAIT=1` skips the minute, so the shots show uptimes in seconds and aren't for the site, and `WAIT_SECS` sets how long each wait for a scene may take before the script fails (default 150): `make screenshots SKIP_UPTIME_WAIT=1 WAIT_SECS=60` |
 
 From the repository root, `make check-rules` validates the Prometheus config and both rule files with promtool, and
 `ConfigFileKeysTest` checks every key in `config/*.conf` against `config/config.conf`, and that each file loads as the

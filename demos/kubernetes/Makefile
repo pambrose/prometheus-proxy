@@ -40,8 +40,8 @@ status:  ## Show both clusters' pods and Services, the Helm releases, and the UR
 open:  ## Open the proxy dashboard and Prometheus's targets in the browser
 	@$(DEMO) open
 
-tour:  ## Walk through the presenter's script, pausing before each step (ACT=n starts from act n)
-	@$(DEMO) tour $(ACT)
+tour:  ## Walk through the presenter's script, pausing before each step (PART=n starts from part n)
+	@$(DEMO) tour $(PART)
 
 logs:  ## Follow a workload's logs (SERVICE=name: agent, the default, proxy, prometheus, targets-sync, orders, ...)
 	@$(DEMO) logs $(SERVICE)

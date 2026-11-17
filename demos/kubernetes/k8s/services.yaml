@@ -1,7 +1,7 @@
 # The simulated services in pp-target (app/services_app.py, one service per pod), each with a ClusterIP Service in the
 # apps namespace annotated prometheus-proxy/path, so targets-sync lists it in the agent's targets. demo.sh applies it
 # with `kubectl --context kind-pp-target apply -f k8s/services.yaml`, and creates their script, the services-app
-# ConfigMap, from app/services_app.py. Act 2's search service is in search.yaml.
+# ConfigMap, from app/services_app.py. Part 2's search service is in search.yaml.
 
 apiVersion: apps/v1
 kind: Deployment
@@ -28,7 +28,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: orders
-          # The dashboard demo's Python image, digest included.
+          # The basics demo's Python image, digest included.
           image: python:3.14-alpine@sha256:5862d971d1f0ae26b258cefa4e893556b1d3aba81bd2ff30888704ad378bab67
           command: ["python", "-u", "/app/services_app.py"]
           env:
@@ -106,7 +106,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: payments
-          # The dashboard demo's Python image, digest included.
+          # The basics demo's Python image, digest included.
           image: python:3.14-alpine@sha256:5862d971d1f0ae26b258cefa4e893556b1d3aba81bd2ff30888704ad378bab67
           command: ["python", "-u", "/app/services_app.py"]
           env:
@@ -184,7 +184,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: shipping
-          # The dashboard demo's Python image, digest included.
+          # The basics demo's Python image, digest included.
           image: python:3.14-alpine@sha256:5862d971d1f0ae26b258cefa4e893556b1d3aba81bd2ff30888704ad378bab67
           command: ["python", "-u", "/app/services_app.py"]
           env:

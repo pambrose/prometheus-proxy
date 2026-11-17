@@ -10,13 +10,13 @@
 #
 # Every published port binds to 127.0.0.1 only: the dashboards have no authentication, Grafana lets anyone view it
 # without signing in, and its admin password is the default, which suits a demo on a laptop and nothing else. Each
-# default port is the dashboard demo's plus 100, so the two demos can run at once. Set NETWORK_DEMO_DASHBOARD_PORT,
+# default port is the basics demo's plus 100, so the two demos can run at once. Set NETWORK_DEMO_DASHBOARD_PORT,
 # NETWORK_DEMO_STANDBY_DASHBOARD_PORT, NETWORK_DEMO_PROXY_PORT, NETWORK_DEMO_PROMETHEUS_PORT,
 # NETWORK_DEMO_GRAFANA_PORT, or NETWORK_DEMO_ZIPKIN_PORT to move a host port that's already taken.
 
 name: prometheus-proxy-network-demo
 
-# The two agents share one image, built from this checkout's agent jar. The dashboard demo builds and runs the same
+# The two agents share one image, built from this checkout's agent jar. The basics demo builds and runs the same
 # tag, so the two demos don't keep two copies of it.
 x-agent: &agent
   image: prometheus-proxy-demo/agent:local
