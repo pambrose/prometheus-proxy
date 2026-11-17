@@ -45,6 +45,8 @@ tour:  ## Walk through the presenter's script, pausing before each step (ACT=n s
 logs:  ## Follow the logs (SERVICE=name for one service: proxy, agent-east, demo-app, ...)
 	@$(DEMO) logs $(SERVICE)
 
-# Retakes the website's Live Demo screenshots from a demo built from this checkout, so they show the current dashboard.
-screenshots: up  ## Retake the website's Live Demo screenshots (needs Docker, Chrome, ImageMagick, cwebp)
+# Retakes the website's Live Demo screenshots from a demo built from this checkout, so they show the current dashboard
+# (needs Docker, Chrome, ImageMagick, cwebp). It's for maintaining the site, not for presenting, so it has no `## `
+# description and `make help` leaves it out.
+screenshots: up
 	@cd "$(DEMO_DIR)" && ./bin/screenshots.sh

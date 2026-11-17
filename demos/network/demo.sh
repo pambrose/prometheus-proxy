@@ -356,7 +356,7 @@ act() {
 # Runs a scenario once the presenter presses Enter, from this directory, so the commands its hint prints read
 # `./demo.sh heal`, as the README's do. Its stdin is closed, so docker compose can't take the tour's input.
 step() {
-  pause "Enter to run: demo.sh $*"
+  pause "Enter to run: ./demo.sh $*"
   (cd "$DEMO_DIR" && ./demo.sh "$@" </dev/null)
 }
 

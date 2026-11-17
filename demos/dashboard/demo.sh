@@ -9,6 +9,8 @@ REPO_DIR="$(cd "$DEMO_DIR/../.." && pwd)"
 COMPOSE=(docker compose -f "$DEMO_DIR/docker/compose.yml")
 IMAGES=(prometheus-proxy-demo/proxy:local prometheus-proxy-demo/agent:local)
 AGENTS=(agent-east agent-west-1 agent-west-2)
+# The agent the agent-* scenarios act on when given none.
+DEFAULT_AGENT="agent-west-2"
 # The services only a scenario starts, so down and status cover them too.
 ON_DEMAND=(--profile rogue --profile duplicate)
 
@@ -42,9 +44,9 @@ Scenarios:
   recover                  Return every service to normal
   discover                 Add the search, recommendations, and notifications services through discovery
   undiscover               Remove the discovered services
-  agent-stop [agent]       Stop an agent (default: agent-west-2)
+  agent-stop [agent]       Stop an agent (default: $DEFAULT_AGENT)
   agent-start [agent]      Start it again
-  agent-freeze [agent]     Freeze an agent so it goes silent and the proxy evicts it (default: agent-west-2)
+  agent-freeze [agent]     Freeze an agent so it goes silent and the proxy evicts it (default: $DEFAULT_AGENT)
   agent-thaw [agent]       Unfreeze it; it reconnects
   rogue-agent              Start a contractor's agent that tries to register payments_metrics
   rogue-agent-stop         Stop and remove it
@@ -91,7 +93,7 @@ wait_for() {
 }
 
 agent_arg() {
-  local agent="${1:-agent-west-2}" known
+  local agent="${1:-$DEFAULT_AGENT}" known
   for known in "${AGENTS[@]}"; do
     if [[ "$agent" == "$known" ]]; then
       echo "$agent"
@@ -100,6 +102,10 @@ agent_arg() {
   done
   die "unknown agent '$agent'; expected one of: ${AGENTS[*]}"
 }
+
+# The agent argument of a command a hint prints: none for the default agent, so the hint reads as the tour's next step
+# and the README's command do.
+agent_suffix() { [[ "$1" == "$DEFAULT_AGENT" ]] || printf ' %s' "$1"; }
 
 # Prints the proxy's latest log line matching an extended regex, waiting up to 30s for one; prints nothing if none comes.
 proxy_said() {
@@ -190,10 +196,11 @@ act() {
   pause "Enter to continue"
 }
 
-# Runs a scenario once the presenter presses Enter. Its stdin is closed, so docker compose can't take the tour's input.
+# Runs a scenario once the presenter presses Enter, as ./demo.sh from this directory, so the commands it prints with
+# $0 read `./demo.sh recover`. Its stdin is closed, so docker compose can't take the tour's input.
 step() {
-  pause "Enter to run: demo.sh $*"
-  "$DEMO_DIR/demo.sh" "$@" </dev/null
+  pause "Enter to run: ./demo.sh $*"
+  (cd "$DEMO_DIR" && ./demo.sh "$@" </dev/null)
 }
 
 cmd_tour() {
@@ -291,7 +298,7 @@ main() {
     "${COMPOSE[@]}" stop "$agent"
     bold "$agent stopped"
     hint "it leaves the dashboard's agent list at once. A west agent's partner keeps shipping_metrics up," \
-      "since the pair is consolidated. Bring it back with: $0 agent-start $agent"
+      "since the pair is consolidated. Bring it back with: $0 agent-start$(agent_suffix "$agent")"
     ;;
   agent-start)
     local agent
@@ -308,7 +315,7 @@ main() {
     hint "its 'idle' time climbs and the 'evicted in' countdown runs. A frozen west agent holds up" \
       "the shared shipping_metrics, since the proxy waits for every agent of a consolidated path. After 30s" \
       "the proxy evicts it, DemoAgentEvicted fires, and its partner carries the path alone." \
-      "Unfreeze it with: $0 agent-thaw $agent"
+      "Unfreeze it with: $0 agent-thaw$(agent_suffix "$agent")"
     ;;
   agent-thaw)
     local agent
