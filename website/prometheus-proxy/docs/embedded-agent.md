@@ -141,7 +141,7 @@ In Spring Boot, set `logging.level.io.grpc.internal=WARN` instead.
   your `logback-spring.xml`, took it for your application's configuration. An application with no Logback
   configuration of its own now gets Logback's default, which logs everything at DEBUG, so add one (see
   [Logging](#logging)); one whose own configuration was being replaced gets it back.
-- Maven builds now get Jackson 2.23.0 and netty-tcnative 2.0.85.Final, natives included, through the agent, where
+- Maven builds now get Jackson 2.23.0 and netty-tcnative 2.0.86.Final, natives included, through the agent, where
   they got Jackson 2.12.7 and the 2.0.84.Final natives. A Jackson your build declares itself still wins.
 
 ## Upgrading from 4.1.x

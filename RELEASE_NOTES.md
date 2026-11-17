@@ -167,7 +167,7 @@ most 10,000 agents connected with one identity, which is every agent when agent 
   version pin, so those builds got Jackson 2.12.7, with the vulnerabilities the 4.3.x pin fixed, and ran netty-tcnative
   2.0.84.Final's native libraries under its 2.0.85.Final classes, without the 2.0.85 fix for an out-of-bounds read in
   ALPN protocol selection. The published POM now declares Jackson 2.23.0 and every netty-tcnative native at
-  2.0.85.Final. Gradle builds, the fat JARs, and the Docker images already had both.
+  2.0.86.Final, the version of its classes. Gradle builds, the fat JARs, and the Docker images already had both.
 - **An agent can no longer keep chunked transfers after their scrape ends.** The proxy kept a large result's transfer
   until the agent finished it, so an agent that started transfers and never finished them, and kept its connection
   open, could make the proxy hold up to about 9 MiB per scrape until it ran out of memory. A transfer now ends with its
@@ -409,9 +409,12 @@ most 10,000 agents connected with one identity, which is every agent when agent 
 
 Runtime: kotlinx-serialization 1.12.0 → 1.13.0, which reverts 1.12.0's change to the exceptions JSON errors are
 reported with (the proxy and agent catch every JSON parse failure whatever its type, so it doesn't change their
-behavior), and Logback 1.6.6 → 1.6.7, whose one behavior change, to `<propertiesConfigurator>` scanning, the shipped
-logging configs don't use. Test only: Kotest 6.2.6 → 6.2.7. The documentation site's Python lock picks up Zensical
-0.0.74 → 0.1.0, Markdown 3.11.2 → 3.11.3, and watchdog 7.0.0 → 7.1.0.
+behavior), Logback 1.6.6 → 1.6.7, whose one behavior change, to `<propertiesConfigurator>` scanning, the shipped
+logging configs don't use, and netty-tcnative 2.0.85.Final → 2.0.86.Final, BoringSSL hardening with no published
+advisory: it wipes session ticket keys before freeing them, rejects a malformed ALPN protocol list, and refuses
+session timeouts and certificate-list limits that BoringSSL would have silently changed. Test only: Kotest 6.2.6 →
+6.2.7. The documentation site's Python lock picks up Zensical 0.0.74 → 0.1.0, Markdown 3.11.2 → 3.11.3, and watchdog
+7.0.0 → 7.1.0.
 
 The dashboard moves from htmx 2.0.11 to 4.0.1, which ships its WebSocket extension itself, so the `htmx-ext-ws` WebJar
 is gone. The dashboard looks and works as before, with one change: a tab gives up its connection while it is hidden
