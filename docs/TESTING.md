@@ -567,17 +567,18 @@ These support helpers also live here (not test classes themselves):
   (`*_IMAGE`) and every third-party image `ContainerTestSupport` gives the container suite is pinned by digest, in a
   form Testcontainers pulls by digest, the suite's Prometheus is the `Makefile`'s, every image each demo's compose file
   (`demos/*/docker/compose.yml`, the dashboard and network demos') pulls is pinned by digest and any Prometheus it runs
-  is the `Makefile`'s, every `astral-sh/setup-uv` step installs a pinned uv, the same one in each, and the CRD schemas
-  `helm-lint` validates against come from a fixed commit, so a hung job gives its check back and what CI runs changes
-  only with a diff here
+  is the `Makefile`'s, as is every image the Kubernetes demo's manifests and kind configs (`demos/kubernetes/k8s` and
+  `demos/kubernetes/kind`) name, the kind node image among them, every `astral-sh/setup-uv` step installs a pinned uv,
+  the same one in each, and the CRD schemas `helm-lint` validates against come from a fixed commit, so a hung job gives
+  its check back and what CI runs changes only with a diff here
 - **ConfigFileKeysTest** — every setting in a HOCON config the repo ships or its tests load (`config/test-configs`,
-  `examples`, `testing`, `etc/compose`, the dashboard and network demos' `demos/dashboard/config` and
-  `demos/network/config`, the container suite's agent configs, and the bundled `reference.conf`) is one
-  `config/config.conf` declares, with the same shape, since HOCON ignores a key it doesn't know; a list's entries are
-  checked against the fields its schema entry gives, as for `proxy.auth` and `agent.pathConfigs`, and a discovery
-  targets file's `paths` entries against `agent.pathConfigs`'. The same goes for every `proxy.` or `agent.` key a test
-  source under `src/test/kotlin` passes as a `-D` setting in a string literal, which HOCON ignores just the same; a key
-  built at run time isn't seen
+  `examples`, `testing`, `etc/compose`, the dashboard, network, and Kubernetes demos' `demos/dashboard/config`,
+  `demos/network/config`, and `demos/kubernetes/config`, the container suite's agent configs, and the bundled
+  `reference.conf`) is one `config/config.conf` declares, with the same shape, since HOCON ignores a key it doesn't
+  know; a list's entries are checked against the fields its schema entry gives, as for `proxy.auth` and
+  `agent.pathConfigs`, and a discovery targets file's `paths` entries against `agent.pathConfigs`'. The same goes for
+  every `proxy.` or `agent.` key a test source under `src/test/kotlin` passes as a `-D` setting in a string literal,
+  which HOCON ignores just the same; a key built at run time isn't seen
 - **ConfigValsTest** — ConfigVals auto-generated from HOCON schema (validates default values, including the empty
   `proxy.dashboard.links`); a config that still sets the retired `proxy.dashboard.recentScrapesQueueSize` loads
 - **DashboardMetricNamesTest** — the Grafana dashboards, the alert rules, the docs' PromQL, and the metric names

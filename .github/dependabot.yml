@@ -107,3 +107,20 @@ updates:
     ignore:
       # As in the dashboard demo, Prometheus moves with the Makefile's PROMETHEUS_IMAGE, by hand.
       - dependency-name: "prom/prometheus"
+
+  # The Kubernetes demo's third-party images in its manifests (demos/kubernetes/k8s), which the docker ecosystem reads:
+  # the Python image its simulated services and targets-sync run on, pinned by tag and digest. Its kind node image
+  # (demos/kubernetes/kind) isn't here: it moves with the kind release it was built for, by hand. Like the other demos,
+  # it builds its proxy and agent images from this checkout.
+  - package-ecosystem: docker
+    directory: /demos/kubernetes/k8s
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      kubernetes-demo:
+        patterns: ["*"]
+    ignore:
+      # As in the other demos, Prometheus moves with the Makefile's PROMETHEUS_IMAGE, by hand.
+      - dependency-name: "prom/prometheus"

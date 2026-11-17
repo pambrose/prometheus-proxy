@@ -26,6 +26,7 @@ nav = [
     { "Quick Start" = "getting-started.md" },
     { "Live Demo" = "demo.md" },
     { "Network Demo" = "network-demo.md" },
+    { "Kubernetes Demo" = "kubernetes-demo.md" },
   ]},
   { "Deployment" = [
     { "Docker" = "docker.md" },

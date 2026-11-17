@@ -70,9 +70,18 @@ class CiHygieneTest : StringSpec() {
       .sortedBy { it.invariantSeparatorsPath }
   }
 
-  // The images a compose file pulls: every service's, but the proxy and agent images built from this checkout.
+  // The Kubernetes demo's manifests and kind cluster configs, which name its third-party images: it runs on kind, not
+  // compose.
+  private val kubernetesDemoFiles by lazy {
+    KUBERNETES_DEMO_IMAGE_DIRS
+      .flatMap { dir -> File(dir).listFiles { file -> file.extension in YAML_EXTENSIONS }.orEmpty().toList() }
+      .sortedBy { it.invariantSeparatorsPath }
+  }
+
+  // The images a compose file, Kubernetes manifest, or kind config pulls: the value of every `image:` key, but the
+  // proxy and agent images built from this checkout.
   private fun pulledImages(file: File) =
-    COMPOSE_IMAGE
+    YAML_IMAGE
       .findAll(file.readText())
       .map { it.groupValues[1] }
       .filterNot { it.endsWith(":local") }
@@ -145,6 +154,20 @@ class CiHygieneTest : StringSpec() {
         listOf("prom/prometheus", "grafana/grafana")
     }
 
+    // The Kubernetes demo (demos/kubernetes) has no compose file: its kind clusters' node image is in its kind configs,
+    // and Prometheus and the Python image its services and targets-sync run on are in its manifests. check-rules
+    // validates its Prometheus config with the Makefile's promtool, so it runs that Prometheus too. Its proxy and agent
+    // images are built from this checkout and loaded into the clusters, and the charts name them through its values
+    // files, not here.
+    "every image the Kubernetes demo runs should be pinned by digest, its Prometheus the Makefile's" {
+      val images = kubernetesDemoFiles.flatMap(::pulledImages)
+      images.map { it.substringBefore(":") }.distinct() shouldContainAll
+        listOf("kindest/node", "prom/prometheus", "python")
+
+      images.forEach { image -> withClue(image) { image shouldMatch DIGEST_PINNED } }
+      images.filter { it.startsWith("prom/prometheus:") }.forEach { it shouldBe makeVars["PROMETHEUS_IMAGE"] }
+    }
+
     // Without a version, setup-uv installs the newest uv, so what builds and deploys the docs site changed with each uv
     // release and no diff here (November #25). And docs-site checks the build docs.yml deploys only if both install the
     // same one.
@@ -188,14 +211,16 @@ class CiHygieneTest : StringSpec() {
     private const val DEMO_COMPOSE = "docker/compose.yml"
     private const val DASHBOARD_DEMO_COMPOSE = "$DEMOS_DIR/dashboard/$DEMO_COMPOSE"
     private const val NETWORK_DEMO_COMPOSE = "$DEMOS_DIR/network/$DEMO_COMPOSE"
+    private val KUBERNETES_DEMO_IMAGE_DIRS = listOf("$DEMOS_DIR/kubernetes/k8s", "$DEMOS_DIR/kubernetes/kind")
+    private val YAML_EXTENSIONS = setOf("yaml", "yml")
     private const val SETUP_UV = "astral-sh/setup-uv@"
     private val MAKE_ASSIGNMENT = Regex("""(?m)^([A-Z][A-Z0-9_]*) :?= (.*)$""")
 
     // A `const val` whose name ends in _IMAGE, with its string on the same line or the next.
     private val CONTAINER_IMAGE = Regex("""const val ([A-Z][A-Z0-9_]*_IMAGE) =\s*"([^"]*)"""")
 
-    // A compose service's image, the value of its `image:` key.
-    private val COMPOSE_IMAGE = Regex("""(?m)^\s+image: (\S+)""")
+    // An `image:` key's value: a compose service's, a Kubernetes container's, or a kind node's.
+    private val YAML_IMAGE = Regex("""(?m)^\s+image: (\S+)""")
     private val DIGEST_PINNED = Regex("""\S+:\S+@sha256:[0-9a-f]{64}""")
   }
 }

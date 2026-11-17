@@ -1,0 +1,19 @@
+# The target cluster (pp-target), behind the firewall: the services, the agent (the prometheus-agent chart), and
+# targets-sync. demo.sh creates it with `kind create cluster --name pp-target` from this file.
+#
+# It maps no port to the host, and its Services are all ClusterIP: nothing in it is reachable from outside. The agent
+# dials out, to the proxy's NodePort in pp-monitoring, across Docker's kind network.
+
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+# The kubelet copies a changed ConfigMap into the pods that mount it on its periodic sync, every syncFrequency (1m by
+# default) plus jitter. 5 seconds brings act 2's agent-targets change to the agent in seconds rather than in up to
+# about a minute, as on a production kubelet.
+kubeadmConfigPatches:
+  - |
+    kind: KubeletConfiguration
+    syncFrequency: 5s
+nodes:
+  - role: control-plane
+    # The same node image as pp-monitoring's (kind/pp-monitoring.yaml).
+    image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5

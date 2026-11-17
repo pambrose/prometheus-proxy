@@ -53,7 +53,7 @@ The displaced agent stays connected without the path, so two agents configured w
 the later one serving it. Only a connection the agent itself has since replaced, one of the same launch, is
 disconnected when it loses its last path. To serve a path from both agents, make them consolidated.
 
-In **consolidated mode**, multiple agents can register the same path for redundancy:
+In **consolidated mode**, multiple agents can register the same path:
 
 ```hocon
 agent.consolidated = true
@@ -65,8 +65,21 @@ remaining agents continue serving the path.
 
 Use cases:
 
-- **High availability** -- multiple agents serving the same endpoints
+- **Several instances behind one path** -- each agent scrapes its own instance of a service, whose
+  series carry a label that tells the instances apart, and Prometheus scrapes them as one target
+- **Redundancy** -- the path keeps answering, with the remaining agents' series, while one agent is down
 - **Rolling upgrades** -- new agent registers before old one deregisters
+
+!!! warning "Agents that scrape the same endpoint send each series twice"
+
+    The proxy joins the agents' answers as they are, so when two consolidated agents scrape the same
+    endpoint, Prometheus gets each of its series once per agent, with the same labels. It keeps the first
+    sample of each and drops the others, logging `Error on ingesting samples with different value but same
+    timestamp` for the target on every scrape and counting them in
+    `prometheus_target_scrapes_sample_duplicate_timestamp_total`, while `up` stays 1. Give each
+    consolidated agent its own endpoint, and keep the agent Helm chart's `replicaCount` at 1, since its
+    replicas all run the same config and scrape the same targets; Kubernetes replaces a failed agent pod.
+    A rolling upgrade sends each series twice for as long as the old and new agents overlap.
 
 !!! note "A consolidated path belongs to one identity"
 

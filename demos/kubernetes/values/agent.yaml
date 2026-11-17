@@ -1,0 +1,31 @@
+# Values for the prometheus-agent chart (charts/prometheus-agent) in pp-target. demo.sh installs it as the
+# prometheus-agent release in the monitoring namespace, with --set-file config=config/agent.conf, the proxy's address
+# (proxy.hostname, the pp-monitoring node's address and the proxy's gRPC NodePort), and an annotation naming the
+# image's ID, so a rebuilt image replaces the pod.
+
+image:
+  # Built from this checkout's agent jar (etc/docker/agent.Dockerfile), shared with the other demos, and loaded into
+  # the cluster with `kind load docker-image`, so the node never pulls it.
+  repository: prometheus-proxy-demo/agent
+  tag: local
+  pullPolicy: Never
+
+# The proxy's token, from the agent-token Secret demo.sh creates in both clusters.
+agentToken:
+  existingSecret: agent-token
+
+# The services come from targets-sync, which writes them into agent-targets (k8s/agent-targets.yaml), a ConfigMap the
+# demo owns rather than the chart, so a helm upgrade never puts back an old list. The agent re-reads it every 5
+# seconds and registers or unregisters what changed, without restarting.
+discovery:
+  enabled: true
+  existingConfigMap: agent-targets
+  reconcileIntervalSecs: 5
+
+# The agent's name is its pod's, so the dashboard lists it under the name kubectl shows, and a replacement pod
+# appears under its own.
+env:
+  - name: AGENT_NAME
+    valueFrom:
+      fieldRef:
+        fieldPath: metadata.name

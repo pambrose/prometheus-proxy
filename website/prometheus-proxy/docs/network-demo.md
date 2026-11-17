@@ -265,5 +265,7 @@ clean slate, `make down && make up`.
 - The demo's [README](https://github.com/pambrose/prometheus-proxy/tree/master/demos/network) lays these scenarios out
   as a presenter's script, with what each one means for the audience, and lists the files that set the demo up,
   including which Toxiproxy toxic each scenario uses.
+- The [Kubernetes Demo](kubernetes-demo.md) deploys the same proxy and agent with their Helm charts on two kind
+  clusters, and shows Kubernetes driving the agent's targets and replacing its pod.
 - [Running in Production](production.md#high-availability) covers a standby proxy and the agent's ordered endpoints.
 - [Advanced Topics](advanced.md#stale-agent-cleanup) covers how the proxy evicts a silent agent.
