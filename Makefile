@@ -1,5 +1,6 @@
 .PHONY: default help stop clean clean-all stubs build tibuild refresh jars \
-        tests mini-tests xxl-tests nh-tests ip-tests netty-tests tls-tests lincheck-tests tla-checks check-rules helm-lint zizmor \
+        tests mini-tests xxl-tests nh-tests ip-tests netty-tests tls-tests \
+        lincheck-tests tla-checks check-rules helm-lint zizmor \
         container-tests scaling-tests all-tests ci ci-build consumer-check regen-certs \
         docker-clean docker-clean-dry \
         all-scaling scaling-paths scaling-agents scaling-payload scaling-consolidated scaling-concurrency scaling-soak \
