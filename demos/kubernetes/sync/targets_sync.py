@@ -123,21 +123,31 @@ def render(services):
     return header + json.dumps({"paths": sorted(targets.values(), key=lambda t: t["path"])}, indent=2) + "\n"
 
 
+def put_if_changed(path, content):
+    """Reads the ConfigMap and, if it doesn't hold content already, writes it: True if it wrote, False if content was
+    there, None on a conflict, someone else's write since the read."""
+    configmap = call_json("GET", path)
+    data = configmap.get("data") or {}
+    if data.get(TARGETS_KEY) == content:
+        return False
+    configmap["data"] = {**data, TARGETS_KEY: content}
+    try:
+        call_json("PUT", path, configmap)
+    except urllib.error.HTTPError as e:
+        if e.code == 409:
+            return None
+        raise
+    return True
+
+
 def write(content):
-    """Puts content in the ConfigMap unless it's there already. A conflict, someone else's write since the read, is
-    retried on a fresh read."""
+    """Puts content in the ConfigMap unless it's there already, retrying a conflict on a fresh read: True if it
+    wrote."""
     path = f"/api/v1/namespaces/{CONFIGMAP_NAMESPACE}/configmaps/{CONFIGMAP_NAME}"
     for _ in range(5):
-        configmap = call_json("GET", path)
-        if (configmap.get("data") or {}).get(TARGETS_KEY) == content:
-            return False
-        configmap["data"] = {**(configmap.get("data") or {}), TARGETS_KEY: content}
-        try:
-            call_json("PUT", path, configmap)
-            return True
-        except urllib.error.HTTPError as e:
-            if e.code != 409:
-                raise
+        written = put_if_changed(path, content)
+        if written is not None:
+            return written
     raise RuntimeError(f"gave up on {CONFIGMAP_NAME} after repeated conflicts")
 
 
