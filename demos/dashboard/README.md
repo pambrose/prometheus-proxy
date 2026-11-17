@@ -242,7 +242,7 @@ The services are `orders`, `payments`, `inventory`, `catalog`, and `shipping`, p
 | `prometheus/demo-alerts.yml` | The fast demo alerts |
 | `grafana/` | The provisioned datasource, dashboard folder, and demo dashboard |
 | `app/demo_app.py` | The simulated services and their control API |
-| `Makefile` | The demo's targets: `make up` (which builds the jars first), `down`, `status`, `open`, `tour`, `logs`, and `screenshots`; `make help` lists them |
+| `Makefile` | The demo's targets: `make up` (which builds the jars first), `down`, `status`, `open`, `tour`, and `logs`, which `make help` lists, and `screenshots`, which it leaves out, since it's for maintaining the site |
 | `demo.sh` | Starting, stopping, and the scenarios |
 | `bin/screenshots.sh` | The Live Demo page's screenshots, in the dark and light themes. `make screenshots` builds and starts the demo, waits a minute so the agents' uptimes read in minutes, plays the scenarios, and writes them to `website/prometheus-proxy/docs/images/demo/` (needs Chrome, ImageMagick 7, and `cwebp`). While checking a change, `SKIP_UPTIME_WAIT=1` skips the minute, so the shots show uptimes in seconds and aren't for the site, and `WAIT_SECS` sets how long each wait for a scene may take before the script fails (default 150): `make screenshots SKIP_UPTIME_WAIT=1 WAIT_SECS=60` |
 
