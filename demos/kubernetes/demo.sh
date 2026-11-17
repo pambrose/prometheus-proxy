@@ -617,9 +617,30 @@ cmd_restore_config() {
 # after each one, and before it runs a scenario.
 TOUR_FROM=1
 TOUR_STEP=0
+# Whether the last thing the tour printed was a pause, which leaves an empty line of its own.
+AFTER_PAUSE=0
 
-# Waits for Enter. At the end of input, as when the tour is piped, it doesn't wait.
-pause() { read -r -p "$(printf '\033[33m> %s\033[0m ' "$1")" _ || true; }
+# Waits for Enter, then leaves an empty line. At the end of input, as when the tour is piped, it doesn't wait.
+pause() {
+  read -r -p "$(printf '\033[33m> %s\033[0m ' "$1")" _ || true
+  echo
+  AFTER_PAUSE=1
+}
+
+# Starts a new block of the tour's output with an empty line, unless a pause has just left one.
+blank_line() {
+  ((AFTER_PAUSE)) || echo
+  AFTER_PAUSE=0
+}
+
+# Waits for Enter before a new part, or the tour's end, when a scenario's output came last, so it isn't printed
+# straight after that output: wait_after_output <prompt>
+wait_after_output() {
+  if ((!AFTER_PAUSE)); then
+    echo
+    pause "$1"
+  fi
+}
 
 # Lists the parts from the one the tour starts at, with about how long each takes and in all, then waits:
 # tour_contents <the demo's name>
@@ -651,8 +672,9 @@ part() {
   local n="$1"
   shift
   ((n >= TOUR_FROM)) || return 1
+  wait_after_output "Press Enter to go on to part $n"
   TOUR_STEP=0
-  echo
+  blank_line
   bold "Part $n of ${#TOUR_PARTS[@]}: ${TOUR_PARTS[n - 1]#* }"
   wrap "  " "  " "$*"
 }
@@ -663,7 +685,7 @@ number_step() {
   local indent
   TOUR_STEP=$((TOUR_STEP + 1))
   indent="$(printf '%*s' $((${#TOUR_STEP} + 4)) '')"
-  echo
+  blank_line
   wrap "  $TOUR_STEP. " "$indent" "$1"
   shift
   (($# == 0)) || wrap "$indent" "$indent" "$*"
@@ -688,6 +710,7 @@ step() {
   number_step "${text[*]}"
   pause "Press Enter to run ./demo.sh $*"
   (cd "$DEMO_DIR" && ./demo.sh "$@" </dev/null)
+  AFTER_PAUSE=0
 }
 
 # Checks the part the tour starts from: check_tour_from <argument>
@@ -747,7 +770,8 @@ cmd_tour() {
       -- restore-config
   fi
 
-  echo
+  wait_after_output "Press Enter to finish the tour"
+  blank_line
   bold "That's the tour."
   echo "To start again from a part, run make tour PART=<n>, or $0 tour <n>."
 }

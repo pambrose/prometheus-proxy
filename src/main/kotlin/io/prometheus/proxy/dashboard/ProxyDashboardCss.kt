@@ -84,9 +84,11 @@ internal object ProxyDashboardCss {
     .md-head, .section { display:flex; justify-content:space-between; padding:9px 15px; font-size:10px;
       letter-spacing:.09em; text-transform:uppercase; color:var(--ink-3); font-weight:600;
       border-bottom:1px solid var(--line); background:var(--surface-2); }
+    /* The current row's edge is 2px, as the current tab's is, and the left padding a pixel wider than the right, so
+       with the edge a row's text sits 18px in. */
     .md-row { display:block; width:100%; text-align:left; font:inherit; cursor:pointer; background:none;
-      border:0; border-bottom:1px solid var(--line-soft); border-left:3px solid transparent;
-      padding:10px 15px; color:var(--ink); }
+      border:0; border-bottom:1px solid var(--line-soft); border-left:2px solid transparent;
+      padding:10px 15px 10px 16px; color:var(--ink); }
     .md-row:hover { background:var(--surface-3); }
     /* Inside the row, and inside a tab, which meets the strip below it. */
     .md-row:focus-visible, .nav a:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }

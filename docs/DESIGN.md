@@ -97,7 +97,7 @@ components:
     textColor: "{colors.ink}"
     typography: "{typography.body}"
     rounded: "{rounded.none}"
-    padding: "10px 15px"
+    padding: "10px 15px 10px 16px"
   row-item-hover:
     backgroundColor: "{colors.surface-3}"
     textColor: "{colors.ink}"
@@ -262,7 +262,7 @@ dimmed.
 ### Primary
 
 - **Burnt Orange** (`accent`): The only warm hue on the surface, and deliberately the rarest. It draws
-  edge of the current item (the selected row's 3px left edge, and the 2px line along the current tab's
+  edge of the current item (the selected row's 2px left edge, and the 2px line along the current tab's
   bottom) and the 2px focus-visible outline. That is the complete list. It brightens to a coral (`accent-dark`) in dark mode, which is the one place the two
   themes differ in character rather than only in value — against black it reads as a lit filament
   rather than as rust.
@@ -302,7 +302,7 @@ Three levels, each shipping as a **solid** and a **soft** companion.
 ### Named Rules
 
 **The Two Places Rule.** The accent appears on focus rings and the current item's edge: the
-selected row's 3px left edge and the current tab's 2px bottom edge, which mean the same thing. Nowhere else. It never fills a background, never sets body type, never becomes a button, never appears in a
+selected row's 2px left edge and the current tab's 2px bottom edge, which mean the same thing. Nowhere else. It never fills a background, never sets body type, never becomes a button, never appears in a
 chart. Its rarity is what makes selection findable in a field of monospace at a glance.
 
 **The Paired Status Rule.** Solid status colors carry meaning on type, dots, and borders. Soft status
@@ -479,7 +479,7 @@ real work.
 
 Borders carry the remaining form language: 1px hairlines for structure, among them the tabs' `line`
 outlines, and the two current-item edges in `accent`, the only borders in the system thicker than a
-hairline: the row item's 3px left border, transparent at rest, and the current tab's 2px bottom.
+hairline: the row item's 2px left border, transparent at rest, and the current tab's 2px bottom.
 
 ### Named Rules
 
@@ -497,7 +497,8 @@ refinement, and no component earns visual weight it doesn't need to do its job.
 
 A `<button>` styled as a full-width list row, so it is keyboard-operable by construction.
 
-- **Shape:** square (`0`), full-bleed, `10px 15px` padding, `line-soft` bottom divider.
+- **Shape:** square (`0`), full-bleed, `10px 15px` padding (`16px` on the left, so with the `2px` edge the text sits
+  `18px` in), `line-soft` bottom divider.
 - **Structure:** two lines — an LED plus the agent name, followed by a neutral Tag naming its identity when
   it registered as one, then `address · N paths` in Caption/`ink-3`.
 - **Rest:** transparent background.
@@ -506,7 +507,7 @@ A `<button>` styled as a full-width list row, so it is keyboard-operable by cons
   never overlaps its neighbors. The row's id is built from its agent id, so htmx gives focus back after
   each push replaces the list.
 - **Current:** background lifts to `surface` (the reading plane, matching the detail pane it controls)
-  and the 3px left border becomes `accent`. Marked `aria-current="true"`.
+  and the 2px left border becomes `accent`. Marked `aria-current="true"`.
 
 ### Status Pill
 

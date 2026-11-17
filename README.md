@@ -18,12 +18,16 @@ endpoints.
 [Prometheus Proxy](https://pambrose.github.io/prometheus-proxy/) enables Prometheus to scrape metrics endpoints running
 behind a firewall and preserves the native pull-based model architecture.
 
+**See it work on your laptop:** three self-contained [demos](#-try-the-demos) run the proxy, its agents, Prometheus,
+and Grafana with one command, and a guided tour walks you through each one.
+
 Questions about the API? The [docs site](https://pambrose.github.io/prometheus-proxy/) has a
 [Context7](https://context7.com/pambrose/prometheus-proxy) chat on every page that answers from this project's
 documentation.
 
 ## Table of Contents
 
+- [Try the Demos](#-try-the-demos)
 - [New Features](#-new-features)
 - [Architecture](#-architecture)
 - [Quick Start](#-quick-start)
@@ -38,6 +42,39 @@ documentation.
 - [Troubleshooting](#-troubleshooting)
 - [Documentation](#-documentation)
 - [License](#-license)
+
+## 🎬 Try the Demos
+
+The quickest way to understand Prometheus Proxy is to watch it work. The repository ships three self-contained demos,
+each started with `make up` and run entirely on one laptop. Each has a guided tour, `make tour`, that walks you through
+it one step at a time: what to open, what to look for, and how each step does what it does.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="website/prometheus-proxy/docs/images/demo/agents.webp">
+  <img alt="The proxy dashboard in the basics demo: its three agents, and agent-east's registered paths and recent scrapes" src="website/prometheus-proxy/docs/images/demo/agents-light.webp">
+</picture>
+
+| Demo | What you'll see | Tour |
+|---|---|---|
+| [Basics](demos/basics) | The proxy, its live dashboard, and three agents behind a simulated firewall, with Prometheus and Grafana. A service fails and another hangs, a redundant pair of agents keeps a path up, new targets appear without a restart, a frozen agent is evicted, and the proxy refuses a path an agent's identity doesn't allow. | 9 parts, about 22 minutes |
+| [Network](demos/network) | The same proxy and agents with a simulated WAN between them, and a standby proxy. A far link, a thin one fixed by filtering at the agent, a proxy that goes away, a link that dies silently, a flaky link traced in Zipkin, and the whole WAN going down. | 7 parts, about 21 minutes |
+| [Kubernetes](demos/kubernetes) | The project's Helm charts on two kind clusters. The target cluster exposes nothing, annotating a Service is all it takes for Prometheus to scrape it, Kubernetes replaces a lost agent by itself, and a config change costs a restart where a target change doesn't. | 4 parts, about 11 minutes |
+
+Start with the basics demo. You need Docker with Compose v2 and a JDK 17 or later; from a clone of the repository:
+
+```bash
+cd demos/basics
+make up      # builds the proxy and agent, starts everything, and prints the URLs
+make tour    # the guided tour
+make down    # stops the demo and removes its containers
+```
+
+The demos use different ports, so they can run side by side. The Kubernetes demo also needs
+[kind](https://kind.sigs.k8s.io/), `kubectl`, and [Helm](https://helm.sh/). Each demo's README has its full script, and
+the website's [Basics Demo](https://pambrose.github.io/prometheus-proxy/demo/),
+[Network Demo](https://pambrose.github.io/prometheus-proxy/network-demo/), and
+[Kubernetes Demo](https://pambrose.github.io/prometheus-proxy/kubernetes-demo/) pages walk through the same scenarios
+with screenshots.
 
 ## ✨ New Features
 
@@ -166,6 +203,8 @@ agents.
 ## 🚀 Quick Start
 
 > 📖 **Docs site:** [Quick Start guide](https://pambrose.github.io/prometheus-proxy/getting-started/) walks through these steps with more detail.
+>
+> 🎬 **Rather watch it first?** The [demos](#-try-the-demos) start the proxy, agents, Prometheus, and Grafana with one command.
 
 **Requirements:** Java 17 or newer
 
