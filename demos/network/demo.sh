@@ -414,6 +414,8 @@ cmd_tour() {
 
   echo
   bold "That's the tour. $0 tour <act> starts again from an act."
+  echo "The same proxy and agent, deployed on Kubernetes with their Helm charts, are in the Kubernetes demo: see" \
+    "demos/kubernetes."
 }
 
 main() {

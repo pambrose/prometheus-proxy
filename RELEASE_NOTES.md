@@ -112,6 +112,13 @@ most 10,000 agents connected with one identity, which is every agent when agent 
   link, a thin one and filtering at the agent, a proxy that goes away, a link that dies silently, a flaky link
   followed in Zipkin, and the whole WAN going down and coming back. The website's new Network Demo page walks
   through each, with screenshots.
+- **A demo of the proxy and agent on Kubernetes.** From `demos/kubernetes`, `make up` creates two kind clusters and
+  installs the project's Helm charts in them: the proxy and Prometheus in one, and the agent and a few services in
+  the other, which exposes nothing. Its presenter's script and `make tour` show the agent connecting out from the
+  target cluster, a Service that Prometheus starts scraping once it is annotated, with nothing restarted, Kubernetes
+  replacing a deleted agent within about a second, and a change to the agent's config replacing its pod where a
+  change to its targets didn't. It runs alongside the other two demos. The website's new Kubernetes Demo page walks
+  through each, with screenshots.
 - **Paths whose agent has gone stay on the dashboard for an hour.** The Paths view used to lose a gone path within
   a minute on a busy proxy, since it rebuilt it from the 200 most recent scrapes across all paths. Each path now
   keeps its own history, and a gone path stays for `proxy.dashboard.departedPathRetentionSecs` (default 3600) after

@@ -1,0 +1,133 @@
+# What the demo adds to pp-target beside the prometheus-agent chart: the apps namespace the services run in, the
+# monitoring namespace the agent runs in, and targets-sync (sync/targets_sync.py), which writes the agent's targets
+# from the Services annotated prometheus-proxy/path. demo.sh applies it with
+# `kubectl --context kind-pp-target apply -f k8s/target.yaml`, and creates targets-sync's script, the
+# targets-sync-script ConfigMap, from sync/targets_sync.py.
+#
+# targets-sync is the demo's, not the product's: a discovery source built into the agent that read Services itself
+# would replace it.
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: apps
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: targets-sync
+  namespace: monitoring
+---
+# targets-sync may list and watch the Services in apps, and nothing else there: not their pods, and not their Secrets.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: targets-sync-read-services
+  namespace: apps
+rules:
+  - apiGroups: [""]
+    resources: [services]
+    verbs: [list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: targets-sync-read-services
+  namespace: apps
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: targets-sync-read-services
+subjects:
+  - kind: ServiceAccount
+    name: targets-sync
+    namespace: monitoring
+---
+# And it may read and update the one ConfigMap it writes, agent-targets, and no other: not the agent's main config,
+# which holds its ports and settings. It can't create it (a create can't be limited to one name), so `make up` creates
+# it, empty (k8s/agent-targets.yaml).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: targets-sync-write-targets
+  namespace: monitoring
+rules:
+  - apiGroups: [""]
+    resources: [configmaps]
+    resourceNames: [agent-targets]
+    verbs: [get, update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: targets-sync-write-targets
+  namespace: monitoring
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: targets-sync-write-targets
+subjects:
+  - kind: ServiceAccount
+    name: targets-sync
+    namespace: monitoring
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: targets-sync
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: targets-sync
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: targets-sync
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: targets-sync
+    spec:
+      serviceAccountName: targets-sync
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: targets-sync
+          # The dashboard demo's Python image, digest included.
+          image: python:3.14-alpine@sha256:5862d971d1f0ae26b258cefa4e893556b1d3aba81bd2ff30888704ad378bab67
+          command: ["python", "-u", "/sync/targets_sync.py"]
+          env:
+            - name: WATCH_NAMESPACE
+              value: apps
+            - name: CONFIGMAP_NAME
+              value: agent-targets
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+          volumeMounts:
+            - name: script
+              mountPath: /sync
+              readOnly: true
+      volumes:
+        - name: script
+          configMap:
+            name: targets-sync-script

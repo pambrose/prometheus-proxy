@@ -57,11 +57,13 @@ SITE_DIR := $(WEBSITE_DIR)/prometheus-proxy
 # names. Its last entry, the repo root, gives the site only examples/ and grafana/, which name no version.
 SITE_VERSION_SOURCES := $(SITE_DIR)/docs src/test/kotlin/website src/test/java/website
 
-# The customer demos, whose Prometheus configs and rules check-rules validates: the dashboard and Grafana, and the
-# network between the agents and the proxies. Each demo under demos/ is self-contained, with its own Makefile for
-# starting and stopping it (`make -C demos/<name> help`), so this one has no demo targets.
+# The customer demos, whose Prometheus configs and rules check-rules validates: the dashboard and Grafana, the network
+# between the agents and the proxies, and the Helm charts deployed on two kind clusters. Each demo under demos/ is
+# self-contained, with its own Makefile for starting and stopping it (`make -C demos/<name> help`), so this one has no
+# demo targets.
 DASHBOARD_DEMO_DIR := demos/dashboard
 NETWORK_DEMO_DIR := demos/network
+KUBERNETES_DEMO_DIR := demos/kubernetes
 
 # TLA+ model checking (specs/tla). The tools jar is git-ignored, and downloaded when it's missing or doesn't match
 # TLA_SHA256; TLC's working states go under build/.
@@ -215,8 +217,9 @@ tla-checks: _tla-tools  ## Model-check the TLA+ specs in specs/tla (the quick co
 	$(TLC) -metadir $(CURDIR)/build/tla/AgentFailover -config AgentFailover.cfg AgentFailover.tla
 	$(TLC) -metadir $(CURDIR)/build/tla/ProxyRegistry -config ProxyRegistry.cfg ProxyRegistry.tla
 
-# Each demo's Prometheus config is checked as the demo's container sees it, with the rule files its compose file mounts
-# where its rule_files glob looks, so promtool also checks the demo's alerting rules and that the config loads them.
+# Each demo's Prometheus config is checked as the demo's Prometheus sees it, with the rule files the demo mounts where
+# its rule_files glob looks, so promtool also checks the demo's alerting rules and that the config loads them. The
+# Kubernetes demo's has no rules.
 check-rules:  ## Validate the alerting rules in grafana/alerts.yml, and each demo's Prometheus config and rules, with promtool (needs Docker)
 	docker run --rm -v "$(CURDIR)/grafana:/rules:ro" --entrypoint promtool $(PROMETHEUS_IMAGE) check rules /rules/alerts.yml
 	docker run --rm -v "$(CURDIR)/$(DASHBOARD_DEMO_DIR)/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
@@ -225,6 +228,8 @@ check-rules:  ## Validate the alerting rules in grafana/alerts.yml, and each dem
 		--entrypoint promtool $(PROMETHEUS_IMAGE) check config /etc/prometheus/prometheus.yml
 	docker run --rm -v "$(CURDIR)/$(NETWORK_DEMO_DIR)/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
 		-v "$(CURDIR)/$(NETWORK_DEMO_DIR)/prometheus/network-alerts.yml:/etc/prometheus/rules/network-alerts.yml:ro" \
+		--entrypoint promtool $(PROMETHEUS_IMAGE) check config /etc/prometheus/prometheus.yml
+	docker run --rm -v "$(CURDIR)/$(KUBERNETES_DEMO_DIR)/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
 		--entrypoint promtool $(PROMETHEUS_IMAGE) check config /etc/prometheus/prometheus.yml
 
 helm-lint:  ## Lint the Helm charts and validate their rendered manifests (needs Docker)

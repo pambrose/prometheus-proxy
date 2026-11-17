@@ -1,0 +1,35 @@
+# The monitoring cluster (pp-monitoring), outside the firewall: the proxy (the prometheus-proxy chart), its dashboard,
+# and Prometheus. demo.sh creates it with `kind create cluster --name pp-monitoring` from a copy of this file.
+#
+# The host reaches the dashboard, Prometheus, and the proxy's scrape port through the demo's NodePort Services
+# (k8s/monitoring.yaml), which these mappings publish on 127.0.0.1 only: the dashboard has no authentication, which
+# suits a demo on a laptop and nothing else. Each host port is the dashboard demo's plus 200, so the three demos can run
+# at once. demo.sh replaces each hostPort with its KUBERNETES_DEMO_*_PORT variable, named in the line's comment, when
+# it creates the cluster; a running cluster keeps the ports it was created with.
+#
+# The agent in pp-target reaches the proxy's gRPC NodePort (the chart's agentService) at this node's address on
+# Docker's kind network, which needs no mapping here.
+
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    # The node image kind 0.33.0's release notes give for its default Kubernetes version, by digest. It moves with the
+    # kind release it was built for, by hand, and demo.sh requires that kind or later.
+    image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
+    extraPortMappings:
+      # The proxy's dashboard (NodePort Service proxy-dashboard).
+      - containerPort: 30094
+        hostPort: 8294  # KUBERNETES_DEMO_DASHBOARD_PORT
+        listenAddress: 127.0.0.1
+        protocol: TCP
+      # Prometheus (NodePort Service prometheus).
+      - containerPort: 30090
+        hostPort: 9290  # KUBERNETES_DEMO_PROMETHEUS_PORT
+        listenAddress: 127.0.0.1
+        protocol: TCP
+      # The proxy's scrape port, for /discovery and each path (NodePort Service proxy-scrape).
+      - containerPort: 30080
+        hostPort: 8280  # KUBERNETES_DEMO_PROXY_PORT
+        listenAddress: 127.0.0.1
+        protocol: TCP

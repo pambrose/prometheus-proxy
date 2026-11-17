@@ -1,0 +1,132 @@
+# What the demo adds to pp-monitoring beside the prometheus-proxy chart: the monitoring namespace, Prometheus, and the
+# NodePort Services that kind/pp-monitoring.yaml publishes on the host's 127.0.0.1. demo.sh applies it with
+# `kubectl --context kind-pp-monitoring apply -f k8s/monitoring.yaml`, and creates Prometheus's config, the
+# prometheus-config ConfigMap, from prometheus/prometheus.yml.
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+---
+# Prometheus, beside the proxy: it finds every path the agent registers through the proxy's /discovery, and scrapes
+# each through the proxy. Its data is in an emptyDir, so a restart starts it afresh, which suits a demo.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: prometheus
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: prometheus
+    spec:
+      # The image's own user, nobody.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: prometheus
+          # The same image, digest included, as PROMETHEUS_IMAGE in the root Makefile, whose promtool check-rules
+          # validates prometheus/prometheus.yml with (CiHygieneTest holds it to that).
+          image: prom/prometheus:v3.14.0@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+            - --storage.tsdb.retention.time=1d
+          ports:
+            - name: http
+              containerPort: 9090
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: http
+            periodSeconds: 2
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+              readOnly: true
+            - name: data
+              mountPath: /prometheus
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-config
+        - name: data
+          emptyDir: {}
+---
+# Prometheus's UI, on the host's 127.0.0.1:9290 (kind/pp-monitoring.yaml).
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: monitoring
+spec:
+  type: NodePort
+  selector:
+    app.kubernetes.io/name: prometheus
+  ports:
+    - name: http
+      port: 9090
+      targetPort: http
+      nodePort: 30090
+---
+# The proxy's dashboard, on the host's 127.0.0.1:8294. The chart leaves the dashboard out of its Service, since the
+# dashboard has no authentication; here it's published on the laptop's loopback only.
+apiVersion: v1
+kind: Service
+metadata:
+  name: proxy-dashboard
+  namespace: monitoring
+spec:
+  type: NodePort
+  # The prometheus-proxy release's pods (the chart's selector labels).
+  selector:
+    app.kubernetes.io/name: prometheus-proxy
+    app.kubernetes.io/instance: prometheus-proxy
+  ports:
+    - name: dashboard
+      port: 8094
+      targetPort: dashboard
+      nodePort: 30094
+---
+# The proxy's scrape port, on the host's 127.0.0.1:8280, so a presenter can curl /discovery and a path through the
+# proxy. Prometheus uses the chart's own ClusterIP Service, prometheus-proxy.
+apiVersion: v1
+kind: Service
+metadata:
+  name: proxy-scrape
+  namespace: monitoring
+spec:
+  type: NodePort
+  selector:
+    app.kubernetes.io/name: prometheus-proxy
+    app.kubernetes.io/instance: prometheus-proxy
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      nodePort: 30080

@@ -1,0 +1,16 @@
+# The agent's discovery targets in pp-target: the paths list targets-sync writes from the annotated Services, which
+# the agent chart mounts (discovery.existingConfigMap in values/agent.yaml) and the agent re-reads every 5 seconds.
+#
+# demo.sh creates it once, empty, with `kubectl create`, and never applies it again: targets-sync owns its contents,
+# and applying this file to a running demo would empty it until targets-sync's next pass. The demo, not the chart,
+# owns it, so a helm upgrade doesn't touch it either.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-targets
+  namespace: monitoring
+data:
+  targets.conf: |
+    // targets-sync (sync/targets_sync.py) replaces this as it starts.
+    {"paths": []}

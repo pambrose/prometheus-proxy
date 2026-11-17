@@ -1,0 +1,84 @@
+# Act 2's service (`demo.sh add-service`): search, deployed like the others in services.yaml, its Service annotated
+# prometheus-proxy/path. The Service is all it takes for Prometheus to scrape it through the proxy: targets-sync adds
+# it to the agent's targets, the kubelet copies the ConfigMap into the agent's pod, and the agent registers the path,
+# without restarting. add-service applies the Deployment first, selecting it by its label, which the Service doesn't
+# carry, and the Service once the pod is ready. `demo.sh remove-service` removes the annotation, and deletes both once
+# the agent has let the path go.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: search
+  namespace: apps
+  labels:
+    app.kubernetes.io/name: search
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: search
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: search
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: search
+          # The dashboard demo's Python image, digest included.
+          image: python:3.14-alpine@sha256:5862d971d1f0ae26b258cefa4e893556b1d3aba81bd2ff30888704ad378bab67
+          command: ["python", "-u", "/app/services_app.py"]
+          env:
+            - name: SERVICE
+              value: search
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+          ports:
+            - name: http
+              containerPort: 8000
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+          volumeMounts:
+            - name: app
+              mountPath: /app
+              readOnly: true
+      volumes:
+        - name: app
+          configMap:
+            name: services-app
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: search
+  namespace: apps
+  annotations:
+    # targets-sync (sync/targets_sync.py) writes every Service with this annotation into the agent's targets.
+    prometheus-proxy/path: search_metrics
+spec:
+  # ClusterIP, the default: reachable inside pp-target only.
+  selector:
+    app.kubernetes.io/name: search
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http

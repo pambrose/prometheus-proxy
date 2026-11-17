@@ -10,7 +10,8 @@ down and coming back, all on one laptop.
 It follows the [dashboard demo](../dashboard), which shows the dashboard, Grafana, and the proxy's features: show that
 one first. This one keeps the same pieces and changes only the link through the firewall, the thing the product
 exists to cross. The website's [Network Demo](https://pambrose.github.io/prometheus-proxy/network-demo/) page walks
-through the same scenarios with screenshots.
+through the same scenarios with screenshots. The [Kubernetes demo](../kubernetes) follows this one, and deploys the
+same proxy and agent with their Helm charts on two kind clusters.
 
 ```
  network-app  (simulated services: orders and payments at headquarters, inventory and shipping at a branch)
@@ -238,6 +239,9 @@ tells either end. It takes about 50 seconds to play out.
 ```bash
 ./demo.sh heal            # returns any agent on the standby to the primary
 ```
+
+That's the script. To show the same proxy and agent deployed on Kubernetes with their Helm charts, go on to the
+[Kubernetes demo](../kubernetes).
 
 ## Scenario reference
 

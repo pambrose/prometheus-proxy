@@ -37,6 +37,11 @@ flowchart LR
 The agent always initiates the connection, so a target cluster only needs **egress** to the
 proxy's gRPC endpoint — no inbound ports are exposed.
 
+!!! tip "See it run"
+
+    The [Kubernetes Demo](kubernetes-demo.md) builds this topology on one laptop: two kind clusters, the charts
+    below, and an agent whose targets come from annotated Services, without restarting it.
+
 !!! note "Namespaces in these examples"
 
     The manifests below put the proxy in a `monitoring` namespace and the agent in `default`.
