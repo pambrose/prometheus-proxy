@@ -204,6 +204,9 @@ internal data class ProxySnapshot(
   val scrapeNowEnabled: Boolean = false,
   // Each path's links into other tools, proxy.dashboard.links, parsed at startup; none hides the Links column.
   val links: List<PathLink> = emptyList(),
+  // The scrapes a path's history holds when full, proxy.dashboard.pathHistorySize, which each row's History strip
+  // keeps a place for; 0 keeps none.
+  val pathHistorySize: Int = 0,
 ) {
   fun agent(agentId: String): AgentView? = agents.firstOrNull { it.agentId == agentId }
 
@@ -405,6 +408,7 @@ internal data class ProxySnapshot(
         activityChangeCount = activity.changeCount,
         scrapeNowEnabled = proxy.proxyConfigVals.dashboard.scrapeNowEnabled,
         links = proxy.options.dashboardLinks,
+        pathHistorySize = proxy.proxyConfigVals.dashboard.pathHistorySize,
       )
     }
   }

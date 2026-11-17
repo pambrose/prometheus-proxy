@@ -119,6 +119,31 @@ class PathTableHtmlTest : StringSpec() {
       Regex("""class="pill ok"""").findAll(historyTable(200, 200, 200, 200, 200)).count() shouldBe 1
     }
 
+    // Faint dots keep the places of the scrapes still to come, so every strip is as wide as a full one, and the
+    // percentages and the Links column stay put as the histories fill.
+    "a history that isn't full should keep a faint place for each scrape still to come, before its scrapes" {
+      val view = DashboardFixtures.pathView(history = [200, 503].map { scrapeRecord(statusCode = it) })
+      val full = DashboardFixtures.pathView(history = [200, 200].map { scrapeRecord(statusCode = it) })
+
+      fun push(
+        path: PathView,
+        historySize: Int,
+      ) = ProxyDashboardHtml.pushFragment(
+          snapshot([path]).copy(pathHistorySize = historySize),
+          null,
+          "/dashboard",
+          DashboardLayout.PATH,
+          0,
+          RowFilter.NONE,
+        )
+
+      push(view, 5) shouldContain
+        """<i class="slot" style="--n:3"></i><i class="crit" style="--n:1"></i><i class="ok" style="--n:1"></i>"""
+      push(full, 2) shouldNotContain """class="slot""""
+      ProxyDashboardCss.CSS shouldContain ".hist i.slot { --dot:var(--line); }"
+      ProxyDashboardCss.CSS shouldNotContain ".hist i.empty"
+    }
+
     "the history strip should stay visible under forced colours" {
       ProxyDashboardCss.CSS shouldContain ".hist i { forced-color-adjust:none; }"
     }

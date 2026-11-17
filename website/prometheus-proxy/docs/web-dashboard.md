@@ -164,7 +164,7 @@ Every path on one row, with the endpoint behind it and how its last scrape went:
 | **Target** | the URL the agent actually fetches, with a button beside it that copies it to the clipboard |
 | **Src** | `cfg` for a statically configured path, `disc` for one from [dynamic discovery](configuration/agent.md#dynamic-target-discovery) |
 | **Last scrape / Status / Duration** | the most recent result for that path |
-| **History** | the path's recent scrapes as a row of dots, oldest on the left, green for a success and red for a failure, then the share that succeeded |
+| **History** | the path's recent scrapes as a row of dots, oldest on the left, green for a success and red for a failure, with faint dots holding the places of scrapes still to come, then the share that succeeded |
 | **Links** | with [links](#links) configured, the path's links into other tools, such as Prometheus and Grafana, by name or by the tool's icon |
 
 The dashboard explains the columns too: **Column guide**, at the right end of the search bar, opens a short

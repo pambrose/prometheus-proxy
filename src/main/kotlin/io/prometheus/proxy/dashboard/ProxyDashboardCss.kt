@@ -249,11 +249,12 @@ internal object ProxyDashboardCss {
     .match-count { padding:7px 15px; color:var(--ink-3); font-size:11.5px; border-bottom:1px solid var(--line-soft); }
     /* A path's recent scrapes, oldest first. Each <i> is a run of like results and paints a 4px dot every 6px, so a
        healthy strip is one element however long it is. Round, as everything that reports state is. A full strip, at
-       the default 20 scrapes, is 120px. */
+       the default 20 scrapes, is 120px, and until a history fills, its first run is .slot (not .empty, the empty
+       state's class): dots in the rule's colour for the scrapes still to come, so every row's strip is that wide. */
     .hist { display:inline-flex; vertical-align:middle; margin:-2px 7px 0 0; }
     .hist i { display:block; height:6px; width:calc(var(--n) * 6px);
       background:radial-gradient(circle at 3px 3px, var(--dot) 2px, transparent 2.5px) 0 0 / 6px 6px repeat-x; }
-    .hist i.ok { --dot:var(--ok); } .hist i.crit { --dot:var(--crit); }
+    .hist i.ok { --dot:var(--ok); } .hist i.crit { --dot:var(--crit); } .hist i.slot { --dot:var(--line); }
     /* Forced colours drop backgrounds, the dots included. */
     @media (forced-colors: active) { .hist i { forced-color-adjust:none; } }
     /* Narrow, the tabs take a row of their own, the bar's last, so they still stand on its rule; the brand and the
