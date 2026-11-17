@@ -144,6 +144,17 @@ class PathTableHtmlTest : StringSpec() {
       ProxyDashboardCss.CSS shouldNotContain ".hist i.empty"
     }
 
+    // A table wider than the window scrolls sideways in its scroller. The push replaces the region inside it, not the
+    // scroller, which kept starting again at the left on every refresh when it was the region itself.
+    "the path table's scroller should stay on the page, and a push should replace only the region inside it" {
+      val page = renderFullPage(snapshot(), DashboardLayout.PATH)
+      val push = pathPush()
+
+      page shouldContain Regex("""<div class="scroller">\s*<div id="${ProxyDashboardHtml.PATH_TABLE_ID}"""")
+      push shouldContain """<div id="${ProxyDashboardHtml.PATH_TABLE_ID}" hx-swap-oob="true""""
+      push shouldNotContain "scroller"
+    }
+
     "the history strip should stay visible under forced colours" {
       ProxyDashboardCss.CSS shouldContain ".hist i { forced-color-adjust:none; }"
     }

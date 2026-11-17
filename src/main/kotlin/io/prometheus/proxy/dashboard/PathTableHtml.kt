@@ -69,7 +69,9 @@ internal object PathTableHtml {
   ) {
     renderFilters(routeBase, DashboardLayout.PATH, filter, columns(snapshot))
     if (snapshot.scrapeNowEnabled) scrapeResultPanel(routeBase)
-    div("scroller") { pathTable(snapshot, filter, oob = false) }
+    // The region a push replaces sits inside the scroller rather than being it, so the scroller stays and a table
+    // scrolled sideways keeps its place across every refresh; a replaced scroller started again at the left.
+    div("scroller") { div { pathTable(snapshot, filter, oob = false) } }
   }
 
   /**

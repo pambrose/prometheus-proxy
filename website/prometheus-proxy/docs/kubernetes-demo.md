@@ -104,8 +104,8 @@ shows the proxy chart in one cluster and the agent chart in the other, and Prome
 target cluster: its one job asks the proxy's `/discovery` what to scrape.
 
 <figure markdown="span">
-  [![The agent, named for its pod, with its four paths](images/kubernetes-demo/agent.webp#only-dark){ loading=lazy }](images/kubernetes-demo/agent.webp)
-  [![The agent, named for its pod, with its four paths](images/kubernetes-demo/agent-light.webp#only-light){ loading=lazy }](images/kubernetes-demo/agent-light.webp)
+  ![The agent, named for its pod, with its four paths](images/kubernetes-demo/agent.webp#only-dark){ loading=lazy }
+  ![The agent, named for its pod, with its four paths](images/kubernetes-demo/agent-light.webp#only-light){ loading=lazy }
   <figcaption>The agent on the dashboard, under its pod's name, connected from the target cluster</figcaption>
 </figure>
 
@@ -114,8 +114,8 @@ pod with the downward API. It has four paths: its own metrics, from its config, 
 discovery.
 
 <figure markdown="span">
-  [![Prometheus's targets, every one found through the proxy](images/kubernetes-demo/targets.webp#only-dark){ loading=lazy }](images/kubernetes-demo/targets.webp)
-  [![Prometheus's targets, every one found through the proxy](images/kubernetes-demo/targets-light.webp#only-light){ loading=lazy }](images/kubernetes-demo/targets-light.webp)
+  ![Prometheus's targets, every one found through the proxy](images/kubernetes-demo/targets.webp#only-dark){ loading=lazy }
+  ![Prometheus's targets, every one found through the proxy](images/kubernetes-demo/targets-light.webp#only-light){ loading=lazy }
   <figcaption>Prometheus's targets: every one found through the proxy's /discovery, and scraped through the proxy</figcaption>
 </figure>
 
@@ -132,8 +132,8 @@ into the agent's pod, the agent re-reads it and registers the path, and Promethe
 scrape.
 
 <figure markdown="span">
-  [![The Paths view, with search_metrics from discovery](images/kubernetes-demo/discovered.webp#only-dark){ loading=lazy }](images/kubernetes-demo/discovered.webp)
-  [![The Paths view, with search_metrics from discovery](images/kubernetes-demo/discovered-light.webp#only-light){ loading=lazy }](images/kubernetes-demo/discovered-light.webp)
+  ![The Paths view, with search_metrics from discovery](images/kubernetes-demo/discovered.webp#only-dark){ loading=lazy }
+  ![The Paths view, with search_metrics from discovery](images/kubernetes-demo/discovered-light.webp#only-light){ loading=lazy }
   <figcaption>search_metrics on the Paths view, its source disc: from discovery, not the agent's config</figcaption>
 </figure>
 
@@ -166,8 +166,8 @@ Prometheus scrape that lands in it fails, and the next succeeds. Nobody touched 
 `agent` label is the pod's name, so the new pod's scrapes start new series, as a `pod` label's would.
 
 <figure markdown="span">
-  [![The Activity view, as the agent's pod is replaced](images/kubernetes-demo/replaced.webp#only-dark){ loading=lazy }](images/kubernetes-demo/replaced.webp)
-  [![The Activity view, as the agent's pod is replaced](images/kubernetes-demo/replaced-light.webp#only-light){ loading=lazy }](images/kubernetes-demo/replaced-light.webp)
+  ![The Activity view, as the agent's pod is replaced](images/kubernetes-demo/replaced.webp#only-dark){ loading=lazy }
+  ![The Activity view, as the agent's pod is replaced](images/kubernetes-demo/replaced-light.webp#only-light){ loading=lazy }
   <figcaption>The Activity view, newest first: the new pod's agent arriving with every path, the old one leaving, and below, the search service's path coming and going</figcaption>
 </figure>
 

@@ -594,11 +594,12 @@ internal object ProxyDashboardHtml {
         }
 
         DashboardLayout.PATH -> {
-          append(createHTML().div("scroller") { pathTable(snapshot, filter, oob = true) })
+          // The region alone, not its scroller, which stays on the page with its scroll position.
+          append(createHTML().div { pathTable(snapshot, filter, oob = true) })
         }
 
         DashboardLayout.ACTIVITY -> {
-          if (withActivity) append(createHTML().div("scroller") { activityTable(snapshot, filter, oob = true) })
+          if (withActivity) append(createHTML().div { activityTable(snapshot, filter, oob = true) })
         }
 
         null -> {}

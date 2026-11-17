@@ -100,8 +100,8 @@ every link and proxy, and returns any agent on the standby to the primary.
 ```
 
 <figure markdown="span">
-  [![Grafana, with agent-branch's scrape time stepping up](images/network-demo/far.webp#only-dark){ loading=lazy }](images/network-demo/far.webp)
-  [![Grafana, with agent-branch's scrape time stepping up](images/network-demo/far-light.webp#only-light){ loading=lazy }](images/network-demo/far-light.webp)
+  ![Grafana, with agent-branch's scrape time stepping up](images/network-demo/far.webp#only-dark){ loading=lazy }
+  ![Grafana, with agent-branch's scrape time stepping up](images/network-demo/far-light.webp#only-light){ loading=lazy }
   <figcaption>agent-branch's scrape time steps up by a round trip; agent-hq's stays flat</figcaption>
 </figure>
 
@@ -120,8 +120,8 @@ shares the link, so it backs up behind the inventory, and within about 15 second
 own metrics fail too. agent-hq, on its own links, is untouched.
 
 <figure markdown="span">
-  [![agent-branch on the thin link, every scrape too late but its idle time near zero](images/network-demo/thin.webp#only-dark){ loading=lazy }](images/network-demo/thin.webp)
-  [![agent-branch on the thin link, every scrape too late but its idle time near zero](images/network-demo/thin-light.webp#only-light){ loading=lazy }](images/network-demo/thin-light.webp)
+  ![agent-branch on the thin link, every scrape too late but its idle time near zero](images/network-demo/thin.webp#only-dark){ loading=lazy }
+  ![agent-branch on the thin link, every scrape too late but its idle time near zero](images/network-demo/thin-light.webp#only-light){ loading=lazy }
   <figcaption>Most of a minute on the thin link: every scrape too late for Prometheus, and agent-branch still connected</figcaption>
 </figure>
 
@@ -134,8 +134,8 @@ dead. [A link that goes silent](#a-link-goes-silent-the-agent-detects-it-and-fai
 ```
 
 <figure markdown="span">
-  [![agent-branch's recent scrapes, with the inventory filtered](images/network-demo/filtered.webp#only-dark){ loading=lazy }](images/network-demo/filtered.webp)
-  [![agent-branch's recent scrapes, with the inventory filtered](images/network-demo/filtered-light.webp#only-light){ loading=lazy }](images/network-demo/filtered-light.webp)
+  ![agent-branch's recent scrapes, with the inventory filtered](images/network-demo/filtered.webp#only-dark){ loading=lazy }
+  ![agent-branch's recent scrapes, with the inventory filtered](images/network-demo/filtered-light.webp#only-light){ loading=lazy }
   <figcaption>The filtered inventory, about 199,000 characters, crossing the thin link in about 3 seconds</figcaption>
 </figure>
 
@@ -156,8 +156,8 @@ brings every path back within a second or two, since what the thin link had queu
 ```
 
 <figure markdown="span">
-  [![agent-branch on the standby, after failing over](images/network-demo/failover.webp#only-dark){ loading=lazy }](images/network-demo/failover.webp)
-  [![agent-branch on the standby, after failing over](images/network-demo/failover-light.webp#only-light){ loading=lazy }](images/network-demo/failover-light.webp)
+  ![agent-branch on the standby, after failing over](images/network-demo/failover.webp#only-dark){ loading=lazy }
+  ![agent-branch on the standby, after failing over](images/network-demo/failover-light.webp#only-light){ loading=lazy }
   <figcaption>The standby's dashboard: agent-branch via its link to the standby, marked failed over</figcaption>
 </figure>
 
@@ -181,8 +181,8 @@ Here the connection doesn't close. The link stops passing anything, the agent's 
 stateful firewall or NAT that drops a connection does, and nothing tells either end.
 
 <figure markdown="span">
-  [![The primary's dashboard, hearing nothing from agent-branch](images/network-demo/cut.webp#only-dark){ loading=lazy }](images/network-demo/cut.webp)
-  [![The primary's dashboard, hearing nothing from agent-branch](images/network-demo/cut-light.webp#only-light){ loading=lazy }](images/network-demo/cut-light.webp)
+  ![The primary's dashboard, hearing nothing from agent-branch](images/network-demo/cut.webp#only-dark){ loading=lazy }
+  ![The primary's dashboard, hearing nothing from agent-branch](images/network-demo/cut-light.webp#only-light){ loading=lazy }
   <figcaption>The primary hears nothing from agent-branch: its idle time climbs toward the eviction</figcaption>
 </figure>
 
@@ -210,7 +210,7 @@ own service name. In Zipkin, the search is `serviceName` = `agent-branch`. Open
 <http://localhost:9511/zipkin/?serviceName=agent-branch>, which fills that search in, and click **Run Query**.
 
 <figure markdown="span">
-  [![A reconnect's connectagent call, traced from agent-branch to the proxy](images/network-demo/tracing.webp){ loading=lazy }](images/network-demo/tracing.webp)
+  ![A reconnect's connectagent call, traced from agent-branch to the proxy](images/network-demo/tracing.webp){ loading=lazy }
   <figcaption>One reconnect's connectagent call, from agent-branch to the proxy</figcaption>
 </figure>
 
@@ -226,8 +226,8 @@ and appear as the connection closes, each about 15 seconds long: as long as the 
 ```
 
 <figure markdown="span">
-  [![Grafana with every link down](images/network-demo/wan-down.webp#only-dark){ loading=lazy }](images/network-demo/wan-down.webp)
-  [![Grafana with every link down](images/network-demo/wan-down-light.webp#only-light){ loading=lazy }](images/network-demo/wan-down-light.webp)
+  ![Grafana with every link down](images/network-demo/wan-down.webp#only-dark){ loading=lazy }
+  ![Grafana with every link down](images/network-demo/wan-down-light.webp#only-light){ loading=lazy }
   <figcaption>Every link down: no agents connected, and NetworkNoAgentsConnected firing</figcaption>
 </figure>
 

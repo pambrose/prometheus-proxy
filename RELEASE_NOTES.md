@@ -220,6 +220,10 @@ most 10,000 agents connected with one identity, which is every agent when agent 
 
 ### Bug Fixes
 
+- **A dashboard table scrolled sideways stays put.** When the Paths or Activity table is wider than the window, you
+  scroll it sideways to reach its last columns, and it jumped back to the left on the next refresh, every two seconds
+  on the Paths view. It now keeps its place.
+
 - **Agents that connect while the proxy is starting stay connected.** An agent that reached the proxy after it began
   accepting agents but before it finished starting was disconnected at once, and reconnected every few seconds until
   startup finished, failing its scrapes meanwhile. That happened to agents racing a proxy restart. They now stay
@@ -311,6 +315,10 @@ most 10,000 agents connected with one identity, which is every agent when agent 
   write terminal escapes or very long text into the proxy's log.
 
 ### Documentation
+
+- **Click a screenshot to see it full size.** On the website's demo pages, a screenshot opens in a lightbox at full
+  resolution, sharper than the page's column can show it, with its caption, and the arrows step through the page's
+  other screenshots.
 
 - **The Docker quick start works.** The agent's config pointed it at `localhost`, which in a container is the agent
   itself, so it never connected. The quick start now puts the proxy and the agent on a shared Docker network, gives

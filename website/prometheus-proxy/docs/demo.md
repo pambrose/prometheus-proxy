@@ -82,8 +82,8 @@ The dashboard has three views: one organized by agent, one by path, and one of w
 any screenshot on this page to see it full size.
 
 <figure markdown="span">
-  [![The Agents view, with agent-east selected](images/demo/agents.webp#only-dark){ loading=lazy }](images/demo/agents.webp)
-  [![The Agents view, with agent-east selected](images/demo/agents-light.webp#only-light){ loading=lazy }](images/demo/agents-light.webp)
+  ![The Agents view, with agent-east selected](images/demo/agents.webp#only-dark){ loading=lazy }
+  ![The Agents view, with agent-east selected](images/demo/agents-light.webp#only-light){ loading=lazy }
   <figcaption>The Agents view, with agent-east selected</figcaption>
 </figure>
 
@@ -95,8 +95,8 @@ characters, large enough that the agent sends it to the proxy in chunks.
 proxy to Prometheus, so the proxy monitors itself the same way it serves everything else.
 
 <figure markdown="span">
-  [![The Paths view](images/demo/paths.webp#only-dark){ loading=lazy }](images/demo/paths.webp)
-  [![The Paths view](images/demo/paths-light.webp#only-light){ loading=lazy }](images/demo/paths-light.webp)
+  ![The Paths view](images/demo/paths.webp#only-dark){ loading=lazy }
+  ![The Paths view](images/demo/paths-light.webp#only-light){ loading=lazy }
   <figcaption>The Paths view</figcaption>
 </figure>
 
@@ -117,8 +117,8 @@ the demo; each command prints what to watch, and a minute between them lets the 
 ```
 
 <figure markdown="span">
-  [![The Paths view during an outage](images/demo/outage.webp#only-dark){ loading=lazy }](images/demo/outage.webp)
-  [![The Paths view during an outage](images/demo/outage-light.webp#only-light){ loading=lazy }](images/demo/outage-light.webp)
+  ![The Paths view during an outage](images/demo/outage.webp#only-dark){ loading=lazy }
+  ![The Paths view during an outage](images/demo/outage-light.webp#only-light){ loading=lazy }
   <figcaption>payments failing with 500, and inventory timing out</figcaption>
 </figure>
 
@@ -127,8 +127,8 @@ reports a 408 (`upstream_timed_out`), so Prometheus gets a clear answer instead 
 working: one failing target never affects the rest.
 
 <figure markdown="span">
-  [![The demo's Grafana dashboard during the outage](images/demo/grafana.webp#only-dark){ loading=lazy }](images/demo/grafana.webp)
-  [![The demo's Grafana dashboard during the outage](images/demo/grafana-light.webp#only-light){ loading=lazy }](images/demo/grafana-light.webp)
+  ![The demo's Grafana dashboard during the outage](images/demo/grafana.webp#only-dark){ loading=lazy }
+  ![The demo's Grafana dashboard during the outage](images/demo/grafana-light.webp#only-light){ loading=lazy }
   <figcaption>The same outage in Grafana</figcaption>
 </figure>
 
@@ -145,8 +145,8 @@ the **Alerts** stat counts them, and so does Prometheus's `/alerts` page.
 ```
 
 <figure markdown="span">
-  [![The Paths view with three discovered services](images/demo/discovered.webp#only-dark){ loading=lazy }](images/demo/discovered.webp)
-  [![The Paths view with three discovered services](images/demo/discovered-light.webp#only-light){ loading=lazy }](images/demo/discovered-light.webp)
+  ![The Paths view with three discovered services](images/demo/discovered.webp#only-dark){ loading=lazy }
+  ![The Paths view with three discovered services](images/demo/discovered-light.webp#only-light){ loading=lazy }
   <figcaption>Three services added through dynamic discovery</figcaption>
 </figure>
 
@@ -162,8 +162,8 @@ its config, and Grafana's **Discovered services** panel fills. `./demo.sh undisc
 ```
 
 <figure markdown="span">
-  [![agent-west-2 frozen, counting down to its eviction](images/demo/evicting.webp#only-dark){ loading=lazy }](images/demo/evicting.webp)
-  [![agent-west-2 frozen, counting down to its eviction](images/demo/evicting-light.webp#only-light){ loading=lazy }](images/demo/evicting-light.webp)
+  ![agent-west-2 frozen, counting down to its eviction](images/demo/evicting.webp#only-dark){ loading=lazy }
+  ![agent-west-2 frozen, counting down to its eviction](images/demo/evicting-light.webp#only-light){ loading=lazy }
   <figcaption>A frozen agent, counting down to its eviction</figcaption>
 </figure>
 
@@ -172,8 +172,8 @@ silence. A consolidated path waits for every agent that serves it, so `/shipping
 scrapes of both paths give up at its 4-second timeout, recorded as 499 (`client_cancelled`).
 
 <figure markdown="span">
-  [![The Paths view after the eviction](images/demo/evicted.webp#only-dark){ loading=lazy }](images/demo/evicted.webp)
-  [![The Paths view after the eviction](images/demo/evicted-light.webp#only-light){ loading=lazy }](images/demo/evicted-light.webp)
+  ![The Paths view after the eviction](images/demo/evicted.webp#only-dark){ loading=lazy }
+  ![The Paths view after the eviction](images/demo/evicted-light.webp#only-light){ loading=lazy }
   <figcaption>After the eviction: a departed path, marked gone</figcaption>
 </figure>
 
@@ -206,8 +206,8 @@ The contractor's agent appears on the dashboard with the one path its identity a
 shows it, searched here for the contractor's agent:
 
 <figure markdown="span">
-  [![The Activity view, searched for agent-rogue](images/demo/activity.webp#only-dark){ loading=lazy }](images/demo/activity.webp)
-  [![The Activity view, searched for agent-rogue](images/demo/activity-light.webp#only-light){ loading=lazy }](images/demo/activity-light.webp)
+  ![The Activity view, searched for agent-rogue](images/demo/activity.webp#only-dark){ loading=lazy }
+  ![The Activity view, searched for agent-rogue](images/demo/activity-light.webp#only-light){ loading=lazy }
   <figcaption>The Activity view, searched for agent-rogue</figcaption>
 </figure>
 
@@ -227,8 +227,8 @@ over. `./demo.sh rogue-agent-stop` removes it.
 ```
 
 <figure markdown="span">
-  [![agent-east with no paths, beside its copy](images/demo/duplicate.webp#only-dark){ loading=lazy }](images/demo/duplicate.webp)
-  [![agent-east with no paths, beside its copy](images/demo/duplicate-light.webp#only-light){ loading=lazy }](images/demo/duplicate-light.webp)
+  ![agent-east with no paths, beside its copy](images/demo/duplicate.webp#only-dark){ loading=lazy }
+  ![agent-east with no paths, beside its copy](images/demo/duplicate-light.webp#only-light){ loading=lazy }
   <figcaption>agent-east, left with no paths by its copy</figcaption>
 </figure>
 
