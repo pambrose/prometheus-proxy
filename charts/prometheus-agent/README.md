@@ -37,6 +37,20 @@ discovery:
 Edit the `<release>-discovery` ConfigMap (or your own, with `discovery.existingConfigMap`) and the agent picks up the
 change within `discovery.reconcileIntervalSecs`, after the kubelet updates the mounted file.
 
+## More than one replica
+
+> [!WARNING]
+> Keep `replicaCount` at 1. Every replica runs the same `config`, so each one registers the same paths and scrapes the
+> same targets. With `agent.consolidated = true`, the proxy sends each scrape to every replica and joins their answers,
+> so Prometheus gets every series once per replica. It keeps the first sample of each and drops the others, logging
+> `Error on ingesting samples with different value but same timestamp` for each target on every scrape and counting
+> them in `prometheus_target_scrapes_sample_duplicate_timestamp_total`, while `up` stays 1. Without consolidated mode,
+> the replica that registered last serves every path and the others sit idle.
+
+One replica is enough for availability: the Deployment replaces a failed pod, and the new agent registers its paths
+again once it starts and connects. Consolidated mode suits agents whose answers differ, such as separate releases that
+each scrape their own instance of a service whose series carry an instance label.
+
 ## Values
 
 | Value                                    | Default                                    | Description                                                                        |
@@ -46,7 +60,7 @@ change within `discovery.reconcileIntervalSecs`, after the kubelet updates the m
 | `config`                                 | an empty `pathConfigs`                     | Agent configuration in HOCON, mounted as `AGENT_CONFIG`                            |
 | `existingConfigMap`                      | `""`                                       | A ConfigMap with an `agent.conf` key, instead of `config`                          |
 | `existingSecret`                         | `""`                                       | A Secret with an `agent.conf` key, instead of either; for credentials in URLs      |
-| `replicaCount`                           | `1`                                        | More than one needs `agent.consolidated = true` in `config`                        |
+| `replicaCount`                           | `1`                                        | Keep it at 1: see [More than one replica](#more-than-one-replica)                  |
 | `discovery.enabled`                      | `false`                                    | Re-read a paths list from its own ConfigMap                                        |
 | `discovery.targets`                      | `""`                                       | The paths list in HOCON                                                            |
 | `discovery.existingConfigMap`            | `""`                                       | A ConfigMap with a `targets.conf` key, instead of `targets`                        |
