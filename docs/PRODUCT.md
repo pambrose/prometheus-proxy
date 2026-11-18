@@ -63,11 +63,13 @@ one they can control (a Kubernetes ConfigMap, a systemd unit, a `docker run` lin
 **Surfaces in scope for design work:**
 
 1. **The operational dashboard** — served from its own port (default `8094`, base path `/dashboard`),
-   **opt-in and disabled by default**. Two bookmarkable layouts: an agent view (master–detail: which
-   agents are connected, what each is doing) and a path view (a table of every registered path and how
-   its last scrape went, *including paths whose agent has departed* — precisely the case that used to
-   vanish from view). A status bar carries connection liveness and proxy-internal health counters.
-   Updates arrive live over a WebSocket.
+   **opt-in and disabled by default**. Three bookmarkable layouts, switched by folder tabs: an agent view
+   (master–detail: which agents are connected, what each is doing), a path view (a table of every
+   registered path and how its recent scrapes went, *including paths whose agent has departed* —
+   precisely the case that used to vanish from view — with search, a problems-only filter, scrape-now,
+   and links out to Prometheus, Grafana, or a runbook), and an activity view (what the proxy did with its
+   agents and paths, including what it refused, newest first). A status bar carries connection liveness
+   and proxy-internal health counters. Updates arrive live over a WebSocket.
 2. **A project landing page** — a surface that persuades a prospective adopter, distinct from the
    reference documentation.
 
@@ -134,12 +136,13 @@ lives relative to the docs site.
 
 **Real and usable:**
 
-- **Repo signals only** — GitHub releases (v4.4.2, released 2026-11-10), Docker Hub pull counts for
+- **Repo signals only** — GitHub releases (v4.5.0, released 2026-11-17), Docker Hub pull counts for
   both images, Maven Central presence, Apache 2.0 license, CI / Codecov / Codacy badges. All
   independently verifiable.
 - **Working configuration and demonstration** — the config examples under `examples/`, the reference
-  schema at `config/config.conf`, the architecture diagram at `docs/prometheus-proxy.png`, and real
-  screenshots of the running dashboard. Demonstration over claims.
+  schema at `config/config.conf`, the architecture diagram at `docs/prometheus-proxy.png`, the three
+  demos under `demos/` (each one `make up` on the released images, with a guided tour), and real
+  screenshots of the running dashboard taken from them. Demonstration over claims.
 
 **Explicitly absent — must not be fabricated:**
 

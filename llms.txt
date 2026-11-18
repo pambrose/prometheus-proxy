@@ -59,12 +59,12 @@ Key RPCs:
 - **Stale agent cleanup**: `AgentContextCleanupService` evicts inactive agents after `maxAgentInactivitySecs` (default 60s)
 - **Consolidated mode**: Multiple agents can register the same path for redundancy
 - **Auth forwarding**: Proxy forwards `Authorization` headers (basic auth / bearer token) from Prometheus scrape configs to agents over gRPC
-- **Embedded agent**: Agents can run inside other JVM apps via `Agent.startAsyncAgent()`, returning an `EmbeddedAgentInfo` lifecycle handle. Since 4.4.0 several agents in one JVM, at once or one after another, share one set of agent metrics with metrics on (each series carries its agent's `launch_id`, and goes when the agent stops), and an embedded agent's `logLevel` sets only the `io.prometheus` loggers, leaving the host's logging alone. The library jar carries no `logback.xml` (only the fat JARs do, from `src/shadow/resources`), so the host's Logback config configures the agent's loggers too
+- **Embedded agent**: Agents can run inside other JVM apps via `Agent.startAsyncAgent()`, returning an `EmbeddedAgentInfo` lifecycle handle. Since 4.4.0 several agents in one JVM, at once or one after another, share one set of agent metrics with metrics on (each series carries its agent's `launch_id`, and goes when the agent stops), and an embedded agent's `logLevel` sets only the `io.prometheus` loggers, leaving the host's logging alone. The library jar carries no `logback.xml` (only the fat JARs do, from `src/shadow/resources`), so the host's Logback config configures the agent's loggers too. Since 4.5.0 the agent's generated gRPC classes need protobuf-java 4.36.2 or later, which a build that embeds the agent resolves through it
 - **Proxy failover** (4.0.0, rule revised in 4.1.0): The agent takes an ordered `agent.proxy.endpoints` list (or comma-separated `--proxy` / `PROXY_HOSTNAME`); a failed connect, or a proxy that rejects the agent's registration or every one of its static paths, advances to the next endpoint, and a connection that registered and then dropped retries from the head, so a recovered primary is picked up automatically. Scrape an HA pair with `static_config`, not `http_sd_config` (a standby returns an empty discovery list, which Prometheus treats as target deletion)
 - **Dynamic target discovery** (4.0.0): Opt-in `agent.discovery` reconcile loop keeps registered paths in sync with a watched HOCON/JSON file (`paths` list of `{ name, path, url, labels }`), so targets change at runtime with no agent restart. Static `pathConfigs` are never touched; a read failure keeps the last-known-good set, while a valid-but-empty file removes all discovered paths
-- **Per-agent identities** (4.0.0): `proxy.auth` lists named identities (token + allowed path globs) enforced on every `registerPath`, closing the shared-token hole where any agent could register (and take over) any path. Legacy `proxy.agentToken` is honored as an allow-all identity for migration. Since 4.1.0 an identity can't take over or join a path another identity's live agent serves, so consolidated agents sharing a path must share an identity. Since 4.4.0 `registerPath` checks a path's length and form before matching it against the globs, and globs are matched in time proportional to the path's length
+- **Per-agent identities** (4.0.0): `proxy.auth` lists named identities (token + allowed path globs) enforced on every `registerPath`, closing the shared-token hole where any agent could register (and take over) any path. Legacy `proxy.agentToken` is honored as an allow-all identity for migration. Since 4.1.0 an identity can't take over or join a path another identity's live agent serves, so consolidated agents sharing a path must share an identity. Since 4.4.0 `registerPath` checks a path's length and form before matching it against the globs, and globs are matched in time proportional to the path's length. Since 4.5.0 it refuses a path with whitespace, a control character, `?`, or `#`, which no scrape can reach, and the agent refuses such a `pathConfigs` entry at startup; the proxy also refuses to start with a `proxy.auth` identity named `legacy-agent-token`, the name it gives the legacy shared token
 - **Metric filtering** (4.0.0): Optional per-path `agent.filters` (fully-anchored `metricNameAllow` / `metricNameDeny` regexes) drop whole metric families at the agent before gzip/chunking, so unwanted series never cross the WAN. Families are kept or dropped atomically (a histogram's `_bucket`/`_sum`/`_count` stay together); non-text or non-UTF-8 payloads pass through unfiltered (fails open). Since 4.4.0 a metric name the target writes quoted (`# TYPE "a.b" counter`, `{"a.b",job="x"} 1`), as Prometheus 3's `escaping=allow-utf-8` allows, is matched unquoted
-- **Operational dashboard** (4.0.0): Read-only live web UI on its own port (`--dashboard`, default port 8094, off by default, unauthenticated) showing connected agents, registered paths — including paths whose agent has gone — and recent scrape results. Two layouts: `/dashboard` (per-agent) and `/dashboard/paths` (one row per path). Both identify agents by name, not internal id, so the two layouts can be read against each other (4.0.1). The page meets WCAG AA (measured contrast floor 4.59:1) and announces connection loss and recovery through a live region (4.0.1); `docs/DESIGN.md` records the visual system and the contrast floor. Since 4.1.0, `proxy.dashboard.allowedHosts` can restrict the Host names it answers to, against DNS rebinding
+- **Operational dashboard** (4.0.0): Live web UI on its own port (`--dashboard`, default port 8094, off by default, unauthenticated) showing connected agents, registered paths — including paths whose agent has gone — and recent scrape results. Layouts: `/dashboard` (per-agent) and `/dashboard/paths` (one row per path). Every layout identifies agents by name, not internal id, so they can be read against each other (4.0.1). The page meets WCAG AA (measured contrast floor 4.59:1) and announces connection loss and recovery through a live region (4.0.1); `docs/DESIGN.md` records the visual system and the contrast floor. Since 4.1.0, `proxy.dashboard.allowedHosts` can restrict the Host names it answers to, against DNS rebinding. Since 4.5.0: a third layout, `/dashboard/activity`, lists what the proxy did with its agents and paths, refusals included (`proxy.dashboard.activityLogSize`, 500 events, in memory); the Paths layout has a History column of each path's last `proxy.dashboard.pathHistorySize` (20) scrapes, a search and a Problems-only filter carried in the URL (`?q=…&problems=1`), each path's auth identity, a column guide, and a Scrape button that scrapes a path through its agent without counting as one of Prometheus's scrapes (the agent counts it in `agent_dashboard_scrapes_total`; `proxy.dashboard.scrapeNowEnabled = false` removes it); `proxy.dashboard.links` adds a Links column of URL templates (`{path}`, `{agent}`, `{identity}`, `{label.<name>}`) into tools such as Prometheus and Grafana, optionally shown as an `icon`; and a path whose agent has gone stays listed for `proxy.dashboard.departedPathRetentionSecs` (3600). `proxy.dashboard.recentScrapesQueueSize` is gone; each agent's recent scrapes come from the path histories
 - **Agent isolation** (4.1.0): The proxy accepts a scrape result only from the agent the scrape was sent to, and binds heartbeats to their connection. With `transportFilterDisabled` (behind a reverse proxy), agent calls are bound to the auth identity the agent connected with, so agents sharing one identity remain indistinguishable
 - **Resource limits** (4.1.0): Each agent's scrape backlog is capped at twice `proxy.internal.scrapeRequestBacklogUnhealthySize` (default 25) and scrapes in flight across all agents at `maxInFlightScrapeRequests` (1000), answering 503 beyond either. One agent connection may register at most `maxPathsPerAgent` (20,000) paths of `maxPathLength` (512) characters with `maxLabelsSizeBytes` (8 KiB) of labels; `0` turns each off. Since 4.4.0 the proxy keeps at most `maxAgentFieldLength` (256) characters of an agent's name, host name, launch ID, and each proxy endpoint, and `maxAgentProxyEndpoints` (16) endpoints. Since 4.5.0 it cuts a path's target URL to `maxTargetUrlLength` (2048) characters, and with the transport filter disabled refuses a connect past `maxAgentsPerIdentity` (10,000) agents of one auth identity. Since 4.4.0 the proxy's `/healthcheck` turns unhealthy when the scrapes or chunked transfers in flight reach `scrapeRequestMapUnhealthySize` / `chunkContextMapUnhealthySize`, which default (`0`) to 80% of `maxInFlightScrapeRequests`, and startup rejects either above that limit
 - **Rejected paths** (4.1.0): A proxy rejecting one static path no longer disconnects the agent: the path is skipped and the rest register, and a rejection that can clear (a path another identity's live agent holds) is retried with backoff. The `PathRejectionCause` enum tells the agent which is which
@@ -81,7 +81,7 @@ These are the only types intended for external consumption (everything else is `
 - `io.prometheus.agent.AgentOptions`, `io.prometheus.proxy.ProxyOptions`, `io.prometheus.common.BaseOptions` (config/CLI parsing)
 - `io.prometheus.agent.EmbeddedAgentInfo` (returned by `Agent.startAsyncAgent`)
 - `io.prometheus.common.EnvVars` (typed env-var enum)
-- `io.prometheus.common.ConfigLoadException` (thrown by `startAsyncAgent` on a config-load failure or an invalid setting when `exitOnMissingConfig` is false, so embedded hosts catch it instead of the JVM exiting)
+- `io.prometheus.common.ConfigLoadException` (thrown by `startAsyncAgent` and `startSyncAgent` when `exitOnMissingConfig` is false, on a config that can't be loaded or any setting the options or the Agent reject, with a config URL's credentials redacted from its whole cause chain, so embedded hosts catch it instead of the JVM exiting)
 
 ## Quick Start
 
@@ -131,13 +131,13 @@ docker network create prometheus-proxy-net
 docker run --rm --name prometheus-proxy --network prometheus-proxy-net \
   -p 8080:8080 -p 50051:50051 \
   --env METRICS_ENABLED=true \
-  pambrose/prometheus-proxy:4.4.2
+  pambrose/prometheus-proxy:4.5.0
 
 # Start agent, in another terminal (in a real deployment, on another host, with PROXY_HOSTNAME the proxy's address)
 docker run --rm --network prometheus-proxy-net \
   --env PROXY_HOSTNAME=prometheus-proxy \
   --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-  pambrose/prometheus-agent:4.4.2
+  pambrose/prometheus-agent:4.5.0
 
 # Scrape the proxy's and the agent's own metrics through the proxy
 curl http://localhost:8080/proxy_metrics
@@ -146,7 +146,7 @@ curl http://localhost:8080/agent_metrics
 # Both run in the foreground until Ctrl+C. To run one in the background, restarted if it exits or
 # Docker restarts (Docker doesn't allow --rm with --restart):
 docker run --detach --name prometheus-proxy --restart unless-stopped --network prometheus-proxy-net \
-  -p 8080:8080 -p 50051:50051 --env METRICS_ENABLED=true pambrose/prometheus-proxy:4.4.2
+  -p 8080:8080 -p 50051:50051 --env METRICS_ENABLED=true pambrose/prometheus-proxy:4.5.0
 docker logs --follow prometheus-proxy                          # follow its log
 docker stop prometheus-proxy && docker rm prometheus-proxy     # stop and remove it
 ```
@@ -165,6 +165,22 @@ helm install prometheus-agent ./charts/prometheus-agent -f agent-values.yaml
 Since 4.4.0 a config that holds secrets, such as `proxy.auth` tokens or credentials in an agent's target URLs, can come from a Secret (`existingSecret`, with a `proxy.conf` or `agent.conf` key) instead of the ConfigMap the chart renders.
 
 Since 4.4.0 the proxy chart's readiness probe is `/ping`, not `/healthcheck`: the proxy's `/healthcheck` measures load, and each agent stays connected to one proxy pod, so taking a busy pod out of the Service would only fail its agents' scrapes.
+
+### Demos
+
+Since 4.5.0 the repository ships three self-contained demos under `demos/`, each run from its own directory of a clone and on its own ports, so they can run side by side. `make up` pulls the latest release's proxy and agent images from Docker Hub and prints the URLs, `make tour` walks through the scenarios one step at a time, and `make down` removes everything; `make up-local` runs the proxy and agent built from the checkout instead (needs a JDK 17 or later).
+
+```bash
+git clone --depth 1 https://github.com/pambrose/prometheus-proxy.git
+cd prometheus-proxy/demos/basics
+make up
+```
+
+- `demos/basics`: the proxy, its dashboard, and three agents with simulated services, Prometheus, and Grafana; failing and hung targets, a redundant pair of agents, discovered targets, an evicted agent, and per-team identities
+- `demos/network`: a proxy and its standby, two agents, and a simulated WAN (Toxiproxy) between them, with Prometheus, Grafana, and Zipkin; a far link, a thin one fixed by filtering at the agent, proxy failover, a link that dies silently, and a flaky link traced in Zipkin
+- `demos/kubernetes`: the Helm charts on two kind clusters, the proxy and Prometheus in one and the agent in the other, which exposes nothing; annotation-driven scraping, a replaced agent pod, and config versus target changes
+
+They need Docker with Compose v2, `git`, `make`, and `curl` on macOS or Linux; the Kubernetes demo also needs kind 0.33.0 or later, `kubectl`, and Helm 3 or 4.
 
 ## Configuration
 
@@ -197,7 +213,7 @@ agent {
 | `--metrics, -e` | `METRICS_ENABLED` | false | Enable internal metrics |
 | `--sd_enabled` | `SD_ENABLED` | false | Service discovery endpoint |
 | `--sd_target_prefix` | `SD_TARGET_PREFIX` | localhost:8080 | Service discovery target: `host:port`, or an `http`/`https` URL |
-| `--dashboard` | `DASHBOARD_ENABLED` | false | Read-only operational dashboard (own port, default 8094) |
+| `--dashboard` | `DASHBOARD_ENABLED` | false | Operational dashboard (own port, default 8094) |
 | `--cert, -t` | `CERT_CHAIN_FILE_PATH` | | TLS certificate chain |
 | `--key, -k` | `PRIVATE_KEY_FILE_PATH` | | TLS private key |
 | `--trust, -s` | `TRUST_CERT_COLLECTION_FILE_PATH` | | TLS trust certificates |
@@ -269,7 +285,7 @@ repositories {
 }
 
 dependencies {
-  implementation("com.pambrose:prometheus-proxy:4.4.2")
+  implementation("com.pambrose:prometheus-proxy:4.5.0")
 }
 ```
 
