@@ -1,14 +1,14 @@
 # Network demo
 
 A self-contained demo of what the network between the agents and the proxies does to Prometheus Proxy, and how the
-proxy and agents cope, for customers. It runs a proxy and its standby, each with its web dashboard, two agents behind a
-simulated firewall, a simulated WAN between them ([Toxiproxy](https://github.com/Shopify/toxiproxy)), a set of
-simulated services, and Prometheus, Grafana, and Zipkin. A presenter can show a far link, a thin one and filtering at
-the agent, a proxy that goes away, a link that dies silently, a flaky link followed in Zipkin, and the whole WAN going
-down and coming back, all on one laptop.
+proxy and agents cope. It runs a proxy and its standby, each with its web dashboard, two agents behind a simulated
+firewall, a simulated WAN between them ([Toxiproxy](https://github.com/Shopify/toxiproxy)), a set of simulated
+services, and Prometheus, Grafana, and Zipkin, all on one laptop. It shows a far link, a thin one and filtering at the
+agent, a proxy that goes away, a link that dies silently, a flaky link followed in Zipkin, and the whole WAN going
+down and coming back.
 
-It follows the [basics demo](../basics), which shows the dashboard, Grafana, and the proxy's features: show that
-one first. This one keeps the same pieces and changes only the link through the firewall, the thing the product
+It follows the [basics demo](../basics), which shows the dashboard, Grafana, and the proxy's features: start with
+that one. This one keeps the same pieces and changes only the link through the firewall, the thing the product
 exists to cross. The website's [Network Demo](https://pambrose.github.io/prometheus-proxy/network-demo/) page walks
 through the same scenarios with screenshots. The [Kubernetes demo](../kubernetes) follows this one, and deploys the
 same proxy and agent with their Helm charts on two kind clusters.
@@ -37,8 +37,8 @@ nothing to build. On macOS or Linux, the demo needs only:
 
 - [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2: Docker Desktop, or Docker Engine with the
   Compose plugin.
-- `git`, to clone the repository, and `make`. On macOS, the Xcode command-line tools (`xcode-select --install`) have
-  both.
+- `git`, to clone the repository, and GNU `make`. On macOS, the Xcode command-line tools (`xcode-select --install`)
+  have both. Where GNU make is installed as `gmake`, type `gmake` wherever these instructions say `make`.
 - `curl`, which the demo uses to wait for each service to answer.
 - A web browser.
 
@@ -50,13 +50,12 @@ Clone the repository, then run the demo's commands from its own directory, where
 git clone --depth 1 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/network
 make up      # pulls the images, starts everything, and prints the URLs
-make tour    # walks through the presenter's script below, pausing before each step
+make tour    # walks through the guided tour below, pausing before each step
 make down    # stops it and removes its containers and network
 ```
 
 The first `make up` pulls the proxy, agent, Prometheus, Grafana, Zipkin, Toxiproxy, and Python images, which takes a few
-minutes. After that it starts in under a minute, and runs without a network connection. **Run it once before the
-meeting.**
+minutes. After that it starts in under a minute, even without a network connection.
 
 | What | URL |
 |---|---|
@@ -90,15 +89,15 @@ Grafana uses its default admin password, so this setup is for a laptop, not for 
 | `grafana` | Opens on the **Prometheus Proxy Network Demo** dashboard. |
 | `zipkin` | Every proxy and agent reports a span for each gRPC call between them, under its own name. |
 
-## Presenter's script
+## Guided tour
 
-Each part lists what to show and what it means for the customer. Run the scenario commands from `demos/network`;
-each one prints what to watch. `./demo.sh heal` ends each part: it removes every toxic, brings back every link and
+`make tour` walks through these parts one step at a time. To follow them here instead, run the scenario commands
+from `demos/network`; each one prints what to watch. `./demo.sh heal` ends each part: it removes every toxic, brings back every link and
 proxy, and returns any agent on the standby to the primary. Leave about a minute between parts so the graphs catch up.
 
 ### 1. Two agents reach the proxy over a simulated WAN
 
-Assume the basics demo has been seen: the same proxy and agents, now with a simulated WAN between them.
+These are the basics demo's proxy and agents, now with a simulated WAN between them.
 
 - Open the dashboard. Two agents are connected; click agent-hq: **via hq-to-proxy:50051 (1 of 2)**, its link to the
   primary, the first of its two endpoints. agent-branch is **via branch-to-proxy:50053 (1 of 2)**. The standby's
@@ -216,8 +215,8 @@ tells either end. It takes about 50 seconds to play out.
   `agent_disconnected` in **Scrape outcomes at the proxies**.
 - Every proxy and agent reports a span to Zipkin for each gRPC call between them, under its own service name. In
   Zipkin, the search is `serviceName` = `agent-branch`. Open <http://localhost:9511/zipkin/?serviceName=agent-branch>,
-  which fills that search in, and click **Run Query**. Each reconnect is a `connectagent` trace, then `registeragent` and a `registerpath`
-  for each path. Zipkin joins the agent's client side and the proxy's server side of each call into one span, so the
+  which fills that search in, and click **Run Query**. Each reconnect is a `connectagent` trace, then `registeragent`
+  and a `registerpath` for each path. Zipkin joins the agent's client side and the proxy's server side of each call into one span, so the
   trace names both services, and its annotations mark when the agent sent the call and the proxy answered it.
 - A connection's scrape streams (`readrequestsfromproxy`, `writeresponsestoproxy`, `writechunkedresponsestoproxy`) are
   traced too, and appear as the connection closes, each about 15 seconds long: as long as the connection lasted.
@@ -249,7 +248,7 @@ tells either end. It takes about 50 seconds to play out.
 ./demo.sh heal            # returns any agent on the standby to the primary
 ```
 
-That's the script. To show the same proxy and agent deployed on Kubernetes with their Helm charts, go on to the
+That's the tour. The same proxy and agent, deployed on Kubernetes with their Helm charts, are in the
 [Kubernetes demo](../kubernetes).
 
 ## Scenario reference
@@ -266,7 +265,7 @@ The optional `[agent]` is `agent-branch` (the default) or `agent-hq`.
 | `demo.sh flaky [agent]` | Closes each connection through the agent's link to the primary after about 15 seconds of its traffic | A `limit_data` toxic, which closes each connection after a set number of bytes |
 | `demo.sh wan-down` / `wan-up` | Takes every link down, or brings every link back | Disables or enables all four Toxiproxy links; a disabled link closes its connections and refuses new ones |
 | `demo.sh heal` | Removes every toxic, brings back every link and proxy, and returns any agent on the standby to the primary | Removes the toxics, enables the links, starts the proxies, and disables an agent's link to the standby for a second, so it reconnects to the primary |
-| `make tour [PART=n]` | Walks through the presenter's script, from part 1 or the one given, pausing before each step |  |
+| `make tour [PART=n]` | Walks through the guided tour above, from part 1 or the one given, pausing before each step |  |
 | `make status` | The containers, each link's state and toxics, and the URLs |  |
 | `make logs [SERVICE=name]` | Follows the logs, of every service or the one given (`wan` is Toxiproxy) |  |
 

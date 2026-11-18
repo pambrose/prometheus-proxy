@@ -6,6 +6,11 @@ set -euo pipefail
 
 DEMO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$DEMO_DIR/../.." && pwd)"
+# The make that runs the repository's targets: the one that ran this script, which the Makefile beside it exports as
+# MAKE, or, run directly, make, or else gmake, the name GNU make has on some systems. MAKE_NAME is the one the
+# messages tell the reader to type.
+MAKE="${MAKE:-$(command -v make || command -v gmake || echo make)}"
+MAKE_NAME="${MAKE##*/}"
 COMPOSE=(docker compose -f "$DEMO_DIR/docker/compose.yml")
 # The proxy and agent images the demo runs, under these tags whichever way they came: pulled from Docker Hub (up)
 # or built from this checkout (up-local). The other demos run the same tags, so there's one copy of each.
@@ -86,7 +91,7 @@ Lifecycle:
   status                   Show the containers, the WAN's links and their toxics, and the URLs
   open                     Open both proxy dashboards, Grafana, and Prometheus in the browser
   logs [service]           Follow the logs (proxy, agent-branch, wan, ...)
-  tour [part]              Walk through the presenter's script, pausing before each step (from part 1, or the one given)
+  tour [part]              Walk through the demo's guided tour, pausing before each step (from part 1, or the one given)
 
 Scenarios (the agent defaults to agent-branch):
   far [agent]              Add ${FAR_LATENCY_MS}ms, give or take ${FAR_JITTER_MS}ms, each way on the agent's links
@@ -264,7 +269,7 @@ version_after() {
 }
 
 # The latest release: the version the docs give, whose images are on Docker Hub.
-latest_release() { make -s --no-print-directory -C "$REPO_DIR" site-version; }
+latest_release() { "$MAKE" -s --no-print-directory -C "$REPO_DIR" site-version; }
 
 check_docker() {
   command -v docker >/dev/null 2>&1 || die "docker is not on the PATH"
@@ -279,7 +284,8 @@ pull_images() {
     released="${RELEASED_IMAGES[i]}:$1"
     if ! docker image inspect "$released" >/dev/null 2>&1; then
       docker pull --quiet "$released" >/dev/null ||
-        die "can't pull $released; check the network, or run 'make up-local' to build the images from this checkout"
+        die "can't pull $released; check the network, or run '$MAKE_NAME up-local' to build the images" \
+          "from this checkout"
     fi
     docker tag "$released" "${IMAGES[i]}"
   done
@@ -319,7 +325,7 @@ start_demo() {
     "${COMPOSE[@]}" up --detach --wait --wait-timeout 180
   else
     bold "Building the proxy and agent from this checkout"
-    make --no-print-directory -C "$REPO_DIR" jars
+    "$MAKE" --no-print-directory -C "$REPO_DIR" jars
     "${COMPOSE[@]}" up --detach --build --wait --wait-timeout 180
   fi
   # Compose recreates a container when its own config changes, not when a file it mounts does, and neither Prometheus
@@ -485,7 +491,7 @@ tour_contents() {
   done
   echo
   wrap "  " "  " "Each step waits for you to press Enter, so you set the pace. Leave about a minute between parts, so" \
-    "the graphs catch up. To start from another part, run make tour PART=<n>, or $0 tour <n>."
+    "the graphs catch up. To start from another part, run $MAKE_NAME tour PART=<n>, or $0 tour <n>."
   pause "Press Enter to start"
 }
 
@@ -558,7 +564,7 @@ TOUR_PARTS=(
 cmd_tour() {
   check_tour_from "${1:-}"
   curl -fsS -o /dev/null "$DASHBOARD_URL" 2>/dev/null ||
-    die "the demo isn't running; start it with 'make up' in demos/network"
+    die "the demo isn't running; start it with '$MAKE_NAME up' in demos/network"
   tour_contents "network demo"
 
   if part 1 "This demo runs the basics demo's proxy and agents with a simulated WAN between them, so you can" \
@@ -631,14 +637,14 @@ cmd_tour() {
   wait_after_output "Press Enter to finish the tour"
   blank_line
   bold "That's the tour."
-  echo "To start again from a part, run make tour PART=<n>, or $0 tour <n>."
+  echo "To start again from a part, run $MAKE_NAME tour PART=<n>, or $0 tour <n>."
   echo
   bold "The other demo:"
   echo "The same proxy and agent, deployed on Kubernetes with their Helm charts, are in the Kubernetes demo, in" \
     "demos/kubernetes."
   echo
   echo "The demos use different ports, so they can run side by side, but each takes memory and CPU."
-  echo "To stop this one and free its resources, run make down, or $0 down."
+  echo "To stop this one and free its resources, run $MAKE_NAME down, or $0 down."
 }
 
 main() {

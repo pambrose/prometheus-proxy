@@ -6,6 +6,11 @@ set -euo pipefail
 
 DEMO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$DEMO_DIR/../.." && pwd)"
+# The make that runs the repository's targets: the one that ran this script, which the Makefile beside it exports as
+# MAKE, or, run directly, make, or else gmake, the name GNU make has on some systems. MAKE_NAME is the one the
+# messages tell the reader to type.
+MAKE="${MAKE:-$(command -v make || command -v gmake || echo make)}"
+MAKE_NAME="${MAKE##*/}"
 
 # The two clusters: pp-monitoring, outside the firewall, runs the proxy, its dashboard, and Prometheus; pp-target,
 # behind it, runs the services, the agent, and targets-sync. kind names each one's kubectl context kind-<name>.
@@ -89,7 +94,7 @@ Lifecycle:
   status                   Show both clusters' pods and Services, the Helm releases, and the URLs
   open                     Open the proxy dashboard and Prometheus's targets in the browser
   logs [name]              Follow a workload's logs: agent (the default), proxy, prometheus, targets-sync, or a service
-  tour [part]              Walk through the presenter's script, pausing before each step (from part 1, or the one given)
+  tour [part]              Walk through the demo's guided tour, pausing before each step (from part 1, or the one given)
 
 Scenarios:
   clusters                 Show that pp-target exposes nothing, each cluster's Helm release, and Prometheus's one job
@@ -132,7 +137,7 @@ version_at_least() {
 version_after() { [[ "$1" != "$2" ]] && version_at_least "$1" "$2"; }
 
 # The latest release: the version the docs give, whose images are on Docker Hub.
-latest_release() { make -s --no-print-directory -C "$REPO_DIR" site-version; }
+latest_release() { "$MAKE" -s --no-print-directory -C "$REPO_DIR" site-version; }
 
 need() { command -v "$1" >/dev/null 2>&1 || die "$1 is not on the PATH; $2"; }
 
@@ -173,7 +178,7 @@ create_cluster() {
   bold "Creating the $name cluster"
   if ! kind create cluster --name "$name" --config "$rendered" --wait 2m; then
     rm -f "$rendered"
-    die "kind couldn't create $name; if a port is taken, move it (see README.md) and run 'make down' first"
+    die "kind couldn't create $name; if a port is taken, move it (see README.md) and run '$MAKE_NAME down' first"
   fi
   rm -f "$rendered"
   if [[ -n "$previous" ]]; then
@@ -190,7 +195,7 @@ check_ports() {
     want="${node_port#*:}"
     port="$(published_port "${node_port%%:*}")"
     [[ "$port" == "$want" ]] ||
-      die "$MONITORING publishes port ${port:-none} where $want was asked for; 'make down' first to move it"
+      die "$MONITORING publishes port ${port:-none} where $want was asked for; '$MAKE_NAME down' first to move it"
   done
 }
 
@@ -201,7 +206,7 @@ build_images() {
   local old_ids id
   docker buildx version >/dev/null 2>&1 || die "docker buildx is missing; the demo builds its images with it"
   bold "Building the proxy and agent from this checkout"
-  make --no-print-directory -C "$REPO_DIR" jars
+  "$MAKE" --no-print-directory -C "$REPO_DIR" jars
   # The jars change on every build (their BuildConfig carries the build time), so each build makes new images and
   # leaves the previous ones untagged; remember them to remove afterwards. One another demo still runs is in use, and
   # stays.
@@ -416,8 +421,8 @@ cmd_up() {
   # A cluster that can't pull an image only says so as its pod waits, so check that both are there first.
   for image in "${RELEASED_IMAGES[@]}"; do
     docker manifest inspect "$image:$release" >/dev/null 2>&1 ||
-      die "can't find $image:$release on Docker Hub; check the network, or run 'make up-local' to build the images" \
-        "from this checkout"
+      die "can't find $image:$release on Docker Hub; check the network, or run '$MAKE_NAME up-local' to build" \
+        "the images from this checkout"
   done
   bold "Installing the demo with the proxy and agent of release $release, from Docker Hub"
   # The charts' own images, at the release rather than the chart's appVersion, which is the same once it's bumped.
@@ -487,7 +492,7 @@ cmd_down() {
 cmd_status() {
   local name
   for name in "$MONITORING" "$TARGET"; do
-    cluster_exists "$name" || echo "$name: not created; 'make up' creates it"
+    cluster_exists "$name" || echo "$name: not created; '$MAKE_NAME up' creates it"
   done
   if cluster_exists "$MONITORING"; then
     echo
@@ -720,7 +725,7 @@ tour_contents() {
   done
   echo
   wrap "  " "  " "Each step waits for you to press Enter, so you set the pace. Leave about a minute between parts, so" \
-    "the graphs catch up. To start from another part, run make tour PART=<n>, or $0 tour <n>."
+    "the graphs catch up. To start from another part, run $MAKE_NAME tour PART=<n>, or $0 tour <n>."
   pause "Press Enter to start"
 }
 
@@ -790,7 +795,7 @@ TOUR_PARTS=(
 cmd_tour() {
   check_tour_from "${1:-}"
   curl -fsS -o /dev/null "$DASHBOARD_URL" 2>/dev/null ||
-    die "the demo isn't running; start it with 'make up' in demos/kubernetes"
+    die "the demo isn't running; start it with '$MAKE_NAME up' in demos/kubernetes"
   tour_contents "Kubernetes demo"
 
   if part 1 "This demo runs the other demos' proxy and agent on Kubernetes, installed with the project's Helm" \
@@ -831,7 +836,7 @@ cmd_tour() {
   wait_after_output "Press Enter to finish the tour"
   blank_line
   bold "That's the tour."
-  echo "To start again from a part, run make tour PART=<n>, or $0 tour <n>."
+  echo "To start again from a part, run $MAKE_NAME tour PART=<n>, or $0 tour <n>."
 }
 
 main() {

@@ -10,6 +10,13 @@ icon: lucide/rocket
 separates the Prometheus server from its metrics endpoints. **Prometheus Proxy** solves this by using a persistent
 gRPC connection initiated from inside the firewall, preserving Prometheus's native pull-based architecture.
 
+!!! tip "See it work on your laptop"
+
+    Three self-contained demos run the proxy, its agents, Prometheus, and Grafana from the released images with one
+    command, and a guided tour walks you through each: the [Basics Demo](demo.md), the [Network Demo](network-demo.md),
+    with a simulated WAN between the agents and the proxies, and the [Kubernetes Demo](kubernetes-demo.md), with the
+    Helm charts on two kind clusters.
+
 ## How It Works
 
 ``` mermaid
@@ -90,13 +97,13 @@ Get running in under a minute:
     # Start the proxy
     docker run --rm --name prometheus-proxy --network prometheus-proxy-net \
       -p 8080:8080 -p 50051:50051 --env METRICS_ENABLED=true \
-      pambrose/prometheus-proxy:4.4.2
+      pambrose/prometheus-proxy:4.5.0
 
     # Start the agent, in another terminal
     docker run --rm --network prometheus-proxy-net \
       --env PROXY_HOSTNAME=prometheus-proxy \
       --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-      pambrose/prometheus-agent:4.4.2
+      pambrose/prometheus-agent:4.5.0
 
     # Scrape the proxy's and the agent's own metrics through the proxy
     curl http://localhost:8080/proxy_metrics
@@ -137,6 +144,14 @@ Full API documentation (KDocs) is available at [KDocs](kdocs/).
 ## Next Steps
 
 <div class="grid cards" markdown>
+
+-   :material-play-circle:{ .lg .middle } __Demos__
+
+    ---
+
+    Watch the proxy and agents work, with Prometheus and Grafana, on your laptop
+
+    [:octicons-arrow-right-24: Basics Demo](demo.md)
 
 -   :material-sitemap:{ .lg .middle } __Architecture__
 

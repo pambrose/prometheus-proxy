@@ -62,7 +62,7 @@ See the [security guide](https://pambrose.github.io/prometheus-proxy/security/).
 | `tls.caFile`                             | `""`                                       | CA in that Secret; setting it requires client certificates               |
 | `admin.enabled` / `admin.port`           | `true` / `8092`                            | `/ping`, used by the probes, and `/healthcheck`; not on the Service      |
 | `metrics.enabled` / `metrics.port`       | `true` / `8082`                            | The proxy's own metrics, on the Service                                  |
-| `dashboard.enabled` / `dashboard.port`   | `false` / `8094`                           | The read-only dashboard; not on the Service, so use `port-forward`       |
+| `dashboard.enabled` / `dashboard.port`   | `false` / `8094`                           | The operational dashboard; not on the Service, so use `port-forward`     |
 | `service.type`                           | `ClusterIP`                                | The main Service: HTTP, gRPC, and metrics ports                          |
 | `agentService.enabled`                   | `false`                                    | A second Service, gRPC only, for agents outside the cluster              |
 | `serviceMonitor.enabled`                 | `false`                                    | A Prometheus Operator ServiceMonitor                                     |

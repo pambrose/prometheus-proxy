@@ -57,7 +57,7 @@ metrics:
   enabled: true
   port: 8082
 
-# The read-only operational dashboard. Unauthenticated: the port is not added to the Service; reach it with
+# The operational dashboard. Unauthenticated: the port is not added to the Service; reach it with
 # kubectl port-forward.
 dashboard:
   enabled: false

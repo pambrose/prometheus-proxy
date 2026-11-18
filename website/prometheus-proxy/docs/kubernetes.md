@@ -184,6 +184,12 @@ Set `PROXY_HOSTNAME` to the proxy's externally reachable address (the `LoadBalan
 [above](#exposing-grpc-to-remote-agents)), including the gRPC port if it is not the default
 `50051`.
 
+Keep it at one replica, as above, or the agent chart's `replicaCount: 1`. Every replica runs the same config and
+registers the same paths: without consolidated mode the last to register serves them and the others sit idle, and
+with it the proxy joins their answers, so Prometheus gets every series once per replica and drops the duplicates,
+logging an error for each target on every scrape. Kubernetes replaces a failed agent pod on its own, in about a
+second in the [Kubernetes Demo](kubernetes-demo.md); see [Consolidated Mode](advanced.md#consolidated-mode).
+
 ### Sidecar
 
 Alternatively, run the agent as a sidecar next to a single application pod and scrape it over

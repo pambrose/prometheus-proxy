@@ -17,6 +17,11 @@ REPO_DIR := $(abspath $(DEMO_DIR)/../..)
 # variable to its recipes.
 DEMO = cd "$(DEMO_DIR)" && ./demo.sh
 
+# demo.sh runs the root Makefile's targets (site-version, and jars for up-local) with the make that ran this one, so
+# `gmake up` works where GNU make is installed as gmake, with no make. Exported, rather than passed as $(MAKE) in a
+# recipe, which would make `make -n up` start the demo.
+export MAKE
+
 default: help
 
 help:  ## Show this help (list of targets)
@@ -41,7 +46,7 @@ status:  ## Show both clusters' pods and Services, the Helm releases, and the UR
 open:  ## Open the proxy dashboard and Prometheus's targets in the browser
 	@$(DEMO) open
 
-tour:  ## Walk through the presenter's script, pausing before each step (PART=n starts from part n)
+tour:  ## Walk through the demo's guided tour, pausing before each step (PART=n starts from part n)
 	@$(DEMO) tour $(PART)
 
 logs:  ## Follow a workload's logs (SERVICE=name: agent, the default, proxy, prometheus, targets-sync, orders, ...)
