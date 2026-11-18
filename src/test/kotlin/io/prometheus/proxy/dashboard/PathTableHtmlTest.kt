@@ -155,6 +155,12 @@ class PathTableHtmlTest : StringSpec() {
       push shouldNotContain "scroller"
     }
 
+    // A wide window's spare width goes to the other columns, so none opens between the percentage and the links.
+    "the History and Links columns should keep their content's width" {
+      historyTable(200) shouldContain """<td class="dim history">"""
+      ProxyDashboardCss.CSS shouldContain ".ptable td.history, .ptable td.links { width:1%; }"
+    }
+
     "the history strip should stay visible under forced colours" {
       ProxyDashboardCss.CSS shouldContain ".hist i { forced-color-adjust:none; }"
     }

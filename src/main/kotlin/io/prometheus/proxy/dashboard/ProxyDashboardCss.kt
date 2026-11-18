@@ -159,6 +159,10 @@ internal object ProxyDashboardCss {
     .ptable tr.departed td:first-child { color:var(--crit); }
     /* The Activity table's Detail column, which holds a sentence, so it wraps where the rest of the row doesn't. */
     .ptable td.wrap { white-space:normal; min-width:280px; }
+    /* The History and Links columns keep their content's width. A table in a window wider than it needs shares the
+       spare width among its columns, in proportion to their content, and the strip's width gave History a large share,
+       which opened a gap between the percentage and the links, centered in theirs; the other columns take it instead. */
+    .ptable td.history, .ptable td.links { width:1%; }
     /* A path's links into other tools: the dimmed column's ink-3, underlined so they read as links, and ink on hover,
        as the nav's are. */
     .ptable td.links a { color:inherit; text-underline-offset:2px; }

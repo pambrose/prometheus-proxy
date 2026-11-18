@@ -683,6 +683,9 @@ the Status LED.
   always full width, its newest dot and the percentage after it sit in the same place on every row, and the column
   doesn't widen on every refresh as the histories fill. A consolidated path records one scrape per agent, so its
   strip fills that many times faster.
+- **Column width:** History, like Links, keeps its content's width (`width:1%`). A table wider than it needs
+  shares its spare width in proportion to its columns' content, and a full-width strip would draw a wide share,
+  opening a gap between the percentage and the links; the other columns take it instead.
 - **Accessibility:** one `role="img"` whose `aria-label` and `title` say "N of M recent scrapes succeeded",
   the figure the percentage beside it rounds.
 - **Forced colors:** `forced-color-adjust: none` on the dots, since forced colors drop backgrounds and the

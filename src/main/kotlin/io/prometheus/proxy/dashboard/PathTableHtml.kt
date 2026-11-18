@@ -326,7 +326,7 @@ internal object PathTableHtml {
     path: PathView,
     historySize: Int,
   ) {
-    td("dim") {
+    td("dim history") {
       val total = path.history.size
       if (total == 0) {
         +DASH
