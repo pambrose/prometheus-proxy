@@ -52,7 +52,7 @@ icon: lucide/play
     Docker Hub images; clone the repository to use them:
 
     ```bash
-    git clone https://github.com/pambrose/prometheus-proxy.git
+    git clone --depth 1 https://github.com/pambrose/prometheus-proxy.git
     cd prometheus-proxy
     ```
 

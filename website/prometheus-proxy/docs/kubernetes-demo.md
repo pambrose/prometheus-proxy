@@ -53,7 +53,7 @@ build. On macOS or Linux, the demo needs only:
 Clone the repository, then run the demo's commands from its own directory, where `make help` lists its targets:
 
 ```bash
-git clone https://github.com/pambrose/prometheus-proxy.git
+git clone --depth 1 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/kubernetes
 make up      # creates both clusters, installs everything, prints the URLs
 make tour    # walks through every scenario below, pausing before each step
