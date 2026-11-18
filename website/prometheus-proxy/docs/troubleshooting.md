@@ -33,7 +33,7 @@ Before diving into a specific symptom, gather signal:
 
 ---
 
-## The proxy exits at startup
+## The proxy or agent exits at startup
 
 ### `java.net.BindException: Address already in use`
 
@@ -46,6 +46,25 @@ before 4.3.0 it kept running instead.
   (Linux).
 - Stop that process, or move the proxy to a free port with the matching option in the
   [CLI Reference](cli-reference.md).
+
+### `Invalid configuration: …`
+
+A setting failed a check at startup. The line names the setting and why it was refused: fix it and start again. A
+standalone proxy or agent logs this one line and exits with status 1; before 4.5.0, some of these settings ended in
+an uncaught exception's stack trace instead. An [embedded agent](embedded-agent.md#agentstartasyncagent) throws a
+`ConfigLoadException` with the same reason.
+
+Settings that fail startup since 4.5.0:
+
+- `proxy.http.idleTimeoutSecs` of `0`, or a negative value other than `-1`. `0` never turned the timeout off; `-1`
+  gives the default, 45 seconds ([Proxy Configuration](configuration/proxy.md)).
+- A service discovery `targetPrefix` with a query or fragment ([Service Discovery](service-discovery.md)).
+- A `proxy.auth` identity named `legacy-agent-token`, the name the legacy shared token has
+  ([Security](security/index.md)).
+- An agent `pathConfigs` path with whitespace, a control character, `?`, or `#`, which no scrape can reach.
+- A `proxy.dashboard.links` entry the dashboard can't use, or an `icon` it doesn't have
+  ([Links](web-dashboard.md#links)).
+- A negative `proxy.internal.maxTargetUrlLength` or `proxy.internal.maxAgentsPerIdentity`.
 
 ---
 

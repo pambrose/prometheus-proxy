@@ -71,12 +71,13 @@ All notable changes to this project are documented in this file.
 
 ### Documentation
 
-- The website has Basics, Network, and Kubernetes Demo pages, with screenshots in the reader's light or dark theme; a screenshot opens full size in a lightbox, and the arrows step through the page's others
+- The website has Basics, Network, and Kubernetes Demo pages, with screenshots in the reader's light or dark theme; a screenshot opens full size in a lightbox, and the arrows step through the page's others. The home page points to them
 - The Docker quick starts connect. The agent ran with `examples/simple.conf`'s `localhost`, its own container, so it never reached the proxy; they now share a Docker network, give the agent `PROXY_HOSTNAME`, and turn on the proxy's metrics, and `simple.conf` reads the proxy's metrics from `PROXY_HOSTNAME` when it's set. The README's production Docker commands no longer combine `--rm` with `--restart`, which Docker refuses, and give the metrics' URLs on port 8080
 - The example configs quote their numeric label values, which since 4.4.0 drew warnings and were left out of service discovery
-- The website's Embedded Agent page has Logging and Upgrading from 4.4.x sections, and it, the Security page, and the KDoc say which settings throw `ConfigLoadException` and that the cause chain is redacted
+- The website's Embedded Agent page has Logging and Upgrading from 4.4.x sections, the latter covering the logging, exception, Jackson, and protobuf changes, and it, the Security page, and the KDoc say which settings throw `ConfigLoadException` and that the cause chain is redacted
+- The website's Troubleshooting page explains the `Invalid configuration:` line a rejected setting ends with, and lists the settings that fail startup since 4.5.0
 - The website documents `maxTargetUrlLength`, `maxAgentsPerIdentity`, and `idleTimeoutSecs`, the path characters that are refused, and the service discovery targets that fail startup. The notes on the transport filter said a disconnected agent lingers until `maxAgentInactivitySecs`; one that disconnects is removed at once
-- The agent chart's README and `values.yaml` warn against more than one replica, which gives Prometheus every series once per replica, and the Advanced Topics page's Consolidated Mode section warns that two consolidated agents scraping one endpoint do the same
+- The agent chart's README and `values.yaml` warn against more than one replica, which gives Prometheus every series once per replica, and the Advanced Topics page's Consolidated Mode section warns that two consolidated agents scraping one endpoint do the same; the Kubernetes page says to keep the agent at one replica
 - The metrics guide gives the agent's scrape latency buckets as 5ms to 90s, and it and the website say `launch_id` identifies each agent instance, not each process. The Production page no longer offers `EmbeddedAgentInfo.close()`, which doesn't exist. KDoc and help text no longer list `all` as a log level, and describe the service discovery target as it has worked since 4.4.0
 - The website's Running in Production page says how long a proxy switch takes, and its Zipkin section what is traced and why Zipkin should start first
 - The website's menu has one Operations section, with the Dashboard page in it

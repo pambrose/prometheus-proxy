@@ -10,6 +10,13 @@ icon: lucide/rocket
 separates the Prometheus server from its metrics endpoints. **Prometheus Proxy** solves this by using a persistent
 gRPC connection initiated from inside the firewall, preserving Prometheus's native pull-based architecture.
 
+!!! tip "See it work on your laptop"
+
+    Three self-contained demos run the proxy, its agents, Prometheus, and Grafana from the released images with one
+    command, and a guided tour walks you through each: the [Basics Demo](demo.md), the [Network Demo](network-demo.md),
+    with a simulated WAN between the agents and the proxies, and the [Kubernetes Demo](kubernetes-demo.md), with the
+    Helm charts on two kind clusters.
+
 ## How It Works
 
 ``` mermaid
@@ -137,6 +144,14 @@ Full API documentation (KDocs) is available at [KDocs](kdocs/).
 ## Next Steps
 
 <div class="grid cards" markdown>
+
+-   :material-play-circle:{ .lg .middle } __Demos__
+
+    ---
+
+    Watch the proxy and agents work, with Prometheus and Grafana, on your laptop
+
+    [:octicons-arrow-right-24: Basics Demo](demo.md)
 
 -   :material-sitemap:{ .lg .middle } __Architecture__
 

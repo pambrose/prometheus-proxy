@@ -184,8 +184,10 @@ now ignores `proxy.dashboard.recentScrapesQueueSize`.
   in `PROXY_HOSTNAME`, and turns on the proxy's metrics. The README's production Docker commands run too.
 - The example configs' label values are strings, so they no longer log warnings at startup or lose labels in service
   discovery.
-- The website's Embedded Agent page explains that the host application configures the agent's logging, and lists the
-  settings for which `startAsyncAgent` throws `ConfigLoadException`.
+- The website's Embedded Agent page explains that the host application configures the agent's logging, lists the
+  settings for which `startAsyncAgent` throws `ConfigLoadException`, and covers this release's changes for embedders.
+- The website's Troubleshooting page explains the `Invalid configuration:` line a bad setting now ends with, and lists
+  the settings this release refuses. The home page points to the demos.
 - The website documents this release's new settings and refusals, and the notes on running behind nginx no longer say a
   disconnected agent stays listed until the inactivity timeout: one that disconnects is removed at once.
 - The agent chart's README warns against running more than one replica, which gives Prometheus every series once per
