@@ -113,10 +113,52 @@ class PathTableHtmlTest : StringSpec() {
       historyTable(200, 200, 503) shouldContain "</span>66%"
     }
 
-    // demos/dashboard/bin/screenshots.sh decides the demo is healthy by counting `class="pill ok"` in the path table
+    // demos/basics/bin/screenshots.sh decides the demo is healthy by counting `class="pill ok"` in the path table
     // against the number of paths, so the strip must not draw with the status pill.
     "the history strip should leave the status pill as the row's only pill" {
       Regex("""class="pill ok"""").findAll(historyTable(200, 200, 200, 200, 200)).count() shouldBe 1
+    }
+
+    // Faint dots keep the places of the scrapes still to come, so every strip is as wide as a full one, and the
+    // percentages and the Links column stay put as the histories fill.
+    "a history that isn't full should keep a faint place for each scrape still to come, before its scrapes" {
+      val view = DashboardFixtures.pathView(history = [200, 503].map { scrapeRecord(statusCode = it) })
+      val full = DashboardFixtures.pathView(history = [200, 200].map { scrapeRecord(statusCode = it) })
+
+      fun push(
+        path: PathView,
+        historySize: Int,
+      ) = ProxyDashboardHtml.pushFragment(
+          snapshot([path]).copy(pathHistorySize = historySize),
+          null,
+          "/dashboard",
+          DashboardLayout.PATH,
+          0,
+          RowFilter.NONE,
+        )
+
+      push(view, 5) shouldContain
+        """<i class="slot" style="--n:3"></i><i class="crit" style="--n:1"></i><i class="ok" style="--n:1"></i>"""
+      push(full, 2) shouldNotContain """class="slot""""
+      ProxyDashboardCss.CSS shouldContain ".hist i.slot { --dot:var(--line); }"
+      ProxyDashboardCss.CSS shouldNotContain ".hist i.empty"
+    }
+
+    // A table wider than the window scrolls sideways in its scroller. The push replaces the region inside it, not the
+    // scroller, which kept starting again at the left on every refresh when it was the region itself.
+    "the path table's scroller should stay on the page, and a push should replace only the region inside it" {
+      val page = renderFullPage(snapshot(), DashboardLayout.PATH)
+      val push = pathPush()
+
+      page shouldContain Regex("""<div class="scroller">\s*<div id="${ProxyDashboardHtml.PATH_TABLE_ID}"""")
+      push shouldContain """<div id="${ProxyDashboardHtml.PATH_TABLE_ID}" hx-swap-oob="true""""
+      push shouldNotContain "scroller"
+    }
+
+    // A wide window's spare width goes to the other columns, so none opens between the percentage and the links.
+    "the History and Links columns should keep their content's width" {
+      historyTable(200) shouldContain """<td class="dim history">"""
+      ProxyDashboardCss.CSS shouldContain ".ptable td.history, .ptable td.links { width:1%; }"
     }
 
     "the history strip should stay visible under forced colours" {
@@ -208,7 +250,7 @@ class PathTableHtmlTest : StringSpec() {
       pathPush() shouldNotContain "Links</th>"
     }
 
-    // demos/dashboard/bin/screenshots.sh counts `class="pill ok"` in the path table against the number of paths.
+    // demos/basics/bin/screenshots.sh counts `class="pill ok"` in the path table against the number of paths.
     "each link should open its path in a new tab, named for a screen reader, and add no status pill" {
       val ok = pathWithJob("orders_metrics", "orders").copy(history = [scrapeRecord(statusCode = 200)])
       val html = pathPush([ok], links = demoLinks)
@@ -240,17 +282,17 @@ class PathTableHtmlTest : StringSpec() {
     }
 
     // The mark and its colour come from the class, through the page's icon stylesheet, so a push carries no URL.
-    // The page's stylesheet draws the tooltip from data-tip: a title's waits longer than the push that replaces it.
-    "an icon link should show its brand mark alone, its name in its tooltip and its aria-label" {
+    // Its title is the browser's tooltip, as the copy and scrape-now buttons' titles are.
+    "an icon link should show its brand mark alone, its name in its title and its aria-label" {
       val html = pathPush([pathWithJob("orders_metrics", "orders")], links = iconLinks)
 
       html shouldContain
         """<td class="dim links center"><a href="http://localhost:9090/graph?job=orders" target="_blank" """ +
         """class="icon icon-prometheus" id="link-0-orders_metrics" rel="noopener noreferrer" """ +
-        """aria-label="Open /orders_metrics in Prometheus" data-tip="Open in Prometheus"></a>""" +
+        """aria-label="Open /orders_metrics in Prometheus" title="Open in Prometheus"></a>""" +
         """<a href="http://localhost:3000/d/demo?var-job=orders" target="_blank" class="icon icon-grafana" """ +
         """id="link-1-orders_metrics" rel="noopener noreferrer" aria-label="Open /orders_metrics in Grafana" """ +
-        """data-tip="Open in Grafana"></a></td>"""
+        """title="Open in Grafana"></a></td>"""
       html shouldNotContain ProxyDashboardService.ICON_DIR
       html shouldNotContain """ title="Prometheus""""
     }
@@ -272,7 +314,7 @@ class PathTableHtmlTest : StringSpec() {
       val html = pathPush([pathWithJob("orders_metrics", "orders")], links = links)
 
       Regex(" · ").findAll(html.substringAfter("""<td class="dim links center">""")).count() shouldBe 1
-      html shouldContain """data-tip="Open in Prometheus"></a><a href="https://runbooks.example.com/orders_metrics""""
+      html shouldContain """title="Open in Prometheus"></a><a href="https://runbooks.example.com/orders_metrics""""
       html shouldContain """>Runbook</a> · <a href="https://logs.example.com/orders_metrics""""
       html shouldContain """>Logs</a><a href="http://localhost:3000/d/demo?var-job=orders""""
     }
@@ -286,8 +328,8 @@ class PathTableHtmlTest : StringSpec() {
 
     // On surface-3, the icon buttons' hover ground, the light theme's marks fall below 3:1, so hover rings the target.
     "an icon link should be a 24px target painted in its brand's colour, and keep its mark in forced colours" {
-      ProxyDashboardCss.CSS shouldContain ".ptable td.links a.icon { position:relative; display:inline-flex; " +
-        "align-items:center; justify-content:center;"
+      ProxyDashboardCss.CSS shouldContain ".ptable td.links a.icon { display:inline-flex; align-items:center; " +
+        "justify-content:center;"
       ProxyDashboardCss.CSS shouldContain "width:24px; height:24px;"
       ProxyDashboardCss.CSS shouldContain "text-decoration:none; }"
       ProxyDashboardCss.CSS shouldContain ".ptable td.links a.icon::before { content:\"\"; width:16px; height:16px; " +
@@ -299,13 +341,11 @@ class PathTableHtmlTest : StringSpec() {
         ".ptable td.links a.icon::before { forced-color-adjust:none; background:LinkText; }"
     }
 
-    // Anchored at the mark's right edge, since the Links column is the table's last and the scroller would clip one
-    // hanging past it, and not displayed until shown, so a hidden one adds nothing to the scroller's width.
-    "an icon link's tooltip should show its name above it on hover or keyboard focus, and the column center its marks" {
-      ProxyDashboardCss.CSS shouldContain ".ptable td.links a.icon::after { content:attr(data-tip); display:none; " +
-        "position:absolute; right:0;"
-      ProxyDashboardCss.CSS shouldContain
-        ".ptable td.links a.icon:hover::after, .ptable td.links a.icon:focus-visible::after { display:block; }"
+    // The browser shows an icon link's title as it does the copy and scrape-now buttons', so the stylesheet draws no
+    // tooltip of its own, which looked and timed unlike theirs.
+    "an icon link's tooltip should be the browser's, and the column center its marks" {
+      ProxyDashboardCss.CSS shouldNotContain "a.icon::after"
+      ProxyDashboardCss.CSS shouldNotContain "data-tip"
       ProxyDashboardCss.CSS shouldContain ".ptable .center { text-align:center; }"
     }
 

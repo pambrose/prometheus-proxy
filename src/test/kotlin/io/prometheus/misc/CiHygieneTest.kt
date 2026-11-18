@@ -31,6 +31,7 @@ import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.maps.shouldNotBeEmpty
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldMatch
 import io.prometheus.containers.support.ContainerTestSupport
 import org.testcontainers.utility.DockerImageName
@@ -135,10 +136,11 @@ class CiHygieneTest : StringSpec() {
 
     // Each demo's compose file (demos/<name>/docker/compose.yml) pulls its third-party images, and check-rules
     // validates each demo's Prometheus config with the Makefile's promtool, so a demo runs that Prometheus. Their
-    // proxy and agent images are built from this checkout, tagged :local, so have no digest.
+    // proxy and agent images are tagged :local, whether demo.sh pulled them from Docker Hub at the latest release or
+    // built them from this checkout, so have no digest.
     "every image a demo pulls should be pinned by digest, its Prometheus the Makefile's" {
       val composeFiles = demoComposeFiles.map { it.invariantSeparatorsPath }
-      composeFiles shouldContainAll listOf(DASHBOARD_DEMO_COMPOSE, NETWORK_DEMO_COMPOSE)
+      composeFiles shouldContainAll listOf(BASICS_DEMO_COMPOSE, NETWORK_DEMO_COMPOSE)
 
       demoComposeFiles.forEach { file ->
         withClue(file.invariantSeparatorsPath) {
@@ -149,16 +151,16 @@ class CiHygieneTest : StringSpec() {
         }
       }
 
-      // The dashboard demo runs both, so the walk above has a Prometheus and a Grafana to check.
-      pulledImages(File(DASHBOARD_DEMO_COMPOSE)).map { it.substringBefore(":") } shouldContainAll
+      // The basics demo runs both, so the walk above has a Prometheus and a Grafana to check.
+      pulledImages(File(BASICS_DEMO_COMPOSE)).map { it.substringBefore(":") } shouldContainAll
         listOf("prom/prometheus", "grafana/grafana")
     }
 
     // The Kubernetes demo (demos/kubernetes) has no compose file: its kind clusters' node image is in its kind configs,
     // and Prometheus and the Python image its services and targets-sync run on are in its manifests. check-rules
     // validates its Prometheus config with the Makefile's promtool, so it runs that Prometheus too. Its proxy and agent
-    // images are built from this checkout and loaded into the clusters, and the charts name them through its values
-    // files, not here.
+    // images are the charts' own at the latest release, or ones built from this checkout and loaded into the clusters,
+    // which demo.sh names on helm's command line, not here.
     "every image the Kubernetes demo runs should be pinned by digest, its Prometheus the Makefile's" {
       val images = kubernetesDemoFiles.flatMap(::pulledImages)
       images.map { it.substringBefore(":") }.distinct() shouldContainAll
@@ -190,6 +192,36 @@ class CiHygieneTest : StringSpec() {
       setupUv.map { (_, step) -> step.input("version") ?: step.input("version-file") }.distinct() shouldHaveSize 1
     }
 
+    // The live site describes the release its visitors can install, so only make release deploys it, through the
+    // workflow_dispatch make gh-docs starts once the release is published. A push to master builds the site and the
+    // KDocs, a check make release-check requires, without uploading or deploying them.
+    "the docs site should deploy only from the workflow_dispatch make release starts" {
+      workflows
+        .getValue(DOCS_WORKFLOW)
+        .get<YamlMap>("on")
+        ?.entries
+        ?.keys
+        ?.map { it.content }
+        .orEmpty() shouldContainAll listOf("push", "workflow_dispatch")
+
+      val docsJobs = jobs.toMap()
+      docsJobs.getValue("$DOCS_WORKFLOW/deploy").get<YamlScalar>("if")?.content shouldBe DISPATCH_ONLY
+      val uploads =
+        docsJobs
+          .getValue("$DOCS_WORKFLOW/build")
+          .get<YamlList>("steps")
+          ?.items
+          .orEmpty()
+          .map { it as YamlMap }
+          .filter { it.get<YamlScalar>("uses")?.content.orEmpty().startsWith(UPLOAD_PAGES) }
+      uploads shouldHaveSize 1
+      uploads.single().get<YamlScalar>("if")?.content shouldBe DISPATCH_ONLY
+
+      val makefile = File(MAKEFILE).readText()
+      makefile shouldContain Regex("""(?m)^gh-docs:.*\n\tgh workflow run $DOCS_WORKFLOW$""")
+      makefile shouldContain "$(MAKE) --no-print-directory gh-docs"
+    }
+
     // datreeio's main branch moves, and with it the ServiceMonitor schema that helm-lint validates against.
     "the CRD schemas should come from a fixed commit of the catalog" {
       makeVars["CRD_SCHEMAS_COMMIT"].orEmpty() shouldMatch Regex("[0-9a-f]{40}")
@@ -209,11 +241,14 @@ class CiHygieneTest : StringSpec() {
       "src/test/kotlin/io/prometheus/containers/support/ContainerTestSupport.kt"
     private const val DEMOS_DIR = "demos"
     private const val DEMO_COMPOSE = "docker/compose.yml"
-    private const val DASHBOARD_DEMO_COMPOSE = "$DEMOS_DIR/dashboard/$DEMO_COMPOSE"
+    private const val BASICS_DEMO_COMPOSE = "$DEMOS_DIR/basics/$DEMO_COMPOSE"
     private const val NETWORK_DEMO_COMPOSE = "$DEMOS_DIR/network/$DEMO_COMPOSE"
     private val KUBERNETES_DEMO_IMAGE_DIRS = listOf("$DEMOS_DIR/kubernetes/k8s", "$DEMOS_DIR/kubernetes/kind")
     private val YAML_EXTENSIONS = setOf("yaml", "yml")
     private const val SETUP_UV = "astral-sh/setup-uv@"
+    private const val DOCS_WORKFLOW = "docs.yml"
+    private const val UPLOAD_PAGES = "actions/upload-pages-artifact@"
+    private const val DISPATCH_ONLY = "github.event_name == 'workflow_dispatch'"
     private val MAKE_ASSIGNMENT = Regex("""(?m)^([A-Z][A-Z0-9_]*) :?= (.*)$""")
 
     // A `const val` whose name ends in _IMAGE, with its string on the same line or the next.

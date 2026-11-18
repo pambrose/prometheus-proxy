@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Retakes the screenshots on the website's Kubernetes Demo page (website/prometheus-proxy/docs/kubernetes-demo.md) from
-# the running demo: it plays the page's scenarios, acts 1 to 3, captures the dashboard and Prometheus in headless Chrome
-# at twice the pixel density, crops each, and writes lossless WebP to
+# the running demo: it plays the page's scenarios, parts 1 to 3, captures the dashboard and Prometheus in headless
+# Chrome at twice the pixel density, each a whole window, and writes lossless WebP to
 # website/prometheus-proxy/docs/images/kubernetes-demo/: <name>.webp in the dark theme and <name>-light.webp in the
 # light one, which the page shows by the reader's theme. It puts the demo back to normal when it finishes, or when it
 # fails.
@@ -31,15 +31,16 @@ TK=(kubectl --context kind-pp-target)
 WAIT_SECS="${WAIT_SECS:-150}"
 SKIP_UPTIME_WAIT="${SKIP_UPTIME_WAIT:-}"
 
-# The CSS width every screenshot is taken at, and the themes each is taken in. The Paths and Activity views are taken
-# wider, as in the dashboard demo: with the services' cluster-local target URLs, the History and Links columns, and the
-# activity's details, their tables are wider than 1280, which would scroll and cut off their right edge.
+# Every screenshot is a whole browser window, 16:10, WIDTH x HEIGHT in CSS pixels, rather than a strip cut to its
+# content, so each fills the same space on the website's page and in the lightbox that opens it full size. The Paths and
+# Activity views are taken in a wider window of the same shape, as in the basics demo: with the services' cluster-local
+# target URLs, the History and Links columns, and the activity's details, their tables are wider than 1280, which would
+# scroll and cut off their right edge. THEMES are the themes each is taken in.
 WIDTH=1280
+HEIGHT=800
 TABLE_WIDTH=1680
+TABLE_HEIGHT=1050
 THEMES=(dark light)
-
-# The dashboard's background in each theme, which shoot_table trims below a table's last row.
-background() { if [[ "$1" == dark ]]; then echo "#0d1015"; else echo "#f2f5f8"; fi; }
 
 # A screenshot's file name in a theme: the dark one keeps the plain name.
 named() { if [[ "$2" == dark ]]; then echo "$1"; else echo "$1-$2"; fi; }
@@ -68,7 +69,7 @@ CHROME_BIN="$(find_chrome)"
 command -v magick >/dev/null 2>&1 || die "ImageMagick 7 ('magick') is not on the PATH"
 command -v cwebp >/dev/null 2>&1 || die "cwebp is not on the PATH"
 curl -fsS -o /dev/null "$DASHBOARD_URL" 2>/dev/null ||
-  die "the demo isn't running at $DASHBOARD_URL; start it with 'make up' in demos/kubernetes"
+  die "the demo isn't running at $DASHBOARD_URL; start it with 'make up-local' in demos/kubernetes"
 
 WORK="$(mktemp -d)"
 
@@ -136,7 +137,7 @@ agent_up_a_minute() {
   [[ -n "$id" ]] && page_has "$DASHBOARD_URL/agents/$id" 'up [0-9]+[mhd]'
 }
 
-# Whether an agent's detail page, by URL, counts at least this many recent scrapes: enough rows to fill a fixed crop.
+# Whether an agent's detail page, by URL, counts at least this many recent scrapes: enough rows to fill the window.
 # The count is data on the detail's Recent scrapes header (detailInner in ProxyDashboardHtml.kt).
 has_scrapes() {
   local count
@@ -171,31 +172,21 @@ capture() {
   [[ -s "$png" ]] || die "Chrome wrote no screenshot for $url"
 }
 
-# A dashboard table in each theme, at a dashboard path, at TABLE_WIDTH: captured taller than the table, then trimmed to
-# its last row.
+# A dashboard table in each theme, at a dashboard path, a whole TABLE_WIDTH x TABLE_HEIGHT window.
 shoot_table() {
-  local name="$1" path="$2" theme png
+  local name="$1" path="$2" theme
   for theme in "${THEMES[@]}"; do
-    png="$WORK/$(named "$name" "$theme").png"
-    capture "$DASHBOARD_URL$path" "$png" 900 "$theme" "" "$TABLE_WIDTH"
-    magick "$png" -background "$(background "$theme")" -fuzz 2% -define trim:edges=south -trim +repage "$png"
+    capture "$DASHBOARD_URL$path" "$WORK/$(named "$name" "$theme").png" "$TABLE_HEIGHT" "$theme" "" "$TABLE_WIDTH"
   done
 }
 
-# A page in each theme, at WIDTH, cut at a fixed CSS height.
+# A page in each theme, a whole WIDTH x HEIGHT window: shoot_fixed <name> <url> [budget]
 shoot_fixed() {
-  local name="$1" url="$2" height="$3" capture_height="${4:-$3}" budget="${5:-3000}" theme png
+  local name="$1" url="$2" budget="${3:-3000}" theme
   for theme in "${THEMES[@]}"; do
-    png="$WORK/$(named "$name" "$theme").png"
-    capture "$url" "$png" "$capture_height" "$theme" "$budget"
-    magick "$png" -crop "$((WIDTH * 2))x$((height * 2))+0+0" +repage "$png"
+    capture "$url" "$WORK/$(named "$name" "$theme").png" "$HEIGHT" "$theme" "$budget"
   done
 }
-
-# The agent detail's height ends on a Recent scrapes row's lower border, six rows down, and the targets page's just
-# below its one scrape pool, for the demo's layout: change them with the dashboard's row metrics or Prometheus's.
-AGENT_HEIGHT=544
-TARGETS_HEIGHT=520
 
 step "Waiting for the demo to be at its start"
 "$DEMO" remove-service >/dev/null
@@ -214,21 +205,21 @@ if ! agent_up_a_minute; then
   fi
 fi
 
-step "Act 1: two clusters, one outbound link"
+step "Part 1: The Helm charts on two clusters, with no inbound access"
 pod="$(agent_pod)"
 id="$(agent_id "$pod")"
 [[ -n "$id" ]] || die "the agent $pod isn't on the dashboard"
-wait_until "the agent's recent scrapes" has_scrapes "$DASHBOARD_URL/agents/$id" 8
-shoot_fixed agent "$DASHBOARD_URL/agents/$id" "$AGENT_HEIGHT"
-shoot_fixed targets "$PROMETHEUS_URL/targets" "$TARGETS_HEIGHT" "$TARGETS_HEIGHT" 8000
+wait_until "the agent's recent scrapes" has_scrapes "$DASHBOARD_URL/agents/$id" 12
+shoot_fixed agent "$DASHBOARD_URL/agents/$id"
+shoot_fixed targets "$PROMETHEUS_URL/targets" 8000
 
-step "Act 2: annotate a Service, and Prometheus scrapes it"
+step "Part 2: annotate a Service, and Prometheus scrapes it"
 "$DEMO" add-service >/dev/null
 wait_until "search up in Prometheus" prometheus_has 'up{job="search"} == 1'
 shoot_table discovered /paths
 "$DEMO" remove-service >/dev/null
 
-step "Act 3: Kubernetes replaces the agent"
+step "Part 3: Kubernetes replaces a deleted agent pod in about a second"
 "$DEMO" delete-agent-pod >/dev/null
 # The Activity view lists the old pod's paths leaving and the new pod's arriving, newest first.
 wait_until "the new agent's scrapes" normal

@@ -18,9 +18,9 @@ and how recent scrapes actually went.
 
 !!! tip "See it running"
 
-    The repository's [`demos/dashboard`](https://github.com/pambrose/prometheus-proxy/tree/master/demos/dashboard)
+    The repository's [`demos/basics`](https://github.com/pambrose/prometheus-proxy/tree/master/demos/basics)
     runs the dashboard with three agents, a set of simulated services, Prometheus, and Grafana, all on one machine:
-    `make up` in a clone's `demos/dashboard` starts it, and `make down` removes it. The [Live Demo](demo.md) page
+    `make up` in a clone's `demos/basics` starts it, and `make down` removes it. The [Basics Demo](demo.md) page
     walks through a failing target, paths discovered at runtime, and an evicted agent, with screenshots of each.
 
 ## Enabling it
@@ -164,7 +164,7 @@ Every path on one row, with the endpoint behind it and how its last scrape went:
 | **Target** | the URL the agent actually fetches, with a button beside it that copies it to the clipboard |
 | **Src** | `cfg` for a statically configured path, `disc` for one from [dynamic discovery](configuration/agent.md#dynamic-target-discovery) |
 | **Last scrape / Status / Duration** | the most recent result for that path |
-| **History** | the path's recent scrapes as a row of dots, oldest on the left, green for a success and red for a failure, then the share that succeeded |
+| **History** | the path's recent scrapes as a row of dots, oldest on the left, green for a success and red for a failure, with faint dots holding the places of scrapes still to come, then the share that succeeded |
 | **Links** | with [links](#links) configured, the path's links into other tools, such as Prometheus and Grafana, by name or by the tool's icon |
 
 The dashboard explains the columns too: **Column guide**, at the right end of the search bar, opens a short
@@ -233,11 +233,11 @@ proxy {
 
 Being a list, `proxy.dashboard.links` must be set in a config file rather than with `-D`.
 
-A link with an `icon` shows its tool's icon, in the tool's own color, in place of its name. Hovering over the icon, or
-tabbing to it, shows a tooltip such as *Open in Grafana*, and a screen reader says the name. The dashboard has two,
-`prometheus` and `grafana`, matched ignoring case; leave `icon` out, or empty, to show the name. The proxy serves the
-icons itself, so the dashboard still needs no access to the internet. The icons are from [Simple
-Icons](https://simpleicons.org) (CC0); the marks belong to their owners.
+A link with an `icon` shows its tool's icon, in the tool's own color, in place of its name. Hovering over the icon
+shows a tooltip such as *Open in Grafana*, and a screen reader says the name. The dashboard has two, `prometheus` and
+`grafana`, matched ignoring case; leave `icon` out, or empty, to show the name. The proxy serves the icons itself, so
+the dashboard still needs no access to the internet. The icons are from [Simple Icons](https://simpleicons.org) (CC0);
+the marks belong to their owners.
 
 A template can use:
 

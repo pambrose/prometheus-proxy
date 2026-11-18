@@ -14,7 +14,7 @@ per-item price list is most of it, and no dashboard uses it, which is what `demo
   GET /inventory/size       the inventory payload's raw and gzipped sizes, as JSON
   GET /healthz              liveness, for the compose healthcheck
 
-Unlike the dashboard demo's app, it has no control API: this demo breaks the network, not the services. Standard
+Unlike the basics demo's app, it has no control API: this demo breaks the network, not the services. Standard
 library only, so it runs on the stock python image.
 """
 

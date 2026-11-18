@@ -209,6 +209,15 @@ class ActivityHtmlTest : StringSpec() {
       html shouldContain ProxyDashboardHtml.STATUS_ID
     }
 
+    // As on the Paths view: the scroller stays, so a table scrolled sideways keeps its place when a push replaces it.
+    "the activity table's scroller should stay on the page, and a push should replace only the region inside it" {
+      val page = renderFullPage(snapshot(), DashboardLayout.ACTIVITY)
+
+      page shouldContain Regex("""<div class="scroller">\s*<div id="${ProxyDashboardHtml.ACTIVITY_ID}"""")
+      activityPush() shouldContain """<div id="${ProxyDashboardHtml.ACTIVITY_ID}" hx-swap-oob="true""""
+      activityPush() shouldNotContain "scroller"
+    }
+
     // The push loop leaves the table out when the page already shows it. The frame is then the status bar alone, still
     // its first tag, so the page's stale-frame filter reads its stamp as before; the other layouts' regions don't
     // depend on the flag.

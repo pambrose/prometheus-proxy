@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Retakes the screenshots on the website's Live Demo page (website/prometheus-proxy/docs/demo.md) from the running demo:
-# it plays the page's scenarios, captures the dashboard and Grafana in headless Chrome at twice the pixel density in both
-# themes, crops each, and writes lossless WebP to website/prometheus-proxy/docs/images/demo/: <name>.webp in the dark
-# theme and <name>-light.webp in the light one, which the page shows by the reader's theme. It puts the demo back to
-# normal when it finishes, or when it fails.
+# Retakes the screenshots on the website's Basics Demo page (website/prometheus-proxy/docs/demo.md) from the running
+# demo: it plays the page's scenarios, captures the dashboard and Grafana in headless Chrome at twice the pixel density
+# in both themes, each a whole window, and writes lossless WebP to website/prometheus-proxy/docs/images/demo/:
+# <name>.webp in the dark theme and <name>-light.webp in the light one, which the page shows by the reader's theme. It
+# puts the demo back to normal when it finishes, or when it fails.
 #
-# `make screenshots`, in demos/dashboard, builds the demo from this checkout and starts it first, so the screenshots
+# `make screenshots`, in demos/basics, builds the demo from this checkout and starts it first, so the screenshots
 # show the dashboard as it is in the code. Needs Chrome or Chromium (set CHROME to choose one), ImageMagick 7
 # (`magick`), and `cwebp`.
 #
@@ -31,16 +31,16 @@ PROMETHEUS_URL="http://localhost:${DEMO_PROMETHEUS_PORT:-9090}"
 WAIT_SECS="${WAIT_SECS:-150}"
 SKIP_UPTIME_WAIT="${SKIP_UPTIME_WAIT:-}"
 
-# The CSS width every screenshot is taken at, and the themes each is taken in. The Paths views are taken wider: with the
-# Identity, History, and Links columns, and the discovered services' longer paths and a gone row's tag, the table is
-# about 1,600px wide in the eviction scene, so at 1280 it scrolls and its right edge is cut off.
+# Every screenshot is a whole browser window, 16:10, WIDTH x HEIGHT in CSS pixels, rather than a strip cut to its
+# content, so each fills the same space on the website's page and in the lightbox that opens it full size. The Paths
+# views are taken in a wider window of the same shape: with the Identity, History, and Links columns, and the
+# discovered services' longer paths and a gone row's tag, the table is about 1,600px wide in the eviction scene, so at
+# 1280 it scrolls and its right edge is cut off. THEMES are the themes each is taken in.
 WIDTH=1280
+HEIGHT=800
 PATHS_WIDTH=1680
+PATHS_HEIGHT=1050
 THEMES=(dark light)
-
-# The page color below the dashboard's last row in a theme, which the Paths views are trimmed to (--bg in
-# ProxyDashboardCss.kt).
-background() { if [[ "$1" == dark ]]; then echo "#0d1015"; else echo "#f2f5f8"; fi; }
 
 # A screenshot's file name in a theme: the dark one keeps the plain name.
 named() { if [[ "$2" == dark ]]; then echo "$1"; else echo "$1-$2"; fi; }
@@ -69,7 +69,7 @@ CHROME_BIN="$(find_chrome)"
 command -v magick >/dev/null 2>&1 || die "ImageMagick 7 ('magick') is not on the PATH"
 command -v cwebp >/dev/null 2>&1 || die "cwebp is not on the PATH"
 curl -fsS -o /dev/null "$DASHBOARD_URL" 2>/dev/null ||
-  die "the demo isn't running at $DASHBOARD_URL; start it with 'make up' in demos/dashboard"
+  die "the demo isn't running at $DASHBOARD_URL; start it with 'make up-local' in demos/basics"
 
 WORK="$(mktemp -d)"
 
@@ -119,7 +119,7 @@ attr() { sed -nE "s/.* $1=\"([^\"]*)\".*/\1/p" <<<"$2"; }
 # The id of the connected agent with this name, or nothing.
 agent_id() { attr data-agent "$(agent_row "$1")"; }
 
-# Whether an agent's detail page, by URL, counts at least this many recent scrapes: enough rows to fill a fixed crop.
+# Whether an agent's detail page, by URL, counts at least this many recent scrapes: enough rows to fill the window.
 # The count is data on the detail's Recent scrapes header (detailInner in ProxyDashboardHtml.kt).
 has_scrapes() {
   local count
@@ -212,31 +212,28 @@ capture() {
   [[ -s "$png" ]] || die "Chrome wrote no screenshot for $url"
 }
 
-# A dashboard table in each theme, at a dashboard path and a CSS width (WIDTH unless given): captured taller than the
-# table, then trimmed to its last row.
+# A dashboard view in each theme, at a dashboard path, a whole window (WIDTH x HEIGHT unless given).
 shoot_table() {
-  local name="$1" path="$2" width="${3:-$WIDTH}" theme png
+  local name="$1" path="$2" width="${3:-$WIDTH}" height="${4:-$HEIGHT}" theme
   for theme in "${THEMES[@]}"; do
-    png="$WORK/$(named "$name" "$theme").png"
-    capture "$DASHBOARD_URL$path" "$png" 900 "$theme" "" "$width"
-    magick "$png" -background "$(background "$theme")" -fuzz 2% -define trim:edges=south -trim +repage "$png"
+    capture "$DASHBOARD_URL$path" "$WORK/$(named "$name" "$theme").png" "$height" "$theme" "" "$width"
   done
 }
 
-# A Paths view in each theme, at PATHS_WIDTH.
+# A Paths view in each theme, a whole PATHS_WIDTH x PATHS_HEIGHT window.
 shoot_paths() {
-  shoot_table "$1" /paths "$PATHS_WIDTH"
+  shoot_table "$1" /paths "$PATHS_WIDTH" "$PATHS_HEIGHT"
 }
 
-# A page in each theme, cut at a fixed CSS height. The agent detail heights end on a row boundary for the demo's layout:
-# change them with the dashboard's row metrics. A {theme} in the URL becomes the theme's name, for Grafana, which
-# doesn't follow the browser's scheme.
+# A page in each theme, a whole WIDTH x HEIGHT window. A page whose viewport ends in a fixed footer, Grafana's, is
+# captured this much taller and cut to HEIGHT, which leaves the footer out. A {theme} in the URL becomes the theme's
+# name, for Grafana, which doesn't follow the browser's scheme. shoot_fixed <name> <url> [capture height] [budget]
 shoot_fixed() {
-  local name="$1" url="$2" height="$3" capture_height="${4:-$3}" budget="${5:-3000}" theme png
+  local name="$1" url="$2" capture_height="${3:-$HEIGHT}" budget="${4:-3000}" theme png
   for theme in "${THEMES[@]}"; do
     png="$WORK/$(named "$name" "$theme").png"
     capture "${url//\{theme\}/$theme}" "$png" "$capture_height" "$theme" "$budget"
-    magick "$png" -crop "$((WIDTH * 2))x$((height * 2))+0+0" +repage "$png"
+    magick "$png" -crop "$((WIDTH * 2))x$((HEIGHT * 2))+0+0" +repage "$png"
   done
 }
 
@@ -261,9 +258,9 @@ fi
 east="$(agent_id agent-east)"
 [[ -n "$east" ]] || die "agent-east isn't connected"
 # Enough of agent-east's Recent scrapes to fill the shot, which the minute's wait gives but SKIP_UPTIME_WAIT doesn't.
-wait_until "agent-east's scrapes" has_scrapes "$DASHBOARD_URL/agents/$east" 11
+wait_until "agent-east's scrapes" has_scrapes "$DASHBOARD_URL/agents/$east" 12
 step "The Agents and Paths views"
-shoot_fixed agents "$DASHBOARD_URL/agents/$east" 769
+shoot_fixed agents "$DASHBOARD_URL/agents/$east"
 shoot_paths paths
 
 step "A failing service and a hung one"
@@ -272,7 +269,8 @@ step "A failing service and a hung one"
 wait_until "DemoTargetDown to fire for payments and inventory" alerts_firing 2
 shoot_paths outage
 # Grafana is captured taller than kept: the bottom of its viewport carries a fixed "Powered by" footer.
-shoot_fixed grafana "$GRAFANA_URL/d/prometheus-proxy-demo?orgId=1&kiosk&from=now-15m&to=now&theme={theme}" 900 1000 15000
+shoot_fixed grafana "$GRAFANA_URL/d/prometheus-proxy-demo?orgId=1&kiosk&from=now-15m&to=now&theme={theme}" \
+  "$((HEIGHT + 100))" 15000
 "$DEMO" recover >/dev/null
 wait_healthy "the services to recover" 9
 
@@ -285,7 +283,7 @@ east="$(agent_id agent-east)"
 [[ -n "$east" ]] || die "agent-east isn't connected"
 "$DEMO" duplicate-agent >/dev/null 2>&1
 wait_until "agent-east-copy to take agent-east's paths" east_has_no_paths
-shoot_fixed duplicate "$DASHBOARD_URL/agents/$east" 420
+shoot_fixed duplicate "$DASHBOARD_URL/agents/$east"
 "$DEMO" duplicate-agent-stop >/dev/null 2>&1
 wait_healthy "nine healthy paths" 9
 
@@ -301,7 +299,7 @@ west2="$(agent_id agent-west-2)"
 "$DEMO" agent-freeze >/dev/null 2>&1
 wait_until "agent-west-2 to be idle for 16 seconds" \
   bash -c "curl -fsS '$DASHBOARD_URL/agents/$west2' | grep -Eq 'idle (1[6-9]|2[0-9])s'"
-shoot_fixed evicting "$DASHBOARD_URL/agents/$west2" 529
+shoot_fixed evicting "$DASHBOARD_URL/agents/$west2"
 wait_until "the proxy to evict agent-west-2" \
   bash -c "curl -fsS '$DASHBOARD_URL/paths' | grep -Eq '<span class=\"crit\">[0-9]+ departed</span>'"
 sleep 4

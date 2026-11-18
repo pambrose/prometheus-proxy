@@ -145,18 +145,14 @@ internal object ProxyDashboardHtml {
   const val COPY_PROXY_ID_PREFIX = "copy-proxy-"
 
   // A row's links (PathTableHtml): the prefix of each one's id, which the link's place in proxy.dashboard.links and
-  // then the path follow, so a link keeps its focus, and with it its tooltip, across the push that replaces the table.
+  // then the path follow, so a link keeps its focus across the push that replaces the table.
   const val LINK_ID_PREFIX = "link-"
-
-  // On an icon link: what its tooltip says, Open in and the link's name, which the stylesheet draws from this
-  // attribute.
-  const val TIP_ATTR = "data-tip"
 
   // No region id starts with it, so an agent id, which an agent behind nginx names itself, can't make a row's id
   // equal one.
   const val AGENT_ROW_ID_PREFIX = "agent-row-"
 
-  // What demos/dashboard/bin/screenshots.sh needs about an agent, as data: on each agent-list row, its id, its name as
+  // What demos/basics/bin/screenshots.sh needs about an agent, as data: on each agent-list row, its id, its name as
   // the row shows it, and its path count, and on its detail's Recent scrapes header, their count. The script matched
   // the row's text before, and every change to its look, a tag, an LED, or a word, broke a regex.
   const val AGENT_ATTR = "data-agent"
@@ -530,7 +526,7 @@ internal object ProxyDashboardHtml {
     recentScrapes(snapshot.scrapesOf(agent.agentId))
   }
 
-  // The detail's Recent scrapes: a header carrying their count as data too, for demos/dashboard/bin/screenshots.sh,
+  // The detail's Recent scrapes: a header carrying their count as data too, for demos/basics/bin/screenshots.sh,
   // then a row for each. The snapshot has already cut them to the agent's latest ProxySnapshot.MAX_DETAIL_SCRAPES, so
   // the count is the rows shown.
   private fun DIV.recentScrapes(scrapes: List<ScrapeRecord>) {
@@ -598,11 +594,12 @@ internal object ProxyDashboardHtml {
         }
 
         DashboardLayout.PATH -> {
-          append(createHTML().div("scroller") { pathTable(snapshot, filter, oob = true) })
+          // The region alone, not its scroller, which stays on the page with its scroll position.
+          append(createHTML().div { pathTable(snapshot, filter, oob = true) })
         }
 
         DashboardLayout.ACTIVITY -> {
-          if (withActivity) append(createHTML().div("scroller") { activityTable(snapshot, filter, oob = true) })
+          if (withActivity) append(createHTML().div { activityTable(snapshot, filter, oob = true) })
         }
 
         null -> {}

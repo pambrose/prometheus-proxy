@@ -75,11 +75,11 @@ updates:
     cooldown:
       default-days: 7
 
-  # The dashboard demo's third-party images (demos/dashboard/docker/compose.yml): Grafana and the Python image its
+  # The basics demo's third-party images (demos/basics/docker/compose.yml): Grafana and the Python image its
   # simulated services run on, each pinned by tag and digest. The proxy and agent images it builds from this checkout
   # aren't pulled, so there's nothing to update for them.
   - package-ecosystem: docker-compose
-    directory: /demos/dashboard/docker
+    directory: /demos/basics/docker
     schedule:
       interval: weekly
     cooldown:
@@ -93,7 +93,7 @@ updates:
       - dependency-name: "prom/prometheus"
 
   # The network demo's third-party images (demos/network/docker/compose.yml): Toxiproxy, Grafana, Zipkin, and the
-  # Python image its simulated services run on, each pinned by tag and digest. Like the dashboard demo, it builds its
+  # Python image its simulated services run on, each pinned by tag and digest. Like the basics demo, it builds its
   # proxy and agent images from this checkout.
   - package-ecosystem: docker-compose
     directory: /demos/network/docker
@@ -105,7 +105,7 @@ updates:
       network-demo:
         patterns: ["*"]
     ignore:
-      # As in the dashboard demo, Prometheus moves with the Makefile's PROMETHEUS_IMAGE, by hand.
+      # As in the basics demo, Prometheus moves with the Makefile's PROMETHEUS_IMAGE, by hand.
       - dependency-name: "prom/prometheus"
 
   # The Kubernetes demo's third-party images in its manifests (demos/kubernetes/k8s), which the docker ecosystem reads:

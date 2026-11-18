@@ -1,13 +1,7 @@
 # Values for the prometheus-proxy chart (charts/prometheus-proxy) in pp-monitoring. demo.sh installs it as the
-# prometheus-proxy release in the monitoring namespace, with --set-file config=config/proxy.conf, and an annotation
-# naming the image's ID, so a rebuilt image replaces the pod.
-
-image:
-  # Built from this checkout's proxy jar (etc/docker/proxy.Dockerfile), shared with the other demos, and loaded into
-  # the cluster with `kind load docker-image`, so the node never pulls it.
-  repository: prometheus-proxy-demo/proxy
-  tag: local
-  pullPolicy: Never
+# prometheus-proxy release in the monitoring namespace, with --set-file config=config/proxy.conf, and chooses the image:
+# the chart's own, pambrose/prometheus-proxy, at the latest release (make up), or the one built from this checkout and
+# loaded into the cluster, with an annotation naming its ID, so a rebuilt image replaces the pod (make up-local).
 
 # The token every agent must present, from the agent-token Secret demo.sh creates in both clusters.
 agentToken:

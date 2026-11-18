@@ -2,22 +2,24 @@
 # firewall, a simulated WAN between them (Toxiproxy), a set of simulated services, and Prometheus, Grafana, and Zipkin
 # in front. See ../README.md. From demos/network:
 #
-#   make up      # builds the jars and the images from this checkout, then starts everything
-#   make down    # stops it and removes its containers and network
+#   make up        # starts everything, with the proxy and agent of the latest release, from Docker Hub
+#   make up-local  # the same, with the proxy and agent built from this checkout
+#   make down      # stops it and removes its containers and network
 #
 # Compose resolves every relative path here against this file's directory, demos/network/docker: the demo's configs
 # are one level up, and the repository root three.
 #
 # Every published port binds to 127.0.0.1 only: the dashboards have no authentication, Grafana lets anyone view it
 # without signing in, and its admin password is the default, which suits a demo on a laptop and nothing else. Each
-# default port is the dashboard demo's plus 100, so the two demos can run at once. Set NETWORK_DEMO_DASHBOARD_PORT,
+# default port is the basics demo's plus 100, so the two demos can run at once. Set NETWORK_DEMO_DASHBOARD_PORT,
 # NETWORK_DEMO_STANDBY_DASHBOARD_PORT, NETWORK_DEMO_PROXY_PORT, NETWORK_DEMO_PROMETHEUS_PORT,
 # NETWORK_DEMO_GRAFANA_PORT, or NETWORK_DEMO_ZIPKIN_PORT to move a host port that's already taken.
 
 name: prometheus-proxy-network-demo
 
-# The two agents share one image, built from this checkout's agent jar. The dashboard demo builds and runs the same
-# tag, so the two demos don't keep two copies of it.
+# The two agents share one image: the latest release's, which demo.sh pulls and tags as this one (make up), or one
+# built from this checkout's agent jar (make up-local, which builds with --build). The basics demo runs the same tag,
+# so the two demos don't keep two copies of it.
 x-agent: &agent
   image: prometheus-proxy-demo/agent:local
   build:
@@ -35,7 +37,7 @@ x-agent: &agent
       condition: service_healthy
   restart: on-failure
 
-# The two proxies share one image, built from this checkout's proxy jar.
+# The two proxies share one image, the latest release's or built from this checkout's proxy jar, as the agents' is.
 x-proxy: &proxy
   image: prometheus-proxy-demo/proxy:local
   build:

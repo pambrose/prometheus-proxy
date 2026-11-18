@@ -27,8 +27,8 @@ most 10,000 agents connected with one identity, which is every agent when agent 
   Logback, and Spring Boot ahead of your `logback-spring.xml`, used as your application's logging configuration.
   It is gone, so your own configuration applies again. If your application has none, and its logging came from the
   agent's file (INFO, with gRPC's internal logging at WARN), Logback now falls back to its default, which logs
-  everything at DEBUG: add a `logback.xml`, and consider setting `io.grpc.internal` to WARN as the standalone agent
-  does. The website's Embedded Agent page shows how.
+  everything at DEBUG: add a `logback.xml`, and consider setting the `io.grpc.internal` logger to WARN as the
+  standalone agent does. The website's Embedded Agent page shows how.
 - **Maven builds get newer Jackson.** A Maven build that embeds the agent now resolves Jackson 2.23.0 through it,
   where it got 2.12.7. A Jackson version your build declares itself still wins.
 - **Builds that embed the agent get protobuf 4.x.** The agent's generated gRPC classes now need protobuf-java 4.36.2
@@ -84,11 +84,11 @@ most 10,000 agents connected with one identity, which is every agent when agent 
 
 ### New Features
 
-- **A demo of the dashboard and Grafana.** From `demos/dashboard` in a clone of the repository, `make up` starts a
+- **A demo of the dashboard and Grafana.** From `demos/basics` in a clone of the repository, `make up` starts a
   proxy with its dashboard, three agents, a set of simulated services, Prometheus, and Grafana with the project's
   dashboards, all on your machine; `make down` removes it. The demo has its own Makefile (`help`, `up`, `down`,
   `status`, `open`, `tour`, `logs`, and `screenshots`), so each demo under `demos/` is self-contained.
-  `demos/dashboard/README.md` walks through what to show: a failing or hung target, a redundant pair of agents,
+  `demos/basics/README.md` walks through what to show: a failing or hung target, a redundant pair of agents,
   services discovered without a restart, and an agent evicted after it goes silent.
 - **Copy a target URL from the dashboard.** Each target URL in the Paths view has a button after it that copies
   the URL, on a dashboard served over plain http too. It shows a check when the copy worked and a cross when it
@@ -100,15 +100,17 @@ most 10,000 agents connected with one identity, which is every agent when agent 
   its URL on the proxy, the one to curl to check the path through the proxy, built from the address you opened the
   dashboard at.
 - **The demo shows several teams on one proxy.** Each data center's agents connect with a token of their own, and a
-  new scenario shows a contractor's agent refused a path its identity doesn't cover. The Live Demo page walks
+  new scenario shows a contractor's agent refused a path its identity doesn't cover. The Basics Demo page walks
   through it.
-- **A guided tour of the demo.** `make tour`, in `demos/dashboard`, walks a presenter through every scenario, one
-  step at a time. A new one shows an agent's config deployed twice by mistake, which now settles instead of the two
-  fighting over their paths. The tour ends by pointing to the network demo, below, for proxy failover, filtering at
-  the agent, and tracing.
+- **A guided tour of the demo.** `make tour`, in `demos/basics`, lists its parts and about how long each takes, then
+  walks a presenter through every scenario one numbered step at a time: what to open, what to click, and what to
+  watch. Each scenario also says how it works: what it changed, and how, to cause what you see. The other two demos'
+  tours, below, work the same way. A new scenario shows an agent's config deployed twice by mistake, which now settles
+  instead of the two fighting over their paths. The tour ends by pointing to the network demo, below, for proxy
+  failover, filtering at the agent, and tracing, and to the Kubernetes demo.
 - **A demo of the network between the agents and the proxies.** From `demos/network`, `make up` starts a proxy and
   its standby, two agents, and a simulated WAN between them, with Prometheus, Grafana, and Zipkin, on ports that
-  don't clash with the dashboard demo's, so both can run at once. Its presenter's script and `make tour` show a far
+  don't clash with the basics demo's, so both can run at once. Its presenter's script and `make tour` show a far
   link, a thin one and filtering at the agent, a proxy that goes away, a link that dies silently, a flaky link
   followed in Zipkin, and the whole WAN going down and coming back. The website's new Network Demo page walks
   through each, with screenshots.
@@ -121,13 +123,17 @@ most 10,000 agents connected with one identity, which is every agent when agent 
   through each, with screenshots. The agent chart's README now warns against running more than one replica, which
   gives Prometheus every series once per replica, and the Advanced Topics page warns that any two
   consolidated agents scraping the same endpoint do the same.
+- **The demos run the released proxy and agent.** Each demo's `make up` pulls the latest release's images from
+  Docker Hub, so there's nothing to build: the demos need Docker, `git`, `make`, `curl`, and a browser, and the
+  Kubernetes demo kind, `kubectl`, and Helm too. Each demo's README and website page lists what it needs.
+  `make up-local` runs the proxy and agent built from your checkout instead.
 - **Paths whose agent has gone stay on the dashboard for an hour.** The Paths view used to lose a gone path within
   a minute on a busy proxy, since it rebuilt it from the 200 most recent scrapes across all paths. Each path now
   keeps its own history, and a gone path stays for `proxy.dashboard.departedPathRetentionSecs` (default 3600) after
   its agent left or its last scrape, whichever is later.
 - **A History column on the dashboard.** Each path's last 20 scrapes (`proxy.dashboard.pathHistorySize`) show as a
   row of green and red dots with the share that succeeded, so a target that fails every scrape no longer looks like
-  one that failed once.
+  one that failed once. Until a path has that many, faint dots hold their places, so the rows line up.
 - **Identities on the dashboard.** With agent authentication on, the Paths view shows the identity that registered
   each path, and each agent's row and detail panel the identity it connected as.
 - **Search the Paths view.** A search box keeps the paths whose path, agent, target or identity matches, and
@@ -217,6 +223,10 @@ most 10,000 agents connected with one identity, which is every agent when agent 
   up another's.
 
 ### Bug Fixes
+
+- **A dashboard table scrolled sideways stays put.** When the Paths or Activity table is wider than the window, you
+  scroll it sideways to reach its last columns, and it jumped back to the left on the next refresh, every two seconds
+  on the Paths view. It now keeps its place.
 
 - **Agents that connect while the proxy is starting stay connected.** An agent that reached the proxy after it began
   accepting agents but before it finished starting was disconnected at once, and reconnected every few seconds until
@@ -310,6 +320,10 @@ most 10,000 agents connected with one identity, which is every agent when agent 
 
 ### Documentation
 
+- **Click a screenshot to see it full size.** On the website's demo pages, a screenshot opens in a lightbox at full
+  resolution, sharper than the page's column can show it, with its caption, and the arrows step through the page's
+  other screenshots.
+
 - **The Docker quick start works.** The agent's config pointed it at `localhost`, which in a container is the agent
   itself, so it never connected. The quick start now puts the proxy and the agent on a shared Docker network, gives
   the agent the proxy's container name in `PROXY_HOSTNAME`, and turns on the proxy's metrics, so
@@ -343,10 +357,10 @@ most 10,000 agents connected with one identity, which is every agent when agent 
 - The API docs no longer list `all` as a log level, which fails startup, and describe the service discovery target
   as it now works: `host:port`, or an `http` or `https` URL, with no user info, query, or fragment. The
   `--sd_target_prefix` help text says the same.
-- The website has a **Live Demo** page, with screenshots of the dashboard and Grafana as the demo's scenarios play
+- The website has a **Basics Demo** page, with screenshots of the dashboard and Grafana as the demo's scenarios play
   out: a failing service, new services found without a restart, and an agent evicted after it goes silent.
 - The website's menu has a single Operations section, with the Dashboard page in it.
-- The Live Demo page's screenshots match your light or dark theme.
+- The Basics Demo page's screenshots match your light or dark theme.
 - The production guide explains what can slow an agent's switch between proxies, and the Zipkin section explains
   why a healthy agent sends few spans and why Zipkin should start before the proxy and agents.
 
@@ -364,11 +378,10 @@ most 10,000 agents connected with one identity, which is every agent when agent 
   published, as an embedding application does. It compiles the website's Java and Kotlin examples, and checks the
   Jackson, netty-tcnative, and Netty versions Maven resolves and that no jar carries a Logback configuration. A
   release waits for it.
-- Documentation changes reach the website as they merge again. The docs workflow deployed only once the version in
-  `gradle.properties` was published, and between releases that version is a `-SNAPSHOT`, which is never released, so
-  no docs change deployed until the next release. It now checks the version the website gives, which
-  `make site-version` prints, so a new release's pages still wait for the release to be published. The
-  `bin/docker-*.sh` scripts run that version too.
+- The website changes only with a release. Documentation merged between releases waits for the next one, which
+  deploys it, so the site always describes the release you can install, never features merged since. The
+  `bin/docker-*.sh` scripts run the version the website gives, which `make site-version` prints, rather than the one in
+  `gradle.properties`, which between releases is a `-SNAPSHOT` with no image.
 - CI builds the documentation site with a pinned uv, 0.13.7, rather than whichever release is newest.
 - The container tests pin their nginx and Prometheus images by digest, so a tag pushed again can't change what they
   test.
@@ -404,7 +417,7 @@ most 10,000 agents connected with one identity, which is every agent when agent 
   `~/.gradle/gradle.properties`. The publish targets stop before Gradle runs when either keychain entry is missing,
   and print the command that adds it. `make release-check` checks the entries too, so `make release` stops before
   running its tests, rather than at the publishing step after them.
-- `make screenshots`, in `demos/dashboard`, retakes the Live Demo page's screenshots from a demo built from the
+- `make screenshots`, in `demos/basics`, retakes the Basics Demo page's screenshots from a demo built from the
   checkout.
 
 ### Also in this release

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Retakes the screenshots on the website's Network Demo page (website/prometheus-proxy/docs/network-demo.md) from the
-# running demo: it plays the page's scenarios, acts 2 to 7, captures the dashboards, Grafana, and Zipkin in headless
-# Chrome at twice the pixel density, crops each, and writes lossless WebP to
+# running demo: it plays the page's scenarios, parts 2 to 7, captures the dashboards, Grafana, and Zipkin in headless
+# Chrome at twice the pixel density, each a whole window, and writes lossless WebP to
 # website/prometheus-proxy/docs/images/network-demo/: <name>.webp in the dark theme and <name>-light.webp in the light
 # one, which the page shows by the reader's theme. Zipkin's UI has one theme, so its shot is taken once. It puts the
 # demo back to normal when it finishes, or when it fails.
@@ -34,9 +34,14 @@ ZIPKIN_URL="http://localhost:${NETWORK_DEMO_ZIPKIN_PORT:-9511}"
 WAIT_SECS="${WAIT_SECS:-150}"
 SKIP_UPTIME_WAIT="${SKIP_UPTIME_WAIT:-}"
 
-# The CSS width every screenshot is taken at, and the themes each is taken in.
+# Every screenshot is a whole browser window, 16:10, WIDTH x HEIGHT in CSS pixels, rather than a strip cut to its
+# content, so each fills the same space on the website's page and in the lightbox that opens it full size. THEMES are
+# the themes each is taken in.
 WIDTH=1280
+HEIGHT=800
 THEMES=(dark light)
+# The recent scrapes an agent's detail shows in the window, about, which a shot of one waits for.
+DETAIL_ROWS=13
 
 # The demo's Grafana dashboard in kiosk mode, over a window each scene gives. A {theme} becomes the theme's name:
 # Grafana doesn't follow the browser's scheme.
@@ -69,7 +74,7 @@ CHROME_BIN="$(find_chrome)"
 command -v magick >/dev/null 2>&1 || die "ImageMagick 7 ('magick') is not on the PATH"
 command -v cwebp >/dev/null 2>&1 || die "cwebp is not on the PATH"
 curl -fsS -o /dev/null "$DASHBOARD_URL" 2>/dev/null ||
-  die "the demo isn't running at $DASHBOARD_URL; start it with 'make up' in demos/network"
+  die "the demo isn't running at $DASHBOARD_URL; start it with 'make up-local' in demos/network"
 
 WORK="$(mktemp -d)"
 
@@ -120,7 +125,7 @@ agent_id() { attr data-agent "$(agent_row "$@")"; }
 # Whether the dashboard at a base URL lists both agents.
 has_both_agents() { [[ -n "$(agent_row agent-hq "$1")" && -n "$(agent_row agent-branch "$1")" ]]; }
 
-# Whether an agent's detail page, by URL, counts at least this many recent scrapes: enough rows to fill a fixed crop.
+# Whether an agent's detail page, by URL, counts at least this many recent scrapes: enough rows to fill the window.
 # The count is data on the detail's Recent scrapes header (detailInner in ProxyDashboardHtml.kt).
 has_scrapes() {
   local count
@@ -178,12 +183,12 @@ filtered_inventory() {
     wc -l | tr -d ' ')" -ge 3 ]]
 }
 
-# Whether an agent's detail page, by URL, shows its last nine scrapes all failed, Prometheus having given up on each.
-# The thin shot's crop holds nine rows.
+# Whether an agent's detail page, by URL, shows its last DETAIL_ROWS scrapes all failed, Prometheus having given up on
+# each: every row the thin shot shows.
 all_too_late() {
   local body
   body="$(curl -fsS "$1" 2>/dev/null)" || return 1
-  (($(grep -Eo 'class="pill [a-z]+">[0-9]+</span>' <<<"$body" | head -9 | grep -c '>499<') == 9))
+  (($(grep -Eo 'class="pill [a-z]+">[0-9]+</span>' <<<"$body" | head -"$DETAIL_ROWS" | grep -c '>499<') == DETAIL_ROWS))
 }
 
 # Whether the primary's dashboard shows agent-branch idle for 16 to 24 seconds: its link is cut, and the eviction
@@ -220,21 +225,22 @@ capture() {
   [[ -s "$png" ]] || die "Chrome wrote no screenshot for $url"
 }
 
-# A page in each theme, cut at a fixed CSS height. The agent detail heights end on a row boundary for the demo's
-# layout: change them with the dashboard's row metrics. A {theme} in the URL becomes the theme's name, for Grafana.
+# A page in each theme, a whole WIDTH x HEIGHT window. A page whose viewport ends in a fixed footer, Grafana's, is
+# captured this much taller and cut to HEIGHT, which leaves the footer out. A {theme} in the URL becomes the theme's
+# name, for Grafana. shoot_fixed <name> <url> [capture height] [budget]
 shoot_fixed() {
-  local name="$1" url="$2" height="$3" capture_height="${4:-$3}" budget="${5:-3000}" theme png
+  local name="$1" url="$2" capture_height="${3:-$HEIGHT}" budget="${4:-3000}" theme png
   for theme in "${THEMES[@]}"; do
     png="$WORK/$(named "$name" "$theme").png"
     capture "${url//\{theme\}/$theme}" "$png" "$capture_height" "$theme" "$budget"
-    magick "$png" -crop "$((WIDTH * 2))x$((height * 2))+0+0" +repage "$png"
+    magick "$png" -crop "$((WIDTH * 2))x$((HEIGHT * 2))+0+0" +repage "$png"
   done
 }
 
 # Grafana's dashboard in each theme, over the last this many seconds: captured taller than kept, since the bottom of
 # its viewport carries a fixed "Powered by" footer. The window is short, so a scene's graphs show it and the minute or
 # so of normal before it, not the scenes before that.
-shoot_grafana() { shoot_fixed "$1" "${GRAFANA_DASHBOARD}${2}s" 900 1000 15000; }
+shoot_grafana() { shoot_fixed "$1" "${GRAFANA_DASHBOARD}${2}s" "$((HEIGHT + 100))" 15000; }
 
 step "Waiting for the demo to be back to normal"
 back_to_normal
@@ -252,12 +258,7 @@ if ! branch_up_a_minute; then
   fi
 fi
 
-# The agent detail heights end on a Recent scrapes row's lower border, nine rows down, for the demo's layout; the
-# failed-over tag makes the standby's header a pixel or two taller. Change them with the dashboard's row metrics.
-DETAIL_HEIGHT=620
-FAILOVER_DETAIL_HEIGHT=621
-
-step "Act 2: a far link"
+step "Part 2: A high-latency link slows scrapes, but nothing fails"
 # Half a minute more of normal, so Grafana's two-minute window opens after the demo's start settled.
 wait_secs 30
 "$DEMO" far >/dev/null
@@ -266,7 +267,7 @@ wait_secs 60
 shoot_grafana far 120
 back_to_normal
 
-step "Act 3: a thin link, and filtering at the agent"
+step "Part 3: A low-bandwidth link fails scrapes; filtering at the agent fixes it"
 branch="$(agent_id agent-branch)"
 [[ -n "$branch" ]] || die "agent-branch isn't connected"
 "$DEMO" thin >/dev/null
@@ -275,47 +276,48 @@ branch="$(agent_id agent-branch)"
 wait_secs 50
 wait_until "agent-branch's last nine scrapes to be too late for Prometheus" all_too_late "$DASHBOARD_URL/agents/$branch"
 [[ "$(agent_id agent-branch)" == "$branch" ]] || die "agent-branch reconnected on the thin link"
-shoot_fixed thin "$DASHBOARD_URL/agents/$branch" "$DETAIL_HEIGHT"
+shoot_fixed thin "$DASHBOARD_URL/agents/$branch"
 "$DEMO" filter >/dev/null 2>&1
 wait_until "agent-branch's filtered inventory scrapes through the thin link" filtered_inventory
 branch="$(agent_id agent-branch)"
-wait_until "agent-branch's scrapes since the restart" has_scrapes "$DASHBOARD_URL/agents/$branch" 11
-shoot_fixed filtered "$DASHBOARD_URL/agents/$branch" "$DETAIL_HEIGHT"
+wait_until "agent-branch's scrapes since the restart" has_scrapes "$DASHBOARD_URL/agents/$branch" "$DETAIL_ROWS"
+shoot_fixed filtered "$DASHBOARD_URL/agents/$branch"
 "$DEMO" unfilter >/dev/null 2>&1
 back_to_normal
 
-step "Act 4: the primary proxy goes away"
+step "Part 4: The primary proxy stops, and the agents fail over to the standby"
 "$DEMO" proxy-down >/dev/null 2>&1
 wait_until "both agents on the standby" has_both_agents "$STANDBY_DASHBOARD_URL"
 branch="$(agent_id agent-branch "$STANDBY_DASHBOARD_URL")"
 [[ -n "$branch" ]] || die "agent-branch isn't on the standby"
-wait_until "agent-branch's scrapes through the standby" has_scrapes "$STANDBY_DASHBOARD_URL/agents/$branch" 11
-shoot_fixed failover "$STANDBY_DASHBOARD_URL/agents/$branch" "$FAILOVER_DETAIL_HEIGHT"
+wait_until "agent-branch's scrapes through the standby" has_scrapes "$STANDBY_DASHBOARD_URL/agents/$branch" \
+  "$DETAIL_ROWS"
+shoot_fixed failover "$STANDBY_DASHBOARD_URL/agents/$branch"
 "$DEMO" proxy-up >/dev/null 2>&1
 back_to_normal
 
-step "Act 5: the link silently dies"
+step "Part 5: A link goes silent; the agent detects it and fails over"
 branch="$(agent_id agent-branch)"
 [[ -n "$branch" ]] || die "agent-branch isn't connected"
 "$DEMO" cut >/dev/null
 wait_until "the primary to hear nothing from agent-branch for 16 seconds" branch_idle
-shoot_fixed cut "$DASHBOARD_URL/agents/$branch" "$DETAIL_HEIGHT"
+shoot_fixed cut "$DASHBOARD_URL/agents/$branch"
 wait_until "agent-branch on its standby link" branch_on_standby
 back_to_normal
 
-step "Act 6: a flaky link, followed in Zipkin"
+step "Part 6: A link that keeps dropping: the agent reconnects, traced in Zipkin"
 "$DEMO" flaky >/dev/null
 # Each connection through the link lasts about 15 seconds; three reconnects put three connectagent traces in Zipkin.
 wait_until "three reconnects of agent-branch's in Zipkin" has_connect_traces 3
 # The newest reconnect's connectagent call, as the scene's tour has the presenter open one. Zipkin's search page
 # doesn't run a query from its URL in headless Chrome, so the shot is of the trace itself. Zipkin's UI has one theme,
 # so this is taken once and serves both of the site's.
-capture "$ZIPKIN_URL/zipkin/traces/$(connect_traces | head -1)" "$WORK/tracing.png" 496 light 8000
+capture "$ZIPKIN_URL/zipkin/traces/$(connect_traces | head -1)" "$WORK/tracing.png" "$HEIGHT" light 8000
 back_to_normal
 
-step "Act 7: the WAN goes down"
+step "Part 7: The whole WAN goes down: an alert fires, and the agents reconnect"
 # A minute and a quarter of normal first, so Grafana's 90-second window shows the WAN going down from a quiet demo,
-# and act 5's NetworkAgentEvicted, which lasts two minutes, has resolved.
+# and part 5's NetworkAgentEvicted, which lasts two minutes, has resolved.
 wait_secs 75
 "$DEMO" wan-down >/dev/null
 wait_until "NetworkNoAgentsConnected to fire" \

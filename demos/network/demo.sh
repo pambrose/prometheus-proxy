@@ -1,13 +1,20 @@
 #!/usr/bin/env bash
 # Drives the Prometheus Proxy network demo (see README.md): starts and stops it, and runs the scenarios a presenter
 # shows, most of them by changing the simulated WAN between the agents and the proxies. The Makefile beside it wraps the
-# lifecycle commands (`make up` builds the jars first, then runs `demo.sh up`). Run with no arguments for the list.
+# lifecycle commands (`make up` runs `demo.sh up`). Run with no arguments for the list.
 set -euo pipefail
 
 DEMO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$DEMO_DIR/../.." && pwd)"
 COMPOSE=(docker compose -f "$DEMO_DIR/docker/compose.yml")
+# The proxy and agent images the demo runs, under these tags whichever way they came: pulled from Docker Hub (up)
+# or built from this checkout (up-local). The other demos run the same tags, so there's one copy of each.
 IMAGES=(prometheus-proxy-demo/proxy:local prometheus-proxy-demo/agent:local)
+# Their releases on Docker Hub, in the same order, which up pulls at the latest release.
+RELEASED_IMAGES=(pambrose/prometheus-proxy pambrose/prometheus-agent)
+# The demo shows what came after this release, so until a later one is out, up builds the proxy and agent from this
+# checkout, as up-local does. When the demo comes to use something unreleased, set this to the latest release.
+NEEDS_RELEASE_AFTER=4.4.2
 AGENTS=(agent-hq agent-branch)
 PROXIES=(proxy proxy-standby)
 # The WAN's links (config/toxiproxy.json), one per agent per proxy. An agent's are named for its site, the part of its
@@ -33,23 +40,53 @@ ZIPKIN_URL="http://localhost:${NETWORK_DEMO_ZIPKIN_PORT:-9511}"
 PROXY_URL="http://localhost:${NETWORK_DEMO_PROXY_PORT:-8180}"
 
 bold() { printf '\033[1m%s\033[0m\n' "$*"; }
-hint() { printf '\033[36mWatch:\033[0m %s\n' "$*"; }
 die() {
   echo "Error: $*" >&2
   exit 1
 }
+
+# The width text is wrapped to: the terminal's, from 60 to 110 columns, or 100 with no terminal to ask.
+text_width() {
+  local cols
+  cols="$({ stty size </dev/tty | cut -d' ' -f2; } 2>/dev/null || true)"
+  [[ "$cols" =~ ^[0-9]+$ ]] || cols=100
+  ((cols >= 60)) || cols=60
+  echo $((cols < 110 ? cols : 110))
+}
+
+# Prints text wrapped to that width, its first line after $1 and the rest after $2, which is as wide as $1 shows:
+# wrap <first> <rest> <text>...
+wrap() {
+  local first="$1" rest="$2" line
+  while IFS= read -r line; do
+    printf '%s%s\n' "$first" "${line% }"
+    first="$rest"
+  done < <(fold -s -w $(($(text_width) - ${#rest})) <<<"${*:3}")
+}
+
+# What a scenario changed: a heading, then each thing to look for as a point of its own, its arguments joined.
+watch_for() { printf '\033[36m%s\033[0m\n' "What to watch:"; }
+point() { wrap "  - " "    " "$*"; }
+# How a scenario does what it does, under its own heading, before what to watch for.
+how_it_works() {
+  printf '\033[36m%s\033[0m\n' "How it works:"
+  wrap "  " "  " "$*"
+}
+# The command that undoes a scenario, or comes after it: follow_up <what> <command>
+follow_up() { printf '\033[36m%s:\033[0m %s\n' "$1" "$2"; }
 
 usage() {
   cat <<EOF
 Usage: $(basename "$0") <command> [argument]
 
 Lifecycle:
-  up                       Build the images from this checkout's jars and start the demo
+  up                       Start the demo with the proxy and agent released on Docker Hub
+  up-local                 Start it with the proxy and agent built from this checkout (needs a JDK 17 or later)
   down                     Stop the demo and remove its containers and network
   status                   Show the containers, the WAN's links and their toxics, and the URLs
   open                     Open both proxy dashboards, Grafana, and Prometheus in the browser
   logs [service]           Follow the logs (proxy, agent-branch, wan, ...)
-  tour [act]               Walk through the presenter's script, pausing before each step (from act 1, or the one given)
+  tour [part]              Walk through the presenter's script, pausing before each step (from part 1, or the one given)
 
 Scenarios (the agent defaults to agent-branch):
   far [agent]              Add ${FAR_LATENCY_MS}ms, give or take ${FAR_JITTER_MS}ms, each way on the agent's links
@@ -213,21 +250,78 @@ restart_branch() {
   NETWORK_DEMO_BRANCH_CONFIG="$1" "${COMPOSE[@]}" up --detach --no-deps agent-branch
 }
 
-cmd_up() {
-  local jar old_ids id
-  for jar in prometheus-proxy prometheus-agent; do
-    [[ -f "$REPO_DIR/build/libs/$jar.jar" ]] ||
-      die "build/libs/$jar.jar is missing; start the demo with 'make up' in demos/network, which builds the jars"
+# Whether version $1 (x.y.z) is later than $2. bash 3.2, macOS's, has no sort -V everywhere, so field by field.
+version_after() {
+  local IFS=. i
+  local -a have want
+  read -r -a have <<<"$1"
+  read -r -a want <<<"$2"
+  for i in 0 1 2; do
+    ((${have[i]:-0} > ${want[i]:-0})) && return 0
+    ((${have[i]:-0} < ${want[i]:-0})) && return 1
   done
+  return 1
+}
+
+# The latest release: the version the docs give, whose images are on Docker Hub.
+latest_release() { make -s --no-print-directory -C "$REPO_DIR" site-version; }
+
+check_docker() {
   command -v docker >/dev/null 2>&1 || die "docker is not on the PATH"
   docker info >/dev/null 2>&1 || die "Docker isn't running"
+}
 
-  # The jars change on every build (their BuildConfig carries the build time), so each start builds new images and
-  # leaves the previous ones untagged; remember them to remove afterwards. One the dashboard demo still runs is in use,
-  # and stays.
+# Tags a release's proxy and agent images from Docker Hub as the demo's, pulling one only if Docker doesn't have it: a
+# release's images don't change, and the demo then starts again without a network connection. pull_images <version>
+pull_images() {
+  local i released
+  for i in 0 1; do
+    released="${RELEASED_IMAGES[i]}:$1"
+    if ! docker image inspect "$released" >/dev/null 2>&1; then
+      docker pull --quiet "$released" >/dev/null ||
+        die "can't pull $released; check the network, or run 'make up-local' to build the images from this checkout"
+    fi
+    docker tag "$released" "${IMAGES[i]}"
+  done
+}
+
+# The proxy and agent of the latest release, unless it predates what the demo shows.
+cmd_up() {
+  local release
+  check_docker
+  release="$(latest_release)" || die "can't tell the latest release from the docs (make site-version)"
+  if version_after "$release" "$NEEDS_RELEASE_AFTER"; then
+    start_demo "$release"
+  else
+    wrap "" "" "The latest release, $release, predates this demo, so it runs the proxy and agent built from this" \
+      "checkout, which takes a JDK 17 or later."
+    start_demo
+  fi
+}
+
+cmd_up_local() {
+  check_docker
+  start_demo
+}
+
+# Starts the demo, or brings a running one up to date, with a release's proxy and agent (start_demo <version>) or
+# with ones built from this checkout (start_demo).
+start_demo() {
+  local old_ids id
+  # The images the demo ran, to remove below once nothing tags them: each build makes new ones, since the jars'
+  # BuildConfig carries the build time, and a release's tags replace a build's. One the basics demo still runs is in
+  # use, and stays.
   old_ids="$(docker image inspect -f '{{.Id}}' "${IMAGES[@]}" 2>/dev/null || true)"
 
-  "${COMPOSE[@]}" up --detach --build --wait --wait-timeout 180
+  if [[ $# -gt 0 ]]; then
+    bold "Starting the demo with the proxy and agent of release $1, from Docker Hub"
+    pull_images "$1"
+    "${COMPOSE[@]}" up --detach --wait --wait-timeout 180
+  else
+    bold "Building the proxy and agent from this checkout"
+    make --no-print-directory -C "$REPO_DIR" jars
+    "${COMPOSE[@]}" up --detach --build --wait --wait-timeout 180
+  fi
   # Compose recreates a container when its own config changes, not when a file it mounts does, and neither Prometheus
   # nor Grafana reliably notices a changed file on its own. Reload Prometheus's config and rules (SIGHUP), and restart
   # Grafana for its dashboard, so a demo started from an older checkout runs this one's.
@@ -323,99 +417,228 @@ cmd_heal() {
     esac
   done
   bold "Every link is up with no toxics, and both proxies are running"
+  how_it_works "This removes every toxic from every link, recreating a link that holds a cut, enables every link, and" \
+    "starts any proxy that's stopped. An agent goes back to the head of its endpoints list only when a connection it" \
+    "registered on drops, so for each agent on the standby it disables that agent's link to the standby for a second," \
+    "which closes the connection, and the agent reconnects through its link to the primary."
+  watch_for
   # Each list may be empty, which bash 3.2, macOS's, takes as unset under set -u unless expanded this way.
   for agent in ${returned[@]+"${returned[@]}"}; do
-    hint "$agent reconnects through $(primary_link "$agent") within a few seconds, and leaves the standby's dashboard."
+    point "$agent reconnects through $(primary_link "$agent") within a few seconds, and leaves the standby's" \
+      "dashboard."
   done
   for agent in ${lost[@]+"${lost[@]}"}; do
-    hint "$agent hasn't connected to either proxy in 20s; see '$0 logs $agent'"
+    point "$agent hasn't connected to either proxy in 20 seconds. To see why, run: $0 logs $agent"
   done
   if ((${#returned[@]} + ${#lost[@]} == 0)); then
-    hint "every agent is on the primary already; its scrapes are back to normal within a scrape or two (5s)."
+    point "Every agent is on the primary already, and its scrapes are back to normal within a scrape or two (5" \
+      "seconds)."
   fi
 }
 
-# The tour: the presenter's script (README.md), one act at a time, pausing for Enter before each step.
+# The tour: the presenter's script (README.md), one part at a time. It numbers each part's steps, and waits for Enter
+# after each one, and before it runs a scenario.
 TOUR_FROM=1
+TOUR_STEP=0
+# Whether the last thing the tour printed was a pause, which leaves an empty line of its own.
+AFTER_PAUSE=0
 
-# Waits for Enter. At the end of input, as when the tour is piped, it doesn't wait.
-pause() { read -r -p "$(printf '\033[33m> %s\033[0m ' "$1")" _ || true; }
-
-# Starts act [n], unless the tour began after it: prints its title and what to show, then waits. Fails for a skipped
-# act.
-act() {
-  local n="$1" title="$2" line
-  shift 2
-  ((n >= TOUR_FROM)) || return 1
+# Waits for Enter, then leaves an empty line. At the end of input, as when the tour is piped, it doesn't wait.
+pause() {
+  read -r -p "$(printf '\033[33m> %s\033[0m ' "$1")" _ || true
   echo
-  bold "Act $n: $title"
-  for line in "$@"; do printf '  %s\n' "$line"; done
-  pause "Enter to continue"
+  AFTER_PAUSE=1
 }
 
-# Runs a scenario once the presenter presses Enter, from this directory, so the commands its hint prints read
-# `./demo.sh heal`, as the README's do. Its stdin is closed, so docker compose can't take the tour's input.
-step() {
-  pause "Enter to run: ./demo.sh $*"
-  (cd "$DEMO_DIR" && ./demo.sh "$@" </dev/null)
+# Starts a new block of the tour's output with an empty line, unless a pause has just left one.
+blank_line() {
+  ((AFTER_PAUSE)) || echo
+  AFTER_PAUSE=0
 }
+
+# Waits for Enter before a new part, or the tour's end, when a scenario's output came last, so it isn't printed
+# straight after that output: wait_after_output <prompt>
+wait_after_output() {
+  if ((!AFTER_PAUSE)); then
+    echo
+    pause "$1"
+  fi
+}
+
+# Lists the parts from the one the tour starts at, with about how long each takes and in all, then waits:
+# tour_contents <the demo's name>
+tour_contents() {
+  local n entry total=0
+  for ((n = TOUR_FROM; n <= ${#TOUR_PARTS[@]}; n++)); do
+    entry="${TOUR_PARTS[n - 1]}"
+    total=$((total + ${entry%% *}))
+  done
+  echo
+  if ((TOUR_FROM == 1)); then
+    bold "A tour of the $1: ${#TOUR_PARTS[@]} parts, about $total minutes"
+  else
+    bold "A tour of the $1, from part $TOUR_FROM of ${#TOUR_PARTS[@]}: about $total minutes"
+  fi
+  for ((n = TOUR_FROM; n <= ${#TOUR_PARTS[@]}; n++)); do
+    entry="${TOUR_PARTS[n - 1]}"
+    printf '  %2d. %s (%s min)\n' "$n" "${entry#* }" "${entry%% *}"
+  done
+  echo
+  wrap "  " "  " "Each step waits for you to press Enter, so you set the pace. Leave about a minute between parts, so" \
+    "the graphs catch up. To start from another part, run make tour PART=<n>, or $0 tour <n>."
+  pause "Press Enter to start"
+}
+
+# Starts part [n], unless the tour began after it: prints its title, from TOUR_PARTS, and what it shows. Fails for a
+# skipped part. part <n> <what it shows>...
+part() {
+  local n="$1"
+  shift
+  ((n >= TOUR_FROM)) || return 1
+  wait_after_output "Press Enter to go on to part $n"
+  TOUR_STEP=0
+  blank_line
+  bold "Part $n of ${#TOUR_PARTS[@]}: ${TOUR_PARTS[n - 1]#* }"
+  wrap "  " "  " "$*"
+}
+
+# Prints the part's next step, numbered: what to do, then what it shows, its words joined.
+# number_step <what to do> [<what it shows>...]
+number_step() {
+  local indent
+  TOUR_STEP=$((TOUR_STEP + 1))
+  indent="$(printf '%*s' $((${#TOUR_STEP} + 4)) '')"
+  blank_line
+  wrap "  $TOUR_STEP. " "$indent" "$1"
+  shift
+  (($# == 0)) || wrap "$indent" "$indent" "$*"
+}
+
+# A step the presenter takes, such as opening a page, then waits: instruct <what to do> [<what it shows>...]
+instruct() {
+  number_step "$@"
+  pause "Press Enter to continue"
+}
+
+# A step that runs a scenario once the presenter presses Enter: step <what it does>... -- <command> [argument]. What
+# it does is joined into one paragraph. It runs as ./demo.sh from this directory, so the commands it prints read
+# ./demo.sh too, and its stdin is closed, so docker compose can't take the tour's input.
+step() {
+  local -a text=()
+  while [[ "$1" != -- ]]; do
+    text+=("$1")
+    shift
+  done
+  shift
+  number_step "${text[*]}"
+  pause "Press Enter to run ./demo.sh $*"
+  (cd "$DEMO_DIR" && ./demo.sh "$@" </dev/null)
+  AFTER_PAUSE=0
+}
+
+# Checks the part the tour starts from: check_tour_from <argument>
+check_tour_from() {
+  TOUR_FROM="${1:-1}"
+  if ! [[ "$TOUR_FROM" =~ ^[0-9]+$ ]] || ((TOUR_FROM < 1 || TOUR_FROM > ${#TOUR_PARTS[@]})); then
+    die "the part to start from is a number from 1 to ${#TOUR_PARTS[@]}"
+  fi
+}
+
+# Each part's title, after about how many minutes it takes to show.
+TOUR_PARTS=(
+  "3 Two agents reach the proxy over a simulated WAN"
+  "2 A high-latency link slows scrapes, but nothing fails"
+  "4 A low-bandwidth link fails scrapes; filtering at the agent fixes it"
+  "3 The primary proxy stops, and the agents fail over to the standby"
+  "3 A link goes silent; the agent detects it and fails over"
+  "3 A link that keeps dropping: the agent reconnects, traced in Zipkin"
+  "3 The whole WAN goes down: an alert fires, and the agents reconnect"
+)
 
 cmd_tour() {
-  TOUR_FROM="${1:-1}"
-  [[ "$TOUR_FROM" =~ ^[1-7]$ ]] || die "the act to start from is a number from 1 to 7"
+  check_tour_from "${1:-}"
   curl -fsS -o /dev/null "$DASHBOARD_URL" 2>/dev/null ||
     die "the demo isn't running; start it with 'make up' in demos/network"
+  tour_contents "network demo"
 
-  act 1 "The link" \
-    "The proxy and agents of the dashboard demo, with a simulated WAN between them: four links, one per agent per" \
-    "proxy. Open $DASHBOARD_URL: two agents, agent-hq and agent-branch, each 'via' its link to the" \
-    "primary (1 of 2). Open $GRAFANA_URL: every target up, and the two agents' scrape times side by side." || true
-  if act 2 "Far away" "agent-branch's links gain a quarter of a second each way; nothing fails."; then
-    step far
-    pause "Watch agent-branch's scrape time step up in Grafana, then press Enter"
-    step heal
-  fi
-  if act 3 "A thin pipe, and filtering at the agent" \
-    "agent-branch's links carry ${THIN_RATE_KBS} KB/s: too little for its inventory payload, which backs up the link." \
-    "The agent stays connected, slow but alive. Then a filter drops what no one uses before it crosses, and" \
-    "everything fits again."; then
-    step thin
-    pause "Wait until its paths fail in Grafana (about 15s), its idle time near 0, then press Enter"
-    step filter
-    step heal
-    step unfilter
-  fi
-  if act 4 "The proxy goes away" \
-    "The primary proxy stops; its connections close, so both agents fail over at once."; then
-    step proxy-down
-    step proxy-up
-    step heal
-  fi
-  if act 5 "The link silently dies" \
-    "agent-branch's link to the primary stops passing anything, the agent's goodbye included, without closing:" \
-    "nothing tells either end. It takes about 50 seconds to play out; see the dashboard demo's frozen agent for the" \
-    "proxy's side of an eviction."; then
-    step cut
-    pause "Wait until agent-branch is on the standby's dashboard (about 50s), then press Enter"
-    step heal
-  fi
-  if act 6 "A flaky link, followed in Zipkin" \
-    "agent-branch's link to the primary drops its connection about every 15 seconds."; then
-    step flaky
-    pause "Open $ZIPKIN_URL/zipkin/, run a query for agent-branch, then press Enter"
-    step heal
-  fi
-  if act 7 "The WAN goes down, and comes back" "Every link goes down, then comes back."; then
-    step wan-down
-    pause "Wait for NetworkNoAgentsConnected in Grafana (about 20s), then press Enter"
-    step wan-up
-    step heal
+  if part 1 "This demo runs the basics demo's proxy and agents with a simulated WAN between them, so you can" \
+    "change the network the agents connect through. It builds on the basics demo, so start with that one if" \
+    "you haven't seen it."; then
+    instruct "The setup: two agents, two proxies, and a WAN between them." \
+      "Two agents run behind the firewall: agent-hq, at headquarters, with two small services, and agent-branch, at" \
+      "a branch office, with a large inventory payload and a small shipping service. Each agent has two links" \
+      "through the WAN, one to the primary proxy and one to its standby, and dials the primary first. The" \
+      "scenarios change agent-branch's links and leave agent-hq's alone, so agent-hq is the steady reference."
+    instruct "Open the primary proxy's dashboard: $DASHBOARD_URL" \
+      "Two agents are connected. Click agent-hq: it's connected 'via hq-to-proxy:50051 (1 of 2)', its link to the" \
+      "primary, the first of its two endpoints. agent-branch is connected 'via branch-to-proxy:50053 (1 of 2)'."
+    instruct "Open the standby proxy's dashboard: $STANDBY_DASHBOARD_URL" \
+      "It has no agents. The standby serves nothing until an agent can't reach the primary."
+    instruct "Open Grafana: $GRAFANA_URL" \
+      "Every target is up on 'Target health', and 'Scrape time through the WAN, by agent' shows the two agents side" \
+      "by side, each well under a tenth of a second."
+    instruct "Each of the next parts ends by healing the WAN." \
+      "./demo.sh heal removes every change to the WAN, brings back every link and proxy, and returns any agent on" \
+      "the standby to the primary, so each part starts from a healthy network."
   fi
 
+  if part 2 "A far-away site adds a round trip's delay to every scrape. Here you add a quarter of a second each" \
+    "way to agent-branch's links."; then
+    step "Add ${FAR_LATENCY_MS} ms, give or take ${FAR_JITTER_MS} ms, each way to agent-branch's links." -- far
+    step "Once you've seen agent-branch's scrape time step up in Grafana, remove the delay." -- heal
+  fi
+
+  if part 3 "A thin link can't carry a large payload in time. Here you limit agent-branch's links to" \
+    "${THIN_RATE_KBS} KB/s toward the proxies, watch its scrapes fail, and then fix them by filtering at the" \
+    "agent."; then
+    step "Limit agent-branch's links to ${THIN_RATE_KBS} KB/s toward the proxies." -- thin
+    step "Once its paths have failed in Grafana, after about 15 seconds, restart agent-branch with a filter that" \
+      "drops the inventory's per-item price list, which no dashboard uses." -- filter
+    step "Remove the bandwidth limit." -- heal
+    step "Restart agent-branch without the filter, to bring back the full payload." -- unfilter
+  fi
+
+  if part 4 "Here you stop the primary proxy. Its connections close, so both agents know at once, and move to" \
+    "the standby with nobody touching them."; then
+    step "Stop the primary proxy." -- proxy-down
+    step "Start the primary proxy again." -- proxy-up
+    step "Send the agents back to the primary: heal closes each agent's connection through its link to the standby" \
+      "once, so the agent reconnects through its link to the primary." -- heal
+  fi
+
+  if part 5 "Unlike part 4, nothing closes here. agent-branch's link to the primary stops passing anything, the" \
+    "agent's goodbye included, which is what a stateful firewall or NAT does when it drops a connection. Neither" \
+    "end is told. It takes about 50 seconds to play out; the basics demo's frozen agent showed the proxy's" \
+    "side of an eviction, and this shows the agent's."; then
+    step "Silence agent-branch's link to the primary, without closing it." -- cut
+    step "Once agent-branch is on the standby's dashboard, after about 50 seconds, restore the link and send it" \
+      "back to the primary." -- heal
+  fi
+
+  if part 6 "Here agent-branch's link to the primary closes its connection about every 15 seconds. The agent" \
+    "reconnects each time, and Zipkin shows every reconnect."; then
+    step "Make agent-branch's link to the primary close each connection after about 15 seconds of traffic." \
+      -- flaky
+    step "Once you've looked at the traces in Zipkin, restore the link." -- heal
+  fi
+
+  if part 7 "Here every link goes down at once, as if the WAN failed, and then comes back."; then
+    step "Take every link down." -- wan-down
+    step "Once NetworkNoAgentsConnected fires in Grafana, after about 20 seconds, bring every link back." -- wan-up
+    step "Return any agent that landed on the standby to the primary." -- heal
+  fi
+
+  wait_after_output "Press Enter to finish the tour"
+  blank_line
+  bold "That's the tour."
+  echo "To start again from a part, run make tour PART=<n>, or $0 tour <n>."
   echo
-  bold "That's the tour. $0 tour <act> starts again from an act."
-  echo "The same proxy and agent, deployed on Kubernetes with their Helm charts, are in the Kubernetes demo: see" \
+  bold "The other demo:"
+  echo "The same proxy and agent, deployed on Kubernetes with their Helm charts, are in the Kubernetes demo, in" \
     "demos/kubernetes."
+  echo
+  echo "The demos use different ports, so they can run side by side, but each takes memory and CPU."
+  echo "To stop this one and free its resources, run make down, or $0 down."
 }
 
 main() {
@@ -423,6 +646,7 @@ main() {
   [[ $# -gt 0 ]] && shift
   case "$cmd" in
   up) cmd_up ;;
+  up-local) cmd_up_local ;;
   down) cmd_down ;;
   status) cmd_status ;;
   open) cmd_open ;;
@@ -435,10 +659,18 @@ main() {
       add_toxic "$link" far-up upstream latency "latency=$FAR_LATENCY_MS" "jitter=$FAR_JITTER_MS"
       add_toxic "$link" far-down downstream latency "latency=$FAR_LATENCY_MS" "jitter=$FAR_JITTER_MS"
     done
-    bold "$agent's links now add ${FAR_LATENCY_MS}ms, give or take ${FAR_JITTER_MS}ms, each way"
-    hint "in Grafana's 'Scrape time through the WAN', $agent's line steps up from under 0.1s to about 0.5s: each" \
-      "scrape gains one round trip, and nothing more. Nothing fails: the connection is already open, so a scrape" \
-      "needs no new handshake through the firewall. Undo with: $0 heal"
+    bold "$agent's links now add ${FAR_LATENCY_MS} ms, give or take ${FAR_JITTER_MS} ms, each way"
+    how_it_works "Each agent reaches each proxy only through a link of Toxiproxy, the wan service, which relays the" \
+      "connection and can be told to misbehave. This adds a latency toxic to both directions of $agent's two links," \
+      "$(primary_link "$agent") and $(standby_link "$agent"), which holds every piece of data for" \
+      "${FAR_LATENCY_MS} ms, give or take ${FAR_JITTER_MS}, before passing it on."
+    watch_for
+    point "In Grafana's 'Scrape time through the WAN, by agent' panel, $agent's line steps up from under 0.1" \
+      "seconds to about 0.5: one round trip more. $(other_agent "$agent")'s line stays flat."
+    point "In $agent's 'Recent scrapes' on the dashboard, every scrape still succeeds."
+    point "Nothing fails, because the agent's connection is already open: a scrape needs no new handshake through" \
+      "the firewall, so it costs one round trip and nothing more."
+    follow_up "To undo it, run" "$0 heal"
     ;;
   thin)
     local agent link
@@ -447,45 +679,71 @@ main() {
       add_toxic "$link" thin-up upstream bandwidth "rate=$THIN_RATE_KBS"
     done
     bold "$agent's links now carry ${THIN_RATE_KBS} KB/s toward the proxies"
+    how_it_works "Each agent reaches each proxy only through a link of Toxiproxy, the wan service, which relays the" \
+      "connection and can be told to misbehave. This adds a bandwidth toxic to $agent's two links," \
+      "$(primary_link "$agent") and $(standby_link "$agent"), in the direction toward the proxies only, which passes" \
+      "at most ${THIN_RATE_KBS} KB a second. Scrape requests still reach the agent at full speed; its answers crawl" \
+      "back."
+    watch_for
     if [[ "$agent" == agent-branch ]]; then
-      hint "the inventory payload, about 56 KB gzipped, needs 7s on this link, and Prometheus gives up at 4s. Every" \
-        "path shares the link, so it backs up behind the inventory, and within about 15s shipping and the agent's" \
-        "own metrics fail too; at about 30s NetworkTargetDown fires for all three. agent-branch stays connected:" \
-        "its answers keep arriving, too late for Prometheus, and each tells the proxy it's alive, so its idle time" \
-        "on the dashboard stays near 0 and nothing is evicted. agent-hq, on its own links, is untouched." \
-        "Next: $0 filter"
+      point "The inventory payload is about 56 KB gzipped, which takes 7 seconds on this link, and Prometheus" \
+        "gives up after 4."
+      point "Every path shares the link, so they back up behind the inventory: within about 15 seconds the shipping" \
+        "service and the agent's own metrics fail too, and at about 30 seconds NetworkTargetDown fires for all three."
+      point "agent-branch stays connected the whole time. Its answers keep arriving, too late for Prometheus, and" \
+        "each one tells the proxy the agent is alive, so on the dashboard its 'idle' time stays near zero and" \
+        "nothing is evicted: a saturated link is slow, not dead."
+      point "agent-hq, on its own links, is untouched."
+      follow_up "Next, run" "$0 filter"
     else
-      hint "$agent's payloads are small, so they still fit: its scrapes take a little longer. Undo with: $0 heal"
+      point "$agent's payloads are small, so they still fit: its scrapes take a little longer, and none fails."
+      follow_up "To undo it, run" "$0 heal"
     fi
     ;;
   filter)
     restart_branch agent-branch-filtered.conf
     bold "agent-branch restarted with a filter that drops inventory_item_price_dollars"
-    hint "the agent drops the family before gzip and chunking, so the inventory payload falls from about 496,000" \
-      "characters to about 199,000 (21 KB gzipped) in agent-branch's Recent scrapes. On the thin link each takes" \
-      "about 3s, inside Prometheus's 4s, and every path is green again within about 5s. Until what the old" \
-      "connection had queued drains through the link, about 20s, the dashboard lists it too, with no paths." \
-      "Grafana's 'Filter bytes saved at the agent' climbs to about 60 KB/s. Undo with: $0 unfilter"
+    how_it_works "This recreates agent-branch's container with config/agent-branch-filtered.conf in place of" \
+      "config/agent-branch.conf. The new config adds an agent.filters entry for /inventory_metrics that drops the" \
+      "inventory_item_price_dollars metric family from every scrape, at the agent, before it compresses the payload" \
+      "and sends it across the WAN."
+    watch_for
+    point "The agent drops that metric family before it compresses and chunks the payload. In agent-branch's" \
+      "'Recent scrapes', the inventory falls from about 496,000 characters to about 199,000, 21 KB gzipped."
+    point "On the thin link each scrape now takes about 3 seconds, inside Prometheus's 4, so every path is green" \
+      "again within about 5 seconds. Grafana's 'Filter bytes saved at the agent' climbs to about 60 KB/s: what never" \
+      "crosses the WAN costs nothing to send, store, or query."
+    point "The restarted agent connects at once. Its old connection stays on the dashboard's agent list, with no" \
+      "paths, for about 20 seconds more, until what it had queued drains through the thin link."
+    follow_up "To remove the filter, run" "$0 unfilter"
     ;;
   unfilter)
     restart_branch agent-branch.conf
     bold "agent-branch restarted without the filter"
-    hint "the inventory payload returns to about 496,000 characters."
+    how_it_works "This recreates agent-branch's container with config/agent-branch.conf, which has no filter."
+    watch_for
+    point "The inventory payload returns to about 496,000 characters in agent-branch's 'Recent scrapes'."
     ;;
   proxy-down)
     local proxy
     proxy="$(proxy_arg "${1:-}")"
     "${COMPOSE[@]}" stop "$proxy"
     bold "$proxy stopped"
+    how_it_works "This runs docker compose stop $proxy, which shuts the proxy down. Its connections close as it" \
+      "exits, and an agent whose connection closed dials the next endpoint in its agent.proxy.endpoints list."
+    watch_for
     if [[ "$proxy" == proxy ]]; then
-      hint "its connections close, so both agents know at once and fail over within about 4s, with no manual step:" \
-        "the standby's dashboard, $STANDBY_DASHBOARD_URL, shows each one 'via <site>-to-standby (2 of 2)', marked" \
-        "failed over. Within about 15s every service is up again in Grafana, scraped through the standby; only" \
-        "prometheus-proxy, the primary's own metrics, stays down, and NetworkTargetDown fires for it alone." \
-        "Bring it back with: $0 proxy-up"
+      point "The primary's connections close, so both agents know at once, and fail over within about 4 seconds" \
+        "with nobody touching them."
+      point "The standby's dashboard shows each agent 'via' its link to the standby, '(2 of 2)', marked" \
+        "'failed over': $STANDBY_DASHBOARD_URL"
+      point "In Grafana, every service is up again on 'Target health' within about 15 seconds, scraped through the" \
+        "standby, and 'Connected agents, by proxy' moves to the standby. Only prometheus-proxy, the primary's own" \
+        "metrics, stays down, and NetworkTargetDown fires for it alone."
+      follow_up "To bring it back, run" "$0 proxy-up"
     else
-      hint "the standby had no agents, so nothing moves; agents connected to it would return to the primary." \
-        "Bring it back with: $0 proxy-up proxy-standby"
+      point "The standby had no agents, so nothing moves. Any agent connected to it would return to the primary."
+      follow_up "To bring it back, run" "$0 proxy-up proxy-standby"
     fi
     ;;
   proxy-up)
@@ -493,11 +751,15 @@ main() {
     proxy="$(proxy_arg "${1:-}")"
     "${COMPOSE[@]}" start "$proxy"
     bold "$proxy started"
+    how_it_works "This runs docker compose start $proxy. Starting a proxy draws no agent to it: an agent changes" \
+      "proxies only when its own connection drops."
+    watch_for
     if [[ "$proxy" == proxy ]]; then
-      hint "the primary is back, but the agents stay on the standby: an agent returns to the head of its list only" \
-        "when its connection drops. Send them back with: $0 heal"
+      point "The primary is back, but the agents stay on the standby: an agent goes back to the head of its list" \
+        "only when its connection drops."
+      follow_up "To send them back to the primary, run" "$0 heal"
     else
-      hint "the standby is ready again, with no agents until one can't connect to the primary."
+      point "The standby is ready again, and has no agents until one can't connect to the primary."
     fi
     ;;
   cut)
@@ -509,12 +771,23 @@ main() {
     add_toxic "$link" cut-hold-up upstream slow_close "delay=$CUT_HOLD_MS"
     add_toxic "$link" cut-hold-down downstream slow_close "delay=$CUT_HOLD_MS"
     bold "$link now passes nothing either way, and closes nothing"
-    hint "the agent isn't told: its scrapes start timing out within 10s, and its idle time climbs on the primary's" \
-      "dashboard. Its heartbeat fails three times, with a 5s deadline each, so at about 20s the agent gives up on the" \
-      "connection and dials the head of its list again, the same dead link, where the connect waits out its 30s" \
-      "deadline. Meanwhile, at about 30s, the primary evicts it, and NetworkAgentEvicted fires. At about 50s it" \
-      "connects through $(standby_link "$agent"): (2 of 2) on the standby's dashboard. $(other_agent "$agent") is" \
-      "untouched. Undo with: $0 heal"
+    how_it_works "This adds four Toxiproxy toxics to $link, $agent's link to the primary. Two timeout toxics with a" \
+      "timeout of 0 drop all data both ways without closing the connection, and two slow_close toxics hold any close" \
+      "for an hour, the agent's own included. To both ends the connection stays open but silent, as when a firewall" \
+      "drops a connection without telling either side, so only timeouts can find it: the agent's heartbeat and" \
+      "connect deadlines, and the proxy's eviction of an agent it hasn't heard from in 30 seconds."
+    watch_for
+    point "Nothing tells the agent. Within about 10 seconds its scrapes start timing out, and on the primary's" \
+      "dashboard its 'idle' time climbs and its 'evicted in' countdown runs."
+    point "The agent's heartbeat fails three times, with a 5-second deadline each, so at about 20 seconds it gives" \
+      "up on the connection. It dials the head of its list again, the same dead link, where the connect waits out" \
+      "its 30-second deadline."
+    point "Meanwhile the primary, which hears nothing, evicts the agent at about 30 seconds, and NetworkAgentEvicted" \
+      "fires."
+    point "At about 50 seconds the agent connects through $(standby_link "$agent"), and the standby's dashboard" \
+      "shows it '(2 of 2)', 'failed over', while the primary is still up. $(other_agent "$agent") is untouched" \
+      "throughout."
+    follow_up "To undo it, run" "$0 heal"
     ;;
   flaky)
     local agent link bytes
@@ -523,29 +796,50 @@ main() {
     bytes="$(flaky_bytes "$agent")"
     add_toxic "$link" flaky upstream limit_data "bytes=$bytes"
     bold "$link now closes each connection once it has carried $((bytes / 1000)) KB toward the proxy"
-    hint "that's about 15s of $agent's traffic, so it reconnects every 15s or so, within milliseconds, and stays on" \
-      "the primary: a connection that registered and then dropped retries from the head of the list. Grafana's" \
-      "'Agent connects' climbs, and most scrapes succeed; the one in flight as a connection drops fails as" \
-      "agent_disconnected. In Zipkin, $ZIPKIN_URL/zipkin/, run a query for $agent: each reconnect is a" \
-      "connectagent trace, then registeragent and a registerpath per path. Undo with: $0 heal"
+    how_it_works "This adds a Toxiproxy limit_data toxic to $link, $agent's link to the primary, which closes each" \
+      "connection through it once that connection has carried $((bytes / 1000)) KB toward the proxy. The count" \
+      "starts over with each new connection, so the link keeps dropping the agent at about the same interval."
+    watch_for
+    point "That's about 15 seconds of $agent's traffic. Each time the link closes, the agent reconnects within" \
+      "milliseconds and stays on the primary: a connection that registered and then dropped retries from the head" \
+      "of the list."
+    point "In Grafana, 'Agent connects, by agent' climbs. Most scrapes succeed; the one in flight as a connection" \
+      "drops fails as agent_disconnected in 'Scrape outcomes at the proxies'."
+    point "Every proxy and agent reports a span to Zipkin for each gRPC call between them, under its own service" \
+      "name. In Zipkin, the search is serviceName = $agent. Open this link, which fills that search in, and click" \
+      "Run Query: $ZIPKIN_URL/zipkin/?serviceName=$agent"
+    point "Each reconnect is a connectagent trace, followed by registeragent and a registerpath for each path." \
+      "Zipkin joins the agent's side and the proxy's side of each call into one span, so the trace names both."
+    follow_up "To undo it, run" "$0 heal"
     ;;
   wan-down)
     local link
     for link in "${LINKS[@]}"; do set_link "$link" disabled; done
     bold "Every link is down"
-    hint "both agents leave both dashboards at once, and retry every 3s, alternating between their two links." \
-      "Their paths leave the proxies' /discovery, so within about 15s their targets vanish from Prometheus rather" \
-      "than staying red: their rows on Grafana's 'Target health' go red for a scrape or two, then stop. The proxies" \
-      "are scraped directly, so Prometheus still sees them: at about 20s NetworkNoAgentsConnected fires. Bring the" \
-      "links back with: $0 wan-up"
+    how_it_works "This disables all four of Toxiproxy's links. A disabled link closes every connection through it and" \
+      "refuses new ones, so both agents lose both proxies at once, as in a WAN outage. The proxies, Prometheus, and" \
+      "Grafana keep running on their side of the WAN."
+    watch_for
+    point "Both agents leave both dashboards at once, and retry every 3 seconds, alternating between their two links."
+    point "Their paths leave the proxies' /discovery, so within about 15 seconds their targets vanish from" \
+      "Prometheus rather than staying red: on Grafana's 'Target health' their rows go red for a scrape or two, then" \
+      "stop."
+    point "Prometheus scrapes the proxies directly, on its own side of the WAN, so it still sees them. The 'Agents'" \
+      "stat reads 0, and at about 20 seconds NetworkNoAgentsConnected fires."
+    follow_up "To bring the links back, run" "$0 wan-up"
     ;;
   wan-up)
     local link
     for link in "${LINKS[@]}"; do set_link "$link" enabled; done
     bold "Every link is back"
-    hint "within a few seconds each agent reconnects, through whichever of its links it tries next, so one may land" \
-      "on the standby. Their targets return, NetworkNoAgentsConnected resolves, and the graphs keep a gap where" \
-      "nothing could be scraped. Return any agent on the standby with: $0 heal"
+    how_it_works "This enables all four links again, and each agent's next retry connects through whichever of its" \
+      "links it tries next."
+    watch_for
+    point "Within a few seconds each agent reconnects, through whichever of its links it tries next, so one may" \
+      "land on the standby."
+    point "Their targets return, NetworkNoAgentsConnected resolves, and the graphs keep a gap where nothing could" \
+      "be scraped."
+    follow_up "To return any agent on the standby to the primary, run" "$0 heal"
     ;;
   heal) cmd_heal ;;
   "" | help | -h | --help) usage ;;

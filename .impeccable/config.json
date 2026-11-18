@@ -1,0 +1,9 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [
+      "website/prometheus-proxy/site/**"
+    ],
+    "ignoreValues": []
+  }
+}

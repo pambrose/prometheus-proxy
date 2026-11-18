@@ -1,6 +1,6 @@
 # Network Demo
 
-The [Live Demo](demo.md) shows the proxy, its dashboard, and Grafana with a perfect network between the agents and the
+The [Basics Demo](demo.md) shows the proxy, its dashboard, and Grafana with a perfect network between the agents and the
 proxy. This second demo puts a simulated WAN there, the link through the firewall that the product exists to cross,
 and shows what a far, thin, dead, flaky, or missing link does, and how the proxy and agents cope. Every screenshot on
 this page comes from it.
@@ -16,7 +16,7 @@ graph LR
   P -->|discovery and scrapes| Proxy[Proxy, dashboard :8194]
   P -->|discovery and scrapes| Standby[Standby proxy, dashboard :8195]
   %% Each agent connects out, through the WAN, so its arrows point back. The invisible links keep the WAN and the
-  %% agents to the right of the proxies, as on the Live Demo page.
+  %% agents to the right of the proxies, as on the Basics Demo page.
   Proxy ~~~ WAN
   Standby ~~~ WAN
   WAN ~~~ HQ
@@ -42,20 +42,32 @@ graph LR
   end
 ```
 
+## What you need
+
+The proxy and agent are the latest release's images, from Docker Hub, the same ones the Basics Demo runs, so there's
+nothing to build. On macOS or Linux, the demo needs only:
+
+- [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2: Docker Desktop, or Docker Engine with the
+  Compose plugin.
+- `git`, to clone the repository, and `make`. On macOS, the Xcode command-line tools (`xcode-select --install`) have
+  both.
+- `curl`, which the demo uses to wait for each service to answer.
+- A web browser.
+
 ## Running it
 
-You need Docker with Compose v2, a JDK 17 or later to run Gradle, and a clone of the repository. The demo's commands
-run from its own directory, where `make help` lists its targets. From the clone's root:
+Clone the repository, then run the demo's commands from its own directory, where `make help` lists its targets:
 
 ```bash
-cd demos/network
-make up      # builds the jars and images, starts everything, prints the URLs
+git clone --depth 1 https://github.com/pambrose/prometheus-proxy.git
+cd prometheus-proxy/demos/network
+make up      # pulls the images, starts everything, prints the URLs
 make tour    # walks through every scenario below, pausing before each step
 make down    # stops it and removes its containers and network
 ```
 
-The first `make up` pulls the Prometheus, Grafana, Zipkin, Toxiproxy, and Python images and builds the jars, which
-takes a few minutes. After that it starts in under a minute, and runs without a network connection.
+The first `make up` pulls the proxy, agent, Prometheus, Grafana, Zipkin, Toxiproxy, and Python images, which takes a few
+minutes. After that it starts in under a minute, and runs without a network connection.
 
 | What | URL |
 |---|---|
@@ -66,8 +78,8 @@ takes a few minutes. After that it starts in under a minute, and runs without a 
 | The proxy's service discovery | <http://localhost:8180/discovery> |
 | Zipkin | <http://localhost:9511/zipkin/> |
 
-Each port is the Live Demo's plus 100, so the two demos can run side by side. Every port binds to `127.0.0.1` only: the
-dashboards have no authentication and Grafana keeps its default admin password, which suits a laptop and nothing
+Each port is the Basics Demo's plus 100, so the two demos can run side by side. Every port binds to `127.0.0.1` only:
+the dashboards have no authentication and Grafana keeps its default admin password, which suits a laptop and nothing
 shared. To move a port that is already taken, set `NETWORK_DEMO_DASHBOARD_PORT`, `NETWORK_DEMO_STANDBY_DASHBOARD_PORT`,
 `NETWORK_DEMO_GRAFANA_PORT`, `NETWORK_DEMO_PROMETHEUS_PORT`, `NETWORK_DEMO_PROXY_PORT`, or `NETWORK_DEMO_ZIPKIN_PORT`,
 for example `NETWORK_DEMO_GRAFANA_PORT=3101 make up`.
@@ -93,15 +105,15 @@ demo; each command prints what to watch. The scenarios that change one agent's l
 they're given `agent-hq`, and `./demo.sh heal` ends each scenario: it removes every change to the WAN, brings back
 every link and proxy, and returns any agent on the standby to the primary.
 
-### Far away
+### A high-latency link slows scrapes, but nothing fails
 
 ```bash
 ./demo.sh far         # agent-branch's links add 250 ms, give or take 50 ms, each way
 ```
 
 <figure markdown="span">
-  [![Grafana, with agent-branch's scrape time stepping up](images/network-demo/far.webp#only-dark){ loading=lazy }](images/network-demo/far.webp)
-  [![Grafana, with agent-branch's scrape time stepping up](images/network-demo/far-light.webp#only-light){ loading=lazy }](images/network-demo/far-light.webp)
+  ![Grafana, with agent-branch's scrape time stepping up](images/network-demo/far.webp#only-dark){ loading=lazy }
+  ![Grafana, with agent-branch's scrape time stepping up](images/network-demo/far-light.webp#only-light){ loading=lazy }
   <figcaption>agent-branch's scrape time steps up by a round trip; agent-hq's stays flat</figcaption>
 </figure>
 
@@ -109,7 +121,7 @@ agent-branch's scrapes take about half a second, one round trip more, while agen
 second. Nothing fails: the agent's connection is already open, so a scrape needs no new handshake through the firewall,
 and costs the round trip and nothing more.
 
-### A thin pipe, and filtering at the agent
+### A low-bandwidth link fails scrapes; filtering at the agent fixes it
 
 ```bash
 ./demo.sh thin        # agent-branch's links carry 8 KB/s toward the proxies
@@ -120,22 +132,22 @@ shares the link, so it backs up behind the inventory, and within about 15 second
 own metrics fail too. agent-hq, on its own links, is untouched.
 
 <figure markdown="span">
-  [![agent-branch on the thin link, every scrape too late but its idle time near zero](images/network-demo/thin.webp#only-dark){ loading=lazy }](images/network-demo/thin.webp)
-  [![agent-branch on the thin link, every scrape too late but its idle time near zero](images/network-demo/thin-light.webp#only-light){ loading=lazy }](images/network-demo/thin-light.webp)
+  ![agent-branch on the thin link, every scrape too late but its idle time near zero](images/network-demo/thin.webp#only-dark){ loading=lazy }
+  ![agent-branch on the thin link, every scrape too late but its idle time near zero](images/network-demo/thin-light.webp#only-light){ loading=lazy }
   <figcaption>Most of a minute on the thin link: every scrape too late for Prometheus, and agent-branch still connected</figcaption>
 </figure>
 
 agent-branch stays connected all the while. Its answers keep arriving, too late for Prometheus, and each one tells the
 proxy the agent is alive, so its idle time stays near zero and the proxy never evicts it: a saturated link is slow, not
-dead. [The link silently dies](#the-link-silently-dies) shows one that is.
+dead. [A link that goes silent](#a-link-goes-silent-the-agent-detects-it-and-fails-over) shows one that is.
 
 ```bash
 ./demo.sh filter      # restarts agent-branch with a metric filter for the inventory
 ```
 
 <figure markdown="span">
-  [![agent-branch's recent scrapes, with the inventory filtered](images/network-demo/filtered.webp#only-dark){ loading=lazy }](images/network-demo/filtered.webp)
-  [![agent-branch's recent scrapes, with the inventory filtered](images/network-demo/filtered-light.webp#only-light){ loading=lazy }](images/network-demo/filtered-light.webp)
+  ![agent-branch's recent scrapes, with the inventory filtered](images/network-demo/filtered.webp#only-dark){ loading=lazy }
+  ![agent-branch's recent scrapes, with the inventory filtered](images/network-demo/filtered-light.webp#only-light){ loading=lazy }
   <figcaption>The filtered inventory, about 199,000 characters, crossing the thin link in about 3 seconds</figcaption>
 </figure>
 
@@ -149,15 +161,15 @@ on the agent list, with no paths, for about 20 seconds more, until what it had q
 `./demo.sh heal` and then `./demo.sh unfilter` restore the link and the full payload. `heal` alone, without the filter,
 brings every path back within a second or two, since what the thin link had queued drains at full speed.
 
-### The proxy goes away
+### The primary proxy stops, and the agents fail over to the standby
 
 ```bash
 ./demo.sh proxy-down  # stops the primary proxy
 ```
 
 <figure markdown="span">
-  [![agent-branch on the standby, after failing over](images/network-demo/failover.webp#only-dark){ loading=lazy }](images/network-demo/failover.webp)
-  [![agent-branch on the standby, after failing over](images/network-demo/failover-light.webp#only-light){ loading=lazy }](images/network-demo/failover-light.webp)
+  ![agent-branch on the standby, after failing over](images/network-demo/failover.webp#only-dark){ loading=lazy }
+  ![agent-branch on the standby, after failing over](images/network-demo/failover-light.webp#only-light){ loading=lazy }
   <figcaption>The standby's dashboard: agent-branch via its link to the standby, marked failed over</figcaption>
 </figure>
 
@@ -171,7 +183,7 @@ primary's own metrics, stays down, and **NetworkTargetDown** fires for it alone.
 list only when its connection drops. `./demo.sh heal` closes each agent's connection through its standby link once,
 and they return to the primary within seconds.
 
-### The link silently dies
+### A link goes silent; the agent detects it and fails over
 
 ```bash
 ./demo.sh cut         # agent-branch's link to the primary goes silent, both ways
@@ -181,8 +193,8 @@ Here the connection doesn't close. The link stops passing anything, the agent's 
 stateful firewall or NAT that drops a connection does, and nothing tells either end.
 
 <figure markdown="span">
-  [![The primary's dashboard, hearing nothing from agent-branch](images/network-demo/cut.webp#only-dark){ loading=lazy }](images/network-demo/cut.webp)
-  [![The primary's dashboard, hearing nothing from agent-branch](images/network-demo/cut-light.webp#only-light){ loading=lazy }](images/network-demo/cut-light.webp)
+  ![The primary's dashboard, hearing nothing from agent-branch](images/network-demo/cut.webp#only-dark){ loading=lazy }
+  ![The primary's dashboard, hearing nothing from agent-branch](images/network-demo/cut-light.webp#only-light){ loading=lazy }
   <figcaption>The primary hears nothing from agent-branch: its idle time climbs toward the eviction</figcaption>
 </figure>
 
@@ -193,7 +205,7 @@ which has heard nothing, evicts the agent after 30 seconds of silence (`proxy.in
 the demo sets to 30), and **NetworkAgentEvicted** fires. At about 50 seconds agent-branch connects through its link to
 the standby, failed over, while the primary is still up. agent-hq is untouched throughout.
 
-### A flaky link, followed in Zipkin
+### A link that keeps dropping: the agent reconnects, traced in Zipkin
 
 ```bash
 ./demo.sh flaky       # agent-branch's link to the primary drops its connection about every 15 seconds
@@ -205,11 +217,12 @@ registered and then dropped retries from the head of the list. Grafana's **Agent
 `agent_connect_count_total`, climbs, and most scrapes succeed; the one in flight as a connection drops fails as
 `agent_disconnected`.
 
-Every proxy and agent reports a [Zipkin](advanced.md#zipkin-tracing) span for each gRPC call between them. Open
-<http://localhost:9511/zipkin/> and run a query for agent-branch.
+Every proxy and agent reports a [Zipkin](advanced.md#zipkin-tracing) span for each gRPC call between them, under its
+own service name. In Zipkin, the search is `serviceName` = `agent-branch`. Open
+<http://localhost:9511/zipkin/?serviceName=agent-branch>, which fills that search in, and click **Run Query**.
 
 <figure markdown="span">
-  [![A reconnect's connectagent call, traced from agent-branch to the proxy](images/network-demo/tracing.webp){ loading=lazy }](images/network-demo/tracing.webp)
+  ![A reconnect's connectagent call, traced from agent-branch to the proxy](images/network-demo/tracing.webp){ loading=lazy }
   <figcaption>One reconnect's connectagent call, from agent-branch to the proxy</figcaption>
 </figure>
 
@@ -218,15 +231,15 @@ agent's client side and the proxy's server side of each call into one span, so a
 annotations mark when the agent sent the call and the proxy answered it. A connection's scrape streams are traced too,
 and appear as the connection closes, each about 15 seconds long: as long as the connection lasted.
 
-### The WAN goes down, and comes back
+### The whole WAN goes down: an alert fires, and the agents reconnect
 
 ```bash
 ./demo.sh wan-down    # every link goes down
 ```
 
 <figure markdown="span">
-  [![Grafana with every link down](images/network-demo/wan-down.webp#only-dark){ loading=lazy }](images/network-demo/wan-down.webp)
-  [![Grafana with every link down](images/network-demo/wan-down-light.webp#only-light){ loading=lazy }](images/network-demo/wan-down-light.webp)
+  ![Grafana with every link down](images/network-demo/wan-down.webp#only-dark){ loading=lazy }
+  ![Grafana with every link down](images/network-demo/wan-down-light.webp#only-light){ loading=lazy }
   <figcaption>Every link down: no agents connected, and NetworkNoAgentsConnected firing</figcaption>
 </figure>
 
@@ -242,20 +255,20 @@ scraped. `./demo.sh heal` returns any agent on the standby to the primary.
 
 ## Scenario reference
 
-| Command | Effect |
-|---|---|
-| `demo.sh far [agent]` | Adds 250 ms of latency, give or take 50 ms, each way on both of the agent's links |
-| `demo.sh thin [agent]` | Caps both of the agent's links at 8 KB/s toward the proxies |
-| `demo.sh filter` / `unfilter` | Restarts agent-branch with or without the inventory filter |
-| `demo.sh proxy-down` / `proxy-up [proxy]` | Stops or starts a proxy (default `proxy`, the primary; or `proxy-standby`) |
-| `demo.sh cut [agent]` | Silences the agent's link to the primary, both ways, closes included |
-| `demo.sh flaky [agent]` | Closes each connection through the agent's link to the primary after about 15 seconds of its traffic |
-| `demo.sh wan-down` / `wan-up` | Takes every link down, or brings every link back |
-| `demo.sh heal` | Removes every change to the WAN, brings back every link and proxy, and returns any agent on the standby to the primary |
-| `make tour [ACT=n]` | Walks through every scenario, from act 1 or the one given, pausing before each step |
-| `make status` | The containers, each link's state and changes, and the URLs |
-| `make logs [SERVICE=name]` | Follows the logs, of every service or the one given |
-| `make open` | Opens both dashboards, Grafana, and Prometheus's alerts in the browser |
+| Command | Effect | How it works |
+|---|---|---|
+| `demo.sh far [agent]` | Adds 250 ms of latency, give or take 50 ms, each way on both of the agent's links | A Toxiproxy `latency` toxic each way on both links |
+| `demo.sh thin [agent]` | Caps both of the agent's links at 8 KB/s toward the proxies | A Toxiproxy `bandwidth` toxic toward the proxies on both links |
+| `demo.sh filter` / `unfilter` | Restarts agent-branch with or without the inventory filter | Recreates agent-branch's container with `config/agent-branch-filtered.conf`, whose `agent.filters` drops `inventory_item_price_dollars`, or with `config/agent-branch.conf` |
+| `demo.sh proxy-down` / `proxy-up [proxy]` | Stops or starts a proxy (default `proxy`, the primary; or `proxy-standby`) | `docker compose stop` / `start`; an agent whose connection closes dials its next endpoint |
+| `demo.sh cut [agent]` | Silences the agent's link to the primary, both ways, closes included | Two `timeout` toxics with a timeout of 0, which drop all data, and two `slow_close` toxics, which hold the closes |
+| `demo.sh flaky [agent]` | Closes each connection through the agent's link to the primary after about 15 seconds of its traffic | A `limit_data` toxic, which closes each connection after a set number of bytes |
+| `demo.sh wan-down` / `wan-up` | Takes every link down, or brings every link back | Disables or enables all four Toxiproxy links; a disabled link closes its connections and refuses new ones |
+| `demo.sh heal` | Removes every change to the WAN, brings back every link and proxy, and returns any agent on the standby to the primary | Removes the toxics, enables the links, starts the proxies, and disables an agent's link to the standby for a second, so it reconnects to the primary |
+| `make tour [PART=n]` | Walks through every scenario, from part 1 or the one given, pausing before each step |  |
+| `make status` | The containers, each link's state and changes, and the URLs |  |
+| `make logs [SERVICE=name]` | Follows the logs, of every service or the one given |  |
+| `make open` | Opens both dashboards, Grafana, and Prometheus's alerts in the browser |  |
 
 The optional `[agent]` is `agent-branch`, the default, or `agent-hq`. `heal` and `unfilter` undo every scenario. For a
 clean slate, `make down && make up`.

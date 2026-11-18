@@ -54,7 +54,8 @@ internal object ActivityHtml {
     filter: RowFilter,
   ) {
     renderFilters(routeBase, DashboardLayout.ACTIVITY, filter, columns(snapshot.authEnabled))
-    div("scroller") { activityTable(snapshot, filter, oob = false) }
+    // Inside the scroller, as the Paths table's region is, so a table scrolled sideways keeps its place on a push.
+    div("scroller") { div { activityTable(snapshot, filter, oob = false) } }
   }
 
   /** The table region, `#activity`, which every push for the Activity view replaces. */

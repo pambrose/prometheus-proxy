@@ -61,7 +61,7 @@ SITE_VERSION_SOURCES := $(SITE_DIR)/docs src/test/kotlin/website src/test/java/w
 # between the agents and the proxies, and the Helm charts deployed on two kind clusters. Each demo under demos/ is
 # self-contained, with its own Makefile for starting and stopping it (`make -C demos/<name> help`), so this one has no
 # demo targets.
-DASHBOARD_DEMO_DIR := demos/dashboard
+BASICS_DEMO_DIR := demos/basics
 NETWORK_DEMO_DIR := demos/network
 KUBERNETES_DEMO_DIR := demos/kubernetes
 
@@ -222,8 +222,8 @@ tla-checks: _tla-tools  ## Model-check the TLA+ specs in specs/tla (the quick co
 # Kubernetes demo's has no rules.
 check-rules:  ## Validate the alerting rules in grafana/alerts.yml, and each demo's Prometheus config and rules, with promtool (needs Docker)
 	docker run --rm -v "$(CURDIR)/grafana:/rules:ro" --entrypoint promtool $(PROMETHEUS_IMAGE) check rules /rules/alerts.yml
-	docker run --rm -v "$(CURDIR)/$(DASHBOARD_DEMO_DIR)/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
-		-v "$(CURDIR)/$(DASHBOARD_DEMO_DIR)/prometheus/demo-alerts.yml:/etc/prometheus/rules/demo-alerts.yml:ro" \
+	docker run --rm -v "$(CURDIR)/$(BASICS_DEMO_DIR)/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
+		-v "$(CURDIR)/$(BASICS_DEMO_DIR)/prometheus/demo-alerts.yml:/etc/prometheus/rules/demo-alerts.yml:ro" \
 		-v "$(CURDIR)/grafana/alerts.yml:/etc/prometheus/rules/alerts.yml:ro" \
 		--entrypoint promtool $(PROMETHEUS_IMAGE) check config /etc/prometheus/prometheus.yml
 	docker run --rm -v "$(CURDIR)/$(NETWORK_DEMO_DIR)/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
@@ -410,9 +410,9 @@ reports: coverage  ## Alias for `coverage`
 # The version the docs site advertises: the tag of every pambrose/prometheus-proxy and -agent image, and the version of
 # the com.pambrose:prometheus-proxy coordinate, on its pages and in its snippets, which step 2 of docs/RELEASE.md bumps.
 # Fails unless they give exactly one. It isn't the gradle.properties version (VERSION), which can be a -SNAPSHOT
-# between releases, while the site still gives the last release. docs.yml deploys a push once this version is
-# published, and bin/docker-*.sh run its images. A tag ends at a letter or digit, so a sentence's full stop isn't part
-# of it, and starts with a digit, so latest isn't a version.
+# between releases, while the site still gives the last release. bin/docker-*.sh and the demos run its images. A tag
+# ends at a letter or digit, so a sentence's full stop isn't part of it, and starts with a digit, so latest isn't a
+# version.
 site-version:  ## Print the version the docs site advertises in its image tags and Maven coordinate
 	@versions=$$(grep -rhoE '(pambrose/prometheus-(proxy|agent)|com\.pambrose:prometheus-proxy):[0-9]([0-9A-Za-z.-]*[0-9A-Za-z])?' \
 		$(SITE_VERSION_SOURCES) | sed 's/.*://' | sort -u); \
@@ -422,8 +422,8 @@ site-version:  ## Print the version the docs site advertises in its image tags a
 		|| { echo "ERROR: the docs site gives more than one version:" $$versions >&2; exit 1; }; \
 	echo "$$versions"
 
-# A push to master deploys the docs site only once the version it advertises is published (see docs.yml); a run started
-# here, as make release does once it has published, deploys whatever the version.
+# The only way the docs site deploys: a push to master builds it without deploying (see docs.yml), so it changes with a
+# release, which runs this once it has published. Run by hand, it deploys master as it is, unreleased pages included.
 gh-docs:  ## Build and deploy the docs site from master now (runs the docs.yml workflow)
 	gh workflow run docs.yml
 
@@ -546,13 +546,13 @@ _confirm-release:
 	@echo "                 for $(PLATFORMS)"
 	@printf 'Continue? [y/N] ' && read ans && [ "$$ans" = "y" ] || { echo "Nothing published."; exit 1; }
 
-# Each step runs only if the one before it passed, so nothing is published until the checkout passes release-check,
-# the full test suite (whose container tests build the images and scrape through them), and the release build.
-# Steps 4-6 and 8 of docs/RELEASE.md. Step 8 ends with gh-docs, once the images check out: docs.yml deploys a push only
-# once the version it advertises is published, so the merge of the bump left the site at the previous release, and
-# this deploys the new one. Everything is published by then, so a failure to start that deploy is reported without
-# hiding the next steps. The GitHub release (step 7) and the Homebrew tap (step 9) are printed as next steps. After a
-# partial release, finish with the remaining targets: release-check refuses a version already published.
+# Each step runs only if the one before it passed, so nothing is published until the checkout passes release-check, the
+# full test suite (whose container tests build the images and scrape through them), and the release build. Steps 4-6 and
+# 8 of docs/RELEASE.md. Step 8 ends with gh-docs, once the images check out: a push to master doesn't deploy the docs
+# site, so the site shows the previous release until this deploys the new one. Everything is published by then, so a
+# failure to start that deploy is reported without hiding the next steps. The GitHub release (step 7) and the Homebrew
+# tap (step 9) are printed as next steps. After a partial release, finish with the remaining targets: release-check
+# refuses a version already published.
 release:  ## Gate, test, build, publish VERSION to Maven Central and Docker Hub (asks first), then deploy the docs
 	$(MAKE) release-check
 	$(MAKE) all-tests

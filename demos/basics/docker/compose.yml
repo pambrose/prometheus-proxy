@@ -1,10 +1,11 @@
-# The Prometheus Proxy dashboard demo: a proxy with its dashboard on, three agents behind a simulated firewall, a set
-# of simulated services, and Prometheus and Grafana in front. See ../README.md. From demos/dashboard:
+# The Prometheus Proxy basics demo: a proxy with its dashboard on, three agents behind a simulated firewall, a set
+# of simulated services, and Prometheus and Grafana in front. See ../README.md. From demos/basics:
 #
-#   make up      # builds the jars and the images from this checkout, then starts everything
-#   make down    # stops it and removes its containers, network, and volume
+#   make up        # starts everything, with the proxy and agent of the latest release, from Docker Hub
+#   make up-local  # the same, with the proxy and agent built from this checkout
+#   make down      # stops it and removes its containers, network, and volume
 #
-# Compose resolves every relative path here against this file's directory, demos/dashboard/docker: the demo's configs
+# Compose resolves every relative path here against this file's directory, demos/basics/docker: the demo's configs
 # are one level up, and the repository root three.
 #
 # Every published port binds to 127.0.0.1 only: the dashboard has no authentication, Grafana lets anyone view it
@@ -14,7 +15,8 @@
 
 name: prometheus-proxy-demo
 
-# The three agents share one image, built from this checkout's agent jar.
+# The three agents share one image: the latest release's, which demo.sh pulls and tags as this one (make up), or one
+# built from this checkout's agent jar (make up-local, which builds with --build).
 x-agent: &agent
   image: prometheus-proxy-demo/agent:local
   build:
@@ -30,7 +32,7 @@ x-agent: &agent
   restart: on-failure
 
 services:
-  # Built from this checkout's proxy jar.
+  # The latest release's, or built from this checkout's proxy jar, as the agents' image is.
   proxy:
     image: prometheus-proxy-demo/proxy:local
     build:

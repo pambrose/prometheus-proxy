@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Simulated services for the Prometheus Proxy dashboard demo.
+"""Simulated services for the Prometheus Proxy basics demo.
 
 Stands in for the applications behind a firewall that the demo's agents scrape. Every service serves Prometheus text
 metrics at /<service>/metrics, and the shipping service has one replica per west agent at /shipping/<replica>/metrics.

@@ -26,7 +26,6 @@ import io.prometheus.proxy.dashboard.ProxyDashboardHtml.PROXY_PATH_ATTR
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SCRAPE_ID_PREFIX
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SCRAPE_RESULT_ID
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SCRAPE_URL_ATTR
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.TIP_ATTR
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.agentLabel
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.renderFilters
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.scrapeTime
@@ -70,7 +69,9 @@ internal object PathTableHtml {
   ) {
     renderFilters(routeBase, DashboardLayout.PATH, filter, columns(snapshot))
     if (snapshot.scrapeNowEnabled) scrapeResultPanel(routeBase)
-    div("scroller") { pathTable(snapshot, filter, oob = false) }
+    // The region a push replaces sits inside the scroller rather than being it, so the scroller stays and a table
+    // scrolled sideways keeps its place across every refresh; a replaced scroller started again at the left.
+    div("scroller") { div { pathTable(snapshot, filter, oob = false) } }
   }
 
   /**
@@ -204,8 +205,9 @@ internal object PathTableHtml {
   private val HISTORY =
     TableColumn(
       label = "History",
-      help = "The path's recent scrapes as dots, oldest on the left, colored as Status is, then the share that " +
-        "succeeded.",
+      help =
+        "The path's recent scrapes as dots, oldest on the left, colored as Status is, with faint dots holding the " +
+        "places of scrapes still to come, then the share that succeeded.",
     )
   private val LINKS =
     TableColumn(
@@ -230,7 +232,7 @@ internal object PathTableHtml {
       td("dim") { scrapeTime(path.lastScrape?.at) }
       statusCell(path)
       td("num dim") { +(path.lastScrape?.let { "${it.durationMillis} ms" } ?: DASH) }
-      historyCell(path)
+      historyCell(path, snapshot)
       if (snapshot.links.isNotEmpty()) linksCell(path, snapshot.links)
     }
   }
@@ -315,9 +317,17 @@ internal object PathTableHtml {
    * Drawn as one element per run of like results, each painting a dot per scrape as a repeating background, rather
    * than an element per scrape: the table is pushed whole every refresh, so a healthy path's strip stays one element.
    * The strip is one image to assistive tech, labelled with the same count the percentage gives.
+   *
+   * Until the history holds [ProxySnapshot.pathHistorySize] scrapes, faint dots keep the places of the ones still to
+   * come, on the left, so every strip is as wide as a full one: the newest scrape and the percentage sit in the same
+   * place on every row, and the column doesn't widen, pushing the Links column along, on every refresh as the
+   * histories fill.
    */
-  private fun TR.historyCell(path: PathView) {
-    td("dim") {
+  private fun TR.historyCell(
+    path: PathView,
+    snapshot: ProxySnapshot,
+  ) {
+    td("dim history") {
       val total = path.history.size
       if (total == 0) {
         +DASH
@@ -328,6 +338,8 @@ internal object PathTableHtml {
           attributes["role"] = "img"
           attributes["aria-label"] = summary
           attributes["title"] = summary
+          val toCome = snapshot.pathHistorySize - total
+          if (toCome > 0) i("slot") { attributes["style"] = "--n:$toCome" }
           path.historyRuns.forEach { (ok, count) ->
             i(if (ok) "ok" else "crit") { attributes["style"] = "--n:$count" }
           }
@@ -365,13 +377,13 @@ internal object PathTableHtml {
 
   /**
    * One of [path]'s links, the one at [place] in `proxy.dashboard.links`: its name, or its brand mark, whose look the
-   * page's icon stylesheet gives its class (see [ProxyDashboardCss.linkIconCss]), with a tooltip saying what it does,
-   * *Open in Grafana*. Either way its `aria-label` names the path and the tool.
+   * page's icon stylesheet gives its class (see [ProxyDashboardCss.linkIconCss]), with a `title` saying what it does,
+   * *Open in Grafana*, which the browser shows as the copy and scrape-now buttons' titles. Either way its `aria-label`
+   * names the path and the tool.
    *
    * Its id is built from [place] and the path, which is unique in the table, so the push that replaces the table every
-   * refresh hands focus back to it, as a copy button's id does; without one, a keyboard user lost their place, and a
-   * mark its tooltip, on every refresh. The stylesheet draws the tooltip from [TIP_ATTR] rather than the browser from a
-   * `title`, which it shows only after a pause that outlasts the push, so a title's tooltip never appeared.
+   * refresh hands focus back to it, as a copy button's id does; without one, a keyboard user lost their place on every
+   * refresh.
    */
   private fun FlowContent.pathLink(
     path: PathView,
@@ -386,7 +398,7 @@ internal object PathTableHtml {
       attributes["rel"] = "noopener noreferrer"
       // Names the path, so a screen reader listing the page's links can tell one row's from another's.
       attributes["aria-label"] = "Open /${path.path} in ${link.name}"
-      if (icon == null) +link.name else attributes[TIP_ATTR] = "Open in ${link.name}"
+      if (icon == null) +link.name else attributes["title"] = "Open in ${link.name}"
     }
   }
 

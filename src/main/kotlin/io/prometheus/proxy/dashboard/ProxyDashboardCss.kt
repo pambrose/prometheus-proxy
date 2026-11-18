@@ -84,9 +84,11 @@ internal object ProxyDashboardCss {
     .md-head, .section { display:flex; justify-content:space-between; padding:9px 15px; font-size:10px;
       letter-spacing:.09em; text-transform:uppercase; color:var(--ink-3); font-weight:600;
       border-bottom:1px solid var(--line); background:var(--surface-2); }
+    /* The current row's edge is 2px, as the current tab's is, and the left padding a pixel wider than the right, so
+       with the edge a row's text sits 18px in. */
     .md-row { display:block; width:100%; text-align:left; font:inherit; cursor:pointer; background:none;
-      border:0; border-bottom:1px solid var(--line-soft); border-left:3px solid transparent;
-      padding:10px 15px; color:var(--ink); }
+      border:0; border-bottom:1px solid var(--line-soft); border-left:2px solid transparent;
+      padding:10px 15px 10px 16px; color:var(--ink); }
     .md-row:hover { background:var(--surface-3); }
     /* Inside the row, and inside a tab, which meets the strip below it. */
     .md-row:focus-visible, .nav a:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
@@ -114,25 +116,26 @@ internal object ProxyDashboardCss {
     .empty { color:var(--ink-3); padding:14px 15px; }
     .empty.pad { padding:22px 18px; }
     .empty.gone { color:var(--crit); }
-    /* Folder tabs. The nav reaches 1px below the bar into its rule, so a tab's bottom edge lies on the rule: a tab
-       at rest leaves it showing through its transparent border, and the current tab paints it the strip's colour, so
-       the tab opens into the strip below it. Every view's first strip is --surface-2 (the search, or the agent list
-       under the Agents tab). Rectangles, as everything that holds content is, with the current item's accent edge
-       on top, as the current agent row has it on the left. */
+    /* Folder tabs, their top corners rounded as a folder tab's are. The nav reaches 1px below the bar into its rule,
+       so a tab's bottom edge lies on the rule: every tab is outlined in the rule's colour across its top and down its
+       sides, and a tab at rest leaves the rule showing through its transparent bottom, so the outline and the rule
+       read as one line. The current tab's bottom is a 2px accent line that covers the rule beneath it, the tab's edge
+       as the selected row's left border is the row's; its bottom padding gives up the extra pixel, so it stands as
+       tall as the others. */
     .nav { display:flex; align-items:flex-end; gap:2px; flex:none; margin:0 0 -1px 18px; }
-    .nav a { color:var(--ink-3); text-decoration:none; padding:5px 14px 6px; border:1px solid transparent;
-      border-top-width:3px; background-clip:padding-box; }
+    .nav a { color:var(--ink-3); text-decoration:none; padding:7px 14px 6px; border:1px solid var(--line);
+      border-bottom-color:transparent; border-radius:6px 6px 0 0; background-clip:padding-box; }
     .nav a:hover { background-color:var(--surface-2); color:var(--ink); }
-    .nav a.on { background-color:var(--surface-2); color:var(--ink); font-weight:600; border-color:var(--line);
-      border-top-color:var(--accent); border-bottom-color:var(--surface-2); }
-    /* Forced colours paint every border, the transparent ones too, which boxed every tab alike and left the current
-       one told apart by its weight alone. Here the tabs keep their own paint, in system colours: a link at rest, and
-       the current tab outlined, its top edge in Highlight and its bottom open onto the content. */
+    .nav a.on { background-color:var(--surface-2); color:var(--ink); font-weight:600;
+      border-bottom:2px solid var(--accent); padding-bottom:5px; }
+    /* The tabs keep their own paint in forced colours, in system colours, so the current one is told apart by more
+       than its weight: every tab outlined in CanvasText as the rule is, a link at rest, and the current tab's bottom
+       line in Highlight. */
     @media (forced-colors: active) {
-      .nav a { forced-color-adjust:none; color:LinkText; background-color:Canvas; border-color:transparent; }
+      .nav a { forced-color-adjust:none; color:LinkText; background-color:Canvas; border-color:CanvasText;
+        border-bottom-color:transparent; }
       .nav a:hover { background-color:Canvas; text-decoration:underline; }
-      .nav a.on { color:CanvasText; background-color:Canvas; border-color:CanvasText; border-top-color:Highlight;
-        border-bottom-color:Canvas; }
+      .nav a.on { color:CanvasText; background-color:Canvas; border-bottom-color:Highlight; }
       .nav a:focus-visible { outline-color:Highlight; }
     }
     /* The focus ring of every control but a list row and a tab, whose rings are inset (above). */
@@ -156,15 +159,19 @@ internal object ProxyDashboardCss {
     .ptable tr.departed td:first-child { color:var(--crit); }
     /* The Activity table's Detail column, which holds a sentence, so it wraps where the rest of the row doesn't. */
     .ptable td.wrap { white-space:normal; min-width:280px; }
+    /* The History and Links columns keep their content's width. A table in a window wider than it needs shares the
+       spare width among its columns, in proportion to their content, and the strip's width gave History a large share,
+       which opened a gap between the percentage and the links, centered in theirs; the other columns take it instead. */
+    .ptable td.history, .ptable td.links { width:1%; }
     /* A path's links into other tools: the dimmed column's ink-3, underlined so they read as links, and ink on hover,
        as the nav's are. */
     .ptable td.links a { color:inherit; text-underline-offset:2px; }
     .ptable td.links a:hover { color:var(--ink); }
-    /* A link drawn as its tool's brand mark (LinkIcon) rather than its name, which its tooltip and aria-label carry: a
+    /* A link drawn as its tool's brand mark (LinkIcon) rather than its name, which its title and aria-label carry: a
        24px target, as the icon buttons are, its 16px mark painted in the brand's colour (--brand) through the mark as
        a mask (--icon). The page's second stylesheet (linkIconCss) sets both per icon, so a push carries only the class.
        An icon stands 4px from its neighbours, where two names take a separator. */
-    .ptable td.links a.icon { position:relative; display:inline-flex; align-items:center; justify-content:center;
+    .ptable td.links a.icon { display:inline-flex; align-items:center; justify-content:center;
       width:24px; height:24px; margin:-4px 0; vertical-align:middle; border-radius:20px; text-decoration:none; }
     .ptable td.links a.icon + a, .ptable td.links a + a.icon { margin-left:4px; }
     .ptable td.links a.icon::before { content:""; width:16px; height:16px; background:var(--brand);
@@ -172,15 +179,6 @@ internal object ProxyDashboardCss {
     /* Hover rings the target rather than filling it as the icon buttons do: on surface-3 the light theme's marks fall
        below 3:1 (2.90:1 and 2.75:1), where on surface-2, the hovered row's ground, they hold it. */
     .ptable td.links a.icon:hover { box-shadow:inset 0 0 0 1px var(--ink-3); }
-    /* The mark's name, above it on hover or keyboard focus, ink on surface: drawn here from data-tip rather than left
-       to a title, whose tooltip waits longer than the push that replaces the table, so it never showed. Anchored at
-       the mark's right edge, since the Links column is the table's last and the scroller would clip one hanging past
-       it, and displayed only while shown, so a hidden one adds nothing to the scroller's width. */
-    .ptable td.links a.icon::after { content:attr(data-tip); display:none; position:absolute; right:0;
-      bottom:calc(100% + 4px); z-index:1; padding:3px 7px; border:1px solid transparent; border-radius:4px;
-      background:var(--ink); color:var(--surface); font-size:11.5px; line-height:1.3; white-space:nowrap;
-      pointer-events:none; }
-    .ptable td.links a.icon:hover::after, .ptable td.links a.icon:focus-visible::after { display:block; }
     /* Forced colours replace the mark's paint, as they do the icon buttons', which would leave the link blank; LinkText
        keeps it visible and reading as a link. */
     @media (forced-colors: active) {
@@ -255,15 +253,16 @@ internal object ProxyDashboardCss {
     .match-count { padding:7px 15px; color:var(--ink-3); font-size:11.5px; border-bottom:1px solid var(--line-soft); }
     /* A path's recent scrapes, oldest first. Each <i> is a run of like results and paints a 4px dot every 6px, so a
        healthy strip is one element however long it is. Round, as everything that reports state is. A full strip, at
-       the default 20 scrapes, is 120px. */
+       the default 20 scrapes, is 120px, and until a history fills, its first run is .slot (not .empty, the empty
+       state's class): dots in the rule's colour for the scrapes still to come, so every row's strip is that wide. */
     .hist { display:inline-flex; vertical-align:middle; margin:-2px 7px 0 0; }
     .hist i { display:block; height:6px; width:calc(var(--n) * 6px);
       background:radial-gradient(circle at 3px 3px, var(--dot) 2px, transparent 2.5px) 0 0 / 6px 6px repeat-x; }
-    .hist i.ok { --dot:var(--ok); } .hist i.crit { --dot:var(--crit); }
+    .hist i.ok { --dot:var(--ok); } .hist i.crit { --dot:var(--crit); } .hist i.slot { --dot:var(--line); }
     /* Forced colours drop backgrounds, the dots included. */
     @media (forced-colors: active) { .hist i { forced-color-adjust:none; } }
-    /* Narrow, the tabs take a row of their own, the bar's last, so they still stand on its rule and open into the strip
-       below; the brand and the status share the rows above. */
+    /* Narrow, the tabs take a row of their own, the bar's last, so they still stand on its rule; the brand and the
+       status share the rows above. */
     @media (max-width:720px) {
       .md { grid-template-columns:1fr; } .md-list { border-right:0; border-bottom:1px solid var(--line); }
       .bar { flex-wrap:wrap; row-gap:4px; }
@@ -273,7 +272,7 @@ internal object ProxyDashboardCss {
        not correlate with viewport size -- a tablet is wide and touch-driven. The dense bar is kept for
        pointer devices rather than spending vertical space everyone pays for. */
     @media (pointer: coarse) {
-      .nav a { min-height:44px; display:inline-flex; align-items:center; padding-top:0; padding-bottom:0; }
+      .nav a, .nav a.on { min-height:44px; display:inline-flex; align-items:center; padding-top:0; padding-bottom:0; }
     }
     """.trimIndent()
 
