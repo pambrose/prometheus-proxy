@@ -12,6 +12,7 @@ All notable changes to this project are documented in this file.
 
 ### Build & Tooling
 
+- The weekly Actions Cleanup workflow runs daily, since the security scan saves a new ~1 GB Trivy database each day it runs and a week of them reached GitHub's 10 GB cache limit, whose eviction reached master's Gradle caches. It deletes the runs past the repository's 30-day log retention (`LOG_RETENTION_DAYS`), not 90 days, so a run isn't listed after its logs are gone, and it lists every run: filtered by `status=completed`, GitHub returned only the newest 1,000, so the old runs it was meant to delete never reached it
 - `make release` tags the release commit and pushes the tag (the new `make release-tag`) before it deploys the docs site, whose `git clone --branch` commands check the tag out, so the site never names a tag that doesn't exist yet; the tag used to come only with the GitHub release, after the deploy. The GitHub release step creates the release on the pushed tag (`gh release create --verify-tag`)
 
 ### Documentation
