@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Retakes the screenshots on the website's Basics Demo page (website/prometheus-proxy/docs/demo.md) from the running
-# demo: it plays the page's scenarios, captures the dashboard and Grafana in headless Chrome at twice the pixel density
-# in both themes, each a whole window, and writes lossless WebP to website/prometheus-proxy/docs/images/demo/:
+# Retakes the screenshots on the website's Basics Demo page (website/prometheus-proxy/docs/basics-demo.md) from the
+# running demo: it plays the page's scenarios, captures the dashboard and Grafana in headless Chrome at twice the pixel
+# density in both themes, each a whole window, and writes lossless WebP to website/prometheus-proxy/docs/images/demo/:
 # <name>.webp in the dark theme and <name>-light.webp in the light one, which the page shows by the reader's theme. It
 # puts the demo back to normal when it finishes, or when it fails.
 #

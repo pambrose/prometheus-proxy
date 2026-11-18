@@ -13,10 +13,10 @@ gRPC connection initiated from inside the firewall, preserving Prometheus's nati
 !!! tip "See it work on your laptop"
 
     Three self-contained demos run the proxy, its agents, Prometheus, and Grafana from the released images with one
-    command, and a guided tour walks you through each: the [Basics Demo](demo.md), the [Network Demo](network-demo.md),
-    with a simulated WAN between the agents and the proxies, and the [Kubernetes Demo](kubernetes-demo.md), with the
-    Helm charts on two kind clusters. The first two need only Docker; the Kubernetes Demo also needs kind, `kubectl`,
-    and Helm.
+    command, and a guided tour walks you through each: the [Basics Demo](basics-demo.md), the
+    [Network Demo](network-demo.md), with a simulated WAN between the agents and the proxies, and the
+    [Kubernetes Demo](kubernetes-demo.md), with the Helm charts on two kind clusters. The first two need only Docker;
+    the Kubernetes Demo also needs kind, `kubectl`, and Helm.
 
 ## How It Works
 
@@ -152,7 +152,7 @@ Full API documentation (KDocs) is available at [KDocs](kdocs/).
 
     Watch the proxy and agents work, with Prometheus and Grafana, on your laptop
 
-    [:octicons-arrow-right-24: Basics Demo](demo.md)
+    [:octicons-arrow-right-24: Basics Demo](basics-demo.md)
 
 -   :material-sitemap:{ .lg .middle } __Architecture__
 

@@ -44,7 +44,7 @@ What each dashboard section watches is described under
 
     `make up` in the `demos/basics` directory of a clone of the repository starts Prometheus and Grafana with both
     dashboards and the alerting rules below already loaded, against a proxy, three agents, and a set of simulated
-    services; `make down` removes it. See the [Basics Demo](demo.md) page.
+    services; `make down` removes it. See the [Basics Demo](basics-demo.md) page.
 
 ## Alerting rules
 

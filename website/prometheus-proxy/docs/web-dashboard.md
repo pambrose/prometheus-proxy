@@ -20,7 +20,7 @@ and how recent scrapes actually went.
 
     The repository's [`demos/basics`](https://github.com/pambrose/prometheus-proxy/tree/master/demos/basics)
     runs the dashboard with three agents, a set of simulated services, Prometheus, and Grafana, all on one machine:
-    `make up` in a clone's `demos/basics` starts it, and `make down` removes it. The [Basics Demo](demo.md) page
+    `make up` in a clone's `demos/basics` starts it, and `make down` removes it. The [Basics Demo](basics-demo.md) page
     walks through a failing target, paths discovered at runtime, and an evicted agent, with screenshots of each.
 
 ## Enabling it

@@ -24,7 +24,7 @@ nav = [
   ]},
   { "Getting Started" = [
     { "Quick Start" = "getting-started.md" },
-    { "Basics Demo" = "demo.md" },
+    { "Basics Demo" = "basics-demo.md" },
     { "Network Demo" = "network-demo.md" },
     { "Kubernetes Demo" = "kubernetes-demo.md" },
   ]},
@@ -113,10 +113,9 @@ icon = "fontawesome/brands/github"
 link = "https://github.com/pambrose/prometheus-proxy"
 
 # ----------------------------------------------------------------------------
-# Markdown extensions
+# Plugins
 # ----------------------------------------------------------------------------
 
-# attr_list - add HTML attributes to Markdown elements
 # Clicking an image opens it full size in a lightbox, GLightbox, which the theme loads from unpkg on a page that has
 # one; the screenshots are taken at twice the pixel density, so the lightbox shows the detail the page's column scales
 # away. The extension wraps each image in its link, so the pages give theirs none. A page's dark and light screenshots
@@ -126,6 +125,15 @@ link = "https://github.com/pambrose/prometheus-proxy"
 auto_themed = true
 auto_caption = true
 
+# The old address of a renamed page goes on working: it leaves a page there that sends the reader to the new one.
+[project.plugins.redirects.redirect_maps]
+"demo.md" = "basics-demo.md"
+
+# ----------------------------------------------------------------------------
+# Markdown extensions
+# ----------------------------------------------------------------------------
+
+# attr_list - add HTML attributes to Markdown elements
 [project.markdown_extensions.attr_list]
 
 # md_in_html - render Markdown inside HTML blocks (needed for grid cards)

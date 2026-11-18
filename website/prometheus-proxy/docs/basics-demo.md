@@ -1,3 +1,7 @@
+---
+icon: lucide/monitor-play
+---
+
 # Basics Demo
 
 The repository ships a demo that runs the whole system on one machine: the proxy with its

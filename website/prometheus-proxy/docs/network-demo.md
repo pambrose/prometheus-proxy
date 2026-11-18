@@ -1,9 +1,13 @@
+---
+icon: lucide/network
+---
+
 # Network Demo
 
-The [Basics Demo](demo.md) shows the proxy, its dashboard, and Grafana with a perfect network between the agents and the
-proxy. This second demo puts a simulated WAN there, the link through the firewall that the product exists to cross,
-and shows what a far, thin, dead, flaky, or missing link does, and how the proxy and agents cope. Every screenshot on
-this page comes from it.
+The [Basics Demo](basics-demo.md) shows the proxy, its dashboard, and Grafana with a perfect network between the agents
+and the proxy. This second demo puts a simulated WAN there, the link through the firewall that the product exists to
+cross, and shows what a far, thin, dead, flaky, or missing link does, and how the proxy and agents cope. Every
+screenshot on this page comes from it.
 
 The WAN is [Toxiproxy](https://github.com/Shopify/toxiproxy), with four links: one from each agent to each proxy. Each
 agent lists its link to the primary proxy first and its link to the standby second, so the dashboards name the link
