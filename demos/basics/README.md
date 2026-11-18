@@ -5,8 +5,8 @@ firewall, a set of simulated services, and Prometheus and Grafana, all on one la
 failures and recovery, redundancy, dynamic discovery, stale-agent eviction, per-team identities, and a misconfigured
 duplicate agent.
 
-The website's [Basics Demo](https://pambrose.github.io/prometheus-proxy/demo/) page walks through the same scenarios
-with screenshots of the dashboard and Grafana.
+The website's [Basics Demo](https://pambrose.github.io/prometheus-proxy/basics-demo/) page walks through the same
+scenarios with screenshots of the dashboard and Grafana.
 
 Proxy failover, filtering at the agent, and tracing through the firewall are in the [network demo](../network), which
 follows this one and puts a simulated WAN between the agents and the proxies.

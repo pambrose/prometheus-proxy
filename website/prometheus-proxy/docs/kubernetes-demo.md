@@ -1,7 +1,11 @@
+---
+icon: lucide/boxes
+---
+
 # Kubernetes Demo
 
-The [Basics Demo](demo.md) and the [Network Demo](network-demo.md) show the proxy, its dashboard, and the link through
-the firewall. This third demo deploys the same proxy and agent the way a platform team would run them: on two
+The [Basics Demo](basics-demo.md) and the [Network Demo](network-demo.md) show the proxy, its dashboard, and the link
+through the firewall. This third demo deploys the same proxy and agent the way a platform team would run them: on two
 [kind](https://kind.sigs.k8s.io/) clusters, with the project's own Helm charts, and Kubernetes doing the operating. It
 shows that the target cluster exposes nothing, that annotating a Service is all it takes for Prometheus to scrape it,
 that Kubernetes replaces a lost agent by itself, and what a change to the agent's config costs next to a change to its
@@ -161,8 +165,8 @@ seconds, 1 to 7. The agent's own re-read, `agent.discovery.reconcileIntervalSecs
 `./demo.sh remove-service` removes the annotation, and the path leaves `/discovery` within about 10 seconds, again
 without a restart.
 
-The [Basics Demo](demo.md) shows dynamic discovery itself, from a file; here Kubernetes drives it. targets-sync is the
-demo's: a discovery source in the agent that read Services itself would replace it.
+The [Basics Demo](basics-demo.md) shows dynamic discovery itself, from a file; here Kubernetes drives it. targets-sync
+is the demo's: a discovery source in the agent that read Services itself would replace it.
 
 ### Kubernetes replaces a deleted agent pod in about a second
 

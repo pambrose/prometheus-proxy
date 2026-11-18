@@ -76,7 +76,7 @@ make down    # stops the demo and removes its containers
 
 The demos use different ports, so they can run side by side. Each demo's README lists what it needs and has its full
 script, and the website's
-[Basics Demo](https://pambrose.github.io/prometheus-proxy/demo/),
+[Basics Demo](https://pambrose.github.io/prometheus-proxy/basics-demo/),
 [Network Demo](https://pambrose.github.io/prometheus-proxy/network-demo/), and
 [Kubernetes Demo](https://pambrose.github.io/prometheus-proxy/kubernetes-demo/) pages walk through the same scenarios
 with screenshots.

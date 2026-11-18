@@ -19,6 +19,7 @@ All notable changes to this project are documented in this file.
 
 - The README, the website's home page, and the basics and network demos' READMEs, pages, and tours say the Kubernetes demo needs kind, `kubectl`, and Helm as well as Docker where they point to it, and its own README and page say so up front
 - The clone commands for the demos and the Helm charts check out the latest release's tag (`--branch 4.5.0`, quietly, with `-c advice.detachedHead=false`), so the demo's scripts are the ones released with the images it pulls, rather than whatever `master` holds, and are never ahead of a release whose images aren't published yet. The release bump updates the tag in each (`RELEASE_VERSION_FILES` lists the files), and `make release-check` fails on one still on the previous release's
+- The website's Basics Demo page moved from `demo/` to `basics-demo/`, matching the other two demo pages; the old address redirects to it, `#` anchors included. The three demo pages have icons in the site's navigation
 
 ## [4.5.0] - 2026-11-17
 

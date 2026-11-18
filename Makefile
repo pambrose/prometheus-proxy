@@ -42,7 +42,7 @@ RELEASE_VERSION_FILES := README.md llms.txt etc/compose/proxy.yml \
 	src/test/kotlin/website/EmbeddedAgentExamples.txt src/test/kotlin/website/KubernetesExamples.txt \
 	docs/RELEASE.md .claude/skills/publishing-release/SKILL.md \
 	demos/basics/README.md demos/network/README.md demos/kubernetes/README.md \
-	website/prometheus-proxy/docs/demo.md website/prometheus-proxy/docs/network-demo.md \
+	website/prometheus-proxy/docs/basics-demo.md website/prometheus-proxy/docs/network-demo.md \
 	website/prometheus-proxy/docs/kubernetes-demo.md
 # The CI jobs that must have passed for the release commit, as workflow-file/job-name, separated by semicolons since
 # job names can hold spaces. make release itself runs only the tests and the distro build, so these are what cover
