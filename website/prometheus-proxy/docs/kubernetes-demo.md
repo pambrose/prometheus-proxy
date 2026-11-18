@@ -33,21 +33,35 @@ graph LR
   end
 ```
 
+## What you need
+
+The proxy and agent are the latest release's images, which each cluster pulls from Docker Hub, so there's nothing to
+build. On macOS or Linux, the demo needs only:
+
+- [Docker](https://docs.docker.com/get-started/get-docker/): Docker Desktop, or Docker Engine. kind runs each cluster's
+  node as a container.
+- [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) 0.33.0 or later,
+  [`kubectl`](https://kubernetes.io/docs/tasks/tools/), and [Helm](https://helm.sh/docs/intro/install/) 3 or 4.
+  `demo.sh` checks for each.
+- `git`, to clone the repository, and `make`. On macOS, the Xcode command-line tools (`xcode-select --install`) have
+  both.
+- `curl`, which the demo uses to wait for each service to answer.
+- A web browser.
+
 ## Running it
 
-You need Docker, a JDK 17 or later to run Gradle, [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation)
-0.33.0 or later, `kubectl`, [Helm](https://helm.sh/docs/intro/install/) 3 or 4, and a clone of the repository. The
-demo's commands run from its own directory, where `make help` lists its targets. From the clone's root:
+Clone the repository, then run the demo's commands from its own directory, where `make help` lists its targets:
 
 ```bash
-cd demos/kubernetes
-make up      # builds the jars and images, creates both clusters, installs everything, prints the URLs
+git clone https://github.com/pambrose/prometheus-proxy.git
+cd prometheus-proxy/demos/kubernetes
+make up      # creates both clusters, installs everything, prints the URLs
 make tour    # walks through every scenario below, pausing before each step
 make down    # deletes both clusters
 ```
 
-The first `make up` pulls the kind node image and builds the jars, and each new cluster pulls the Prometheus and Python
-images, which takes a few minutes. After that, `make up` on running clusters takes under a minute.
+The first `make up` pulls the kind node image, and each new cluster pulls its images, the proxy's and Prometheus's or
+the agent's and Python's, which takes a few minutes. After that, `make up` on running clusters takes under a minute.
 
 | What | URL |
 |---|---|

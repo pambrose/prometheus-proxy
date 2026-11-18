@@ -1,4 +1,4 @@
-.PHONY: default help up down status open tour logs screenshots _jars
+.PHONY: default help up up-local down status open tour logs screenshots
 
 # The network demo's own targets (README.md), so the demo is self-contained; the root Makefile has none. Run them from
 # this directory (`make up`), with `make -C demos/network up`, or with `make -f demos/network/Makefile up`: every path
@@ -22,13 +22,14 @@ help:  ## Show this help (list of targets)
 	@awk 'BEGIN {FS = ":.*?## "; printf "Usage: make <target>\n\nTargets:\n"} \
 		/^[a-zA-Z0-9_-]+:.*?## / {printf "  \033[36m%-24s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-# The images are built from the repository's jars, so the demo always runs the proxy and agent as they are in the code;
-# the root Makefile's jars target builds them.
-_jars:
-	@$(MAKE) --no-print-directory -C "$(REPO_DIR)" jars
-
-up: _jars  ## Build the jars and images from this checkout, start the demo, and print its URLs (needs Docker)
+# up runs the proxy and agent images of the latest release, from Docker Hub, unless that release predates what the demo
+# shows; then it builds them, as up-local always does, from this checkout's jars, which the root Makefile's jars target
+# builds, so the demo shows the code as it is.
+up:  ## Start the demo with the proxy and agent released on Docker Hub, and print its URLs (needs Docker)
 	@$(DEMO) up
+
+up-local:  ## The same, with the proxy and agent built from this checkout (needs a JDK 17 or later too)
+	@$(DEMO) up-local
 
 down:  ## Stop the demo and remove its containers and network
 	@$(DEMO) down
@@ -48,5 +49,5 @@ logs:  ## Follow the logs (SERVICE=name for one service: proxy, agent-branch, wa
 # Retakes the website's Network Demo screenshots from a demo built from this checkout, so they show the current
 # dashboard (needs Docker, Chrome, ImageMagick, cwebp). It's for maintaining the site, not for presenting, so it has no
 # `## ` description and `make help` leaves it out.
-screenshots: up
+screenshots: up-local
 	@cd "$(DEMO_DIR)" && ./bin/screenshots.sh

@@ -1,13 +1,20 @@
 #!/usr/bin/env bash
 # Drives the Prometheus Proxy network demo (see README.md): starts and stops it, and runs the scenarios a presenter
 # shows, most of them by changing the simulated WAN between the agents and the proxies. The Makefile beside it wraps the
-# lifecycle commands (`make up` builds the jars first, then runs `demo.sh up`). Run with no arguments for the list.
+# lifecycle commands (`make up` runs `demo.sh up`). Run with no arguments for the list.
 set -euo pipefail
 
 DEMO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$DEMO_DIR/../.." && pwd)"
 COMPOSE=(docker compose -f "$DEMO_DIR/docker/compose.yml")
+# The proxy and agent images the demo runs, under these tags whichever way they came: pulled from Docker Hub (up)
+# or built from this checkout (up-local). The other demos run the same tags, so there's one copy of each.
 IMAGES=(prometheus-proxy-demo/proxy:local prometheus-proxy-demo/agent:local)
+# Their releases on Docker Hub, in the same order, which up pulls at the latest release.
+RELEASED_IMAGES=(pambrose/prometheus-proxy pambrose/prometheus-agent)
+# The demo shows what came after this release, so until a later one is out, up builds the proxy and agent from this
+# checkout, as up-local does. When the demo comes to use something unreleased, set this to the latest release.
+NEEDS_RELEASE_AFTER=4.4.2
 AGENTS=(agent-hq agent-branch)
 PROXIES=(proxy proxy-standby)
 # The WAN's links (config/toxiproxy.json), one per agent per proxy. An agent's are named for its site, the part of its
@@ -73,7 +80,8 @@ usage() {
 Usage: $(basename "$0") <command> [argument]
 
 Lifecycle:
-  up                       Build the images from this checkout's jars and start the demo
+  up                       Start the demo with the proxy and agent released on Docker Hub
+  up-local                 Start it with the proxy and agent built from this checkout (needs a JDK 17 or later)
   down                     Stop the demo and remove its containers and network
   status                   Show the containers, the WAN's links and their toxics, and the URLs
   open                     Open both proxy dashboards, Grafana, and Prometheus in the browser
@@ -242,21 +250,78 @@ restart_branch() {
   NETWORK_DEMO_BRANCH_CONFIG="$1" "${COMPOSE[@]}" up --detach --no-deps agent-branch
 }
 
-cmd_up() {
-  local jar old_ids id
-  for jar in prometheus-proxy prometheus-agent; do
-    [[ -f "$REPO_DIR/build/libs/$jar.jar" ]] ||
-      die "build/libs/$jar.jar is missing; start the demo with 'make up' in demos/network, which builds the jars"
+# Whether version $1 (x.y.z) is later than $2. bash 3.2, macOS's, has no sort -V everywhere, so field by field.
+version_after() {
+  local IFS=. i
+  local -a have want
+  read -r -a have <<<"$1"
+  read -r -a want <<<"$2"
+  for i in 0 1 2; do
+    ((${have[i]:-0} > ${want[i]:-0})) && return 0
+    ((${have[i]:-0} < ${want[i]:-0})) && return 1
   done
+  return 1
+}
+
+# The latest release: the version the docs give, whose images are on Docker Hub.
+latest_release() { make -s --no-print-directory -C "$REPO_DIR" site-version; }
+
+check_docker() {
   command -v docker >/dev/null 2>&1 || die "docker is not on the PATH"
   docker info >/dev/null 2>&1 || die "Docker isn't running"
+}
 
-  # The jars change on every build (their BuildConfig carries the build time), so each start builds new images and
-  # leaves the previous ones untagged; remember them to remove afterwards. One the basics demo still runs is in use,
-  # and stays.
+# Tags a release's proxy and agent images from Docker Hub as the demo's, pulling one only if Docker doesn't have it: a
+# release's images don't change, and the demo then starts again without a network connection. pull_images <version>
+pull_images() {
+  local i released
+  for i in 0 1; do
+    released="${RELEASED_IMAGES[i]}:$1"
+    if ! docker image inspect "$released" >/dev/null 2>&1; then
+      docker pull --quiet "$released" >/dev/null ||
+        die "can't pull $released; check the network, or run 'make up-local' to build the images from this checkout"
+    fi
+    docker tag "$released" "${IMAGES[i]}"
+  done
+}
+
+# The proxy and agent of the latest release, unless it predates what the demo shows.
+cmd_up() {
+  local release
+  check_docker
+  release="$(latest_release)" || die "can't tell the latest release from the docs (make site-version)"
+  if version_after "$release" "$NEEDS_RELEASE_AFTER"; then
+    start_demo "$release"
+  else
+    wrap "" "" "The latest release, $release, predates this demo, so it runs the proxy and agent built from this" \
+      "checkout, which takes a JDK 17 or later."
+    start_demo
+  fi
+}
+
+cmd_up_local() {
+  check_docker
+  start_demo
+}
+
+# Starts the demo, or brings a running one up to date, with a release's proxy and agent (start_demo <version>) or
+# with ones built from this checkout (start_demo).
+start_demo() {
+  local old_ids id
+  # The images the demo ran, to remove below once nothing tags them: each build makes new ones, since the jars'
+  # BuildConfig carries the build time, and a release's tags replace a build's. One the basics demo still runs is in
+  # use, and stays.
   old_ids="$(docker image inspect -f '{{.Id}}' "${IMAGES[@]}" 2>/dev/null || true)"
 
-  "${COMPOSE[@]}" up --detach --build --wait --wait-timeout 180
+  if [[ $# -gt 0 ]]; then
+    bold "Starting the demo with the proxy and agent of release $1, from Docker Hub"
+    pull_images "$1"
+    "${COMPOSE[@]}" up --detach --wait --wait-timeout 180
+  else
+    bold "Building the proxy and agent from this checkout"
+    make --no-print-directory -C "$REPO_DIR" jars
+    "${COMPOSE[@]}" up --detach --build --wait --wait-timeout 180
+  fi
   # Compose recreates a container when its own config changes, not when a file it mounts does, and neither Prometheus
   # nor Grafana reliably notices a changed file on its own. Reload Prometheus's config and rules (SIGHUP), and restart
   # Grafana for its dashboard, so a demo started from an older checkout runs this one's.
@@ -581,6 +646,7 @@ main() {
   [[ $# -gt 0 ]] && shift
   case "$cmd" in
   up) cmd_up ;;
+  up-local) cmd_up_local ;;
   down) cmd_down ;;
   status) cmd_status ;;
   open) cmd_open ;;

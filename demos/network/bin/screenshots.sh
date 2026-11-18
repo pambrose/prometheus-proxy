@@ -74,7 +74,7 @@ CHROME_BIN="$(find_chrome)"
 command -v magick >/dev/null 2>&1 || die "ImageMagick 7 ('magick') is not on the PATH"
 command -v cwebp >/dev/null 2>&1 || die "cwebp is not on the PATH"
 curl -fsS -o /dev/null "$DASHBOARD_URL" 2>/dev/null ||
-  die "the demo isn't running at $DASHBOARD_URL; start it with 'make up' in demos/network"
+  die "the demo isn't running at $DASHBOARD_URL; start it with 'make up-local' in demos/network"
 
 WORK="$(mktemp -d)"
 

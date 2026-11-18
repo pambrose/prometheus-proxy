@@ -30,25 +30,33 @@ same proxy and agent with their Helm charts on two kind clusters.
 The proxies see every agent at the WAN's address, as they would behind a NAT. Each agent's endpoints are its two
 links, so the dashboards' "via" line names the link it connected through.
 
-The proxy and agent images are built from this checkout, so the demo always runs the proxy and agent as they are in
-the code. They're the basics demo's images, `prometheus-proxy-demo/{proxy,agent}:local`, so the two demos share
-them.
+## What you need
+
+The proxy and agent are the latest release's images, from Docker Hub, the same ones the basics demo runs, so there's
+nothing to build. On macOS or Linux, the demo needs only:
+
+- [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2: Docker Desktop, or Docker Engine with the
+  Compose plugin.
+- `git`, to clone the repository, and `make`. On macOS, the Xcode command-line tools (`xcode-select --install`) have
+  both.
+- `curl`, which the demo uses to wait for each service to answer.
+- A web browser.
 
 ## Quick start
 
-You need Docker with Compose v2, and a JDK 17 or later to run Gradle. The demo's commands run from its own directory,
-where `make help` lists its targets. From the repository root:
+Clone the repository, then run the demo's commands from its own directory, where `make help` lists its targets:
 
 ```bash
-cd demos/network
-make up      # builds the jars and images, starts everything, and prints the URLs
+git clone https://github.com/pambrose/prometheus-proxy.git
+cd prometheus-proxy/demos/network
+make up      # pulls the images, starts everything, and prints the URLs
 make tour    # walks through the presenter's script below, pausing before each step
 make down    # stops it and removes its containers and network
 ```
 
-The first `make up` pulls the Prometheus, Grafana, Zipkin, Toxiproxy, and Python images and builds the jars, which
-takes a few minutes. After that it starts in under a minute, and runs without a network connection. **Run it once
-before the meeting.**
+The first `make up` pulls the proxy, agent, Prometheus, Grafana, Zipkin, Toxiproxy, and Python images, which takes a few
+minutes. After that it starts in under a minute, and runs without a network connection. **Run it once before the
+meeting.**
 
 | What | URL |
 |---|---|
@@ -268,7 +276,7 @@ The optional `[agent]` is `agent-branch` (the default) or `agent-hq`.
 
 | File | What it sets up |
 |---|---|
-| `docker/compose.yml` | The services, their ports, the WAN's network aliases, and the images built from this checkout |
+| `docker/compose.yml` | The services, their ports, the WAN's network aliases, and their images |
 | `config/toxiproxy.json` | The WAN's four links: each one's name, the port it listens on, and the proxy it reaches |
 | `config/proxy.conf` | The dashboard, service discovery, a shared agent token, tracing, and a 30-second eviction limit, so part 5 fits a demo |
 | `config/proxy-standby.conf` | The standby: `proxy.conf`, with its own scrape address for service discovery |
@@ -278,8 +286,8 @@ The optional `[agent]` is `agent-branch` (the default) or `agent-hq`.
 | `prometheus/network-alerts.yml` | The fast demo alerts: a target down, an agent evicted, and no agents connected |
 | `grafana/` | The provisioned datasource, dashboard folder, and the network dashboard |
 | `app/network_app.py` | The simulated services |
-| `Makefile` | The demo's targets: `make up` (which builds the jars first), `down`, `status`, `open`, `tour`, and `logs`, which `make help` lists, and `screenshots`, which it leaves out, since it's for maintaining the site |
-| `demo.sh` | Starting, stopping, and the scenarios. It drives the WAN with `toxiproxy-cli` inside the `wan` container, under fixed toxic names, so `heal` finds them all |
+| `Makefile` | The demo's targets: `make up`, `make up-local` (which runs the proxy and agent built from this checkout, for trying a change to them), `down`, `status`, `open`, `tour`, and `logs`, which `make help` lists, and `screenshots`, which it leaves out, since it's for maintaining the site |
+| `demo.sh` | Starting, stopping, and the scenarios. It drives the WAN with `toxiproxy-cli` inside the `wan` container, under fixed toxic names, so `heal` finds them all. Its `NEEDS_RELEASE_AFTER` is the latest release that predates what the demo shows: until a later one is out, `make up` builds the proxy and agent from this checkout, as `make up-local` does, so set it to the latest release when the demo comes to use something unreleased |
 | `bin/screenshots.sh` | The Network Demo page's screenshots, in the dark and light themes. `make screenshots` builds and starts the demo, waits a minute so the agents' uptimes read in minutes, plays parts 2 to 7, and writes them to `website/prometheus-proxy/docs/images/network-demo/` (needs Chrome, ImageMagick 7, and `cwebp`). While checking a change, `SKIP_UPTIME_WAIT=1` skips the minute, and `WAIT_SECS` sets how long each wait for a scene may take before the script fails (default 150): `make screenshots SKIP_UPTIME_WAIT=1 WAIT_SECS=60` |
 
 The toxics behind each scenario: `far` is a `latency` toxic on both streams of both of the agent's links; `thin` a

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Drives the Prometheus Proxy Kubernetes demo (see README.md): creates and deletes its two kind clusters, installs the
 # proxy and agent charts in them, and runs the scenarios a presenter shows. The Makefile beside it wraps the lifecycle
-# commands (`make up` builds the jars first, then runs `demo.sh up`). Run with no arguments for the list.
+# commands (`make up` runs `demo.sh up`). Run with no arguments for the list.
 set -euo pipefail
 
 DEMO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -17,9 +17,18 @@ TK=(kubectl --context "kind-$TARGET")
 MH=(helm --kube-context "kind-$MONITORING" --namespace monitoring)
 TH=(helm --kube-context "kind-$TARGET" --namespace monitoring)
 
-# Built from this checkout's jars, as the other demos build them, so they share the images.
+# The proxy and agent images up-local builds from this checkout's jars and loads into the clusters, the other demos'
+# tags, so they share the images. up instead installs the charts with their own images, pambrose/prometheus-{proxy,agent}
+# at the latest release, which each cluster pulls from Docker Hub.
 PROXY_IMAGE=prometheus-proxy-demo/proxy:local
 AGENT_IMAGE=prometheus-proxy-demo/agent:local
+RELEASED_IMAGES=(pambrose/prometheus-proxy pambrose/prometheus-agent)
+# The demo shows what came after this release, so until a later one is out, up builds the proxy and agent from this
+# checkout, as up-local does. When the demo comes to use something unreleased, set this to the latest release.
+NEEDS_RELEASE_AFTER=4.4.2
+# The chart values that choose the proxy's and the agent's images, which up and up-local set.
+PROXY_IMAGE_VALUES=()
+AGENT_IMAGE_VALUES=()
 # The kind release the node image in kind/*.yaml was built for.
 MIN_KIND_VERSION=0.33.0
 # The services `make up` deploys (k8s/services.yaml); part 2 adds search (k8s/search.yaml).
@@ -74,7 +83,8 @@ usage() {
 Usage: $(basename "$0") <command> [argument]
 
 Lifecycle:
-  up                       Build the images from this checkout's jars, create both kind clusters, and install the demo
+  up                       Create both kind clusters and install the demo, with the proxy and agent released on Docker Hub
+  up-local                 The same, with the proxy and agent built from this checkout (needs a JDK 17 or later)
   down                     Delete both kind clusters
   status                   Show both clusters' pods and Services, the Helm releases, and the URLs
   open                     Open the proxy dashboard and Prometheus's targets in the browser
@@ -118,13 +128,18 @@ version_at_least() {
   return 0
 }
 
+# Whether version $1 (x.y.z) is later than $2.
+version_after() { [[ "$1" != "$2" ]] && version_at_least "$1" "$2"; }
+
+# The latest release: the version the docs give, whose images are on Docker Hub.
+latest_release() { make -s --no-print-directory -C "$REPO_DIR" site-version; }
+
 need() { command -v "$1" >/dev/null 2>&1 || die "$1 is not on the PATH; $2"; }
 
 check_tools() {
   local kind_version helm_version
   need docker "the demo needs Docker"
   docker info >/dev/null 2>&1 || die "Docker isn't running"
-  docker buildx version >/dev/null 2>&1 || die "docker buildx is missing; the demo builds its images with it"
   need kind "install kind $MIN_KIND_VERSION or later (https://kind.sigs.k8s.io/)"
   need kubectl "install kubectl (https://kubernetes.io/docs/tasks/tools/)"
   need helm "install Helm 3 or 4 (https://helm.sh/docs/intro/install/)"
@@ -184,11 +199,14 @@ image_id() { docker image inspect -f '{{.Id}}' "$1" 2>/dev/null || true; }
 
 build_images() {
   local old_ids id
+  docker buildx version >/dev/null 2>&1 || die "docker buildx is missing; the demo builds its images with it"
+  bold "Building the proxy and agent from this checkout"
+  make --no-print-directory -C "$REPO_DIR" jars
   # The jars change on every build (their BuildConfig carries the build time), so each build makes new images and
   # leaves the previous ones untagged; remember them to remove afterwards. One another demo still runs is in use, and
   # stays.
   old_ids="$(docker image inspect -f '{{.Id}}' "$PROXY_IMAGE" "$AGENT_IMAGE" 2>/dev/null || true)"
-  bold "Building $PROXY_IMAGE and $AGENT_IMAGE from this checkout's jars"
+  bold "Building $PROXY_IMAGE and $AGENT_IMAGE from the jars"
   # --load, so the image lands in Docker's own store whichever builder is selected; kind loads it from there. Without
   # --provenance=false, the build's provenance attestation, which carries its time, gave the same jars a new image ID
   # on every build, so each `make up` loaded the images again and replaced the pods.
@@ -340,8 +358,7 @@ install_monitoring() {
     "${MK[@]}" -n monitoring rollout restart deployment/prometheus >/dev/null
   fi
   "${MH[@]}" upgrade --install prometheus-proxy "$REPO_DIR/charts/prometheus-proxy" \
-    -f "$DEMO_DIR/values/proxy.yaml" --set-file "config=$DEMO_DIR/config/proxy.conf" \
-    --set-string "podAnnotations.prometheus-proxy-demo/image=$(image_id "$PROXY_IMAGE")" \
+    -f "$DEMO_DIR/values/proxy.yaml" --set-file "config=$DEMO_DIR/config/proxy.conf" "${PROXY_IMAGE_VALUES[@]}" \
     --wait --timeout 5m >/dev/null
   "${MK[@]}" -n monitoring rollout status deployment/prometheus --timeout 180s >/dev/null
 }
@@ -368,8 +385,7 @@ install_target() {
   "${TK[@]}" apply -f "$DEMO_DIR/k8s/services.yaml" >/dev/null
   "${TH[@]}" upgrade --install prometheus-agent "$REPO_DIR/charts/prometheus-agent" \
     -f "$DEMO_DIR/values/agent.yaml" --set-file "config=$DEMO_DIR/config/agent.conf" \
-    --set "proxy.hostname=$node_ip:$node_port" \
-    --set-string "podAnnotations.prometheus-proxy-demo/image=$(image_id "$AGENT_IMAGE")" \
+    --set "proxy.hostname=$node_ip:$node_port" "${AGENT_IMAGE_VALUES[@]}" \
     --wait --timeout 5m >/dev/null
   "${TK[@]}" -n monitoring rollout status deployment/targets-sync --timeout 180s >/dev/null
   for service in "${SERVICES[@]}"; do
@@ -377,25 +393,67 @@ install_target() {
   done
 }
 
-cmd_up() {
-  local jar name port
-  for jar in prometheus-proxy prometheus-agent; do
-    [[ -f "$REPO_DIR/build/libs/$jar.jar" ]] ||
-      die "build/libs/$jar.jar is missing; start the demo with 'make up' in demos/kubernetes, which builds the jars"
-  done
+# Checks the ports and the tools, before anything is built, pulled, or created.
+check_up() {
+  local port
   for port in "$DASHBOARD_PORT" "$PROMETHEUS_PORT" "$PROXY_PORT"; do
     [[ "$port" =~ ^[0-9]+$ ]] || die "'$port' isn't a port number"
   done
   check_tools
-  build_images
+}
+
+# The proxy and agent of the latest release, unless it predates what the demo shows.
+cmd_up() {
+  local release image
+  check_up
+  release="$(latest_release)" || die "can't tell the latest release from the docs (make site-version)"
+  if ! version_after "$release" "$NEEDS_RELEASE_AFTER"; then
+    wrap "" "" "The latest release, $release, predates this demo, so it runs the proxy and agent built from this" \
+      "checkout, which takes a JDK 17 or later."
+    start_demo local
+    return
+  fi
+  # A cluster that can't pull an image only says so as its pod waits, so check that both are there first.
+  for image in "${RELEASED_IMAGES[@]}"; do
+    docker manifest inspect "$image:$release" >/dev/null 2>&1 ||
+      die "can't find $image:$release on Docker Hub; check the network, or run 'make up-local' to build the images" \
+        "from this checkout"
+  done
+  bold "Installing the demo with the proxy and agent of release $release, from Docker Hub"
+  # The charts' own images, at the release rather than the chart's appVersion, which is the same once it's bumped.
+  PROXY_IMAGE_VALUES=(--set-string "image.tag=$release")
+  AGENT_IMAGE_VALUES=(--set-string "image.tag=$release")
+  start_demo
+}
+
+cmd_up_local() {
+  check_up
+  start_demo local
+}
+
+# Creates the clusters and installs the demo, or brings a running one up to date, with the images up chose
+# (start_demo) or with ones built from this checkout (start_demo local).
+start_demo() {
+  local name built="${1:-}"
+  if [[ "$built" == local ]]; then
+    build_images
+    # Loaded into the clusters, so the nodes never pull them, with an annotation naming each image's ID, so a rebuilt
+    # image replaces its pod.
+    PROXY_IMAGE_VALUES=(--set "image.repository=${PROXY_IMAGE%:*}" --set-string "image.tag=${PROXY_IMAGE#*:}"
+      --set image.pullPolicy=Never --set-string "podAnnotations.prometheus-proxy-demo/image=$(image_id "$PROXY_IMAGE")")
+    AGENT_IMAGE_VALUES=(--set "image.repository=${AGENT_IMAGE%:*}" --set-string "image.tag=${AGENT_IMAGE#*:}"
+      --set image.pullPolicy=Never --set-string "podAnnotations.prometheus-proxy-demo/image=$(image_id "$AGENT_IMAGE")")
+  fi
 
   for name in "$MONITORING" "$TARGET"; do
     cluster_exists "$name" || create_cluster "$name"
   done
   check_ports
-  # Each image goes only to the cluster that runs it. kind skips an image the node already has.
-  kind load docker-image "$PROXY_IMAGE" --name "$MONITORING"
-  kind load docker-image "$AGENT_IMAGE" --name "$TARGET"
+  if [[ "$built" == local ]]; then
+    # Each image goes only to the cluster that runs it. kind skips an image the node already has.
+    kind load docker-image "$PROXY_IMAGE" --name "$MONITORING"
+    kind load docker-image "$AGENT_IMAGE" --name "$TARGET"
+  fi
 
   # Each cluster's own objects first: their namespaces hold the token's Secrets. Prometheus and targets-sync wait for
   # the ConfigMaps install_monitoring and install_target create.
@@ -781,6 +839,7 @@ main() {
   [[ $# -gt 0 ]] && shift
   case "$cmd" in
   up) cmd_up ;;
+  up-local) cmd_up_local ;;
   down) cmd_down ;;
   status) cmd_status ;;
   open) cmd_open ;;

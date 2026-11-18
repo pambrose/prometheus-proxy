@@ -1,14 +1,8 @@
 # Values for the prometheus-agent chart (charts/prometheus-agent) in pp-target. demo.sh installs it as the
-# prometheus-agent release in the monitoring namespace, with --set-file config=config/agent.conf, the proxy's address
-# (proxy.hostname, the pp-monitoring node's address and the proxy's gRPC NodePort), and an annotation naming the
-# image's ID, so a rebuilt image replaces the pod.
-
-image:
-  # Built from this checkout's agent jar (etc/docker/agent.Dockerfile), shared with the other demos, and loaded into
-  # the cluster with `kind load docker-image`, so the node never pulls it.
-  repository: prometheus-proxy-demo/agent
-  tag: local
-  pullPolicy: Never
+# prometheus-agent release in the monitoring namespace, with --set-file config=config/agent.conf and the proxy's
+# address (proxy.hostname, the pp-monitoring node's address and the proxy's gRPC NodePort), and chooses the image: the
+# chart's own, pambrose/prometheus-agent, at the latest release (make up), or the one built from this checkout and
+# loaded into the cluster, with an annotation naming its ID, so a rebuilt image replaces the pod (make up-local).
 
 # The proxy's token, from the agent-token Secret demo.sh creates in both clusters.
 agentToken:

@@ -27,27 +27,37 @@ the deployment itself.
                 Prometheus :9290 (5s scrapes, 4s timeout)        dashboard :8294        scrape port :8280
 ```
 
-The proxy and agent images are built from this checkout, so the demo always runs the proxy and agent as they are in
-the code. They're the other demos' images, `prometheus-proxy-demo/{proxy,agent}:local`, and `make up` loads each into
-the cluster that runs it, so neither cluster pulls them.
+## What you need
+
+The proxy and agent are the latest release's images, which each cluster pulls from Docker Hub, so there's nothing to
+build. On macOS or Linux, the demo needs only:
+
+- [Docker](https://docs.docker.com/get-started/get-docker/): Docker Desktop, or Docker Engine. kind runs each cluster's
+  node as a container.
+- [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) 0.33.0 or later,
+  [`kubectl`](https://kubernetes.io/docs/tasks/tools/), and [Helm](https://helm.sh/docs/intro/install/) 3 or 4.
+  `demo.sh` checks for each.
+- `git`, to clone the repository, and `make`. On macOS, the Xcode command-line tools (`xcode-select --install`) have
+  both.
+- `curl`, which the demo uses to wait for each service to answer.
+- A web browser.
 
 ## Quick start
 
-You need Docker, a JDK 17 or later to run Gradle, [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation)
-0.33.0 or later, `kubectl`, and [Helm](https://helm.sh/docs/intro/install/) 3 or 4. `demo.sh` checks for each. The
-demo's commands run from its own directory, where `make help` lists its targets. From the repository root:
+Clone the repository, then run the demo's commands from its own directory, where `make help` lists its targets:
 
 ```bash
-cd demos/kubernetes
-make up      # builds the jars and images, creates both clusters, installs everything, and prints the URLs
+git clone https://github.com/pambrose/prometheus-proxy.git
+cd prometheus-proxy/demos/kubernetes
+make up      # creates both clusters, installs everything, and prints the URLs
 make tour    # walks through the presenter's script below, pausing before each step
 make down    # deletes both clusters
 ```
 
-The first `make up` pulls the kind node image and builds the jars, and each new cluster pulls the Prometheus and Python
-images, which takes a few minutes. After that, `make up` on running clusters takes under a minute. `make down` deletes
-the clusters, and the images inside them, so the next `make up` needs a network connection again. **Run it once before
-the meeting, and leave it running.**
+The first `make up` pulls the kind node image, and each new cluster pulls its images, the proxy's and Prometheus's or
+the agent's and Python's, which takes a few minutes. After that, `make up` on running clusters takes under a minute.
+`make down` deletes the clusters, and the images inside them, so the next `make up` needs a network connection again.
+**Run it once before the meeting, and leave it running.**
 
 | What | URL |
 |---|---|
@@ -183,8 +193,8 @@ The basics demo shows dynamic discovery itself, from a file; this part shows Kub
 |---|---|
 | `kind/pp-monitoring.yaml` | The monitoring cluster: its node image, and the host ports kind publishes its NodePorts on |
 | `kind/pp-target.yaml` | The target cluster: its node image, no host ports, and the kubelet's 5-second `syncFrequency` for part 2 |
-| `values/proxy.yaml` | The proxy chart's values: the image built from this checkout, the token's Secret, the dashboard, and a NodePort `agentService` |
-| `values/agent.yaml` | The agent chart's values: the image, the token's Secret, discovery from `agent-targets` every 5 seconds, and `AGENT_NAME` from the pod's name |
+| `values/proxy.yaml` | The proxy chart's values: the token's Secret, the dashboard, and a NodePort `agentService` |
+| `values/agent.yaml` | The agent chart's values: the token's Secret, discovery from `agent-targets` every 5 seconds, and `AGENT_NAME` from the pod's name |
 | `config/proxy.conf` | The proxy's config, which `demo.sh` passes to the chart with `--set-file`: the dashboard and its link into Prometheus, and service discovery |
 | `config/agent.conf` | The agent's main config: its scrape timeout, and its one static path, its own metrics |
 | `config/agent-change.conf` | Part 4's change: the agent's JVM metrics, which `change-config` appends to `agent.conf` |
@@ -195,16 +205,19 @@ The basics demo shows dynamic discovery itself, from a file; this part shows Kub
 | `prometheus/prometheus.yml` | One HTTP service discovery job against the proxy |
 | `app/services_app.py` | The simulated services |
 | `sync/targets_sync.py` | targets-sync |
-| `Makefile` | The demo's targets: `make up` (which builds the jars first), `down`, `status`, `open`, `tour`, and `logs`, which `make help` lists, and `screenshots`, which it leaves out, since it's for maintaining the site |
-| `demo.sh` | Creating and deleting the clusters, installing the charts, and the scenarios |
+| `Makefile` | The demo's targets: `make up`, `make up-local` (which runs the proxy and agent built from this checkout, for trying a change to them), `down`, `status`, `open`, `tour`, and `logs`, which `make help` lists, and `screenshots`, which it leaves out, since it's for maintaining the site |
+| `demo.sh` | Creating and deleting the clusters, installing the charts, and the scenarios. Its `NEEDS_RELEASE_AFTER` is the latest release that predates what the demo shows: until a later one is out, `make up` builds the proxy and agent from this checkout, as `make up-local` does, so set it to the latest release when the demo comes to use something unreleased |
 | `bin/screenshots.sh` | The Kubernetes Demo page's screenshots, in the dark and light themes. `make screenshots` builds and starts the demo, waits a minute so the agent's uptime reads in minutes, plays parts 1 to 3, and writes them to `website/prometheus-proxy/docs/images/kubernetes-demo/` (needs Chrome, ImageMagick 7, and `cwebp`). While checking a change, `SKIP_UPTIME_WAIT=1` skips the minute, and `WAIT_SECS` sets how long each wait for a scene may take before the script fails (default 150) |
 
 How `make up` wires the two clusters together:
 
-- **The images.** It builds `prometheus-proxy-demo/{proxy,agent}:local` from `etc/docker/*.Dockerfile`, as the other
-  demos do, and `kind load`s the proxy's into `pp-monitoring` and the agent's into `pp-target`. The charts run them
-  with `pullPolicy: Never`, and with the image's ID as a pod annotation, so a rebuilt image replaces the pod. The
-  images are built without a provenance attestation, which would give the same jars a new image ID on every build.
+- **The images.** It installs each chart with its own image, `pambrose/prometheus-proxy` or `pambrose/prometheus-agent`,
+  at the latest release, the version the docs give (`make site-version`), and each cluster pulls it from Docker Hub.
+  `make up-local` instead builds `prometheus-proxy-demo/{proxy,agent}:local` from `etc/docker/*.Dockerfile`, as the
+  other demos do, and `kind load`s the proxy's into `pp-monitoring` and the agent's into `pp-target`; the charts run
+  them with `pullPolicy: Never`, and with the image's ID as a pod annotation, so a rebuilt image replaces the pod. Those
+  images are built without a provenance attestation, which would give the same jars a new image ID on every build. A
+  pulled release can't be loaded that way: Docker holds it for one platform, and `kind load` imports every platform.
 - **The link.** The proxy chart's `agentService` is a NodePort, since kind has no load balancer. `demo.sh` reads its
   port, and `pp-monitoring`'s node address on Docker's `kind` network, which both clusters' nodes are on, and installs
   the agent chart with `--set proxy.hostname=<address>:<port>`. A real target cluster would dial a load balancer or an

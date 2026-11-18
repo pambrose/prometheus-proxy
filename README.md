@@ -60,18 +60,22 @@ it one step at a time: what to open, what to look for, and how each step does wh
 | [Network](demos/network) | The same proxy and agents with a simulated WAN between them, and a standby proxy. A far link, a thin one fixed by filtering at the agent, a proxy that goes away, a link that dies silently, a flaky link traced in Zipkin, and the whole WAN going down. | 7 parts, about 21 minutes |
 | [Kubernetes](demos/kubernetes) | The project's Helm charts on two kind clusters. The target cluster exposes nothing, annotating a Service is all it takes for Prometheus to scrape it, Kubernetes replaces a lost agent by itself, and a config change costs a restart where a target change doesn't. | 4 parts, about 11 minutes |
 
-Start with the basics demo. You need Docker with Compose v2 and a JDK 17 or later; from a clone of the repository:
+Start with the basics demo. The proxy and agent are the released images, from Docker Hub, so there's nothing to build:
+on macOS or Linux, it needs only [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2, `git`,
+`make`, `curl`, and a browser.
 
 ```bash
-cd demos/basics
-make up      # builds the proxy and agent, starts everything, and prints the URLs
+git clone https://github.com/pambrose/prometheus-proxy.git
+cd prometheus-proxy/demos/basics
+make up      # pulls the images, starts everything, and prints the URLs
 make tour    # the guided tour
 make down    # stops the demo and removes its containers
 ```
 
 The demos use different ports, so they can run side by side. The Kubernetes demo also needs
-[kind](https://kind.sigs.k8s.io/), `kubectl`, and [Helm](https://helm.sh/). Each demo's README has its full script, and
-the website's [Basics Demo](https://pambrose.github.io/prometheus-proxy/demo/),
+[kind](https://kind.sigs.k8s.io/) 0.33.0 or later, `kubectl`, and [Helm](https://helm.sh/) 3 or 4. Each demo's README
+lists what it needs and has its full script, and the website's
+[Basics Demo](https://pambrose.github.io/prometheus-proxy/demo/),
 [Network Demo](https://pambrose.github.io/prometheus-proxy/network-demo/), and
 [Kubernetes Demo](https://pambrose.github.io/prometheus-proxy/kubernetes-demo/) pages walk through the same scenarios
 with screenshots.

@@ -135,7 +135,8 @@ class CiHygieneTest : StringSpec() {
 
     // Each demo's compose file (demos/<name>/docker/compose.yml) pulls its third-party images, and check-rules
     // validates each demo's Prometheus config with the Makefile's promtool, so a demo runs that Prometheus. Their
-    // proxy and agent images are built from this checkout, tagged :local, so have no digest.
+    // proxy and agent images are tagged :local, whether demo.sh pulled them from Docker Hub at the latest release or
+    // built them from this checkout, so have no digest.
     "every image a demo pulls should be pinned by digest, its Prometheus the Makefile's" {
       val composeFiles = demoComposeFiles.map { it.invariantSeparatorsPath }
       composeFiles shouldContainAll listOf(BASICS_DEMO_COMPOSE, NETWORK_DEMO_COMPOSE)
@@ -157,8 +158,8 @@ class CiHygieneTest : StringSpec() {
     // The Kubernetes demo (demos/kubernetes) has no compose file: its kind clusters' node image is in its kind configs,
     // and Prometheus and the Python image its services and targets-sync run on are in its manifests. check-rules
     // validates its Prometheus config with the Makefile's promtool, so it runs that Prometheus too. Its proxy and agent
-    // images are built from this checkout and loaded into the clusters, and the charts name them through its values
-    // files, not here.
+    // images are the charts' own at the latest release, or ones built from this checkout and loaded into the clusters,
+    // which demo.sh names on helm's command line, not here.
     "every image the Kubernetes demo runs should be pinned by digest, its Prometheus the Makefile's" {
       val images = kubernetesDemoFiles.flatMap(::pulledImages)
       images.map { it.substringBefore(":") }.distinct() shouldContainAll

@@ -47,22 +47,32 @@ flowchart TB
   style inside stroke:#c0392b,stroke-width:2px,stroke-dasharray:6 4
 ```
 
-The proxy and agent images are built from this checkout, so the demo always shows the dashboard as it is in the code.
+## What you need
+
+The proxy and agent are the latest release's images, from Docker Hub, so there's nothing to build. On macOS or Linux,
+the demo needs only:
+
+- [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2: Docker Desktop, or Docker Engine with the
+  Compose plugin.
+- `git`, to clone the repository, and `make`. On macOS, the Xcode command-line tools (`xcode-select --install`) have
+  both.
+- `curl`, which the demo uses to wait for each service to answer.
+- A web browser.
 
 ## Quick start
 
-You need Docker with Compose v2, and a JDK 17 or later to run Gradle. The demo's commands run from its own directory,
-where `make help` lists its targets. From the repository root:
+Clone the repository, then run the demo's commands from its own directory, where `make help` lists its targets:
 
 ```bash
-cd demos/basics
-make up      # builds the jars and images, starts everything, and prints the URLs
+git clone https://github.com/pambrose/prometheus-proxy.git
+cd prometheus-proxy/demos/basics
+make up      # pulls the images, starts everything, and prints the URLs
 make tour    # walks through the presenter's script below, pausing before each step
 make down    # stops it and removes its containers, network, and volume
 ```
 
-The first `make up` pulls the Prometheus, Grafana, and Python images and builds the jars, which takes a few minutes.
-After that it starts in under a minute, and runs without a network connection. **Run it once before the meeting.**
+The first `make up` pulls the proxy, agent, Prometheus, Grafana, and Python images, which takes a few minutes. After
+that it starts in under a minute, and runs without a network connection. **Run it once before the meeting.**
 
 | What | URL |
 |---|---|
@@ -261,7 +271,7 @@ The services are `orders`, `payments`, `inventory`, `catalog`, and `shipping`, p
 
 | File | What it sets up |
 |---|---|
-| `docker/compose.yml` | The services, their ports, and the images built from this checkout |
+| `docker/compose.yml` | The services, their ports, and their images |
 | `config/proxy.conf` | The dashboard, service discovery, the per-agent identities, and a 30-second eviction limit, so part 7 fits a demo |
 | `config/agent-duplicate.conf` | agent-east's config under another name, for part 9 |
 | `config/agent-*.conf` | Each agent's proxy endpoint, identity token, paths, and their labels (the `job` Prometheus uses), discovery for agent-east, consolidated mode for the west pair, and a 3-second scrape timeout |
@@ -269,8 +279,8 @@ The services are `orders`, `payments`, `inventory`, `catalog`, and `shipping`, p
 | `prometheus/demo-alerts.yml` | The fast demo alerts |
 | `grafana/` | The provisioned datasource, dashboard folder, and demo dashboard |
 | `app/demo_app.py` | The simulated services and their control API |
-| `Makefile` | The demo's targets: `make up` (which builds the jars first), `down`, `status`, `open`, `tour`, and `logs`, which `make help` lists, and `screenshots`, which it leaves out, since it's for maintaining the site |
-| `demo.sh` | Starting, stopping, and the scenarios |
+| `Makefile` | The demo's targets: `make up`, `make up-local` (which runs the proxy and agent built from this checkout, for trying a change to them), `down`, `status`, `open`, `tour`, and `logs`, which `make help` lists, and `screenshots`, which it leaves out, since it's for maintaining the site |
+| `demo.sh` | Starting, stopping, and the scenarios. Its `NEEDS_RELEASE_AFTER` is the latest release that predates what the demo shows: until a later one is out, `make up` builds the proxy and agent from this checkout, as `make up-local` does, so set it to the latest release when the demo comes to use something unreleased |
 | `bin/screenshots.sh` | The Basics Demo page's screenshots, in the dark and light themes. `make screenshots` builds and starts the demo, waits a minute so the agents' uptimes read in minutes, plays the scenarios, and writes them to `website/prometheus-proxy/docs/images/demo/` (needs Chrome, ImageMagick 7, and `cwebp`). While checking a change, `SKIP_UPTIME_WAIT=1` skips the minute, so the shots show uptimes in seconds and aren't for the site, and `WAIT_SECS` sets how long each wait for a scene may take before the script fails (default 150): `make screenshots SKIP_UPTIME_WAIT=1 WAIT_SECS=60` |
 
 From the repository root, `make check-rules` validates the Prometheus config and both rule files with promtool, and

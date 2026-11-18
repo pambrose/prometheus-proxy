@@ -123,6 +123,10 @@ most 10,000 agents connected with one identity, which is every agent when agent 
   through each, with screenshots. The agent chart's README now warns against running more than one replica, which
   gives Prometheus every series once per replica, and the Advanced Topics page warns that any two
   consolidated agents scraping the same endpoint do the same.
+- **The demos run the released proxy and agent.** Each demo's `make up` pulls the latest release's images from
+  Docker Hub, so there's nothing to build: the demos need Docker, `git`, `make`, `curl`, and a browser, and the
+  Kubernetes demo kind, `kubectl`, and Helm too. Each demo's README and website page lists what it needs.
+  `make up-local` runs the proxy and agent built from your checkout instead.
 - **Paths whose agent has gone stay on the dashboard for an hour.** The Paths view used to lose a gone path within
   a minute on a busy proxy, since it rebuilt it from the 200 most recent scrapes across all paths. Each path now
   keeps its own history, and a gone path stays for `proxy.dashboard.departedPathRetentionSecs` (default 3600) after

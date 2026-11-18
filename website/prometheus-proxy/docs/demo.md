@@ -37,20 +37,32 @@ graph LR
   end
 ```
 
+## What you need
+
+The proxy and agent are the latest release's images, from Docker Hub, so there's nothing to build. On macOS or Linux,
+the demo needs only:
+
+- [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2: Docker Desktop, or Docker Engine with the
+  Compose plugin.
+- `git`, to clone the repository, and `make`. On macOS, the Xcode command-line tools (`xcode-select --install`) have
+  both.
+- `curl`, which the demo uses to wait for each service to answer.
+- A web browser.
+
 ## Running it
 
-You need Docker with Compose v2, a JDK 17 or later to run Gradle, and a clone of the repository. The demo's commands
-run from its own directory, where `make help` lists its targets. From the clone's root:
+Clone the repository, then run the demo's commands from its own directory, where `make help` lists its targets:
 
 ```bash
-cd demos/basics
-make up      # builds the jars and images, starts everything, prints the URLs
+git clone https://github.com/pambrose/prometheus-proxy.git
+cd prometheus-proxy/demos/basics
+make up      # pulls the images, starts everything, prints the URLs
 make tour    # walks through every scenario below, pausing before each step
 make down    # stops it and removes its containers, network, and volume
 ```
 
-The first `make up` pulls the Prometheus, Grafana, and Python images and builds the jars, which takes a few minutes.
-After that it starts in under a minute, and runs without a network connection.
+The first `make up` pulls the proxy, agent, Prometheus, Grafana, and Python images, which takes a few minutes. After
+that it starts in under a minute, and runs without a network connection.
 
 | What | URL |
 |---|---|
