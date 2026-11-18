@@ -49,8 +49,8 @@ nothing to build. On macOS or Linux, the demo needs only:
 
 - [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2: Docker Desktop, or Docker Engine with the
   Compose plugin.
-- `git`, to clone the repository, and `make`. On macOS, the Xcode command-line tools (`xcode-select --install`) have
-  both.
+- `git`, to clone the repository, and GNU `make`. On macOS, the Xcode command-line tools (`xcode-select --install`)
+  have both. Where GNU make is installed as `gmake`, type `gmake` wherever these instructions say `make`.
 - `curl`, which the demo uses to wait for each service to answer.
 - A web browser.
 
@@ -275,8 +275,8 @@ clean slate, `make down && make up`.
 
 ## Going further
 
-- The demo's [README](https://github.com/pambrose/prometheus-proxy/tree/master/demos/network) lays these scenarios out
-  as a presenter's script, with what each one means for the audience, and lists the files that set the demo up,
+- The demo's [README](https://github.com/pambrose/prometheus-proxy/tree/master/demos/network) has these scenarios as
+  a guided tour, explaining how each one works, and lists the files that set the demo up,
   including which Toxiproxy toxic each scenario uses.
 - The [Kubernetes Demo](kubernetes-demo.md) deploys the same proxy and agent with their Helm charts on two kind
   clusters, and shows Kubernetes driving the agent's targets and replacing its pod.

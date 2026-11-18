@@ -16,6 +16,11 @@ REPO_DIR := $(abspath $(DEMO_DIR)/../..)
 # command line (`make up NETWORK_DEMO_GRAFANA_PORT=3101`), since make exports a command-line variable to its recipes.
 DEMO = cd "$(DEMO_DIR)" && ./demo.sh
 
+# demo.sh runs the root Makefile's targets (site-version, and jars for up-local) with the make that ran this one, so
+# `gmake up` works where GNU make is installed as gmake, with no make. Exported, rather than passed as $(MAKE) in a
+# recipe, which would make `make -n up` start the demo.
+export MAKE
+
 default: help
 
 help:  ## Show this help (list of targets)
@@ -40,7 +45,7 @@ status:  ## Show the containers, the WAN's links and their toxics, and the URLs
 open:  ## Open both proxy dashboards, Grafana, and Prometheus's alerts in the browser
 	@$(DEMO) open
 
-tour:  ## Walk through the presenter's script, pausing before each step (PART=n starts from part n)
+tour:  ## Walk through the demo's guided tour, pausing before each step (PART=n starts from part n)
 	@$(DEMO) tour $(PART)
 
 logs:  ## Follow the logs (SERVICE=name for one service: proxy, agent-branch, wan, ...)

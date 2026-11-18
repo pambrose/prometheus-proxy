@@ -43,8 +43,8 @@ build. On macOS or Linux, the demo needs only:
 - [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) 0.33.0 or later,
   [`kubectl`](https://kubernetes.io/docs/tasks/tools/), and [Helm](https://helm.sh/docs/intro/install/) 3 or 4.
   `demo.sh` checks for each.
-- `git`, to clone the repository, and `make`. On macOS, the Xcode command-line tools (`xcode-select --install`) have
-  both.
+- `git`, to clone the repository, and GNU `make`. On macOS, the Xcode command-line tools (`xcode-select --install`)
+  have both. Where GNU make is installed as `gmake`, type `gmake` wherever these instructions say `make`.
 - `curl`, which the demo uses to wait for each service to answer.
 - A web browser.
 
@@ -223,8 +223,8 @@ which only a restart applies. `./demo.sh restore-config` puts the original confi
 
 ## Going further
 
-- The demo's [README](https://github.com/pambrose/prometheus-proxy/tree/master/demos/kubernetes) lays these scenarios
-  out as a presenter's script, with what each one means for the audience, and lists the files that set the demo up,
+- The demo's [README](https://github.com/pambrose/prometheus-proxy/tree/master/demos/kubernetes) has these scenarios
+  as a guided tour, explaining how each one works, and lists the files that set the demo up,
   including how `make up` connects the two clusters. It also says why the demo runs one agent, not two consolidated
   replicas.
 - [Kubernetes](kubernetes.md) is the guide to the deployment itself: the charts, exposing the proxy's gRPC port to

@@ -1,9 +1,9 @@
 # Kubernetes demo
 
-A self-contained demo of Prometheus Proxy deployed the way a platform team would run it, for customers. It runs two
+A self-contained demo of Prometheus Proxy deployed the way a platform team would run it. It runs two
 [kind](https://kind.sigs.k8s.io/) clusters on one laptop: a monitoring cluster with the proxy, its web dashboard, and
 Prometheus, and a target cluster, behind the "firewall", with a set of simulated services and the agent. Both are
-installed with the project's own Helm charts, from [`charts/`](../../charts). A presenter can show that the target
+installed with the project's own Helm charts, from [`charts/`](../../charts). It shows that the target
 cluster exposes nothing, that annotating a Service is all it takes for Prometheus to scrape it, that Kubernetes
 replaces a lost agent by itself, and what a change to the agent's config costs next to a change to its targets.
 
@@ -37,8 +37,8 @@ build. On macOS or Linux, the demo needs only:
 - [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) 0.33.0 or later,
   [`kubectl`](https://kubernetes.io/docs/tasks/tools/), and [Helm](https://helm.sh/docs/intro/install/) 3 or 4.
   `demo.sh` checks for each.
-- `git`, to clone the repository, and `make`. On macOS, the Xcode command-line tools (`xcode-select --install`) have
-  both.
+- `git`, to clone the repository, and GNU `make`. On macOS, the Xcode command-line tools (`xcode-select --install`)
+  have both. Where GNU make is installed as `gmake`, type `gmake` wherever these instructions say `make`.
 - `curl`, which the demo uses to wait for each service to answer.
 - A web browser.
 
@@ -50,14 +50,14 @@ Clone the repository, then run the demo's commands from its own directory, where
 git clone --depth 1 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/kubernetes
 make up      # creates both clusters, installs everything, and prints the URLs
-make tour    # walks through the presenter's script below, pausing before each step
+make tour    # walks through the guided tour below, pausing before each step
 make down    # deletes both clusters
 ```
 
 The first `make up` pulls the kind node image, and each new cluster pulls its images, the proxy's and Prometheus's or
 the agent's and Python's, which takes a few minutes. After that, `make up` on running clusters takes under a minute.
 `make down` deletes the clusters, and the images inside them, so the next `make up` needs a network connection again.
-**Run it once before the meeting, and leave it running.**
+To show it without a network connection, run `make up` once beforehand and leave it running.
 
 | What | URL |
 |---|---|
@@ -90,14 +90,14 @@ every command, and puts back the context that was current when it creates a clus
 | `pp-target` / `monitoring` | `targets-sync` | Lists and watches the Services in `apps`, and writes each annotated `prometheus-proxy/path` into the agent's targets ConfigMap, `agent-targets` (`sync/targets_sync.py`). Part of the demo, not the product. |
 | `pp-target` / `apps` | `orders`, `payments`, `shipping` | The simulated services (`app/services_app.py`), one per pod, each behind a ClusterIP Service annotated `prometheus-proxy/path`. Traffic follows a 5-minute "day", so the graphs move. |
 
-## Presenter's script
+## Guided tour
 
-Each part lists what to show and what it means for the customer. Run the scenario commands from `demos/kubernetes`;
-each one prints what to watch, and how long it took. The times below were measured on an Apple-silicon laptop.
+`make tour` walks through these parts one step at a time. To follow them here instead, run the scenario commands
+from `demos/kubernetes`; each one prints what to watch, and how long it took. The times below were measured on an Apple-silicon laptop.
 
 ### 1. The Helm charts on two clusters, with no inbound access
 
-Assume the earlier demos have been seen: the same proxy and agent, now deployed with their Helm charts.
+These are the earlier demos' proxy and agent, now deployed with their Helm charts.
 
 ```bash
 ./demo.sh clusters        # pp-target's Services, each cluster's Helm release, and Prometheus's one job
@@ -181,7 +181,7 @@ The basics demo shows dynamic discovery itself, from a file; this part shows Kub
 | `demo.sh add-service` / `remove-service` | Deploys the search service and then its Service, annotated `prometheus-proxy/path`; or removes the annotation and then deletes both | `kubectl apply` / `kubectl annotate ... prometheus-proxy/path-`; targets-sync rewrites the `agent-targets` ConfigMap, which the kubelet copies into the agent's pod |
 | `demo.sh delete-agent-pod` | Deletes the agent's pod, and reports when its replacement registered and how long scrapes failed | `kubectl delete pod`; the agent's Deployment starts a replacement |
 | `demo.sh change-config` / `restore-config` | Upgrades the agent chart with or without `config/agent-change.conf`, and reports the replacement the same way | `helm upgrade --set-file config=...`; the config's checksum on the pod template makes the Deployment replace the pod |
-| `make tour [PART=n]` | Walks through the presenter's script, from part 1 or the one given, pausing before each step |  |
+| `make tour [PART=n]` | Walks through the guided tour above, from part 1 or the one given, pausing before each step |  |
 | `make status` | Both clusters' pods and Services, the Helm releases, and the URLs |  |
 | `make logs [SERVICE=name]` | Follows a workload's logs: `agent` (the default), `proxy`, `prometheus`, `targets-sync`, or a service |  |
 

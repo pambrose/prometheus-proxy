@@ -1,9 +1,9 @@
 # Basics demo
 
-A self-contained demo of Prometheus Proxy for customers. It runs the proxy with its web dashboard, three agents behind a
-simulated firewall, a set of simulated services, and Prometheus and Grafana. A presenter can show live traffic,
+A self-contained demo of Prometheus Proxy. It runs the proxy with its web dashboard, three agents behind a simulated
+firewall, a set of simulated services, and Prometheus and Grafana, all on one laptop, and shows live traffic,
 failures and recovery, redundancy, dynamic discovery, stale-agent eviction, per-team identities, and a misconfigured
-duplicate agent, all on one laptop.
+duplicate agent.
 
 The website's [Basics Demo](https://pambrose.github.io/prometheus-proxy/demo/) page walks through the same scenarios
 with screenshots of the dashboard and Grafana.
@@ -54,8 +54,8 @@ the demo needs only:
 
 - [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2: Docker Desktop, or Docker Engine with the
   Compose plugin.
-- `git`, to clone the repository, and `make`. On macOS, the Xcode command-line tools (`xcode-select --install`) have
-  both.
+- `git`, to clone the repository, and GNU `make`. On macOS, the Xcode command-line tools (`xcode-select --install`)
+  have both. Where GNU make is installed as `gmake`, type `gmake` wherever these instructions say `make`.
 - `curl`, which the demo uses to wait for each service to answer.
 - A web browser.
 
@@ -67,12 +67,12 @@ Clone the repository, then run the demo's commands from its own directory, where
 git clone --depth 1 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/basics
 make up      # pulls the images, starts everything, and prints the URLs
-make tour    # walks through the presenter's script below, pausing before each step
+make tour    # walks through the guided tour below, pausing before each step
 make down    # stops it and removes its containers, network, and volume
 ```
 
 The first `make up` pulls the proxy, agent, Prometheus, Grafana, and Python images, which takes a few minutes. After
-that it starts in under a minute, and runs without a network connection. **Run it once before the meeting.**
+that it starts in under a minute, even without a network connection.
 
 | What | URL |
 |---|---|
@@ -102,15 +102,15 @@ anything shared.
 | `prometheus` | Scrapes every path through the proxy every 5s, with no target in its config. It loads the project's alerting rules (`grafana/alerts.yml`) and the demo's fast ones (`prometheus/demo-alerts.yml`). |
 | `grafana` | Opens on the **Prometheus Proxy Demo** dashboard. The project's own **Prometheus Proxy** and **Prometheus Agents** dashboards (`grafana/*.json`) are linked from its top bar. |
 
-## Presenter's script
+## Guided tour
 
-Each part lists what to show and what it means for the customer. Run the scenario commands from `demos/basics`;
-each one prints what to watch. Leave about a minute between parts so the graphs catch up.
+`make tour` walks through these parts one step at a time. To follow them here instead, run the scenario commands
+from `demos/basics`; each one prints what to watch. Leave about a minute between parts so the graphs catch up.
 
 ### 1. How Prometheus scrapes services behind a firewall
 
-Show the diagram above. Prometheus pulls metrics, but the services live behind a firewall that allows no inbound
-connections. The agents sit inside the firewall and connect *out* to the proxy over gRPC. Prometheus scrapes the proxy
+The diagram above shows the setup. Prometheus pulls metrics, but the services live behind a firewall that allows no
+inbound connections. The agents sit inside the firewall and connect *out* to the proxy over gRPC. Prometheus scrapes the proxy
 as if it were each service. The demo simulates the firewall: its containers share one network, but Prometheus has no
 targets of its own, so it reaches each service only through the proxy.
 
@@ -120,8 +120,8 @@ Open the dashboard on the **Agents** view.
 
 - Three agents are connected, each with its address and number of paths.
 - Click **agent-east**. It shows its host, uptime, and idle time, the paths it registered with their labels, and the
-  scrapes flowing through it live: status, time, and size. The catalog payload is about 480,000 characters, large enough that the agent sends it to the
-  proxy in chunks.
+  scrapes flowing through it live: status, time, and size. The catalog payload is about 480,000 characters, large
+  enough that the agent sends it to the proxy in chunks.
 - `/proxy_metrics` is the proxy's own metrics. They leave the proxy, go through an agent, and come back through the
   proxy to Prometheus, so the proxy monitors itself with the same path as everything else.
 - Switch to **Paths**: every path, the agent serving it, its target, its last scrape, and its status.
@@ -139,7 +139,7 @@ Open Grafana. It lands on the **Prometheus Proxy Demo** dashboard.
 - The **Prometheus Proxy** and **Prometheus Agents** links open the dashboards the project ships for operating the
   proxy itself.
 - Prometheus's config lists no targets. It asks the proxy (`/discovery`) what exists, and each agent's labels set the
-  `job`. Show <http://localhost:8080/discovery>.
+  `job`. Its answer is at <http://localhost:8080/discovery>.
 
 ### 4. One service fails, another hangs, and the rest keep working
 
@@ -243,7 +243,7 @@ register only the paths its patterns allow.
 ./demo.sh duplicate-agent-stop   # removes the copy, and restarts agent-east to register again
 ```
 
-That's the script. For proxy failover, filtering at the agent, and tracing through the firewall, go on to the
+That's the tour. For proxy failover, filtering at the agent, and tracing through the firewall, go on to the
 [network demo](../network). The same proxy and agent, deployed on Kubernetes with their Helm charts, are in the
 [Kubernetes demo](../kubernetes). The demos use different ports, so they can run side by side, but each takes memory
 and CPU: `make down` stops this one and frees its resources.
@@ -260,7 +260,7 @@ and CPU: `make down` stops this one and frees its resources.
 | `demo.sh agent-freeze` / `agent-thaw [agent]` | Pauses or resumes an agent's container (default `agent-west-2`) | `docker compose pause` / `unpause`: the connection stays open but silent, so the proxy evicts the agent after 30 seconds |
 | `demo.sh rogue-agent` / `rogue-agent-stop` | Starts or removes the contractor's agent | Starts or removes `agent-rogue` (compose profile `rogue`), which presents the contractor identity's token, allowed only `contractor_*` paths |
 | `demo.sh duplicate-agent` / `duplicate-agent-stop` | Starts a second copy of agent-east, or removes it and restarts agent-east | Starts or removes `agent-east-copy` (profile `duplicate`): agent-east's config under another name, not consolidated |
-| `make tour [PART=n]` | Walks through the presenter's script, from part 1 or the one given, pausing before each step |  |
+| `make tour [PART=n]` | Walks through the guided tour above, from part 1 or the one given, pausing before each step |  |
 | `make status` | The containers, the services' modes, and the URLs |  |
 | `make logs [SERVICE=name]` | Follows the logs, of every service or the one given |  |
 

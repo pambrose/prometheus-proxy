@@ -44,8 +44,8 @@ the demo needs only:
 
 - [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2: Docker Desktop, or Docker Engine with the
   Compose plugin.
-- `git`, to clone the repository, and `make`. On macOS, the Xcode command-line tools (`xcode-select --install`) have
-  both.
+- `git`, to clone the repository, and GNU `make`. On macOS, the Xcode command-line tools (`xcode-select --install`)
+  have both. Where GNU make is installed as `gmake`, type `gmake` wherever these instructions say `make`.
 - `curl`, which the demo uses to wait for each service to answer.
 - A web browser.
 
@@ -273,8 +273,8 @@ scenario. For a clean slate, `make down && make up`.
 
 ## Going further
 
-- The demo's [README](https://github.com/pambrose/prometheus-proxy/tree/master/demos/basics) lays these scenarios
-  out as a presenter's script, with what each one means for the audience, and lists the files that set the demo up.
+- The demo's [README](https://github.com/pambrose/prometheus-proxy/tree/master/demos/basics) has these scenarios
+  as a guided tour, explaining how each one works, and lists the files that set the demo up.
 - The [Network Demo](network-demo.md) puts a simulated WAN between the agents and the proxies, and shows what a far,
   thin, dead, flaky, or missing link does. It also covers what this demo leaves out: the agents failing over to a
   standby proxy, a filter at the agent that keeps a payload from crossing the firewall, and a call followed through

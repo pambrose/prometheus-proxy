@@ -183,11 +183,9 @@ Here's a simplified network diagram of how the deployed `proxy` and `agent` work
 
 ![Architecture Diagram](https://github.com/pambrose/prometheus-proxy/raw/master/docs/prometheus-proxy.png)
 
-Endpoints running behind a firewall require a `prometheus-agent` (the agent) to be run inside the firewall. An agent can
-run as a stand-alone server, embedded in another java server, or as a java agent. Agents connect to
-a `prometheus-proxy` (the proxy) and register the paths for which they will provide data. One proxy can work with one or
-many
-agents.
+Endpoints running behind a firewall require a `prometheus-agent` (the agent) to be run inside the firewall. An agent
+can run as a standalone server or embedded in another JVM application. Agents connect to a `prometheus-proxy` (the
+proxy) and register the paths for which they will provide data. One proxy can work with one or many agents.
 
 ### Components
 
@@ -317,8 +315,8 @@ If you prefer to build the project from source:
    `agentJar` and `proxyJar` are dedicated `ShadowJar` tasks; the default `shadowJar` task is disabled so it cannot produce a third redundant fat jar.
 
 3. The JARs will be available in `build/libs/`:
-  - `build/libs/prometheus-proxy.jar`
-  - `build/libs/prometheus-agent.jar`
+   - `build/libs/prometheus-proxy.jar`
+   - `build/libs/prometheus-agent.jar`
 
 ### Docker Quick Start
 
@@ -367,10 +365,9 @@ docker rm prometheus-proxy              # remove the stopped container
 
 ### Agent Configuration
 
-If the prometheus-proxy were running on a machine named *mymachine.local* and the
-`agent.pathConfigs` value in
-the [myapps.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf)
-config file had the contents:
+If the prometheus-proxy were running on a machine named *mymachine.local* and the `agent.pathConfigs` value in the
+[myapps.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf) config file had
+the contents:
 
 ```hocon
 agent {
@@ -478,9 +475,8 @@ docker run --detach --name prometheus-agent --restart unless-stopped \
 Or use Docker Compose: [`etc/compose/proxy.yml`](etc/compose/proxy.yml) runs a proxy, an agent, and a Prometheus server
 that scrapes through them (`docker compose -f etc/compose/proxy.yml up`).
 
-Using the config
-file [simple.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf), the proxy
-and the agent metrics would be available from the proxy's scrape port on *localhost* at:
+Using the config file [simple.conf](https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf),
+the proxy and the agent metrics would be available from the proxy's scrape port on *localhost* at:
 
 * http://localhost:8080/proxy_metrics
 * http://localhost:8080/agent_metrics
@@ -768,13 +764,13 @@ Both proxy and agent expose their own metrics:
 
 > 📖 **Docs site:** [Configuration overview](https://pambrose.github.io/prometheus-proxy/configuration/) and the [CLI Reference](https://pambrose.github.io/prometheus-proxy/cli-reference/) document every option and environment variable.
 
-The proxy and agent use the [Typesafe Config](https://github.com/typesafehub/config) library. Configuration values are
+The proxy and agent use the [Typesafe Config](https://github.com/lightbend/config) library. Configuration values are
 evaluated in order: **CLI options → environment variables → config file values**.
 
 Typesafe Config highlights include:
 
 * support for files in three formats: Java properties, JSON, and a human-friendly JSON
-  superset ([HOCON](https://github.com/typesafehub/config#using-hocon-the-json-superset))
+  superset ([HOCON](https://github.com/lightbend/config#using-hocon-the-json-superset))
 * config files can be files or urls
 * config values can come from CLI options, environment variables, Java system properties, and/or config files.
 * config files can reference environment variables
@@ -792,8 +788,8 @@ Typesafe Config highlights include:
 | **Proxy** | `--port, -p`       | `PROXY_PORT`                    | Port for Prometheus to scrape (Default: 8080)        |
 | **Proxy** | `--agent_port, -a` | `AGENT_PORT`                    | Port for Agents to connect via gRPC (Default: 50051) |
 | **Proxy** | `--dashboard`      | `DASHBOARD_ENABLED`             | Enable the operational dashboard (Default: disabled) |
-| **Proxy** | `--dashboard_port` | `DASHBOARD_PORT`                | Port for the operational dashboard (Default: 8094)      |
-| **Proxy** | `--dashboard_host` | `DASHBOARD_HOST`                | Listen address for the dashboard (Default: 0.0.0.0)     |
+| **Proxy** | `--dashboard_port` | `DASHBOARD_PORT`                | Port for the operational dashboard (Default: 8094)   |
+| **Proxy** | `--dashboard_host` | `DASHBOARD_HOST`                | Listen address for the dashboard (Default: 0.0.0.0)  |
 | **Agent** | `--proxy, -p`      | `PROXY_HOSTNAME`                | Hostname/IP of the Proxy. Accepts a comma-separated failover list (e.g. `proxy-a:50051,proxy-b:50051`); see `agent.proxy.endpoints` |
 
 ### Configuration Notes
@@ -848,10 +844,8 @@ agent.pathConfigs: [{
 }]
 ```
 
-This leverages the existing service discovery features already built into Prometheus.
-
-Another service discovery example config can be found in
-[federate.conf](https://github.com/pambrose/prometheus-proxy/blob/master/examples/federate.conf).
+This leverages the existing service discovery features already built into Prometheus. A complete example config is
+[`examples/federate.conf`](examples/federate.conf).
 
 #### Nginx Reverse Proxy
 
@@ -861,9 +855,8 @@ java -jar prometheus-proxy.jar --tf_disabled
 java -jar prometheus-agent.jar --tf_disabled --config myconfig.conf
 ```
 
-An example nginx conf file is [here](https://github.com/pambrose/prometheus-proxy/blob/master/nginx/docker/nginx.conf),
-and an example agent/proxy conf file
-is [here](https://github.com/pambrose/prometheus-proxy/blob/master/nginx/nginx-proxy.conf)
+An example nginx config is [`nginx/docker/nginx.conf`](nginx/docker/nginx.conf), and an example proxy and agent config
+is [`nginx/nginx-proxy.conf`](nginx/nginx-proxy.conf).
 
 **⚠️ Note:** With `transportFilterDisabled`, the proxy can't see a connection close, only the agent's request stream
 end. An agent that disconnects ends that stream, and is removed at once; one that dies before opening its stream, or
@@ -1136,8 +1129,8 @@ Report a security problem privately, not in a public issue, pull request, or dis
 
 Full documentation is available at the [Prometheus Proxy Documentation](https://pambrose.github.io/prometheus-proxy/) site.
 
-KDoc API documentation is published
-at [pambrose.github.io/prometheus-proxy/kdocs](https://pambrose.github.io/prometheus-proxy/kdocs/).
+KDoc API documentation is published at
+[pambrose.github.io/prometheus-proxy/kdocs](https://pambrose.github.io/prometheus-proxy/kdocs/).
 
 **Note:** Running on Kubernetes? Helm charts for the proxy and the agent are in [`charts/`](charts/), and the
 [Kubernetes deployment guide](https://pambrose.github.io/prometheus-proxy/kubernetes/) covers them along with ready-to-use proxy and
@@ -1166,10 +1159,11 @@ dependencies {
 
 ## 📄 License
 
-This project is licensed under the Apache License 2.0 - see [License.txt](LICENSE.txt) for details.
+This project is licensed under the Apache License 2.0 - see [LICENSE.txt](LICENSE.txt) for details.
 
 ## Related Links
 
-* [Prometheus.io](http://prometheus.io)
-* [gRPC](http://grpc.io)
-* [Typesafe Config](https://github.com/carueda/tscfg)
+* [Prometheus.io](https://prometheus.io)
+* [gRPC](https://grpc.io)
+* [Typesafe Config](https://github.com/lightbend/config)
+* [tscfg](https://github.com/carueda/tscfg), which generates the config classes from the reference config
