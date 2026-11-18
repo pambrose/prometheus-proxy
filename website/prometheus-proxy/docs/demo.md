@@ -51,10 +51,11 @@ the demo needs only:
 
 ## Running it
 
-Clone the repository, then run the demo's commands from its own directory, where `make help` lists its targets:
+Clone the repository at the latest release, then run the demo's commands from its own directory, where `make help` lists
+its targets:
 
 ```bash
-git clone --depth 1 https://github.com/pambrose/prometheus-proxy.git
+git clone -c advice.detachedHead=false --depth 1 --branch 4.5.0 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/basics
 make up      # pulls the images, starts everything, prints the URLs
 make tour    # walks through every scenario below, pausing before each step

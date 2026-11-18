@@ -49,10 +49,10 @@ icon: lucide/play
 
     On Kubernetes, install the proxy and the agent with the Helm charts in the repository's
     [`charts/`](https://github.com/pambrose/prometheus-proxy/tree/master/charts) directory. They run the
-    Docker Hub images; clone the repository to use them:
+    Docker Hub images; clone the repository at the release whose images they run to use them:
 
     ```bash
-    git clone --depth 1 https://github.com/pambrose/prometheus-proxy.git
+    git clone -c advice.detachedHead=false --depth 1 --branch 4.5.0 https://github.com/pambrose/prometheus-proxy.git
     cd prometheus-proxy
     ```
 

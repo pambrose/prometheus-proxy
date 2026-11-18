@@ -168,10 +168,10 @@ Since 4.4.0 the proxy chart's readiness probe is `/ping`, not `/healthcheck`: th
 
 ### Demos
 
-Since 4.5.0 the repository ships three self-contained demos under `demos/`, each run from its own directory of a clone and on its own ports, so they can run side by side. `make up` pulls the latest release's proxy and agent images from Docker Hub and prints the URLs, `make tour` walks through the scenarios one step at a time, and `make down` removes everything; `make up-local` runs the proxy and agent built from the checkout instead (needs a JDK 17 or later).
+Since 4.5.0 the repository ships three self-contained demos under `demos/`, each run from its own directory of a clone and on its own ports, so they can run side by side. `make up` pulls the latest release's proxy and agent images from Docker Hub and prints the URLs, `make tour` walks through the scenarios one step at a time, and `make down` removes everything; `make up-local` runs the proxy and agent built from the checkout instead (needs a JDK 17 or later). Clone the latest release's tag, as below, so the demo matches the images it pulls.
 
 ```bash
-git clone --depth 1 https://github.com/pambrose/prometheus-proxy.git
+git clone -c advice.detachedHead=false --depth 1 --branch 4.5.0 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/basics
 make up
 ```

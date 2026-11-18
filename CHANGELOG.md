@@ -4,6 +4,21 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [Unreleased]
+
+### Bug Fixes
+
+- Each demo's `make up` checks for the tools it needs before it pulls, builds, or starts anything, and names a missing one: Docker, running, with Compose v2 (the basics and network demos) or kind, `kubectl`, and Helm (the Kubernetes demo), and `curl`, without which the wait for each service retried for two minutes and then blamed the service. `make up-local` also checks for a JDK 17 or later, the one `JAVA_HOME` names or else the one on the PATH
+
+### Build & Tooling
+
+- `make release` tags the release commit and pushes the tag (the new `make release-tag`) before it deploys the docs site, whose `git clone --branch` commands check the tag out, so the site never names a tag that doesn't exist yet; the tag used to come only with the GitHub release, after the deploy. The GitHub release step creates the release on the pushed tag (`gh release create --verify-tag`)
+
+### Documentation
+
+- The README, the website's home page, and the basics and network demos' READMEs, pages, and tours say the Kubernetes demo needs kind, `kubectl`, and Helm as well as Docker where they point to it, and its own README and page say so up front
+- The clone commands for the demos and the Helm charts check out the latest release's tag (`--branch 4.5.0`, quietly, with `-c advice.detachedHead=false`), so the demo's scripts are the ones released with the images it pulls, rather than whatever `master` holds, and are never ahead of a release whose images aren't published yet. The release bump updates the tag in each (`RELEASE_VERSION_FILES` lists the files), and `make release-check` fails on one still on the previous release's
+
 ## [4.5.0] - 2026-11-17
 
 ### Behavior Changes

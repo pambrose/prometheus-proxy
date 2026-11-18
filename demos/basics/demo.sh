@@ -183,9 +183,31 @@ version_after() {
 # The latest release: the version the docs give, whose images are on Docker Hub.
 latest_release() { "$MAKE" -s --no-print-directory -C "$REPO_DIR" site-version; }
 
-check_docker() {
-  command -v docker >/dev/null 2>&1 || die "docker is not on the PATH"
+need() { command -v "$1" >/dev/null 2>&1 || die "$1 is not on the PATH; $2"; }
+
+# The tools up and up-local need, checked before anything is pulled, built, or started. Without curl, the wait for
+# each service would retry for two minutes and then blame the service.
+check_tools() {
+  need docker "install Docker (https://docs.docker.com/get-started/get-docker/)"
   docker info >/dev/null 2>&1 || die "Docker isn't running"
+  docker compose version >/dev/null 2>&1 ||
+    die "the demo needs Docker Compose v2, the docker compose plugin (https://docs.docker.com/compose/install/)"
+  need curl "install curl; the demo uses it to wait for each service to answer"
+}
+
+# Building the proxy and agent runs Gradle, which needs a JDK 17 or later: the one JAVA_HOME names, as the Gradle
+# wrapper takes it, or else the java on the PATH. Checked before anything is built, so a missing or old one is named
+# up front.
+check_jdk() {
+  local java="${JAVA_HOME:+$JAVA_HOME/bin/}java" version
+  command -v "$java" >/dev/null 2>&1 ||
+    die "building the proxy and agent from this checkout takes a JDK 17 or later;" \
+      "install one, or set JAVA_HOME (https://adoptium.net)"
+  version="$("$java" -version 2>&1 | sed -nE '1s/.*version "(1\.)?([0-9]+).*/\2/p')"
+  if ! [[ "$version" =~ ^[0-9]+$ ]] || ((version < 17)); then
+    die "building the proxy and agent from this checkout takes a JDK 17 or later, not Java ${version:-of an unknown" \
+      "version} ($java)"
+  fi
 }
 
 # Tags a release's proxy and agent images from Docker Hub as the demo's, pulling one only if Docker doesn't have it: a
@@ -206,7 +228,7 @@ pull_images() {
 # The proxy and agent of the latest release, unless it predates what the demo shows.
 cmd_up() {
   local release
-  check_docker
+  check_tools
   release="$(latest_release)" || die "can't tell the latest release from the docs (make site-version)"
   if version_after "$release" "$NEEDS_RELEASE_AFTER"; then
     start_demo "$release"
@@ -218,7 +240,7 @@ cmd_up() {
 }
 
 cmd_up_local() {
-  check_docker
+  check_tools
   start_demo
 }
 
@@ -236,6 +258,7 @@ start_demo() {
     pull_images "$1"
     "${COMPOSE[@]}" up --detach --wait --wait-timeout 180
   else
+    check_jdk
     bold "Building the proxy and agent from this checkout"
     "$MAKE" --no-print-directory -C "$REPO_DIR" jars
     "${COMPOSE[@]}" up --detach --build --wait --wait-timeout 180
@@ -525,7 +548,7 @@ cmd_tour() {
   bold "The other demos:"
   echo "Proxy failover, filtering at the agent, and tracing are in the network demo, in demos/network."
   echo "The same proxy and agent, deployed on Kubernetes with their Helm charts, are in the Kubernetes demo, in" \
-    "demos/kubernetes."
+    "demos/kubernetes, which needs kind, kubectl, and Helm as well as Docker."
   echo
   echo "The demos use different ports, so they can run side by side, but each takes memory and CPU."
   echo "To stop this one and free its resources, run $MAKE_NAME down, or $0 down."
