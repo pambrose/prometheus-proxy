@@ -232,7 +232,7 @@ internal object PathTableHtml {
       td("dim") { scrapeTime(path.lastScrape?.at) }
       statusCell(path)
       td("num dim") { +(path.lastScrape?.let { "${it.durationMillis} ms" } ?: DASH) }
-      historyCell(path, snapshot.pathHistorySize)
+      historyCell(path, snapshot)
       if (snapshot.links.isNotEmpty()) linksCell(path, snapshot.links)
     }
   }
@@ -318,13 +318,14 @@ internal object PathTableHtml {
    * than an element per scrape: the table is pushed whole every refresh, so a healthy path's strip stays one element.
    * The strip is one image to assistive tech, labelled with the same count the percentage gives.
    *
-   * Until the history holds [historySize] scrapes, faint dots keep the places of the ones still to come, on the left,
-   * so every strip is as wide as a full one: the newest scrape and the percentage sit in the same place on every row,
-   * and the column doesn't widen, pushing the Links column along, on every refresh as the histories fill.
+   * Until the history holds [ProxySnapshot.pathHistorySize] scrapes, faint dots keep the places of the ones still to
+   * come, on the left, so every strip is as wide as a full one: the newest scrape and the percentage sit in the same
+   * place on every row, and the column doesn't widen, pushing the Links column along, on every refresh as the
+   * histories fill.
    */
   private fun TR.historyCell(
     path: PathView,
-    historySize: Int,
+    snapshot: ProxySnapshot,
   ) {
     td("dim history") {
       val total = path.history.size
@@ -337,7 +338,7 @@ internal object PathTableHtml {
           attributes["role"] = "img"
           attributes["aria-label"] = summary
           attributes["title"] = summary
-          val toCome = historySize - total
+          val toCome = snapshot.pathHistorySize - total
           if (toCome > 0) i("slot") { attributes["style"] = "--n:$toCome" }
           path.historyRuns.forEach { (ok, count) ->
             i(if (ok) "ok" else "crit") { attributes["style"] = "--n:$count" }
