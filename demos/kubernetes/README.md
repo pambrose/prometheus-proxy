@@ -6,6 +6,7 @@ Prometheus, and a target cluster, behind the "firewall", with a set of simulated
 installed with the project's own Helm charts, from [`charts/`](../../charts). It shows that the target
 cluster exposes nothing, that annotating a Service is all it takes for Prometheus to scrape it, that Kubernetes
 replaces a lost agent by itself, and what a change to the agent's config costs next to a change to its targets.
+Unlike the other two demos, it needs kind, `kubectl`, and Helm as well as Docker: see [What you need](#what-you-need).
 
 It follows the [network demo](../network), which follows the [basics demo](../basics): those two show the
 dashboard, Grafana, the proxy's features, and the link through the firewall, and this one assumes them. It keeps the
@@ -30,7 +31,8 @@ the deployment itself.
 ## What you need
 
 The proxy and agent are the latest release's images, which each cluster pulls from Docker Hub, so there's nothing to
-build. On macOS or Linux, the demo needs only:
+build. Unlike the other two demos, this one needs kind, `kubectl`, and Helm as well as Docker. On macOS or Linux, it
+needs:
 
 - [Docker](https://docs.docker.com/get-started/get-docker/): Docker Desktop, or Docker Engine. kind runs each cluster's
   node as a container.
@@ -44,10 +46,11 @@ build. On macOS or Linux, the demo needs only:
 
 ## Quick start
 
-Clone the repository, then run the demo's commands from its own directory, where `make help` lists its targets:
+Clone the repository at the latest release, then run the demo's commands from its own directory, where `make help` lists
+its targets:
 
 ```bash
-git clone --depth 1 https://github.com/pambrose/prometheus-proxy.git
+git clone -c advice.detachedHead=false --depth 1 --branch 4.5.0 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/kubernetes
 make up      # creates both clusters, installs everything, and prints the URLs
 make tour    # walks through the guided tour below, pausing before each step

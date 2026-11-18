@@ -7,7 +7,7 @@
         coverage coverage-html coverage-xml coverage-log coverage-verify \
         coverage-open coverage-packages coverage-clean reports site-version gh-docs \
         gh-status tsconfig distro docker-push docker-verify homebrew-formulae release release-check _confirm-release \
-        tree depends lint detekt detekt-baseline \
+        release-tag tree depends lint detekt detekt-baseline \
         versions versions-all kdocs clean-site check-site upgrade-site build-site site \
         publish-local publish-local-snapshot publish-snapshot publish-maven-central \
         upgrade-wrapper _check-gpg-env _check-maven-central-env _require-version _require-gradle-version _tla-tools
@@ -40,7 +40,10 @@ RELEASE_VERSION_FILES := README.md llms.txt etc/compose/proxy.yml \
 	website/prometheus-proxy/docs/getting-started.md website/prometheus-proxy/docs/index.md \
 	website/prometheus-proxy/docs/docker.md src/test/kotlin/website/DockerExamples.txt \
 	src/test/kotlin/website/EmbeddedAgentExamples.txt src/test/kotlin/website/KubernetesExamples.txt \
-	docs/RELEASE.md .claude/skills/publishing-release/SKILL.md
+	docs/RELEASE.md .claude/skills/publishing-release/SKILL.md \
+	demos/basics/README.md demos/network/README.md demos/kubernetes/README.md \
+	website/prometheus-proxy/docs/demo.md website/prometheus-proxy/docs/network-demo.md \
+	website/prometheus-proxy/docs/kubernetes-demo.md
 # The CI jobs that must have passed for the release commit, as workflow-file/job-name, separated by semicolons since
 # job names can hold spaces. make release itself runs only the tests and the distro build, so these are what cover
 # the coverage floors, TLA+, the alerting rules, the Helm charts, the docs site build, what a Maven build that embeds
@@ -482,10 +485,10 @@ docker-verify: _require-version  ## Check both published VERSION images carry ev
 # Publishes nothing: it fails unless this checkout is fit to publish VERSION. The local checks run first, then the
 # network ones (GitHub's CI checks for HEAD, Maven Central, Docker Hub). A bumped file also fails if it still has the
 # previous release's version (the CHANGELOG section below VERSION's) where step 2 bumps it: an image tag or the Maven
-# coordinate, a Maven <version>, a chart's version or appVersion, or the backticked examples in docker.md,
-# docs/RELEASE.md, and the skill. Historical mentions, such as "Version 4.3.0 (released ...)", don't match. And every
-# CI check passing isn't enough, since with [skip ci] or a disabled workflow a lone third-party check can be the whole
-# list: each RELEASE_REQUIRED_JOBS job must also have run for HEAD and passed.
+# coordinate, a Maven <version>, a chart's version or appVersion, a git clone's --branch, or the backticked examples
+# in docker.md, docs/RELEASE.md, and the skill. Historical mentions, such as "Version 4.3.0 (released ...)", don't
+# match. And every CI check passing isn't enough, since with [skip ci] or a disabled workflow a lone third-party check
+# can be the whole list: each RELEASE_REQUIRED_JOBS job must also have run for HEAD and passed.
 release-check: _require-version _check-gpg-env _check-maven-central-env  ## Fail unless this checkout is fit to publish VERSION
 	@case "$(VERSION)" in *SNAPSHOT*|*-rc*|*-beta*|*-alpha*) \
 		echo "ERROR: $(VERSION) is a pre-release; make release publishes final versions" >&2; exit 1;; esac
@@ -505,7 +508,7 @@ release-check: _require-version _check-gpg-env _check-maven-central-env  ## Fail
 	@prev=$$(awk -v h='## [$(VERSION)]' 'f && /^## \[/ { sub(/^## \[/, ""); sub(/\].*/, ""); print; exit } index($$0, h) == 1 { f = 1 }' CHANGELOG.md); \
 	[ -n "$$prev" ] || { echo "ERROR: CHANGELOG.md has no release section below [$(VERSION)]" >&2; exit 1; }; \
 	p=$$(printf '%s' "$$prev" | sed 's/\./\\./g'); \
-	stale=$$(grep -nE "prometheus-(proxy|agent):$$p([^0-9.]|\$$)|<version>$$p</version>|^(version: $$p|appVersion: \"$$p\")\$$|e\.g\., \`$$p\`|\`$$p\` literal" \
+	stale=$$(grep -nE "prometheus-(proxy|agent):$$p([^0-9.]|\$$)|<version>$$p</version>|^(version: $$p|appVersion: \"$$p\")\$$|e\.g\., \`$$p\`|\`$$p\` literal|--branch $$p( |\$$)" \
 		$(RELEASE_VERSION_FILES) | sed 's/^/  /'); \
 	[ -z "$$stale" ] || { printf 'ERROR: still at the previous version, %s (step 2 of docs/RELEASE.md):\n%s\n' "$$prev" "$$stale" >&2; exit 1; }
 	@tagged=$$(git rev-parse -q --verify "refs/tags/$(VERSION)^{commit}"); \
@@ -548,11 +551,12 @@ _confirm-release:
 
 # Each step runs only if the one before it passed, so nothing is published until the checkout passes release-check, the
 # full test suite (whose container tests build the images and scrape through them), and the release build. Steps 4-6 and
-# 8 of docs/RELEASE.md. Step 8 ends with gh-docs, once the images check out: a push to master doesn't deploy the docs
-# site, so the site shows the previous release until this deploys the new one. Everything is published by then, so a
-# failure to start that deploy is reported without hiding the next steps. The GitHub release (step 7) and the Homebrew
-# tap (step 9) are printed as next steps. After a partial release, finish with the remaining targets: release-check
-# refuses a version already published.
+# 8 of docs/RELEASE.md. Step 8 ends by pushing the release tag, which the docs' `git clone --branch VERSION` commands
+# check out, and then gh-docs, once the images check out: a push to master doesn't deploy the docs site, so the site
+# shows the previous release until this deploys the new one, by which time its clone commands' tag exists. Everything is
+# published by then, so a failure to start that deploy is reported without hiding the next steps. The GitHub release
+# (step 7) and the Homebrew tap (step 9) are printed as next steps. After a partial release, finish with the remaining
+# targets: release-check refuses a version already published.
 release:  ## Gate, test, build, publish VERSION to Maven Central and Docker Hub (asks first), then deploy the docs
 	$(MAKE) release-check
 	$(MAKE) all-tests
@@ -561,20 +565,35 @@ release:  ## Gate, test, build, publish VERSION to Maven Central and Docker Hub 
 	$(MAKE) publish-maven-central
 	$(MAKE) docker-push
 	$(MAKE) docker-verify
+	$(MAKE) release-tag
 	@if $(MAKE) --no-print-directory gh-docs; then \
 		docs="Started the docs site deploy; make gh-status shows the run."; \
 	else \
 		docs="WARNING: could not start the docs site deploy; run make gh-docs."; \
 	fi; \
-	prev=$$(git describe --tags --abbrev=0 2>/dev/null); \
+	prev=$$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null); \
 	echo; \
 	echo "Published $(VERSION) to Maven Central and Docker Hub. $$docs"; \
 	echo "Next (steps 7 and 9 of docs/RELEASE.md):"; \
 	echo "  1. Create the GitHub release (tag $(VERSION), title v$(VERSION)) with a summary that ends with"; \
 	echo "     **Full Changelog**: https://github.com/pambrose/prometheus-proxy/compare/$$prev...$(VERSION)"; \
-	echo "     gh release create $(VERSION) --target $$(git rev-parse HEAD) --title v$(VERSION) --notes-file <notes> \\"; \
+	echo "     gh release create $(VERSION) --verify-tag --title v$(VERSION) --notes-file <notes> \\"; \
 	echo "       build/libs/prometheus-agent.jar build/libs/prometheus-proxy.jar build/libs/prometheus-proxy-$(VERSION)-sources.jar"; \
 	echo "  2. make homebrew-formulae, then commit and push the tap"
+
+# Tags HEAD as VERSION, as the earlier releases' lightweight tags are, and pushes the tag. make release runs it once
+# everything is published, before it deploys the docs site, whose `git clone --branch VERSION` commands need the tag;
+# the GitHub release (step 7) then attaches to it. A tag already on HEAD, from a release that stopped partway, is pushed
+# again; one on another commit fails, as release-check does.
+release-tag: _require-version  ## Tag HEAD as VERSION and push the tag (make release runs it before deploying the docs)
+	@tagged=$$(git rev-parse -q --verify "refs/tags/$(VERSION)^{commit}"); \
+	if [ -z "$$tagged" ]; then \
+		git tag "$(VERSION)" || exit 1; \
+	elif [ "$$tagged" != "$$(git rev-parse HEAD)" ]; then \
+		echo "ERROR: tag $(VERSION) points at another commit" >&2; exit 1; \
+	fi; \
+	git push --quiet origin "refs/tags/$(VERSION)" \
+		&& echo "Tagged $$(git rev-parse --short HEAD) as $(VERSION) and pushed the tag"
 
 tree:  ## Print Gradle dependency tree (quiet)
 	$(GRADLE) -q dependencies

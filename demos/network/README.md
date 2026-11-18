@@ -11,7 +11,7 @@ It follows the [basics demo](../basics), which shows the dashboard, Grafana, and
 that one. This one keeps the same pieces and changes only the link through the firewall, the thing the product
 exists to cross. The website's [Network Demo](https://pambrose.github.io/prometheus-proxy/network-demo/) page walks
 through the same scenarios with screenshots. The [Kubernetes demo](../kubernetes) follows this one, and deploys the
-same proxy and agent with their Helm charts on two kind clusters.
+same proxy and agent with their Helm charts on two kind clusters; it needs kind, `kubectl`, and Helm as well as Docker.
 
 ```
  network-app  (simulated services: orders and payments at headquarters, inventory and shipping at a branch)
@@ -44,10 +44,11 @@ nothing to build. On macOS or Linux, the demo needs only:
 
 ## Quick start
 
-Clone the repository, then run the demo's commands from its own directory, where `make help` lists its targets:
+Clone the repository at the latest release, then run the demo's commands from its own directory, where `make help` lists
+its targets:
 
 ```bash
-git clone --depth 1 https://github.com/pambrose/prometheus-proxy.git
+git clone -c advice.detachedHead=false --depth 1 --branch 4.5.0 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/network
 make up      # pulls the images, starts everything, and prints the URLs
 make tour    # walks through the guided tour below, pausing before each step
@@ -249,7 +250,7 @@ tells either end. It takes about 50 seconds to play out.
 ```
 
 That's the tour. The same proxy and agent, deployed on Kubernetes with their Helm charts, are in the
-[Kubernetes demo](../kubernetes).
+[Kubernetes demo](../kubernetes), which needs kind, `kubectl`, and Helm as well as Docker.
 
 ## Scenario reference
 

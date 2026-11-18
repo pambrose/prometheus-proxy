@@ -122,7 +122,8 @@ job `RELEASE_REQUIRED_JOBS` lists, passed; a dated section for the version in bo
 the previous one, in every bumped file; not already published). `RELEASE_VERSION_FILES` in the `Makefile` mirrors
 step 2's list of hard-coded version literals; keep the two in step.
 
-`make release` ends by deploying the docs site (`make gh-docs`, a `workflow_dispatch` of `docs.yml`), the only run
+`make release` ends by pushing the release tag (`make release-tag`), which the docs' `git clone --branch` commands
+check out, and deploying the docs site (`make gh-docs`, a `workflow_dispatch` of `docs.yml`), the only run
 that deploys it: a push to `master` builds the site and the KDocs as a check, without deploying, so the live site
 describes the last release until the next one, docs changes merged in between included (`CiHygieneTest` pins this).
 `make gh-docs` by hand deploys `master` as it is, unreleased pages included. `make site-version` prints the version the

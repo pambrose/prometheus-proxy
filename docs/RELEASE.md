@@ -14,18 +14,19 @@ Steps 1-3 are edits to merge to `master`. After that, `make release` runs steps 
 - both changelogs have a dated section for the version (`## [VERSION] - YYYY-MM-DD` in `CHANGELOG.md`, and
   `_Released YYYY-MM-DD_` under `## VERSION` in `RELEASE_NOTES.md`);
 - every file step 2 lists mentions the version, and none still has the previous release's version where step 2
-  bumps it (an image tag, the Maven coordinate or `<version>`, a chart's `version` or `appVersion`, or the
-  backticked examples);
+  bumps it (an image tag, the Maven coordinate or `<version>`, a chart's `version` or `appVersion`, a `git clone`'s
+  `--branch`, or the backticked examples);
 - the version isn't a pre-release, its tag (if one exists) points at this commit, and it isn't already on Maven
   Central or Docker Hub;
 - the GPG setup and Maven Central credentials `publish-maven-central` needs are in place (step 6), and Docker is
   running.
 
 It then runs `make all-tests` and `make distro`, asks once, publishes to Maven Central and Docker Hub, checks the
-published images with `make docker-verify`, and deploys the docs site with `make gh-docs`. It ends by printing the
-GitHub release (step 7) and Homebrew (step 9) steps, which stay manual. Run `make release-check` on its own to see
-what's still missing. If a release stops after publishing somewhere, finish it with the remaining targets, since
-`release-check` refuses a version that is already published.
+published images with `make docker-verify`, tags the commit as the version and pushes the tag with `make release-tag`,
+and deploys the docs site with `make gh-docs`; the tag comes first because the site's `git clone --branch` commands
+check it out. It ends by printing the GitHub release (step 7) and Homebrew (step 9) steps, which stay manual. Run
+`make release-check` on its own to see what's still missing. If a release stops after publishing somewhere, finish it
+with the remaining targets, since `release-check` refuses a version that is already published.
 
 Merging doesn't deploy the site; only a release does. The docs workflow (`.github/workflows/docs.yml`) builds the
 site and the KDocs on every push to `master`, as a check `make release-check` requires, but deploys only from a
@@ -50,6 +51,10 @@ is, unreleased pages included.
    - `src/test/kotlin/website/DockerExamples.txt`, `EmbeddedAgentExamples.txt` (Gradle and Maven), and
      `KubernetesExamples.txt` — snippet sources included by the website's Docker, Embedded Agent, and
      Kubernetes pages, so the published site shows whatever version is here.
+   - The `git clone --branch` tag the demos and the Helm install check out, so a reader runs the scripts released with
+     the images they pull: `README.md` and `llms.txt`, `demos/basics/README.md`, `demos/network/README.md`, and
+     `demos/kubernetes/README.md`, and the website's `demo.md`, `network-demo.md`, `kubernetes-demo.md`, and
+     `getting-started.md`.
    - This step, and the matching line in `.claude/skills/publishing-release/SKILL.md`.
 
    `RELEASE_VERSION_FILES` in the `Makefile` lists these files for `make release-check`; keep it in step with this
@@ -89,7 +94,8 @@ is, unreleased pages included.
      ```
 
 7) Create a release on GitHub (https://github.com/pambrose/prometheus-proxy/releases):
-   - **Tag**: the version with no `v` prefix (e.g. `4.0.1`).
+   - **Tag**: the version with no `v` prefix (e.g. `4.0.1`). `make release` has pushed it already, so create the
+     release on it: `gh release create <version> --verify-tag …`, as `make release` prints.
    - **Title**: the version with a `v` prefix (e.g. `v4.0.1`).
    - **Description**: summarize the changes and include a full-changelog link
      (e.g. `**Full Changelog**: https://github.com/pambrose/prometheus-proxy/compare/<prev>...<new>`).
@@ -98,8 +104,9 @@ is, unreleased pages included.
 
 8) Build and push the multi-arch Docker images: `make docker-push`. This tags both `:latest` and
    `:<version>`; it refuses to push pre-release versions (`-SNAPSHOT`/`-rc`/`-beta`/`-alpha`) as `:latest`.
-   Once `make docker-verify` passes, deploy the docs site with `make gh-docs`, so it shows the new version;
-   `make gh-status` lists the docs workflow's runs.
+   Once `make docker-verify` passes, push the release tag with `make release-tag`, which the docs' clone commands
+   check out, then deploy the docs site with `make gh-docs`, so it shows the new version; `make gh-status` lists the
+   docs workflow's runs.
 
 9) Update the Homebrew formulae once the GitHub release is published: `make homebrew-formulae`, then commit and
    push the tap. The target downloads the release's `prometheus-proxy.jar` and `prometheus-agent.jar`, hashes

@@ -61,10 +61,11 @@ the demo needs only:
 
 ## Quick start
 
-Clone the repository, then run the demo's commands from its own directory, where `make help` lists its targets:
+Clone the repository at the latest release, then run the demo's commands from its own directory, where `make help` lists
+its targets:
 
 ```bash
-git clone --depth 1 https://github.com/pambrose/prometheus-proxy.git
+git clone -c advice.detachedHead=false --depth 1 --branch 4.5.0 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/basics
 make up      # pulls the images, starts everything, and prints the URLs
 make tour    # walks through the guided tour below, pausing before each step
@@ -245,8 +246,9 @@ register only the paths its patterns allow.
 
 That's the tour. For proxy failover, filtering at the agent, and tracing through the firewall, go on to the
 [network demo](../network). The same proxy and agent, deployed on Kubernetes with their Helm charts, are in the
-[Kubernetes demo](../kubernetes). The demos use different ports, so they can run side by side, but each takes memory
-and CPU: `make down` stops this one and frees its resources.
+[Kubernetes demo](../kubernetes), which needs kind, `kubectl`, and Helm as well as Docker. The demos use different
+ports, so they can run side by side, but each takes memory and CPU: `make down` stops this one and frees its
+resources.
 
 ## Scenario reference
 

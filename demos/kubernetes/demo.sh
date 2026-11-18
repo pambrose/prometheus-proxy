@@ -143,17 +143,34 @@ need() { command -v "$1" >/dev/null 2>&1 || die "$1 is not on the PATH; $2"; }
 
 check_tools() {
   local kind_version helm_version
-  need docker "the demo needs Docker"
+  need docker "install Docker (https://docs.docker.com/get-started/get-docker/)"
   docker info >/dev/null 2>&1 || die "Docker isn't running"
   need kind "install kind $MIN_KIND_VERSION or later (https://kind.sigs.k8s.io/)"
   need kubectl "install kubectl (https://kubernetes.io/docs/tasks/tools/)"
   need helm "install Helm 3 or 4 (https://helm.sh/docs/intro/install/)"
+  # Without curl, the wait for each service would retry until its deadline and then blame the service.
+  need curl "install curl; the demo uses it to wait for each service to answer"
   kind_version="$(kind version | sed -nE 's/^kind v([0-9]+\.[0-9]+\.[0-9]+).*/\1/p')"
   [[ -n "$kind_version" ]] || die "can't read kind's version from '$(kind version)'"
   version_at_least "$kind_version" "$MIN_KIND_VERSION" ||
     die "kind $kind_version is older than $MIN_KIND_VERSION, the release the demo's node image is built for"
   helm_version="$(helm version --template '{{.Version}}' 2>/dev/null || true)"
   [[ "$helm_version" =~ ^v[34]\. ]] || die "the demo needs Helm 3 or 4, not '$helm_version'"
+}
+
+# Building the proxy and agent runs Gradle, which needs a JDK 17 or later: the one JAVA_HOME names, as the Gradle
+# wrapper takes it, or else the java on the PATH. Checked before anything is built, so a missing or old one is named
+# up front.
+check_jdk() {
+  local java="${JAVA_HOME:+$JAVA_HOME/bin/}java" version
+  command -v "$java" >/dev/null 2>&1 ||
+    die "building the proxy and agent from this checkout takes a JDK 17 or later;" \
+      "install one, or set JAVA_HOME (https://adoptium.net)"
+  version="$("$java" -version 2>&1 | sed -nE '1s/.*version "(1\.)?([0-9]+).*/\2/p')"
+  if ! [[ "$version" =~ ^[0-9]+$ ]] || ((version < 17)); then
+    die "building the proxy and agent from this checkout takes a JDK 17 or later, not Java ${version:-of an unknown" \
+      "version} ($java)"
+  fi
 }
 
 cluster_exists() { kind get clusters 2>/dev/null | grep -qx "$1"; }
@@ -204,6 +221,7 @@ image_id() { docker image inspect -f '{{.Id}}' "$1" 2>/dev/null || true; }
 
 build_images() {
   local old_ids id
+  check_jdk
   docker buildx version >/dev/null 2>&1 || die "docker buildx is missing; the demo builds its images with it"
   bold "Building the proxy and agent from this checkout"
   "$MAKE" --no-print-directory -C "$REPO_DIR" jars

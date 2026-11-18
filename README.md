@@ -58,23 +58,24 @@ it one step at a time: what to open, what to look for, and how each step does wh
 |---|---|---|
 | [Basics](demos/basics) | The proxy, its live dashboard, and three agents behind a simulated firewall, with Prometheus and Grafana. A service fails and another hangs, a redundant pair of agents keeps a path up, new targets appear without a restart, a frozen agent is evicted, and the proxy refuses a path an agent's identity doesn't allow. | 9 parts, about 22 minutes |
 | [Network](demos/network) | The same proxy and agents with a simulated WAN between them, and a standby proxy. A far link, a thin one fixed by filtering at the agent, a proxy that goes away, a link that dies silently, a flaky link traced in Zipkin, and the whole WAN going down. | 7 parts, about 21 minutes |
-| [Kubernetes](demos/kubernetes) | The project's Helm charts on two kind clusters. The target cluster exposes nothing, annotating a Service is all it takes for Prometheus to scrape it, Kubernetes replaces a lost agent by itself, and a config change costs a restart where a target change doesn't. | 4 parts, about 11 minutes |
+| [Kubernetes](demos/kubernetes) | The project's Helm charts on two kind clusters. The target cluster exposes nothing, annotating a Service is all it takes for Prometheus to scrape it, Kubernetes replaces a lost agent by itself, and a config change costs a restart where a target change doesn't. Needs kind, `kubectl`, and Helm as well as Docker. | 4 parts, about 11 minutes |
 
 Start with the basics demo. The proxy and agent are the released images, from Docker Hub, so there's nothing to build:
-on macOS or Linux, it needs only [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2, `git`,
-`make`, `curl`, and a browser.
+on macOS or Linux, the basics and network demos need only [Docker](https://docs.docker.com/get-started/get-docker/)
+with Compose v2, `git`, `make`, `curl`, and a browser. The Kubernetes demo runs two Kubernetes clusters in Docker, so it
+also needs [kind](https://kind.sigs.k8s.io/) 0.33.0 or later, [`kubectl`](https://kubernetes.io/docs/tasks/tools/),
+and [Helm](https://helm.sh/) 3 or 4.
 
 ```bash
-git clone --depth 1 https://github.com/pambrose/prometheus-proxy.git
+git clone -c advice.detachedHead=false --depth 1 --branch 4.5.0 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/basics
 make up      # pulls the images, starts everything, and prints the URLs
 make tour    # the guided tour
 make down    # stops the demo and removes its containers
 ```
 
-The demos use different ports, so they can run side by side. The Kubernetes demo also needs
-[kind](https://kind.sigs.k8s.io/) 0.33.0 or later, `kubectl`, and [Helm](https://helm.sh/) 3 or 4. Each demo's README
-lists what it needs and has its full script, and the website's
+The demos use different ports, so they can run side by side. Each demo's README lists what it needs and has its full
+script, and the website's
 [Basics Demo](https://pambrose.github.io/prometheus-proxy/demo/),
 [Network Demo](https://pambrose.github.io/prometheus-proxy/network-demo/), and
 [Kubernetes Demo](https://pambrose.github.io/prometheus-proxy/kubernetes-demo/) pages walk through the same scenarios

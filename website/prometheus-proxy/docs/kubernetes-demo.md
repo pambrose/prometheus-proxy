@@ -5,7 +5,8 @@ the firewall. This third demo deploys the same proxy and agent the way a platfor
 [kind](https://kind.sigs.k8s.io/) clusters, with the project's own Helm charts, and Kubernetes doing the operating. It
 shows that the target cluster exposes nothing, that annotating a Service is all it takes for Prometheus to scrape it,
 that Kubernetes replaces a lost agent by itself, and what a change to the agent's config costs next to a change to its
-targets. Every screenshot on this page comes from it.
+targets. Every screenshot on this page comes from it. Unlike the other two demos, it needs kind, `kubectl`, and Helm as
+well as Docker: see [What you need](#what-you-need).
 
 ``` mermaid
 %%{init: {'flowchart': {'curve': 'linear'}}}%%
@@ -36,7 +37,8 @@ graph LR
 ## What you need
 
 The proxy and agent are the latest release's images, which each cluster pulls from Docker Hub, so there's nothing to
-build. On macOS or Linux, the demo needs only:
+build. Unlike the other two demos, this one needs kind, `kubectl`, and Helm as well as Docker. On macOS or Linux, it
+needs:
 
 - [Docker](https://docs.docker.com/get-started/get-docker/): Docker Desktop, or Docker Engine. kind runs each cluster's
   node as a container.
@@ -50,10 +52,11 @@ build. On macOS or Linux, the demo needs only:
 
 ## Running it
 
-Clone the repository, then run the demo's commands from its own directory, where `make help` lists its targets:
+Clone the repository at the latest release, then run the demo's commands from its own directory, where `make help` lists
+its targets:
 
 ```bash
-git clone --depth 1 https://github.com/pambrose/prometheus-proxy.git
+git clone -c advice.detachedHead=false --depth 1 --branch 4.5.0 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/kubernetes
 make up      # creates both clusters, installs everything, prints the URLs
 make tour    # walks through every scenario below, pausing before each step

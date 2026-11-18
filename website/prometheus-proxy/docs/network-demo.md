@@ -56,10 +56,11 @@ nothing to build. On macOS or Linux, the demo needs only:
 
 ## Running it
 
-Clone the repository, then run the demo's commands from its own directory, where `make help` lists its targets:
+Clone the repository at the latest release, then run the demo's commands from its own directory, where `make help` lists
+its targets:
 
 ```bash
-git clone --depth 1 https://github.com/pambrose/prometheus-proxy.git
+git clone -c advice.detachedHead=false --depth 1 --branch 4.5.0 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/network
 make up      # pulls the images, starts everything, prints the URLs
 make tour    # walks through every scenario below, pausing before each step
@@ -279,6 +280,7 @@ clean slate, `make down && make up`.
   a guided tour, explaining how each one works, and lists the files that set the demo up,
   including which Toxiproxy toxic each scenario uses.
 - The [Kubernetes Demo](kubernetes-demo.md) deploys the same proxy and agent with their Helm charts on two kind
-  clusters, and shows Kubernetes driving the agent's targets and replacing its pod.
+  clusters, and shows Kubernetes driving the agent's targets and replacing its pod. It needs kind, `kubectl`, and Helm
+  as well as Docker.
 - [Running in Production](production.md#high-availability) covers a standby proxy and the agent's ordered endpoints.
 - [Advanced Topics](advanced.md#stale-agent-cleanup) covers how the proxy evicts a silent agent.

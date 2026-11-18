@@ -2,6 +2,27 @@
 
 ---
 
+## Unreleased
+
+_Not yet released_
+
+Fixes to the demos' setup: each checks for the tools it needs before it starts, and the docs say up front that the
+Kubernetes demo needs kind, `kubectl`, and Helm.
+
+### Bug Fixes
+
+- **A demo names a missing tool before it starts.** `make up` checks for Docker, running, with Compose v2, or, for the
+  Kubernetes demo, kind, `kubectl`, and Helm, and for `curl`; without `curl`, it waited two minutes and then blamed a
+  service that was fine. `make up-local` also checks for a JDK 17 or later.
+
+### Documentation
+
+- The docs say the Kubernetes demo needs kind, `kubectl`, and Helm as well as Docker wherever they point to it.
+- The demos and the Helm charts are cloned at the latest release's tag rather than `master`, so a demo's scripts always
+  match the images it pulls.
+
+---
+
 ## 4.5.0
 
 _Released 2026-11-17_
