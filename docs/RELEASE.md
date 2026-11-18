@@ -27,12 +27,12 @@ GitHub release (step 7) and Homebrew (step 9) steps, which stay manual. Run `mak
 what's still missing. If a release stops after publishing somewhere, finish it with the remaining targets, since
 `release-check` refuses a version that is already published.
 
-Merging steps 1-3 doesn't deploy the site. The site shows the version step 2 bumps as its Docker tag and Maven
-coordinate (`make site-version` prints it), so the docs workflow (`.github/workflows/docs.yml`) deploys a push to
-`master` only once that version is on Maven Central and both its images are on Docker Hub. Until `make release`
-deploys it, the site stays at the previous release, and docs changes merged in the meantime wait with it. Between
-releases the site shows the last release, which is published, so a docs change deploys as it merges, whatever
-`gradle.properties` holds, a `-SNAPSHOT` included. `make gh-docs` deploys whatever the version.
+Merging doesn't deploy the site; only a release does. The docs workflow (`.github/workflows/docs.yml`) builds the
+site and the KDocs on every push to `master`, as a check `make release-check` requires, but deploys only from a
+`workflow_dispatch`, which `make release` starts with `make gh-docs` once it has published. So the live site describes
+the last release, which its visitors can install, until the next one: docs changes merged in between, steps 1-3
+included, wait for it. To deploy a fix the live site can't wait for, run `make gh-docs`, which deploys `master` as it
+is, unreleased pages included.
 
 1) Bump `version` in `gradle.properties` (the single source of truth).
 

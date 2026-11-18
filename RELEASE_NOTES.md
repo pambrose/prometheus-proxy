@@ -27,8 +27,8 @@ most 10,000 agents connected with one identity, which is every agent when agent 
   Logback, and Spring Boot ahead of your `logback-spring.xml`, used as your application's logging configuration.
   It is gone, so your own configuration applies again. If your application has none, and its logging came from the
   agent's file (INFO, with gRPC's internal logging at WARN), Logback now falls back to its default, which logs
-  everything at DEBUG: add a `logback.xml`, and consider setting `io.grpc.internal` to WARN as the standalone agent
-  does. The website's Embedded Agent page shows how.
+  everything at DEBUG: add a `logback.xml`, and consider setting the `io.grpc.internal` logger to WARN as the
+  standalone agent does. The website's Embedded Agent page shows how.
 - **Maven builds get newer Jackson.** A Maven build that embeds the agent now resolves Jackson 2.23.0 through it,
   where it got 2.12.7. A Jackson version your build declares itself still wins.
 - **Builds that embed the agent get protobuf 4.x.** The agent's generated gRPC classes now need protobuf-java 4.36.2
@@ -378,11 +378,10 @@ most 10,000 agents connected with one identity, which is every agent when agent 
   published, as an embedding application does. It compiles the website's Java and Kotlin examples, and checks the
   Jackson, netty-tcnative, and Netty versions Maven resolves and that no jar carries a Logback configuration. A
   release waits for it.
-- Documentation changes reach the website as they merge again. The docs workflow deployed only once the version in
-  `gradle.properties` was published, and between releases that version is a `-SNAPSHOT`, which is never released, so
-  no docs change deployed until the next release. It now checks the version the website gives, which
-  `make site-version` prints, so a new release's pages still wait for the release to be published. The
-  `bin/docker-*.sh` scripts run that version too.
+- The website changes only with a release. Documentation merged between releases waits for the next one, which
+  deploys it, so the site always describes the release you can install, never features merged since. The
+  `bin/docker-*.sh` scripts run the version the website gives, which `make site-version` prints, rather than the one in
+  `gradle.properties`, which between releases is a `-SNAPSHOT` with no image.
 - CI builds the documentation site with a pinned uv, 0.13.7, rather than whichever release is newest.
 - The container tests pin their nginx and Prometheus images by digest, so a tag pushed again can't change what they
   test.

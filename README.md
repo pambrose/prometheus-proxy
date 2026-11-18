@@ -46,7 +46,7 @@ documentation.
 ## 🎬 Try the Demos
 
 The quickest way to understand Prometheus Proxy is to watch it work. The repository ships three self-contained demos,
-each started with `make up` and run entirely on one laptop. Each has a guided tour, `make tour`, that walks you through
+each started with `make up` and run locally. Each has a guided tour, `make tour`, that walks you through
 it one step at a time: what to open, what to look for, and how each step does what it does.
 
 <picture>

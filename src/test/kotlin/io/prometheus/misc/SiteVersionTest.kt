@@ -18,26 +18,20 @@
 
 package io.prometheus.misc
 
-import com.charleskorn.kaml.Yaml
-import com.charleskorn.kaml.YamlList
-import com.charleskorn.kaml.YamlMap
-import com.charleskorn.kaml.YamlScalar
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeEmpty
-import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.ints.shouldNotBeZero
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldMatch
-import io.kotest.matchers.string.shouldNotContain
 import java.io.File
 import java.util.concurrent.TimeUnit
 import kotlin.io.path.createTempDirectory
 
 // The docs site gives the version step 2 of docs/RELEASE.md bumps, not the gradle.properties one, which is a -SNAPSHOT
-// between releases. docs.yml read gradle.properties to decide whether a push to master deploys, so with a -SNAPSHOT
-// there, it deployed nothing until the next release (November #22). make site-version prints what the site gives.
+// between releases, with no image (November #22). make site-version prints what the site gives, and bin/docker-*.sh
+// and the demos run its images.
 class SiteVersionTest : StringSpec() {
   private class MakeResult(
     val exitCode: Int,
@@ -95,23 +89,6 @@ class SiteVersionTest : StringSpec() {
       }
     }
 
-    "docs.yml should decide whether to deploy from make site-version, not from gradle.properties" {
-      val steps =
-        (Yaml.default.parseToYamlNode(File(DOCS_WORKFLOW).readText()) as YamlMap)
-          .get<YamlMap>("jobs")
-          ?.get<YamlMap>("build")
-          ?.get<YamlList>("steps")
-          ?.items
-          .orEmpty()
-          .map { it as YamlMap }
-      val check = steps.filter { it.get<YamlScalar>("id")?.content == "published" }
-      check shouldHaveSize 1
-
-      val run = check.single().get<YamlScalar>("run")?.content.orEmpty()
-      run shouldContain "make -s --no-print-directory site-version"
-      run shouldNotContain "gradle.properties"
-    }
-
     // A -SNAPSHOT version never has an image, and the version after it has none until it's released.
     "bin/docker-agent.sh and bin/docker-proxy.sh should run the version the site gives" {
       DOCKER_SCRIPTS
@@ -137,7 +114,6 @@ class SiteVersionTest : StringSpec() {
 
   companion object {
     private const val DOCKER_EXAMPLES = "src/test/kotlin/website/DockerExamples.txt"
-    private const val DOCS_WORKFLOW = ".github/workflows/docs.yml"
     private const val SNAPSHOT = "0.0.0-SNAPSHOT"
     private const val MAKE_TIMEOUT_SECS = 60L
     private val DOCKER_SCRIPTS = listOf("bin/docker-agent.sh", "bin/docker-proxy.sh")

@@ -1,4 +1,11 @@
 name: Documentation
+# The site deploys only with a release: `make release` starts a workflow_dispatch (`make gh-docs`) once it has
+# published to Maven Central and Docker Hub and checked the images, and that run deploys master as the release left it.
+# A push to master builds the site and the KDocs without deploying them, so the live site keeps describing the release
+# its visitors can install, never features merged since; and the build is a check on each commit, which make
+# release-check requires to have passed. Nothing else builds the KDocs before a release. To deploy master between
+# releases, a fix the live site can't wait for, run `make gh-docs`: it deploys master as it is, unreleased pages
+# included.
 on:
   push:
     branches:
@@ -9,8 +16,10 @@ on:
 permissions:
   contents: read
 
+# One run at a time per event, never cancelled. Pushes and deploys queue apart, so a push's build can't take the place
+# of a deploy waiting in the queue, which a pending run in the same group would.
 concurrency:
-  group: pages
+  group: pages-${{ github.event_name }}
   cancel-in-progress: false
 
 jobs:
@@ -25,45 +34,11 @@ jobs:
     permissions:
       contents: read
       pages: read
-    outputs:
-      deploy: ${{ steps.published.outputs.deploy }}
     steps:
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-
-      # The site gives, as its Docker image tag and Maven coordinate, the version that step 2 of docs/RELEASE.md bumps
-      # (`make site-version` prints it), and a bumped version doesn't exist until `make release` publishes it. So a
-      # push deploys only once the version's POM is on Maven Central and both its images are on Docker Hub; until then
-      # the site stays at the previous release. Between releases the site still gives the last one, which is
-      # published, so docs changes deploy as they merge, whatever gradle.properties holds: a -SNAPSHOT there had kept
-      # every docs change from deploying until the next release. A workflow_dispatch always deploys: `make release`
-      # starts one (`make gh-docs`) once it has verified the images. The site is built either way, so a push that
-      # doesn't deploy still checks the build. If make can't name one version, the job fails.
-      - name: Check that the version the site gives is published
-        id: published
-        run: |
-          deploy=true
-          if [ "$GITHUB_EVENT_NAME" = push ]; then
-            version=$(make -s --no-print-directory site-version)
-            for url in \
-              "https://repo1.maven.org/maven2/com/pambrose/prometheus-proxy/$version/prometheus-proxy-$version.pom" \
-              "https://hub.docker.com/v2/namespaces/pambrose/repositories/prometheus-proxy/tags/$version" \
-              "https://hub.docker.com/v2/namespaces/pambrose/repositories/prometheus-agent/tags/$version"; do
-              code=$(curl -sSL -o /dev/null -w '%{http_code}' --max-time 30 "$url" || true)
-              case "$code" in
-                200) ;;
-                404)
-                  deploy=false
-                  echo "::notice::Not deploying: $version isn't published yet ($url); make release deploys the site once it is" ;;
-                *)
-                  deploy=false
-                  echo "::warning::Not deploying: could not tell whether $version is published ($url answered $code); make gh-docs deploys the site" ;;
-              esac
-            done
-          fi
-          echo "deploy=$deploy" >> "$GITHUB_OUTPUT"
 
       # Build the Zensical documentation site from website/uv.lock with `make build-site`, which CI's docs-site job
       # also runs on every pull request. uv reads website/.python-version and installs that Python itself.
@@ -90,17 +65,19 @@ jobs:
       # Copy KDocs into the Zensical site output
       - run: cp -r build/dokka/html website/prometheus-proxy/site/kdocs
 
+      # Only a run that deploys needs the artifact.
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        if: github.event_name == 'workflow_dispatch'
         with:
           path: website/prometheus-proxy/site
 
   # Deploy the artifact produced by the build job. Deliberately minimal (no
   # checkout or build) so re-running just this job re-deploys the existing
-  # artifact without rebuilding or re-uploading it. It is skipped on a push whose
-  # version isn't published yet (the build job's check).
+  # artifact without rebuilding or re-uploading it. Only a workflow_dispatch
+  # deploys (see the top of this file); a push only builds.
   deploy:
     needs: build
-    if: needs.build.outputs.deploy == 'true'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

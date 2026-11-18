@@ -410,9 +410,9 @@ reports: coverage  ## Alias for `coverage`
 # The version the docs site advertises: the tag of every pambrose/prometheus-proxy and -agent image, and the version of
 # the com.pambrose:prometheus-proxy coordinate, on its pages and in its snippets, which step 2 of docs/RELEASE.md bumps.
 # Fails unless they give exactly one. It isn't the gradle.properties version (VERSION), which can be a -SNAPSHOT
-# between releases, while the site still gives the last release. docs.yml deploys a push once this version is
-# published, and bin/docker-*.sh run its images. A tag ends at a letter or digit, so a sentence's full stop isn't part
-# of it, and starts with a digit, so latest isn't a version.
+# between releases, while the site still gives the last release. bin/docker-*.sh and the demos run its images. A tag
+# ends at a letter or digit, so a sentence's full stop isn't part of it, and starts with a digit, so latest isn't a
+# version.
 site-version:  ## Print the version the docs site advertises in its image tags and Maven coordinate
 	@versions=$$(grep -rhoE '(pambrose/prometheus-(proxy|agent)|com\.pambrose:prometheus-proxy):[0-9]([0-9A-Za-z.-]*[0-9A-Za-z])?' \
 		$(SITE_VERSION_SOURCES) | sed 's/.*://' | sort -u); \
@@ -422,8 +422,8 @@ site-version:  ## Print the version the docs site advertises in its image tags a
 		|| { echo "ERROR: the docs site gives more than one version:" $$versions >&2; exit 1; }; \
 	echo "$$versions"
 
-# A push to master deploys the docs site only once the version it advertises is published (see docs.yml); a run started
-# here, as make release does once it has published, deploys whatever the version.
+# The only way the docs site deploys: a push to master builds it without deploying (see docs.yml), so it changes with a
+# release, which runs this once it has published. Run by hand, it deploys master as it is, unreleased pages included.
 gh-docs:  ## Build and deploy the docs site from master now (runs the docs.yml workflow)
 	gh workflow run docs.yml
 
@@ -546,13 +546,13 @@ _confirm-release:
 	@echo "                 for $(PLATFORMS)"
 	@printf 'Continue? [y/N] ' && read ans && [ "$$ans" = "y" ] || { echo "Nothing published."; exit 1; }
 
-# Each step runs only if the one before it passed, so nothing is published until the checkout passes release-check,
-# the full test suite (whose container tests build the images and scrape through them), and the release build.
-# Steps 4-6 and 8 of docs/RELEASE.md. Step 8 ends with gh-docs, once the images check out: docs.yml deploys a push only
-# once the version it advertises is published, so the merge of the bump left the site at the previous release, and
-# this deploys the new one. Everything is published by then, so a failure to start that deploy is reported without
-# hiding the next steps. The GitHub release (step 7) and the Homebrew tap (step 9) are printed as next steps. After a
-# partial release, finish with the remaining targets: release-check refuses a version already published.
+# Each step runs only if the one before it passed, so nothing is published until the checkout passes release-check, the
+# full test suite (whose container tests build the images and scrape through them), and the release build. Steps 4-6 and
+# 8 of docs/RELEASE.md. Step 8 ends with gh-docs, once the images check out: a push to master doesn't deploy the docs
+# site, so the site shows the previous release until this deploys the new one. Everything is published by then, so a
+# failure to start that deploy is reported without hiding the next steps. The GitHub release (step 7) and the Homebrew
+# tap (step 9) are printed as next steps. After a partial release, finish with the remaining targets: release-check
+# refuses a version already published.
 release:  ## Gate, test, build, publish VERSION to Maven Central and Docker Hub (asks first), then deploy the docs
 	$(MAKE) release-check
 	$(MAKE) all-tests

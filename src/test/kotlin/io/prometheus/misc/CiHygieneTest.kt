@@ -31,6 +31,7 @@ import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.maps.shouldNotBeEmpty
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldMatch
 import io.prometheus.containers.support.ContainerTestSupport
 import org.testcontainers.utility.DockerImageName
@@ -191,6 +192,36 @@ class CiHygieneTest : StringSpec() {
       setupUv.map { (_, step) -> step.input("version") ?: step.input("version-file") }.distinct() shouldHaveSize 1
     }
 
+    // The live site describes the release its visitors can install, so only make release deploys it, through the
+    // workflow_dispatch make gh-docs starts once the release is published. A push to master builds the site and the
+    // KDocs, a check make release-check requires, without uploading or deploying them.
+    "the docs site should deploy only from the workflow_dispatch make release starts" {
+      workflows
+        .getValue(DOCS_WORKFLOW)
+        .get<YamlMap>("on")
+        ?.entries
+        ?.keys
+        ?.map { it.content }
+        .orEmpty() shouldContainAll listOf("push", "workflow_dispatch")
+
+      val docsJobs = jobs.toMap()
+      docsJobs.getValue("$DOCS_WORKFLOW/deploy").get<YamlScalar>("if")?.content shouldBe DISPATCH_ONLY
+      val uploads =
+        docsJobs
+          .getValue("$DOCS_WORKFLOW/build")
+          .get<YamlList>("steps")
+          ?.items
+          .orEmpty()
+          .map { it as YamlMap }
+          .filter { it.get<YamlScalar>("uses")?.content.orEmpty().startsWith(UPLOAD_PAGES) }
+      uploads shouldHaveSize 1
+      uploads.single().get<YamlScalar>("if")?.content shouldBe DISPATCH_ONLY
+
+      val makefile = File(MAKEFILE).readText()
+      makefile shouldContain Regex("""(?m)^gh-docs:.*\n\tgh workflow run $DOCS_WORKFLOW$""")
+      makefile shouldContain "$(MAKE) --no-print-directory gh-docs"
+    }
+
     // datreeio's main branch moves, and with it the ServiceMonitor schema that helm-lint validates against.
     "the CRD schemas should come from a fixed commit of the catalog" {
       makeVars["CRD_SCHEMAS_COMMIT"].orEmpty() shouldMatch Regex("[0-9a-f]{40}")
@@ -215,6 +246,9 @@ class CiHygieneTest : StringSpec() {
     private val KUBERNETES_DEMO_IMAGE_DIRS = listOf("$DEMOS_DIR/kubernetes/k8s", "$DEMOS_DIR/kubernetes/kind")
     private val YAML_EXTENSIONS = setOf("yaml", "yml")
     private const val SETUP_UV = "astral-sh/setup-uv@"
+    private const val DOCS_WORKFLOW = "docs.yml"
+    private const val UPLOAD_PAGES = "actions/upload-pages-artifact@"
+    private const val DISPATCH_ONLY = "github.event_name == 'workflow_dispatch'"
     private val MAKE_ASSIGNMENT = Regex("""(?m)^([A-Z][A-Z0-9_]*) :?= (.*)$""")
 
     // A `const val` whose name ends in _IMAGE, with its string on the same line or the next.

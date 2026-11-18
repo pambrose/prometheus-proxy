@@ -569,8 +569,9 @@ These support helpers also live here (not test classes themselves):
   (`demos/*/docker/compose.yml`, the basics and network demos') pulls is pinned by digest and any Prometheus it runs
   is the `Makefile`'s, as is every image the Kubernetes demo's manifests and kind configs (`demos/kubernetes/k8s` and
   `demos/kubernetes/kind`) name, the kind node image among them, every `astral-sh/setup-uv` step installs a pinned uv,
-  the same one in each, and the CRD schemas `helm-lint` validates against come from a fixed commit, so a hung job gives
-  its check back and what CI runs changes only with a diff here
+  the same one in each, the CRD schemas `helm-lint` validates against come from a fixed commit, and `docs.yml` uploads
+  and deploys the site only from the `workflow_dispatch` `make release` starts with `make gh-docs`, so a hung job gives
+  its check back, what CI runs changes only with a diff here, and a push to `master` leaves the live site alone
 - **ConfigFileKeysTest** — every setting in a HOCON config the repo ships or its tests load (`config/test-configs`,
   `examples`, `testing`, `etc/compose`, the basics, network, and Kubernetes demos' `demos/basics/config`,
   `demos/network/config`, and `demos/kubernetes/config`, the container suite's agent configs, and the bundled
@@ -605,8 +606,8 @@ These support helpers also live here (not test classes themselves):
   instead of only in the container suite
 - **SiteVersionTest** — `make site-version` prints the version the docs site's image tags and Maven coordinate give:
   the Docker examples' tag, a release version, whatever `gradle.properties` holds. It skips `latest` and a full stop
-  after a tag, and fails when the site gives two versions or none. `docs.yml`'s deploy check and `bin/docker-*.sh`
-  read their version from it, not from `gradle.properties`, whose `-SNAPSHOT` between releases has no image
+  after a tag, and fails when the site gives two versions or none. `bin/docker-*.sh` read their version from it, not
+  from `gradle.properties`, whose `-SNAPSHOT` between releases has no image
 - **TestingGuideTest** — every `*Test.kt` under `src/test/kotlin` is named in its package's section of this
   document, and every support file under `src/test` is named somewhere in it
 - **WebsiteConfigKeysTest** — every `proxy.` and `agent.` config key the website's pages name is in

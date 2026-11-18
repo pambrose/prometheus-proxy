@@ -122,11 +122,12 @@ job `RELEASE_REQUIRED_JOBS` lists, passed; a dated section for the version in bo
 the previous one, in every bumped file; not already published). `RELEASE_VERSION_FILES` in the `Makefile` mirrors
 step 2's list of hard-coded version literals; keep the two in step.
 
-`make release` ends by deploying the docs site (`make gh-docs`, a `workflow_dispatch` of `docs.yml`), because a push
-to `master` deploys only once the version the site shows as its image tag and Maven coordinate (`make site-version`,
-the version step 2 bumps) is on Maven Central and Docker Hub, so a merged version bump doesn't deploy. Between
-releases the site shows the last release, so a docs change deploys as it merges; that's why the check reads the site
-and not `gradle.properties`, which can hold a `-SNAPSHOT` (`SiteVersionTest` pins both). CI's `docs-site` job
+`make release` ends by deploying the docs site (`make gh-docs`, a `workflow_dispatch` of `docs.yml`), the only run
+that deploys it: a push to `master` builds the site and the KDocs as a check, without deploying, so the live site
+describes the last release until the next one, docs changes merged in between included (`CiHygieneTest` pins this).
+`make gh-docs` by hand deploys `master` as it is, unreleased pages included. `make site-version` prints the version the
+site shows as its image tag and Maven coordinate, the one step 2 bumps, which `bin/docker-*.sh` and the demos run; not
+`gradle.properties`, which can hold a `-SNAPSHOT` (`SiteVersionTest`). CI's `docs-site` job
 (`make build-site`) builds the site on every pull request; it's named so as not to share a name with the `build`
 check the branch protection requires.
 
