@@ -115,6 +115,26 @@ a way into the app.
 On the proxy dashboard, the embedded agent is an agent like any other: `coffee-shop-1.0`, named after the app's version,
 with two paths, the coffee shop's metrics and its own, and its scrapes as they happen.
 
+## Where the agent is configured
+
+The coffee shop configures its agent in code, with no config file. `startPrometheusAgent`, in
+[`PrometheusAgent.kt`](https://github.com/pambrose/prometheus-proxy/blob/master/demos/embedded/app/src/main/kotlin/coffeeshop/PrometheusAgent.kt),
+builds the agent's config in memory from the app's environment and starts it with
+[`Agent.startAsyncAgent(config)`](embedded-agent.md#configuring-in-code):
+
+```kotlin
+--8<-- "demos/embedded/app/src/main/kotlin/coffeeshop/PrometheusAgent.kt:agent-config"
+```
+
+- [`Main.kt`](https://github.com/pambrose/prometheus-proxy/blob/master/demos/embedded/app/src/main/kotlin/coffeeshop/Main.kt)
+  calls it once the app's routes are in place, so the agent's first scrape finds `/metrics`, and shuts the agent down
+  when the app stops (`ApplicationStopped`).
+- The environment comes from the demo's
+  [`docker/compose.yml`](https://github.com/pambrose/prometheus-proxy/blob/master/demos/embedded/docker/compose.yml),
+  whose `x-coffee-shop-env` block gives the proxy's address and the name its certificate was issued to, and reads the
+  token, the CA certificate, and the password for `/metrics` from `docker/.env`, which `make up` writes the first time
+  it runs.
+
 ## The coffee shop in Grafana
 
 <figure markdown="span">

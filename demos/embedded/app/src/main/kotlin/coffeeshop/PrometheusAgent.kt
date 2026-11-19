@@ -12,6 +12,9 @@ private val logger = KotlinLogging.logger {}
 // The agent's own metrics endpoint, inside the container only: the agent serves the proxy its scrapes of it.
 private const val AGENT_METRICS_PORT = 8083
 
+// The website's Embedded Demo page shows this function, with its KDoc, from here to its end marker.
+// --8<-- [start:agent-config]
+
 /**
  * Starts the prometheus-proxy agent embedded in the shop, from the app's own settings, in memory: no config file holds
  * the token, the proxy's certificate, or the password for /metrics. It connects to the proxy, so the app opens no port
@@ -75,6 +78,7 @@ fun startPrometheusAgent(appPort: Int): EmbeddedAgentInfo? {
     null
   }
 }
+// --8<-- [end:agent-config]
 
 private fun env(name: String) = System.getenv(name).orEmpty().trim()
 
