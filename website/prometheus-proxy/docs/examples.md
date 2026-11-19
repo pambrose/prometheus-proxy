@@ -128,4 +128,5 @@ Both sides present certificates: the proxy trusts the client CA and the agent su
 --8<-- "examples/tls-with-mutual-auth.conf"
 ```
 
-See [TLS Setup](security/tls.md) for generating certificates and the full TLS option set.
+See [TLS Setup](security/tls.md) for [creating certificates](security/tls.md#creating-certificates) and the full
+TLS option set.

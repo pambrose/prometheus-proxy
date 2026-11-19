@@ -38,10 +38,11 @@ path, and the agent returns a **ScrapeResponse** with the fetched body, status, 
 
 ### Consolidated mode
 
-A mode (`agent.consolidated = true`) in which multiple agents may register the **same** path
-for redundancy, instead of the later registration displacing the earlier one. A scrape of the path
-goes to every agent serving it, and their responses are merged. See
-[Advanced Topics](advanced.md#consolidated-mode).
+A mode (`agent.consolidated = true`) in which multiple agents may register the **same** path,
+for redundancy or to put several instances behind one path, instead of the later registration
+displacing the earlier one. A scrape of the path goes to every agent serving it, and their responses
+are merged, so each agent should scrape its own instance of the service: agents that scrape the same
+endpoint send each series twice. See [Advanced Topics](advanced.md#consolidated-mode).
 
 ### Chunking
 
@@ -71,9 +72,10 @@ restart. Discovered paths are tagged `disc` on the dashboard; static `pathConfig
 
 ### Proxy failover
 
-The agent's high-availability mechanism: an ordered `agent.proxy.endpoints` list tried head-first
-on every reconnect, so the agent moves to a standby when a connect fails and returns to the
-primary once it recovers. One connection is active at a time. See
+The agent's high-availability mechanism: an ordered `agent.proxy.endpoints` list. A failed connect,
+or a proxy that rejects the agent's registration, moves the agent to the next endpoint. When a
+connection that registered drops, the agent starts again from the head of the list, so it returns to
+a recovered primary at its next reconnect. One connection is active at a time. See
 [High availability](production.md#high-availability).
 
 ### Agent identity

@@ -27,6 +27,20 @@ All notable changes to this project are documented in this file.
   whose heading anchors kept those emoji's invisible variation selector. The Basics and Kubernetes demo pages no longer
   say the images are built from the clone, the Running in Production page's health-probe advice renders as a list
   item instead of text inside the HA section, and the KDocs page's fallback link points into the site
+- Where the docs offer consolidated mode for redundancy (Running in Production, Troubleshooting, the Glossary,
+  Architecture, Agent Configuration, and the README), they say each agent should scrape its own instance of the
+  service, since agents that scrape the same endpoint send each series twice. Running in Production no longer offers
+  it for rolling upgrades, which a redeploy with the same identity handles
+- The Glossary, the home page, and the README describe failback as the agent does it: a failed connect or a rejected
+  registration moves it to the next endpoint, and only a registered connection that drops sends it back to the head
+  of the list, so it returns to a recovered primary at its next reconnect
+- The Security page's Current limits note no longer says identity tokens can't come from environment variables,
+  which the same page shows HOCON substitution doing
+- Troubleshooting's Registration is rejected table lists the identity, takeover, path-limit, and reserved-path
+  rejections, and says which ones the agent retries
+- TLS Setup shows how to create a private CA and the proxy's and agents' certificates with OpenSSL or LibreSSL, in
+  place of a link to gRPC's example
+- `docs/cli-args.md`, a second hand-kept copy of the website's CLI Reference, now points to it, as does the README
 
 ## [4.5.0] - 2026-11-17
 

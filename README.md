@@ -154,7 +154,7 @@ infrastructure:
 - **[Proxy High Availability](https://pambrose.github.io/prometheus-proxy/production/#high-availability)** —
   The proxy is no longer a single point of failure for the entire metrics plane. Agents take an
   ordered list of proxy endpoints, fail over to a standby when the primary is unreachable, and return
-  to the primary when it recovers — no health prober, no manual step.
+  to a recovered primary at their next reconnect — no health prober, no manual step.
 - **[Per-Agent Identities and Path Authorization](https://pambrose.github.io/prometheus-proxy/security/#per-agent-identities-and-path-authorization)** —
   A shared token can't tell agents apart, so any holder could register — and silently take over — any
   path. Named identities scope each agent to its own path patterns, enable per-agent revocation, and
@@ -776,7 +776,8 @@ Typesafe Config highlights include:
 * config values can come from CLI options, environment variables, Java system properties, and/or config files.
 * config files can reference environment variables
 
-**📖 Complete configuration reference:** [**CLI Options & Environment Variables Reference**](docs/cli-args.md)
+**📖 Complete configuration reference:** the docs site's [**CLI Reference**](https://pambrose.github.io/prometheus-proxy/cli-reference/)
+lists every CLI option with its environment variable, config property, and default.
 
 ### Common Options Summary
 
@@ -904,7 +905,8 @@ Agents connect to a proxy using [gRPC](https://grpc.io). gRPC supports TLS with 
 necessary certificate and key file paths can be specified via CLI args, environment variables, and configuration file
 settings.
 
-The gRPC docs describe [how to set up TLS](https://github.com/grpc/grpc-java/tree/master/examples/example-tls).
+The docs site's [TLS Setup](https://pambrose.github.io/prometheus-proxy/security/tls/#creating-certificates) shows
+how to create a CA and the proxy's and agents' certificates with OpenSSL.
 The [repo](https://github.com/pambrose/prometheus-proxy/tree/master/testing/certs) includes the certificates and keys
 necessary to test TLS support.
 
@@ -1124,7 +1126,8 @@ Report a security problem privately, not in a public issue, pull request, or dis
 - Increase `max_concurrent_clients` for high-throughput scenarios
 - Tune HTTP client cache settings
 - Consider splitting targets across multiple agents (a consolidated path is scraped through every agent that
-  serves it, so extra agents on one path add redundancy, not throughput)
+  serves it, so extra agents on one path add no throughput, and ones that scrape the same endpoint send each series
+  twice)
 
 ## 📖 Documentation
 

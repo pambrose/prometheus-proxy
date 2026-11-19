@@ -130,10 +130,12 @@ its admin and metrics ports, so no restart policy ever fired. See
     authority override for the whole list, so endpoints with different CAs or certificate SANs fail
     with an opaque handshake error rather than a clear configuration error.
 
-- For **agent** redundancy, use [consolidated mode](advanced.md#consolidated-mode): multiple
-  agents register the same path, and the proxy keeps serving it as long as one remains
-  connected. This also smooths **rolling upgrades** — the new agent registers before the old
-  one drains.
+- For **agent** redundancy, use [consolidated mode](advanced.md#consolidated-mode), with each agent
+  scraping its own instance of the service: the proxy merges their answers into each scrape of the
+  path, and keeps serving it, with the remaining agents' series, while one is down. Agents that scrape
+  the same endpoint send every series once per agent, which Prometheus rejects as duplicates, logging
+  an error on every scrape. A **rolling upgrade** needs no consolidated mode: an agent redeployed with
+  the same identity takes its paths over when it registers.
 
 - For **health probes**, point Kubernetes liveness probes at `/ping`, and readiness probes at `/ping`
   on the proxy and `/healthcheck` on the agent. The proxy's `/healthcheck` measures load, so alert on it
@@ -219,4 +221,4 @@ backlog means agents can't keep up. See [Performance Tuning](advanced.md#perform
 - [ ] Content-size limits sized for your largest payload
 - [ ] JVM heap sized for peak decompressed payload × concurrency
 - [ ] Liveness probes on `/ping`; readiness on `/ping` (proxy) and `/healthcheck` (agent)
-- [ ] Consolidated mode configured where you need agent redundancy
+- [ ] Consolidated mode where you need agent redundancy, with each agent scraping its own instance

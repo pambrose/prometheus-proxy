@@ -157,8 +157,9 @@ it still has allow-all access — the per-agent entries constrain only the agent
 
     Identities are read at startup, so revoking one requires a **proxy restart** — there is no hot
     reload. Identity derives from the presented token, not from an mTLS client certificate, and
-    tokens live in the proxy's config file (no env-var or file-based token source). Compare tokens'
-    operational weight against [mutual TLS](tls.md) when choosing a posture; the two can be combined.
+    tokens come from the proxy's config, written there or substituted from environment variables as
+    described above. Compare tokens' operational weight against [mutual TLS](tls.md) when choosing a
+    posture; the two can be combined.
 
 ## Isolation Between Agents
 
