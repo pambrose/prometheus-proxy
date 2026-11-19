@@ -44,6 +44,19 @@ All notable changes to this project are documented in this file.
 - The README's architecture diagram has a dark-mode variant (`docs/prometheus-proxy-dark.png`), served to dark themes,
   since its arrows and labels, black on a transparent background, vanished on GitHub's dark theme.
   `make readme-diagram-dark` regenerates it (`scripts/dark_diagram.py`) after the diagram changes
+- The README's New Features section summarizes the latest release and links the release notes and changelog for the
+  earlier ones; each release now replaces the summary (`docs/RELEASE.md` step 2) rather than adding to it. Its
+  Examples & Use Cases section is folded into the others: the example configs into Configuration Examples, the common
+  scenarios into Architecture, federation and Nginx into Advanced Features, and gRPC reflection into Security & TLS
+- README fixes: the admin endpoints include `/threaddump`, the TLS Docker agent no longer publishes ports its config
+  doesn't enable and dials `mymachine.local` like the other examples, and Troubleshooting names the HTTP client cache
+  flags
+- The Embedded Agent page documents `EmbeddedAgentInfo.shutdown()` and `Agent.startSyncAgent()`, the Basics Demo
+  page's scenarios follow the tour's order, and the Dashboard page has a navigation icon
+- Copy fixes: Service Discovery explains the Blitz verification path; TLS Setup's Override Authority speaks of
+  subject alternative names; Troubleshooting drops the entry for a fat-JAR bug fixed in 3.2.0, says disabled admin and
+  metrics ports refuse connections rather than answer 404, and quotes the proxy's log line for an identity's denied
+  path; and Agent Configuration gathers its path rules under one heading
 
 ## [4.5.0] - 2026-11-17
 

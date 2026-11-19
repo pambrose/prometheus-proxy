@@ -25,6 +25,7 @@ Kubernetes demo needs kind, `kubectl`, and Helm.
   that scrape the same endpoint send each series twice.
 - The docs describe failback as the agent does it: it returns to a recovered primary at its next reconnect.
 - Troubleshooting lists the identity, takeover, and limit rejections a path registration can get.
+- The Embedded Agent page documents `EmbeddedAgentInfo.shutdown()` and `Agent.startSyncAgent()`.
 - The demos and the Helm charts are cloned at the latest release's tag rather than `master`, so a demo's scripts always
   match the images it pulls.
 - The website's Basics Demo page is now at `basics-demo/`, next to the other two demo pages; links to the old `demo/`
