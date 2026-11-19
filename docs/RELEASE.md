@@ -39,9 +39,9 @@ is, unreleased pages included.
 
 2) Update the `4.5.0` literals to the new version everywhere they are hard-coded
    (`git grep -n` for the outgoing version finds them all):
-   - `README.md` — the Docker tag examples and the Maven Central dependency block. Also add a summary
-     paragraph for the new version at the top of the **New Features** section; the earlier releases'
-     paragraphs stay as they are.
+   - `README.md` — the Docker tag examples and the Maven Central dependency block. Also replace the
+     previous release's summary paragraph in the **New Features** section with one for the new version;
+     the earlier releases' summaries live in `RELEASE_NOTES.md`, which the section links.
    - `llms.txt` — the Docker tag examples and the Maven Central dependency block.
    - `etc/compose/proxy.yml` — the proxy and agent image tags.
    - `charts/prometheus-proxy/Chart.yaml` and `charts/prometheus-agent/Chart.yaml` — `version` and `appVersion`

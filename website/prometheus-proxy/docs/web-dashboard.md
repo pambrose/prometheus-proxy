@@ -1,3 +1,7 @@
+---
+icon: lucide/layout-dashboard
+---
+
 # Operational Dashboard
 
 A dashboard for answering the question this system raises most often: **why isn't this target scraping?**

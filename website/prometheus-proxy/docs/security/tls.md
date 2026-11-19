@@ -134,7 +134,8 @@ Mount certificate files into the container:
 
 ## Override Authority
 
-For testing scenarios where the server certificate's CN doesn't match the hostname:
+For testing, when the proxy's certificate doesn't list the host name the agent dials among its subject alternative
+names:
 
 ```hocon
 agent.tls.overrideAuthority = "expected.hostname.com"

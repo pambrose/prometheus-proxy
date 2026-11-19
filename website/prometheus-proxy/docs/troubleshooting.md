@@ -70,17 +70,6 @@ Settings that fail startup since 4.5.0:
 
 ## Agent can't connect to the proxy
 
-### `Address types of NameResolver 'unix' ... not supported by transport`
-
-The gRPC client fell back to the `unix` name-resolver scheme on a hostname target because the
-DNS resolver provider was missing from the shaded JAR.
-
-- **Cause:** a fat JAR built before this was fixed dropped grpc's `DnsNameResolverProvider`
-  from `META-INF/services`.
-- **Fix:** use the **3.2.0 or newer** `prometheus-proxy.jar` / `prometheus-agent.jar` (the
-  providers are re-registered via `src/shadow/resources`). As a stopgap, addressing the proxy
-  by **IP** instead of hostname also avoids DNS resolution.
-
 ### Connection refused / timeouts on the gRPC port
 
 - Confirm the agent's `PROXY_HOSTNAME` (and port, if not the default `50051`) points at the
@@ -177,12 +166,12 @@ The proxy logs the reason and returns `valid = false` to the agent:
 | `Invalid path: /… ('…' can't appear in a scrape's request path)` | The `path` contains whitespace, a control character, `?`, or `#`, which no scrape can reach. Rename it. |
 | `Consolidated agent rejected for non-consolidated path`     | A consolidated agent tried to join a path another agent owns non-consolidated. Make **all** agents for the path consolidated, or none. |
 | `Non-consolidated agent rejected for consolidated path`     | The reverse of the above — same fix.                                        |
-| `Agent identity '…' is not authorized to register path /…` | The path matches none of the `paths` patterns of the agent's [`proxy.auth` identity](security/index.md#per-agent-identities-and-path-authorization). Add a pattern that covers it, or rename the path. |
+| `Agent identity '…' denied registration of path /…` (the agent logs `… is not authorized to register path /…`) | The path matches none of the `paths` patterns of the agent's [`proxy.auth` identity](security/index.md#per-agent-identities-and-path-authorization). Add a pattern that covers it, or rename the path. |
 | `Path /… is served by identity '…'; identity '…' cannot take it over` (or `join it`) | A live agent of another identity serves the path. The agent retries, and registers the path once that agent is gone. To move the path, stop the old agent; for both to serve it, give them the same identity and consolidated mode. |
 | `Path /… is N characters, over proxy.internal.maxPathLength (…)` | Shorten the path, or raise the limit ([Internal Settings](configuration/proxy.md#internal-settings)). |
 | `Labels for path /… are N bytes, over proxy.internal.maxLabelsSizeBytes (…)` | Trim the path's `labels`, or raise the limit. |
 | `Agent … already serves N paths, the proxy.internal.maxPathsPerAgent limit (…); path /… refused` | Spread the paths across more agents, or raise the limit. |
-| `Invalid path: /… is the service discovery path, which the proxy serves itself` | The proxy serves that path itself, as it does `favicon.ico` and the blitz path. Rename it. |
+| `Invalid path: /… is the service discovery path, which the proxy serves itself` | The proxy serves that path itself, as it does `favicon.ico` and, when enabled, the [Blitz verification path](service-discovery.md#labels). Rename it. |
 
 See [Consolidated Mode](advanced.md#consolidated-mode) for the all-or-nothing rule. The agent retries the
 consolidation and identity conflicts, which clear once the agents serving the path leave; it doesn't retry
@@ -224,11 +213,12 @@ See [TLS Setup](security/tls.md) and the [example configs](examples.md).
 
 ---
 
-## Metrics or admin endpoints return 404
+## Metrics or admin endpoints don't answer
 
-The endpoints are **disabled by default**. Enable them with `--admin` / `--metrics` (or
-`ADMIN_ENABLED=true` / `METRICS_ENABLED=true`) and scrape the metrics port (`8082` proxy,
-`8083` agent), not the admin port.
+The endpoints are **disabled by default**, so their ports refuse connections until you enable them with
+`--admin` / `--metrics` (or `ADMIN_ENABLED=true` / `METRICS_ENABLED=true`). A 404 means the port is up but serves
+no such path: scrape `/metrics` on the metrics port (`8082` proxy, `8083` agent), and `/ping`, `/healthcheck`,
+`/version`, and `/threaddump` on the admin port (`8092` proxy, `8093` agent).
 
 ---
 

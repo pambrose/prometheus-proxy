@@ -153,6 +153,16 @@ the **Alerts** stat counts them, and so does Prometheus's `/alerts` page.
 
 `./demo.sh recover` returns every service to normal, and the red rows turn green within a scrape or two.
 
+### A second agent keeps a path up when one stops
+
+```bash
+./demo.sh agent-stop      # stops agent-west-2
+./demo.sh agent-start     # it reconnects and rejoins in seconds
+```
+
+A stopped agent leaves the dashboard at once, and `/shipping_metrics` drops from `+1` to agent-west-1 alone. In
+Grafana, **Shipping by replica** keeps west-1 flowing, and shipping stays green on **Target health**.
+
 ### New services appear without a restart
 
 ```bash
@@ -197,16 +207,6 @@ bar counts it as departed, and agent-west-1 carries `/shipping_metrics` alone, w
 target. The Activity view lists the eviction as a problem, with how long the proxy waited and the paths the agent
 served. `./demo.sh agent-thaw` unfreezes the agent, and it reconnects and registers again.
 
-### A second agent keeps a path up when one stops
-
-```bash
-./demo.sh agent-stop      # stops agent-west-2
-./demo.sh agent-start     # it reconnects and rejoins in seconds
-```
-
-A stopped agent leaves the dashboard at once, and `/shipping_metrics` drops from `+1` to agent-west-1 alone. In
-Grafana, **Shipping by replica** keeps west-1 flowing, and shipping stays green on **Target health**.
-
 ### Per-team tokens restrict which paths an agent can register
 
 The proxy has [per-agent identities](security/index.md#per-agent-identities-and-path-authorization): each data
@@ -229,7 +229,7 @@ shows it, searched here for the contractor's agent:
 The command also prints the proxy's log line:
 
 ```
-WARN  [ProxyServiceImpl.kt:333] - Agent identity 'contractor' denied registration of path /payments_metrics
+WARN  [ProxyServiceImpl.kt:335] - Agent identity 'contractor' denied registration of path /payments_metrics
 ```
 
 Payments keeps coming from agent-east, untouched. With a shared token, the newer agent would have taken the path

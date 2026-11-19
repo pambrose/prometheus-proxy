@@ -82,10 +82,32 @@ use), with the startup failure as its cause. A failed start releases everything 
 
 ### `EmbeddedAgentInfo`
 
-| Property    | Type     | Description                     |
-|:------------|:---------|:--------------------------------|
-| `launchId`  | `String` | Unique ID for this agent launch |
-| `agentName` | `String` | Name of the agent               |
+The handle `startAsyncAgent()` returns.
+
+| Member       | Type     | Description                                                                                   |
+|:-------------|:---------|:----------------------------------------------------------------------------------------------|
+| `launchId`   | `String` | Unique ID for this agent launch, new each time an agent starts                                |
+| `agentName`  | `String` | Name of the agent: `agent.name`, or `Unnamed-<hostname>` when none is set                     |
+| `shutdown()` | `Unit`   | Stops the agent and blocks until it has stopped; calling it again, or on a failed agent, does nothing |
+
+Call `shutdown()` from your application's shutdown hook, or wherever it stops its own services. It closes the
+connection to the proxy, drains the scrapes in flight, and releases the admin and metrics ports, so the agent's
+connection and background work don't outlive your application.
+
+### `Agent.startSyncAgent()`
+
+Starts an agent from command-line arguments, as the standalone agent's `main()` does, and returns once the agent is
+running. It returns no handle: the agent runs on its own non-daemon thread, so a JVM whose `main()` calls this keeps
+running until the agent stops. Use `startAsyncAgent()` to embed an agent you stop yourself.
+
+| Parameter             | Type            | Description                                                                                                                                  |
+|:----------------------|:----------------|:---------------------------------------------------------------------------------------------------------------------------------------------|
+| `args`                | `Array<String>` | The agent's [CLI options](cli-reference.md#agent-options), such as `--config agent.conf`                                                     |
+| `exitOnMissingConfig` | `Boolean`       | `true` behaves as the standalone agent does, exiting the JVM on a config error. `false` throws `ConfigLoadException` instead, and with no `--config` falls back to the built-in defaults |
+
+**Throws:** `ConfigLoadException`, when `exitOnMissingConfig` is `false`, in the cases
+[`startAsyncAgent()`](#agentstartasyncagent) lists, and for `-v` or `-u`; `IllegalStateException` when the agent fails
+to start, with the failure as its cause. It waits up to 30 seconds for the agent to start.
 
 ## How It Works
 

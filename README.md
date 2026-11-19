@@ -93,80 +93,8 @@ bounds what one agent can make it hold or log. Some configs that start today wil
 embed the agent move to protobuf 4.x, so read **Before you upgrade** in the [release notes](RELEASE_NOTES.md) first;
 the [changelog](CHANGELOG.md) has the full list.
 
-Version 4.4.2 (released 2026-11-10) moves the Docker images to Google's distroless Debian 13 base, with the same Java
-25.0.5 runtime: they are clear of an `apt` vulnerability, carry 7 OS packages instead of 108, and no longer have a
-shell. Netty moves to 4.2.20.Final for its security fixes, among them a mutual-TLS authentication bypass. Typesafe
-Config 1.4.10 rejects a config value with text after a list or an object, which earlier versions loaded with that text
-dropped, so read **Before you upgrade** in the [release notes](RELEASE_NOTES.md) first. Every page of the documentation
-site has a Context7 chat for questions about the API; the [changelog](CHANGELOG.md) has the full list.
-
-Version 4.4.1 (released 2026-11-01) is a security patch release for the Docker images: they move to Java 25.0.5, the
-October 2026 Java security update, whose trusted certificates drop the eMudhra roots removed after the eMudhra CA
-compromise, and they carry their release version, commit, and source repository as image labels. Nothing in it
-changes configuration, metrics, or the wire protocol, and the library behaves as 4.4.0 did; see the
-[changelog](CHANGELOG.md) for the full list.
-
-Version 4.4.0 (released 2026-10-29) is a security and reliability release. An authenticated agent can no longer
-complete another agent's scrape or stall the proxy with a long path, the proxy bounds what agents report about
-themselves, and builds that embed the agent now get the patched Netty. Service discovery gives Prometheus targets it
-accepts, now also behind HTTPS or a path prefix; the Helm charts can take their config from a Secret
-(`existingSecret`); and the agent passes the scrape timeout on to exporters, sends a target URL's credentials with
-the first request, and reads no more of a response into memory than `maxContentLengthMBytes`. Some agent configs
-that start today will fail at startup, and the proxy chart's readiness probe moves to `/ping`, so read
-**Before you upgrade** in the [release notes](RELEASE_NOTES.md) first; the [changelog](CHANGELOG.md) has the full
-list.
-
-Version 4.3.0 (released 2026-10-12) adds three opt-in JVM metric groups (buffer pools, JIT compilation, and native
-memory), shows each agent's real address on the dashboard instead of `Unknown`, and makes a proxy that fails to
-start exit instead of hanging. The images move to the Ubuntu 24.04 variant of their `eclipse-temurin` base, which
-is clear of an OpenSSL vulnerability, and gRPC, netty-tcnative, and Kotlin are updated; the [changelog](CHANGELOG.md)
-has the full list.
-
-Version 4.2.0 (released 2026-09-26) moves the proxy and agent to the Prometheus Java client 1.x, replacing the
-unmaintained 0.x client. Every `proxy_*` and `agent_*` metric keeps its name, labels, and buckets, but the
-`_created` series are gone and, with the JVM exports on, the JVM memory metrics are renamed, so read
-**Before you upgrade** in the [release notes](RELEASE_NOTES.md) first. The proxy and agent can now be installed
-with Homebrew, the bundled Grafana dashboards' connection, eviction, heartbeat, and scrape-count panels show data
-again, and the JARs no longer print logback and kotlin-logging lines at startup. It also adds Helm charts for the
-proxy and the agent, and ships the alerting rules as `grafana/alerts.yml`; the [changelog](CHANGELOG.md) has the
-full list.
-
-Version 4.1.0 (released 2026-09-23) is a security and reliability release: agents can no longer answer,
-read, or take over each other's scrapes and paths, a rejected path no longer takes an agent offline and a
-rejecting proxy is now failed over, and the proxy bounds what clients and agents can ask of it (scrape backlogs,
-in-flight scrapes, paths per agent, redirects, and service-discovery labels). It changes some defaults, scrape
-outcome labels, and startup checks, so read **Before you upgrade** in the
-[release notes](RELEASE_NOTES.md) first; the [changelog](CHANGELOG.md) has the full list.
-
-Version 4.0.1 (released 2026-07-31) is a dashboard patch release: agents are now identified by name
-rather than internal id in the path layout, 29 WCAG AA contrast failures are fixed (measured floor
-4.59:1), and the page is usable with a screen reader — see the
-[changelog](CHANGELOG.md) for the full list. Nothing in it changes configuration, metrics, or the wire
-protocol.
-
-Version 4.0.0 (released 2026-07-25) added five features focused on running the proxy as production
-infrastructure:
-
-- **[Operational Dashboard](https://pambrose.github.io/prometheus-proxy/web-dashboard/)** — A
-  live-updating web page that answers "why isn't this target scraping?" without log-diving
-  on two machines. It shows every connected agent, every registered path — including paths whose agent
-  has **gone**, precisely the case that used to vanish from view — and how recent scrapes went.
-- **[Proxy High Availability](https://pambrose.github.io/prometheus-proxy/production/#high-availability)** —
-  The proxy is no longer a single point of failure for the entire metrics plane. Agents take an
-  ordered list of proxy endpoints, fail over to a standby when the primary is unreachable, and return
-  to a recovered primary at their next reconnect — no health prober, no manual step.
-- **[Per-Agent Identities and Path Authorization](https://pambrose.github.io/prometheus-proxy/security/#per-agent-identities-and-path-authorization)** —
-  A shared token can't tell agents apart, so any holder could register — and silently take over — any
-  path. Named identities scope each agent to its own path patterns, enable per-agent revocation, and
-  make one proxy safe to share across teams. Existing shared tokens keep working during migration.
-- **[Metric Filtering at the Agent](https://pambrose.github.io/prometheus-proxy/configuration/agent/#metric-filtering)** —
-  Drop unwanted metric families **before** they cross the WAN, the one place where dropping data pays
-  the most and where Prometheus's own `metric_relabel_configs` can't reach. Per-path allow/deny
-  regexes with Prometheus-compatible anchoring; whole families are kept or dropped atomically.
-- **[Dynamic Target Discovery](https://pambrose.github.io/prometheus-proxy/configuration/agent/#dynamic-target-discovery)** —
-  Add and remove scrape targets by editing a watched file — no agent restart, and unchanged paths
-  never stop scraping. The file can be generated (Kubernetes ConfigMap, Ansible, cron), so automation
-  only needs permission to write a file, never to restart a process.
+Each earlier release's summary is in the [release notes](RELEASE_NOTES.md), and the [changelog](CHANGELOG.md) has
+every change.
 
 ## 🧱 Architecture
 
@@ -215,6 +143,14 @@ proxy) and register the paths for which they will provide data. One proxy can wo
 - ✅ **Bandwidth-conscious** - Optional per-path metric filtering drops unwanted families at the agent
 - ✅ **Observable** - A live dashboard shows every agent, path, and recent scrape in one place, and scrapes a path on demand
 - ✅ **Zero changes** to existing Prometheus configuration patterns
+
+### Common Scenarios
+
+- **🏢 Enterprise environments** - Scrape metrics across firewall boundaries
+- **☁️ Multi-cloud deployments** - Bridge different network segments
+- **🔒 Secure environments** - Monitor internal services without opening inbound ports
+- **🌐 Federation** - Scrape existing Prometheus instances via `/federate` endpoint
+- **🚀 Kubernetes** - Monitor services across clusters or namespaces
 
 ## 🚀 Quick Start
 
@@ -432,6 +368,22 @@ scrape_configs:
     static_configs:
       - targets: [ 'mymachine.local:8080' ]
 ```
+
+### Example Configurations
+
+> 📖 **Docs site:** [Example Configs guide](https://pambrose.github.io/prometheus-proxy/examples/) describes each ready-to-run config under
+`examples/`.
+
+| Use Case                   | Configuration                                                              |
+|:---------------------------|:---------------------------------------------------------------------------|
+| **Basic setup**            | [`examples/simple.conf`](examples/simple.conf)                             |
+| **Multiple apps**          | [`examples/myapps.conf`](examples/myapps.conf)                             |
+| **Metric filtering**       | [`examples/agent-filters.conf`](examples/agent-filters.conf)               |
+| **Dynamic discovery**      | [`examples/discovery-targets.conf`](examples/discovery-targets.conf)       |
+| **TLS (no mutual auth)**   | [`examples/tls-no-mutual-auth.conf`](examples/tls-no-mutual-auth.conf)     |
+| **TLS (with mutual auth)** | [`examples/tls-with-mutual-auth.conf`](examples/tls-with-mutual-auth.conf) |
+| **Prometheus federation**  | [`examples/federate.conf`](examples/federate.conf)                         |
+| **Nginx reverse proxy**    | [`nginx/nginx-proxy.conf`](nginx/nginx-proxy.conf)                         |
 
 ## 🐳 Docker Usage
 
@@ -695,6 +647,39 @@ Two things to know before deploying a pair:
 
 > 📖 **Docs site:** [High availability](https://pambrose.github.io/prometheus-proxy/production/#high-availability) for the full Prometheus-side setup, and [Running an HA pair](https://pambrose.github.io/prometheus-proxy/web-dashboard/#running-an-ha-pair) for how the dashboard shows failed-over agents.
 
+### Prometheus Federation
+
+Scrape an existing Prometheus instance via the `/federate` endpoint:
+```hocon
+agent.pathConfigs: [{
+  name: "Federated Prometheus"
+  path: "federated_metrics"
+  url: "http://prometheus-server:9090/federate?match[]={__name__=~\"job:.*\"}"
+}]
+```
+
+This leverages the existing service discovery features already built into Prometheus. A complete example config is
+[`examples/federate.conf`](examples/federate.conf).
+
+### Nginx Reverse Proxy
+
+To use with Nginx as a reverse proxy, disable the transport filter on both Proxy and Agent:
+```bash
+java -jar prometheus-proxy.jar --tf_disabled
+java -jar prometheus-agent.jar --tf_disabled --config myconfig.conf
+```
+
+An example nginx config is [`nginx/docker/nginx.conf`](nginx/docker/nginx.conf), and an example proxy and agent config
+is [`nginx/nginx-proxy.conf`](nginx/nginx-proxy.conf).
+
+**⚠️ Note:** With `transportFilterDisabled`, the proxy can't see a connection close, only the agent's request stream
+end. An agent that disconnects ends that stream, and is removed at once; one that dies before opening its stream, or
+whose connection stays half-open, is removed after the inactivity timeout (default: 1 minute, controlled by
+`proxy.internal.maxAgentInactivitySecs`). The proxy also limits the agents connected as one auth identity to
+`proxy.internal.maxAgentsPerIdentity` (10,000), and with agent auth off every agent shares one identity.
+
+> 📖 **Docs site:** [Advanced Topics guide](https://pambrose.github.io/prometheus-proxy/advanced/) covers the Nginx reverse-proxy setup, federation, and other advanced configurations.
+
 ### Performance Tuning
 
 Configure concurrent scraping:
@@ -757,7 +742,7 @@ Both proxy and agent expose their own metrics:
 - **Proxy metrics:** `http://proxy-host:8082/metrics`
 - **Agent metrics:** `http://agent-host:8083/metrics`. The agent sits behind the firewall, so give it a path for its own
   metrics and let Prometheus scrape them through the proxy, like any other target
-- **Admin endpoints:** `http://host:admin-port/ping`, `/healthcheck`, `/version`
+- **Admin endpoints:** `http://host:admin-port/ping`, `/healthcheck`, `/version`, `/threaddump`
 - **JVM metrics:** off by default; each group is turned on under `proxy.metrics` or `agent.metrics` in the config
   file (`memoryPoolsExportsEnabled`, `garbageCollectorExportsEnabled`, and so on). Version 4.3.0 adds buffer pools
   (`bufferPoolExportsEnabled`), JIT compilation (`compilationExportsEnabled`), and native memory
@@ -805,98 +790,6 @@ lists every CLI option with its environment variable, config property, and defau
 * **Per-Agent Auth:** `proxy.auth` (per-agent identities with path authorization) is a list of objects, so it is config-file-only — see [Per-Agent Identities and Path Authorization](#per-agent-identities-and-path-authorization).
 * **Keepalives:** See the [gRPC keepalive guide](https://grpc.io/docs/guides/keepalive/) for tuning details.
 * **Exposition formats:** Scrapes are carried as text, so the agent asks targets only for the text and OpenMetrics formats. Native histograms, which Prometheus receives only in the protobuf format, aren't available through the proxy.
-
----
-
-## 📝 Examples & Use Cases
-
-> 📖 **Docs site:** [Example Configs guide](https://pambrose.github.io/prometheus-proxy/examples/) describes each ready-to-run config under
-`examples/`.
-
-### Common Scenarios
-
-- **🏢 Enterprise environments** - Scrape metrics across firewall boundaries
-- **☁️ Multi-cloud deployments** - Bridge different network segments
-- **🔒 Secure environments** - Monitor internal services without opening inbound ports
-- **🌐 Federation** - Scrape existing Prometheus instances via `/federate` endpoint
-- **🚀 Kubernetes** - Monitor services across clusters or namespaces
-
-### Example Configurations
-
-| Use Case                   | Configuration                                                              |
-|:---------------------------|:---------------------------------------------------------------------------|
-| **Basic setup**            | [`examples/simple.conf`](examples/simple.conf)                             |
-| **Multiple apps**          | [`examples/myapps.conf`](examples/myapps.conf)                             |
-| **Metric filtering**       | [`examples/agent-filters.conf`](examples/agent-filters.conf)               |
-| **Dynamic discovery**      | [`examples/discovery-targets.conf`](examples/discovery-targets.conf)       |
-| **TLS (no mutual auth)**   | [`examples/tls-no-mutual-auth.conf`](examples/tls-no-mutual-auth.conf)     |
-| **TLS (with mutual auth)** | [`examples/tls-with-mutual-auth.conf`](examples/tls-with-mutual-auth.conf) |
-| **Prometheus federation**  | [`examples/federate.conf`](examples/federate.conf)                         |
-| **Nginx reverse proxy**    | [`nginx/nginx-proxy.conf`](nginx/nginx-proxy.conf)                         |
-
-### Advanced Use Cases
-
-> 📖 **Docs site:** [Advanced Topics guide](https://pambrose.github.io/prometheus-proxy/advanced/) covers the Nginx reverse-proxy setup, federation, and other advanced configurations.
-
-#### Prometheus Federation
-
-Scrape an existing Prometheus instance via the `/federate` endpoint:
-```hocon
-agent.pathConfigs: [{
-  name: "Federated Prometheus"
-  path: "federated_metrics"
-  url: "http://prometheus-server:9090/federate?match[]={__name__=~\"job:.*\"}"
-}]
-```
-
-This leverages the existing service discovery features already built into Prometheus. A complete example config is
-[`examples/federate.conf`](examples/federate.conf).
-
-#### Nginx Reverse Proxy
-
-To use with Nginx as a reverse proxy, disable the transport filter on both Proxy and Agent:
-```bash
-java -jar prometheus-proxy.jar --tf_disabled
-java -jar prometheus-agent.jar --tf_disabled --config myconfig.conf
-```
-
-An example nginx config is [`nginx/docker/nginx.conf`](nginx/docker/nginx.conf), and an example proxy and agent config
-is [`nginx/nginx-proxy.conf`](nginx/nginx-proxy.conf).
-
-**⚠️ Note:** With `transportFilterDisabled`, the proxy can't see a connection close, only the agent's request stream
-end. An agent that disconnects ends that stream, and is removed at once; one that dies before opening its stream, or
-whose connection stays half-open, is removed after the inactivity timeout (default: 1 minute, controlled by
-`proxy.internal.maxAgentInactivitySecs`). The proxy also limits the agents connected as one auth identity to
-`proxy.internal.maxAgentsPerIdentity` (10,000), and with agent auth off every agent shares one identity.
-
-### gRPC Reflection
-
-[gRPC Reflection](https://grpc.io/docs/guides/reflection/) is **disabled by default** (see the security note below).
-Enable it for debugging and tooling with `proxy.reflectionDisabled=false` in the config file,
-`-Dproxy.reflectionDisabled=false` on the command line, or `REFLECTION_DISABLED=false`.
-
-**Test with [grpcurl](https://github.com/fullstorydev/grpcurl):**
-
-```bash
-# List available services
-grpcurl -plaintext localhost:50051 list
-
-# Describe a service
-grpcurl -plaintext localhost:50051 describe ProxyService
-
-# When the proxy requires agent tokens, present one
-grpcurl -plaintext -H 'agent-token: <token>' localhost:50051 list
-```
-
-If you use grpcurl `-plaintext` option, make sure that you run the proxy in plaintext
-mode, i.e., do not define any TLS properties.
-
-**⚠️ Security Note:** Reflection exposes the full gRPC API surface: every service, method, and message type. When agent
-authentication is configured (the [agent token](#agent-token-authentication) or per-agent identities), reflection calls
-need a valid token like every other call on the agent port, and fail with `UNAUTHENTICATED` without one. With no agent
-authentication, anyone who can reach the agent port (default `50051`) can use it, so enable it only on a trusted network.
-Hiding the API shape is not a substitute for authentication: still pair the agent port with agent tokens, mutual TLS,
-and/or network segmentation.
 
 ## 🔐 Security & TLS
 
@@ -960,11 +853,11 @@ docker run --rm -p 8082:8082 -p 8092:8092 -p 50440:50440 -p 8080:8080 \
     --env METRICS_ENABLED=true \
     pambrose/prometheus-proxy:4.5.0
 
-docker run --rm -p 8083:8083 -p 8093:8093 \
+docker run --rm \
     --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
     --mount type=bind,source="$(pwd)"/examples/tls-no-mutual-auth.conf,target=/app/tls-no-mutual-auth.conf \
     --env AGENT_CONFIG=tls-no-mutual-auth.conf \
-    --env PROXY_HOSTNAME=mymachine.lan:50440 \
+    --env PROXY_HOSTNAME=mymachine.local:50440 \
     --name docker-agent \
     pambrose/prometheus-agent:4.5.0
 ```
@@ -1094,6 +987,35 @@ java -jar prometheus-agent.jar --trust_all_x509 --config myconfig.conf
 process-global and all-or-nothing: it disables certificate validation for **every** HTTPS target the agent
 scrapes, and it takes precedence over `--https_truststore`. Prefer a custom trust store whenever possible.
 
+### gRPC Reflection
+
+[gRPC Reflection](https://grpc.io/docs/guides/reflection/) is **disabled by default** (see the security note below).
+Enable it for debugging and tooling with `proxy.reflectionDisabled=false` in the config file,
+`-Dproxy.reflectionDisabled=false` on the command line, or `REFLECTION_DISABLED=false`.
+
+**Test with [grpcurl](https://github.com/fullstorydev/grpcurl):**
+
+```bash
+# List available services
+grpcurl -plaintext localhost:50051 list
+
+# Describe a service
+grpcurl -plaintext localhost:50051 describe ProxyService
+
+# When the proxy requires agent tokens, present one
+grpcurl -plaintext -H 'agent-token: <token>' localhost:50051 list
+```
+
+If you use grpcurl `-plaintext` option, make sure that you run the proxy in plaintext
+mode, i.e., do not define any TLS properties.
+
+**⚠️ Security Note:** Reflection exposes the full gRPC API surface: every service, method, and message type. When agent
+authentication is configured (the [agent token](#agent-token-authentication) or per-agent identities), reflection calls
+need a valid token like every other call on the agent port, and fail with `UNAUTHENTICATED` without one. With no agent
+authentication, anyone who can reach the agent port (default `50051`) can use it, so enable it only on a trusted network.
+Hiding the API shape is not a substitute for authentication: still pair the agent port with agent tokens, mutual TLS,
+and/or network segmentation.
+
 ### Reporting a Vulnerability
 
 Report a security problem privately, not in a public issue, pull request, or discussion: use GitHub's
@@ -1127,7 +1049,8 @@ Report a security problem privately, not in a public issue, pull request, or dis
 **Performance issues:**
 
 - Increase `max_concurrent_clients` for high-throughput scenarios
-- Tune HTTP client cache settings
+- Tune the HTTP client cache (`--max_cache_size`, `--max_cache_age_mins`, `--max_cache_idle_mins`,
+  `--cache_cleanup_interval_mins`)
 - Consider splitting targets across multiple agents (a consolidated path is scraped through every agent that
   serves it, so extra agents on one path add no throughput, and ones that scrape the same endpoint send each series
   twice)

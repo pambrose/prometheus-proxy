@@ -8,9 +8,9 @@ The agent runs inside the firewall and scrapes local metrics endpoints on behalf
 
 ## Path Configs
 
-The `pathConfigs` array defines which metrics endpoints the agent exposes through the proxy. An entry without a
-path (or with just `/`) or without a URL is skipped with a warning. Two entries for the same path, with or without
-a leading `/`, fail the agent's startup, since the second would replace the first's URL:
+The `pathConfigs` array defines which metrics endpoints the agent exposes through the proxy. Two entries for the
+same path, with or without a leading `/`, fail the agent's startup, since the second would replace the first's URL.
+[Path rules](#path-rules) below covers what else a path may and may not be.
 
 ### Basic Configuration
 
@@ -41,11 +41,13 @@ Each path config entry has these fields:
 | `url`    | Yes      | Actual metrics endpoint the agent fetches from                |
 | `labels` | No       | JSON string of labels for service discovery (default: `"{}"`); keys starting with `__` are dropped |
 
-!!! note "Paths are a single segment"
+### Path rules
 
-    An entry whose `path` or `url` is blank is skipped at startup, with a warning naming it, and the
-    agent's other paths still register: the proxy answers a blank path with a 404, so such an entry
-    could only ever be a dead registration.
+!!! note "A path is one segment of plain characters"
+
+    An entry whose `path` is blank or just `/`, or whose `url` is blank, is skipped at startup, with a
+    warning naming it, and the agent's other paths still register: the proxy answers a blank path with a
+    404, so such an entry could only ever be a dead registration.
 
     A `path` is one URL segment — it must not contain an embedded `/`. The proxy serves each
     registered path at `/<path>` (a one-segment route), so a multi-segment value like

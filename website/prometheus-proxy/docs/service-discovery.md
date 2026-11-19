@@ -110,8 +110,10 @@ of string to string, and one entry that isn't fails its whole discovery response
 leaves such entries out. The proxy logs a warning naming them when the path registers, and the
 agent logs one at startup for a `pathConfigs` entry. The path itself still registers.
 
-A path can't be the discovery path, `favicon.ico`, or the blitz path: the proxy serves those
-itself, so it refuses to register them.
+A path can't be the discovery path (with service discovery on), `favicon.ico`, or the Blitz
+verification path (`proxy.internal.blitz.path`, with `proxy.internal.blitz.enabled` on: the file the
+Blitz service fetches to verify you own the site): the proxy serves those itself, so it refuses to
+register them.
 
 !!! note "Reserved label keys"
 
