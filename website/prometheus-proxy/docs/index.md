@@ -63,7 +63,7 @@ The system comprises two components:
   each agent to the paths it may register
 - **Scalable** -- one proxy supports many agents, each serving multiple paths
 - **Highly available** -- agents [fail over](production.md#high-availability) across an ordered list
-  of proxies, and return to the primary when it recovers
+  of proxies, and return to a recovered primary at their next reconnect
 - **Dynamic** -- agents pick up target changes from a
   [watched file](configuration/agent.md#dynamic-target-discovery) at runtime, no restart needed
 - **Bandwidth-conscious** -- optional per-path

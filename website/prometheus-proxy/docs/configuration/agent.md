@@ -377,7 +377,10 @@ agents to register the same path:
 --8<-- "ConfigExamples.txt:consolidated-mode"
 ```
 
-This is useful for redundancy -- if one agent goes down, another can serve the same path.
+This is useful for redundancy -- if one agent goes down, the others keep serving the path. Give each
+agent its own instance of the service to scrape: the proxy merges every agent's answer into each scrape,
+so agents that scrape the same endpoint send each series twice. See
+[Consolidated Mode](../advanced.md#consolidated-mode).
 
 ## Agent Naming
 

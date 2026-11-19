@@ -20,6 +20,11 @@ Kubernetes demo needs kind, `kubectl`, and Helm.
 - The docs say the Kubernetes demo needs kind, `kubectl`, and Helm as well as Docker wherever they point to it.
 - The website had configuration precedence wrong: a setting's environment variable overrides its `-D` value, which
   overrides the config file.
+- TLS Setup shows how to create a private CA and the proxy's and agents' certificates with OpenSSL.
+- The docs say consolidated mode gives redundancy only when each agent scrapes its own instance of a service: agents
+  that scrape the same endpoint send each series twice.
+- The docs describe failback as the agent does it: it returns to a recovered primary at its next reconnect.
+- Troubleshooting lists the identity, takeover, and limit rejections a path registration can get.
 - The demos and the Helm charts are cloned at the latest release's tag rather than `master`, so a demo's scripts always
   match the images it pulls.
 - The website's Basics Demo page is now at `basics-demo/`, next to the other two demo pages; links to the old `demo/`

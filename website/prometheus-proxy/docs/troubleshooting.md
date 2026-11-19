@@ -125,8 +125,9 @@ The path is known but cannot be served right now.
 
 - **Proxy shutting down** (`proxy_stopped`).
 - **Agent disconnected** (`agent_disconnected`) — before or during the scrape, including an eviction
-  or another agent taking over the path. Transient during agent restarts; for redundancy use
-  [consolidated mode](advanced.md#consolidated-mode).
+  or another agent taking over the path. Transient during agent restarts. Consolidated mode keeps a
+  path answering while one of its agents is down, when each agent scrapes its own instance of the
+  service; see [Consolidated Mode](advanced.md#consolidated-mode).
 
 ### `502 Bad Gateway`
 
@@ -176,8 +177,16 @@ The proxy logs the reason and returns `valid = false` to the agent:
 | `Invalid path: /… ('…' can't appear in a scrape's request path)` | The `path` contains whitespace, a control character, `?`, or `#`, which no scrape can reach. Rename it. |
 | `Consolidated agent rejected for non-consolidated path`     | A consolidated agent tried to join a path another agent owns non-consolidated. Make **all** agents for the path consolidated, or none. |
 | `Non-consolidated agent rejected for consolidated path`     | The reverse of the above — same fix.                                        |
+| `Agent identity '…' is not authorized to register path /…` | The path matches none of the `paths` patterns of the agent's [`proxy.auth` identity](security/index.md#per-agent-identities-and-path-authorization). Add a pattern that covers it, or rename the path. |
+| `Path /… is served by identity '…'; identity '…' cannot take it over` (or `join it`) | A live agent of another identity serves the path. The agent retries, and registers the path once that agent is gone. To move the path, stop the old agent; for both to serve it, give them the same identity and consolidated mode. |
+| `Path /… is N characters, over proxy.internal.maxPathLength (…)` | Shorten the path, or raise the limit ([Internal Settings](configuration/proxy.md#internal-settings)). |
+| `Labels for path /… are N bytes, over proxy.internal.maxLabelsSizeBytes (…)` | Trim the path's `labels`, or raise the limit. |
+| `Agent … already serves N paths, the proxy.internal.maxPathsPerAgent limit (…); path /… refused` | Spread the paths across more agents, or raise the limit. |
+| `Invalid path: /… is the service discovery path, which the proxy serves itself` | The proxy serves that path itself, as it does `favicon.ico` and the blitz path. Rename it. |
 
-See [Consolidated Mode](advanced.md#consolidated-mode) for the all-or-nothing rule.
+See [Consolidated Mode](advanced.md#consolidated-mode) for the all-or-nothing rule. The agent retries the
+consolidation and identity conflicts, which clear once the agents serving the path leave; it doesn't retry
+the others while it stays connected.
 
 The proxy logs the first rejection of a path for an agent connection at WARN, and an identical repeat at
 DEBUG -- an agent retries a rejection that can clear, and a lasting conflict would otherwise fill the log.

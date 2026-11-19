@@ -31,6 +31,41 @@ Both sides authenticate each other:
     Certificates, keys, and the TLS options are used as before, but anything that differs between the two
     providers, such as the default cipher suites, now follows BoringSSL.
 
+## Creating Certificates
+
+For a deployment, create a private CA and sign the proxy's certificate with it, and for mutual TLS each
+agent's too. With OpenSSL, or the LibreSSL that macOS ships:
+
+```bash
+PROXY_HOST=proxy.example.com   # the name agents use to reach the proxy
+
+# A private CA, which both sides trust
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:4096 -out ca.key
+openssl req -x509 -new -key ca.key -sha256 -days 3650 -subj "/CN=prometheus-proxy CA" \
+  -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign,cRLSign" -out ca.crt
+
+# The proxy's certificate, for PROXY_HOST
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out server.key
+openssl req -new -key server.key -subj "/CN=$PROXY_HOST" -out server.csr
+openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -sha256 -days 825 \
+  -extfile <(printf 'subjectAltName=DNS:%s\nextendedKeyUsage=serverAuth\n' "$PROXY_HOST") -out server.crt
+
+# An agent's certificate, for mutual TLS
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out client.key
+openssl req -new -key client.key -subj "/CN=agent-1" -out client.csr
+openssl x509 -req -in client.csr -CA ca.crt -CAkey ca.key -CAcreateserial -sha256 -days 825 \
+  -extfile <(printf 'extendedKeyUsage=clientAuth\n') -out client.crt
+```
+
+The proxy takes `server.crt` and `server.key`, and for mutual TLS `ca.crt`; each agent takes `ca.crt`, and for
+mutual TLS `client.crt` and `client.key`, as in [Configuration](#configuration) below. Repeat the last three commands
+with another name for each further agent.
+
+`PROXY_HOST` must be the name agents dial, in `--proxy` or `agent.proxy.hostname`: the agent checks it against the
+certificate's subject alternative name. For an IP address, write `IP:%s` in place of `DNS:%s`. In an HA pair, sign
+every proxy's certificate with the same CA, since an agent uses one trust store for all its endpoints. `ca.key` signs
+every certificate, so keep it off the proxy and agent hosts.
+
 ## Configuration
 
 === "CLI (No Mutual Auth)"
@@ -120,7 +155,5 @@ The repository includes complete TLS configuration examples:
 | [`examples/tls-no-mutual-auth.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/examples/tls-no-mutual-auth.conf)     | Server-side TLS only      |
 | [`examples/tls-with-mutual-auth.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/examples/tls-with-mutual-auth.conf) | Mutual TLS authentication |
 
-## Setting Up TLS
-
-For detailed instructions on creating TLS certificates for gRPC, see the
-[gRPC TLS documentation](https://github.com/grpc/grpc-java/tree/master/examples/example-tls).
+The [gRPC TLS documentation](https://github.com/grpc/grpc-java/tree/master/examples/example-tls) covers TLS for gRPC
+in more depth.

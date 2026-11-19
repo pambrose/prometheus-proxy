@@ -151,8 +151,9 @@ proxy.internal {
 ## Consolidated Mode
 
 By default, each path is owned by a single agent. In **consolidated mode**, multiple agents can
-register the same path for redundancy. When a scrape request arrives for a consolidated path,
-the proxy sends it to every agent serving the path and merges their responses into one.
+register the same path for redundancy, each scraping its own instance of a service. When a scrape
+request arrives for a consolidated path, the proxy sends it to every agent serving the path and merges
+their responses into one, so agents that scrape the same endpoint send each series twice.
 
 ```hocon
 agent.consolidated = true
