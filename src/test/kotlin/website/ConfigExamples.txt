@@ -105,11 +105,11 @@ agent {
 ; --8<-- [start:precedence-example]
 Configuration precedence (highest to lowest):
 
-1. CLI options:       --port 9090
-2. System properties: -Dproxy.http.port=9090
-3. Environment vars:  PROXY_PORT=9090
-4. Config file:       proxy.http.port = 9090
-5. Default values:    8080
+1. CLI options:        --port 9090
+2. Environment vars:   PROXY_PORT=9090
+3. Dynamic properties: -Dproxy.http.port=9090
+4. Config file:        proxy.http.port = 9090
+5. Default values:     8080
 ; --8<-- [end:precedence-example]
 
 ; --8<-- [start:env-var-reference]

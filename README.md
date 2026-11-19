@@ -168,7 +168,7 @@ infrastructure:
   never stop scraping. The file can be generated (Kubernetes ConfigMap, Ansible, cron), so automation
   only needs permission to write a file, never to restart a process.
 
-## 🏗️ Architecture
+## 🧱 Architecture
 
 > 📖 **Docs site:** [Architecture](https://pambrose.github.io/prometheus-proxy/architecture/) for the full component breakdown and request flow, and the [Glossary](https://pambrose.github.io/prometheus-proxy/glossary/) for the core terms used throughout the docs.
 
@@ -298,7 +298,7 @@ brew services restart prometheus-agent   # pick up an edited config
 brew services stop prometheus-agent      # stop, and no longer start at login
 ```
 
-### 🛠️ Building from Source
+### 🧰 Building from Source
 
 If you prefer to build the project from source:
 
@@ -502,7 +502,7 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
 target for `--mount` options.
 
-## ⚙️ Advanced Features
+## 🧩 Advanced Features
 
 ### Embedded Agent
 

@@ -135,6 +135,10 @@ its admin and metrics ports, so no restart policy ever fired. See
   connected. This also smooths **rolling upgrades** — the new agent registers before the old
   one drains.
 
+- For **health probes**, point Kubernetes liveness probes at `/ping`, and readiness probes at `/ping`
+  on the proxy and `/healthcheck` on the agent. The proxy's `/healthcheck` measures load, so alert on it
+  rather than take a busy proxy out of rotation. See [Kubernetes](kubernetes.md#health-probes-resources).
+
 ### Scraping an HA pair
 
 !!! warning "Use `static_config`, not `http_sd_config`"
@@ -157,9 +161,6 @@ scrape_configs:
 Both proxies are scraped every interval. Exactly one of them has the agent connected and returns the
 metrics; the other returns `404` and shows as `up=0`. Deduplicate in the usual Prometheus HA way
 (distinct `external_labels` plus a downstream deduplicating reader, or `honor_labels`).
-- Point Kubernetes liveness probes at `/ping`, and readiness probes at `/ping` on the proxy and
-  `/healthcheck` on the agent. The proxy's `/healthcheck` measures load, so alert on it rather than take
-  a busy proxy out of rotation. See [Kubernetes](kubernetes.md#health-probes-resources).
 
 ## Sizing & tuning
 
