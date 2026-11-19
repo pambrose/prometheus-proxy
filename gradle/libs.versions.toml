@@ -68,6 +68,8 @@ simple-icons = "16.2.0"
 # common-utils brings (JVM instrumentation, exposition formats, exporters) resolve to the same version as
 # prometheus-metrics-core, even when this one moves ahead of common-utils.
 prometheus = "1.10.0"
+# Only the embedded demo's app (demos/embedded/app) uses Micrometer, as a Ktor app that embeds the agent would.
+micrometer = "1.18.0"
 dropwizard = "4.2.40"
 # Dropwizard metrics-json (common-utils' service-utils) brings Jackson 2.12.7, which has CVE-2025-52999 and
 # CVE-2026-54512/54513 (high). build.gradle.kts imports this BOM to raise it, and declares the `jackson` bundle at this
@@ -144,6 +146,10 @@ ktor-server-call-logging = { module = "io.ktor:ktor-server-call-logging", versio
 ktor-server-compression = { module = "io.ktor:ktor-server-compression", version.ref = "ktor" }
 ktor-server-html-builder = { module = "io.ktor:ktor-server-html-builder", version.ref = "ktor" }
 ktor-server-websockets = { module = "io.ktor:ktor-server-websockets", version.ref = "ktor" }
+# The embedded demo's app only (demos/embedded/app), which reads this catalog so its Ktor moves with the project's.
+ktor-server-auth = { module = "io.ktor:ktor-server-auth", version.ref = "ktor" }
+ktor-server-metrics-micrometer = { module = "io.ktor:ktor-server-metrics-micrometer", version.ref = "ktor" }
+micrometer-registry-prometheus = { module = "io.micrometer:micrometer-registry-prometheus", version.ref = "micrometer" }
 
 # WebJars
 webjar-htmx = { module = "org.webjars.npm:htmx.org", version.ref = "htmx" }

@@ -53,9 +53,9 @@ is, unreleased pages included.
      `KubernetesExamples.txt` — snippet sources included by the website's Docker, Embedded Agent, and
      Kubernetes pages, so the published site shows whatever version is here.
    - The `git clone --branch` tag the demos and the Helm install check out, so a reader runs the scripts released with
-     the images they pull: `README.md` and `llms.txt`, `demos/basics/README.md`, `demos/network/README.md`, and
-     `demos/kubernetes/README.md`, and the website's `basics-demo.md`, `network-demo.md`, `kubernetes-demo.md`, and
-     `getting-started.md`.
+     the images they pull: `README.md` and `llms.txt`, `demos/basics/README.md`, `demos/network/README.md`,
+     `demos/kubernetes/README.md`, and `demos/embedded/README.md`, and the website's `basics-demo.md`,
+     `network-demo.md`, `kubernetes-demo.md`, `embedded-demo.md`, and `getting-started.md`.
    - This step, and the matching line in `.claude/skills/publishing-release/SKILL.md`.
 
    `RELEASE_VERSION_FILES` in the `Makefile` lists these files for `make release-check`; keep it in step with this

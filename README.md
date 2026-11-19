@@ -45,7 +45,7 @@ documentation.
 
 ## 🎬 Try the Demos
 
-The quickest way to understand Prometheus Proxy is to watch it work. The repository ships three self-contained demos,
+The quickest way to understand Prometheus Proxy is to watch it work. The repository ships four self-contained demos,
 each started with `make up` and run locally. Each has a guided tour, `make tour`, that walks you through
 it one step at a time: what to open, what to look for, and how each step does what it does.
 
@@ -59,12 +59,14 @@ it one step at a time: what to open, what to look for, and how each step does wh
 | [Basics](demos/basics) | The proxy, its live dashboard, and three agents behind a simulated firewall, with Prometheus and Grafana. A service fails and another hangs, a redundant pair of agents keeps a path up, new targets appear without a restart, a frozen agent is evicted, and the proxy refuses a path an agent's identity doesn't allow. | 9 parts, about 22 minutes |
 | [Network](demos/network) | The same proxy and agents with a simulated WAN between them, and a standby proxy. A far link, a thin one fixed by filtering at the agent, a proxy that goes away, a link that dies silently, a flaky link traced in Zipkin, and the whole WAN going down. | 7 parts, about 21 minutes |
 | [Kubernetes](demos/kubernetes) | The project's Helm charts on two kind clusters. The target cluster exposes nothing, annotating a Service is all it takes for Prometheus to scrape it, Kubernetes replaces a lost agent by itself, and a config change costs a restart where a target change doesn't. Needs kind, `kubectl`, and Helm as well as Docker. | 4 parts, about 11 minutes |
+| [Embedded](demos/embedded) | A Ktor coffee shop with the agent embedded in it, its metrics in Grafana with no port opened for them. A rush fills the queue, a broken machine fires an alert, a deploy hands the agent's paths to the new version, the shop keeps serving while the proxy is away, and every secret comes from the environment. | 7 parts, about 15 minutes |
 
 Start with the basics demo. The proxy and agent are the released images, from Docker Hub, so there's nothing to build:
-on macOS or Linux, the basics and network demos need only [Docker](https://docs.docker.com/get-started/get-docker/)
-with Compose v2, `git`, `make`, `curl`, and a browser. The Kubernetes demo runs two Kubernetes clusters in Docker, so it
-also needs [kind](https://kind.sigs.k8s.io/) 0.33.0 or later, [`kubectl`](https://kubernetes.io/docs/tasks/tools/),
-and [Helm](https://helm.sh/) 3 or 4.
+on macOS or Linux, the basics, network, and embedded demos need only
+[Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2, `git`, `make`, `curl`, and a browser; the
+embedded demo builds its app inside Docker. The Kubernetes demo runs two Kubernetes clusters in Docker, so it also
+needs [kind](https://kind.sigs.k8s.io/) 0.33.0 or later, [`kubectl`](https://kubernetes.io/docs/tasks/tools/), and
+[Helm](https://helm.sh/) 3 or 4.
 
 ```bash
 git clone -c advice.detachedHead=false --depth 1 --branch 4.6.0 https://github.com/pambrose/prometheus-proxy.git
@@ -77,8 +79,9 @@ make down    # stops the demo and removes its containers
 The demos use different ports, so they can run side by side. Each demo's README lists what it needs and has its full
 script, and the website's
 [Basics Demo](https://pambrose.github.io/prometheus-proxy/basics-demo/),
-[Network Demo](https://pambrose.github.io/prometheus-proxy/network-demo/), and
-[Kubernetes Demo](https://pambrose.github.io/prometheus-proxy/kubernetes-demo/) pages walk through the same scenarios
+[Network Demo](https://pambrose.github.io/prometheus-proxy/network-demo/),
+[Kubernetes Demo](https://pambrose.github.io/prometheus-proxy/kubernetes-demo/), and
+[Embedded Demo](https://pambrose.github.io/prometheus-proxy/embedded-demo/) pages walk through the same scenarios
 with screenshots.
 
 ## ✨ New Features
@@ -89,9 +92,10 @@ app's own scrape credentials never sit in a config file. The proxy and the agent
 as PEM text, or its base64, in environment variables (`CERT_CHAIN_PEM`, `PRIVATE_KEY_PEM`,
 `TRUST_CERT_COLLECTION_PEM`), so the Docker images run TLS on a platform that passes secrets as variables. The docs
 site's new [Cloud Platforms](https://pambrose.github.io/prometheus-proxy/cloud-platforms/) page runs an embedded agent
-in an app on Cloud Run or ECS, with the proxy on Railway, DigitalOcean, GCP, or AWS, and
-[`examples/cloud-proxy`](examples/cloud-proxy) holds a proxy and Prometheus to start from. The
-[release notes](RELEASE_NOTES.md) and the [changelog](CHANGELOG.md) have the full list.
+in an app on ECS, Cloud Run, or Azure Container Apps, with the proxy on AWS, GCP, Azure, DigitalOcean, or Railway, and
+[`examples/cloud-proxy`](examples/cloud-proxy) holds a proxy and Prometheus to start from, and a new
+[embedded demo](demos/embedded) runs it all on your laptop, in a Ktor app. The [release notes](RELEASE_NOTES.md) and
+the [changelog](CHANGELOG.md) have the full list.
 
 Each earlier release's summary is in the [release notes](RELEASE_NOTES.md), and the [changelog](CHANGELOG.md) has
 every change.
@@ -489,8 +493,8 @@ the agent had opened.
 An application that holds the agent's settings itself, such as a token, the proxy's certificate, or credentials for
 its own `/metrics`, can pass them in memory instead of in a file, as a Typesafe `Config` rooted at `agent`:
 `Agent.startAsyncAgent(config)`. The docs site's
-[Cloud Platforms](https://pambrose.github.io/prometheus-proxy/cloud-platforms/) page builds an app on Cloud Run or ECS
-around it.
+[Cloud Platforms](https://pambrose.github.io/prometheus-proxy/cloud-platforms/) page builds an app on ECS, Cloud Run,
+or Azure Container Apps around it.
 
 Several agents can run in one JVM with metrics on, at once or one after another: they share one set of agent metrics,
 and each series carries its agent's `launch_id`. An embedded agent's `logLevel` sets only the `io.prometheus` loggers,

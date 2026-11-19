@@ -119,9 +119,9 @@ monitoring    prometheus-agent   ClusterIP   10.96.100.246   <none>        8083/
 ```
 
 Every Service in the target cluster is ClusterIP: nothing in it can be reached from outside, and kind maps none of its
-ports to the host but the API server's, for `kubectl`. The agent dialed out to the proxy; nothing dialed in. `helm list`
-shows the proxy chart in one cluster and the agent chart in the other, and Prometheus's config names no target in the
-target cluster: its one job asks the proxy's `/discovery` what to scrape.
+ports to the host but the API server's, for `kubectl`. The agent opened its connection to the proxy; nothing connected
+in. `helm list` shows the proxy chart in one cluster and the agent chart in the other, and Prometheus's config names no
+target in the target cluster: its one job asks the proxy's `/discovery` what to scrape.
 
 <figure markdown="span">
   ![The agent, named for its pod, with its four paths](images/kubernetes-demo/agent.webp#only-dark){ loading=lazy }

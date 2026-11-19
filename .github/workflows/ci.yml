@@ -46,6 +46,11 @@ jobs:
       - name: Compile, lint, and detekt (no tests)
         run: ./gradlew clean build -x test
 
+      # The embedded demo's coffee shop is a Gradle project of its own (demos/embedded/app), which the build above
+      # doesn't compile. Built against this checkout's library, so a change to its API that breaks the demo fails here.
+      - name: Build the embedded demo's app against this checkout
+        run: ./gradlew -p demos/embedded/app -PlocalProxy build
+
       # --continue still writes the coverage report when a coverage floor fails. It doesn't when a test fails: the
       # kover tasks depend on the test task, so Gradle skips them and the Codecov upload finds no report.
       - name: Run tests, verify coverage, and generate the coverage report

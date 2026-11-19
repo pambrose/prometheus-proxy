@@ -1,0 +1,18 @@
+<configuration>
+  <!-- The coffee shop's logging, which configures the embedded agent's loggers too: the library carries none of its own -->
+  <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%d{HH:mm:ss.SSS} %-5level %logger{24} - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <root level="INFO">
+    <appender-ref ref="STDOUT"/>
+  </root>
+
+  <!-- As the standalone agent has it: only gRPC's internal warnings and errors -->
+  <logger name="io.grpc.internal" level="WARN"/>
+  <!-- Netty's startup chatter, and the logging registry Ktor's Micrometer plugin starts before the app gives it its own -->
+  <logger name="io.netty" level="WARN"/>
+  <logger name="io.micrometer.core.instrument.push.PushMeterRegistry" level="WARN"/>
+</configuration>

@@ -16,6 +16,11 @@ All notable changes to this project are documented in this file.
   `PRIVATE_KEY_PEM`, and `TRUST_CERT_COLLECTION_PEM` environment variables. The Docker images, which have no shell to
   write a variable to a file, run TLS on a platform that passes secrets as environment variables. A file and a PEM for
   the same piece are refused, and a PEM is never logged
+- A fourth demo, `demos/embedded`: a Ktor coffee shop with the agent embedded, started from an in-memory config, the
+  stock proxy taking its TLS certificate and key from PEM variables, and Prometheus and Grafana beside it. Its tour
+  covers a rush, an alert, a deploy that hands the agent's paths to the new version, the proxy going away, and secrets
+  from the environment. `make up` builds the app inside Docker against the latest release; CI builds it against the
+  checkout
 
 ### Bug Fixes
 
@@ -49,9 +54,10 @@ All notable changes to this project are documented in this file.
   which the same page shows HOCON substitution doing
 - Troubleshooting's Registration is rejected table lists the identity, takeover, path-limit, and reserved-path
   rejections, and says which ones the agent retries
-- A Cloud Platforms page runs an embedded agent in an app on Cloud Run, ECS on Fargate, or another platform, with the
-  proxy on Railway, DigitalOcean, GCP, or AWS, and `examples/cloud-proxy` holds a proxy and Prometheus to start from. TLS Setup, Docker,
-  Embedded Agent, and the CLI Reference cover the PEM settings and the in-memory config
+- A Cloud Platforms page runs an embedded agent in an app on ECS on Fargate, Cloud Run, Azure Container Apps, or
+  another platform, with the proxy on AWS, GCP, Azure, DigitalOcean, or Railway, and `examples/cloud-proxy` holds a
+  proxy and Prometheus to start from. TLS Setup, Docker, Embedded Agent, and the CLI Reference cover the PEM settings
+  and the in-memory config. An Embedded Demo page walks through the new demo with screenshots
 - TLS Setup shows how to create a private CA and the proxy's and agents' certificates with OpenSSL or LibreSSL, in
   place of a link to gRPC's example
 - `docs/cli-args.md`, a second hand-kept copy of the website's CLI Reference, now points to it, as does the README

@@ -2,6 +2,10 @@
 build/
 .superset
 
+# The embedded demo's secrets, which its demo.sh writes for docker compose, and its app's Kotlin daemon state
+demos/embedded/docker/.env
+.kotlin/
+
 # TLA+ tools (downloaded by `make tla-checks`) and TLC's working files
 specs/tla/tla2tools.jar*
 specs/tla/states/

@@ -14,7 +14,7 @@ The two components play different roles, and that determines where each one runs
 - The **agent** runs **inside** each target cluster, alongside the services it scrapes. It
   opens an **outbound** gRPC connection to the proxy, so the target cluster never needs an
   inbound firewall rule.
-- The **proxy** runs **centrally**, next to Prometheus. Agents dial *in* to it on the gRPC
+- The **proxy** runs **centrally**, next to Prometheus. Agents connect *in* to it on the gRPC
   port (`50051`), and Prometheus scrapes it on the HTTP port (`8080`).
 
 ```mermaid

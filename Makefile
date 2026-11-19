@@ -41,9 +41,9 @@ RELEASE_VERSION_FILES := README.md llms.txt etc/compose/proxy.yml examples/cloud
 	website/prometheus-proxy/docs/docker.md src/test/kotlin/website/DockerExamples.txt \
 	src/test/kotlin/website/EmbeddedAgentExamples.txt src/test/kotlin/website/KubernetesExamples.txt \
 	docs/RELEASE.md .claude/skills/publishing-release/SKILL.md \
-	demos/basics/README.md demos/network/README.md demos/kubernetes/README.md \
+	demos/basics/README.md demos/network/README.md demos/kubernetes/README.md demos/embedded/README.md \
 	website/prometheus-proxy/docs/basics-demo.md website/prometheus-proxy/docs/network-demo.md \
-	website/prometheus-proxy/docs/kubernetes-demo.md
+	website/prometheus-proxy/docs/kubernetes-demo.md website/prometheus-proxy/docs/embedded-demo.md
 # The CI jobs that must have passed for the release commit, as workflow-file/job-name, separated by semicolons since
 # job names can hold spaces. make release itself runs only the tests and the distro build, so these are what cover
 # the coverage floors, TLA+, the alerting rules, the Helm charts, the docs site build, what a Maven build that embeds
@@ -61,12 +61,14 @@ SITE_DIR := $(WEBSITE_DIR)/prometheus-proxy
 SITE_VERSION_SOURCES := $(SITE_DIR)/docs src/test/kotlin/website src/test/java/website
 
 # The customer demos, whose Prometheus configs and rules check-rules validates: the dashboard and Grafana, the network
-# between the agents and the proxies, and the Helm charts deployed on two kind clusters. Each demo under demos/ is
+# between the agents and the proxies, the Helm charts deployed on two kind clusters, and an app with the agent
+# embedded, its metrics in Grafana. Each demo under demos/ is
 # self-contained, with its own Makefile for starting and stopping it (`make -C demos/<name> help`), so this one has no
 # demo targets.
 BASICS_DEMO_DIR := demos/basics
 NETWORK_DEMO_DIR := demos/network
 KUBERNETES_DEMO_DIR := demos/kubernetes
+EMBEDDED_DEMO_DIR := demos/embedded
 
 # TLA+ model checking (specs/tla). The tools jar is git-ignored, and downloaded when it's missing or doesn't match
 # TLA_SHA256; TLC's working states go under build/.
@@ -233,6 +235,10 @@ check-rules:  ## Validate the alerting rules in grafana/alerts.yml, and each dem
 		-v "$(CURDIR)/$(NETWORK_DEMO_DIR)/prometheus/network-alerts.yml:/etc/prometheus/rules/network-alerts.yml:ro" \
 		--entrypoint promtool $(PROMETHEUS_IMAGE) check config /etc/prometheus/prometheus.yml
 	docker run --rm -v "$(CURDIR)/$(KUBERNETES_DEMO_DIR)/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
+		--entrypoint promtool $(PROMETHEUS_IMAGE) check config /etc/prometheus/prometheus.yml
+	docker run --rm -v "$(CURDIR)/$(EMBEDDED_DEMO_DIR)/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
+		-v "$(CURDIR)/$(EMBEDDED_DEMO_DIR)/prometheus/embedded-alerts.yml:/etc/prometheus/rules/embedded-alerts.yml:ro" \
+		-v "$(CURDIR)/grafana/alerts.yml:/etc/prometheus/rules/alerts.yml:ro" \
 		--entrypoint promtool $(PROMETHEUS_IMAGE) check config /etc/prometheus/prometheus.yml
 
 helm-lint:  ## Lint the Helm charts and validate their rendered manifests (needs Docker)

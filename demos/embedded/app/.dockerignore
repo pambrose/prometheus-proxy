@@ -1,0 +1,6 @@
+# The build context is this directory: the sources for the compiled build, and the host's build/install for the
+# prebuilt one (Dockerfile).
+.gradle
+.kotlin
+build
+!build/install

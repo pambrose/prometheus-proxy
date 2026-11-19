@@ -74,8 +74,9 @@ and is resolved, as a config file is, so a `${?ENV_VAR}` substitution in it work
 environment variables of single settings, such as `AGENT_TOKEN` or `PROXY_HOSTNAME`, still take precedence over it, as
 they do over a config file: give your application's own settings other names, unless you mean the agent to read them.
 
-[Cloud Platforms](cloud-platforms.md) builds on this to run an embedded agent in an app on Cloud Run, ECS on Fargate,
-or another platform, with the proxy on Railway, DigitalOcean, GCP, or AWS.
+[Cloud Platforms](cloud-platforms.md) builds on this to run an embedded agent in an app on ECS on Fargate, Cloud Run,
+Azure Container Apps, or another platform, with the proxy on AWS, GCP, Azure, DigitalOcean, or Railway, and the
+[Embedded Demo](embedded-demo.md) runs it on one machine, in a Ktor app.
 
 ## API Reference
 

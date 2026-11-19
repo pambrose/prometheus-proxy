@@ -28,7 +28,7 @@ When bumping the version, update `version` in `gradle.properties` and every hard
 - `charts/prometheus-{proxy,agent}/Chart.yaml` — `version` and `appVersion` (the image tag the charts deploy)
 - `website/prometheus-proxy/docs/{getting-started,index,docker}.md` — Docker pull/run examples
 - `src/test/kotlin/website/{DockerExamples,EmbeddedAgentExamples,KubernetesExamples}.txt` — snippet sources the website's Docker, Embedded Agent, and Kubernetes pages include
-- `README.md`, `llms.txt`, `demos/{basics,network,kubernetes}/README.md`, and `website/prometheus-proxy/docs/{demo,network-demo,kubernetes-demo,getting-started}.md` — the `git clone --branch` tag the demos and the Helm install check out
+- `README.md`, `llms.txt`, `demos/{basics,network,kubernetes,embedded}/README.md`, and `website/prometheus-proxy/docs/{basics-demo,network-demo,kubernetes-demo,embedded-demo,getting-started}.md` — the `git clone --branch` tag the demos and the Helm install check out
 - this line, and step 2 of `docs/RELEASE.md`
 
 `RELEASE_VERSION_FILES` in the `Makefile` lists the same files for `make release-check`; keep it in step.

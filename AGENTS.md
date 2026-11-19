@@ -38,6 +38,11 @@ Run `make help` for the current target list with descriptions (auto-extracted fr
 Each demo under `demos/` is self-contained, with its own Makefile run from its directory (`make -C demos/<name> help`
 lists its targets), so the root `Makefile` has no demo targets.
 
+The embedded demo's coffee shop, `demos/embedded/app`, is a Gradle project of its own, outside the root build, that
+embeds the agent through the public API and reads `gradle/libs.versions.toml` (its Ktor and Micrometer entries are
+there for it). CI builds it against the checkout, `./gradlew -p demos/embedded/app -PlocalProxy build` (a composite
+build, which lints it too), so a change to `Agent.startAsyncAgent` or the config tree it takes must keep it compiling.
+
 ## Architecture
 
 A **Prometheus Proxy** system enabling Prometheus to scrape metrics from endpoints behind firewalls.

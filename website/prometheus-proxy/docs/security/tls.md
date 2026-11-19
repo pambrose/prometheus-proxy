@@ -130,8 +130,8 @@ java -jar prometheus-agent.jar --config examples/tls-with-mutual-auth.conf
 ## Certificates as Environment Variables
 
 Since 4.6.0, each certificate and key can be given as its PEM text rather than as a file. This suits a platform that
-passes secrets as environment variables, such as Railway, DigitalOcean, Cloud Run, or ECS, and the Docker images,
-which have no shell to write a variable out to a file:
+passes secrets as environment variables, such as ECS, Cloud Run, Azure Container Apps, DigitalOcean, or Railway, and
+the Docker images, which have no shell to write a variable out to a file:
 
 | File setting                  | PEM setting              | PEM environment variable    |
 |:------------------------------|:-------------------------|:----------------------------|

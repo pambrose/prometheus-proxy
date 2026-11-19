@@ -4,13 +4,14 @@ icon: lucide/cloud
 
 # Cloud Platforms
 
-An app on a platform such as Cloud Run or ECS can't be scraped by a Prometheus outside the platform without opening
-its metrics to the internet. An [embedded agent](embedded-agent.md) reverses the direction: it dials out to a proxy
-beside Prometheus, and answers each scrape by reading the app's own `/metrics`. This page sets that up for a JVM app,
-with the proxy on Railway, DigitalOcean, GCP, or AWS.
+An app on a platform such as ECS, Cloud Run, or Azure Container Apps can't be scraped by a Prometheus outside the
+platform without opening its metrics to the internet. An [embedded agent](embedded-agent.md) reverses the direction: it
+connects to a proxy beside Prometheus, and answers each scrape by reading the app's own `/metrics`. This page sets
+that up for a JVM app, with the proxy on AWS, GCP, Azure, DigitalOcean, or Railway. The
+[Embedded Demo](embedded-demo.md) runs the same setup on one machine.
 
 ```text
-App platform (Cloud Run, ECS, ...)               Proxy host (Railway, DigitalOcean, GCP, AWS)
+App platform (ECS, Cloud Run, ...)               Proxy host (AWS, GCP, Azure, DigitalOcean, Railway)
   app: /metrics on 127.0.0.1                       prometheus-proxy  :50051  agents, over TLS with a token
    └ embedded agent ── gRPC, TLS + token ─────►                      :8080   scrapes, private
                                                    Prometheus ── scrapes :8080/my_app_metrics
@@ -72,22 +73,30 @@ Give the app's Logback configuration the line the standalone agent has for gRPC'
 ### What the App Platform Must Give It
 
 - **CPU between requests, and an instance that stays up.** The agent holds its connection to the proxy open between
-  scrapes, so a platform that throttles CPU outside requests, or scales the app to zero, stalls it. On Cloud Run, that
-  is instance-based billing with a minimum instance:
+  scrapes, so a platform that throttles CPU outside requests, or scales the app to zero, stalls it.
+    - On AWS, run the app as an ECS service on Fargate, whose tasks keep their CPU whether or not they handle
+      requests. App Runner gives an instance CPU only while it handles requests, and bills an idle one for its memory
+      alone, so the agent stalls there.
+    - On GCP, Cloud Run needs instance-based billing with a minimum instance:
 
-    ```bash
-    gcloud run services update my-app --no-cpu-throttling --min-instances=1
-    ```
+        ```bash
+        gcloud run services update my-app --no-cpu-throttling --min-instances=1
+        ```
 
-    On AWS, run the app as an ECS service on Fargate, whose tasks keep their CPU whether or not they handle requests.
-    App Runner gives an instance CPU only while it handles requests, and bills an idle one for its memory alone, so the
-    agent stalls there.
+    - On Azure, Container Apps scales an app to zero by default, so keep a replica running:
+
+        ```bash
+        az containerapp update --name my-app --resource-group my-group --min-replicas 1
+        ```
+
+        On App Service, turn on Always On, which keeps the app loaded when it has no requests.
 
 - **One instance per path.** Each agent registers its path as its own, and the last one to register serves it, so a
-  second instance's agent takes the path from the first. Run one instance (`--max-instances=1` on Cloud Run, a desired
-  count of 1 for an ECS service), or make the agents [consolidated](advanced.md#consolidated-mode) and give each
-  instance's series a label of its own, such as a common tag with the instance's ID: the proxy merges the instances'
-  answers into one scrape, and without the label it would repeat each series once per instance.
+  second instance's agent takes the path from the first. Run one instance (a desired count of 1 for an ECS service,
+  `--max-instances=1` on Cloud Run, `--max-replicas 1` on Container Apps), or make the agents
+  [consolidated](advanced.md#consolidated-mode) and give each instance's series a label of its own, such as a common
+  tag with the instance's ID: the proxy merges the instances' answers into one scrape, and without the label it would
+  repeat each series once per instance.
 - **Deploys need nothing more.** While the old and new revisions overlap, the new revision's agent takes the path
   over, and the old one stops with its app.
 
@@ -121,10 +130,11 @@ The proxy and Prometheus run together, on a host whose agent port the apps can r
 
 | Platform     | Agents reach the proxy through                        | Prometheus runs                            |
 |:-------------|:------------------------------------------------------|:-------------------------------------------|
-| Railway      | A TCP Proxy on the proxy service's port 50051         | As another service, on the private network |
-| DigitalOcean | A Droplet's address, with a firewall open on 50051    | On the Droplet, beside the proxy           |
-| GCP          | A Compute Engine VM's address, with a firewall rule   | On the VM, beside the proxy                |
 | AWS          | An EC2 instance's address, with a security group rule | On the instance, beside the proxy          |
+| GCP          | A Compute Engine VM's address, with a firewall rule   | On the VM, beside the proxy                |
+| Azure        | An Azure VM's address, with a network security rule   | On the VM, beside the proxy                |
+| DigitalOcean | A Droplet's address, with a firewall open on 50051    | On the Droplet, beside the proxy           |
+| Railway      | A TCP Proxy on the proxy service's port 50051         | As another service, on the private network |
 
 [`examples/cloud-proxy`](https://github.com/pambrose/prometheus-proxy/tree/master/examples/cloud-proxy) holds the
 proxy's config and a Prometheus config for each of them, and a Compose file that runs both on a VM:
@@ -147,34 +157,26 @@ proxy's config and a Prometheus config for each of them, and a Compose file that
     --8<-- "examples/cloud-proxy/prometheus.yml"
     ```
 
-### Railway
+### AWS
 
-- Railway's HTTPS domains don't carry the agent's gRPC through to the container, so give the proxy service a
-  [TCP Proxy](https://docs.railway.com/networking/tcp-proxy) on port 50051, and no HTTPS domain. Railway gives it a
-  host and port, such as `shuttle.proxy.rlwy.net:15140`, which is the agent's `PROMETHEUS_PROXY`.
-- The TCP Proxy forwards the connection as it is and adds no TLS, so the proxy does its own: deploy the
-  `pambrose/prometheus-proxy` image, 4.6.0 or later, and set `CERT_CHAIN_PEM`, `PRIVATE_KEY_PEM`, and `AGENT_TOKEN` as
-  the service's variables, with `METRICS_ENABLED=true` for the proxy's own metrics. The image needs no config file for
-  this.
-- Name the service `prometheus-proxy`, so Prometheus reaches it at `prometheus-proxy.railway.internal:8080` on the
-  [private network](https://docs.railway.com/networking/private-networking). In an older environment, whose private
-  network carries IPv6 only, set the proxy's `proxy.http.host` to `"::"`, in a config it reads through
-  `PROXY_CONFIG`, so Prometheus can reach the scrape port.
-- Run Prometheus as another service, built from a Dockerfile that copies in a `prometheus.yml` like the example's,
-  with its targets on `prometheus-proxy.railway.internal`, and a volume for its data.
+- On an EC2 instance with Docker, copy `examples/cloud-proxy` over, put the certificate, key, and token in its `.env`,
+  and run `docker compose up --detach`. Open the agent port in the instance's security group:
 
-### DigitalOcean
+    ```bash
+    aws ec2 authorize-security-group-ingress --group-id sg-0123456789abcdef0 --protocol tcp --port 50051 \
+      --cidr 0.0.0.0/0
+    ```
 
-- On a Droplet with Docker, copy `examples/cloud-proxy` over, put the certificate, key, and token in its `.env`, and
-  run `docker compose up --detach`. Give the Droplet a
-  [Cloud Firewall](https://docs.digitalocean.com/products/networking/firewalls/) that admits only port 50051, and SSH
-  from your own address.
-- App Platform is a poorer fit. DigitalOcean documents
-  [HTTP/2 for its services](https://docs.digitalocean.com/products/app-platform/how-to/configure-http2/), which gRPC
-  needs, but its [limits page](https://docs.digitalocean.com/products/app-platform/details/limits/) says it doesn't
-  support gRPC. Its edge is also a reverse proxy, which needs the
-  [transport filter](advanced.md#nginx-reverse-proxy) off on both sides. Try it with your own app before relying on it.
-- On DigitalOcean Kubernetes, see [Kubernetes](kubernetes.md).
+- An app on ECS in the same VPC can reach the instance on its private address instead: admit the app's security group
+  (`--source-group` in place of `--cidr`), so the agent port needn't face the internet at all. Keep the token and TLS
+  anyway.
+- To run the proxy on ECS on Fargate, as a service with one task, put a
+  [Network Load Balancer](https://docs.aws.amazon.com/elasticloadbalancing/latest/network/load-balancer-listeners.html)
+  in front of it with a TCP listener on 50051. A TCP listener forwards the connection as it is, so the proxy does its
+  own TLS, and the agent's heartbeat, which it sends whenever the connection has been idle for a few
+  seconds, keeps the connection inside the listener's idle timeout. Run Prometheus as another service that reaches
+  the proxy's scrape port inside the VPC.
+- On EKS, see [Kubernetes](kubernetes.md).
 
 ### GCP
 
@@ -199,26 +201,53 @@ proxy's config and a Prometheus config for each of them, and a Compose file that
   request timeout, at most 60 minutes, and the agent reconnects. The proxy needs the same single, always-on instance
   as the app. A VM is simpler.
 
-### AWS
+### Azure
 
-- On an EC2 instance with Docker, copy `examples/cloud-proxy` over, put the certificate, key, and token in its `.env`,
-  and run `docker compose up --detach`. Open the agent port in the instance's security group:
+- On an Azure VM with Docker, copy `examples/cloud-proxy` over, put the certificate, key, and token in its `.env`, and
+  run `docker compose up --detach`. Open the agent port in the VM's network security group with
+  [`az vm open-port`](https://learn.microsoft.com/en-us/cli/azure/vm?view=azure-cli-latest), which admits it from any
+  source; for a narrower one, add the rule with `az network nsg rule create` instead:
 
     ```bash
-    aws ec2 authorize-security-group-ingress --group-id sg-0123456789abcdef0 --protocol tcp --port 50051 \
-      --cidr 0.0.0.0/0
+    az vm open-port --resource-group my-group --name my-proxy-vm --port 50051
     ```
 
-- An app on ECS in the same VPC can reach the instance on its private address instead: admit the app's security group
-  (`--source-group` in place of `--cidr`), so the agent port needn't face the internet at all. Keep the token and TLS
-  anyway.
-- To run the proxy on ECS on Fargate, as a service with one task, put a
-  [Network Load Balancer](https://docs.aws.amazon.com/elasticloadbalancing/latest/network/load-balancer-listeners.html)
-  in front of it with a TCP listener on 50051. A TCP listener forwards the connection as it is, so the proxy does its
-  own TLS, as on Railway, and the agent's heartbeat, which it sends whenever the connection has been idle for a few
-  seconds, keeps the connection inside the listener's idle timeout. Run Prometheus as another service that reaches
-  the proxy's scrape port inside the VPC.
-- On EKS, see [Kubernetes](kubernetes.md).
+- An app on Container Apps, in an environment with a virtual network that reaches the VM's, can reach the VM on its
+  private address instead, so the agent port needn't face the internet at all. Keep the token and TLS anyway.
+- On AKS, see [Kubernetes](kubernetes.md).
+- The proxy can run on [Container Apps](https://learn.microsoft.com/en-us/azure/container-apps/ingress-overview) too, as
+  an app with one replica. External TCP ingress on port 50051 forwards the agent's connection as it is, so the proxy
+  does its own TLS; Container Apps offers it only in an environment with a virtual network. Run Prometheus as another
+  app in the environment, and give it the proxy's scrape port as an additional, internal TCP port.
+
+### DigitalOcean
+
+- On a Droplet with Docker, copy `examples/cloud-proxy` over, put the certificate, key, and token in its `.env`, and
+  run `docker compose up --detach`. Give the Droplet a
+  [Cloud Firewall](https://docs.digitalocean.com/products/networking/firewalls/) that admits only port 50051, and SSH
+  from your own address.
+- App Platform is a poorer fit. DigitalOcean documents
+  [HTTP/2 for its services](https://docs.digitalocean.com/products/app-platform/how-to/configure-http2/), which gRPC
+  needs, but its [limits page](https://docs.digitalocean.com/products/app-platform/details/limits/) says it doesn't
+  support gRPC. Its edge is also a reverse proxy, which needs the
+  [transport filter](advanced.md#nginx-reverse-proxy) off on both sides. Try it with your own app before relying on it.
+- On DigitalOcean Kubernetes, see [Kubernetes](kubernetes.md).
+
+### Railway
+
+- Railway's HTTPS domains don't carry the agent's gRPC through to the container, so give the proxy service a
+  [TCP Proxy](https://docs.railway.com/networking/tcp-proxy) on port 50051, and no HTTPS domain. Railway gives it a
+  host and port, such as `shuttle.proxy.rlwy.net:15140`, which is the agent's `PROMETHEUS_PROXY`.
+- The TCP Proxy forwards the connection as it is and adds no TLS, so the proxy does its own: deploy the
+  `pambrose/prometheus-proxy` image, 4.6.0 or later, and set `CERT_CHAIN_PEM`, `PRIVATE_KEY_PEM`, and `AGENT_TOKEN` as
+  the service's variables, with `METRICS_ENABLED=true` for the proxy's own metrics. The image needs no config file for
+  this.
+- Name the service `prometheus-proxy`, so Prometheus reaches it at `prometheus-proxy.railway.internal:8080` on the
+  [private network](https://docs.railway.com/networking/private-networking). In an older environment, whose private
+  network carries IPv6 only, set the proxy's `proxy.http.host` to `"::"`, in a config it reads through
+  `PROXY_CONFIG`, so Prometheus can reach the scrape port.
+- Run Prometheus as another service, built from a Dockerfile that copies in a `prometheus.yml` like the example's,
+  with its targets on `prometheus-proxy.railway.internal`, and a volume for its data.
 
 ## On the Prometheus Side
 
