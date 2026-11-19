@@ -38,7 +38,8 @@ java -jar prometheus-proxy.jar --config /etc/prometheus-proxy/proxy.conf
 
 ### Dynamic Properties
 
-Override any configuration value using `-D` flags:
+Set any scalar configuration value with a `-D` flag. It overrides the config file, but a CLI option or environment
+variable for the same setting overrides it:
 
 ```bash
 java -jar prometheus-proxy.jar -Dproxy.http.port=9090 -Dproxy.admin.enabled=true

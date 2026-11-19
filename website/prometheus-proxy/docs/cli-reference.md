@@ -118,7 +118,8 @@ opaque bind or builder error:
 
 ## Dynamic Properties
 
-Use `-D` to override any configuration value:
+Use `-D` to set any scalar configuration value. It overrides the config file, but a CLI option or environment variable
+for the same setting overrides it:
 
 ```bash
 java -jar prometheus-proxy.jar \

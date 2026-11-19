@@ -20,6 +20,13 @@ All notable changes to this project are documented in this file.
 - The README, the website's home page, and the basics and network demos' READMEs, pages, and tours say the Kubernetes demo needs kind, `kubectl`, and Helm as well as Docker where they point to it, and its own README and page say so up front
 - The clone commands for the demos and the Helm charts check out the latest release's tag (`--branch 4.5.0`, quietly, with `-c advice.detachedHead=false`), so the demo's scripts are the ones released with the images it pulls, rather than whatever `master` holds, and are never ahead of a release whose images aren't published yet. The release bump updates the tag in each (`RELEASE_VERSION_FILES` lists the files), and `make release-check` fails on one still on the previous release's
 - The website's Basics Demo page moved from `demo/` to `basics-demo/`, matching the other two demo pages; the old address redirects to it, `#` anchors included. The three demo pages have icons in the site's navigation
+- The website's configuration precedence ranks environment variables above `-D` properties, as the options resolve
+  them: a setting's environment variable overrides its `-D` value, which overrides the config file. It had the two the
+  other way round
+- The README's table-of-contents links to Architecture, Building from Source, and Advanced Features work on GitHub,
+  whose heading anchors kept those emoji's invisible variation selector. The Basics and Kubernetes demo pages no longer
+  say the images are built from the clone, the Running in Production page's health-probe advice renders as a list
+  item instead of text inside the HA section, and the KDocs page's fallback link points into the site
 
 ## [4.5.0] - 2026-11-17
 

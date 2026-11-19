@@ -93,8 +93,7 @@ and nothing shared. To move a port that is already taken, set `KUBERNETES_DEMO_D
 | `pp-target` | `targets-sync` | Lists and watches the Services in the `apps` namespace, and writes each one annotated `prometheus-proxy/path` into the agent's targets ConfigMap. Part of the demo, not the product. |
 | `pp-target` | `orders`, `payments`, `shipping` | Simulated services, each behind a ClusterIP Service annotated `prometheus-proxy/path`. |
 
-The proxy and agent images are built from the checkout and loaded into the clusters, so the demo always runs the code
-as it is. The charts get nothing but a values file each, a config file, and the proxy's address.
+The charts get nothing but a values file each, a config file, and the proxy's address.
 
 ## Scenarios
 

@@ -18,6 +18,8 @@ Kubernetes demo needs kind, `kubectl`, and Helm.
 ### Documentation
 
 - The docs say the Kubernetes demo needs kind, `kubectl`, and Helm as well as Docker wherever they point to it.
+- The website had configuration precedence wrong: a setting's environment variable overrides its `-D` value, which
+  overrides the config file.
 - The demos and the Helm charts are cloned at the latest release's tag rather than `master`, so a demo's scripts always
   match the images it pulls.
 - The website's Basics Demo page is now at `basics-demo/`, next to the other two demo pages; links to the old `demo/`

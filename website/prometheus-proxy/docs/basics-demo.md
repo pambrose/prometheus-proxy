@@ -8,8 +8,6 @@ The repository ships a demo that runs the whole system on one machine: the proxy
 [dashboard](web-dashboard.md), three agents behind a simulated firewall, a set of simulated services, and Prometheus
 and Grafana in front. It is the quickest way to watch the proxy work, and every screenshot on this page comes from it.
 
-The proxy and agent images are built from your clone, so the demo shows the dashboard as it is in the code.
-
 ``` mermaid
 %%{init: {'flowchart': {'curve': 'linear'}}}%%
 graph LR
