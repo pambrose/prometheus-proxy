@@ -1,6 +1,6 @@
 [versions]
 # Toolchain
-gradle-wrapper = "9.9.1"
+gradle-wrapper = "9.9.2"
 jvm = "17"
 # The JVM the tests run on: the runtime the Docker images ship (main code still compiles for `jvm`)
 testJvm = "25"
@@ -55,7 +55,7 @@ ktor = "3.6.1"
 # htmx-ext-ws dependency. ProxyDashboardService reads the version through BuildConfig, so both the classpath paths it
 # reads and the URLs it serves the assets at follow it. A major bump means porting ProxyDashboardHtml's page shell
 # and script (attributes, event names, the WebSocket config), not just the version.
-htmx = "4.0.1"
+htmx = "4.0.2"
 # Simple Icons (CC0), the brand marks the dashboard's Links column can show (LinkIcon). The WebJar holds every brand, in
 # 7.5 MB, so build.gradle.kts extracts only the SVGs LinkIcon names, through a configuration of its own, and the WebJar
 # stays out of the `webjars` bundle, the runtime classpath, the POM, and the fat JARs. ProxyDashboardService serves the
@@ -81,7 +81,7 @@ zipkin = "6.3.1"
 
 # Logging
 logging = "8.0.7"
-logback = "1.6.7"
+logback = "1.6.8"
 slf4j = "2.0.20"
 
 # Config / CLI

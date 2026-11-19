@@ -74,6 +74,14 @@ All notable changes to this project are documented in this file.
   metrics ports refuse connections rather than answer 404, and quotes the proxy's log line for an identity's denied
   path; and Agent Configuration gathers its path rules under one heading
 
+### Dependencies
+
+- Update Gradle 9.9.1 → 9.9.2
+- Update Logback 1.6.7 → 1.6.8
+- Update the dashboard's htmx 4.0.1 → 4.0.2
+- Update the documentation site's Python dependency lock (`website/uv.lock`): pymdown-extensions 13.0 → 13.1 and
+  backrefs 8.2 → 8.2.1
+
 ## [4.5.0] - 2026-11-17
 
 ### Behavior Changes
