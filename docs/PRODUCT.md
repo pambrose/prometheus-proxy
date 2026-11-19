@@ -126,7 +126,9 @@ lives relative to the docs site.
 - **Name:** `prometheus-proxy` (lowercase, hyphenated) is the project name and the string used as the
   dashboard's brand mark. The two services are `proxy` and `agent`.
 - **License:** Apache 2.0. Author: Paul Ambrose. Repository: `pambrose/prometheus-proxy`.
-- **Existing assets:** the architecture diagram at `docs/prometheus-proxy.png`. There is no logo,
+- **Existing assets:** the architecture diagram at `docs/prometheus-proxy.png`, with a dark-mode variant
+  at `docs/prometheus-proxy-dark.png` that the README serves to dark themes (`make readme-diagram-dark` regenerates
+  it after the diagram changes). There is no logo,
   wordmark, or defined brand palette — none has been established, and none should be assumed to exist.
 - *Observed, not user-confirmed:* the existing README and docs voice is direct and problem-first —
   it states the operational pain, then the mechanism, in concrete technical terms, without marketing

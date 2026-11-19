@@ -641,6 +641,9 @@ clean-site:  ## Remove generated zensical site and cache
 site: clean-site  ## Serve the docs site locally with zensical
 	cd $(SITE_DIR) && uv run zensical serve
 
+readme-diagram-dark:  ## Regenerate the README diagram's dark-mode variant from docs/prometheus-proxy.png
+	uv run --script scripts/dark_diagram.py docs/prometheus-proxy.png docs/prometheus-proxy-dark.png
+
 publish-local: _require-version  ## Publish artifacts to the local Maven repository
 	$(GRADLE) publishToMavenLocal
 
