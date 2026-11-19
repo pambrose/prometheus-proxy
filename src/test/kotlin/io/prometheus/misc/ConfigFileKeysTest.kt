@@ -188,6 +188,7 @@ class ConfigFileKeysTest : StringSpec() {
       listOf(
         "config/test-configs",
         "examples",
+        "examples/cloud-proxy",
         "testing",
         "etc/compose",
         "demos/basics/config",
@@ -197,7 +198,14 @@ class ConfigFileKeysTest : StringSpec() {
       )
 
     private val SHIPPED_CONFIG_DIRS =
-      listOf("examples", "demos/basics/config", "demos/network/config", "demos/kubernetes/config", "etc/compose")
+      listOf(
+        "examples",
+        "examples/cloud-proxy",
+        "demos/basics/config",
+        "demos/network/config",
+        "demos/kubernetes/config",
+        "etc/compose",
+      )
 
     private const val TEST_SOURCES = "src/test/kotlin"
     private const val TEST_UTILS = "src/test/kotlin/io/prometheus/harness/support/TestUtils.kt"

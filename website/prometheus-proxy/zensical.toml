@@ -31,6 +31,7 @@ nav = [
   { "Deployment" = [
     { "Docker" = "docker.md" },
     { "Kubernetes" = "kubernetes.md" },
+    { "Cloud Platforms" = "cloud-platforms.md" },
   ]},
   { "Configuration" = [
     { "Overview" = "configuration/index.md" },

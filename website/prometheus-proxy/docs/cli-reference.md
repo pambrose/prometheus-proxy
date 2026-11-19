@@ -30,9 +30,17 @@ icon: lucide/terminal
 | `--cert, -t`                     | `CERT_CHAIN_FILE_PATH`            | `proxy.tls.certChainFilePath`           |                          | TLS cert chain file          |
 | `--key, -k`                      | `PRIVATE_KEY_FILE_PATH`           | `proxy.tls.privateKeyFilePath`          |                          | TLS private key file         |
 | `--trust, -s`                    | `TRUST_CERT_COLLECTION_FILE_PATH` | `proxy.tls.trustCertCollectionFilePath` |                          | TLS trust cert file          |
+|                                  | `CERT_CHAIN_PEM`                  | `proxy.tls.certChainPem`                |                          | TLS cert chain, as PEM       |
+|                                  | `PRIVATE_KEY_PEM`                 | `proxy.tls.privateKeyPem`               |                          | TLS private key, as PEM      |
+|                                  | `TRUST_CERT_COLLECTION_PEM`       | `proxy.tls.trustCertCollectionPem`      |                          | TLS trust certs, as PEM      |
 | `--version, -v`                  |                                   |                                         |                          | Print version info and exit  |
 | `--usage, -u`                    |                                   |                                         |                          | Print usage message and exit |
 | `-D`                             |                                   |                                         |                          | Dynamic property assignment  |
+
+The `*_PEM` settings take a certificate or key itself, as PEM text or its base64, in place of the matching file, for
+a platform that passes secrets as environment variables (see
+[TLS Setup](security/tls.md#certificates-as-environment-variables)). They have no command-line option, so a key never
+shows in a process listing.
 
 ### Proxy gRPC Options
 
@@ -76,10 +84,16 @@ icon: lucide/terminal
 | `--cert, -t`                   | `CERT_CHAIN_FILE_PATH`            | `agent.tls.certChainFilePath`               |             | TLS cert chain file                                 |
 | `--key, -k`                    | `PRIVATE_KEY_FILE_PATH`           | `agent.tls.privateKeyFilePath`              |             | TLS private key file                                |
 | `--trust, -s`                  | `TRUST_CERT_COLLECTION_FILE_PATH` | `agent.tls.trustCertCollectionFilePath`     |             | TLS trust cert file                                 |
+|                                | `CERT_CHAIN_PEM`                  | `agent.tls.certChainPem`                    |             | TLS cert chain, as PEM                              |
+|                                | `PRIVATE_KEY_PEM`                 | `agent.tls.privateKeyPem`                   |             | TLS private key, as PEM                             |
+|                                | `TRUST_CERT_COLLECTION_PEM`       | `agent.tls.trustCertCollectionPem`          |             | TLS trust certs, as PEM                             |
 | `--override, --over`           | `OVERRIDE_AUTHORITY`              | `agent.tls.overrideAuthority`               |             | TLS authority override                              |
 | `--version, -v`                |                                   |                                             |             | Print version info and exit                         |
 | `--usage, -u`                  |                                   |                                             |             | Print usage message and exit                        |
 | `-D`                           |                                   |                                             |             | Dynamic property assignment                         |
+
+As for the proxy, the `*_PEM` settings take a certificate or key as PEM text or its base64, and have no command-line
+option.
 
 ### Agent HTTP Client Cache Options
 

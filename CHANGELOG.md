@@ -4,7 +4,18 @@ All notable changes to this project are documented in this file.
 
 ---
 
-## [Unreleased]
+## [4.6.0] - 2026-11-19
+
+### New Features
+
+- `Agent.startAsyncAgent(config)` starts an embedded agent from a Typesafe `Config` built in memory, so a host's token,
+  the proxy's certificate, and scrape credentials needn't sit in a config file. It is always embedded: a setting it
+  can't use throws `ConfigLoadException`. `typesafe-config` is now an `api` dependency, on a host's compile classpath
+- The proxy and the agent take each TLS certificate, key, and trust collection as PEM text, or its base64, in place of
+  a file: `tls.certChainPem`, `tls.privateKeyPem`, and `tls.trustCertCollectionPem`, or the `CERT_CHAIN_PEM`,
+  `PRIVATE_KEY_PEM`, and `TRUST_CERT_COLLECTION_PEM` environment variables. The Docker images, which have no shell to
+  write a variable to a file, run TLS on a platform that passes secrets as environment variables. A file and a PEM for
+  the same piece are refused, and a PEM is never logged
 
 ### Bug Fixes
 
@@ -38,6 +49,9 @@ All notable changes to this project are documented in this file.
   which the same page shows HOCON substitution doing
 - Troubleshooting's Registration is rejected table lists the identity, takeover, path-limit, and reserved-path
   rejections, and says which ones the agent retries
+- A Cloud Platforms page runs an embedded agent in an app on Cloud Run, ECS on Fargate, or another platform, with the
+  proxy on Railway, DigitalOcean, GCP, or AWS, and `examples/cloud-proxy` holds a proxy and Prometheus to start from. TLS Setup, Docker,
+  Embedded Agent, and the CLI Reference cover the PEM settings and the in-memory config
 - TLS Setup shows how to create a private CA and the proxy's and agents' certificates with OpenSSL or LibreSSL, in
   place of a link to gRPC's example
 - `docs/cli-args.md`, a second hand-kept copy of the website's CLI Reference, now points to it, as does the README

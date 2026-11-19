@@ -26,7 +26,6 @@ import com.pambrose.common.util.runCatchingCancellable
 import com.pambrose.common.util.simpleClassName
 import com.pambrose.common.utils.TlsContext
 import com.pambrose.common.utils.TlsContext.Companion.PLAINTEXT_CONTEXT
-import com.pambrose.common.utils.TlsUtils.buildClientTlsContext
 import com.google.protobuf.ByteString.copyFrom
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.grpc.ClientInterceptors
@@ -38,6 +37,7 @@ import io.prometheus.common.DeferredClientInterceptor
 import io.prometheus.common.Messages.BLANK_AGENT_ID_MSG
 import io.prometheus.common.Messages.BLANK_PATH_MSG
 import io.prometheus.common.ScrapeResults
+import io.prometheus.common.TlsMaterial
 import io.prometheus.common.Utils.failureKey
 import io.prometheus.common.Utils.logStreamFailure
 import io.prometheus.common.Utils.HostPort
@@ -208,11 +208,11 @@ internal class AgentGrpcService(
   init {
     tlsContext =
       agent.options.run {
-        if (isTlsEnabled || trustCertCollectionFilePath.isNotEmpty())
-          buildClientTlsContext(
-            certChainFilePath = certChainFilePath,
-            privateKeyFilePath = privateKeyFilePath,
-            trustCertCollectionFilePath = trustCertCollectionFilePath,
+        if (isTlsEnabled || hasTrustCertCollection)
+          TlsMaterial.clientContext(
+            certChain = certChainSource,
+            privateKey = privateKeySource,
+            trust = trustCertCollectionSource,
           )
         else
           PLAINTEXT_CONTEXT

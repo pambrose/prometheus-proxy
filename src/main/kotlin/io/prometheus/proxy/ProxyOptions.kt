@@ -274,18 +274,21 @@ class ProxyOptions internal constructor(
         certChainFilePath = tls.certChainFilePath,
         privateKeyFilePath = tls.privateKeyFilePath,
         trustCertCollectionFilePath = tls.trustCertCollectionFilePath,
+        certChainPem = tls.certChainPem,
+        privateKeyPem = tls.privateKeyPem,
+        trustCertCollectionPem = tls.trustCertCollectionPem,
       )
     }
 
     validateInternalConfigVals(proxyConfigVals.internal)
     assignBlitzPath(proxyConfigVals.internal.blitz)
 
-    // Resolved after assignCommonOptions so trustCertCollectionFilePath reflects the CLI/env/config value.
+    // Resolved after assignCommonOptions so the trust collection, as a file or PEM, reflects the CLI/env/config value.
     agentToken = resolveStringOption(agentToken, AGENT_TOKEN, proxyConfigVals.agentToken)
     // Never log the token value -- only whether one is configured.
     logger.info { "agentToken: ${if (agentToken.isEmpty()) "(none)" else "***"}" }
     // Warn only when the agent port is genuinely open to any reachable peer.
-    if (isAgentPortUnauthenticated(agentToken, proxyConfigVals.auth.size, isTlsEnabled, trustCertCollectionFilePath)) {
+    if (isAgentPortUnauthenticated(agentToken, proxyConfigVals.auth.size, isTlsEnabled, hasTrustCertCollection)) {
       logger.warn {
         "Agent gRPC port is unauthenticated -- no agent token, per-agent identity (proxy.auth), or mutual TLS " +
           "is configured. Any reachable peer can register as an agent. Do not expose this port in production."
@@ -295,7 +298,7 @@ class ProxyOptions internal constructor(
       logger.warn {
         "Agent tokens are configured but TLS is not enabled on the agent gRPC port -- tokens are sent in " +
           "cleartext and can be captured by anyone who can observe the traffic. Set certChainFilePath and " +
-          "privateKeyFilePath to enable TLS."
+          "privateKeyFilePath, or certChainPem and privateKeyPem, to enable TLS."
       }
     }
 
@@ -519,9 +522,9 @@ class ProxyOptions internal constructor(
       agentToken: String,
       authIdentityCount: Int,
       isTlsEnabled: Boolean,
-      trustCertCollectionFilePath: String,
+      hasTrustCertCollection: Boolean,
     ): Boolean {
-      val isMutualTls = isTlsEnabled && trustCertCollectionFilePath.isNotEmpty()
+      val isMutualTls = isTlsEnabled && hasTrustCertCollection
       return agentToken.isEmpty() && authIdentityCount == 0 && !isMutualTls
     }
 

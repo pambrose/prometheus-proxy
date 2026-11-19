@@ -35,7 +35,7 @@ RELEASE_BRANCH ?= master
 MAVEN_CENTRAL_URL := https://repo1.maven.org/maven2/com/pambrose/prometheus-proxy
 # The files step 2 of docs/RELEASE.md bumps to the new version; release-check fails if one doesn't mention VERSION, or
 # still has the previous release's version where step 2 bumps it. Keep this list in step with that step.
-RELEASE_VERSION_FILES := README.md llms.txt etc/compose/proxy.yml \
+RELEASE_VERSION_FILES := README.md llms.txt etc/compose/proxy.yml examples/cloud-proxy/docker-compose.yml \
 	charts/prometheus-proxy/Chart.yaml charts/prometheus-agent/Chart.yaml \
 	website/prometheus-proxy/docs/getting-started.md website/prometheus-proxy/docs/index.md \
 	website/prometheus-proxy/docs/docker.md src/test/kotlin/website/DockerExamples.txt \

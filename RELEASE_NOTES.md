@@ -2,12 +2,24 @@
 
 ---
 
-## Unreleased
+## 4.6.0
 
-_Not yet released_
+_Released 2026-11-19_
 
-Fixes to the demos' setup: each checks for the tools it needs before it starts, and the docs say up front that the
-Kubernetes demo needs kind, `kubectl`, and Helm.
+An embedded agent can start from a config built in memory, and the proxy and the agent take their TLS certificates
+and keys as environment variables, so an app on Cloud Run or ECS, and a proxy on Railway, DigitalOcean, GCP, or AWS,
+need no secret files. Also, fixes to the demos' setup: each checks for the tools it needs before it starts.
+
+### New Features
+
+- **Start an embedded agent from a config in memory.** `Agent.startAsyncAgent(config)` takes a Typesafe `Config`, so
+  the agent's token, the proxy's certificate, and credentials for your app's `/metrics` never sit in a config file.
+- **TLS certificates and keys as environment variables.** `CERT_CHAIN_PEM`, `PRIVATE_KEY_PEM`, and
+  `TRUST_CERT_COLLECTION_PEM` (or the `tls.*Pem` settings) take PEM text, or its base64, in place of a file, so the
+  Docker images run TLS on a platform that passes secrets as variables, with no wrapper image.
+- **A guide to cloud platforms.** The website's new Cloud Platforms page runs an embedded agent in an app on Cloud Run,
+  ECS on Fargate, or another platform, with the proxy on Railway, DigitalOcean, GCP, or AWS, and `examples/cloud-proxy`
+  holds a proxy and Prometheus to start from.
 
 ### Bug Fixes
 

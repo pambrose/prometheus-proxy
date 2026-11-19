@@ -17,6 +17,7 @@
 
 package io.prometheus.harness
 
+import com.typesafe.config.ConfigFactory
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeTrue
@@ -25,6 +26,10 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldHaveLength
 import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.types.shouldBeInstanceOf
+import io.ktor.client.HttpClient
+import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpStatusCode
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
@@ -40,12 +45,13 @@ import io.prometheus.common.startAndAwaitReady
 import io.prometheus.harness.support.TestUtils.startProxy
 import kotlin.io.path.createTempFile
 import kotlin.time.Duration.Companion.seconds
+import io.ktor.client.engine.cio.CIO as ClientCIO
 import io.ktor.server.cio.CIO as ServerCIO
 
 // The public embedded entry point, end to end. AgentTest pins the failure contract for a config that can't
 // be loaded (it surfaces as ConfigLoadException instead of exiting the host JVM). This pins the success
-// contract: an agent built from a config file connects to a real proxy over Netty, the returned handle
-// reports the configured name, and shutdown() tears the connection down so the proxy forgets the agent.
+// contract: an agent built from a config file, or from one built in memory, connects to a real proxy over Netty, the
+// returned handle reports the configured name, and shutdown() tears the connection down so the proxy forgets the agent.
 // The banner is left on (the default) because that is what an embedding host gets unless it opts out. It
 // also pins the failure contract for a config that loads but holds a setting the agent can't use.
 class EmbeddedAgentApiTest : StringSpec() {
@@ -95,6 +101,64 @@ class EmbeddedAgentApiTest : StringSpec() {
         runCatching { proxy.stopSync(10.seconds) }
         configFile.delete()
       }
+    }
+
+    // The in-memory overload: a host that holds the agent's settings itself passes them as a Config, so no config file
+    // holds them on disk. The proxy serves the path the agent registered, from the target the config names.
+    "startAsyncAgent should start the agent from an in-memory config, and the proxy should serve its path" {
+      PrometheusRegistry.defaultRegistry.clear()
+
+      val target =
+        embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
+          routing { get("/metrics") { call.respondText(TARGET_METRICS) } }
+        }
+      val proxy = startProxy(args = ["--agent_port", "$GRPC_PORT"], proxyPort = HTTP_PORT)
+      var info: EmbeddedAgentInfo? = null
+      try {
+        val targetUrl = "http://$LOOPBACK_HOST:${target.startAndAwaitReady()}/metrics"
+        val config =
+          ConfigFactory.parseMap(
+            mapOf(
+              "agent" to
+                mapOf(
+                  "name" to AGENT_NAME,
+                  "proxy" to mapOf("hostname" to LOOPBACK_HOST, "port" to GRPC_PORT),
+                  "pathConfigs" to [mapOf("name" to "app", "path" to IN_MEMORY_PATH, "url" to targetUrl)],
+                  "internal" to mapOf("reconnectPauseSecs" to 1),
+                ),
+            ),
+          )
+
+        info = Agent.startAsyncAgent(config, logBanner = false)
+        info.agentName shouldBe AGENT_NAME
+
+        HttpClient(ClientCIO).use { client ->
+          eventually(30.seconds) {
+            val response = client.get("http://$LOOPBACK_HOST:$HTTP_PORT/$IN_MEMORY_PATH")
+            response.status shouldBe HttpStatusCode.OK
+            response.bodyAsText() shouldContain TARGET_METRICS
+          }
+        }
+
+        info.shutdown()
+        eventually(30.seconds) {
+          proxy.agentContextManager.agentContextSize shouldBe 0
+        }
+      } finally {
+        runCatching { info?.shutdown() }
+        runCatching { proxy.stopSync(10.seconds) }
+        target.stop(0, 0)
+      }
+    }
+
+    // The in-memory overload is always embedded: a setting the agent can't use throws, and never exits the JVM.
+    "startAsyncAgent should throw ConfigLoadException for an in-memory config with a setting it can't use" {
+      val config = ConfigFactory.parseString("agent.scrapeTimeoutSecs = 0")
+      val exception =
+        runCatching { Agent.startAsyncAgent(config, logBanner = false) }
+          .onSuccess { it.shutdown() }
+          .exceptionOrNull()
+      exception.shouldBeInstanceOf<ConfigLoadException>().message.orEmpty() shouldContain "scrapeTimeoutSecs"
     }
 
     // November #8: the failure contract covers a config the agent loads but can't use, not only one it can't load. Each
@@ -191,6 +255,8 @@ class EmbeddedAgentApiTest : StringSpec() {
     private fun configUrl(port: Int) = "http://user:$SECRET@$LOOPBACK_HOST:$port/agent.conf"
 
     private const val AGENT_NAME = "embedded-api-agent"
+    private const val IN_MEMORY_PATH = "in_memory_metrics"
+    private const val TARGET_METRICS = "in_memory_target_metric 1.0"
 
     // Dedicated ports, following the one-off convention the other standalone harness specs use.
     private const val HTTP_PORT = TestPorts.EMBEDDED_API_HTTP_PORT

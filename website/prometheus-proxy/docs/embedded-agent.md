@@ -49,6 +49,34 @@ The embedded agent uses the same HOCON configuration as the standalone agent:
 --8<-- "EmbeddedAgentExamples.txt:embedded-agent-config"
 ```
 
+## Configuring in Code
+
+Since 4.6.0, an application that holds the agent's settings itself, such as a token, the proxy's certificate, or
+credentials for its own `/metrics`, can pass them in memory, as a Typesafe `Config`, so that no config file holds them
+on disk. The
+tree is the one a config file holds, rooted at `agent`, and the certificate is given as PEM text
+([`agent.tls.trustCertCollectionPem`](security/tls.md#certificates-as-environment-variables)):
+
+=== "Kotlin"
+
+    ```kotlin
+    --8<-- "EmbeddedAgentConfigKotlinExample.kt:embedded-kotlin-config"
+    ```
+
+=== "Java"
+
+    ```java
+    --8<-- "EmbeddedAgentConfigJavaExample.java:embedded-java-config"
+    ```
+
+`ConfigFactory.parseString` and `ConfigFactory.parseMap` build one too. The config falls back to the built-in defaults
+and is resolved, as a config file is, so a `${?ENV_VAR}` substitution in it works. `AGENT_CONFIG` isn't read, but the
+environment variables of single settings, such as `AGENT_TOKEN` or `PROXY_HOSTNAME`, still take precedence over it, as
+they do over a config file: give your application's own settings other names, unless you mean the agent to read them.
+
+[Cloud Platforms](cloud-platforms.md) builds on this to run an embedded agent in an app on Cloud Run, ECS on Fargate,
+or another platform, with the proxy on Railway, DigitalOcean, GCP, or AWS.
+
 ## API Reference
 
 ### `Agent.startAsyncAgent()`
@@ -61,16 +89,26 @@ Starts the agent in background threads/coroutines.
 | `exitOnMissingConfig` | `Boolean` | Pass `false` to embed: a config error or invalid option throws `ConfigLoadException`. `true` exits the JVM, as the standalone agent does |
 | `logBanner`           | `Boolean` | Log the startup banner (default: `true`, which Java callers get by leaving it out too)                                                   |
 
+Or, to start the agent from a config built in memory (see [Configuring in Code](#configuring-in-code)):
+
+| Parameter   | Type      | Description                                                                                         |
+|:------------|:----------|:----------------------------------------------------------------------------------------------------|
+| `config`    | `Config`  | The agent's configuration, rooted at `agent`, as a Typesafe `Config`                                |
+| `logBanner` | `Boolean` | Log the startup banner (default: `true`, which Java callers get by leaving it out too)              |
+
+This form is always embedded: a config error throws `ConfigLoadException`, and never exits the JVM.
+
 **Returns:** `EmbeddedAgentInfo`
 
-**Throws:** `ConfigLoadException`, when `exitOnMissingConfig` is `false`, for a config that can't be loaded or
-parsed, or for a setting the agent can't use, from the config or an environment variable:
+**Throws:** `ConfigLoadException`, when `exitOnMissingConfig` is `false` or the config is in memory, for a config that
+can't be loaded or parsed, or for a setting the agent can't use, from the config or an environment variable:
 
 - a value of the wrong type or out of range, such as `scrapeTimeoutSecs = "abc"` or `0`;
 - an unresolved `${…}` substitution;
 - a malformed proxy endpoint;
 - a duplicate `pathConfigs` or `filters` entry, or a filter regex that doesn't compile;
-- an HTTPS trust store (`agent.http.trustStorePath`) or TLS certificate file that is missing or malformed.
+- an HTTPS trust store (`agent.http.trustStorePath`) or TLS certificate file that is missing or malformed, or a TLS
+  certificate or key given as PEM that can't be read, or given as both a file and PEM.
 
 Credentials in a config URL are redacted from its message and from every message in its cause chain. The cause is the
 exception that rejected the setting, usually an `IllegalArgumentException`. When that exception's message held a URL
@@ -113,7 +151,7 @@ to start, with the failure as its cause. It waits up to 30 seconds for the agent
 
 When you call `startAsyncAgent()`:
 
-1. The agent reads the configuration file
+1. The agent reads the configuration file, or the config you passed
 2. Starts its admin and metrics servers, if enabled, and waits for them to come up
 3. Returns with agent metadata, without waiting for a proxy connection
 4. Connects to the proxy and registers paths in the background

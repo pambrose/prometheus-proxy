@@ -1,0 +1,41 @@
+# A prometheus-proxy and a Prometheus that scrapes through it, on a VM that agents embedded in cloud apps dial out to,
+# such as a DigitalOcean Droplet, a Compute Engine instance, or an EC2 instance. The setup is described at
+# https://pambrose.github.io/prometheus-proxy/cloud-platforms/
+#
+# Put the proxy's certificate and key, as base64, and the agents' token in a .env file beside this one, and keep it out
+# of version control:
+#
+#   CERT_CHAIN_PEM=<base64 < server.crt | tr -d '\n'>
+#   PRIVATE_KEY_PEM=<base64 < server.key | tr -d '\n'>
+#   AGENT_TOKEN=<openssl rand -hex 32>
+#
+# then run `docker compose up --detach` here. Only the agents' port, 50051, is published to the internet; let it, and
+# nothing else, through the host's firewall.
+
+services:
+  proxy:
+    image: pambrose/prometheus-proxy:4.6.0
+    ports:
+      - "50051:50051"           # gRPC, for the agents: TLS and the token
+    environment:
+      PROXY_CONFIG: /app/proxy.conf
+      CERT_CHAIN_PEM: ${CERT_CHAIN_PEM:?set CERT_CHAIN_PEM in .env}
+      PRIVATE_KEY_PEM: ${PRIVATE_KEY_PEM:?set PRIVATE_KEY_PEM in .env}
+      AGENT_TOKEN: ${AGENT_TOKEN:?set AGENT_TOKEN in .env}
+    volumes:
+      - ./proxy.conf:/app/proxy.conf:ro
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.14.0
+    ports:
+      - "127.0.0.1:9090:9090"   # On this host only: reach it with an SSH tunnel, or run Grafana beside it
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    depends_on:
+      - proxy
+    restart: unless-stopped
+
+volumes:
+  prometheus-data:

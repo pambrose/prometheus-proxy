@@ -20,6 +20,8 @@ package io.prometheus.agent
 
 import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.Logger
+import com.typesafe.config.ConfigFactory
+import com.typesafe.config.ConfigValueFactory
 import io.kotest.assertions.throwables.shouldNotThrowAny
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
@@ -37,6 +39,7 @@ import io.prometheus.common.Utils.parseEndpointList
 import io.prometheus.common.agentOptions
 import io.prometheus.common.testConfigVals
 import org.slf4j.LoggerFactory
+import java.io.File
 
 class AgentOptionsTest : StringSpec() {
   init {
@@ -676,7 +679,7 @@ class AgentOptionsTest : StringSpec() {
       AgentOptions.isAgentTokenSentInCleartext(
         agentToken = "tok",
         isTlsEnabled = false,
-        trustCertCollectionFilePath = "",
+        hasTrustCertCollection = false,
       ).shouldBeTrue()
     }
 
@@ -684,7 +687,7 @@ class AgentOptionsTest : StringSpec() {
       AgentOptions.isAgentTokenSentInCleartext(
         agentToken = "tok",
         isTlsEnabled = false,
-        trustCertCollectionFilePath = "/certs/ca.pem",
+        hasTrustCertCollection = true,
       ).shouldBeFalse()
     }
 
@@ -692,7 +695,7 @@ class AgentOptionsTest : StringSpec() {
       AgentOptions.isAgentTokenSentInCleartext(
         agentToken = "tok",
         isTlsEnabled = true,
-        trustCertCollectionFilePath = "",
+        hasTrustCertCollection = false,
       ).shouldBeFalse()
     }
 
@@ -700,7 +703,7 @@ class AgentOptionsTest : StringSpec() {
       AgentOptions.isAgentTokenSentInCleartext(
         agentToken = "",
         isTlsEnabled = false,
-        trustCertCollectionFilePath = "",
+        hasTrustCertCollection = false,
       ).shouldBeFalse()
     }
 
@@ -725,6 +728,60 @@ class AgentOptionsTest : StringSpec() {
         }
       e.cause.shouldBeInstanceOf<IllegalArgumentException>()
       e.message shouldContain "Malformed"
+    }
+
+    // ==================== In-memory config ====================
+
+    // Agent.startAsyncAgent(Config): a host passes the agent's settings in memory, so no config file holds them on
+    // disk.
+    "an in-memory config should supply the agent's settings" {
+      val options =
+        AgentOptions(
+          ConfigFactory.parseString(
+            """
+            agent {
+              name = in-memory
+              proxy { hostname = proxy.example.com, port = 50443 }
+              agentToken = "0123456789abcdef"
+              tls.overrideAuthority = prometheus-proxy
+            }
+            """.trimIndent(),
+          ),
+        )
+      options.agentName shouldBe "in-memory"
+      options.proxyHostname shouldBe "proxy.example.com:50443"
+      options.agentToken shouldBe "0123456789abcdef"
+      options.overrideAuthority shouldBe "prometheus-proxy"
+    }
+
+    // As a config file does, it falls back to ConfigFactory.load(), which carries the built-in defaults.
+    "an in-memory config should fall back to the built-in defaults" {
+      val options = AgentOptions(ConfigFactory.parseString("agent.name = in-memory"))
+      options.scrapeTimeoutSecs shouldBe testConfigVals("").agent.scrapeTimeoutSecs
+      options.proxyHostname shouldBe "localhost:$DEFAULT_GRPC_PORT"
+    }
+
+    // It is resolved as a config file is, so an optional substitution of an unset environment variable keeps the
+    // value.
+    "an in-memory config should resolve an optional substitution" {
+      val config =
+        ConfigFactory.parseString($$"agent.name = in-memory\nagent.name = ${?PROMETHEUS_PROXY_UNSET_TEST_VAR}")
+      AgentOptions(config).agentName shouldBe "in-memory"
+    }
+
+    "an in-memory config with an unresolved substitution should throw ConfigLoadException" {
+      val config = ConfigFactory.parseString($$"agent.name = ${missing.value}")
+      val e = shouldThrow<ConfigLoadException> { AgentOptions(config) }
+      e.message shouldContain "missing.value"
+    }
+
+    // The PEM a host holds goes in as it is, line breaks and all, with no file to write.
+    "an in-memory config should take the trusted certificate as PEM text" {
+      val pem = File("testing/certs/ca.pem").readText()
+      val tls = mapOf("trustCertCollectionPem" to pem)
+      val options = AgentOptions(ConfigValueFactory.fromMap(mapOf("agent" to mapOf("tls" to tls))).toConfig())
+      options.hasTrustCertCollection.shouldBeTrue()
+      options.trustCertCollectionFilePath shouldBe ""
     }
 
     // ==================== Parse-only Options ====================

@@ -83,6 +83,12 @@ object TestPorts {
   const val TLS_NO_MUTUAL_AUTH_AGENT_PORT = 9518
   const val TLS_MUTUAL_AUTH_AGENT_PORT = 9519
 
+  // TlsPemTest: a proxy for its one-way TLS case, and another for its mutual-TLS case
+  const val TLS_PEM_HTTP_PORT = 9536
+  const val TLS_PEM_AGENT_PORT = 9537
+  const val TLS_PEM_MUTUAL_HTTP_PORT = 9538
+  const val TLS_PEM_MUTUAL_AGENT_PORT = 9539
+
   // AgentTokenAuthTest
   const val TOKEN_AUTH_HTTP_PORT_OK = 9513
   const val TOKEN_AUTH_AGENT_PORT_OK = 9520

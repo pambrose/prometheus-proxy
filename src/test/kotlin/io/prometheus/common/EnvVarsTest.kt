@@ -117,6 +117,9 @@ class EnvVarsTest : StringSpec() {
       EnvVars.CERT_CHAIN_FILE_PATH.name shouldBe "CERT_CHAIN_FILE_PATH"
       EnvVars.PRIVATE_KEY_FILE_PATH.name shouldBe "PRIVATE_KEY_FILE_PATH"
       EnvVars.TRUST_CERT_COLLECTION_FILE_PATH.name shouldBe "TRUST_CERT_COLLECTION_FILE_PATH"
+      EnvVars.CERT_CHAIN_PEM.name shouldBe "CERT_CHAIN_PEM"
+      EnvVars.PRIVATE_KEY_PEM.name shouldBe "PRIVATE_KEY_PEM"
+      EnvVars.TRUST_CERT_COLLECTION_PEM.name shouldBe "TRUST_CERT_COLLECTION_PEM"
     }
 
     "EnvVars enum should have correct names for gRPC keepalive variables" {
@@ -189,8 +192,8 @@ class EnvVarsTest : StringSpec() {
       }
     }
 
-    "EnvVars enum should have exactly 51 entries" {
-      EnvVars.entries.size shouldBe 51
+    "EnvVars enum should have exactly 54 entries" {
+      EnvVars.entries.size shouldBe 54
     }
 
     "EnvVars entries should contain all defined constants" {
@@ -303,6 +306,9 @@ class EnvVarsTest : StringSpec() {
         "CERT_CHAIN_FILE_PATH",
         "PRIVATE_KEY_FILE_PATH",
         "TRUST_CERT_COLLECTION_FILE_PATH",
+        "CERT_CHAIN_PEM",
+        "PRIVATE_KEY_PEM",
+        "TRUST_CERT_COLLECTION_PEM",
         "OVERRIDE_AUTHORITY",
         "KEEPALIVE_TIME_SECS",
         "KEEPALIVE_TIMEOUT_SECS",

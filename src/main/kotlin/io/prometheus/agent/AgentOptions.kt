@@ -19,6 +19,7 @@
 package io.prometheus.agent
 
 import com.beust.jcommander.Parameter
+import com.typesafe.config.Config
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Agent
 import io.prometheus.common.BaseOptions
@@ -51,13 +52,15 @@ import io.prometheus.common.Utils.stripScheme
 import io.prometheus.common.requirePositive
 import kotlin.time.Duration.Companion.seconds
 
-// The primary constructor is internal so parseOnly stays out of the public API, and the public constructor below keeps
-// the (args, exitOnMissingConfig) signature that code compiled against earlier releases calls.
+// The primary constructor is internal so parseOnly and suppliedConfig stay out of the public API, and the public
+// constructor below keeps the (args, exitOnMissingConfig) signature that code compiled against earlier releases calls.
 class AgentOptions internal constructor(
   args: Array<String>,
   exitOnMissingConfig: Boolean,
   // Parse the command line and handle -u/-v only, without loading the config (Agent.startSyncAgent).
   parseOnly: Boolean,
+  // The config a host built in memory (Agent.startAsyncAgent(Config)), read in place of a config file or URL.
+  suppliedConfig: Config? = null,
 ) : BaseOptions(
   progName = Agent::class.java.name,
   args = args,
@@ -66,9 +69,14 @@ class AgentOptions internal constructor(
   // For the Agent, exitOnMissingConfig doubles as the standalone/embedded switch: main() and
   // startSyncAgent() pass true, while embedded hosts pass false so startup failures stay catchable.
   embedded = !exitOnMissingConfig,
+  suppliedConfig = suppliedConfig,
 ) {
   constructor(args: Array<String>, exitOnMissingConfig: Boolean) :
     this(args, exitOnMissingConfig, parseOnly = false)
+
+  // An embedded agent's options, from a config the host built in memory rather than a file or URL.
+  internal constructor(config: Config) :
+    this(emptyArray(), exitOnMissingConfig = false, parseOnly = false, suppliedConfig = config)
 
   constructor(args: List<String>, exitOnMissingConfig: Boolean) :
     this(args.toTypedArray(), exitOnMissingConfig)
@@ -331,14 +339,18 @@ class AgentOptions internal constructor(
         certChainFilePath = tls.certChainFilePath,
         privateKeyFilePath = tls.privateKeyFilePath,
         trustCertCollectionFilePath = tls.trustCertCollectionFilePath,
+        certChainPem = tls.certChainPem,
+        privateKeyPem = tls.privateKeyPem,
+        trustCertCollectionPem = tls.trustCertCollectionPem,
       )
     }
 
-    // Checked here, after assignCommonOptions resolves the TLS paths.
-    if (isAgentTokenSentInCleartext(agentToken, isTlsEnabled, trustCertCollectionFilePath)) {
+    // Checked here, after assignCommonOptions resolves the TLS material.
+    if (isAgentTokenSentInCleartext(agentToken, isTlsEnabled, hasTrustCertCollection)) {
       logger.warn {
         "agentToken is configured but TLS is not -- the token is sent to the proxy in cleartext and can be " +
-          "captured by anyone who can observe the traffic. Set trustCertCollectionFilePath to use TLS."
+          "captured by anyone who can observe the traffic. Set trustCertCollectionFilePath or " +
+          "trustCertCollectionPem to use TLS."
       }
     }
 
@@ -562,7 +574,7 @@ class AgentOptions internal constructor(
     internal fun isAgentTokenSentInCleartext(
       agentToken: String,
       isTlsEnabled: Boolean,
-      trustCertCollectionFilePath: String,
-    ): Boolean = agentToken.isNotEmpty() && !isTlsEnabled && trustCertCollectionFilePath.isEmpty()
+      hasTrustCertCollection: Boolean,
+    ): Boolean = agentToken.isNotEmpty() && !isTlsEnabled && !hasTrustCertCollection
   }
 }

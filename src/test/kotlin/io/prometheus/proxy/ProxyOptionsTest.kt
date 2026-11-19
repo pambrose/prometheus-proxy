@@ -425,7 +425,7 @@ class ProxyOptionsTest : StringSpec() {
         agentToken = "",
         authIdentityCount = 0,
         isTlsEnabled = false,
-        trustCertCollectionFilePath = "",
+        hasTrustCertCollection = false,
       ).shouldBeTrue()
     }
 
@@ -434,7 +434,7 @@ class ProxyOptionsTest : StringSpec() {
         agentToken = "",
         authIdentityCount = 1,
         isTlsEnabled = false,
-        trustCertCollectionFilePath = "",
+        hasTrustCertCollection = false,
       ).shouldBeFalse()
     }
 
@@ -443,7 +443,7 @@ class ProxyOptionsTest : StringSpec() {
         agentToken = "tok",
         authIdentityCount = 0,
         isTlsEnabled = false,
-        trustCertCollectionFilePath = "",
+        hasTrustCertCollection = false,
       ).shouldBeFalse()
     }
 
@@ -452,7 +452,7 @@ class ProxyOptionsTest : StringSpec() {
         agentToken = "",
         authIdentityCount = 0,
         isTlsEnabled = true,
-        trustCertCollectionFilePath = "/certs/ca.pem",
+        hasTrustCertCollection = true,
       ).shouldBeFalse()
     }
 
@@ -463,7 +463,7 @@ class ProxyOptionsTest : StringSpec() {
         agentToken = "",
         authIdentityCount = 0,
         isTlsEnabled = false,
-        trustCertCollectionFilePath = "/certs/ca.pem",
+        hasTrustCertCollection = true,
       ).shouldBeTrue()
     }
 
@@ -473,7 +473,7 @@ class ProxyOptionsTest : StringSpec() {
         agentToken = "",
         authIdentityCount = 0,
         isTlsEnabled = true,
-        trustCertCollectionFilePath = "",
+        hasTrustCertCollection = false,
       ).shouldBeTrue()
     }
 

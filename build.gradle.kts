@@ -138,7 +138,9 @@ dependencies {
 
   implementation(libs.annotation.api)
   implementation(libs.jcommander)
-  implementation(libs.typesafe.config)
+  // Agent.startAsyncAgent takes a Typesafe Config, so a compiler that calls it needs the type: api puts it on consumers'
+  // compile classpaths (compile scope in the POM).
+  api(libs.typesafe.config)
   implementation(libs.prometheus.metrics.core)
   // Aligns the Prometheus Java client modules common-utils brings with prometheus-metrics-core; see libs.versions.toml.
   implementation(platform(libs.prometheus.metrics.bom))

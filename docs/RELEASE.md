@@ -37,13 +37,14 @@ is, unreleased pages included.
 
 1) Bump `version` in `gradle.properties` (the single source of truth).
 
-2) Update the `4.5.0` literals to the new version everywhere they are hard-coded
+2) Update the `4.6.0` literals to the new version everywhere they are hard-coded
    (`git grep -n` for the outgoing version finds them all):
    - `README.md` — the Docker tag examples and the Maven Central dependency block. Also replace the
      previous release's summary paragraph in the **New Features** section with one for the new version;
      the earlier releases' summaries live in `RELEASE_NOTES.md`, which the section links.
    - `llms.txt` — the Docker tag examples and the Maven Central dependency block.
    - `etc/compose/proxy.yml` — the proxy and agent image tags.
+   - `examples/cloud-proxy/docker-compose.yml` — the proxy image tag.
    - `charts/prometheus-proxy/Chart.yaml` and `charts/prometheus-agent/Chart.yaml` — `version` and `appVersion`
      (the image tag the charts deploy by default).
    - `website/prometheus-proxy/docs/getting-started.md`, `index.md`, and `docker.md` — the Docker pull

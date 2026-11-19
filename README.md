@@ -67,7 +67,7 @@ also needs [kind](https://kind.sigs.k8s.io/) 0.33.0 or later, [`kubectl`](https:
 and [Helm](https://helm.sh/) 3 or 4.
 
 ```bash
-git clone -c advice.detachedHead=false --depth 1 --branch 4.5.0 https://github.com/pambrose/prometheus-proxy.git
+git clone -c advice.detachedHead=false --depth 1 --branch 4.6.0 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/basics
 make up      # pulls the images, starts everything, and prints the URLs
 make tour    # the guided tour
@@ -83,15 +83,15 @@ with screenshots.
 
 ## ✨ New Features
 
-Version 4.5.0 (released 2026-11-17) gives the dashboard an Activity view of what the proxy did with its agents and
-their paths, what it refused included, and a History column of each path's recent scrapes. The Paths view can be
-searched or narrowed to its problems, scrapes a path on demand, links each path into Prometheus, Grafana, or a
-runbook, and keeps a path whose agent has gone for an hour. Three [demos](#-try-the-demos) run the released images
-with one command and a guided tour. It also has the fixes from the November 2026 code review: a build that embeds the
-agent no longer has its logging configuration replaced and gets the patched Jackson and TLS natives, and the proxy
-bounds what one agent can make it hold or log. Some configs that start today will fail at startup, and builds that
-embed the agent move to protobuf 4.x, so read **Before you upgrade** in the [release notes](RELEASE_NOTES.md) first;
-the [changelog](CHANGELOG.md) has the full list.
+Version 4.6.0 (released 2026-11-19) makes the agent easier to run inside an app on a cloud platform. An embedded agent
+starts from a config built in memory, `Agent.startAsyncAgent(config)`, so its token, the proxy's certificate, and the
+app's own scrape credentials never sit in a config file. The proxy and the agent take their TLS certificates and keys
+as PEM text, or its base64, in environment variables (`CERT_CHAIN_PEM`, `PRIVATE_KEY_PEM`,
+`TRUST_CERT_COLLECTION_PEM`), so the Docker images run TLS on a platform that passes secrets as variables. The docs
+site's new [Cloud Platforms](https://pambrose.github.io/prometheus-proxy/cloud-platforms/) page runs an embedded agent
+in an app on Cloud Run or ECS, with the proxy on Railway, DigitalOcean, GCP, or AWS, and
+[`examples/cloud-proxy`](examples/cloud-proxy) holds a proxy and Prometheus to start from. The
+[release notes](RELEASE_NOTES.md) and the [changelog](CHANGELOG.md) have the full list.
 
 Each earlier release's summary is in the [release notes](RELEASE_NOTES.md), and the [changelog](CHANGELOG.md) has
 every change.
@@ -268,13 +268,13 @@ docker network create prometheus-proxy-net
 docker run --rm --name prometheus-proxy --network prometheus-proxy-net \
   -p 8080:8080 -p 50051:50051 \
   --env METRICS_ENABLED=true \
-  pambrose/prometheus-proxy:4.5.0
+  pambrose/prometheus-proxy:4.6.0
 
 # Start agent, in another terminal
 docker run --rm --network prometheus-proxy-net \
   --env PROXY_HOSTNAME=prometheus-proxy \
   --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-  pambrose/prometheus-agent:4.5.0
+  pambrose/prometheus-agent:4.6.0
 
 # Scrape the proxy's and the agent's own metrics through the proxy
 curl http://localhost:8080/proxy_metrics
@@ -292,7 +292,7 @@ too (Docker doesn't allow `--rm` with `--restart`):
 
 ```bash
 docker run --detach --name prometheus-proxy --restart unless-stopped --network prometheus-proxy-net \
-  -p 8080:8080 -p 50051:50051 --env METRICS_ENABLED=true pambrose/prometheus-proxy:4.5.0
+  -p 8080:8080 -p 50051:50051 --env METRICS_ENABLED=true pambrose/prometheus-proxy:4.6.0
 
 docker logs --follow prometheus-proxy   # follow its log
 docker stop prometheus-proxy            # stop it, and no longer restart it
@@ -394,8 +394,8 @@ scrape_configs:
 The docker images support multiple architectures (amd64, arm64, s390x, ppc64le):
 
 ```bash
-docker pull pambrose/prometheus-proxy:4.5.0
-docker pull pambrose/prometheus-agent:4.5.0
+docker pull pambrose/prometheus-proxy:4.6.0
+docker pull pambrose/prometheus-agent:4.6.0
 ```
 
 ### Production Docker Setup
@@ -413,7 +413,7 @@ docker run --detach --name prometheus-proxy --restart unless-stopped \
         -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
         --env ADMIN_ENABLED=true \
         --env METRICS_ENABLED=true \
-        pambrose/prometheus-proxy:4.5.0
+        pambrose/prometheus-proxy:4.6.0
 ```
 
 Start an agent container with:
@@ -425,7 +425,7 @@ docker run --detach --name prometheus-agent --restart unless-stopped \
         -p 8083:8083 -p 8093:8093 \
         --env PROXY_HOSTNAME=prometheus-proxy \
         --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-        pambrose/prometheus-agent:4.5.0
+        pambrose/prometheus-agent:4.6.0
 ```
 
 Or use Docker Compose: [`etc/compose/proxy.yml`](etc/compose/proxy.yml) runs a proxy, an agent, and a Prometheus server
@@ -451,7 +451,7 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/prom-agent.conf,target=/app/prom-agent.conf \
     --env AGENT_CONFIG=prom-agent.conf \
     --env PROXY_HOSTNAME=prometheus-proxy \
-    pambrose/prometheus-agent:4.5.0
+    pambrose/prometheus-agent:4.6.0
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
@@ -485,6 +485,12 @@ store that can't be loaded), the embedded `startAsyncAgent` / `startSyncAgent` e
 reason and exit with code 1. If the agent then fails to start (for example, its admin or metrics port is already in
 use), `startAsyncAgent` throws `IllegalStateException` with the startup failure as its cause, after releasing everything
 the agent had opened.
+
+An application that holds the agent's settings itself, such as a token, the proxy's certificate, or credentials for
+its own `/metrics`, can pass them in memory instead of in a file, as a Typesafe `Config` rooted at `agent`:
+`Agent.startAsyncAgent(config)`. The docs site's
+[Cloud Platforms](https://pambrose.github.io/prometheus-proxy/cloud-platforms/) page builds an app on Cloud Run or ECS
+around it.
 
 Several agents can run in one JVM with metrics on, at once or one after another: they share one set of agent metrics,
 and each series carries its agent's `launch_id`. An embedded agent's `logLevel` sets only the `io.prometheus` loggers,
@@ -816,6 +822,12 @@ Running TLS with mutual authentication requires these settings:
 * `certChainFilePath`, `privateKeyFilePath` and `trustCertCollectionFilePath` on the proxy
 * `certChainFilePath`, `privateKeyFilePath` and `trustCertCollectionFilePath` on the agent
 
+Each file can be given as its PEM text, or the base64 of it, instead: `certChainPem`, `privateKeyPem`, and
+`trustCertCollectionPem`, or the `CERT_CHAIN_PEM`, `PRIVATE_KEY_PEM`, and `TRUST_CERT_COLLECTION_PEM` environment
+variables, for a platform that passes secrets as variables and for the Docker images, which have no shell to write
+one to a file. See
+[Certificates as Environment Variables](https://pambrose.github.io/prometheus-proxy/security/tls/#certificates-as-environment-variables).
+
 Run a proxy and an agent with TLS (with mutual authentication) with:
 
 ```bash
@@ -851,7 +863,7 @@ docker run --rm -p 8082:8082 -p 8092:8092 -p 50440:50440 -p 8080:8080 \
     --env PROXY_CONFIG=tls-no-mutual-auth.conf \
     --env ADMIN_ENABLED=true \
     --env METRICS_ENABLED=true \
-    pambrose/prometheus-proxy:4.5.0
+    pambrose/prometheus-proxy:4.6.0
 
 docker run --rm \
     --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
@@ -859,7 +871,7 @@ docker run --rm \
     --env AGENT_CONFIG=tls-no-mutual-auth.conf \
     --env PROXY_HOSTNAME=mymachine.local:50440 \
     --name docker-agent \
-    pambrose/prometheus-agent:4.5.0
+    pambrose/prometheus-agent:4.6.0
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
@@ -1083,7 +1095,7 @@ repositories {
 }
 
 dependencies {
-  implementation("com.pambrose:prometheus-proxy:4.5.0")
+  implementation("com.pambrose:prometheus-proxy:4.6.0")
 }
 ```
 
