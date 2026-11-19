@@ -41,6 +41,9 @@ All notable changes to this project are documented in this file.
 - TLS Setup shows how to create a private CA and the proxy's and agents' certificates with OpenSSL or LibreSSL, in
   place of a link to gRPC's example
 - `docs/cli-args.md`, a second hand-kept copy of the website's CLI Reference, now points to it, as does the README
+- The README's architecture diagram has a dark-mode variant (`docs/prometheus-proxy-dark.png`), served to dark themes,
+  since its arrows and labels, black on a transparent background, vanished on GitHub's dark theme.
+  `make readme-diagram-dark` regenerates it (`scripts/dark_diagram.py`) after the diagram changes
 
 ## [4.5.0] - 2026-11-17
 
