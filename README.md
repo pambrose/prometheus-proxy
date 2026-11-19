@@ -112,7 +112,7 @@ Here's a simplified network diagram of how the deployed `proxy` and `agent` work
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/prometheus-proxy-dark.png">
-  <img alt="Architecture diagram: Prometheus scrapes the proxy outside the firewall at proxy:8080/app1_metrics and the other paths; the agent inside the firewall holds a one-way persistent connection out to the proxy and fetches app1, app2, and app3's :9100/metrics" src="docs/prometheus-proxy.png">
+  <img alt="Architecture diagram: Prometheus scrapes the proxy outside the firewall at proxy:8080/app1_metrics and the other paths; the agent inside the firewall holds a one-way persistent connection out to the proxy and fetches app1, app2, and app3's :9100/metrics" src="docs/prometheus-proxy-light.png">
 </picture>
 
 Endpoints running behind a firewall require a `prometheus-agent` (the agent) to be run inside the firewall. An agent
