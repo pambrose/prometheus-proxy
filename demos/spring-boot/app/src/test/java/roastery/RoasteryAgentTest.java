@@ -36,6 +36,10 @@ class RoasteryAgentTest {
   private static int scrapePort;
   private static int agentPort;
 
+  // The roastery's own port, which Spring Boot picked
+  @Value("${local.server.port}")
+  private int appPort;
+
   // Before Spring Boot starts the roastery: a plaintext proxy, and the agent's settings pointing at it
   @DynamicPropertySource
   static void agentSettings(DynamicPropertyRegistry registry) throws IOException {
@@ -59,9 +63,6 @@ class RoasteryAgentTest {
   static void stopProxy() {
     proxy.stopAsync().awaitTerminated();
   }
-
-  @Value("${local.server.port}")
-  private int appPort;
 
   @Test
   void theProxyServesTheRoasterysMetrics() throws Exception {
