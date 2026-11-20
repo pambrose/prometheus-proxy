@@ -88,7 +88,8 @@ environment variables. A two-stage Dockerfile, for a Gradle app named `my-app` t
   leaves out `build/`, `.gradle/`, `.kotlin/`, `.git/`, and `.idea/`, so `COPY . .` sends only the sources, and a commit
   or an IDE doesn't make the next build start over.
 - The start script `installDist` writes reads `JAVA_OPTS`. Besides sizing the heap from the container's memory, it
-  carries two flags for Netty, which the agent's gRPC runs on, on Java 24 and later; the stock images run with both:
+  carries two flags for Netty, which the agent's gRPC runs on, on Java 24 and later. The stock images run with the
+  second; their jars ask for native access in their manifest instead of the first, which only `java -jar` reads:
     - `--enable-native-access=ALL-UNNAMED` lets Netty load its native TLS library without the warning Java prints,
       which says a later release will block the call.
     - `--sun-misc-unsafe-memory-access=allow` lets Netty use `sun.misc.Unsafe` for its buffers, which it otherwise

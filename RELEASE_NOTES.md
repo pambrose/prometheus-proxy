@@ -37,6 +37,8 @@ the demos' setup: each checks for the tools it needs before it starts.
 
 ### Bug Fixes
 
+- **`java -jar` without a warning.** The proxy and agent JARs ask for native access in their manifest, so running one
+  with `java -jar` on Java 24 or later no longer prints Java's restricted-method warning, with no flag to pass.
 - **A demo names a missing tool before it starts.** `make up` checks for Docker, running, with Compose v2, or, for the
   Kubernetes demo, kind, `kubectl`, and Helm, and for `curl`; without `curl`, it waited two minutes and then blamed a
   service that was fine. `make up-local` also checks for a JDK 17 or later.
