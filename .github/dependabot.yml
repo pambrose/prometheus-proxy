@@ -159,6 +159,11 @@ updates:
       # change.
       - dependency-name: "eclipse-temurin"
         update-types: ["version-update:semver-major"]
+      # The Maven image's JDK, held at 25 too. Dependabot reads the JDK in its tag as part of the version
+      # (3.9-eclipse-temurin-25-noble is 3.9.25), so a new JDK is a patch update to it, which no update-types rule
+      # holds: this one ignores a later JDK on Maven 3.9 and leaves the 25 tag's digest updates.
+      - dependency-name: "maven"
+        versions: [">= 3.9.26, < 3.10"]
 
   # The Spring Boot demo's roastery's Spring Boot (demos/spring-boot/app/pom.xml), whose dependency management sets the
   # versions of the agent's libraries the roastery runs: a new release reaches make consumer-check here first.
