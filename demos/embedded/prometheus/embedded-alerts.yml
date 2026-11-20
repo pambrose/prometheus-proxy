@@ -1,0 +1,32 @@
+# The coffee shop's alerts, short-fused so they fire within a part of the tour. `make check-rules` validates them.
+groups:
+  - name: coffee-shop
+    rules:
+      # No answer through the proxy: the app is down, or its agent isn't connected, so the proxy has no path to serve.
+      - alert: CoffeeShopDown
+        expr: up{job="coffee-shop"} == 0
+        for: 15s
+        labels:
+          severity: critical
+        annotations:
+          summary: The coffee shop's metrics can't be scraped through the proxy
+
+      # More than one order in ten fails: an espresso drink with the espresso machine broken.
+      - alert: CoffeeShopErrors
+        expr: |
+          sum(rate(coffee_orders_total{outcome="failed"}[30s]))
+            / sum(rate(coffee_orders_total[30s])) > 0.1
+        for: 10s
+        labels:
+          severity: warning
+        annotations:
+          summary: '{{ $value | humanizePercentage }} of orders are failing'
+
+      # The queue is close to the counter's 40 orders, so customers are about to be turned away.
+      - alert: CoffeeQueueBacklog
+        expr: coffee_queue_depth > 30
+        for: 15s
+        labels:
+          severity: warning
+        annotations:
+          summary: '{{ $value }} orders are waiting for a barista'

@@ -166,14 +166,17 @@ support file isn't named at all.
 Outside `io/prometheus/`, `src/test/kotlin/website/` and `src/test/java/website/` hold the docs site's code
 snippets, which `website/prometheus-proxy/zensical.toml` resolves by file name. Most are `.txt` files of marked
 regions; **EmbeddedAgentKotlinExample** and **EmbeddedAgentJavaExample** are the embedded-agent examples on the
-Embedded Agent page, compiled with the tests so that a change to `Agent.startAsyncAgent()` that breaks them fails
-the build.
+Embedded Agent page, and **EmbeddedAgentConfigKotlinExample** and **EmbeddedAgentConfigJavaExample** the ones that
+start an agent from an in-memory config, on that page and the Cloud Platforms page, compiled with the tests so that a
+change to `Agent.startAsyncAgent()` that breaks them fails the build. **KtorHostExample**, in `src/test/kotlin/hosts/`,
+is the Cloud Platforms page's Ktor module that starts and stops the agent; it lives outside `website/` because it needs
+a Ktor server, which the build below doesn't give a host.
 
 The tests compile those examples against the project's own classpath, which a build that embeds the agent doesn't
 get: it gets what the published POM gives it, resolved by its own build tool. `make consumer-check`, which CI's
 `consumer-check` job runs, covers that. It publishes this checkout to the local Maven repository and has
 `etc/consumer-check/check.sh` build `etc/consumer-check`, a Maven project that depends only on that artifact. The
-check fails unless both examples compile there (a public type's supertype at runtime scope broke the Java one),
+check fails unless the examples compile there (a public type's supertype at runtime scope broke the Java one),
 Maven resolves Jackson, every netty-tcnative native, Netty, and protobuf at the versions `gradle/libs.versions.toml`
 pins, and no jar on the classpath carries a `logback.xml`, which would replace the host application's logging config.
 
@@ -221,8 +224,10 @@ pins, and no jar on the classpath carries a `logback.xml`, which would replace t
   discovery reconciles race over a real in-process gRPC connection; once they finish, the agent's local path map and
   the proxy's registrations for it agree exactly
 - **AgentOptionsTest** — CLI parsing, defaults, validation, SSL settings, gRPC options; embedded, a setting the
-  options reject, a wrong-typed or unparseable `-D` override included, throws `ConfigLoadException`; and
-  `PROXY_HOSTNAME` overrides a malformed or blank config endpoint without parsing it
+  options reject, a wrong-typed or unparseable `-D` override included, throws `ConfigLoadException`;
+  `PROXY_HOSTNAME` overrides a malformed or blank config endpoint without parsing it; and options built from an
+  in-memory config take its settings, fall back to the built-in defaults, resolve its substitutions, and take a
+  trusted certificate as PEM text
 - **AgentClientInterceptorTest** — gRPC client interceptor that adds agent-id metadata to outbound calls
 - **AgentTokenClientInterceptorTest** — gRPC client interceptor that attaches the agent token header to outbound calls
 - **EndpointFailoverTest** — Proxy endpoint rotation: a failed connect or a rejected registration moves to the next
@@ -236,6 +241,14 @@ pins, and no jar on the classpath carries a `logback.xml`, which would replace t
 - **HttpClientCacheLincheckTest** — Lincheck, stress only (tagged `Lincheck`): scrapes under three credentials race LRU
   eviction, expiry, and `close()` in a two-client cache; no scrape is handed a closed client or has its client closed
   under it, and the only open clients are the cached ones, or none after `close()`
+- **EmbeddedAgentConfigTest** — the builder for an embedded agent's settings, and its `embeddedAgent { }` DSL: each
+  method's setting reaches `AgentOptions` as a config file's would, each Kotlin property sets what its method does
+  and reads it back, a property set to `null` takes its setting out, and nothing set gives the defaults;
+  `scrapeSelf` and `path` percent-encode a username and password into the URL so a password with any character decodes
+  back intact, an empty pair means none, and `path` refuses credentials for a URL that has its own, as the agent's
+  parser reads it; labels become JSON; `setting()` takes precedence over a method; `toString()` shows what `setting()`
+  sets but not the token, a password, a PEM, or a path's credentials; and a blank path, an out-of-range port, or a URL
+  with no scheme throws `ConfigLoadException`
 - **EmbeddedAgentInfoTest** — EmbeddedAgentInfo data class (launchId, agentName storage)
 - **RequestFailureExceptionTest** — RequestFailureException custom exception class
 - **SslSettingsTest** — SSL keystore/truststore loading for TLS configuration
@@ -531,6 +544,12 @@ One support helper also lives here (not a test class itself):
   when the registry rejects one, leave none of them registered
 - **TestPortsTest** — every port in `TestPorts` is distinct, so no two specs can bind the same port, and below 32768,
   outside the ephemeral range the OS hands out to outgoing connections
+- **TlsMaterialTest** — TLS material given as PEM text (`*Pem` settings, `*_PEM` env vars): a value is read as PEM,
+  as base64 of PEM (wrapped in lines or not), or as PEM on one line with literal `\n` escapes, and anything else is
+  refused without the value in the message; a file and a PEM for the same material are refused; server and client
+  contexts from PEM, from a mix of PEM and files, and, with no PEM, from common-utils' file builders (MockK); malformed
+  PEM armor refused without its content; and the options resolve each `*Pem` setting, turn TLS on with it, log only
+  whether it is set, and, embedded, throw `ConfigLoadException`
 - **UtilsTest** — Utility functions: parseHostPort, sanitizeUrl, appendQueryParams, decodeParams, toJsonElement,
   setLogLevel, exceptionDetails; failureKey, which keys a failure by its gRPC status code, wrapped or not, and one
   without a status by its class, and its message only when asked
@@ -543,6 +562,8 @@ These support helpers also live here (not test classes themselves):
   entry instead, since a proxy, agent, or Prometheus already running on the machine holds the defaults.
   `TestUtils.startProxy` / `startAgent` bind the `HARNESS_*` gRPC, admin, and metrics ports unless a spec passes
   its own
+- **TestCerts** — the repository's test certificates (`testing/certs`): their paths, text, and base64, for the specs
+  that give TLS material as PEM
 - **TestOptions** — factories that build `ProxyOptions` / `AgentOptions` from a list, `ConfigVals` from a HOCON
   fragment merged with the reference config, and `ProxyOptions` from a temp config file
 - **EmbeddedTestServer** — `EmbeddedServer.startAndAwaitReady()`, which starts a Ktor server with `wait = false`
@@ -665,9 +686,12 @@ mechanism that the standard suite cannot reach:
   reaches the proxy once rather than on every retry, whether static or discovered; Netty, so each token resolves
   to its own identity
 - **EmbeddedAgentApiTest** — the public `startAsyncAgent()` handle connects from a config file, reports its
-  identity, and disconnects on `shutdown()`; and a config served from a URL with credentials that holds a setting
-  the agent rejects, whether its options or its constructor reject it, throws `ConfigLoadException`, with the
-  credentials in none of its messages, its cause chain, or the log
+  identity, and disconnects on `shutdown()`; the overload that takes an in-memory `Config`, through the
+  `EmbeddedAgentConfig` builder, starts an agent whose path the proxy serves, and throws `ConfigLoadException` for a
+  setting it can't use; a path given a username and password with the builder reaches a target that demands them as
+  Basic Auth, whatever their characters; and a config served from a URL with
+  credentials that holds a setting the agent rejects, whether its options or its constructor reject it, throws
+  `ConfigLoadException`, with the credentials in none of its messages, its cause chain, or the log
 - **EmbeddedAgentMetricsTest** — with metrics on, an agent started again after `shutdown()` and two agents at
   once each connect and count their own connects without a registry clear in between; a stopped agent's series go
   with it; and a host metric with an agent metric's name fails `startAsyncAgent()`, with the registry's rejection
@@ -714,6 +738,9 @@ mechanism that the standard suite cannot reach:
   while nothing is recorded, and sent again for a new message and once an agent's connection is recorded
 - **TlsMutualAuthRejectionTest** — the negative mutual-TLS path over a real Netty handshake, which the
   in-process TLS specs cannot perform (item 28 in `docs/archive/CODE_REVIEW_JUNE_2026.md`)
+- **TlsPemTest** — TLS over Netty with every certificate and key given as PEM, none as a file: the proxy's as base64
+  `-D` settings, and an embedded agent's as PEM text, set with the builder; a scrape crosses the channel one-way and
+  with mutual TLS
 
 #### Harness Infrastructure (`harness/support/`)
 
@@ -724,6 +751,9 @@ mechanism that the standard suite cannot reach:
   listens on, held for the test by a socket bound but not listening, so no other process can take it meanwhile, and
   `HarnessConstants.localConfigFile()` fails for a missing test config rather than fetching one from GitHub
 - **TestUtils** — Utility functions: `startProxy()`, `startAgent()`, `exceptionHandler()`
+- **EmbeddedAgentScrape** — `withEmbeddedAgentScraped()`, which starts a proxy, a scrape target, which can demand
+  Basic Auth, and an agent built with `embeddedAgent { }`, waits until the proxy serves the target's metrics, and tears
+  all three down; `EmbeddedAgentApiTest` and `TlsPemTest` share it
 - **AbstractHarnessTests** — Abstract base defining the standard 8-test suite
 - **BasicHarnessTests** — Reusable test implementations (missing path, invalid path, add/remove paths, etc.)
 - **HarnessTests** — Core integration logic: `proxyCallTest()` (sequential, parallel, concurrent queries),
@@ -761,7 +791,9 @@ process, which surfaces as a wait strategy timing out against a status the conta
 - **ContainersLargePayloadTest** — forces the chunked + gzipped scrape path with a large synthetic payload
 - **ContainersReconnectTest** — agent reconnects to a replacement proxy and scrapes resume
 - **ContainersAgentTokenAuthTest** — pre-shared agent-token authentication on the gRPC channel
-- **ContainersTlsTest** / **ContainersHttpsTargetTest** — server-only and mutual TLS on gRPC; HTTPS upstreams
+- **ContainersTlsTest** / **ContainersHttpsTargetTest** — server-only and mutual TLS on gRPC, and TLS with the
+  certificates and key given as `*_PEM` environment variables, no file mounted, in the distroless images; HTTPS
+  upstreams
 - **ContainersDiscoveryTest** — dynamic target discovery in the packaged JARs: a path reconciled from a
   watched file, with no static `pathConfigs`, scrapes end to end
 - **ContainersProxyFailoverTest** — two proxies on distinct network aliases; the agent moves to the standby

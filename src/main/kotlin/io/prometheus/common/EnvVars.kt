@@ -211,6 +211,24 @@ enum class EnvVars {
   TRUST_CERT_COLLECTION_FILE_PATH,
 
   /**
+   * The TLS certificate chain itself, as PEM or the base64 of the PEM, in place of [CERT_CHAIN_FILE_PATH], for a
+   * platform that passes secrets as environment variables rather than files. Set one of the two, not both.
+   */
+  CERT_CHAIN_PEM,
+
+  /**
+   * The TLS private key itself, as PEM or the base64 of the PEM, in place of [PRIVATE_KEY_FILE_PATH]. Set one of the
+   * two, not both.
+   */
+  PRIVATE_KEY_PEM,
+
+  /**
+   * The trust-store certificate collection itself, as PEM or the base64 of the PEM, in place of
+   * [TRUST_CERT_COLLECTION_FILE_PATH]. Set one of the two, not both.
+   */
+  TRUST_CERT_COLLECTION_PEM,
+
+  /**
    * TLS authority override for the Agent's gRPC channel.
    * Useful when the Proxy hostname does not match its certificate SAN.
    */

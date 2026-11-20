@@ -7,8 +7,8 @@ icon: lucide/container
 Multi-platform images (amd64, arm64, s390x, ppc64le) are published on Docker Hub for every release.
 
 ```bash
-docker pull pambrose/prometheus-proxy:4.5.0
-docker pull pambrose/prometheus-agent:4.5.0
+docker pull pambrose/prometheus-proxy:4.6.0
+docker pull pambrose/prometheus-agent:4.6.0
 ```
 
 ## Basic Usage
@@ -113,6 +113,12 @@ Mount your certificate files into the container:
 --8<-- "DockerExamples.txt:docker-tls"
 ```
 
+Or, on a platform that passes secrets as environment variables, give them as PEM, with no file mounted:
+
+```bash
+--8<-- "DockerExamples.txt:docker-tls-pem"
+```
+
 See [TLS Setup](security/tls.md) for complete TLS configuration details.
 
 ## Environment Variables
@@ -132,4 +138,4 @@ docker pull pambrose/prometheus-agent:latest
 
 !!! tip "Pin versions in production"
 
-    Use explicit version tags (e.g., `4.5.0`) in production to avoid unexpected upgrades.
+    Use explicit version tags (e.g., `4.6.0`) in production to avoid unexpected upgrades.

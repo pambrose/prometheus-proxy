@@ -5,7 +5,7 @@ repositories {
 }
 
 dependencies {
-  implementation("com.pambrose:prometheus-proxy:4.5.0")
+  implementation("com.pambrose:prometheus-proxy:4.6.0")
 }
 // --8<-- [end:gradle-dependency]
 
@@ -15,7 +15,7 @@ dependencies {
   <dependency>
     <groupId>com.pambrose</groupId>
     <artifactId>prometheus-proxy</artifactId>
-    <version>4.5.0</version>
+    <version>4.6.0</version>
   </dependency>
 </dependencies>
 <!-- --8<-- [end:maven-dependency] -->
@@ -34,3 +34,23 @@ agent {
   ]
 }
 // --8<-- [end:embedded-agent-config]
+
+# --8<-- [start:embedded-app-dockerfile]
+# Build the app with its own Gradle wrapper, on a JDK, keeping Gradle's downloads between builds
+FROM eclipse-temurin:25-jdk-noble AS build
+WORKDIR /src
+COPY . .
+RUN --mount=type=cache,target=/root/.gradle ./gradlew --no-daemon installDist
+
+# Run it on a JRE, as a user that isn't root, named by number
+FROM eclipse-temurin:25-jre-noble
+RUN useradd --system --uid 1001 --home-dir /app app
+COPY --from=build /src/build/install/my-app /app
+USER 1001
+# Lets Netty, which the agent's gRPC runs on, load its native TLS library and use sun.misc.Unsafe on Java 24 and later,
+# and sizes the heap from the container's memory
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=75 --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow"
+# The app's own port; the agent opens none, since it connects out to the proxy
+EXPOSE 8080
+ENTRYPOINT ["/app/bin/my-app"]
+# --8<-- [end:embedded-app-dockerfile]

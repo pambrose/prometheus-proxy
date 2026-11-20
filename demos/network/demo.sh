@@ -123,7 +123,7 @@ print_urls() {
   echo "  Proxy discovery:  $PROXY_URL/discovery"
   echo
   echo "Scenarios: $0 far | thin | filter | proxy-down | cut | flaky | wan-down | heal ...  (no arguments for help)"
-  echo "Or walk through them all: $0 tour"
+  echo "Or walk through them all: $MAKE_NAME tour, or $0 tour"
 }
 
 # Runs toxiproxy-cli inside the wan container, so its API needs no published port.

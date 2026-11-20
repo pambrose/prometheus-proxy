@@ -32,6 +32,7 @@ import com.pambrose.common.util.hostInfo
 import com.pambrose.common.util.randomId
 import com.pambrose.common.util.runCatchingCancellable
 import com.pambrose.common.util.simpleClassName
+import com.typesafe.config.Config
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.grpc.StatusException
 import io.grpc.StatusRuntimeException
@@ -116,7 +117,7 @@ import kotlin.time.TimeSource.Monotonic
  *
  * ### Embedded Usage
  * ```kotlin
- * val agentInfo = Agent.startAsyncAgent("config.conf", exitOnMissingConfig = false)
+ * val agentInfo = Agent.startAsyncAgent(configFilename = "config.conf", exitOnMissingConfig = false)
  * println("Started agent: ${agentInfo.agentName}")
  * ```
  *
@@ -880,6 +881,45 @@ class Agent(
       configFilename: String,
       exitOnMissingConfig: Boolean,
       logBanner: Boolean = true,
+    ): EmbeddedAgentInfo =
+      startEmbedded(exitOnMissingConfig, logBanner) { AgentOptions(configFilename, exitOnMissingConfig) }
+
+    /**
+     * Starts an Agent from a config built in memory, on a background thread, and returns once it has started, as the
+     * [startAsyncAgent] that takes a config file does. A host that holds the agent's settings itself, such as a token,
+     * a trusted certificate (`agent.tls.trustCertCollectionPem`), or credentials in a scrape URL, passes them here
+     * without writing a config file that would hold them on disk.
+     *
+     * [config] is the tree a config file holds, rooted at `agent`: build it with `ConfigFactory.parseString`,
+     * `ConfigFactory.parseMap`, or `ConfigValueFactory.fromMap(...).toConfig()`. It falls back to
+     * `ConfigFactory.load()` and is then resolved, as a config file is, so a `${?ENV_VAR}` substitution in it works.
+     * The `AGENT_CONFIG` environment variable is not read, but the environment variables of single settings, such as
+     * `AGENT_TOKEN` or `PROXY_HOSTNAME`, still take precedence over it, as they do over a config file.
+     *
+     * The agent is always started embedded: a config it can't use throws [io.prometheus.common.ConfigLoadException],
+     * and never exits the process.
+     *
+     * @param config The agent's configuration, rooted at `agent`.
+     * @param logBanner When `true` (default), logs the Agent ASCII banner and version on startup. Pass `false`
+     *   to suppress banner output when embedding inside an app that owns its own logging surface.
+     * @return An [EmbeddedAgentInfo] handle for inspecting and shutting down the launched Agent.
+     * @throws io.prometheus.common.ConfigLoadException when a setting is invalid, in the cases the [startAsyncAgent]
+     *   that takes a config file lists.
+     * @throws IllegalStateException if the Agent fails to start, for example because its admin or metrics port is
+     *   already in use. The startup failure is the cause, and whatever the Agent had opened is released first.
+     */
+    @Suppress("unused")
+    @JvmStatic
+    @JvmOverloads
+    fun startAsyncAgent(
+      config: Config,
+      logBanner: Boolean = true,
+    ): EmbeddedAgentInfo = startEmbedded(exitOnMissingConfig = false, logBanner) { AgentOptions(config) }
+
+    private fun startEmbedded(
+      exitOnMissingConfig: Boolean,
+      logBanner: Boolean,
+      options: () -> AgentOptions,
     ): EmbeddedAgentInfo {
       if (logBanner)
         logger.apply {
@@ -888,7 +928,7 @@ class Agent(
         }
       // startSync(), not startAsync(): a startup failure must reach the caller as an exception rather than leave it
       // holding a handle to a FAILED agent.
-      val agent = newAgent(exitOnMissingConfig) { AgentOptions(configFilename, exitOnMissingConfig) }
+      val agent = newAgent(exitOnMissingConfig, options)
       agent.startSync()
       return EmbeddedAgentInfo(agent)
     }

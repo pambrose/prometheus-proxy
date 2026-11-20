@@ -108,6 +108,40 @@ updates:
       # As in the basics demo, Prometheus moves with the Makefile's PROMETHEUS_IMAGE, by hand.
       - dependency-name: "prom/prometheus"
 
+  # The embedded demo's third-party images (demos/embedded/docker/compose.yml): Grafana and Caddy, the coffee shop's
+  # load balancer, each pinned by tag and digest. Its proxy image is the latest release's or one built from this
+  # checkout, and its coffee shop is built, so there's nothing to update for them here.
+  - package-ecosystem: docker-compose
+    directory: /demos/embedded/docker
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      embedded-demo:
+        patterns: ["*"]
+    ignore:
+      # As in the other demos, Prometheus moves with the Makefile's PROMETHEUS_IMAGE, by hand.
+      - dependency-name: "prom/prometheus"
+
+  # The images the embedded demo's coffee shop is built and runs on (demos/embedded/app/Dockerfile): Gradle, on the
+  # JDK the runtime ships, and eclipse-temurin's JRE, both pinned by tag and digest. Its Kotlin, Ktor, and Micrometer
+  # come from the repository's version catalog, which the gradle entry above keeps up to date.
+  - package-ecosystem: docker
+    directory: /demos/embedded/app
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      embedded-demo-app:
+        patterns: ["*"]
+    ignore:
+      # Java 25, the LTS the proxy and agent images ship, as in /etc/docker; moving to another line is a deliberate
+      # change, and the Gradle image's JDK goes with it.
+      - dependency-name: "eclipse-temurin"
+        update-types: ["version-update:semver-major"]
+
   # The Kubernetes demo's third-party images in its manifests (demos/kubernetes/k8s), which the docker ecosystem reads:
   # the Python image its simulated services and targets-sync run on, pinned by tag and digest. Its kind node image
   # (demos/kubernetes/kind) isn't here: it moves with the kind release it was built for, by hand. Like the other demos,

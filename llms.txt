@@ -59,7 +59,7 @@ Key RPCs:
 - **Stale agent cleanup**: `AgentContextCleanupService` evicts inactive agents after `maxAgentInactivitySecs` (default 60s)
 - **Consolidated mode**: Multiple agents can register the same path for redundancy
 - **Auth forwarding**: Proxy forwards `Authorization` headers (basic auth / bearer token) from Prometheus scrape configs to agents over gRPC
-- **Embedded agent**: Agents can run inside other JVM apps via `Agent.startAsyncAgent()`, returning an `EmbeddedAgentInfo` lifecycle handle. Since 4.4.0 several agents in one JVM, at once or one after another, share one set of agent metrics with metrics on (each series carries its agent's `launch_id`, and goes when the agent stops), and an embedded agent's `logLevel` sets only the `io.prometheus` loggers, leaving the host's logging alone. The library jar carries no `logback.xml` (only the fat JARs do, from `src/shadow/resources`), so the host's Logback config configures the agent's loggers too. Since 4.5.0 the agent's generated gRPC classes need protobuf-java 4.36.2 or later, which a build that embeds the agent resolves through it
+- **Embedded agent**: Agents can run inside other JVM apps via `Agent.startAsyncAgent()`, returning an `EmbeddedAgentInfo` lifecycle handle. Since 4.4.0 several agents in one JVM, at once or one after another, share one set of agent metrics with metrics on (each series carries its agent's `launch_id`, and goes when the agent stops), and an embedded agent's `logLevel` sets only the `io.prometheus` loggers, leaving the host's logging alone. The library jar carries no `logback.xml` (only the fat JARs do, from `src/shadow/resources`), so the host's Logback config configures the agent's loggers too. Since 4.5.0 the agent's generated gRPC classes need protobuf-java 4.36.2 or later, which a build that embeds the agent resolves through it. Since 4.6.0 `embeddedAgent { }` (Kotlin) or `EmbeddedAgentConfig.builder()` (Java) builds one's settings with typed methods, `scrapeSelf` percent-encoding its host's `/metrics` credentials into the URL, and `Agent.startAsyncAgent(config)` starts one from a Typesafe `Config` built in memory (rooted at `agent`), so a host's token, the proxy's certificate (`agent.tls.trustCertCollectionPem`), and scrape credentials never sit in a config file; the website's Cloud Platforms page runs one in an app on ECS on Fargate, Cloud Run, or Azure Container Apps, with the proxy on AWS, GCP, Azure, DigitalOcean, or Railway
 - **Proxy failover** (4.0.0, rule revised in 4.1.0): The agent takes an ordered `agent.proxy.endpoints` list (or comma-separated `--proxy` / `PROXY_HOSTNAME`); a failed connect, or a proxy that rejects the agent's registration or every one of its static paths, advances to the next endpoint, and a connection that registered and then dropped retries from the head, so a recovered primary is picked up automatically. Scrape an HA pair with `static_config`, not `http_sd_config` (a standby returns an empty discovery list, which Prometheus treats as target deletion)
 - **Dynamic target discovery** (4.0.0): Opt-in `agent.discovery` reconcile loop keeps registered paths in sync with a watched HOCON/JSON file (`paths` list of `{ name, path, url, labels }`), so targets change at runtime with no agent restart. Static `pathConfigs` are never touched; a read failure keeps the last-known-good set, while a valid-but-empty file removes all discovered paths
 - **Per-agent identities** (4.0.0): `proxy.auth` lists named identities (token + allowed path globs) enforced on every `registerPath`, closing the shared-token hole where any agent could register (and take over) any path. Legacy `proxy.agentToken` is honored as an allow-all identity for migration. Since 4.1.0 an identity can't take over or join a path another identity's live agent serves, so consolidated agents sharing a path must share an identity. Since 4.4.0 `registerPath` checks a path's length and form before matching it against the globs, and globs are matched in time proportional to the path's length. Since 4.5.0 it refuses a path with whitespace, a control character, `?`, or `#`, which no scrape can reach, and the agent refuses such a `pathConfigs` entry at startup; the proxy also refuses to start with a `proxy.auth` identity named `legacy-agent-token`, the name it gives the legacy shared token
@@ -77,11 +77,12 @@ Key RPCs:
 
 These are the only types intended for external consumption (everything else is `internal`):
 
-- `io.prometheus.Agent` and `io.prometheus.Proxy` (entry points)
+- `io.prometheus.Agent` and `io.prometheus.Proxy` (entry points; `Agent.startAsyncAgent` takes a config file or URL, or a Typesafe `Config` built in memory)
 - `io.prometheus.agent.AgentOptions`, `io.prometheus.proxy.ProxyOptions`, `io.prometheus.common.BaseOptions` (config/CLI parsing)
+- `io.prometheus.agent.EmbeddedAgentConfig` and `embeddedAgent { }` (an embedded agent's settings built in code with typed methods; `EmbeddedAgentConfig.builder()` from Java)
 - `io.prometheus.agent.EmbeddedAgentInfo` (returned by `Agent.startAsyncAgent`)
 - `io.prometheus.common.EnvVars` (typed env-var enum)
-- `io.prometheus.common.ConfigLoadException` (thrown by `startAsyncAgent` and `startSyncAgent` when `exitOnMissingConfig` is false, on a config that can't be loaded or any setting the options or the Agent reject, with a config URL's credentials redacted from its whole cause chain, so embedded hosts catch it instead of the JVM exiting)
+- `io.prometheus.common.ConfigLoadException` (thrown by `startAsyncAgent` and `startSyncAgent` when `exitOnMissingConfig` is false, and by `startAsyncAgent(config)` always, on a config that can't be loaded or any setting the options or the Agent reject, with a config URL's credentials redacted from its whole cause chain, so embedded hosts catch it instead of the JVM exiting)
 
 ## Quick Start
 
@@ -131,13 +132,13 @@ docker network create prometheus-proxy-net
 docker run --rm --name prometheus-proxy --network prometheus-proxy-net \
   -p 8080:8080 -p 50051:50051 \
   --env METRICS_ENABLED=true \
-  pambrose/prometheus-proxy:4.5.0
+  pambrose/prometheus-proxy:4.6.0
 
 # Start agent, in another terminal (in a real deployment, on another host, with PROXY_HOSTNAME the proxy's address)
 docker run --rm --network prometheus-proxy-net \
   --env PROXY_HOSTNAME=prometheus-proxy \
   --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-  pambrose/prometheus-agent:4.5.0
+  pambrose/prometheus-agent:4.6.0
 
 # Scrape the proxy's and the agent's own metrics through the proxy
 curl http://localhost:8080/proxy_metrics
@@ -146,7 +147,7 @@ curl http://localhost:8080/agent_metrics
 # Both run in the foreground until Ctrl+C. To run one in the background, restarted if it exits or
 # Docker restarts (Docker doesn't allow --rm with --restart):
 docker run --detach --name prometheus-proxy --restart unless-stopped --network prometheus-proxy-net \
-  -p 8080:8080 -p 50051:50051 --env METRICS_ENABLED=true pambrose/prometheus-proxy:4.5.0
+  -p 8080:8080 -p 50051:50051 --env METRICS_ENABLED=true pambrose/prometheus-proxy:4.6.0
 docker logs --follow prometheus-proxy                          # follow its log
 docker stop prometheus-proxy && docker rm prometheus-proxy     # stop and remove it
 ```
@@ -168,10 +169,10 @@ Since 4.4.0 the proxy chart's readiness probe is `/ping`, not `/healthcheck`: th
 
 ### Demos
 
-Since 4.5.0 the repository ships three self-contained demos under `demos/`, each run from its own directory of a clone and on its own ports, so they can run side by side. `make up` pulls the latest release's proxy and agent images from Docker Hub and prints the URLs, `make tour` walks through the scenarios one step at a time, and `make down` removes everything; `make up-local` runs the proxy and agent built from the checkout instead (needs a JDK 17 or later). Clone the latest release's tag, as below, so the demo matches the images it pulls.
+Since 4.5.0 the repository ships self-contained demos under `demos/`, four since 4.6.0, each run from its own directory of a clone and on its own ports, so they can run side by side. `make up` pulls the latest release's proxy and agent images from Docker Hub and prints the URLs, `make tour` walks through the scenarios one step at a time, and `make down` removes everything; `make up-local` runs the proxy and agent built from the checkout instead (needs a JDK 17 or later). Clone the latest release's tag, as below, so the demo matches the images it pulls.
 
 ```bash
-git clone -c advice.detachedHead=false --depth 1 --branch 4.5.0 https://github.com/pambrose/prometheus-proxy.git
+git clone -c advice.detachedHead=false --depth 1 --branch 4.6.0 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/basics
 make up
 ```
@@ -179,6 +180,7 @@ make up
 - `demos/basics`: the proxy, its dashboard, and three agents with simulated services, Prometheus, and Grafana; failing and hung targets, a redundant pair of agents, discovered targets, an evicted agent, and per-team identities
 - `demos/network`: a proxy and its standby, two agents, and a simulated WAN (Toxiproxy) between them, with Prometheus, Grafana, and Zipkin; a far link, a thin one fixed by filtering at the agent, proxy failover, a link that dies silently, and a flaky link traced in Zipkin
 - `demos/kubernetes`: the Helm charts on two kind clusters, the proxy and Prometheus in one and the agent in the other, which exposes nothing; annotation-driven scraping, a replaced agent pod, and config versus target changes
+- `demos/embedded`: a Ktor coffee shop with the agent embedded (`demos/embedded/app`, whose agent's settings are built in code with `embeddedAgent { }`), the stock proxy taking TLS from PEM variables, Prometheus, and Grafana; a rush, a failure that fires an alert, a deploy that hands the paths to the new version, the proxy going away while the app keeps serving, and secrets from the environment. `make up` builds the coffee shop inside Docker against the latest release
 
 They need Docker with Compose v2, `git`, `make`, and `curl` on macOS or Linux; the Kubernetes demo also needs kind 0.33.0 or later, `kubectl`, and Helm 3 or 4.
 
@@ -244,6 +246,11 @@ TLS with mutual auth additionally requires:
 - Proxy: `trustCertCollectionFilePath`
 - Agent: `certChainFilePath`, `privateKeyFilePath`
 
+Since 4.6.0 each can be given as PEM text, or its base64, instead of a file, for a platform that passes secrets as environment
+variables and for the shell-less Docker images: `tls.certChainPem`, `tls.privateKeyPem`, `tls.trustCertCollectionPem`
+(env `CERT_CHAIN_PEM`, `PRIVATE_KEY_PEM`, `TRUST_CERT_COLLECTION_PEM`; no CLI flags). A file and a PEM for the same
+piece are refused, and a PEM is never logged.
+
 Scraping HTTPS targets (agent → endpoint, separate from the agent ↔ proxy gRPC TLS above):
 - `agent.http.trustStorePath` (+ `trustStorePassword`) — trust a custom/private CA, validation stays on
 - `agent.http.enableTrustAllX509Certificates = true` — disable verification entirely (dev only; takes precedence)
@@ -285,7 +292,7 @@ repositories {
 }
 
 dependencies {
-  implementation("com.pambrose:prometheus-proxy:4.5.0")
+  implementation("com.pambrose:prometheus-proxy:4.6.0")
 }
 ```
 
@@ -298,6 +305,7 @@ dependencies {
 - TLS (no mutual auth): `examples/tls-no-mutual-auth.conf`
 - TLS (with mutual auth): `examples/tls-with-mutual-auth.conf`
 - Prometheus federation: `examples/federate.conf`
+- A proxy and Prometheus on a VM, for agents embedded in cloud apps (TLS and token from `.env`): `examples/cloud-proxy/`
 
 ## Monitoring Assets
 

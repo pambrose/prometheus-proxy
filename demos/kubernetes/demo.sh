@@ -117,7 +117,7 @@ print_urls() {
   echo "  kubectl:          kubectl --context kind-$MONITORING ...   kubectl --context kind-$TARGET ..."
   echo
   echo "Scenarios: $0 clusters | add-service | delete-agent-pod | change-config ...  (no arguments for help)"
-  echo "Or walk through them all: $0 tour"
+  echo "Or walk through them all: $MAKE_NAME tour, or $0 tour"
 }
 
 # Whether version $1 (x.y.z) is at least $2. bash 3.2, macOS's, has no sort -V everywhere, so field by field.
@@ -576,7 +576,7 @@ cmd_clusters() {
   echo
   watch_for
   point "Every Service in $TARGET is ClusterIP, so nothing in it can be reached from outside the cluster. The" \
-    "agent dialed out of $TARGET to the proxy's NodePort in $MONITORING; nothing dialed in."
+    "agent opened its connection from $TARGET to the proxy's NodePort in $MONITORING; nothing connected in."
   point "Each cluster runs one of the charts the project ships, installed with nothing but a values file."
   point "Prometheus's one job asks the proxy's /discovery what to scrape, so its config names no target in $TARGET."
   point "On the proxy dashboard the agent is listed under its pod's name, $(agent_pod): $DASHBOARD_URL"

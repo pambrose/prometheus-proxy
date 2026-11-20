@@ -7,7 +7,7 @@
   a Maven embedder gets.
 
   The sources are the docs site's embedded-agent examples, compiled in place rather than copied, so the examples on
-  the Embedded Agent page are the ones checked. check.sh passes the two versions below; the build writes under the
+  the Embedded Agent and Cloud Platforms pages are the ones checked. check.sh passes the two versions below; the build writes under the
   repo's build/consumer-check, beside check.sh's resolution reports.
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
@@ -63,17 +63,18 @@
     </pluginManagement>
 
     <plugins>
-      <!-- The Java example only: src/test/java is the repo's test source root. -->
+      <!-- The Java examples only: src/test/java is the repo's test source root. -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
         <configuration>
           <includes>
             <include>website/EmbeddedAgentJavaExample.java</include>
+            <include>website/EmbeddedAgentConfigJavaExample.java</include>
           </includes>
         </configuration>
       </plugin>
-      <!-- src/test/kotlin/website holds the Kotlin example and the site's .txt snippets, which the compiler skips. -->
+      <!-- src/test/kotlin/website holds the Kotlin examples and the site's .txt snippets, which the compiler skips. -->
       <plugin>
         <groupId>org.jetbrains.kotlin</groupId>
         <artifactId>kotlin-maven-plugin</artifactId>

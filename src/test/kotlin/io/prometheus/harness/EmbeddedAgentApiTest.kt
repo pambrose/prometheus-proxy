@@ -17,6 +17,7 @@
 
 package io.prometheus.harness
 
+import com.typesafe.config.ConfigFactory
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeTrue
@@ -35,17 +36,19 @@ import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.common.ConfigLoadException
 import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.common.TestPorts
+import io.prometheus.common.Utils.causeChain
 import io.prometheus.common.captureLogs
 import io.prometheus.common.startAndAwaitReady
 import io.prometheus.harness.support.TestUtils.startProxy
+import io.prometheus.harness.support.withEmbeddedAgentScraped
 import kotlin.io.path.createTempFile
 import kotlin.time.Duration.Companion.seconds
 import io.ktor.server.cio.CIO as ServerCIO
 
 // The public embedded entry point, end to end. AgentTest pins the failure contract for a config that can't
 // be loaded (it surfaces as ConfigLoadException instead of exiting the host JVM). This pins the success
-// contract: an agent built from a config file connects to a real proxy over Netty, the returned handle
-// reports the configured name, and shutdown() tears the connection down so the proxy forgets the agent.
+// contract: an agent built from a config file, or from one built in memory, connects to a real proxy over Netty, the
+// returned handle reports the configured name, and shutdown() tears the connection down so the proxy forgets the agent.
 // The banner is left on (the default) because that is what an embedding host gets unless it opts out. It
 // also pins the failure contract for a config that loads but holds a setting the agent can't use.
 class EmbeddedAgentApiTest : StringSpec() {
@@ -97,6 +100,43 @@ class EmbeddedAgentApiTest : StringSpec() {
       }
     }
 
+    // The in-memory overload, which EmbeddedAgentConfig.start() calls: a host that holds the agent's settings itself
+    // passes them as a Config, so no config file holds them on disk. The proxy serves the path the agent registered,
+    // from the target the config names.
+    "startAsyncAgent should start the agent from an in-memory config, and the proxy should serve its path" {
+      withEmbeddedAgentScraped(
+        httpPort = HTTP_PORT,
+        agentPort = GRPC_PORT,
+        agentName = AGENT_NAME,
+      ) { proxy, agent ->
+        agent.agentName shouldBe AGENT_NAME
+        agent.shutdown()
+        eventually(30.seconds) {
+          proxy.agentContextManager.agentContextSize shouldBe 0
+        }
+      }
+    }
+
+    // The builder percent-encodes a path's credentials into its URL, and the agent sends them as Basic Auth, so a
+    // password with any character reaches the target intact: the scrape gets through only if it does.
+    "an agent built with the builder sends a path's credentials, whatever their characters, as Basic Auth" {
+      withEmbeddedAgentScraped(
+        httpPort = HTTP_PORT,
+        agentPort = GRPC_PORT,
+        targetCredentials = "agent" to "p@ss:w/rd%#+ ?&é",
+      )
+    }
+
+    // The in-memory overload is always embedded: a setting the agent can't use throws, and never exits the JVM.
+    "startAsyncAgent should throw ConfigLoadException for an in-memory config with a setting it can't use" {
+      val config = ConfigFactory.parseString("agent.scrapeTimeoutSecs = 0")
+      val exception =
+        runCatching { Agent.startAsyncAgent(config, logBanner = false) }
+          .onSuccess { it.shutdown() }
+          .exceptionOrNull()
+      exception.shouldBeInstanceOf<ConfigLoadException>().message.orEmpty() shouldContain "scrapeTimeoutSecs"
+    }
+
     // November #8: the failure contract covers a config the agent loads but can't use, not only one it can't load. Each
     // of these escaped as an IllegalArgumentException or a Typesafe ConfigException, and the Typesafe messages began
     // with the config URL, credentials and all. The first four are the review's inputs. The trust store and the four
@@ -134,7 +174,7 @@ class EmbeddedAgentApiTest : StringSpec() {
         val exception = failure.exception.shouldBeInstanceOf<ConfigLoadException>()
         exception.message.orEmpty() shouldContain named
         // An embedded host that logs the exception prints its whole cause chain.
-        generateSequence<Throwable>(exception) { it.cause }.forEach { it.message.orEmpty() shouldNotContain SECRET }
+        exception.causeChain().forEach { it.message.orEmpty() shouldNotContain SECRET }
         exception.stackTraceToString() shouldNotContain SECRET
         // The reason is logged too, so the log check below can't pass for want of lines.
         failure.logs.any { it.startsWith("Invalid configuration: ") && named in it }.shouldBeTrue()

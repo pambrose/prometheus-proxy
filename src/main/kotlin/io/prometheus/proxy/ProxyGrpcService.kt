@@ -25,7 +25,6 @@ import com.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.pambrose.common.dsl.MetricsDsl.healthCheck
 import com.pambrose.common.utils.TlsContext
 import com.pambrose.common.utils.TlsContext.Companion.PLAINTEXT_CONTEXT
-import com.pambrose.common.utils.TlsUtils.buildServerTlsContext
 import com.pambrose.common.utils.shutdownGracefully
 import com.google.common.util.concurrent.MoreExecutors
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
@@ -36,6 +35,7 @@ import io.grpc.ServerInterceptors
 import io.grpc.protobuf.services.ProtoReflectionServiceV1
 import io.prometheus.Proxy
 import io.prometheus.common.DeferredServerInterceptor
+import io.prometheus.common.TlsMaterial
 import java.util.concurrent.TimeUnit.SECONDS
 import kotlin.time.Duration.Companion.seconds
 
@@ -69,10 +69,10 @@ internal class ProxyGrpcService(
     val options = proxy.options
     val tlsContext =
       if (options.isTlsEnabled)
-        buildServerTlsContext(
-          certChainFilePath = options.certChainFilePath,
-          privateKeyFilePath = options.privateKeyFilePath,
-          trustCertCollectionFilePath = options.trustCertCollectionFilePath,
+        TlsMaterial.serverContext(
+          certChain = options.certChainSource,
+          privateKey = options.privateKeySource,
+          trust = options.trustCertCollectionSource,
         )
       else
         PLAINTEXT_CONTEXT

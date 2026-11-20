@@ -38,6 +38,11 @@ Run `make help` for the current target list with descriptions (auto-extracted fr
 Each demo under `demos/` is self-contained, with its own Makefile run from its directory (`make -C demos/<name> help`
 lists its targets), so the root `Makefile` has no demo targets.
 
+The embedded demo's coffee shop, `demos/embedded/app`, is a Gradle project of its own, outside the root build, that
+embeds the agent through the public API and reads `gradle/libs.versions.toml` (its Ktor and Micrometer entries are
+there for it). CI builds it against the checkout, `./gradlew -p demos/embedded/app -PlocalProxy build` (a composite
+build, which lints it too), so a change to `Agent.startAsyncAgent` or the config tree it takes must keep it compiling.
+
 ## Architecture
 
 A **Prometheus Proxy** system enabling Prometheus to scrape metrics from endpoints behind firewalls.
@@ -60,12 +65,16 @@ from HOCON via tscfg — see `make tsconfig`).
 
 Only these types are part of the supported, documented public API. Everything else is `internal`:
 
-- `io.prometheus.Agent` (entry point + companion `main` / `startSyncAgent` / `startAsyncAgent`)
+- `io.prometheus.Agent` (entry point + companion `main` / `startSyncAgent` / `startAsyncAgent`, which takes a config
+  file or URL, or a Typesafe `Config` built in memory; `typesafe-config` is therefore an `api` dependency)
 - `io.prometheus.Proxy` (entry point + companion `main`)
 - `io.prometheus.agent.AgentOptions` / `io.prometheus.proxy.ProxyOptions` / `io.prometheus.common.BaseOptions`
+- `io.prometheus.agent.EmbeddedAgentConfig` and `embeddedAgent { }` (an embedded agent's settings built in code with
+  typed methods, for Java through `EmbeddedAgentConfig.builder()`, and started with `start()`; it builds the `Config`
+  `startAsyncAgent(Config)` takes)
 - `io.prometheus.agent.EmbeddedAgentInfo` (handle returned by `Agent.startAsyncAgent`)
 - `io.prometheus.common.EnvVars`
-- `io.prometheus.common.ConfigLoadException` (thrown by `startAsyncAgent` and `startSyncAgent` when `exitOnMissingConfig` is false, on a config that can't be loaded or a setting the options or the Agent reject, with a config URL's credentials redacted from its whole cause chain, so embedded hosts can catch it instead of the JVM exiting)
+- `io.prometheus.common.ConfigLoadException` (thrown by `startAsyncAgent` and `startSyncAgent` when `exitOnMissingConfig` is false, and by `startAsyncAgent(Config)` always, on a config that can't be loaded or a setting the options or the Agent reject, with a config URL's credentials redacted from its whole cause chain, so embedded hosts can catch it instead of the JVM exiting)
 
 When promoting a type from `internal` to `public`, also add a cross-reference to it in `docs/packages.md` (the Dokka `includes.from` file). When demoting, remove the link to avoid dangling references in the generated site.
 
@@ -85,6 +94,9 @@ aren't in the proto: a scrape result is sent in chunks once its gzipped size rea
 - **Per-agent auth**: `AgentAuthManager` + `AgentAuthServerInterceptor` resolve `proxy.auth` identity tokens and enforce path globs on `registerPath`; legacy `proxy.agentToken` maps to an allow-all identity. `registerPath` runs `ProxyPathManager.formRejection` (length, form, labels size) before the globs see a path, and `AgentAuthManager.globMatches` matches in time proportional to the path's length; keep both, since a regex or the other order lets one authenticated agent stall the proxy with a long path. With `transportFilterDisabled`, where the agent names its own agentId on every call, `readRequestsFromProxy` looks the context up once and removes only that object (`Proxy.removeAgentContextIfCurrent`), and `AgentContextManager.addAgentContextWithinLimit` caps the contexts one identity holds at `proxy.internal.maxAgentsPerIdentity`.
 - **Agent-supplied values**: the proxy cuts what an agent reports about itself (`ProxyServiceImpl.boundedRegistration`, `proxy.internal.maxAgentFieldLength` / `maxAgentProxyEndpoints`) and about each path (`ProxyPathManager.addPath`: the target URL, redacted before it's cut, to `maxTargetUrlLength`), and logs every agent-supplied value through `AgentValues.shownValue`, which cuts it and escapes its control characters so it can't forge a log line (`ProxyPathManager.shownPath` for a path or `agentId`, its first 64 characters); bound or cut any new agent-supplied value before storing it, and pass it through `shownValue` before logging it. `formRejection` refuses a path with whitespace, a control character, `?`, or `#` (`AgentValues.pathCharacterProblem`), which the agent checks on its `pathConfigs` at startup too.
 - **Shared metrics**: `AgentMetrics` / `ProxyMetrics` build their collectors once per JVM in their companion objects and share them through `SharedCollectors`, since the default registry rejects a second collector with the same name and label names, which kept a second agent in a JVM from connecting. Add a new metric to its companion's `SHARED` list; an agent metric takes `launch_id` as its first label and goes in `LABELED` too, so a stopped agent's series are removed.
+- **TLS material**: each certificate, key, or trust collection is a file (`tls.*FilePath`) or PEM text or its base64
+  (`tls.*Pem`, `*_PEM` env vars, no CLI flags), never both (`TlsSource.requireOneSource`); `TlsMaterial` builds the
+  gRPC TLS context from either with `GrpcSslContexts`. Never log a PEM value, only whether it's set.
 - **Metric filtering**: `MetricFilter` (per-path `agent.filters`) drops whole metric families in `AgentHttpService` before gzip/chunking; fails open on non-text or non-UTF-8 payloads.
 - **Dashboard**: Ktor + htmx (WebJar, no CDN) on its own port, fed by the `ProxyEvent` bus; see `proxy/dashboard/`.
   The Links column's brand icons (`LinkIcon`) come from the Simple Icons WebJar, of which the build's

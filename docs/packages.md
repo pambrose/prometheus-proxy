@@ -24,6 +24,10 @@ These are the entry points intended for embedders and integrators:
   [ProxyOptions][io.prometheus.proxy.ProxyOptions] —
   CLI argument parsing and config loading; subclasses of
   [BaseOptions][io.prometheus.common.BaseOptions].
+- [EmbeddedAgentConfig][io.prometheus.agent.EmbeddedAgentConfig] — an embedded Agent's settings,
+  built in code with a typed method for each: [embeddedAgent][io.prometheus.agent.embeddedAgent]
+  from Kotlin, [EmbeddedAgentConfig.builder][io.prometheus.agent.EmbeddedAgentConfig.Companion.builder]
+  from Java.
 - [EmbeddedAgentInfo][io.prometheus.agent.EmbeddedAgentInfo] — lifecycle handle returned by
   [Agent.startAsyncAgent][io.prometheus.Agent.Companion.startAsyncAgent] when running an Agent
   inside a host JVM.
@@ -78,6 +82,10 @@ scrape executor, path manager, HTTP-client cache, TLS helpers, and gRPC intercep
 - [AgentOptions][io.prometheus.agent.AgentOptions] parses CLI arguments and HOCON config for
   agent-specific settings (proxy hostname, scrape timeout, chunking threshold, gzip threshold,
   HTTP-client cache sizing, TLS, and keepalive).
+- [EmbeddedAgentConfig][io.prometheus.agent.EmbeddedAgentConfig] builds an embedded agent's
+  settings in code (name, proxy, token, PEM certificates, and the paths it scrapes, with Basic
+  Auth credentials percent-encoded into their URLs) and starts it; its builder is the receiver of
+  [embeddedAgent][io.prometheus.agent.embeddedAgent], the Kotlin DSL.
 - [EmbeddedAgentInfo][io.prometheus.agent.EmbeddedAgentInfo] is the return value of
   [Agent.startAsyncAgent][io.prometheus.Agent.Companion.startAsyncAgent], carrying the
   `launchId` and `agentName` of the started agent and a `shutdown()` method for graceful stop.

@@ -50,7 +50,7 @@ Clone the repository at the latest release, then run the demo's commands from it
 its targets:
 
 ```bash
-git clone -c advice.detachedHead=false --depth 1 --branch 4.5.0 https://github.com/pambrose/prometheus-proxy.git
+git clone -c advice.detachedHead=false --depth 1 --branch 4.6.0 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/kubernetes
 make up      # creates both clusters, installs everything, and prints the URLs
 make tour    # walks through the guided tour below, pausing before each step
@@ -107,7 +107,7 @@ These are the earlier demos' proxy and agent, now deployed with their Helm chart
 ```
 
 - Every Service in `pp-target` is ClusterIP: nothing in it can be reached from outside, and kind maps no port of it to
-  the host but its API server's, for `kubectl`. The agent dialed out to the proxy; nothing dialed in.
+  the host but its API server's, for `kubectl`. The agent opened its connection to the proxy; nothing connected in.
 - `helm list` shows the proxy chart in `pp-monitoring` and the agent chart in `pp-target`: the charts the project
   ships, with nothing but a values file each.
 - Prometheus's config names no target in `pp-target`. Its one job asks the proxy's `/discovery` what to scrape.

@@ -1,0 +1,38 @@
+# Prometheus config for the embedded demo (demos/embedded/docker/compose.yml): the setup the website's Cloud Platforms
+# page describes. Prometheus reaches the proxy on the compose network, where the proxy serves the coffee shop's metrics
+# at the paths its embedded agent registered. `make check-rules` validates this file with promtool.
+
+global:
+  # Short intervals so Grafana moves visibly during the tour.
+  scrape_interval: 5s
+  scrape_timeout: 4s
+  evaluation_interval: 5s
+
+rule_files:
+  # The alerting rules the project ships (grafana/alerts.yml), and the coffee shop's (embedded-alerts.yml).
+  - /etc/prometheus/rules/*.yml
+
+scrape_configs:
+  # The coffee shop's own metrics, which its agent reads from the app's /metrics on 127.0.0.1. The instance names the
+  # app rather than the proxy its metrics come through.
+  - job_name: coffee-shop
+    metrics_path: /coffee_shop_metrics
+    static_configs:
+      - targets: [ 'proxy:8080' ]
+    relabel_configs:
+      - target_label: instance
+        replacement: coffee-shop
+
+  # The embedded agent's own metrics, which it serves inside the app's container and sends through the proxy too.
+  - job_name: coffee-shop-agent
+    metrics_path: /coffee_shop_agent_metrics
+    static_configs:
+      - targets: [ 'proxy:8080' ]
+    relabel_configs:
+      - target_label: instance
+        replacement: coffee-shop
+
+  # The proxy's own metrics.
+  - job_name: prometheus-proxy
+    static_configs:
+      - targets: [ 'proxy:8082' ]

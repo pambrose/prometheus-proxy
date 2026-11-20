@@ -1,0 +1,15 @@
+# The demo's Prometheus, as Grafana's default datasource. The dashboards pick the default datasource through their
+# `datasource` variable, so they need no uid of their own.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      # Prometheus scrapes every 5s; $__rate_interval works from this.
+      timeInterval: 5s

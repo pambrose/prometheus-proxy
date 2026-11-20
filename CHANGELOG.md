@@ -4,7 +4,26 @@ All notable changes to this project are documented in this file.
 
 ---
 
-## [Unreleased]
+## [4.6.0] - 2026-11-19
+
+### New Features
+
+- `Agent.startAsyncAgent(config)` starts an embedded agent from a Typesafe `Config` built in memory, so a host's token,
+  the proxy's certificate, and scrape credentials needn't sit in a config file. It is always embedded: a setting it
+  can't use throws `ConfigLoadException`. `typesafe-config` is now an `api` dependency, on a host's compile classpath
+- `EmbeddedAgentConfig` builds an embedded agent's settings with a typed method for each, `embeddedAgent { }` from
+  Kotlin and `EmbeddedAgentConfig.builder()` from Java, in place of a hand-built `Config`. `scrapeSelf` points the
+  agent at its host's own `/metrics`, percent-encoding Basic Auth credentials into the URL
+- The proxy and the agent take each TLS certificate, key, and trust collection as PEM text, or its base64, in place of
+  a file: `tls.certChainPem`, `tls.privateKeyPem`, and `tls.trustCertCollectionPem`, or the `CERT_CHAIN_PEM`,
+  `PRIVATE_KEY_PEM`, and `TRUST_CERT_COLLECTION_PEM` environment variables. The Docker images, which have no shell to
+  write a variable to a file, run TLS on a platform that passes secrets as environment variables. A file and a PEM for
+  the same piece are refused, and a PEM is never logged
+- A fourth demo, `demos/embedded`: a Ktor coffee shop with the agent embedded, started from an in-memory config, the
+  stock proxy taking its TLS certificate and key from PEM variables, and Prometheus and Grafana beside it. Its tour
+  covers a rush, an alert, a deploy that hands the agent's paths to the new version, the proxy going away, and secrets
+  from the environment. `make up` builds the app inside Docker against the latest release; CI builds it against the
+  checkout
 
 ### Bug Fixes
 
@@ -38,6 +57,10 @@ All notable changes to this project are documented in this file.
   which the same page shows HOCON substitution doing
 - Troubleshooting's Registration is rejected table lists the identity, takeover, path-limit, and reserved-path
   rejections, and says which ones the agent retries
+- A Cloud Platforms page runs an embedded agent in an app on ECS on Fargate, Cloud Run, Azure Container Apps, or
+  another platform, with the proxy on AWS, GCP, Azure, DigitalOcean, or Railway, and `examples/cloud-proxy` holds a
+  proxy and Prometheus to start from. TLS Setup, Docker, Embedded Agent, and the CLI Reference cover the PEM settings
+  and the in-memory config. An Embedded Demo page walks through the new demo with screenshots
 - TLS Setup shows how to create a private CA and the proxy's and agents' certificates with OpenSSL or LibreSSL, in
   place of a link to gRPC's example
 - `docs/cli-args.md`, a second hand-kept copy of the website's CLI Reference, now points to it, as does the README
@@ -59,6 +82,14 @@ All notable changes to this project are documented in this file.
   subject alternative names; Troubleshooting drops the entry for a fat-JAR bug fixed in 3.2.0, says disabled admin and
   metrics ports refuse connections rather than answer 404, and quotes the proxy's log line for an identity's denied
   path; and Agent Configuration gathers its path rules under one heading
+
+### Dependencies
+
+- Update Gradle 9.9.1 → 9.9.2
+- Update Logback 1.6.7 → 1.6.8
+- Update the dashboard's htmx 4.0.1 → 4.0.2
+- Update the documentation site's Python dependency lock (`website/uv.lock`): pymdown-extensions 13.0 → 13.1 and
+  backrefs 8.2 → 8.2.1
 
 ## [4.5.0] - 2026-11-17
 

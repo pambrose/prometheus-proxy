@@ -35,14 +35,17 @@ import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.common.EnvVars.ADMIN_ENABLED
 import io.prometheus.common.EnvVars.ADMIN_PORT
 import io.prometheus.common.EnvVars.CERT_CHAIN_FILE_PATH
+import io.prometheus.common.EnvVars.CERT_CHAIN_PEM
 import io.prometheus.common.EnvVars.DEBUG_ENABLED
 import io.prometheus.common.EnvVars.KEEPALIVE_TIMEOUT_SECS
 import io.prometheus.common.EnvVars.KEEPALIVE_TIME_SECS
 import io.prometheus.common.EnvVars.METRICS_ENABLED
 import io.prometheus.common.EnvVars.METRICS_PORT
 import io.prometheus.common.EnvVars.PRIVATE_KEY_FILE_PATH
+import io.prometheus.common.EnvVars.PRIVATE_KEY_PEM
 import io.prometheus.common.EnvVars.TRANSPORT_FILTER_DISABLED
 import io.prometheus.common.EnvVars.TRUST_CERT_COLLECTION_FILE_PATH
+import io.prometheus.common.EnvVars.TRUST_CERT_COLLECTION_PEM
 import io.prometheus.common.Utils.sanitizeUrl
 import io.prometheus.common.Utils.sanitizeUrlsInText
 import org.slf4j.Logger.ROOT_LOGGER_NAME
@@ -85,6 +88,8 @@ abstract class BaseOptions protected constructor(
   private val envConfig: String,
   private val exitOnMissingConfig: Boolean = false,
   private val embedded: Boolean = false,
+  // A config the host built in memory (Agent.startAsyncAgent(Config)), read in place of a config file or URL.
+  private val suppliedConfig: Config? = null,
 ) {
   /**
    * Path or URL to the HOCON config file. Accepts a local filesystem path, an `http://`/`https://` URL, or a
@@ -150,17 +155,18 @@ abstract class BaseOptions protected constructor(
     private set
 
   /**
-   * Filesystem path to the TLS certificate chain (PEM). Must be paired with [privateKeyFilePath]; supplying
-   * one without the other is rejected by [validateTlsConfig]. Empty disables TLS on this side and exposes
-   * plaintext gRPC. See also [isTlsEnabled].
+   * Filesystem path to the TLS certificate chain (PEM). Must be paired with [privateKeyFilePath], or the key given as
+   * PEM (`tls.privateKeyPem`); supplying one without the other is rejected by [validateTlsConfig]. Empty, with no
+   * `tls.certChainPem` either, disables TLS on this side and exposes plaintext gRPC. See also [isTlsEnabled].
    */
   @Parameter(names = ["-t", "--cert"], description = "Certificate chain file path")
   var certChainFilePath = ""
     private set
 
   /**
-   * Filesystem path to the TLS private key (PEM) matching [certChainFilePath]. Must be paired with the cert
-   * file; supplying one without the other is rejected by [validateTlsConfig]. Empty disables TLS on this side.
+   * Filesystem path to the TLS private key (PEM) matching [certChainFilePath]. Must be paired with the certificate
+   * chain, as a file or as PEM; supplying one without the other is rejected by [validateTlsConfig]. Empty, with no
+   * `tls.privateKeyPem` either, disables TLS on this side.
    */
   @Parameter(names = ["-k", "--key"], description = "Private key file path")
   var privateKeyFilePath = ""
@@ -168,7 +174,8 @@ abstract class BaseOptions protected constructor(
 
   /**
    * Filesystem path to the trust-store certificate collection (PEM) used to validate the peer's certificate.
-   * Required for mTLS; for one-way TLS the JDK default trust store is used when this is empty.
+   * Required for mTLS, as a file or as PEM (`tls.trustCertCollectionPem`); for one-way TLS the JDK default trust store
+   * is used when neither is given.
    */
   @Parameter(names = ["-s", "--trust"], description = "Trust certificate collection file path")
   var trustCertCollectionFilePath = ""
@@ -238,8 +245,35 @@ abstract class BaseOptions protected constructor(
   internal lateinit var configVals: ConfigVals
     private set
 
+  // The TLS material given as PEM text, or the base64 of it (TlsMaterial.pemText), in place of the matching file path,
+  // for a platform that passes secrets as environment variables. Each resolves from its env var, then the role's
+  // `tls.*Pem` setting; there are no command-line flags, since a command line shows in `ps`. Never logged.
+  internal var certChainPem = ""
+    private set
+
+  internal var privateKeyPem = ""
+    private set
+
+  internal var trustCertCollectionPem = ""
+    private set
+
+  /** Whether TLS is on for this side: a certificate chain and a private key are both given, as files or as PEM. */
   val isTlsEnabled: Boolean
-    get() = certChainFilePath.isNotEmpty() && privateKeyFilePath.isNotEmpty()
+    get() = certChainSource.isGiven && privateKeySource.isGiven
+
+  // Whether a trust collection is given, as a file or as PEM: required for mutual TLS, and on the agent it pins the
+  // proxies it trusts.
+  internal val hasTrustCertCollection: Boolean
+    get() = trustCertCollectionSource.isGiven
+
+  internal val certChainSource: TlsSource
+    get() = TlsSource("certChain", certChainFilePath, certChainPem)
+
+  internal val privateKeySource: TlsSource
+    get() = TlsSource("privateKey", privateKeyFilePath, privateKeyPem)
+
+  internal val trustCertCollectionSource: TlsSource
+    get() = TlsSource("trustCertCollection", trustCertCollectionFilePath, trustCertCollectionPem)
 
   private fun isFlagInArgs(vararg names: String): Boolean =
     cliArgs.any { arg -> names.any { name -> arg.equals(name, ignoreCase = true) } }
@@ -279,13 +313,16 @@ abstract class BaseOptions protected constructor(
   ): String = cliValue.ifEmpty { envVar.getEnv(configDefault) }
 
   protected fun validateTlsConfig() {
-    val hasCert = certChainFilePath.isNotEmpty()
-    val hasKey = privateKeyFilePath.isNotEmpty()
+    listOf(certChainSource, privateKeySource, trustCertCollectionSource).forEach { it.requireOneSource() }
+    val hasCert = certChainSource.isGiven
+    val hasKey = privateKeySource.isGiven
     require(hasCert == hasKey) {
       if (hasCert)
-        "Incomplete TLS configuration: certificate chain file is set but private key file is missing (use --key)"
+        "Incomplete TLS configuration: the certificate chain is set but the private key file is missing " +
+          "(use --key, or give the key as PEM in privateKeyPem)"
       else
-        "Incomplete TLS configuration: private key file is set but certificate chain file is missing (use --cert)"
+        "Incomplete TLS configuration: the private key is set but the certificate chain file is missing " +
+          "(use --cert, or give the chain as PEM in certChainPem)"
     }
   }
 
@@ -431,6 +468,17 @@ abstract class BaseOptions protected constructor(
     logger.info { "trustCertCollectionFilePath: $trustCertCollectionFilePath" }
   }
 
+  // A TLS PEM setting's value, from [envVar], then [configDefault], as PEM text. Only whether it is set is logged: it
+  // may be a private key.
+  private fun resolvePem(
+    setting: String,
+    envVar: EnvVars,
+    configDefault: String,
+  ): String =
+    TlsMaterial.pemText(setting, resolveStringOption("", envVar, configDefault)).also { pem ->
+      logger.info { "$setting: ${if (pem.isEmpty()) "(none)" else "(set)"}" }
+    }
+
   /**
    * Resolves the options common to both Proxy and Agent in a single, shared order, ending with
    * [validateTlsConfig]. Each argument is the role-specific config default; the underlying `assign*`
@@ -450,6 +498,9 @@ abstract class BaseOptions protected constructor(
     certChainFilePath: String,
     privateKeyFilePath: String,
     trustCertCollectionFilePath: String,
+    certChainPem: String,
+    privateKeyPem: String,
+    trustCertCollectionPem: String,
   ) {
     assignKeepAliveTimeSecs(keepAliveTimeSecs)
     assignKeepAliveTimeoutSecs(keepAliveTimeoutSecs)
@@ -462,6 +513,10 @@ abstract class BaseOptions protected constructor(
     assignCertChainFilePath(certChainFilePath)
     assignPrivateKeyFilePath(privateKeyFilePath)
     assignTrustCertCollectionFilePath(trustCertCollectionFilePath)
+    this.certChainPem = resolvePem("certChainPem", CERT_CHAIN_PEM, certChainPem)
+    this.privateKeyPem = resolvePem("privateKeyPem", PRIVATE_KEY_PEM, privateKeyPem)
+    this.trustCertCollectionPem =
+      resolvePem("trustCertCollectionPem", TRUST_CERT_COLLECTION_PEM, trustCertCollectionPem)
     validateTlsConfig()
   }
 
@@ -490,15 +545,17 @@ abstract class BaseOptions protected constructor(
     envConfig: String,
     exitOnMissingConfig: Boolean,
   ) {
-    config =
-      readConfig(
+    // A supplied config takes the place of the file or URL, and of envConfig, with the same fallback a file gets.
+    val fallback = ConfigFactory.load().resolve()
+    val loaded =
+      suppliedConfig?.withFallback(fallback) ?: readConfig(
         configSource.ifEmpty { System.getenv(envConfig).orEmpty() },
         envConfig,
         ConfigParseOptions.defaults().setAllowMissing(false),
-        ConfigFactory.load().resolve(),
+        fallback,
         exitOnMissingConfig,
       )
-        .resolve(ConfigResolveOptions.defaults())
+    config = loaded.resolve(ConfigResolveOptions.defaults())
 
     dynamicParams
       .forEach { (k, v) ->

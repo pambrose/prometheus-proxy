@@ -24,6 +24,9 @@ Both sides authenticate each other:
 | **Proxy** | `certChainFilePath`, `privateKeyFilePath`, `trustCertCollectionFilePath` |
 | **Agent** | `certChainFilePath`, `privateKeyFilePath`, `trustCertCollectionFilePath` |
 
+Each file can be given as its PEM text instead, in a setting or an environment variable; see
+[Certificates as Environment Variables](#certificates-as-environment-variables).
+
 !!! note "TLS provider"
 
     Since 4.1.0 the fat JARs and the Docker images use OpenSSL (BoringSSL) for TLS on Linux (x86_64,
@@ -124,12 +127,43 @@ java -jar prometheus-agent.jar --config examples/tls-with-mutual-auth.conf
     The certificates in `testing/certs/` are for development and testing only.
     Generate your own certificates for production deployments.
 
+## Certificates as Environment Variables
+
+Since 4.6.0, each certificate and key can be given as its PEM text rather than as a file. This suits a platform that
+passes secrets as environment variables, such as ECS, Cloud Run, Azure Container Apps, DigitalOcean, or Railway, and
+the Docker images, which have no shell to write a variable out to a file:
+
+| File setting                  | PEM setting              | PEM environment variable    |
+|:------------------------------|:-------------------------|:----------------------------|
+| `certChainFilePath`           | `certChainPem`           | `CERT_CHAIN_PEM`            |
+| `privateKeyFilePath`          | `privateKeyPem`          | `PRIVATE_KEY_PEM`           |
+| `trustCertCollectionFilePath` | `trustCertCollectionPem` | `TRUST_CERT_COLLECTION_PEM` |
+
+The settings sit under `proxy.tls` and `agent.tls`, beside the file settings, and the variables apply to whichever of
+the two reads them. A value can be:
+
+- the PEM text, line breaks and all, as `"$(cat server.key)"` gives it;
+- its base64, on one line, for a variable field that takes one line: `base64 < server.crt | tr -d '\n'`;
+- the PEM on one line, with each line break written as `\n`.
+
+Give each piece as a file or as PEM, not both: the proxy and the agent refuse a file and a PEM for the same piece. As
+with files, a certificate chain and a private key turn TLS on, and a trust collection alone turns it on for an agent.
+Only whether a PEM setting is set is logged, never its value, and there are no command-line options for them, so a
+key never shows in a process listing. An [embedded agent](../embedded-agent.md#configuring-in-code) takes them in
+code, with `trustCertificatePem` and `clientCertificatePem`.
+
 ## TLS with Docker
 
 Mount certificate files into the container:
 
 ```bash
 --8<-- "DockerExamples.txt:docker-tls"
+```
+
+Or give them as [environment variables](#certificates-as-environment-variables), with no file mounted:
+
+```bash
+--8<-- "DockerExamples.txt:docker-tls-pem"
 ```
 
 ## Override Authority

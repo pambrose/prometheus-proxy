@@ -12,11 +12,12 @@ gRPC connection initiated from inside the firewall, preserving Prometheus's nati
 
 !!! tip "See it work on your laptop"
 
-    Three self-contained demos run the proxy, its agents, Prometheus, and Grafana from the released images with one
+    Four self-contained demos run the proxy, its agents, Prometheus, and Grafana from the released images with one
     command, and a guided tour walks you through each: the [Basics Demo](basics-demo.md), the
-    [Network Demo](network-demo.md), with a simulated WAN between the agents and the proxies, and the
-    [Kubernetes Demo](kubernetes-demo.md), with the Helm charts on two kind clusters. The first two need only Docker;
-    the Kubernetes Demo also needs kind, `kubectl`, and Helm.
+    [Network Demo](network-demo.md), with a simulated WAN between the agents and the proxies, the
+    [Kubernetes Demo](kubernetes-demo.md), with the Helm charts on two kind clusters, and the
+    [Embedded Demo](embedded-demo.md), with the agent embedded in a Ktor app. All but the Kubernetes Demo need only
+    Docker; it also needs kind, `kubectl`, and Helm.
 
 ## How It Works
 
@@ -98,13 +99,13 @@ Get running in under a minute:
     # Start the proxy
     docker run --rm --name prometheus-proxy --network prometheus-proxy-net \
       -p 8080:8080 -p 50051:50051 --env METRICS_ENABLED=true \
-      pambrose/prometheus-proxy:4.5.0
+      pambrose/prometheus-proxy:4.6.0
 
     # Start the agent, in another terminal
     docker run --rm --network prometheus-proxy-net \
       --env PROXY_HOSTNAME=prometheus-proxy \
       --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-      pambrose/prometheus-agent:4.5.0
+      pambrose/prometheus-agent:4.6.0
 
     # Scrape the proxy's and the agent's own metrics through the proxy
     curl http://localhost:8080/proxy_metrics

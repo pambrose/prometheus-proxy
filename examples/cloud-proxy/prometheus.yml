@@ -1,0 +1,22 @@
+# Prometheus beside the proxy. It reaches the proxy on the compose network, where the proxy serves each app's metrics
+# at the path its agent registered. The setup is described at
+# https://pambrose.github.io/prometheus-proxy/cloud-platforms/
+global:
+  scrape_interval: 30s
+
+scrape_configs:
+  # The app's metrics, which its embedded agent registered as my_app_metrics. Prometheus sends its scrape timeout along,
+  # and the agent stops the app's scrape at it.
+  - job_name: my-app
+    metrics_path: /my_app_metrics
+    static_configs:
+      - targets: [ 'proxy:8080' ]
+    relabel_configs:
+      # Name the app, not the proxy its metrics come through
+      - target_label: instance
+        replacement: my-app
+
+  # The proxy's own metrics: proxy_agent_map_size counts the connected agents
+  - job_name: prometheus-proxy
+    static_configs:
+      - targets: [ 'proxy:8082' ]
