@@ -3,6 +3,8 @@
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/pambrose/prometheus-proxy)](https://github.com/pambrose/prometheus-proxy/releases)
 [![Maven Central](https://img.shields.io/maven-central/v/com.pambrose/prometheus-proxy)](https://central.sonatype.com/artifact/com.pambrose/prometheus-proxy)
 [![Kotlin version](https://img.shields.io/badge/dynamic/toml?url=https%3A%2F%2Fraw.githubusercontent.com%2Fpambrose%2Fprometheus-proxy%2Fmaster%2Fgradle%2Flibs.versions.toml&query=%24.versions.kotlin&label=kotlin&color=red&logo=kotlin)](https://kotlinlang.org)
+[![Java version](https://img.shields.io/badge/dynamic/toml?url=https%3A%2F%2Fraw.githubusercontent.com%2Fpambrose%2Fprometheus-proxy%2Fmaster%2Fgradle%2Flibs.versions.toml&query=%24.versions.jvm&label=java&suffix=%2B&color=orange&logo=openjdk)](https://adoptium.net)
+[![CI](https://github.com/pambrose/prometheus-proxy/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/pambrose/prometheus-proxy/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/pambrose/prometheus-proxy/branch/master/graph/badge.svg)](https://codecov.io/gh/pambrose/prometheus-proxy)
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/422df508473443df9fbd8ea00fdee973)](https://app.codacy.com/gh/pambrose/prometheus-proxy/dashboard)
 [![CodeScene Average Code Health](https://codescene.io/projects/85750/status-badges/average-code-health)](https://codescene.io/projects/85750)
@@ -59,7 +61,7 @@ it one step at a time: what to open, what to look for, and how each step does wh
 | [Basics](demos/basics) | The proxy, its live dashboard, and three agents behind a simulated firewall, with Prometheus and Grafana. A service fails and another hangs, a redundant pair of agents keeps a path up, new targets appear without a restart, a frozen agent is evicted, and the proxy refuses a path an agent's identity doesn't allow. | 9 parts, about 22 minutes |
 | [Network](demos/network) | The same proxy and agents with a simulated WAN between them, and a standby proxy. A far link, a thin one fixed by filtering at the agent, a proxy that goes away, a link that dies silently, a flaky link traced in Zipkin, and the whole WAN going down. | 7 parts, about 21 minutes |
 | [Kubernetes](demos/kubernetes) | The project's Helm charts on two kind clusters. The target cluster exposes nothing, annotating a Service is all it takes for Prometheus to scrape it, Kubernetes replaces a lost agent by itself, and a config change costs a restart where a target change doesn't. Needs kind, `kubectl`, and Helm as well as Docker. | 4 parts, about 11 minutes |
-| [Embedded](demos/embedded) | A Ktor coffee shop with the agent embedded in it, its metrics in Grafana with no port opened for them. A rush fills the queue, a broken machine fires an alert, a deploy hands the agent's paths to the new version, the shop keeps serving while the proxy is away, and every secret comes from the environment. | 7 parts, about 15 minutes |
+| [Embedded (Ktor)](demos/embedded) | A Ktor coffee shop with the agent embedded in it, its metrics in Grafana with no port opened for them. A rush fills the queue, a broken machine fires an alert, a deploy hands the agent's paths to the new version, the shop keeps serving while the proxy is away, and every secret comes from the environment. | 7 parts, about 15 minutes |
 | [Spring Boot](demos/spring-boot) | A Spring Boot roastery, written in Java, with the agent embedded through `EmbeddedAgentConfig.builder()`. The agent starts and stops with the app, reports its connection in Actuator's health, reads Actuator's metrics behind Spring Security, runs with the versions of its libraries Spring Boot picks, and goes first in a graceful shutdown. | 4 parts, about 8 minutes |
 
 Start with the basics demo. The proxy and agent are the released images, from Docker Hub, so there's nothing to build:
@@ -90,7 +92,7 @@ scenarios.
 
 ## ✨ New Features
 
-Version 4.6.0 (released 2026-11-19) makes the agent easier to run inside an app on a cloud platform. An embedded agent
+Version 4.6.0 (released 2026-11-20) makes the agent easier to run inside an app on a cloud platform. An embedded agent
 starts from settings built in code, with typed methods (`embeddedAgent { }`, or `EmbeddedAgentConfig.builder()` from
 Java), or from a Typesafe `Config` built in memory, so its token, the proxy's certificate, and the app's own scrape
 credentials never sit in a config file. The proxy and the agent take their TLS certificates and keys

@@ -6,7 +6,8 @@ This document summarizes the KDoc documentation in the Prometheus Proxy codebase
 
 ### Documented Classes
 
-KDoc documentation exists on the two top-level public classes:
+KDoc documentation exists on the two top-level public classes, `Agent` and `Proxy`, and on the embedded agent's
+public API, `EmbeddedAgentConfig` and `EmbeddedAgentInfo` (below them):
 
 #### `Agent` (`src/main/kotlin/io/prometheus/Agent.kt`)
 
@@ -36,6 +37,29 @@ Comprehensive KDoc (~85 lines) covering:
 - **High Availability**: Multi-proxy deployment patterns
 - **@param**: `options`, `proxyPort`, `inProcessServerName`, `testMode`, `initBlock`
 - **@see**: `ProxyOptions`, `Agent`
+
+#### `EmbeddedAgentConfig` (`src/main/kotlin/io/prometheus/agent/EmbeddedAgentConfig.kt`)
+
+KDoc on the class, its `Builder`, and every builder method and property (24 blocks), covering:
+
+- **Class Purpose**: an embedded agent's settings, built in code with a typed method for each and held in memory,
+  started with `start()`, which behaves as `Agent.startAsyncAgent(config)` does: built-in defaults, single settings'
+  environment variables first, and `ConfigLoadException` on a setting the agent can't use; `toConfig()` gives the tree
+- **Usage Example**: `embeddedAgent { }` from Kotlin, with `builder()` named for Java
+- **Builder**: the `name`, `proxy`, `token`, `consolidated`, and `agentMetricsPort` properties, TLS from PEM
+  (`trustCertificatePem`, `clientCertificatePem`), `path` and `scrapeSelf` (credentials percent-encoded into the URL),
+  and `setting(key, value)` and its precedence
+
+#### `EmbeddedAgentInfo` (`src/main/kotlin/io/prometheus/agent/EmbeddedAgentInfo.kt`)
+
+KDoc on the class and each member, covering:
+
+- **Class Purpose**: the handle `Agent.startAsyncAgent` returns, the supported surface for an agent the host didn't
+  construct
+- **Usage Example**: starting, logging its identity, and `shutdown()`
+- **Members**: `launchId`, `agentName`, `isConnected` and `proxyEndpoint` (its connection, read live for a health
+  check), and `shutdown()`
+- **@property**: `launchId`, `agentName`
 
 ### Documented Internal Classes
 

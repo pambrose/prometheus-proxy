@@ -57,7 +57,7 @@ Key RPCs:
 
 - **Chunking**: Large metric payloads are split into `ChunkedScrapeResponse` messages to stay within gRPC limits (configurable via `chunkContentSizeKbs`, default 32KB)
 - **Stale agent cleanup**: `AgentContextCleanupService` evicts inactive agents after `maxAgentInactivitySecs` (default 60s)
-- **Consolidated mode**: Multiple agents can register the same path for redundancy
+- **Consolidated mode**: Multiple agents can register the same path for redundancy, each scraping its own instance of the service; agents that scrape the same endpoint send each series twice
 - **Auth forwarding**: Proxy forwards `Authorization` headers (basic auth / bearer token) from Prometheus scrape configs to agents over gRPC
 - **Embedded agent**: Agents can run inside other JVM apps via `Agent.startAsyncAgent()`, returning an `EmbeddedAgentInfo` lifecycle handle. Since 4.4.0 several agents in one JVM, at once or one after another, share one set of agent metrics with metrics on (each series carries its agent's `launch_id`, and goes when the agent stops), and an embedded agent's `logLevel` sets only the `io.prometheus` loggers, leaving the host's logging alone. The library jar carries no `logback.xml` (only the fat JARs do, from `src/shadow/resources`), so the host's Logback config configures the agent's loggers too. Since 4.5.0 the agent's generated gRPC classes need protobuf-java 4.36.2 or later, which a build that embeds the agent resolves through it. Since 4.6.0 `embeddedAgent { }` (Kotlin) or `EmbeddedAgentConfig.builder()` (Java) builds one's settings with typed methods, `scrapeSelf` percent-encoding its host's `/metrics` credentials into the URL, and `Agent.startAsyncAgent(config)` starts one from a Typesafe `Config` built in memory (rooted at `agent`), so a host's token, the proxy's certificate (`agent.tls.trustCertCollectionPem`), and scrape credentials never sit in a config file, and `EmbeddedAgentInfo.isConnected` / `proxyEndpoint` report its connection to the proxy, live, for a host's health check; the website's Cloud Platforms page runs one in an app on ECS on Fargate, Cloud Run, or Azure Container Apps, with the proxy on AWS, GCP, Azure, DigitalOcean, or Railway
 - **Proxy failover** (4.0.0, rule revised in 4.1.0): The agent takes an ordered `agent.proxy.endpoints` list (or comma-separated `--proxy` / `PROXY_HOSTNAME`); a failed connect, or a proxy that rejects the agent's registration or every one of its static paths, advances to the next endpoint, and a connection that registered and then dropped retries from the head, so a recovered primary is picked up automatically. Scrape an HA pair with `static_config`, not `http_sd_config` (a standby returns an empty discovery list, which Prometheus treats as target deletion)
@@ -187,7 +187,7 @@ They need Docker with Compose v2, `git`, `make`, and `curl` on macOS or Linux; t
 
 ## Configuration
 
-Uses Typesafe Config (HOCON). Precedence: CLI args > environment variables > config file values.
+Uses Typesafe Config (HOCON). Precedence: CLI args > environment variables > `-D` system properties > config file values > built-in defaults.
 
 ### Agent Path Configuration (HOCON)
 

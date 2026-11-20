@@ -76,6 +76,8 @@ The system comprises two components:
   before they cross the WAN
 - **Observable** -- a [live dashboard](web-dashboard.md) shows every agent, path, and recent
   scrape in one place, and scrapes a path on demand
+- **Embeddable** -- the agent can [run inside a JVM app](embedded-agent.md), with its settings
+  built in code, so an app on a [cloud platform](cloud-platforms.md) needs no secret files
 - **Zero changes** to existing Prometheus configuration patterns
 
 ## Quick Start
@@ -190,5 +192,13 @@ Full API documentation (KDocs) is available at [KDocs](kdocs/).
     Built-in metrics and Grafana dashboards
 
     [:octicons-arrow-right-24: Monitoring](monitoring.md)
+
+-   :material-cloud-outline:{ .lg .middle } __Cloud Platforms__
+
+    ---
+
+    Embed the agent in an app on ECS, Cloud Run, or Azure Container Apps
+
+    [:octicons-arrow-right-24: Cloud Platforms](cloud-platforms.md)
 
 </div>
