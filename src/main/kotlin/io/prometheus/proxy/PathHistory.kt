@@ -134,7 +134,7 @@ internal class PathHistory(
       // The path just recorded is at the back, so it is never the one evicted.
       val leastRecent = rings.keys.iterator()
       while (rings.size > maxPaths) {
-        leastRecent.next()
+        val _ = leastRecent.next()
         leastRecent.remove()
       }
     }
@@ -168,7 +168,7 @@ internal class PathHistory(
       departures[key] = departure
       val earliest = departures.keys.iterator()
       while (departures.size > maxDepartedPaths) {
-        earliest.next()
+        val _ = earliest.next()
         earliest.remove()
       }
     }
