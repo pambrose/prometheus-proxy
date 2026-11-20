@@ -478,6 +478,8 @@ agent. This approach eliminates the need for a separate agent process when your 
 
 > 📖 **Docs site:** [Embedded Agent guide](https://pambrose.github.io/prometheus-proxy/embedded-agent/) for the full API surface and lifecycle details.
 
+> 🎬 **See it running:** the [embedded demo](demos/embedded) runs the agent inside a Ktor coffee shop, built with `embeddedAgent { }`, and the [Spring Boot demo](demos/spring-boot) inside a Spring Boot roastery written in Java, built with `EmbeddedAgentConfig.builder()`. Each starts with one command, and the website's [Embedded Demo](https://pambrose.github.io/prometheus-proxy/embedded-demo/) and [Spring Boot Demo](https://pambrose.github.io/prometheus-proxy/spring-boot-demo/) pages walk through them.
+
 In Kotlin:
 
 ```kotlin
@@ -557,8 +559,8 @@ runtime, with no restart:
 agent {
   discovery {
     enabled = true
-    file.path = "/etc/prometheus-proxy/targets.conf"   // HOCON or JSON list of paths
-    reconcileIntervalSecs = 30                          // Poll and full-resync interval
+    file.path = "/etc/prometheus-proxy/targets.conf"  // HOCON or JSON list of paths
+    reconcileIntervalSecs = 30                        // Poll and full-resync interval
   }
 }
 ```
@@ -611,8 +613,8 @@ agent {
 
   filters: [
     {
-      path: "app1_metrics"          // The pathConfigs (or discovered) path this applies to
-      metricNameAllow: []           // Fully-anchored regexes; empty allows every family
+      path: "app1_metrics"  // The pathConfigs (or discovered) path this applies to
+      metricNameAllow: []   // Fully-anchored regexes; empty allows every family
       metricNameDeny: [ "go_gc_.*", "go_memstats_.*" ]
     }
   ]
@@ -941,7 +943,7 @@ proxy {
   auth = [
     { name = team-a, token = "team-a-token", paths = ["team_a_*"] }
     { name = team-b, token = "team-b-token", paths = ["team_b_*"] }
-    { name = infra,  token = "infra-token",  paths = [] }          # empty paths = may register any path
+    { name = infra,  token = "infra-token",  paths = [] }  # empty paths = may register any path
   ]
 }
 ```
