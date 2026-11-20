@@ -12,7 +12,7 @@ which Prometheus scrapes. The demo shows the parts that are Spring Boot's own:
 
 The coffee shop in the [embedded demo](../embedded) shows the rest with an app in Kotlin: a rush, an alert in Grafana,
 a deploy that hands the agent's path to the new version, the proxy going away, and secrets from the environment. The
-website's [Spring Boot Demo](https://pambrose.github.io/prometheus-proxy/spring-boot-demo/) page walks through this
+website's [Spring Boot Demo](https://prometheus-proxy.com/spring-boot-demo/) page walks through this
 one.
 
 ```mermaid

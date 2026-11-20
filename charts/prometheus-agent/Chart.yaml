@@ -8,7 +8,7 @@ type: application
 version: 4.6.0
 appVersion: "4.6.0"
 kubeVersion: ">=1.25.0-0"
-home: https://pambrose.github.io/prometheus-proxy/
+home: https://prometheus-proxy.com/
 sources:
   - https://github.com/pambrose/prometheus-proxy
 keywords:

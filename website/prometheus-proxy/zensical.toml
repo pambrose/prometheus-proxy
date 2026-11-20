@@ -7,7 +7,7 @@
 site_name = "Prometheus Proxy"
 site_description = "Enable Prometheus to scrape metrics endpoints behind firewalls"
 site_author = "Paul Ambrose"
-site_url = "https://pambrose.github.io/prometheus-proxy/"
+site_url = "https://prometheus-proxy.com/"
 
 repo_url = "https://github.com/pambrose/prometheus-proxy"
 repo_name = "pambrose/prometheus-proxy"

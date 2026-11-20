@@ -46,7 +46,7 @@ env:
 
 or put the whole config, under a `proxy.conf` key, in a Secret you name in `existingSecret`.
 
-See the [security guide](https://pambrose.github.io/prometheus-proxy/security/).
+See the [security guide](https://prometheus-proxy.com/security/).
 
 ## Values
 

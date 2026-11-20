@@ -26,7 +26,7 @@ Security fixes go into the latest release. Upgrade to it to receive them; older 
 ## Before you report
 
 Some behavior is by design and documented, so check the
-[security guide](https://pambrose.github.io/prometheus-proxy/security/) first:
+[security guide](https://prometheus-proxy.com/security/) first:
 
 - The agent gRPC port (default `50051`) accepts any agent unless a pre-shared agent token, per-agent identities,
   or mutual TLS is configured. The proxy logs a warning at startup when it is left open.
@@ -36,7 +36,7 @@ Some behavior is by design and documented, so check the
   names and hosts of the agents serving it. With an exporter that takes its target as a query parameter, such as
   blackbox_exporter's `/probe?target=…`, that reaches any host the exporter can. Bind `proxy.http.host` to a private
   address and firewall the port so only Prometheus can reach it; see
-  [Scrape Port Access](https://pambrose.github.io/prometheus-proxy/security/#scrape-port-access).
+  [Scrape Port Access](https://prometheus-proxy.com/security/#scrape-port-access).
 - The admin, metrics, and dashboard endpoints have no authentication and no TLS. Keep their ports on an internal
   network.
 

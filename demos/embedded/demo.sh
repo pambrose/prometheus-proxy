@@ -521,7 +521,7 @@ cmd_tour() {
   if part 7 "The coffee shop and the proxy hold a token, TLS certificates, and a password, and neither reads" \
     "them from a file: the setup a platform that passes secrets as environment variables needs."; then
     step "Show where the coffee shop and the proxy get their secrets." -- secrets
-    instruct "Read the website's Cloud Platforms page: https://pambrose.github.io/prometheus-proxy/cloud-platforms/" \
+    instruct "Read the website's Cloud Platforms page: https://prometheus-proxy.com/cloud-platforms/" \
       "It sets up the same thing for real: the app on ECS, Cloud Run, or Azure Container Apps, and the proxy on" \
       "AWS, GCP, Azure, DigitalOcean, or Railway, with your own certificate and token."
   fi
