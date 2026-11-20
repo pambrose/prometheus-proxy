@@ -474,16 +474,31 @@ agent. This approach eliminates the need for a separate agent process when your 
 
 > 📖 **Docs site:** [Embedded Agent guide](https://pambrose.github.io/prometheus-proxy/embedded-agent/) for the full API surface and lifecycle details.
 
-  ```Java
-  // Start embedded agent; false (exitOnMissingConfig) makes config errors throw instead of exiting the JVM
-  EmbeddedAgentInfo agentInfo = Agent.startAsyncAgent("configFile.conf", false);
+In Kotlin:
 
-  // Your application code runs here
-  // The agent runs in the background and does not block your application
+```kotlin
+// Start embedded agent; exitOnMissingConfig = false makes config errors throw instead of exiting the JVM
+val agentInfo = Agent.startAsyncAgent(configFilename = "configFile.conf", exitOnMissingConfig = false)
 
-  // Shutdown the agent when the application terminates
-  agentInfo.shutdown();
-  ```
+// Your application code runs here
+// The agent runs in the background and does not block your application
+
+// Shutdown the agent when the application terminates
+agentInfo.shutdown()
+```
+
+In Java:
+
+```java
+// Start embedded agent; false (exitOnMissingConfig) makes config errors throw instead of exiting the JVM
+EmbeddedAgentInfo agentInfo = Agent.startAsyncAgent("configFile.conf", false);
+
+// Your application code runs here
+// The agent runs in the background and does not block your application
+
+// Shutdown the agent when the application terminates
+agentInfo.shutdown();
+```
 
 If the configuration cannot be loaded (a parse error, an unreachable config URL, or a missing file), or it holds a
 setting the agent can't use (a value of the wrong type or out of range, an unresolved `${…}` substitution, or a trust
