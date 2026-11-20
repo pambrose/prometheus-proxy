@@ -7,9 +7,6 @@ import io.prometheus.common.ConfigLoadException
 
 private val logger = KotlinLogging.logger {}
 
-// The agent's own metrics endpoint, inside the container only: the agent serves the proxy its scrapes of it.
-private const val AGENT_METRICS_PORT = 8083
-
 // The website's Embedded Demo page shows this function, with its KDoc, from here to its end marker.
 // --8<-- [start:agent-config]
 
@@ -49,9 +46,12 @@ fun startPrometheusAgent(
         username = env("METRICS_USER"),
         password = env("METRICS_PASSWORD"),
       )
-      // The agent's own metrics, which it serves the proxy too
-      agentMetricsPort = AGENT_METRICS_PORT
-      scrapeSelf(path = "coffee_shop_agent_metrics", port = AGENT_METRICS_PORT)
+      // The agent's own metrics, served to the proxy too, when METRICS_ENABLED in the app's environment turns them on,
+      // on their default port, 8083, inside the container only; a METRICS_PORT would have to change this too. Without
+      // them, the path would only fail. Its admin endpoints and /debug come from the environment as well, with nothing
+      // here: ADMIN_ENABLED and DEBUG_ENABLED.
+      if (env("METRICS_ENABLED").equals("true", ignoreCase = true))
+        scrapeSelf(path = "coffee_shop_agent_metrics", port = 8083)
     }.start(logBanner = false).also { agent ->
       logger.info { "Prometheus agent ${agent.agentName} started; it connects to the proxy at $proxyEndpoint" }
     }

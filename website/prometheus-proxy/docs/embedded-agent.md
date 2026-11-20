@@ -269,6 +269,95 @@ reach its log; you may want the same:
 
 In Spring Boot, set `logging.level.io.grpc.internal=WARN` instead.
 
+## Debugging
+
+### Admin and Debug Endpoints
+
+Start by turning on the agent's admin endpoints and its `/debug` page, which are off unless asked for. The simplest
+way is the app's environment, which the agent reads itself, with no change to the code:
+
+```bash
+ADMIN_ENABLED=true   # the admin endpoints, on port 8093 (ADMIN_PORT for another)
+DEBUG_ENABLED=true   # adds /debug
+```
+
+They take effect at the app's next start, and override the code, so a deployed app turns them on, and off once the
+agent works, with a restart and no new build. In code, `setting("admin.enabled", true)`, `setting("admin.port", 8093)`,
+and `setting("admin.debugEnabled", true)` set them, since the builder has no method for them; in a config file or a
+`Config`, they're `agent.admin.enabled`, `agent.admin.port`, and `agent.admin.debugEnabled`.
+
+The agent then serves these on its admin port, as the standalone agent does:
+
+| Path           | Shows                                                                                                                                                                                                          |
+|:---------------|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `/ping`        | `pong`, while the agent is running                                                                                                                                                                             |
+| `/version`     | The agent's version, release date, and build time, as JSON                                                                                                                                                     |
+| `/healthcheck` | The agent's health checks, as JSON: `all_services_healthy`, `scrape_request_backlog_check` (scrape requests waiting for the agent), `thread_deadlock`, and `metrics_service` when its metrics are on |
+| `/threaddump`  | A dump of the JVM's threads, your application's as well as the agent's                                                                                                                                         |
+| `/debug`       | The agent's name, its ID (empty while it isn't connected), the proxy it's connected to or trying, its uptime, its admin and metrics services, each path with the URL it scrapes, credentials masked, and the paths discovery registered or skipped |
+
+`/healthcheck` stays healthy while the agent can't reach a proxy, since it reports the agent's own state, not its
+connection: [`EmbeddedAgentInfo`](#embeddedagentinfo)'s `isConnected` and `proxyEndpoint` tell you that.
+
+Turn them off once the agent works. The admin port answers on every interface, without authentication, and
+`/threaddump` shows your application's threads too, so while they're on, keep the port on an internal network, as for a
+standalone agent (see [Production](production.md)). It must be one your application doesn't use: a port in use makes
+`start()` throw `IllegalStateException`. The [Embedded Demo](embedded-demo.md#debugging-the-agent)'s coffee shop turns
+them on, and its tour shows each one.
+
+### Logs
+
+`setting("logLevel", "debug")`, or `AGENT_LOG_LEVEL=debug`, logs the agent's `io.prometheus` loggers at DEBUG, and
+leaves your application's own logging alone (see [Logging](#logging)). Even at INFO, the agent logs its settings as it
+starts, such as `adminEnabled: true`, after the environment variables have taken precedence, so its startup log shows
+whether one overrode the builder.
+
+### On the Agents Dashboard
+
+The [Agents dashboard](grafana.md#dashboards) the project ships shows an embedded agent like any other: its
+connections to the proxy, its scrapes and their failures, their latency, and its backlog. It reads them from the
+agent's own metrics, which `METRICS_ENABLED=true` in the app's environment turns on, on port 8083 (`METRICS_PORT` for
+another; `agentMetrics(port)` does it in code). Then have the agent scrape them as one of its paths, so Prometheus
+reads them through the proxy:
+
+=== "Kotlin"
+
+    ```kotlin
+    embeddedAgent {
+      // The agent's other settings
+      scrapeSelf(path = "my_app_agent_metrics", port = 8083)
+    }.start()
+    ```
+
+=== "Java"
+
+    ```java
+    EmbeddedAgentConfig.builder()
+        // The agent's other settings
+        .scrapeSelf("my_app_agent_metrics", 8083)
+        .build()
+        .start();
+    ```
+
+Add the path only when the metrics are on, as when `METRICS_ENABLED` is `true`: without them, every scrape of it fails.
+Then give the path a Prometheus job of its own, since the dashboard tells agents apart by `job`:
+
+```yaml
+scrape_configs:
+  - job_name: my-app-agent
+    metrics_path: /my_app_agent_metrics
+    static_configs:
+      - targets: [ 'proxy-host:8080' ]
+```
+
+The [Embedded Demo](embedded-demo.md) does this for its coffee shop's agent, and its Grafana links to the dashboard.
+
+### The Proxy's View
+
+The proxy's [dashboard](web-dashboard.md) shows whether the agent registered, the paths it holds, and each path's
+recent scrapes, and `curl -i http://<proxy-host>:8080/<path>` scrapes a path through the proxy without Prometheus.
+[Troubleshooting](troubleshooting.md) says what each status code and outcome means.
+
 ## Upgrading from 4.4.x
 
 - `startAsyncAgent()` throws `ConfigLoadException` for a config that loads but holds a setting the agent can't use,

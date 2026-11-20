@@ -14,8 +14,8 @@
 # Every published port binds to 127.0.0.1 only: the dashboard has no authentication, Grafana lets anyone view it
 # without signing in, and its admin password is the default, which suits a demo on a laptop and nothing else. The
 # default ports are the basics demo's plus 300, so the demos can run at once. Set EMBEDDED_DEMO_APP_PORT,
-# EMBEDDED_DEMO_DASHBOARD_PORT, EMBEDDED_DEMO_PROXY_PORT, EMBEDDED_DEMO_PROMETHEUS_PORT, or EMBEDDED_DEMO_GRAFANA_PORT
-# to move a host port that's already taken.
+# EMBEDDED_DEMO_DASHBOARD_PORT, EMBEDDED_DEMO_PROXY_PORT, EMBEDDED_DEMO_PROMETHEUS_PORT, EMBEDDED_DEMO_GRAFANA_PORT, or
+# EMBEDDED_DEMO_AGENT_ADMIN_PORT to move a host port that's already taken.
 
 name: prometheus-proxy-embedded-demo
 
@@ -29,6 +29,12 @@ x-coffee-shop-env: &coffee-shop-env
   PROMETHEUS_PROXY_AUTHORITY: foo.test.google.fr
   METRICS_USER: ${METRICS_USER:-}
   METRICS_PASSWORD: ${METRICS_PASSWORD:-}
+  # Read by the agent itself, not the app, and over anything the app's code sets: the agent's own metrics, on port
+  # 8083, and its admin endpoints, on 8093, with /debug. Take ADMIN_ENABLED and DEBUG_ENABLED out once the agent works:
+  # the admin port has no authentication, and /threaddump shows every thread in the app.
+  METRICS_ENABLED: "true"
+  ADMIN_ENABLED: "true"
+  DEBUG_ENABLED: "true"
 
 # The coffee shop's health: its /healthz answers 200. The image has bash, and no curl or wget.
 x-coffee-shop-healthcheck: &coffee-shop-healthcheck
@@ -56,7 +62,11 @@ services:
     environment:
       <<: *coffee-shop-env
       APP_VERSION: "1.0"
-    # No port of its own: the load balancer below is the shop's address, as a platform's is.
+    # The shop's address is the load balancer below, as a platform's is. Its one published port is its agent's admin
+    # port, which ADMIN_ENABLED turns on, so the tour can show /debug; on a platform, it would stay on the internal
+    # network. 1.1 doesn't publish it.
+    ports:
+      - "127.0.0.1:${EMBEDDED_DEMO_AGENT_ADMIN_PORT:-8393}:8093"  # The agent's admin endpoints, /debug among them
     depends_on:
       proxy:
         condition: service_started
