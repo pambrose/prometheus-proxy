@@ -2,6 +2,7 @@
         tests mini-tests xxl-tests nh-tests ip-tests netty-tests tls-tests \
         lincheck-tests tla-checks check-rules helm-lint zizmor \
         container-tests scaling-tests all-tests ci ci-build consumer-check spring-boot-demo-check \
+        demos-up demos-up-local demos-down \
         _publish-consumer-check regen-certs \
         docker-clean docker-clean-dry \
         all-scaling scaling-paths scaling-agents scaling-payload scaling-consolidated scaling-concurrency scaling-soak \
@@ -66,13 +67,26 @@ SITE_VERSION_SOURCES := $(SITE_DIR)/docs src/test/kotlin/website src/test/java/w
 # The customer demos, whose Prometheus configs and rules check-rules validates: the dashboard and Grafana, the network
 # between the agents and the proxies, the Helm charts deployed on two kind clusters, an app with the agent embedded,
 # its metrics in Grafana, and a Spring Boot app with the agent embedded. Each demo under demos/ is
-# self-contained, with its own Makefile for starting and stopping it (`make -C demos/<name> help`), so this one has no
-# demo targets.
+# self-contained, with its own Makefile for starting and stopping it (`make -C demos/<name> help`); this one's only
+# demo targets, demos-up, demos-up-local, and demos-down, run those Makefiles' up, up-local, and down for every demo.
 BASICS_DEMO_DIR := demos/basics
 NETWORK_DEMO_DIR := demos/network
 KUBERNETES_DEMO_DIR := demos/kubernetes
 EMBEDDED_DEMO_DIR := demos/embedded
 SPRING_BOOT_DEMO_DIR := demos/spring-boot
+# The demos demos-up, demos-up-local, and demos-down run, in that order: the Kubernetes demo, which needs kind, kubectl,
+# and Helm too, last.
+DEMOS := basics network embedded spring-boot kubernetes
+
+# Runs a target of every demo's own Makefile, one after another: $(call run_demos,<target>). A demo that fails doesn't
+# stop the rest; the failed ones are listed at the end.
+define run_demos
+@failed=; for demo in $(DEMOS); do \
+	printf '\n\033[1;36m==> make -C demos/%s %s\033[0m\n\n' $$demo $(1); \
+	$(MAKE) --no-print-directory -C demos/$$demo $(1) || failed="$$failed $$demo"; \
+done; \
+[ -z "$$failed" ] || { echo "ERROR: make $(1) failed in:$$failed" >&2; exit 1; }
+endef
 
 # TLA+ model checking (specs/tla). The tools jar is git-ignored, and downloaded when it's missing or doesn't match
 # TLA_SHA256; TLC's working states go under build/.
@@ -289,6 +303,16 @@ ci:  ## Run the CI workflow's jobs locally: TLA+, alerting rules, Helm charts, t
 	done; \
 	[ -z "$$failed" ] || { echo "ERROR: CI jobs failed:$$failed" >&2; exit 1; }; \
 	echo "CI jobs passed: $(CI_JOBS)"
+
+# Every demo at once, on its own ports, as the demos' READMEs give them; together they take a lot of memory and CPU.
+demos-up:  ## Start every demo with the latest release, one after another (needs Docker; the Kubernetes demo also needs kind, kubectl, and Helm)
+	$(call run_demos,up)
+
+demos-up-local:  ## The same, with every demo built from this checkout (needs a JDK 17 or later, and Maven for the Spring Boot demo, too)
+	$(call run_demos,up-local)
+
+demos-down:  ## Stop every demo: remove their containers and networks, and the Kubernetes demo's kind clusters
+	$(call run_demos,down)
 
 # ci.yml sets HARNESS_CONFIG=MINI for the whole job, so both Gradle runs see it; were it to differ, the test task would
 # be out of date and koverXmlReport would rerun the tests. --continue still writes the coverage report when a coverage
