@@ -4,7 +4,7 @@
 
 ## 4.6.0
 
-_Released 2026-11-19_
+_Released 2026-11-20_
 
 An embedded agent can start from a config built in memory, and the proxy and the agent take their TLS certificates
 and keys as environment variables, so an app on ECS, Cloud Run, or Azure Container Apps, and a proxy on AWS, GCP,
@@ -30,8 +30,6 @@ a Spring Boot app in Java. Also, fixes to the demos' setup: each checks for the 
 - **A demo of the agent in a Spring Boot app.** `demos/spring-boot` runs a Java roastery with the agent started and
   stopped with the app, scraping Actuator's metrics behind Spring Security, on the versions of its libraries Spring
   Boot picks. The Embedded Agent page's new "In Spring Boot" section covers the same.
-- **Every demo at once.** From the repository's root, `make demos-up` starts every demo, one after another, and
-  `make demos-down` stops them all.
 - **A guide to cloud platforms.** The website's new Cloud Platforms page runs an embedded agent in an app on ECS on
   Fargate, Cloud Run, Azure Container Apps, or another platform, with the proxy on AWS, GCP, Azure, DigitalOcean, or
   Railway, and `examples/cloud-proxy` holds a proxy and Prometheus to start from.
