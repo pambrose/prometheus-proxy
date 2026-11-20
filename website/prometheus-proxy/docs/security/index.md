@@ -86,7 +86,7 @@ proxy {
   auth = [
     { name = team-a, token = "team-a-token", paths = ["team_a_*"] }
     { name = team-b, token = "team-b-token", paths = ["team_b_*"] }
-    { name = infra,  token = "infra-token",  paths = [] }          // empty paths = may register any path
+    { name = infra,  token = "infra-token",  paths = [] }  // empty paths = may register any path
   ]
 }
 ```
