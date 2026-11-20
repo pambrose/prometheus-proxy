@@ -242,7 +242,8 @@ pins, and no jar on the classpath carries a `logback.xml`, which would replace t
   eviction, expiry, and `close()` in a two-client cache; no scrape is handed a closed client or has its client closed
   under it, and the only open clients are the cached ones, or none after `close()`
 - **EmbeddedAgentConfigTest** — the builder for an embedded agent's settings, and its `embeddedAgent { }` DSL: each
-  method's setting reaches `AgentOptions` as a config file's would, and nothing set gives the defaults;
+  method's setting reaches `AgentOptions` as a config file's would, each Kotlin property sets what its method does
+  and reads it back, a property set to `null` takes its setting out, and nothing set gives the defaults;
   `scrapeSelf` and `path` percent-encode a username and password into the URL so a password with any character decodes
   back intact, an empty pair means none, and `path` refuses credentials for a URL that has its own, as the agent's
   parser reads it; labels become JSON; `setting()` takes precedence over a method; `toString()` shows what `setting()`

@@ -84,9 +84,10 @@ internal suspend fun withEmbeddedAgentScraped(
     val targetUrl = "http://$LOOPBACK_HOST:${target.startAndAwaitReady()}/metrics"
     agent =
       embeddedAgent {
-        name(agentName)
-        // localhost, the name a test certificate's override authority stands in for
-        proxy("localhost:$agentPort")
+        name = agentName
+        // localhost, the name a test certificate's override authority stands in for; this., since the local proxy is
+        // the running Proxy
+        this.proxy = "localhost:$agentPort"
         path(path, targetUrl, targetCredentials?.first, targetCredentials?.second)
         setting("internal.reconnectPauseSecs", 1)
         configure()

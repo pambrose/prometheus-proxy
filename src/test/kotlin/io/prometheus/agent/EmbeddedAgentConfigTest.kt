@@ -68,6 +68,50 @@ class EmbeddedAgentConfigTest : StringSpec() {
       options.metricsPort shouldBe 9183
     }
 
+    // In Kotlin, the settings that take one value are properties too.
+    "each property sets what its method sets, and reads it back" {
+      val byProperty =
+        embeddedAgent {
+          name = "my-app"
+          proxy = "proxy.example.com:50443"
+          token = TOKEN
+          consolidated = true
+          agentMetricsPort = 9183
+
+          name shouldBe "my-app"
+          proxy shouldBe "proxy.example.com:50443"
+          token shouldBe TOKEN
+          consolidated.shouldBeTrue()
+          agentMetricsPort shouldBe 9183
+        }
+      val byMethod =
+        embeddedAgent {
+          name("my-app")
+          proxy("proxy.example.com:50443")
+          token(TOKEN)
+          consolidated()
+          agentMetrics(9183)
+        }
+
+      byProperty.toConfig() shouldBe byMethod.toConfig()
+    }
+
+    "a property set to null takes its setting out" {
+      val options =
+        embeddedAgent {
+          name = "my-app"
+          token = TOKEN
+          agentMetricsPort = 9183
+          name = null
+          token = null
+          agentMetricsPort = null
+        }.options()
+
+      options.agentName shouldBe ""
+      options.agentToken shouldBe ""
+      options.metricsEnabled.shouldBeFalse()
+    }
+
     "a builder with nothing set gives the built-in defaults" {
       val options = EmbeddedAgentConfig.builder().build().options()
       options.proxyHostname shouldBe "localhost:50051"

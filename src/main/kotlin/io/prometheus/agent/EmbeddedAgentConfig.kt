@@ -36,10 +36,10 @@ import kotlinx.serialization.json.JsonPrimitive
  * ```kotlin
  * val agent =
  *   embeddedAgent {
- *     name("my-app-$version")
- *     proxy("proxy.example.com:50051")
- *     token(token)
- *     trustCertificatePem(certificatePem, authority = "prometheus-proxy")
+ *     name = "my-app-$version"
+ *     proxy = "proxy.example.com:50051"
+ *     token = agentToken
+ *     trustCertificatePem(pem = certificatePem, authority = "prometheus-proxy")
  *     scrapeSelf(path = "my_app_metrics", port = 8080, username = user, password = password)
  *   }.start(logBanner = false)
  * ```
@@ -77,6 +77,9 @@ class EmbeddedAgentConfig private constructor(
    * Kotlin's [embeddedAgent] block; a method called twice keeps its last value, and [path] and [scrapeSelf] add a path
    * each time. Anything the builder has no method for, [setting] sets by its key. A value the builder can tell is
    * wrong, such as a port out of range, throws [ConfigLoadException], as [start] does for one the agent rejects.
+   *
+   * In Kotlin, the settings that take one value are properties too, so `name = "my-app"` does what `name("my-app")`
+   * does: [name], [proxy], [token], [consolidated], and [agentMetricsPort]. Java sees only the methods.
    */
   class Builder internal constructor() {
     // The methods' settings, keyed by their path under agent, then the paths, then setting()'s, which come last in the
@@ -86,7 +89,24 @@ class EmbeddedAgentConfig private constructor(
     private val settings = linkedMapOf<String, Any>()
 
     /** The agent's name, as the proxy's dashboard and logs show it (`agent.name`). */
-    fun name(name: String): Builder = apply { values["name"] = name }
+    @get:JvmSynthetic
+    @set:JvmSynthetic
+    var name: String?
+      get() = values["name"] as String?
+      set(value) = put("name", value)
+
+    /** Sets [name]. */
+    fun name(name: String): Builder = apply { this.name = name }
+
+    /**
+     * The proxy the agent connects to, as `host` or `host:port` (the port defaults to 50051) (`agent.proxy.endpoints`).
+     * The [proxy] method takes several, in the order the agent fails over through them.
+     */
+    @get:JvmSynthetic
+    @set:JvmSynthetic
+    var proxy: String?
+      get() = (values["proxy.endpoints"] as List<*>?)?.joinToString(",")
+      set(value) = put("proxy.endpoints", value?.let { listOf(it) })
 
     /**
      * The proxy the agent connects to, as `host` or `host:port` (the port defaults to 50051), or several, in the
@@ -95,7 +115,14 @@ class EmbeddedAgentConfig private constructor(
     fun proxy(vararg endpoints: String): Builder = apply { values["proxy.endpoints"] = endpoints.toList() }
 
     /** The token the agent presents to the proxy, which has to match the proxy's (`agent.agentToken`). */
-    fun token(token: String): Builder = apply { values["agentToken"] = token }
+    @get:JvmSynthetic
+    @set:JvmSynthetic
+    var token: String?
+      get() = values["agentToken"] as String?
+      set(value) = put("agentToken", value)
+
+    /** Sets [token]. */
+    fun token(token: String): Builder = apply { this.token = token }
 
     /**
      * The certificate the agent trusts the proxy's certificate by, as PEM text or its base64
@@ -126,18 +153,31 @@ class EmbeddedAgentConfig private constructor(
       }
 
     /** Whether the agent registers its paths in consolidated mode, alongside other agents (`agent.consolidated`). */
+    @get:JvmSynthetic
+    @set:JvmSynthetic
+    var consolidated: Boolean
+      get() = values["consolidated"] as Boolean? ?: false
+      set(value) = put("consolidated", value)
+
+    /** Sets [consolidated]; with no argument, turns it on. */
     @JvmOverloads
-    fun consolidated(consolidated: Boolean = true): Builder = apply { values["consolidated"] = consolidated }
+    fun consolidated(consolidated: Boolean = true): Builder = apply { this.consolidated = consolidated }
 
     /**
-     * Turns on the agent's own metrics endpoint, on [port], which is off unless asked for (`agent.metrics.enabled`
-     * and `agent.metrics.port`).
+     * The port of the agent's own metrics endpoint, which is off unless one is given (`agent.metrics.enabled` and
+     * `agent.metrics.port`); null turns it off again.
      */
-    fun agentMetrics(port: Int): Builder =
-      apply {
-        values["metrics.enabled"] = true
-        values["metrics.port"] = port
+    @get:JvmSynthetic
+    @set:JvmSynthetic
+    var agentMetricsPort: Int?
+      get() = values["metrics.port"] as Int?
+      set(value) {
+        put("metrics.enabled", value?.let { true })
+        put("metrics.port", value)
       }
+
+    /** Turns on the agent's own metrics endpoint, on [port]; sets [agentMetricsPort]. */
+    fun agentMetrics(port: Int): Builder = apply { agentMetricsPort = port }
 
     /**
      * Has the agent scrape the app it's embedded in: its metrics at `http://127.0.0.1:<port>/<metricsPath>`, served to
@@ -203,6 +243,14 @@ class EmbeddedAgentConfig private constructor(
       key: String,
       value: Any,
     ): Builder = apply { settings[key] = value }
+
+    // Sets a method's or a property's setting, or, given null, takes it out.
+    private fun put(
+      key: String,
+      value: Any?,
+    ) {
+      if (value == null) values.remove(key) else values[key] = value
+    }
 
     /** The settings, ready to [start][EmbeddedAgentConfig.start]. */
     fun build(): EmbeddedAgentConfig {
@@ -275,7 +323,12 @@ class EmbeddedAgentConfig private constructor(
  * Builds an [EmbeddedAgentConfig] in a block whose receiver is its [builder][EmbeddedAgentConfig.Builder]:
  *
  * ```kotlin
- * val agent = embeddedAgent { name("my-app"); proxy("proxy.example.com:50051"); scrapeSelf("my_app_metrics", 8080) }
+ * val agent =
+ *   embeddedAgent {
+ *     name = "my-app"
+ *     proxy = "proxy.example.com:50051"
+ *     scrapeSelf(path = "my_app_metrics", port = 8080)
+ *   }
  * agent.start()
  * ```
  */

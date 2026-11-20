@@ -32,11 +32,11 @@ fun startPrometheusAgent(
   return try {
     embeddedAgent {
       // The version tells the old and new revisions apart during a deploy
-      name("my-app-$appVersion")
-      proxy(proxyEndpoint)
-      token(env("PROMETHEUS_AGENT_TOKEN"))
+      name = "my-app-$appVersion"
+      proxy = proxyEndpoint
+      token = env("PROMETHEUS_AGENT_TOKEN")
       // The proxy's certificate, as PEM or its base64, and the name it was issued to
-      trustCertificatePem(env("PROMETHEUS_PROXY_CERT"), authority = "prometheus-proxy")
+      trustCertificatePem(pem = env("PROMETHEUS_PROXY_CERT"), authority = "prometheus-proxy")
       // The app's own /metrics, on 127.0.0.1; the agent sends the credentials as Basic Auth
       scrapeSelf(
         path = "my_app_metrics",

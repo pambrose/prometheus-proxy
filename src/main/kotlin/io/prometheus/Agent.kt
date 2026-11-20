@@ -117,7 +117,7 @@ import kotlin.time.TimeSource.Monotonic
  *
  * ### Embedded Usage
  * ```kotlin
- * val agentInfo = Agent.startAsyncAgent("config.conf", exitOnMissingConfig = false)
+ * val agentInfo = Agent.startAsyncAgent(configFilename = "config.conf", exitOnMissingConfig = false)
  * println("Started agent: ${agentInfo.agentName}")
  * ```
  *

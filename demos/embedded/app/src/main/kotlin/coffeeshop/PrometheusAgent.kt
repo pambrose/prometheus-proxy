@@ -34,12 +34,12 @@ fun startPrometheusAgent(
   return try {
     embeddedAgent {
       // The version tells the old and new deployments apart on the proxy's dashboard and in its logs
-      name("coffee-shop-$appVersion")
-      proxy(proxyEndpoint)
-      token(env("PROMETHEUS_AGENT_TOKEN"))
+      name = "coffee-shop-$appVersion"
+      proxy = proxyEndpoint
+      token = env("PROMETHEUS_AGENT_TOKEN")
       // The certificate the proxy's is signed with, as PEM or its base64, and the name it was issued to
       trustCertificatePem(
-        env("PROMETHEUS_PROXY_CERT"),
+        pem = env("PROMETHEUS_PROXY_CERT"),
         authority = env("PROMETHEUS_PROXY_AUTHORITY").ifEmpty { "prometheus-proxy" },
       )
       // The app's own /metrics; the agent sends the credentials as Basic Auth
@@ -50,7 +50,7 @@ fun startPrometheusAgent(
         password = env("METRICS_PASSWORD"),
       )
       // The agent's own metrics, which it serves the proxy too
-      agentMetrics(AGENT_METRICS_PORT)
+      agentMetricsPort = AGENT_METRICS_PORT
       scrapeSelf(path = "coffee_shop_agent_metrics", port = AGENT_METRICS_PORT)
     }.start(logBanner = false).also { agent ->
       logger.info { "Prometheus agent ${agent.agentName} started; it connects to the proxy at $proxyEndpoint" }
