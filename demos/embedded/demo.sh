@@ -697,8 +697,8 @@ main() {
     bold "The proxy's secrets, by name:"
     docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$proxy_id" | cut -d= -f1 |
       { grep -E '^(AGENT_TOKEN|CERT_CHAIN_PEM|PRIVATE_KEY_PEM)$' || true; } | sed 's/^/  /'
-    how_it_works "The coffee shop builds its agent's config in memory from its environment," \
-      "Agent.startAsyncAgent(config), so the token, the certificate it trusts, and the password for its /metrics" \
+    how_it_works "The coffee shop builds its agent's settings in code from its environment, with" \
+      "embeddedAgent { }, so the token, the certificate it trusts, and the password for its /metrics" \
       "never sit in a file (app/src/main/kotlin/coffeeshop/PrometheusAgent.kt). The proxy is the stock image, which" \
       "has no shell to write a variable to a file, and takes its TLS certificate and key as PEM, base64-encoded, in" \
       "CERT_CHAIN_PEM and PRIVATE_KEY_PEM. demo.sh wrote all of them to docker/.env, which docker compose reads; on a" \

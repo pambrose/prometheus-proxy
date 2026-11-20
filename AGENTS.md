@@ -42,6 +42,16 @@ The embedded demo's coffee shop, `demos/embedded/app`, is a Gradle project of it
 embeds the agent through the public API and reads `gradle/libs.versions.toml` (its Ktor and Micrometer entries are
 there for it). CI builds it against the checkout, `./gradlew -p demos/embedded/app -PlocalProxy build` (a composite
 build, which lints it too), so a change to `Agent.startAsyncAgent` or the config tree it takes must keep it compiling.
+IntelliJ imports it as a second linked Gradle project (`.idea/gradle.xml`); its `gradle/wrapper/gradle-wrapper.properties`
+is a symlink to the root's, so the IDE syncs it with the root's Gradle instead of generating a wrapper of its own.
+
+The Spring Boot demo's roastery, `demos/spring-boot/app`, is a Maven project, a Spring Boot app in Java that embeds the
+agent through `EmbeddedAgentConfig.builder()`. Spring Boot's dependency management sets the versions of some of the
+agent's libraries (kotlinx-serialization, Jackson 2, Logback, gRPC), older than the agent's own;
+`make spring-boot-demo-check` (in CI's `consumer-check` job) builds it against the snapshot `consumer-check` publishes
+and runs its `RoasteryAgentTest`, which starts the agent against a proxy in the same JVM and scrapes through it, so a
+change to the builder's Java surface, or a Spring Boot release that breaks the agent at runtime, fails there. Its
+`prometheus-proxy.version` is a release version literal.
 
 ## Architecture
 

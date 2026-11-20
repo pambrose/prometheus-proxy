@@ -223,4 +223,6 @@ no shell to write a variable to a file, takes its certificate and key as base64 
   Apps, and the proxy on AWS, GCP, Azure, DigitalOcean, or Railway, with your own certificate and token.
 - [Embedded Agent](embedded-agent.md) covers the API the coffee shop uses, and the agent's logging and metrics inside
   a host app.
+- The [Spring Boot Demo](spring-boot-demo.md) embeds the agent in a Spring Boot app written in Java, and shows the
+  agent's lifecycle with the app's, Actuator's metrics behind Spring Security, and the versions Spring Boot picks.
 - The [Basics Demo](basics-demo.md) runs standalone agents behind a simulated firewall, with the proxy's dashboard.

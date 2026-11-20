@@ -12,12 +12,16 @@ gRPC connection initiated from inside the firewall, preserving Prometheus's nati
 
 !!! tip "See it work on your laptop"
 
-    Four self-contained demos run the proxy, its agents, Prometheus, and Grafana from the released images with one
-    command, and a guided tour walks you through each: the [Basics Demo](basics-demo.md), the
-    [Network Demo](network-demo.md), with a simulated WAN between the agents and the proxies, the
-    [Kubernetes Demo](kubernetes-demo.md), with the Helm charts on two kind clusters, and the
-    [Embedded Demo](embedded-demo.md), with the agent embedded in a Ktor app. All but the Kubernetes Demo need only
-    Docker; it also needs kind, `kubectl`, and Helm.
+    Five self-contained demos run the proxy, its agents, and Prometheus from the released images with one command,
+    and a guided tour walks you through each:
+
+    - the [Basics Demo](basics-demo.md);
+    - the [Network Demo](network-demo.md), with a simulated WAN between the agents and the proxies;
+    - the [Kubernetes Demo](kubernetes-demo.md), with the Helm charts on two kind clusters;
+    - the [Embedded Demo](embedded-demo.md), with the agent embedded in a Ktor app;
+    - the [Spring Boot Demo](spring-boot-demo.md), with the agent embedded in a Spring Boot app.
+
+    All but the Kubernetes Demo need only Docker; it also needs kind, `kubectl`, and Helm.
 
 ## How It Works
 

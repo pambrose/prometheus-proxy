@@ -8,7 +8,8 @@ _Released 2026-11-19_
 
 An embedded agent can start from a config built in memory, and the proxy and the agent take their TLS certificates
 and keys as environment variables, so an app on ECS, Cloud Run, or Azure Container Apps, and a proxy on AWS, GCP,
-Azure, DigitalOcean, or Railway, need no secret files. A new demo runs the agent embedded in a Ktor app. Also, fixes to
+Azure, DigitalOcean, or Railway, need no secret files. Two new demos run the agent embedded in an app: a Ktor app, and
+a Spring Boot app in Java. Also, fixes to
 the demos' setup: each checks for the tools it needs before it starts.
 
 ### New Features
@@ -24,6 +25,9 @@ the demos' setup: each checks for the tools it needs before it starts.
   metrics in Grafana with no port opened for them, and the proxy taking its certificate and key from environment
   variables. `make up` and `make tour` walk through a rush, an alert, a deploy, the proxy going away, and where the
   secrets come from.
+- **A demo of the agent in a Spring Boot app.** `demos/spring-boot` runs a Java roastery with the agent started and
+  stopped with the app, scraping Actuator's metrics behind Spring Security, on the versions of its libraries Spring
+  Boot picks. The Embedded Agent page's new "In Spring Boot" section covers the same.
 - **A guide to cloud platforms.** The website's new Cloud Platforms page runs an embedded agent in an app on ECS on
   Fargate, Cloud Run, Azure Container Apps, or another platform, with the proxy on AWS, GCP, Azure, DigitalOcean, or
   Railway, and `examples/cloud-proxy` holds a proxy and Prometheus to start from.

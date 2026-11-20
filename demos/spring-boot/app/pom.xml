@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The Spring Boot demo's roastery (../README.md): a Spring Boot app, built with Maven, with the prometheus-proxy agent
+  embedded in it. It's a Maven project of its own, outside the repository's Gradle build, as an application that embeds
+  the agent is.
+
+  The agent comes from Maven Central at prometheus-proxy.version, or, with -Dprometheus-proxy.version=<a snapshot>, from
+  the local Maven repository, where demo.sh up-local and CI publish this checkout first.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>4.2.0</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>demo.roastery</groupId>
+  <artifactId>roastery</artifactId>
+  <version>1.0</version>
+  <name>roastery</name>
+
+  <properties>
+    <!-- The oldest Java Spring Boot 4 and the agent run on, so a JDK 17 or later builds it; the image runs 25 -->
+    <java.version>17</java.version>
+    <prometheus-proxy.version>4.6.0</prometheus-proxy.version>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-webmvc</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-security</artifactId>
+    </dependency>
+    <!-- Actuator's /actuator/prometheus, which the agent reads -->
+    <dependency>
+      <groupId>io.micrometer</groupId>
+      <artifactId>micrometer-registry-prometheus</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.pambrose</groupId>
+      <artifactId>prometheus-proxy</artifactId>
+      <version>${prometheus-proxy.version}</version>
+    </dependency>
+    <!-- RoasteryAgentTest, which runs the agent against a proxy at the versions Spring Boot picks -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <finalName>roastery</finalName>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+        <executions>
+          <!-- META-INF/build-info.properties, whose version names the agent -->
+          <execution>
+            <goals>
+              <goal>build-info</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <!-- RoasteryAgentTest's proxy and agent log from their own threads, which corrupts Surefire's default channel,
+               the test JVM's stdout; a TCP channel leaves stdout to them -->
+          <forkNode implementation="org.apache.maven.plugin.surefire.extensions.SurefireForkNodeFactory"/>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

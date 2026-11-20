@@ -1,0 +1,23 @@
+# Prometheus config for the Spring Boot demo (demos/spring-boot/docker/compose.yml). Prometheus reaches the proxy on
+# the compose network, where the proxy serves the roastery's metrics at the path its embedded agent registered.
+# `make check-rules` validates this file with promtool.
+
+global:
+  scrape_interval: 5s
+  scrape_timeout: 4s
+
+scrape_configs:
+  # The roastery's metrics, which its agent reads from Actuator's /actuator/prometheus on 127.0.0.1. The instance names
+  # the app rather than the proxy its metrics come through.
+  - job_name: roastery
+    metrics_path: /roastery_metrics
+    static_configs:
+      - targets: [ 'proxy:8080' ]
+    relabel_configs:
+      - target_label: instance
+        replacement: roastery
+
+  # The proxy's own metrics.
+  - job_name: prometheus-proxy
+    static_configs:
+      - targets: [ 'proxy:8082' ]

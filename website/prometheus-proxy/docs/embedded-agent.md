@@ -29,16 +29,16 @@ instead of running a separate agent process.
 
 ## Usage
 
-=== "Java"
-
-    ```java
-    --8<-- "EmbeddedAgentJavaExample.java:embedded-java"
-    ```
-
 === "Kotlin"
 
     ```kotlin
     --8<-- "EmbeddedAgentKotlinExample.kt:embedded-kotlin"
+    ```
+
+=== "Java"
+
+    ```java
+    --8<-- "EmbeddedAgentJavaExample.java:embedded-java"
     ```
 
 ## Agent Configuration
@@ -89,6 +89,28 @@ config file is, so a `${?ENV_VAR}` substitution in it works.
 [Cloud Platforms](cloud-platforms.md) builds on this to run an embedded agent in an app on ECS on Fargate, Cloud Run,
 Azure Container Apps, or another platform, with the proxy on AWS, GCP, Azure, DigitalOcean, or Railway, and the
 [Embedded Demo](embedded-demo.md) runs it on one machine, in a Ktor app.
+
+## In Spring Boot
+
+A Spring Boot app runs the agent from a bean, so it starts and stops with the app. The
+[Spring Boot Demo](spring-boot-demo.md)'s roastery does each of these:
+
+- **A `SmartLifecycle` bean** in the last phase, the default, starts the agent once the web server is serving, so the
+  agent's first scrape finds the app's metrics, and stops it first on shutdown, before the web server drains: the
+  agent disconnects, the proxy drops its paths, and no scrape reaches a server that's going away.
+- **Actuator's metrics:** with `micrometer-registry-prometheus` on the classpath, Actuator serves them at
+  `/actuator/prometheus`, so `scrapeSelf` takes `"actuator/prometheus"` as its `metricsPath`, with the credentials the
+  app's Spring Security asks for.
+- **The settings:** a `@ConfigurationProperties` record can hold them, with `application.yml` reading each from the
+  environment, as `${PROMETHEUS_AGENT_TOKEN:}` does. Give it a `toString` that leaves the secrets out, so the app can
+  log it.
+- **Spring Boot's dependency management** sets the versions of the libraries it knows, some of the agent's among them:
+  kotlinx-serialization, Jackson 2, Logback, and gRPC run older than the agent's own. The agent runs with them, and
+  the demo's roastery runs it at Spring Boot's versions on every pull request
+  ([Spring Boot's versions](spring-boot-demo.md#spring-boots-versions-of-the-agents-libraries)). Were a Spring Boot
+  release to break it, a property in the app's pom sets that library back: `kotlin-serialization.version`,
+  `jackson-2-bom.version`, `logback.version`, or `grpc-java.version`.
+- **Logging:** see [Logging](#logging) for the line Spring Boot's `application.yml` takes.
 
 ## API Reference
 
