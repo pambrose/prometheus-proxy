@@ -40,15 +40,15 @@ import kotlinx.html.unsafe
 // The demo's coffee shop: a Ktor app with a Prometheus agent embedded in it (PrometheusAgent.kt), whose customers
 // order over HTTP on their own (Customers.kt). See demos/embedded/README.md in the repository.
 fun main() {
-  val port = System.getenv("PORT")?.toIntOrNull() ?: 8080
+  val port = env("PORT").toIntOrNull() ?: 8080
   // start(wait = true) stops the server on SIGTERM, which raises ApplicationStopped, where the agent stops too.
   embeddedServer(CIO, port = port) { coffeeShop(port) }.start(wait = true)
 }
 
 fun Application.coffeeShop(port: Int) {
-  val version = System.getenv("APP_VERSION").orEmpty().ifEmpty { "dev" }
-  val metricsUser = System.getenv("METRICS_USER").orEmpty()
-  val metricsPassword = System.getenv("METRICS_PASSWORD").orEmpty()
+  val version = env("APP_VERSION").ifEmpty { "dev" }
+  val metricsUser = env("METRICS_USER")
+  val metricsPassword = env("METRICS_PASSWORD")
 
   // Ktor's HTTP metrics (ktor_http_server_requests_seconds) and the JVM's, then the shop's, in one registry. The plugin
   // goes first: it configures the registry, which Micrometer wants done before any meter is registered.
@@ -84,8 +84,8 @@ fun Application.coffeeShop(port: Int) {
         |Version:          $version
         |Queue:            ${shop.queueDepth.get()} of ${shop.queueCapacity}
         |Baristas:         ${shop.baristas}
-        |Rush hour:        ${if (shop.isRush) "on" else "off"}
-        |Espresso machine: ${if (shop.isMachineBroken) "broken" else "working"}
+        |Rush hour:        ${shop.rushLabel}
+        |Espresso machine: ${shop.machineLabel}
         |Served:           $served
         |
         """.trimMargin(),
@@ -148,7 +148,7 @@ fun Application.coffeeShop(port: Int) {
   shop.open(this)
   Customers(shop, port).start(this)
   // Once the routes are in place, so the agent's first scrape finds /metrics.
-  val agent = startPrometheusAgent(port)
+  val agent = startPrometheusAgent(port, version)
   monitor.subscribe(ApplicationStopped) { agent?.shutdown() }
 }
 
@@ -192,12 +192,15 @@ private fun HTML.statusPage(
   }
   body {
     h1 { +"Coffee shop" }
-    p("sub") { +"Version $version, with a Prometheus agent embedded. This page refreshes every two seconds." }
+    p("sub") {
+      +"Version $version, with a Prometheus agent embedded."
+      if (refresh) +" This page refreshes every two seconds."
+    }
     div("cards") {
       card("Queue", "${shop.queueDepth.get()}")
       card("Baristas", "${shop.baristas}")
-      card("Rush hour", if (shop.isRush) "on" else "off")
-      card("Espresso machine", if (shop.isMachineBroken) "broken" else "working", bad = shop.isMachineBroken)
+      card("Rush hour", shop.rushLabel)
+      card("Espresso machine", shop.machineLabel, bad = shop.isMachineBroken)
     }
     table {
       tr {
@@ -222,3 +225,7 @@ private fun kotlinx.html.FlowContent.card(
   div("label") { +label }
   span(if (bad) "value bad" else "value") { +value }
 }
+
+// An environment variable's value, trimmed, or empty when it isn't set: read the same way here and for the agent, so a
+// password with stray whitespace matches its scrape URL's.
+internal fun env(name: String) = System.getenv(name).orEmpty().trim()

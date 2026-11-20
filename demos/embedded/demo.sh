@@ -116,38 +116,43 @@ print_urls() {
 # POSTs to the coffee shop's own knobs, on its published port: shop <path>
 shop() { curl -fsS -X POST "$APP_URL$1" || die "the coffee shop refused $1; is the demo running? See '$0 status'"; }
 
-wait_for() {
-  local url="$1" name="$2" deadline=$((SECONDS + 120))
-  until curl -fsS -o /dev/null "$url" 2>/dev/null; do
-    ((SECONDS < deadline)) || die "$name did not answer at $url within 120s; see '$0 logs'"
-    sleep 2
-  done
-}
-
-# Waits up to 30s for the coffee shop's address, its load balancer, to answer from this version: wait_for_version <v>
-wait_for_version() {
-  local deadline=$((SECONDS + 30))
-  until curl -fsS "$APP_URL/status" 2>/dev/null | grep -Eq "^Version: +$1\$"; do
-    ((SECONDS < deadline)) || die "the coffee shop didn't answer as version $1 within 30s; see '$0 logs'"
+# Runs a command every second until it succeeds, for up to the given seconds; fails if it never does:
+# wait_until <seconds> <command>...
+wait_until() {
+  local deadline=$((SECONDS + $1))
+  shift
+  until "$@"; do
+    ((SECONDS < deadline)) || return 1
     sleep 1
   done
 }
 
-# How many of the proxy's log lines match an extended regex.
-proxy_count() { "${COMPOSE[@]}" logs --no-log-prefix proxy 2>/dev/null | grep -cE "$1" || true; }
+answers() { curl -fsS -o /dev/null "$1" 2>/dev/null; }
+
+wait_for() { wait_until 120 answers "$1" || die "$2 did not answer at $1 within 120s; see '$0 logs'"; }
+
+# Whether the coffee shop's address, its load balancer, answers from version $1.
+serves_version() { curl -fsS "$APP_URL/status" 2>/dev/null | grep -Eq "^Version: +$1\$"; }
+
+wait_for_version() {
+  wait_until 30 serves_version "$1" || die "the coffee shop didn't answer as version $1 within 30s; see '$0 logs'"
+}
+
+# The proxy's log lines that match an extended regex, one a line, or nothing.
+proxy_lines() { "${COMPOSE[@]}" logs --no-log-prefix proxy 2>/dev/null | grep -E "$1" || true; }
+
+# How many lines some text has, not counting an empty one.
+count_lines() { grep -c . <<<"$1" || true; }
 
 # Prints the proxy's latest log line matching an extended regex, once there are more than [after] of them, waiting up
-# to 30s; prints nothing if none comes: proxy_said <regex> [after]
+# to 30s; prints nothing if none comes. It reads the log once a second: proxy_said <regex> [after]
 proxy_said() {
-  local deadline=$((SECONDS + 30)) after="${2:-0}" line=""
-  until [[ -n "$line" ]] || ((SECONDS >= deadline)); do
-    if (($(proxy_count "$1") > after)); then
-      line="$("${COMPOSE[@]}" logs --no-log-prefix proxy 2>/dev/null | grep -E "$1" | tail -1 || true)"
-    else
-      sleep 2
-    fi
+  local after="${2:-0}" lines deadline=$((SECONDS + 30))
+  until lines="$(proxy_lines "$1")" && (($(count_lines "$lines") > after)); do
+    ((SECONDS < deadline)) || return 0
+    sleep 1
   done
-  [[ -z "$line" ]] || printf '\033[36mThe proxy logged:\033[0m %s\n' "$line"
+  printf '\033[36mThe proxy logged:\033[0m %s\n' "$(tail -1 <<<"$lines")"
 }
 
 # Whether version $1 (x.y.z) is later than $2. bash 3.2, macOS's, has no sort -V everywhere, so field by field.
@@ -246,10 +251,12 @@ cmd_up_local() {
 # Starts the demo, or brings a running one up to date, with a release's proxy and library (start_demo <version>) or
 # with ones built from this checkout (start_demo).
 start_demo() {
-  local old_ids id
+  local old_ids id grafana_before
   # The images the demo ran, to remove below once nothing tags them: each build makes new ones. One another demo still
   # runs is in use, and stays.
   old_ids="$(docker image inspect -f '{{.Id}}' "${IMAGES[@]}" 2>/dev/null || true)"
+  # The Grafana container of a demo already running, if any, which has to be restarted to read changed files.
+  grafana_before="$("${COMPOSE[@]}" ps --quiet grafana 2>/dev/null || true)"
   write_env
 
   if [[ $# -gt 0 ]]; then
@@ -261,15 +268,19 @@ start_demo() {
   else
     check_jdk
     bold "Building the proxy, and the coffee shop against the library, from this checkout"
-    "$MAKE" --no-print-directory -C "$REPO_DIR" jars
+    # The proxy's fat jar, which its image copies; the coffee shop takes the library from the checkout itself.
+    "$REPO_DIR/gradlew" --quiet -p "$REPO_DIR" proxyJar
     "$REPO_DIR/gradlew" --quiet -p "$DEMO_DIR/app" -PlocalProxy installDist
     EMBEDDED_DEMO_APP_BUILD=prebuilt "${COMPOSE[@]}" up --detach --build --wait --wait-timeout 180
   fi
   # Compose recreates a container when its own config changes, not when a file it mounts does, and neither Prometheus
   # nor Grafana reliably notices a changed file on its own. Reload Prometheus's config and rules (SIGHUP), and restart
-  # Grafana for its dashboards, so a demo started from an older checkout runs this one's.
+  # a Grafana that was already running for its dashboards, so a demo started from an older checkout runs this one's. A
+  # Grafana just created read them as they are.
   "${COMPOSE[@]}" kill --signal SIGHUP prometheus >/dev/null
-  "${COMPOSE[@]}" restart grafana >/dev/null
+  if [[ -n "$grafana_before" && "$grafana_before" == "$("${COMPOSE[@]}" ps --quiet grafana)" ]]; then
+    "${COMPOSE[@]}" restart grafana >/dev/null
+  fi
 
   for id in $old_ids; do
     if [[ -z "$(docker image inspect -f '{{join .RepoTags ""}}' "$id" 2>/dev/null)" ]]; then
@@ -616,7 +627,7 @@ main() {
     ;;
   deploy)
     local overwrites
-    overwrites="$(proxy_count "Overwriting path /coffee_shop_metrics")"
+    overwrites="$(count_lines "$(proxy_lines "Overwriting path /coffee_shop_metrics")")"
     bold "Deploying version 1.1 beside version 1.0"
     "${COMPOSE[@]}" --profile deploy up --detach --no-deps --wait coffee-shop-next
     proxy_said "Overwriting path /coffee_shop_metrics" "$overwrites"
@@ -639,7 +650,7 @@ main() {
     ;;
   rollback)
     local overwrites
-    overwrites="$(proxy_count "Overwriting path /coffee_shop_metrics")"
+    overwrites="$(count_lines "$(proxy_lines "Overwriting path /coffee_shop_metrics")")"
     "${COMPOSE[@]}" up --detach --no-deps --wait coffee-shop
     proxy_said "Overwriting path /coffee_shop_metrics" "$overwrites"
     "${COMPOSE[@]}" --profile deploy rm --stop --force coffee-shop-next

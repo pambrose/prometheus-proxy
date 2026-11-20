@@ -17,7 +17,6 @@
 package io.prometheus.common
 
 import com.pambrose.common.utils.TlsContext
-import com.pambrose.common.utils.TlsUtils
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.grpc.netty.GrpcSslContexts
 import io.netty.handler.ssl.ClientAuth
@@ -36,7 +35,7 @@ internal class TlsSource(
   path: String,
   val pem: String,
 ) {
-  // Trimmed, as common-utils' file-based builders trim a path before they open it.
+  // Trimmed, as the paths have always been before a file is opened.
   val path: String = path.trim()
 
   val pathSetting: String get() = "${name}FilePath"
@@ -78,8 +77,9 @@ internal class TlsSource(
 }
 
 /**
- * Turns the TLS settings of a Proxy or Agent into the gRPC [TlsContext] it uses, and reads TLS material given as PEM
- * text, which a platform that passes secrets as environment variables needs in place of files.
+ * Turns the TLS settings of a Proxy or Agent into the gRPC [TlsContext] it uses, reading each piece from its file or
+ * its PEM text alike (a platform that passes secrets as environment variables needs the PEM in place of files), with
+ * the [GrpcSslContexts] calls common-utils' file-based builders make.
  */
 internal object TlsMaterial {
   private const val PEM_BEGIN = "-----BEGIN "
@@ -116,56 +116,44 @@ internal object TlsMaterial {
 
   /**
    * The client side's context: [trust] pins the servers to trust, or the JVM's trust store is used without one, and
-   * [certChain] with [privateKey] enables mutual auth. With no PEM among them, common-utils builds it from the files,
-   * as it always has; otherwise it is built here, with the same [GrpcSslContexts] calls.
+   * [certChain] with [privateKey] enables mutual auth.
    */
   fun clientContext(
     certChain: TlsSource,
     privateKey: TlsSource,
     trust: TlsSource,
-  ): TlsContext =
-    if (noPem(certChain, privateKey, trust)) {
-      TlsUtils.buildClientTlsContext(certChain.path, privateKey.path, trust.path)
-    } else {
-      val builder = GrpcSslContexts.forClient()
-      trust.withStream { builder.trustManager(it) }
-        ?: logger.info { "No ${trust.settings} given; using the JVM default trust store" }
-      val mutualAuth = certChain.isGiven
-      if (mutualAuth)
-        certChain.withStream { certIn -> privateKey.withStream { keyIn -> builder.keyManager(certIn, keyIn) } }
-      TlsContext(builder.build(), mutualAuth)
-    }
+  ): TlsContext {
+    val builder = GrpcSslContexts.forClient()
+    trust.withStream { builder.trustManager(it) }
+      ?: logger.info { "No ${trust.settings} given; using the JVM default trust store" }
+    val mutualAuth = certChain.isGiven
+    if (mutualAuth)
+      certChain.withStream { certIn -> privateKey.withStream { keyIn -> builder.keyManager(certIn, keyIn) } }
+    return TlsContext(builder.build(), mutualAuth)
+  }
 
   /**
    * The server side's context, from [certChain] and [privateKey], which are required; [trust] enables mutual auth,
-   * requiring a client certificate it trusts. With no PEM among them, common-utils builds it from the files, as it
-   * always has; otherwise it is built here, with the same [GrpcSslContexts] calls.
+   * requiring a client certificate it trusts.
    */
   fun serverContext(
     certChain: TlsSource,
     privateKey: TlsSource,
     trust: TlsSource,
-  ): TlsContext =
-    if (noPem(certChain, privateKey, trust)) {
-      TlsUtils.buildServerTlsContext(certChain.path, privateKey.path, trust.path)
-    } else {
-      require(certChain.isGiven) { "Server ${certChain.settings} is required for TLS" }
-      require(privateKey.isGiven) { "Server ${privateKey.settings} is required for TLS" }
-      val builder =
-        checkNotNull(
-          certChain.withStream { certIn ->
-            privateKey.withStream { keyIn -> GrpcSslContexts.forServer(certIn, keyIn) }
-          },
-        )
-      val mutualAuth = trust.isGiven
-      if (mutualAuth) {
-        trust.withStream { builder.trustManager(it) }
-        builder.clientAuth(ClientAuth.REQUIRE)
-      }
-      TlsContext(builder.build(), mutualAuth)
+  ): TlsContext {
+    require(certChain.isGiven) { "Server ${certChain.settings} is required for TLS" }
+    require(privateKey.isGiven) { "Server ${privateKey.settings} is required for TLS" }
+    val builder =
+      checkNotNull(
+        certChain.withStream { certIn -> privateKey.withStream { keyIn -> GrpcSslContexts.forServer(certIn, keyIn) } },
+      )
+    val mutualAuth = trust.isGiven
+    if (mutualAuth) {
+      trust.withStream { builder.trustManager(it) }
+      builder.clientAuth(ClientAuth.REQUIRE)
     }
-
-  private fun noPem(vararg sources: TlsSource) = sources.all { it.pem.isEmpty() }
+    return TlsContext(builder.build(), mutualAuth)
+  }
 
   private val logger = logger {}
 }

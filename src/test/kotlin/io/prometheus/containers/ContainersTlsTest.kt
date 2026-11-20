@@ -21,6 +21,7 @@ package io.prometheus.containers
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.string.shouldContain
+import io.prometheus.common.TestCerts
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.containers.support.ContainerTestSupport.agentContainer
 import io.prometheus.containers.support.ContainerTestSupport.containerTestsEnabled
@@ -32,8 +33,6 @@ import io.prometheus.containers.support.bodyOf
 import io.prometheus.containers.support.closeQuietly
 import io.prometheus.containers.support.stopQuietly
 import org.testcontainers.containers.Network
-import java.io.File
-import java.util.Base64
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -157,8 +156,8 @@ class ContainersTlsTest : StringSpec() {
             network,
             env =
               mapOf(
-                "CERT_CHAIN_PEM" to base64("testing/certs/server1.pem"),
-                "PRIVATE_KEY_PEM" to File("testing/certs/server1.key").readText(),
+                "CERT_CHAIN_PEM" to TestCerts.base64(TestCerts.SERVER_CERT),
+                "PRIVATE_KEY_PEM" to TestCerts.read(TestCerts.SERVER_KEY),
               ),
           )
         val agent =
@@ -166,7 +165,7 @@ class ContainersTlsTest : StringSpec() {
             network,
             env =
               mapOf(
-                "TRUST_CERT_COLLECTION_PEM" to File("testing/certs/ca.pem").readText(),
+                "TRUST_CERT_COLLECTION_PEM" to TestCerts.read(TestCerts.CA_CERT),
                 "OVERRIDE_AUTHORITY" to "foo.test.google.fr",
               ),
             waitLogRegex = ".*Registered http://metrics-stub/metrics as /test_metrics.*",
@@ -186,6 +185,4 @@ class ContainersTlsTest : StringSpec() {
       }
     }
   }
-
-  private fun base64(path: String) = Base64.getEncoder().encodeToString(File(path).readBytes())
 }

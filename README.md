@@ -87,8 +87,9 @@ with screenshots.
 ## ✨ New Features
 
 Version 4.6.0 (released 2026-11-19) makes the agent easier to run inside an app on a cloud platform. An embedded agent
-starts from a config built in memory, `Agent.startAsyncAgent(config)`, so its token, the proxy's certificate, and the
-app's own scrape credentials never sit in a config file. The proxy and the agent take their TLS certificates and keys
+starts from settings built in code, with typed methods (`embeddedAgent { }`, or `EmbeddedAgentConfig.builder()` from
+Java), or from a Typesafe `Config` built in memory, so its token, the proxy's certificate, and the app's own scrape
+credentials never sit in a config file. The proxy and the agent take their TLS certificates and keys
 as PEM text, or its base64, in environment variables (`CERT_CHAIN_PEM`, `PRIVATE_KEY_PEM`,
 `TRUST_CERT_COLLECTION_PEM`), so the Docker images run TLS on a platform that passes secrets as variables. The docs
 site's new [Cloud Platforms](https://pambrose.github.io/prometheus-proxy/cloud-platforms/) page runs an embedded agent
@@ -491,7 +492,8 @@ use), `startAsyncAgent` throws `IllegalStateException` with the startup failure 
 the agent had opened.
 
 An application that holds the agent's settings itself, such as a token, the proxy's certificate, or credentials for
-its own `/metrics`, can pass them in memory instead of in a file, as a Typesafe `Config` rooted at `agent`:
+its own `/metrics`, can build them in code instead of in a file, with `embeddedAgent { }` (or
+`EmbeddedAgentConfig.builder()` from Java), or pass a Typesafe `Config` rooted at `agent` to
 `Agent.startAsyncAgent(config)`. The docs site's
 [Cloud Platforms](https://pambrose.github.io/prometheus-proxy/cloud-platforms/) page builds an app on ECS, Cloud Run,
 or Azure Container Apps around it.

@@ -11,6 +11,9 @@ All notable changes to this project are documented in this file.
 - `Agent.startAsyncAgent(config)` starts an embedded agent from a Typesafe `Config` built in memory, so a host's token,
   the proxy's certificate, and scrape credentials needn't sit in a config file. It is always embedded: a setting it
   can't use throws `ConfigLoadException`. `typesafe-config` is now an `api` dependency, on a host's compile classpath
+- `EmbeddedAgentConfig` builds an embedded agent's settings with a typed method for each, `embeddedAgent { }` from
+  Kotlin and `EmbeddedAgentConfig.builder()` from Java, in place of a hand-built `Config`. `scrapeSelf` points the
+  agent at its host's own `/metrics`, percent-encoding Basic Auth credentials into the URL
 - The proxy and the agent take each TLS certificate, key, and trust collection as PEM text, or its base64, in place of
   a file: `tls.certChainPem`, `tls.privateKeyPem`, and `tls.trustCertCollectionPem`, or the `CERT_CHAIN_PEM`,
   `PRIVATE_KEY_PEM`, and `TRUST_CERT_COLLECTION_PEM` environment variables. The Docker images, which have no shell to

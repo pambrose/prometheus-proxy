@@ -149,8 +149,8 @@ the two reads them. A value can be:
 Give each piece as a file or as PEM, not both: the proxy and the agent refuse a file and a PEM for the same piece. As
 with files, a certificate chain and a private key turn TLS on, and a trust collection alone turns it on for an agent.
 Only whether a PEM setting is set is logged, never its value, and there are no command-line options for them, so a
-key never shows in a process listing. An [embedded agent](../embedded-agent.md#configuring-in-code) can take them in
-a config it builds in memory.
+key never shows in a process listing. An [embedded agent](../embedded-agent.md#configuring-in-code) takes them in
+code, with `trustCertificatePem` and `clientCertificatePem`.
 
 ## TLS with Docker
 

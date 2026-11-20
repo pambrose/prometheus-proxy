@@ -37,17 +37,18 @@ enum class Drink(
 }
 
 /** What happened to an order, as `coffee_orders_total`'s `outcome` label gives it. */
-enum class Outcome(
-  val label: String,
-) {
+enum class Outcome {
   // Brewed and handed over
-  SERVED("served"),
+  SERVED,
 
   // Turned away at the counter: the queue was full
-  REJECTED("rejected"),
+  REJECTED,
 
   // Couldn't be made: an espresso drink while the espresso machine is broken
-  FAILED("failed"),
+  FAILED,
+  ;
+
+  val label: String get() = name.lowercase()
 }
 
 /** What the counter did with an order: took it, for a barista to brew, or turned it away. */
@@ -82,6 +83,10 @@ class CoffeeShop(
     private set
   val isRush get() = rush.get()
   val isMachineBroken get() = machineBroken.get()
+
+  // The rush and the machine as the status page and /status put them
+  val rushLabel get() = if (isRush) "on" else "off"
+  val machineLabel get() = if (isMachineBroken) "broken" else "working"
 
   init {
     metrics.bind(this)

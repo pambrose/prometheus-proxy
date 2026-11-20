@@ -546,17 +546,16 @@ abstract class BaseOptions protected constructor(
     exitOnMissingConfig: Boolean,
   ) {
     // A supplied config takes the place of the file or URL, and of envConfig, with the same fallback a file gets.
-    config =
-      (
-        suppliedConfig?.withFallback(ConfigFactory.load().resolve())
-          ?: readConfig(
-            configSource.ifEmpty { System.getenv(envConfig).orEmpty() },
-            envConfig,
-            ConfigParseOptions.defaults().setAllowMissing(false),
-            ConfigFactory.load().resolve(),
-            exitOnMissingConfig,
-          )
-      ).resolve(ConfigResolveOptions.defaults())
+    val fallback = ConfigFactory.load().resolve()
+    val loaded =
+      suppliedConfig?.withFallback(fallback) ?: readConfig(
+        configSource.ifEmpty { System.getenv(envConfig).orEmpty() },
+        envConfig,
+        ConfigParseOptions.defaults().setAllowMissing(false),
+        fallback,
+        exitOnMissingConfig,
+      )
+    config = loaded.resolve(ConfigResolveOptions.defaults())
 
     dynamicParams
       .forEach { (k, v) ->

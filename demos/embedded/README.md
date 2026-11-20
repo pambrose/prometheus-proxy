@@ -196,7 +196,7 @@ and registers its paths again, and the graphs resume, with a gap for the time th
 ```
 
 It lists the coffee shop's and the proxy's secrets by name, and shows that the app's container holds no config file.
-The app builds its agent's config in memory, `Agent.startAsyncAgent(config)`, so the token, the certificate it trusts,
+The app builds its agent's settings in code, `embeddedAgent { }`, so the token, the certificate it trusts,
 and the password for its `/metrics` never sit in a file (`app/src/main/kotlin/coffeeshop/PrometheusAgent.kt`). The
 proxy is the stock image, which has no shell to write a variable to a file, and takes its certificate and key as PEM,
 base64-encoded, in `CERT_CHAIN_PEM` and `PRIVATE_KEY_PEM`. It logs only whether each is set.

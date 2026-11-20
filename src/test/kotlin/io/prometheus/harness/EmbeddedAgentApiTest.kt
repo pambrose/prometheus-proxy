@@ -26,10 +26,6 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldHaveLength
 import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.types.shouldBeInstanceOf
-import io.ktor.client.HttpClient
-import io.ktor.client.request.get
-import io.ktor.client.statement.bodyAsText
-import io.ktor.http.HttpStatusCode
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
@@ -43,9 +39,9 @@ import io.prometheus.common.TestPorts
 import io.prometheus.common.captureLogs
 import io.prometheus.common.startAndAwaitReady
 import io.prometheus.harness.support.TestUtils.startProxy
+import io.prometheus.harness.support.withEmbeddedAgentScraped
 import kotlin.io.path.createTempFile
 import kotlin.time.Duration.Companion.seconds
-import io.ktor.client.engine.cio.CIO as ClientCIO
 import io.ktor.server.cio.CIO as ServerCIO
 
 // The public embedded entry point, end to end. AgentTest pins the failure contract for a config that can't
@@ -103,52 +99,36 @@ class EmbeddedAgentApiTest : StringSpec() {
       }
     }
 
-    // The in-memory overload: a host that holds the agent's settings itself passes them as a Config, so no config file
-    // holds them on disk. The proxy serves the path the agent registered, from the target the config names.
+    // The in-memory overload, which EmbeddedAgentConfig.start() calls: a host that holds the agent's settings itself
+    // passes them as a Config, so no config file holds them on disk. The proxy serves the path the agent registered,
+    // from the target the config names.
     "startAsyncAgent should start the agent from an in-memory config, and the proxy should serve its path" {
-      PrometheusRegistry.defaultRegistry.clear()
-
-      val target =
-        embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
-          routing { get("/metrics") { call.respondText(TARGET_METRICS) } }
-        }
-      val proxy = startProxy(args = ["--agent_port", "$GRPC_PORT"], proxyPort = HTTP_PORT)
-      var info: EmbeddedAgentInfo? = null
-      try {
-        val targetUrl = "http://$LOOPBACK_HOST:${target.startAndAwaitReady()}/metrics"
-        val config =
-          ConfigFactory.parseMap(
-            mapOf(
-              "agent" to
-                mapOf(
-                  "name" to AGENT_NAME,
-                  "proxy" to mapOf("hostname" to LOOPBACK_HOST, "port" to GRPC_PORT),
-                  "pathConfigs" to [mapOf("name" to "app", "path" to IN_MEMORY_PATH, "url" to targetUrl)],
-                  "internal" to mapOf("reconnectPauseSecs" to 1),
-                ),
-            ),
-          )
-
-        info = Agent.startAsyncAgent(config, logBanner = false)
-        info.agentName shouldBe AGENT_NAME
-
-        HttpClient(ClientCIO).use { client ->
-          eventually(30.seconds) {
-            val response = client.get("http://$LOOPBACK_HOST:$HTTP_PORT/$IN_MEMORY_PATH")
-            response.status shouldBe HttpStatusCode.OK
-            response.bodyAsText() shouldContain TARGET_METRICS
-          }
-        }
-
-        info.shutdown()
+      withEmbeddedAgentScraped(
+        httpPort = HTTP_PORT,
+        agentPort = GRPC_PORT,
+        agentName = AGENT_NAME,
+        path = IN_MEMORY_PATH,
+        targetMetrics = TARGET_METRICS,
+      ) { proxy, agent ->
+        agent.agentName shouldBe AGENT_NAME
+        agent.shutdown()
         eventually(30.seconds) {
           proxy.agentContextManager.agentContextSize shouldBe 0
         }
-      } finally {
-        runCatching { info?.shutdown() }
-        runCatching { proxy.stopSync(10.seconds) }
-        target.stop(0, 0)
       }
+    }
+
+    // The builder percent-encodes a path's credentials into its URL, and the agent sends them as Basic Auth, so a
+    // password with any character reaches the target intact: the scrape gets through only if it does.
+    "an agent built with the builder sends a path's credentials, whatever their characters, as Basic Auth" {
+      withEmbeddedAgentScraped(
+        httpPort = HTTP_PORT,
+        agentPort = GRPC_PORT,
+        agentName = AGENT_NAME,
+        path = IN_MEMORY_PATH,
+        targetMetrics = TARGET_METRICS,
+        targetCredentials = "agent" to "p@ss:w/rd%#+ ?&é",
+      )
     }
 
     // The in-memory overload is always embedded: a setting the agent can't use throws, and never exits the JVM.

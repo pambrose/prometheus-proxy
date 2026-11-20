@@ -16,7 +16,7 @@ REPO_DIR := $(abspath $(DEMO_DIR)/../..)
 # since make exports a command-line variable to its recipes.
 DEMO = cd "$(DEMO_DIR)" && ./demo.sh
 
-# demo.sh runs the root Makefile's targets (site-version, and jars for up-local) with the make that ran this one, so
+# demo.sh runs the root Makefile's site-version target with the make that ran this one, so
 # `gmake up` works where GNU make is installed as gmake, with no make. Exported, rather than passed as $(MAKE) in a
 # recipe, which would make `make -n up` start the demo.
 export MAKE

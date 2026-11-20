@@ -17,6 +17,31 @@ import java.time.Duration
 class ShopMetrics(
   private val registry: MeterRegistry,
 ) {
+  // Every drink's counter for each outcome, and its brew timer, registered once, so each series exists from the start
+  private val orders =
+    Drink.entries.associateWith { drink ->
+      Outcome.entries.associateWith { outcome ->
+        Counter
+          .builder("coffee.orders")
+          .description("Orders, by drink and what happened to them")
+          .tag("drink", drink.label)
+          .tag("outcome", outcome.label)
+          .register(registry)
+      }
+    }
+
+  private val brews =
+    Drink.entries.associateWith { drink ->
+      Timer
+        .builder("coffee.brew")
+        .description("How long a drink took to brew")
+        .tag("drink", drink.label)
+        .publishPercentileHistogram()
+        .minimumExpectedValue(Duration.ofMillis(100))
+        .maximumExpectedValue(Duration.ofSeconds(10))
+        .register(registry)
+    }
+
   fun bind(shop: CoffeeShop) {
     Gauge.builder("coffee.queue.depth") { shop.queueDepth.get() }
       .description("Orders taken and waiting for a barista")
@@ -35,22 +60,10 @@ class ShopMetrics(
   fun ordered(
     drink: Drink,
     outcome: Outcome,
-  ) = Counter.builder("coffee.orders")
-    .description("Orders, by drink and what happened to them")
-    .tag("drink", drink.label)
-    .tag("outcome", outcome.label)
-    .register(registry)
-    .increment()
+  ) = orders.getValue(drink).getValue(outcome).increment()
 
   fun brewed(
     drink: Drink,
     seconds: Double,
-  ) = Timer.builder("coffee.brew")
-    .description("How long a drink took to brew")
-    .tag("drink", drink.label)
-    .publishPercentileHistogram()
-    .minimumExpectedValue(Duration.ofMillis(100))
-    .maximumExpectedValue(Duration.ofSeconds(10))
-    .register(registry)
-    .record(Duration.ofMillis((seconds * 1000).toLong()))
+  ) = brews.getValue(drink).record(Duration.ofMillis((seconds * 1000).toLong()))
 }

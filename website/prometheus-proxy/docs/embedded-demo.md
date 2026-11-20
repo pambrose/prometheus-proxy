@@ -119,8 +119,8 @@ with two paths, the coffee shop's metrics and its own, and its scrapes as they h
 
 The coffee shop configures its agent in code, with no config file. `startPrometheusAgent`, in
 [`PrometheusAgent.kt`](https://github.com/pambrose/prometheus-proxy/blob/master/demos/embedded/app/src/main/kotlin/coffeeshop/PrometheusAgent.kt),
-builds the agent's config in memory from the app's environment and starts it with
-[`Agent.startAsyncAgent(config)`](embedded-agent.md#configuring-in-code):
+builds the agent's settings from the app's environment with
+[`embeddedAgent { }`](embedded-agent.md#configuring-in-code) and starts it:
 
 ```kotlin
 --8<-- "demos/embedded/app/src/main/kotlin/coffeeshop/PrometheusAgent.kt:agent-config"
@@ -180,7 +180,7 @@ reconnects within a few seconds and registers its paths again.
 ## Secrets from the environment
 
 `./demo.sh secrets` lists the coffee shop's and the proxy's secrets by name, and shows that the app's container holds
-no config file. The app builds its agent's config in memory from its environment, and the stock proxy image, which has
+no config file. The app builds its agent's settings in code from its environment, and the stock proxy image, which has
 no shell to write a variable to a file, takes its certificate and key as base64 PEM in `CERT_CHAIN_PEM` and
 `PRIVATE_KEY_PEM`, and logs only whether each is set. On a cloud platform, they're the service's variables.
 

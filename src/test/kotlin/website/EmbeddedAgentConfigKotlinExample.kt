@@ -17,11 +17,9 @@
 package website
 
 // --8<-- [start:embedded-kotlin-config]
-import com.typesafe.config.ConfigValueFactory
-import io.prometheus.Agent
 import io.prometheus.agent.EmbeddedAgentInfo
+import io.prometheus.agent.embeddedAgent
 import io.prometheus.common.ConfigLoadException
-import java.net.URLEncoder
 
 // Starts the agent from the app's own settings, in memory, so no config file holds the token or the password. Returns
 // null when the agent is off, or can't start: the app's metrics aren't worth an outage.
@@ -30,42 +28,23 @@ fun startPrometheusAgent(
   appPort: Int,
 ): EmbeddedAgentInfo? {
   // host:port, the proxy's agent port; the agent stays off without it
-  val proxy = env("PROMETHEUS_PROXY").ifEmpty { return null }
-  val config =
-    ConfigValueFactory
-      .fromMap(
-        mapOf(
-          "agent" to
-            mapOf(
-              // The version tells the old and new revisions apart during a deploy
-              "name" to "my-app-$appVersion",
-              "proxy" to mapOf("hostname" to proxy),
-              "agentToken" to env("PROMETHEUS_AGENT_TOKEN"),
-              "tls" to
-                mapOf(
-                  // The proxy's certificate, as PEM or its base64, and the name it was issued to
-                  "trustCertCollectionPem" to env("PROMETHEUS_PROXY_CERT"),
-                  "overrideAuthority" to "prometheus-proxy",
-                ),
-              // The agent opens no port of its own
-              "admin" to mapOf("enabled" to false),
-              "metrics" to mapOf("enabled" to false),
-              "pathConfigs" to
-                listOf(
-                  mapOf(
-                    "name" to "My App",
-                    "path" to "my_app_metrics",
-                    // The app's own /metrics, on this machine; the agent sends the credentials as Basic Auth
-                    "url" to "http://${userInfo("METRICS_USER")}:${userInfo("METRICS_PASSWORD")}" +
-                      "@127.0.0.1:$appPort/metrics",
-                  ),
-                ),
-            ),
-        ),
-      ).toConfig()
-
+  val proxyEndpoint = env("PROMETHEUS_PROXY").ifEmpty { return null }
   return try {
-    Agent.startAsyncAgent(config, logBanner = false)
+    embeddedAgent {
+      // The version tells the old and new revisions apart during a deploy
+      name("my-app-$appVersion")
+      proxy(proxyEndpoint)
+      token(env("PROMETHEUS_AGENT_TOKEN"))
+      // The proxy's certificate, as PEM or its base64, and the name it was issued to
+      trustCertificatePem(env("PROMETHEUS_PROXY_CERT"), authority = "prometheus-proxy")
+      // The app's own /metrics, on 127.0.0.1; the agent sends the credentials as Basic Auth
+      scrapeSelf(
+        path = "my_app_metrics",
+        port = appPort,
+        username = env("METRICS_USER"),
+        password = env("METRICS_PASSWORD"),
+      )
+    }.start(logBanner = false)
   } catch (e: ConfigLoadException) {
     System.err.println("The Prometheus agent's settings are invalid: ${e.message}")
     null
@@ -76,8 +55,4 @@ fun startPrometheusAgent(
 }
 
 private fun env(name: String) = System.getenv(name).orEmpty().trim()
-
-// A credential for a URL's user info, percent-encoded. URLEncoder writes a space as '+', which user info keeps as a
-// plus, so it becomes %20.
-private fun userInfo(name: String) = URLEncoder.encode(env(name), Charsets.UTF_8).replace("+", "%20")
 // --8<-- [end:embedded-kotlin-config]

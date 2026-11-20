@@ -241,6 +241,12 @@ pins, and no jar on the classpath carries a `logback.xml`, which would replace t
 - **HttpClientCacheLincheckTest** — Lincheck, stress only (tagged `Lincheck`): scrapes under three credentials race LRU
   eviction, expiry, and `close()` in a two-client cache; no scrape is handed a closed client or has its client closed
   under it, and the only open clients are the cached ones, or none after `close()`
+- **EmbeddedAgentConfigTest** — the builder for an embedded agent's settings, and its `embeddedAgent { }` DSL: each
+  method's setting reaches `AgentOptions` as a config file's would, and nothing set gives the defaults;
+  `scrapeSelf` and `path` percent-encode a username and password into the URL so a password with any character decodes
+  back intact, an empty pair means none, and `path` refuses credentials for a URL that has its own; labels become
+  JSON; `setting()` takes precedence over a method; the DSL and the builder build the same tree; `toString()` leaves
+  out the token, the private key, and a path's credentials; and a blank path or an out-of-range port is refused
 - **EmbeddedAgentInfoTest** — EmbeddedAgentInfo data class (launchId, agentName storage)
 - **RequestFailureExceptionTest** — RequestFailureException custom exception class
 - **SslSettingsTest** — SSL keystore/truststore loading for TLS configuration
@@ -554,6 +560,8 @@ These support helpers also live here (not test classes themselves):
   entry instead, since a proxy, agent, or Prometheus already running on the machine holds the defaults.
   `TestUtils.startProxy` / `startAgent` bind the `HARNESS_*` gRPC, admin, and metrics ports unless a spec passes
   its own
+- **TestCerts** — the repository's test certificates (`testing/certs`): their paths, text, and base64, for the specs
+  that give TLS material as PEM
 - **TestOptions** — factories that build `ProxyOptions` / `AgentOptions` from a list, `ConfigVals` from a HOCON
   fragment merged with the reference config, and `ProxyOptions` from a temp config file
 - **EmbeddedTestServer** — `EmbeddedServer.startAndAwaitReady()`, which starts a Ktor server with `wait = false`
@@ -676,8 +684,10 @@ mechanism that the standard suite cannot reach:
   reaches the proxy once rather than on every retry, whether static or discovered; Netty, so each token resolves
   to its own identity
 - **EmbeddedAgentApiTest** — the public `startAsyncAgent()` handle connects from a config file, reports its
-  identity, and disconnects on `shutdown()`; the overload that takes an in-memory `Config` starts an agent whose path
-  the proxy serves, and throws `ConfigLoadException` for a setting it can't use; and a config served from a URL with
+  identity, and disconnects on `shutdown()`; the overload that takes an in-memory `Config`, through the
+  `EmbeddedAgentConfig` builder, starts an agent whose path the proxy serves, and throws `ConfigLoadException` for a
+  setting it can't use; a path given a username and password with the builder reaches a target that demands them as
+  Basic Auth, whatever their characters; and a config served from a URL with
   credentials that holds a setting the agent rejects, whether its options or its constructor reject it, throws
   `ConfigLoadException`, with the credentials in none of its messages, its cause chain, or the log
 - **EmbeddedAgentMetricsTest** — with metrics on, an agent started again after `shutdown()` and two agents at
@@ -727,7 +737,7 @@ mechanism that the standard suite cannot reach:
 - **TlsMutualAuthRejectionTest** — the negative mutual-TLS path over a real Netty handshake, which the
   in-process TLS specs cannot perform (item 28 in `docs/archive/CODE_REVIEW_JUNE_2026.md`)
 - **TlsPemTest** — TLS over Netty with every certificate and key given as PEM, none as a file: the proxy's as base64
-  `-D` settings, and an embedded agent's as PEM text in an in-memory config; a scrape crosses the channel one-way and
+  `-D` settings, and an embedded agent's as PEM text, set with the builder; a scrape crosses the channel one-way and
   with mutual TLS
 
 #### Harness Infrastructure (`harness/support/`)
@@ -739,6 +749,9 @@ mechanism that the standard suite cannot reach:
   listens on, held for the test by a socket bound but not listening, so no other process can take it meanwhile, and
   `HarnessConstants.localConfigFile()` fails for a missing test config rather than fetching one from GitHub
 - **TestUtils** — Utility functions: `startProxy()`, `startAgent()`, `exceptionHandler()`
+- **EmbeddedAgentScrape** — `withEmbeddedAgentScraped()`, which starts a proxy, a scrape target, which can demand
+  Basic Auth, and an agent built with `embeddedAgent { }`, waits until the proxy serves the target's metrics, and tears
+  all three down; `EmbeddedAgentApiTest` and `TlsPemTest` share it
 - **AbstractHarnessTests** — Abstract base defining the standard 8-test suite
 - **BasicHarnessTests** — Reusable test implementations (missing path, invalid path, add/remove paths, etc.)
 - **HarnessTests** — Core integration logic: `proxyCallTest()` (sequential, parallel, concurrent queries),

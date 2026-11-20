@@ -19,8 +19,6 @@
 package io.prometheus.common
 
 import ch.qos.logback.classic.Level
-import com.pambrose.common.utils.TlsContext
-import com.pambrose.common.utils.TlsUtils
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
@@ -32,12 +30,14 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.string.shouldStartWith
 import io.kotest.matchers.types.shouldBeInstanceOf
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.mockkObject
-import io.mockk.unmockkObject
-import io.mockk.verify
-import java.io.File
+import io.prometheus.common.TestCerts.CA_CERT
+import io.prometheus.common.TestCerts.CLIENT_CERT
+import io.prometheus.common.TestCerts.CLIENT_KEY
+import io.prometheus.common.TestCerts.SERVER_CERT
+import io.prometheus.common.TestCerts.SERVER_KEY
+import io.prometheus.common.TestCerts.base64
+import io.prometheus.common.TestCerts.read
+import io.prometheus.common.Utils.causeChain
 import java.util.Base64
 
 // TLS material given as PEM text, the form a platform that passes secrets as environment variables needs, in place of
@@ -56,7 +56,7 @@ class TlsMaterialTest : StringSpec() {
     }
 
     "the base64 of PEM text is decoded" {
-      TlsMaterial.pemText("certChainPem", base64(CA_PEM)) shouldBe CA_PEM
+      TlsMaterial.pemText("certChainPem", encoded(CA_PEM)) shouldBe CA_PEM
     }
 
     // `base64` without -w0 (GNU) or a MIME encoder wraps its output in lines.
@@ -73,7 +73,7 @@ class TlsMaterialTest : StringSpec() {
 
     // The value may be a private key, so the message names the setting and never the value.
     "a value that is neither PEM nor base64 of PEM is refused without the value in the message" {
-      listOf("not a certificate at all", base64("not PEM either"), "%%%").forEach { value ->
+      listOf("not a certificate at all", encoded("not PEM either"), "%%%").forEach { value ->
         val e = shouldThrow<IllegalArgumentException> { TlsMaterial.pemText("privateKeyPem", value) }
         e.message shouldBe "privateKeyPem is neither PEM text nor the base64 of PEM text"
         e.message.orEmpty() shouldNotContain value
@@ -91,25 +91,25 @@ class TlsMaterialTest : StringSpec() {
     }
 
     "a source is given by a path or by a PEM" {
-      TlsSource("certChain", CA_FILE, "").isGiven.shouldBeTrue()
+      TlsSource("certChain", CA_CERT, "").isGiven.shouldBeTrue()
       TlsSource("certChain", "", CA_PEM).isGiven.shouldBeTrue()
     }
 
     "a file and a PEM for the same material are refused" {
-      val e = shouldThrow<IllegalArgumentException> { TlsSource("certChain", CA_FILE, CA_PEM).requireOneSource() }
+      val e = shouldThrow<IllegalArgumentException> { TlsSource("certChain", CA_CERT, CA_PEM).requireOneSource() }
       e.message shouldBe "Set certChainFilePath or certChainPem, not both"
     }
 
     "a source's stream reads the PEM, or the file, or is absent" {
       TlsSource("x", "", CA_PEM).withStream { it.readBytes().decodeToString() } shouldBe CA_PEM
-      TlsSource("x", CA_FILE, "").withStream { it.readBytes().decodeToString() } shouldBe File(CA_FILE).readText()
+      TlsSource("x", CA_CERT, "").withStream { it.readBytes().decodeToString() } shouldBe read(CA_CERT)
       TlsSource("x", "", "").withStream { it.readBytes() }.shouldBeNull()
     }
 
     // As common-utils' file-based builders do, a path is trimmed before it is opened.
     "a source's path is trimmed" {
-      val source = TlsSource("x", "  $CA_FILE \n", "")
-      source.withStream { it.readBytes().decodeToString() } shouldBe File(CA_FILE).readText()
+      val source = TlsSource("x", "  $CA_CERT \n", "")
+      source.withStream { it.readBytes().decodeToString() } shouldBe read(CA_CERT)
     }
 
     "a source whose file doesn't exist is refused" {
@@ -126,13 +126,13 @@ class TlsMaterialTest : StringSpec() {
       oneWay.sslContext.shouldNotBeNull().isServer.shouldBeTrue()
       oneWay.mutualAuth.shouldBeFalse()
 
-      val mutual = TlsMaterial.serverContext(certChain, privateKey, pemSource("trustCertCollection", CA_FILE))
+      val mutual = TlsMaterial.serverContext(certChain, privateKey, pemSource("trustCertCollection", CA_CERT))
       mutual.sslContext.shouldNotBeNull().isServer.shouldBeTrue()
       mutual.mutualAuth.shouldBeTrue()
     }
 
     "a client context from PEM is client-side, with mutual auth only when a certificate and key are given" {
-      val trust = pemSource("trustCertCollection", CA_FILE)
+      val trust = pemSource("trustCertCollection", CA_CERT)
       val oneWay = TlsMaterial.clientContext(none("certChain"), none("privateKey"), trust)
       oneWay.sslContext.shouldNotBeNull().isClient.shouldBeTrue()
       oneWay.mutualAuth.shouldBeFalse()
@@ -149,37 +149,28 @@ class TlsMaterialTest : StringSpec() {
         TlsMaterial.serverContext(
           pemSource("certChain", SERVER_CERT),
           TlsSource("privateKey", SERVER_KEY, ""),
-          TlsSource("trustCertCollection", CA_FILE, ""),
+          TlsSource("trustCertCollection", CA_CERT, ""),
         )
       context.sslContext.shouldNotBeNull().isServer.shouldBeTrue()
       context.mutualAuth.shouldBeTrue()
     }
 
-    // Material given only as files keeps the path it always took, through common-utils.
-    "with no PEM, the contexts come from common-utils' file-based builders" {
-      val serverContext = mockk<TlsContext>()
-      val clientContext = mockk<TlsContext>()
-      mockkObject(TlsUtils)
-      try {
-        every { TlsUtils.buildServerTlsContext(SERVER_CERT, SERVER_KEY, "") } returns serverContext
-        every { TlsUtils.buildClientTlsContext("", "", CA_FILE) } returns clientContext
-
+    // Material given only as files is read the same way, so the files the TLS specs and existing configs name still
+    // work.
+    "a context from files alone is built from the files" {
+      val server =
         TlsMaterial.serverContext(
           TlsSource("certChain", SERVER_CERT, ""),
           TlsSource("privateKey", SERVER_KEY, ""),
-          none("trustCertCollection"),
-        ) shouldBe serverContext
-        TlsMaterial.clientContext(
-          none("certChain"),
-          none("privateKey"),
-          TlsSource("trustCertCollection", CA_FILE, ""),
-        ) shouldBe clientContext
+          TlsSource("trustCertCollection", CA_CERT, ""),
+        )
+      server.sslContext.shouldNotBeNull().isServer.shouldBeTrue()
+      server.mutualAuth.shouldBeTrue()
 
-        verify(exactly = 1) { TlsUtils.buildServerTlsContext(SERVER_CERT, SERVER_KEY, "") }
-        verify(exactly = 1) { TlsUtils.buildClientTlsContext("", "", CA_FILE) }
-      } finally {
-        unmockkObject(TlsUtils)
-      }
+      val client =
+        TlsMaterial.clientContext(none("certChain"), none("privateKey"), TlsSource("trustCertCollection", CA_CERT, ""))
+      client.sslContext.shouldNotBeNull().isClient.shouldBeTrue()
+      client.mutualAuth.shouldBeFalse()
     }
 
     "a server context needs both a certificate chain and a private key" {
@@ -211,8 +202,8 @@ class TlsMaterialTest : StringSpec() {
       val options =
         proxyOptions(
           [
-            "-Dproxy.tls.certChainPem=${base64(read(SERVER_CERT))}",
-            "-Dproxy.tls.privateKeyPem=${base64(read(SERVER_KEY))}",
+            "-Dproxy.tls.certChainPem=${base64(SERVER_CERT)}",
+            "-Dproxy.tls.privateKeyPem=${base64(SERVER_KEY)}",
           ],
         )
       options.isTlsEnabled.shouldBeTrue()
@@ -222,20 +213,20 @@ class TlsMaterialTest : StringSpec() {
     }
 
     "the agent takes its trust collection as PEM, which turns TLS on without a certificate of its own" {
-      val trustArg = "-Dagent.tls.trustCertCollectionPem=${base64(read(CA_FILE))}"
+      val trustArg = "-Dagent.tls.trustCertCollectionPem=${base64(CA_CERT)}"
       val options = agentOptions(["--name", "a", "--proxy", "host", trustArg], false)
       options.isTlsEnabled.shouldBeFalse()
       options.hasTrustCertCollection.shouldBeTrue()
-      options.trustCertCollectionSource.withStream { it.readBytes().decodeToString() } shouldBe read(CA_FILE).trim()
+      options.trustCertCollectionSource.withStream { it.readBytes().decodeToString() } shouldBe read(CA_CERT).trim()
     }
 
     // A private key in the log would be a leak; only whether each PEM is set is logged.
     "a PEM setting is logged as set, never by its value" {
-      val keyBase64 = base64(read(SERVER_KEY))
+      val keyBase64 = base64(SERVER_KEY)
       val keyBody = read(SERVER_KEY).lines()[1]
       val events =
         captureLogs("io.prometheus", Level.INFO) {
-          val certArg = "-Dproxy.tls.certChainPem=${base64(read(SERVER_CERT))}"
+          val certArg = "-Dproxy.tls.certChainPem=${base64(SERVER_CERT)}"
           proxyOptions([certArg, "-Dproxy.tls.privateKeyPem=$keyBase64"])
         }
       val lines = events.map { it.formattedMessage }
@@ -256,7 +247,7 @@ class TlsMaterialTest : StringSpec() {
               SERVER_CERT,
               "--key",
               SERVER_KEY,
-              "-Dproxy.tls.certChainPem=${base64(read(SERVER_CERT))}",
+              "-Dproxy.tls.certChainPem=${base64(SERVER_CERT)}",
             ],
           )
         }
@@ -264,7 +255,7 @@ class TlsMaterialTest : StringSpec() {
     }
 
     "a PEM certificate without a key is incomplete TLS" {
-      val certArg = "-Dproxy.tls.certChainPem=${base64(read(SERVER_CERT))}"
+      val certArg = "-Dproxy.tls.certChainPem=${base64(SERVER_CERT)}"
       val e = shouldThrow<IllegalArgumentException> { proxyOptions([certArg]) }
       e.message shouldContain "private key file is missing"
       e.message shouldContain "privateKeyPem"
@@ -277,14 +268,14 @@ class TlsMaterialTest : StringSpec() {
           agentOptions(["--name", "a", "--proxy", "host", "-Dagent.tls.trustCertCollectionPem=$GARBAGE"], false)
         }
       e.message shouldContain "trustCertCollectionPem is neither PEM text nor the base64 of PEM text"
-      generateSequence<Throwable>(e) { it.cause }.forEach { it.message.orEmpty() shouldNotContain GARBAGE }
+      e.causeChain().forEach { it.message.orEmpty() shouldNotContain GARBAGE }
     }
 
     "an embedded agent with a file and a PEM for the same material throws ConfigLoadException" {
       val e =
         shouldThrow<ConfigLoadException> {
-          val trustArg = "-Dagent.tls.trustCertCollectionPem=${base64(read(CA_FILE))}"
-          agentOptions(["--name", "a", "--proxy", "host", "--trust", CA_FILE, trustArg], false)
+          val trustArg = "-Dagent.tls.trustCertCollectionPem=${base64(CA_CERT)}"
+          agentOptions(["--name", "a", "--proxy", "host", "--trust", CA_CERT, trustArg], false)
         }
       e.message shouldContain "Set trustCertCollectionFilePath or trustCertCollectionPem, not both"
       e.cause.shouldBeInstanceOf<IllegalArgumentException>()
@@ -292,19 +283,12 @@ class TlsMaterialTest : StringSpec() {
   }
 
   companion object {
-    private const val CA_FILE = "testing/certs/ca.pem"
-    private const val SERVER_CERT = "testing/certs/server1.pem"
-    private const val SERVER_KEY = "testing/certs/server1.key"
-    private const val CLIENT_CERT = "testing/certs/client.pem"
-    private const val CLIENT_KEY = "testing/certs/client.key"
     private const val MISSING_FILE = "/no/such/dir/missing.pem"
     private const val GARBAGE = "definitely-not-a-certificate"
 
-    private val CA_PEM = read(CA_FILE).trim()
+    private val CA_PEM = read(CA_CERT).trim()
 
-    private fun read(path: String) = File(path).readText()
-
-    private fun base64(text: String) = Base64.getEncoder().encodeToString(text.toByteArray())
+    private fun encoded(text: String) = Base64.getEncoder().encodeToString(text.toByteArray())
 
     // The material in [file], given as PEM text.
     private fun pemSource(

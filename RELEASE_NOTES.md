@@ -13,8 +13,10 @@ the demos' setup: each checks for the tools it needs before it starts.
 
 ### New Features
 
-- **Start an embedded agent from a config in memory.** `Agent.startAsyncAgent(config)` takes a Typesafe `Config`, so
-  the agent's token, the proxy's certificate, and credentials for your app's `/metrics` never sit in a config file.
+- **Start an embedded agent from settings in code.** `embeddedAgent { }` (or `EmbeddedAgentConfig.builder()` from
+  Java) builds the agent's settings with a typed method for each, and `Agent.startAsyncAgent(config)` takes a Typesafe
+  `Config`, so the agent's token, the proxy's certificate, and credentials for your app's `/metrics` never sit in a
+  config file.
 - **TLS certificates and keys as environment variables.** `CERT_CHAIN_PEM`, `PRIVATE_KEY_PEM`, and
   `TRUST_CERT_COLLECTION_PEM` (or the `tls.*Pem` settings) take PEM text, or its base64, in place of a file, so the
   Docker images run TLS on a platform that passes secrets as variables, with no wrapper image.

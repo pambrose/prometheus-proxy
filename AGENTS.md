@@ -69,6 +69,9 @@ Only these types are part of the supported, documented public API. Everything el
   file or URL, or a Typesafe `Config` built in memory; `typesafe-config` is therefore an `api` dependency)
 - `io.prometheus.Proxy` (entry point + companion `main`)
 - `io.prometheus.agent.AgentOptions` / `io.prometheus.proxy.ProxyOptions` / `io.prometheus.common.BaseOptions`
+- `io.prometheus.agent.EmbeddedAgentConfig` and `embeddedAgent { }` (an embedded agent's settings built in code with
+  typed methods, for Java through `EmbeddedAgentConfig.builder()`, and started with `start()`; it builds the `Config`
+  `startAsyncAgent(Config)` takes)
 - `io.prometheus.agent.EmbeddedAgentInfo` (handle returned by `Agent.startAsyncAgent`)
 - `io.prometheus.common.EnvVars`
 - `io.prometheus.common.ConfigLoadException` (thrown by `startAsyncAgent` and `startSyncAgent` when `exitOnMissingConfig` is false, and by `startAsyncAgent(Config)` always, on a config that can't be loaded or a setting the options or the Agent reject, with a config URL's credentials redacted from its whole cause chain, so embedded hosts can catch it instead of the JVM exiting)
@@ -93,7 +96,7 @@ aren't in the proto: a scrape result is sent in chunks once its gzipped size rea
 - **Shared metrics**: `AgentMetrics` / `ProxyMetrics` build their collectors once per JVM in their companion objects and share them through `SharedCollectors`, since the default registry rejects a second collector with the same name and label names, which kept a second agent in a JVM from connecting. Add a new metric to its companion's `SHARED` list; an agent metric takes `launch_id` as its first label and goes in `LABELED` too, so a stopped agent's series are removed.
 - **TLS material**: each certificate, key, or trust collection is a file (`tls.*FilePath`) or PEM text or its base64
   (`tls.*Pem`, `*_PEM` env vars, no CLI flags), never both (`TlsSource.requireOneSource`); `TlsMaterial` builds the
-  gRPC TLS context, through common-utils' `TlsUtils` when no PEM is given. Never log a PEM value, only whether it's set.
+  gRPC TLS context from either, with the `GrpcSslContexts` calls common-utils' `TlsUtils` makes. Never log a PEM value, only whether it's set.
 - **Metric filtering**: `MetricFilter` (per-path `agent.filters`) drops whole metric families in `AgentHttpService` before gzip/chunking; fails open on non-text or non-UTF-8 payloads.
 - **Dashboard**: Ktor + htmx (WebJar, no CDN) on its own port, fed by the `ProxyEvent` bus; see `proxy/dashboard/`.
   The Links column's brand icons (`LinkIcon`) come from the Simple Icons WebJar, of which the build's

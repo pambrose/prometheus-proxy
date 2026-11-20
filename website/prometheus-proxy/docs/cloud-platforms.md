@@ -22,8 +22,7 @@ App platform (ECS, Cloud Run, ...)               Proxy host (AWS, GCP, Azure, Di
 - The agent runs inside the app and connects out to the proxy's agent port, so the app opens no port, and nothing
   outside reaches into the platform.
 - It answers each scrape by reading the app's own `/metrics` on `127.0.0.1`. If that endpoint asks for Basic Auth, the
-  credentials go in the scrape URL, percent-encoded; the agent sends them with each scrape and leaves them out of its
-  logs.
+  agent sends the credentials with each scrape and leaves them out of its logs.
 - Prometheus scrapes the proxy, on a private network, at the path the agent registered. Keep the proxy's scrape port
   (8080) off the internet: anyone who reaches it scrapes through the agent. Only the agent port (50051) is public,
   behind TLS and a token.
@@ -33,8 +32,9 @@ App platform (ECS, Cloud Run, ...)               Proxy host (AWS, GCP, Azure, Di
 
 ### Starting the Agent
 
-Build the agent's config in memory from the app's own settings, so no file holds the token or the password, and start
-it with [`Agent.startAsyncAgent(config)`](embedded-agent.md#configuring-in-code):
+Build the agent's settings in code from the app's own, with
+[`embeddedAgent { }` or `EmbeddedAgentConfig.builder()`](embedded-agent.md#configuring-in-code), so no file holds the
+token or the password, and start it:
 
 === "Kotlin"
 
@@ -54,7 +54,9 @@ it with [`Agent.startAsyncAgent(config)`](embedded-agent.md#configuring-in-code)
 - The agent reads its own environment variables too, such as `AGENT_TOKEN` and `PROXY_HOSTNAME`, and they take
   precedence over the config, so keep those names out of the app's environment unless you mean the agent to use them.
 - The app's version in `agent.name` tells the old and new revisions apart in the proxy's logs during a deploy.
-- The agent's admin and metrics servers stay off, since the app has no port to spare for them.
+- The agent's admin and metrics servers stay off, as they are unless asked for, since the app has no port to spare for
+  them.
+- `scrapeSelf` percent-encodes the credentials into the scrape URL, so a password with any character works.
 - A failure to start is logged, and the app carries on without the agent: its metrics aren't worth an outage.
 
 ### Starting and Stopping It With the App
