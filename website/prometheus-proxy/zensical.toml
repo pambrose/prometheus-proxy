@@ -28,6 +28,7 @@ nav = [
     { "Network Demo" = "network-demo.md" },
     { "Kubernetes Demo" = "kubernetes-demo.md" },
     { "Embedded Demo" = "embedded-demo.md" },
+    { "Spring Boot Demo" = "spring-boot-demo.md" },
   ]},
   { "Deployment" = [
     { "Docker" = "docker.md" },

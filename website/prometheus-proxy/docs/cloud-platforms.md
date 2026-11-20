@@ -67,7 +67,8 @@ Start the agent once the app serves `/metrics`, and stop it when the app stops. 
 --8<-- "src/test/kotlin/hosts/KtorHostExample.kt:ktor-host"
 ```
 
-In Spring Boot, start it from an `ApplicationReadyEvent` listener and call `shutdown()` from a `@PreDestroy` method.
+In Spring Boot, a `SmartLifecycle` bean starts and stops it with the app; see
+[In Spring Boot](embedded-agent.md#in-spring-boot), and the [Spring Boot Demo](spring-boot-demo.md), which runs one.
 
 Give the app's Logback configuration the line the standalone agent has for gRPC's internal logging; see
 [Logging](embedded-agent.md#logging).
@@ -88,10 +89,10 @@ environment variables. A two-stage Dockerfile, for a Gradle app named `my-app` t
   or an IDE doesn't make the next build start over.
 - The start script `installDist` writes reads `JAVA_OPTS`. Besides sizing the heap from the container's memory, it
   carries two flags for Netty, which the agent's gRPC runs on, on Java 24 and later; the stock images run with both:
-  - `--enable-native-access=ALL-UNNAMED` lets Netty load its native TLS library without the warning Java prints, which
-    says a later release will block the call.
-  - `--sun-misc-unsafe-memory-access=allow` lets Netty use `sun.misc.Unsafe` for its buffers, which it otherwise does
-    without. Java 22 and earlier don't know it and won't start with it, so leave it out there.
+    - `--enable-native-access=ALL-UNNAMED` lets Netty load its native TLS library without the warning Java prints,
+      which says a later release will block the call.
+    - `--sun-misc-unsafe-memory-access=allow` lets Netty use `sun.misc.Unsafe` for its buffers, which it otherwise
+      does without. Java 22 and earlier don't know it and won't start with it, so leave it out there.
 - An app built as a fat JAR starts with `java -jar`, which doesn't read `JAVA_OPTS`: give the options in
   `JDK_JAVA_OPTIONS`, which the `java` launcher reads, or on its command line.
 - Any JDK 17 or later runs the agent; the stock images run 25.

@@ -195,6 +195,7 @@ class ConfigFileKeysTest : StringSpec() {
         "demos/network/config",
         "demos/kubernetes/config",
         "demos/embedded/config",
+        "demos/spring-boot/config",
         "src/test/resources/containers",
       )
 
@@ -206,6 +207,7 @@ class ConfigFileKeysTest : StringSpec() {
         "demos/network/config",
         "demos/kubernetes/config",
         "demos/embedded/config",
+        "demos/spring-boot/config",
         "etc/compose",
       )
 

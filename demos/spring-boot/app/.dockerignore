@@ -1,0 +1,4 @@
+# The build context is this directory: the sources for the compiled build, and the jar demo.sh builds on the host for
+# the prebuilt one (Dockerfile).
+target
+!target/roastery.jar

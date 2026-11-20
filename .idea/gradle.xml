@@ -12,6 +12,15 @@
           </set>
         </option>
       </GradleProjectSettings>
+      <GradleProjectSettings>
+        <option name="externalProjectPath" value="$PROJECT_DIR$/demos/embedded/app" />
+        <option name="gradleJvm" value="17" />
+        <option name="modules">
+          <set>
+            <option value="$PROJECT_DIR$/demos/embedded/app" />
+          </set>
+        </option>
+      </GradleProjectSettings>
     </option>
   </component>
 </project>

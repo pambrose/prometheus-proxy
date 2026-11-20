@@ -142,6 +142,39 @@ updates:
       - dependency-name: "eclipse-temurin"
         update-types: ["version-update:semver-major"]
 
+  # The images the Spring Boot demo's roastery is built and runs on (demos/spring-boot/app/Dockerfile): Maven, on a JDK
+  # 25, and eclipse-temurin's JRE, both pinned by tag and digest. Its compose file has no third-party image but
+  # Prometheus, which moves by hand, as in the other demos, so it has no entry.
+  - package-ecosystem: docker
+    directory: /demos/spring-boot/app
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      spring-boot-demo-app:
+        patterns: ["*"]
+    ignore:
+      # Java 25, the LTS the proxy and agent images ship, as in /etc/docker; moving to another line is a deliberate
+      # change.
+      - dependency-name: "eclipse-temurin"
+        update-types: ["version-update:semver-major"]
+
+  # The Spring Boot demo's roastery's Spring Boot (demos/spring-boot/app/pom.xml), whose dependency management sets the
+  # versions of the agent's libraries the roastery runs: a new release reaches make consumer-check here first.
+  - package-ecosystem: maven
+    directory: /demos/spring-boot/app
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      spring-boot-demo-maven:
+        patterns: ["*"]
+    ignore:
+      # The release the demo builds against with make up, which each release bumps (docs/RELEASE.md step 2).
+      - dependency-name: "com.pambrose:prometheus-proxy"
+
   # The Kubernetes demo's third-party images in its manifests (demos/kubernetes/k8s), which the docker ecosystem reads:
   # the Python image its simulated services and targets-sync run on, pinned by tag and digest. Its kind node image
   # (demos/kubernetes/kind) isn't here: it moves with the kind release it was built for, by hand. Like the other demos,

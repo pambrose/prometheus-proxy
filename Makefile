@@ -42,8 +42,10 @@ RELEASE_VERSION_FILES := README.md llms.txt etc/compose/proxy.yml examples/cloud
 	src/test/kotlin/website/EmbeddedAgentExamples.txt src/test/kotlin/website/KubernetesExamples.txt \
 	docs/RELEASE.md .claude/skills/publishing-release/SKILL.md \
 	demos/basics/README.md demos/network/README.md demos/kubernetes/README.md demos/embedded/README.md \
+	demos/spring-boot/README.md demos/spring-boot/app/pom.xml \
 	website/prometheus-proxy/docs/basics-demo.md website/prometheus-proxy/docs/network-demo.md \
-	website/prometheus-proxy/docs/kubernetes-demo.md website/prometheus-proxy/docs/embedded-demo.md
+	website/prometheus-proxy/docs/kubernetes-demo.md website/prometheus-proxy/docs/embedded-demo.md \
+	website/prometheus-proxy/docs/spring-boot-demo.md
 # The CI jobs that must have passed for the release commit, as workflow-file/job-name, separated by semicolons since
 # job names can hold spaces. make release itself runs only the tests and the distro build, so these are what cover
 # the coverage floors, TLA+, the alerting rules, the Helm charts, the docs site build, what a Maven build that embeds
@@ -61,14 +63,15 @@ SITE_DIR := $(WEBSITE_DIR)/prometheus-proxy
 SITE_VERSION_SOURCES := $(SITE_DIR)/docs src/test/kotlin/website src/test/java/website
 
 # The customer demos, whose Prometheus configs and rules check-rules validates: the dashboard and Grafana, the network
-# between the agents and the proxies, the Helm charts deployed on two kind clusters, and an app with the agent
-# embedded, its metrics in Grafana. Each demo under demos/ is
+# between the agents and the proxies, the Helm charts deployed on two kind clusters, an app with the agent embedded,
+# its metrics in Grafana, and a Spring Boot app with the agent embedded. Each demo under demos/ is
 # self-contained, with its own Makefile for starting and stopping it (`make -C demos/<name> help`), so this one has no
 # demo targets.
 BASICS_DEMO_DIR := demos/basics
 NETWORK_DEMO_DIR := demos/network
 KUBERNETES_DEMO_DIR := demos/kubernetes
 EMBEDDED_DEMO_DIR := demos/embedded
+SPRING_BOOT_DEMO_DIR := demos/spring-boot
 
 # TLA+ model checking (specs/tla). The tools jar is git-ignored, and downloaded when it's missing or doesn't match
 # TLA_SHA256; TLC's working states go under build/.
@@ -240,6 +243,8 @@ check-rules:  ## Validate the alerting rules in grafana/alerts.yml, and each dem
 		-v "$(CURDIR)/$(EMBEDDED_DEMO_DIR)/prometheus/embedded-alerts.yml:/etc/prometheus/rules/embedded-alerts.yml:ro" \
 		-v "$(CURDIR)/grafana/alerts.yml:/etc/prometheus/rules/alerts.yml:ro" \
 		--entrypoint promtool $(PROMETHEUS_IMAGE) check config /etc/prometheus/prometheus.yml
+	docker run --rm -v "$(CURDIR)/$(SPRING_BOOT_DEMO_DIR)/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
+		--entrypoint promtool $(PROMETHEUS_IMAGE) check config /etc/prometheus/prometheus.yml
 
 helm-lint:  ## Lint the Helm charts and validate their rendered manifests (needs Docker)
 	@set -e; for chart in $(CHARTS); do for values in charts/$$chart/ci/*-values.yaml; do \
@@ -294,9 +299,12 @@ ci-build:  ## The CI workflow's build job: compile, lint, and detekt, then the t
 # CI's consumer-check job. A Maven build that embeds the agent resolves the published POM by Maven's rules, which the
 # repo's Gradle builds don't follow, so this publishes the artifact to the local Maven repository, needing no GPG key,
 # as publish-local-snapshot does, and has etc/consumer-check/check.sh build a Maven project that depends only on it.
-consumer-check: _require-version  ## Build a Maven project that embeds the agent against this checkout's POM, and check what it resolves (needs mvn)
+# Then it builds the Spring Boot demo's roastery against it too, whose versions Spring Boot's dependency management
+# sets, so a Spring Boot release that breaks the agent fails here.
+consumer-check: _require-version  ## Build Maven projects that embed the agent, a Spring Boot app among them, against this checkout's POM, and check what they resolve (needs mvn)
 	$(GRADLE) -PoverrideVersion=$(CONSUMER_CHECK_VERSION) publishToMavenLocal
 	./etc/consumer-check/check.sh $(CONSUMER_CHECK_VERSION)
+	mvn --batch-mode --quiet -f $(SPRING_BOOT_DEMO_DIR)/app -Dprometheus-proxy.version=$(CONSUMER_CHECK_VERSION) verify
 
 docker-clean-dry:  ## Preview what `make docker-clean` would reclaim (removes nothing)
 	@./bin/docker-clean-tests.sh --dry-run --cache

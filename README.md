@@ -60,11 +60,12 @@ it one step at a time: what to open, what to look for, and how each step does wh
 | [Network](demos/network) | The same proxy and agents with a simulated WAN between them, and a standby proxy. A far link, a thin one fixed by filtering at the agent, a proxy that goes away, a link that dies silently, a flaky link traced in Zipkin, and the whole WAN going down. | 7 parts, about 21 minutes |
 | [Kubernetes](demos/kubernetes) | The project's Helm charts on two kind clusters. The target cluster exposes nothing, annotating a Service is all it takes for Prometheus to scrape it, Kubernetes replaces a lost agent by itself, and a config change costs a restart where a target change doesn't. Needs kind, `kubectl`, and Helm as well as Docker. | 4 parts, about 11 minutes |
 | [Embedded](demos/embedded) | A Ktor coffee shop with the agent embedded in it, its metrics in Grafana with no port opened for them. A rush fills the queue, a broken machine fires an alert, a deploy hands the agent's paths to the new version, the shop keeps serving while the proxy is away, and every secret comes from the environment. | 7 parts, about 15 minutes |
+| [Spring Boot](demos/spring-boot) | A Spring Boot roastery, written in Java, with the agent embedded through `EmbeddedAgentConfig.builder()`. The agent starts and stops with the app, reads Actuator's metrics behind Spring Security, runs with the versions of its libraries Spring Boot picks, and goes first in a graceful shutdown. | 4 parts, about 8 minutes |
 
 Start with the basics demo. The proxy and agent are the released images, from Docker Hub, so there's nothing to build:
-on macOS or Linux, the basics, network, and embedded demos need only
+on macOS or Linux, the basics, network, embedded, and Spring Boot demos need only
 [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2, `git`, `make`, `curl`, and a browser; the
-embedded demo builds its app inside Docker. The Kubernetes demo runs two Kubernetes clusters in Docker, so it also
+embedded and Spring Boot demos build their apps inside Docker. The Kubernetes demo runs two Kubernetes clusters in Docker, so it also
 needs [kind](https://kind.sigs.k8s.io/) 0.33.0 or later, [`kubectl`](https://kubernetes.io/docs/tasks/tools/), and
 [Helm](https://helm.sh/) 3 or 4.
 
@@ -80,9 +81,10 @@ The demos use different ports, so they can run side by side. Each demo's README 
 script, and the website's
 [Basics Demo](https://pambrose.github.io/prometheus-proxy/basics-demo/),
 [Network Demo](https://pambrose.github.io/prometheus-proxy/network-demo/),
-[Kubernetes Demo](https://pambrose.github.io/prometheus-proxy/kubernetes-demo/), and
-[Embedded Demo](https://pambrose.github.io/prometheus-proxy/embedded-demo/) pages walk through the same scenarios
-with screenshots.
+[Kubernetes Demo](https://pambrose.github.io/prometheus-proxy/kubernetes-demo/),
+[Embedded Demo](https://pambrose.github.io/prometheus-proxy/embedded-demo/), and
+[Spring Boot Demo](https://pambrose.github.io/prometheus-proxy/spring-boot-demo/) pages walk through the same
+scenarios.
 
 ## ✨ New Features
 
@@ -95,7 +97,8 @@ as PEM text, or its base64, in environment variables (`CERT_CHAIN_PEM`, `PRIVATE
 site's new [Cloud Platforms](https://pambrose.github.io/prometheus-proxy/cloud-platforms/) page runs an embedded agent
 in an app on ECS, Cloud Run, or Azure Container Apps, with the proxy on AWS, GCP, Azure, DigitalOcean, or Railway, and
 [`examples/cloud-proxy`](examples/cloud-proxy) holds a proxy and Prometheus to start from, and a new
-[embedded demo](demos/embedded) runs it all on your laptop, in a Ktor app. The [release notes](RELEASE_NOTES.md) and
+[embedded demo](demos/embedded) runs it all on your laptop, in a Ktor app, and a
+[Spring Boot demo](demos/spring-boot) in a Spring Boot app written in Java. The [release notes](RELEASE_NOTES.md) and
 the [changelog](CHANGELOG.md) have the full list.
 
 Each earlier release's summary is in the [release notes](RELEASE_NOTES.md), and the [changelog](CHANGELOG.md) has
