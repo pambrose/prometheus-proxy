@@ -144,15 +144,17 @@ proxy_lines() { "${COMPOSE[@]}" logs --no-log-prefix proxy 2>/dev/null | grep -E
 # How many lines some text has, not counting an empty one.
 count_lines() { grep -c . <<<"$1" || true; }
 
+# How many of the proxy's log lines match an extended regex.
+proxy_count() { count_lines "$(proxy_lines "$1")"; }
+
+# Whether more than $2 of the proxy's log lines match the extended regex $1, which it keeps in proxy_matches.
+proxy_logged_more() { proxy_matches="$(proxy_lines "$1")" && (($(count_lines "$proxy_matches") > $2)); }
+
 # Prints the proxy's latest log line matching an extended regex, once there are more than [after] of them, waiting up
 # to 30s; prints nothing if none comes. It reads the log once a second: proxy_said <regex> [after]
 proxy_said() {
-  local after="${2:-0}" lines deadline=$((SECONDS + 30))
-  until lines="$(proxy_lines "$1")" && (($(count_lines "$lines") > after)); do
-    ((SECONDS < deadline)) || return 0
-    sleep 1
-  done
-  printf '\033[36mThe proxy logged:\033[0m %s\n' "$(tail -1 <<<"$lines")"
+  wait_until 30 proxy_logged_more "$1" "${2:-0}" || return 0
+  printf '\033[36mThe proxy logged:\033[0m %s\n' "$(tail -1 <<<"$proxy_matches")"
 }
 
 # Whether version $1 (x.y.z) is later than $2. bash 3.2, macOS's, has no sort -V everywhere, so field by field.
@@ -302,7 +304,7 @@ cmd_down() {
 
 cmd_status() {
   "${COMPOSE[@]}" "${ON_DEMAND[@]}" ps
-  if curl -fsS -o /dev/null "$APP_URL/healthz" 2>/dev/null; then
+  if answers "$APP_URL/healthz"; then
     echo
     bold "The coffee shop"
     curl -fsS "$APP_URL/status"
@@ -446,7 +448,7 @@ TOUR_PARTS=(
 
 cmd_tour() {
   check_tour_from "${1:-}"
-  curl -fsS -o /dev/null "$APP_URL/healthz" 2>/dev/null ||
+  answers "$APP_URL/healthz" ||
     die "the demo isn't running; start it with '$MAKE_NAME up' in demos/embedded"
   tour_contents "embedded demo"
 
@@ -627,7 +629,7 @@ main() {
     ;;
   deploy)
     local overwrites
-    overwrites="$(count_lines "$(proxy_lines "Overwriting path /coffee_shop_metrics")")"
+    overwrites="$(proxy_count "Overwriting path /coffee_shop_metrics")"
     bold "Deploying version 1.1 beside version 1.0"
     "${COMPOSE[@]}" --profile deploy up --detach --no-deps --wait coffee-shop-next
     proxy_said "Overwriting path /coffee_shop_metrics" "$overwrites"
@@ -650,7 +652,7 @@ main() {
     ;;
   rollback)
     local overwrites
-    overwrites="$(count_lines "$(proxy_lines "Overwriting path /coffee_shop_metrics")")"
+    overwrites="$(proxy_count "Overwriting path /coffee_shop_metrics")"
     "${COMPOSE[@]}" up --detach --no-deps --wait coffee-shop
     proxy_said "Overwriting path /coffee_shop_metrics" "$overwrites"
     "${COMPOSE[@]}" --profile deploy rm --stop --force coffee-shop-next

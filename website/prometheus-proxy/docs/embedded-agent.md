@@ -152,13 +152,14 @@ returns the builder, whose methods chain and end with `build()`. A method called
 | `setting(key, value)`                                              | the key, under `agent`                              | Any other setting, such as `http.clientTimeoutSecs`; it takes precedence over a method that sets the same key                             |
 
 A username and password are percent-encoded into the URL and sent as Basic Auth; both empty, as unset environment
-variables give, means none. Labels are a map of names to values.
+variables give, means none. Labels are a map of names to values. A value the builder can tell is wrong, such as a blank
+path or a port out of range, throws `ConfigLoadException`, as `start()` does for a setting the agent rejects.
 
 | `EmbeddedAgentConfig` member | Type                 | Description                                                                                            |
 |:-----------------------------|:---------------------|:-------------------------------------------------------------------------------------------------------|
 | `start(logBanner)`           | `EmbeddedAgentInfo`  | Starts the agent, as `startAsyncAgent(config)` does, and throws as it does; `logBanner` defaults to `true` |
 | `toConfig()`                 | `Config`             | The settings as the tree a config file holds, rooted at `agent`                                        |
-| `toString()`                 | `String`             | The settings, without the token, the private key, or a path's credentials, so an app can log them      |
+| `toString()`                 | `String`             | The settings, with the token, passwords, and PEMs shown only as set, and a path's credentials masked, so an app can log them |
 
 ### `EmbeddedAgentInfo`
 

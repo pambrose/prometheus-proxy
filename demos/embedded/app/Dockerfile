@@ -12,6 +12,8 @@ ARG APP_BUILD=compiled
 FROM gradle:9.9.1-jdk25@sha256:39d599d8df1777d73b00b5bf928254ecd121802d518577fe08d41a3cf86aa45f AS compiled
 ARG PROXY_VERSION
 WORKDIR /src
+# catalog is the named build context above, not a stage, which hadolint can't see
+# hadolint ignore=DL3022
 COPY --from=catalog libs.versions.toml /catalog/libs.versions.toml
 COPY settings.gradle.kts build.gradle.kts ./
 COPY src ./src

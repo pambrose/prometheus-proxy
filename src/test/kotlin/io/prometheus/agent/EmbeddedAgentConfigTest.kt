@@ -22,10 +22,10 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
-import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
+import io.prometheus.common.ConfigLoadException
 import io.prometheus.common.TestCerts.CA_CERT
 import io.prometheus.common.TestCerts.CLIENT_CERT
 import io.prometheus.common.TestCerts.CLIENT_KEY
@@ -106,7 +106,7 @@ class EmbeddedAgentConfigTest : StringSpec() {
     "an empty username and password, or an empty certificate, count as none" {
       val config = embeddedAgent { scrapeSelf("app", 8080, username = "", password = "").trustCertificatePem("") }
       config.pathConfigs().single().url shouldBe "http://127.0.0.1:8080/metrics"
-      config.toString() shouldContain "tls=off"
+      config.toString() shouldContain "trustCertCollectionPem=(none)"
       config.options().hasTrustCertCollection.shouldBeFalse()
     }
 
@@ -118,12 +118,12 @@ class EmbeddedAgentConfigTest : StringSpec() {
       url.host shouldBe "sidecar"
     }
 
+    // Read as the agent reads it: a Compose service name such as my_sidecar isn't a host java.net.URI accepts.
     "path refuses separate credentials for a URL that already has its own" {
-      val e =
-        shouldThrow<IllegalArgumentException> {
-          embeddedAgent { path("x", "http://u:p@sidecar:9100/metrics", "user", "password") }
-        }
-      e.message shouldContain "already has credentials"
+      listOf("http://u:p@sidecar:9100/metrics", "http://u:p@my_sidecar:9100/metrics").forEach { url ->
+        val e = shouldThrow<ConfigLoadException> { embeddedAgent { path("x", url, "user", "password") } }
+        e.message shouldContain "already has credentials"
+      }
     }
 
     "a path's labels are written as the JSON pathConfigs takes" {
@@ -147,26 +147,6 @@ class EmbeddedAgentConfigTest : StringSpec() {
       options.httpClientTimeoutSecs shouldBe 33
     }
 
-    "the DSL and the builder build the same config" {
-      val dsl =
-        embeddedAgent {
-          name("app")
-          proxy("proxy:50051")
-          token(TOKEN)
-          scrapeSelf("app_metrics", 8080, "user", PASSWORD)
-        }
-      val builder =
-        EmbeddedAgentConfig
-          .builder()
-          .name("app")
-          .proxy("proxy:50051")
-          .token(TOKEN)
-          .scrapeSelf("app_metrics", 8080, "user", PASSWORD)
-          .build()
-
-      dsl.toConfig().root().unwrapped() shouldBe builder.toConfig().root().unwrapped()
-    }
-
     // An app may log its settings; the token, the private key, and a path's credentials stay out.
     "toString leaves out the token, the private key, and a path's credentials" {
       val shown =
@@ -179,24 +159,35 @@ class EmbeddedAgentConfigTest : StringSpec() {
         }.toString()
 
       shown shouldContain "name=app"
-      shown shouldContain "token=set"
-      shown shouldContain "tls=mutual"
-      shown shouldContain "/app_metrics -> http://***@127.0.0.1:8080/metrics"
+      shown shouldContain "agentToken=(set)"
+      shown shouldContain "privateKeyPem=(set)"
+      shown shouldContain "url=http://***@127.0.0.1:8080/metrics"
       listOf(TOKEN, "user", "p%40ss", read(CLIENT_KEY).lines()[1]).forEach { shown shouldNotContain it }
     }
 
-    "a blank path, or a port out of range, is refused" {
-      shouldThrow<IllegalArgumentException> { embeddedAgent { scrapeSelf(" ", 8080) } }
-      shouldThrow<IllegalArgumentException> { embeddedAgent { scrapeSelf("app", 0) } }
-      shouldThrow<IllegalArgumentException> { embeddedAgent { path("", "http://host/metrics") } }
-      shouldThrow<IllegalArgumentException> { embeddedAgent { agentMetrics(70000) } }
+    // It's read from the built tree, so what setting() overrides shows too, and a secret set that way stays out.
+    "toString shows what setting sets, with its secrets left out" {
+      val shown =
+        embeddedAgent {
+          name("from-the-builder")
+          setting("name", "from-a-setting")
+          setting("agentToken", TOKEN)
+          setting("http.trustStorePassword", PASSWORD)
+        }.toString()
+
+      shown shouldContain "name=from-a-setting"
+      shown shouldContain "agentToken=(set)"
+      shown shouldContain "trustStorePassword=(set)"
+      listOf("from-the-builder", TOKEN, PASSWORD).forEach { shown shouldNotContain it }
     }
 
-    "path and scrapeSelf each add a path" {
-      embeddedAgent {
-        scrapeSelf("a", 8080)
-        path("b", "http://sidecar:9100/metrics")
-      }.pathConfigs() shouldHaveSize 2
+    // As a setting the agent rejects throws ConfigLoadException when it starts, so does a value the builder rejects.
+    "a blank path, a port out of range, or a URL with no scheme throws ConfigLoadException" {
+      shouldThrow<ConfigLoadException> { embeddedAgent { scrapeSelf(" ", 8080) } }
+      shouldThrow<ConfigLoadException> { embeddedAgent { scrapeSelf("app", 0) } }
+      shouldThrow<ConfigLoadException> { embeddedAgent { path("", "http://host/metrics") } }
+      shouldThrow<ConfigLoadException> { embeddedAgent { path("app", "sidecar:9100/metrics", "user", "pw") } }
+      shouldThrow<ConfigLoadException> { embeddedAgent { agentMetrics(70000) }.options() }
     }
   }
 

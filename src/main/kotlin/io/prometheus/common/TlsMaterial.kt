@@ -35,7 +35,7 @@ internal class TlsSource(
   path: String,
   val pem: String,
 ) {
-  // Trimmed, as the paths have always been before a file is opened.
+  // Trimmed before the file is opened
   val path: String = path.trim()
 
   val pathSetting: String get() = "${name}FilePath"
@@ -79,7 +79,7 @@ internal class TlsSource(
 /**
  * Turns the TLS settings of a Proxy or Agent into the gRPC [TlsContext] it uses, reading each piece from its file or
  * its PEM text alike (a platform that passes secrets as environment variables needs the PEM in place of files), with
- * the [GrpcSslContexts] calls common-utils' file-based builders make.
+ * [GrpcSslContexts].
  */
 internal object TlsMaterial {
   private const val PEM_BEGIN = "-----BEGIN "

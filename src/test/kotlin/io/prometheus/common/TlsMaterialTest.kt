@@ -106,7 +106,7 @@ class TlsMaterialTest : StringSpec() {
       TlsSource("x", "", "").withStream { it.readBytes() }.shouldBeNull()
     }
 
-    // As common-utils' file-based builders do, a path is trimmed before it is opened.
+    // A path is trimmed before it is opened, so a stray space or newline in a setting is harmless.
     "a source's path is trimmed" {
       val source = TlsSource("x", "  $CA_CERT \n", "")
       source.withStream { it.readBytes().decodeToString() } shouldBe read(CA_CERT)

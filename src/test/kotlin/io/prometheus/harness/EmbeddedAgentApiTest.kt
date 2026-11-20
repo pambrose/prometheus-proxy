@@ -36,6 +36,7 @@ import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.common.ConfigLoadException
 import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.common.TestPorts
+import io.prometheus.common.Utils.causeChain
 import io.prometheus.common.captureLogs
 import io.prometheus.common.startAndAwaitReady
 import io.prometheus.harness.support.TestUtils.startProxy
@@ -107,8 +108,6 @@ class EmbeddedAgentApiTest : StringSpec() {
         httpPort = HTTP_PORT,
         agentPort = GRPC_PORT,
         agentName = AGENT_NAME,
-        path = IN_MEMORY_PATH,
-        targetMetrics = TARGET_METRICS,
       ) { proxy, agent ->
         agent.agentName shouldBe AGENT_NAME
         agent.shutdown()
@@ -124,9 +123,6 @@ class EmbeddedAgentApiTest : StringSpec() {
       withEmbeddedAgentScraped(
         httpPort = HTTP_PORT,
         agentPort = GRPC_PORT,
-        agentName = AGENT_NAME,
-        path = IN_MEMORY_PATH,
-        targetMetrics = TARGET_METRICS,
         targetCredentials = "agent" to "p@ss:w/rd%#+ ?&é",
       )
     }
@@ -178,7 +174,7 @@ class EmbeddedAgentApiTest : StringSpec() {
         val exception = failure.exception.shouldBeInstanceOf<ConfigLoadException>()
         exception.message.orEmpty() shouldContain named
         // An embedded host that logs the exception prints its whole cause chain.
-        generateSequence<Throwable>(exception) { it.cause }.forEach { it.message.orEmpty() shouldNotContain SECRET }
+        exception.causeChain().forEach { it.message.orEmpty() shouldNotContain SECRET }
         exception.stackTraceToString() shouldNotContain SECRET
         // The reason is logged too, so the log check below can't pass for want of lines.
         failure.logs.any { it.startsWith("Invalid configuration: ") && named in it }.shouldBeTrue()
@@ -235,8 +231,6 @@ class EmbeddedAgentApiTest : StringSpec() {
     private fun configUrl(port: Int) = "http://user:$SECRET@$LOOPBACK_HOST:$port/agent.conf"
 
     private const val AGENT_NAME = "embedded-api-agent"
-    private const val IN_MEMORY_PATH = "in_memory_metrics"
-    private const val TARGET_METRICS = "in_memory_target_metric 1.0"
 
     // Dedicated ports, following the one-off convention the other standalone harness specs use.
     private const val HTTP_PORT = TestPorts.EMBEDDED_API_HTTP_PORT

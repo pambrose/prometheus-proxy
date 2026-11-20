@@ -53,9 +53,9 @@ import io.ktor.server.cio.CIO as ServerCIO
 internal suspend fun withEmbeddedAgentScraped(
   httpPort: Int,
   agentPort: Int,
-  agentName: String,
-  path: String,
-  targetMetrics: String,
+  agentName: String = "embedded-agent",
+  path: String = "embedded_metrics",
+  targetMetrics: String = "embedded_target_metric 1.0",
   proxyArgs: List<String> = emptyList(),
   targetCredentials: Pair<String, String>? = null,
   configure: EmbeddedAgentConfig.Builder.() -> Unit = {},
@@ -82,7 +82,7 @@ internal suspend fun withEmbeddedAgentScraped(
   var agent: EmbeddedAgentInfo? = null
   try {
     val targetUrl = "http://$LOOPBACK_HOST:${target.startAndAwaitReady()}/metrics"
-    val started =
+    agent =
       embeddedAgent {
         name(agentName)
         // localhost, the name a test certificate's override authority stands in for
@@ -91,7 +91,6 @@ internal suspend fun withEmbeddedAgentScraped(
         setting("internal.reconnectPauseSecs", 1)
         configure()
       }.start(logBanner = false)
-    agent = started
 
     HttpClient(ClientCIO).use { client ->
       eventually(30.seconds) {
@@ -100,7 +99,7 @@ internal suspend fun withEmbeddedAgentScraped(
         response.bodyAsText() shouldContain targetMetrics
       }
     }
-    block(proxy, started)
+    block(proxy, agent)
   } finally {
     runCatching { agent?.shutdown() }
     runCatching { proxy.stopSync(10.seconds) }

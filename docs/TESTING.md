@@ -244,9 +244,10 @@ pins, and no jar on the classpath carries a `logback.xml`, which would replace t
 - **EmbeddedAgentConfigTest** — the builder for an embedded agent's settings, and its `embeddedAgent { }` DSL: each
   method's setting reaches `AgentOptions` as a config file's would, and nothing set gives the defaults;
   `scrapeSelf` and `path` percent-encode a username and password into the URL so a password with any character decodes
-  back intact, an empty pair means none, and `path` refuses credentials for a URL that has its own; labels become
-  JSON; `setting()` takes precedence over a method; the DSL and the builder build the same tree; `toString()` leaves
-  out the token, the private key, and a path's credentials; and a blank path or an out-of-range port is refused
+  back intact, an empty pair means none, and `path` refuses credentials for a URL that has its own, as the agent's
+  parser reads it; labels become JSON; `setting()` takes precedence over a method; `toString()` shows what `setting()`
+  sets but not the token, a password, a PEM, or a path's credentials; and a blank path, an out-of-range port, or a URL
+  with no scheme throws `ConfigLoadException`
 - **EmbeddedAgentInfoTest** — EmbeddedAgentInfo data class (launchId, agentName storage)
 - **RequestFailureExceptionTest** — RequestFailureException custom exception class
 - **SslSettingsTest** — SSL keystore/truststore loading for TLS configuration

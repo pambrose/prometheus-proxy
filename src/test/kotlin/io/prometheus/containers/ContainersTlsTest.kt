@@ -21,7 +21,14 @@ package io.prometheus.containers
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.string.shouldContain
-import io.prometheus.common.TestCerts
+import io.prometheus.common.TestCerts.CA_CERT
+import io.prometheus.common.TestCerts.CLIENT_CERT
+import io.prometheus.common.TestCerts.CLIENT_KEY
+import io.prometheus.common.TestCerts.SERVER_AUTHORITY
+import io.prometheus.common.TestCerts.SERVER_CERT
+import io.prometheus.common.TestCerts.SERVER_KEY
+import io.prometheus.common.TestCerts.base64
+import io.prometheus.common.TestCerts.read
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.containers.support.ContainerTestSupport.agentContainer
 import io.prometheus.containers.support.ContainerTestSupport.containerTestsEnabled
@@ -65,8 +72,8 @@ class ContainersTlsTest : StringSpec() {
               ),
             hostFiles =
               mapOf(
-                "testing/certs/server1.pem" to "/certs/server.pem",
-                "testing/certs/server1.key" to "/certs/server.key",
+                SERVER_CERT to "/certs/server.pem",
+                SERVER_KEY to "/certs/server.key",
               ),
           )
         val agent =
@@ -75,9 +82,9 @@ class ContainersTlsTest : StringSpec() {
             env =
               mapOf(
                 "TRUST_CERT_COLLECTION_FILE_PATH" to "/certs/ca.pem",
-                "OVERRIDE_AUTHORITY" to "foo.test.google.fr",
+                "OVERRIDE_AUTHORITY" to SERVER_AUTHORITY,
               ),
-            hostFiles = mapOf("testing/certs/ca.pem" to "/certs/ca.pem"),
+            hostFiles = mapOf(CA_CERT to "/certs/ca.pem"),
             waitLogRegex = ".*Registered http://metrics-stub/metrics as /test_metrics.*",
           )
         try {
@@ -108,9 +115,9 @@ class ContainersTlsTest : StringSpec() {
               ),
             hostFiles =
               mapOf(
-                "testing/certs/server1.pem" to "/certs/server.pem",
-                "testing/certs/server1.key" to "/certs/server.key",
-                "testing/certs/ca.pem" to "/certs/ca.pem",
+                SERVER_CERT to "/certs/server.pem",
+                SERVER_KEY to "/certs/server.key",
+                CA_CERT to "/certs/ca.pem",
               ),
           )
         val agent =
@@ -121,13 +128,13 @@ class ContainersTlsTest : StringSpec() {
                 "CERT_CHAIN_FILE_PATH" to "/certs/client.pem",
                 "PRIVATE_KEY_FILE_PATH" to "/certs/client.key",
                 "TRUST_CERT_COLLECTION_FILE_PATH" to "/certs/ca.pem",
-                "OVERRIDE_AUTHORITY" to "foo.test.google.fr",
+                "OVERRIDE_AUTHORITY" to SERVER_AUTHORITY,
               ),
             hostFiles =
               mapOf(
-                "testing/certs/client.pem" to "/certs/client.pem",
-                "testing/certs/client.key" to "/certs/client.key",
-                "testing/certs/ca.pem" to "/certs/ca.pem",
+                CLIENT_CERT to "/certs/client.pem",
+                CLIENT_KEY to "/certs/client.key",
+                CA_CERT to "/certs/ca.pem",
               ),
             waitLogRegex = ".*Registered http://metrics-stub/metrics as /test_metrics.*",
           )
@@ -156,8 +163,8 @@ class ContainersTlsTest : StringSpec() {
             network,
             env =
               mapOf(
-                "CERT_CHAIN_PEM" to TestCerts.base64(TestCerts.SERVER_CERT),
-                "PRIVATE_KEY_PEM" to TestCerts.read(TestCerts.SERVER_KEY),
+                "CERT_CHAIN_PEM" to base64(SERVER_CERT),
+                "PRIVATE_KEY_PEM" to read(SERVER_KEY),
               ),
           )
         val agent =
@@ -165,8 +172,8 @@ class ContainersTlsTest : StringSpec() {
             network,
             env =
               mapOf(
-                "TRUST_CERT_COLLECTION_PEM" to TestCerts.read(TestCerts.CA_CERT),
-                "OVERRIDE_AUTHORITY" to "foo.test.google.fr",
+                "TRUST_CERT_COLLECTION_PEM" to read(CA_CERT),
+                "OVERRIDE_AUTHORITY" to SERVER_AUTHORITY,
               ),
             waitLogRegex = ".*Registered http://metrics-stub/metrics as /test_metrics.*",
           )

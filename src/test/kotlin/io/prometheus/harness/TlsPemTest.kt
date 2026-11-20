@@ -40,9 +40,6 @@ class TlsPemTest : StringSpec() {
       withEmbeddedAgentScraped(
         httpPort = TestPorts.TLS_PEM_HTTP_PORT,
         agentPort = TestPorts.TLS_PEM_AGENT_PORT,
-        agentName = AGENT_NAME,
-        path = PATH,
-        targetMetrics = TARGET_METRICS,
         proxyArgs =
           [
             "-Dproxy.tls.certChainPem=${base64(SERVER_CERT)}",
@@ -56,9 +53,6 @@ class TlsPemTest : StringSpec() {
       withEmbeddedAgentScraped(
         httpPort = TestPorts.TLS_PEM_MUTUAL_HTTP_PORT,
         agentPort = TestPorts.TLS_PEM_MUTUAL_AGENT_PORT,
-        agentName = AGENT_NAME,
-        path = PATH,
-        targetMetrics = TARGET_METRICS,
         proxyArgs =
           [
             "-Dproxy.tls.certChainPem=${base64(SERVER_CERT)}",
@@ -71,11 +65,5 @@ class TlsPemTest : StringSpec() {
         },
       )
     }
-  }
-
-  companion object {
-    private const val AGENT_NAME = "tls-pem-agent"
-    private const val PATH = "tls_pem_metrics"
-    private const val TARGET_METRICS = "tls_pem_target_metric 1.0"
   }
 }
