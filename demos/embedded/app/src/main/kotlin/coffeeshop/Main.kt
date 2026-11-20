@@ -15,6 +15,7 @@ import io.ktor.server.html.respondHtml
 import io.ktor.server.metrics.micrometer.MicrometerMetrics
 import io.ktor.server.request.uri
 import io.ktor.server.response.respondText
+import io.ktor.server.routing.Route
 import io.ktor.server.routing.RoutingCall
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
@@ -45,104 +46,21 @@ fun main() {
   embeddedServer(CIO, port = port) { coffeeShop(port) }.start(wait = true)
 }
 
-fun Application.coffeeShop(port: Int) {
-  val version = env("APP_VERSION").ifEmpty { "dev" }
-  val metricsUser = env("METRICS_USER")
-  val metricsPassword = env("METRICS_PASSWORD")
+// The app's version, which its page, /status, and its agent's name show, so a deploy can be told apart from the last.
+private val version = env("APP_VERSION").ifEmpty { "dev" }
 
+fun Application.coffeeShop(port: Int) {
   // Ktor's HTTP metrics (ktor_http_server_requests_seconds) and the JVM's, then the shop's, in one registry. The plugin
   // goes first: it configures the registry, which Micrometer wants done before any meter is registered.
   val registry = PrometheusMeterRegistry(PrometheusConfig.DEFAULT)
   install(MicrometerMetrics) { this.registry = registry }
   val shop = CoffeeShop(ShopMetrics(registry))
-
-  // /metrics is for the agent, which reads it on 127.0.0.1 with these credentials; nobody else gets in.
-  install(Authentication) {
-    basic("metrics") {
-      realm = "metrics"
-      validate { credentials ->
-        val ok = metricsUser.isNotEmpty() && credentials.name == metricsUser && credentials.password == metricsPassword
-        if (ok) UserIdPrincipal(credentials.name) else null
-      }
-    }
-  }
+  installMetricsLogin()
 
   routing {
-    // ?refresh=false leaves out the page's two-second refresh, for a screenshot (bin/screenshots.sh).
-    get("/") {
-      val refresh = call.parameters["refresh"] != "false"
-      call.respondHtml { statusPage(shop, version, refresh) }
-    }
-
-    get("/healthz") { call.respondText("ok") }
-
-    // The shop's state as text, for `demo.sh status`.
-    get("/status") {
-      val served = Drink.entries.joinToString { "${it.label} ${shop.served.getValue(it).get()}" }
-      call.respondText(
-        """
-        |Version:          $version
-        |Queue:            ${shop.queueDepth.get()} of ${shop.queueCapacity}
-        |Baristas:         ${shop.baristas}
-        |Rush hour:        ${shop.rushLabel}
-        |Espresso machine: ${shop.machineLabel}
-        |Served:           $served
-        |
-        """.trimMargin(),
-      )
-    }
-
-    // An order at the counter: POST /orders?drink=latte
-    post("/orders") {
-      val drink = Drink.named(call.parameters["drink"].orEmpty())
-      if (drink == null) {
-        val menu = Drink.entries.joinToString { it.label }
-        call.respondText("No such drink; the menu is $menu\n", status = HttpStatusCode.BadRequest)
-        return@post
-      }
-      when (shop.placeOrder(drink)) {
-        OrderResult.QUEUED -> {
-          call.respondText("A ${drink.label} is on its way\n", status = HttpStatusCode.Accepted)
-        }
-
-        OrderResult.REJECTED -> {
-          call.respondText("The queue is full; try again soon\n", status = HttpStatusCode.TooManyRequests)
-        }
-
-        OrderResult.FAILED -> {
-          call.respondText("The espresso machine is broken\n", status = HttpStatusCode.ServiceUnavailable)
-        }
-      }
-    }
-
-    authenticate("metrics") {
-      get("/metrics") {
-        call.respondText(registry.scrape(), ContentType.parse("text/plain; version=0.0.4; charset=utf-8"))
-      }
-    }
-
-    // The knobs the demo's tour turns. Unauthenticated: the demo publishes the app on 127.0.0.1 only.
-    post("/admin/rush") {
-      val on = call.booleanParameter("on") ?: return@post
-      shop.setRush(on)
-      call.respondText(if (on) "Rush hour: customers order three times as often\n" else "The rush is over\n")
-    }
-
-    post("/admin/machine") {
-      val broken = call.booleanParameter("broken") ?: return@post
-      shop.setMachineBroken(broken)
-      call.respondText(if (broken) "The espresso machine is broken\n" else "The espresso machine is fixed\n")
-    }
-
-    post("/admin/baristas") {
-      val count = call.parameters["count"]?.toIntOrNull()
-      if (count == null || count !in 1..12) {
-        call.respondText("count must be from 1 to 12\n", status = HttpStatusCode.BadRequest)
-        return@post
-      }
-      shop.setBaristas(count)
-      call.respondText("$count baristas on shift\n")
-    }
+    shopRoutes(shop)
+    metricsRoute(registry)
+    adminRoutes(shop)
   }
 
   shop.open(this)
@@ -150,6 +68,106 @@ fun Application.coffeeShop(port: Int) {
   // Once the routes are in place, so the agent's first scrape finds /metrics.
   val agent = startPrometheusAgent(port, version)
   monitor.subscribe(ApplicationStopped) { agent?.shutdown() }
+}
+
+// /metrics is for the agent, which reads it on 127.0.0.1 with these credentials; nobody else gets in.
+private fun Application.installMetricsLogin() {
+  val user = env("METRICS_USER")
+  val password = env("METRICS_PASSWORD")
+  install(Authentication) {
+    basic("metrics") {
+      realm = "metrics"
+      validate { credentials ->
+        val ok = user.isNotEmpty() && credentials.name == user && credentials.password == password
+        if (ok) UserIdPrincipal(credentials.name) else null
+      }
+    }
+  }
+}
+
+// The shop's page, its health check, its state as text, and its counter.
+private fun Route.shopRoutes(shop: CoffeeShop) {
+  // ?refresh=false leaves out the page's two-second refresh, for a screenshot (bin/screenshots.sh).
+  get("/") {
+    val refresh = call.parameters["refresh"] != "false"
+    call.respondHtml { statusPage(shop, refresh) }
+  }
+
+  get("/healthz") { call.respondText("ok") }
+
+  // The shop's state as text, for `demo.sh status`.
+  get("/status") { call.respondText(statusText(shop)) }
+
+  // An order at the counter: POST /orders?drink=latte
+  post("/orders") { call.placeOrder(shop) }
+}
+
+private fun statusText(shop: CoffeeShop): String {
+  val served = Drink.entries.joinToString { "${it.label} ${shop.served.getValue(it).get()}" }
+  return """
+    |Version:          $version
+    |Queue:            ${shop.queueDepth.get()} of ${shop.queueCapacity}
+    |Baristas:         ${shop.baristas}
+    |Rush hour:        ${shop.rushLabel}
+    |Espresso machine: ${shop.machineLabel}
+    |Served:           $served
+    |
+    """.trimMargin()
+}
+
+private suspend fun RoutingCall.placeOrder(shop: CoffeeShop) {
+  val drink = Drink.named(parameters["drink"].orEmpty())
+  if (drink == null) {
+    val menu = Drink.entries.joinToString { it.label }
+    respondText("No such drink; the menu is $menu\n", status = HttpStatusCode.BadRequest)
+    return
+  }
+  when (shop.placeOrder(drink)) {
+    OrderResult.QUEUED -> {
+      respondText("A ${drink.label} is on its way\n", status = HttpStatusCode.Accepted)
+    }
+
+    OrderResult.REJECTED -> {
+      respondText("The queue is full; try again soon\n", status = HttpStatusCode.TooManyRequests)
+    }
+
+    OrderResult.FAILED -> {
+      respondText("The espresso machine is broken\n", status = HttpStatusCode.ServiceUnavailable)
+    }
+  }
+}
+
+private fun Route.metricsRoute(registry: PrometheusMeterRegistry) {
+  authenticate("metrics") {
+    get("/metrics") {
+      call.respondText(registry.scrape(), ContentType.parse("text/plain; version=0.0.4; charset=utf-8"))
+    }
+  }
+}
+
+// The knobs the demo's tour turns. Unauthenticated: the demo publishes the app on 127.0.0.1 only.
+private fun Route.adminRoutes(shop: CoffeeShop) {
+  post("/admin/rush") {
+    val on = call.booleanParameter("on") ?: return@post
+    shop.setRush(on)
+    call.respondText(if (on) "Rush hour: customers order three times as often\n" else "The rush is over\n")
+  }
+
+  post("/admin/machine") {
+    val broken = call.booleanParameter("broken") ?: return@post
+    shop.setMachineBroken(broken)
+    call.respondText(if (broken) "The espresso machine is broken\n" else "The espresso machine is fixed\n")
+  }
+
+  post("/admin/baristas") {
+    val count = call.parameters["count"]?.toIntOrNull()
+    if (count == null || count !in 1..12) {
+      call.respondText("count must be from 1 to 12\n", status = HttpStatusCode.BadRequest)
+      return@post
+    }
+    shop.setBaristas(count)
+    call.respondText("$count baristas on shift\n")
+  }
 }
 
 // The value of the query parameter [name], true or false; anything else is answered with a 400, and null returned.
@@ -160,7 +178,6 @@ private suspend fun RoutingCall.booleanParameter(name: String): Boolean? =
 
 private fun HTML.statusPage(
   shop: CoffeeShop,
-  version: String,
   refresh: Boolean,
 ) {
   head {
