@@ -6,7 +6,7 @@ Prometheus, and a target cluster, behind the "firewall", with a set of simulated
 installed with the project's own Helm charts, from [`charts/`](../../charts). It shows that the target
 cluster exposes nothing, that annotating a Service is all it takes for Prometheus to scrape it, that Kubernetes
 replaces a lost agent by itself, and what a change to the agent's config costs next to a change to its targets.
-Unlike the other two demos, it needs kind, `kubectl`, and Helm as well as Docker: see [What you need](#what-you-need).
+Unlike the other demos, it needs kind, `kubectl`, and Helm as well as Docker: see [What you need](#what-you-need).
 
 It follows the [network demo](../network), which follows the [basics demo](../basics): those two show the
 dashboard, Grafana, the proxy's features, and the link through the firewall, and this one assumes them. It keeps the
@@ -31,7 +31,7 @@ the deployment itself.
 ## What you need
 
 The proxy and agent are the latest release's images, which each cluster pulls from Docker Hub, so there's nothing to
-build. Unlike the other two demos, this one needs kind, `kubectl`, and Helm as well as Docker. On macOS or Linux, it
+build. Unlike the other demos, this one needs kind, `kubectl`, and Helm as well as Docker. On macOS or Linux, it
 needs:
 
 - [Docker](https://docs.docker.com/get-started/get-docker/): Docker Desktop, or Docker Engine. kind runs each cluster's
@@ -71,7 +71,7 @@ To show it without a network connection, run `make up` once beforehand and leave
 
 `make open` opens the dashboard and Prometheus's targets in your browser.
 
-Every port is the basics demo's plus 200, so all three demos can run at once. kind publishes them when it creates
+Every port is the basics demo's plus 200, so all the demos can run at once. kind publishes them when it creates
 `pp-monitoring`, so to move one that's already taken, set its variable when the cluster is created, and for every
 command after, for example `KUBERNETES_DEMO_PROMETHEUS_PORT=9291 make up`. The variables are
 `KUBERNETES_DEMO_DASHBOARD_PORT`, `KUBERNETES_DEMO_PROMETHEUS_PORT`, and `KUBERNETES_DEMO_PROXY_PORT`; the dashboard's

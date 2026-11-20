@@ -5,6 +5,7 @@ roasts the coffee shop's beans, runs the agent inside its own JVM, started by a 
 binds. The agent reads the metrics Spring Boot's Actuator serves behind Spring Security, and sends them to a proxy,
 which Prometheus scrapes. The demo shows the parts that are Spring Boot's own:
 - the agent's lifecycle with the app's;
+- the agent's connection in Actuator's health;
 - Actuator's metrics behind a password;
 - the versions of the agent's libraries that Spring Boot's dependency management picks;
 - a graceful shutdown that takes the agent down first.

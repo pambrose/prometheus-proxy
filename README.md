@@ -45,7 +45,7 @@ documentation.
 
 ## 🎬 Try the Demos
 
-The quickest way to understand Prometheus Proxy is to watch it work. The repository ships four self-contained demos,
+The quickest way to understand Prometheus Proxy is to watch it work. The repository ships five self-contained demos,
 each started with `make up` and run locally. Each has a guided tour, `make tour`, that walks you through
 it one step at a time: what to open, what to look for, and how each step does what it does.
 
@@ -60,7 +60,7 @@ it one step at a time: what to open, what to look for, and how each step does wh
 | [Network](demos/network) | The same proxy and agents with a simulated WAN between them, and a standby proxy. A far link, a thin one fixed by filtering at the agent, a proxy that goes away, a link that dies silently, a flaky link traced in Zipkin, and the whole WAN going down. | 7 parts, about 21 minutes |
 | [Kubernetes](demos/kubernetes) | The project's Helm charts on two kind clusters. The target cluster exposes nothing, annotating a Service is all it takes for Prometheus to scrape it, Kubernetes replaces a lost agent by itself, and a config change costs a restart where a target change doesn't. Needs kind, `kubectl`, and Helm as well as Docker. | 4 parts, about 11 minutes |
 | [Embedded](demos/embedded) | A Ktor coffee shop with the agent embedded in it, its metrics in Grafana with no port opened for them. A rush fills the queue, a broken machine fires an alert, a deploy hands the agent's paths to the new version, the shop keeps serving while the proxy is away, and every secret comes from the environment. | 7 parts, about 15 minutes |
-| [Spring Boot](demos/spring-boot) | A Spring Boot roastery, written in Java, with the agent embedded through `EmbeddedAgentConfig.builder()`. The agent starts and stops with the app, reads Actuator's metrics behind Spring Security, runs with the versions of its libraries Spring Boot picks, and goes first in a graceful shutdown. | 4 parts, about 8 minutes |
+| [Spring Boot](demos/spring-boot) | A Spring Boot roastery, written in Java, with the agent embedded through `EmbeddedAgentConfig.builder()`. The agent starts and stops with the app, reports its connection in Actuator's health, reads Actuator's metrics behind Spring Security, runs with the versions of its libraries Spring Boot picks, and goes first in a graceful shutdown. | 4 parts, about 8 minutes |
 
 Start with the basics demo. The proxy and agent are the released images, from Docker Hub, so there's nothing to build:
 on macOS or Linux, the basics, network, embedded, and Spring Boot demos need only

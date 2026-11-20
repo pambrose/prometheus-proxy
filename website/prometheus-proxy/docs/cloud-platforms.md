@@ -70,6 +70,12 @@ Start the agent once the app serves `/metrics`, and stop it when the app stops. 
 In Spring Boot, a `SmartLifecycle` bean starts and stops it with the app; see
 [In Spring Boot](embedded-agent.md#in-spring-boot), and the [Spring Boot Demo](spring-boot-demo.md), which runs one.
 
+Keep the agent out of the health check the platform restarts the app on. The app serves without its agent, which
+reconnects by itself once the proxy is back, so a failed check would only restart a working app. To see whether the
+agent is connected, report [`EmbeddedAgentInfo`](embedded-agent.md#embeddedagentinfo)'s `isConnected` and
+`proxyEndpoint` somewhere that doesn't fail the check, such as a detail of the app's status page; the Spring Boot Demo
+reports them in Actuator's health as UNKNOWN, not DOWN.
+
 Give the app's Logback configuration the line the standalone agent has for gRPC's internal logging; see
 [Logging](embedded-agent.md#logging).
 

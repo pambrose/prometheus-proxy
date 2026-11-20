@@ -536,6 +536,7 @@ cmd_tour() {
   echo "Proxy failover, filtering at the agent, and tracing are in the network demo, in demos/network."
   echo "The same proxy and agent, deployed on Kubernetes with their Helm charts, are in the Kubernetes demo, in" \
     "demos/kubernetes, which needs kind, kubectl, and Helm as well as Docker."
+  echo "The agent in a Spring Boot app, written in Java, is in the Spring Boot demo, in demos/spring-boot."
   echo
   echo "The demos use different ports, so they can run side by side, but each takes memory and CPU."
   echo "To stop this one and free its resources, run $MAKE_NAME down, or $0 down."

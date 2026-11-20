@@ -9,7 +9,7 @@ through the firewall. This third demo deploys the same proxy and agent the way a
 [kind](https://kind.sigs.k8s.io/) clusters, with the project's own Helm charts, and Kubernetes doing the operating. It
 shows that the target cluster exposes nothing, that annotating a Service is all it takes for Prometheus to scrape it,
 that Kubernetes replaces a lost agent by itself, and what a change to the agent's config costs next to a change to its
-targets. Every screenshot on this page comes from it. Unlike the other two demos, it needs kind, `kubectl`, and Helm as
+targets. Every screenshot on this page comes from it. Unlike the other demos, it needs kind, `kubectl`, and Helm as
 well as Docker: see [What you need](#what-you-need).
 
 ``` mermaid
@@ -41,7 +41,7 @@ graph LR
 ## What you need
 
 The proxy and agent are the latest release's images, which each cluster pulls from Docker Hub, so there's nothing to
-build. Unlike the other two demos, this one needs kind, `kubectl`, and Helm as well as Docker. On macOS or Linux, it
+build. Unlike the other demos, this one needs kind, `kubectl`, and Helm as well as Docker. On macOS or Linux, it
 needs:
 
 - [Docker](https://docs.docker.com/get-started/get-docker/): Docker Desktop, or Docker Engine. kind runs each cluster's
@@ -77,7 +77,7 @@ the agent's and Python's, which takes a few minutes. After that, `make up` on ru
 | The proxy's service discovery | <http://localhost:8280/discovery> |
 | `kubectl` | `kubectl --context kind-pp-monitoring …` and `kubectl --context kind-pp-target …` |
 
-Each port is the Basics Demo's plus 200, so all three demos can run side by side. kind publishes them on `127.0.0.1`
+Each port is the Basics Demo's plus 200, so all the demos can run side by side. kind publishes them on `127.0.0.1`
 only, through NodePort Services in the monitoring cluster: the dashboard has no authentication, which suits a laptop
 and nothing shared. To move a port that is already taken, set `KUBERNETES_DEMO_DASHBOARD_PORT`,
 `KUBERNETES_DEMO_PROMETHEUS_PORT`, or `KUBERNETES_DEMO_PROXY_PORT` when the cluster is created, for example
@@ -237,3 +237,5 @@ which only a restart applies. `./demo.sh restore-config` puts the original confi
   other clusters, and updating targets without restarting the agent.
 - [Agent Configuration](configuration/agent.md#dynamic-target-discovery) covers dynamic target discovery, which the
   agent's targets ConfigMap feeds.
+- The [Embedded Demo](embedded-demo.md) runs the agent inside an app instead, a Ktor coffee shop, and the
+  [Spring Boot Demo](spring-boot-demo.md) inside a Spring Boot app written in Java.
