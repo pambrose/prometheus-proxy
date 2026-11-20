@@ -45,7 +45,15 @@ internal class ProxyServerTransportFilter(
     }
   }
 
-  override fun transportTerminated(attributes: Attributes) {
+  // Null when the connection closed before its transport was ready, as one that fails its TLS handshake, or a port
+  // probe, does: transportReady never ran, so there is no context to remove. The parameter is nullable for it; declared
+  // non-null, the override threw a NullPointerException, which Netty logged at WARN for each such connection.
+  override fun transportTerminated(attributes: Attributes?) {
+    if (attributes == null) {
+      logger.debug { "A connection closed before its transport was ready" }
+      super.transportTerminated(null)
+      return
+    }
     attributes.get(AGENT_ID_KEY)?.also { agentId ->
       val context = proxy.removeAgentContext(agentId, RemovalReason.TERMINATION)
       when {

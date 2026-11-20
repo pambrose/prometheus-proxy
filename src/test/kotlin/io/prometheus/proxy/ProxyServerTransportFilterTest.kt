@@ -147,6 +147,19 @@ class ProxyServerTransportFilterTest : StringSpec() {
       filter.transportTerminated(emptyAttrs)
     }
 
+    // gRPC hands transportTerminated null when a connection closes before its transport is ready, as one that fails its
+    // TLS handshake, or a port probe, does. The override's non-null parameter threw on it, so Netty logged a
+    // NullPointerException at WARN for each such connection.
+    "transportTerminated should take a transport that was never ready, below INFO" {
+      val (mockProxy, _) = createMockProxy()
+      val filter = ProxyServerTransportFilter(mockProxy)
+
+      val events = captureLogs("io.prometheus.proxy", Level.DEBUG) { filter.transportTerminated(null) }
+
+      verify(exactly = 0) { mockProxy.removeAgentContext(any(), any()) }
+      events.filter { it.level.isGreaterOrEqual(Level.INFO) }.shouldBeEmpty()
+    }
+
     // ==================== Remote Address Tests ====================
 
     // gRPC keys attributes by instance, so the filter must read gRPC's own key: a key the filter created itself

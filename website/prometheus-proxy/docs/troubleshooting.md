@@ -82,6 +82,11 @@ Settings that fail startup since 4.5.0:
 
 The proxy has an agent token configured and the agent's token is missing or doesn't match.
 
+- **Where it shows:** the agent logs it at WARN, with a stack trace, on its first attempt, and again every 10 minutes
+  while it lasts; its reconnects every few seconds in between are at DEBUG. The proxy logs
+  `Refused an agent from <host> (UNAUTHENTICATED): it sent an unknown agent token` (or `no agent token`) at WARN, at
+  most once a minute for each host.
+
 - **Fix:** set the **same** `--agent_token` / `AGENT_TOKEN` on the agent as on the proxy. An
   empty token on the proxy disables the check. See
   [Security](security/index.md#agent-authentication-pre-shared-token).

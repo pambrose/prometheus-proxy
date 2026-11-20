@@ -18,6 +18,7 @@
 
 package io.prometheus.proxy
 
+import ch.qos.logback.classic.Level
 import io.grpc.Attributes
 import io.grpc.Grpc
 import io.grpc.Metadata
@@ -32,7 +33,11 @@ import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
 import io.prometheus.common.GrpcConstants.META_AGENT_TOKEN_KEY
+import io.prometheus.common.KeyedThrottle
+import io.prometheus.common.captureLogs
 import java.net.InetSocketAddress
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.TestTimeSource
 import io.prometheus.proxy.AgentAuthManager.AuthEntry
 
 class AgentAuthServerInterceptorTest : StringSpec() {
@@ -44,6 +49,10 @@ class AgentAuthServerInterceptorTest : StringSpec() {
 
   private fun headersWithToken(token: String?): Metadata =
     Metadata().apply { token?.also { put(META_AGENT_TOKEN_KEY, it) } }
+
+  // A refused call reads its transport's attributes for the host to warn of, which a relaxed mock answers with a mock
+  private fun refusedCall() =
+    mockk<ServerCall<Any, Any>>(relaxed = true).also { every { it.attributes } returns Attributes.EMPTY }
 
   init {
     "valid token should delegate to handler and expose the resolved identity in the context" {
@@ -70,7 +79,7 @@ class AgentAuthServerInterceptorTest : StringSpec() {
 
     "missing token should close with UNAUTHENTICATED and not start the handler" {
       val interceptor = AgentAuthServerInterceptor(authManager)
-      val mockCall = mockk<ServerCall<Any, Any>>(relaxed = true)
+      val mockCall = refusedCall()
       val mockHandler = mockk<ServerCallHandler<Any, Any>>(relaxed = true)
       val statusSlot = slot<Status>()
 
@@ -85,7 +94,7 @@ class AgentAuthServerInterceptorTest : StringSpec() {
 
     "unknown token should close with UNAUTHENTICATED and not start the handler" {
       val interceptor = AgentAuthServerInterceptor(authManager)
-      val mockCall = mockk<ServerCall<Any, Any>>(relaxed = true)
+      val mockCall = refusedCall()
       val mockHandler = mockk<ServerCallHandler<Any, Any>>(relaxed = true)
       val statusSlot = slot<Status>()
 
@@ -101,7 +110,7 @@ class AgentAuthServerInterceptorTest : StringSpec() {
         AgentAuthServerInterceptor(
           AgentAuthManager.create([AuthEntry("team_a", "abcdef", ["*"])], ""),
         )
-      val mockCall = mockk<ServerCall<Any, Any>>(relaxed = true)
+      val mockCall = refusedCall()
       val mockHandler = mockk<ServerCallHandler<Any, Any>>(relaxed = true)
 
       interceptor.interceptCall(mockCall, headersWithToken("abcxyz"), mockHandler)
@@ -129,6 +138,37 @@ class AgentAuthServerInterceptorTest : StringSpec() {
         [
           Triple(ActivityKind.BAD_TOKEN, "No agent token, from 10.8.8.8", 1),
           Triple(ActivityKind.BAD_TOKEN, "An unknown agent token, from 10.9.9.9", 3),
+        ]
+    }
+
+    // Refused without a word in the proxy's log, a wrong token showed only in the agent's, once, as it first failed to
+    // connect, while it went on reconnecting every few seconds; and the dashboard, with its activity feed, may be off.
+    "a bad token should be logged at WARN, naming the host, at most once a minute for each host" {
+      val time = TestTimeSource()
+      val interceptor =
+        AgentAuthServerInterceptor(authManager, badTokenWarnings = KeyedThrottle(1.minutes, 1_000, time))
+
+      fun callFrom(host: String) =
+        mockk<ServerCall<Any, Any>>(relaxed = true).also {
+          every { it.attributes } returns
+            Attributes.newBuilder().set(Grpc.TRANSPORT_ATTR_REMOTE_ADDR, InetSocketAddress(host, 40000)).build()
+        }
+
+      val events =
+        captureLogs("io.prometheus.proxy", Level.DEBUG) {
+          repeat(3) {
+            interceptor.interceptCall(callFrom("10.9.9.9"), headersWithToken("nope"), mockk(relaxed = true))
+          }
+          interceptor.interceptCall(callFrom("10.8.8.8"), headersWithToken(null), mockk(relaxed = true))
+          time += 1.minutes
+          interceptor.interceptCall(callFrom("10.9.9.9"), headersWithToken("nope"), mockk(relaxed = true))
+        }
+
+      events.filter { it.level == Level.WARN }.map { it.formattedMessage } shouldBe
+        [
+          "Refused an agent from 10.9.9.9 (UNAUTHENTICATED): it sent an unknown agent token",
+          "Refused an agent from 10.8.8.8 (UNAUTHENTICATED): it sent no agent token",
+          "Refused an agent from 10.9.9.9 (UNAUTHENTICATED): it sent an unknown agent token",
         ]
     }
 
