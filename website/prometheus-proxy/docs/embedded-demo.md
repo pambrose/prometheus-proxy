@@ -128,15 +128,14 @@ builds the agent's settings from the app's environment with
 
 The app's Ktor module, `coffeeShop` in
 [`Main.kt`](https://github.com/pambrose/prometheus-proxy/blob/master/demos/embedded/app/src/main/kotlin/coffeeshop/Main.kt),
-serves the metrics the agent reads, at `/metrics` behind Basic Auth. It starts the agent once its routes are in place, so
-the agent's first scrape finds `/metrics`, and shuts the agent down when the app stops (`ApplicationStopped`):
+starts the agent and stops it with the app:
 
 ```kotlin
 --8<-- "demos/embedded/app/src/main/kotlin/coffeeshop/Main.kt:app-module"
 ```
 
 - The app depends on `com.pambrose:prometheus-proxy`, as [Adding the Dependency](embedded-agent.md#adding-the-dependency)
-  shows; the demo's build takes its version from the repository's version catalog.
+  shows; the demo's build uses the latest release (`make up`) or this checkout (`make up-local`).
 - Its image is built from
   [`app/Dockerfile`](https://github.com/pambrose/prometheus-proxy/blob/master/demos/embedded/app/Dockerfile), as
   [Packaging the App](cloud-platforms.md#packaging-the-app) describes, with a second way in that copies in a build

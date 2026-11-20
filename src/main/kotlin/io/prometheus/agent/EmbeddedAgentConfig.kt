@@ -78,8 +78,8 @@ class EmbeddedAgentConfig private constructor(
    * each time. Anything the builder has no method for, [setting] sets by its key. A value the builder can tell is
    * wrong, such as a port out of range, throws [ConfigLoadException], as [start] does for one the agent rejects.
    *
-   * In Kotlin, the settings that take one value are properties too, so `name = "my-app"` does what `name("my-app")`
-   * does: [name], [proxy], [token], [consolidated], and [agentMetricsPort]. Java sees only the methods.
+   * In Kotlin, a setting that takes one value is a property too, so `name = "my-app"` does what `name("my-app")` does;
+   * Java sees only the methods.
    */
   class Builder internal constructor() {
     // The methods' settings, keyed by their path under agent, then the paths, then setting()'s, which come last in the
@@ -99,20 +99,17 @@ class EmbeddedAgentConfig private constructor(
     fun name(name: String): Builder = apply { this.name = name }
 
     /**
-     * The proxy the agent connects to, as `host` or `host:port` (the port defaults to 50051) (`agent.proxy.endpoints`).
-     * The [proxy] method takes several, in the order the agent fails over through them.
+     * The proxy the agent connects to, as `host` or `host:port` (the port defaults to 50051), or several, separated by
+     * commas, in the order the agent fails over through them, as `PROXY_HOSTNAME` takes them (`agent.proxy.endpoints`).
      */
     @get:JvmSynthetic
     @set:JvmSynthetic
     var proxy: String?
       get() = (values["proxy.endpoints"] as List<*>?)?.joinToString(",")
-      set(value) = put("proxy.endpoints", value?.let { listOf(it) })
+      set(value) = put("proxy.endpoints", value?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() })
 
-    /**
-     * The proxy the agent connects to, as `host` or `host:port` (the port defaults to 50051), or several, in the
-     * order the agent fails over through them (`agent.proxy.endpoints`).
-     */
-    fun proxy(vararg endpoints: String): Builder = apply { values["proxy.endpoints"] = endpoints.toList() }
+    /** Sets [proxy] to one endpoint or several, in the order the agent fails over through them. */
+    fun proxy(vararg endpoints: String): Builder = apply { proxy = endpoints.joinToString(",") }
 
     /** The token the agent presents to the proxy, which has to match the proxy's (`agent.agentToken`). */
     @get:JvmSynthetic
@@ -136,7 +133,7 @@ class EmbeddedAgentConfig private constructor(
     ): Builder =
       apply {
         values["tls.trustCertCollectionPem"] = pem
-        if (authority == null) values.remove("tls.overrideAuthority") else values["tls.overrideAuthority"] = authority
+        put("tls.overrideAuthority", authority)
       }
 
     /**

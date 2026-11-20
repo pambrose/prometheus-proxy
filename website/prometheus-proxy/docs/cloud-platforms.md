@@ -84,14 +84,14 @@ environment variables. A two-stage Dockerfile, for a Gradle app named `my-app` t
 
 - It builds with the app's own Gradle wrapper on a JDK, and runs the result on a JRE as a user that isn't root, named by
   number, so a platform that checks for one, such as Kubernetes with `runAsNonRoot`, can. Add a `.dockerignore` that
-  leaves out `build/` and `.gradle/`, so `COPY . .` doesn't send them.
-- The start script `installDist` writes reads `JAVA_OPTS`, whose two flags are for Netty, which the agent's gRPC runs
-  on, on Java 24 and later; the stock images run with both:
+  leaves out `build/`, `.gradle/`, `.kotlin/`, `.git/`, and `.idea/`, so `COPY . .` sends only the sources, and a commit
+  or an IDE doesn't make the next build start over.
+- The start script `installDist` writes reads `JAVA_OPTS`. Besides sizing the heap from the container's memory, it
+  carries two flags for Netty, which the agent's gRPC runs on, on Java 24 and later; the stock images run with both:
   - `--enable-native-access=ALL-UNNAMED` lets Netty load its native TLS library without the warning Java prints, which
     says a later release will block the call.
   - `--sun-misc-unsafe-memory-access=allow` lets Netty use `sun.misc.Unsafe` for its buffers, which it otherwise does
     without. Java 22 and earlier don't know it and won't start with it, so leave it out there.
-- `-XX:MaxRAMPercentage=75` sizes the heap from the container's memory limit, not the host's.
 - An app built as a fat JAR starts with `java -jar`, which doesn't read `JAVA_OPTS`: give the options in
   `JDK_JAVA_OPTIONS`, which the `java` launcher reads, or on its command line.
 - Any JDK 17 or later runs the agent; the stock images run 25.

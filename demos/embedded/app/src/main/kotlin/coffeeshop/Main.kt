@@ -46,11 +46,12 @@ fun main() {
   embeddedServer(CIO, port = port) { coffeeShop(port) }.start(wait = true)
 }
 
+// The website's Embedded Demo page shows the version and this function, from here to the end marker.
+// --8<-- [start:app-module]
+
 // The app's version, which its page, /status, and its agent's name show, so a deploy can be told apart from the last.
 private val version = env("APP_VERSION").ifEmpty { "dev" }
 
-// The website's Embedded Demo page shows this function, from here to its end marker.
-// --8<-- [start:app-module]
 fun Application.coffeeShop(port: Int) {
   // Ktor's HTTP metrics (ktor_http_server_requests_seconds) and the JVM's, then the shop's, in one registry. The plugin
   // goes first: it configures the registry, which Micrometer wants done before any meter is registered.
@@ -61,7 +62,12 @@ fun Application.coffeeShop(port: Int) {
 
   routing {
     shopRoutes(shop)
-    metricsRoute(registry)
+    // The metrics the agent reads, behind the login above
+    authenticate("metrics") {
+      get("/metrics") {
+        call.respondText(registry.scrape(), ContentType.parse("text/plain; version=0.0.4; charset=utf-8"))
+      }
+    }
     adminRoutes(shop)
   }
 
@@ -136,14 +142,6 @@ private suspend fun RoutingCall.placeOrder(shop: CoffeeShop) {
 
     OrderResult.FAILED -> {
       respondText("The espresso machine is broken\n", status = HttpStatusCode.ServiceUnavailable)
-    }
-  }
-}
-
-private fun Route.metricsRoute(registry: PrometheusMeterRegistry) {
-  authenticate("metrics") {
-    get("/metrics") {
-      call.respondText(registry.scrape(), ContentType.parse("text/plain; version=0.0.4; charset=utf-8"))
     }
   }
 }

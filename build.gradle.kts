@@ -479,8 +479,9 @@ fun Project.configureDokka() {
     dokkaSourceSets.main {
       documentedVisibilities(VisibilityModifier.Public)
 
-      // Agent and Proxy inherit members from common-utils' AbstractGenericService that name types from its runtime-only
-      // dependencies, such as DropwizardExports, which the compile classpath Dokka reads lacks.
+      // Agent and Proxy extend common-utils' AbstractGenericService, whose private dropwizardExports field has a type from
+      // a runtime-only dependency, DropwizardExports, which the compile classpath Dokka reads lacks. Nothing public
+      // names it, so this is only for Dokka; drop it once common-utils types the field by an interface (MultiCollector).
       classpath.from(configurations.runtimeClasspath)
 
       perPackageOption {

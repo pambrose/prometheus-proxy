@@ -96,6 +96,16 @@ class EmbeddedAgentConfigTest : StringSpec() {
       byProperty.toConfig() shouldBe byMethod.toConfig()
     }
 
+    // As PROXY_HOSTNAME does, the proxy property takes several endpoints, separated by commas, and reads them back so.
+    "the proxy property takes a comma-separated failover list, as the vararg method does" {
+      val config = embeddedAgent { proxy = "proxy-a.example.com:50443, proxy-b.example.com" }
+      config.options().proxyHostname shouldBe "proxy-a.example.com:50443,proxy-b.example.com:50051"
+      config.toConfig() shouldBe
+        embeddedAgent { proxy("proxy-a.example.com:50443", "proxy-b.example.com") }.toConfig()
+      val endpoints = embeddedAgent { proxy("a:1", "b:2") }.toConfig().getStringList("agent.proxy.endpoints")
+      endpoints shouldBe listOf("a:1", "b:2")
+    }
+
     "a property set to null takes its setting out" {
       val options =
         embeddedAgent {

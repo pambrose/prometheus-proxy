@@ -78,16 +78,15 @@ internal suspend fun withEmbeddedAgentScraped(
         }
       }
     }
-  val proxy = startProxy(args = ["--agent_port", "$agentPort"] + proxyArgs, proxyPort = httpPort)
+  val proxyServer = startProxy(args = ["--agent_port", "$agentPort"] + proxyArgs, proxyPort = httpPort)
   var agent: EmbeddedAgentInfo? = null
   try {
     val targetUrl = "http://$LOOPBACK_HOST:${target.startAndAwaitReady()}/metrics"
     agent =
       embeddedAgent {
         name = agentName
-        // localhost, the name a test certificate's override authority stands in for; this., since the local proxy is
-        // the running Proxy
-        this.proxy = "localhost:$agentPort"
+        // localhost, the name a test certificate's override authority stands in for
+        proxy = "localhost:$agentPort"
         path(path, targetUrl, targetCredentials?.first, targetCredentials?.second)
         setting("internal.reconnectPauseSecs", 1)
         configure()
@@ -100,10 +99,10 @@ internal suspend fun withEmbeddedAgentScraped(
         response.bodyAsText() shouldContain targetMetrics
       }
     }
-    block(proxy, agent)
+    block(proxyServer, agent)
   } finally {
     runCatching { agent?.shutdown() }
-    runCatching { proxy.stopSync(10.seconds) }
+    runCatching { proxyServer.stopSync(10.seconds) }
     target.stop(0, 0)
   }
 }

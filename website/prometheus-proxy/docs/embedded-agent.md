@@ -68,8 +68,6 @@ from Kotlin, or `EmbeddedAgentConfig.builder()` from Java, and call `start()`:
     --8<-- "EmbeddedAgentConfigJavaExample.java:embedded-java-config"
     ```
 
-- **In Kotlin, a setting that takes one value is a property,** such as `name = "my-app"`; the Java builder has a method
-  for each, such as `.name("my-app")`.
 - **The certificate is PEM text,** or its base64
   ([`agent.tls.trustCertCollectionPem`](security/tls.md#certificates-as-environment-variables)).
 - **`scrapeSelf` points the agent at the app's own metrics** on `127.0.0.1`. It percent-encodes a username and password
@@ -153,8 +151,9 @@ returns the builder, whose methods chain and end with `build()`. A method called
 | `path(path, url, username, password, labels)`                      | `agent.pathConfigs`                                 | Scrape any target at `url` and serve it at `path`; the rest are optional, and the URL then carries no credentials of its own              |
 | `setting(key, value)`                                              | the key, under `agent`                              | Any other setting, such as `http.clientTimeoutSecs`; it takes precedence over a method that sets the same key                             |
 
-In `embeddedAgent { }`, `name`, `proxy` (one endpoint), `token`, `consolidated`, and `agentMetricsPort` are properties
-too, so `name = "my-app"` does what `name("my-app")` does, and setting one to `null` takes it out. Java sees only the
+In `embeddedAgent { }`, `name`, `proxy`, `token`, `consolidated`, and `agentMetricsPort` are properties too, so
+`name = "my-app"` does what `name("my-app")` does; `proxy` takes several endpoints separated by commas, as
+`PROXY_HOSTNAME` does, and `null` takes `name`, `proxy`, `token`, or `agentMetricsPort` out. Java sees only the
 methods.
 
 A username and password are percent-encoded into the URL and sent as Basic Auth; both empty, as unset environment

@@ -21,9 +21,10 @@ class PrometheusAgent < Formula
   def install
     libexec.install "prometheus-agent.jar"
 
-    # The JVM flags are the ones etc/docker/agent.Dockerfile passes to silence JDK 25's native-access and
-    # sun.misc.Unsafe startup warnings. Older JDKs reject --sun-misc-unsafe-memory-access, so the script always uses
-    # openjdk@25 rather than honoring a JAVA_HOME set for other work.
+    # The JVM flags are the ones etc/docker/agent.Dockerfile passes: native access without JDK 25's startup warning,
+    # and sun.misc.Unsafe for netty, which on JDK 24 and later goes without it otherwise. Older JDKs reject
+    # --sun-misc-unsafe-memory-access, so the script always uses openjdk@25 rather than honoring a JAVA_HOME set for
+    # other work.
     (bin/"prometheus-agent").write <<~SHELL
       #!/bin/bash
       exec "#{Language::Java.java_home("25")}/bin/java" \\
