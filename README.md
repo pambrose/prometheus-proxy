@@ -67,7 +67,9 @@ on macOS or Linux, the basics, network, embedded, and Spring Boot demos need onl
 [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2, `git`, `make`, `curl`, and a browser; the
 embedded and Spring Boot demos build their apps inside Docker. The Kubernetes demo runs two Kubernetes clusters in Docker, so it also
 needs [kind](https://kind.sigs.k8s.io/) 0.33.0 or later, [`kubectl`](https://kubernetes.io/docs/tasks/tools/), and
-[Helm](https://helm.sh/) 3 or 4.
+[Helm](https://helm.sh/) 3 or 4. From the repository's root, `make demos-up` (or `make demos-up-local`, to build them
+from the checkout) starts every demo, one after another, and `make demos-down` stops them all; together they take a lot
+of memory and CPU.
 
 ```bash
 git clone -c advice.detachedHead=false --depth 1 --branch 4.6.0 https://github.com/pambrose/prometheus-proxy.git

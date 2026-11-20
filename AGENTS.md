@@ -36,7 +36,8 @@ Run `make help` for the current target list with descriptions (auto-extracted fr
 `Makefile`). The container and scaling targets need Docker.
 
 Each demo under `demos/` is self-contained, with its own Makefile run from its directory (`make -C demos/<name> help`
-lists its targets), so the root `Makefile` has no demo targets.
+lists its targets). The root `Makefile`'s only demo targets, `demos-up`, `demos-up-local`, and `demos-down`, run every
+demo's `up`, `up-local`, or `down` in turn (its `DEMOS` list), and keep going past a demo that fails.
 
 The embedded demo's coffee shop, `demos/embedded/app`, is a Gradle project of its own, outside the root build, that
 embeds the agent through the public API and reads `gradle/libs.versions.toml` (its Ktor and Micrometer entries are
