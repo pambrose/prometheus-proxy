@@ -74,6 +74,9 @@ import java.util.concurrent.locks.ReentrantLock
 import java.util.zip.CRC32
 import kotlin.concurrent.atomics.plusAssign
 import kotlin.concurrent.withLock
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 
 /**
  * Outcome of a single [AgentGrpcService.sendHeartBeat] call, used by the agent's heartbeat loop to
@@ -109,6 +112,7 @@ internal class AgentGrpcService(
   internal val agent: Agent,
   private val options: AgentOptions,
   private val inProcessServerName: String,
+  private val timeSource: TimeSource = TimeSource.Monotonic,
 ) {
   private val grpcLock = ReentrantLock()
   private var grpcStarted by atomicBoolean(false)
@@ -155,10 +159,17 @@ internal class AgentGrpcService(
   // render a host:port pair that was never configured.
   val currentEndpoint: HostPort get() = endpoints[endpointIndex]
 
-  // The last connect failure logged at WARN for each proxy endpoint, as Utils.failureKey gives it, until a connect to
-  // it succeeds: a proxy that stays down, or a dead primary in a failover list, logs its failure once and then at
-  // DEBUG (October #17). The endpoints are the configured list, so this stays as small.
-  private val connectFailures = ConcurrentHashMap<String, String>()
+  // The last connect failure logged at WARN for each proxy endpoint, as Utils.failureKey gives it, and when, until a
+  // connect to it succeeds: a proxy that stays down, or a dead primary in a failover list, logs its failure once and
+  // then at DEBUG (October #17), with a WARN again every CONNECT_FAILURE_REMINDER_INTERVAL while it lasts, since a
+  // failure that won't clear by itself, such as a refused token, otherwise sat in the log's first lines. The endpoints
+  // are the configured list, so this stays as small.
+  private val connectFailures = ConcurrentHashMap<String, LoggedFailure>()
+
+  private class LoggedFailure(
+    val key: String,
+    val warnedAt: TimeMark,
+  )
 
   val agentHostName: String get() = currentEndpoint.host
   val agentPort: Int get() = currentEndpoint.port
@@ -358,11 +369,24 @@ internal class AgentGrpcService(
       val failure = failureKey(e)
       val message =
         "Cannot connect to proxy at $proxyHost using ${tlsContext.desc()} - ${e.simpleClassName}: ${e.message}"
-      // The first failure, and a change, at WARN with the stack trace for diagnosis; a repeat at DEBUG.
-      if (connectFailures.put(proxyHost, failure) == failure)
-        logger.debug { message }
-      else
-        logger.warn(e) { message }
+      // The first failure, and a change, at WARN with the stack trace for diagnosis; a repeat at DEBUG, and at WARN
+      // again, without the stack trace, once the last WARN is CONNECT_FAILURE_REMINDER_INTERVAL old.
+      val last = connectFailures[proxyHost]
+      when {
+        last?.key != failure -> {
+          connectFailures[proxyHost] = LoggedFailure(failure, timeSource.markNow())
+          logger.warn(e) { message }
+        }
+
+        last.warnedAt.elapsedNow() >= CONNECT_FAILURE_REMINDER_INTERVAL -> {
+          connectFailures[proxyHost] = LoggedFailure(failure, timeSource.markNow())
+          logger.warn { "$message (still failing, retrying every few seconds)" }
+        }
+
+        else -> {
+          logger.debug { message }
+        }
+      }
       false
     }
   }
@@ -662,5 +686,8 @@ internal class AgentGrpcService(
 
     // Max time to wait for the gRPC channel to terminate after shutdownNow() (finding 28).
     private const val CHANNEL_TERMINATION_TIMEOUT_SECS = 5L
+
+    // How often a connect failure that persists is logged at WARN again.
+    private val CONNECT_FAILURE_REMINDER_INTERVAL = 10.minutes
   }
 }

@@ -105,6 +105,9 @@ import kotlin.reflect.full.declaredMemberFunctions
 import kotlin.reflect.jvm.isAccessible
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeSource
+import kotlin.time.TestTimeSource
+import kotlin.time.Duration.Companion.minutes
 
 @Suppress("LargeClass")
 class AgentGrpcServiceTest : StringSpec() {
@@ -150,10 +153,11 @@ class AgentGrpcServiceTest : StringSpec() {
   private suspend fun withService(
     proxySpec: String,
     transportFilterDisabled: Boolean = false,
+    timeSource: TimeSource = TimeSource.Monotonic,
     block: suspend (AgentGrpcService) -> Unit,
   ) {
     val agent = createMockAgent(proxySpec, transportFilterDisabled = transportFilterDisabled)
-    val service = AgentGrpcService(agent, agent.options, "test-server")
+    val service = AgentGrpcService(agent, agent.options, "test-server", timeSource)
     try {
       block(service)
     } finally {
@@ -167,8 +171,9 @@ class AgentGrpcServiceTest : StringSpec() {
   private suspend fun withStubbedService(
     proxySpec: String,
     transportFilterDisabled: Boolean = false,
+    timeSource: TimeSource = TimeSource.Monotonic,
     block: suspend (AgentGrpcService, ProxyServiceGrpcKt.ProxyServiceCoroutineStub) -> Unit,
-  ) = withService(proxySpec, transportFilterDisabled) { service ->
+  ) = withService(proxySpec, transportFilterDisabled, timeSource) { service ->
     val stub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
     service.grpcStub = stub
     service.unaryDeadlineSecs = 0
@@ -488,6 +493,31 @@ class AgentGrpcServiceTest : StringSpec() {
           warnings[1] shouldContain "UNAUTHENTICATED"
           warnings[2] shouldContain "UNAUTHENTICATED"
         }
+      }
+    }
+
+    // Logged once, a failure that won't clear by itself, such as a refused token, sat in the log's first lines while
+    // the agent went on reconnecting every few seconds, each attempt below WARN.
+    "a connect failure that persists should be logged at WARN again every 10 minutes, without its stack trace" {
+      val time = TestTimeSource()
+      withStubbedService("localhost:$PROXY_AGENT_PORT", timeSource = time) { service, mockStub ->
+        coEvery { mockStub.connectAgent(any(), any<Metadata>()) } throws
+          StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Missing or invalid agent token"))
+
+        val events =
+          captureLogs<AgentGrpcService>(Level.DEBUG) {
+            repeat(3) { service.connectAgent().shouldBeFalse() }
+            time += 10.minutes
+            repeat(3) { service.connectAgent().shouldBeFalse() }
+          }
+
+        val warnings = events.filter { it.level == Level.WARN }
+        warnings.size shouldBe 2
+        warnings.forEach { it.formattedMessage shouldContain "UNAUTHENTICATED" }
+        warnings[0].throwableProxy.shouldNotBeNull()
+        warnings[1].throwableProxy.shouldBeNull()
+        warnings[1].formattedMessage shouldContain "still failing"
+        events.count { it.level == Level.DEBUG && "Cannot connect to proxy" in it.formattedMessage } shouldBe 4
       }
     }
 

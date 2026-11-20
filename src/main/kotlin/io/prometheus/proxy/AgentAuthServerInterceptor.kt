@@ -16,6 +16,7 @@
 
 package io.prometheus.proxy
 
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.grpc.Context
 import io.grpc.Contexts
 import io.grpc.Grpc
@@ -25,9 +26,11 @@ import io.grpc.ServerCallHandler
 import io.grpc.ServerInterceptor
 import io.grpc.Status
 import io.prometheus.common.GrpcConstants.META_AGENT_TOKEN_KEY
+import io.prometheus.common.KeyedThrottle
 import io.prometheus.proxy.AgentAuthManager.Companion.AGENT_IDENTITY_KEY
 import io.prometheus.proxy.ProxyServerTransportFilter.Companion.displayHost
 import io.prometheus.proxy.ProxyServiceImpl.Companion.UNKNOWN_ADDRESS
+import kotlin.time.Duration.Companion.minutes
 
 /**
  * Authenticates agent RPCs against the configured identities and attaches the resolved identity.
@@ -39,17 +42,19 @@ import io.prometheus.proxy.ProxyServiceImpl.Companion.UNKNOWN_ADDRESS
  * enforce per-agent path authorization. When no identities are configured this interceptor is not
  * installed and the agent port preserves its historical open behavior.
  *
- * A refused call goes in the dashboard's activity feed, by the host it came from, each host's calls within a minute
- * counted on one line: a wrong token is the usual reason a new agent never appears, and the proxy logs nothing about
- * it.
+ * A refused call is logged at WARN, naming the host it came from, at most once a minute for each host, and goes in the
+ * dashboard's activity feed, each host's calls within a minute counted on one line: a wrong token is the usual reason a
+ * new agent never appears, and the agent itself logs why only for its first attempt.
  *
  * @param authManager resolves presented tokens to identities
  * @param activityLog where a refused call is recorded; null with the dashboard off
+ * @param badTokenWarnings which hosts' refused calls may be logged at WARN now
  * @see io.prometheus.agent.AgentTokenClientInterceptor
  */
 internal class AgentAuthServerInterceptor(
   private val authManager: AgentAuthManager,
   private val activityLog: ActivityLog? = null,
+  private val badTokenWarnings: KeyedThrottle<String> = KeyedThrottle(BAD_TOKEN_WARNING_INTERVAL, MAX_BAD_TOKEN_HOSTS),
 ) : ServerInterceptor {
   override fun <ReqT, RespT> interceptCall(
     call: ServerCall<ReqT, RespT>,
@@ -74,9 +79,23 @@ internal class AgentAuthServerInterceptor(
     call: ServerCall<*, *>,
     missing: Boolean,
   ) {
-    val log = activityLog ?: return
     val host = call.attributes.get(Grpc.TRANSPORT_ATTR_REMOTE_ADDR)?.let(::displayHost) ?: UNKNOWN_ADDRESS
+    if (badTokenWarnings.tryAcquire(host))
+      logger.warn {
+        "Refused an agent from $host (UNAUTHENTICATED): it sent ${if (missing) "no" else "an unknown"} agent token"
+      }
     val token = if (missing) "No agent token" else "An unknown agent token"
-    log.recordFromSource(host, ActivityKind.BAD_TOKEN, "$token, from $host")
+    activityLog?.recordFromSource(host, ActivityKind.BAD_TOKEN, "$token, from $host")
+  }
+
+  private companion object {
+    private val logger = logger {}
+
+    // How often a host's refused calls may be logged at WARN: an agent with a wrong token reconnects every few seconds.
+    private val BAD_TOKEN_WARNING_INTERVAL = 1.minutes
+
+    // The most hosts whose last WARN is remembered. Anyone who can reach the agent port can send a bad token, so the
+    // cap keeps the memory bounded; a host forgotten early is only warned of again early.
+    private const val MAX_BAD_TOKEN_HOSTS = 1_000
   }
 }
