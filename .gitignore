@@ -28,6 +28,8 @@ specs/tla/states/
 .idea/misc.xml
 .idea/kotlinc.xml
 .idea/inspectionProfiles/Project_Default.xml
+# Written by IntelliJ for each checkout's source encodings
+.idea/encodings.xml
 # Personal plugin state
 .idea/copilot.data.migration.*.xml
 .idea/SweepConfig.xml
