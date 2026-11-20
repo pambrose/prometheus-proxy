@@ -1,6 +1,7 @@
 package roastery;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.util.StringUtils;
 
 /**
  * The embedded agent's settings, bound from {@code roastery.monitoring} in application.yml, whose defaults read the
@@ -19,7 +20,7 @@ public record AgentSettings(
 
   /** Whether a proxy is given; without one, as on a developer's machine, the agent stays off. */
   public boolean enabled() {
-    return proxyEndpoint != null && !proxyEndpoint.isBlank();
+    return StringUtils.hasText(proxyEndpoint);
   }
 
   // The token, the certificate, and the password stay out of it, so it can be logged
@@ -31,6 +32,6 @@ public record AgentSettings(
   }
 
   private static String shown(String secret) {
-    return secret == null || secret.isBlank() ? "(none)" : "(set)";
+    return StringUtils.hasText(secret) ? "(set)" : "(none)";
   }
 }

@@ -18,8 +18,7 @@ import org.springframework.stereotype.Component;
  * Runs the prometheus-proxy agent embedded in the roastery, from its {@link AgentSettings}, in memory: no config file
  * holds the token, the proxy's certificate, or the password for {@code /actuator/prometheus}. The agent connects to
  * the proxy, so the app opens no port for Prometheus, and answers each scrape by reading Actuator's
- * {@code /actuator/prometheus} on 127.0.0.1. It's named after the app's version, so the proxy's dashboard and logs tell
- * the old and new versions apart during a deploy.
+ * {@code /actuator/prometheus} on 127.0.0.1.
  *
  * <p>As a {@link SmartLifecycle} in the last phase, it starts once the web server is serving, so the agent's first
  * scrape finds Actuator, and stops first when the app shuts down, before the web server drains: the agent disconnects
@@ -35,7 +34,6 @@ public class PrometheusAgentLifecycle implements SmartLifecycle {
   private final BuildProperties build;
   private final Environment environment;
   private volatile EmbeddedAgentInfo agent;
-  private volatile boolean running;
 
   public PrometheusAgentLifecycle(AgentSettings settings, BuildProperties build, Environment environment) {
     this.settings = settings;
@@ -45,7 +43,6 @@ public class PrometheusAgentLifecycle implements SmartLifecycle {
 
   @Override
   public void start() {
-    running = true;
     if (!settings.enabled()) {
       logger.info("roastery.monitoring.proxy-endpoint isn't set, so the Prometheus agent stays off");
       return;
@@ -91,12 +88,12 @@ public class PrometheusAgentLifecycle implements SmartLifecycle {
       started.shutdown();
       agent = null;
     }
-    running = false;
   }
 
+  // Running while the agent is: one that's off, or failed to start, has nothing to stop
   @Override
   public boolean isRunning() {
-    return running;
+    return agent != null;
   }
 }
 // --8<-- [end:agent-lifecycle]

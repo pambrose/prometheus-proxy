@@ -105,33 +105,27 @@ It builds the agent's settings with `EmbeddedAgentConfig.builder()`, the Java fo
   `PROMETHEUS_PROXY_CERT`, and the rest. Its `toString` leaves the secrets out, so the app can log it.
 - **The password:** `SecurityConfig` lets only the agent's user read `/actuator/prometheus`; the status page and
   `/actuator/health` are open. `scrapeSelf` percent-encodes the credentials into the scrape URL.
-- **The lifecycle:** as a `SmartLifecycle` bean in the last phase, the agent starts once the web server is serving, so
-  its first scrape finds Actuator, and stops first on shutdown, before the web server drains.
+
+[In Spring Boot](embedded-agent.md#in-spring-boot) has the same points for an app of your own.
 
 ## Spring Boot's versions of the agent's libraries
 
 Spring Boot's dependency management, which an app takes from `spring-boot-starter-parent`, sets the version of every
-library it knows, whatever version a dependency asks for. Some of the agent's libraries are among them, and Spring
-Boot 4.2.0 gives the roastery older versions than the agent is built with:
+library it knows, whatever version a dependency asks for. Some of the agent's libraries are among them, and the
+roastery runs kotlinx-serialization, Jackson 2, Logback, and gRPC older than the agent is built with.
+`./demo.sh versions` prints both, from the jars the running roastery holds and the project's version catalog.
 
-| Library | The agent's | Spring Boot 4.2.0's |
-|---|---|---|
-| kotlinx-serialization | 1.13.0 | 1.11.0 |
-| Jackson 2 | 2.23.0 | 2.21.8 |
-| Logback | 1.6.8 | 1.6.6 |
-| gRPC | 1.85.1 | 1.84.1 |
-
-The agent runs with them, as the roastery shows, and the project builds the roastery on every pull request, so a
-Spring Boot release that breaks the agent is caught there. Were one to break it, a property in the app's pom sets that
-library back: `kotlin-serialization.version`, `jackson-2-bom.version`, `logback.version`, or `grpc-java.version`.
-`./demo.sh versions` prints the table above from the jars the running roastery holds.
+The agent runs with Spring Boot's versions, as the roastery shows. On every pull request, the project builds the
+roastery and runs its
+[`RoasteryAgentTest`](https://github.com/pambrose/prometheus-proxy/blob/master/demos/spring-boot/app/src/test/java/roastery/RoasteryAgentTest.java),
+which starts the agent against a proxy and scrapes through it, so a Spring Boot release that breaks the agent fails
+there. Were one to break it, a property in the app's pom sets that library back: `kotlin-serialization.version`,
+`jackson-2-bom.version`, `logback.version`, or `grpc-java.version`.
 
 ## A graceful shutdown
 
-`./demo.sh stop-app` stops the roastery with SIGTERM, as a platform does on a deploy or a scale-down. Spring Boot stops
-its lifecycle beans from the last phase down, so the agent stops first: it disconnects from the proxy, which drops the
-roastery's path at once, and no scrape reaches the web server once it starts draining. The roastery's log shows the
-order:
+`./demo.sh stop-app` stops the roastery with SIGTERM, as a platform does on a deploy or a scale-down. The agent, in the
+last lifecycle phase, stops first, and the roastery's log shows the order:
 
 ```text
 Stopping the Prometheus agent roastery-1.0

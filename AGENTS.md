@@ -47,9 +47,11 @@ is a symlink to the root's, so the IDE syncs it with the root's Gradle instead o
 
 The Spring Boot demo's roastery, `demos/spring-boot/app`, is a Maven project, a Spring Boot app in Java that embeds the
 agent through `EmbeddedAgentConfig.builder()`. Spring Boot's dependency management sets the versions of some of the
-agent's libraries (kotlinx-serialization, Jackson 2, Logback, gRPC), older than the agent's own; `make consumer-check`
-(CI's `consumer-check` job) builds it against the snapshot it publishes, so a change to the builder's Java surface, or
-a Spring Boot release that breaks the agent, fails there. Its `prometheus-proxy.version` is a release version literal.
+agent's libraries (kotlinx-serialization, Jackson 2, Logback, gRPC), older than the agent's own;
+`make spring-boot-demo-check` (in CI's `consumer-check` job) builds it against the snapshot `consumer-check` publishes
+and runs its `RoasteryAgentTest`, which starts the agent against a proxy in the same JVM and scrapes through it, so a
+change to the builder's Java surface, or a Spring Boot release that breaks the agent at runtime, fails there. Its
+`prometheus-proxy.version` is a release version literal.
 
 ## Architecture
 

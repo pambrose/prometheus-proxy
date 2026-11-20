@@ -27,7 +27,8 @@ All notable changes to this project are documented in this file.
 - A fifth demo, `demos/spring-boot`: a Spring Boot roastery in Java, built with Maven, with the agent embedded through
   `EmbeddedAgentConfig.builder()` in a `SmartLifecycle` bean, reading Actuator's metrics behind Spring Security. Its
   tour covers the agent's lifecycle with the app's, the versions of the agent's libraries Spring Boot picks, and a
-  graceful shutdown. `make consumer-check` builds it against the checkout
+  graceful shutdown. `make spring-boot-demo-check` builds it against the checkout and runs the agent at Spring Boot's
+  versions
 
 ### Bug Fixes
 

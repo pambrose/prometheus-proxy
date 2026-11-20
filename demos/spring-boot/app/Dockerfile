@@ -12,7 +12,7 @@ COPY pom.xml ./
 COPY src ./src
 # The cache keeps Maven's downloads between builds, so a second make up builds in seconds.
 RUN --mount=type=cache,target=/root/.m2,id=roastery-maven \
-    mvn --batch-mode --quiet -Dprometheus-proxy.version="${PROXY_VERSION:?}" -DskipTests package \
+    mvn --batch-mode --quiet -Dprometheus-proxy.version="${PROXY_VERSION:?}" -Dmaven.test.skip=true package \
     && mkdir /jar && cp target/roastery.jar /jar/
 
 FROM scratch AS prebuilt
@@ -20,20 +20,23 @@ COPY target/roastery.jar /jar/
 
 FROM ${APP_BUILD} AS jar
 
-# Spring Boot's own layout for an image: the app's jar beside lib/, its dependencies' jars, which `demo.sh versions`
-# lists, as it runs.
+# Spring Boot's own layout for an image, the app's jar beside lib/, its dependencies' jars, which `demo.sh versions`
+# lists, in layers, so a rebuild rewrites only those that changed: the app, and a snapshot of the library. A release
+# build has no snapshot, so its layer is made empty.
 FROM eclipse-temurin:25-jre-noble@sha256:a98128a57de944a72bd31fbc79b898edd5a5864d3652071d5bbd2160ab7d7dce AS extracted
 COPY --from=jar /jar/roastery.jar /tmp/
-RUN java -Djarmode=tools -jar /tmp/roastery.jar extract --destination /app
+RUN java -Djarmode=tools -jar /tmp/roastery.jar extract --layers --destination /layers \
+    && mkdir -p /layers/snapshot-dependencies
 
 FROM eclipse-temurin:25-jre-noble@sha256:a98128a57de944a72bd31fbc79b898edd5a5864d3652071d5bbd2160ab7d7dce
 RUN useradd --system --uid 1001 --home-dir /app roastery
-COPY --from=extracted /app /app
+COPY --from=extracted /layers/dependencies/ /app/
+COPY --from=extracted /layers/snapshot-dependencies/ /app/
+COPY --from=extracted /layers/application/ /app/
 USER 1001
 WORKDIR /app
-# Spring Boot's jar starts with java -jar, which reads JDK_JAVA_OPTIONS: they let Netty, which the agent's gRPC runs
-# on, load its native TLS library and use sun.misc.Unsafe on Java 24 and later, and size the heap from the
-# container's memory.
+# The flags the proxy and agent images run with, and a heap sized from the container's memory, in JDK_JAVA_OPTIONS,
+# which java -jar reads.
 ENV JDK_JAVA_OPTIONS="-XX:MaxRAMPercentage=75 --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow"
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "/app/roastery.jar"]

@@ -80,17 +80,6 @@ and nothing shared. `make up` writes them, with a random token and password, to 
 | `proxy` | The stock proxy image, which takes its TLS certificate and key, and the agent's token, from environment variables, with no file mounted. Its agent port is reachable only on the compose network; its dashboard is on. |
 | `prometheus` | Scrapes the roastery's path through the proxy every 5s, and the proxy's own metrics. |
 
-### Where the agent is set up
-
-- **`AgentSettings`** is a `@ConfigurationProperties` record. It binds `roastery.monitoring` from `application.yml`,
-  whose values read the environment the coffee shop's agent reads: `PROMETHEUS_PROXY`, `PROMETHEUS_AGENT_TOKEN`,
-  `PROMETHEUS_PROXY_CERT`, `PROMETHEUS_PROXY_AUTHORITY`, `METRICS_USER`, and `METRICS_PASSWORD`.
-- **`PrometheusAgentLifecycle`** is a `SmartLifecycle` bean in the last phase, so it starts once the web server is
-  serving and stops first. It builds the agent's settings with `EmbeddedAgentConfig.builder()`, the Java form of
-  `embeddedAgent { }`, pointing `scrapeSelf` at `actuator/prometheus` with the credentials.
-- **`SecurityConfig`** lets only that user read `/actuator/prometheus`; the status page and `/actuator/health` are
-  open.
-
 ## Guided tour
 
 `make tour`, or `./demo.sh tour`, walks through four parts, pausing before each step. `make tour PART=3`, or
@@ -112,19 +101,14 @@ so Prometheus never needs them.
 ### 3. What Spring Boot's dependency management picked
 
 Spring Boot sets the version of every library it knows, some of the agent's among them, whatever version the agent
-asks for. `./demo.sh versions` compares the versions the roastery runs with the ones the agent is built with:
+asks for: kotlinx-serialization, Jackson 2, Logback, and gRPC run older than the agent's own. `./demo.sh versions`
+prints the versions the roastery runs beside the ones the agent is built with.
 
-| Library | The agent's | Spring Boot 4.2.0's |
-|---|---|---|
-| kotlinx-serialization | 1.13.0 | 1.11.0 |
-| Jackson 2 | 2.23.0 | 2.21.8 |
-| Logback | 1.6.8 | 1.6.6 |
-| gRPC | 1.85.1 | 1.84.1 |
-
-The agent runs with Spring Boot's versions, as the roastery shows, and `make consumer-check` builds the roastery on
-every pull request, so a Spring Boot release that breaks it is caught there. Were one to break it, a property in the
-pom sets that library back: `kotlin-serialization.version`, `jackson-2-bom.version`, `logback.version`, or
-`grpc-java.version`.
+The agent runs with Spring Boot's versions, as the roastery shows. On every pull request,
+`make spring-boot-demo-check` builds the roastery and runs its `RoasteryAgentTest`, which starts the agent against a
+proxy and scrapes through it, so a Spring Boot release that breaks the agent fails there. Were one to break it, a
+property in the pom sets that library back: `kotlin-serialization.version`, `jackson-2-bom.version`,
+`logback.version`, or `grpc-java.version`.
 
 ### 4. A graceful shutdown takes the agent down first
 
@@ -146,7 +130,9 @@ the roastery's path, and no scrape reaches the web server once it starts drainin
 
 | Path | What it is |
 |---|---|
-| `app/` | The roastery: a Maven project of its own, outside the repository's Gradle build, whose parent is Spring Boot's `spring-boot-starter-parent`. `src/main/java/roastery/` holds the app, and `src/main/resources/application.yml` its settings. Its `Dockerfile` builds it with Maven inside Docker (`make up`) or copies a jar built on the host (`make up-local`), and runs Spring Boot's extracted layout on a JRE. |
+| `app/` | The roastery: a Maven project of its own, outside the repository's Gradle build, whose parent is Spring Boot's `spring-boot-starter-parent`. Its `Dockerfile` builds it with Maven inside Docker (`make up`) or copies a jar built on the host (`make up-local`), and runs Spring Boot's extracted layout on a JRE. |
+| `app/src/main/java/roastery/` | `PrometheusAgentLifecycle`, the `SmartLifecycle` bean that runs the agent; `AgentSettings`, the `@ConfigurationProperties` record it's built from, whose values `src/main/resources/application.yml` reads from the environment; `SecurityConfig`, which lets only the agent's user read `/actuator/prometheus`; and the roastery itself. |
+| `app/src/test/java/roastery/RoasteryAgentTest.java` | Starts the roastery and a proxy in one JVM, and scrapes through the proxy: the agent at the versions Spring Boot picks, which `make spring-boot-demo-check` runs on every pull request. |
 | `config/proxy.conf` | The proxy's settings: its metrics and its dashboard. Its TLS material and token come from the environment. |
 | `docker/compose.yml` | The services above. |
 | `prometheus/prometheus.yml` | Prometheus's scrape config. |

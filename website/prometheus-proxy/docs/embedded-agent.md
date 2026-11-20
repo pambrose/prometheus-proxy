@@ -104,11 +104,12 @@ A Spring Boot app runs the agent from a bean, so it starts and stops with the ap
 - **The settings:** a `@ConfigurationProperties` record can hold them, with `application.yml` reading each from the
   environment, as `${PROMETHEUS_AGENT_TOKEN:}` does. Give it a `toString` that leaves the secrets out, so the app can
   log it.
-- **Spring Boot's dependency management** sets the versions of the libraries it knows, some of the agent's among them,
-  older ones in Spring Boot 4.2.0: kotlinx-serialization 1.11.0 (the agent's is 1.13.0), Jackson 2 2.21.8 (2.23.0),
-  Logback 1.6.6 (1.6.8), and gRPC 1.84.1 (1.85.1). The agent runs with them, and the project builds the demo's
-  roastery against each pull request. Were a Spring Boot release to break it, a property in the app's pom sets that
-  library back: `kotlin-serialization.version`, `jackson-2-bom.version`, `logback.version`, or `grpc-java.version`.
+- **Spring Boot's dependency management** sets the versions of the libraries it knows, some of the agent's among them:
+  kotlinx-serialization, Jackson 2, Logback, and gRPC run older than the agent's own. The agent runs with them, and
+  the demo's roastery runs it at Spring Boot's versions on every pull request
+  ([Spring Boot's versions](spring-boot-demo.md#spring-boots-versions-of-the-agents-libraries)). Were a Spring Boot
+  release to break it, a property in the app's pom sets that library back: `kotlin-serialization.version`,
+  `jackson-2-bom.version`, `logback.version`, or `grpc-java.version`.
 - **Logging:** see [Logging](#logging) for the line Spring Boot's `application.yml` takes.
 
 ## API Reference

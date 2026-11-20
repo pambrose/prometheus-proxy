@@ -1,7 +1,8 @@
 .PHONY: default help stop clean clean-all stubs build tibuild refresh jars \
         tests mini-tests xxl-tests nh-tests ip-tests netty-tests tls-tests \
         lincheck-tests tla-checks check-rules helm-lint zizmor \
-        container-tests scaling-tests all-tests ci ci-build consumer-check regen-certs \
+        container-tests scaling-tests all-tests ci ci-build consumer-check spring-boot-demo-check \
+        _publish-consumer-check regen-certs \
         docker-clean docker-clean-dry \
         all-scaling scaling-paths scaling-agents scaling-payload scaling-consolidated scaling-concurrency scaling-soak \
         coverage coverage-html coverage-xml coverage-log coverage-verify \
@@ -104,7 +105,7 @@ CHARTS := prometheus-proxy prometheus-agent
 
 # The jobs of the CI workflow (.github/workflows/ci.yml) that `make ci` runs, quickest first; build-site is its docs-site
 # job, and ci-build its build job. Keep the list, and ci-build's steps, in step with that workflow.
-CI_JOBS := tla-checks check-rules helm-lint build-site consumer-check ci-build
+CI_JOBS := tla-checks check-rules helm-lint build-site consumer-check spring-boot-demo-check ci-build
 
 # The version consumer-check publishes to the local Maven repository and builds against. Never a released version,
 # which the local repository may already hold from Maven Central, so the check always reads what this checkout builds.
@@ -299,12 +300,18 @@ ci-build:  ## The CI workflow's build job: compile, lint, and detekt, then the t
 # CI's consumer-check job. A Maven build that embeds the agent resolves the published POM by Maven's rules, which the
 # repo's Gradle builds don't follow, so this publishes the artifact to the local Maven repository, needing no GPG key,
 # as publish-local-snapshot does, and has etc/consumer-check/check.sh build a Maven project that depends only on it.
-# Then it builds the Spring Boot demo's roastery against it too, whose versions Spring Boot's dependency management
-# sets, so a Spring Boot release that breaks the agent fails here.
-consumer-check: _require-version  ## Build Maven projects that embed the agent, a Spring Boot app among them, against this checkout's POM, and check what they resolve (needs mvn)
-	$(GRADLE) -PoverrideVersion=$(CONSUMER_CHECK_VERSION) publishToMavenLocal
+consumer-check: _publish-consumer-check  ## Build a Maven project that embeds the agent against this checkout's POM, and check what it resolves (needs mvn)
 	./etc/consumer-check/check.sh $(CONSUMER_CHECK_VERSION)
+
+# Also in CI's consumer-check job: builds the Spring Boot demo's roastery against the same artifact, with the versions
+# of the agent's libraries Spring Boot's dependency management sets, and runs RoasteryAgentTest, which starts the agent
+# against a proxy and scrapes through it, so a Spring Boot release that breaks the agent at runtime fails here.
+spring-boot-demo-check: _publish-consumer-check  ## Build and test the Spring Boot demo's roastery against this checkout's POM, at Spring Boot's versions (needs mvn)
 	mvn --batch-mode --quiet -f $(SPRING_BOOT_DEMO_DIR)/app -Dprometheus-proxy.version=$(CONSUMER_CHECK_VERSION) verify
+
+# The artifact both checks build against, published once however many of them a make run asks for.
+_publish-consumer-check: _require-version
+	$(GRADLE) -PoverrideVersion=$(CONSUMER_CHECK_VERSION) publishToMavenLocal
 
 docker-clean-dry:  ## Preview what `make docker-clean` would reclaim (removes nothing)
 	@./bin/docker-clean-tests.sh --dry-run --cache

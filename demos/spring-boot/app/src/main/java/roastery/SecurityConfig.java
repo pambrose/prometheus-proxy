@@ -8,6 +8,7 @@ import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.util.StringUtils;
 
 /**
  * Actuator's {@code /actuator/prometheus} is for the agent, which reads it on 127.0.0.1 with the credentials in
@@ -25,7 +26,7 @@ public class SecurityConfig {
 
   @Bean
   UserDetailsService metricsUser(AgentSettings settings) {
-    if (settings.metricsUser() == null || settings.metricsUser().isBlank()) {
+    if (!StringUtils.hasText(settings.metricsUser())) {
       return new InMemoryUserDetailsManager();
     }
     return new InMemoryUserDetailsManager(

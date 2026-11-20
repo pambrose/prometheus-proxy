@@ -256,10 +256,12 @@ start_demo() {
     check_build_tools
     bold "Building the proxy, and the roastery against the library, from this checkout"
     # The proxy's fat jar, which its image copies, and the library, which the roastery's Maven build takes from the
-    # local Maven repository, as an app on Maven Central's would.
-    "$REPO_DIR/gradlew" --quiet -p "$REPO_DIR" proxyJar
-    "$REPO_DIR/gradlew" --quiet -p "$REPO_DIR" -PoverrideVersion="$LOCAL_LIBRARY_VERSION" publishToMavenLocal
-    mvn --batch-mode --quiet -f "$DEMO_DIR/app" -Dprometheus-proxy.version="$LOCAL_LIBRARY_VERSION" -DskipTests package
+    # local Maven repository, as an app on Maven Central's would; the library's API docs, which the build doesn't
+    # read, are left out.
+    "$REPO_DIR/gradlew" --quiet -p "$REPO_DIR" -PoverrideVersion="$LOCAL_LIBRARY_VERSION" \
+      proxyJar publishToMavenLocal -x dokkaGeneratePublicationHtml
+    mvn --batch-mode --quiet -f "$DEMO_DIR/app" -Dprometheus-proxy.version="$LOCAL_LIBRARY_VERSION" \
+      -Dmaven.test.skip=true package
     SPRING_BOOT_DEMO_APP_BUILD=prebuilt "${COMPOSE[@]}" up --detach --build --wait --wait-timeout 180
   fi
   # Compose recreates a container when its own config changes, not when a file it mounts does: reload Prometheus's
@@ -316,24 +318,27 @@ lib_version() {
 # A library's version in the repository's version catalog, which the agent is built with: catalog_version <key>
 catalog_version() { sed -nE "s/^$1 *= *\"([^\"]+)\".*/\1/p" "$REPO_DIR/gradle/libs.versions.toml"; }
 
+# One row of the versions table: row <library> <the agent's> <the roastery's>
+row() { printf '  %-24s %-14s %s\n' "$1" "$2" "$3"; }
+
 cmd_versions() {
-  local libs boot
+  local libs
   libs="$("${COMPOSE[@]}" exec -T roastery ls /app/lib 2>/dev/null)" ||
     die "the roastery isn't running; start the demo with '$MAKE_NAME up'"
-  boot="$(sed -nE '/spring-boot-starter-parent/{n;s/.*<version>([^<]+)<.*/\1/p;}' "$DEMO_DIR/app/pom.xml")"
-  bold "The agent's libraries: the versions it's built with, and the ones the roastery runs, which Spring Boot $boot picked"
-  printf '  %-24s %-14s %s\n' "Library" "The agent's" "The roastery's"
-  printf '  %-24s %-14s %s\n' "kotlinx-serialization" "$(catalog_version serialization)" \
-    "$(lib_version "$libs" kotlinx-serialization-json-jvm)"
-  printf '  %-24s %-14s %s\n' "Jackson 2" "$(catalog_version jackson)" "$(lib_version "$libs" jackson-databind 2)"
-  printf '  %-24s %-14s %s\n' "Logback" "$(catalog_version logback)" "$(lib_version "$libs" logback-classic)"
-  printf '  %-24s %-14s %s\n' "gRPC" "$(catalog_version grpc)" "$(lib_version "$libs" grpc-core)"
-  printf '  %-24s %-14s %s\n' "Netty" "$(catalog_version netty)" "$(lib_version "$libs" netty-handler)"
-  printf '  %-24s %-14s %s\n' "Kotlin" "$(catalog_version kotlin)" "$(lib_version "$libs" kotlin-stdlib)"
+  bold "The agent's libraries: the versions it's built with, and the ones the roastery runs, which Spring Boot" \
+    "$(lib_version "$libs" spring-boot) picked"
+  row "Library" "The agent's" "The roastery's"
+  row "kotlinx-serialization" "$(catalog_version serialization)" "$(lib_version "$libs" kotlinx-serialization-json-jvm)"
+  row "Jackson 2" "$(catalog_version jackson)" "$(lib_version "$libs" jackson-databind 2)"
+  row "Logback" "$(catalog_version logback)" "$(lib_version "$libs" logback-classic)"
+  row "gRPC" "$(catalog_version grpc)" "$(lib_version "$libs" grpc-core)"
+  row "Netty" "$(catalog_version netty)" "$(lib_version "$libs" netty-handler)"
+  row "Kotlin" "$(catalog_version kotlin)" "$(lib_version "$libs" kotlin-stdlib)"
   how_it_works "Spring Boot's dependency management, which the roastery's pom takes from spring-boot-starter-parent," \
     "sets the version of every library it knows, the agent's dependencies among them, whatever version the agent" \
-    "asks for. The agent runs with these, as the roastery shows. Were one to break it, a property in the pom sets" \
-    "that library back: kotlin-serialization.version, jackson-2-bom.version, logback.version, or grpc-java.version."
+    "asks for. The agent runs with these, as the roastery shows here and its RoasteryAgentTest checks on every pull" \
+    "request. Were one to break it, a property in the pom sets that library back: kotlin-serialization.version," \
+    "jackson-2-bom.version, logback.version, or grpc-java.version."
   watch_for
   point "The roastery's image holds its dependencies as jars in /app/lib, the layout Spring Boot's own extract" \
     "command makes, so this reads their versions from their names: $0 logs roastery shows no error from any."

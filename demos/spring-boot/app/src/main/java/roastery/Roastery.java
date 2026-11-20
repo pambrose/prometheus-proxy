@@ -8,6 +8,7 @@ import java.util.EnumMap;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -18,31 +19,31 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class Roastery {
-  /** Where the green beans come from, and how often each is roasted. */
+  /** Where the green beans come from. */
   public enum Origin {
-    ETHIOPIA(3),
-    COLOMBIA(4),
-    SUMATRA(2),
-    GUATEMALA(1);
-
-    final int weight;
-
-    Origin(int weight) {
-      this.weight = weight;
-    }
+    ETHIOPIA,
+    COLOMBIA,
+    SUMATRA,
+    GUATEMALA;
 
     String label() {
       return name().toLowerCase();
     }
   }
 
+  // The origins in the proportions they're roasted, so the graph's four lines stay apart
+  private static final Origin[] ROTATION = {
+    Origin.COLOMBIA, Origin.COLOMBIA, Origin.COLOMBIA, Origin.COLOMBIA,
+    Origin.ETHIOPIA, Origin.ETHIOPIA, Origin.ETHIOPIA,
+    Origin.SUMATRA, Origin.SUMATRA,
+    Origin.GUATEMALA,
+  };
   private static final int BATCH_KG = 15;
   // Beans lose about a sixth of their weight in the roaster
   private static final int ROASTED_KG = 12;
   private static final int RESTOCK_KG = 300;
 
   private final Map<Origin, Counter> batches = new EnumMap<>(Origin.class);
-  private final Map<Origin, Integer> roasted = new EnumMap<>(Origin.class);
   private final Timer roastTime;
   private final Counter shipped;
   private final AtomicInteger greenKg = new AtomicInteger(RESTOCK_KG);
@@ -56,7 +57,6 @@ public class Roastery {
               .description("Batches of beans roasted, by origin")
               .tag("origin", origin.label())
               .register(registry));
-      roasted.put(origin, 0);
     }
     roastTime = Timer.builder("roastery_roast").description("How long a batch takes to roast").register(registry);
     shipped =
@@ -67,51 +67,37 @@ public class Roastery {
     registry.gauge("roastery_roasted_stock_kg", roastedKg);
   }
 
-  /** Roasts a batch from an origin picked by its weight, restocking green beans when they run low. */
+  /** Roasts a batch from the next origin, restocking green beans when they run low. */
   @Scheduled(fixedDelay = 2_000)
-  public synchronized void roast() {
+  public void roast() {
     if (greenKg.get() < BATCH_KG) {
       greenKg.addAndGet(RESTOCK_KG);
     }
-    Origin origin = pick();
+    Origin origin = ROTATION[ThreadLocalRandom.current().nextInt(ROTATION.length)];
     // A roast takes 10 to 14 minutes; the demo records it without waiting for it
     roastTime.record(Duration.ofSeconds(ThreadLocalRandom.current().nextLong(600, 840)));
     batches.get(origin).increment();
-    roasted.merge(origin, 1, Integer::sum);
     greenKg.addAndGet(-BATCH_KG);
     roastedKg.addAndGet(ROASTED_KG);
   }
 
   /** Ships some of the roasted beans to the coffee shop. */
   @Scheduled(fixedDelay = 5_000, initialDelay = 5_000)
-  public synchronized void ship() {
+  public void ship() {
     int kg = Math.min(roastedKg.get(), ThreadLocalRandom.current().nextInt(10, 31));
     roastedKg.addAndGet(-kg);
     shipped.increment(kg);
   }
 
   /** The roastery's state, for its status page. */
-  public synchronized String status() {
-    StringBuilder text = new StringBuilder();
-    roasted.forEach((origin, count) -> text.append(origin.label()).append(' ').append(count).append(", "));
-    return "Roasted:      " + text.substring(0, text.length() - 2)
+  public String status() {
+    String roasted =
+        batches.entrySet().stream()
+            .map(entry -> entry.getKey().label() + " " + (long) entry.getValue().count())
+            .collect(Collectors.joining(", "));
+    return "Roasted:      " + roasted
         + "\nGreen stock:  " + greenKg.get() + " kg"
         + "\nRoasted:      " + roastedKg.get() + " kg"
         + "\nShipped:      " + (long) shipped.count() + " kg\n";
-  }
-
-  private static Origin pick() {
-    int total = 0;
-    for (Origin origin : Origin.values()) {
-      total += origin.weight;
-    }
-    int roll = ThreadLocalRandom.current().nextInt(total);
-    for (Origin origin : Origin.values()) {
-      roll -= origin.weight;
-      if (roll < 0) {
-        return origin;
-      }
-    }
-    return Origin.COLOMBIA;
   }
 }
