@@ -48,7 +48,8 @@ CMD []
 
 # G1 is the default GC on JDK 25 and MaxGCPauseMillis/UseStringDeduplication are non-experimental,
 # so -XX:+UseG1GC and -XX:+UnlockExperimentalVMOptions were no-ops and have been removed.
-# --enable-native-access=ALL-UNNAMED grants the classpath fat JAR native access (jansi's System.load),
-# and --sun-misc-unsafe-memory-access=allow silences netty's terminally-deprecated sun.misc.Unsafe
-# memory calls; both suppress JDK 25 startup warnings (drop the Unsafe flag once netty stops using it).
+# --enable-native-access=ALL-UNNAMED grants the classpath fat JAR native access without JDK 25's
+# startup warning: jansi's System.load, and netty's for its native TLS library.
+# --sun-misc-unsafe-memory-access=allow lets netty use sun.misc.Unsafe for its buffers, which on JDK 24
+# and later it otherwise goes without (drop the flag once netty stops using Unsafe).
 ENTRYPOINT ["java", "-server", "-XX:MaxGCPauseMillis=100", "-XX:+UseStringDeduplication", "--enable-native-access=ALL-UNNAMED", "--sun-misc-unsafe-memory-access=allow", "-jar", "/app/prometheus-agent.jar"]
