@@ -205,7 +205,8 @@ That's the tour. The website's [Cloud Platforms](https://pambrose.github.io/prom
 sets up the same thing for real, with the app on ECS, Cloud Run, or Azure Container Apps and the proxy on AWS, GCP,
 Azure, DigitalOcean, or Railway.
 Standalone agents behind a firewall are in the [basics demo](../basics), proxy failover and tracing in the
-[network demo](../network), and the Helm charts in the [Kubernetes demo](../kubernetes). The demos use different
+[network demo](../network), the Helm charts in the [Kubernetes demo](../kubernetes), and the agent in a Spring Boot app,
+written in Java, in the [Spring Boot demo](../spring-boot). The demos use different
 ports, so they can run side by side, but each takes memory and CPU: `make down` stops this one and frees its
 resources.
 

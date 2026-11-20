@@ -44,6 +44,12 @@ All notable changes to this project are documented in this file.
   scripts no longer pass `--enable-native-access`
 - The weekly Actions Cleanup workflow runs daily, since the security scan saves a new ~1 GB Trivy database each day it runs and a week of them reached GitHub's 10 GB cache limit, whose eviction reached master's Gradle caches. It deletes the runs past the repository's 30-day log retention (`LOG_RETENTION_DAYS`), not 90 days, so a run isn't listed after its logs are gone, and it lists every run: filtered by `status=completed`, GitHub returned only the newest 1,000, so the old runs it was meant to delete never reached it
 - `make release` tags the release commit and pushes the tag (the new `make release-tag`) before it deploys the docs site, whose `git clone --branch` commands check the tag out, so the site never names a tag that doesn't exist yet; the tag used to come only with the GitHub release, after the deploy. The GitHub release step creates the release on the pushed tag (`gh release create --verify-tag`)
+- The root `Makefile`'s `make demos-up`, `demos-up-local`, and `demos-down` start or stop every demo in turn, and keep
+  going past one that fails
+- IntelliJ imports the embedded demo's coffee shop, `demos/embedded/app`, as a second linked Gradle project, on the
+  root's Gradle wrapper (its wrapper properties are a symlink to the root's), so its sources resolve in the IDE
+- The KDocs build gives Dokka the runtime classpath, so publishing no longer warns that it can't resolve common-utils'
+  `DropwizardExports`
 
 ### Documentation
 
@@ -74,6 +80,8 @@ All notable changes to this project are documented in this file.
   and the in-memory config. An Embedded Demo page walks through the new demo with screenshots
 - TLS Setup shows how to create a private CA and the proxy's and agents' certificates with OpenSSL or LibreSSL, in
   place of a link to gRPC's example
+- The demos' dashboard links to Prometheus, and the Dashboard page's link examples, open Prometheus 3's query page,
+  `/query`, rather than `/graph`, which only redirects to it
 - `docs/cli-args.md`, a second hand-kept copy of the website's CLI Reference, now points to it, as does the README
 - The README's architecture diagram has a dark-mode version (`docs/prometheus-proxy-dark.png`), served to dark themes,
   since its arrows and labels, black on a transparent background, vanished on GitHub's dark theme. It and the light
@@ -100,7 +108,10 @@ All notable changes to this project are documented in this file.
 - Update Logback 1.6.7 → 1.6.8
 - Update the dashboard's htmx 4.0.1 → 4.0.2
 - Update the documentation site's Python dependency lock (`website/uv.lock`): pymdown-extensions 13.0 → 13.1 and
-  backrefs 8.2 → 8.2.1
+  backrefs 8.2 → 8.3
+- Update the basics, network, and Kubernetes demos' simulated services' image, `python:3.14-alpine` →
+  `python:3.15-alpine` (#455, #456, #457)
+- Update the GitHub Actions the workflows pin by commit SHA: `anthropics/claude-code-action` 1.0.271 → 1.0.275 (#458)
 
 ## [4.5.0] - 2026-11-17
 

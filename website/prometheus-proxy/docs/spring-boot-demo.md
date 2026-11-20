@@ -12,6 +12,7 @@ them to a proxy, which Prometheus scrapes.
 It shows what's particular to Spring Boot:
 
 - the agent's lifecycle with the app's;
+- the agent's connection in Actuator's health;
 - Actuator's metrics behind a password;
 - the versions of the agent's libraries that Spring Boot's dependency management picks;
 - a graceful shutdown that takes the agent down first.
