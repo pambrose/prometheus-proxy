@@ -74,7 +74,7 @@ one they can control (a Kubernetes ConfigMap, a systemd unit, a `docker run` lin
    reference documentation.
 
 Explicitly **out of scope** for now: the Zensical documentation site at
-`pambrose.github.io/prometheus-proxy`, and the Grafana dashboard JSON under `grafana/`.
+`prometheus-proxy.com`, and the Grafana dashboard JSON under `grafana/`.
 
 **Vocabulary** (used consistently in code, docs, and UI — do not invent synonyms):
 *agent*, *proxy*, *path* (the registered scrape path), *target URL* (what the agent actually scrapes),

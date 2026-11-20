@@ -15,7 +15,7 @@ httpPort: 8080
 agentPort: 50051
 
 # Proxy configuration in HOCON, mounted as the proxy's config file (PROXY_CONFIG). Settings not given here, in env, or
-# in extraArgs take their defaults. See https://pambrose.github.io/prometheus-proxy/configuration/proxy/
+# in extraArgs take their defaults. See https://prometheus-proxy.com/configuration/proxy/
 # The chart renders it into a ConfigMap, which anyone who can read ConfigMaps in the namespace can read, so keep
 # proxy.auth tokens out of it: substitute each from an environment variable set from a Secret (env below), as here,
 # or put the whole config in a Secret (existingSecret).

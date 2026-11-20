@@ -1,6 +1,6 @@
 # A prometheus-proxy and a Prometheus that scrapes through it, on a VM that agents embedded in cloud apps connect to,
 # such as an EC2 instance, a Compute Engine instance, an Azure VM, or a DigitalOcean Droplet. The setup is described at
-# https://pambrose.github.io/prometheus-proxy/cloud-platforms/
+# https://prometheus-proxy.com/cloud-platforms/
 #
 # Put the proxy's certificate and key, as base64, and the agents' token in a .env file beside this one, and keep it out
 # of version control:

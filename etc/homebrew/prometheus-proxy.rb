@@ -43,7 +43,7 @@ class PrometheusProxy < Formula
         agent.port = 50051
 
         // Until agents must authenticate (agentToken, per-agent auth, or mutual TLS), any peer that can reach
-        // agent.port can register as an agent. See https://pambrose.github.io/prometheus-proxy/security/
+        // agent.port can register as an agent. See https://prometheus-proxy.com/security/
       }
     HOCON
     etc.install "prometheus-proxy.conf"

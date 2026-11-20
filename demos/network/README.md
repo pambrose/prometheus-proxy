@@ -9,7 +9,7 @@ down and coming back.
 
 It follows the [basics demo](../basics), which shows the dashboard, Grafana, and the proxy's features: start with
 that one. This one keeps the same pieces and changes only the link through the firewall, the thing the product
-exists to cross. The website's [Network Demo](https://pambrose.github.io/prometheus-proxy/network-demo/) page walks
+exists to cross. The website's [Network Demo](https://prometheus-proxy.com/network-demo/) page walks
 through the same scenarios with screenshots. The [Kubernetes demo](../kubernetes) follows this one, and deploys the
 same proxy and agent with their Helm charts on two kind clusters; it needs kind, `kubectl`, and Helm as well as Docker.
 

@@ -17,13 +17,13 @@
 collecting metrics. The pull model is problematic when a firewall separates a Prometheus server and its metrics
 endpoints.
 
-[Prometheus Proxy](https://pambrose.github.io/prometheus-proxy/) enables Prometheus to scrape metrics endpoints running
+[Prometheus Proxy](https://prometheus-proxy.com/) enables Prometheus to scrape metrics endpoints running
 behind a firewall and preserves the native pull-based model architecture.
 
 **See it work on your laptop:** three self-contained [demos](#-try-the-demos) run the proxy, its agents, Prometheus,
 and Grafana with one command, and a guided tour walks you through each one.
 
-Questions about the API? The [docs site](https://pambrose.github.io/prometheus-proxy/) has a
+Questions about the API? The [docs site](https://prometheus-proxy.com/) has a
 [Context7](https://context7.com/pambrose/prometheus-proxy) chat on every page that answers from this project's
 documentation.
 
@@ -83,11 +83,11 @@ make down    # stops the demo and removes its containers
 
 The demos use different ports, so they can run side by side. Each demo's README lists what it needs and has its full
 script, and the website's
-[Basics Demo](https://pambrose.github.io/prometheus-proxy/basics-demo/),
-[Network Demo](https://pambrose.github.io/prometheus-proxy/network-demo/),
-[Kubernetes Demo](https://pambrose.github.io/prometheus-proxy/kubernetes-demo/),
-[Embedded Demo](https://pambrose.github.io/prometheus-proxy/embedded-demo/), and
-[Spring Boot Demo](https://pambrose.github.io/prometheus-proxy/spring-boot-demo/) pages walk through the same
+[Basics Demo](https://prometheus-proxy.com/basics-demo/),
+[Network Demo](https://prometheus-proxy.com/network-demo/),
+[Kubernetes Demo](https://prometheus-proxy.com/kubernetes-demo/),
+[Embedded Demo](https://prometheus-proxy.com/embedded-demo/), and
+[Spring Boot Demo](https://prometheus-proxy.com/spring-boot-demo/) pages walk through the same
 scenarios.
 
 ## ✨ New Features
@@ -98,7 +98,7 @@ Java), or from a Typesafe `Config` built in memory, so its token, the proxy's ce
 credentials never sit in a config file. The proxy and the agent take their TLS certificates and keys
 as PEM text, or its base64, in environment variables (`CERT_CHAIN_PEM`, `PRIVATE_KEY_PEM`,
 `TRUST_CERT_COLLECTION_PEM`), so the Docker images run TLS on a platform that passes secrets as variables. The docs
-site's new [Cloud Platforms](https://pambrose.github.io/prometheus-proxy/cloud-platforms/) page runs an embedded agent
+site's new [Cloud Platforms](https://prometheus-proxy.com/cloud-platforms/) page runs an embedded agent
 in an app on ECS, Cloud Run, or Azure Container Apps, with the proxy on AWS, GCP, Azure, DigitalOcean, or Railway, and
 [`examples/cloud-proxy`](examples/cloud-proxy) holds a proxy and Prometheus to start from, and a new
 [embedded demo](demos/embedded) runs it all on your laptop, in a Ktor app, and a
@@ -110,7 +110,7 @@ every change.
 
 ## 🧱 Architecture
 
-> 📖 **Docs site:** [Architecture](https://pambrose.github.io/prometheus-proxy/architecture/) for the full component breakdown and request flow, and the [Glossary](https://pambrose.github.io/prometheus-proxy/glossary/) for the core terms used throughout the docs.
+> 📖 **Docs site:** [Architecture](https://prometheus-proxy.com/architecture/) for the full component breakdown and request flow, and the [Glossary](https://prometheus-proxy.com/glossary/) for the core terms used throughout the docs.
 
 The `prometheus-proxy` runtime comprises two services:
 
@@ -166,7 +166,7 @@ proxy) and register the paths for which they will provide data. One proxy can wo
 
 ## 🚀 Quick Start
 
-> 📖 **Docs site:** [Quick Start guide](https://pambrose.github.io/prometheus-proxy/getting-started/) walks through these steps with more detail.
+> 📖 **Docs site:** [Quick Start guide](https://prometheus-proxy.com/getting-started/) walks through these steps with more detail.
 >
 > 🎬 **Rather watch it first?** The [demos](#-try-the-demos) start the proxy, agents, Prometheus, and Grafana with one command.
 
@@ -313,7 +313,7 @@ docker rm prometheus-proxy              # remove the stopped container
 
 ## 📋 Configuration Examples
 
-> 📖 **Docs site:** [Agent configuration](https://pambrose.github.io/prometheus-proxy/configuration/agent/) and [Proxy configuration](https://pambrose.github.io/prometheus-proxy/configuration/proxy/) document every config key in depth.
+> 📖 **Docs site:** [Agent configuration](https://prometheus-proxy.com/configuration/agent/) and [Proxy configuration](https://prometheus-proxy.com/configuration/proxy/) document every config key in depth.
 
 ### Agent Configuration
 
@@ -383,7 +383,7 @@ scrape_configs:
 
 ### Example Configurations
 
-> 📖 **Docs site:** [Example Configs guide](https://pambrose.github.io/prometheus-proxy/examples/) describes each ready-to-run config under
+> 📖 **Docs site:** [Example Configs guide](https://prometheus-proxy.com/examples/) describes each ready-to-run config under
 `examples/`.
 
 | Use Case                   | Configuration                                                              |
@@ -399,7 +399,7 @@ scrape_configs:
 
 ## 🐳 Docker Usage
 
-> 📖 **Docs site:** [Docker deployment guide](https://pambrose.github.io/prometheus-proxy/docker/) covers compose files, bind mounts, and container configuration. Running on Kubernetes? See the [Kubernetes guide](https://pambrose.github.io/prometheus-proxy/kubernetes/).
+> 📖 **Docs site:** [Docker deployment guide](https://prometheus-proxy.com/docker/) covers compose files, bind mounts, and container configuration. Running on Kubernetes? See the [Kubernetes guide](https://prometheus-proxy.com/kubernetes/).
 
 ### Multi-Platform Images
 
@@ -476,9 +476,9 @@ target for `--mount` options.
 If you are running a JVM-based program, you can run with the agent embedded directly in your app and not use an external
 agent. This approach eliminates the need for a separate agent process when your application already runs on the JVM.
 
-> 📖 **Docs site:** [Embedded Agent guide](https://pambrose.github.io/prometheus-proxy/embedded-agent/) for the full API surface and lifecycle details.
+> 📖 **Docs site:** [Embedded Agent guide](https://prometheus-proxy.com/embedded-agent/) for the full API surface and lifecycle details.
 
-> 🎬 **See it running:** the [embedded demo](demos/embedded) runs the agent inside a Ktor coffee shop, built with `embeddedAgent { }`, and the [Spring Boot demo](demos/spring-boot) inside a Spring Boot roastery written in Java, built with `EmbeddedAgentConfig.builder()`. Each starts with one command, and the website's [Embedded Demo](https://pambrose.github.io/prometheus-proxy/embedded-demo/) and [Spring Boot Demo](https://pambrose.github.io/prometheus-proxy/spring-boot-demo/) pages walk through them.
+> 🎬 **See it running:** the [embedded demo](demos/embedded) runs the agent inside a Ktor coffee shop, built with `embeddedAgent { }`, and the [Spring Boot demo](demos/spring-boot) inside a Spring Boot roastery written in Java, built with `EmbeddedAgentConfig.builder()`. Each starts with one command, and the website's [Embedded Demo](https://prometheus-proxy.com/embedded-demo/) and [Spring Boot Demo](https://prometheus-proxy.com/spring-boot-demo/) pages walk through them.
 
 In Kotlin:
 
@@ -519,7 +519,7 @@ An application that holds the agent's settings itself, such as a token, the prox
 its own `/metrics`, can build them in code instead of in a file, with `embeddedAgent { }` (or
 `EmbeddedAgentConfig.builder()` from Java), or pass a Typesafe `Config` rooted at `agent` to
 `Agent.startAsyncAgent(config)`. The docs site's
-[Cloud Platforms](https://pambrose.github.io/prometheus-proxy/cloud-platforms/) page builds an app on ECS, Cloud Run,
+[Cloud Platforms](https://prometheus-proxy.com/cloud-platforms/) page builds an app on ECS, Cloud Run,
 or Azure Container Apps around it.
 
 Several agents can run in one JVM with metrics on, at once or one after another: they share one set of agent metrics,
@@ -545,7 +545,7 @@ Access discovery endpoint at: `http://proxy-host:8080/discovery`
 or an `http` or `https` URL such as `https://proxy.example.com/prometheus/`, whose scheme and path the proxy gives each
 target as its `__scheme__` label and a prefix of its `__metrics_path__`.
 
-> 📖 **Docs site:** [Service Discovery guide](https://pambrose.github.io/prometheus-proxy/service-discovery/) explains the discovery payload format and the Prometheus
+> 📖 **Docs site:** [Service Discovery guide](https://prometheus-proxy.com/service-discovery/) explains the discovery payload format and the Prometheus
 `http_sd_configs` wiring.
 
 ### Dynamic Target Discovery (Agent)
@@ -681,7 +681,7 @@ Two things to know before deploying a pair:
 - **All endpoints share one TLS configuration** (one trust store, one `overrideAuthority`), so proxies
   with different CAs or certificate SANs fail with an opaque handshake error.
 
-> 📖 **Docs site:** [High availability](https://pambrose.github.io/prometheus-proxy/production/#high-availability) for the full Prometheus-side setup, and [Running an HA pair](https://pambrose.github.io/prometheus-proxy/web-dashboard/#running-an-ha-pair) for how the dashboard shows failed-over agents.
+> 📖 **Docs site:** [High availability](https://prometheus-proxy.com/production/#high-availability) for the full Prometheus-side setup, and [Running an HA pair](https://prometheus-proxy.com/web-dashboard/#running-an-ha-pair) for how the dashboard shows failed-over agents.
 
 ### Prometheus Federation
 
@@ -714,7 +714,7 @@ whose connection stays half-open, is removed after the inactivity timeout (defau
 `proxy.internal.maxAgentInactivitySecs`). The proxy also limits the agents connected as one auth identity to
 `proxy.internal.maxAgentsPerIdentity` (10,000), and with agent auth off every agent shares one identity.
 
-> 📖 **Docs site:** [Advanced Topics guide](https://pambrose.github.io/prometheus-proxy/advanced/) covers the Nginx reverse-proxy setup, federation, and other advanced configurations.
+> 📖 **Docs site:** [Advanced Topics guide](https://prometheus-proxy.com/advanced/) covers the Nginx reverse-proxy setup, federation, and other advanced configurations.
 
 ### Performance Tuning
 
@@ -729,7 +729,7 @@ java -jar prometheus-agent.jar \
 
 ## 📊 Monitoring & Observability
 
-> 📖 **Docs site:** [Monitoring guide](https://pambrose.github.io/prometheus-proxy/monitoring/) for the full metrics reference and admin endpoints, plus [Grafana & Alerting](https://pambrose.github.io/prometheus-proxy/grafana/) for ready-to-import dashboards and alert rules.
+> 📖 **Docs site:** [Monitoring guide](https://prometheus-proxy.com/monitoring/) for the full metrics reference and admin endpoints, plus [Grafana & Alerting](https://prometheus-proxy.com/grafana/) for ready-to-import dashboards and alert rules.
 
 ### Operational Dashboard
 
@@ -763,13 +763,13 @@ someone who can. The dashboard refuses a WebSocket from a foreign site; behind a
 rewrites the Host header, list the public origin in `proxy.dashboard.allowedOrigins`. It answers to any
 host name by default, which leaves it open to DNS rebinding (a page pointing its own DNS name at the
 dashboard's address); list the names you reach it by in `proxy.dashboard.allowedHosts` to close that. See
-[Dashboard exposure](https://pambrose.github.io/prometheus-proxy/web-dashboard/#exposure).
+[Dashboard exposure](https://prometheus-proxy.com/web-dashboard/#exposure).
 
 Accessibility: text and UI colors clear the WCAG AA contrast thresholds with a measured floor of
 4.59:1, the path table carries proper header semantics, and connection loss and recovery are
 announced to screen readers rather than signalled by colour alone.
 
-> 📖 **Docs site:** [Dashboard guide](https://pambrose.github.io/prometheus-proxy/web-dashboard/) for the three layouts, the links, the status-bar gauges, and HA-pair behavior.
+> 📖 **Docs site:** [Dashboard guide](https://prometheus-proxy.com/web-dashboard/) for the three layouts, the links, the status-bar gauges, and HA-pair behavior.
 
 ### Built-in Metrics
 
@@ -783,11 +783,11 @@ Both proxy and agent expose their own metrics:
   file (`memoryPoolsExportsEnabled`, `garbageCollectorExportsEnabled`, and so on). Version 4.3.0 adds buffer pools
   (`bufferPoolExportsEnabled`), JIT compilation (`compilationExportsEnabled`), and native memory
   (`nativeMemoryExportsEnabled`, which needs the JVM started with `-XX:NativeMemoryTracking=summary`); the
-  [Monitoring guide](https://pambrose.github.io/prometheus-proxy/monitoring/) lists every metric
+  [Monitoring guide](https://prometheus-proxy.com/monitoring/) lists every metric
 
 ## 🔧 Configuration Options
 
-> 📖 **Docs site:** [Configuration overview](https://pambrose.github.io/prometheus-proxy/configuration/) and the [CLI Reference](https://pambrose.github.io/prometheus-proxy/cli-reference/) document every option and environment variable.
+> 📖 **Docs site:** [Configuration overview](https://prometheus-proxy.com/configuration/) and the [CLI Reference](https://prometheus-proxy.com/cli-reference/) document every option and environment variable.
 
 The proxy and agent use the [Typesafe Config](https://github.com/lightbend/config) library. Configuration values are
 evaluated in order: **CLI options → environment variables → config file values**.
@@ -800,7 +800,7 @@ Typesafe Config highlights include:
 * config values can come from CLI options, environment variables, Java system properties, and/or config files.
 * config files can reference environment variables
 
-**📖 Complete configuration reference:** the docs site's [**CLI Reference**](https://pambrose.github.io/prometheus-proxy/cli-reference/)
+**📖 Complete configuration reference:** the docs site's [**CLI Reference**](https://prometheus-proxy.com/cli-reference/)
 lists every CLI option with its environment variable, config property, and default.
 
 ### Common Options Summary
@@ -829,7 +829,7 @@ lists every CLI option with its environment variable, config property, and defau
 
 ## 🔐 Security & TLS
 
-> 📖 **Docs site:** [Security overview](https://pambrose.github.io/prometheus-proxy/security/) and the [TLS Setup guide](https://pambrose.github.io/prometheus-proxy/security/tls/) cover agent authentication, mutual TLS, and certificate management in depth.
+> 📖 **Docs site:** [Security overview](https://prometheus-proxy.com/security/) and the [TLS Setup guide](https://prometheus-proxy.com/security/tls/) cover agent authentication, mutual TLS, and certificate management in depth.
 
 ### TLS Configuration Details
 
@@ -837,7 +837,7 @@ Agents connect to a proxy using [gRPC](https://grpc.io). gRPC supports TLS with 
 necessary certificate and key file paths can be specified via CLI args, environment variables, and configuration file
 settings.
 
-The docs site's [TLS Setup](https://pambrose.github.io/prometheus-proxy/security/tls/#creating-certificates) shows
+The docs site's [TLS Setup](https://prometheus-proxy.com/security/tls/#creating-certificates) shows
 how to create a CA and the proxy's and agents' certificates with OpenSSL.
 The [repo](https://github.com/pambrose/prometheus-proxy/tree/master/testing/certs) includes the certificates and keys
 necessary to test TLS support.
@@ -856,7 +856,7 @@ Each file can be given as its PEM text, or the base64 of it, instead: `certChain
 `trustCertCollectionPem`, or the `CERT_CHAIN_PEM`, `PRIVATE_KEY_PEM`, and `TRUST_CERT_COLLECTION_PEM` environment
 variables, for a platform that passes secrets as variables and for the Docker images, which have no shell to write
 one to a file. See
-[Certificates as Environment Variables](https://pambrose.github.io/prometheus-proxy/security/tls/#certificates-as-environment-variables).
+[Certificates as Environment Variables](https://prometheus-proxy.com/security/tls/#certificates-as-environment-variables).
 
 Run a proxy and an agent with TLS (with mutual authentication) with:
 
@@ -999,7 +999,7 @@ agents scrape their targets, with the request's own query string and `Authorizat
 service discovery on, list every path with its agents' names and hosts. With an exporter that takes its target as a
 query parameter, such as blackbox_exporter's `/probe?target=…`, that reaches any host the exporter can. Bind
 `proxy.http.host` to a private address and firewall the port so only Prometheus reaches it; see
-[Scrape Port Access](https://pambrose.github.io/prometheus-proxy/security/#scrape-port-access).
+[Scrape Port Access](https://prometheus-proxy.com/security/#scrape-port-access).
 
 ### Scraping HTTPS Endpoints
 
@@ -1066,7 +1066,7 @@ Report a security problem privately, not in a public issue, pull request, or dis
 
 ## 🔧 Troubleshooting
 
-> 📖 **Docs site:** [Troubleshooting guide](https://pambrose.github.io/prometheus-proxy/troubleshooting/) is a symptom-driven reference covering more failure modes and fixes.
+> 📖 **Docs site:** [Troubleshooting guide](https://prometheus-proxy.com/troubleshooting/) is a symptom-driven reference covering more failure modes and fixes.
 
 ### Common Issues
 
@@ -1099,19 +1099,19 @@ Report a security problem privately, not in a public issue, pull request, or dis
 
 ## 📖 Documentation
 
-Full documentation is available at the [Prometheus Proxy Documentation](https://pambrose.github.io/prometheus-proxy/) site.
+Full documentation is available at the [Prometheus Proxy Documentation](https://prometheus-proxy.com/) site.
 
 KDoc API documentation is published at
-[pambrose.github.io/prometheus-proxy/kdocs](https://pambrose.github.io/prometheus-proxy/kdocs/).
+[prometheus-proxy.com/kdocs](https://prometheus-proxy.com/kdocs/).
 
 **Note:** Running on Kubernetes? Helm charts for the proxy and the agent are in [`charts/`](charts/), and the
-[Kubernetes deployment guide](https://pambrose.github.io/prometheus-proxy/kubernetes/) covers them along with ready-to-use proxy and
+[Kubernetes deployment guide](https://prometheus-proxy.com/kubernetes/) covers them along with ready-to-use proxy and
 agent manifests, standalone and sidecar agent patterns, gRPC exposure for remote agents, and Prometheus Operator
 (`ServiceMonitor`) integration. A config that holds secrets, such as `proxy.auth` tokens or credentials in an agent's
 target URLs, can come from a Secret (`existingSecret`) instead of the chart's ConfigMap.
 
 **Note:** Deploying to production? The
-[Running in Production guide](https://pambrose.github.io/prometheus-proxy/production/) pulls the security, reliability,
+[Running in Production guide](https://prometheus-proxy.com/production/) pulls the security, reliability,
 and tuning settings into a single operational checklist.
 
 ### Maven Central

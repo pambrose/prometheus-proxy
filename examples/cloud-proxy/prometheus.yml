@@ -1,6 +1,6 @@
 # Prometheus beside the proxy. It reaches the proxy on the compose network, where the proxy serves each app's metrics
 # at the path its agent registered. The setup is described at
-# https://pambrose.github.io/prometheus-proxy/cloud-platforms/
+# https://prometheus-proxy.com/cloud-platforms/
 global:
   scrape_interval: 30s
 

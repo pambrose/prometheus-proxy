@@ -17,5 +17,5 @@ The dashboard is not on the Service (it is unauthenticated). Reach it with:
 
 WARNING: unless your config sets per-agent identities (proxy.auth), any process that can reach the gRPC port can
 register as an agent. Set agentToken.existingSecret, require mutual TLS (tls.caFile), or configure proxy.auth. See
-https://pambrose.github.io/prometheus-proxy/security/
+https://prometheus-proxy.com/security/
 {{- end }}

@@ -6,14 +6,14 @@ The system has two components: a **proxy** that runs alongside Prometheus (outsi
 
 ## Links
 
-- [Documentation](https://pambrose.github.io/prometheus-proxy/)
+- [Documentation](https://prometheus-proxy.com/)
 - [GitHub Repository](https://github.com/pambrose/prometheus-proxy)
 - [README](https://github.com/pambrose/prometheus-proxy/blob/master/README.md)
 - [Changelog](https://github.com/pambrose/prometheus-proxy/blob/master/CHANGELOG.md)
 - [Release Notes](https://github.com/pambrose/prometheus-proxy/blob/master/RELEASE_NOTES.md)
 - [Security Policy (reporting vulnerabilities)](https://github.com/pambrose/prometheus-proxy/blob/master/SECURITY.md)
-- [KDoc API Reference](https://pambrose.github.io/prometheus-proxy/kdocs/)
-- [CLI Reference](https://pambrose.github.io/prometheus-proxy/cli-reference/)
+- [KDoc API Reference](https://prometheus-proxy.com/kdocs/)
+- [CLI Reference](https://prometheus-proxy.com/cli-reference/)
 - [Maven Central](https://central.sonatype.com/artifact/com.pambrose/prometheus-proxy)
 - [Docker Images: pambrose/prometheus-proxy](https://hub.docker.com/r/pambrose/prometheus-proxy)
 - [Docker Images: pambrose/prometheus-agent](https://hub.docker.com/r/pambrose/prometheus-agent)

@@ -7,9 +7,9 @@ reaching Grafana with no port opened for them. It also shows a rush, a failure t
 hands the agent's paths to the new version, the proxy going away while the app keeps serving, and secrets that come
 from the environment.
 
-It's the setup the website's [Cloud Platforms](https://pambrose.github.io/prometheus-proxy/cloud-platforms/) page
+It's the setup the website's [Cloud Platforms](https://prometheus-proxy.com/cloud-platforms/) page
 describes, on one machine, and the website's
-[Embedded Demo](https://pambrose.github.io/prometheus-proxy/embedded-demo/) page walks through it with screenshots.
+[Embedded Demo](https://prometheus-proxy.com/embedded-demo/) page walks through it with screenshots.
 Standalone agents behind a firewall, with the proxy's dashboard, are in the [basics demo](../basics).
 
 ```mermaid
@@ -201,7 +201,7 @@ and the password for its `/metrics` never sit in a file (`app/src/main/kotlin/co
 proxy is the stock image, which has no shell to write a variable to a file, and takes its certificate and key as PEM,
 base64-encoded, in `CERT_CHAIN_PEM` and `PRIVATE_KEY_PEM`. It logs only whether each is set.
 
-That's the tour. The website's [Cloud Platforms](https://pambrose.github.io/prometheus-proxy/cloud-platforms/) page
+That's the tour. The website's [Cloud Platforms](https://prometheus-proxy.com/cloud-platforms/) page
 sets up the same thing for real, with the app on ECS, Cloud Run, or Azure Container Apps and the proxy on AWS, GCP,
 Azure, DigitalOcean, or Railway.
 Standalone agents behind a firewall are in the [basics demo](../basics), proxy failover and tracing in the

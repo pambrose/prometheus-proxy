@@ -22,7 +22,7 @@ proxy:
   hostname: ""
 
 # Agent configuration in HOCON (AGENT_CONFIG): above all, the paths the agent registers and the targets behind them.
-# See https://pambrose.github.io/prometheus-proxy/configuration/agent/
+# See https://prometheus-proxy.com/configuration/agent/
 config: |
   agent {
     pathConfigs: [
@@ -39,7 +39,7 @@ existingSecret: ""
 
 # Dynamic target discovery: the agent re-reads a paths list from its own ConfigMap on an interval, so targets can
 # change without restarting it, and without touching the main config. See
-# https://pambrose.github.io/prometheus-proxy/kubernetes/#updating-targets-without-restarting-the-agent
+# https://prometheus-proxy.com/kubernetes/#updating-targets-without-restarting-the-agent
 discovery:
   enabled: false
   # A HOCON paths list, rendered into this chart's discovery ConfigMap.
