@@ -479,6 +479,10 @@ fun Project.configureDokka() {
     dokkaSourceSets.main {
       documentedVisibilities(VisibilityModifier.Public)
 
+      // Agent and Proxy inherit members from common-utils' AbstractGenericService that name types from its runtime-only
+      // dependencies, such as DropwizardExports, which the compile classpath Dokka reads lacks.
+      classpath.from(configurations.runtimeClasspath)
+
       perPackageOption {
         matchingRegex.set("io\\.prometheus\\.grpc.*")
         suppress.set(true)

@@ -1,0 +1,22 @@
+{
+  "usage": "EmbeddedAgentConfig is a public builder whose settings are strings (name, endpoints, token, PEM text, paths, URLs, credentials), and whose scrapeSelf and path take named, defaulted arguments that give Java its overloads; its argument count and string-heavy arguments are its API's shape, so those rules are off for it alone.",
+  "rule_sets": [
+    {
+      "matching_content_path": "src/main/kotlin/io/prometheus/agent/EmbeddedAgentConfig.kt",
+      "rules": [
+        {
+          "name": "Excess Number of Function Arguments",
+          "weight": 0.0
+        },
+        {
+          "name": "Primitive Obsession",
+          "weight": 0.0
+        },
+        {
+          "name": "String Heavy Function Arguments",
+          "weight": 0.0
+        }
+      ]
+    }
+  ]
+}
