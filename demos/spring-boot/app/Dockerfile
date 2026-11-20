@@ -5,7 +5,7 @@
 #   prebuilt (make up-local)  copies target/roastery.jar, which demo.sh built on the host against this checkout
 ARG APP_BUILD=compiled
 
-FROM maven:3.9-eclipse-temurin-25-noble@sha256:93b8a14ea2f412782e4e842651273b4d903e35cc496284f178fbbe2d67d00976 AS compiled
+FROM maven:3.9-eclipse-temurin-26-noble@sha256:b2c1ad85954592f9928e84327c65201f308ad9b5d8ed7d5b823717c97bf23fbb AS compiled
 ARG PROXY_VERSION
 WORKDIR /src
 COPY pom.xml ./
