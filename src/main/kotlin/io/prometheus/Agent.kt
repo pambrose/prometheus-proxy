@@ -73,6 +73,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Semaphore
 import java.util.concurrent.CountDownLatch
 import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.AtomicReference
 import kotlin.concurrent.atomics.update
 import kotlin.math.roundToInt
 import kotlin.time.Duration
@@ -213,6 +214,16 @@ class Agent(
   private val pathDiscoveryService: PathDiscoveryService? = createPathDiscoveryService()
   internal val grpcService = AgentGrpcService(this, options, inProcessServerName)
   internal var agentId: String by nonNullableReference("")
+
+  // The connection Prometheus can scrape through: open, with the agent's paths registered on it. Null before the
+  // first one, between one ending and the next registering, and once the agent stops.
+  private val liveConnection = AtomicReference<AgentConnectionContext?>(null)
+
+  // Whether the agent is connected to a proxy that can scrape through it now (EmbeddedAgentInfo.isConnected).
+  internal val isConnectedToProxy: Boolean get() = isRunning && liveConnection.load()?.connected == true
+
+  // The endpoint of that connection, as host:port, or null without one (EmbeddedAgentInfo.proxyEndpoint).
+  internal val connectedProxyEndpoint: String? get() = if (isConnectedToProxy) proxyHost else null
   internal val launchId = randomId(15)
   private val metricsHolder = lazy { AgentMetrics(this) }
   internal val metrics by metricsHolder
@@ -334,7 +345,12 @@ class Agent(
     // Close connectionContext when disconnected from the server or the service is shutdown and isRunning is false
     val connectionContext =
       AgentConnectionContext(agentConfigVals.internal.scrapeRequestBacklogUnhealthySize * BACKLOG_CAPACITY_MULTIPLIER)
-    coroutineScope { launchConnectionTasks(connectionContext) }
+    liveConnection.store(connectionContext)
+    try {
+      coroutineScope { launchConnectionTasks(connectionContext) }
+    } finally {
+      liveConnection.store(null)
+    }
     logger.info { "connectToProxy() completed" }
   }
 

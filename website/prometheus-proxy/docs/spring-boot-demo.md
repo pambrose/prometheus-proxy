@@ -105,6 +105,10 @@ It builds the agent's settings with `EmbeddedAgentConfig.builder()`, the Java fo
   `PROMETHEUS_PROXY_CERT`, and the rest. Its `toString` leaves the secrets out, so the app can log it.
 - **The password:** `SecurityConfig` lets only the agent's user read `/actuator/prometheus`; the status page and
   `/actuator/health` are open. `scrapeSelf` percent-encodes the credentials into the scrape URL.
+- **Its health:** `PrometheusAgentHealthIndicator` puts the agent in `/actuator/health`, as `prometheusAgent`, from
+  `EmbeddedAgentInfo.isConnected` and `proxyEndpoint`: UP while it's connected, with the proxy's address, and UNKNOWN,
+  not DOWN, when it's off or reconnecting, so a lost proxy leaves the roastery's health UP. `./demo.sh health` shows
+  it.
 
 [In Spring Boot](embedded-agent.md#in-spring-boot) has the same points for an app of your own.
 
@@ -141,6 +145,7 @@ Graceful shutdown complete
 |---|---|
 | `./demo.sh settings` | Shows the agent's settings as Spring Boot bound them, and the agent starting |
 | `./demo.sh peek` | Tries `/actuator/prometheus` without the password, then reads it through the proxy |
+| `./demo.sh health` | Shows the agent in Actuator's `/actuator/health`: connected, and to which proxy |
 | `./demo.sh versions` | Compares the versions of the agent's libraries in the roastery with the agent's own |
 | `./demo.sh stop-app` / `start-app` | Stops the roastery with SIGTERM, or starts it again |
 | `make status` | The containers, the roastery's state, and the URLs |

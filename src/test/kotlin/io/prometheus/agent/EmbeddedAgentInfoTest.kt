@@ -46,6 +46,19 @@ class EmbeddedAgentInfoTest : StringSpec() {
       info.agentName shouldBe "test-agent"
     }
 
+    "should expose the agent's connection, live" {
+      val agent = mockk<Agent>()
+      every { agent.isConnectedToProxy } returnsMany listOf(true, false)
+      every { agent.connectedProxyEndpoint } returnsMany listOf("proxy.example.com:50051", null)
+
+      val info = EmbeddedAgentInfo(agent)
+
+      info.isConnected shouldBe true
+      info.proxyEndpoint shouldBe "proxy.example.com:50051"
+      info.isConnected shouldBe false
+      info.proxyEndpoint shouldBe null
+    }
+
     "shutdown should call agent stop" {
       val agent = mockk<Agent>(relaxed = true)
 

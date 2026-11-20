@@ -32,6 +32,7 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.prometheus.Agent
 import io.prometheus.agent.EmbeddedAgentInfo
+import io.prometheus.agent.embeddedAgent
 import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.common.ConfigLoadException
 import io.prometheus.common.LOOPBACK_HOST
@@ -110,10 +111,37 @@ class EmbeddedAgentApiTest : StringSpec() {
         agentName = AGENT_NAME,
       ) { proxy, agent ->
         agent.agentName shouldBe AGENT_NAME
+        agent.isConnected shouldBe true
+        agent.proxyEndpoint shouldBe "localhost:$GRPC_PORT"
         agent.shutdown()
+        agent.isConnected shouldBe false
+        agent.proxyEndpoint shouldBe null
         eventually(30.seconds) {
           proxy.agentContextManager.agentContextSize shouldBe 0
         }
+      }
+    }
+
+    // A host's health check reads isConnected: it goes false when the proxy goes away, while the agent retries.
+    "isConnected goes false when the proxy goes away" {
+      withEmbeddedAgentScraped(httpPort = HTTP_PORT, agentPort = GRPC_PORT) { proxy, agent ->
+        agent.isConnected shouldBe true
+        proxy.stopSync(10.seconds)
+        eventually(30.seconds) {
+          agent.isConnected shouldBe false
+          agent.proxyEndpoint shouldBe null
+        }
+      }
+    }
+
+    "isConnected is false before the agent first connects" {
+      // No proxy listens on the spec's agent port in this test, so the agent keeps retrying.
+      val agent = embeddedAgent { proxy = "localhost:$GRPC_PORT" }.start(logBanner = false)
+      try {
+        agent.isConnected shouldBe false
+        agent.proxyEndpoint shouldBe null
+      } finally {
+        agent.shutdown()
       }
     }
 

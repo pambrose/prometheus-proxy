@@ -88,7 +88,8 @@ scrape executor, path manager, HTTP-client cache, TLS helpers, and gRPC intercep
   [embeddedAgent][io.prometheus.agent.embeddedAgent], the Kotlin DSL.
 - [EmbeddedAgentInfo][io.prometheus.agent.EmbeddedAgentInfo] is the return value of
   [Agent.startAsyncAgent][io.prometheus.Agent.Companion.startAsyncAgent], carrying the
-  `launchId` and `agentName` of the started agent and a `shutdown()` method for graceful stop.
+  `launchId` and `agentName` of the started agent, its connection to the proxy (`isConnected`,
+  `proxyEndpoint`, read live for a host's health check), and a `shutdown()` method for graceful stop.
 
 # Package io.prometheus.common
 

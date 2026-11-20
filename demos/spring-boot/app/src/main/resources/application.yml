@@ -14,6 +14,11 @@ management:
     web:
       exposure:
         include: health, prometheus
+  # The components' details, the agent's among them (PrometheusAgentHealthIndicator); the demo publishes the app on
+  # 127.0.0.1 only
+  endpoint:
+    health:
+      show-details: always
 
 logging:
   level:

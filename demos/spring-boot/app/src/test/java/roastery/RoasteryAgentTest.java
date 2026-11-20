@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -33,12 +34,13 @@ class RoasteryAgentTest {
   private static final HttpClient HTTP = HttpClient.newHttpClient();
   private static Proxy proxy;
   private static int scrapePort;
+  private static int agentPort;
 
   // Before Spring Boot starts the roastery: a plaintext proxy, and the agent's settings pointing at it
   @DynamicPropertySource
   static void agentSettings(DynamicPropertyRegistry registry) throws IOException {
     scrapePort = freePort();
-    int agentPort = freePort();
+    agentPort = freePort();
     proxy =
         new Proxy(
             new ProxyOptions(List.of("--port", "" + scrapePort, "--agent_port", "" + agentPort)),
@@ -58,6 +60,9 @@ class RoasteryAgentTest {
     proxy.stopAsync().awaitTerminated();
   }
 
+  @Value("${local.server.port}")
+  private int appPort;
+
   @Test
   void theProxyServesTheRoasterysMetrics() throws Exception {
     HttpRequest scrape = HttpRequest.newBuilder(URI.create("http://localhost:" + scrapePort + "/roastery_metrics")).build();
@@ -72,6 +77,13 @@ class RoasteryAgentTest {
       Thread.sleep(250);
     }
     assertThat(body).contains("roastery_batches_roasted_total", "jvm_threads_live_threads");
+
+    // The agent connected, so Actuator's health reports it UP, with the proxy it reached
+    HttpRequest health = HttpRequest.newBuilder(URI.create("http://localhost:" + appPort + "/actuator/health")).build();
+    assertThat(HTTP.send(health, HttpResponse.BodyHandlers.ofString()).body())
+        .contains(
+            "\"prometheusAgent\":{\"details\":{\"agent\":\"roastery-1.0\",\"proxy\":\"localhost:" + agentPort
+                + "\"},\"status\":\"UP\"}");
   }
 
   private static int freePort() throws IOException {

@@ -83,7 +83,8 @@ Only these types are part of the supported, documented public API. Everything el
 - `io.prometheus.agent.EmbeddedAgentConfig` and `embeddedAgent { }` (an embedded agent's settings built in code with
   typed methods, for Java through `EmbeddedAgentConfig.builder()`, and started with `start()`; it builds the `Config`
   `startAsyncAgent(Config)` takes)
-- `io.prometheus.agent.EmbeddedAgentInfo` (handle returned by `Agent.startAsyncAgent`)
+- `io.prometheus.agent.EmbeddedAgentInfo` (handle returned by `Agent.startAsyncAgent`, with the agent's connection,
+  `isConnected` and `proxyEndpoint`, read live for a host's health check)
 - `io.prometheus.common.EnvVars`
 - `io.prometheus.common.ConfigLoadException` (thrown by `startAsyncAgent` and `startSyncAgent` when `exitOnMissingConfig` is false, and by `startAsyncAgent(Config)` always, on a config that can't be loaded or a setting the options or the Agent reject, with a config URL's credentials redacted from its whole cause chain, so embedded hosts can catch it instead of the JVM exiting)
 
