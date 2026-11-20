@@ -22,9 +22,9 @@ class PrometheusProxy < Formula
     libexec.install "prometheus-proxy.jar"
 
     # The JVM flag is the one etc/docker/proxy.Dockerfile passes: sun.misc.Unsafe for netty, which on JDK 24 and later
-    # goes without it otherwise. The jar's manifest gives it native access, without JDK 25's startup warning. Older JDKs
-    # reject --sun-misc-unsafe-memory-access, so the script always uses openjdk@25 rather than honoring a JAVA_HOME set
-    # for other work.
+    # goes without it otherwise. The jar's manifest gives it native access, without JDK 25's startup warning. Older
+    # JDKs reject --sun-misc-unsafe-memory-access, so the script always uses openjdk@25 rather than honoring a
+    # JAVA_HOME set for other work.
     (bin/"prometheus-proxy").write <<~SHELL
       #!/bin/bash
       exec "#{Language::Java.java_home("25")}/bin/java" \\
