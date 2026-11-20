@@ -11,6 +11,9 @@ All notable changes to this project are documented in this file.
 - `Agent.startAsyncAgent(config)` starts an embedded agent from a Typesafe `Config` built in memory, so a host's token,
   the proxy's certificate, and scrape credentials needn't sit in a config file. It is always embedded: a setting it
   can't use throws `ConfigLoadException`. `typesafe-config` is now an `api` dependency, on a host's compile classpath
+- `EmbeddedAgentInfo.isConnected` and `proxyEndpoint` report, live, whether the embedded agent is connected to a proxy
+  with its paths registered, and to which, for a host's health check. The Spring Boot demo's roastery reports them in
+  Actuator's `/actuator/health`, as UNKNOWN rather than DOWN when the agent isn't connected
 - `EmbeddedAgentConfig` builds an embedded agent's settings with a typed method for each, `embeddedAgent { }` from
   Kotlin and `EmbeddedAgentConfig.builder()` from Java, in place of a hand-built `Config`. `scrapeSelf` points the
   agent at its host's own `/metrics`, percent-encoding Basic Auth credentials into the URL

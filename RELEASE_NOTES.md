@@ -18,6 +18,9 @@ the demos' setup: each checks for the tools it needs before it starts.
   Java) builds the agent's settings with a typed method for each, and `Agent.startAsyncAgent(config)` takes a Typesafe
   `Config`, so the agent's token, the proxy's certificate, and credentials for your app's `/metrics` never sit in a
   config file.
+- **An embedded agent's connection, for health checks.** `EmbeddedAgentInfo.isConnected` and `proxyEndpoint` tell a
+  host app whether its agent is connected to a proxy, and to which. The Spring Boot demo puts them in Actuator's
+  `/actuator/health`.
 - **TLS certificates and keys as environment variables.** `CERT_CHAIN_PEM`, `PRIVATE_KEY_PEM`, and
   `TRUST_CERT_COLLECTION_PEM` (or the `tls.*Pem` settings) take PEM text, or its base64, in place of a file, so the
   Docker images run TLS on a platform that passes secrets as variables, with no wrapper image.

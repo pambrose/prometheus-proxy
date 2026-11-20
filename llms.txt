@@ -80,7 +80,7 @@ These are the only types intended for external consumption (everything else is `
 - `io.prometheus.Agent` and `io.prometheus.Proxy` (entry points; `Agent.startAsyncAgent` takes a config file or URL, or a Typesafe `Config` built in memory)
 - `io.prometheus.agent.AgentOptions`, `io.prometheus.proxy.ProxyOptions`, `io.prometheus.common.BaseOptions` (config/CLI parsing)
 - `io.prometheus.agent.EmbeddedAgentConfig` and `embeddedAgent { }` (an embedded agent's settings built in code with typed methods; `EmbeddedAgentConfig.builder()` from Java)
-- `io.prometheus.agent.EmbeddedAgentInfo` (returned by `Agent.startAsyncAgent`)
+- `io.prometheus.agent.EmbeddedAgentInfo` (returned by `Agent.startAsyncAgent`; `isConnected` and `proxyEndpoint` report its connection to the proxy, live, for a host's health check)
 - `io.prometheus.common.EnvVars` (typed env-var enum)
 - `io.prometheus.common.ConfigLoadException` (thrown by `startAsyncAgent` and `startSyncAgent` when `exitOnMissingConfig` is false, and by `startAsyncAgent(config)` always, on a config that can't be loaded or any setting the options or the Agent reject, with a config URL's credentials redacted from its whole cause chain, so embedded hosts catch it instead of the JVM exiting)
 

@@ -95,5 +95,10 @@ public class PrometheusAgentLifecycle implements SmartLifecycle {
   public boolean isRunning() {
     return agent != null;
   }
+
+  /** The running agent's handle, for its health indicator, or null when it's off. */
+  public EmbeddedAgentInfo agent() {
+    return agent;
+  }
 }
 // --8<-- [end:agent-lifecycle]

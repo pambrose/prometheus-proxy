@@ -249,7 +249,8 @@ pins, and no jar on the classpath carries a `logback.xml`, which would replace t
   parser reads it; labels become JSON; `setting()` takes precedence over a method; `toString()` shows what `setting()`
   sets but not the token, a password, a PEM, or a path's credentials; and a blank path, an out-of-range port, or a URL
   with no scheme throws `ConfigLoadException`
-- **EmbeddedAgentInfoTest** — EmbeddedAgentInfo data class (launchId, agentName storage)
+- **EmbeddedAgentInfoTest** — EmbeddedAgentInfo data class (launchId, agentName storage), and its connection,
+  `isConnected` and `proxyEndpoint`, read live from the agent
 - **RequestFailureExceptionTest** — RequestFailureException custom exception class
 - **SslSettingsTest** — SSL keystore/truststore loading for TLS configuration
 - **TrustAllX509TrustManagerTest** — TrustAllX509TrustManager (dev/test only, bypasses SSL validation)
@@ -688,8 +689,10 @@ mechanism that the standard suite cannot reach:
 - **EmbeddedAgentApiTest** — the public `startAsyncAgent()` handle connects from a config file, reports its
   identity, and disconnects on `shutdown()`; the overload that takes an in-memory `Config`, through the
   `EmbeddedAgentConfig` builder, starts an agent whose path the proxy serves, and throws `ConfigLoadException` for a
-  setting it can't use; a path given a username and password with the builder reaches a target that demands them as
-  Basic Auth, whatever their characters; and a config served from a URL with
+  setting it can't use; the handle's `isConnected` and `proxyEndpoint` report the connection once the proxy serves the
+  agent's path, go false after `shutdown()` or once the proxy goes away, and are false before the first connection; a
+  path given a username and password with the builder reaches a target that demands them as Basic Auth, whatever their
+  characters; and a config served from a URL with
   credentials that holds a setting the agent rejects, whether its options or its constructor reject it, throws
   `ConfigLoadException`, with the credentials in none of its messages, its cause chain, or the log
 - **EmbeddedAgentMetricsTest** — with metrics on, an agent started again after `shutdown()` and two agents at

@@ -24,7 +24,7 @@ import io.prometheus.Agent
  * Returned by [Agent.startAsyncAgent][io.prometheus.Agent.Companion.startAsyncAgent], this is the
  * supported way for embedders to interact with an Agent they did not construct directly. The
  * underlying [Agent] instance is intentionally hidden so consumers depend only on this stable,
- * minimal surface — identity (for logging and metrics correlation) and shutdown.
+ * minimal surface — identity (for logging and metrics correlation), its connection to the proxy, and shutdown.
  *
  * The handle is a Kotlin `data class` purely to inherit value-equality and `toString()`; do not
  * `copy()` or destructure it. The `private val agent` is the canonical owner of the running Agent,
@@ -56,6 +56,17 @@ data class EmbeddedAgentInfo(
 
   /** See class-level KDoc. */
   val agentName: String get() = agent.agentName
+
+  /**
+   * Whether the agent is connected to a proxy and has registered its paths there, so Prometheus can scrape through it
+   * now. False before its first connection, while it reconnects after losing one, and once it has stopped. Read live
+   * each time, so a host's health check can report it, though without failing the app's health: a lost proxy
+   * shouldn't take the app down.
+   */
+  val isConnected: Boolean get() = agent.isConnectedToProxy
+
+  /** The proxy the agent is connected to, as `host:port`, or null when it isn't ([isConnected]). */
+  val proxyEndpoint: String? get() = agent.connectedProxyEndpoint
 
   /**
    * Gracefully stops the embedded [Agent].

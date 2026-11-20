@@ -110,6 +110,9 @@ A Spring Boot app runs the agent from a bean, so it starts and stops with the ap
   ([Spring Boot's versions](spring-boot-demo.md#spring-boots-versions-of-the-agents-libraries)). Were a Spring Boot
   release to break it, a property in the app's pom sets that library back: `kotlin-serialization.version`,
   `jackson-2-bom.version`, `logback.version`, or `grpc-java.version`.
+- **A health indicator** can report the agent in Actuator's `/actuator/health` from `EmbeddedAgentInfo.isConnected`
+  and `proxyEndpoint`: UP while it's connected, and UNKNOWN, not DOWN, when it's off or reconnecting, so a lost proxy
+  leaves the app's health UP.
 - **Logging:** see [Logging](#logging) for the line Spring Boot's `application.yml` takes.
 
 ## API Reference
@@ -192,11 +195,17 @@ path or a port out of range, throws `ConfigLoadException`, as `start()` does for
 
 The handle `startAsyncAgent()` and `EmbeddedAgentConfig.start()` return.
 
-| Member       | Type     | Description                                                                                   |
-|:-------------|:---------|:----------------------------------------------------------------------------------------------|
-| `launchId`   | `String` | Unique ID for this agent launch, new each time an agent starts                                |
-| `agentName`  | `String` | Name of the agent: `agent.name`, or `Unnamed-<hostname>` when none is set                     |
-| `shutdown()` | `Unit`   | Stops the agent and blocks until it has stopped; calling it again, or on a failed agent, does nothing |
+| Member          | Type      | Description                                                                                                                                       |
+|:----------------|:----------|:--------------------------------------------------------------------------------------------------------------------------------------------------|
+| `launchId`      | `String`  | Unique ID for this agent launch, new each time an agent starts                                                                                    |
+| `agentName`     | `String`  | Name of the agent: `agent.name`, or `Unnamed-<hostname>` when none is set                                                                         |
+| `isConnected`   | `Boolean` | Whether the agent is connected to a proxy and has registered its paths there, so Prometheus can scrape through it now; read live, for a health check |
+| `proxyEndpoint` | `String?` | The proxy it's connected to, as `host:port`, or `null` when it isn't                                                                             |
+| `shutdown()`    | `Unit`    | Stops the agent and blocks until it has stopped; calling it again, or on a failed agent, does nothing                                            |
+
+`isConnected` is false before the agent's first connection, while it reconnects after losing one, and once it has
+stopped. A host's health check can report it, though without failing the app's own health: a lost proxy shouldn't
+take the app down.
 
 Call `shutdown()` from your application's shutdown hook, or wherever it stops its own services. It closes the
 connection to the proxy, drains the scrapes in flight, and releases the admin and metrics ports, so the agent's

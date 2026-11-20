@@ -89,6 +89,7 @@ Lifecycle:
 Scenarios:
   settings           Show the agent's settings as Spring Boot bound them, and the agent starting
   peek               Try Actuator's /actuator/prometheus without its password, then read it through the proxy
+  health             Show the agent in Actuator's /actuator/health: connected, and to which proxy
   versions           Compare the versions of the agent's libraries the roastery runs, which Spring Boot picked, with
                      the agent's own
   stop-app           Stop the roastery, as a platform does, with SIGTERM
@@ -478,6 +479,7 @@ cmd_tour() {
     instruct "Open the proxy dashboard: $DASHBOARD_URL" \
       "Its Agents view lists one agent, roastery-1.0, named after the app's version from Spring Boot's build" \
       "info, with one path, roastery_metrics. The agent connected to the proxy over TLS, and registered it."
+    step "Ask Actuator's health how the agent is doing." -- health
   fi
 
   if part 2 "Spring Boot's Actuator serves the app's metrics at /actuator/prometheus, which Spring Security" \
@@ -556,6 +558,22 @@ main() {
       "reads it on 127.0.0.1 with the credentials, which the builder's scrapeSelf percent-encoded into the scrape" \
       "URL, and sends the metrics to the proxy over its own connection. Prometheus scrapes the proxy at the path" \
       "the agent registered, /roastery_metrics."
+    ;;
+  health)
+    local json
+    json="$(curl -fsS "$APP_URL/actuator/health")" ||
+      die "the roastery isn't answering at $APP_URL; is the demo running? See '$0 status'"
+    bold "The agent's component of Actuator's /actuator/health:"
+    sed -nE 's/.*("prometheusAgent":\{"details":\{[^}]*\},"status":"[A-Z_]+"\}).*/  \1/p' <<<"$json"
+    # The app's own status, the last in the JSON
+    bold "The app's health: $(sed -nE 's/.*"status":"([A-Z_]+)"\}$/\1/p' <<<"$json")"
+    how_it_works "PrometheusAgentHealthIndicator reads the agent's EmbeddedAgentInfo, isConnected and" \
+      "proxyEndpoint, each time Actuator asks: UP while the agent is connected to a proxy that can scrape through" \
+      "it, and UNKNOWN when it's off or reconnecting. Not DOWN: the roastery keeps serving without its agent, so a" \
+      "lost proxy leaves the app's health UP, and a platform that checks it keeps sending it requests."
+    watch_for
+    point "With the proxy stopped (docker compose -f docker/compose.yml stop proxy), the component turns UNKNOWN" \
+      "within a few seconds while the app stays UP; once the proxy is back (start proxy), it's UP again."
     ;;
   versions) cmd_versions ;;
   stop-app)
