@@ -225,7 +225,7 @@ proxy {
     links = [
       {
         name = "Prometheus"
-        url = "http://prometheus:9090/graph?g0.expr=up%7Bjob%3D%22{label.job}%22%7D"
+        url = "http://prometheus:9090/query?g0.expr=up%7Bjob%3D%22{label.job}%22%7D"
         icon = "prometheus"
       }
       { name = "Grafana", url = "http://grafana:3000/d/proxy-targets?var-job={label.job}", icon = "grafana" }
@@ -270,7 +270,7 @@ scrape_configs:
 
 The label holds the path with its leading slash, after any path prefix in `proxy.service.discovery.targetPrefix`, so
 with no prefix a link can query `up{path="/{path}"}`, written into the URL as
-`http://prometheus:9090/graph?g0.expr=up%7Bpath%3D%22%2F{path}%22%7D`.
+`http://prometheus:9090/query?g0.expr=up%7Bpath%3D%22%2F{path}%22%7D`.
 
 - **A missing value drops the link.** A row whose path lacks a value a template needs, such as a label it didn't
   register, gets no link for that template, never one with an empty slot. A row left with no link shows a dash.
