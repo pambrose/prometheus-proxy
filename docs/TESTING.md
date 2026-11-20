@@ -617,6 +617,9 @@ These support helpers also live here (not test classes themselves):
   proxy's metrics from `PROXY_HOSTNAME`, as the Docker quick start needs, or from `localhost`; and no `docker run`
   command in the README, `llms.txt`, or the website's pages and snippets combines `--rm` with `--restart`, which
   Docker refuses
+- **HomebrewFormulaTest** — every line of the Homebrew formulae in `etc/homebrew`, with the version and checksum
+  `make homebrew-formulae` fills in, fits within 118 characters, the limit of the `brew style` check the tap's CI runs
+  and this repository's 120 doesn't hold a formula to
 - **LocalTestConfigTest** — no test source under `src/test/kotlin/io` names `raw.githubusercontent.com`, so a spec
   reads its config from the checkout, and a renamed or deleted one fails instead of testing a copy on GitHub `master`
 - **LogbackConfigTest** — the fat JARs' `logback.xml` (`src/shadow/resources`, kept out of the library jar), loaded
