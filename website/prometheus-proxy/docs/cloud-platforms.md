@@ -72,6 +72,32 @@ In Spring Boot, start it from an `ApplicationReadyEvent` listener and call `shut
 Give the app's Logback configuration the line the standalone agent has for gRPC's internal logging; see
 [Logging](embedded-agent.md#logging).
 
+### Packaging the App
+
+The agent is a library inside the app, so the app's image is an ordinary JVM image. It adds nothing for the agent: no
+port, since the agent connects out to the proxy, and no file, since the token and the certificate come in as
+environment variables. A two-stage Dockerfile, for a Gradle app named `my-app` that uses the `application` plugin:
+
+```dockerfile
+--8<-- "EmbeddedAgentExamples.txt:embedded-app-dockerfile"
+```
+
+- It builds with the app's own Gradle wrapper on a JDK, and runs the result on a JRE as a user that isn't root, named by
+  number, so a platform that checks for one, such as Kubernetes with `runAsNonRoot`, can. Add a `.dockerignore` that
+  leaves out `build/` and `.gradle/`, so `COPY . .` doesn't send them.
+- The start script `installDist` writes reads `JAVA_OPTS`, whose two flags are for Netty, which the agent's gRPC runs
+  on, on Java 24 and later; the stock images run with both:
+  - `--enable-native-access=ALL-UNNAMED` lets Netty load its native TLS library without the warning Java prints, which
+    says a later release will block the call.
+  - `--sun-misc-unsafe-memory-access=allow` lets Netty use `sun.misc.Unsafe` for its buffers, which it otherwise does
+    without. Java 22 and earlier don't know it and won't start with it, so leave it out there.
+- `-XX:MaxRAMPercentage=75` sizes the heap from the container's memory limit, not the host's.
+- An app built as a fat JAR starts with `java -jar`, which doesn't read `JAVA_OPTS`: give the options in
+  `JDK_JAVA_OPTIONS`, which the `java` launcher reads, or on its command line.
+- Any JDK 17 or later runs the agent; the stock images run 25.
+
+The [Embedded Demo](embedded-demo.md)'s coffee shop is built the same way.
+
 ### What the App Platform Must Give It
 
 - **CPU between requests, and an instance that stays up.** The agent holds its connection to the proxy open between
