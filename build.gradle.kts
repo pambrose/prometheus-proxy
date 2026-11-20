@@ -420,7 +420,9 @@ fun Project.configureJars() {
 
   fun ShadowJar.configureFatJar(archiveName: String, mainClass: String) {
     archiveFileName.set(archiveName)
-    manifest { attributes("Main-Class" to mainClass) }
+    // Enable-Native-Access gives the jar's classes native access under java -jar, which Java 22 and later honor and
+    // older JDKs ignore, so every launcher runs without Java 24's restricted-method warning and no flag to pass.
+    manifest { attributes("Main-Class" to mainClass, "Enable-Native-Access" to "ALL-UNNAMED") }
     mergeServiceFiles()
     // First-wins kept one dependency's NOTICE and one LICENSE of each name, where the Apache License's section 4(d)
     // requires every NOTICE, and MIT and the like require their own license text (October #40). Every NOTICE is
