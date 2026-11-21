@@ -92,7 +92,7 @@ scenarios.
 
 ## ✨ New Features
 
-Version 4.6.1 (released 2026-11-20) puts a login on the proxy's dashboard: set `DASHBOARD_PASSWORD`, and the dashboard
+Version 4.6.1 (released 2026-11-22) puts a login on the proxy's dashboard: set `DASHBOARD_PASSWORD`, and the dashboard
 shows a login page, with the username `admin` unless you set `DASHBOARD_USERNAME`. The proxy now logs
 a refused agent token where an operator looks, and no longer logs an exception for a connection that closes before it
 is ready, such as a port probe or a failed TLS handshake. The Embedded Agent page has a new

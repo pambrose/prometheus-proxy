@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file.
 
 ---
 
-## [4.6.1] - 2026-11-20
+## [4.6.1] - 2026-11-22
 
 ### New Features
 
@@ -40,6 +40,8 @@ All notable changes to this project are documented in this file.
   formulae, and `HomebrewFormulaTest` checks them with the version and checksum filled in
 - Dependabot holds the Spring Boot demo's Maven image at JDK 25: it reads the JDK in the image's tag as part of the
   version, so JDK 26 came as a patch update
+- Update the GitHub Actions the workflows pin by commit SHA: `actions/setup-java` 6.2.0 → 6.3.0 and
+  `anthropics/claude-code-action` 1.0.275 → 1.0.276 (#477)
 
 ### Documentation
 
