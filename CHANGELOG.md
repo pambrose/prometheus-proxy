@@ -16,6 +16,24 @@ All notable changes to this project are documented in this file.
   settings the agent resolved, a token or key only as set. It takes the proxy dashboard's login
   (`agent.dashboard.password`), Host and Origin checks, and session cap, and an embedded agent turns it on with
   `EmbeddedAgentConfig`'s `dashboard(port, host)` and `dashboardLogin(password, username)`
+- The agent's dashboard shows each path's recent scrapes as the agent saw them (`agent.dashboard.pathHistorySize`,
+  default 20): a strip of results on each path, and a Recent scrapes list with the target's status, the fetch's
+  duration, the body's size before and after the filter, whether it was gzipped and chunked, and the reason a scrape
+  failed. A Scrape now button (`agent.dashboard.scrapeNowEnabled`, on by default) fetches a path's target from the
+  agent at once, whether or not the proxy has the path, and shows the start of the body after the filter; it is counted
+  in no metric and kept out of the path's history
+
+### Bug Fixes
+
+- The dashboard's Scrape now result said only "404 Not Found" when it refused a path that isn't registered, rather than
+  why: the scrape port's handler that gives a bare 404 its status line as a body replaced every 404's body. It now
+  fills in only a 404 that has none
+
+### Behavior Changes
+
+- A scrape the proxy dashboard's Scrape now makes no longer counts in the agent's `agent_filter_lines_dropped_total`
+  and `agent_filter_bytes_saved_total`, or in the lines and bytes the agent's dashboard shows a filter dropping: like
+  the `agent_scrape_*` metrics, they count only Prometheus's scrapes
 
 ## [4.6.1] - 2026-11-22
 

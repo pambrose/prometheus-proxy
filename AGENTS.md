@@ -120,7 +120,9 @@ aren't in the proto: a scrape result is sent in chunks once its gzipped size rea
   What a dashboard shares, its server, login, guards, versioned assets, sessions, and push loop, is
   `common/dashboard/DashboardServer`, which serves a `DashboardSite`: the proxy's is in `ProxyDashboardService`, and the
   agent's (`agent.dashboard`, off by default) in `agent/dashboard/AgentDashboardService`, which reads the agent's
-  connection, path registration failures, filters, and discovery through `AgentSnapshot`. `DashboardPage`,
+  connection, path registration failures, filters, discovery, and each path's recent scrapes (`AgentScrapeHistory`,
+  filled by `AgentHttpService.fetchScrapeUrl`) through `AgentSnapshot`, and serves the agent's own Scrape now
+  (`AgentScrapeNow`). `DashboardPage`,
   `DashboardScript`, and `DashboardCss` are the page, script, and stylesheet both render with.
   The Links column's brand icons (`LinkIcon`) come from the Simple Icons WebJar, of which the build's
   `extractDashboardIcons` copies only the SVGs `LinkIcon` names into the main resources, so the 7.5 MB WebJar stays off

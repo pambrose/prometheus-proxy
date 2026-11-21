@@ -41,6 +41,10 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.parameters
+import io.ktor.server.engine.embeddedServer
+import io.ktor.server.response.respondText
+import io.ktor.server.routing.get
+import io.ktor.server.routing.routing
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
 import io.prometheus.Agent
@@ -57,16 +61,18 @@ import io.prometheus.common.dashboard.DashboardPage
 import io.prometheus.common.dashboard.DashboardServer
 import io.prometheus.common.dashboard.DashboardServer.Companion.HX_REQUEST_HEADER
 import io.prometheus.common.dashboard.LoginHtml
+import io.prometheus.common.startAndAwaitReady
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.metrics.model.registry.PrometheusRegistry
 import kotlinx.coroutines.withTimeout
 import kotlin.time.Duration.Companion.seconds
+import io.ktor.server.cio.CIO as ServerCIO
 
 /**
  * The agent's dashboard, served by a real agent: with its proxy down, where only the agent can say what is wrong, and
- * up, with one path registered and one the proxy refuses; its WebSocket's pushes; its login; and that it stays off
- * unless asked.
+ * up, with one path registered and one the proxy refuses; a path's scrapes as the agent saw them, and its Scrape now;
+ * its WebSocket's pushes; its login; and that it stays off unless asked.
  */
 class AgentWebDashboardTest : StringSpec() {
   private fun dashboardAgent(
@@ -115,6 +121,17 @@ class AgentWebDashboardTest : StringSpec() {
           // The target's password never reaches the page.
           this shouldNotContain "s3cret"
         }
+
+        // Scrape now works with the proxy down: the agent fetches the target itself, which here can't be resolved.
+        client.post("$base/dashboard/scrape?path=agent_dash_allowed_metrics") { header(HX_REQUEST_HEADER, "true") }
+          .apply {
+            status shouldBe HttpStatusCode.OK
+            bodyAsText().apply {
+              this shouldContain """<span class="pill crit">"""
+              this shouldContain """<div class="sr-failure">"""
+              this shouldNotContain "s3cret"
+            }
+          }
 
         client.webSocket("ws://$LOOPBACK_HOST:$AGENT_DASHBOARD_UI_DOWN_DASHBOARD_PORT/dashboard/events") {
           // The status bar at once, before the page says which view it shows.
@@ -194,6 +211,89 @@ class AgentWebDashboardTest : StringSpec() {
       }
     }
 
+    // What only the agent sees of a scrape: the target's own answer, and what the filter did to the body. Scrape now
+    // fetches the target from the agent, through the path's filter, and is recorded nowhere.
+    "a scrape through the proxy should show in the path's history, and Scrape now should fetch it from the agent" {
+      val stub =
+        embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
+          routing { get("/metrics") { call.respondText(STUB_BODY) } }
+        }
+      val stubPort = stub.startAndAwaitReady()
+      val proxy =
+        startProxy(
+          args = ["--agent_port", "$AGENT_DASHBOARD_UI_GRPC_PORT"],
+          proxyPort = AGENT_DASHBOARD_UI_HTTP_PORT,
+          configArgs = ["--config", CONFIG_FILE],
+        )
+      val agent = dashboardAgent(AGENT_DASHBOARD_UI_GRPC_PORT, AGENT_DASHBOARD_UI_DASHBOARD_PORT)
+      val base = "http://$LOOPBACK_HOST:$AGENT_DASHBOARD_UI_DASHBOARD_PORT"
+      val client = HttpClient(CIO)
+      try {
+        agent.awaitInitialConnection(30.seconds).shouldBeTrue()
+        agent.pathManager.registerPath(SCRAPED_PATH, "http://$LOOPBACK_HOST:$stubPort/metrics")
+        client.get("http://$LOOPBACK_HOST:$AGENT_DASHBOARD_UI_HTTP_PORT/$SCRAPED_PATH").bodyAsText().apply {
+          this shouldContain "kept_metric"
+          this shouldNotContain "go_goroutines"
+        }
+
+        eventually(30.seconds) {
+          client.get("$base/dashboard").bodyAsText() shouldContain
+            """aria-label="1 of 1 recent scrapes succeeded""""
+        }
+        client.get("$base/dashboard/paths/$SCRAPED_PATH").bodyAsText().apply {
+          this shouldContain "<span>Recent scrapes</span><span>1</span>"
+          this shouldContain "after the filter"
+        }
+
+        client.post("$base/dashboard/scrape?path=$SCRAPED_PATH") { header(HX_REQUEST_HEADER, "true") }.apply {
+          status shouldBe HttpStatusCode.OK
+          bodyAsText().apply {
+            this shouldContain """<span class="pill ok">200</span>"""
+            this shouldContain "after the filter"
+            this shouldContain "kept_metric"
+            this shouldNotContain "go_goroutines"
+          }
+        }
+        // The history still holds the proxy's one scrape.
+        agent.scrapeHistory.shouldNotBeNull().snapshot().getValue(SCRAPED_PATH).size shouldBe 1
+
+        // Without the header only the page's own script sends, no scrape: a page elsewhere can't make the agent act.
+        client.post("$base/dashboard/scrape?path=$SCRAPED_PATH").status shouldBe HttpStatusCode.Forbidden
+        // A browser names a path, never a URL, and only a path the agent knows is scraped. The panel says why.
+        client.post("$base/dashboard/scrape?path=nope") { header(HX_REQUEST_HEADER, "true") }.apply {
+          status shouldBe HttpStatusCode.NotFound
+          bodyAsText() shouldContain "/nope isn't configured, discovered, or registered"
+        }
+      } finally {
+        client.close()
+        agent.stopSync(10.seconds)
+        proxy.stopSync(10.seconds)
+        stub.stop(0, 0)
+      }
+    }
+
+    "with Scrape now off, the agent's dashboard should have no button and no route for it" {
+      val agent =
+        dashboardAgent(
+          AGENT_DASHBOARD_UI_DOWN_GRPC_PORT,
+          AGENT_DASHBOARD_UI_DOWN_DASHBOARD_PORT,
+          extraArgs = ["-Dagent.dashboard.scrapeNowEnabled=false"],
+        )
+      val base = "http://$LOOPBACK_HOST:$AGENT_DASHBOARD_UI_DOWN_DASHBOARD_PORT"
+      val client = HttpClient(CIO)
+      try {
+        client.post("$base/dashboard/scrape?path=agent_dash_allowed_metrics") { header(HX_REQUEST_HEADER, "true") }
+          .status shouldBe HttpStatusCode.NotFound
+        client.get("$base/dashboard/paths/agent_dash_allowed_metrics").bodyAsText().apply {
+          this shouldNotContain """class="scrape-now""""
+          this shouldNotContain """id="${DashboardPage.SCRAPE_RESULT_ID}""""
+        }
+      } finally {
+        client.close()
+        agent.stopSync(10.seconds)
+      }
+    }
+
     // The proxy's login, the agent's name: its own heading and its own cookie.
     "with a password set, the agent's dashboard should ask for a login, under the agent's name" {
       val agent =
@@ -248,6 +348,17 @@ class AgentWebDashboardTest : StringSpec() {
 
   private companion object {
     const val CONFIG_FILE = "config/test-configs/agent-dashboard.conf"
+
+    // Registered at runtime against a stub, with a filter in CONFIG_FILE that drops the go_ family.
+    const val SCRAPED_PATH = "agent_dash_allowed_scraped"
+    val STUB_BODY =
+      """
+      # TYPE kept_metric gauge
+      kept_metric 1
+      # TYPE go_goroutines gauge
+      go_goroutines 12
+
+      """.trimIndent()
     const val PASSWORD = "agent-dash-Passw0rd"
     const val MAX_FRAMES = 12
     val FRAME_PATIENCE = 30.seconds

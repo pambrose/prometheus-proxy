@@ -858,9 +858,13 @@ The agent's own dashboard (`AgentDashboardHtml`), on this system without excepti
 bar, master–detail panes, key–value rows, and script, from `common/dashboard`. Two views:
 
 - **Paths**, the Agent list's layout: a row per path, its LED green while registered and red otherwise, by the No
-  Amber Dot Rule. A tag says which red: `retrying` (warn), `refused` (crit), or `pending` (neutral). The detail's hero
-  carries the same tag, `registered` included. Below it are the proxy's reason, its time, and when the path is tried
-  again, then the labels and the metric filter.
+  Amber Dot Rule. A tag says which red: `retrying` (warn), `refused` (crit), or `pending` (neutral). A third line,
+  in the row's secondary type, carries the path's last Status Pill and its History strip, the Path Table's, once the
+  proxy has scraped it, or says a registered path isn't scraped yet. The detail's hero carries the
+  same tag, `registered` included, and the Scrape now icon button. Below it are the proxy's reason, its time, and when
+  the path is tried again, then the labels, the metric filter, and Recent scrapes: key–value rows of time, Status
+  Pill, and what the agent did with the body, a scrape from the proxy's dashboard tagged neutral. The scrape-now result
+  panel sits above the master–detail panes, outside every push, as it sits above the Path Table.
 - **Connection**: a hero whose LED is green only while connected, with `failed over` as on the agent detail. Then the
   proxy endpoints, each a key–value row with a neutral `in use` or `trying` tag and its last connect error. Then
   discovery and the settings.

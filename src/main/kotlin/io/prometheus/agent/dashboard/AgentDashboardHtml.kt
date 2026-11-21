@@ -18,6 +18,8 @@ package io.prometheus.agent.dashboard
 
 import io.ktor.http.encodeURLPathPart
 import io.prometheus.agent.AgentPathManager.RegistrationFailure
+import io.prometheus.agent.dashboard.AgentScrapesHtml.recentScrapes
+import io.prometheus.agent.dashboard.AgentScrapesHtml.scrapesLine
 import io.prometheus.common.dashboard.DashboardPage
 import io.prometheus.common.dashboard.DashboardPage.DASH
 import io.prometheus.common.dashboard.DashboardPage.STATUS_ID
@@ -29,6 +31,8 @@ import io.prometheus.common.dashboard.DashboardPage.dashboardHead
 import io.prometheus.common.dashboard.DashboardPage.humanize
 import io.prometheus.common.dashboard.DashboardPage.logoutForm
 import io.prometheus.common.dashboard.DashboardPage.pageTitle
+import io.prometheus.common.dashboard.DashboardPage.scrapeNowButton
+import io.prometheus.common.dashboard.DashboardPage.scrapeResultPanel
 import io.prometheus.common.dashboard.DashboardPage.size
 import io.prometheus.common.dashboard.DashboardPage.tabs
 import io.prometheus.common.dashboard.DashboardPage.timeOfDay
@@ -137,6 +141,7 @@ internal object AgentDashboardHtml {
       announcer()
       when (layout) {
         AgentLayout.PATHS -> {
+          if (snapshot.scrapeNowEnabled) scrapeResultPanel(routeBase)
           main("md") {
             div("md-list") { pathListInner(snapshot, selectedPath, routeBase, oob = false) }
             div("md-detail") { detailInner(snapshot, selectedPath, oob = false) }
@@ -239,6 +244,7 @@ internal object AgentDashboardHtml {
           stateTag(path.state)
         }
         span("host") { +listOf(path.source.name.lowercase(), path.url.ifEmpty { DASH }).joinToString(" · ") }
+        scrapesLine(path, snapshot.pathHistorySize)
       }
     }
   }
@@ -265,6 +271,7 @@ internal object AgentDashboardHtml {
         span(led(path.state == PathState.REGISTERED)) {}
         +"/${path.path}"
         stateTag(path.state, always = true)
+        if (snapshot.scrapeNowEnabled) scrapeNowButton(path.path)
       }
       div("hero-meta") {
         +listOfNotNull(path.name.ifEmpty { null }, path.source.name.lowercase(), path.url.ifEmpty { null })
@@ -276,6 +283,7 @@ internal object AgentDashboardHtml {
     kv("URL", path.url.ifEmpty { DASH })
     kv("Labels", path.labels.ifEmpty { DASH })
     path.filter?.also { filterSection(it) }
+    recentScrapes(path.history)
   }
 
   // Why the path isn't registered: the proxy's reason, or what kept it from answering, when, and when it's next tried.

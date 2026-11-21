@@ -114,9 +114,23 @@ internal class MetricFilter private constructor(
    *
    * Fails open on a non-text [contentType] or a body that is not valid UTF-8, warning once per
    * condition. A `null` return means "use the raw bytes" and is distinct from a filter that ran and
-   * happened to drop nothing, so a fail-open scrape never records filter metrics.
+   * happened to drop nothing, so a fail-open scrape never records filter metrics. What it drops is added to
+   * [linesDropped] and [bytesSaved]; [previewBytes] filters alike and adds nothing.
    */
   fun filterBytes(
+    bytes: ByteArray,
+    contentType: String,
+  ): FilterOutcome? =
+    previewBytes(bytes, contentType)?.also {
+      droppedLines += it.linesDropped.toLong()
+      savedBytes += it.bytesSaved.toLong()
+    }
+
+  /**
+   * Filters [bytes] as [filterBytes] does, without adding what it drops to [linesDropped] and [bytesSaved]: for a
+   * scrape a dashboard asked for, which isn't one of Prometheus's.
+   */
+  fun previewBytes(
     bytes: ByteArray,
     contentType: String,
   ): FilterOutcome? {
@@ -148,8 +162,6 @@ internal class MetricFilter private constructor(
     // a successfully strict-decoded string, and re-encoding a string that came from valid UTF-8
     // reproduces the exact bytes it was decoded from -- so bytesSaved can never go negative.
     val filtered = result.text.encodeToByteArray()
-    droppedLines += result.linesDropped.toLong()
-    savedBytes += (bytes.size - filtered.size).toLong()
     return FilterOutcome(filtered, result.text, result.linesDropped, bytes.size - filtered.size)
   }
 

@@ -42,6 +42,7 @@ import io.prometheus.agent.AgentHttpService
 import io.prometheus.agent.AgentMetrics
 import io.prometheus.agent.AgentOptions
 import io.prometheus.agent.AgentPathManager
+import io.prometheus.agent.AgentScrapeHistory
 import io.prometheus.agent.EmbeddedAgentInfo
 import io.prometheus.agent.EndpointFailover
 import io.prometheus.agent.HeartBeatResult
@@ -228,6 +229,21 @@ class Agent(
         dashboardPort = options.dashboardPort,
         dashboardPath = options.dashboardPath,
         login = options.dashboardLogin,
+      )
+    else
+      null
+
+  // Each path's last scrapes as the agent saw them, for its dashboard's history strips and Recent scrapes. Null unless
+  // the dashboard is on, as the proxy's pathHistory is, so with it off nothing is kept that nothing would read. Bounded
+  // by the paths the agent knows: configured, discovered, and registered.
+  internal val scrapeHistory: AgentScrapeHistory? =
+    if (options.dashboardEnabled)
+      AgentScrapeHistory(
+        historySize = agentConfigVals.dashboard.pathHistorySize,
+        pathCount = {
+          pathManager.pathConfigs.size + pathManager.registeredPaths.size +
+            pathDiscoveryService?.discoveredEntries.orEmpty().size
+        },
       )
     else
       null

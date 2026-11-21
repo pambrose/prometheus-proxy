@@ -18,6 +18,7 @@ package io.prometheus.proxy.dashboard
 
 import io.prometheus.Proxy
 import io.prometheus.common.Utils.toJsonElement
+import io.prometheus.common.dashboard.DashboardPage
 import io.prometheus.proxy.ActivityEntry
 import io.prometheus.proxy.ActivityLog
 import io.prometheus.proxy.AgentAuthManager.Companion.LEGACY_IDENTITY_NAME
@@ -78,26 +79,15 @@ internal data class PathView(
   /** How many agents beyond the first back this path, for the `+N` marker on a consolidated row. */
   val additionalAgents: Int get() = (agentIds.size - 1).coerceAtLeast(0)
 
-  // The three below are computed once per snapshot, not on every read: a snapshot is rendered for every session and
+  // The two below are computed once per snapshot, not on every read: a snapshot is rendered for every session and
   // page that shows it.
-
-  /** How many of [history]'s scrapes succeeded. */
-  val historySucceeded: Int by lazy(LazyThreadSafetyMode.PUBLICATION) { history.count { it.isSuccess } }
 
   /**
    * [history] as runs of consecutive like results, **oldest first**, each a `(succeeded, count)` pair: what the path
    * table's history strip draws, one element per run.
    */
   val historyRuns: List<Pair<Boolean, Int>> by lazy(LazyThreadSafetyMode.PUBLICATION) {
-    buildList {
-      history.asReversed().forEach { record ->
-        val last = lastOrNull()
-        if (last != null && last.first == record.isSuccess)
-          set(lastIndex, last.first to last.second + 1)
-        else
-          add(record.isSuccess to 1)
-      }
-    }
+    DashboardPage.historyRuns(history.map { it.isSuccess })
   }
 
   /**

@@ -26,6 +26,9 @@ package io.prometheus.common
  * rather than a copy of the line.
  */
 internal object Exposition {
+  /** The OpenMetrics end-of-stream marker, a body's last line. */
+  const val EOF_MARKER = "# EOF"
+
   // Keywords whose comment line opens a metric family.
   private val FAMILY_KEYWORDS = listOf("HELP", "TYPE", "UNIT")
 

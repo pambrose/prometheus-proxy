@@ -723,7 +723,11 @@ class ProxyWebDashboardTest : StringSpec() {
             }
           }
           scrapeNow().status shouldBe HttpStatusCode.TooManyRequests
-          scrapeNow("nothing_here").status shouldBe HttpStatusCode.NotFound
+          // The refusal says why, in the panel, rather than a bare status line.
+          scrapeNow("nothing_here").apply {
+            status shouldBe HttpStatusCode.NotFound
+            bodyAsText() shouldContain "/nothing_here isn't registered"
+          }
           scrapeNow { }.status shouldBe HttpStatusCode.Forbidden
           scrapeNow {
             header(HX_REQUEST_HEADER, "true")

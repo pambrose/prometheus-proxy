@@ -250,32 +250,33 @@ class ProxyHttpConfigTest : StringSpec() {
 
     // ==================== StatusPages Integration Tests ====================
 
-    "StatusPages NotFound handler should return correct text" {
-      val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
-        install(StatusPages) {
-          status(HttpStatusCode.NotFound) { call, cause ->
-            call.respond(
-              TextContent(
-                "${cause.value} ${cause.description}",
-                Text.Plain.withCharset(Charsets.UTF_8),
-                cause,
-              ),
-            )
+    // The status line as plain text for a 404 with nothing to say: an unknown route, or a scrape of an unregistered
+    // path, whose results carry no body. A 404 a route wrote a body for keeps it: the dashboards' Scrape now says there
+    // why it refused, which the status line replaced.
+    "the 404 handler should give a body only to a 404 without one" {
+      val server =
+        embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
+          install(StatusPages) { with(ProxyHttpConfig) { configureStatusPages() } }
+          routing {
+            get("/explained") { call.respondText("/x isn't registered", Text.Plain, HttpStatusCode.NotFound) }
+            get("/empty") { call.respondText("", Text.Plain, HttpStatusCode.NotFound) }
           }
         }
-        routing {
-          // No routes - all requests should 404
-        }
-      }
 
       try {
         val port = server.startAndAwaitReady()
         val client = newHttpClient()
 
-        val response = client.get("http://localhost:$port/nonexistent")
-        response.status shouldBe HttpStatusCode.NotFound
-        response.bodyAsText() shouldContain "404"
-        response.bodyAsText() shouldContain "Not Found"
+        client.get("http://localhost:$port/explained").apply {
+          status shouldBe HttpStatusCode.NotFound
+          bodyAsText() shouldBe "/x isn't registered"
+        }
+        listOf("/empty", "/nonexistent").forEach { path ->
+          client.get("http://localhost:$port$path").apply {
+            status shouldBe HttpStatusCode.NotFound
+            bodyAsText() shouldBe "404 Not Found"
+          }
+        }
 
         client.close()
       } finally {

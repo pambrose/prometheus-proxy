@@ -487,6 +487,8 @@ class ScrapeResultsTest : StringSpec() {
           srFailureReason = "reason",
           srUrl = "http://target/metrics",
           scrapeCounterMsg = "success",
+          rawSize = 300,
+          filteredSize = 100,
         )
       results.dashboardScrape.shouldBeFalse()
 
@@ -498,7 +500,7 @@ class ScrapeResultsTest : StringSpec() {
         .forEach { property -> withClue(property.name) { property.get(marked) shouldBe property.get(results) } }
       marked.toScrapeResponse() shouldBe results.toScrapeResponse()
       // A field added to ScrapeResults must be carried over by asDashboardScrape too, and given a value above.
-      ScrapeResults::class.primaryConstructor!!.parameters.size shouldBe 12
+      ScrapeResults::class.primaryConstructor!!.parameters.size shouldBe 14
     }
   }
 }

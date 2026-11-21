@@ -28,6 +28,7 @@ import io.ktor.server.request.ApplicationRequest
 import io.ktor.server.request.header
 import io.prometheus.Proxy
 import io.prometheus.common.AgentValues.shownValue
+import io.prometheus.common.Exposition
 import io.prometheus.common.ScrapeResults
 import io.prometheus.proxy.ProxyUtils.DecodedContent
 import io.prometheus.proxy.ProxyUtils.unzip
@@ -57,9 +58,6 @@ import kotlin.time.Duration.Companion.seconds
 internal object ScrapeDispatch {
   private val logger = logger {}
   private val authHeaderWithoutTlsWarned = AtomicBoolean(false)
-
-  // OpenMetrics end-of-stream marker, stripped from each consolidated agent's body and re-appended once.
-  internal const val EOF_MARKER = "# EOF"
 
   // The proxy waited out scrapeRequestTimeoutSecs without the agent answering. Distinct from
   // upstream_timed_out, which is the agent answering promptly to report that its own fetch of the
@@ -122,10 +120,10 @@ internal object ScrapeDispatch {
     if (nonEmpty.size == 1) return nonEmpty[0].contentText
 
     val trimmed = nonEmpty.map { it.contentText.trimEnd() }
-    val hasEof = trimmed.any { it.endsWith(EOF_MARKER) }
-    val stripped = trimmed.map { it.removeSuffix(EOF_MARKER).trimEnd() }
+    val hasEof = trimmed.any { it.endsWith(Exposition.EOF_MARKER) }
+    val stripped = trimmed.map { it.removeSuffix(Exposition.EOF_MARKER).trimEnd() }
     val joined = stripped.joinToString("\n")
-    return if (hasEof) "$joined\n$EOF_MARKER" else joined
+    return if (hasEof) "$joined\n${Exposition.EOF_MARKER}" else joined
   }
 
   /**

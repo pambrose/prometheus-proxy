@@ -24,6 +24,7 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.string.shouldStartWith
 import io.prometheus.agent.AgentPathManager.RegistrationFailure
+import io.prometheus.agent.AgentScrapeRecord
 import io.prometheus.agent.PathSource
 import io.prometheus.agent.ShownFailure
 import io.prometheus.agent.dashboard.AgentDashboardHtml.renderPage
@@ -47,6 +48,7 @@ class AgentDashboardHtmlTest : StringSpec() {
   private fun snapshot(
     paths: List<AgentPathView> = emptyList(),
     connection: ConnectionView = ConnectionView(ConnectionState.CONNECTED, [EndpointView("proxy:50051", true)]),
+    scrapeNow: Boolean = true,
   ) = AgentSnapshot(
     agentName = "agent-7",
     agentId = "12",
@@ -58,7 +60,39 @@ class AgentDashboardHtmlTest : StringSpec() {
     paths = paths,
     discovery = null,
     settings = ["Scrape timeout" to "15s"],
+    pathHistorySize = 5,
+    scrapeNowEnabled = scrapeNow,
   )
+
+  private fun scrape(
+    statusCode: Int = 200,
+    bytes: Long = 4300,
+    filteredBytes: Long = bytes,
+    gzipped: Boolean = false,
+    chunked: Boolean = false,
+    failure: String = "",
+    fromProxyDashboard: Boolean = false,
+  ) = AgentScrapeRecord(
+    statusCode = statusCode,
+    outcome = if (statusCode == 200) "success" else "unsuccessful",
+    durationMillis = 12,
+    bytes = bytes,
+    filteredBytes = filteredBytes,
+    gzipped = gzipped,
+    chunked = chunked,
+    failure = failure,
+    fromProxyDashboard = fromProxyDashboard,
+    at = at,
+  )
+
+  private fun scraped(vararg history: AgentScrapeRecord) =
+    AgentPathView(
+      "orders",
+      PathSource.STATIC,
+      "http://orders/metrics",
+      PathState.REGISTERED,
+      history = history.toList(),
+    )
 
   private fun page(
     snapshot: AgentSnapshot,
@@ -205,6 +239,65 @@ class AgentDashboardHtmlTest : StringSpec() {
         this shouldContain """id="${AgentDashboardHtml.CONNECTION_ID}" hx-swap-oob="true""""
         this shouldNotContain AgentDashboardHtml.PATH_LIST_ID
       }
+    }
+
+    // Newest last on the strip, as the proxy's path table draws it, with the places of the scrapes still to come.
+    "a path row should show its recent scrapes as a strip, and how its last one went" {
+      page(snapshot([scraped(scrape(503), scrape(), scrape())])).apply {
+        this shouldContain """<span class="hist" role="img" aria-label="2 of 3 recent scrapes succeeded""""
+        this shouldContain """<i class="slot" style="--n:2"></i><i class="ok" style="--n:2"></i>"""
+        this shouldContain """<i class="crit" style="--n:1"></i></span>66%"""
+        // The last result first, then the strip: one line, in the list's narrow column.
+        this shouldContain """<span class="host"><span class="pill crit">503</span> <span class="hist" """
+      }
+    }
+
+    // Prometheus not scraping a registered path is news; an unregistered path can't be scraped, so says nothing.
+    "a registered path not scraped yet should say so, and an unregistered one nothing" {
+      val pending = AgentPathView("pending_metrics", PathSource.STATIC, "http://p/metrics", PathState.PENDING)
+      page(snapshot([scraped(), pending])).apply {
+        this shouldContain "not scraped since the agent started"
+        Regex("not scraped since").findAll(this).count() shouldBe 1
+      }
+    }
+
+    "the detail pane should list a path's recent scrapes, with what the agent did with each body" {
+      val path =
+        scraped(
+          scrape(bytes = 90_000, filteredBytes = 30_000, gzipped = true, chunked = true, fromProxyDashboard = true),
+          scrape(503, bytes = 0, failure = "Connection refused <b>"),
+        )
+      page(snapshot([path]), selected = "orders").apply {
+        this shouldContain """<span>Recent scrapes</span><span>2</span>"""
+        this shouldContain "success · 12 ms · 87.9 KB · 29.3 KB after the filter · gzipped · chunked"
+        this shouldContain """<span class="tag">from the proxy's dashboard</span>"""
+        this shouldContain "unsuccessful · 12 ms · Connection refused &lt;b&gt;"
+        this shouldNotContain "<b>"
+      }
+      page(snapshot([scraped()]), selected = "orders") shouldContain "Not scraped since the agent started"
+    }
+
+    // The button sits in the detail pane, which every push replaces, and the panel outside every pushed region, so a
+    // push never clears a result someone is reading. The page's script reads the path back out of the button's id.
+    "with Scrape now on, the detail pane should have its button, and the Paths view its result panel" {
+      page(snapshot([scraped()]), selected = "orders").apply {
+        this shouldContain
+          """<button type="button" class="scrape-now" id="${DashboardPage.SCRAPE_ID_PREFIX}orders" aria-label="Scrape /orders now""""
+        this shouldContain
+          """<div class="scrape-result" id="${DashboardPage.SCRAPE_RESULT_ID}" ${DashboardPage.SCRAPE_URL_ATTR}="/dashboard/scrape" hidden="hidden">"""
+      }
+      // The page's stylesheet and script name both classes, so only the markup is matched.
+      val button = "class=\"scrape-now\""
+      val panel = "id=\"${DashboardPage.SCRAPE_RESULT_ID}\""
+      AgentDashboardHtml.pushFragment(snapshot([scraped()]), AgentView(selectedPath = "orders"), "/dashboard").apply {
+        this shouldContain button
+        this shouldNotContain panel
+      }
+      page(snapshot([scraped()], scrapeNow = false), selected = "orders").apply {
+        this shouldNotContain button
+        this shouldNotContain panel
+      }
+      page(snapshot([scraped()]), layout = AgentLayout.CONNECTION) shouldNotContain panel
     }
 
     "a path row should select it by its URL, encoded, and the page's script should know the agent's views" {

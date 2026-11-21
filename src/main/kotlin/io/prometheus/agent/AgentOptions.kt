@@ -370,6 +370,9 @@ class AgentOptions internal constructor(
         ),
         logger,
       )
+      // At 0 no path would keep a scrape, so every path's history strip and Recent scrapes would stay empty.
+      if (dashboardEnabled)
+        logger.requirePositive("dashboard.pathHistorySize", pathHistorySize)
     }
 
     validateInternalConfigVals(agentConfigVals.internal)

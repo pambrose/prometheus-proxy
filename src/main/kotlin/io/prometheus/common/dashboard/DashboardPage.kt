@@ -31,6 +31,7 @@ import kotlinx.html.a
 import kotlinx.html.button
 import kotlinx.html.div
 import kotlinx.html.form
+import kotlinx.html.i
 import kotlinx.html.meta
 import kotlinx.html.nav
 import kotlinx.html.script
@@ -240,6 +241,93 @@ internal object DashboardPage {
       // java.time's formatter, since the standard library has none that takes a zone.
       +timeFormat.format(at.toJavaInstant())
     }
+  }
+
+  /**
+   * Where a scrape-now's result shows, filled by the page's script from the route it names (see DashboardScript).
+   * Rendered outside every pushed region, so a push never clears a result someone is reading.
+   */
+  fun FlowContent.scrapeResultPanel(routeBase: String) {
+    div("scrape-result") {
+      attributes["id"] = SCRAPE_RESULT_ID
+      attributes[SCRAPE_URL_ATTR] = "$routeBase/scrape"
+      attributes["hidden"] = "hidden"
+    }
+  }
+
+  /**
+   * The button that scrapes [path] now and shows the result in the [scrapeResultPanel]. The page's script reads the
+   * path back out of its id, which is built from the path, unique on the page, so the push that replaces the region it
+   * is in hands focus back to it.
+   */
+  fun FlowContent.scrapeNowButton(path: String) {
+    button(type = ButtonType.button, classes = "scrape-now") {
+      attributes["id"] = "$SCRAPE_ID_PREFIX$path"
+      attributes["aria-label"] = "Scrape /$path now"
+      attributes["title"] = "Scrape now"
+    }
+  }
+
+  /** A scrape's status code as a pill, `ok` for a success and `crit` for anything else, as every view shows one. */
+  fun FlowOrPhrasingContent.statusPill(
+    statusCode: Int,
+    isSuccess: Boolean,
+  ) {
+    span(if (isSuccess) "pill ok" else "pill crit") { +"$statusCode" }
+  }
+
+  /**
+   * A path's recent scrapes, [succeeded] each, **newest first**, as runs of consecutive like results, **oldest first**,
+   * each a `(succeeded, count)` pair: what [historyStrip] draws, one element per run.
+   */
+  fun historyRuns(succeeded: List<Boolean>): List<Pair<Boolean, Int>> =
+    buildList {
+      succeeded.asReversed().forEach { ok ->
+        val last = lastOrNull()
+        if (last != null && last.first == ok)
+          set(lastIndex, ok to last.second + 1)
+        else
+          add(ok to 1)
+      }
+    }
+
+  /**
+   * A path's recent scrapes as a row of dots, oldest on the left, then the share that succeeded, or a dash for a path
+   * with none: [runs], from [historyRuns], in a history that holds [capacity] scrapes when full. Where a status says
+   * how the last scrape went, this says whether that is news: a target that fails every scrape and one that failed once
+   * in twenty read the same in a status alone.
+   *
+   * Drawn as one element per run of like results, each painting a dot per scrape as a repeating background, rather
+   * than an element per scrape: a dashboard pushes its paths whole every refresh, so a healthy path's strip stays one
+   * element. The strip is one image to assistive tech, labelled with the same count the percentage gives.
+   *
+   * Until the history holds [capacity] scrapes, faint dots keep the places of the ones still to come, on the left, so
+   * every strip is as wide as a full one: the newest scrape and the percentage sit in the same place on every row, and
+   * a column of strips doesn't widen on every refresh as the histories fill.
+   */
+  fun FlowOrPhrasingContent.historyStrip(
+    runs: List<Pair<Boolean, Int>>,
+    capacity: Int,
+  ) {
+    val total = runs.sumOf { it.second }
+    if (total == 0) {
+      +DASH
+      return
+    }
+    val succeeded = runs.filter { it.first }.sumOf { it.second }
+    val summary = "$succeeded of $total recent scrapes succeeded"
+    span("hist") {
+      attributes["role"] = "img"
+      attributes["aria-label"] = summary
+      attributes["title"] = summary
+      val toCome = capacity - total
+      if (toCome > 0) i("slot") { attributes["style"] = "--n:$toCome" }
+      runs.forEach { (ok, count) ->
+        i(if (ok) "ok" else "crit") { attributes["style"] = "--n:$count" }
+      }
+    }
+    // Floored, so a path with any failure never reads 100%.
+    +"${succeeded * 100 / total}%"
   }
 
   /** An uptime at the precision a hero line wants: the two largest units from a day up, then one. */

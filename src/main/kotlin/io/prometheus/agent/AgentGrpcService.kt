@@ -589,7 +589,7 @@ internal class AgentGrpcService(
 
       logger.debug { "Comparing ${zipped.size} and $chunkContentSize" }
 
-      if (zipped.size < chunkContentSize) {
+      if (!scrapeResults.isChunked(chunkContentSize)) {
         logger.debug { "Writing zipped non-chunked msg scrapeId: $scrapeId length: ${zipped.size}" }
         nonChunkedChannel.send(scrapeResults.toScrapeResponse())
         agent.updateScrapeResultCounter(scrapeResults, "gzipped")

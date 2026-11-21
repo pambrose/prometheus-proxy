@@ -20,10 +20,12 @@ import io.prometheus.Agent
 import io.prometheus.BuildConfig
 import io.prometheus.agent.AgentPathManager.PathContext
 import io.prometheus.agent.AgentPathManager.RegistrationFailure
+import io.prometheus.agent.AgentScrapeRecord
 import io.prometheus.agent.PathSource
 import io.prometheus.agent.ShownFailure
 import io.prometheus.agent.filter.MetricFilter
 import io.prometheus.common.Utils.sanitizeUrl
+import io.prometheus.common.dashboard.DashboardPage
 import kotlin.time.Duration
 import kotlin.time.Instant
 import kotlinx.serialization.json.Json
@@ -116,6 +118,7 @@ internal data class FilterView(
  * @param name the name `agent.pathConfigs` gives it, empty for a discovered path
  * @param url the URL it scrapes, its userinfo and query values redacted
  * @param failure its last failure to register, until it registers
+ * @param history its recent scrapes as the agent saw them, newest first, at most `agent.dashboard.pathHistorySize`
  */
 internal data class AgentPathView(
   val path: String,
@@ -126,7 +129,16 @@ internal data class AgentPathView(
   val labels: String = "",
   val failure: RegistrationFailure? = null,
   val filter: FilterView? = null,
-)
+  val history: List<AgentScrapeRecord> = emptyList(),
+) {
+  /** The path's most recent scrape, or null for one not scraped since the agent started. */
+  val lastScrape: AgentScrapeRecord? get() = history.firstOrNull()
+
+  /** [history] as the strip draws it (see [DashboardPage.historyRuns]); computed once, as a snapshot renders often. */
+  val historyRuns: List<Pair<Boolean, Int>> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+    DashboardPage.historyRuns(history.map { it.isSuccess })
+  }
+}
 
 /**
  * The agent's path discovery (`agent.discovery`), and how its last read went.
@@ -153,6 +165,9 @@ internal data class DiscoveryView(
  * @param agentId the id the proxy gave the agent when it connected, empty while it isn't
  * @param discovery the agent's path discovery, or null when it is off
  * @param settings the agent's effective settings, by name, none of them a secret
+ * @param pathHistorySize the scrapes a path's history holds when full, `agent.dashboard.pathHistorySize`, which each
+ *   path's strip keeps the places of
+ * @param scrapeNowEnabled whether each path has a Scrape now button, `agent.dashboard.scrapeNowEnabled`
  */
 internal data class AgentSnapshot(
   val agentName: String,
@@ -165,6 +180,8 @@ internal data class AgentSnapshot(
   val paths: List<AgentPathView>,
   val discovery: DiscoveryView?,
   val settings: List<Pair<String, String>>,
+  val pathHistorySize: Int = 0,
+  val scrapeNowEnabled: Boolean = false,
 ) {
   /** The paths not registered: refused, retrying, or still pending. */
   val unregistered: List<AgentPathView> get() = paths.filter { it.state != PathState.REGISTERED }
@@ -183,6 +200,8 @@ internal data class AgentSnapshot(
         paths = paths(agent),
         discovery = discovery(agent),
         settings = settings(agent),
+        pathHistorySize = agent.agentConfigVals.dashboard.pathHistorySize,
+        scrapeNowEnabled = agent.agentConfigVals.dashboard.scrapeNowEnabled,
       )
 
     private fun connection(agent: Agent): ConnectionView {
@@ -211,12 +230,16 @@ internal data class AgentSnapshot(
       val manager = agent.pathManager
       val registered = manager.registeredPaths.associateBy { it.path }
       val failures = manager.pathFailures
+      val histories = agent.scrapeHistory?.snapshot().orEmpty()
       val known =
         configured(agent) + discovered(agent) +
           registered.values.map { KnownPath(it.path, it.source, it.url, labels = it.labels) }
       return known
         .distinctBy { it.path }
-        .map { view(it, registered[it.path], failures[it.path], manager.filtersByPath[it.path]) }
+        .map {
+          view(it, registered[it.path], failures[it.path], manager.filtersByPath[it.path])
+            .copy(history = histories[it.path].orEmpty())
+        }
         .sortedBy { it.path }
     }
 
@@ -240,7 +263,7 @@ internal data class AgentSnapshot(
       }
 
     // [known] as the dashboard shows it: its registration's source, URL, and labels while it has one, its failure, and
-    // its filter.
+    // its filter. Its recent scrapes are joined after.
     private fun view(
       known: KnownPath,
       context: PathContext?,

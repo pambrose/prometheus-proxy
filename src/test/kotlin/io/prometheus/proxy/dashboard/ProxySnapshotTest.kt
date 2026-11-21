@@ -154,7 +154,6 @@ class ProxySnapshotTest : StringSpec() {
       val history = [200, 503, 200, 200].map { DashboardFixtures.scrapeRecord(statusCode = it) }
       DashboardFixtures.pathView(history = history).apply {
         historyRuns shouldBe [true to 2, false to 1, true to 1]
-        historySucceeded shouldBe 3
       }
       DashboardFixtures.pathView().historyRuns shouldBe emptyList()
     }
