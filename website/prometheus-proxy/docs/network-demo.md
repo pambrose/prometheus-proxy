@@ -64,7 +64,7 @@ Clone the repository at the latest release, then run the demo's commands from it
 its targets:
 
 ```bash
-git clone -c advice.detachedHead=false --depth 1 --branch 4.6.0 https://github.com/pambrose/prometheus-proxy.git
+git clone -c advice.detachedHead=false --depth 1 --branch 4.6.1 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/network
 make up      # pulls the images, starts everything, prints the URLs
 make tour    # walks through every scenario below, pausing before each step
@@ -84,7 +84,7 @@ minutes. After that it starts in under a minute, and runs without a network conn
 | Zipkin | <http://localhost:9511/zipkin/> |
 
 Each port is the Basics Demo's plus 100, so the two demos can run side by side. Every port binds to `127.0.0.1` only:
-the dashboards have no authentication and Grafana keeps its default admin password, which suits a laptop and nothing
+the dashboards run without their login and Grafana keeps its default admin password, which suits a laptop and nothing
 shared. To move a port that is already taken, set `NETWORK_DEMO_DASHBOARD_PORT`, `NETWORK_DEMO_STANDBY_DASHBOARD_PORT`,
 `NETWORK_DEMO_GRAFANA_PORT`, `NETWORK_DEMO_PROMETHEUS_PORT`, `NETWORK_DEMO_PROXY_PORT`, or `NETWORK_DEMO_ZIPKIN_PORT`,
 for example `NETWORK_DEMO_GRAFANA_PORT=3101 make up`.

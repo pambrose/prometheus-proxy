@@ -48,7 +48,7 @@ Clone the repository at the latest release, then run the demo's commands from it
 its targets:
 
 ```bash
-git clone -c advice.detachedHead=false --depth 1 --branch 4.6.0 https://github.com/pambrose/prometheus-proxy.git
+git clone -c advice.detachedHead=false --depth 1 --branch 4.6.1 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/network
 make up      # pulls the images, starts everything, and prints the URLs
 make tour    # walks through the guided tour below, pausing before each step
@@ -73,7 +73,7 @@ Every port is the basics demo's plus 100, so both demos can run at once. If a po
 example with `NETWORK_DEMO_GRAFANA_PORT=3101 make up`. The variables are `NETWORK_DEMO_DASHBOARD_PORT`,
 `NETWORK_DEMO_STANDBY_DASHBOARD_PORT`, `NETWORK_DEMO_GRAFANA_PORT`, `NETWORK_DEMO_PROMETHEUS_PORT`,
 `NETWORK_DEMO_PROXY_PORT`, and `NETWORK_DEMO_ZIPKIN_PORT`; the dashboard's links into Prometheus and Grafana keep the
-default ports (`config/proxy.conf`). Every port binds to `127.0.0.1` only. The dashboards have no authentication and
+default ports (`config/proxy.conf`). Every port binds to `127.0.0.1` only. The dashboards run without their login and
 Grafana uses its default admin password, so this setup is for a laptop, not for anything shared.
 
 ## What's running

@@ -4,6 +4,54 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [4.6.1] - 2026-11-20
+
+### New Features
+
+- The dashboard can require a login: set `proxy.dashboard.password` (`DASHBOARD_PASSWORD`) and a browser gets a login
+  page, styled after Grafana's, with the username `proxy.dashboard.username` (`DASHBOARD_USERNAME`, default `admin`). A
+  login starts a session, kept in memory, that ends after 24 hours idle, 7 days, or Log out, in the top bar, and a page
+  left open stops getting updates when its session ends; a script sends the login as HTTP Basic Auth instead, which a
+  browser's request (`Sec-Fetch-Mode`) can't. After 10 wrong logins from one address within a minute, or 100 in all,
+  logins are refused with a 429 for up to a minute. Neither setting has a command-line flag, and the password is never
+  logged. The proxy refuses to start with an empty username, a colon in it, or a control character in either, and logs a
+  wrong login at WARN at most once a minute per address. The dashboard serves plain HTTP, so the docs say to put TLS in
+  front of it. The Helm chart takes the password from a Secret, `dashboard.login.existingSecret`
+
+### Bug Fixes
+
+- A connection that closes before its transport is ready, such as a port probe or one that fails its TLS handshake, no
+  longer has Netty log a `NullPointerException` at WARN from the proxy's transport filter (seen behind Railway's TCP
+  proxy); the proxy logs it at DEBUG
+- The proxy logs a refused agent token at WARN, naming the host and whether the token was unknown or missing, at most
+  once a minute for each host; it reached only the dashboard's activity feed, which is often off. The agent logs a
+  connect failure that persists at WARN again every 10 minutes, without the stack trace, where it logged one only on
+  its first attempt and then reconnected at DEBUG
+- The docs site is served at https://prometheus-proxy.com: each page's canonical link and the sitemap name it, the 404
+  page loads its stylesheet and script, and the links to the site from the README, `llms.txt`, `SECURITY.md`, the
+  demos, the Helm charts, the cloud-proxy example, and the Homebrew formula follow it
+
+### Build & Tooling
+
+- The Homebrew formulae keep within Homebrew's 118-character lines, past which the tap's style check failed the 4.6.0
+  formulae, and `HomebrewFormulaTest` checks them with the version and checksum filled in
+- Dependabot holds the Spring Boot demo's Maven image at JDK 25: it reads the JDK in the image's tag as part of the
+  version, so JDK 26 came as a patch update
+
+### Documentation
+
+- The Embedded Agent page has a Debugging section: the agent's admin endpoints and `/debug`, turned on with
+  `ADMIN_ENABLED` and `DEBUG_ENABLED` (or `setting()` in code), what each shows, its logs, the proxy's view, and its
+  metrics on the Agents dashboard with `METRICS_ENABLED` and a path for them. The embedded demo turns them on from the
+  coffee shop's environment, publishes the admin port on `127.0.0.1:8393`, and adds `./demo.sh debug` and a tour part
+  that walks through them
+- The pages that said the dashboard has no authentication say how to set its login, and that it needs TLS in front
+- The docs site's diagrams open full size with a click, or Enter, and stay sharp at any size. They wait for the page's
+  font before they're drawn, so on a first visit their labels no longer overflow their boxes
+- The basics demo's tour has a tenth part: `./demo.sh login` restarts the proxy with a dashboard password in its
+  environment (`DEMO_DASHBOARD_PASSWORD` in its compose file), and `login-off` without it. Its readiness checks take a
+  login page's 401 as the proxy answering
+
 ## [4.6.0] - 2026-11-20
 
 ### New Features

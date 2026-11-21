@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Retakes the screenshots on the website's Basics Demo page (website/prometheus-proxy/docs/basics-demo.md) from the
-# running demo: it plays the page's scenarios, captures the dashboard and Grafana in headless Chrome at twice the pixel
+# Retakes the screenshots on the website's Basics Demo page (website/prometheus-proxy/docs/basics-demo.md), and the
+# login page's on its Dashboard page (web-dashboard.md), from the running demo: it plays the page's scenarios, captures the dashboard and Grafana in headless Chrome at twice the pixel
 # density in both themes, each a whole window, and writes lossless WebP to website/prometheus-proxy/docs/images/demo/:
 # <name>.webp in the dark theme and <name>-light.webp in the light one, which the page shows by the reader's theme. It
 # puts the demo back to normal when it finishes, or when it fails.
@@ -73,8 +73,10 @@ curl -fsS -o /dev/null "$DASHBOARD_URL" 2>/dev/null ||
 
 WORK="$(mktemp -d)"
 
-# Undoes every scenario, whatever state a failure left the demo in.
+# Undoes every scenario, whatever state a failure left the demo in. login-off leaves a proxy whose login is already off
+# as it is, since Compose recreates a container only for a changed environment.
 restore() {
+  "$DEMO" login-off >/dev/null 2>&1 || true
   "$DEMO" agent-thaw >/dev/null 2>&1 || true
   "$DEMO" undiscover >/dev/null 2>&1 || true
   "$DEMO" recover >/dev/null 2>&1 || true
@@ -312,9 +314,16 @@ wait_until "the proxy to refuse agent-rogue's payments path" \
 shoot_table activity "/activity?q=agent-rogue"
 "$DEMO" rogue-agent-stop >/dev/null 2>&1
 
+# Last, since turning the login on and off restarts the proxy, which starts the dashboard's histories over. The login
+# page needs no session, and loads nothing, so it's captured as any other page is.
+step "The dashboard's login page"
+"$DEMO" login >/dev/null 2>&1
+shoot_fixed login "$DASHBOARD_URL/login"
+"$DEMO" login-off >/dev/null 2>&1
+
 step "Writing WebP to ${OUT_DIR#"$REPO_DIR"/}"
 mkdir -p "$OUT_DIR"
-for name in agents paths outage grafana duplicate discovered evicting evicted activity; do
+for name in agents paths outage grafana duplicate discovered evicting evicted activity login; do
   for theme in "${THEMES[@]}"; do
     file="$(named "$name" "$theme")"
     cwebp -quiet -lossless -z 9 "$WORK/$file.png" -o "$OUT_DIR/$file.webp"

@@ -99,6 +99,18 @@ class ProxyDashboardHtmlTest : StringSpec() {
       html shouldContain """hx-swap-oob="true""""
     }
 
+    // With a login set, the bar ends in Log out, a plain form the browser posts. Outside every pushed region, so a push
+    // never replaces it, nor needs to carry it.
+    "the Log out button should render only with a login, and in no push" {
+      val withLogin = renderFullPage(snapshot(), loginEnabled = true)
+      withLogin shouldContain """action="/dashboard/logout""""
+      withLogin shouldContain """id="${ProxyDashboardHtml.LOGOUT_ID}""""
+      renderFullPage(snapshot()) shouldNotContain """id="${ProxyDashboardHtml.LOGOUT_ID}""""
+      listOf(DashboardLayout.AGENT, DashboardLayout.PATH, DashboardLayout.ACTIVITY, null).forEach { layout ->
+        ProxyDashboardHtml.pushFragment(snapshot(), null, "/dashboard", layout) shouldNotContain "logout"
+      }
+    }
+
     "an agent row should carry the htmx attributes that drive selection" {
       val html = ProxyDashboardHtml.pushFragment(snapshot(), selectedId = null, routeBase = "/dashboard")
 

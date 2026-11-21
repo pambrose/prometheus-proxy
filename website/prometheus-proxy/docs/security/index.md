@@ -324,5 +324,5 @@ the latest release only, so upgrade to receive them.
 [`SECURITY.md`](https://github.com/pambrose/prometheus-proxy/blob/master/SECURITY.md) lists what a useful report
 includes, and which documented behavior is by design rather than a vulnerability: the agent port accepting any
 agent without a token, identities, or mutual TLS; the scrape port having no authentication, so that whoever can
-reach it can trigger scrapes with their own query string and `Authorization` header; and the admin, metrics, and
-dashboard ports having no authentication.
+reach it can trigger scrapes with their own query string and `Authorization` header; the admin and metrics ports
+having no authentication; and the dashboard having no TLS, and no authentication until its password is set.

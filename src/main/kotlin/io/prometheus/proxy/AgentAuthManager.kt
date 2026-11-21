@@ -19,6 +19,7 @@ package io.prometheus.proxy
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.grpc.Context
 import io.prometheus.Proxy
+import io.prometheus.common.Utils.sha256
 import java.security.MessageDigest
 
 /**
@@ -208,7 +209,5 @@ internal class AgentAuthManager private constructor(
       }
       return g == glob.length
     }
-
-    private fun sha256(value: String): ByteArray = MessageDigest.getInstance("SHA-256").digest(value.toByteArray())
   }
 }

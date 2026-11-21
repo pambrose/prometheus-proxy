@@ -48,6 +48,22 @@ or put the whole config, under a `proxy.conf` key, in a Secret you name in `exis
 
 See the [security guide](https://prometheus-proxy.com/security/).
 
+## The dashboard's login
+
+The dashboard (`dashboard.enabled`) stays off the Service, so you reach it with `kubectl port-forward`. To have it ask
+for a login as well, put a password in a Secret and name it in `dashboard.login.existingSecret`; the username is
+`admin` unless you set `dashboard.login.username`:
+
+```bash
+kubectl -n monitoring create secret generic prometheus-proxy-dashboard --from-literal=password='<a long password>'
+helm upgrade prometheus-proxy ./charts/prometheus-proxy --namespace monitoring --reuse-values \
+  --set dashboard.enabled=true --set dashboard.login.existingSecret=prometheus-proxy-dashboard
+```
+
+Create the Secret with `--from-literal`, not from a file that ends in a newline: the proxy refuses a password with a
+control character in it. The dashboard serves plain HTTP, so the password is protected only by the port-forward's
+tunnel or, behind an Ingress, by the TLS the Ingress terminates.
+
 ## Values
 
 | Value                                    | Default                                    | Description                                                              |
@@ -63,6 +79,8 @@ See the [security guide](https://prometheus-proxy.com/security/).
 | `admin.enabled` / `admin.port`           | `true` / `8092`                            | `/ping`, used by the probes, and `/healthcheck`; not on the Service      |
 | `metrics.enabled` / `metrics.port`       | `true` / `8082`                            | The proxy's own metrics, on the Service                                  |
 | `dashboard.enabled` / `dashboard.port`   | `false` / `8094`                           | The operational dashboard; not on the Service, so use `port-forward`     |
+| `dashboard.login.existingSecret`         | `""`                                       | Secret holding the dashboard's password (`DASHBOARD_PASSWORD`), at `key` |
+| `dashboard.login.username`               | `admin`                                    | The username the dashboard's login takes (`DASHBOARD_USERNAME`)          |
 | `service.type`                           | `ClusterIP`                                | The main Service: HTTP, gRPC, and metrics ports                          |
 | `agentService.enabled`                   | `false`                                    | A second Service, gRPC only, for agents outside the cluster              |
 | `serviceMonitor.enabled`                 | `false`                                    | A Prometheus Operator ServiceMonitor                                     |

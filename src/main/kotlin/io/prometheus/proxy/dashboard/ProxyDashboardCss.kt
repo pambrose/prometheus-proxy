@@ -23,7 +23,8 @@ package io.prometheus.proxy.dashboard
  * roles, and components these rules implement, and the contrast each color pairing was measured at.
  */
 internal object ProxyDashboardCss {
-  val CSS =
+  /** The color tokens, light and dark, which the login page's stylesheet ([LoginHtml]) shares. */
+  val TOKENS =
     """
     /* Every quiet colour is set so its *worst* pairing still clears 4.5:1, not just its pairing with
        --surface. --ink-3 is the binding case: it lands on --surface-2 under the table and section
@@ -43,6 +44,11 @@ internal object ProxyDashboardCss {
         --crit:#f85149; --crit-soft:#2d1512;
       }
     }
+    """.trimIndent()
+
+  // The rules, after the tokens. Declared before CSS, which an object initializes in order.
+  private val RULES =
+    """
     /* Visible to assistive tech, absent from the render. Used for the connection announcer and the
        table caption, both of which duplicate something the layout already says visually. */
     .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden;
@@ -60,6 +66,12 @@ internal object ProxyDashboardCss {
     .bar { display:flex; align-items:flex-end; gap:10px; padding:8px 15px 0; border-bottom:1px solid var(--line);
            background:var(--surface); }
     .brand { font-weight:600; flex:none; padding-bottom:6px; }
+    /* Log out, at the bar's end, quieter than the tabs. */
+    .logout { flex:none; padding-bottom:5px; }
+    .logout button { font:inherit; font-size:11.5px; color:var(--ink-2); background:none; border:1px solid var(--line);
+      border-radius:3px; padding:1px 9px; cursor:pointer; }
+    .logout button:hover { color:var(--ink); background-color:var(--surface-2); }
+    .logout button:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
     .bar-right { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:2px 14px;
       margin-left:auto; min-width:0; padding-bottom:6px; color:var(--ink-3); font-size:11.5px; }
     /* Each stat stays whole; the row wraps between them rather than mid-phrase, which at 390px was
@@ -275,6 +287,8 @@ internal object ProxyDashboardCss {
       .nav a, .nav a.on { min-height:44px; display:inline-flex; align-items:center; padding-top:0; padding-bottom:0; }
     }
     """.trimIndent()
+
+  val CSS = TOKENS + "\n" + RULES
 
   /**
    * The rules that give each of [icons] its mark and its colour in each theme, for a second `<style>` in the page's

@@ -22,14 +22,17 @@ import com.beust.jcommander.Parameter
 import com.google.common.net.InetAddresses
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Proxy
+import io.prometheus.common.AgentValues.shownValue
 import io.prometheus.common.BaseOptions
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.EnvVars.AGENT_PORT
 import io.prometheus.common.EnvVars.AGENT_TOKEN
 import io.prometheus.common.EnvVars.DASHBOARD_ENABLED
 import io.prometheus.common.EnvVars.DASHBOARD_HOST
+import io.prometheus.common.EnvVars.DASHBOARD_PASSWORD
 import io.prometheus.common.EnvVars.DASHBOARD_PATH
 import io.prometheus.common.EnvVars.DASHBOARD_PORT
+import io.prometheus.common.EnvVars.DASHBOARD_USERNAME
 import io.prometheus.common.EnvVars.HANDSHAKE_TIMEOUT_SECS
 import io.prometheus.common.EnvVars.MAX_CONNECTION_AGE_GRACE_SECS
 import io.prometheus.common.EnvVars.MAX_CONNECTION_AGE_SECS
@@ -162,8 +165,9 @@ class ProxyOptions internal constructor(
 
   /**
    * Address the operational dashboard listens on. Empty means "fall back to [DASHBOARD_HOST] env var, then
-   * `proxy.dashboard.host` config (default `0.0.0.0`)". The dashboard has no authentication, so enabling it on a
-   * wildcard address logs a startup warning; `127.0.0.1` keeps it reachable only from the proxy host.
+   * `proxy.dashboard.host` config (default `0.0.0.0`)". Without a login ([dashboardPassword]) the dashboard has no
+   * authentication, so enabling it on a wildcard address logs a startup warning; `127.0.0.1` keeps it reachable only
+   * from the proxy host.
    */
   @Parameter(names = ["--dashboard_host"], description = "Operational dashboard listen address")
   var dashboardHost = ""
@@ -173,6 +177,16 @@ class ProxyOptions internal constructor(
   // fails startup. A list, so it can only be set in a config file. Declared above the init block that assigns it, or
   // its initializer would run after and empty it again.
   internal var dashboardLinks: List<PathLink> = emptyList()
+    private set
+
+  // The login the dashboard requires, from its login page or as HTTP Basic Auth: proxy.dashboard.username (default
+  // "admin") and password. A password turns it on; empty, the default, leaves the dashboard open. Each resolves from
+  // its env var, then its setting; there are no command-line flags, since a command line shows in `ps`. The password is
+  // never logged. Declared above the init block that assigns them, as dashboardLinks is.
+  internal var dashboardUsername = ""
+    private set
+
+  internal var dashboardPassword = ""
     private set
 
   /**
@@ -333,6 +347,8 @@ class ProxyOptions internal constructor(
 
     dashboardPath = resolveStringOption(dashboardPath, DASHBOARD_PATH, dashboard.path)
     dashboardHost = resolveStringOption(dashboardHost, DASHBOARD_HOST, dashboard.host)
+    dashboardUsername = DASHBOARD_USERNAME.getEnv(dashboard.username)
+    dashboardPassword = DASHBOARD_PASSWORD.getEnv(dashboard.password)
 
     if (dashboardEnabled) {
       require(dashboardPath.isNotEmpty()) { "dashboardPath is empty" }
@@ -349,7 +365,17 @@ class ProxyOptions internal constructor(
       dashboardLinks = PathLink.parseAll(dashboard.links.map { PathLink.Entry(it.name, it.url, it.icon) })
       logger.info { "dashboard.links: ${dashboardLinks.joinToString { it.logged }.ifEmpty { "(none)" }}" }
       logger.info { "dashboardHost: $dashboardHost, dashboardPort: $dashboardPort, dashboardPath: $dashboardPath" }
-      if (isWildcardAddress(dashboardHost)) {
+      validateDashboardLogin()
+      if (dashboardPassword.isNotEmpty()) {
+        // Never the password.
+        logger.info {
+          "dashboard login: on, dashboardUsername: ${shownValue(dashboardUsername)}, dashboardPassword: ***"
+        }
+        logger.info {
+          "The dashboard requires a login, over plain HTTP, so its password crosses the network readable; put TLS in " +
+            "front of it, such as a reverse proxy, unless the network is trusted"
+        }
+      } else if (isWildcardAddress(dashboardHost)) {
         val rebindingHint =
           if (dashboard.allowedHosts.isEmpty())
             " Set proxy.dashboard.allowedHosts to refuse unknown host names."
@@ -357,7 +383,8 @@ class ProxyOptions internal constructor(
             ""
         logger.warn {
           "The dashboard has no authentication and listens on all interfaces ($dashboardHost:$dashboardPort). " +
-            "Set proxy.dashboard.host (--dashboard_host) to 127.0.0.1, or firewall the port.$rebindingHint"
+            "Set proxy.dashboard.host (--dashboard_host) to 127.0.0.1, firewall the port, or set " +
+            "proxy.dashboard.password (DASHBOARD_PASSWORD) to require a login.$rebindingHint"
         }
       }
     }
@@ -501,6 +528,27 @@ class ProxyOptions internal constructor(
     }
     return (if (value == 0) maxInFlight - maxInFlight / 5 else value)
       .also { logger.info { "internal.$name: $it" } }
+  }
+
+  /**
+   * Fails startup on a dashboard login the dashboard can't check, once a password turns it on: an empty username,
+   * a colon in it, where HTTP Basic Auth splits the username from the password, or a control character in either,
+   * such as the trailing newline of a secret read from a file, which no browser would send. No message includes a
+   * value. Without a password the username isn't used, so it isn't checked.
+   */
+  private fun validateDashboardLogin() {
+    if (dashboardPassword.isEmpty())
+      return
+    require(dashboardUsername.isNotEmpty()) {
+      "proxy.dashboard.username (DASHBOARD_USERNAME) is empty, with proxy.dashboard.password set"
+    }
+    require(':' !in dashboardUsername) {
+      "proxy.dashboard.username can't contain a colon, where HTTP Basic Auth splits it from the password"
+    }
+    require(dashboardUsername.none { it.isISOControl() }) { "proxy.dashboard.username contains a control character" }
+    require(dashboardPassword.none { it.isISOControl() }) {
+      "proxy.dashboard.password contains a control character, such as a trailing newline"
+    }
   }
 
   internal companion object {

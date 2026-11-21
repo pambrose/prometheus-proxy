@@ -841,6 +841,17 @@ records that control actions that do change the proxy are a planned direction; w
 need a genuinely new component vocabulary (destructive confirmation, action button, disabled state), and
 inventing it is a design decision, not an extraction.
 
+### Login Page
+
+The page a browser gets, before anything else, once `proxy.dashboard.password` is set (`LoginHtml`). **The one
+deliberate exception to this system**, styled after Grafana's login page at the maintainer's request (2026-11-20): a
+full-page radial gradient from `surface-3` to `bg`, one 400px column, centered across and 40% of the way down, a 28px
+weight-500 "Prometheus Proxy Dashboard" heading in a system sans-serif stack (Inter, then `system-ui`), labels above
+40px fields on `surface-2` with a 4px radius, an 8px-radius `surface` card, one full-width `accent`-filled Log in button
+whose text is white on the light accent (4.83:1) and `bg` on the dark one (6.94:1), and a `crit-soft` alert with a
+`crit` left edge after a wrong login. It uses this system's color tokens, in both themes, and loads nothing. The Don'ts
+below still bind the dashboard itself; the exception is the login page alone.
+
 ### Named Rules
 
 **The Still Interface Rule.** No CSS transitions. Hover, selection, and live swaps land instantly.

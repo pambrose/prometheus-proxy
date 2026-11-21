@@ -29,6 +29,7 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.string.shouldStartWith
 import io.prometheus.common.BaseOptions.Companion.failOnInvalidConfig
 import io.prometheus.common.ConfigLoadException
@@ -48,7 +49,8 @@ class ProxyDashboardOptionsTest : StringSpec() {
     // ==================== Enabling, Listening, and Sessions ====================
 
     // The dashboard must stay OFF unless asked for, matching the admin and metrics posture -- it renders agent
-    // names, hostnames, target URLs and recent activity in one place on a port with no auth and no TLS.
+    // names, hostnames, target URLs and recent activity in one place on a port with no TLS, and no auth until a
+    // password is set.
     "dashboardEnabled should default to false" {
       val options = proxyOptions(emptyList())
       options.dashboardEnabled.shouldBeFalse()
@@ -110,8 +112,8 @@ class ProxyDashboardOptionsTest : StringSpec() {
         .map { it.formattedMessage } shouldContainElement "dashboard.maxSessions: 50"
     }
 
-    // The dashboard has no authentication, so listening on every interface earns a startup warning. Only a
-    // literal wildcard address counts: a hostname is never resolved at startup just to decide whether to warn.
+    // Without a login the dashboard has no authentication, so listening on every interface earns a startup warning.
+    // Only a literal wildcard address counts: a hostname is never resolved at startup just to decide whether to warn.
     "only a wildcard address counts as listening on all interfaces" {
       ProxyOptions.isWildcardAddress("0.0.0.0").shouldBeTrue()
       ProxyOptions.isWildcardAddress("::").shouldBeTrue()
@@ -207,5 +209,71 @@ class ProxyDashboardOptionsTest : StringSpec() {
       }.message shouldStartWith
         "Invalid configuration: proxy.dashboard.links link 'Logs' has an unknown icon 'loki'; use prometheus or grafana"
     }
+
+    // ==================== Login ====================
+
+    // A password turns the login on; the username is admin until it's set, as Grafana's is.
+    "the dashboard's login should be off, with the username admin, until a password is set" {
+      proxyOptions(["--dashboard"]).apply {
+        dashboardUsername shouldBe "admin"
+        dashboardPassword shouldBe ""
+      }
+    }
+
+    "a password should turn the login on, logged with its username and the password masked" {
+      var options: ProxyOptions? = null
+      val logs =
+        captureLogs<ProxyOptions>(Level.INFO) {
+          options = proxyOptions(["--dashboard", "-Dproxy.dashboard.password=$LOGIN_PASSWORD"])
+        }
+      options.shouldNotBeNull().dashboardPassword shouldBe LOGIN_PASSWORD
+      val messages = logs.map { it.formattedMessage }
+      messages shouldContainElement "dashboard login: on, dashboardUsername: admin, dashboardPassword: ***"
+      messages.none { LOGIN_PASSWORD in it }.shouldBeTrue()
+      // With a login, the warning about an unauthenticated dashboard on every interface gives way to a note that the
+      // login crosses the network over plain HTTP.
+      logs.none { it.level == Level.WARN && "no authentication" in it.formattedMessage }.shouldBeTrue()
+      messages.any { "plain HTTP" in it }.shouldBeTrue()
+    }
+
+    "the login's username should be settable in the config file" {
+      val config = """proxy.dashboard { username = "ops", password = "$LOGIN_PASSWORD" }"""
+      proxyOptionsFromConfig(config, extraArgs = ["--dashboard"]).dashboardUsername shouldBe "ops"
+    }
+
+    "without a login, a dashboard on all interfaces should warn, naming the password as a remedy" {
+      captureLogs<ProxyOptions>(Level.INFO) { proxyOptions(["--dashboard"]) }
+        .single { it.level == Level.WARN && "no authentication" in it.formattedMessage }
+        .formattedMessage shouldContain "proxy.dashboard.password (DASHBOARD_PASSWORD)"
+    }
+
+    // A colon would move where Basic Auth splits the username from the password, and a control character, such as a
+    // secret file's trailing newline, is one no browser sends, so the login could never match.
+    "a login the dashboard can't check should fail startup, naming no value" {
+      val cases =
+        mapOf(
+          """username = "", password = "$LOGIN_PASSWORD"""" to "proxy.dashboard.username (DASHBOARD_USERNAME) is empty",
+          """username = "ops:team", password = "$LOGIN_PASSWORD"""" to "username can't contain a colon",
+          """username = "ops\tteam", password = "$LOGIN_PASSWORD"""" to "username contains a control character",
+          """password = "$LOGIN_PASSWORD\n"""" to "password contains a control character",
+        )
+      cases.forEach { (settings, problem) ->
+        shouldThrow<IllegalArgumentException> {
+          proxyOptionsFromConfig("proxy.dashboard { $settings }", extraArgs = ["--dashboard"])
+        }.message.shouldNotBeNull().apply {
+          this shouldContain problem
+          this shouldNotContain LOGIN_PASSWORD
+        }
+      }
+    }
+
+    "without a password, the login's username should go unchecked, since it isn't used" {
+      proxyOptionsFromConfig("""proxy.dashboard.username = "ops:team" """, extraArgs = ["--dashboard"])
+        .dashboardPassword shouldBe ""
+    }
+  }
+
+  private companion object {
+    const val LOGIN_PASSWORD = "s3cret-Passw0rd"
   }
 }

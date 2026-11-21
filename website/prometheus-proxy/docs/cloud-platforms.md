@@ -26,7 +26,8 @@ App platform (ECS, Cloud Run, ...)               Proxy host (AWS, GCP, Azure, Di
 - Prometheus scrapes the proxy, on a private network, at the path the agent registered. Keep the proxy's scrape port
   (8080) off the internet: anyone who reaches it scrapes through the agent. Only the agent port (50051) is public,
   behind TLS and a token.
-- Leave the proxy's [dashboard](web-dashboard.md) off, as it is by default: it has no authentication.
+- Leave the proxy's [dashboard](web-dashboard.md) off, as it is by default, or set its [login](web-dashboard.md#login)
+  and keep it on the private network: without a login, it has no authentication.
 
 ## In the App
 

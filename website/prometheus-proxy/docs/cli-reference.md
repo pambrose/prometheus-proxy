@@ -24,6 +24,8 @@ icon: lucide/terminal
 | `--dashboard_port`               | `DASHBOARD_PORT`                  | `proxy.dashboard.port`                  | 8094                     | Dashboard listen port        |
 | `--dashboard_path`               | `DASHBOARD_PATH`                  | `proxy.dashboard.path`                  | "dashboard"              | Dashboard base path          |
 | `--dashboard_host`               | `DASHBOARD_HOST`                  | `proxy.dashboard.host`                  | "0.0.0.0"                | Dashboard listen address     |
+|                                  | `DASHBOARD_USERNAME`              | `proxy.dashboard.username`              | "admin"                  | Dashboard login's username   |
+|                                  | `DASHBOARD_PASSWORD`              | `proxy.dashboard.password`              |                          | Dashboard login's password   |
 | `--tf-disabled, --tf_disabled`   | `TRANSPORT_FILTER_DISABLED`       | `proxy.transportFilterDisabled`         | false                    | Disable transport filter     |
 | `--ref-disabled, --ref_disabled` | `REFLECTION_DISABLED`             | `proxy.reflectionDisabled`              | true                     | Disable gRPC reflection      |
 | `--log_level`                    | `PROXY_LOG_LEVEL`                 | `proxy.logLevel`                        | "info"                   | Log level                    |
@@ -40,7 +42,8 @@ icon: lucide/terminal
 The `*_PEM` settings take a certificate or key itself, as PEM text or its base64, in place of the matching file, for
 a platform that passes secrets as environment variables (see
 [TLS Setup](security/tls.md#certificates-as-environment-variables)). They have no command-line option, so a key never
-shows in a process listing.
+shows in a process listing. Nor do the dashboard's login settings: a password turns the login on, with the username
+`admin` unless set (see [Login](web-dashboard.md#login)).
 
 ### Proxy gRPC Options
 

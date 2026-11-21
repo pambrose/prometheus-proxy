@@ -67,6 +67,15 @@ enum class EnvVars {
   /** Listen address for the Proxy's operational dashboard. Default `0.0.0.0`. */
   DASHBOARD_HOST,
 
+  /** The username of the operational dashboard's login, which [DASHBOARD_PASSWORD] turns on. Default `admin`. */
+  DASHBOARD_USERNAME,
+
+  /**
+   * Requires a login to the operational dashboard, [DASHBOARD_USERNAME] and this password, from its login page or, from
+   * a script, as HTTP Basic Auth. Empty, the default, leaves the dashboard open. Never logged.
+   */
+  DASHBOARD_PASSWORD,
+
   /** Disable the Proxy's gRPC server reflection service. Default `true` (disabled); `false` enables it. */
   REFLECTION_DISABLED,
 
