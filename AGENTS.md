@@ -20,12 +20,18 @@ make ci                                  # Run the CI workflow's jobs locally (n
 ./gradlew detekt                         # Run detekt static analysis
 ./gradlew formatKotlin                   # Auto-format code
 make zizmor                              # Audit .github/ workflows and dependabot.yml (needs Docker)
+make codescene                           # CodeScene's pull request check, run locally with its cs CLI
 ```
 
 The `zizmor` check fails a pull request on any finding, so a workflow change must keep the conventions it enforces:
 actions pinned to a commit SHA with the version in a trailing comment, `persist-credentials: false` on every
 `actions/checkout`, least-privilege `permissions`, and a `cooldown` on every Dependabot entry. The Makefile and the
 workflow pin the same zizmor version; update them together.
+
+The `CodeScene Code Health Review (master)` check comes from CodeScene's GitHub app, not a workflow, and isn't
+required. `make codescene` runs the same delta analysis with the local `cs` CLI (signed in with `cs auth login`) on the
+branch's changes since `origin/master`, uncommitted and untracked files included, and fails as the check does: on a
+code health finding that's new or worse outside `src/test/`.
 
 Always run lint and build before completing tasks:
 `./gradlew detekt && ./gradlew lintKotlinMain && ./gradlew build -x test`

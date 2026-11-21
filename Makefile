@@ -1,6 +1,6 @@
 .PHONY: default help stop clean clean-all stubs build tibuild refresh jars \
         tests mini-tests xxl-tests nh-tests ip-tests netty-tests tls-tests \
-        lincheck-tests tla-checks check-rules helm-lint zizmor \
+        lincheck-tests tla-checks check-rules helm-lint zizmor codescene \
         container-tests scaling-tests all-tests ci ci-build consumer-check spring-boot-demo-check \
         demos-up demos-up-local demos-down \
         _publish-consumer-check regen-certs \
@@ -131,6 +131,12 @@ CONSUMER_CHECK_VERSION := $(patsubst %-SNAPSHOT,%,$(VERSION))-consumer-check-SNA
 # zizmor audits the GitHub Actions workflows and dependabot.yml. The same version as .github/workflows/zizmor.yml, with
 # the digest zizmor-action pins for it (its support/versions file); update the two together.
 ZIZMOR_IMAGE := ghcr.io/zizmorcore/zizmor:1.31.1@sha256:42d409dbb851d4c5d35a058cf042b828bea1e3f2884378c526eb0974780e18d9
+
+# What codescene compares this checkout with: the merge base of HEAD and this ref, as of the last fetch, where a pull
+# request's check starts from.
+CODESCENE_BASE ?= origin/master
+# The paths codescene leaves out, as the CodeScene check does: test code.
+CODESCENE_EXCLUDE := (^|/)src/test/
 
 # Banner printed at the start of every scaling target, so a long `all-scaling` run makes it obvious
 # which preset is executing at any moment (they look alike in Gradle's output otherwise).
@@ -285,6 +291,29 @@ helm-lint:  ## Lint the Helm charts and validate their rendered manifests (needs
 zizmor:  ## Audit the GitHub Actions workflows and dependabot.yml with zizmor (needs Docker)
 	@GH_TOKEN="$${GH_TOKEN:-$$(gh auth token 2>/dev/null)}"; export GH_TOKEN; \
 	docker run --rm -v "$(CURDIR):/workspace:ro" -w /workspace $${GH_TOKEN:+-e GH_TOKEN} $(ZIZMOR_IMAGE) .
+
+# The "CodeScene Code Health Review (master)" check comes from CodeScene's GitHub app, not a workflow: a delta analysis
+# of the pull request against master, with .codescene/code-health-rules.json. This runs that analysis with the local
+# CodeScene CLI, cs (signed in with `cs auth login`), on what this checkout adds to its merge base with CODESCENE_BASE:
+# its commits, its uncommitted changes, and its new files git doesn't track yet. cs skips a file the index doesn't
+# have, so those are added to a throwaway copy of the index, never the real one. cs prints every finding, but the
+# check's quality gates fail only on one that's new or worse (introduced or degraded) outside test code, so this fails
+# on those alone, and lists them by file as the check does.
+codescene:  ## Run CodeScene's pull request check locally with the cs CLI, on this checkout's changes since origin/master
+	@command -v cs >/dev/null || { echo "Error: the CodeScene CLI, cs, isn't installed: https://codescene.io/docs/cli/index.html" >&2; exit 1; }; \
+	command -v jq >/dev/null || { echo "Error: jq isn't installed" >&2; exit 1; }; \
+	base=$$(git merge-base $(CODESCENE_BASE) HEAD) && index=$$(git rev-parse --git-path index) && tmp=$$(mktemp) || exit 1; \
+	trap 'rm -f "$$tmp"' EXIT; cp "$$index" "$$tmp" || exit 1; export GIT_INDEX_FILE="$$tmp"; \
+	git add --intent-to-add . || exit 1; \
+	files=$$(git diff --name-only --diff-filter=d $$base | grep -v -E '$(CODESCENE_EXCLUDE)'); \
+	if [ -z "$$files" ]; then echo "No changes outside test code since $(CODESCENE_BASE)"; exit 0; fi; \
+	printf '%s\n' "$$files" | cs delta $$base --file-list - || exit 1; \
+	json=$$(printf '%s\n' "$$files" | cs delta $$base --file-list - --output-format json --include-metadata) || exit 1; \
+	worse=$$(printf '%s\n' "$$json" | jq -r '.results[]? | {name, worse: [.findings[] | select(."change-type" == "introduced" or ."change-type" == "degraded") | .category]} | select(.worse | length > 0) | "  \(.name): \(.worse | join(", "))"') || exit 1; \
+	if [ -n "$$worse" ]; then \
+		printf '\nThe CodeScene check would fail on these findings, new or worse outside test code:\n%s\n' "$$worse" >&2; exit 1; \
+	fi; \
+	echo "The CodeScene check would pass: no finding is new or worse outside test code"
 
 container-tests: jars  ## Run the Testcontainers tests (needs Docker)
 	@DOCKER_HOST="$$(docker context inspect --format '{{.Endpoints.docker.Host}}' 2>/dev/null)"; \
