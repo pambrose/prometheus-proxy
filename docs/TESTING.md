@@ -486,31 +486,9 @@ Two support helpers also live here (not test classes themselves):
   departed paths; both having to match; browser input
   trimmed and cut, never inside a surrogate pair; a filter read from a URL's query; an activity line matched by its
   event, agent, identity, paths, or detail, and its problems kept; and identity labels
-- **DashboardLoginTest** (`dashboard/`) — the dashboard's login read from a request's `Authorization` header: the
-  right pair accepted; no header, a wrong username or password, a prefix of either, another scheme, a value that isn't
-  base64, or one with no colon refused, never thrown on; the scheme matched in any case; a split at the first colon,
-  so a password may contain one; non-ASCII values compared as UTF-8; the login page's form accepted only with both
-  halves right; and neither value in its `toString`
-- **DashboardSessionsTest** (`dashboard/`) — the login page's sessions: a new one valid and a token never issued, null,
-  or empty not; 43 base64url characters, distinct each time; ended 24 hours after its last request, which a request
-  restarts, and a check that isn't a request doesn't; 7 days after it began however recently used; ended by removal;
-  the least recently used dropped past the cap; and an expired one forgotten
-- **LoginLimiterTest** (`dashboard/`) — the limit on wrong logins: an address under it let in, one at it refused and no
-  other, let in again once its oldest wrong login is a minute old; every address refused at the overall limit, until
-  its oldest is a minute old; and at most so many addresses remembered, the least recent going first
-- **LoginHtmlTest** (`dashboard/`) — the login page: its heading, a form posting to the login route with labeled,
-  autocompleting, length-capped fields and one Log in button; after a failure the alert, the username kept, and the
-  password focused, and without one neither; the alert for too many wrong logins; the next path and the username escaped; a root mount posting to
-  `/login`; nothing loaded from anywhere; and the dashboard's color tokens, in both themes
-- **ProxyDashboardServiceTest** (`dashboard/`) — Dashboard request guards: where a login may send the browser
-  (`safeNext`: a page under the base, never off-site, a protocol-relative or backslashed path, a `.` or `..` segment,
-  or the login page itself, at a root mount too), the session cookie named for the port, the WebSocket Origin check
-  (own host, `allowedOrigins`, foreign or malformed origins refused), the opt-in `allowedHosts` Host check against DNS rebinding,
-  and the snapshot cache pages and sessions render from: one collect per refresh interval however many reads, shared
-  by concurrent reads, and none reused across a topology change, even one landing mid-collect; and the value a push
-  compares to leave out an Activity table the page already shows (`ActivityTable`): equal for an unchanged feed and the
-  same message, different on a change of the feed, the search, "Problems only", or the message, and none for another
-  layout
+- **ProxyDashboardServiceTest** (`dashboard/`) — the value a push compares to leave out an Activity table the page
+  already shows (`ActivityTable`): equal for an unchanged feed and the same message, different on a change of the
+  feed, the search, "Problems only", or the message, and none for another layout
 - **ProxySnapshotTest** (`dashboard/`) — Dashboard view models: eviction countdown, health thresholds, failover
   position, a path's history as runs of like results, oldest first, and `buildPathViews` joining registered paths to
   their history and latest scrape and surfacing departed ones with theirs: a path that departed before its first scrape,
@@ -543,6 +521,21 @@ One support helper also lives here (not a test class itself):
 - **ConfigLoadExceptionTest** — The public exception embedded hosts catch: message-only and with-cause constructors
 - **ConfigWrappersTest** — Factory methods for AdminConfig, MetricsConfig, ZipkinConfig
 - **ConstantsTest** — Constant values (EMPTY_AGENT_ID_MSG, EMPTY_PATH_MSG, EMPTY_INSTANCE)
+- **DashboardLoginTest** (`dashboard/`) — a dashboard's login read from a request's `Authorization` header: the right
+  pair accepted; no header, a wrong username or password, a prefix of either, another scheme, a value that isn't
+  base64, or one with no colon refused, never thrown on; the scheme matched in any case; a split at the first colon,
+  so a password may contain one; non-ASCII values compared as UTF-8; the login page's form accepted only with both
+  halves right; and neither value in its `toString`
+- **DashboardServerTest** (`dashboard/`) — the request rules every dashboard shares (`DashboardServer`): where a
+  login may send the browser (`safeNext`: a page under the base, never off-site, a protocol-relative or backslashed
+  path, a `.` or `..` segment, or the login page itself, at a root mount too), the session cookie named for the role
+  and the port, so a proxy's and an agent's on one host differ, the WebSocket Origin check (own host,
+  `allowedOrigins`, foreign or malformed origins refused), and the opt-in `allowedHosts` Host check against DNS
+  rebinding
+- **DashboardSessionsTest** (`dashboard/`) — a dashboard's login-page sessions: a new one valid and a token never
+  issued, null, or empty not; 43 base64url characters, distinct each time; ended 24 hours after its last request,
+  which a request restarts, and a check that isn't a request doesn't; 7 days after it began however recently used;
+  ended by removal; the least recently used dropped past the cap; and an expired one forgotten
 - **DeferredInterceptorsTest** — the client and server interceptors that build their delegate on the first call, once,
   and again on a later call if building it failed, which lets the Zipkin tracing interceptors be installed before the
   reporter they need exists
@@ -558,6 +551,14 @@ One support helper also lives here (not a test class itself):
   time source), each key has its own interval, past its cap the key asked about least recently is forgotten and passes
   as a new one, an interval or cap that isn't positive is refused, and of concurrent calls for one key exactly one
   passes
+- **LoginHtmlTest** (`dashboard/`) — a dashboard's login page: the heading it is given, escaped, a form posting to the
+  login route with labeled, autocompleting, length-capped fields and one Log in button; after a failure the alert, the
+  username kept, and the password focused, and without one neither; the alert for too many wrong logins; the next path
+  and the username escaped; a root mount posting to `/login`; nothing loaded from anywhere; and the dashboard's color
+  tokens, in both themes
+- **LoginLimiterTest** (`dashboard/`) — a dashboard's limit on wrong logins: an address under it let in, one at it
+  refused and no other, let in again once its oldest wrong login is a minute old; every address refused at the overall
+  limit, until its oldest is a minute old; and at most so many addresses remembered, the least recent going first
 - **MetricBuildersTest** — the metric builders keep no exemplars and only classic histogram buckets; a
   `sampledGauge` value that throws is reported as NaN instead of failing the scrape; and `setToCurrentTime` sets
   Unix seconds, which the dashboards' `time() - *_start_time_seconds` panels assume
@@ -566,6 +567,9 @@ One support helper also lives here (not a test class itself):
 - **SharedCollectorsTest** — the collectors every agent (or proxy) in a JVM shares register on the first acquire
   and unregister, with their series cleared, on the last release; register again after a registry clear; and,
   when the registry rejects one, leave none of them registered
+- **SnapshotCacheTest** (`dashboard/`) — the snapshot cache a dashboard's pages and sessions render from: one collect
+  per refresh interval however many reads, a fresh collect for the push loop's tick that the reads after it share,
+  shared by concurrent reads, and none reused across a change, even one landing mid-collect
 - **TestPortsTest** — every port in `TestPorts` is distinct, so no two specs can bind the same port, and below 32768,
   outside the ephemeral range the OS hands out to outgoing connections
 - **TlsMaterialTest** — TLS material given as PEM text (`*Pem` settings, `*_PEM` env vars): a value is read as PEM,

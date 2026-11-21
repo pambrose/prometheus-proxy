@@ -26,6 +26,7 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.string.shouldNotStartWith
 import io.kotest.matchers.string.shouldStartWith
+import io.prometheus.common.dashboard.DashboardServer
 import io.prometheus.proxy.ScrapeRecord
 import io.prometheus.proxy.dashboard.DashboardFixtures.departedPathView
 import io.prometheus.proxy.dashboard.DashboardFixtures.renderFullPage
@@ -454,7 +455,7 @@ class ProxyDashboardHtmlTest : StringSpec() {
     "a root-mounted dashboard should not emit protocol-relative links" {
       val page = renderFullPage(snapshot(), routeBase = "")
       page shouldContain """hx-ws:connect="/events""""
-      page shouldContain """src="/${ProxyDashboardService.ASSET_DIR}/htmx.min.js""""
+      page shouldContain """src="/${DashboardServer.ASSET_DIR}/htmx.min.js""""
       page shouldContain """href="/paths""""
       page shouldContain """hx-get="/agents/1""""
       page shouldNotContain "\"//"
@@ -467,7 +468,7 @@ class ProxyDashboardHtmlTest : StringSpec() {
     // The marks' URLs are under the route base, which the static sheet can't know, so they have a sheet of their own.
     "the page should give each brand icon a link shows its mark and colours, in a second stylesheet in its head" {
       val head = renderFullPage(iconSnapshot(), DashboardLayout.PATH).substringBefore("</head>")
-      val dir = "/dashboard/${ProxyDashboardService.ICON_DIR}"
+      val dir = "/dashboard/${DashboardServer.ICON_DIR}"
 
       Regex("<style>").findAll(head).count() shouldBe 2
       head shouldContain
@@ -501,7 +502,7 @@ class ProxyDashboardHtmlTest : StringSpec() {
     "a root-mounted dashboard should give the icons' URLs a single leading slash" {
       val page = renderFullPage(iconSnapshot(), DashboardLayout.PATH, routeBase = "")
 
-      page shouldContain """--icon:url("/${ProxyDashboardService.ICON_DIR}/grafana.svg")"""
+      page shouldContain """--icon:url("/${DashboardServer.ICON_DIR}/grafana.svg")"""
       page shouldNotContain "url(\"//"
     }
 

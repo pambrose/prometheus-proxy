@@ -16,6 +16,7 @@
 
 package io.prometheus.proxy.dashboard
 
+import io.prometheus.common.dashboard.DashboardServer
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.ANNOUNCER_ID
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.COLUMN_GUIDE_ID
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.COLUMN_GUIDE_TOGGLE_ID
@@ -156,7 +157,7 @@ internal object DashboardScript {
       function checkSession() {
         if (checkingSession || !document.getElementById('$LOGOUT_ID')) return;
         checkingSession = true;
-        fetch(base + '/session', { headers: { '${ProxyDashboardService.HX_REQUEST_HEADER}': 'true' } })
+        fetch(base + '/session', { headers: { '${DashboardServer.HX_REQUEST_HEADER}': 'true' } })
           .then(function (response) {
             if (response.status === 401) location.reload();
           }, function () {})
@@ -297,7 +298,7 @@ internal object DashboardScript {
         panel.hidden = false;
         panel.textContent = 'Scraping /' + path + '…';
         var url = panel.getAttribute('$SCRAPE_URL_ATTR') + '?path=' + encodeURIComponent(path);
-        fetch(url, { method: 'POST', headers: { '${ProxyDashboardService.HX_REQUEST_HEADER}': 'true' } })
+        fetch(url, { method: 'POST', headers: { '${DashboardServer.HX_REQUEST_HEADER}': 'true' } })
           .then(function (response) {
             // A session that has ended: the reload brings the login page.
             if (response.status === 401) { location.reload(); return null; }

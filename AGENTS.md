@@ -111,6 +111,8 @@ aren't in the proto: a scrape result is sent in chunks once its gzipped size rea
   gRPC TLS context from either with `GrpcSslContexts`. Never log a PEM value, only whether it's set.
 - **Metric filtering**: `MetricFilter` (per-path `agent.filters`) drops whole metric families in `AgentHttpService` before gzip/chunking; fails open on non-text or non-UTF-8 payloads.
 - **Dashboard**: Ktor + htmx (WebJar, no CDN) on its own port, fed by the `ProxyEvent` bus; see `proxy/dashboard/`.
+  What a dashboard shares, its server, login, guards, versioned assets, sessions, and push loop, is
+  `common/dashboard/DashboardServer`, which serves a `DashboardSite`: the proxy's is in `ProxyDashboardService`.
   The Links column's brand icons (`LinkIcon`) come from the Simple Icons WebJar, of which the build's
   `extractDashboardIcons` copies only the SVGs `LinkIcon` names into the main resources, so the 7.5 MB WebJar stays off
   the runtime classpath and out of the POM and the fat JARs; a new icon needs its slug in `configureDashboardIcons` too.

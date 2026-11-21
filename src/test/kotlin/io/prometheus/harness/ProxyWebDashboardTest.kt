@@ -53,6 +53,9 @@ import io.mockk.unmockkObject
 import io.mockk.verify
 import io.prometheus.Agent
 import io.prometheus.Proxy
+import io.prometheus.common.dashboard.DashboardServer.Companion.ASSET_DIR
+import io.prometheus.common.dashboard.DashboardServer.Companion.HX_REQUEST_HEADER
+import io.prometheus.common.dashboard.DashboardServer.Companion.ICON_DIR
 import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.common.startAndAwaitReady
@@ -63,9 +66,6 @@ import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.proxy.dashboard.DashboardFixtures.scrapeRecord
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml
-import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.ASSET_DIR
-import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.HX_REQUEST_HEADER
-import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.ICON_DIR
 import io.prometheus.proxy.dashboard.ProxySnapshot
 import kotlinx.coroutines.withTimeout
 import kotlin.time.Duration.Companion.seconds

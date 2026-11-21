@@ -16,30 +16,31 @@
 
 @file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
 
-package io.prometheus.proxy.dashboard
+package io.prometheus.common.dashboard
 
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
-import io.prometheus.proxy.dashboard.LoginHtml.renderLogin
+import io.prometheus.common.dashboard.LoginHtml.renderLogin
 import kotlinx.html.html
 import kotlinx.html.stream.createHTML
 
-/** [LoginHtml]: the dashboard's login page. The routes that serve it are covered in `ProxyWebDashboardLoginTest`. */
+/** [LoginHtml]: a dashboard's login page. The routes that serve it are covered in `ProxyWebDashboardLoginTest`. */
 class LoginHtmlTest : StringSpec() {
   private fun page(
+    heading: String = HEADING,
     routeBase: String = "/dashboard",
     next: String = "/dashboard",
     username: String = "",
     alert: String? = null,
-  ) = createHTML().html { renderLogin(routeBase, next, username, alert) }
+  ) = createHTML().html { renderLogin(heading, routeBase, next, username, alert) }
 
   init {
     "the page has the heading, a form posting to the login route, and labeled fields" {
       page().apply {
-        this shouldContain "<h1>${LoginHtml.HEADING}</h1>"
-        this shouldContain "<title>Log in · ${LoginHtml.HEADING}</title>"
+        this shouldContain "<h1>$HEADING</h1>"
+        this shouldContain "<title>Log in · $HEADING</title>"
         this shouldContain """action="/dashboard/login""""
         this shouldContain """method="post""""
         this shouldContain """name="${LoginHtml.USERNAME_FIELD}""""
@@ -52,6 +53,15 @@ class LoginHtmlTest : StringSpec() {
         this shouldContain """name="${LoginHtml.NEXT_FIELD}" value="/dashboard""""
         this shouldContain """maxlength="${LoginHtml.MAX_FIELD_LENGTH}""""
         Regex("""<button[^>]*type="submit"[^>]*>Log in</button>""").findAll(this).count() shouldBe 1
+      }
+    }
+
+    // Each dashboard names itself: the proxy's and the agent's share the page.
+    "the page should carry the heading it is given, escaped" {
+      page(heading = "Prometheus <Agent> Dashboard").apply {
+        this shouldContain "<h1>Prometheus &lt;Agent&gt; Dashboard</h1>"
+        this shouldContain "<title>Log in · Prometheus &lt;Agent&gt; Dashboard</title>"
+        this shouldNotContain HEADING
       }
     }
 
@@ -114,10 +124,14 @@ class LoginHtmlTest : StringSpec() {
 
     "its colors are the dashboard's tokens, in both themes" {
       page().apply {
-        this shouldContain ProxyDashboardCss.TOKENS
+        this shouldContain DashboardCss.TOKENS
         this shouldContain "prefers-color-scheme: dark"
         this shouldContain "var(--accent)"
       }
     }
+  }
+
+  companion object {
+    private const val HEADING = "Prometheus Test Dashboard"
   }
 }

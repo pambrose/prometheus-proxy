@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.prometheus.proxy.dashboard
+package io.prometheus.common.dashboard
 
 import io.prometheus.common.Utils
 import io.prometheus.common.Utils.sha256

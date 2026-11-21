@@ -22,6 +22,7 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
+import io.prometheus.common.dashboard.DashboardServer
 import io.prometheus.proxy.dashboard.DashboardFixtures.renderFullPage
 import io.prometheus.proxy.dashboard.DashboardFixtures.snapshot
 
@@ -84,7 +85,7 @@ class DashboardScriptTest : StringSpec() {
       val page = renderFullPage(snapshot())
 
       page shouldContain "closest('button.scrape-now')"
-      page shouldContain "method: 'POST', headers: { '${ProxyDashboardService.HX_REQUEST_HEADER}': 'true' }"
+      page shouldContain "method: 'POST', headers: { '${DashboardServer.HX_REQUEST_HEADER}': 'true' }"
       page shouldContain "panel.innerHTML = html;"
       // Closing the panel hands focus back to the button that filled it.
       page shouldContain "function closeScrapeResult(panel)"
@@ -268,9 +269,9 @@ class DashboardScriptTest : StringSpec() {
     // browser running its cached htmx against the next version's markup.
     "the page should load its scripts from the versioned asset directory" {
       val page = renderFullPage(snapshot())
-      ProxyDashboardService.ASSET_DIR shouldContain ProxyDashboardService.HTMX_VERSION
-      page shouldContain """src="/dashboard/${ProxyDashboardService.ASSET_DIR}/htmx.min.js""""
-      page shouldContain """src="/dashboard/${ProxyDashboardService.ASSET_DIR}/hx-ws.min.js""""
+      DashboardServer.ASSET_DIR shouldContain DashboardServer.HTMX_VERSION
+      page shouldContain """src="/dashboard/${DashboardServer.ASSET_DIR}/htmx.min.js""""
+      page shouldContain """src="/dashboard/${DashboardServer.ASSET_DIR}/hx-ws.min.js""""
     }
 
     "the stylesheet should define the disconnected treatment and hide it by default" {

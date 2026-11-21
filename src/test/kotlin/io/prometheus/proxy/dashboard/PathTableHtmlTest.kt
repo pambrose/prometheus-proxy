@@ -23,6 +23,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldEndWith
 import io.kotest.matchers.string.shouldNotContain
+import io.prometheus.common.dashboard.DashboardServer
 import io.prometheus.proxy.dashboard.DashboardFixtures.departedPathView
 import io.prometheus.proxy.dashboard.DashboardFixtures.iconLinks
 import io.prometheus.proxy.dashboard.DashboardFixtures.renderFullPage
@@ -293,7 +294,7 @@ class PathTableHtmlTest : StringSpec() {
         """<a href="http://localhost:3000/d/demo?var-job=orders" target="_blank" class="icon icon-grafana" """ +
         """id="link-1-orders_metrics" rel="noopener noreferrer" aria-label="Open /orders_metrics in Grafana" """ +
         """title="Open in Grafana"></a></td>"""
-      html shouldNotContain ProxyDashboardService.ICON_DIR
+      html shouldNotContain DashboardServer.ICON_DIR
       html shouldNotContain """ title="Prometheus""""
     }
 

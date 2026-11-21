@@ -22,6 +22,7 @@ import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.string.shouldContain
 import io.prometheus.common.TestPorts.PROXY_DASHBOARD_PORT
+import io.prometheus.common.dashboard.DashboardServer.Companion.ASSET_DIR
 import io.prometheus.containers.support.ContainerTestSupport.agentContainer
 import io.prometheus.containers.support.ContainerTestSupport.containerTestsEnabled
 import io.prometheus.containers.support.ContainerTestSupport.httpClient
@@ -31,7 +32,6 @@ import io.prometheus.containers.support.baseUrl
 import io.prometheus.containers.support.bodyOf
 import io.prometheus.containers.support.closeQuietly
 import io.prometheus.containers.support.stopQuietly
-import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.ASSET_DIR
 import org.testcontainers.containers.Network
 import kotlin.time.Duration.Companion.seconds
 

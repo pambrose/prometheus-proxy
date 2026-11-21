@@ -16,6 +16,7 @@
 
 package io.prometheus.proxy.dashboard
 
+import io.prometheus.common.dashboard.DashboardServer
 import kotlinx.html.ButtonType
 import kotlinx.html.DIV
 import kotlinx.html.FORM
@@ -185,8 +186,8 @@ internal object ProxyDashboardHtml {
       linkIconStyle(snapshot.links, routeBase)
       // Ahead of the scripts: htmx reads its config once, when htmx.min.js loads.
       meta(name = "htmx-config", content = HTMX_CONFIG)
-      script(src = "$routeBase/${ProxyDashboardService.ASSET_DIR}/htmx.min.js") {}
-      script(src = "$routeBase/${ProxyDashboardService.ASSET_DIR}/hx-ws.min.js") {}
+      script(src = "$routeBase/${DashboardServer.ASSET_DIR}/htmx.min.js") {}
+      script(src = "$routeBase/${DashboardServer.ASSET_DIR}/hx-ws.min.js") {}
     }
     body {
       // Loading hx-ws.min.js is what enables the extension; htmx 4 has no hx-ext.
