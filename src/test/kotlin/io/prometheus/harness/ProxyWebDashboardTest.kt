@@ -53,6 +53,7 @@ import io.mockk.unmockkObject
 import io.mockk.verify
 import io.prometheus.Agent
 import io.prometheus.Proxy
+import io.prometheus.common.dashboard.DashboardPage
 import io.prometheus.common.dashboard.DashboardServer.Companion.ASSET_DIR
 import io.prometheus.common.dashboard.DashboardServer.Companion.HX_REQUEST_HEADER
 import io.prometheus.common.dashboard.DashboardServer.Companion.ICON_DIR
@@ -187,7 +188,7 @@ class ProxyWebDashboardTest : StringSpec() {
     }.shouldNotBeNull()
 
   // The stamp of a frame rendered from the browser's message [seq] (see ProxyDashboardHtml.pushFragment).
-  private fun viewOf(seq: Long) = """${ProxyDashboardHtml.VIEW_ATTR}="$seq""""
+  private fun viewOf(seq: Long) = """${DashboardPage.VIEW_ATTR}="$seq""""
 
   init {
     "the dashboard serves a page and pushes updates over the WebSocket" {
@@ -448,7 +449,7 @@ class ProxyWebDashboardTest : StringSpec() {
           // The first frame comes before the session has said what its page shows, so it carries only the
           // status bar: no agent list to mark a row in, and no detail pane to blank.
           nextText().also {
-            it shouldContain """id="${ProxyDashboardHtml.STATUS_ID}""""
+            it shouldContain """id="${DashboardPage.STATUS_ID}""""
             it shouldNotContain """id="${ProxyDashboardHtml.AGENT_LIST_ID}""""
             it shouldNotContain """id="${ProxyDashboardHtml.DETAIL_ID}""""
           }
@@ -458,7 +459,7 @@ class ProxyWebDashboardTest : StringSpec() {
           awaitFrame(SELECTED_ROW)
           // Every frame rendered from that message carries its count, which the page compares against the
           // count it has sent to drop a frame rendered from an older message.
-          awaitFrame("""${ProxyDashboardHtml.VIEW_ATTR}="1"""")
+          awaitFrame("""${DashboardPage.VIEW_ATTR}="1"""")
 
           // Switching layout the same way changes which regions the push carries.
           send(Frame.Text("""{"layout":"PATH"}"""))
@@ -653,7 +654,7 @@ class ProxyWebDashboardTest : StringSpec() {
             unmockkObject(ProxyDashboardHtml)
           }
           send(Frame.Text("""{"layout":"AGENT","seq":3}"""))
-          nextText() shouldContain """${ProxyDashboardHtml.VIEW_ATTR}="3""""
+          nextText() shouldContain """${DashboardPage.VIEW_ATTR}="3""""
         }
       }
     }
@@ -687,7 +688,7 @@ class ProxyWebDashboardTest : StringSpec() {
           agent.pathManager.registerPath("ui_scrape_metrics", "http://$LOOPBACK_HOST:$stubPort/metrics")
           eventually(30.seconds) {
             client.get("$base/dashboard/paths").bodyAsText() shouldContain
-              """id="${ProxyDashboardHtml.SCRAPE_ID_PREFIX}ui_scrape_metrics""""
+              """id="${DashboardPage.SCRAPE_ID_PREFIX}ui_scrape_metrics""""
           }
 
           // The path's History as the proxy holds it, which the Paths view and the agent's Recent scrapes show.
@@ -761,7 +762,7 @@ class ProxyWebDashboardTest : StringSpec() {
           client.post("$base/dashboard/scrape?path=ui_scrape_metrics") { header(HX_REQUEST_HEADER, "true") }
             .status shouldBe HttpStatusCode.NotFound
           client.get("$base/dashboard/paths").bodyAsText() shouldNotContain
-            """id="${ProxyDashboardHtml.SCRAPE_RESULT_ID}""""
+            """id="${DashboardPage.SCRAPE_RESULT_ID}""""
         }
       } finally {
         stub.stop(0, 0)
@@ -861,7 +862,7 @@ class ProxyWebDashboardTest : StringSpec() {
           suspend fun expectQuiet() =
             repeat(QUIET_FRAMES) {
               withTimeout(FRAME_PATIENCE) { nextText() }.also {
-                it shouldContain """id="${ProxyDashboardHtml.STATUS_ID}""""
+                it shouldContain """id="${DashboardPage.STATUS_ID}""""
                 it shouldNotContain ACTIVITY_TABLE
               }
             }

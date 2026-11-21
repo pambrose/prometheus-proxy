@@ -26,6 +26,7 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldStartWith
+import io.prometheus.common.dashboard.DashboardCss
 import io.prometheus.proxy.AgentAuthManager.Companion.LEGACY_IDENTITY_NAME
 import io.prometheus.proxy.dashboard.DashboardFixtures.departedPathView
 import io.prometheus.proxy.dashboard.DashboardFixtures.pathView
@@ -214,7 +215,7 @@ class PathLinkTest : StringSpec() {
     "every icon's colour should clear 3:1 against a hovered row in each theme" {
       // The light theme's, then the dark theme's.
       val grounds =
-        Regex("""--surface-2:(#[0-9a-f]{6})""").findAll(ProxyDashboardCss.CSS).map { it.groupValues[1] }.toList()
+        Regex("""--surface-2:(#[0-9a-f]{6})""").findAll(DashboardCss.CSS).map { it.groupValues[1] }.toList()
       grounds.size shouldBe 2
 
       LinkIcon.entries.forEach { icon ->

@@ -20,6 +20,7 @@ package io.prometheus.agent.filter
 
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -33,6 +34,24 @@ class MetricFilterTest : StringSpec() {
   ) = MetricFilter.createOrNull(allow, deny, "test_path").shouldNotBeNull()
 
   init {
+    // For the agent's dashboard, which shows a path's filter's effect whether or not the agent's metrics are on.
+    "a filter should count what it has dropped across scrapes, and say when it let one through unfiltered" {
+      val filter = filter(deny = ["noise"])
+      val payload = "# TYPE noise counter\nnoise 1\nkept 2\n".encodeToByteArray()
+
+      filter.allowPatterns.shouldBeEmpty()
+      filter.denyPatterns shouldBe ["noise"]
+      repeat(2) { filter.filterBytes(payload, "text/plain") }
+      filter.linesDropped shouldBe 4
+      filter.bytesSaved shouldBe 2L * (payload.size - "kept 2\n".length)
+      filter.failedOpen.shouldBeNull()
+
+      filter.filterBytes(payload, "application/vnd.google.protobuf").shouldBeNull()
+      filter.failedOpen shouldBe "a scrape's content type was not text"
+      // A scrape let through unfiltered counts nothing.
+      filter.linesDropped shouldBe 4
+    }
+
     // Prometheus 3 offers escaping=allow-utf-8, which the agent passes on, so a target can write a name outside the
     // legacy character set quoted: `# TYPE "a.b" counter`, and `{"a.b",job="x"} 1` with the name as the first thing in
     // the braces. The filter kept the quotes in the family name and read the sample name as "", so an allow list

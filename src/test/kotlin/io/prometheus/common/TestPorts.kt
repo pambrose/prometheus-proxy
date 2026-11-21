@@ -34,6 +34,7 @@ object TestPorts {
 
   const val AGENT_METRICS_PORT = 8083
   const val AGENT_ADMIN_PORT = 8093
+  const val AGENT_DASHBOARD_PORT = 8095
 
   const val PROMETHEUS_PORT = 9090
   const val NGINX_PORT = 80
@@ -234,6 +235,15 @@ object TestPorts {
   const val DASHBOARD_UI_LOGIN_HTTP_PORT = 9743
   const val DASHBOARD_UI_LOGIN_GRPC_PORT = 9744
   const val DASHBOARD_UI_LOGIN_DASHBOARD_PORT = 9745
+
+  // AgentWebDashboardTest: the agent's dashboard, with its proxy up and with it down (nothing listens on the down
+  // case's gRPC port), and with a login.
+  const val AGENT_DASHBOARD_UI_HTTP_PORT = 9746
+  const val AGENT_DASHBOARD_UI_GRPC_PORT = 9747
+  const val AGENT_DASHBOARD_UI_DASHBOARD_PORT = 9748
+  const val AGENT_DASHBOARD_UI_DOWN_GRPC_PORT = 9749
+  const val AGENT_DASHBOARD_UI_DOWN_DASHBOARD_PORT = 9750
+  const val AGENT_DASHBOARD_UI_LOGIN_DASHBOARD_PORT = 9751
 
   // ProxyTest and AgentTest: what a real proxy or agent binds in the garbage-collection and failed-startup cases.
   // These came from ServerSocket(0), released and bound again later, so another connection could take one in between

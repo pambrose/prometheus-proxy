@@ -70,6 +70,12 @@ shows in a process listing. Nor do the dashboard's login settings: a password tu
 | `--debug, -b`                  | `DEBUG_ENABLED`                   | `agent.admin.debugEnabled`                  | false       | Enable debug servlet                                |
 | `--metrics, -e`                | `METRICS_ENABLED`                 | `agent.metrics.enabled`                     | false       | Enable metrics collection                           |
 | `--metrics_port, -m`           | `METRICS_PORT`                    | `agent.metrics.port`                        | 8083        | Metrics listen port                                 |
+| `--dashboard`                  | `DASHBOARD_ENABLED`               | `agent.dashboard.enabled`                   | false       | Enable the agent's dashboard                        |
+| `--dashboard_port`             | `DASHBOARD_PORT`                  | `agent.dashboard.port`                      | 8095        | Agent dashboard listen port                         |
+| `--dashboard_path`             | `DASHBOARD_PATH`                  | `agent.dashboard.path`                      | "dashboard" | Agent dashboard base path                           |
+| `--dashboard_host`             | `DASHBOARD_HOST`                  | `agent.dashboard.host`                      | "0.0.0.0"   | Agent dashboard listen address                      |
+|                                | `DASHBOARD_USERNAME`              | `agent.dashboard.username`                  | "admin"     | Agent dashboard login's username                    |
+|                                | `DASHBOARD_PASSWORD`              | `agent.dashboard.password`                  |             | Agent dashboard login's password                    |
 | `--consolidated, -o`           | `CONSOLIDATED`                    | `agent.consolidated`                        | false       | Allow multiple agents per path                      |
 | `--timeout`                    | `SCRAPE_TIMEOUT_SECS`             | `agent.scrapeTimeoutSecs`                   | 15          | Scrape timeout (seconds)                            |
 | `--max_retries`                | `SCRAPE_MAX_RETRIES`              | `agent.scrapeMaxRetries`                    | 0           | Max scrape retries (0 = disabled)                   |
@@ -96,7 +102,8 @@ shows in a process listing. Nor do the dashboard's login settings: a password tu
 | `-D`                           |                                   |                                             |             | Dynamic property assignment                         |
 
 As for the proxy, the `*_PEM` settings take a certificate or key as PEM text or its base64, and have no command-line
-option.
+option, nor do the dashboard's login settings (see [Agent Dashboard](agent-dashboard.md)). The `DASHBOARD_*` variables
+are the proxy's, read by whichever process reads them, as `ADMIN_*` and `METRICS_*` are.
 
 ### Agent HTTP Client Cache Options
 

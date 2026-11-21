@@ -16,8 +16,9 @@
 
 package io.prometheus.proxy.dashboard
 
+import io.prometheus.common.dashboard.DashboardPage.SAY_ATTR
+import io.prometheus.common.dashboard.DashboardPage.size
 import io.prometheus.proxy.ScrapeDispatch
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SAY_ATTR
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.statusPill
 import kotlinx.html.ButtonType
 import kotlinx.html.DIV
@@ -26,7 +27,6 @@ import kotlinx.html.div
 import kotlinx.html.pre
 import kotlinx.html.span
 import kotlinx.html.stream.createHTML
-import java.util.Locale
 
 /**
  * The result panel's content for a scrape-now, which the page's script puts in `#scrape-result` (see [ScrapeNow]).
@@ -94,16 +94,5 @@ internal object ScrapeNowHtml {
       "${summary.samples} samples".takeIf { counted },
       ScrapeDispatch.EOF_MARKER.takeIf { summary.hasEof },
     )
-  }
-
-  private const val KIB = 1024.0
-
-  internal fun size(bytes: Long): String {
-    val kib = bytes / KIB
-    return when {
-      bytes < KIB -> "$bytes bytes"
-      kib < KIB -> String.format(Locale.ROOT, "%.1f KB", kib)
-      else -> String.format(Locale.ROOT, "%.1f MB", kib / KIB)
-    }
   }
 }

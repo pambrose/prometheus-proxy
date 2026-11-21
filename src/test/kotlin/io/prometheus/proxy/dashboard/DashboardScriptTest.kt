@@ -22,6 +22,7 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
+import io.prometheus.common.dashboard.DashboardPage
 import io.prometheus.common.dashboard.DashboardServer
 import io.prometheus.proxy.dashboard.DashboardFixtures.renderFullPage
 import io.prometheus.proxy.dashboard.DashboardFixtures.snapshot
@@ -42,7 +43,7 @@ class DashboardScriptTest : StringSpec() {
       page shouldContain "addEventListener('htmx:ws:before:message:incoming'"
       page shouldContain "evt.preventDefault()"
       // Anchored at the start of the frame, on the attribute the server writes.
-      page shouldContain """/^<span[^>]*\s${ProxyDashboardHtml.VIEW_ATTR}="""
+      page shouldContain """/^<span[^>]*\s${DashboardPage.VIEW_ATTR}="""
     }
 
     // Left and Right open the neighbouring view from anywhere on the page, not only from a focused tab: a click on a
@@ -52,16 +53,16 @@ class DashboardScriptTest : StringSpec() {
     "the page script should switch views with the arrow keys from anywhere but a text field" {
       val page = renderFullPage(snapshot(), DashboardLayout.PATH)
 
-      page shouldContain """<nav class="nav" id="${ProxyDashboardHtml.NAV_ID}">"""
+      page shouldContain """<nav class="nav" id="${DashboardPage.NAV_ID}">"""
       page shouldContain "evt.key !== 'ArrowLeft' && evt.key !== 'ArrowRight'"
       page shouldContain "evt.altKey || evt.ctrlKey || evt.metaKey || evt.shiftKey || evt.repeat"
       page shouldContain "if (typingIn(evt.target)) return;"
       page shouldContain
-        "var from = focusedTab || document.querySelector('#${ProxyDashboardHtml.NAV_ID} a[aria-current=\"page\"]');"
+        "var from = focusedTab || document.querySelector('#${DashboardPage.NAV_ID} a[aria-current=\"page\"]');"
       page shouldContain "(tabs.indexOf(from) + step + tabs.length) % tabs.length"
       // The gate that left the arrows working only from a focused tab.
       page shouldNotContain
-        "var tab = evt.target.closest('#${ProxyDashboardHtml.NAV_ID} a');\n        if (!tab) return;"
+        "var tab = evt.target.closest('#${DashboardPage.NAV_ID} a');\n        if (!tab) return;"
       page shouldContain "window.location.assign(next.href);"
       page shouldContain "arrowedTo === window.location.pathname"
     }
@@ -71,7 +72,7 @@ class DashboardScriptTest : StringSpec() {
     // <body>, and Escape in the search still clears the search.
     "the page script should open and close the column guide from its button, its close button, and Escape" {
       val page = renderFullPage(snapshot(), DashboardLayout.PATH)
-      val toggle = ProxyDashboardHtml.COLUMN_GUIDE_TOGGLE_ID
+      val toggle = DashboardPage.COLUMN_GUIDE_TOGGLE_ID
 
       page shouldContain "else if (evt.target.closest('#$toggle')) showGuide(!guideOpen());"
       page shouldContain "toggle.setAttribute('aria-expanded', open ? 'true' : 'false');"
@@ -136,7 +137,7 @@ class DashboardScriptTest : StringSpec() {
       page shouldContain "if (response.status === 401) location.reload();"
       // Only on a page with a login, which has Log out, and one check at a time: every failed reconnect closes the
       // socket again.
-      page shouldContain "if (checkingSession || !document.getElementById('${ProxyDashboardHtml.LOGOUT_ID}')) return;"
+      page shouldContain "if (checkingSession || !document.getElementById('${DashboardPage.LOGOUT_ID}')) return;"
       Regex("""addEventListener\('htmx:ws:close', function \(\) \{[^}]*checkSession\(\)""")
         .containsMatchIn(page) shouldBe true
       page shouldContain "if (response.status === 401) { location.reload(); return null; }"
@@ -182,7 +183,7 @@ class DashboardScriptTest : StringSpec() {
       val page = renderFullPage(snapshot())
       page shouldContain "document.body.addEventListener('click'"
       page shouldContain "evt.target.closest('button.copy')"
-      page shouldContain "btn.getAttribute('${ProxyDashboardHtml.COPY_ATTR}')"
+      page shouldContain "btn.getAttribute('${DashboardPage.COPY_ATTR}')"
     }
 
     // navigator.clipboard is undefined outside a secure context, and the dashboard is usually plain http on
@@ -198,8 +199,8 @@ class DashboardScriptTest : StringSpec() {
     "the page should build a proxy URL from its own host and the proxy's scrape port" {
       val page = renderFullPage(snapshot())
       page shouldContain "'http://' + window.location.hostname + ':'"
-      page shouldContain "document.body.getAttribute('${ProxyDashboardHtml.SCRAPE_PORT_ATTR}')"
-      page shouldContain "btn.getAttribute('${ProxyDashboardHtml.PROXY_PATH_ATTR}')"
+      page shouldContain "document.body.getAttribute('${DashboardPage.SCRAPE_PORT_ATTR}')"
+      page shouldContain "btn.getAttribute('${DashboardPage.PROXY_PATH_ATTR}')"
     }
 
     // A push that lands while the mark is showing replaces the marked button with an unmarked one.

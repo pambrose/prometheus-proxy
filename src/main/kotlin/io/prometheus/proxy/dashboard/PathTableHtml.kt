@@ -16,19 +16,20 @@
 
 package io.prometheus.proxy.dashboard
 
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.COPY_ATTR
+import io.prometheus.common.dashboard.DashboardPage
+import io.prometheus.common.dashboard.DashboardPage.COPY_ATTR
+import io.prometheus.common.dashboard.DashboardPage.DASH
+import io.prometheus.common.dashboard.DashboardPage.PROXY_PATH_ATTR
+import io.prometheus.common.dashboard.DashboardPage.SCRAPE_ID_PREFIX
+import io.prometheus.common.dashboard.DashboardPage.SCRAPE_RESULT_ID
+import io.prometheus.common.dashboard.DashboardPage.SCRAPE_URL_ATTR
+import io.prometheus.common.dashboard.DashboardPage.timeOfDay
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.COPY_PROXY_ID_PREFIX
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.COPY_TARGET_ID_PREFIX
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.DASH
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.LINK_ID_PREFIX
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.PATH_TABLE_ID
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.PROXY_PATH_ATTR
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SCRAPE_ID_PREFIX
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SCRAPE_RESULT_ID
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SCRAPE_URL_ATTR
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.agentLabel
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.renderFilters
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.scrapeTime
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.statusPill
 import kotlinx.html.BUTTON
 import kotlinx.html.ButtonType
@@ -229,7 +230,7 @@ internal object PathTableHtml {
       if (snapshot.authEnabled) td("dim") { +(identityLabel(path.identity) ?: DASH) }
       targetCell(path)
       td("dim") { +sourceLabel(path.pathSource) }
-      td("dim") { scrapeTime(path.lastScrape?.at) }
+      td("dim") { timeOfDay(path.lastScrape?.at) }
       statusCell(path)
       td("num dim") { +(path.lastScrape?.let { "${it.durationMillis} ms" } ?: DASH) }
       historyCell(path, snapshot)
@@ -241,7 +242,7 @@ internal object PathTableHtml {
    * A path, and while the proxy serves it, the button that copies its proxy URL, the one to curl to check the path
    * through the proxy. The proxy can't know the name the viewer reaches it by, so the button carries the path, and the
    * page's script joins it to the host the page was opened at and the scrape port,
-   * [io.prometheus.proxy.dashboard.ProxyDashboardHtml.SCRAPE_PORT_ATTR] on `<body>`. With
+   * [io.prometheus.proxy.dashboard.DashboardPage.SCRAPE_PORT_ATTR] on `<body>`. With
    * [scrapeNow], the button that scrapes it at once follows.
    */
   private fun TR.pathCell(

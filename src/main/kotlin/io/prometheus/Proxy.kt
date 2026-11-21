@@ -40,7 +40,6 @@ import io.prometheus.common.Utils.getVersionDesc
 import io.prometheus.common.Utils.toJsonElement
 import io.prometheus.common.AgentValues.isValidLabelName
 import io.prometheus.common.AgentValues.labelsProblem
-import io.prometheus.common.dashboard.DashboardLogin
 import io.prometheus.proxy.ActivityLog
 import io.prometheus.proxy.AgentAuthManager
 import io.prometheus.proxy.AgentContext
@@ -191,6 +190,13 @@ class Proxy(
   // The port Prometheus scrapes, for the dashboard's proxy URLs.
   internal val scrapePort: Int get() = httpService.httpPort
 
+  /**
+   * Fan-out bus for topology changes. Declared before the managers, which publish to it, and the dashboard, which
+   * reads it.
+   * Always present, even with the dashboard disabled: emitting into a bus with no subscribers is a no-op.
+   */
+  internal val eventBus = ProxyEventBus()
+
   // Null unless proxy.dashboard.enabled. Off by default, matching the admin and metrics posture: the dashboard shows
   // agent names, hostnames, target URLs and recent activity in one place, on a port with no auth unless
   // proxy.dashboard.password is set.
@@ -201,7 +207,7 @@ class Proxy(
         dashboardHost = options.dashboardHost,
         dashboardPort = options.dashboardPort,
         dashboardPath = options.dashboardPath,
-        login = options.dashboardPassword.ifEmpty { null }?.let { DashboardLogin(options.dashboardUsername, it) },
+        login = options.dashboardLogin,
       )
     else
       null
@@ -250,12 +256,6 @@ class Proxy(
 
   private val metricsHolder = lazy { ProxyMetrics(this) }
   internal val metrics by metricsHolder
-
-  /**
-   * Fan-out bus for topology changes. Declared before the managers because they publish to it.
-   * Always present, even with the dashboard disabled: emitting into a bus with no subscribers is a no-op.
-   */
-  internal val eventBus = ProxyEventBus()
 
   internal val pathManager by lazy { ProxyPathManager(this, isTestMode) }
   internal val agentContextManager = AgentContextManager(isTestMode, eventBus, activityLog = activityLog)

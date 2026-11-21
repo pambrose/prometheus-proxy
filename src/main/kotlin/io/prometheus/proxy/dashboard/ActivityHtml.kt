@@ -16,14 +16,14 @@
 
 package io.prometheus.proxy.dashboard
 
+import io.prometheus.common.dashboard.DashboardPage.DASH
+import io.prometheus.common.dashboard.DashboardPage.timeOfDay
 import io.prometheus.proxy.ActivityEntry
 import io.prometheus.proxy.ActivityKind
 import io.prometheus.proxy.ActivityLog
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.ACTIVITY_ID
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.DASH
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.agentLabel
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.renderFilters
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.scrapeTime
 import kotlinx.html.DIV
 import kotlinx.html.FlowContent
 import kotlinx.html.TBODY
@@ -140,7 +140,7 @@ internal object ActivityHtml {
     showIdentity: Boolean,
   ) {
     tr {
-      td { scrapeTime(entry.at) }
+      td { timeOfDay(entry.at) }
       eventCell(entry)
       // Named as the other views name it, so a line can be read against the agent list.
       td { +(entry.agentName.takeIf { it.isNotEmpty() }?.let(::agentLabel) ?: DASH) }

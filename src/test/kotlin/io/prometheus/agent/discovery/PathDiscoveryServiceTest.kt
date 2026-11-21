@@ -22,6 +22,8 @@ import ch.qos.logback.classic.Level
 import io.grpc.Status
 import io.grpc.StatusException
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.string.shouldNotContain
 import io.prometheus.common.captureLogs
 import io.prometheus.common.deadlineExceeded
 import io.kotest.matchers.nulls.shouldNotBeNull
@@ -107,6 +109,34 @@ class PathDiscoveryServiceTest : StringSpec() {
       service.reconcileOnce()
 
       coVerify(exactly = 1) { pathManager.reconcileDiscoveredPaths(desired) }
+    }
+
+    // The agent's dashboard shows the last read's failure, on a port that may have no login, and a file's parse error
+    // can quote a line of it, a target's URL with its password.
+    "a read's failure should be kept for the dashboard with any URL's credentials redacted, until a read succeeds" {
+      var fail = true
+      val pathManager = mockk<AgentPathManager>(relaxed = true)
+      val service =
+        PathDiscoveryService(
+          pathManager,
+          {
+            if (fail)
+              throw IllegalStateException("line 3: bad entry url: \"http://ops:s3cret@host/metrics?token=t0k\"")
+            emptyList()
+          },
+          30,
+        )
+
+      service.reconcileFailure.shouldBeNull()
+      service.reconcileOnce()
+      service.reconcileFailure.shouldNotBeNull().message.apply {
+        this shouldContain "IllegalStateException: line 3: bad entry url"
+        this shouldNotContain "s3cret"
+        this shouldNotContain "t0k"
+      }
+      fail = false
+      service.reconcileOnce()
+      service.reconcileFailure.shouldBeNull()
     }
 
     "a successful empty read reconciles to empty (removes all discovered)" {

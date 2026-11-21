@@ -23,6 +23,8 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldEndWith
 import io.kotest.matchers.string.shouldNotContain
+import io.prometheus.common.dashboard.DashboardCss
+import io.prometheus.common.dashboard.DashboardPage
 import io.prometheus.common.dashboard.DashboardServer
 import io.prometheus.proxy.dashboard.DashboardFixtures.departedPathView
 import io.prometheus.proxy.dashboard.DashboardFixtures.iconLinks
@@ -141,8 +143,8 @@ class PathTableHtmlTest : StringSpec() {
       push(view, 5) shouldContain
         """<i class="slot" style="--n:3"></i><i class="crit" style="--n:1"></i><i class="ok" style="--n:1"></i>"""
       push(full, 2) shouldNotContain """class="slot""""
-      ProxyDashboardCss.CSS shouldContain ".hist i.slot { --dot:var(--line); }"
-      ProxyDashboardCss.CSS shouldNotContain ".hist i.empty"
+      DashboardCss.CSS shouldContain ".hist i.slot { --dot:var(--line); }"
+      DashboardCss.CSS shouldNotContain ".hist i.empty"
     }
 
     // A table wider than the window scrolls sideways in its scroller. The push replaces the region inside it, not the
@@ -159,11 +161,11 @@ class PathTableHtmlTest : StringSpec() {
     // A wide window's spare width goes to the other columns, so none opens between the percentage and the links.
     "the History and Links columns should keep their content's width" {
       historyTable(200) shouldContain """<td class="dim history">"""
-      ProxyDashboardCss.CSS shouldContain ".ptable td.history, .ptable td.links { width:1%; }"
+      DashboardCss.CSS shouldContain ".ptable td.history, .ptable td.links { width:1%; }"
     }
 
     "the history strip should stay visible under forced colours" {
-      ProxyDashboardCss.CSS shouldContain ".hist i { forced-color-adjust:none; }"
+      DashboardCss.CSS shouldContain ".hist i { forced-color-adjust:none; }"
     }
 
     "the path table should be captioned and its headers scoped" {
@@ -219,7 +221,7 @@ class PathTableHtmlTest : StringSpec() {
     // A path whose agent left before Prometheus scraped it now has a row, from its departure, and nothing to put in its
     // scrape cells.
     "a path that departed before its first scrape should show the en dash for its scrapes" {
-      val dash = ProxyDashboardHtml.DASH
+      val dash = DashboardPage.DASH
       val html = pathPush([departedPathView(lastScrape = null, agentName = "warehouse-01")])
 
       html shouldContain "warehouse-01"
@@ -274,12 +276,12 @@ class PathTableHtmlTest : StringSpec() {
         """<td class="dim links center"><a href="https://runbooks.example.com/app_metrics" target="_blank" """
       html shouldContain """aria-label="Open /orphan_metrics in Runbook">Runbook</a></td>"""
       html shouldNotContain "in Prometheus"
-      pathPush(links = demoLinks) shouldContain """<td class="dim links center">${ProxyDashboardHtml.DASH}</td>"""
+      pathPush(links = demoLinks) shouldContain """<td class="dim links center">${DashboardPage.DASH}</td>"""
     }
 
     "the links should be quiet, and take focus as the nav does" {
-      ProxyDashboardCss.CSS shouldContain ".ptable td.links a { color:inherit;"
-      ProxyDashboardCss.CSS shouldContain ".ptable td.links a:focus-visible {"
+      DashboardCss.CSS shouldContain ".ptable td.links a { color:inherit;"
+      DashboardCss.CSS shouldContain ".ptable td.links a:focus-visible {"
     }
 
     // The mark and its colour come from the class, through the page's icon stylesheet, so a push carries no URL.
@@ -329,25 +331,25 @@ class PathTableHtmlTest : StringSpec() {
 
     // On surface-3, the icon buttons' hover ground, the light theme's marks fall below 3:1, so hover rings the target.
     "an icon link should be a 24px target painted in its brand's colour, and keep its mark in forced colours" {
-      ProxyDashboardCss.CSS shouldContain ".ptable td.links a.icon { display:inline-flex; align-items:center; " +
+      DashboardCss.CSS shouldContain ".ptable td.links a.icon { display:inline-flex; align-items:center; " +
         "justify-content:center;"
-      ProxyDashboardCss.CSS shouldContain "width:24px; height:24px;"
-      ProxyDashboardCss.CSS shouldContain "text-decoration:none; }"
-      ProxyDashboardCss.CSS shouldContain ".ptable td.links a.icon::before { content:\"\"; width:16px; height:16px; " +
+      DashboardCss.CSS shouldContain "width:24px; height:24px;"
+      DashboardCss.CSS shouldContain "text-decoration:none; }"
+      DashboardCss.CSS shouldContain ".ptable td.links a.icon::before { content:\"\"; width:16px; height:16px; " +
         "background:var(--brand);"
-      ProxyDashboardCss.CSS shouldContain "mask:var(--icon) center/contain no-repeat; }"
-      ProxyDashboardCss.CSS shouldNotContain "a.icon:hover { background"
-      ProxyDashboardCss.CSS shouldContain ".ptable td.links a.icon:hover { box-shadow:inset 0 0 0 1px var(--ink-3); }"
-      ProxyDashboardCss.CSS shouldContain
+      DashboardCss.CSS shouldContain "mask:var(--icon) center/contain no-repeat; }"
+      DashboardCss.CSS shouldNotContain "a.icon:hover { background"
+      DashboardCss.CSS shouldContain ".ptable td.links a.icon:hover { box-shadow:inset 0 0 0 1px var(--ink-3); }"
+      DashboardCss.CSS shouldContain
         ".ptable td.links a.icon::before { forced-color-adjust:none; background:LinkText; }"
     }
 
     // The browser shows an icon link's title as it does the copy and scrape-now buttons', so the stylesheet draws no
     // tooltip of its own, which looked and timed unlike theirs.
     "an icon link's tooltip should be the browser's, and the column center its marks" {
-      ProxyDashboardCss.CSS shouldNotContain "a.icon::after"
-      ProxyDashboardCss.CSS shouldNotContain "data-tip"
-      ProxyDashboardCss.CSS shouldContain ".ptable .center { text-align:center; }"
+      DashboardCss.CSS shouldNotContain "a.icon::after"
+      DashboardCss.CSS shouldNotContain "data-tip"
+      DashboardCss.CSS shouldContain ".ptable .center { text-align:center; }"
     }
 
     // ==================== Search and filter ====================
@@ -361,7 +363,7 @@ class PathTableHtmlTest : StringSpec() {
       html shouldNotContain "/db_metrics"
       html shouldContain """<div class="match-count">Showing 1 of 3 paths</div>"""
       // For the page's script, which says the count aloud once per change of filter.
-      html shouldContain """${ProxyDashboardHtml.MATCH_COUNT_ATTR}="Showing 1 of 3 paths""""
+      html shouldContain """${DashboardPage.MATCH_COUNT_ATTR}="Showing 1 of 3 paths""""
     }
 
     "an unfiltered table should not say how many it shows" {
@@ -380,10 +382,10 @@ class PathTableHtmlTest : StringSpec() {
       val page = renderFullPage(snapshot(), DashboardLayout.PATH, filter = RowFilter.of("east", problemsOnly = true))
 
       page shouldContain """<form action="/dashboard/paths" method="get" class="filters" role="search">"""
-      page shouldContain """id="${ProxyDashboardHtml.FILTER_QUERY_ID}" aria-label="Filter paths""""
-      page shouldContain """name="${RowFilter.QUERY_PARAM}""""
+      page shouldContain """id="${DashboardPage.FILTER_QUERY_ID}" aria-label="Filter paths""""
+      page shouldContain """name="${DashboardPage.QUERY_PARAM}""""
       page shouldContain """value="east""""
-      page shouldContain """id="${ProxyDashboardHtml.FILTER_PROBLEMS_ID}" value="1" checked="checked""""
+      page shouldContain """id="${DashboardPage.FILTER_PROBLEMS_ID}" value="1" checked="checked""""
       // A push replaces #path-table, so the input someone is typing in must not be inside it.
       (page.indexOf("""<form action""") < page.indexOf("""id="${ProxyDashboardHtml.PATH_TABLE_ID}"""")) shouldBe true
     }
@@ -455,13 +457,13 @@ class PathTableHtmlTest : StringSpec() {
     // A push replaces #path-table, header and all, every refresh; the guide below the search outlives every one.
     "the column guide should follow the search, ahead of the scrape result and the pushed table, and no push carry it" {
       val page = pathsPage(snapshot(scrapeNowEnabled = true))
-      val guide = page.indexOf("""<section class="column-guide" id="${ProxyDashboardHtml.COLUMN_GUIDE_ID}"""")
+      val guide = page.indexOf("""<section class="column-guide" id="${DashboardPage.COLUMN_GUIDE_ID}"""")
 
       (page.indexOf("</form>") in 0..<guide) shouldBe true
-      (guide < page.indexOf("""id="${ProxyDashboardHtml.SCRAPE_RESULT_ID}"""")) shouldBe true
+      (guide < page.indexOf("""id="${DashboardPage.SCRAPE_RESULT_ID}"""")) shouldBe true
       (guide < page.indexOf("""id="${ProxyDashboardHtml.PATH_TABLE_ID}"""")) shouldBe true
       pathPush(scrapeNowEnabled = true, authEnabled = true, links = demoLinks).apply {
-        this shouldNotContain ProxyDashboardHtml.COLUMN_GUIDE_ID
+        this shouldNotContain DashboardPage.COLUMN_GUIDE_ID
         this shouldNotContain "<dt>"
       }
     }
@@ -473,8 +475,8 @@ class PathTableHtmlTest : StringSpec() {
         val form = renderFullPage(snapshot(), layout).substringAfter("""class="filters"""").substringBefore("</form>")
 
         form.trimEnd() shouldEndWith
-          """<button type="button" class="guide-toggle" id="${ProxyDashboardHtml.COLUMN_GUIDE_TOGGLE_ID}" """ +
-          """aria-expanded="false" aria-controls="${ProxyDashboardHtml.COLUMN_GUIDE_ID}">Column guide</button>"""
+          """<button type="button" class="guide-toggle" id="${DashboardPage.COLUMN_GUIDE_TOGGLE_ID}" """ +
+          """aria-expanded="false" aria-controls="${DashboardPage.COLUMN_GUIDE_ID}">Column guide</button>"""
       }
     }
 
@@ -483,21 +485,21 @@ class PathTableHtmlTest : StringSpec() {
       listOf(DashboardLayout.PATH, DashboardLayout.ACTIVITY).forEach { layout ->
         renderFullPage(snapshot(), layout).apply {
           this shouldContain
-            """<section class="column-guide" id="${ProxyDashboardHtml.COLUMN_GUIDE_ID}" aria-label="Column guide" """ +
+            """<section class="column-guide" id="${DashboardPage.COLUMN_GUIDE_ID}" aria-label="Column guide" """ +
             """hidden="hidden">"""
           this shouldContain """aria-label="Close the column guide""""
         }
       }
       // The script names the ids, so look for the elements.
       renderFullPage(snapshot()).apply {
-        this shouldNotContain """id="${ProxyDashboardHtml.COLUMN_GUIDE_ID}""""
-        this shouldNotContain """id="${ProxyDashboardHtml.COLUMN_GUIDE_TOGGLE_ID}""""
+        this shouldNotContain """id="${DashboardPage.COLUMN_GUIDE_ID}""""
+        this shouldNotContain """id="${DashboardPage.COLUMN_GUIDE_TOGGLE_ID}""""
       }
     }
 
     "the column guide's button should take focus as the other controls do, and keep its icon in forced colours" {
-      ProxyDashboardCss.CSS shouldContain ".close:focus-visible, .guide-toggle:focus-visible,"
-      ProxyDashboardCss.CSS shouldContain ".close::before, .guide-toggle::before { forced-color-adjust:none;"
+      DashboardCss.CSS shouldContain ".close:focus-visible, .guide-toggle:focus-visible,"
+      DashboardCss.CSS shouldContain ".close::before, .guide-toggle::before { forced-color-adjust:none;"
     }
 
     // ==================== Scrape now ====================
@@ -505,7 +507,7 @@ class PathTableHtmlTest : StringSpec() {
     // The id carries the path, which the page's script reads back out of it.
     "a live path should have a Scrape button, carrying its path in its id, when scrape-now is on" {
       pathPush([path("orders_metrics")], scrapeNowEnabled = true) shouldContain
-        """<button type="button" class="scrape-now" id="${ProxyDashboardHtml.SCRAPE_ID_PREFIX}orders_metrics" """ +
+        """<button type="button" class="scrape-now" id="${DashboardPage.SCRAPE_ID_PREFIX}orders_metrics" """ +
         """aria-label="Scrape /orders_metrics now""""
     }
 
@@ -520,14 +522,14 @@ class PathTableHtmlTest : StringSpec() {
       val page = renderFullPage(snapshot(scrapeNowEnabled = true), DashboardLayout.PATH)
 
       page shouldContain
-        """<div class="scrape-result" id="${ProxyDashboardHtml.SCRAPE_RESULT_ID}" """ +
-        """${ProxyDashboardHtml.SCRAPE_URL_ATTR}="/dashboard/scrape" hidden="hidden"></div>"""
+        """<div class="scrape-result" id="${DashboardPage.SCRAPE_RESULT_ID}" """ +
+        """${DashboardPage.SCRAPE_URL_ATTR}="/dashboard/scrape" hidden="hidden"></div>"""
       (
-        page.indexOf("""id="${ProxyDashboardHtml.SCRAPE_RESULT_ID}"""") <
+        page.indexOf("""id="${DashboardPage.SCRAPE_RESULT_ID}"""") <
         page.indexOf("""id="${ProxyDashboardHtml.PATH_TABLE_ID}"""")
       ) shouldBe true
       renderFullPage(snapshot(), DashboardLayout.PATH) shouldNotContain
-        """id="${ProxyDashboardHtml.SCRAPE_RESULT_ID}""""
+        """id="${DashboardPage.SCRAPE_RESULT_ID}""""
     }
 
     // ==================== Problems in the status bar and title ====================
@@ -540,21 +542,21 @@ class PathTableHtmlTest : StringSpec() {
       // A departed path counts once, as departed, not again as failing.
       html shouldContain "<span class=\"crit\">1 failing</span>"
       html shouldContain "<span class=\"crit\">1 departed</span>"
-      html shouldContain """${ProxyDashboardHtml.TITLE_ATTR}="(2 problems) prometheus-proxy""""
+      html shouldContain """${DashboardPage.TITLE_ATTR}="(2 problems) prometheus-proxy""""
       renderFullPage(snapshot([failing, departed])) shouldContain "<title>(2 problems) prometheus-proxy</title>"
     }
 
     "a single problem should read in the singular" {
       val failing = path("app_metrics").copy(history = [scrapeRecord(statusCode = 503)])
 
-      pathPush([failing]) shouldContain """${ProxyDashboardHtml.TITLE_ATTR}="(1 problem) prometheus-proxy""""
+      pathPush([failing]) shouldContain """${DashboardPage.TITLE_ATTR}="(1 problem) prometheus-proxy""""
     }
 
     "a healthy proxy's status bar should name no failing paths, and its title no problems" {
       val html = pathPush()
 
       html shouldNotContain "failing"
-      html shouldContain """${ProxyDashboardHtml.TITLE_ATTR}="prometheus-proxy""""
+      html shouldContain """${DashboardPage.TITLE_ATTR}="prometheus-proxy""""
       renderFullPage(snapshot()) shouldContain "<title>prometheus-proxy</title>"
     }
   }

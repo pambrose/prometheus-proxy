@@ -51,17 +51,29 @@ internal object LoginHtml {
   const val MAX_FIELD_LENGTH = 1_024
 
   /**
-   * The page, headed [heading], the dashboard's name, and posting to `<routeBase>/login`. [next] is where a successful
-   * login goes, which the route checks again; [username] refills the field after a refused login, whose [alert],
-   * [FAILED] or [LIMITED], the page shows, focusing the password.
+   * What a login page shows.
+   *
+   * @param heading the dashboard's name
+   * @param routeBase the dashboard's base, under which the form posts to `login`
+   * @param next where a successful login goes, which the route checks again
+   * @param username what refills the field after a refused login
+   * @param alert why the last login was refused, [FAILED] or [LIMITED], which the page shows, focusing the password
    */
-  fun HTML.renderLogin(
-    heading: String,
-    routeBase: String,
-    next: String,
-    username: String = "",
-    alert: String? = null,
-  ) {
+  class Form(
+    val heading: String,
+    val routeBase: String,
+    val next: String,
+    val username: String = "",
+    val alert: String? = null,
+  )
+
+  /** The page [page] describes. */
+  fun HTML.renderLogin(page: Form) {
+    val heading = page.heading
+    val routeBase = page.routeBase
+    val next = page.next
+    val username = page.username
+    val alert = page.alert
     attributes["lang"] = "en"
     head {
       meta(charset = "utf-8")

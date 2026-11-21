@@ -20,6 +20,8 @@ import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.common.Exposition
 import java.nio.charset.CharacterCodingException
 import kotlin.concurrent.atomics.AtomicBoolean
+import kotlin.concurrent.atomics.AtomicLong
+import kotlin.concurrent.atomics.plusAssign
 
 /**
  * Outcome of filtering one scraped payload.
@@ -81,6 +83,32 @@ internal class MetricFilter private constructor(
   private val contentTypeWarned = AtomicBoolean(false)
   private val invalidUtf8Warned = AtomicBoolean(false)
 
+  // What the filter has dropped since the agent started, for the agent's dashboard, which shows it whether or not the
+  // agent's metrics are on.
+  private val droppedLines = AtomicLong(0L)
+  private val savedBytes = AtomicLong(0L)
+
+  /** The metric names kept, as regular expressions; empty keeps every name the deny list doesn't drop. */
+  val allowPatterns: List<String> get() = allow.map { it.pattern }
+
+  /** The metric names dropped, as regular expressions. */
+  val denyPatterns: List<String> get() = deny.map { it.pattern }
+
+  /** The lines the filter has dropped since the agent started. */
+  val linesDropped: Long get() = droppedLines.load()
+
+  /** The bytes the filter has saved since the agent started. */
+  val bytesSaved: Long get() = savedBytes.load()
+
+  /** Why the filter has let a scrape through unfiltered, or null when it never has (see [filterBytes]). */
+  val failedOpen: String?
+    get() =
+      when {
+        contentTypeWarned.load() -> "a scrape's content type was not text"
+        invalidUtf8Warned.load() -> "a scrape's body was not valid UTF-8"
+        else -> null
+      }
+
   /**
    * Filters [bytes], or returns `null` when the payload was deliberately left untouched.
    *
@@ -120,6 +148,8 @@ internal class MetricFilter private constructor(
     // a successfully strict-decoded string, and re-encoding a string that came from valid UTF-8
     // reproduces the exact bytes it was decoded from -- so bytesSaved can never go negative.
     val filtered = result.text.encodeToByteArray()
+    droppedLines += result.linesDropped.toLong()
+    savedBytes += (bytes.size - filtered.size).toLong()
     return FilterOutcome(filtered, result.text, result.linesDropped, bytes.size - filtered.size)
   }
 

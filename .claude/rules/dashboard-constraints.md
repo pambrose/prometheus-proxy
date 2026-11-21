@@ -4,11 +4,13 @@ paths:
   - "src/test/kotlin/io/prometheus/proxy/dashboard/**"
   - "src/main/kotlin/io/prometheus/common/dashboard/**"
   - "src/test/kotlin/io/prometheus/common/dashboard/**"
+  - "src/main/kotlin/io/prometheus/agent/dashboard/**"
+  - "src/test/kotlin/io/prometheus/agent/dashboard/**"
 ---
 
 # Dashboard Design Constraints
 
-`docs/DESIGN.md` is the visual contract (color tokens, typography roles, components) and `docs/PRODUCT.md` the product one; both are tracked, while the tooling that generated them is gitignored. These constraints in `ProxyDashboardHtml.kt`, `PathTableHtml.kt` (the Paths view's table), `ActivityHtml.kt` (the Activity view's table), `DashboardScript.kt` (the page's script), `ScrapeNow.kt`, `ProxyDashboardCss.kt`, `ProxyDashboardService.kt` (the proxy's site), and `common/dashboard/DashboardServer.kt` (the server, login, guards, assets, sessions, and push loop every dashboard shares) are load-bearing and easy to undo by accident:
+`docs/DESIGN.md` is the visual contract (color tokens, typography roles, components) and `docs/PRODUCT.md` the product one; both are tracked, while the tooling that generated them is gitignored. These constraints in `ProxyDashboardHtml.kt`, `PathTableHtml.kt` (the Paths view's table), `ActivityHtml.kt` (the Activity view's table), `ScrapeNow.kt`, `ProxyDashboardCss.kt`, `ProxyDashboardService.kt` (the proxy's site), and in `common/dashboard/` what every dashboard shares, `DashboardServer.kt` (the server, login, guards, assets, sessions, and push loop), `DashboardPage.kt` (the ids the script reads, the head, tabs, and live region), `DashboardScript.kt` (the page's script), and `DashboardCss.kt`, are load-bearing and easy to undo by accident. The agent's dashboard (`agent/dashboard/`) is built from the same parts and keeps the same rules:
 
 - **The live region must stay outside every `hx-swap-oob` region.** A region the push loop rewrites re-announces itself on every frame. `ProxyDashboardHtmlTest` pins this.
 - **The column guide stays outside every `hx-swap-oob` region, and its rows come from the header's own columns.** `renderFilters` renders it under the search, where no push reaches it, so it stays open as `#path-table` (header and all) is replaced every refresh; inside a pushed region it would close on the next frame. Each view builds one `TableColumn` list per render (`PathTableHtml.columns`, `ActivityHtml.columns`), and both the header row (`columnHeaders`) and the guide iterate it, so a column can't reach the header without an explanation; add a column to that list, not to the header row alone. `PathTableHtmlTest` and `ActivityHtmlTest` pin both.

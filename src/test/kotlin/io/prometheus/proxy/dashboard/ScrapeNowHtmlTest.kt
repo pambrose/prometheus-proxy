@@ -23,6 +23,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import io.ktor.http.HttpStatusCode
+import io.prometheus.common.dashboard.DashboardPage
 import kotlin.time.Duration.Companion.milliseconds
 
 /** The scrape-now result panel's content, [ScrapeNowHtml]. */
@@ -63,7 +64,7 @@ class ScrapeNowHtmlTest : StringSpec() {
         this shouldContain "success · 120 ms · 4.2 KB · text/plain · 1 families · 1 samples"
         this shouldContain "<pre># TYPE up gauge\nup 1\n</pre>"
         // Said aloud by the page's script, from the heading.
-        this shouldContain """${ProxyDashboardHtml.SAY_ATTR}="Scrape of /orders_metrics finished: 200 in 120 ms.""""
+        this shouldContain """${DashboardPage.SAY_ATTR}="Scrape of /orders_metrics finished: 200 in 120 ms.""""
         this shouldContain """<button type="button" class="close" aria-label="Close the scrape result""""
         this shouldNotContain "sr-note"
       }
@@ -118,14 +119,14 @@ class ScrapeNowHtmlTest : StringSpec() {
       ScrapeNowHtml.render(ScrapeNow.Refused(HttpStatusCode.TooManyRequests, "4 dashboard scrapes are running")).apply {
         this shouldContain """<span class="tag crit">not scraped</span>"""
         this shouldContain "4 dashboard scrapes are running"
-        this shouldContain """${ProxyDashboardHtml.SAY_ATTR}="Not scraped: 4 dashboard scrapes are running.""""
+        this shouldContain """${DashboardPage.SAY_ATTR}="Not scraped: 4 dashboard scrapes are running.""""
       }
     }
 
     "a size should read in bytes, KB, or MB" {
-      ScrapeNowHtml.size(900) shouldBe "900 bytes"
-      ScrapeNowHtml.size(4300) shouldBe "4.2 KB"
-      ScrapeNowHtml.size(3 * 1024 * 1024) shouldBe "3.0 MB"
+      DashboardPage.size(900) shouldBe "900 bytes"
+      DashboardPage.size(4300) shouldBe "4.2 KB"
+      DashboardPage.size(3 * 1024 * 1024) shouldBe "3.0 MB"
     }
   }
 }

@@ -14,47 +14,50 @@
  * limitations under the License.
  */
 
-package io.prometheus.proxy.dashboard
+package io.prometheus.common.dashboard
 
-import io.prometheus.common.dashboard.DashboardServer
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.ANNOUNCER_ID
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.COLUMN_GUIDE_ID
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.COLUMN_GUIDE_TOGGLE_ID
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.COPY_ATTR
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.FILTER_PROBLEMS_ID
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.FILTER_QUERY_ID
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.LOGOUT_ID
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.MATCH_COUNT_ATTR
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.NAV_ID
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.PROXY_PATH_ATTR
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SAY_ATTR
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SCRAPE_ID_PREFIX
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SCRAPE_PORT_ATTR
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SCRAPE_RESULT_ID
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SCRAPE_URL_ATTR
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.STATUS_ID
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.TITLE_ATTR
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.VIEW_ATTR
+import io.prometheus.common.dashboard.DashboardPage.ANNOUNCER_ID
+import io.prometheus.common.dashboard.DashboardPage.COLUMN_GUIDE_ID
+import io.prometheus.common.dashboard.DashboardPage.COLUMN_GUIDE_TOGGLE_ID
+import io.prometheus.common.dashboard.DashboardPage.COPY_ATTR
+import io.prometheus.common.dashboard.DashboardPage.FILTER_PROBLEMS_ID
+import io.prometheus.common.dashboard.DashboardPage.FILTER_QUERY_ID
+import io.prometheus.common.dashboard.DashboardPage.LOGOUT_ID
+import io.prometheus.common.dashboard.DashboardPage.MATCH_COUNT_ATTR
+import io.prometheus.common.dashboard.DashboardPage.NAV_ID
+import io.prometheus.common.dashboard.DashboardPage.PROBLEMS_ON
+import io.prometheus.common.dashboard.DashboardPage.PROBLEMS_PARAM
+import io.prometheus.common.dashboard.DashboardPage.PROXY_PATH_ATTR
+import io.prometheus.common.dashboard.DashboardPage.QUERY_PARAM
+import io.prometheus.common.dashboard.DashboardPage.SAY_ATTR
+import io.prometheus.common.dashboard.DashboardPage.SCRAPE_ID_PREFIX
+import io.prometheus.common.dashboard.DashboardPage.SCRAPE_PORT_ATTR
+import io.prometheus.common.dashboard.DashboardPage.SCRAPE_RESULT_ID
+import io.prometheus.common.dashboard.DashboardPage.SCRAPE_URL_ATTR
+import io.prometheus.common.dashboard.DashboardPage.STATUS_ID
+import io.prometheus.common.dashboard.DashboardPage.TITLE_ATTR
+import io.prometheus.common.dashboard.DashboardPage.VIEW_ATTR
 
 /**
- * The dashboard page's one script, which [ProxyDashboardHtml.renderPage] inlines. Apart from the renderer so each stays
- * a size a reader can hold; it names the page's ids and attributes through the renderer's constants, so the two can't
- * drift apart.
+ * A dashboard page's one script, which each dashboard's renderer inlines. Apart from the renderers so each stays a size
+ * a reader can hold; it names the page's ids and attributes through [DashboardPage]'s constants, so the two can't drift
+ * apart. A handler for an element a page doesn't have does nothing there, so every dashboard runs the same script.
+ *
+ * @param subject the process the page reports on, `proxy` or `agent`, as the connection's announcements name it
+ * @param views the dashboard's views: the one served at its base, also shown with a row selected, and the others, each
+ *   at its own route
+ * @param selectionSegment the route segment a selected row's id follows, as in `<base>/agents/<id>`
  */
-internal object DashboardScript {
-  // How long the path search waits after a keystroke before applying the filter: long enough not to push a new table
-  // per letter, short enough to read as typing into a live view.
-  private const val FILTER_DEBOUNCE_MILLIS = 250
-
-  // How long a copy button shows its result: long enough to notice after the click, brief enough that it reads
-  // as the click's answer rather than as a state of the row.
-  private const val COPY_MARK_MILLIS = 1500
+internal class DashboardScript(
+  subject: String,
+  views: List<DashboardView>,
+  selectionSegment: String,
+) {
+  private val defaultLayout = views.first { it.segment.isEmpty() }.name
 
   // The layouts with a route of their own, by its segment, for the page's script: {"paths":"PATH",...}.
-  private val LAYOUTS_JS =
-    DashboardLayout.entries
-      .filter { it.segment.isNotEmpty() }
-      .joinToString(",", "{", "}") { "\"${it.segment}\":\"${it.name}\"" }
+  private val layoutsJs =
+    views.filter { it.segment.isNotEmpty() }.joinToString(",", "{", "}") { "\"${it.segment}\":\"${it.name}\"" }
 
   /**
    * The page's script. It reads the selection back out of the URL that hx-push-url already set, and tells the server,
@@ -62,24 +65,31 @@ internal object DashboardScript {
    * search, the copy and scrape-now buttons, the column guide, the tabs' arrow keys, and the scrape times' conversion
    * to the viewer's zone, the only things on the page that htmx does not model; everything else is htmx.
    */
-  val JS =
+  val js =
     """
     (function () {
       // htmx 4 runs the inline scripts of content it swaps in, and every back or forward navigation
       // refetches the page and swaps it into <body>, so this script runs again on each one. The body, its
       // listeners, and the socket all survive that swap, so a second run would only stack another set of
       // listeners, and one announce per navigation would become two, then three.
-      if (window.__proxyUiInit) return;
-      window.__proxyUiInit = true;
+      if (window.__${subject}UiInit) return;
+      window.__${subject}UiInit = true;
+      // The dashboard's base, from the socket's URL. The page's route is what follows it: matched there, rather than by
+      // the URL's last segment, a base or a selected row's id named like a view can't be taken for that view.
+      var base = (document.body.getAttribute('hx-ws:connect') || '').replace(/\/events$/, '');
+      function route() {
+        var path = window.location.pathname;
+        return (path.indexOf(base) === 0 ? path.slice(base.length) : path).replace(/^\/+|\/+$/g, '');
+      }
       function selectedId() {
-        var m = window.location.pathname.match(/\/agents\/([^/]+)$/);
+        var m = route().match(/^$selectionSegment\/([^/]+)$/);
         return m ? m[1] : null;
       }
-      // Each layout's name by its route's last segment, from DashboardLayout; the agent layout is the base itself.
-      var LAYOUTS = $LAYOUTS_JS;
+      // Each layout's name by its route; the default layout is the base itself, and a selected row's.
+      var LAYOUTS = $layoutsJs;
       function layout() {
-        var m = window.location.pathname.match(/\/([^/]+)\/?$/);
-        return m && Object.prototype.hasOwnProperty.call(LAYOUTS, m[1]) ? LAYOUTS[m[1]] : 'AGENT';
+        var r = route();
+        return Object.prototype.hasOwnProperty.call(LAYOUTS, r) ? LAYOUTS[r] : '$defaultLayout';
       }
       // The extension's connection, which outlives its socket: each reconnect replaces connection.socket,
       // so this keeps the connection and reads the socket when it sends.
@@ -117,7 +127,7 @@ internal object DashboardScript {
       // open; a failed connect always ends in 'htmx:ws:close' too.
       //
       // A hidden tab is the other exception. The extension closes the socket while the tab is hidden and
-      // reopens it when the tab is shown again, which frees the session for the proxy. That is a pause, not
+      // reopens it when the tab is shown again, which frees the session for the server. That is a pause, not
       // an outage, so a close while the tab is hidden changes nothing. An outage that begins while the tab is
       // hidden still shows: the reconnect that runs when the tab is shown fails while it is visible.
       //
@@ -133,8 +143,8 @@ internal object DashboardScript {
         // Only transitions are news. Every failed retry closes the socket again, and rewriting the region on
         // each one would re-announce the outage every couple of seconds for as long as it lasts. Nothing to
         // say about the first successful connect either; only a recovery from a real outage.
-        if (!up && !wasDown) region.textContent = 'Connection to the proxy lost. Reconnecting.';
-        else if (up && wasDown) region.textContent = 'Connection to the proxy restored.';
+        if (!up && !wasDown) region.textContent = 'Connection to the $subject lost. Reconnecting.';
+        else if (up && wasDown) region.textContent = 'Connection to the $subject restored.';
       }
       function connected(up) {
         document.body.classList.toggle('ws-down', !up);
@@ -147,12 +157,10 @@ internal object DashboardScript {
         // At once: until this message arrives, the server pushes a new session only the status bar.
         announce();
       });
-      // The dashboard's base, from the socket's URL, for the session check.
-      var base = (document.body.getAttribute('hx-ws:connect') || '').replace(/\/events$/, '');
       // Whether this page may still use the dashboard, asked when its socket closes: a session that has ended, by
-      // expiring, a Log out elsewhere, or a proxy restart, gets a 401, and a reload, which the server answers with the
+      // expiring, a Log out elsewhere, or a restart, gets a 401, and a reload, which the server answers with the
       // login page. Only on a page with a login, which has Log out, and one check at a time, since every failed
-      // reconnect closes the socket again; with the proxy down, nothing happens.
+      // reconnect closes the socket again; with the server down, nothing happens.
       var checkingSession = false;
       function checkSession() {
         if (checkingSession || !document.getElementById('$LOGOUT_ID')) return;
@@ -206,8 +214,8 @@ internal object DashboardScript {
         var problems = document.getElementById('$FILTER_PROBLEMS_ID');
         if (!q || !problems) return;
         var params = new URLSearchParams();
-        if (q.value.trim()) params.set('${RowFilter.QUERY_PARAM}', q.value.trim());
-        if (problems.checked) params.set('${RowFilter.PROBLEMS_PARAM}', '${RowFilter.PROBLEMS_ON}');
+        if (q.value.trim()) params.set('$QUERY_PARAM', q.value.trim());
+        if (problems.checked) params.set('$PROBLEMS_PARAM', '$PROBLEMS_ON');
         var search = params.toString();
         history.replaceState(history.state, '', window.location.pathname + (search ? '?' + search : ''));
         // The first frame rendered from this filter says how many rows it left.
@@ -283,10 +291,10 @@ internal object DashboardScript {
           say('Could not copy the ' + what.toLowerCase() + '.');
         });
       }
-      // Scrape now: a path's Scrape button has the proxy scrape it at once, and the result shows in the panel above the
+      // Scrape now: a path's Scrape button has the server scrape it at once, and the result shows in the panel above the
       // table. A request of the script's own, not hx-post: the push loop replaces the table every frame, which would
       // drop a request its button made. The panel is outside every pushed region, so a push never clears a result.
-      // The header is the one htmx sends, which the route requires, so no page on another site can make the proxy
+      // The header is the one htmx sends, which the route requires, so no page on another site can make the server
       // scrape. Closing the panel hands focus back to the button that filled it.
       var scrapedFrom = null;
       function scrapeNow(btn) {
@@ -311,7 +319,7 @@ internal object DashboardScript {
             // A refusal the guard answers in plain text has no heading; it is said as the panel shows it.
             say(heading ? heading.getAttribute('$SAY_ATTR') : panel.textContent);
           }, function () {
-            panel.textContent = 'No answer from the proxy for the scrape of /' + path + '.';
+            panel.textContent = 'No answer from the $subject for the scrape of /' + path + '.';
             say(panel.textContent);
           });
       }
@@ -359,7 +367,7 @@ internal object DashboardScript {
       // never focuses a link on a click or a Tab. Not while typing, so the arrows still move the caret in the search.
       // A bare key only: Alt+Left is the browser's Back, and a held key would start a page load per repeat. On <body>,
       // as the other listeners are: a back or forward swaps a new nav in.
-      var TAB_FOCUS_KEY = 'proxy-dashboard-tab-focus';
+      var TAB_FOCUS_KEY = '$subject-dashboard-tab-focus';
       function typingIn(el) {
         if (el.isContentEditable) return true;
         var tag = el.tagName;
@@ -408,9 +416,9 @@ internal object DashboardScript {
       function proxyUrl(path) {
         return 'http://' + window.location.hostname + ':' + document.body.getAttribute('$SCRAPE_PORT_ATTR') + path;
       }
-      // Scrape times arrive as <time datetime="...Z"> showing the proxy's zone, and are shown in the viewer's, the
+      // Scrape times arrive as <time datetime="...Z"> showing the server's zone, and are shown in the viewer's, the
       // zone Grafana uses, so a failure here and the spike it caused there read the same clock. Every frame and row
-      // click is converted in its fragment before htmx swaps it in, so no frame shows the proxy's zone first. The
+      // click is converted in its fragment before htmx swaps it in, so no frame shows the server's zone first. The
       // title gives the date and the zone's name, which the column has no room for.
       function pad(n) {
         return (n < 10 ? '0' : '') + n;
@@ -431,4 +439,14 @@ internal object DashboardScript {
       });
     })();
     """.trimIndent()
+
+  private companion object {
+    // How long the path search waits after a keystroke before applying the filter: long enough not to push a new table
+    // per letter, short enough to read as typing into a live view.
+    const val FILTER_DEBOUNCE_MILLIS = 250
+
+    // How long a copy button shows its result: long enough to notice after the click, brief enough that it reads
+    // as the click's answer rather than as a state of the row.
+    const val COPY_MARK_MILLIS = 1500
+  }
 }

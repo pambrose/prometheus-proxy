@@ -46,6 +46,7 @@ import io.prometheus.agent.EmbeddedAgentInfo
 import io.prometheus.agent.EndpointFailover
 import io.prometheus.agent.HeartBeatResult
 import io.prometheus.agent.RequestFailureException
+import io.prometheus.agent.dashboard.AgentDashboardService
 import io.prometheus.agent.discovery.FileDiscoverySource
 import io.prometheus.agent.discovery.PathDiscoveryService
 import io.prometheus.metrics.core.datapoints.Timer
@@ -60,6 +61,7 @@ import io.prometheus.common.Utils.logStreamFailure
 import io.prometheus.common.ScrapeRequestAction
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.Utils.sanitizeUrl
+import kotlin.time.Instant
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -211,9 +213,24 @@ class Agent(
   }
 
   internal val pathManager = AgentPathManager(this)
-  private val pathDiscoveryService: PathDiscoveryService? = createPathDiscoveryService()
+  internal val pathDiscoveryService: PathDiscoveryService? = createPathDiscoveryService()
   internal val grpcService = AgentGrpcService(this, options, inProcessServerName)
   internal var agentId: String by nonNullableReference("")
+
+  // The agent's dashboard, on its own port, off unless agent.dashboard.enabled: an agent embedded in another app opens
+  // no port of its own unless asked. It renders the agent's paths, target URLs, and proxy endpoints, on a port with no
+  // auth unless agent.dashboard.password is set.
+  internal val dashboardService =
+    if (options.dashboardEnabled)
+      AgentDashboardService(
+        agent = this,
+        dashboardHost = options.dashboardHost,
+        dashboardPort = options.dashboardPort,
+        dashboardPath = options.dashboardPath,
+        login = options.dashboardLogin,
+      )
+    else
+      null
 
   // The connection Prometheus can scrape through: open, with the agent's paths registered on it. Null before the
   // first one, between one ending and the next registering, and once the agent stops.
@@ -221,6 +238,9 @@ class Agent(
 
   // Whether the agent is connected to a proxy that can scrape through it now (EmbeddedAgentInfo.isConnected).
   internal val isConnectedToProxy: Boolean get() = isRunning && liveConnection.load()?.connected == true
+
+  // When the agent's current connection to a proxy began, for its dashboard; null while it has none.
+  internal val connectedAt: Instant? get() = liveConnection.load()?.startedAt
 
   // The endpoint of that connection, as host:port, or null without one (EmbeddedAgentInfo.proxyEndpoint).
   internal val connectedProxyEndpoint: String? get() = if (isConnectedToProxy) proxyHost else null
@@ -252,6 +272,10 @@ class Agent(
     grpcService.failoverEndpointsDesc?.also { logger.info { "Proxy failover endpoints, tried in order: $it" } }
     logger.info { "Proxy reconnect pause time: ${agentConfigVals.internal.reconnectPauseSecs.seconds}" }
     logger.info { "Scrape timeout time: ${options.scrapeTimeoutSecs.seconds}" }
+
+    // Must precede initServletService: the ServiceManager snapshots this list there, so a service registered
+    // afterwards is invisible to it and to the all_services_healthy check.
+    dashboardService?.also { addServices(it) }
 
     initServletService {
       if (options.debugEnabled) {
@@ -523,6 +547,7 @@ class Agent(
 
   override fun registerHealthChecks() {
     super.registerHealthChecks()
+    dashboardService?.also { healthCheckRegistry.register("dashboard_service", it.healthCheck) }
     healthCheckRegistry.register(
       "scrape_request_backlog_check",
       healthCheck {
@@ -723,6 +748,7 @@ class Agent(
         val _ = metrics
       }
       super.startUp()
+      dashboardService?.startSync()
     }.onFailure { releaseAfterFailedStartUp() }
       .getOrThrow()
   }
@@ -733,6 +759,7 @@ class Agent(
   private fun releaseAfterFailedStartUp() {
     val steps: List<() -> Unit> =
       [
+        { dashboardService?.stopSync() },
         { grpcService.shutDown() },
         { runBlocking { agentHttpService.close() } },
         { closeMetrics() },
@@ -746,6 +773,7 @@ class Agent(
   override fun shutDown() {
     val steps: List<() -> Unit> =
       [
+        { dashboardService?.stopSync() },
         { grpcService.shutDown() },
         { runBlocking { agentHttpService.close() } },
         { closeMetrics() },

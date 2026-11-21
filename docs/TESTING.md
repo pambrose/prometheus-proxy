@@ -228,6 +228,12 @@ pins, and no jar on the classpath carries a `logback.xml`, which would replace t
   `PROXY_HOSTNAME` overrides a malformed or blank config endpoint without parsing it; and options built from an
   in-memory config take its settings, fall back to the built-in defaults, resolve its substitutions, and take a
   trusted certificate as PEM text
+- **AgentDashboardOptionsTest** — the agent dashboard's options, `agent.dashboard` and the `--dashboard*` flags, which
+  the agent resolves as the proxy resolves its own: off by default, on port 8095 apart from the admin port and the
+  proxy's, path and host defaults, settable from the command line and read from the agent's config, not the proxy's;
+  an out-of-range port, an empty path, a blank host, or a non-positive `maxSessions` or `refreshIntervalSecs` refused
+  while it is on, with a `ConfigLoadException`; the login off with the username `admin` until a password is set, then
+  logged masked; and, without one, a warning on every interface that names the agent's settings
 - **AgentClientInterceptorTest** — gRPC client interceptor that adds agent-id metadata to outbound calls
 - **AgentTokenClientInterceptorTest** — gRPC client interceptor that attaches the agent token header to outbound calls
 - **EndpointFailoverTest** — Proxy endpoint rotation: a failed connect or a rejected registration moves to the next
@@ -254,6 +260,16 @@ pins, and no jar on the classpath carries a `logback.xml`, which would replace t
 - **RequestFailureExceptionTest** — RequestFailureException custom exception class
 - **SslSettingsTest** — SSL keystore/truststore loading for TLS configuration
 - **TrustAllX509TrustManagerTest** — TrustAllX509TrustManager (dev/test only, bypasses SSL validation)
+- **AgentSnapshotTest** (`dashboard/`) — `AgentSnapshot.collect`, from an agent built but never started: connecting
+  to the first of its endpoints, with no id, no failure, and no connect yet; every configured path pending, sorted,
+  with its URL's credentials and query redacted, its name and labels; a path's filter with its rules and nothing
+  dropped; the settings as the agent resolved them, with only whether a token is set; and no discovery while it is off
+- **AgentDashboardHtmlTest** (`dashboard/`) — the agent dashboard's markup: a path, a reason, and a URL escaped; a
+  refused path's reason and "not until the agent reconnects"; a retry's wait as a countdown, and one already due as
+  the next retry; an en dash for missing labels; the empty and gone detail panes; a failing connection's endpoints,
+  each with its last error, the one being tried, and "failed over"; the title's count of refused and retrying paths
+  and a failing connection; a push's status bar first and stamped, with the regions of the page's view alone; and a
+  row's encoded selection URL and the script's agent views
 - **FileDiscoverySourceTest** (`discovery/`) — Discovery-file parsing: HOCON and JSON, empty or absent `paths`,
   rejection of missing files, malformed files and incomplete entries, and HOCON substitution resolution
 - **PathDiscoveryServiceTest** (`discovery/`) — A failed read reconciles the last good read, so a reconnect registers
@@ -704,6 +720,12 @@ chunked transfer crosses the spec's transport:
 The classes above all run that same standard suite. These run their own scenario instead, each pinning one
 mechanism that the standard suite cannot reach:
 
+- **AgentWebDashboardTest** — the agent's dashboard, served by a real agent: with its proxy down, failing, with the
+  endpoint's error, every path pending, the target's password kept off the page, and its WebSocket pushing the status
+  bar at once and then the regions each view asks for; connected, one path registered and one refused, with the
+  proxy's reason, the detail pane as a page and as htmx's fragment, the connection's endpoint, connects, and token,
+  and the root's redirect; with a password, the login page under the agent's name and a cookie named for the agent;
+  and no dashboard without `--dashboard`
 - **AgentDiscoveryTest** — dynamic target discovery: the agent reconciles a watched file's paths, adding,
   updating and removing them with no restart
 - **AgentMetricFilterTest** — per-path metric filtering: a denied metric family never reaches the proxy

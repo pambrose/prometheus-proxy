@@ -17,6 +17,8 @@
 package io.prometheus.common
 
 import com.typesafe.config.ConfigFactory
+import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlin.io.path.createTempFile
 import io.prometheus.agent.AgentOptions
 import io.prometheus.proxy.ProxyOptions
@@ -60,11 +62,31 @@ fun proxyOptionsFromConfig(
   contents: String,
   suffix: String = ".conf",
   extraArgs: List<String> = emptyList(),
-): ProxyOptions {
-  val file =
-    createTempFile("test-config", suffix).toFile().apply { writeText(contents.trimIndent()) }
+): ProxyOptions = withConfigFile(contents, suffix) { proxyOptions(["--config", it] + extraArgs) }
+
+/** Writes [contents] to a temp file and builds [AgentOptions] from it via `--config`, as for the proxy. */
+fun agentOptionsFromConfig(
+  contents: String,
+  extraArgs: List<String> = emptyList(),
+): AgentOptions = withConfigFile(contents) { agentOptions(["--config", it] + extraArgs, exitOnMissingConfig = false) }
+
+/**
+ * An embedded agent's rejection of a setting (exitOnMissingConfig false): the [ConfigLoadException] it throws, rather
+ * than exiting, with the [IllegalArgumentException] that rejected it as the cause (November #8). The message carries
+ * the cause's, so a spec can still check which setting it names.
+ */
+inline fun shouldBeRejected(block: () -> Any?): ConfigLoadException =
+  shouldThrow<ConfigLoadException>(block).also { it.cause.shouldBeInstanceOf<IllegalArgumentException>() }
+
+// Writes [contents] to a temp file with [suffix], runs [block] with its path, and deletes it.
+private fun <T> withConfigFile(
+  contents: String,
+  suffix: String = ".conf",
+  block: (String) -> T,
+): T {
+  val file = createTempFile("test-config", suffix).toFile().apply { writeText(contents.trimIndent()) }
   try {
-    return proxyOptions(["--config", file.absolutePath] + extraArgs)
+    return block(file.absolutePath)
   } finally {
     file.delete()
   }

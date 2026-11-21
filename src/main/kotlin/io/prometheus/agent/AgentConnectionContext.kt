@@ -20,6 +20,8 @@ import com.pambrose.common.delegate.AtomicDelegates.atomicBoolean
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.common.ScrapeRequestAction
 import io.prometheus.common.ScrapeResults
+import kotlin.time.Clock
+import kotlin.time.Instant
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
 
@@ -40,6 +42,9 @@ internal class AgentConnectionContext(
   // diverge if a future call site forgot to pass it (finding 31).
   val backlogCapacity: Int,
 ) {
+  /** When the connection began, for the agent's dashboard. */
+  val startedAt: Instant = Clock.System.now()
+
   private var disconnected by atomicBoolean(false)
   private val scrapeRequestActionsChannel = Channel<ScrapeRequestAction>(backlogCapacity)
   private val scrapeResultsChannel = Channel<ScrapeResults>(UNLIMITED)

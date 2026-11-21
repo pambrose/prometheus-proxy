@@ -20,6 +20,7 @@ import com.pambrose.common.util.runCatchingCancellable
 import com.pambrose.common.util.simpleClassName
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.agent.AgentPathManager
+import io.prometheus.agent.ShownFailure
 import io.prometheus.common.Utils.failureKey
 import kotlinx.coroutines.delay
 import kotlin.time.Duration
@@ -48,12 +49,27 @@ internal class PathDiscoveryService(
   private val source: PathDiscoverySource,
   private val intervalSecs: Int,
 ) {
-  // The last reconcile's failure, as Utils.failureKey gives it, or null after a success; see reconcileOnce.
-  private var lastFailure: String? = null
+  // The last reconcile's failure, as Utils.failureKey gives it to compare with the next, and as the agent's dashboard
+  // shows it, or null after a success; see reconcileOnce. Volatile, since the dashboard reads it from another thread.
+  private class LastFailure(
+    val key: String,
+    val shown: ShownFailure,
+  )
+
+  @Volatile
+  private var lastFailure: LastFailure? = null
 
   // The paths the source last read successfully, or null before the first good read. The live path map can't be the
   // last-known-good set: every connect clears it, so a reconnect while the file was unreadable registered nothing.
+  // Volatile, since the agent's dashboard reads it from another thread.
+  @Volatile
   private var lastGoodPaths: List<DiscoveredPath>? = null
+
+  /** The entries the source last read successfully, empty before the first good read. */
+  val discoveredEntries: List<DiscoveredPath> get() = lastGoodPaths.orEmpty()
+
+  /** The last reconcile's failure, or null after a success, and before the first reconcile. */
+  val reconcileFailure: ShownFailure? get() = lastFailure?.shown
 
   // The entries the last read dropped as unusable, empty for a source that does not report them.
   val skippedEntries: List<DiscoveredPath>
@@ -99,13 +115,13 @@ internal class PathDiscoveryService(
       lastFailure = null
     }.onFailure { e ->
       val failure = failureKey(e, withMessage = true)
-      if (failure == lastFailure)
+      if (failure == lastFailure?.key)
         logger.debug {
           "Path discovery reconcile failed again; keeping the paths last read: ${e.simpleClassName}: ${e.message}"
         }
       else
         logger.warn(e) { "Path discovery reconcile failed; keeping the paths last read" }
-      lastFailure = failure
+      lastFailure = LastFailure(failure, ShownFailure.of(e))
     }
   }
 

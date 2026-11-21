@@ -354,6 +354,24 @@ class AgentOptions internal constructor(
       }
     }
 
+    with(agentConfigVals.dashboard) {
+      assignDashboardOptions(
+        "agent",
+        DashboardConfig(
+          enabled = enabled,
+          port = port,
+          path = path,
+          host = host,
+          username = username,
+          password = password,
+          maxSessions = maxSessions,
+          refreshIntervalSecs = refreshIntervalSecs,
+          allowedHosts = allowedHosts,
+        ),
+        logger,
+      )
+    }
+
     validateInternalConfigVals(agentConfigVals.internal)
     validateDiscoveryConfigVals(agentConfigVals.discovery)
 

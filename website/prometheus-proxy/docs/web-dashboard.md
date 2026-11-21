@@ -20,6 +20,11 @@ and how recent scrapes actually went.
     It listens on all interfaces by default, and without a login the proxy logs a warning at startup when it does. Set
     `proxy.dashboard.host` (or `--dashboard_host`) to `127.0.0.1` to keep it on the proxy host.
 
+!!! tip "The agent's side"
+
+    This dashboard shows agents once they connect. For an agent that can't, or a path the proxy refused, turn on the
+    agent's own [dashboard](agent-dashboard.md), which shows its connection and each path from the agent's side.
+
 !!! tip "See it running"
 
     The repository's [`demos/basics`](https://github.com/pambrose/prometheus-proxy/tree/master/demos/basics)

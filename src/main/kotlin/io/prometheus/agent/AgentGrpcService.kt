@@ -58,6 +58,7 @@ import io.prometheus.grpc.registerAgentRequest
 import io.prometheus.grpc.registerPathRequest
 import io.prometheus.grpc.summaryData
 import io.prometheus.grpc.unregisterPathRequest
+import kotlin.concurrent.atomics.AtomicInt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
@@ -159,17 +160,37 @@ internal class AgentGrpcService(
   // render a host:port pair that was never configured.
   val currentEndpoint: HostPort get() = endpoints[endpointIndex]
 
-  // The last connect failure logged at WARN for each proxy endpoint, as Utils.failureKey gives it, and when, until a
-  // connect to it succeeds: a proxy that stays down, or a dead primary in a failover list, logs its failure once and
-  // then at DEBUG (October #17), with a WARN again every CONNECT_FAILURE_REMINDER_INTERVAL while it lasts, since a
-  // failure that won't clear by itself, such as a refused token, otherwise sat in the log's first lines. The endpoints
-  // are the configured list, so this stays as small.
+  // Each proxy endpoint's connect failure, until a connect to it succeeds: the failure logged at WARN last, as
+  // Utils.failureKey gives it, and when, and the latest one, for the agent's dashboard, which shows an agent that can't
+  // reach its proxy, as the proxy's never can. A proxy that stays down, or a dead primary in a failover list, logs its
+  // failure once and then at DEBUG (October #17), with a WARN again every CONNECT_FAILURE_REMINDER_INTERVAL while it
+  // lasts, since a failure that won't clear by itself, such as a refused token, otherwise sat in the log's first lines.
+  // The endpoints are the configured list, so this stays as small.
   private val connectFailures = ConcurrentHashMap<String, LoggedFailure>()
 
   private class LoggedFailure(
     val key: String,
     val warnedAt: TimeMark,
+    val latest: ShownFailure,
   )
+
+  /** The latest failure to connect to each proxy endpoint, by its `host:port`, until a connect to it succeeds. */
+  val connectFailuresByEndpoint: Map<String, ShownFailure> get() = connectFailures.mapValues { it.value.latest }
+
+  // Whether the agent's latest connect attempt failed, for the agent's dashboard: an endpoint's failure stays until
+  // that endpoint connects, so after a failover the failures left behind don't say the agent is failing now.
+  @Volatile
+  var lastConnectFailed = false
+    private set
+
+  // The connects that succeeded, for the agent's dashboard.
+  private val successfulConnects = AtomicInt(0)
+
+  /** How many times the agent has connected to a proxy. */
+  val connects: Int get() = successfulConnects.load()
+
+  /** How the agent reaches its proxy: plaintext, TLS, or mutual TLS, as its connect log lines say it. */
+  val tlsDescription: String get() = tlsContext.desc()
 
   val agentHostName: String get() = currentEndpoint.host
   val agentPort: Int get() = currentEndpoint.port
@@ -354,6 +375,8 @@ internal class AgentGrpcService(
         unaryStub().connectAgent(EMPTY_INSTANCE)
 
       connectFailures.remove(proxyHost)
+      lastConnectFailed = false
+      successfulConnects += 1
       logger.info { "Connected to proxy at $proxyHost using ${tlsContext.desc()}" }
       agent.metrics { connectCount.labelValues(agent.launchId, "success").inc() }
       true
@@ -369,21 +392,24 @@ internal class AgentGrpcService(
       val failure = failureKey(e)
       val message =
         "Cannot connect to proxy at $proxyHost using ${tlsContext.desc()} - ${e.simpleClassName}: ${e.message}"
+      val latest = ShownFailure.of(e)
+      lastConnectFailed = true
       // The first failure, and a change, at WARN with the stack trace for diagnosis; a repeat at DEBUG, and at WARN
       // again, without the stack trace, once the last WARN is CONNECT_FAILURE_REMINDER_INTERVAL old.
       val last = connectFailures[proxyHost]
       when {
         last?.key != failure -> {
-          connectFailures[proxyHost] = LoggedFailure(failure, timeSource.markNow())
+          connectFailures[proxyHost] = LoggedFailure(failure, timeSource.markNow(), latest)
           logger.warn(e) { message }
         }
 
         last.warnedAt.elapsedNow() >= CONNECT_FAILURE_REMINDER_INTERVAL -> {
-          connectFailures[proxyHost] = LoggedFailure(failure, timeSource.markNow())
+          connectFailures[proxyHost] = LoggedFailure(failure, timeSource.markNow(), latest)
           logger.warn { "$message (still failing, retrying every few seconds)" }
         }
 
         else -> {
+          connectFailures[proxyHost] = LoggedFailure(failure, last.warnedAt, latest)
           logger.debug { message }
         }
       }
@@ -415,7 +441,7 @@ internal class AgentGrpcService(
       .also { response ->
         agent.markMsgSent()
         if (!response.valid)
-          throw RequestFailureException("registerAgent() - ${response.reason}")
+          throw RequestFailureException.fromProxy("registerAgent", response.reason)
       }
     initialConnectionLatch.countDown()
   }
@@ -453,7 +479,7 @@ internal class AgentGrpcService(
     ).apply {
       agent.markMsgSent()
       if (!valid)
-        throw RequestFailureException("registerPathOnProxy() - $reason", rejectionCause)
+        throw RequestFailureException.fromProxy("registerPathOnProxy", reason, rejectionCause)
     }
 
   suspend fun unregisterPathOnProxy(pathVal: String): UnregisterPathResponse =
@@ -467,7 +493,7 @@ internal class AgentGrpcService(
     ).apply {
       agent.markMsgSent()
       if (!valid)
-        throw RequestFailureException("unregisterPathOnProxy() - $reason")
+        throw RequestFailureException.fromProxy("unregisterPathOnProxy", reason)
     }
 
   // Sends one heartbeat and classifies the outcome for the caller (Agent.startHeartBeat), which uses the

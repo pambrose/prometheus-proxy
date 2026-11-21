@@ -16,7 +16,32 @@
 
 package io.prometheus.proxy.dashboard
 
+import io.prometheus.common.dashboard.DashboardPage
+import io.prometheus.common.dashboard.DashboardPage.ANNOUNCER_ID
+import io.prometheus.common.dashboard.DashboardPage.COLUMN_GUIDE_ID
+import io.prometheus.common.dashboard.DashboardPage.COLUMN_GUIDE_TOGGLE_ID
+import io.prometheus.common.dashboard.DashboardPage.DASH
+import io.prometheus.common.dashboard.DashboardPage.FILTER_PROBLEMS_ID
+import io.prometheus.common.dashboard.DashboardPage.FILTER_QUERY_ID
+import io.prometheus.common.dashboard.DashboardPage.HTMX_CONFIG
+import io.prometheus.common.dashboard.DashboardPage.LOGOUT_ID
+import io.prometheus.common.dashboard.DashboardPage.NAV_ID
+import io.prometheus.common.dashboard.DashboardPage.SCRAPE_PORT_ATTR
+import io.prometheus.common.dashboard.DashboardPage.STATUS_ID
+import io.prometheus.common.dashboard.DashboardPage.TITLE_ATTR
+import io.prometheus.common.dashboard.DashboardPage.VIEW_ATTR
+import io.prometheus.common.dashboard.DashboardPage.announcer
+import io.prometheus.common.dashboard.DashboardPage.connectionIndicator
+import io.prometheus.common.dashboard.DashboardPage.dashboardHead
+import io.prometheus.common.dashboard.DashboardPage.humanize
+import io.prometheus.common.dashboard.DashboardPage.logoutForm
+import io.prometheus.common.dashboard.DashboardPage.pageTitle
+import io.prometheus.common.dashboard.DashboardPage.tabs
+import io.prometheus.common.dashboard.DashboardPage.timeOfDay
+import io.prometheus.common.dashboard.DashboardScript
 import io.prometheus.common.dashboard.DashboardServer
+import io.prometheus.common.dashboard.DashboardView
+import io.prometheus.common.dashboard.href
 import kotlinx.html.ButtonType
 import kotlinx.html.DIV
 import kotlinx.html.FORM
@@ -75,17 +100,13 @@ import kotlin.time.toJavaInstant
  * @param searchFields what the search above the layout's table matches, for its placeholder; the agent layout has none
  */
 internal enum class DashboardLayout(
-  val segment: String,
-  val title: String,
+  override val segment: String,
+  override val title: String,
   val searchFields: String = "",
-) {
+) : DashboardView {
   AGENT("", "Agents"),
   PATH("paths", "Paths", "path, agent, target, or identity"),
   ACTIVITY("activity", "Activity", "event, agent, identity, path, or detail"),
-  ;
-
-  /** The layout's URL, under [routeBase]; the agent layout's is the base itself, which at a root mount is "/". */
-  fun href(routeBase: String): String = if (segment.isEmpty()) routeBase.ifEmpty { "/" } else "$routeBase/$segment"
 }
 
 /**
@@ -97,48 +118,10 @@ internal enum class DashboardLayout(
  * detail pane independently without re-rendering the page.
  */
 internal object ProxyDashboardHtml {
-  private val timeFormat = DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault())
-
   const val AGENT_LIST_ID = "agent-list"
   const val DETAIL_ID = "detail"
-  const val STATUS_ID = "status-bar"
   const val PATH_TABLE_ID = "path-table"
   const val ACTIVITY_ID = "activity"
-  const val ANNOUNCER_ID = "conn-announce"
-
-  // The tabs, which the page's script moves between with the arrow keys. No path or agent can give an element this id:
-  // every id built from one starts with a prefix (agent-row-, copy-, scrape-path-).
-  const val NAV_ID = "layout-nav"
-  const val VIEW_ATTR = "data-view"
-  const val COPY_ATTR = "data-copy"
-  const val PROXY_PATH_ATTR = "data-proxy-path"
-  const val SCRAPE_PORT_ATTR = "data-scrape-port"
-
-  // The search above the Paths and Activity tables. One set of ids for both: the two never show on one page.
-  const val FILTER_QUERY_ID = "filter-q"
-  const val FILTER_PROBLEMS_ID = "filter-problems"
-
-  // The column guide under the search, and the button at the search's end that opens it; one pair for both tables, as
-  // the search's ids are. No path or agent can give an element either id: every id built from one starts with a prefix
-  // (agent-row-, copy-, scrape-path-).
-  const val COLUMN_GUIDE_ID = "column-guide"
-  const val COLUMN_GUIDE_TOGGLE_ID = "column-guide-toggle"
-
-  // On the table region a push replaces: how many rows the filter left, which the page's script says aloud once per
-  // change of filter.
-  const val MATCH_COUNT_ATTR = "data-match-count"
-
-  // Scrape-now (ScrapeNow): the panel a result shows in, the route the page's script posts to, on the panel, the
-  // prefix of a button's id, which the path follows, and the sentence a result's heading carries for the script to say
-  // aloud. No region id starts with the prefix, so no path can give a button the id of the panel or a region.
-  const val SCRAPE_RESULT_ID = "scrape-result"
-  const val SCRAPE_URL_ATTR = "data-scrape-url"
-  const val SCRAPE_ID_PREFIX = "scrape-path-"
-  const val SAY_ATTR = "data-say"
-
-  // On the status bar: the page's title, which counts the paths failing or gone, for the page's script to put in the
-  // tab.
-  const val TITLE_ATTR = "data-title"
 
   // The two kinds of copy button, by row. Their ids differ before the path does ("copy-t..." and "copy-p..."), so no
   // path can give one kind the id of the other.
@@ -152,9 +135,6 @@ internal object ProxyDashboardHtml {
   // No region id starts with it, so an agent id, which an agent behind nginx names itself, can't make a row's id
   // equal one.
   const val AGENT_ROW_ID_PREFIX = "agent-row-"
-
-  // The Log out form, in the bar, with a login set.
-  const val LOGOUT_ID = "logout"
 
   // What demos/basics/bin/screenshots.sh needs about an agent, as data: on each agent-list row, its id, its name as
   // the row shows it, and its path count, and on its detail's Recent scrapes header, their count. The script matched
@@ -179,16 +159,7 @@ internal object ProxyDashboardHtml {
     // Declared so assistive tech pronounces agent names, paths, and status text as English rather than
     // falling back to the listener's system locale.
     attributes["lang"] = "en"
-    head {
-      title(pageTitle(snapshot))
-      meta(name = "viewport", content = "width=device-width, initial-scale=1")
-      style { unsafe { raw(ProxyDashboardCss.CSS) } }
-      linkIconStyle(snapshot.links, routeBase)
-      // Ahead of the scripts: htmx reads its config once, when htmx.min.js loads.
-      meta(name = "htmx-config", content = HTMX_CONFIG)
-      script(src = "$routeBase/${DashboardServer.ASSET_DIR}/htmx.min.js") {}
-      script(src = "$routeBase/${DashboardServer.ASSET_DIR}/hx-ws.min.js") {}
-    }
+    head { dashboardHead(pageTitle(snapshot), routeBase) { linkIconStyle(snapshot.links, routeBase) } }
     body {
       // Loading hx-ws.min.js is what enables the extension; htmx 4 has no hx-ext.
       attributes["hx-ws:connect"] = "$routeBase/events"
@@ -200,22 +171,9 @@ internal object ProxyDashboardHtml {
         span("brand") { +BRAND }
         renderNav(routeBase, layout)
         renderStatus(snapshot)
-        // After the status and outside it, which a push replaces. A plain form the browser posts itself.
-        if (loginEnabled) {
-          form(action = "$routeBase/logout", method = FormMethod.post, classes = "logout") {
-            attributes["id"] = LOGOUT_ID
-            button(type = ButtonType.submit) { +"Log out" }
-          }
-        }
+        if (loginEnabled) logoutForm(routeBase)
       }
-      // The one live region on the page. Kept outside every out-of-band id on purpose: a region the push
-      // loop rewrites would re-announce itself on every frame, so this is written only by the socket
-      // lifecycle handlers, which fire when the state actually changes.
-      div("sr-only") {
-        attributes["id"] = ANNOUNCER_ID
-        attributes["role"] = "status"
-        attributes["aria-live"] = "polite"
-      }
+      announcer()
 
       when (layout) {
         DashboardLayout.AGENT -> {
@@ -240,41 +198,15 @@ internal object ProxyDashboardHtml {
       // The one piece htmx does not model: telling the server which agent THIS session is viewing, so
       // the push loop knows whether to send a detail pane. hx-push-url already puts the selection in
       // the URL, so this reads it back rather than tracking state of its own.
-      script { unsafe { raw(DashboardScript.JS) } }
+      script { unsafe { raw(SCRIPT) } }
     }
   }
 
-  /**
-   * The layout switcher: a plain link per [DashboardLayout], no htmx, drawn as tabs.
-   *
-   * Deliberately a real navigation rather than a swap. The layouts have disjoint region ids, so
-   * swapping one in would leave the push loop addressing elements that no longer exist; a page load
-   * makes that impossible by construction. It also costs nothing worth saving — this fires on an
-   * explicit click, not on an update, and the socket re-announces the new layout as soon as it opens.
-   *
-   * Links in a `<nav>` with `aria-current`, not ARIA tabs: each opens a page of its own, which `role="tab"` would
-   * misstate. The page's script adds the arrow keys (see DashboardScript).
-   */
+  /** The layout switcher: a tab per [DashboardLayout] (see [DashboardPage.tabs]). */
   fun FlowContent.renderNav(
     routeBase: String,
     layout: DashboardLayout,
-  ) {
-    nav("nav") {
-      attributes["id"] = NAV_ID
-      DashboardLayout.entries.forEach { navLink(routeBase, it, current = it == layout) }
-    }
-  }
-
-  private fun NAV.navLink(
-    routeBase: String,
-    layout: DashboardLayout,
-    current: Boolean,
-  ) {
-    a(href = layout.href(routeBase), classes = if (current) "on" else null) {
-      if (current) attributes["aria-current"] = "page"
-      +layout.title
-    }
-  }
+  ) = tabs(DashboardLayout.entries, layout, routeBase)
 
   /**
    * The search above [layout]'s table, which submits to the layout's own route, and under it the guide to the table's
@@ -293,7 +225,7 @@ internal object ProxyDashboardHtml {
   ) {
     form(action = layout.href(routeBase), method = FormMethod.get, classes = "filters") {
       attributes["role"] = "search"
-      input(type = InputType.search, name = RowFilter.QUERY_PARAM) {
+      input(type = InputType.search, name = DashboardPage.QUERY_PARAM) {
         attributes["id"] = FILTER_QUERY_ID
         attributes["aria-label"] = "Filter ${layout.title.lowercase()}"
         attributes["placeholder"] = "Filter by ${layout.searchFields}"
@@ -302,9 +234,9 @@ internal object ProxyDashboardHtml {
         value = filter.query
       }
       label {
-        input(type = InputType.checkBox, name = RowFilter.PROBLEMS_PARAM) {
+        input(type = InputType.checkBox, name = DashboardPage.PROBLEMS_PARAM) {
           attributes["id"] = FILTER_PROBLEMS_ID
-          value = RowFilter.PROBLEMS_ON
+          value = DashboardPage.PROBLEMS_ON
           checked = filter.problemsOnly
         }
         +"Problems only"
@@ -358,22 +290,6 @@ internal object ProxyDashboardHtml {
     span(if (isSuccess) "pill ok" else "pill crit") { +"$statusCode" }
   }
 
-  /**
-   * A scrape's time, or a dash when there is none. Rendered as `<time datetime="…Z">` with the time of day in the
-   * proxy's zone, which the page's script replaces with the viewer's (see DashboardScript).
-   */
-  internal fun FlowOrPhrasingContent.scrapeTime(at: Instant?) {
-    if (at == null) {
-      +DASH
-      return
-    }
-    time {
-      attributes["datetime"] = Instant.fromEpochSeconds(at.epochSeconds).toString()
-      // java.time's formatter, since the standard library has none that takes a zone.
-      +timeFormat.format(at.toJavaInstant())
-    }
-  }
-
   /** Status counters. Driven by the timer rather than the event bus -- these drift, they do not change. */
   fun FlowContent.renderStatus(
     snapshot: ProxySnapshot,
@@ -396,16 +312,7 @@ internal object ProxyDashboardHtml {
     attributes[TITLE_ATTR] = pageTitle(snapshot)
     val departed = snapshot.paths.count { it.isDeparted }
     val failing = snapshot.paths.count { it.isFailing }
-    // Both labels are always rendered; which one shows is driven by the `ws-down` class on <body>,
-    // which the WebSocket lifecycle handlers toggle. Body-level rather than here because this region
-    // is overwritten by every push -- and a push can only happen while connected, so the server never
-    // has to render the disconnected state itself. The class lives on the one element pushes never
-    // touch, so it survives the frozen-status-bar window during an outage.
-    span("conn") {
-      span("beacon") {}
-      span("conn-live") { +"live" }
-      span("conn-down") { +"reconnecting…" }
-    }
+    connectionIndicator()
     span { +"${snapshot.health.agentCount} agents" }
     span { +"${snapshot.health.pathCount} paths" }
     // health.pathCount counts registrations, so a departed path is deliberately absent from it -- which
@@ -555,7 +462,7 @@ internal object ProxyDashboardHtml {
     } else {
       scrapes.forEach { record ->
         div("kv scrape") {
-          span("t") { scrapeTime(record.at) }
+          span("t") { timeOfDay(record.at) }
           span("k") { +"/${record.path}" }
           statusPill(record.statusCode, record.isSuccess)
           span("v") { +"${record.durationMillis} ms · ${record.contentLength} chars · ${record.outcome}" }
@@ -648,47 +555,13 @@ internal object ProxyDashboardHtml {
    * dashboard left in a background tab still says when something is wrong. Counted by [PathView.isProblem], as the
    * "Problems only" filter counts them, so the title and the filtered table agree.
    */
-  private fun pageTitle(snapshot: ProxySnapshot): String {
-    val problems = snapshot.paths.count { it.isProblem }
-    return when (problems) {
-      0 -> BRAND
-      1 -> "(1 problem) $BRAND"
-      else -> "($problems problems) $BRAND"
-    }
-  }
+  private fun pageTitle(snapshot: ProxySnapshot): String = pageTitle(BRAND, snapshot.paths.count { it.isProblem })
 
-  /** An agent's uptime at the precision the hero line wants: the two largest units from a day up, then one. */
-  internal fun humanize(duration: Duration): String =
-    duration.toComponents { days, hours, minutes, seconds, _ ->
-      when {
-        days > 0 -> "${days}d ${hours}h"
-        hours > 0 -> "${hours}h ${minutes}m"
-        minutes > 0 -> "${minutes}m"
-        else -> "${seconds}s"
-      }
-    }
+  // The page's script (DashboardScript), for the proxy's layouts: the agent layout at the base, an agent selected at
+  // agents/<id>.
+  private val SCRIPT =
+    DashboardScript(subject = "proxy", views = DashboardLayout.entries, selectionSegment = "agents").js
 
   private const val UNASSIGNED = "Unassigned"
   private const val BRAND = "prometheus-proxy"
-
-  // An en dash for "the agent never told us", kept distinct from an empty cell, which would read as a
-  // rendering bug rather than as absent data.
-  const val DASH = "\u2013"
-
-  /**
-   * htmx's config, read from a `<meta>` tag.
-   *
-   * `noSwap` keeps htmx 2's rule that a 4xx or 5xx response is not swapped in. htmx 4 swaps every
-   * response but a 204 or 304, so a row click that failed would replace `#detail` with the error body, and
-   * the pushes, which address `#detail`, would have nothing left to update.
-   *
-   * `ws` caps the reconnect backoff. The extension's default doubles the wait from 500 ms up to a minute,
-   * resetting only on a successful open. That is tuned for public services guarding against a reconnect
-   * stampede, the opposite of this dashboard, which has a handful of viewers on a LAN. Left alone, a short
-   * outage grows the wait so far that the page can sit idle for tens of seconds after the proxy is already
-   * back. With these values the waits run 500 ms, 1 s, then 2 s ± 250 ms: recovery within about 2 s, and
-   * just enough jitter that many dashboards do not reconnect in lockstep.
-   */
-  private const val HTMX_CONFIG =
-    """{"noSwap":[204,304,"4xx","5xx"],"ws":{"reconnectDelay":500,"reconnectMaxDelay":2000,"reconnectJitter":0.125}}"""
 }
