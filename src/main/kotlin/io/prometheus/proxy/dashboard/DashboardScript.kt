@@ -145,8 +145,19 @@ internal object DashboardScript {
         // At once: until this message arrives, the server pushes a new session only the status bar.
         announce();
       });
+      // The dashboard's base, from the socket's URL, for the session check.
+      var base = (document.body.getAttribute('hx-ws:connect') || '').replace(/\/events$/, '');
+      // Whether this page may still use the dashboard, asked when its socket closes: a session that has ended, by
+      // expiring, a Log out elsewhere, or a proxy restart, gets a 401, and a reload, which the server answers with the
+      // login page. Without a login, or with the proxy down, nothing happens.
+      function checkSession() {
+        fetch(base + '/session', { headers: { '${ProxyDashboardService.HX_REQUEST_HEADER}': 'true' } })
+          .then(function (response) {
+            if (response.status === 401) location.reload();
+          }, function () {});
+      }
       document.body.addEventListener('htmx:ws:close', function () {
-        if (!document.hidden) connected(false);
+        if (!document.hidden) { connected(false); checkSession(); }
       });
       // htmx 4 dispatches its history events on document, which a listener on <body> never hears.
       document.addEventListener('htmx:after:history:push', announce);
@@ -281,8 +292,13 @@ internal object DashboardScript {
         panel.textContent = 'Scraping /' + path + '…';
         var url = panel.getAttribute('$SCRAPE_URL_ATTR') + '?path=' + encodeURIComponent(path);
         fetch(url, { method: 'POST', headers: { '${ProxyDashboardService.HX_REQUEST_HEADER}': 'true' } })
-          .then(function (response) { return response.text(); })
+          .then(function (response) {
+            // A session that has ended: the reload brings the login page.
+            if (response.status === 401) { location.reload(); return null; }
+            return response.text();
+          })
           .then(function (html) {
+            if (html === null) return;
             panel.innerHTML = html;
             var heading = panel.querySelector('[$SAY_ATTR]');
             // A refusal the guard answers in plain text has no heading; it is said as the panel shows it.

@@ -152,6 +152,9 @@ internal object ProxyDashboardHtml {
   // equal one.
   const val AGENT_ROW_ID_PREFIX = "agent-row-"
 
+  // The Log out form, in the bar, with a login set.
+  const val LOGOUT_ID = "logout"
+
   // What demos/basics/bin/screenshots.sh needs about an agent, as data: on each agent-list row, its id, its name as
   // the row shows it, and its path count, and on its detail's Recent scrapes header, their count. The script matched
   // the row's text before, and every change to its look, a tag, an LED, or a word, broke a regex.
@@ -160,13 +163,17 @@ internal object ProxyDashboardHtml {
   const val PATH_COUNT_ATTR = "data-path-count"
   const val SCRAPE_COUNT_ATTR = "data-scrape-count"
 
-  /** The full page. Only served on a real navigation; every later update arrives over the socket. */
+  /**
+   * The full page. Only served on a real navigation; every later update arrives over the socket. With [loginEnabled],
+   * the bar ends in a Log out button.
+   */
   fun HTML.renderPage(
     snapshot: ProxySnapshot,
     selectedId: String?,
     routeBase: String,
     layout: DashboardLayout = DashboardLayout.AGENT,
     filter: RowFilter = RowFilter.NONE,
+    loginEnabled: Boolean = false,
   ) {
     // Declared so assistive tech pronounces agent names, paths, and status text as English rather than
     // falling back to the listener's system locale.
@@ -192,6 +199,13 @@ internal object ProxyDashboardHtml {
         span("brand") { +BRAND }
         renderNav(routeBase, layout)
         renderStatus(snapshot)
+        // After the status and outside it, which a push replaces. A plain form the browser posts itself.
+        if (loginEnabled) {
+          form(action = "$routeBase/logout", method = FormMethod.post, classes = "logout") {
+            attributes["id"] = LOGOUT_ID
+            button(type = ButtonType.submit) { +"Log out" }
+          }
+        }
       }
       // The one live region on the page. Kept outside every out-of-band id on purpose: a region the push
       // loop rewrites would re-announce itself on every frame, so this is written only by the socket

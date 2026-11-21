@@ -57,7 +57,7 @@ Clone the repository at the latest release, then run the demo's commands from it
 its targets:
 
 ```bash
-git clone -c advice.detachedHead=false --depth 1 --branch 4.6.0 https://github.com/pambrose/prometheus-proxy.git
+git clone -c advice.detachedHead=false --depth 1 --branch 4.6.1 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/basics
 make up      # pulls the images, starts everything, prints the URLs
 make tour    # walks through every scenario below, pausing before each step
@@ -74,9 +74,10 @@ that it starts in under a minute, and runs without a network connection.
 | Prometheus | <http://localhost:9090> (alerts at `/alerts`) |
 | The proxy's service discovery | <http://localhost:8080/discovery> |
 
-Every port binds to `127.0.0.1` only: the dashboard has no authentication and Grafana keeps its default admin
-password, which suits a laptop and nothing shared. To move a port that is already taken, set `DEMO_DASHBOARD_PORT`,
-`DEMO_GRAFANA_PORT`, `DEMO_PROMETHEUS_PORT`, or `DEMO_PROXY_PORT`, for example `DEMO_GRAFANA_PORT=3001 make up`.
+Every port binds to `127.0.0.1` only: the dashboard runs without a login, but for [its own
+scenario](#a-login-for-the-dashboard), and Grafana keeps its default admin password, which suits a laptop and nothing
+shared. To move a port that is already taken, set `DEMO_DASHBOARD_PORT`, `DEMO_GRAFANA_PORT`, `DEMO_PROMETHEUS_PORT`, or
+`DEMO_PROXY_PORT`, for example `DEMO_GRAFANA_PORT=3001 make up`.
 
 ## What's running
 
@@ -254,6 +255,26 @@ seconds. The command prints the proxy's log line, which names both agents and gi
 true` on each, if both should serve the paths. `./demo.sh duplicate-agent-stop` removes the copy and restarts
 agent-east, which registers its paths again.
 
+### A login for the dashboard
+
+```bash
+./demo.sh login       # restarts the proxy with a dashboard password in its environment
+```
+
+<figure markdown="span">
+  ![The dashboard's login page](images/demo/login.webp#only-dark){ loading=lazy }
+  ![The dashboard's login page](images/demo/login-light.webp#only-light){ loading=lazy }
+  <figcaption>The dashboard's login page</figcaption>
+</figure>
+
+Reload the dashboard and it shows its [login page](web-dashboard.md#login). Sign in as `admin`, with the password
+`admin`, and it opens the page you asked for; **Log out**, at the right end of the top bar, signs you out. The password
+comes from the proxy's environment, `DEMO_DASHBOARD_PASSWORD` in `docker/compose.yml`, not from `config/proxy.conf`,
+so it never sits in a file, and a script sends the login as HTTP Basic Auth instead:
+`curl -u admin:admin http://localhost:8094/dashboard/paths`. A restart clears what the proxy holds in memory, so the
+tour does this last: the agents reconnect within a few seconds, and the dashboard's histories start over.
+`./demo.sh login-off` restarts the proxy without the password.
+
 ## Scenario reference
 
 | Command | Effect | How it works |
@@ -265,14 +286,15 @@ agent-east, which registers its paths again.
 | `demo.sh agent-stop` / `agent-start [agent]` | Stops or starts an agent (default `agent-west-2`) | `docker compose stop` / `start`: the agent's connection closes as it exits |
 | `demo.sh agent-freeze` / `agent-thaw [agent]` | Pauses or resumes an agent's container (default `agent-west-2`) | `docker compose pause` / `unpause`: the connection stays open but silent, so the proxy evicts the agent after 30 seconds |
 | `demo.sh rogue-agent` / `rogue-agent-stop` | Starts or removes the contractor's agent | Starts or removes `agent-rogue` (compose profile `rogue`), which presents the contractor identity's token, allowed only `contractor_*` paths |
+| `demo.sh login` / `login-off` | Turns the dashboard's login on (`admin`, password `admin`) or off | Restarts the proxy with or without `DASHBOARD_PASSWORD`, from `DEMO_DASHBOARD_PASSWORD` in `docker/compose.yml` |
 | `demo.sh duplicate-agent` / `duplicate-agent-stop` | Starts a second copy of agent-east, or removes it and restarts agent-east | Starts or removes `agent-east-copy` (profile `duplicate`): agent-east's config under another name, not consolidated |
 | `make tour [PART=n]` | Walks through every scenario, from part 1 or the one given, pausing before each step |  |
 | `make status` | The containers, the services' modes, and the URLs |  |
 | `make logs [SERVICE=name]` | Follows the logs, of every service or the one given |  |
 | `make open` | Opens the dashboard, Grafana, and Prometheus's alerts in the browser |  |
 
-`recover`, `undiscover`, `agent-thaw`, `agent-start`, `rogue-agent-stop`, and `duplicate-agent-stop` undo every
-scenario. For a clean slate, `make down && make up`.
+`recover`, `undiscover`, `agent-thaw`, `agent-start`, `rogue-agent-stop`, `duplicate-agent-stop`, and `login-off` undo
+every scenario. For a clean slate, `make down && make up`.
 
 ## Going further
 

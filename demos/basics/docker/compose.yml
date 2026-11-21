@@ -8,8 +8,9 @@
 # Compose resolves every relative path here against this file's directory, demos/basics/docker: the demo's configs
 # are one level up, and the repository root three.
 #
-# Every published port binds to 127.0.0.1 only: the dashboard has no authentication, Grafana lets anyone view it
-# without signing in, and its admin password is the default, which suits a demo on a laptop and nothing else. Set
+# Every published port binds to 127.0.0.1 only: the dashboard has no login unless ./demo.sh login turns it on, Grafana
+# lets anyone view it without signing in, and its admin password is the default, which suits a demo on a laptop and
+# nothing else. Set
 # DEMO_DASHBOARD_PORT, DEMO_GRAFANA_PORT, DEMO_PROMETHEUS_PORT, or DEMO_PROXY_PORT to move a host port that's already
 # taken.
 
@@ -41,6 +42,9 @@ services:
     hostname: proxy
     environment:
       PROXY_CONFIG: /app/proxy.conf
+      # The dashboard's login, which ./demo.sh login turns on, from the environment rather than proxy.conf, so no
+      # password sits in a file. Empty, as make up leaves it, turns it off.
+      DASHBOARD_PASSWORD: ${DEMO_DASHBOARD_PASSWORD:-}
     volumes:
       - ../config/proxy.conf:/app/proxy.conf:ro
     ports:

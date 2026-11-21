@@ -27,7 +27,7 @@
   <properties>
     <!-- The oldest Java Spring Boot 4 and the agent run on, so a JDK 17 or later builds it; the image runs 25 -->
     <java.version>17</java.version>
-    <prometheus-proxy.version>4.6.0</prometheus-proxy.version>
+    <prometheus-proxy.version>4.6.1</prometheus-proxy.version>
   </properties>
 
   <dependencies>

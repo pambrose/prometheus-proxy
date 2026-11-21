@@ -60,7 +60,7 @@ Clone the repository at the latest release, then run the demo's commands from it
 its targets:
 
 ```bash
-git clone -c advice.detachedHead=false --depth 1 --branch 4.6.0 https://github.com/pambrose/prometheus-proxy.git
+git clone -c advice.detachedHead=false --depth 1 --branch 4.6.1 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/kubernetes
 make up      # creates both clusters, installs everything, prints the URLs
 make tour    # walks through every scenario below, pausing before each step
@@ -78,7 +78,7 @@ the agent's and Python's, which takes a few minutes. After that, `make up` on ru
 | `kubectl` | `kubectl --context kind-pp-monitoring …` and `kubectl --context kind-pp-target …` |
 
 Each port is the Basics Demo's plus 200, so all the demos can run side by side. kind publishes them on `127.0.0.1`
-only, through NodePort Services in the monitoring cluster: the dashboard has no authentication, which suits a laptop
+only, through NodePort Services in the monitoring cluster: the dashboard runs without its login, which suits a laptop
 and nothing shared. To move a port that is already taken, set `KUBERNETES_DEMO_DASHBOARD_PORT`,
 `KUBERNETES_DEMO_PROMETHEUS_PORT`, or `KUBERNETES_DEMO_PROXY_PORT` when the cluster is created, for example
 `KUBERNETES_DEMO_PROMETHEUS_PORT=9291 make up`.

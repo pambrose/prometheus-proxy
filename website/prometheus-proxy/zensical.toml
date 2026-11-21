@@ -12,6 +12,9 @@ site_url = "https://prometheus-proxy.com/"
 repo_url = "https://github.com/pambrose/prometheus-proxy"
 repo_name = "pambrose/prometheus-proxy"
 
+# The Mermaid diagrams' styles, for javascripts/diagrams.js, which overrides/main.html loads ahead of the theme's bundle.
+extra_css = ["stylesheets/diagrams.css"]
+
 copyright = """
 Copyright &copy; 2026 Paul Ambrose
 """

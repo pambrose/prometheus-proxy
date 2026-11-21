@@ -31,9 +31,12 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.Parameters
+import io.ktor.http.encodeURLParameter
 import io.ktor.http.content.CachingOptions
 import io.ktor.http.parseQueryString
 import io.ktor.http.withCharset
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.createApplicationPlugin
 import io.ktor.server.application.createRouteScopedPlugin
 import io.ktor.server.application.install
@@ -49,6 +52,10 @@ import io.ktor.server.response.respondText
 import io.ktor.server.plugins.origin
 import io.ktor.server.request.ApplicationRequest
 import io.ktor.server.request.httpMethod
+import io.ktor.server.request.path
+import io.ktor.server.request.receiveParameters
+import io.ktor.server.request.uri
+import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
@@ -62,6 +69,7 @@ import io.ktor.websocket.close
 import io.ktor.websocket.readText
 import io.prometheus.BuildConfig
 import io.prometheus.Proxy
+import io.prometheus.common.KeyedThrottle
 import io.prometheus.proxy.ProxyEvent
 import io.prometheus.proxy.ProxyHttpConfig.configureKtorServer
 import kotlinx.coroutines.CoroutineScope
@@ -70,6 +78,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.isActive
@@ -89,6 +98,7 @@ import kotlin.concurrent.atomics.AtomicLong
 import kotlin.concurrent.atomics.minusAssign
 import kotlin.concurrent.atomics.plusAssign
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
@@ -121,10 +131,13 @@ import kotlin.time.TimeSource
  *
  * ### Exposure
  *
- * The port has no authentication, so what the service can bound, it does: a WebSocket handshake from a foreign
- * browser origin is refused, sessions are capped at `proxy.dashboard.maxSessions`, a session that stops reading is
- * closed rather than buffered for, and a page request or a browser message renders the recent snapshot rather than
- * collecting one (see [SnapshotCache]).
+ * With `proxy.dashboard.password` set, every request needs a session from the login page ([LoginHtml]), or, from a
+ * script, the login, `proxy.dashboard.username` (default `admin`) and that password, as HTTP Basic Auth (see
+ * [DashboardLogin] and [DashboardSessions]). Without either, before routing, a page request is sent to the login page
+ * and anything else gets a 401. Without a password, the default, the port has no authentication. Either way, what the
+ * service can bound, it does: a WebSocket handshake from a foreign browser origin is refused, sessions are capped at
+ * `proxy.dashboard.maxSessions`, a session that stops reading is closed rather than buffered for, and a page request or
+ * a browser message renders the recent snapshot rather than collecting one (see [SnapshotCache]).
  * Setting `proxy.dashboard.allowedHosts` also refuses a request naming an unknown host, which stops DNS rebinding.
  * The listen address is `proxy.dashboard.host`; binding it to a private address is what keeps the page private.
  */
@@ -133,6 +146,8 @@ internal class ProxyDashboardService(
   private val dashboardHost: String,
   private val dashboardPort: Int,
   dashboardPath: String,
+  dashboardUsername: String = "",
+  dashboardPassword: String = "",
 ) : GenericIdleService() {
   private val basePath = "/" + dashboardPath.trim('/')
 
@@ -221,17 +236,124 @@ internal class ProxyDashboardService(
     }
 
   // Why pageGuard refuses [request], or null when it may proceed.
-  private fun pageRefusal(request: ApplicationRequest): String? {
+  private fun pageRefusal(request: ApplicationRequest): String? =
+    originRefusal(request)
+      ?: if (request.httpMethod != HttpMethod.Get && request.headers[HX_REQUEST_HEADER] != "true")
+        "Only the dashboard's page may ask for this"
+      else
+        null
+
+  // Why a request from [request]'s Origin is refused, or null when it may proceed (see isOriginAllowed). The login and
+  // logout forms, which the browser posts itself and so send no HX-Request header, take this check alone.
+  private fun originRefusal(request: ApplicationRequest): String? {
     val origin = request.headers[HttpHeaders.Origin]
-    if (!isOriginAllowed(origin, request.headers[HttpHeaders.Host], allowedOrigins)) {
-      logger.info {
-        "Refused a dashboard request from origin $origin; add it to proxy.dashboard.allowedOrigins if expected"
-      }
-      return "Origin not allowed"
+    if (isOriginAllowed(origin, request.headers[HttpHeaders.Host], allowedOrigins))
+      return null
+    logger.info {
+      "Refused a dashboard request from origin $origin; add it to proxy.dashboard.allowedOrigins if expected"
     }
-    if (request.httpMethod != HttpMethod.Get && request.headers[HX_REQUEST_HEADER] != "true")
-      return "Only the dashboard's page may ask for this"
-    return null
+    return "Origin not allowed"
+  }
+
+  // The login every request must carry, proxy.dashboard.username and password, once a password is set; null, without
+  // one, the default, leaves the dashboard open.
+  private val login = if (dashboardPassword.isEmpty()) null else DashboardLogin(dashboardUsername, dashboardPassword)
+
+  // The login page's sessions, and the cookie that carries one: named for the port, since a browser sends a host's
+  // cookies to every port on it, and an HA pair can run on one host.
+  private val logins = DashboardSessions()
+  private val sessionCookie = cookieName(dashboardPort)
+  private val loginPath = "$routeBase/login"
+  private val logoutPath = "$routeBase/logout"
+
+  // Which addresses' wrong logins may be logged at WARN now.
+  private val badLoginWarnings = KeyedThrottle<String>(BAD_LOGIN_WARNING_INTERVAL, MAX_BAD_LOGIN_HOSTS)
+
+  // Application-wide, like hostCheck, and installed after it, so it runs before routing and covers every page, asset,
+  // and action, the WebSocket handshake, and a path that would 404: a route added later can't miss it. Installed only
+  // with a password set. Lets through a valid session, or a script's right Basic login; sends a page request to the
+  // login page and answers anything else with a 401. Never with WWW-Authenticate, which would have a browser show its
+  // own prompt. The login and logout routes need no session. Basic Auth is for scripts only (see isBrowser).
+  private fun authCheck(login: DashboardLogin) =
+    createApplicationPlugin("DashboardAuthCheck") {
+      onCall { call ->
+        val request = call.request
+        if (request.path() == loginPath || request.path() == logoutPath ||
+          logins.isValid(request.cookies[sessionCookie])
+        )
+          return@onCall
+        // A browser must use the login page: one that once saved a Basic login sends it with every request, which would
+        // skip the page and outlast Log out. So a browser's Basic login is ignored, and only a script's is read.
+        val header = if (isBrowser(request)) null else request.headers[HttpHeaders.Authorization]
+        if (header != null) {
+          if (login.accepts(header))
+            return@onCall
+          logBadLogin(request.origin.remoteAddress)
+          // As a wrong form login waits, so guessing through Basic Auth is no faster.
+          delay(LOGIN_FAILURE_DELAY)
+        }
+        if (wantsPage(request))
+          call.seeOther("$loginPath?${LoginHtml.NEXT_FIELD}=${request.uri.encodeURLParameter()}")
+        else
+          call.respondText("Login required", ContentType.Text.Plain, HttpStatusCode.Unauthorized)
+      }
+    }
+
+  // The login page, never cached or framed, for a page asked for without a session or after a wrong login.
+  private suspend fun ApplicationCall.respondLogin(
+    next: String,
+    username: String = "",
+    failed: Boolean = false,
+  ) {
+    response.header(HttpHeaders.CacheControl, "no-store")
+    response.header("Content-Security-Policy", "frame-ancestors 'none'")
+    respondHtml(if (failed) HttpStatusCode.Unauthorized else HttpStatusCode.OK) {
+      with(LoginHtml) { renderLogin(routeBase, next, username, failed) }
+    }
+  }
+
+  // The login form's POST: a foreign origin refused, a body over MAX_LOGIN_BODY_BYTES (or of unknown length) refused
+  // unread, a wrong login answered after LOGIN_FAILURE_DELAY, and a right one given a session and sent on to next.
+  private suspend fun ApplicationCall.logIn(login: DashboardLogin) {
+    originRefusal(request)?.also { return respondText(it, ContentType.Text.Plain, HttpStatusCode.Forbidden) }
+    val length = request.headers[HttpHeaders.ContentLength]?.toLongOrNull()
+    if (length == null || length > MAX_LOGIN_BODY_BYTES)
+      return respondText("Login form too large", ContentType.Text.Plain, HttpStatusCode.PayloadTooLarge)
+    val form = runCatching { receiveParameters() }.getOrDefault(Parameters.Empty)
+    val username = form[LoginHtml.USERNAME_FIELD].orEmpty().take(LoginHtml.MAX_FIELD_LENGTH)
+    val next = safeNext(form[LoginHtml.NEXT_FIELD], routeBase)
+    if (login.accepts(username, form[LoginHtml.PASSWORD_FIELD].orEmpty())) {
+      // Secure when the browser reached the dashboard over https, as through a TLS-terminating reverse proxy.
+      val secure = request.headers[HttpHeaders.Origin]?.startsWith("https://", ignoreCase = true) == true
+      response.header(
+        HttpHeaders.SetCookie,
+        sessionCookieHeader(logins.create(), DashboardSessions.MAX_AGE_SECS, secure),
+      )
+      seeOther(next)
+    } else {
+      logBadLogin(request.origin.remoteAddress)
+      // Slows a guesser down; each request waits on its own, so it costs no thread.
+      delay(LOGIN_FAILURE_DELAY)
+      respondLogin(next, username, failed = true)
+    }
+  }
+
+  // The Set-Cookie value for [token], kept for [maxAgeSecs]; an empty token and 0 expire it.
+  private fun sessionCookieHeader(
+    token: String,
+    maxAgeSecs: Int,
+    secure: Boolean = false,
+  ) = "$sessionCookie=$token; Max-Age=$maxAgeSecs; Path=$basePath; HttpOnly; SameSite=Lax" +
+    if (secure) "; Secure" else ""
+
+  // At WARN at most once a minute for each address, and at DEBUG otherwise, so a client guessing in a loop can't flood
+  // the log. Never the username it gave, which is the client's own text.
+  private fun logBadLogin(address: String) {
+    val message = "Refused a dashboard request from $address with a wrong login"
+    if (badLoginWarnings.tryAcquire(address))
+      logger.warn { message }
+    else
+      logger.debug { message }
   }
 
   // Application-wide rather than route-scoped, so it runs before routing and covers every page, asset, and the
@@ -264,6 +386,7 @@ internal class ProxyDashboardService(
       // off -- a dashboard polling its own socket would drown the proxy's logs.
       configureKtorServer(isLoggingEnabled = false)
       install(hostCheck)
+      login?.also { install(authCheck(it)) }
       install(WebSockets) {
         // Ktor's defaults send no pings and buffer outgoing frames without limit, so a client that stops reading
         // would pile up a frame per push until the proxy ran out of memory. Pings find a dead peer, and a full
@@ -295,6 +418,31 @@ internal class ProxyDashboardService(
           get("/") { call.respondRedirect(basePath, permanent = false) }
         }
 
+        // The login page and its form, and Log out, only with a password set.
+        login?.also { credentials ->
+          get(loginPath) {
+            if (logins.isValid(call.request.cookies[sessionCookie]))
+              call.seeOther(basePath)
+            else
+              call.respondLogin(safeNext(call.request.queryParameters[LoginHtml.NEXT_FIELD], routeBase))
+          }
+          post(loginPath) { call.logIn(credentials) }
+          post(logoutPath) {
+            val refusal = originRefusal(call.request)
+            if (refusal != null) {
+              call.respondText(refusal, ContentType.Text.Plain, HttpStatusCode.Forbidden)
+            } else {
+              logins.remove(call.request.cookies[sessionCookie])
+              call.response.header(HttpHeaders.SetCookie, sessionCookieHeader("", 0))
+              call.seeOther(loginPath)
+            }
+          }
+        }
+
+        // Whether this request may use the dashboard: the auth check answers first, so this is a 204 only when it may.
+        // The page's script asks when its WebSocket closes, so an expired session lands on the login page.
+        get("$routeBase/session") { call.respond(HttpStatusCode.NoContent) }
+
         // Explicit allowlist rather than staticResources: the webjar layout embeds a version in the
         // path, and an allowlist means there is no path-traversal surface and no dependence on how Ktor
         // interprets a basePackage. Two entries is not worth a generic static handler.
@@ -322,7 +470,11 @@ internal class ProxyDashboardService(
 
         get(basePath) {
           val snapshot = snapshots.recent()
-          call.respondHtml { with(ProxyDashboardHtml) { renderPage(snapshot, null, routeBase, DashboardLayout.AGENT) } }
+          call.respondHtml {
+            with(ProxyDashboardHtml) {
+              renderPage(snapshot, null, routeBase, DashboardLayout.AGENT, loginEnabled = login != null)
+            }
+          }
         }
 
         // A real page rather than a fragment: switching layout is a navigation, so the browser gets a
@@ -334,7 +486,7 @@ internal class ProxyDashboardService(
             val snapshot = snapshots.recent()
             val filter = RowFilter.of(call.request.queryParameters)
             call.respondHtml {
-              with(ProxyDashboardHtml) { renderPage(snapshot, null, routeBase, layout, filter) }
+              with(ProxyDashboardHtml) { renderPage(snapshot, null, routeBase, layout, filter, login != null) }
             }
           }
         }
@@ -357,7 +509,9 @@ internal class ProxyDashboardService(
             )
           else
             call.respondHtml {
-              with(ProxyDashboardHtml) { renderPage(snapshot, agentId, routeBase, DashboardLayout.AGENT) }
+              with(ProxyDashboardHtml) {
+                renderPage(snapshot, agentId, routeBase, DashboardLayout.AGENT, loginEnabled = login != null)
+              }
             }
         }
 
@@ -638,6 +792,7 @@ internal class ProxyDashboardService(
       add("host", dashboardHost)
       add("port", dashboardPort)
       add("path", basePath)
+      add("login", if (login == null) "off" else "on")
       add("sessions", sessions.size)
     }
 
@@ -684,6 +839,65 @@ internal class ProxyDashboardService(
     private const val PING_PERIOD_MILLIS = 15_000L
     private const val PING_TIMEOUT_MILLIS = 15_000L
     private const val MAX_INCOMING_FRAME_BYTES = 64L * 1024
+
+    private val BAD_LOGIN_WARNING_INTERVAL = 1.minutes
+    private const val MAX_BAD_LOGIN_HOSTS = 1_000
+
+    /** The largest login form the login route reads; a browser's is a few hundred bytes. */
+    internal const val MAX_LOGIN_BODY_BYTES = 4_096
+
+    /** How long a wrong login from the form waits before its answer. */
+    internal val LOGIN_FAILURE_DELAY = 1.seconds
+
+    // The longest next the login page carries; a longer one goes to the base.
+    private const val MAX_NEXT_LENGTH = 2_048
+
+    /** The session cookie's name, for the dashboard on [port]. */
+    internal fun cookieName(port: Int) = "prometheus_proxy_dashboard_$port"
+
+    /**
+     * Where a login sends the browser: [next] when it is a page of the dashboard at [routeBase], else the dashboard's
+     * base. A path only, not a URL, not a protocol-relative `//host`, nor one a browser reads as one (`/\host`), with
+     * no `.` or `..` segment, and not the login page itself, so a link to the login page can't send a browser off-site.
+     */
+    internal fun safeNext(
+      next: String?,
+      routeBase: String,
+    ): String {
+      val base = routeBase.ifEmpty { "/" }
+      val path = next.orEmpty()
+      val pathPart = path.substringBefore('?')
+      val underBase = routeBase.isEmpty() || pathPart == routeBase || pathPart.startsWith("$routeBase/")
+      val isSafe =
+        path.length <= MAX_NEXT_LENGTH &&
+          path.startsWith("/") &&
+          !path.startsWith("//") &&
+          path.none { it == '\\' || it.isISOControl() || it.isWhitespace() } &&
+          underBase &&
+          pathPart.split('/').none { it == "." || it == ".." } &&
+          pathPart != "$routeBase/login"
+      return if (isSafe) path else base
+    }
+
+    // Fetch Metadata's header, which every current browser sends with every request, a WebSocket handshake included,
+    // and a script such as curl doesn't.
+    private const val SEC_FETCH_MODE = "Sec-Fetch-Mode"
+
+    /** Whether [request] came from a browser, which must log in on the login page rather than with Basic Auth. */
+    internal fun isBrowser(request: ApplicationRequest) = request.headers[SEC_FETCH_MODE] != null
+
+    // A browser's navigation to a page, which the auth check sends to the login page rather than refusing: a GET that
+    // takes HTML and isn't htmx's own request.
+    internal fun wantsPage(request: ApplicationRequest) =
+      request.httpMethod == HttpMethod.Get &&
+        request.headers[HX_REQUEST_HEADER] == null &&
+        request.headers[HttpHeaders.Accept].orEmpty().contains("text/html")
+
+    // A 303, so the browser follows a POST's redirect with a GET.
+    private suspend fun ApplicationCall.seeOther(location: String) {
+      response.header(HttpHeaders.Location, location)
+      respond(HttpStatusCode.SeeOther)
+    }
 
     // Sent by htmx, and by the page's script with each scrape-now.
     internal const val HX_REQUEST_HEADER = "HX-Request"

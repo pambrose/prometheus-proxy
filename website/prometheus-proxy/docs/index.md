@@ -105,13 +105,13 @@ Get running in under a minute:
     # Start the proxy
     docker run --rm --name prometheus-proxy --network prometheus-proxy-net \
       -p 8080:8080 -p 50051:50051 --env METRICS_ENABLED=true \
-      pambrose/prometheus-proxy:4.6.0
+      pambrose/prometheus-proxy:4.6.1
 
     # Start the agent, in another terminal
     docker run --rm --network prometheus-proxy-net \
       --env PROXY_HOSTNAME=prometheus-proxy \
       --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-      pambrose/prometheus-agent:4.6.0
+      pambrose/prometheus-agent:4.6.1
 
     # Scrape the proxy's and the agent's own metrics through the proxy
     curl http://localhost:8080/proxy_metrics

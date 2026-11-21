@@ -191,10 +191,18 @@ class Proxy(
   internal val scrapePort: Int get() = httpService.httpPort
 
   // Null unless proxy.dashboard.enabled. Off by default, matching the admin and metrics posture: the dashboard shows
-  // agent names, hostnames, target URLs and recent activity in one place, on a port with no auth.
+  // agent names, hostnames, target URLs and recent activity in one place, on a port with no auth unless
+  // proxy.dashboard.password is set.
   private val dashboardService =
     if (options.dashboardEnabled)
-      ProxyDashboardService(this, options.dashboardHost, options.dashboardPort, options.dashboardPath)
+      ProxyDashboardService(
+        proxy = this,
+        dashboardHost = options.dashboardHost,
+        dashboardPort = options.dashboardPort,
+        dashboardPath = options.dashboardPath,
+        dashboardUsername = options.dashboardUsername,
+        dashboardPassword = options.dashboardPassword,
+      )
     else
       null
   private val recentReqs: EvictingQueue<String> = EvictingQueue.create(proxyConfigVals.admin.recentRequestsQueueSize)

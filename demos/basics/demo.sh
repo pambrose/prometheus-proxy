@@ -19,7 +19,10 @@ IMAGES=(prometheus-proxy-demo/proxy:local prometheus-proxy-demo/agent:local)
 RELEASED_IMAGES=(pambrose/prometheus-proxy pambrose/prometheus-agent)
 # The demo shows what came after this release, so until a later one is out, up builds the proxy and agent from this
 # checkout, as up-local does. When the demo comes to use something unreleased, set this to the latest release.
-NEEDS_RELEASE_AFTER=4.4.2
+NEEDS_RELEASE_AFTER=4.6.0
+# The dashboard password the login scenario gives the proxy. A demo's, in a public file, as Grafana's admin password
+# is: never use it anywhere else.
+LOGIN_PASSWORD="admin"
 AGENTS=(agent-east agent-west-1 agent-west-2)
 # The agent the agent-* scenarios act on when given none.
 DEFAULT_AGENT="agent-west-2"
@@ -94,6 +97,8 @@ Scenarios:
   rogue-agent-stop         Stop and remove it
   duplicate-agent          Start a second copy of agent-east, without consolidated mode
   duplicate-agent-stop     Remove it, and restart agent-east so it registers its paths again
+  login                    Restart the proxy with the dashboard's login on (admin, password $LOGIN_PASSWORD)
+  login-off                Restart it with the login off
 
 Services: orders, payments, inventory, catalog, shipping (and search, recommendations, notifications once discovered)
 Agents:   ${AGENTS[*]}
@@ -126,9 +131,18 @@ except urllib.error.HTTPError as e:
 ' "$method" "$path"
 }
 
+# Whether $1 answers: with a 2xx, or with the 401 the dashboard sends a request without its login when
+# config/proxy.conf sets proxy.dashboard.password, which means the proxy is up as well. curl -f counts a 401 as a
+# failure, so a wait for the dashboard would run out with the proxy answering all along.
+answers() {
+  local code
+  code="$(curl -sS -o /dev/null -w '%{http_code}' "$1" 2>/dev/null)" || return 1
+  [[ $code == 2?? || $code == 401 ]]
+}
+
 wait_for() {
   local url="$1" name="$2" deadline=$((SECONDS + 120))
-  until curl -fsS -o /dev/null "$url" 2>/dev/null; do
+  until answers "$url"; do
     ((SECONDS < deadline)) || die "$name did not answer at $url within 120s; see '$0 logs'"
     sleep 2
   done
@@ -430,11 +444,12 @@ TOUR_PARTS=(
   "2 The proxy evicts an agent that goes silent"
   "2 Per-team tokens restrict which paths an agent can register"
   "2 A duplicate agent takes over the paths, and the proxy logs the fix"
+  "2 A login for the dashboard"
 )
 
 cmd_tour() {
   check_tour_from "${1:-}"
-  curl -fsS -o /dev/null "$DASHBOARD_URL" 2>/dev/null ||
+  answers "$DASHBOARD_URL" ||
     die "the demo isn't running; start it with '$MAKE_NAME up' in demos/basics"
   tour_contents "basics demo"
 
@@ -540,6 +555,17 @@ cmd_tour() {
     step "Remove the copy, and restart agent-east so it registers its paths again." -- duplicate-agent-stop
   fi
 
+  if part 10 "The dashboard can ask for a login, with a password from the proxy's environment. Here you turn it" \
+    "on, sign in and out, and turn it off again. It comes last because it restarts the proxy."; then
+    step "Restart the proxy with a password for its dashboard." -- login
+    instruct "Reload the dashboard: $DASHBOARD_URL" \
+      "It shows the login page instead. Sign in as admin, with the password $LOGIN_PASSWORD, and it opens the page" \
+      "you asked for, with the agents reconnected."
+    instruct "Click Log out, at the right end of the top bar." \
+      "Your session ends, and the login page comes back."
+    step "Restart the proxy without the password." -- login-off
+  fi
+
   wait_after_output "Press Enter to finish the tour"
   blank_line
   bold "That's the tour."
@@ -552,6 +578,13 @@ cmd_tour() {
   echo
   echo "The demos use different ports, so they can run side by side, but each takes memory and CPU."
   echo "To stop this one and free its resources, run $MAKE_NAME down, or $0 down."
+}
+
+# Restarts only the proxy, with the dashboard password given, or with none, which turns its login off. Compose
+# recreates the container for the changed environment; the agents reconnect on their own. restart_proxy <password>
+restart_proxy() {
+  DEMO_DASHBOARD_PASSWORD="$1" "${COMPOSE[@]}" up --detach --no-deps --no-build proxy
+  wait_for "$DASHBOARD_URL" "The proxy dashboard"
 }
 
 main() {
@@ -745,6 +778,32 @@ main() {
       "few seconds."
     ;;
   "" | help | -h | --help) usage ;;
+  login)
+    restart_proxy "$LOGIN_PASSWORD"
+    bold "The dashboard now asks for a login: admin, with the password $LOGIN_PASSWORD"
+    how_it_works "This restarts the proxy with DASHBOARD_PASSWORD in its environment, from DEMO_DASHBOARD_PASSWORD" \
+      "in docker/compose.yml, which turns on the dashboard's login; the username is admin unless DASHBOARD_USERNAME" \
+      "sets another. The password comes from the environment rather than config/proxy.conf, so it never sits in a" \
+      "file. A restart clears what the proxy holds in memory: the agents reconnect within a few seconds and" \
+      "register their paths again, and the dashboard's histories start over."
+    watch_for
+    point "Reloading the dashboard shows its login page. Signing in opens the page you asked for, and Log out, at the" \
+      "right end of the top bar, signs you out."
+    point "A wrong password shows 'Invalid username or password', and the proxy logs it at WARN, at most once a" \
+      "minute for each address. To see it, run $0 logs proxy"
+    point "A script sends the login as HTTP Basic Auth instead: curl -u admin:$LOGIN_PASSWORD $DASHBOARD_URL/paths" \
+      "answers, and the same curl without -u gets a 401."
+    point "The dashboard serves plain HTTP, so anywhere but a laptop, put TLS in front of it."
+    follow_up "To turn the login off again, run" "$0 login-off"
+    ;;
+  login-off)
+    restart_proxy ""
+    bold "The dashboard's login is off again"
+    how_it_works "This restarts the proxy without DASHBOARD_PASSWORD, so the dashboard is open again, as the rest of" \
+      "the demo runs it, on 127.0.0.1 only. The agents reconnect within a few seconds."
+    watch_for
+    point "Reloading the dashboard opens it without a login."
+    ;;
   *)
     usage >&2
     exit 1

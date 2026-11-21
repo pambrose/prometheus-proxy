@@ -27,9 +27,11 @@ import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.types.shouldBeSameInstanceAs
 import io.kotest.matchers.types.shouldNotBeSameInstanceAs
 import io.prometheus.proxy.dashboard.ProxyDashboardService.ActivityTable
+import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.cookieName
 import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.hostAllowlist
 import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.isHostAllowed
 import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.isOriginAllowed
+import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.safeNext
 import io.prometheus.proxy.dashboard.ProxyDashboardService.SnapshotCache
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
@@ -86,6 +88,36 @@ class ProxyDashboardServiceTest : StringSpec() {
     )
 
   init {
+    // Where a successful login goes: the page it was asked for, but only a page of this dashboard, so a link to the
+    // login page can't send a browser off-site with a fresh session.
+    "safeNext should keep a path under the dashboard's base and send anything else to the base" {
+      listOf("/dashboard", "/dashboard/paths?q=a", "/dashboard/agents/7").forEach {
+        safeNext(it, "/dashboard") shouldBe
+        it
+      }
+      listOf(
+        null,
+        "",
+        "//evil.example",
+        "https://evil.example/",
+        "/\\evil.example",
+        "/other",
+        "/dashboardx",
+        "/dashboard/../other",
+        "dashboard/paths",
+        "/dashboard/login",
+      ).forEach { safeNext(it, "/dashboard") shouldBe "/dashboard" }
+      // At a root mount every page is under the base, but a protocol-relative URL still isn't a path.
+      safeNext("/paths", "") shouldBe "/paths"
+      listOf("//evil.example", "/\\evil.example", null).forEach { safeNext(it, "") shouldBe "/" }
+    }
+
+    // Cookies are kept per host, not per port, so two proxies on one host, an HA pair, would overwrite each other's.
+    "each dashboard port should have its own session cookie" {
+      cookieName(8094) shouldBe "prometheus_proxy_dashboard_8094"
+      cookieName(8094) shouldNotBe cookieName(8194)
+    }
+
     "a request with no Origin header should be allowed, since only browsers send one" {
       isOriginAllowed(origin = null, host = "proxy:8094", allowedOrigins = emptyList()).shouldBeTrue()
     }

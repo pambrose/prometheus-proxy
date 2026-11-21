@@ -50,7 +50,7 @@ Clone the repository at the latest release, then run the demo's commands from it
 its targets:
 
 ```bash
-git clone -c advice.detachedHead=false --depth 1 --branch 4.6.0 https://github.com/pambrose/prometheus-proxy.git
+git clone -c advice.detachedHead=false --depth 1 --branch 4.6.1 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/kubernetes
 make up      # creates both clusters, installs everything, and prints the URLs
 make tour    # walks through the guided tour below, pausing before each step
@@ -76,8 +76,8 @@ Every port is the basics demo's plus 200, so all the demos can run at once. kind
 command after, for example `KUBERNETES_DEMO_PROMETHEUS_PORT=9291 make up`. The variables are
 `KUBERNETES_DEMO_DASHBOARD_PORT`, `KUBERNETES_DEMO_PROMETHEUS_PORT`, and `KUBERNETES_DEMO_PROXY_PORT`; the dashboard's
 link into Prometheus keeps the default port (`config/proxy.conf`). A running cluster keeps the ports it was created
-with, and `make up` says so if they differ: `make down` first. Every port binds to `127.0.0.1` only. The dashboard has
-no authentication, so this setup is for a laptop, not for anything shared.
+with, and `make up` says so if they differ: `make down` first. Every port binds to `127.0.0.1` only. The dashboard runs
+without its login, so this setup is for a laptop, not for anything shared.
 
 kind adds a `kind-pp-monitoring` and a `kind-pp-target` context to your kubeconfig. `demo.sh` names the context on
 every command, and puts back the context that was current when it creates a cluster.

@@ -124,13 +124,21 @@ proxy {
     allowedOrigins = []             // Browser origins allowed besides the dashboard's own host
     allowedHosts = []               // Host names the dashboard answers to; empty turns the check off
     links = []                      // Links from each path into other tools: { name = "...", url = "...", icon = "..." }
+    username = "admin"              // The login's username, once a password is set
+    password = ""                   // Requires a login, from the login page or as Basic Auth; empty leaves it open
   }
 }
 ```
 
 Also settable as `--dashboard` / `--dashboard_port` / `--dashboard_path` / `--dashboard_host`, or `DASHBOARD_ENABLED` / `DASHBOARD_PORT` / `DASHBOARD_PATH` / `DASHBOARD_HOST`.
 
-The proxy logs a warning at startup when the dashboard is enabled on all interfaces. A WebSocket from a browser
+`password` turns on a login, from the dashboard's login page or, for a script, as HTTP Basic Auth, with `username`
+(`admin` unless set). Both are settable as `DASHBOARD_USERNAME` / `DASHBOARD_PASSWORD`, but have no command-line flags,
+since a command line shows in `ps`. The proxy never logs the password, and refuses to start with an empty username, a
+colon in it, or a control character in either. The dashboard serves plain HTTP, so put TLS in front of it; see
+[Login](../web-dashboard.md#login).
+
+Without a login, the proxy logs a warning at startup when the dashboard is enabled on all interfaces. A WebSocket from a browser
 origin other than the dashboard's own host is refused; behind a reverse proxy that rewrites the Host header, list the
 public origin (for example `"https://dash.example.com"`) in `allowedOrigins`. Being a list, `allowedOrigins` must be
 set in a config file rather than with `-D`.

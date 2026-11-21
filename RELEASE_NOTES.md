@@ -2,6 +2,40 @@
 
 ---
 
+## 4.6.1
+
+_Released 2026-11-20_
+
+The dashboard can ask for a login, the proxy logs a refused agent token where an operator looks, and the Embedded
+Agent page shows how to debug an embedded agent.
+
+### New Features
+
+- **A login for the dashboard.** Set `DASHBOARD_PASSWORD` (or `proxy.dashboard.password`) and the dashboard shows a
+  login page before anything else, styled after Grafana's. The username is `admin` unless you set `DASHBOARD_USERNAME`.
+  A login lasts until **Log out**, 24 hours without use, or 7 days, and a proxy restart signs everyone out. Scripts send
+  the login as HTTP Basic Auth (`curl -u`); a browser always gets the login page. The dashboard still serves plain HTTP, so put TLS in front of it, such as a
+  reverse proxy, unless the network is trusted, and keep its port internal either way. The Helm chart reads the
+  password from a Secret (`dashboard.login.existingSecret`).
+
+### Bug Fixes
+
+- **A refused agent token shows in the proxy's log.** The proxy logs it at WARN, naming the host and whether the token
+  was unknown or missing, at most once a minute for each host. Before, only the dashboard's activity feed showed it,
+  and the agent said why only on its first attempt; now it says so again every 10 minutes while it can't connect.
+- **No exception for a connection that closes early.** A port probe, or a connection that fails its TLS handshake, no
+  longer logs a `NullPointerException` at WARN on the proxy, as it did behind Railway's TCP proxy.
+- **The docs site's address.** Its pages and sitemap name https://prometheus-proxy.com, and its 404 page loads its
+  styles again.
+
+### Documentation
+
+- **Debugging an embedded agent.** The Embedded Agent page's new Debugging section turns on the agent's admin
+  endpoints and `/debug` with `ADMIN_ENABLED` and `DEBUG_ENABLED`, says what each shows, and puts the agent's own
+  metrics on the Agents dashboard with `METRICS_ENABLED`. The embedded demo's tour walks through them.
+- **The dashboard's login in the basics demo.** The tour's new last part turns it on, with the password in the proxy's
+  environment, signs in and out, and turns it off again (`./demo.sh login`, `./demo.sh login-off`).
+
 ## 4.6.0
 
 _Released 2026-11-20_

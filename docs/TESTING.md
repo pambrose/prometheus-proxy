@@ -350,7 +350,10 @@ Two support helpers also live here (not test classes themselves):
   at startup; only a wildcard address counted as listening on all interfaces; `proxy.dashboard.links` parsed from a
   config file in order and logged by name, with a link's `icon` read and logged too, and a link the dashboard can't
   render, or one with an icon it doesn't have, failing startup with an `Invalid configuration:` message, naming the
-  link, while the dashboard is on
+  link, while the dashboard is on; and the login, its username `admin` until set and off until a password turns it
+  on, logged with the password masked, its startup failures (an empty username, a colon in it, a control character in
+  either) naming no value, the username left unchecked without a password, and the all-interfaces warning only
+  without a login
 - **SdTargetTest** — `sdTargetPrefix` parsing: host:port as is; an http(s) URL split into the target, `__scheme__`,
   and a path prefix; anything else, including a host:port with a query or fragment, refused, naming the setting
 - **ProxyDynamicConfigTest** — Dynamic config overrides via -D flags (maxZippedContentSizeMBytes,
@@ -403,9 +406,10 @@ Two support helpers also live here (not test classes themselves):
   activity feed, naming its host, a host's repeats counted on its line
 - **ProxyEventBusTest** — Dashboard event bus: ordered delivery, non-blocking emit with no subscriber, no replay to a
   late subscriber, fan-out to multiple subscribers, and AgentContextManager emitting on connect only
-- **ProxyDashboardHtmlTest** (`dashboard/`) — Dashboard renderer: the Agents view (an agent row's htmx attributes and
-  its one id across the page and the pushes, never a region's; the selected agent marked current; an explicit gone state
-  for a selected agent that disconnected, a prompt when none is selected, and a placeholder for one not yet registered;
+- **ProxyDashboardHtmlTest** (`dashboard/`) — Dashboard renderer: the Log out button only with a login and in no push,
+  the Agents view (an agent row's htmx attributes and its one id across the page and the pushes, never a region's; the
+  selected agent marked current; an explicit gone state for a selected agent that disconnected, a prompt when none is
+  selected, and a placeholder for one not yet registered;
   failover markers; an agent's uptime; an empty proxy said to be empty), the detail's Recent scrapes (the selected
   agent's alone from a shared path's history, its latest across its paths, newest first, at most the cap, which the
   header counts), the pushes (top-level out-of-band regions, only those of the session's layout, the status bar alone
@@ -419,7 +423,8 @@ Two support helpers also live here (not test classes themselves):
 - **DashboardScriptTest** (`dashboard/`) — the page's script and the htmx it runs on: frames stamped below its message
   count dropped, the arrow keys switching views from anywhere but a text field, the column guide opened and closed
   from its button, its close button, and Escape from anywhere but a text field, the scrape-now request with htmx's
-  header, each layout named by its route, the WebSocket connection indicator (both labels in the status region, the
+  header, each layout named by its route, an ended session sent to the login page (a session check on the socket's
+  close, and a reload on a refused scrape), the WebSocket connection indicator (both labels in the status region, the
   lifecycle events it flips on and the ones it must not, a close while the tab is hidden ignored, a lost connection
   announced once per outage, the capped reconnect backoff, and the stylesheet's disconnected treatment), no htmx 2
   WebSocket names, history pushes heard on the document, copy clicks from one listener on the body (the clipboard
@@ -481,8 +486,23 @@ Two support helpers also live here (not test classes themselves):
   departed paths; both having to match; browser input
   trimmed and cut, never inside a surrogate pair; a filter read from a URL's query; an activity line matched by its
   event, agent, identity, paths, or detail, and its problems kept; and identity labels
-- **ProxyDashboardServiceTest** (`dashboard/`) — Dashboard request guards: the WebSocket Origin check (own host,
-  `allowedOrigins`, foreign or malformed origins refused), the opt-in `allowedHosts` Host check against DNS rebinding,
+- **DashboardLoginTest** (`dashboard/`) — the dashboard's login read from a request's `Authorization` header: the
+  right pair accepted; no header, a wrong username or password, a prefix of either, another scheme, a value that isn't
+  base64, or one with no colon refused, never thrown on; the scheme matched in any case; a split at the first colon,
+  so a password may contain one; non-ASCII values compared as UTF-8; the login page's form accepted only with both
+  halves right; and neither value in its `toString`
+- **DashboardSessionsTest** (`dashboard/`) — the login page's sessions: a new one valid and a token never issued, null,
+  or empty not; 43 base64url characters, distinct each time; ended 24 hours after its last request, which a request
+  restarts, and 7 days after it began however recently used; ended by removal; the least recently used dropped past
+  the cap; and an expired one forgotten
+- **LoginHtmlTest** (`dashboard/`) — the login page: its heading, a form posting to the login route with labeled,
+  autocompleting, length-capped fields and one Log in button; after a failure the alert, the username kept, and the
+  password focused, and without one neither; the next path and the username escaped; a root mount posting to
+  `/login`; nothing loaded from anywhere; and the dashboard's color tokens, in both themes
+- **ProxyDashboardServiceTest** (`dashboard/`) — Dashboard request guards: where a login may send the browser
+  (`safeNext`: a page under the base, never off-site, a protocol-relative or backslashed path, a `.` or `..` segment,
+  or the login page itself, at a root mount too), the session cookie named for the port, the WebSocket Origin check
+  (own host, `allowedOrigins`, foreign or malformed origins refused), the opt-in `allowedHosts` Host check against DNS rebinding,
   and the snapshot cache pages and sessions render from: one collect per refresh interval however many reads, shared
   by concurrent reads, and none reused across a topology change, even one landing mid-collect; and the value a push
   compares to leave out an Activity table the page already shows (`ActivityTable`): equal for an unchanged feed and the
@@ -742,6 +762,16 @@ mechanism that the standard suite cannot reach:
   cooldown, for an unknown path, without htmx's header, or from another origin, and absent when off; and an Activity
   page sent its table over a real socket in the first frame rendered from its message, left out of the ticks after it
   while nothing is recorded, and sent again for a new message and once an agent's connection is recorded
+- **ProxyWebDashboardLoginTest** — the dashboard with a password set, split from ProxyWebDashboardTest, a proxy per
+  spec: a page navigation without a session sent to the login page with its path as `next`, and anything else (the
+  WebSocket handshake, the scrape action, an asset, `/session`) a 401 with no `WWW-Authenticate`; the login page, not
+  cached or framed; a wrong login answered after a second with the alert, and one WARN for two, never naming the
+  username; a right one setting the session cookie (`HttpOnly`, `SameSite=Lax`, the base's `Path`, 7 days, `Secure`
+  from an https origin) and returning to `next`, never off-site; the dashboard, its WebSocket, and `/session` working
+  with the cookie; Log out ending the session; a foreign origin refused on the login and Log out forms; an oversized or
+  chunked login body refused; Basic Auth for scripts, a wrong one answered after a second; a browser's saved Basic
+  login (a request with `Sec-Fetch-Mode`) ignored, the page, `/session`, and the WebSocket included, and not logged as
+  wrong; a root mount's login at `/login`; and, with no password, no login page and no Log out
 - **TlsMutualAuthRejectionTest** — the negative mutual-TLS path over a real Netty handshake, which the
   in-process TLS specs cannot perform (item 28 in `docs/archive/CODE_REVIEW_JUNE_2026.md`)
 - **TlsPemTest** — TLS over Netty with every certificate and key given as PEM, none as a file: the proxy's as base64

@@ -125,6 +125,19 @@ class DashboardScriptTest : StringSpec() {
     // htmx 4 renamed every WebSocket event and attribute. A listener left on an htmx 2 name never fires,
     // so the page would keep claiming "live" through an outage; ws-connect still works but logs a
     // deprecation warning on every load; and hx-ext no longer exists.
+    // A session that ends while the page is open, by expiring, a Log out elsewhere, or a proxy restart: the socket
+    // closes, the page asks whether it may still use the dashboard, and on a 401 reloads, which the server answers with
+    // the login page. A scrape refused with a 401 does the same, rather than showing the refusal in the panel.
+    "the page script should send an expired session to the login page" {
+      val page = renderFullPage(snapshot())
+      page shouldContain "function checkSession()"
+      page shouldContain "fetch(base + '/session'"
+      page shouldContain "if (response.status === 401) location.reload();"
+      Regex("""addEventListener\('htmx:ws:close', function \(\) \{[^}]*checkSession\(\)""")
+        .containsMatchIn(page) shouldBe true
+      page shouldContain "if (response.status === 401) { location.reload(); return null; }"
+    }
+
     "the page should use no htmx 2 WebSocket names" {
       val page = renderFullPage(snapshot())
       page shouldNotContain "htmx:wsOpen"
@@ -148,7 +161,8 @@ class DashboardScriptTest : StringSpec() {
     // not read as an outage, or every tab switch would turn the beacon red and announce a lost connection.
     "the page should ignore a close made while the tab is hidden" {
       val page = renderFullPage(snapshot())
-      page shouldContain "if (!document.hidden) connected(false)"
+      // Nor ask about its session: a hidden tab gives up its socket on purpose.
+      page shouldContain "if (!document.hidden) { connected(false); checkSession(); }"
     }
 
     // Each failed reconnect attempt closes the socket again. Writing the live region on every close would

@@ -230,6 +230,11 @@ object TestPorts {
   const val DASHBOARD_UI_ACTIVITY_PUSH_GRPC_PORT = 9741
   const val DASHBOARD_UI_ACTIVITY_PUSH_DASHBOARD_PORT = 9742
 
+  // ProxyWebDashboardLoginTest: a dashboard that requires a login.
+  const val DASHBOARD_UI_LOGIN_HTTP_PORT = 9743
+  const val DASHBOARD_UI_LOGIN_GRPC_PORT = 9744
+  const val DASHBOARD_UI_LOGIN_DASHBOARD_PORT = 9745
+
   // ProxyTest and AgentTest: what a real proxy or agent binds in the garbage-collection and failed-startup cases.
   // These came from ServerSocket(0), released and bound again later, so another connection could take one in between
   // (October #46). The port each failed-startup case holds open as taken still does.

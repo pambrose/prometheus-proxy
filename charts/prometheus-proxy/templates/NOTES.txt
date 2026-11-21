@@ -9,8 +9,15 @@ Agents connect to its gRPC port:
 Prometheus scrapes each path an agent registers through the HTTP port:
   http://{{ include "prometheus-proxy.fullname" . }}.{{ .Release.Namespace }}.svc:{{ .Values.httpPort }}/<path>
 {{- if .Values.dashboard.enabled }}
+{{- if .Values.dashboard.login.existingSecret }}
 
-The dashboard is not on the Service (it is unauthenticated). Reach it with:
+The dashboard is not on the Service, and asks for the login ({{ .Values.dashboard.login.username }}, with the password in
+the {{ .Values.dashboard.login.existingSecret }} Secret). Reach it with:
+{{- else }}
+
+The dashboard is not on the Service (it is unauthenticated; set dashboard.login.existingSecret to require a login).
+Reach it with:
+{{- end }}
   kubectl -n {{ .Release.Namespace }} port-forward deploy/{{ include "prometheus-proxy.fullname" . }} {{ .Values.dashboard.port }}
 {{- end }}
 {{- if not (or .Values.agentToken.existingSecret .Values.tls.caFile) }}

@@ -1,0 +1,21 @@
+/* The site's Mermaid diagrams, which javascripts/diagrams.js makes open full size: the diagrams' cursor and focus ring,
+   and the dialog that shows one. A stylesheet in extra_css rather than a style the script adds, since instant
+   navigation rebuilds the page's head from the next page's, keeping only what every page lists. */
+.md-typeset div.mermaid[role="button"] { cursor: zoom-in; }
+.md-typeset div.mermaid[role="button"]:focus-visible {
+  outline: 2px solid var(--md-accent-fg-color); outline-offset: 4px;
+}
+dialog.diagram-zoom {
+  box-sizing: border-box; width: 100vw; height: 100vh; max-width: none; max-height: none; margin: 0;
+  padding: 48px 24px 24px; border: 0; background: var(--md-default-bg-color); color: var(--md-default-fg-color);
+  cursor: zoom-out;
+}
+dialog.diagram-zoom::backdrop { background: var(--md-default-bg-color); }
+html:has(dialog.diagram-zoom[open]) { overflow: hidden; }
+dialog.diagram-zoom .diagram-zoom-view { width: 100%; height: 100%; }
+dialog.diagram-zoom button {
+  position: absolute; top: 8px; right: 12px; width: 36px; height: 36px; border: 0; border-radius: 50%;
+  background: transparent; color: var(--md-default-fg-color--light); font: 28px/36px sans-serif; cursor: pointer;
+}
+dialog.diagram-zoom button:hover { color: var(--md-default-fg-color); background: var(--md-default-fg-color--lightest); }
+dialog.diagram-zoom button:focus-visible { outline: 2px solid var(--md-accent-fg-color); }

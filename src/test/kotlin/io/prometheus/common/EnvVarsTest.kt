@@ -192,8 +192,8 @@ class EnvVarsTest : StringSpec() {
       }
     }
 
-    "EnvVars enum should have exactly 54 entries" {
-      EnvVars.entries.size shouldBe 54
+    "EnvVars enum should have exactly 56 entries" {
+      EnvVars.entries.size shouldBe 56
     }
 
     "EnvVars entries should contain all defined constants" {
@@ -210,6 +210,8 @@ class EnvVarsTest : StringSpec() {
         "DASHBOARD_PORT",
         "DASHBOARD_PATH",
         "DASHBOARD_HOST",
+        "DASHBOARD_USERNAME",
+        "DASHBOARD_PASSWORD",
         "REFLECTION_DISABLED",
         "HANDSHAKE_TIMEOUT_SECS",
         "PERMIT_KEEPALIVE_WITHOUT_CALLS",
@@ -268,6 +270,8 @@ class EnvVarsTest : StringSpec() {
         "DASHBOARD_PORT",
         "DASHBOARD_PATH",
         "DASHBOARD_HOST",
+        "DASHBOARD_USERNAME",
+        "DASHBOARD_PASSWORD",
         "REFLECTION_DISABLED",
         "HANDSHAKE_TIMEOUT_SECS",
         "PERMIT_KEEPALIVE_WITHOUT_CALLS",

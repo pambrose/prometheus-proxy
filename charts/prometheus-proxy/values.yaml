@@ -57,11 +57,16 @@ metrics:
   enabled: true
   port: 8082
 
-# The operational dashboard. Unauthenticated: the port is not added to the Service; reach it with
-# kubectl port-forward.
+# The operational dashboard. The port is not added to the Service; reach it with kubectl port-forward. Unauthenticated
+# unless login.existingSecret names a Secret holding a password (DASHBOARD_PASSWORD), which then requires a login, on
+# the dashboard's login page, with login.username (DASHBOARD_USERNAME). The dashboard serves plain HTTP.
 dashboard:
   enabled: false
   port: 8094
+  login:
+    username: admin
+    existingSecret: ""
+    key: password
 
 service:
   type: ClusterIP

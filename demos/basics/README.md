@@ -65,7 +65,7 @@ Clone the repository at the latest release, then run the demo's commands from it
 its targets:
 
 ```bash
-git clone -c advice.detachedHead=false --depth 1 --branch 4.6.0 https://github.com/pambrose/prometheus-proxy.git
+git clone -c advice.detachedHead=false --depth 1 --branch 4.6.1 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/basics
 make up      # pulls the images, starts everything, and prints the URLs
 make tour    # walks through the guided tour below, pausing before each step
@@ -87,8 +87,8 @@ that it starts in under a minute, even without a network connection.
 If a port is already taken, move it, for example with `DEMO_GRAFANA_PORT=3001 make up`. The variables are
 `DEMO_DASHBOARD_PORT`, `DEMO_GRAFANA_PORT`, `DEMO_PROMETHEUS_PORT`, and `DEMO_PROXY_PORT`; the dashboard's links into
 Prometheus and Grafana keep the default ports (`config/proxy.conf`). Every port binds to `127.0.0.1` only. The
-dashboard has no authentication and Grafana uses its default admin password, so this setup is for a laptop, not for
-anything shared.
+dashboard runs without a login, but for part 10 of the tour, and Grafana uses its default admin password, so this
+setup is for a laptop, not for anything shared.
 
 ## What's running
 
@@ -244,6 +244,25 @@ register only the paths its patterns allow.
 ./demo.sh duplicate-agent-stop   # removes the copy, and restarts agent-east to register again
 ```
 
+### 10. A login for the dashboard
+
+```bash
+./demo.sh login       # restarts the proxy with a dashboard password in its environment
+```
+
+- Reload the dashboard: it shows its login page. Sign in as `admin`, with the password `admin`, and it opens the page
+  you asked for; **Log out**, at the right end of the top bar, signs you out. A wrong password shows "Invalid username
+  or password", and the proxy logs it at WARN.
+- The password comes from the proxy's environment, `DEMO_DASHBOARD_PASSWORD` in `docker/compose.yml`, not from
+  `config/proxy.conf`, so it never sits in a file. A script sends the login as HTTP Basic Auth instead:
+  `curl -u admin:admin http://localhost:8094/dashboard/paths`.
+- A restart clears what the proxy holds in memory, so this part comes last: the agents reconnect within a few seconds
+  and register their paths again, and the dashboard's histories start over.
+
+```bash
+./demo.sh login-off   # restarts the proxy without the password
+```
+
 That's the tour. For proxy failover, filtering at the agent, and tracing through the firewall, go on to the
 [network demo](../network). The same proxy and agent, deployed on Kubernetes with their Helm charts, are in the
 [Kubernetes demo](../kubernetes), which needs kind, `kubectl`, and Helm as well as Docker. The demos use different
@@ -261,6 +280,7 @@ resources.
 | `demo.sh agent-stop` / `agent-start [agent]` | Stops or starts an agent (default `agent-west-2`) | `docker compose stop` / `start`: the agent's connection closes as it exits |
 | `demo.sh agent-freeze` / `agent-thaw [agent]` | Pauses or resumes an agent's container (default `agent-west-2`) | `docker compose pause` / `unpause`: the connection stays open but silent, so the proxy evicts the agent after 30 seconds |
 | `demo.sh rogue-agent` / `rogue-agent-stop` | Starts or removes the contractor's agent | Starts or removes `agent-rogue` (compose profile `rogue`), which presents the contractor identity's token, allowed only `contractor_*` paths |
+| `demo.sh login` / `login-off` | Turns the dashboard's login on (`admin`, password `admin`) or off | Restarts the proxy with or without `DASHBOARD_PASSWORD`, from `DEMO_DASHBOARD_PASSWORD` in `docker/compose.yml` |
 | `demo.sh duplicate-agent` / `duplicate-agent-stop` | Starts a second copy of agent-east, or removes it and restarts agent-east | Starts or removes `agent-east-copy` (profile `duplicate`): agent-east's config under another name, not consolidated |
 | `make tour [PART=n]` | Walks through the guided tour above, from part 1 or the one given, pausing before each step |  |
 | `make status` | The containers, the services' modes, and the URLs |  |
@@ -273,7 +293,7 @@ The services are `orders`, `payments`, `inventory`, `catalog`, and `shipping`, p
 
 | File | What it sets up |
 |---|---|
-| `docker/compose.yml` | The services, their ports, and their images |
+| `docker/compose.yml` | The services, their ports, and their images, and the proxy's dashboard password for part 10 |
 | `config/proxy.conf` | The dashboard, service discovery, the per-agent identities, and a 30-second eviction limit, so part 7 fits a demo |
 | `config/agent-duplicate.conf` | agent-east's config under another name, for part 9 |
 | `config/agent-*.conf` | Each agent's proxy endpoint, identity token, paths, and their labels (the `job` Prometheus uses), discovery for agent-east, consolidated mode for the west pair, and a 3-second scrape timeout |
@@ -283,7 +303,7 @@ The services are `orders`, `payments`, `inventory`, `catalog`, and `shipping`, p
 | `app/demo_app.py` | The simulated services and their control API |
 | `Makefile` | The demo's targets: `make up`, `make up-local` (which runs the proxy and agent built from this checkout, for trying a change to them), `down`, `status`, `open`, `tour`, and `logs`, which `make help` lists, and `screenshots`, which it leaves out, since it's for maintaining the site |
 | `demo.sh` | Starting, stopping, and the scenarios. Its `NEEDS_RELEASE_AFTER` is the latest release that predates what the demo shows: until a later one is out, `make up` builds the proxy and agent from this checkout, as `make up-local` does, so set it to the latest release when the demo comes to use something unreleased |
-| `bin/screenshots.sh` | The Basics Demo page's screenshots, in the dark and light themes. `make screenshots` builds and starts the demo, waits a minute so the agents' uptimes read in minutes, plays the scenarios, and writes them to `website/prometheus-proxy/docs/images/demo/` (needs Chrome, ImageMagick 7, and `cwebp`). While checking a change, `SKIP_UPTIME_WAIT=1` skips the minute, so the shots show uptimes in seconds and aren't for the site, and `WAIT_SECS` sets how long each wait for a scene may take before the script fails (default 150): `make screenshots SKIP_UPTIME_WAIT=1 WAIT_SECS=60` |
+| `bin/screenshots.sh` | The Basics Demo page's screenshots, and the Dashboard page's of the login page, in the dark and light themes. `make screenshots` builds and starts the demo, waits a minute so the agents' uptimes read in minutes, plays the scenarios, and writes them to `website/prometheus-proxy/docs/images/demo/` (needs Chrome, ImageMagick 7, and `cwebp`). While checking a change, `SKIP_UPTIME_WAIT=1` skips the minute, so the shots show uptimes in seconds and aren't for the site, and `WAIT_SECS` sets how long each wait for a scene may take before the script fails (default 150): `make screenshots SKIP_UPTIME_WAIT=1 WAIT_SECS=60` |
 
 From the repository root, `make check-rules` validates the Prometheus config and both rule files with promtool, and
 `ConfigFileKeysTest` checks every key in `config/*.conf` against `config/config.conf`, and that each file loads as the

@@ -6,7 +6,7 @@ docker network create prometheus-proxy-net
 docker run --rm --name prometheus-proxy --network prometheus-proxy-net \
   -p 8080:8080 -p 50051:50051 \
   --env METRICS_ENABLED=true \
-  pambrose/prometheus-proxy:4.6.0
+  pambrose/prometheus-proxy:4.6.1
 ; --8<-- [end:docker-proxy-basic]
 
 ; --8<-- [start:docker-agent-basic]
@@ -14,7 +14,7 @@ docker run --rm --name prometheus-proxy --network prometheus-proxy-net \
 docker run --rm --network prometheus-proxy-net \
   --env PROXY_HOSTNAME=prometheus-proxy \
   --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-  pambrose/prometheus-agent:4.6.0
+  pambrose/prometheus-agent:4.6.1
 
 # Scrape the proxy's and the agent's own metrics through the proxy:
 curl http://localhost:8080/proxy_metrics
@@ -25,14 +25,14 @@ curl http://localhost:8080/agent_metrics
 # Run the proxy in the background:
 docker run --detach --name prometheus-proxy --restart unless-stopped \
   -p 8080:8080 -p 50051:50051 \
-  pambrose/prometheus-proxy:4.6.0
+  pambrose/prometheus-proxy:4.6.1
 
 # Run an agent in the background with a local config file:
 docker run --detach --name prometheus-agent --restart unless-stopped \
   --mount type=bind,source="$(pwd)"/agent.conf,target=/app/agent.conf \
   --env AGENT_CONFIG=agent.conf \
   --env PROXY_HOSTNAME=proxy-host.example.com \
-  pambrose/prometheus-agent:4.6.0
+  pambrose/prometheus-agent:4.6.1
 ; --8<-- [end:docker-background]
 
 ; --8<-- [start:docker-manage]
@@ -53,7 +53,7 @@ docker run --detach --name prometheus-proxy \
   --env ADMIN_ENABLED=true \
   --env METRICS_ENABLED=true \
   --restart unless-stopped \
-  pambrose/prometheus-proxy:4.6.0
+  pambrose/prometheus-proxy:4.6.1
 ; --8<-- [end:docker-proxy-production]
 
 ; --8<-- [start:docker-agent-local-config]
@@ -65,13 +65,13 @@ docker run --detach --name prometheus-agent \
   --env AGENT_CONFIG=prom-agent.conf \
   --env PROXY_HOSTNAME=proxy-host.example.com \
   --restart unless-stopped \
-  pambrose/prometheus-agent:4.6.0
+  pambrose/prometheus-agent:4.6.1
 ; --8<-- [end:docker-agent-local-config]
 
 ; --8<-- [start:docker-compose-full]
 services:
   proxy:
-    image: pambrose/prometheus-proxy:4.6.0
+    image: pambrose/prometheus-proxy:4.6.1
     ports:
       - "8080:8080"    # HTTP scrape port
       - "50051:50051"  # gRPC agent port
@@ -85,7 +85,7 @@ services:
     restart: unless-stopped
 
   agent:
-    image: pambrose/prometheus-agent:4.6.0
+    image: pambrose/prometheus-agent:4.6.1
     ports:
       - "8083:8083"    # Metrics port
       - "8093:8093"    # Admin port
@@ -113,7 +113,7 @@ docker run --rm \
   --env PROXY_CONFIG=tls.conf \
   --env ADMIN_ENABLED=true \
   --env METRICS_ENABLED=true \
-  pambrose/prometheus-proxy:4.6.0
+  pambrose/prometheus-proxy:4.6.1
 
 # Agent with TLS (no mutual auth):
 docker run --rm \
@@ -123,7 +123,7 @@ docker run --rm \
   --mount type=bind,source="$(pwd)"/tls.conf,target=/app/tls.conf \
   --env AGENT_CONFIG=tls.conf \
   --env PROXY_HOSTNAME=proxy-host:50440 \
-  pambrose/prometheus-agent:4.6.0
+  pambrose/prometheus-agent:4.6.1
 ; --8<-- [end:docker-tls]
 
 ; --8<-- [start:docker-tls-pem]
@@ -133,7 +133,7 @@ docker run --rm \
   -p 50051:50051 \
   --env CERT_CHAIN_PEM="$(base64 < server.crt | tr -d '\n')" \
   --env PRIVATE_KEY_PEM="$(base64 < server.key | tr -d '\n')" \
-  pambrose/prometheus-proxy:4.6.0
+  pambrose/prometheus-proxy:4.6.1
 
 # Agent trusting the CA that signed the proxy's certificate, given as an environment variable:
 docker run --rm \
@@ -141,7 +141,7 @@ docker run --rm \
   --env AGENT_CONFIG=agent.conf \
   --env PROXY_HOSTNAME=proxy-host:50051 \
   --env TRUST_CERT_COLLECTION_PEM="$(cat ca.crt)" \
-  pambrose/prometheus-agent:4.6.0
+  pambrose/prometheus-agent:4.6.1
 ; --8<-- [end:docker-tls-pem]
 
 ; --8<-- [start:docker-env-vars]

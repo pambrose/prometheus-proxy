@@ -1,6 +1,9 @@
 {% extends "base.html" %}
 
 {% block scripts %}
+  {#- Ahead of the theme's bundle, which draws the Mermaid diagrams: it has them wait for the page's font, so their
+      labels fit, and opens each full size with a click. See the script's header. #}
+  <script src="{{ 'javascripts/diagrams.js' | url }}"></script>
   {{ super() }}
   {#- Context7's chat for questions about the API, answered from its index of this repository. The widget reads its
       settings from the last script tag with a data-library attribute and adds its chat box to the page once, outside

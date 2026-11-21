@@ -10,14 +10,14 @@ Without it, that answer lives in the logs of two different machines, or in a JSO
 proxy already holds everything needed to answer it — which agents are connected, which paths they back,
 and how recent scrapes actually went.
 
-!!! warning "Off by default, and unauthenticated"
+!!! warning "Off by default, and open until you set a password"
 
-    The dashboard has **no authentication and no TLS**, the same posture as the admin and metrics endpoints. It
-    shows agent names, hostnames, target URLs, labels and recent activity in one place, and anyone who can reach it
-    can have the proxy scrape a path and read the start of what it returns, so treat its port as internal and do
-    not expose it publicly.
+    The dashboard has **no TLS**, and **no authentication until you set a password** (`DASHBOARD_PASSWORD`; see
+    [Login](#login)). It shows agent names, hostnames, target URLs, labels and recent activity in one place, and
+    anyone who can reach it can have the proxy scrape a path and read the start of what it returns, so treat its port
+    as internal and do not expose it publicly, with a login or without one.
 
-    It listens on all interfaces by default, and the proxy logs a warning at startup when it does. Set
+    It listens on all interfaces by default, and without a login the proxy logs a warning at startup when it does. Set
     `proxy.dashboard.host` (or `--dashboard_host`) to `127.0.0.1` to keep it on the proxy host.
 
 !!! tip "See it running"
@@ -44,6 +44,8 @@ and how recent scrapes actually went.
         activityLogSize = 500       // Lines kept in the Activity view
         scrapeNowEnabled = true     // A Scrape button on each path; false removes it and its route
         links = []                  // Links from each path into other tools; see Links below
+        username = "admin"          // The login's username, once a password is set
+        password = ""               // Requires a login; better set as DASHBOARD_PASSWORD, see Login below
       }
     }
     ```
@@ -61,6 +63,63 @@ and how recent scrapes actually went.
     ```
 
 Then open `http://<proxy-host>:8094/dashboard`.
+
+## Login
+
+Set a password, and the dashboard asks for a login before it shows anything: a browser gets its login page, and after
+a right login, the page it asked for. The username is `admin` unless you set another.
+
+<figure markdown="span">
+  ![The dashboard's login page](images/demo/login.webp#only-dark){ loading=lazy }
+  ![The dashboard's login page](images/demo/login-light.webp#only-light){ loading=lazy }
+  <figcaption>The login page, once a password is set</figcaption>
+</figure>
+
+=== "Environment"
+
+    ```bash
+    DASHBOARD_ENABLED=true DASHBOARD_PASSWORD='<a long password>' java -jar prometheus-proxy.jar
+    ```
+
+=== "Config file"
+
+    ```hocon
+    proxy {
+      dashboard {
+        enabled = true
+        username = "ops"            // admin unless set; DASHBOARD_USERNAME
+        password = ${?OPS_PASSWORD} // From the environment, so the file holds no password
+      }
+    }
+    ```
+
+The username and password have no command-line flags, since a command line shows in `ps`. Set the password from the
+environment, or from a Secret on a platform that has them, rather than in a config file others can read.
+
+A login starts a session, which the browser keeps in a cookie. It ends after 24 hours without a request, 7 days after
+the login, or with **Log out**, at the end of the top bar. The proxy keeps sessions in memory, so a restart signs
+everyone out; a page left open then goes to the login page by itself. The cookie is `HttpOnly`, `SameSite=Lax`, named
+for the dashboard's port (so two proxies on one host keep their own), and `Secure` when the browser reached the
+dashboard over `https`, as through a reverse proxy.
+
+A script sends the login with each request as HTTP Basic Auth instead, and needs no session. A browser can't: it always
+gets the login page, even with a Basic login it saved for the dashboard's address earlier, so Log out signs it out.
+
+```bash
+curl -u admin:'<the password>' http://proxy-host:8094/dashboard/paths
+```
+
+The proxy logs the username and that a password is set, never the password. It logs a wrong login at WARN, with the
+address it came from, at most once a minute for each address, and answers a wrong login from the page after a second.
+It refuses to start with an empty username, a colon in it (where Basic Auth splits the username from the password), or
+a control character in either, such as the trailing newline of a password read from a file.
+
+!!! warning "Put TLS in front of it"
+
+    The dashboard serves plain HTTP, so the password, and the session cookie after it, cross the network readable by
+    anyone who can watch the traffic. Off the proxy host, reach the dashboard through a reverse proxy that terminates
+    TLS (list its public origin in `allowedOrigins`; see [Exposure](#exposure)), an SSH tunnel, or
+    `kubectl port-forward`. A login doesn't make the port safe to expose publicly.
 
 ## Three layouts
 
@@ -399,8 +458,8 @@ The agent ID will *not* match — that one is assigned by each proxy independent
 
 ## Exposure
 
-The dashboard has no authentication, so anyone who can reach its port can read it. Keep the port on an
-internal network, or bind it to a private address with `proxy.dashboard.host`; the proxy warns at startup
+Without a [login](#login), anyone who can reach the dashboard's port can read it. Keep the port on an internal
+network, or bind it to a private address with `proxy.dashboard.host`; without a login, the proxy warns at startup
 when the dashboard listens on all interfaces.
 
 A browser inside that network can still be used to reach it. The dashboard guards against the two ways a
@@ -419,22 +478,26 @@ web page can do that:
 The Activity layout shows the address each call with a bad token came from, so anyone who can read the dashboard
 can see who has tried the agent port.
 
-Anyone who can reach the dashboard can also have the proxy [scrape a path](#scrape-now) and read the first 2 KB of what
-it returns, even with the scrape port firewalled to Prometheus. The route takes a request only from the dashboard's own
+Anyone who can reach the dashboard, with its login when one is set, can also have the proxy [scrape a path](#scrape-now)
+and read the first 2 KB of what it returns, even with the scrape port firewalled to Prometheus. The route takes a request only from the dashboard's own
 page: it applies the same Origin check as the WebSocket, and requires the header the page's script sends, which a page on
 another site can't add without the proxy's permission, so a link or form elsewhere can't make it scrape. Set
 `proxy.dashboard.scrapeNowEnabled = false` where that is more than the dashboard's readers should have.
 
+A login doesn't replace either guard, so the dashboard keeps both with a login set, and checks the Origin of the login
+and Log out forms as well.
+
 Sessions are also capped at `proxy.dashboard.maxSessions` (default 50), and a client that stops reading or
-sends an oversized message is disconnected. Neither list stops someone who can reach the port directly.
+sends an oversized message is disconnected. Neither list stops someone who can reach the port directly; a login does.
 Both are lists, so set them in a config file; see [Dashboard configuration](configuration/proxy.md#dashboard).
 
 ## Limits
 
 - **One action.** Nothing on the dashboard changes the proxy's state. Its one action, [scrape now](#scrape-now),
   scrapes a target as Prometheus would.
-- **No authentication.** Rely on network isolation, as with the admin port; see [Exposure](#exposure) for
-  what the dashboard itself guards against.
+- **One shared login, over plain HTTP.** The [login](#login) is one username and password for everyone, and the
+  dashboard has no TLS of its own. Without a login, rely on network isolation, as with the admin port; see
+  [Exposure](#exposure) for what the dashboard itself guards against.
 - **Consolidated paths show one agent's target.** When several agents register the same path, the row
   names one of them, with the others counted in the `+N`, and shows that agent's target URL and source.
   When it leaves, the row names the next agent and shows its target. The path's labels, which service

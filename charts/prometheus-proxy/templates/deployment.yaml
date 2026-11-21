@@ -79,6 +79,15 @@ spec:
               value: {{ .Values.dashboard.enabled | quote }}
             - name: DASHBOARD_PORT
               value: {{ .Values.dashboard.port | quote }}
+            {{- with .Values.dashboard.login.existingSecret }}
+            - name: DASHBOARD_USERNAME
+              value: {{ $.Values.dashboard.login.username | quote }}
+            - name: DASHBOARD_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ . }}
+                  key: {{ $.Values.dashboard.login.key }}
+            {{- end }}
             {{- if include "prometheus-proxy.hasConfig" . }}
             - name: PROXY_CONFIG
               value: /app/config/proxy.conf
