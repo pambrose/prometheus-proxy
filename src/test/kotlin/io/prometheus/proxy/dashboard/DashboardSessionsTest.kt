@@ -74,6 +74,18 @@ class DashboardSessionsTest : StringSpec() {
       DashboardSessions.MAX_AGE_SECS shouldBe 7.days.inWholeSeconds.toInt()
     }
 
+    // An open dashboard asks whether its session has ended on each push, which mustn't count as a request: a tab left
+    // open would keep its session alive past its idle time.
+    "a check that doesn't count as a request should leave the idle time running" {
+      val clock = TestTimeSource()
+      val sessions = DashboardSessions(timeSource = clock)
+      val token = sessions.create()
+      clock += 23.hours
+      sessions.isValid(token, counts = false).shouldBeTrue()
+      clock += 1.hours + 1.seconds
+      sessions.isValid(token, counts = false).shouldBeFalse()
+    }
+
     "removing a session ends it" {
       val sessions = DashboardSessions()
       val token = sessions.create()

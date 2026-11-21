@@ -32,8 +32,8 @@ class LoginHtmlTest : StringSpec() {
     routeBase: String = "/dashboard",
     next: String = "/dashboard",
     username: String = "",
-    failed: Boolean = false,
-  ) = createHTML().html { renderLogin(routeBase, next, username, failed) }
+    alert: String? = null,
+  ) = createHTML().html { renderLogin(routeBase, next, username, alert) }
 
   init {
     "the page has the heading, a form posting to the login route, and labeled fields" {
@@ -56,12 +56,21 @@ class LoginHtmlTest : StringSpec() {
     }
 
     "a failed login shows the alert and keeps the username, with the password focused" {
-      page(username = "ops", failed = true).apply {
+      page(username = "ops", alert = LoginHtml.FAILED).apply {
         this shouldContain """role="alert""""
         this shouldContain LoginHtml.FAILED
         this shouldContain """value="ops""""
         Regex("""<input[^>]*name="password"[^>]*autofocus""").containsMatchIn(this) shouldBe true
         Regex("""<input[^>]*name="username"[^>]*autofocus""").containsMatchIn(this) shouldBe false
+      }
+    }
+
+    // Past the limit on wrong logins, the page says so, and why the right password won't do for now.
+    "too many wrong logins should show the alert that says so" {
+      page(username = "ops", alert = LoginHtml.LIMITED).apply {
+        this shouldContain """role="alert""""
+        this shouldContain LoginHtml.LIMITED
+        this shouldNotContain LoginHtml.FAILED
       }
     }
 

@@ -13,10 +13,12 @@ Agent page shows how to debug an embedded agent.
 
 - **A login for the dashboard.** Set `DASHBOARD_PASSWORD` (or `proxy.dashboard.password`) and the dashboard shows a
   login page before anything else, styled after Grafana's. The username is `admin` unless you set `DASHBOARD_USERNAME`.
-  A login lasts until **Log out**, 24 hours without use, or 7 days, and a proxy restart signs everyone out. Scripts send
-  the login as HTTP Basic Auth (`curl -u`); a browser always gets the login page. The dashboard still serves plain HTTP, so put TLS in front of it, such as a
-  reverse proxy, unless the network is trusted, and keep its port internal either way. The Helm chart reads the
-  password from a Secret (`dashboard.login.existingSecret`).
+  A login lasts until **Log out**, 24 hours without use, or 7 days, and a proxy restart signs everyone out; a page left
+  open then goes to the login page. Scripts send the login as HTTP Basic Auth (`curl -u`); a browser always gets the
+  login page. After 10 wrong logins from one address within a minute, or 100 in all, the dashboard refuses logins for up
+  to a minute. It still serves plain HTTP, so put TLS in front of it, such as a reverse proxy, unless the network is
+  trusted, and keep its port internal either way. The Helm chart reads the password from a Secret
+  (`dashboard.login.existingSecret`).
 
 ### Bug Fixes
 

@@ -66,8 +66,14 @@ internal class DashboardSessions(
     return token
   }
 
-  /** Whether [token] names a session that hasn't ended; a valid one counts as a request, restarting its idle time. */
-  fun isValid(token: String?): Boolean {
+  /**
+   * Whether [token] names a session that hasn't ended. A valid one [counts] as a request, restarting its idle time,
+   * unless the check is the dashboard's own, of a page it keeps open, which isn't a request.
+   */
+  fun isValid(
+    token: String?,
+    counts: Boolean = true,
+  ): Boolean {
     if (token.isNullOrEmpty())
       return false
     val key = keyOf(token)
@@ -77,7 +83,8 @@ internal class DashboardSessions(
         sessions.remove(key)
         false
       } else {
-        session.lastRequest = timeSource.markNow()
+        if (counts)
+          session.lastRequest = timeSource.markNow()
         true
       }
     }

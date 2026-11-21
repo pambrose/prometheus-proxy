@@ -78,7 +78,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.isActive
@@ -180,7 +179,12 @@ internal class ProxyDashboardService(
 
   /** One connected browser: how to reach it, and what its page shows. */
   private class Session(
+    // The login session the page's socket was opened with, which the push loop ends it with; null without a login, or
+    // for a script's socket, which logs in with Basic Auth on every request rather than keeping a session.
+    val login: String?,
     val send: suspend (String) -> Unit,
+    // Closes the socket.
+    val end: suspend () -> Unit,
   ) {
     // Written by this session's socket coroutine and read by the shared push loop, hence @Volatile. Null until the
     // browser's first message says which page it shows, and until then a push carries only the status bar (see
@@ -278,6 +282,10 @@ internal class ProxyDashboardService(
   // Which addresses' wrong logins may be logged at WARN now.
   private val badLoginWarnings = KeyedThrottle<String>(BAD_LOGIN_WARNING_INTERVAL, MAX_BAD_LOGIN_HOSTS)
 
+  // The limit on wrong logins, which refuses every login from an address past it, or from any past the overall one,
+  // before its password is looked at, from the form or as Basic Auth.
+  private val limiter = LoginLimiter(MAX_BAD_LOGINS_PER_ADDRESS, MAX_BAD_LOGINS_OVERALL)
+
   // Application-wide, like hostCheck, and installed after it, so it runs before routing and covers every page, asset,
   // and action, the WebSocket handshake, and a path that would 404: a route added later can't miss it. Installed only
   // with a password set. Lets through a valid session, or a script's right Basic login; sends a page request to the
@@ -294,9 +302,15 @@ internal class ProxyDashboardService(
         // skip the page and outlast Log out. So a browser's Basic login is ignored, and only a script's is read.
         val header = if (isBrowser(request)) null else request.headers[HttpHeaders.Authorization]
         if (header != null) {
+          val address = request.origin.remoteAddress
+          if (limiter.isBlocked(address)) {
+            call.response.header(HttpHeaders.RetryAfter, RETRY_AFTER_SECS)
+            call.respondText(LoginHtml.LIMITED, ContentType.Text.Plain, HttpStatusCode.TooManyRequests)
+            return@onCall
+          }
           if (login.accepts(header))
             return@onCall
-          refuseBadLogin(request.origin.remoteAddress)
+          recordBadLogin(address)
         }
         if (wantsPage(request))
           call.seeOther("$loginPath?${LoginHtml.NEXT_FIELD}=${request.uri.encodeURLParameter()}")
@@ -309,17 +323,17 @@ internal class ProxyDashboardService(
   private suspend fun ApplicationCall.respondLogin(
     next: String,
     username: String = "",
-    failed: Boolean = false,
+    alert: String? = null,
+    status: HttpStatusCode = HttpStatusCode.OK,
   ) {
     response.header(HttpHeaders.CacheControl, "no-store")
     response.header("Content-Security-Policy", "frame-ancestors 'none'")
-    respondHtml(if (failed) HttpStatusCode.Unauthorized else HttpStatusCode.OK) {
-      with(LoginHtml) { renderLogin(routeBase, next, username, failed) }
-    }
+    respondHtml(status) { with(LoginHtml) { renderLogin(routeBase, next, username, alert) } }
   }
 
   // The login form's POST, behind originGuard: a body over MAX_LOGIN_BODY_BYTES (or of unknown length) refused unread,
-  // a wrong login answered after LOGIN_FAILURE_DELAY, and a right one given a session and sent on to next.
+  // any login from an address past the limit on wrong ones refused, and a right one given a session and sent on to
+  // next.
   private suspend fun ApplicationCall.logIn(login: DashboardLogin) {
     val length = request.headers[HttpHeaders.ContentLength]?.toLongOrNull()
     if (length == null || length > MAX_LOGIN_BODY_BYTES)
@@ -327,14 +341,18 @@ internal class ProxyDashboardService(
     val form = runCatching { receiveParameters() }.getOrDefault(Parameters.Empty)
     val username = form[LoginHtml.USERNAME_FIELD].orEmpty().take(LoginHtml.MAX_FIELD_LENGTH)
     val next = safeNext(form[LoginHtml.NEXT_FIELD], routeBase)
-    if (login.accepts(username, form[LoginHtml.PASSWORD_FIELD].orEmpty())) {
+    val address = request.origin.remoteAddress
+    if (limiter.isBlocked(address)) {
+      response.header(HttpHeaders.RetryAfter, RETRY_AFTER_SECS)
+      respondLogin(next, username, LoginHtml.LIMITED, HttpStatusCode.TooManyRequests)
+    } else if (login.accepts(username, form[LoginHtml.PASSWORD_FIELD].orEmpty())) {
       // Secure when the browser reached the dashboard over https, as through a TLS-terminating reverse proxy.
       val secure = request.headers[HttpHeaders.Origin]?.startsWith("https://", ignoreCase = true) == true
       response.header(HttpHeaders.SetCookie, sessionCookieHeader(logins.create(), secure))
       seeOther(next)
     } else {
-      refuseBadLogin(request.origin.remoteAddress)
-      respondLogin(next, username, failed = true)
+      recordBadLogin(address)
+      respondLogin(next, username, LoginHtml.FAILED, HttpStatusCode.Unauthorized)
     }
   }
 
@@ -345,16 +363,21 @@ internal class ProxyDashboardService(
   ) = "$sessionCookie=${token.orEmpty()}; Max-Age=${if (token == null) 0 else DashboardSessions.MAX_AGE_SECS}; " +
     "Path=$basePath; HttpOnly; SameSite=Lax" + if (secure) "; Secure" else ""
 
-  // A wrong login, from the form or Basic Auth: logged at WARN at most once a minute for each address, and at DEBUG
-  // otherwise, so a client guessing in a loop can't flood the log, and never with the username it gave, which is the
-  // client's own text; then answered after LOGIN_FAILURE_DELAY, which costs no thread while it waits.
-  private suspend fun refuseBadLogin(address: String) {
+  // A wrong login, from the form or Basic Auth: counted against the limit, and logged at WARN at most once a minute
+  // for each address and at DEBUG otherwise, so a client guessing in a loop can't flood the log, never with the
+  // username it gave, which is the client's own text. The one that reaches the limit is logged at WARN too.
+  private fun recordBadLogin(address: String) {
+    val limited = limiter.recordFailure(address)
     val message = "Refused a dashboard request from $address with a wrong login"
     if (badLoginWarnings.tryAcquire(address))
       logger.warn { message }
     else
       logger.debug { message }
-    delay(LOGIN_FAILURE_DELAY)
+    if (limited)
+      logger.warn {
+        "Too many wrong dashboard logins, from $address or in all: refusing them for up to a minute " +
+          "($MAX_BAD_LOGINS_PER_ADDRESS from one address, or $MAX_BAD_LOGINS_OVERALL in all, within a minute)"
+      }
   }
 
   // Application-wide rather than route-scoped, so it runs before routing and covers every page, asset, and the
@@ -435,6 +458,8 @@ internal class ProxyDashboardService(
             install(originGuard)
             post {
               logins.remove(call.request.cookies[sessionCookie])
+              // So the push loop closes this session's open pages now rather than at its next tick.
+              wake.trySend(Unit)
               call.response.header(HttpHeaders.SetCookie, sessionCookieHeader(null))
               call.seeOther(loginPath)
             }
@@ -542,7 +567,12 @@ internal class ProxyDashboardService(
               close(CloseReason(CloseReason.Codes.TRY_AGAIN_LATER, "Too many dashboard sessions"))
               return@webSocket
             }
-            val session = Session { text -> outgoing.send(Frame.Text(text)) }
+            val session =
+              Session(
+                login = if (loginEnabled) call.request.cookies[sessionCookie] else null,
+                send = { text -> outgoing.send(Frame.Text(text)) },
+                end = { close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "The dashboard session ended")) },
+              )
             sessions.add(session)
             try {
               // The status bar at once, rather than making the browser wait for the first event or tick. The
@@ -610,7 +640,15 @@ internal class ProxyDashboardService(
       if (sessions.isEmpty()) continue
       // Always a collect, never the cache: a tick exists to sample the values that drift.
       val snapshot = snapshots.fresh()
-      sessions.forEach { push(it, snapshot) }
+      sessions.forEach {
+        // A page whose login session has ended, by Log out, expiring, or a restart's losing it, gets no more pushes:
+        // its socket closes, and the page, asking for its session, goes to the login page. A check, not a request, so
+        // an open page doesn't keep its session from going idle.
+        if (it.login != null && !logins.isValid(it.login, counts = false))
+          it.end()
+        else
+          push(it, snapshot)
+      }
     }
   }
 
@@ -848,8 +886,14 @@ internal class ProxyDashboardService(
     /** The largest login form the login route reads; a browser's is a few hundred bytes. */
     internal const val MAX_LOGIN_BODY_BYTES = 4_096
 
-    /** How long a wrong login from the form waits before its answer. */
-    internal val LOGIN_FAILURE_DELAY = 1.seconds
+    /** The most wrong logins one address may make in a minute; past it, its logins are refused for the minute. */
+    internal const val MAX_BAD_LOGINS_PER_ADDRESS = 10
+
+    // The most from every address together, past which every login is refused for the minute.
+    private const val MAX_BAD_LOGINS_OVERALL = 100
+
+    // How long a refused login is told to wait, the limit's window, in seconds.
+    private const val RETRY_AFTER_SECS = "60"
 
     // The longest next the login page carries; a longer one goes to the base.
     private const val MAX_NEXT_LENGTH = 2_048

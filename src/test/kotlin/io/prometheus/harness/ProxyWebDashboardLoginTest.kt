@@ -22,7 +22,6 @@ import ch.qos.logback.classic.Level
 import com.pambrose.common.util.runCatchingCancellable
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeTrue
-import io.kotest.matchers.comparables.shouldBeGreaterThanOrEqualTo
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -49,6 +48,7 @@ import io.ktor.http.content.OutgoingContent
 import io.ktor.http.parameters
 import io.ktor.utils.io.ByteWriteChannel
 import io.ktor.utils.io.writeStringUtf8
+import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.readText
 import io.prometheus.common.LOOPBACK_HOST
@@ -62,8 +62,8 @@ import io.prometheus.proxy.dashboard.ProxyDashboardService
 import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.ASSET_DIR
 import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.HX_REQUEST_HEADER
 import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.SEC_FETCH_MODE
+import kotlinx.coroutines.withTimeout
 import kotlin.time.Duration.Companion.seconds
-import kotlin.time.measureTimedValue
 
 /**
  * The dashboard with a login, `proxy.dashboard.password`, over the Netty transport: the login page and its session
@@ -211,13 +211,12 @@ class ProxyWebDashboardLoginTest : StringSpec() {
       }
     }
 
-    "a wrong login should wait, say so, and be logged once, without the username given" {
+    "a wrong login should say so, and be logged once, without the username given" {
       withProxy {
         val logs =
           captureLogs<ProxyDashboardService>(Level.DEBUG) {
             repeat(2) {
-              val (response, took) = measureTimedValue { logIn(username = WRONG_USERNAME, password = "wrong") }
-              took shouldBeGreaterThanOrEqualTo ProxyDashboardService.LOGIN_FAILURE_DELAY
+              val response = logIn(username = WRONG_USERNAME, password = "wrong")
               response.status shouldBe HttpStatusCode.Unauthorized
               response.setSessionCookie().shouldBeNull()
               response.bodyAsText().apply {
@@ -328,10 +327,46 @@ class ProxyWebDashboardLoginTest : StringSpec() {
     "scripts should still log in with Basic Auth" {
       withProxy {
         get("$base/dashboard") { basicAuth(USERNAME, PASSWORD) }.status shouldBe HttpStatusCode.OK
-        // A wrong one waits as a wrong form login does, so guessing through Basic Auth is no faster.
-        val (wrong, took) = measureTimedValue { get("$base/dashboard") { basicAuth(USERNAME, "wrong") } }
-        wrong.status shouldBe HttpStatusCode.Unauthorized
-        took shouldBeGreaterThanOrEqualTo ProxyDashboardService.LOGIN_FAILURE_DELAY
+        get("$base/dashboard") { basicAuth(USERNAME, "wrong") }.status shouldBe HttpStatusCode.Unauthorized
+      }
+    }
+
+    // A limit, not a delay, which a guesser sending logins in parallel wouldn't feel: past it, every login from the
+    // address is refused until the oldest wrong one is a minute old, the right password included, from the form or as
+    // Basic Auth. Each spec has a proxy of its own, so the limit starts from nothing here.
+    "too many wrong logins from one address should be refused for the rest of the minute" {
+      withProxy {
+        repeat(ProxyDashboardService.MAX_BAD_LOGINS_PER_ADDRESS) {
+          logIn(password = "wrong").status shouldBe HttpStatusCode.Unauthorized
+        }
+        logIn().apply {
+          status shouldBe HttpStatusCode.TooManyRequests
+          headers[HttpHeaders.RetryAfter] shouldBe "60"
+          setSessionCookie().shouldBeNull()
+          bodyAsText() shouldContain LoginHtml.LIMITED
+        }
+        get("$base/dashboard") { basicAuth(USERNAME, PASSWORD) }.status shouldBe HttpStatusCode.TooManyRequests
+      }
+    }
+
+    // The login is checked when a page's WebSocket opens; a socket outlives that, so the push loop closes one whose
+    // session has ended, and Log out wakes it at once. The page then asks for its session and gets the login page.
+    "an open dashboard's WebSocket should close when its session ends" {
+      withProxy {
+        val token = loggedIn()
+        webSocket(socketUrl, request = { session(token) }) {
+          (incoming.receive() as Frame.Text).readText() shouldContain "hx-swap-oob"
+          post("$base/dashboard/logout") {
+            session(token)
+            header(HttpHeaders.Origin, base)
+          }.status shouldBe HttpStatusCode.SeeOther
+          withTimeout(10.seconds) {
+            while (!incoming.receiveCatching().isClosed) {
+              // Frames pushed before the close; the next one is the close itself.
+            }
+          }
+          closeReason.await()?.knownReason shouldBe CloseReason.Codes.VIOLATED_POLICY
+        }
       }
     }
 

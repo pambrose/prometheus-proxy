@@ -493,11 +493,14 @@ Two support helpers also live here (not test classes themselves):
   halves right; and neither value in its `toString`
 - **DashboardSessionsTest** (`dashboard/`) — the login page's sessions: a new one valid and a token never issued, null,
   or empty not; 43 base64url characters, distinct each time; ended 24 hours after its last request, which a request
-  restarts, and 7 days after it began however recently used; ended by removal; the least recently used dropped past
-  the cap; and an expired one forgotten
+  restarts, and a check that isn't a request doesn't; 7 days after it began however recently used; ended by removal;
+  the least recently used dropped past the cap; and an expired one forgotten
+- **LoginLimiterTest** (`dashboard/`) — the limit on wrong logins: an address under it let in, one at it refused and no
+  other, let in again once its oldest wrong login is a minute old; every address refused at the overall limit, until
+  its oldest is a minute old; and at most so many addresses remembered, the least recent going first
 - **LoginHtmlTest** (`dashboard/`) — the login page: its heading, a form posting to the login route with labeled,
   autocompleting, length-capped fields and one Log in button; after a failure the alert, the username kept, and the
-  password focused, and without one neither; the next path and the username escaped; a root mount posting to
+  password focused, and without one neither; the alert for too many wrong logins; the next path and the username escaped; a root mount posting to
   `/login`; nothing loaded from anywhere; and the dashboard's color tokens, in both themes
 - **ProxyDashboardServiceTest** (`dashboard/`) — Dashboard request guards: where a login may send the browser
   (`safeNext`: a page under the base, never off-site, a protocol-relative or backslashed path, a `.` or `..` segment,
@@ -765,11 +768,13 @@ mechanism that the standard suite cannot reach:
 - **ProxyWebDashboardLoginTest** — the dashboard with a password set, split from ProxyWebDashboardTest, a proxy per
   spec: a page navigation without a session sent to the login page with its path as `next`, and anything else (the
   WebSocket handshake, the scrape action, an asset, `/session`) a 401 with no `WWW-Authenticate`; the login page, not
-  cached or framed; a wrong login answered after a second with the alert, and one WARN for two, never naming the
+  cached or framed; a wrong login answered with the alert, and one WARN for two, never naming the
   username; a right one setting the session cookie (`HttpOnly`, `SameSite=Lax`, the base's `Path`, 7 days, `Secure`
   from an https origin) and returning to `next`, never off-site; the dashboard, its WebSocket, and `/session` working
   with the cookie; Log out ending the session; a foreign origin refused on the login and Log out forms; an oversized or
-  chunked login body refused; Basic Auth for scripts, a wrong one answered after a second; a browser's saved Basic
+  chunked login body refused; Basic Auth for scripts; past 10 wrong logins from one address, every login from it refused
+  with a 429 and `Retry-After`, the right one included, from the form or as Basic Auth; an open page's WebSocket closed
+  once its session ends (`VIOLATED_POLICY`), without waiting for a reconnect; a browser's saved Basic
   login (a request with `Sec-Fetch-Mode`) ignored, the page, `/session`, and the WebSocket included, and not logged as
   wrong; a root mount's login at `/login`; and, with no password, no login page and no Log out
 - **TlsMutualAuthRejectionTest** — the negative mutual-TLS path over a real Netty handshake, which the

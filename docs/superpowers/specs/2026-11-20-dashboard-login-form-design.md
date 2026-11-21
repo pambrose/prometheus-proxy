@@ -47,8 +47,11 @@ dashboard's own, styled after Grafana's login, with a "Prometheus Proxy Dashboar
 - **`POST <base>/login`** takes a form of `username`, `password`, and `next`:
   - refused with a 403 for a foreign `Origin`, as the page guard refuses one;
   - a body over 4 KB, or one with no `Content-Length`, is refused with a 413;
-  - a wrong login waits a second, logs the throttled WARN (address only), and renders the page again with a 401,
-    the alert, and the username kept;
+  - a wrong login logs the throttled WARN (address only), and renders the page again with a 401, the alert, and the
+    username kept;
+  - past 10 wrong logins from one address within a minute, or 100 in all, every login it covers is refused with a 429
+    and `Retry-After: 60`, before its password is looked at, from the form or as Basic Auth (added after review; it
+    replaced a one-second delay on each wrong login, which didn't slow a guesser sending logins in parallel);
   - a right one creates a session, sets the cookie, and redirects (303) to `next` when it is a path under the
     dashboard's base, else to the base, so it can't redirect off-site.
 - **`POST <base>/logout`**: the same Origin check; removes the session, expires the cookie, and redirects to the login

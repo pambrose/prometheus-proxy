@@ -9,12 +9,14 @@ All notable changes to this project are documented in this file.
 ### New Features
 
 - The dashboard can require a login: set `proxy.dashboard.password` (`DASHBOARD_PASSWORD`) and a browser gets a login
-  page, styled after Grafana's, with the username `proxy.dashboard.username` (`DASHBOARD_USERNAME`, default `admin`).
-  A login starts a session, kept in memory, that ends after 24 hours idle, 7 days, or Log out, in the top bar; a
-  script sends the login as HTTP Basic Auth instead, which a browser's request (`Sec-Fetch-Mode`) can't. Neither setting has a command-line flag, and the password is never
-  logged. The proxy refuses to start with an empty username, a colon in it, or a control character in either, and logs
-  a wrong login at WARN at most once a minute per address. The dashboard serves plain HTTP, so the docs say to put TLS
-  in front of it. The Helm chart takes the password from a Secret, `dashboard.login.existingSecret`
+  page, styled after Grafana's, with the username `proxy.dashboard.username` (`DASHBOARD_USERNAME`, default `admin`). A
+  login starts a session, kept in memory, that ends after 24 hours idle, 7 days, or Log out, in the top bar, and a page
+  left open stops getting updates when its session ends; a script sends the login as HTTP Basic Auth instead, which a
+  browser's request (`Sec-Fetch-Mode`) can't. After 10 wrong logins from one address within a minute, or 100 in all,
+  logins are refused with a 429 for up to a minute. Neither setting has a command-line flag, and the password is never
+  logged. The proxy refuses to start with an empty username, a colon in it, or a control character in either, and logs a
+  wrong login at WARN at most once a minute per address. The dashboard serves plain HTTP, so the docs say to put TLS in
+  front of it. The Helm chart takes the password from a Secret, `dashboard.login.existingSecret`
 
 ### Bug Fixes
 

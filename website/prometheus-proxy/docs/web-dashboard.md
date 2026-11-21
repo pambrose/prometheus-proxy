@@ -109,10 +109,18 @@ gets the login page, even with a Basic login it saved for the dashboard's addres
 curl -u admin:'<the password>' http://proxy-host:8094/dashboard/paths
 ```
 
+After 10 wrong logins from one address within a minute, or 100 from all of them together, the dashboard refuses every
+login from that address, or from any, with a 429, the right password included, until the oldest of those wrong logins
+is a minute old. So a guesser can't try passwords in parallel. Behind a reverse proxy every login comes from the
+proxy's address, so the first limit is everyone's, and during an attack the real users wait out the minute too.
+
+A page left open when its session ends, by Log out in another tab, by expiring, or by a proxy restart, stops getting
+updates within a couple of seconds, and goes to the login page.
+
 The proxy logs the username and that a password is set, never the password. It logs a wrong login at WARN, with the
-address it came from, at most once a minute for each address, and answers a wrong login from the page after a second.
-It refuses to start with an empty username, a colon in it (where Basic Auth splits the username from the password), or
-a control character in either, such as the trailing newline of a password read from a file.
+address it came from, at most once a minute for each address, and logs reaching the limit. It refuses to start with an
+empty username, a colon in it (where Basic Auth splits the username from the password), or a control character in
+either, such as the trailing newline of a password read from a file.
 
 !!! warning "Put TLS in front of it"
 

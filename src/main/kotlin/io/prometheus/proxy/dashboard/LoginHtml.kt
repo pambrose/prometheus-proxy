@@ -43,6 +43,7 @@ import kotlinx.html.unsafe
 internal object LoginHtml {
   const val HEADING = "Prometheus Proxy Dashboard"
   const val FAILED = "Invalid username or password"
+  const val LIMITED = "Too many wrong logins. Try again in a minute."
   const val USERNAME_FIELD = "username"
   const val PASSWORD_FIELD = "password"
   const val NEXT_FIELD = "next"
@@ -52,13 +53,14 @@ internal object LoginHtml {
 
   /**
    * The page, posting to `<routeBase>/login`. [next] is where a successful login goes, which the route checks again;
-   * [username] refills the field after a [failed] login, which also shows the alert and focuses the password.
+   * [username] refills the field after a refused login, whose [alert], [FAILED] or [LIMITED], the page shows, focusing
+   * the password.
    */
   fun HTML.renderLogin(
     routeBase: String,
     next: String,
     username: String = "",
-    failed: Boolean = false,
+    alert: String? = null,
   ) {
     attributes["lang"] = "en"
     head {
@@ -71,10 +73,10 @@ internal object LoginHtml {
       main {
         h1 { +HEADING }
         form(action = "$routeBase/login", method = FormMethod.post, classes = "card") {
-          if (failed) {
+          if (alert != null) {
             div("alert") {
               attributes["role"] = "alert"
-              +FAILED
+              +alert
             }
           }
           div("field") {
@@ -90,7 +92,7 @@ internal object LoginHtml {
               autoComplete = "username"
               attributes["autocapitalize"] = "none"
               attributes["spellcheck"] = "false"
-              if (!failed) autoFocus = true
+              if (alert == null) autoFocus = true
             }
           }
           div("field") {
@@ -103,7 +105,7 @@ internal object LoginHtml {
               required = true
               maxLength = "$MAX_FIELD_LENGTH"
               autoComplete = "current-password"
-              if (failed) autoFocus = true
+              if (alert != null) autoFocus = true
             }
           }
           input(type = InputType.hidden, name = NEXT_FIELD) { value = next }
