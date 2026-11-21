@@ -4,7 +4,7 @@
         container-tests scaling-tests all-tests ci ci-build consumer-check spring-boot-demo-check \
         demos-up demos-up-local demos-down \
         _publish-consumer-check regen-certs \
-        docker-clean docker-clean-dry \
+        docker-build docker-scan docker-clean docker-clean-dry \
         all-scaling scaling-paths scaling-agents scaling-payload scaling-consolidated scaling-concurrency scaling-soak \
         coverage coverage-html coverage-xml coverage-log coverage-verify \
         coverage-open coverage-packages coverage-clean reports site-version gh-docs \
@@ -23,6 +23,9 @@ GRADLE := ./gradlew
 TSCFG_VERSION := 1.2.5
 PLATFORMS := linux/amd64,linux/arm64,linux/s390x,linux/ppc64le
 IMAGE_PREFIX := pambrose/prometheus
+# The tag docker-build gives the images it loads into the local Docker for docker-scan: prometheus-proxy:local and
+# prometheus-agent:local. They aren't $(IMAGE_PREFIX) images, so a stray `docker push` can't send one to Docker Hub.
+LOCAL_IMAGE_TAG := local
 # OCI labels for the published images: the version, commit, and source that tools reading an image's labels show. The
 # distroless base sets no labels, so these and the Dockerfiles' maintainer are all the images carry.
 IMAGE_LABELS = --label org.opencontainers.image.version=$(VERSION) \
@@ -482,6 +485,19 @@ tsconfig:  ## Regenerate ConfigVals from config/config.conf via tscfg
 	java -jar ./config/jars/tscfg-$(TSCFG_VERSION).jar --spec config/config.conf --pn io.prometheus.common --cn ConfigVals --dd src/main/java/io/prometheus/common
 
 distro: build jars  ## Clean build + jars
+
+# --load puts the images into the local Docker; a docker-container builder, like the one docker-push selects, otherwise
+# keeps the result to itself. They're built for this machine's platform only, from the fat jars jars builds, as CI's
+# image-scan job builds them.
+docker-build: jars  ## Build the proxy and agent images for this machine's platform into the local Docker, tagged local
+	docker buildx build --load -f ./etc/docker/proxy.Dockerfile -t prometheus-proxy:$(LOCAL_IMAGE_TAG) .
+	docker buildx build --load -f ./etc/docker/agent.Dockerfile -t prometheus-agent:$(LOCAL_IMAGE_TAG) .
+
+# Scans the images, not just their base: the libraries inside the fat jars are only visible here. Docker Scout lists
+# every CVE it finds; CI's image-scan job runs Trivy instead, and fails only on a fixable HIGH or CRITICAL one.
+docker-scan: docker-build  ## Build the proxy and agent images locally, then list their CVEs with Docker Scout
+	docker scout cves prometheus-proxy:$(LOCAL_IMAGE_TAG)
+	docker scout cves prometheus-agent:$(LOCAL_IMAGE_TAG)
 
 docker-push: _require-version jars  ## Build and push multi-arch agent/proxy images
 	@case "$(VERSION)" in \

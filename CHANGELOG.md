@@ -33,6 +33,9 @@ All notable changes to this project are documented in this file.
 
 ### Build & Tooling
 
+- `make docker-build` builds the proxy and agent images for this machine into the local Docker, as
+  `prometheus-proxy:local` and `prometheus-agent:local`, and `make docker-scan` builds them and lists their CVEs with
+  Docker Scout, the libraries inside the fat jars included
 - The Homebrew formulae keep within Homebrew's 118-character lines, past which the tap's style check failed the 4.6.0
   formulae, and `HomebrewFormulaTest` checks them with the version and checksum filled in
 - Dependabot holds the Spring Boot demo's Maven image at JDK 25: it reads the JDK in the image's tag as part of the
