@@ -16,6 +16,9 @@
 
 package io.prometheus.proxy.dashboard
 
+import io.prometheus.common.dashboard.DashboardCss
+import io.prometheus.common.dashboard.DashboardServer
+
 /**
  * The dashboard's stylesheet, inlined into the page's `<style>` by [ProxyDashboardHtml].
  *
@@ -23,29 +26,6 @@ package io.prometheus.proxy.dashboard
  * roles, and components these rules implement, and the contrast each color pairing was measured at.
  */
 internal object ProxyDashboardCss {
-  /** The color tokens, light and dark, which the login page's stylesheet ([LoginHtml]) shares. */
-  val TOKENS =
-    """
-    /* Every quiet colour is set so its *worst* pairing still clears 4.5:1, not just its pairing with
-       --surface. --ink-3 is the binding case: it lands on --surface-2 under the table and section
-       headers, which is a full step closer than the reading plane. */
-    :root {
-      --bg:#f2f5f8; --surface:#fff; --surface-2:#e9edf2; --surface-3:#dde3ea;
-      --line:#cfd7e0; --line-soft:#e3e9ef; --ink:#131820; --ink-2:#48525f; --ink-3:#626b77;
-      --accent:#c8461f; --ok:#1a7a42; --ok-soft:#e3f4ea; --warn:#8a5d08; --warn-soft:#f9f0da;
-      --crit:#c02a20; --crit-soft:#fbe6e4;
-      --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
-    }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg:#0d1015; --surface:#151a21; --surface-2:#1c222b; --surface-3:#242c37;
-        --line:#2b333f; --line-soft:#212934; --ink:#e7ebf1; --ink-2:#a4aebc; --ink-3:#858f9d;
-        --accent:#ff7043; --ok:#3fb950; --ok-soft:#12251a; --warn:#d29922; --warn-soft:#2a2110;
-        --crit:#f85149; --crit-soft:#2d1512;
-      }
-    }
-    """.trimIndent()
-
   // The rules, after the tokens. Declared before CSS, which an object initializes in order.
   private val RULES =
     """
@@ -288,7 +268,7 @@ internal object ProxyDashboardCss {
     }
     """.trimIndent()
 
-  val CSS = TOKENS + "\n" + RULES
+  val CSS = DashboardCss.TOKENS + "\n" + RULES
 
   /**
    * The rules that give each of [icons] its mark and its colour in each theme, for a second `<style>` in the page's
@@ -304,7 +284,7 @@ internal object ProxyDashboardCss {
   ): String =
     buildString {
       for (icon in icons) {
-        val url = "$routeBase/${ProxyDashboardService.ICON_DIR}/${icon.fileName}"
+        val url = "$routeBase/${DashboardServer.ICON_DIR}/${icon.fileName}"
         appendLine(".links a.icon-${icon.slug} { --icon:url(\"$url\"); --brand:${icon.lightColor}; }")
       }
       // Only the icons whose colour changes with the theme need a rule in the dark one.

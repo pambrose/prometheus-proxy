@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.prometheus.proxy.dashboard
+package io.prometheus.common.dashboard
 
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes

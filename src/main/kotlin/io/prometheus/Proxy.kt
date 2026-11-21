@@ -40,6 +40,7 @@ import io.prometheus.common.Utils.getVersionDesc
 import io.prometheus.common.Utils.toJsonElement
 import io.prometheus.common.AgentValues.isValidLabelName
 import io.prometheus.common.AgentValues.labelsProblem
+import io.prometheus.common.dashboard.DashboardLogin
 import io.prometheus.proxy.ActivityLog
 import io.prometheus.proxy.AgentAuthManager
 import io.prometheus.proxy.AgentContext
@@ -58,7 +59,6 @@ import io.prometheus.proxy.ProxyPathManager
 import io.prometheus.proxy.RemovalReason
 import io.prometheus.proxy.ScrapeRecord
 import io.prometheus.proxy.ScrapeRequestManager
-import io.prometheus.proxy.dashboard.DashboardLogin
 import io.prometheus.proxy.dashboard.ProxyDashboardService
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking

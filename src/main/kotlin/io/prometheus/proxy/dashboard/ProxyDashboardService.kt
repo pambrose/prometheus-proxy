@@ -17,8 +17,6 @@
 package io.prometheus.proxy.dashboard
 
 import com.codahale.metrics.health.HealthCheck
-import com.google.common.net.HostAndPort
-import com.google.common.net.InetAddresses
 import com.google.common.util.concurrent.MoreExecutors
 import com.pambrose.common.concurrent.GenericIdleService
 import com.pambrose.common.concurrent.genericServiceListener
@@ -26,85 +24,38 @@ import com.pambrose.common.dsl.GuavaDsl.toStringElements
 import com.pambrose.common.dsl.MetricsDsl.healthCheck
 import com.pambrose.common.util.simpleClassName
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
-import io.ktor.http.CacheControl
 import io.ktor.http.ContentType
-import io.ktor.http.HttpHeaders
-import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
-import io.ktor.http.Parameters
-import io.ktor.http.encodeURLParameter
-import io.ktor.http.content.CachingOptions
 import io.ktor.http.parseQueryString
 import io.ktor.http.withCharset
-import io.ktor.server.application.ApplicationCall
-import io.ktor.server.application.createApplicationPlugin
-import io.ktor.server.application.createRouteScopedPlugin
 import io.ktor.server.application.install
-import io.ktor.server.cio.CIO
-import io.ktor.server.engine.connector
-import io.ktor.server.engine.embeddedServer
 import io.ktor.server.html.respondHtml
-import io.ktor.server.plugins.cachingheaders.CachingHeaders
-import io.ktor.server.response.header
-import io.ktor.server.response.respondBytes
-import io.ktor.server.response.respondRedirect
-import io.ktor.server.response.respondText
 import io.ktor.server.plugins.origin
-import io.ktor.server.request.ApplicationRequest
-import io.ktor.server.request.httpMethod
-import io.ktor.server.request.path
-import io.ktor.server.request.receiveParameters
-import io.ktor.server.request.uri
-import io.ktor.server.response.respond
+import io.ktor.server.response.respondText
+import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
-import io.ktor.server.routing.routing
-import io.ktor.server.websocket.WebSockets
-import io.ktor.server.websocket.webSocket
-import io.ktor.websocket.ChannelOverflow
-import io.ktor.websocket.CloseReason
-import io.ktor.websocket.Frame
-import io.ktor.websocket.close
-import io.ktor.websocket.readText
-import io.prometheus.BuildConfig
 import io.prometheus.Proxy
-import io.prometheus.common.KeyedThrottle
+import io.prometheus.common.dashboard.DashboardFrame
+import io.prometheus.common.dashboard.DashboardLogin
+import io.prometheus.common.dashboard.DashboardServer
+import io.prometheus.common.dashboard.DashboardServer.Companion.HX_REQUEST_HEADER
+import io.prometheus.common.dashboard.DashboardSettings
+import io.prometheus.common.dashboard.DashboardSite
 import io.prometheus.proxy.ProxyEvent
-import io.prometheus.proxy.ProxyHttpConfig.configureKtorServer
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
-import java.net.URI
-import java.util.concurrent.ConcurrentHashMap
-import kotlin.concurrent.atomics.AtomicInt
-import kotlin.concurrent.atomics.AtomicLong
-import kotlin.concurrent.atomics.minusAssign
-import kotlin.concurrent.atomics.plusAssign
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
-import kotlin.time.TimeMark
-import kotlin.time.TimeSource
 
 /**
- * Operational dashboard, served from its own Ktor server on its own port. It reads the proxy's state and changes none
- * of it; its one action, scrape-now ([ScrapeNow]), scrapes a path as Prometheus would.
+ * Operational dashboard, served from its own Ktor server on its own port ([DashboardServer], which every dashboard's
+ * login, guards, assets, sessions, and push loop come from). It reads the proxy's state and changes none of it; its one
+ * action, scrape-now ([ScrapeNow]), scrapes a path as Prometheus would.
  *
  * Deliberately **not** the admin port: that one is a Jetty servlet container created inside
  * `common-utils`, whose only extension point is a `path -> Servlet` map — Ktor routing, the HTML DSL,
@@ -117,10 +68,10 @@ import kotlin.time.TimeSource
  *
  * ### How updates reach the browser
  *
- * One shared push loop, not one per session. It wakes on either a topology
- * [io.prometheus.proxy.ProxyEvent] or a timer tick, collects a single [ProxySnapshot], and fans the same
- * rendered fragments out to every connected session. An Activity page is sent its table only when the feed or
- * the page's filter has changed since the last one it was sent (see [ActivityTable]).
+ * The server's one shared push loop wakes on either a topology [io.prometheus.proxy.ProxyEvent] or a timer tick,
+ * collects a single [ProxySnapshot], and fans the same rendered fragments out to every connected session. An Activity
+ * page is sent its table only when the feed or the page's filter has changed since the last one it was sent (see
+ * [ActivityTable]).
  *
  * **Scrape completions deliberately do not wake it.** They arrive at scrape rate — tens per second on a
  * busy proxy — and waking on each would run a snapshot collect that often, taking the same path-map
@@ -130,15 +81,10 @@ import kotlin.time.TimeSource
  *
  * ### Exposure
  *
- * With `proxy.dashboard.password` set, every request needs a session from the login page ([LoginHtml]), or, from a
- * script, the login, `proxy.dashboard.username` (default `admin`) and that password, as HTTP Basic Auth (see
- * [DashboardLogin] and [DashboardSessions]). Without either, before routing, a page request is sent to the login page
- * and anything else gets a 401. Without a password, the default, the port has no authentication. Either way, what the
- * service can bound, it does: a WebSocket handshake from a foreign browser origin is refused, sessions are capped at
- * `proxy.dashboard.maxSessions`, a session that stops reading is closed rather than buffered for, and a page request or
- * a browser message renders the recent snapshot rather than collecting one (see [SnapshotCache]).
- * Setting `proxy.dashboard.allowedHosts` also refuses a request naming an unknown host, which stops DNS rebinding.
- * The listen address is `proxy.dashboard.host`; binding it to a private address is what keeps the page private.
+ * With `proxy.dashboard.password` set, every request needs a session from the login page, or, from a script, the
+ * login, `proxy.dashboard.username` (default `admin`) and that password, as HTTP Basic Auth. Without a password, the
+ * default, the port has no authentication. See [DashboardServer] for what is bounded either way. The listen address is
+ * `proxy.dashboard.host`; binding it to a private address is what keeps the page private.
  */
 internal class ProxyDashboardService(
   private val proxy: Proxy,
@@ -147,24 +93,15 @@ internal class ProxyDashboardService(
   dashboardPath: String,
   // The login every request must carry, from proxy.dashboard.username and password, once a password is set; null, the
   // default, leaves the dashboard open.
-  private val login: DashboardLogin? = null,
+  login: DashboardLogin? = null,
 ) : GenericIdleService() {
-  private val basePath = "/" + dashboardPath.trim('/')
-
-  // The base with no trailing slash, so every sub-route below joins with a single separator. Empty at a
-  // root mount, where basePath is "/" and plain interpolation would otherwise yield "//events" -- which a
-  // browser reads as a protocol-relative URL and resolves to a host named "events". Normalized here, once,
-  // rather than at each use site: the routes registered below and the links ProxyDashboardHtml renders are
-  // the same URLs, so a rule applied in only one of the two layers is a rule that can disagree with itself.
-  private val routeBase = basePath.trimEnd('/')
-
   /**
    * What a session's page shows: its layout and the agent selected in it, from the browser's latest message, and that
    * message's [seq], the count of messages the page had sent.
    *
    * One value rather than separate fields, so a push reads all of them at once. Read separately, a push racing the
    * first message could pair its layout with the selection from before it, and render the detail pane with nothing
-   * selected -- the flash [Session.view] being null exists to prevent.
+   * selected -- the flash a null view exists to prevent.
    *
    * Every frame is stamped with [seq], and the page drops a frame stamped below the count it has sent (see
    * ProxyDashboardHtml.pushFragment). That closes the race between a row click and the push loop: a tick rendered from
@@ -178,419 +115,137 @@ internal class ProxyDashboardService(
     val filter: RowFilter,
   )
 
-  /** One connected browser: how to reach it, and what its page shows. */
-  private class Session(
-    // The login session the page's socket was opened with, which the push loop ends it with; null without a login, or
-    // for a script's socket, which logs in with Basic Auth on every request rather than keeping a session.
-    val login: String?,
-    val send: suspend (String) -> Unit,
-    // Closes the socket.
-    val end: suspend () -> Unit,
-  ) {
-    // Written by this session's socket coroutine and read by the shared push loop, hence @Volatile. Null until the
-    // browser's first message says which page it shows, and until then a push carries only the status bar (see
-    // ProxyDashboardHtml.pushFragment). The browser sends that message as soon as the socket opens.
-    @Volatile
-    var view: View? = null
-
-    // Whether a push for this session has failed to render, which is logged once rather than every refresh.
-    @Volatile
-    var renderFailed = false
-
-    // Held for the whole of a push to this session, from reading its view to recording what was sent. The push loop
-    // and the session's own socket coroutine both push, and without it the two could record in one order and send in
-    // the other, leaving activityShown naming a table the page never got.
-    val pushing = Mutex()
-
-    // The Activity table in the last frame sent to this page, or null when that frame had none, being for another
-    // layout. Guarded by pushing.
-    var activityShown: ActivityTable? = null
-  }
-
-  private val sessions = ConcurrentHashMap.newKeySet<Session>()
-  private val wake = Channel<Unit>(Channel.CONFLATED)
-  private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-  private val refreshInterval = proxy.proxyConfigVals.dashboard.refreshIntervalSecs.seconds
-  private val maxSessions = proxy.proxyConfigVals.dashboard.maxSessions
-  private val allowedOrigins: List<String> = proxy.proxyConfigVals.dashboard.allowedOrigins
-
-  // Normalized once. Null when proxy.dashboard.allowedHosts is empty, which turns the Host check off.
-  private val hostAllowlist: Set<String>? =
-    hostAllowlist(proxy.proxyConfigVals.dashboard.allowedHosts, allowedOrigins)
-
-  // Claimed before a session joins [sessions] and released after it leaves, so the cap holds under concurrent
-  // connects; the set's own size is only an estimate while another thread is adding to it.
-  private val sessionCount = AtomicInt(0)
-
-  // What every page and session renders from; the push loop refills it on each wake. See SnapshotCache.
-  private val snapshots = SnapshotCache(refreshInterval) { snapshot() }
+  private val dashboardConfig = proxy.proxyConfigVals.dashboard
 
   // Null unless proxy.dashboard.scrapeNowEnabled, which leaves the route unregistered, so it answers 404.
-  private val scrapeNow = if (proxy.proxyConfigVals.dashboard.scrapeNowEnabled) ScrapeNow(proxy) else null
+  private val scrapeNow = if (dashboardConfig.scrapeNowEnabled) ScrapeNow(proxy) else null
 
-  // The guard on every route the page's script calls, the WebSocket and the actions, so a page on another site can't
-  // use one through a viewer's browser. It refuses a foreign Origin (see isOriginAllowed). An action, any request but
-  // a GET (the WebSocket handshake is one), must also carry the header htmx and the page's script send, which another
-  // site's page can't add without a CORS preflight the dashboard never answers; the origin check alone lets through a
-  // request with no Origin. Runs before the WebSocket upgrade, so a refused page never receives a frame.
-  private val pageGuard = guard("DashboardPageGuard", ::pageRefusal)
+  private val site =
+    object : DashboardSite<View, ProxySnapshot> {
+      // Topology changes wake the loop; scrape completions do not -- see the class KDoc. A getter, read as the server
+      // starts: the proxy builds its event bus after this service.
+      override val changes: Flow<Any?>
+        get() = proxy.eventBus.flow.filter { it !is ProxyEvent.ScrapeCompleted }
 
-  // The login and logout forms' guard, which the browser posts itself and so sends no HX-Request header: the Origin
-  // check alone.
-  private val originGuard = guard("DashboardOriginGuard", ::originRefusal)
+      override suspend fun collect(): ProxySnapshot = ProxySnapshot.collect(proxy)
 
-  // A route-scoped plugin answering a 403 with whatever [refusal] gives a request, which proceeds when it gives null.
-  private fun guard(
-    name: String,
-    refusal: (ApplicationRequest) -> String?,
-  ) = createRouteScopedPlugin(name) {
-    onCall { call ->
-      refusal(call.request)?.also { call.respondText(it, ContentType.Text.Plain, HttpStatusCode.Forbidden) }
-    }
-  }
+      override fun parseView(message: String): View =
+        View(parseLayout(message), parseSelection(message), parseSeq(message), parseFilter(message))
 
-  // Why pageGuard refuses [request], or null when it may proceed.
-  private fun pageRefusal(request: ApplicationRequest): String? =
-    originRefusal(request)
-      ?: if (request.httpMethod != HttpMethod.Get && request.headers[HX_REQUEST_HEADER] != "true")
-        "Only the dashboard's page may ask for this"
-      else
-        null
-
-  // Why a request from [request]'s Origin is refused, or null when it may proceed (see isOriginAllowed).
-  private fun originRefusal(request: ApplicationRequest): String? {
-    val origin = request.headers[HttpHeaders.Origin]
-    if (isOriginAllowed(origin, request.headers[HttpHeaders.Host], allowedOrigins))
-      return null
-    logger.info {
-      "Refused a dashboard request from origin $origin; add it to proxy.dashboard.allowedOrigins if expected"
-    }
-    return "Origin not allowed"
-  }
-
-  private val loginEnabled = login != null
-
-  // The login page's sessions, and the cookie that carries one: named for the port, since a browser sends a host's
-  // cookies to every port on it, and an HA pair can run on one host.
-  private val logins = DashboardSessions()
-  private val sessionCookie = cookieName(dashboardPort)
-  private val loginPath = "$routeBase/login"
-  private val logoutPath = "$routeBase/logout"
-
-  // Which addresses' wrong logins may be logged at WARN now.
-  private val badLoginWarnings = KeyedThrottle<String>(BAD_LOGIN_WARNING_INTERVAL, MAX_BAD_LOGIN_HOSTS)
-
-  // The limit on wrong logins, which refuses every login from an address past it, or from any past the overall one,
-  // before its password is looked at, from the form or as Basic Auth.
-  private val limiter = LoginLimiter(MAX_BAD_LOGINS_PER_ADDRESS, MAX_BAD_LOGINS_OVERALL)
-
-  // Application-wide, like hostCheck, and installed after it, so it runs before routing and covers every page, asset,
-  // and action, the WebSocket handshake, and a path that would 404: a route added later can't miss it. Installed only
-  // with a password set. Lets through a valid session, or a script's right Basic login; sends a page request to the
-  // login page and answers anything else with a 401. Never with WWW-Authenticate, which would have a browser show its
-  // own prompt. The login and logout routes need no session. Basic Auth is for scripts only (see isBrowser).
-  private fun authCheck(login: DashboardLogin) =
-    createApplicationPlugin("DashboardAuthCheck") {
-      onCall { call ->
-        val request = call.request
-        val path = request.path()
-        if (path == loginPath || path == logoutPath || logins.isValid(request.cookies[sessionCookie]))
-          return@onCall
-        // A browser must use the login page: one that once saved a Basic login sends it with every request, which would
-        // skip the page and outlast Log out. So a browser's Basic login is ignored, and only a script's is read.
-        val header = if (isBrowser(request)) null else request.headers[HttpHeaders.Authorization]
-        if (header != null) {
-          val address = request.origin.remoteAddress
-          if (limiter.isBlocked(address)) {
-            call.response.header(HttpHeaders.RetryAfter, RETRY_AFTER_SECS)
-            call.respondText(LoginHtml.LIMITED, ContentType.Text.Plain, HttpStatusCode.TooManyRequests)
-            return@onCall
-          }
-          if (login.accepts(header))
-            return@onCall
-          recordBadLogin(address)
-        }
-        if (wantsPage(request))
-          call.seeOther("$loginPath?${LoginHtml.NEXT_FIELD}=${request.uri.encodeURLParameter()}")
-        else
-          call.respondText("Login required", ContentType.Text.Plain, HttpStatusCode.Unauthorized)
+      override fun frame(
+        snapshot: ProxySnapshot,
+        view: View?,
+        sent: Any?,
+        routeBase: String,
+      ): DashboardFrame {
+        val seq = view?.seq ?: 0L
+        val filter = view?.filter ?: RowFilter.NONE
+        // The Activity table goes only when it differs from the one the page shows; see ActivityTable. For another
+        // layout there is no table, and the flag changes nothing.
+        val activity = ActivityTable.of(snapshot, view?.layout, seq, filter)
+        val text =
+          ProxyDashboardHtml.pushFragment(
+            snapshot,
+            view?.selectedId,
+            routeBase,
+            view?.layout,
+            seq,
+            filter,
+            withActivity = activity != sent,
+          )
+        return DashboardFrame(text, activity)
       }
-    }
 
-  // The login page, never cached or framed, for a page asked for without a session or after a wrong login.
-  private suspend fun ApplicationCall.respondLogin(
-    next: String,
-    username: String = "",
-    alert: String? = null,
-    status: HttpStatusCode = HttpStatusCode.OK,
-  ) {
-    response.header(HttpHeaders.CacheControl, "no-store")
-    response.header("Content-Security-Policy", "frame-ancestors 'none'")
-    respondHtml(status) { with(LoginHtml) { renderLogin(routeBase, next, username, alert) } }
-  }
-
-  // The login form's POST, behind originGuard: a body over MAX_LOGIN_BODY_BYTES (or of unknown length) refused unread,
-  // any login from an address past the limit on wrong ones refused, and a right one given a session and sent on to
-  // next.
-  private suspend fun ApplicationCall.logIn(login: DashboardLogin) {
-    val length = request.headers[HttpHeaders.ContentLength]?.toLongOrNull()
-    if (length == null || length > MAX_LOGIN_BODY_BYTES)
-      return respondText("Login form too large", ContentType.Text.Plain, HttpStatusCode.PayloadTooLarge)
-    val form = runCatching { receiveParameters() }.getOrDefault(Parameters.Empty)
-    val username = form[LoginHtml.USERNAME_FIELD].orEmpty().take(LoginHtml.MAX_FIELD_LENGTH)
-    val next = safeNext(form[LoginHtml.NEXT_FIELD], routeBase)
-    val address = request.origin.remoteAddress
-    if (limiter.isBlocked(address)) {
-      response.header(HttpHeaders.RetryAfter, RETRY_AFTER_SECS)
-      respondLogin(next, username, LoginHtml.LIMITED, HttpStatusCode.TooManyRequests)
-    } else if (login.accepts(username, form[LoginHtml.PASSWORD_FIELD].orEmpty())) {
-      // Secure when the browser reached the dashboard over https, as through a TLS-terminating reverse proxy.
-      val secure = request.headers[HttpHeaders.Origin]?.startsWith("https://", ignoreCase = true) == true
-      response.header(HttpHeaders.SetCookie, sessionCookieHeader(logins.create(), secure))
-      seeOther(next)
-    } else {
-      recordBadLogin(address)
-      respondLogin(next, username, LoginHtml.FAILED, HttpStatusCode.Unauthorized)
-    }
-  }
-
-  // The Set-Cookie value for [token], kept for a session's longest life; a null token expires the cookie.
-  private fun sessionCookieHeader(
-    token: String?,
-    secure: Boolean = false,
-  ) = "$sessionCookie=${token.orEmpty()}; Max-Age=${if (token == null) 0 else DashboardSessions.MAX_AGE_SECS}; " +
-    "Path=$basePath; HttpOnly; SameSite=Lax" + if (secure) "; Secure" else ""
-
-  // A wrong login, from the form or Basic Auth: counted against the limit, and logged at WARN at most once a minute
-  // for each address and at DEBUG otherwise, so a client guessing in a loop can't flood the log, never with the
-  // username it gave, which is the client's own text. The one that reaches the limit is logged at WARN too.
-  private fun recordBadLogin(address: String) {
-    val limited = limiter.recordFailure(address)
-    val message = "Refused a dashboard request from $address with a wrong login"
-    if (badLoginWarnings.tryAcquire(address))
-      logger.warn { message }
-    else
-      logger.debug { message }
-    if (limited)
-      logger.warn {
-        "Too many wrong dashboard logins, from $address or in all: refusing them for up to a minute " +
-          "($MAX_BAD_LOGINS_PER_ADDRESS from one address, or $MAX_BAD_LOGINS_OVERALL in all, within a minute)"
-      }
-  }
-
-  // Application-wide rather than route-scoped, so it runs before routing and covers every page, asset, and the
-  // WebSocket. See isHostAllowed.
-  private val hostCheck =
-    createApplicationPlugin("DashboardHostCheck") {
-      onCall { call ->
-        val host = call.request.headers[HttpHeaders.Host]
-        if (!isHostAllowed(host, hostAllowlist)) {
-          logger.info {
-            "Refused a dashboard request for host $host; add it to proxy.dashboard.allowedHosts if expected"
-          }
-          call.respondText("Host not allowed", ContentType.Text.Plain, HttpStatusCode.Forbidden)
-        }
-      }
+      override fun Route.pages(server: DashboardServer<View, ProxySnapshot>) = pageRoutes(server)
     }
 
   private val server =
-    embeddedServer(
-      factory = CIO,
-      configure = {
-        connector {
-          host = dashboardHost
-          port = dashboardPort
-        }
-      },
-    ) {
-      // Shares the proxy's own Ktor configuration: compression (htmx.min.js is ~37 KB), StatusPages so
-      // a failure returns a logged 500 rather than a bare one, and DefaultHeaders. Request logging is
-      // off -- a dashboard polling its own socket would drown the proxy's logs.
-      configureKtorServer(isLoggingEnabled = false)
-      install(hostCheck)
-      login?.also { install(authCheck(it)) }
-      install(WebSockets) {
-        // Ktor's defaults send no pings and buffer outgoing frames without limit, so a client that stops reading
-        // would pile up a frame per push until the proxy ran out of memory. Pings find a dead peer, and a full
-        // buffer closes that session instead of growing -- so the shared push loop never waits on a slow one.
-        pingPeriodMillis = PING_PERIOD_MILLIS
-        timeoutMillis = PING_TIMEOUT_MILLIS
-        // A browser message is a few dozen bytes; the default accepts, and buffers whole, a frame of any size.
-        maxFrameSize = MAX_INCOMING_FRAME_BYTES
-        channels { outgoing = bounded(OUTGOING_FRAME_BUFFER, ChannelOverflow.CLOSE) }
-      }
-      install(CachingHeaders) {
-        // The served asset URLs carry their WebJar's version (ASSET_DIR, ICON_DIR), so a URL's content never changes
-        // and a year-long max-age is safe. An unversioned URL would let a browser keep running a cached htmx after an
-        // upgrade.
-        options { _, outgoing ->
-          if (CACHED_TYPES.any { outgoing.contentType?.match(it) == true })
-            CachingOptions(CacheControl.MaxAge(ASSET_MAX_AGE_SECS, visibility = CacheControl.Visibility.Public))
-          else
-            null
-        }
-      }
+    DashboardServer(
+      DashboardSettings(
+        role = "proxy",
+        host = dashboardHost,
+        port = dashboardPort,
+        path = dashboardPath,
+        refreshInterval = dashboardConfig.refreshIntervalSecs.seconds,
+        maxSessions = dashboardConfig.maxSessions,
+        allowedOrigins = dashboardConfig.allowedOrigins,
+        allowedHosts = dashboardConfig.allowedHosts,
+        login = login,
+        loginHeading = LOGIN_HEADING,
+        icons = LinkIcon.entries.associate { it.fileName to it.resource },
+      ),
+      site,
+    )
 
-      routing {
-        // The dashboard lives under basePath (default /dashboard), so the bare root would otherwise 404. Send it to
-        // the dashboard. Skipped when basePath is already "/" -- there the page route below owns the root, and a
-        // second handler would be a duplicate. Temporary rather than permanent: basePath is configurable,
-        // so a cached 301 would be wrong if it ever changed.
-        if (routeBase.isNotEmpty()) {
-          get("/") { call.respondRedirect(basePath, permanent = false) }
-        }
-
-        // The login page and its form, and Log out, only with a password set.
-        login?.also { credentials ->
-          route(loginPath) {
-            install(originGuard)
-            get {
-              if (logins.isValid(call.request.cookies[sessionCookie]))
-                call.seeOther(basePath)
-              else
-                call.respondLogin(safeNext(call.request.queryParameters[LoginHtml.NEXT_FIELD], routeBase))
-            }
-            post { call.logIn(credentials) }
-          }
-          route(logoutPath) {
-            install(originGuard)
-            post {
-              logins.remove(call.request.cookies[sessionCookie])
-              // So the push loop closes this session's open pages now rather than at its next tick.
-              wake.trySend(Unit)
-              call.response.header(HttpHeaders.SetCookie, sessionCookieHeader(null))
-              call.seeOther(loginPath)
-            }
-          }
-        }
-
-        // Whether this request may use the dashboard: the auth check answers first, so this is a 204 only when it may.
-        // The page's script asks when its WebSocket closes, so an expired session lands on the login page.
-        get("$routeBase/session") { call.respond(HttpStatusCode.NoContent) }
-
-        // Explicit allowlist rather than staticResources: the webjar layout embeds a version in the
-        // path, and an allowlist means there is no path-traversal surface and no dependence on how Ktor
-        // interprets a basePackage. Two entries is not worth a generic static handler.
-        get("$routeBase/$ASSET_DIR/{file}") {
-          val bytes = assetBytes[call.parameters["file"]]
-          if (bytes == null)
-            call.respondText("Not found", ContentType.Text.Plain, HttpStatusCode.NotFound)
-          else
-            call.respondBytes(bytes, ContentType.Application.JavaScript, HttpStatusCode.OK)
-        }
-
-        // The Links column's brand marks (LinkIcon), the same way. An SVG is a document that can run script, so one
-        // opened directly runs sandboxed, with no access to the dashboard's origin, and a browser may not take it for
-        // another type; as a mask image, the page's only use of one, neither header changes anything.
-        get("$routeBase/$ICON_DIR/{file}") {
-          val bytes = iconBytes[call.parameters["file"]]
-          if (bytes == null) {
-            call.respondText("Not found", ContentType.Text.Plain, HttpStatusCode.NotFound)
-          } else {
-            call.response.header("X-Content-Type-Options", "nosniff")
-            call.response.header("Content-Security-Policy", "sandbox")
-            call.respondBytes(bytes, ContentType.Image.SVG, HttpStatusCode.OK)
-          }
-        }
-
-        get(basePath) {
-          val snapshot = snapshots.recent()
-          call.respondHtml {
-            with(ProxyDashboardHtml) {
-              renderPage(snapshot, null, routeBase, DashboardLayout.AGENT, loginEnabled = loginEnabled)
-            }
-          }
-        }
-
-        // A real page rather than a fragment: switching layout is a navigation, so the browser gets a
-        // fresh document whose region ids match the layout it is now showing.
-        // The filter is in the URL, so a filtered view can be bookmarked or shared; the page sends it back over the
-        // socket, which is what keeps the pushed table filtered.
-        for (layout in DashboardLayout.entries.filter { it.segment.isNotEmpty() }) {
-          get(layout.href(routeBase)) {
-            val snapshot = snapshots.recent()
-            val filter = RowFilter.of(call.request.queryParameters)
-            call.respondHtml {
-              with(ProxyDashboardHtml) { renderPage(snapshot, null, routeBase, layout, filter, loginEnabled) }
-            }
-          }
-        }
-
-        get("$routeBase/agents/{agentId}") {
-          val agentId = call.parameters["agentId"]
-          val snapshot = snapshots.recent()
-          // hx-push-url makes this URL the address bar's, so it must survive a reload or a shared link.
-          // A row click is an htmx swap and wants just the detail fragment; a full navigation to the same
-          // URL wants the whole dashboard with the agent selected. htmx marks its own requests with
-          // HX-Request -- except a history-restore, which fetches the full URL expecting a full page.
-          val htmxSwap =
-            call.request.headers[HX_REQUEST_HEADER] == "true" &&
-              call.request.headers["HX-History-Restore-Request"] != "true"
-          if (htmxSwap)
-            call.respondText(
-              ProxyDashboardHtml.detailFragment(snapshot, agentId),
-              ContentType.Text.Html,
-              HttpStatusCode.OK,
-            )
-          else
-            call.respondHtml {
-              with(ProxyDashboardHtml) {
-                renderPage(snapshot, agentId, routeBase, DashboardLayout.AGENT, loginEnabled = loginEnabled)
-              }
-            }
-        }
-
-        scrapeNow?.also { scrapes ->
-          route("$routeBase/scrape") {
-            install(pageGuard)
-            post {
-              // The address, not the host name, which could cost a reverse DNS lookup on every click.
-              val result = scrapes.scrape(
-                call.request.queryParameters["path"].orEmpty(),
-                call.request.origin.remoteAddress,
-              )
-              call.respondText(
-                ScrapeNowHtml.render(result),
-                ContentType.Text.Html.withCharset(Charsets.UTF_8),
-                result.status,
-              )
-            }
-          }
-        }
-
-        route("$routeBase/events") {
-          install(pageGuard)
-          webSocket {
-            if (!reserveSession()) {
-              close(CloseReason(CloseReason.Codes.TRY_AGAIN_LATER, "Too many dashboard sessions"))
-              return@webSocket
-            }
-            val session =
-              Session(
-                login = if (loginEnabled) call.request.cookies[sessionCookie] else null,
-                send = { text -> outgoing.send(Frame.Text(text)) },
-                end = { close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "The dashboard session ended")) },
-              )
-            sessions.add(session)
-            try {
-              // The status bar at once, rather than making the browser wait for the first event or tick. The
-              // regions that depend on what the page shows follow its first message, below.
-              push(session, snapshots.recent())
-              for (frame in incoming) {
-                if (frame is Frame.Text) {
-                  val text = frame.readText()
-                  session.view = View(parseLayout(text), parseSelection(text), parseSeq(text), parseFilter(text))
-                  push(session, snapshots.recent())
-                }
-              }
-            } finally {
-              sessions.remove(session)
-              sessionCount -= 1
-            }
-          }
+  // The proxy's pages: the three layouts, an agent's detail, and scrape-now.
+  private fun Route.pageRoutes(server: DashboardServer<View, ProxySnapshot>) {
+    val routeBase = server.routeBase
+    val loginEnabled = server.loginEnabled
+    get(server.basePath) {
+      val snapshot = server.snapshots.recent()
+      call.respondHtml {
+        with(ProxyDashboardHtml) {
+          renderPage(snapshot, null, routeBase, DashboardLayout.AGENT, loginEnabled = loginEnabled)
         }
       }
     }
+
+    // A real page rather than a fragment: switching layout is a navigation, so the browser gets a
+    // fresh document whose region ids match the layout it is now showing.
+    // The filter is in the URL, so a filtered view can be bookmarked or shared; the page sends it back over the
+    // socket, which is what keeps the pushed table filtered.
+    for (layout in DashboardLayout.entries.filter { it.segment.isNotEmpty() }) {
+      get(layout.href(routeBase)) {
+        val snapshot = server.snapshots.recent()
+        val filter = RowFilter.of(call.request.queryParameters)
+        call.respondHtml {
+          with(ProxyDashboardHtml) { renderPage(snapshot, null, routeBase, layout, filter, loginEnabled) }
+        }
+      }
+    }
+
+    get("$routeBase/agents/{agentId}") {
+      val agentId = call.parameters["agentId"]
+      val snapshot = server.snapshots.recent()
+      // hx-push-url makes this URL the address bar's, so it must survive a reload or a shared link.
+      // A row click is an htmx swap and wants just the detail fragment; a full navigation to the same
+      // URL wants the whole dashboard with the agent selected. htmx marks its own requests with
+      // HX-Request -- except a history-restore, which fetches the full URL expecting a full page.
+      val htmxSwap =
+        call.request.headers[HX_REQUEST_HEADER] == "true" &&
+          call.request.headers["HX-History-Restore-Request"] != "true"
+      if (htmxSwap)
+        call.respondText(
+          ProxyDashboardHtml.detailFragment(snapshot, agentId),
+          ContentType.Text.Html,
+          HttpStatusCode.OK,
+        )
+      else
+        call.respondHtml {
+          with(ProxyDashboardHtml) {
+            renderPage(snapshot, agentId, routeBase, DashboardLayout.AGENT, loginEnabled = loginEnabled)
+          }
+        }
+    }
+
+    scrapeNow?.also { scrapes ->
+      route("$routeBase/scrape") {
+        install(server.pageGuard)
+        post {
+          // The address, not the host name, which could cost a reverse DNS lookup on every click.
+          val result = scrapes.scrape(
+            call.request.queryParameters["path"].orEmpty(),
+            call.request.origin.remoteAddress,
+          )
+          call.respondText(
+            ScrapeNowHtml.render(result),
+            ContentType.Text.Html.withCharset(Charsets.UTF_8),
+            result.status,
+          )
+        }
+      }
+    }
+  }
 
   val healthCheck =
     healthCheck {
@@ -606,185 +261,11 @@ internal class ProxyDashboardService(
 
   override fun startUp() {
     server.start()
-    scope.launch { pushLoop() }
-    scope.launch {
-      // Topology changes wake the loop; scrape completions do not -- see the class KDoc. Conflated, so
-      // a burst (a fleet reconnecting at once) collapses into a single collect.
-      proxy.eventBus.flow
-        .filter { it !is ProxyEvent.ScrapeCompleted }
-        .collect {
-          // Retire the cached snapshot so no page or session renders a topology older than the change.
-          snapshots.invalidate()
-          wake.trySend(Unit)
-        }
-    }
-    logger.info { "Started $simpleClassName on $dashboardHost:$dashboardPort at $basePath" }
+    logger.info { "Started $simpleClassName on $dashboardHost:$dashboardPort at ${server.basePath}" }
   }
 
   override fun shutDown() {
-    scope.cancel()
-    server.stop(GRACE_MILLIS, TIMEOUT_MILLIS)
-  }
-
-  /**
-   * Wakes on a topology change or, failing that, on the refresh interval; collects once; fans out.
-   *
-   * The timeout is what keeps drifting values live. Without it, an idle proxy would freeze its
-   * countdowns until the next agent connected.
-   */
-  private suspend fun pushLoop() {
-    while (scope.isActive) {
-      withTimeoutOrNull(refreshInterval) { wake.receive() }
-      if (sessions.isEmpty()) continue
-      // Always a collect, never the cache: a tick exists to sample the values that drift.
-      val snapshot = snapshots.fresh()
-      sessions.forEach {
-        // A page whose login session has ended, by Log out, expiring, or a restart's losing it, gets no more pushes:
-        // its socket closes, and the page, asking for its session, goes to the login page. A check, not a request, so
-        // an open page doesn't keep its session from going idle.
-        if (it.login != null && !logins.isValid(it.login, counts = false))
-          it.end()
-        else
-          push(it, snapshot)
-      }
-    }
-  }
-
-  private suspend fun push(
-    session: Session,
-    snapshot: ProxySnapshot,
-  ) {
-    session.pushing.withLock {
-      val view = session.view
-      val seq = view?.seq ?: 0L
-      val filter = view?.filter ?: RowFilter.NONE
-      // The Activity table goes only when it differs from the one the page shows; see ActivityTable. For another
-      // layout there is no table, and the flag changes nothing.
-      val activity = ActivityTable.of(snapshot, view?.layout, seq, filter)
-      // Rendered apart from the send. A send fails when the browser has gone, which is routine, but a render that
-      // throws is a bug in this page; caught with the sends, it froze every session on that layout with nothing logged
-      // above DEBUG.
-      val fragment =
-        runCatching {
-          ProxyDashboardHtml.pushFragment(
-            snapshot,
-            view?.selectedId,
-            routeBase,
-            view?.layout,
-            seq,
-            filter,
-            withActivity = activity != session.activityShown,
-          )
-        }.onFailure { e ->
-          if (!session.renderFailed) logger.error(e) { "Failed to render a dashboard push" }
-          session.renderFailed = true
-        }.getOrNull() ?: return
-      // A send fails when the browser has gone, which is routine. Only this coroutine's own cancellation, as the
-      // service stops, is passed on: a gone browser's cancelled channel fails a send with a CancellationException too,
-      // and passing that on would end the loop that pushes to every other session.
-      runCatching { session.send(fragment) }
-        .onSuccess { session.activityShown = activity }
-        .onFailure {
-          currentCoroutineContext().ensureActive()
-          logger.debug { "Dashboard push not sent: ${it.simpleClassName}" }
-        }
-    }
-  }
-
-  /**
-   * Collects a snapshot off the CIO event loop.
-   *
-   * `ProxyPathManager` guards its map with `synchronized`, and Kotlin's `synchronized` parks the
-   * carrier thread rather than suspending the coroutine — collecting inline would couple this dashboard to
-   * scrape latency, and worse, couple scrape latency to this dashboard.
-   */
-  private suspend fun snapshot(): ProxySnapshot = withContext(Dispatchers.IO) { ProxySnapshot.collect(proxy) }
-
-  /** Claims a session slot, or returns false when [maxSessions] sessions are already connected. */
-  private fun reserveSession(): Boolean {
-    while (true) {
-      val current = sessionCount.load()
-      if (current >= maxSessions) return false
-      if (sessionCount.compareAndSet(current, current + 1)) return true
-    }
-  }
-
-  /**
-   * The static assets, read from the classpath once.
-   *
-   * Read once rather than per request: the port has no authentication, so a request loop would
-   * otherwise make the proxy inflate ~37 KB out of the JAR without bound.
-   */
-  private val assetBytes: Map<String, ByteArray> by lazy {
-    ASSETS.mapNotNull { (name, resource) ->
-      javaClass.classLoader.getResourceAsStream(resource)?.use { name to it.readBytes() }
-    }.toMap()
-  }
-
-  /** The brand marks (LinkIcon), by file name, read from the classpath once, for the reason [assetBytes] is. */
-  private val iconBytes: Map<String, ByteArray> by lazy {
-    LinkIcon.entries.mapNotNull { icon ->
-      javaClass.classLoader.getResourceAsStream(icon.resource)?.use { icon.fileName to it.readBytes() }
-    }.toMap()
-  }
-
-  /**
-   * The most recent [ProxySnapshot], served until it is [maxAge] old or the topology changes.
-   *
-   * Every page and WebSocket render reads from here. A client decides how fast its requests and messages arrive, so
-   * collecting per request would let it hold the path-map monitor, which every scrape and registration takes, as often
-   * as it liked -- the scrape-latency coupling [snapshot] runs off the event loop to avoid. Through the cache, the
-   * collect rate is bounded by the refresh interval instead. The price is drifting values (backlogs, countdowns, scrape
-   * history) up to one interval old, the staleness the push loop already accepts.
-   *
-   * Topology is not held that long. [invalidate], called on every topology event, starts a new generation, and an entry
-   * is served only while the generation it was collected in is current. So a collect that began before a change and
-   * ended after it is not reused. Clearing the entry on the event did not ensure that: the late collect refilled the
-   * cache with the old topology, and with no session open, nothing else collected for a whole interval. What remains is
-   * the moment an event takes to reach the dashboard after the change it reports.
-   *
-   * One collect runs at a time. A read that finds no usable entry waits for the collect under way and renders its
-   * result, so a burst of requests on an empty cache costs one collect rather than one each.
-   */
-  internal class SnapshotCache(
-    private val maxAge: Duration,
-    private val clock: TimeSource = TimeSource.Monotonic,
-    private val collect: suspend () -> ProxySnapshot,
-  ) {
-    /** A collected snapshot, when its collect began, and the generation it began in. */
-    private class Entry(
-      val snapshot: ProxySnapshot,
-      val taken: TimeMark,
-      val generation: Long,
-    )
-
-    private val collecting = Mutex()
-    private val generation = AtomicLong(0L)
-
-    @Volatile
-    private var latest: Entry? = null
-
-    /** Retires every snapshot collected, or being collected, before this call. */
-    fun invalidate() {
-      generation += 1L
-    }
-
-    /** The cached snapshot while it is usable; otherwise a collect, shared with every read that arrives meanwhile. */
-    suspend fun recent(): ProxySnapshot = usable() ?: collecting.withLock { usable() ?: collectAndStore() }
-
-    /** Always a collect, for the push loop's tick; the reads after it are served what it collected. */
-    suspend fun fresh(): ProxySnapshot = collecting.withLock { collectAndStore() }
-
-    private fun usable(): ProxySnapshot? =
-      latest?.takeIf { it.generation == generation.load() && it.taken.elapsedNow() < maxAge }?.snapshot
-
-    // Callers hold collecting. The generation and the time are read before the collect, so an entry never claims to be
-    // newer than the state it read.
-    private suspend fun collectAndStore(): ProxySnapshot {
-      val collectedIn = generation.load()
-      val taken = clock.markNow()
-      return collect().also { latest = Entry(it, taken, collectedIn) }
-    }
+    server.stop()
   }
 
   /**
@@ -829,139 +310,17 @@ internal class ProxyDashboardService(
     toStringElements {
       add("host", dashboardHost)
       add("port", dashboardPort)
-      add("path", basePath)
-      add("login", if (loginEnabled) "on" else "off")
-      add("sessions", sessions.size)
+      add("path", server.basePath)
+      add("login", if (server.loginEnabled) "on" else "off")
+      add("sessions", server.sessionsOpen)
     }
 
   companion object {
     private val logger = logger {}
     private val json = Json { ignoreUnknownKeys = true }
 
-    // Generated from libs.versions.toml, since the WebJar classpath layout embeds the version. Reading
-    // it rather than restating it means a dependency bump cannot leave the asset route pointing at
-    // a path that is no longer on the classpath.
-    internal const val HTMX_VERSION = BuildConfig.HTMX_VERSION
-
-    /**
-     * Where the assets are served under the route base. It carries the WebJar version because the assets are cached
-     * for a year: with a fixed URL, a browser that cached one htmx would keep running it against the markup of the
-     * next. The route and the page's script tags both read it, so they cannot disagree.
-     */
-    internal const val ASSET_DIR = "assets/$HTMX_VERSION"
-
-    /** The only classpath resources this server will serve, by request filename. */
-    internal val ASSETS =
-      mapOf(
-        "htmx.min.js" to "META-INF/resources/webjars/htmx.org/$HTMX_VERSION/dist/htmx.min.js",
-        // htmx 4 ships its WebSocket extension in the same WebJar.
-        "hx-ws.min.js" to "META-INF/resources/webjars/htmx.org/$HTMX_VERSION/dist/ext/hx-ws.min.js",
-      )
-
-    // The version of the Simple Icons WebJar the build extracts the brand marks (LinkIcon) from; see HTMX_VERSION.
-    internal const val SIMPLE_ICONS_VERSION = BuildConfig.SIMPLE_ICONS_VERSION
-
-    /**
-     * Where the brand marks ([LinkIcon]) are served under the route base, by [LinkIcon.fileName]. It carries the Simple
-     * Icons version for the reason [ASSET_DIR] carries htmx's. The route and the page's icon stylesheet
-     * ([ProxyDashboardCss.linkIconCss]) both read it.
-     */
-    internal const val ICON_DIR = "assets/icons/$SIMPLE_ICONS_VERSION"
-
-    // The types of what ASSET_DIR and ICON_DIR serve, which CachingHeaders lets a browser keep for a year.
-    private val CACHED_TYPES = listOf(ContentType.Application.JavaScript, ContentType.Image.SVG)
-
-    private const val ASSET_MAX_AGE_SECS = 31_536_000
-    private const val GRACE_MILLIS = 2_000L
-    private const val TIMEOUT_MILLIS = 5_000L
-    private const val PING_PERIOD_MILLIS = 15_000L
-    private const val PING_TIMEOUT_MILLIS = 15_000L
-    private const val MAX_INCOMING_FRAME_BYTES = 64L * 1024
-
-    private val BAD_LOGIN_WARNING_INTERVAL = 1.minutes
-    private const val MAX_BAD_LOGIN_HOSTS = 1_000
-
-    /** The largest login form the login route reads; a browser's is a few hundred bytes. */
-    internal const val MAX_LOGIN_BODY_BYTES = 4_096
-
-    /** The most wrong logins one address may make in a minute; past it, its logins are refused for the minute. */
-    internal const val MAX_BAD_LOGINS_PER_ADDRESS = 10
-
-    // The most from every address together, past which every login is refused for the minute.
-    private const val MAX_BAD_LOGINS_OVERALL = 100
-
-    // How long a refused login is told to wait, the limit's window, in seconds.
-    private const val RETRY_AFTER_SECS = "60"
-
-    // The longest next the login page carries; a longer one goes to the base.
-    private const val MAX_NEXT_LENGTH = 2_048
-
-    /** The session cookie's name, for the dashboard on [port]. */
-    internal fun cookieName(port: Int) = "prometheus_proxy_dashboard_$port"
-
-    /**
-     * Where a login sends the browser: [next] when it is a page of the dashboard at [routeBase], else the dashboard's
-     * base. A path only, not a URL, not a protocol-relative `//host`, nor one a browser reads as one (`/\host`), with
-     * no `.` or `..` segment, and not the login page itself, so a link to the login page can't send a browser off-site.
-     */
-    internal fun safeNext(
-      next: String?,
-      routeBase: String,
-    ): String {
-      val path = next.orEmpty()
-      return if (isPlainPath(path) && isDashboardPage(path.substringBefore('?'), routeBase))
-        path
-      else
-        routeBase.ifEmpty { "/" }
-    }
-
-    // A path, and only a path: not too long, absolute, not protocol-relative, and with no character a browser could
-    // read as starting a host (a backslash), nor a control character or whitespace.
-    private fun isPlainPath(path: String) =
-      when {
-        path.length > MAX_NEXT_LENGTH -> false
-        !path.startsWith("/") -> false
-        path.startsWith("//") -> false
-        else -> path.none { it == '\\' || it.isISOControl() || it.isWhitespace() }
-      }
-
-    // A page of the dashboard at [routeBase], by the part of a path before its query: under the base, with no . or ..
-    // segment, and not the login page.
-    private fun isDashboardPage(
-      pagePath: String,
-      routeBase: String,
-    ) = when {
-      pagePath == "$routeBase/login" -> false
-      pagePath.split('/').any { it == "." || it == ".." } -> false
-      routeBase.isEmpty() -> true
-      else -> pagePath == routeBase || pagePath.startsWith("$routeBase/")
-    }
-
-    // Fetch Metadata's header, which every current browser sends with every request, a WebSocket handshake included,
-    // and a script such as curl doesn't.
-    internal const val SEC_FETCH_MODE = "Sec-Fetch-Mode"
-
-    /** Whether [request] came from a browser, which must log in on the login page rather than with Basic Auth. */
-    private fun isBrowser(request: ApplicationRequest) = request.headers[SEC_FETCH_MODE] != null
-
-    // A browser's navigation to a page, which the auth check sends to the login page rather than refusing: a GET that
-    // takes HTML and isn't htmx's own request.
-    private fun wantsPage(request: ApplicationRequest) =
-      request.httpMethod == HttpMethod.Get &&
-        request.headers[HX_REQUEST_HEADER] == null &&
-        request.headers[HttpHeaders.Accept].orEmpty().contains("text/html")
-
-    // A 303, so the browser follows a POST's redirect with a GET.
-    private suspend fun ApplicationCall.seeOther(location: String) {
-      response.header(HttpHeaders.Location, location)
-      respond(HttpStatusCode.SeeOther)
-    }
-
-    // Sent by htmx, and by the page's script with each scrape-now.
-    internal const val HX_REQUEST_HEADER = "HX-Request"
-
-    // Frames a session may have waiting before it is closed. A reading browser drains each push long before the next.
-    private const val OUTGOING_FRAME_BUFFER = 32
+    /** The login page's heading. */
+    internal const val LOGIN_HEADING = "Prometheus Proxy Dashboard"
 
     /**
      * Reads `{"select": "<agentId>"}` from a session message.
@@ -1032,79 +391,5 @@ internal class ProxyDashboardService(
           ?.content
           ?.let { RowFilter.of(parseQueryString(it.removePrefix("?"))) }
       }.getOrNull() ?: RowFilter.NONE
-
-    /**
-     * Whether a WebSocket handshake or an action carrying [origin] may proceed, given the request's [host] header.
-     *
-     * No Origin is allowed: browsers send one on every WebSocket handshake and every POST, so its absence means a
-     * non-browser client, and this check exists to stop a browser being turned against the dashboard. Otherwise the
-     * origin must name the host the request was addressed to -- the dashboard's own page -- or match an [allowedOrigins]
-     * entry, for a dashboard behind a reverse proxy that rewrites Host. Anything unparseable, including the opaque
-     * `null` origin, is refused.
-     *
-     * This does not stop DNS rebinding, where the attacker's origin and the Host header agree; see [isHostAllowed].
-     */
-    internal fun isOriginAllowed(
-      origin: String?,
-      host: String?,
-      allowedOrigins: Collection<String>,
-    ): Boolean {
-      if (origin == null) return true
-      val authority = runCatching { URI(origin).rawAuthority }.getOrNull()
-      return allowedOrigins.any { normalizeOrigin(it) == normalizeOrigin(origin) } ||
-        (authority != null && host != null && authority.equals(host, ignoreCase = true))
-    }
-
-    private fun normalizeOrigin(origin: String) = origin.trim().trimEnd('/').lowercase()
-
-    private const val LOCALHOST = "localhost"
-
-    /**
-     * Whether a request whose Host header is [host] may proceed, given the [allowlist] built by [hostAllowlist].
-     *
-     * Opt-in protection against DNS rebinding, where an attacker points their own name at the dashboard's address: a
-     * rebound browser sends that name as both Origin and Host, so [isOriginAllowed] lets it through. A null
-     * [allowlist] -- `proxy.dashboard.allowedHosts` empty, the default -- allows every Host. Otherwise the dashboard
-     * answers only to an IP address or a name in [allowlist], ignoring the port, case, and a trailing dot. A request
-     * with no Host is allowed, since browsers always send one; an empty or unparseable Host is refused.
-     * `X-Forwarded-Host` is never consulted: a rebound page is same-origin and can set it.
-     */
-    internal fun isHostAllowed(
-      host: String?,
-      allowlist: Set<String>?,
-    ): Boolean {
-      if (allowlist == null || host == null) return true
-      val name = hostName(host) ?: return false
-      return InetAddresses.isInetAddress(name) || name in allowlist
-    }
-
-    /**
-     * The names the dashboard answers to when [allowedHosts] is set: those names, `localhost`, and the host of each
-     * [allowedOrigins] entry (a reverse proxy's public name), normalized as [isHostAllowed] normalizes a Host header.
-     * Null when [allowedHosts] is empty, which turns the Host check off. An entry that does not parse is ignored.
-     */
-    internal fun hostAllowlist(
-      allowedHosts: Collection<String>,
-      allowedOrigins: Collection<String>,
-    ): Set<String>? =
-      if (allowedHosts.isEmpty())
-        null
-      else
-        buildSet {
-          add(LOCALHOST)
-          allowedHosts.mapNotNullTo(this) { hostName(it) }
-          allowedOrigins.mapNotNullTo(this) { origin ->
-            runCatching { URI(origin.trim()).host }.getOrNull()?.let(::hostName)
-          }
-        }
-
-    // The host part of a Host header, an allowedHosts entry, or an origin's host: port and IPv6 brackets removed,
-    // lowercased, and without a trailing dot. Null when empty or unparseable.
-    private fun hostName(value: String): String? =
-      runCatching { HostAndPort.fromString(value.trim()).host }
-        .getOrNull()
-        ?.trimEnd('.')
-        ?.lowercase()
-        ?.takeIf { it.isNotEmpty() }
   }
 }

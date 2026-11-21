@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.prometheus.proxy.dashboard
+package io.prometheus.common.dashboard
 
 import kotlinx.html.ButtonType
 import kotlinx.html.FormMethod
@@ -35,13 +35,12 @@ import kotlinx.html.title
 import kotlinx.html.unsafe
 
 /**
- * The dashboard's login page, which a page request without a session is sent to once `proxy.dashboard.password` is
- * set. Styled after Grafana's: a heading over one centered form, labels above full-width fields, one full-width
- * button, and a red alert above the form after a wrong login. Its colors are the dashboard's own tokens, light or
- * dark as the system is, and it loads nothing: no script, no font, no image.
+ * A dashboard's login page, which a page request without a session is sent to once the dashboard's password is set
+ * (see [DashboardServer]). Styled after Grafana's: a heading over one centered form, labels above full-width fields,
+ * one full-width button, and a red alert above the form after a wrong login. Its colors are the dashboard's own
+ * tokens, light or dark as the system is, and it loads nothing: no script, no font, no image.
  */
 internal object LoginHtml {
-  const val HEADING = "Prometheus Proxy Dashboard"
   const val FAILED = "Invalid username or password"
   const val LIMITED = "Too many wrong logins. Try again in a minute."
   const val USERNAME_FIELD = "username"
@@ -52,11 +51,12 @@ internal object LoginHtml {
   const val MAX_FIELD_LENGTH = 1_024
 
   /**
-   * The page, posting to `<routeBase>/login`. [next] is where a successful login goes, which the route checks again;
-   * [username] refills the field after a refused login, whose [alert], [FAILED] or [LIMITED], the page shows, focusing
-   * the password.
+   * The page, headed [heading], the dashboard's name, and posting to `<routeBase>/login`. [next] is where a successful
+   * login goes, which the route checks again; [username] refills the field after a refused login, whose [alert],
+   * [FAILED] or [LIMITED], the page shows, focusing the password.
    */
   fun HTML.renderLogin(
+    heading: String,
     routeBase: String,
     next: String,
     username: String = "",
@@ -65,13 +65,13 @@ internal object LoginHtml {
     attributes["lang"] = "en"
     head {
       meta(charset = "utf-8")
-      title("Log in · $HEADING")
+      title("Log in · $heading")
       meta(name = "viewport", content = "width=device-width, initial-scale=1")
       style { unsafe { raw(STYLE) } }
     }
     body("login") {
       main {
-        h1 { +HEADING }
+        h1 { +heading }
         form(action = "$routeBase/login", method = FormMethod.post, classes = "card") {
           if (alert != null) {
             div("alert") {
@@ -151,5 +151,5 @@ internal object LoginHtml {
     """.trimIndent()
 
   // The whole stylesheet, built once. Declared after CSS, which an object initializes in order.
-  private val STYLE = ProxyDashboardCss.TOKENS + "\n" + CSS
+  private val STYLE = DashboardCss.TOKENS + "\n" + CSS
 }

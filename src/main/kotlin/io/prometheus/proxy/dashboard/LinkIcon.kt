@@ -16,13 +16,15 @@
 
 package io.prometheus.proxy.dashboard
 
+import io.prometheus.common.dashboard.DashboardServer
+
 /**
  * A brand mark a `proxy.dashboard.links` entry can show in place of its name (its `icon` key), painted in the brand's
  * color through the mark as a mask (see [ProxyDashboardCss.linkIconCss]).
  *
  * The marks are Simple Icons' (simpleicons.org, CC0), from its WebJar. The build extracts only the SVGs named here into
  * the proxy's resources (`configureDashboardIcons` in build.gradle.kts, whose list of slugs must match), and
- * [ProxyDashboardService] serves them under [ProxyDashboardService.ICON_DIR]. The marks belong to their owners.
+ * [ProxyDashboardService] serves them under [DashboardServer.ICON_DIR]. The marks belong to their owners.
  *
  * Each color clears WCAG 1.4.11's 3:1 for a non-text mark on `--surface-2`, the ground of a hovered row, in both
  * themes: 3:1 rather than text's 4.5:1, since the link's name is also in its tooltip and its `aria-label`. Prometheus's
@@ -42,7 +44,7 @@ internal enum class LinkIcon(
   GRAFANA("grafana", "#E26000", "#F46800"),
   ;
 
-  /** The file the dashboard serves the mark as, under [ProxyDashboardService.ICON_DIR]. */
+  /** The file the dashboard serves the mark as, under [DashboardServer.ICON_DIR]. */
   val fileName: String get() = "$slug.svg"
 
   /** Where the build put the mark on the classpath. */

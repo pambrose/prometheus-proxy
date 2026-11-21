@@ -54,14 +54,15 @@ import io.ktor.websocket.readText
 import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.common.TestPorts
 import io.prometheus.common.captureLogs
+import io.prometheus.common.dashboard.DashboardServer
+import io.prometheus.common.dashboard.DashboardServer.Companion.ASSET_DIR
+import io.prometheus.common.dashboard.DashboardServer.Companion.HX_REQUEST_HEADER
+import io.prometheus.common.dashboard.DashboardServer.Companion.SEC_FETCH_MODE
+import io.prometheus.common.dashboard.LoginHtml
 import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.metrics.model.registry.PrometheusRegistry
-import io.prometheus.proxy.dashboard.LoginHtml
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml
 import io.prometheus.proxy.dashboard.ProxyDashboardService
-import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.ASSET_DIR
-import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.HX_REQUEST_HEADER
-import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.SEC_FETCH_MODE
 import kotlinx.coroutines.withTimeout
 import kotlin.time.Duration.Companion.seconds
 
@@ -74,7 +75,7 @@ import kotlin.time.Duration.Companion.seconds
 class ProxyWebDashboardLoginTest : StringSpec() {
   private val base = "http://$LOOPBACK_HOST:$DASHBOARD_PORT"
   private val socketUrl = "ws://$LOOPBACK_HOST:$DASHBOARD_PORT/dashboard/events"
-  private val cookie = ProxyDashboardService.cookieName(DASHBOARD_PORT)
+  private val cookie = DashboardServer.cookieName("proxy", DASHBOARD_PORT)
 
   // A proxy with its dashboard at [path] and, unless [password] is null, a login, and a client that follows no
   // redirect, so a spec sees each one.
@@ -204,7 +205,7 @@ class ProxyWebDashboardLoginTest : StringSpec() {
           headers[HttpHeaders.CacheControl].orEmpty() shouldContain "no-store"
           headers["Content-Security-Policy"].orEmpty() shouldContain "frame-ancestors 'none'"
           bodyAsText().apply {
-            this shouldContain LoginHtml.HEADING
+            this shouldContain ProxyDashboardService.LOGIN_HEADING
             this shouldContain """name="${LoginHtml.NEXT_FIELD}" value="/dashboard/paths""""
           }
         }
@@ -214,7 +215,7 @@ class ProxyWebDashboardLoginTest : StringSpec() {
     "a wrong login should say so, and be logged once, without the username given" {
       withProxy {
         val logs =
-          captureLogs<ProxyDashboardService>(Level.DEBUG) {
+          captureLogs<DashboardServer<*, *>>(Level.DEBUG) {
             repeat(2) {
               val response = logIn(username = WRONG_USERNAME, password = "wrong")
               response.status shouldBe HttpStatusCode.Unauthorized
@@ -336,7 +337,7 @@ class ProxyWebDashboardLoginTest : StringSpec() {
     // Basic Auth. Each spec has a proxy of its own, so the limit starts from nothing here.
     "too many wrong logins from one address should be refused for the rest of the minute" {
       withProxy {
-        repeat(ProxyDashboardService.MAX_BAD_LOGINS_PER_ADDRESS) {
+        repeat(DashboardServer.MAX_BAD_LOGINS_PER_ADDRESS) {
           logIn(password = "wrong").status shouldBe HttpStatusCode.Unauthorized
         }
         logIn().apply {
@@ -376,7 +377,7 @@ class ProxyWebDashboardLoginTest : StringSpec() {
     "a browser's saved Basic login should not get past the login page" {
       withProxy {
         val logs =
-          captureLogs<ProxyDashboardService>(Level.DEBUG) {
+          captureLogs<DashboardServer<*, *>>(Level.DEBUG) {
             page("/dashboard") { browserBasic("navigate") }.apply {
               status shouldBe HttpStatusCode.SeeOther
               headers[HttpHeaders.Location] shouldBe "/dashboard/login?next=%2Fdashboard"
