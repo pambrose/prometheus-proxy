@@ -4,7 +4,7 @@
 
 ## 4.6.1
 
-_Released 2026-11-20_
+_Released 2026-11-22_
 
 The dashboard can ask for a login, the proxy logs a refused agent token where an operator looks, and the Embedded
 Agent page shows how to debug an embedded agent.
