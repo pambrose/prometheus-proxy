@@ -19,8 +19,6 @@ package io.prometheus.agent.dashboard
 import io.ktor.http.encodeURLPathPart
 import io.prometheus.agent.AgentPathManager.RegistrationFailure
 import io.prometheus.agent.dashboard.AgentScrapesHtml.recentScrapes
-import io.prometheus.agent.dashboard.AgentScrapesHtml.scrapeNowButton
-import io.prometheus.agent.dashboard.AgentScrapesHtml.scrapeResultPanel
 import io.prometheus.agent.dashboard.AgentScrapesHtml.scrapesLine
 import io.prometheus.common.dashboard.DashboardPage
 import io.prometheus.common.dashboard.DashboardPage.DASH
@@ -33,6 +31,8 @@ import io.prometheus.common.dashboard.DashboardPage.dashboardHead
 import io.prometheus.common.dashboard.DashboardPage.humanize
 import io.prometheus.common.dashboard.DashboardPage.logoutForm
 import io.prometheus.common.dashboard.DashboardPage.pageTitle
+import io.prometheus.common.dashboard.DashboardPage.scrapeNowButton
+import io.prometheus.common.dashboard.DashboardPage.scrapeResultPanel
 import io.prometheus.common.dashboard.DashboardPage.size
 import io.prometheus.common.dashboard.DashboardPage.tabs
 import io.prometheus.common.dashboard.DashboardPage.timeOfDay

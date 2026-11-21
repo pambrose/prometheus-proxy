@@ -79,11 +79,8 @@ internal data class PathView(
   /** How many agents beyond the first back this path, for the `+N` marker on a consolidated row. */
   val additionalAgents: Int get() = (agentIds.size - 1).coerceAtLeast(0)
 
-  // The three below are computed once per snapshot, not on every read: a snapshot is rendered for every session and
+  // The two below are computed once per snapshot, not on every read: a snapshot is rendered for every session and
   // page that shows it.
-
-  /** How many of [history]'s scrapes succeeded. */
-  val historySucceeded: Int by lazy(LazyThreadSafetyMode.PUBLICATION) { history.count { it.isSuccess } }
 
   /**
    * [history] as runs of consecutive like results, **oldest first**, each a `(succeeded, count)` pair: what the path

@@ -18,8 +18,8 @@ package io.prometheus.proxy.dashboard
 
 import io.ktor.http.HttpStatusCode
 import io.prometheus.Proxy
-import io.prometheus.common.KeyedThrottle
 import io.prometheus.common.dashboard.RawScrape
+import io.prometheus.common.dashboard.ScrapeNowLimits
 import io.prometheus.common.dashboard.ScrapeNowResult
 import io.prometheus.common.dashboard.ScrapeNowResult.Done
 import io.prometheus.common.dashboard.ScrapeNowResult.Refused
@@ -32,7 +32,6 @@ import io.prometheus.proxy.ScrapeHeaders
 import io.prometheus.proxy.ScrapeOrigin
 import io.prometheus.proxy.ScrapeRequestResponse
 import io.prometheus.proxy.ScrapeSpec
-import kotlinx.coroutines.sync.Semaphore
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 
@@ -47,9 +46,8 @@ import kotlin.time.TimeSource
  * dashboard asked for it ([ScrapeOrigin.DASHBOARD]), so it counts it in `agent_dashboard_scrapes_total` rather than
  * its own scrape metrics; an agent older than that field can't tell, and counts it as Prometheus's.
  *
- * Bounded, so clicks can't take the in-flight slots Prometheus's scrapes need: at most [MAX_CONCURRENT] run at once, a
- * path is scraped at most once every [COOLDOWN], and each agent is waited on for at most [TIMEOUT] and a grace, the
- * timeout the agent is told too.
+ * Bounded, so clicks can't take the in-flight slots Prometheus's scrapes need: within [ScrapeNowLimits], and each agent
+ * is waited on for at most [TIMEOUT] and a grace, the timeout the agent is told too.
  *
  * @param submit how a path's agents are scraped; the real scrape unless a test stands in for it
  */
@@ -60,11 +58,7 @@ internal class ScrapeNow(
     ScrapeDispatch.submitScrapeRequests(info, proxy, scrapeOf(path))
   },
 ) {
-  private val permits = Semaphore(MAX_CONCURRENT)
-
-  // Which paths may be scraped from the dashboard now: each at most once every COOLDOWN. It remembers the
-  // MAX_REMEMBERED_PATHS paths asked about most recently; one asked about less recently is long past its cooldown.
-  private val cooldowns = KeyedThrottle<String>(COOLDOWN, MAX_REMEMBERED_PATHS, timeSource)
+  private val limits = ScrapeNowLimits(timeSource)
 
   /** Scrapes [path] for a browser at [client], unless the path or the limits refuse it. */
   suspend fun scrape(
@@ -78,8 +72,7 @@ internal class ScrapeNow(
       !proxy.isRunning -> Refused(HttpStatusCode.ServiceUnavailable, "The proxy isn't running")
       info == null -> Refused(HttpStatusCode.NotFound, "/$shown isn't registered")
       info.isNotValid() -> Refused(HttpStatusCode.ServiceUnavailable, "/$shown has no agent connected")
-      !permits.tryAcquire() -> Refused(HttpStatusCode.TooManyRequests, "$MAX_CONCURRENT dashboard scrapes are running")
-      else -> scrapeWithin(Request(info, key, client))
+      else -> limits.within(key, shown) { scraped(Request(info, key, client)) }
     }
   }
 
@@ -90,18 +83,8 @@ internal class ScrapeNow(
     val client: String,
   )
 
-  // Holds one of the permits, which it gives back.
-  private suspend fun scrapeWithin(request: Request): ScrapeNowResult =
-    try {
-      if (cooldowns.tryAcquire(request.key)) {
-        Done(ScrapeSummary.of(request.key, submit(request.info, request.key))).also { record(request, it.summary) }
-      } else {
-        val shown = ProxyPathManager.shownPath(request.key)
-        Refused(HttpStatusCode.TooManyRequests, "/$shown was scraped from the dashboard less than $COOLDOWN ago")
-      }
-    } finally {
-      permits.release()
-    }
+  private suspend fun scraped(request: Request): ScrapeNowResult =
+    Done(ScrapeSummary.of(request.key, submit(request.info, request.key))).also { record(request, it.summary) }
 
   private fun record(
     request: Request,
@@ -119,9 +102,6 @@ internal class ScrapeNow(
   }
 
   companion object {
-    const val MAX_CONCURRENT = 4
-    val COOLDOWN = 5.seconds
-
     // How long a scrape-now waits for its target, which the agent is told; the grace covers the agent's answer.
     private val TIMEOUT = 10.seconds
     private val TIMEOUT_GRACE = 5.seconds
@@ -133,8 +113,6 @@ internal class ScrapeNow(
     // the scrape metrics it reports to Prometheus.
     internal fun scrapeOf(path: String) =
       ScrapeSpec(path, headers = HEADERS, timeout = TIMEOUT + TIMEOUT_GRACE, origin = ScrapeOrigin.DASHBOARD)
-
-    private const val MAX_REMEMBERED_PATHS = 1000
   }
 }
 

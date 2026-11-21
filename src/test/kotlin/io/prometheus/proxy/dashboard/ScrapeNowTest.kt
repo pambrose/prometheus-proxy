@@ -25,6 +25,7 @@ import io.ktor.http.HttpStatusCode
 import io.mockk.every
 import io.mockk.mockk
 import io.prometheus.Proxy
+import io.prometheus.common.dashboard.ScrapeNowLimits
 import io.prometheus.common.dashboard.ScrapeNowResult
 import io.prometheus.grpc.registerAgentRequest
 import io.prometheus.proxy.ActivityKind
@@ -129,7 +130,7 @@ class ScrapeNowTest : StringSpec() {
       // Another path isn't held up.
       scrapes.scrape("payments_metrics", "c").shouldBeInstanceOf<ScrapeNowResult.Done>()
 
-      time += ScrapeNow.COOLDOWN
+      time += ScrapeNowLimits.COOLDOWN
       scrapes.scrape("orders_metrics", "c").shouldBeInstanceOf<ScrapeNowResult.Done>()
     }
 
@@ -145,13 +146,13 @@ class ScrapeNowTest : StringSpec() {
         }
 
       coroutineScope {
-        val running = (1..ScrapeNow.MAX_CONCURRENT).map { async { scrapes.scrape("p$it", "c") } }
-        eventually(5.seconds) { started.load() shouldBe ScrapeNow.MAX_CONCURRENT }
+        val running = (1..ScrapeNowLimits.MAX_CONCURRENT).map { async { scrapes.scrape("p$it", "c") } }
+        eventually(5.seconds) { started.load() shouldBe ScrapeNowLimits.MAX_CONCURRENT }
 
         scrapes.scrape("one_more", "c") shouldBe
           ScrapeNowResult.Refused(
             HttpStatusCode.TooManyRequests,
-            "${ScrapeNow.MAX_CONCURRENT} dashboard scrapes are running",
+            "${ScrapeNowLimits.MAX_CONCURRENT} dashboard scrapes are running",
           )
 
         gate.complete(Unit)

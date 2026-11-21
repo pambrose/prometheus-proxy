@@ -57,6 +57,10 @@ internal class ScrapeResults(
   val rawSize: Int = 0,
   val filteredSize: Int = 0,
 ) {
+  // Whether these results go to the proxy in chunks: a gzipped body of at least [chunkContentSizeBytes]. The one rule
+  // for both AgentGrpcService, which sends them so, and the agent's dashboard, which records it (AgentScrapeRecord).
+  fun isChunked(chunkContentSizeBytes: Int) = srZipped && srContentAsZipped.size >= chunkContentSizeBytes
+
   // These results, marked as a scrape the proxy's dashboard asked for. Every other field is carried over as it is.
   fun asDashboardScrape() =
     ScrapeResults(

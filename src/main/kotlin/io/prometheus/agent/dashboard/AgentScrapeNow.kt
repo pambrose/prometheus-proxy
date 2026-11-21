@@ -23,14 +23,13 @@ import io.prometheus.Agent
 import io.prometheus.agent.AgentPathManager
 import io.prometheus.agent.filter.MetricFilter
 import io.prometheus.common.AgentValues
-import io.prometheus.common.KeyedThrottle
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.dashboard.RawScrape
+import io.prometheus.common.dashboard.ScrapeNowLimits
 import io.prometheus.common.dashboard.ScrapeNowResult
 import io.prometheus.common.dashboard.ScrapeNowResult.Done
 import io.prometheus.common.dashboard.ScrapeNowResult.Refused
 import io.prometheus.common.dashboard.ScrapeSummary
-import kotlinx.coroutines.sync.Semaphore
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
@@ -49,8 +48,8 @@ import kotlin.time.TimeSource
  * scrapes the proxy asked for (see `AgentHttpService.fetchForDashboard`). It is logged instead, with the address it
  * came from.
  *
- * Bounded, as the proxy's is, so clicks can't crowd out the scrapes the proxy asks for: at most [MAX_CONCURRENT] run at
- * once, a path is scraped at most once every [COOLDOWN], and the target is waited on for at most [TIMEOUT].
+ * Bounded, as the proxy's is, so clicks can't crowd out the scrapes the proxy asks for: within [ScrapeNowLimits], and
+ * the target is waited on for at most [TIMEOUT].
  *
  * @param fetch how a path's target is scraped, given its URL and filter; the agent's own fetch unless a test stands in
  */
@@ -61,11 +60,7 @@ internal class AgentScrapeNow(
     agent.agentHttpService.fetchForDashboard(url, filter, TIMEOUT)
   },
 ) {
-  private val permits = Semaphore(MAX_CONCURRENT)
-
-  // Which paths may be scraped from the dashboard now: each at most once every COOLDOWN. It remembers the
-  // MAX_REMEMBERED_PATHS paths asked about most recently; one asked about less recently is long past its cooldown.
-  private val cooldowns = KeyedThrottle<String>(COOLDOWN, MAX_REMEMBERED_PATHS, timeSource)
+  private val limits = ScrapeNowLimits(timeSource)
 
   /** Scrapes [path] for a browser at [client], unless the agent doesn't know the path or the limits refuse it. */
   suspend fun scrape(
@@ -74,19 +69,11 @@ internal class AgentScrapeNow(
   ): ScrapeNowResult {
     val key = AgentPathManager.requestedPathKey(path)
     val url = urlOf(key)
-    return when {
-      url == null -> {
-        Refused(HttpStatusCode.NotFound, "/${AgentValues.shownValue(key)} isn't configured, discovered, or registered")
-      }
-
-      !permits.tryAcquire() -> {
-        Refused(HttpStatusCode.TooManyRequests, "$MAX_CONCURRENT dashboard scrapes are running")
-      }
-
-      else -> {
-        scrapeWithin(key, url, client)
-      }
-    }
+    val shown = AgentValues.shownValue(key)
+    return if (url == null)
+      Refused(HttpStatusCode.NotFound, "/$shown isn't configured, discovered, or registered")
+    else
+      limits.within(key, shown) { scraped(key, url, client) }
   }
 
   // The URL the agent has for [key]: its registration's, which is the one the proxy's scrapes reach, or else its
@@ -96,23 +83,15 @@ internal class AgentScrapeNow(
       ?: agent.pathManager.pathConfigs.firstOrNull { it.path.removePrefix("/") == key }?.url
       ?: agent.pathDiscoveryService?.discoveredEntries?.firstOrNull { it.path.removePrefix("/") == key }?.url
 
-  // Holds one of the permits, which it gives back.
-  private suspend fun scrapeWithin(
+  private suspend fun scraped(
     key: String,
     url: String,
     client: String,
-  ): ScrapeNowResult =
-    try {
-      if (cooldowns.tryAcquire(key)) {
-        val started = timeSource.markNow()
-        val results = fetch(url, agent.pathManager.filtersByPath[key])
-        Done(summaryOf(key, results, started.elapsedNow())).also { logScrape(it.summary, client) }
-      } else {
-        Refused(HttpStatusCode.TooManyRequests, "/$key was scraped from the dashboard less than $COOLDOWN ago")
-      }
-    } finally {
-      permits.release()
-    }
+  ): ScrapeNowResult {
+    val started = timeSource.markNow()
+    val results = fetch(url, agent.pathManager.filtersByPath[key])
+    return Done(summaryOf(key, results, started.elapsedNow())).also { logScrape(it.summary, client) }
+  }
 
   private fun logScrape(
     summary: ScrapeSummary,
@@ -127,13 +106,8 @@ internal class AgentScrapeNow(
   companion object {
     private val logger = logger {}
 
-    const val MAX_CONCURRENT = 4
-    val COOLDOWN = 5.seconds
-
     // How long a Scrape now waits for its target, which the target is told, as the proxy's tells the agent.
     private val TIMEOUT = 10.seconds
-
-    private const val MAX_REMEMBERED_PATHS = 1000
 
     // What a scrape of [path] that came to [results] after [duration] found, as the result panel shows it: the body
     // after the path's filter, unzipped, and its size before the filter and after.

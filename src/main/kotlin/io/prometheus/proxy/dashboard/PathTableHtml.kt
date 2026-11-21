@@ -20,10 +20,9 @@ import io.prometheus.common.dashboard.DashboardPage
 import io.prometheus.common.dashboard.DashboardPage.COPY_ATTR
 import io.prometheus.common.dashboard.DashboardPage.DASH
 import io.prometheus.common.dashboard.DashboardPage.PROXY_PATH_ATTR
-import io.prometheus.common.dashboard.DashboardPage.SCRAPE_ID_PREFIX
-import io.prometheus.common.dashboard.DashboardPage.SCRAPE_RESULT_ID
-import io.prometheus.common.dashboard.DashboardPage.SCRAPE_URL_ATTR
 import io.prometheus.common.dashboard.DashboardPage.historyStrip
+import io.prometheus.common.dashboard.DashboardPage.scrapeNowButton
+import io.prometheus.common.dashboard.DashboardPage.scrapeResultPanel
 import io.prometheus.common.dashboard.DashboardPage.statusPill
 import io.prometheus.common.dashboard.DashboardPage.timeOfDay
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.COPY_PROXY_ID_PREFIX
@@ -87,16 +86,6 @@ internal object PathTableHtml {
   ) {
     val icons = links.mapNotNull { it.icon }.distinct()
     if (icons.isNotEmpty()) style { unsafe { raw(ProxyDashboardCss.linkIconCss(routeBase, icons)) } }
-  }
-
-  // Where a scrape-now's result shows, filled by the page's script from the route it names. Outside the table's
-  // out-of-band region, so a push never clears a result someone is reading.
-  private fun FlowContent.scrapeResultPanel(routeBase: String) {
-    div("scrape-result") {
-      attributes["id"] = SCRAPE_RESULT_ID
-      attributes[SCRAPE_URL_ATTR] = "$routeBase/scrape"
-      attributes["hidden"] = "hidden"
-    }
   }
 
   /** The table region, `#path-table`, which every push for the Paths view replaces. */
@@ -255,21 +244,8 @@ internal object PathTableHtml {
         copyButton("$COPY_PROXY_ID_PREFIX${path.path}", "proxy URL", path) {
           attributes[PROXY_PATH_ATTR] = "/${path.path}"
         }
-        if (scrapeNow) scrapeButton(path)
+        if (scrapeNow) scrapeNowButton(path.path)
       }
-    }
-  }
-
-  /**
-   * The button that scrapes [path] now, through its agent, and shows the result above the table (see [ScrapeNow]). Its
-   * id is built from the path, as a copy button's is, so the push that replaces the table hands focus back to it.
-   */
-  private fun FlowContent.scrapeButton(path: PathView) {
-    button(type = ButtonType.button, classes = "scrape-now") {
-      // The page's script reads the path back out of the id.
-      attributes["id"] = "$SCRAPE_ID_PREFIX${path.path}"
-      attributes["aria-label"] = "Scrape /${path.path} now"
-      attributes["title"] = "Scrape now"
     }
   }
 

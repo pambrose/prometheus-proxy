@@ -17,24 +17,20 @@
 package io.prometheus.agent.dashboard
 
 import io.prometheus.agent.AgentScrapeRecord
-import io.prometheus.common.dashboard.DashboardPage.SCRAPE_ID_PREFIX
-import io.prometheus.common.dashboard.DashboardPage.SCRAPE_RESULT_ID
-import io.prometheus.common.dashboard.DashboardPage.SCRAPE_URL_ATTR
 import io.prometheus.common.dashboard.DashboardPage.historyStrip
 import io.prometheus.common.dashboard.DashboardPage.size
 import io.prometheus.common.dashboard.DashboardPage.statusPill
 import io.prometheus.common.dashboard.DashboardPage.timeOfDay
-import kotlinx.html.ButtonType
 import kotlinx.html.DIV
 import kotlinx.html.FlowContent
-import kotlinx.html.button
 import kotlinx.html.div
 import kotlinx.html.span
 
 /**
- * The agent dashboard's scrapes, as [AgentDashboardHtml] renders them on its Paths view: each row's history strip and
- * last result, the detail pane's Recent scrapes and Scrape now button, and the panel a Scrape now's result shows in
- * ([AgentScrapeNow]). Apart from [AgentDashboardHtml], as the proxy's path table is apart from the page around it.
+ * The agent dashboard's scrapes, as [AgentDashboardHtml] renders them on its Paths view: each row's last result and
+ * history strip, and the detail pane's Recent scrapes. Its Scrape now button and result panel are every dashboard's
+ * (`DashboardPage.scrapeNowButton`, `scrapeResultPanel`). Apart from [AgentDashboardHtml], as the proxy's path table is
+ * apart from the page around it.
  */
 internal object AgentScrapesHtml {
   // How a row's last scrape went, then its recent scrapes as a strip: one line, which fits the list's narrow column, so
@@ -57,27 +53,6 @@ internal object AgentScrapesHtml {
       path.state == PathState.REGISTERED -> {
         span("host") { +"not scraped since the agent started" }
       }
-    }
-  }
-
-  // Where a Scrape now's result shows, filled by the page's script from the route it names. Outside every pushed
-  // region, so a push never clears a result someone is reading.
-  fun FlowContent.scrapeResultPanel(routeBase: String) {
-    div("scrape-result") {
-      attributes["id"] = SCRAPE_RESULT_ID
-      attributes[SCRAPE_URL_ATTR] = "$routeBase/scrape"
-      attributes["hidden"] = "hidden"
-    }
-  }
-
-  // Scrapes the path's target from the agent at once; the page's script posts it and reads the path back out of the
-  // id, as it does for the proxy's button. Its id is the path's, unique on the page, so the push that replaces the pane
-  // hands focus back to it.
-  fun FlowContent.scrapeNowButton(path: String) {
-    button(type = ButtonType.button, classes = "scrape-now") {
-      attributes["id"] = "$SCRAPE_ID_PREFIX$path"
-      attributes["aria-label"] = "Scrape /$path now"
-      attributes["title"] = "Scrape now"
     }
   }
 

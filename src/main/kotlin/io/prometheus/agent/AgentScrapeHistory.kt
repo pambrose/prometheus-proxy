@@ -60,8 +60,8 @@ internal data class AgentScrapeRecord(
     private const val MAX_FAILURE_CHARS = 512
 
     /**
-     * The record of a scrape that came to [results] after [duration]. Chunked as `AgentGrpcService` decides it: a
-     * gzipped body of at least [chunkContentSizeBytes] goes to the proxy in chunks.
+     * The record of a scrape that came to [results] after [duration], chunked as [ScrapeResults.isChunked] says for
+     * [chunkContentSizeBytes], as the gRPC service sends it.
      */
     fun of(
       results: ScrapeResults,
@@ -74,7 +74,7 @@ internal data class AgentScrapeRecord(
       bytes = results.rawSize.toLong(),
       filteredBytes = results.filteredSize.toLong(),
       gzipped = results.srZipped,
-      chunked = results.srZipped && results.srContentAsZipped.size >= chunkContentSizeBytes,
+      chunked = results.isChunked(chunkContentSizeBytes),
       failure = AgentValues.shownValue(results.srFailureReason, MAX_FAILURE_CHARS),
       fromProxyDashboard = results.dashboardScrape,
     )

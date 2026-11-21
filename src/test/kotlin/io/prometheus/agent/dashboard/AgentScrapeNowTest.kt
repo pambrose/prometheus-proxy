@@ -33,6 +33,7 @@ import io.prometheus.Agent
 import io.prometheus.agent.filter.MetricFilter
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.agentOptionsFromConfig
+import io.prometheus.common.dashboard.ScrapeNowLimits
 import io.prometheus.common.dashboard.ScrapeNowResult
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
@@ -171,17 +172,17 @@ class AgentScrapeNowTest : StringSpec() {
       scrapes.scrape("orders_metrics", "c") shouldBe
         ScrapeNowResult.Refused(
           HttpStatusCode.TooManyRequests,
-          "/orders_metrics was scraped from the dashboard less than ${AgentScrapeNow.COOLDOWN} ago",
+          "/orders_metrics was scraped from the dashboard less than ${ScrapeNowLimits.COOLDOWN} ago",
         )
       scrapes.scrape("payments_metrics", "c").shouldBeInstanceOf<ScrapeNowResult.Done>()
-      time += AgentScrapeNow.COOLDOWN
+      time += ScrapeNowLimits.COOLDOWN
       scrapes.scrape("orders_metrics", "c").shouldBeInstanceOf<ScrapeNowResult.Done>()
     }
 
     "no more than its limit should run at once" {
       val started = AtomicInt(0)
       val release = CompletableDeferred<Unit>()
-      val limit = AgentScrapeNow.MAX_CONCURRENT
+      val limit = ScrapeNowLimits.MAX_CONCURRENT
       val agent =
         agent((1..limit + 1).joinToString(",") { """{ name = p$it, path = p$it, url = "http://p$it.invalid" }""" })
       val scrapes =

@@ -243,6 +243,31 @@ internal object DashboardPage {
     }
   }
 
+  /**
+   * Where a scrape-now's result shows, filled by the page's script from the route it names (see DashboardScript).
+   * Rendered outside every pushed region, so a push never clears a result someone is reading.
+   */
+  fun FlowContent.scrapeResultPanel(routeBase: String) {
+    div("scrape-result") {
+      attributes["id"] = SCRAPE_RESULT_ID
+      attributes[SCRAPE_URL_ATTR] = "$routeBase/scrape"
+      attributes["hidden"] = "hidden"
+    }
+  }
+
+  /**
+   * The button that scrapes [path] now and shows the result in the [scrapeResultPanel]. The page's script reads the
+   * path back out of its id, which is built from the path, unique on the page, so the push that replaces the region it
+   * is in hands focus back to it.
+   */
+  fun FlowContent.scrapeNowButton(path: String) {
+    button(type = ButtonType.button, classes = "scrape-now") {
+      attributes["id"] = "$SCRAPE_ID_PREFIX$path"
+      attributes["aria-label"] = "Scrape /$path now"
+      attributes["title"] = "Scrape now"
+    }
+  }
+
   /** A scrape's status code as a pill, `ok` for a success and `crit` for anything else, as every view shows one. */
   fun FlowOrPhrasingContent.statusPill(
     statusCode: Int,
