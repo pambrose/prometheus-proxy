@@ -23,10 +23,9 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.string.shouldStartWith
-import io.prometheus.agent.AgentGrpcService.ConnectFailure
 import io.prometheus.agent.AgentPathManager.RegistrationFailure
 import io.prometheus.agent.PathSource
-import io.prometheus.agent.discovery.PathDiscoveryService.ReconcileFailure
+import io.prometheus.agent.ShownFailure
 import io.prometheus.agent.dashboard.AgentDashboardHtml.renderPage
 import io.prometheus.common.dashboard.DashboardPage
 import kotlinx.html.html
@@ -70,7 +69,7 @@ class AgentDashboardHtmlTest : StringSpec() {
   private fun refusal(
     reason: String = "Agent identity 'team_a' is not authorized to register path /x",
     retrying: Boolean = false,
-  ) = RegistrationFailure(PathSource.STATIC, reason, refused = true, retrying = retrying, retryAt = null, at = at)
+  ) = RegistrationFailure(ShownFailure(reason, at), refused = true, retrying = retrying, retryAt = null)
 
   init {
     "a path, a reason, and a URL from outside should be escaped, never markup" {
@@ -113,13 +112,10 @@ class AgentDashboardHtmlTest : StringSpec() {
       AgentDashboardHtml.nextTry(refusal(retrying = true)) shouldBe "at the next retry"
     }
 
-    "a path with no labels, or the empty object the agent stores for none, should show an en dash" {
-      listOf("", "{}", "{ }").forEach { labels ->
-        val path =
-          AgentPathView("orders", PathSource.STATIC, "http://orders/metrics", PathState.REGISTERED, labels = labels)
-        page(snapshot([path]), selected = "orders") shouldContain
-          """<span class="k">Labels</span><span class="v">${DashboardPage.DASH}</span>"""
-      }
+    "a path with no labels should show an en dash, not an empty cell" {
+      val path = AgentPathView("orders", PathSource.STATIC, "http://orders/metrics", PathState.REGISTERED)
+      page(snapshot([path]), selected = "orders") shouldContain
+        """<span class="k">Labels</span><span class="v">${DashboardPage.DASH}</span>"""
     }
 
     "with nothing selected, or a path no longer known, the detail pane should say so" {
@@ -137,11 +133,10 @@ class AgentDashboardHtmlTest : StringSpec() {
             EndpointView(
               "proxy-a:50051",
               current = false,
-              failure = ConnectFailure("StatusException: UNAVAILABLE", at),
+              failure = ShownFailure("StatusException: UNAVAILABLE", at),
             ),
             EndpointView("proxy-b:50051", current = true),
           ],
-          failedOver = true,
         )
       page(snapshot(connection = connection), layout = AgentLayout.CONNECTION).apply {
         this shouldContain "failing · proxy-b:50051"
@@ -157,7 +152,7 @@ class AgentDashboardHtmlTest : StringSpec() {
         DiscoveryView(
           file = "/etc/agent/targets.conf",
           intervalSecs = 30,
-          failure = ReconcileFailure("ConfigException: line 3: expecting a value", at),
+          failure = ShownFailure("ConfigException: line 3: expecting a value", at),
           entries = 2,
           skipped = ["no_url" to ""],
           collisions = ["orders_metrics"],

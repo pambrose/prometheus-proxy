@@ -97,6 +97,23 @@ class AgentSnapshotTest : StringSpec() {
       snapshot.paths.first { it.path == "billing_metrics" }.labels shouldBe """{"team": "b"}"""
     }
 
+    // An empty object, however it's spaced, is how the config and the agent say "no labels", so the page shows none.
+    "a path's empty labels object should read as no labels" {
+      val snapshot =
+        AgentSnapshot.collect(
+          agent(
+            """
+            agent.pathConfigs = [
+              { name: "A", path: "a_metrics", url: "http://a/metrics", labels: "{}" }
+              { name: "B", path: "b_metrics", url: "http://b/metrics", labels: "{ \n }" }
+            ]
+            """,
+          ),
+        )
+
+      snapshot.paths.map { it.labels } shouldContainExactly ["", ""]
+    }
+
     "a path's metric filter should carry its rules, with nothing dropped yet" {
       val snapshot =
         AgentSnapshot.collect(

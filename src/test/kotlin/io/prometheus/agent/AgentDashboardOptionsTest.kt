@@ -24,6 +24,7 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContain as shouldContainElement
+import io.kotest.matchers.collections.shouldNotBeIn
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -36,6 +37,7 @@ import io.prometheus.common.TestPorts.PROXY_DASHBOARD_PORT
 import io.prometheus.common.agentOptions
 import io.prometheus.common.agentOptionsFromConfig
 import io.prometheus.common.captureLogs
+import io.prometheus.common.shouldBeRejected
 
 /**
  * The agent dashboard's options, `agent.dashboard` and the `--dashboard*` flags, which the agent resolves as the proxy
@@ -54,7 +56,7 @@ class AgentDashboardOptionsTest : StringSpec() {
     "the agent's dashboard should default to port $AGENT_DASHBOARD_PORT, apart from the admin port and the proxy's" {
       options().apply {
         dashboardPort shouldBe AGENT_DASHBOARD_PORT
-        dashboardPort.shouldNotBeIn(AGENT_ADMIN_PORT, PROXY_DASHBOARD_PORT)
+        dashboardPort shouldNotBeIn listOf(AGENT_ADMIN_PORT, PROXY_DASHBOARD_PORT)
         dashboardPath shouldBe "dashboard"
         dashboardHost shouldBe "0.0.0.0"
       }
@@ -149,11 +151,6 @@ class AgentDashboardOptionsTest : StringSpec() {
       }
     }
   }
-
-  private fun Int.shouldNotBeIn(vararg others: Int) = others.none { it == this }.shouldBeTrue()
-
-  private inline fun shouldBeRejected(block: () -> Any?): ConfigLoadException =
-    shouldThrow<ConfigLoadException>(block).also { it.cause.shouldBeInstanceOf<IllegalArgumentException>() }
 
   private companion object {
     const val LOGIN_PASSWORD = "s3cret-Passw0rd"

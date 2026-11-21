@@ -460,6 +460,28 @@ class AgentGrpcServiceTest : StringSpec() {
       }
     }
 
+    // The agent's dashboard: the latest failure per endpoint, its URLs redacted, until that endpoint connects, and
+    // whether the latest attempt failed, which a success on any endpoint clears, so a failover isn't shown as failing.
+    "a failed connect should be kept for the dashboard, redacted, and a success should clear the failing flag" {
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
+        coEvery { mockStub.connectAgent(any(), any<Metadata>()) } throws
+          StatusRuntimeException(Status.UNAVAILABLE.withDescription("via http://ops:s3cret@lb/route"))
+
+        service.connectAgent().shouldBeFalse()
+        service.lastConnectFailed.shouldBeTrue()
+        service.connectFailuresByEndpoint.values.single().message.apply {
+          this shouldContain "UNAVAILABLE"
+          this shouldNotContain "s3cret"
+        }
+
+        coEvery { mockStub.connectAgent(any(), any<Metadata>()) } returns EMPTY_INSTANCE
+        service.connectAgent().shouldBeTrue()
+        service.lastConnectFailed.shouldBeFalse()
+        service.connectFailuresByEndpoint.keys.shouldBeEmpty()
+        service.connects shouldBe 1
+      }
+    }
+
     // With the 3s reconnect pause, a proxy outage wrote about 20 ERROR stack traces a minute (October #17).
     "repeated failures to connect to one proxy should log one WARN with the stack trace, and the rest at DEBUG" {
       withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->

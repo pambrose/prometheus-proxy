@@ -124,9 +124,9 @@ class ScrapeNowHtmlTest : StringSpec() {
     }
 
     "a size should read in bytes, KB, or MB" {
-      ScrapeNowHtml.size(900) shouldBe "900 bytes"
-      ScrapeNowHtml.size(4300) shouldBe "4.2 KB"
-      ScrapeNowHtml.size(3 * 1024 * 1024) shouldBe "3.0 MB"
+      DashboardPage.size(900) shouldBe "900 bytes"
+      DashboardPage.size(4300) shouldBe "4.2 KB"
+      DashboardPage.size(3 * 1024 * 1024) shouldBe "3.0 MB"
     }
   }
 }

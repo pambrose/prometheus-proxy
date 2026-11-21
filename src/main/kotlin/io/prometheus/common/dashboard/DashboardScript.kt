@@ -44,18 +44,20 @@ import io.prometheus.common.dashboard.DashboardPage.VIEW_ATTR
  * apart. A handler for an element a page doesn't have does nothing there, so every dashboard runs the same script.
  *
  * @param subject the process the page reports on, `proxy` or `agent`, as the connection's announcements name it
- * @param layouts the name of each view with a route of its own, by its route's last segment
- * @param defaultLayout the name of the view served at the dashboard's base, and with a row selected
+ * @param views the dashboard's views: the one served at its base, also shown with a row selected, and the others, each
+ *   at its own route
  * @param selectionSegment the route segment a selected row's id follows, as in `<base>/agents/<id>`
  */
 internal class DashboardScript(
   subject: String,
-  layouts: Map<String, String>,
-  defaultLayout: String,
+  views: List<DashboardView>,
   selectionSegment: String,
 ) {
+  private val defaultLayout = views.first { it.segment.isEmpty() }.name
+
   // The layouts with a route of their own, by its segment, for the page's script: {"paths":"PATH",...}.
-  private val layoutsJs = layouts.entries.joinToString(",", "{", "}") { (segment, name) -> "\"$segment\":\"$name\"" }
+  private val layoutsJs =
+    views.filter { it.segment.isNotEmpty() }.joinToString(",", "{", "}") { "\"${it.segment}\":\"${it.name}\"" }
 
   /**
    * The page's script. It reads the selection back out of the URL that hx-push-url already set, and tells the server,
@@ -72,17 +74,22 @@ internal class DashboardScript(
       // listeners, and one announce per navigation would become two, then three.
       if (window.__${subject}UiInit) return;
       window.__${subject}UiInit = true;
+      // The dashboard's base, from the socket's URL. The page's route is what follows it: matched there, rather than by
+      // the URL's last segment, a base or a selected row's id named like a view can't be taken for that view.
+      var base = (document.body.getAttribute('hx-ws:connect') || '').replace(/\/events$/, '');
+      function route() {
+        var path = window.location.pathname;
+        return (path.indexOf(base) === 0 ? path.slice(base.length) : path).replace(/^\/+|\/+$/g, '');
+      }
       function selectedId() {
-        var m = window.location.pathname.match(/\/$selectionSegment\/([^/]+)$/);
+        var m = route().match(/^$selectionSegment\/([^/]+)$/);
         return m ? m[1] : null;
       }
-      // Each layout's name by its route's last segment; the default layout is the base itself, and a selected row's.
+      // Each layout's name by its route; the default layout is the base itself, and a selected row's.
       var LAYOUTS = $layoutsJs;
       function layout() {
-        // A selected row's page is the default layout's, whatever its id: an id can name a layout too.
-        if (selectedId() !== null) return '$defaultLayout';
-        var m = window.location.pathname.match(/\/([^/]+)\/?$/);
-        return m && Object.prototype.hasOwnProperty.call(LAYOUTS, m[1]) ? LAYOUTS[m[1]] : '$defaultLayout';
+        var r = route();
+        return Object.prototype.hasOwnProperty.call(LAYOUTS, r) ? LAYOUTS[r] : '$defaultLayout';
       }
       // The extension's connection, which outlives its socket: each reconnect replaces connection.socket,
       // so this keeps the connection and reads the socket when it sends.
@@ -150,8 +157,6 @@ internal class DashboardScript(
         // At once: until this message arrives, the server pushes a new session only the status bar.
         announce();
       });
-      // The dashboard's base, from the socket's URL, for the session check.
-      var base = (document.body.getAttribute('hx-ws:connect') || '').replace(/\/events$/, '');
       // Whether this page may still use the dashboard, asked when its socket closes: a session that has ended, by
       // expiring, a Log out elsewhere, or a restart, gets a 401, and a reload, which the server answers with the
       // login page. Only on a page with a login, which has Log out, and one check at a time, since every failed

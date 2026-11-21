@@ -18,6 +18,7 @@ package io.prometheus.common.dashboard
 
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlin.time.Duration
 import kotlin.time.Instant
 import kotlin.time.toJavaInstant
@@ -38,6 +39,23 @@ import kotlinx.html.style
 import kotlinx.html.time
 import kotlinx.html.title
 import kotlinx.html.unsafe
+
+/**
+ * One of a dashboard's views, as its tabs, its routes, and its page's script know it: an enum entry's [name], the route
+ * [segment] below the dashboard's base, empty for the view served at the base itself, and the [title] its tab shows.
+ */
+internal interface DashboardView {
+  val name: String
+  val segment: String
+  val title: String
+}
+
+/**
+ * The view's URL, under [routeBase]; the base view's is the base itself, which at a root mount is "/". An extension
+ * rather than a default method, which would compile to a `DefaultImpls` class no test can cover.
+ */
+internal fun DashboardView.href(routeBase: String): String =
+  if (segment.isEmpty()) routeBase.ifEmpty { "/" } else "$routeBase/$segment"
 
 /**
  * What every dashboard page shares: the ids and attributes its script ([DashboardScript]) reads, the head that loads
@@ -111,13 +129,6 @@ internal object DashboardPage {
   const val HTMX_CONFIG =
     """{"noSwap":[204,304,"4xx","5xx"],"ws":{"reconnectDelay":500,"reconnectMaxDelay":2000,"reconnectJitter":0.125}}"""
 
-  /** A tab: a link to one of the dashboard's views, and whether it is the one shown. */
-  class Tab(
-    val href: String,
-    val title: String,
-    val current: Boolean,
-  )
-
   /**
    * The page's head: its [title], the stylesheet, any [extra] style after it, and htmx with its WebSocket extension,
    * from the versioned asset route under [routeBase].
@@ -148,17 +159,36 @@ internal object DashboardPage {
    * Links in a `<nav>` with `aria-current`, not ARIA tabs: each opens a page of its own, which `role="tab"` would
    * misstate. The page's script adds the arrow keys (see DashboardScript).
    */
-  fun FlowContent.tabs(tabs: List<Tab>) {
+  fun FlowContent.tabs(
+    views: List<DashboardView>,
+    current: DashboardView,
+    routeBase: String,
+  ) {
     nav("nav") {
       attributes["id"] = NAV_ID
-      tabs.forEach { tab ->
-        a(href = tab.href, classes = if (tab.current) "on" else null) {
-          if (tab.current) attributes["aria-current"] = "page"
-          +tab.title
+      views.forEach { view ->
+        val on = view == current
+        a(href = view.href(routeBase), classes = if (on) "on" else null) {
+          if (on) attributes["aria-current"] = "page"
+          +view.title
         }
       }
     }
   }
+
+  /**
+   * A page's title: the [brand], after a count of the [problems] while there are any, so a dashboard left in a
+   * background tab still says when something is wrong.
+   */
+  fun pageTitle(
+    brand: String,
+    problems: Int,
+  ): String =
+    when (problems) {
+      0 -> brand
+      1 -> "(1 problem) $brand"
+      else -> "($problems problems) $brand"
+    }
 
   /**
    * The connection indicator, at the start of the status bar. Both labels are always rendered; which one shows is
@@ -224,4 +254,16 @@ internal object DashboardPage {
     }
 
   private val timeFormat = DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault())
+
+  private const val KIB = 1024.0
+
+  /** A size in bytes, as a person reads it: bytes below a kilobyte, then KB, then MB, to one decimal place. */
+  fun size(bytes: Long): String {
+    val kib = bytes / KIB
+    return when {
+      bytes < KIB -> "$bytes bytes"
+      kib < KIB -> String.format(Locale.ROOT, "%.1f KB", kib)
+      else -> String.format(Locale.ROOT, "%.1f MB", kib / KIB)
+    }
+  }
 }

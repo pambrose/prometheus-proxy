@@ -35,10 +35,13 @@ import io.prometheus.common.dashboard.DashboardPage.connectionIndicator
 import io.prometheus.common.dashboard.DashboardPage.dashboardHead
 import io.prometheus.common.dashboard.DashboardPage.humanize
 import io.prometheus.common.dashboard.DashboardPage.logoutForm
+import io.prometheus.common.dashboard.DashboardPage.pageTitle
 import io.prometheus.common.dashboard.DashboardPage.tabs
 import io.prometheus.common.dashboard.DashboardPage.timeOfDay
 import io.prometheus.common.dashboard.DashboardScript
 import io.prometheus.common.dashboard.DashboardServer
+import io.prometheus.common.dashboard.DashboardView
+import io.prometheus.common.dashboard.href
 import kotlinx.html.ButtonType
 import kotlinx.html.DIV
 import kotlinx.html.FORM
@@ -97,17 +100,13 @@ import kotlin.time.toJavaInstant
  * @param searchFields what the search above the layout's table matches, for its placeholder; the agent layout has none
  */
 internal enum class DashboardLayout(
-  val segment: String,
-  val title: String,
+  override val segment: String,
+  override val title: String,
   val searchFields: String = "",
-) {
+) : DashboardView {
   AGENT("", "Agents"),
   PATH("paths", "Paths", "path, agent, target, or identity"),
   ACTIVITY("activity", "Activity", "event, agent, identity, path, or detail"),
-  ;
-
-  /** The layout's URL, under [routeBase]; the agent layout's is the base itself, which at a root mount is "/". */
-  fun href(routeBase: String): String = if (segment.isEmpty()) routeBase.ifEmpty { "/" } else "$routeBase/$segment"
 }
 
 /**
@@ -207,7 +206,7 @@ internal object ProxyDashboardHtml {
   fun FlowContent.renderNav(
     routeBase: String,
     layout: DashboardLayout,
-  ) = tabs(DashboardLayout.entries.map { DashboardPage.Tab(it.href(routeBase), it.title, current = it == layout) })
+  ) = tabs(DashboardLayout.entries, layout, routeBase)
 
   /**
    * The search above [layout]'s table, which submits to the layout's own route, and under it the guide to the table's
@@ -556,24 +555,12 @@ internal object ProxyDashboardHtml {
    * dashboard left in a background tab still says when something is wrong. Counted by [PathView.isProblem], as the
    * "Problems only" filter counts them, so the title and the filtered table agree.
    */
-  private fun pageTitle(snapshot: ProxySnapshot): String {
-    val problems = snapshot.paths.count { it.isProblem }
-    return when (problems) {
-      0 -> BRAND
-      1 -> "(1 problem) $BRAND"
-      else -> "($problems problems) $BRAND"
-    }
-  }
+  private fun pageTitle(snapshot: ProxySnapshot): String = pageTitle(BRAND, snapshot.paths.count { it.isProblem })
 
   // The page's script (DashboardScript), for the proxy's layouts: the agent layout at the base, an agent selected at
   // agents/<id>.
   private val SCRIPT =
-    DashboardScript(
-      subject = "proxy",
-      layouts = DashboardLayout.entries.filter { it.segment.isNotEmpty() }.associate { it.segment to it.name },
-      defaultLayout = DashboardLayout.AGENT.name,
-      selectionSegment = "agents",
-    ).js
+    DashboardScript(subject = "proxy", views = DashboardLayout.entries, selectionSegment = "agents").js
 
   private const val UNASSIGNED = "Unassigned"
   private const val BRAND = "prometheus-proxy"

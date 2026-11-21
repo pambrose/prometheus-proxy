@@ -20,11 +20,8 @@ import com.pambrose.common.util.runCatchingCancellable
 import com.pambrose.common.util.simpleClassName
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.agent.AgentPathManager
-import io.prometheus.common.AgentValues.shownValue
+import io.prometheus.agent.ShownFailure
 import io.prometheus.common.Utils.failureKey
-import io.prometheus.common.Utils.sanitizeUrlsInText
-import kotlin.time.Clock
-import kotlin.time.Instant
 import kotlinx.coroutines.delay
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -52,8 +49,15 @@ internal class PathDiscoveryService(
   private val source: PathDiscoverySource,
   private val intervalSecs: Int,
 ) {
-  // The last reconcile's failure, as Utils.failureKey gives it, or null after a success; see reconcileOnce.
-  private var lastFailure: String? = null
+  // The last reconcile's failure, as Utils.failureKey gives it to compare with the next, and as the agent's dashboard
+  // shows it, or null after a success; see reconcileOnce. Volatile, since the dashboard reads it from another thread.
+  private class LastFailure(
+    val key: String,
+    val shown: ShownFailure,
+  )
+
+  @Volatile
+  private var lastFailure: LastFailure? = null
 
   // The paths the source last read successfully, or null before the first good read. The live path map can't be the
   // last-known-good set: every connect clears it, so a reconnect while the file was unreadable registered nothing.
@@ -61,21 +65,11 @@ internal class PathDiscoveryService(
   @Volatile
   private var lastGoodPaths: List<DiscoveredPath>? = null
 
-  // The last reconcile's failure, what it was and when, for the agent's dashboard; null after a success.
-  @Volatile
-  private var lastFailureShown: ReconcileFailure? = null
-
   /** The entries the source last read successfully, empty before the first good read. */
   val discoveredEntries: List<DiscoveredPath> get() = lastGoodPaths.orEmpty()
 
   /** The last reconcile's failure, or null after a success, and before the first reconcile. */
-  val reconcileFailure: ReconcileFailure? get() = lastFailureShown
-
-  /** A reconcile's failure, for the agent's dashboard: what it was, and when. */
-  data class ReconcileFailure(
-    val message: String,
-    val at: Instant,
-  )
+  val reconcileFailure: ShownFailure? get() = lastFailure?.shown
 
   // The entries the last read dropped as unusable, empty for a source that does not report them.
   val skippedEntries: List<DiscoveredPath>
@@ -119,19 +113,15 @@ internal class PathDiscoveryService(
       if (lastFailure != null)
         logger.info { "Path discovery reconcile succeeded again" }
       lastFailure = null
-      lastFailureShown = null
     }.onFailure { e ->
-      // Redacted, since the dashboard may have no login: a file's parse error can quote a line of it, a target's URL.
-      lastFailureShown =
-        ReconcileFailure(shownValue(sanitizeUrlsInText("${e.simpleClassName}: ${e.message}")), Clock.System.now())
       val failure = failureKey(e, withMessage = true)
-      if (failure == lastFailure)
+      if (failure == lastFailure?.key)
         logger.debug {
           "Path discovery reconcile failed again; keeping the paths last read: ${e.simpleClassName}: ${e.message}"
         }
       else
         logger.warn(e) { "Path discovery reconcile failed; keeping the paths last read" }
-      lastFailure = failure
+      lastFailure = LastFailure(failure, ShownFailure.of(e))
     }
   }
 

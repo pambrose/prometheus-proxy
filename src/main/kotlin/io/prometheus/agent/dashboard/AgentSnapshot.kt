@@ -18,15 +18,16 @@ package io.prometheus.agent.dashboard
 
 import io.prometheus.Agent
 import io.prometheus.BuildConfig
-import io.prometheus.agent.AgentGrpcService.ConnectFailure
 import io.prometheus.agent.AgentPathManager.PathContext
 import io.prometheus.agent.AgentPathManager.RegistrationFailure
 import io.prometheus.agent.PathSource
-import io.prometheus.agent.discovery.PathDiscoveryService.ReconcileFailure
+import io.prometheus.agent.ShownFailure
 import io.prometheus.agent.filter.MetricFilter
 import io.prometheus.common.Utils.sanitizeUrl
 import kotlin.time.Duration
 import kotlin.time.Instant
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 
 /** Where the agent stands with its proxy. */
 internal enum class ConnectionState(
@@ -51,7 +52,7 @@ internal enum class ConnectionState(
 internal data class EndpointView(
   val spec: String,
   val current: Boolean,
-  val failure: ConnectFailure? = null,
+  val failure: ShownFailure? = null,
 )
 
 /**
@@ -60,7 +61,6 @@ internal data class EndpointView(
  *
  * @param since when the current connection began, while connected
  * @param connects how many times the agent has connected
- * @param failedOver whether the endpoint in use is not the first, the primary
  * @param transport how the agent reaches its proxy: plaintext, TLS, or mutual TLS
  * @param tokenSet whether the agent presents a token, never the token
  */
@@ -69,12 +69,14 @@ internal data class ConnectionView(
   val endpoints: List<EndpointView>,
   val since: Instant? = null,
   val connects: Int = 0,
-  val failedOver: Boolean = false,
   val transport: String = "plaintext",
   val tokenSet: Boolean = false,
 ) {
   /** The endpoint in use, or being tried. */
   val endpoint: String get() = endpoints.firstOrNull { it.current }?.spec.orEmpty()
+
+  /** Whether the endpoint in use is not the first, the primary. */
+  val failedOver: Boolean get() = endpoints.indexOfFirst { it.current } > 0
 }
 
 /** Where a path stands with the proxy. */
@@ -138,7 +140,7 @@ internal data class AgentPathView(
 internal data class DiscoveryView(
   val file: String,
   val intervalSecs: Int,
-  val failure: ReconcileFailure? = null,
+  val failure: ShownFailure? = null,
   val entries: Int = 0,
   val skipped: List<Pair<String, String>> = emptyList(),
   val collisions: List<String> = emptyList(),
@@ -169,7 +171,7 @@ internal data class AgentSnapshot(
 
   companion object {
     /** Reads the snapshot from [agent]. */
-    suspend fun collect(agent: Agent): AgentSnapshot =
+    fun collect(agent: Agent): AgentSnapshot =
       AgentSnapshot(
         agentName = agent.agentName,
         agentId = agent.agentId,
@@ -186,11 +188,10 @@ internal data class AgentSnapshot(
     private fun connection(agent: Agent): ConnectionView {
       val grpc = agent.grpcService
       val failures = grpc.connectFailuresByEndpoint
-      val connected = agent.isConnectedToProxy
       val state =
         when {
-          connected -> ConnectionState.CONNECTED
-          failures.isNotEmpty() -> ConnectionState.FAILING
+          agent.isConnectedToProxy -> ConnectionState.CONNECTED
+          grpc.lastConnectFailed -> ConnectionState.FAILING
           else -> ConnectionState.CONNECTING
         }
       val current = grpc.currentEndpointIndex
@@ -199,25 +200,23 @@ internal data class AgentSnapshot(
         endpoints = grpc.endpointSpecs.mapIndexed { i, spec -> EndpointView(spec, i == current, failures[spec]) },
         since = agent.connectedAt,
         connects = grpc.connects,
-        failedOver = current > 0,
         transport = grpc.tlsDescription,
         tokenSet = agent.options.agentToken.isNotEmpty(),
       )
     }
 
-    // Every path the agent knows: configured, discovered, registered, or refused, one row each, by path. Configured
-    // first, so a path's name and labels come from its config entry.
+    // Every path the agent knows: configured, discovered, or registered, one row each, by path. Configured first, so a
+    // path's name and labels come from its config entry. A path whose registration failed is configured or discovered.
     internal fun paths(agent: Agent): List<AgentPathView> {
       val manager = agent.pathManager
       val registered = manager.registeredPaths.associateBy { it.path }
       val failures = manager.pathFailures
       val known =
         configured(agent) + discovered(agent) +
-          registered.values.map { KnownPath(it.path, it.source, it.url, labels = it.labels) } +
-          failures.map { (path, failure) -> KnownPath(path, failure.source, "") }
+          registered.values.map { KnownPath(it.path, it.source, it.url, labels = it.labels) }
       return known
         .distinctBy { it.path }
-        .map { view(it, registered[it.path], failures[it.path], manager.filters[it.path]) }
+        .map { view(it, registered[it.path], failures[it.path], manager.filtersByPath[it.path]) }
         .sortedBy { it.path }
     }
 
@@ -231,13 +230,12 @@ internal data class AgentSnapshot(
     )
 
     private fun configured(agent: Agent): List<KnownPath> =
-      agent.pathManager.configuredPaths.map {
+      agent.pathManager.pathConfigs.map {
         KnownPath(it.path.removePrefix("/"), PathSource.STATIC, it.url, it.name, it.labels)
       }
 
-    // The usable entries discovery last read; an unusable one is among discovery's skipped entries instead.
     private fun discovered(agent: Agent): List<KnownPath> =
-      agent.pathDiscoveryService?.discoveredEntries.orEmpty().filter { it.usable }.map {
+      agent.pathDiscoveryService?.discoveredEntries.orEmpty().map {
         KnownPath(it.path.removePrefix("/"), PathSource.DISCOVERED, it.url, labels = it.labels)
       }
 
@@ -254,12 +252,23 @@ internal data class AgentSnapshot(
       url = sanitizeUrl(context?.url ?: known.url),
       state = stateOf(context != null, failure),
       name = known.name,
-      labels = context?.labels ?: known.labels,
+      labels = shownLabels(context?.labels ?: known.labels),
       failure = failure,
       filter = filter?.let {
         FilterView(it.allowPatterns, it.denyPatterns, it.linesDropped, it.bytesSaved, it.failedOpen)
       },
     )
+
+    // [labels], a JSON object as the config or the agent stores it, or empty for an empty object, which is how the
+    // agent stores none, however it's spaced. Anything that isn't an object is shown as given.
+    private fun shownLabels(labels: String): String =
+      if (runCatching {
+        Json.parseToJsonElement(labels).jsonObject.isEmpty()
+      }.getOrDefault(labels.isBlank())
+      )
+        ""
+        else
+        labels
 
     private fun stateOf(
       registered: Boolean,
@@ -272,10 +281,10 @@ internal data class AgentSnapshot(
         else -> PathState.REFUSED
       }
 
-    private suspend fun discovery(agent: Agent): DiscoveryView? {
+    private fun discovery(agent: Agent): DiscoveryView? {
       val service = agent.pathDiscoveryService ?: return null
       val config = agent.agentConfigVals.discovery
-      val conflicts = agent.pathManager.discoveryConflicts()
+      val conflicts = agent.pathManager.discoveryConflicts
       return DiscoveryView(
         file = config.file.path,
         intervalSecs = config.reconcileIntervalSecs,

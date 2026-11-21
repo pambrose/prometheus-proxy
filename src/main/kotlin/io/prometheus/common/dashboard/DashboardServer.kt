@@ -167,7 +167,7 @@ internal interface DashboardSite<V : Any, S : Any> {
  *   drifting values live: without it, an idle process would freeze its countdowns until the next change.
  */
 internal class DashboardServer<V : Any, S : Any>(
-  private val settings: DashboardSettings,
+  val settings: DashboardSettings,
   private val site: DashboardSite<V, S>,
 ) {
   /** The base path, with a leading slash; `/` at a root mount. */
@@ -257,20 +257,8 @@ internal class DashboardServer<V : Any, S : Any>(
 
   // Why pageGuard refuses [request], or null when it may proceed.
   private fun pageRefusal(request: ApplicationRequest): String? {
-    val originRefused = originRefusal(request)
-    return when {
-      originRefused != null -> {
-        originRefused
-      }
-
-      request.httpMethod != HttpMethod.Get && request.headers[HX_REQUEST_HEADER] != "true" -> {
-        "Only the dashboard's page may ask for this"
-      }
-
-      else -> {
-        null
-      }
-    }
+    val notThePage = request.httpMethod != HttpMethod.Get && request.headers[HX_REQUEST_HEADER] != "true"
+    return originRefusal(request) ?: "Only the dashboard's page may ask for this".takeIf { notThePage }
   }
 
   // Why a request from [request]'s Origin is refused, or null when it may proceed (see isOriginAllowed).
@@ -491,12 +479,8 @@ internal class DashboardServer<V : Any, S : Any>(
   // A year for what ASSET_DIR and ICON_DIR serve (see CachingHeaders above), and nothing for anything else.
   private fun assetCaching(contentType: ContentType?): CachingOptions? {
     val cached = CACHED_TYPES.any { contentType?.match(it) == true }
-    return if (cached)
-      CachingOptions(
-        CacheControl.MaxAge(ASSET_MAX_AGE_SECS, visibility = CacheControl.Visibility.Public),
-      )
-      else
-      null
+    val yearLong = CacheControl.MaxAge(ASSET_MAX_AGE_SECS, visibility = CacheControl.Visibility.Public)
+    return CachingOptions(yearLong).takeIf { cached }
   }
 
   // The login page and its form, and Log out, only with a password set.
@@ -800,6 +784,17 @@ internal class DashboardServer<V : Any, S : Any>(
 
     // Sent by htmx, and by a page's script with each action.
     internal const val HX_REQUEST_HEADER = "HX-Request"
+
+    // Sent by htmx when it fetches a page to restore from its history, which wants the whole page.
+    private const val HX_HISTORY_RESTORE_HEADER = "HX-History-Restore-Request"
+
+    /**
+     * Whether [request] is htmx swapping a fragment into the page, as a row click does, rather than a navigation, a
+     * reload, or a shared link, which want the whole page. htmx marks its own requests with `HX-Request`, except a
+     * history restore, which fetches the full URL expecting a full page.
+     */
+    internal fun isHtmxSwap(request: ApplicationRequest) =
+      request.headers[HX_REQUEST_HEADER] == "true" && request.headers[HX_HISTORY_RESTORE_HEADER] != "true"
 
     /**
      * Whether a WebSocket handshake or an action carrying [origin] may proceed, given the request's [host] header.

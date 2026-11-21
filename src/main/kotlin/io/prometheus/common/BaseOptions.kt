@@ -55,6 +55,7 @@ import io.prometheus.common.EnvVars.TRUST_CERT_COLLECTION_FILE_PATH
 import io.prometheus.common.EnvVars.TRUST_CERT_COLLECTION_PEM
 import io.prometheus.common.Utils.sanitizeUrl
 import io.prometheus.common.Utils.sanitizeUrlsInText
+import io.prometheus.common.dashboard.DashboardLogin
 import org.slf4j.Logger.ROOT_LOGGER_NAME
 import java.io.File
 import java.io.FileNotFoundException
@@ -194,6 +195,10 @@ abstract class BaseOptions protected constructor(
 
   internal var dashboardPassword = ""
     private set
+
+  /** The login the dashboard requires, once a password turns it on; null leaves the dashboard open. */
+  internal val dashboardLogin: DashboardLogin?
+    get() = dashboardPassword.ifEmpty { null }?.let { DashboardLogin(dashboardUsername, it) }
 
   /**
    * Disables the gRPC transport filter that records remote-peer information per call. Set when running behind

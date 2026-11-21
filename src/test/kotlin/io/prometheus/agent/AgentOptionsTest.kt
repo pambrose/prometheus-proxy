@@ -37,6 +37,7 @@ import io.prometheus.common.ConfigLoadException
 import io.prometheus.common.Utils.HostPort
 import io.prometheus.common.Utils.parseEndpointList
 import io.prometheus.common.agentOptions
+import io.prometheus.common.shouldBeRejected
 import io.prometheus.common.testConfigVals
 import org.slf4j.LoggerFactory
 import java.io.File
@@ -810,11 +811,5 @@ class AgentOptionsTest : StringSpec() {
 
     private const val ENDPOINTS_CONFIG_FILE = "config/test-configs/proxy-endpoints.conf"
     private const val DISCOVERY_FILE_ARG = "-Dagent.discovery.file.path=discovered.conf"
-
-    // These specs build embedded options (exitOnMissingConfig false), where a setting the options reject throws
-    // ConfigLoadException, with the IllegalArgumentException that rejected it as the cause (November #8). The message
-    // carries the cause's, so a spec can still check which setting it names.
-    private inline fun shouldBeRejected(block: () -> Any?): ConfigLoadException =
-      shouldThrow<ConfigLoadException>(block).also { it.cause.shouldBeInstanceOf<IllegalArgumentException>() }
   }
 }

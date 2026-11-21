@@ -49,7 +49,6 @@ import io.prometheus.agent.RequestFailureException
 import io.prometheus.agent.dashboard.AgentDashboardService
 import io.prometheus.agent.discovery.FileDiscoverySource
 import io.prometheus.agent.discovery.PathDiscoveryService
-import io.prometheus.common.dashboard.DashboardLogin
 import io.prometheus.metrics.core.datapoints.Timer
 import io.prometheus.common.BaseOptions.Companion.DEBUG
 import io.prometheus.common.BaseOptions.Companion.failOnInvalidConfig
@@ -62,7 +61,6 @@ import io.prometheus.common.Utils.logStreamFailure
 import io.prometheus.common.ScrapeRequestAction
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.Utils.sanitizeUrl
-import kotlin.time.Clock
 import kotlin.time.Instant
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -229,7 +227,7 @@ class Agent(
         dashboardHost = options.dashboardHost,
         dashboardPort = options.dashboardPort,
         dashboardPath = options.dashboardPath,
-        login = options.dashboardPassword.ifEmpty { null }?.let { DashboardLogin(options.dashboardUsername, it) },
+        login = options.dashboardLogin,
       )
     else
       null
@@ -242,9 +240,7 @@ class Agent(
   internal val isConnectedToProxy: Boolean get() = isRunning && liveConnection.load()?.connected == true
 
   // When the agent's current connection to a proxy began, for its dashboard; null while it has none.
-  @Volatile
-  internal var connectedAt: Instant? = null
-    private set
+  internal val connectedAt: Instant? get() = liveConnection.load()?.startedAt
 
   // The endpoint of that connection, as host:port, or null without one (EmbeddedAgentInfo.proxyEndpoint).
   internal val connectedProxyEndpoint: String? get() = if (isConnectedToProxy) proxyHost else null
@@ -374,12 +370,10 @@ class Agent(
     val connectionContext =
       AgentConnectionContext(agentConfigVals.internal.scrapeRequestBacklogUnhealthySize * BACKLOG_CAPACITY_MULTIPLIER)
     liveConnection.store(connectionContext)
-    connectedAt = Clock.System.now()
     try {
       coroutineScope { launchConnectionTasks(connectionContext) }
     } finally {
       liveConnection.store(null)
-      connectedAt = null
     }
     logger.info { "connectToProxy() completed" }
   }

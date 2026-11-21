@@ -29,11 +29,8 @@ import io.prometheus.common.AgentValues.labelsProblem
 import io.prometheus.common.AgentValues.pathCharacterProblem
 import io.prometheus.common.Utils.sanitizeUrl
 import io.prometheus.common.AgentValues.shownValue
-import io.prometheus.common.Utils.sanitizeUrlsInText
 import io.prometheus.grpc.PathRejectionCause.CONSOLIDATION_MISMATCH
 import io.prometheus.grpc.PathRejectionCause.HELD_BY_ANOTHER_IDENTITY
-import kotlin.time.Clock
-import kotlin.time.Instant
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -115,6 +112,7 @@ internal class AgentPathManager(
       discoveredRejections.clear()
       staleUnregisterFailures.clear()
       reportedConflicts.clear()
+      discoveryConflicts = DiscoveryConflicts(emptyList(), emptyList())
       registrationFailures.clear()
     }
 
@@ -122,7 +120,7 @@ internal class AgentPathManager(
 
   // A blank path or url could never register, and registerPaths does not catch the require() that would reject it,
   // so one config typo would fail every connect attempt. Dropped here instead, the way discovery drops its own.
-  private val pathConfigs: List<PathConfig> =
+  val pathConfigs: List<PathConfig> =
     agentConfigVals.pathConfigs
       .map { PathConfig(name = it.name, path = it.path, url = it.url, labels = it.labels) }
       .filter { config ->
@@ -177,7 +175,7 @@ internal class AgentPathManager(
 
   // Compiled once at startup, never per scrape. Keyed by normalized path, so a filter applies to
   // that path regardless of whether it was registered statically or by discovery.
-  private val filtersByPath: Map<String, MetricFilter> =
+  val filtersByPath: Map<String, MetricFilter> =
     agentConfigVals.filters
       .also { filters ->
         // Keyed by normalized path, so a second entry for a path would silently replace the first -- and with it any
@@ -239,7 +237,7 @@ internal class AgentPathManager(
           if (e.retryable) StaticRetry(nextBackoff(prior?.backoff, staticRetryInterval)) else null
         }
       val path = config.path.removePrefix("/")
-      recordFailure(path, PathSource.STATIC, e, retrying = e.retryable, retryAt = retry?.backoff?.dueAt)
+      recordFailure(path, e, retrying = e.retryable, retryAt = retry?.backoff?.dueAt)
       logRejection(PathSource.STATIC, path, e, repeat, retry?.backoff?.wait)
       e
     }
@@ -279,7 +277,7 @@ internal class AgentPathManager(
     // replace() changes only a path still waiting to be retried, so a concurrent clear() isn't undone.
     val path = config.path.removePrefix("/")
     if (rejectedStaticPaths.replace(config, next) != null)
-      recordFailure(path, PathSource.STATIC, e, retrying = true, retryAt = next.backoff.dueAt)
+      recordFailure(path, e, retrying = true, retryAt = next.backoff.dueAt)
     val retrying = retryingIn(next.backoff.wait)
     if (prior.failure == failure)
       logger.debug { "Still failing to retry static path /$path, $retrying: ${e.simpleClassName}: ${e.message}" }
@@ -363,9 +361,8 @@ internal class AgentPathManager(
 
       // Forget the rejections of paths no longer desired.
       discoveredRejections.keys.retainAll(desiredByPath.keys)
-      registrationFailures.entries.removeIf { (path, failure) ->
-        failure.source == PathSource.DISCOVERED && path !in desiredByPath
-      }
+      // And their registration failures: every recorded failure is a configured path's or a desired discovered one's.
+      registrationFailures.keys.retainAll { it in configuredStaticPaths || it in desiredByPath }
 
       // Register new discovered paths and re-register changed ones (unregister-then-register keeps the
       // local mapping and the proxy's stored labels in agreement).
@@ -437,6 +434,12 @@ internal class AgentPathManager(
     paths: Set<String>,
   ) {
     val reported = reportedConflicts.put(conflict, paths).orEmpty()
+    if (paths != reported)
+      discoveryConflicts =
+        DiscoveryConflicts(
+          collisions = reportedConflicts[DiscoveryConflict.COLLISION].orEmpty().sorted(),
+          duplicates = reportedConflicts[DiscoveryConflict.DUPLICATE].orEmpty().sorted(),
+        )
     val shown = paths.map { "/$it" }
     when {
       paths == reported -> if (paths.isNotEmpty()) logger.debug { conflict.unchanged(shown) }
@@ -468,7 +471,7 @@ internal class AgentPathManager(
     }.onFailure { e ->
       val record = discoveredRejection(entry.url, labels, e, prior?.backoff)
       discoveredRejections[path] = record
-      recordFailure(path, PathSource.DISCOVERED, e, retrying = record.retryable, retryAt = record.backoff?.dueAt)
+      recordFailure(path, e, retrying = record.retryable, retryAt = record.backoff?.dueAt)
       val repeat = prior?.failure == record.failure
       if (e is RequestFailureException)
         logRejection(PathSource.DISCOVERED, path, e, repeat, record.backoff?.wait)
@@ -556,25 +559,14 @@ internal class AgentPathManager(
   // null for the next tick of the loop that retries it, or for no retry.
   private fun recordFailure(
     path: String,
-    source: PathSource,
     e: Throwable,
     retrying: Boolean,
     retryAt: TimeMark?,
   ) {
-    val reason = if (e is RequestFailureException) e.reason else "${e.simpleClassName}: ${e.message}"
-    registrationFailures[path] =
-      RegistrationFailure(
-        source = source,
-        reason = shownValue(sanitizeUrlsInText(reason), SHOWN_REASON_CHARS),
-        refused = e is RequestFailureException,
-        retrying = retrying,
-        retryAt = retryAt,
-        at = Clock.System.now(),
-      )
+    val refused = e is RequestFailureException
+    val failure = if (refused) ShownFailure.of(e.reason) else ShownFailure.of(e)
+    registrationFailures[path] = RegistrationFailure(failure, refused, retrying, retryAt)
   }
-
-  /** The static paths the config lists, registered or not, in their order there. */
-  val configuredPaths: List<PathConfig> get() = pathConfigs
 
   /** Every path registered with the proxy now. */
   val registeredPaths: List<PathContext> get() = pathContextMap.values.toList()
@@ -582,34 +574,28 @@ internal class AgentPathManager(
   /** Each path's last failure to register, by normalized path, until it registers (see [RegistrationFailure]). */
   val pathFailures: Map<String, RegistrationFailure> get() = registrationFailures.toMap()
 
-  /** The metric filter for each path that has one, by normalized path. */
-  val filters: Map<String, MetricFilter> get() = filtersByPath
-
-  /** The discovered paths last found colliding with a static path, and those the discovery file lists twice. */
-  suspend fun discoveryConflicts(): DiscoveryConflicts =
-    pathMutex.withLock {
-      DiscoveryConflicts(
-        collisions = reportedConflicts[DiscoveryConflict.COLLISION].orEmpty().sorted(),
-        duplicates = reportedConflicts[DiscoveryConflict.DUPLICATE].orEmpty().sorted(),
-      )
-    }
+  /**
+   * The discovered paths last found colliding with a static path, and those the discovery file lists twice. A plain
+   * read, kept by reportConflict as it reports them, so the agent's dashboard never waits on [pathMutex], which a
+   * reconcile holds across its calls to the proxy.
+   */
+  @Volatile
+  var discoveryConflicts = DiscoveryConflicts(emptyList(), emptyList())
+    private set
 
   /**
    * A path's last failure to register, for the agent's dashboard.
    *
-   * @param reason the proxy's reason, for a refusal, or what kept the proxy from answering
+   * @param reason the proxy's reason, for a refusal, or what kept the proxy from answering, and when
    * @param refused whether the proxy answered, refusing the path
    * @param retrying whether the path is tried again before the agent reconnects
    * @param retryAt when the next try is due, or null for the next tick of the loop that retries it, or for no retry
-   * @param at when it failed
    */
   data class RegistrationFailure(
-    val source: PathSource,
-    val reason: String,
+    val reason: ShownFailure,
     val refused: Boolean,
     val retrying: Boolean,
     val retryAt: TimeMark?,
-    val at: Instant,
   )
 
   /** The discovered paths in conflict, by normalized path: [collisions] with static paths, and [duplicates]. */
@@ -640,9 +626,6 @@ internal class AgentPathManager(
 
   companion object {
     private val logger = logger {}
-
-    // How much of a registration failure's reason the dashboard shows: the proxy's reasons run to a sentence or two.
-    private const val SHOWN_REASON_CHARS = 512
 
     // The rejection causes that clear while the agent stays connected: a live agent holds the path, and it leaves
     // eventually. No other cause does, including none (a proxy predating the field) and one this agent doesn't know.

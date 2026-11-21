@@ -16,14 +16,6 @@
 
 package io.prometheus.proxy.dashboard
 
-import com.codahale.metrics.health.HealthCheck
-import com.google.common.util.concurrent.MoreExecutors
-import com.pambrose.common.concurrent.GenericIdleService
-import com.pambrose.common.concurrent.genericServiceListener
-import com.pambrose.common.dsl.GuavaDsl.toStringElements
-import com.pambrose.common.dsl.MetricsDsl.healthCheck
-import com.pambrose.common.util.simpleClassName
-import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.parseQueryString
@@ -41,13 +33,34 @@ import io.prometheus.common.dashboard.DashboardFrame
 import io.prometheus.common.dashboard.DashboardLogin
 import io.prometheus.common.dashboard.DashboardMessage
 import io.prometheus.common.dashboard.DashboardServer
-import io.prometheus.common.dashboard.DashboardServer.Companion.HX_REQUEST_HEADER
+import io.prometheus.common.dashboard.DashboardService
 import io.prometheus.common.dashboard.DashboardSettings
 import io.prometheus.common.dashboard.DashboardSite
+import io.prometheus.common.dashboard.href
 import io.prometheus.proxy.ProxyEvent
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
 import kotlin.time.Duration.Companion.seconds
+
+/**
+ * What a session's page shows: its layout and the agent selected in it, from the browser's latest message, and that
+ * message's [seq], the count of messages the page had sent.
+ *
+ * One value rather than separate fields, so a push reads all of them at once. Read separately, a push racing the
+ * first message could pair its layout with the selection from before it, and render the detail pane with nothing
+ * selected -- the flash a null view exists to prevent.
+ *
+ * Every frame is stamped with [seq], and the page drops a frame stamped below the count it has sent (see
+ * ProxyDashboardHtml.pushFragment). That closes the race between a row click and the push loop: a tick rendered from
+ * the previous selection can reach the browser after the click's own swap, and without the stamp it put the previous
+ * agent back in the detail pane until the next frame.
+ */
+internal class ProxyView(
+  val layout: DashboardLayout,
+  val selectedId: String?,
+  val seq: Long,
+  val filter: RowFilter,
+)
 
 /**
  * Operational dashboard, served from its own Ktor server on its own port ([DashboardServer], which every dashboard's
@@ -85,49 +98,27 @@ import kotlin.time.Duration.Companion.seconds
  */
 internal class ProxyDashboardService(
   private val proxy: Proxy,
-  private val dashboardHost: String,
-  private val dashboardPort: Int,
+  dashboardHost: String,
+  dashboardPort: Int,
   dashboardPath: String,
   // The login every request must carry, from proxy.dashboard.username and password, once a password is set; null, the
   // default, leaves the dashboard open.
   login: DashboardLogin? = null,
-) : GenericIdleService() {
-  /**
-   * What a session's page shows: its layout and the agent selected in it, from the browser's latest message, and that
-   * message's [seq], the count of messages the page had sent.
-   *
-   * One value rather than separate fields, so a push reads all of them at once. Read separately, a push racing the
-   * first message could pair its layout with the selection from before it, and render the detail pane with nothing
-   * selected -- the flash a null view exists to prevent.
-   *
-   * Every frame is stamped with [seq], and the page drops a frame stamped below the count it has sent (see
-   * ProxyDashboardHtml.pushFragment). That closes the race between a row click and the push loop: a tick rendered from
-   * the previous selection can reach the browser after the click's own swap, and without the stamp it put the previous
-   * agent back in the detail pane until the next frame.
-   */
-  private class View(
-    val layout: DashboardLayout,
-    val selectedId: String?,
-    val seq: Long,
-    val filter: RowFilter,
-  )
-
+) : DashboardService<ProxyView, ProxySnapshot>() {
   private val dashboardConfig = proxy.proxyConfigVals.dashboard
 
   // Null unless proxy.dashboard.scrapeNowEnabled, which leaves the route unregistered, so it answers 404.
   private val scrapeNow = if (dashboardConfig.scrapeNowEnabled) ScrapeNow(proxy) else null
 
   private val site =
-    object : DashboardSite<View, ProxySnapshot> {
-      // Topology changes wake the loop; scrape completions do not -- see the class KDoc. A getter, read as the server
-      // starts: the proxy builds its event bus after this service.
-      override val changes: Flow<Any?>
-        get() = proxy.eventBus.flow.filter { it !is ProxyEvent.ScrapeCompleted }
+    object : DashboardSite<ProxyView, ProxySnapshot> {
+      // Topology changes wake the loop; scrape completions do not -- see the class KDoc.
+      override val changes: Flow<Any?> = proxy.eventBus.flow.filter { it !is ProxyEvent.ScrapeCompleted }
 
       override suspend fun collect(): ProxySnapshot = ProxySnapshot.collect(proxy)
 
-      override fun parseView(message: String): View =
-        View(
+      override fun parseView(message: String): ProxyView =
+        ProxyView(
           parseLayout(message),
           DashboardMessage.selection(message),
           DashboardMessage.seq(message),
@@ -136,7 +127,7 @@ internal class ProxyDashboardService(
 
       override fun frame(
         snapshot: ProxySnapshot,
-        view: View?,
+        view: ProxyView?,
         sent: Any?,
         routeBase: String,
       ): DashboardFrame {
@@ -158,10 +149,10 @@ internal class ProxyDashboardService(
         return DashboardFrame(text, activity)
       }
 
-      override fun Route.pages(server: DashboardServer<View, ProxySnapshot>) = pageRoutes(server)
+      override fun Route.pages(server: DashboardServer<ProxyView, ProxySnapshot>) = pageRoutes(server)
     }
 
-  private val server =
+  override val server =
     DashboardServer(
       DashboardSettings(
         role = "proxy",
@@ -180,7 +171,7 @@ internal class ProxyDashboardService(
     )
 
   // The proxy's pages: the three layouts, an agent's detail, and scrape-now.
-  private fun Route.pageRoutes(server: DashboardServer<View, ProxySnapshot>) {
+  private fun Route.pageRoutes(server: DashboardServer<ProxyView, ProxySnapshot>) {
     val routeBase = server.routeBase
     val loginEnabled = server.loginEnabled
     get(server.basePath) {
@@ -213,10 +204,7 @@ internal class ProxyDashboardService(
       // A row click is an htmx swap and wants just the detail fragment; a full navigation to the same
       // URL wants the whole dashboard with the agent selected. htmx marks its own requests with
       // HX-Request -- except a history-restore, which fetches the full URL expecting a full page.
-      val htmxSwap =
-        call.request.headers[HX_REQUEST_HEADER] == "true" &&
-          call.request.headers["HX-History-Restore-Request"] != "true"
-      if (htmxSwap)
+      if (DashboardServer.isHtmxSwap(call.request))
         call.respondText(
           ProxyDashboardHtml.detailFragment(snapshot, agentId),
           ContentType.Text.Html,
@@ -247,27 +235,6 @@ internal class ProxyDashboardService(
         }
       }
     }
-  }
-
-  val healthCheck =
-    healthCheck {
-      if (isRunning)
-        HealthCheck.Result.healthy()
-      else
-        HealthCheck.Result.unhealthy("$simpleClassName is not running")
-    }
-
-  init {
-    addListener(genericServiceListener(logger), MoreExecutors.directExecutor())
-  }
-
-  override fun startUp() {
-    server.start()
-    logger.info { "Started $simpleClassName on $dashboardHost:$dashboardPort at ${server.basePath}" }
-  }
-
-  override fun shutDown() {
-    server.stop()
   }
 
   /**
@@ -308,18 +275,7 @@ internal class ProxyDashboardService(
     }
   }
 
-  override fun toString() =
-    toStringElements {
-      add("host", dashboardHost)
-      add("port", dashboardPort)
-      add("path", server.basePath)
-      add("login", if (server.loginEnabled) "on" else "off")
-      add("sessions", server.sessionsOpen)
-    }
-
   companion object {
-    private val logger = logger {}
-
     /** The login page's heading. */
     internal const val LOGIN_HEADING = "Prometheus Proxy Dashboard"
 

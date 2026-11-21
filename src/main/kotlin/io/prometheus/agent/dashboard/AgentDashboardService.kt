@@ -16,14 +16,6 @@
 
 package io.prometheus.agent.dashboard
 
-import com.codahale.metrics.health.HealthCheck
-import com.google.common.util.concurrent.MoreExecutors
-import com.pambrose.common.concurrent.GenericIdleService
-import com.pambrose.common.concurrent.genericServiceListener
-import com.pambrose.common.dsl.GuavaDsl.toStringElements
-import com.pambrose.common.dsl.MetricsDsl.healthCheck
-import com.pambrose.common.util.simpleClassName
-import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.decodeURLPart
@@ -36,9 +28,10 @@ import io.prometheus.common.dashboard.DashboardFrame
 import io.prometheus.common.dashboard.DashboardLogin
 import io.prometheus.common.dashboard.DashboardMessage
 import io.prometheus.common.dashboard.DashboardServer
-import io.prometheus.common.dashboard.DashboardServer.Companion.HX_REQUEST_HEADER
+import io.prometheus.common.dashboard.DashboardService
 import io.prometheus.common.dashboard.DashboardSettings
 import io.prometheus.common.dashboard.DashboardSite
+import io.prometheus.common.dashboard.href
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlin.time.Duration.Companion.seconds
@@ -59,13 +52,13 @@ import kotlin.time.Duration.Companion.seconds
  */
 internal class AgentDashboardService(
   private val agent: Agent,
-  private val dashboardHost: String,
-  private val dashboardPort: Int,
+  dashboardHost: String,
+  dashboardPort: Int,
   dashboardPath: String,
   // The login every request must carry, from agent.dashboard.username and password, once a password is set; null, the
   // default, leaves the dashboard open.
   login: DashboardLogin? = null,
-) : GenericIdleService() {
+) : DashboardService<AgentView, AgentSnapshot>() {
   private val dashboardConfig = agent.agentConfigVals.dashboard
 
   private val site =
@@ -92,7 +85,7 @@ internal class AgentDashboardService(
       override fun Route.pages(server: DashboardServer<AgentView, AgentSnapshot>) = pageRoutes(server)
     }
 
-  private val server =
+  override val server =
     DashboardServer(
       DashboardSettings(
         role = "agent",
@@ -127,10 +120,7 @@ internal class AgentDashboardService(
     get("$routeBase/${AgentDashboardHtml.SELECTION_SEGMENT}/{path}") {
       val path = call.parameters["path"]
       val snapshot = server.snapshots.recent()
-      val htmxSwap =
-        call.request.headers[HX_REQUEST_HEADER] == "true" &&
-          call.request.headers["HX-History-Restore-Request"] != "true"
-      if (htmxSwap)
+      if (DashboardServer.isHtmxSwap(call.request))
         call.respondText(AgentDashboardHtml.detailFragment(snapshot, path), ContentType.Text.Html, HttpStatusCode.OK)
       else
         call.respondHtml {
@@ -139,39 +129,7 @@ internal class AgentDashboardService(
     }
   }
 
-  val healthCheck =
-    healthCheck {
-      if (isRunning)
-        HealthCheck.Result.healthy()
-      else
-        HealthCheck.Result.unhealthy("$simpleClassName is not running")
-    }
-
-  init {
-    addListener(genericServiceListener(logger), MoreExecutors.directExecutor())
-  }
-
-  override fun startUp() {
-    server.start()
-    logger.info { "Started $simpleClassName on $dashboardHost:$dashboardPort at ${server.basePath}" }
-  }
-
-  override fun shutDown() {
-    server.stop()
-  }
-
-  override fun toString() =
-    toStringElements {
-      add("host", dashboardHost)
-      add("port", dashboardPort)
-      add("path", server.basePath)
-      add("login", if (server.loginEnabled) "on" else "off")
-      add("sessions", server.sessionsOpen)
-    }
-
   companion object {
-    private val logger = logger {}
-
     /** The login page's heading. */
     internal const val LOGIN_HEADING = "Prometheus Agent Dashboard"
   }

@@ -28,9 +28,12 @@ import io.prometheus.common.dashboard.DashboardPage.connectionIndicator
 import io.prometheus.common.dashboard.DashboardPage.dashboardHead
 import io.prometheus.common.dashboard.DashboardPage.humanize
 import io.prometheus.common.dashboard.DashboardPage.logoutForm
+import io.prometheus.common.dashboard.DashboardPage.pageTitle
+import io.prometheus.common.dashboard.DashboardPage.size
 import io.prometheus.common.dashboard.DashboardPage.tabs
 import io.prometheus.common.dashboard.DashboardPage.timeOfDay
 import io.prometheus.common.dashboard.DashboardScript
+import io.prometheus.common.dashboard.DashboardView
 import kotlinx.html.DIV
 import kotlinx.html.FlowContent
 import kotlinx.html.HTML
@@ -54,15 +57,11 @@ import kotlin.time.Clock
  * @param title the view's name in the tabs
  */
 internal enum class AgentLayout(
-  val segment: String,
-  val title: String,
-) {
+  override val segment: String,
+  override val title: String,
+) : DashboardView {
   PATHS("", "Paths"),
   CONNECTION("connection", "Connection"),
-  ;
-
-  /** The view's URL, under [routeBase]; the Paths view's is the base itself, which at a root mount is "/". */
-  fun href(routeBase: String): String = if (segment.isEmpty()) routeBase.ifEmpty { "/" } else "$routeBase/$segment"
 }
 
 /**
@@ -103,12 +102,7 @@ internal object AgentDashboardHtml {
 
   // The page's script (DashboardScript), for the agent's views: Paths at the base, a path selected at paths/<path>.
   private val SCRIPT =
-    DashboardScript(
-      subject = "agent",
-      layouts = AgentLayout.entries.filter { it.segment.isNotEmpty() }.associate { it.segment to it.name },
-      defaultLayout = AgentLayout.PATHS.name,
-      selectionSegment = SELECTION_SEGMENT,
-    ).js
+    DashboardScript(subject = "agent", views = AgentLayout.entries, selectionSegment = SELECTION_SEGMENT).js
 
   /** A selected path's URL, under [routeBase]. */
   fun selectionHref(
@@ -136,7 +130,7 @@ internal object AgentDashboardHtml {
       attributes["hx-ws:connect"] = "$routeBase/events"
       div("bar") {
         span("brand") { +BRAND }
-        tabs(AgentLayout.entries.map { DashboardPage.Tab(it.href(routeBase), it.title, current = it == layout) })
+        tabs(AgentLayout.entries, layout, routeBase)
         span("bar-right") { statusInner(snapshot, oob = false) }
         if (loginEnabled) logoutForm(routeBase)
       }
@@ -240,7 +234,7 @@ internal object AgentDashboardHtml {
         attributes[STATE_ATTR] = path.state.name.lowercase()
         if (path.path == selectedPath) attributes["aria-current"] = "true"
         span {
-          span("led ${ledClass(path.state)}") {}
+          span(led(path.state == PathState.REGISTERED)) {}
           +"/${path.path}"
           stateTag(path.state)
         }
@@ -268,7 +262,7 @@ internal object AgentDashboardHtml {
     }
     div("hero") {
       div("hero-title") {
-        span("led ${ledClass(path.state)}") {}
+        span(led(path.state == PathState.REGISTERED)) {}
         +"/${path.path}"
         stateTag(path.state, always = true)
       }
@@ -280,8 +274,7 @@ internal object AgentDashboardHtml {
     path.failure?.also { failureSection(it) }
     div("section") { span { +"Target" } }
     kv("URL", path.url.ifEmpty { DASH })
-    // An empty object is how the agent stores no labels.
-    kv("Labels", path.labels.takeUnless { it.isBlank() || it.replace(" ", "") == "{}" } ?: DASH)
+    kv("Labels", path.labels.ifEmpty { DASH })
     path.filter?.also { filterSection(it) }
   }
 
@@ -289,8 +282,8 @@ internal object AgentDashboardHtml {
   private fun DIV.failureSection(failure: RegistrationFailure) {
     div("section") { span { +if (failure.refused) "Refused by the proxy" else "Couldn't reach the proxy" } }
     div("kv") {
-      span("t") { timeOfDay(failure.at) }
-      span("v") { +failure.reason.ifEmpty { DASH } }
+      span("t") { timeOfDay(failure.reason.at) }
+      span("v") { +failure.reason.message.ifEmpty { DASH } }
     }
     kv("Next try", nextTry(failure))
   }
@@ -307,7 +300,7 @@ internal object AgentDashboardHtml {
     div("section") { span { +"Metric filter" } }
     kv("Keeps", filter.allow.joinToString(", ").ifEmpty { "every name the deny list doesn't drop" })
     kv("Drops", filter.deny.joinToString(", ").ifEmpty { DASH })
-    kv("Dropped so far", "${filter.linesDropped} lines, ${filter.bytesSaved} bytes")
+    kv("Dropped so far", "${filter.linesDropped} lines, ${size(filter.bytesSaved)}")
     filter.failedOpen?.also { kv("Let through unfiltered", "once or more: $it") }
   }
 
@@ -320,7 +313,7 @@ internal object AgentDashboardHtml {
     val connection = snapshot.connection
     div("hero") {
       div("hero-title") {
-        span("led ${connectionLed(connection.state)}") {}
+        span(led(connection.state == ConnectionState.CONNECTED)) {}
         +"${connection.state.label} · ${connection.endpoint}"
         if (connection.failedOver) span("tag warn") { +"failed over" }
       }
@@ -330,19 +323,13 @@ internal object AgentDashboardHtml {
       span { +"Proxy endpoints" }
       span { +"${connection.endpoints.size}" }
     }
+    // The endpoint the agent is on, or is trying.
+    val currentTag = if (connection.state == ConnectionState.CONNECTED) "in use" else "trying"
     connection.endpoints.forEach { endpoint ->
       div("kv") {
         span("k") {
           +endpoint.spec
-          if (endpoint.current)
-            span("tag") {
-              +if (connection.state ==
-            ConnectionState.CONNECTED
-              )
-              "in use"
-              else
-              "trying"
-            }
+          if (endpoint.current) span("tag") { +currentTag }
         }
         span("v") {
           val failure = endpoint.failure
@@ -430,11 +417,9 @@ internal object AgentDashboardHtml {
     }
   }
 
-  // A path's LED: green while the proxy routes its scrapes here, red while it doesn't.
-  private fun ledClass(state: PathState): String = if (state == PathState.REGISTERED) "ok" else "crit"
-
-  // A connection's LED, binary as every LED is: green while connected, red while not.
-  private fun connectionLed(state: ConnectionState): String = if (state == ConnectionState.CONNECTED) "ok" else "crit"
+  // An LED's classes, binary as every LED is: a path green while the proxy routes its scrapes here, a connection green
+  // while connected, and either red otherwise.
+  private fun led(ok: Boolean): String = if (ok) "led ok" else "led crit"
 
   // A connection's state in the status bar, as text, where amber may say what is true but not yet a failure: still
   // connecting, which no failure has interrupted.
@@ -451,11 +436,6 @@ internal object AgentDashboardHtml {
    */
   internal fun pageTitle(snapshot: AgentSnapshot): String {
     val paths = snapshot.paths.count { it.state == PathState.REFUSED || it.state == PathState.RETRYING }
-    val problems = paths + if (snapshot.connection.state == ConnectionState.FAILING) 1 else 0
-    return when (problems) {
-      0 -> BRAND
-      1 -> "(1 problem) $BRAND"
-      else -> "($problems problems) $BRAND"
-    }
+    return pageTitle(BRAND, paths + if (snapshot.connection.state == ConnectionState.FAILING) 1 else 0)
   }
 }
