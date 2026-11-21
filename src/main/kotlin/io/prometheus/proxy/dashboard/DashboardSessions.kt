@@ -16,7 +16,7 @@
 
 package io.prometheus.proxy.dashboard
 
-import java.security.MessageDigest
+import io.prometheus.common.Utils.sha256
 import java.security.SecureRandom
 import java.util.Base64
 import kotlin.time.Duration
@@ -60,8 +60,9 @@ internal class DashboardSessions(
   /** Starts a session and returns its token, 256 random bits as 43 base64url characters. */
   fun create(): String {
     val token = ENCODER.encodeToString(ByteArray(TOKEN_BYTES).also { RANDOM.nextBytes(it) })
+    val key = keyOf(token)
     val now = timeSource.markNow()
-    synchronized(sessions) { sessions[keyOf(token)] = Session(now, now) }
+    synchronized(sessions) { sessions[key] = Session(now, now) }
     return token
   }
 
@@ -99,7 +100,6 @@ internal class DashboardSessions(
     private val RANDOM = SecureRandom()
     private val ENCODER = Base64.getUrlEncoder().withoutPadding()
 
-    private fun keyOf(token: String) =
-      MessageDigest.getInstance("SHA-256").digest(token.toByteArray(Charsets.UTF_8)).toHexString()
+    private fun keyOf(token: String) = sha256(token).toHexString()
   }
 }

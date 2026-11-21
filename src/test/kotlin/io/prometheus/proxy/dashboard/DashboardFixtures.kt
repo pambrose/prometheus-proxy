@@ -190,5 +190,8 @@ internal object DashboardFixtures {
     layout: DashboardLayout = DashboardLayout.AGENT,
     routeBase: String = "/dashboard",
     filter: RowFilter = RowFilter.NONE,
-  ) = createHTML().html { with(ProxyDashboardHtml) { renderPage(snapshot, null, routeBase, layout, filter) } }
+    loginEnabled: Boolean = false,
+  ) = createHTML().html {
+    with(ProxyDashboardHtml) { renderPage(snapshot, null, routeBase, layout, filter, loginEnabled) }
+  }
 }

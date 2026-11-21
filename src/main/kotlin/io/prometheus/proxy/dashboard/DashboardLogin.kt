@@ -16,6 +16,8 @@
 
 package io.prometheus.proxy.dashboard
 
+import io.prometheus.common.Utils
+import io.prometheus.common.Utils.sha256
 import java.security.MessageDigest
 import java.util.Base64
 
@@ -24,34 +26,30 @@ import java.util.Base64
  * `admin`): checked against the login page's form, which starts a session (see [DashboardSessions]), and against an
  * HTTP Basic `Authorization` header, which a script such as `curl -u` sends with each request instead.
  *
- * Both are compared as UTF-8 bytes: a browser sends a non-ASCII Basic password as UTF-8, and the form's text is
- * encoded the same way. Neither value is kept as a String, and [toString] shows neither.
+ * Both are compared as UTF-8: the form's text is, and curl and the like send a non-ASCII Basic password that way. Only
+ * the values' digests are kept ([Utils.sha256]), and [toString] shows neither.
  */
 internal class DashboardLogin(
   username: String,
   password: String,
 ) {
-  private val username = username.toByteArray(Charsets.UTF_8)
-  private val password = password.toByteArray(Charsets.UTF_8)
+  private val usernameDigest = sha256(username)
+  private val passwordDigest = sha256(password)
 
   /** Whether [header], a request's `Authorization` value, or null when it has none, carries this login. */
-  fun accepts(header: String?): Boolean {
-    val (givenUsername, givenPassword) = credentials(header) ?: return false
-    // Both halves are compared every time, so a wrong username takes as long as a wrong password, and each comparison
-    // takes time that depends only on the length of what was given (see matches).
-    val usernameMatches = matches(givenUsername, username)
-    val passwordMatches = matches(givenPassword, password)
-    return usernameMatches and passwordMatches
-  }
+  fun accepts(header: String?): Boolean =
+    credentials(header)?.let { (username, password) ->
+      accepts(String(username, Charsets.UTF_8), String(password, Charsets.UTF_8))
+    } == true
 
   /** Whether the login page's form gave this login's [username] and [password]. */
   fun accepts(
     username: String,
     password: String,
   ): Boolean {
-    // Both compared every time, as for a header.
-    val usernameMatches = matches(username.toByteArray(Charsets.UTF_8), this.username)
-    val passwordMatches = matches(password.toByteArray(Charsets.UTF_8), this.password)
+    // Both halves are compared every time, so a wrong username takes as long as a wrong password.
+    val usernameMatches = MessageDigest.isEqual(sha256(username), usernameDigest)
+    val passwordMatches = MessageDigest.isEqual(sha256(password), passwordDigest)
     return usernameMatches and passwordMatches
   }
 
@@ -73,12 +71,5 @@ internal class DashboardLogin(
         return null
       return decoded.copyOfRange(0, colon) to decoded.copyOfRange(colon + 1, decoded.size)
     }
-
-    // MessageDigest.isEqual's time depends on the length of its first argument and on nothing else, so the value given
-    // goes first: a caller learns how long its own guess was, never the length of the real one.
-    private fun matches(
-      given: ByteArray,
-      expected: ByteArray,
-    ) = MessageDigest.isEqual(given, expected)
   }
 }

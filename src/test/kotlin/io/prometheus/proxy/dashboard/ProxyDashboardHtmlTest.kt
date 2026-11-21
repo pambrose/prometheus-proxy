@@ -34,8 +34,6 @@ import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
-import kotlinx.html.html
-import kotlinx.html.stream.createHTML
 
 /**
  * The dashboard's renderer, [ProxyDashboardHtml]: the Agents view's list and detail pane, the pushes' out-of-band
@@ -104,10 +102,7 @@ class ProxyDashboardHtmlTest : StringSpec() {
     // With a login set, the bar ends in Log out, a plain form the browser posts. Outside every pushed region, so a push
     // never replaces it, nor needs to carry it.
     "the Log out button should render only with a login, and in no push" {
-      val withLogin =
-        createHTML().html {
-          with(ProxyDashboardHtml) { renderPage(snapshot(), null, "/dashboard", loginEnabled = true) }
-        }
+      val withLogin = renderFullPage(snapshot(), loginEnabled = true)
       withLogin shouldContain """action="/dashboard/logout""""
       withLogin shouldContain """id="${ProxyDashboardHtml.LOGOUT_ID}""""
       renderFullPage(snapshot()) shouldNotContain """id="${ProxyDashboardHtml.LOGOUT_ID}""""

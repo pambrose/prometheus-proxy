@@ -65,7 +65,7 @@ internal object LoginHtml {
       meta(charset = "utf-8")
       title("Log in · $HEADING")
       meta(name = "viewport", content = "width=device-width, initial-scale=1")
-      style { unsafe { raw(ProxyDashboardCss.TOKENS + "\n" + CSS) } }
+      style { unsafe { raw(STYLE) } }
     }
     body("login") {
       main {
@@ -113,13 +113,13 @@ internal object LoginHtml {
     }
   }
 
-  // The page's own rules, after the dashboard's tokens. Text on the button is --on-accent: white clears 4.5:1 on the
-  // light theme's accent (4.83:1), the dark theme's background on its accent (6.94:1).
+  // The page's own rules, after the dashboard's tokens. Text on the button is --on-accent: the light theme's surface,
+  // white, clears 4.5:1 on its accent (4.83:1), and the dark theme's background on its accent (6.94:1).
   private val CSS =
     """
-    :root { --on-accent:#fff;
+    :root { --on-accent:var(--surface);
       --sans:Inter,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; }
-    @media (prefers-color-scheme: dark) { :root { --on-accent:#0d1015; } }
+    @media (prefers-color-scheme: dark) { :root { --on-accent:var(--bg); } }
     * { box-sizing:border-box; margin:0; padding:0; }
     /* The space left over goes 2:3 above and below the form, so it sits 40% of the way down, not in the middle. */
     body.login { min-height:100vh; display:flex; flex-direction:column; align-items:center; padding:32px 16px;
@@ -147,4 +147,7 @@ internal object LoginHtml {
       .alert { border-left-color:Mark; }
     }
     """.trimIndent()
+
+  // The whole stylesheet, built once. Declared after CSS, which an object initializes in order.
+  private val STYLE = ProxyDashboardCss.TOKENS + "\n" + CSS
 }

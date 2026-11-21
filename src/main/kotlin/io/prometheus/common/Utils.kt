@@ -29,6 +29,7 @@ import io.prometheus.Proxy
 import kotlinx.serialization.json.Json
 import org.slf4j.Logger.ROOT_LOGGER_NAME
 import org.slf4j.LoggerFactory
+import java.security.MessageDigest
 
 internal object Utils {
   private const val REDACTED = "***"
@@ -41,6 +42,12 @@ internal object Utils {
   private const val KOTLIN_LOGGING_STARTUP_ENV_VAR = "KOTLIN_LOGGING_STARTUP_MESSAGE"
 
   internal fun getVersionDesc(asJson: Boolean = false): String = Proxy::class.versionDesc(asJson)
+
+  /**
+   * The SHA-256 of [value]'s UTF-8 bytes. Secrets are compared by their digests with [MessageDigest.isEqual], whose
+   * time then depends on neither secret's length nor content, nor on which one is passed first.
+   */
+  internal fun sha256(value: String): ByteArray = MessageDigest.getInstance("SHA-256").digest(value.toByteArray())
 
   val EMPTY_BYTE_ARRAY = ByteArray(0)
 

@@ -133,6 +133,9 @@ class DashboardScriptTest : StringSpec() {
       page shouldContain "function checkSession()"
       page shouldContain "fetch(base + '/session'"
       page shouldContain "if (response.status === 401) location.reload();"
+      // Only on a page with a login, which has Log out, and one check at a time: every failed reconnect closes the
+      // socket again.
+      page shouldContain "if (checkingSession || !document.getElementById('${ProxyDashboardHtml.LOGOUT_ID}')) return;"
       Regex("""addEventListener\('htmx:ws:close', function \(\) \{[^}]*checkSession\(\)""")
         .containsMatchIn(page) shouldBe true
       page shouldContain "if (response.status === 401) { location.reload(); return null; }"

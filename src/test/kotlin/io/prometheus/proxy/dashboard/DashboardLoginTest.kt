@@ -29,7 +29,7 @@ import java.util.Base64
 
 /**
  * [DashboardLogin]: what it reads from a request's `Authorization` header, and which headers carry its login. The
- * dashboard's routes requiring it are covered in `ProxyWebDashboardTest`.
+ * dashboard's routes requiring it are covered in `ProxyWebDashboardLoginTest`.
  */
 class DashboardLoginTest : StringSpec() {
   private val login = DashboardLogin(USERNAME, PASSWORD)
@@ -84,7 +84,7 @@ class DashboardLoginTest : StringSpec() {
       DashboardLogin("admin", "a:b:c").accepts(basic("admin:a:b:c")).shouldBeTrue()
     }
 
-    // A browser sends a non-ASCII Basic password as its UTF-8 bytes.
+    // curl and the like send a non-ASCII Basic password as its UTF-8 bytes, and the form's text is UTF-8 too.
     "a non-ASCII username and password should be compared as UTF-8" {
       val unicode = DashboardLogin("opérateur", "pässwörd-日本")
       unicode.accepts(basic("opérateur:pässwörd-日本")).shouldBeTrue()

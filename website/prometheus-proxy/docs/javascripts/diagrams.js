@@ -3,51 +3,62 @@
 // The theme draws each diagram with mermaid.render into a closed shadow root as soon as Mermaid loads, which can be
 // before the page's font has, on a first visit. Mermaid then sizes every label for the fallback font, and the real one,
 // wider, overflows the boxes: a subgraph's title is cut short, and an edge's label runs into the box beside it. This
-// script loads before the theme's bundle (overrides/main.html), so it can
-//   1. wrap mermaid.render, the moment the theme's loader defines Mermaid, so it waits for the page's font, and
-//   2. open each diagram's shadow root as the theme makes it, and mark the diagram as a button that shows it in a
-//      dialog filling the window. A diagram is an SVG, so it stays sharp at any size.
-// Instant navigation swaps only the page's content, so both, and the listeners below, last from page to page. The styles
-// are in stylesheets/diagrams.css, which every page lists: a style this added to the head would be gone after one.
+// script loads before the theme's bundle (overrides/main.html) and wraps mermaid.render, the moment the theme's loader
+// defines Mermaid, so that it
+//   1. waits for the page's font before drawing, and
+//   2. hands the theme a bindFunctions that keeps the diagram's shadow root, which the theme calls with it once the
+//      diagram is on the page, and marks the diagram as a button that shows it in a dialog filling the window. A
+//      diagram is an SVG, so it stays sharp at any size.
+// Instant navigation swaps only the page's content, so the wrapper, and the listeners below, last from page to page.
+// The styles are in stylesheets/diagrams.css, which every page lists: a style this added to the head would be gone
+// after one.
 (() => {
-  // 1. Draw only once the font the labels are set in has loaded.
-  const fontsLoaded = () =>
-    document.fonts.load(`1em ${getComputedStyle(document.body).fontFamily}`).then(() => document.fonts.ready)
+  // Each drawn diagram's shadow root, by its host, the div.mermaid on the page.
+  const roots = new WeakMap()
 
-  const waitForFonts = (mermaid) => {
-    if (!mermaid || typeof mermaid.render !== "function" || mermaid.render.waitsForFonts) return mermaid
+  // The font the labels are set in, loaded once for every diagram on every page.
+  let fonts
+  const fontsLoaded = () =>
+    (fonts ??= document.fonts
+      .load(`1em ${getComputedStyle(document.body).fontFamily}`)
+      .then(() => document.fonts.ready))
+
+  const enlargeable = (root) => {
+    roots.set(root.host, root)
+    root.host.tabIndex = 0
+    root.host.setAttribute("role", "button")
+    root.host.setAttribute("aria-label", "Enlarge the diagram")
+    root.host.title = "Click to enlarge"
+  }
+
+  const wrapRender = (mermaid) => {
+    if (!mermaid || typeof mermaid.render !== "function" || mermaid.render.wrapped) return mermaid
     const render = mermaid.render.bind(mermaid)
     mermaid.render = async (...args) => {
       await fontsLoaded()
-      return render(...args)
+      const result = await render(...args)
+      return {
+        ...result,
+        bindFunctions: (root) => {
+          enlargeable(root)
+          result.bindFunctions?.(root)
+        },
+      }
     }
-    mermaid.render.waitsForFonts = true
+    mermaid.render.wrapped = true
     return mermaid
   }
 
   // The theme loads Mermaid only on a page with a diagram, and the script it loads assigns window.mermaid, so catch the
   // assignment. Mermaid isn't defined yet when this runs, which the theme's loader checks for.
-  let mermaid = window.mermaid
+  let mermaid
   Object.defineProperty(window, "mermaid", {
     configurable: true,
     get: () => mermaid,
     set: (value) => {
-      mermaid = waitForFonts(value)
+      mermaid = wrapRender(value)
     },
   })
-  waitForFonts(mermaid)
-
-  // 2. Each diagram the theme draws is a div.mermaid host; open its shadow root, and make the host a button.
-  const attachShadow = Element.prototype.attachShadow
-  Element.prototype.attachShadow = function (init) {
-    if (!this.classList.contains("mermaid")) return attachShadow.call(this, init)
-    this.tabIndex = 0
-    this.setAttribute("role", "button")
-    this.setAttribute("aria-label", "Enlarge the diagram")
-    this.title = "Click to enlarge"
-    return attachShadow.call(this, { ...init, mode: "open" })
-  }
-
 
   // One dialog for every diagram, made on the first click. The diagram goes in a shadow root of its own, as the theme's
   // does, so the page's styles don't reach its labels, and its ids, which its own styles select, stay unique.
@@ -72,7 +83,7 @@
   }
 
   const enlarge = (host) => {
-    const svg = host.shadowRoot?.querySelector("svg")
+    const svg = roots.get(host)?.querySelector("svg")
     if (!svg) return
     const zoom = zoomDialog()
     const copy = svg.cloneNode(true)

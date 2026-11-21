@@ -228,12 +228,21 @@ internal class ProxyDashboardService(
   // a GET (the WebSocket handshake is one), must also carry the header htmx and the page's script send, which another
   // site's page can't add without a CORS preflight the dashboard never answers; the origin check alone lets through a
   // request with no Origin. Runs before the WebSocket upgrade, so a refused page never receives a frame.
-  private val pageGuard =
-    createRouteScopedPlugin("DashboardPageGuard") {
-      onCall { call ->
-        pageRefusal(call.request)?.also { call.respondText(it, ContentType.Text.Plain, HttpStatusCode.Forbidden) }
-      }
+  private val pageGuard = guard("DashboardPageGuard", ::pageRefusal)
+
+  // The login and logout forms' guard, which the browser posts itself and so sends no HX-Request header: the Origin
+  // check alone.
+  private val originGuard = guard("DashboardOriginGuard", ::originRefusal)
+
+  // A route-scoped plugin answering a 403 with whatever [refusal] gives a request, which proceeds when it gives null.
+  private fun guard(
+    name: String,
+    refusal: (ApplicationRequest) -> String?,
+  ) = createRouteScopedPlugin(name) {
+    onCall { call ->
+      refusal(call.request)?.also { call.respondText(it, ContentType.Text.Plain, HttpStatusCode.Forbidden) }
     }
+  }
 
   // Why pageGuard refuses [request], or null when it may proceed.
   private fun pageRefusal(request: ApplicationRequest): String? =
@@ -243,8 +252,7 @@ internal class ProxyDashboardService(
       else
         null
 
-  // Why a request from [request]'s Origin is refused, or null when it may proceed (see isOriginAllowed). The login and
-  // logout forms, which the browser posts itself and so send no HX-Request header, take this check alone.
+  // Why a request from [request]'s Origin is refused, or null when it may proceed (see isOriginAllowed).
   private fun originRefusal(request: ApplicationRequest): String? {
     val origin = request.headers[HttpHeaders.Origin]
     if (isOriginAllowed(origin, request.headers[HttpHeaders.Host], allowedOrigins))
@@ -258,6 +266,7 @@ internal class ProxyDashboardService(
   // The login every request must carry, proxy.dashboard.username and password, once a password is set; null, without
   // one, the default, leaves the dashboard open.
   private val login = if (dashboardPassword.isEmpty()) null else DashboardLogin(dashboardUsername, dashboardPassword)
+  private val loginEnabled = login != null
 
   // The login page's sessions, and the cookie that carries one: named for the port, since a browser sends a host's
   // cookies to every port on it, and an HA pair can run on one host.
@@ -278,9 +287,8 @@ internal class ProxyDashboardService(
     createApplicationPlugin("DashboardAuthCheck") {
       onCall { call ->
         val request = call.request
-        if (request.path() == loginPath || request.path() == logoutPath ||
-          logins.isValid(request.cookies[sessionCookie])
-        )
+        val path = request.path()
+        if (path == loginPath || path == logoutPath || logins.isValid(request.cookies[sessionCookie]))
           return@onCall
         // A browser must use the login page: one that once saved a Basic login sends it with every request, which would
         // skip the page and outlast Log out. So a browser's Basic login is ignored, and only a script's is read.
@@ -288,9 +296,7 @@ internal class ProxyDashboardService(
         if (header != null) {
           if (login.accepts(header))
             return@onCall
-          logBadLogin(request.origin.remoteAddress)
-          // As a wrong form login waits, so guessing through Basic Auth is no faster.
-          delay(LOGIN_FAILURE_DELAY)
+          refuseBadLogin(request.origin.remoteAddress)
         }
         if (wantsPage(request))
           call.seeOther("$loginPath?${LoginHtml.NEXT_FIELD}=${request.uri.encodeURLParameter()}")
@@ -312,10 +318,9 @@ internal class ProxyDashboardService(
     }
   }
 
-  // The login form's POST: a foreign origin refused, a body over MAX_LOGIN_BODY_BYTES (or of unknown length) refused
-  // unread, a wrong login answered after LOGIN_FAILURE_DELAY, and a right one given a session and sent on to next.
+  // The login form's POST, behind originGuard: a body over MAX_LOGIN_BODY_BYTES (or of unknown length) refused unread,
+  // a wrong login answered after LOGIN_FAILURE_DELAY, and a right one given a session and sent on to next.
   private suspend fun ApplicationCall.logIn(login: DashboardLogin) {
-    originRefusal(request)?.also { return respondText(it, ContentType.Text.Plain, HttpStatusCode.Forbidden) }
     val length = request.headers[HttpHeaders.ContentLength]?.toLongOrNull()
     if (length == null || length > MAX_LOGIN_BODY_BYTES)
       return respondText("Login form too large", ContentType.Text.Plain, HttpStatusCode.PayloadTooLarge)
@@ -325,35 +330,31 @@ internal class ProxyDashboardService(
     if (login.accepts(username, form[LoginHtml.PASSWORD_FIELD].orEmpty())) {
       // Secure when the browser reached the dashboard over https, as through a TLS-terminating reverse proxy.
       val secure = request.headers[HttpHeaders.Origin]?.startsWith("https://", ignoreCase = true) == true
-      response.header(
-        HttpHeaders.SetCookie,
-        sessionCookieHeader(logins.create(), DashboardSessions.MAX_AGE_SECS, secure),
-      )
+      response.header(HttpHeaders.SetCookie, sessionCookieHeader(logins.create(), secure))
       seeOther(next)
     } else {
-      logBadLogin(request.origin.remoteAddress)
-      // Slows a guesser down; each request waits on its own, so it costs no thread.
-      delay(LOGIN_FAILURE_DELAY)
+      refuseBadLogin(request.origin.remoteAddress)
       respondLogin(next, username, failed = true)
     }
   }
 
-  // The Set-Cookie value for [token], kept for [maxAgeSecs]; an empty token and 0 expire it.
+  // The Set-Cookie value for [token], kept for a session's longest life; a null token expires the cookie.
   private fun sessionCookieHeader(
-    token: String,
-    maxAgeSecs: Int,
+    token: String?,
     secure: Boolean = false,
-  ) = "$sessionCookie=$token; Max-Age=$maxAgeSecs; Path=$basePath; HttpOnly; SameSite=Lax" +
-    if (secure) "; Secure" else ""
+  ) = "$sessionCookie=${token.orEmpty()}; Max-Age=${if (token == null) 0 else DashboardSessions.MAX_AGE_SECS}; " +
+    "Path=$basePath; HttpOnly; SameSite=Lax" + if (secure) "; Secure" else ""
 
-  // At WARN at most once a minute for each address, and at DEBUG otherwise, so a client guessing in a loop can't flood
-  // the log. Never the username it gave, which is the client's own text.
-  private fun logBadLogin(address: String) {
+  // A wrong login, from the form or Basic Auth: logged at WARN at most once a minute for each address, and at DEBUG
+  // otherwise, so a client guessing in a loop can't flood the log, and never with the username it gave, which is the
+  // client's own text; then answered after LOGIN_FAILURE_DELAY, which costs no thread while it waits.
+  private suspend fun refuseBadLogin(address: String) {
     val message = "Refused a dashboard request from $address with a wrong login"
     if (badLoginWarnings.tryAcquire(address))
       logger.warn { message }
     else
       logger.debug { message }
+    delay(LOGIN_FAILURE_DELAY)
   }
 
   // Application-wide rather than route-scoped, so it runs before routing and covers every page, asset, and the
@@ -420,20 +421,21 @@ internal class ProxyDashboardService(
 
         // The login page and its form, and Log out, only with a password set.
         login?.also { credentials ->
-          get(loginPath) {
-            if (logins.isValid(call.request.cookies[sessionCookie]))
-              call.seeOther(basePath)
-            else
-              call.respondLogin(safeNext(call.request.queryParameters[LoginHtml.NEXT_FIELD], routeBase))
+          route(loginPath) {
+            install(originGuard)
+            get {
+              if (logins.isValid(call.request.cookies[sessionCookie]))
+                call.seeOther(basePath)
+              else
+                call.respondLogin(safeNext(call.request.queryParameters[LoginHtml.NEXT_FIELD], routeBase))
+            }
+            post { call.logIn(credentials) }
           }
-          post(loginPath) { call.logIn(credentials) }
-          post(logoutPath) {
-            val refusal = originRefusal(call.request)
-            if (refusal != null) {
-              call.respondText(refusal, ContentType.Text.Plain, HttpStatusCode.Forbidden)
-            } else {
+          route(logoutPath) {
+            install(originGuard)
+            post {
               logins.remove(call.request.cookies[sessionCookie])
-              call.response.header(HttpHeaders.SetCookie, sessionCookieHeader("", 0))
+              call.response.header(HttpHeaders.SetCookie, sessionCookieHeader(null))
               call.seeOther(loginPath)
             }
           }
@@ -472,7 +474,7 @@ internal class ProxyDashboardService(
           val snapshot = snapshots.recent()
           call.respondHtml {
             with(ProxyDashboardHtml) {
-              renderPage(snapshot, null, routeBase, DashboardLayout.AGENT, loginEnabled = login != null)
+              renderPage(snapshot, null, routeBase, DashboardLayout.AGENT, loginEnabled = loginEnabled)
             }
           }
         }
@@ -486,7 +488,7 @@ internal class ProxyDashboardService(
             val snapshot = snapshots.recent()
             val filter = RowFilter.of(call.request.queryParameters)
             call.respondHtml {
-              with(ProxyDashboardHtml) { renderPage(snapshot, null, routeBase, layout, filter, login != null) }
+              with(ProxyDashboardHtml) { renderPage(snapshot, null, routeBase, layout, filter, loginEnabled) }
             }
           }
         }
@@ -510,7 +512,7 @@ internal class ProxyDashboardService(
           else
             call.respondHtml {
               with(ProxyDashboardHtml) {
-                renderPage(snapshot, agentId, routeBase, DashboardLayout.AGENT, loginEnabled = login != null)
+                renderPage(snapshot, agentId, routeBase, DashboardLayout.AGENT, loginEnabled = loginEnabled)
               }
             }
         }
@@ -792,7 +794,7 @@ internal class ProxyDashboardService(
       add("host", dashboardHost)
       add("port", dashboardPort)
       add("path", basePath)
-      add("login", if (login == null) "off" else "on")
+      add("login", if (loginEnabled) "on" else "off")
       add("sessions", sessions.size)
     }
 
@@ -881,14 +883,14 @@ internal class ProxyDashboardService(
 
     // Fetch Metadata's header, which every current browser sends with every request, a WebSocket handshake included,
     // and a script such as curl doesn't.
-    private const val SEC_FETCH_MODE = "Sec-Fetch-Mode"
+    internal const val SEC_FETCH_MODE = "Sec-Fetch-Mode"
 
     /** Whether [request] came from a browser, which must log in on the login page rather than with Basic Auth. */
-    internal fun isBrowser(request: ApplicationRequest) = request.headers[SEC_FETCH_MODE] != null
+    private fun isBrowser(request: ApplicationRequest) = request.headers[SEC_FETCH_MODE] != null
 
     // A browser's navigation to a page, which the auth check sends to the login page rather than refusing: a GET that
     // takes HTML and isn't htmx's own request.
-    internal fun wantsPage(request: ApplicationRequest) =
+    private fun wantsPage(request: ApplicationRequest) =
       request.httpMethod == HttpMethod.Get &&
         request.headers[HX_REQUEST_HEADER] == null &&
         request.headers[HttpHeaders.Accept].orEmpty().contains("text/html")

@@ -22,6 +22,7 @@ import io.prometheus.proxy.dashboard.ProxyDashboardHtml.COLUMN_GUIDE_TOGGLE_ID
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.COPY_ATTR
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.FILTER_PROBLEMS_ID
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.FILTER_QUERY_ID
+import io.prometheus.proxy.dashboard.ProxyDashboardHtml.LOGOUT_ID
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.MATCH_COUNT_ATTR
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.NAV_ID
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.PROXY_PATH_ATTR
@@ -149,12 +150,17 @@ internal object DashboardScript {
       var base = (document.body.getAttribute('hx-ws:connect') || '').replace(/\/events$/, '');
       // Whether this page may still use the dashboard, asked when its socket closes: a session that has ended, by
       // expiring, a Log out elsewhere, or a proxy restart, gets a 401, and a reload, which the server answers with the
-      // login page. Without a login, or with the proxy down, nothing happens.
+      // login page. Only on a page with a login, which has Log out, and one check at a time, since every failed
+      // reconnect closes the socket again; with the proxy down, nothing happens.
+      var checkingSession = false;
       function checkSession() {
+        if (checkingSession || !document.getElementById('$LOGOUT_ID')) return;
+        checkingSession = true;
         fetch(base + '/session', { headers: { '${ProxyDashboardService.HX_REQUEST_HEADER}': 'true' } })
           .then(function (response) {
             if (response.status === 401) location.reload();
-          }, function () {});
+          }, function () {})
+          .then(function () { checkingSession = false; });
       }
       document.body.addEventListener('htmx:ws:close', function () {
         if (!document.hidden) { connected(false); checkSession(); }

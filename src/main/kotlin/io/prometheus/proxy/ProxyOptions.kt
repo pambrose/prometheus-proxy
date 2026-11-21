@@ -22,6 +22,7 @@ import com.beust.jcommander.Parameter
 import com.google.common.net.InetAddresses
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.Proxy
+import io.prometheus.common.AgentValues.shownValue
 import io.prometheus.common.BaseOptions
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.EnvVars.AGENT_PORT
@@ -366,8 +367,10 @@ class ProxyOptions internal constructor(
       logger.info { "dashboardHost: $dashboardHost, dashboardPort: $dashboardPort, dashboardPath: $dashboardPath" }
       validateDashboardLogin(dashboardUsername, dashboardPassword)
       if (dashboardPassword.isNotEmpty()) {
-        // The username was just checked for control characters, so it can't forge a log line; never the password.
-        logger.info { "dashboard login: on, dashboardUsername: $dashboardUsername, dashboardPassword: ***" }
+        // Never the password.
+        logger.info {
+          "dashboard login: on, dashboardUsername: ${shownValue(dashboardUsername)}, dashboardPassword: ***"
+        }
         logger.info {
           "The dashboard requires a login, over plain HTTP, so its password crosses the network readable; put TLS in " +
             "front of it, such as a reverse proxy, unless the network is trusted"

@@ -72,12 +72,11 @@ curl -fsS -o /dev/null "$DASHBOARD_URL" 2>/dev/null ||
   die "the demo isn't running at $DASHBOARD_URL; start it with 'make up-local' in demos/basics"
 
 WORK="$(mktemp -d)"
-# Set while the dashboard's login is on, for its scene, so restore turns it off only then: login-off restarts the proxy.
-LOGIN_ON=0
 
-# Undoes every scenario, whatever state a failure left the demo in.
+# Undoes every scenario, whatever state a failure left the demo in. login-off leaves a proxy whose login is already off
+# as it is, since Compose recreates a container only for a changed environment.
 restore() {
-  ((!LOGIN_ON)) || "$DEMO" login-off >/dev/null 2>&1 || true
+  "$DEMO" login-off >/dev/null 2>&1 || true
   "$DEMO" agent-thaw >/dev/null 2>&1 || true
   "$DEMO" undiscover >/dev/null 2>&1 || true
   "$DEMO" recover >/dev/null 2>&1 || true
@@ -318,11 +317,9 @@ shoot_table activity "/activity?q=agent-rogue"
 # Last, since turning the login on and off restarts the proxy, which starts the dashboard's histories over. The login
 # page needs no session, and loads nothing, so it's captured as any other page is.
 step "The dashboard's login page"
-LOGIN_ON=1
 "$DEMO" login >/dev/null 2>&1
 shoot_fixed login "$DASHBOARD_URL/login"
 "$DEMO" login-off >/dev/null 2>&1
-LOGIN_ON=0
 
 step "Writing WebP to ${OUT_DIR#"$REPO_DIR"/}"
 mkdir -p "$OUT_DIR"

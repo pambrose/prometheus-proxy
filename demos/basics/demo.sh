@@ -131,18 +131,19 @@ except urllib.error.HTTPError as e:
 ' "$method" "$path"
 }
 
-# Whether $1 answers: with a 2xx, or with the 401 the dashboard sends a request without its login when
-# config/proxy.conf sets proxy.dashboard.password, which means the proxy is up as well. curl -f counts a 401 as a
-# failure, so a wait for the dashboard would run out with the proxy answering all along.
+# Whether $1 answers with a status below 400, as curl -f would count it. With login as $2, a 401 counts too: the
+# dashboard sends it a request without a session once ./demo.sh login has turned its login on, so the proxy is up all
+# the same. answers <url> [login]
 answers() {
   local code
   code="$(curl -sS -o /dev/null -w '%{http_code}' "$1" 2>/dev/null)" || return 1
-  [[ $code == 2?? || $code == 401 ]]
+  ((code < 400)) || [[ ${2:-} == login && $code == 401 ]]
 }
 
+# Waits up to 2 minutes for a URL to answer (see answers): wait_for <url> <what it is> [login]
 wait_for() {
-  local url="$1" name="$2" deadline=$((SECONDS + 120))
-  until answers "$url"; do
+  local url="$1" name="$2" accept="${3:-}" deadline=$((SECONDS + 120))
+  until answers "$url" "$accept"; do
     ((SECONDS < deadline)) || die "$name did not answer at $url within 120s; see '$0 logs'"
     sleep 2
   done
@@ -289,7 +290,7 @@ start_demo() {
     fi
   done
 
-  wait_for "$DASHBOARD_URL" "The proxy dashboard"
+  wait_for "$DASHBOARD_URL" "The proxy dashboard" login
   wait_for "$PROMETHEUS_URL/-/ready" "Prometheus"
   wait_for "$GRAFANA_URL/api/health" "Grafana"
   print_urls
@@ -449,7 +450,7 @@ TOUR_PARTS=(
 
 cmd_tour() {
   check_tour_from "${1:-}"
-  answers "$DASHBOARD_URL" ||
+  answers "$DASHBOARD_URL" login ||
     die "the demo isn't running; start it with '$MAKE_NAME up' in demos/basics"
   tour_contents "basics demo"
 
@@ -584,7 +585,7 @@ cmd_tour() {
 # recreates the container for the changed environment; the agents reconnect on their own. restart_proxy <password>
 restart_proxy() {
   DEMO_DASHBOARD_PASSWORD="$1" "${COMPOSE[@]}" up --detach --no-deps --no-build proxy
-  wait_for "$DASHBOARD_URL" "The proxy dashboard"
+  wait_for "$DASHBOARD_URL" "The proxy dashboard" login
 }
 
 main() {

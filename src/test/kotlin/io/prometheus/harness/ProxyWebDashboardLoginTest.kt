@@ -22,7 +22,6 @@ import ch.qos.logback.classic.Level
 import com.pambrose.common.util.runCatchingCancellable
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeTrue
-import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.comparables.shouldBeGreaterThanOrEqualTo
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
@@ -62,6 +61,7 @@ import io.prometheus.proxy.dashboard.ProxyDashboardHtml
 import io.prometheus.proxy.dashboard.ProxyDashboardService
 import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.ASSET_DIR
 import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.HX_REQUEST_HEADER
+import io.prometheus.proxy.dashboard.ProxyDashboardService.Companion.SEC_FETCH_MODE
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.measureTimedValue
 
@@ -73,6 +73,7 @@ import kotlin.time.measureTimedValue
  */
 class ProxyWebDashboardLoginTest : StringSpec() {
   private val base = "http://$LOOPBACK_HOST:$DASHBOARD_PORT"
+  private val socketUrl = "ws://$LOOPBACK_HOST:$DASHBOARD_PORT/dashboard/events"
   private val cookie = ProxyDashboardService.cookieName(DASHBOARD_PORT)
 
   // A proxy with its dashboard at [path] and, unless [password] is null, a login, and a client that follows no
@@ -122,7 +123,7 @@ class ProxyWebDashboardLoginTest : StringSpec() {
   }
 
   private suspend fun HttpClient.logIn(
-    username: String = "admin",
+    username: String = USERNAME,
     password: String = PASSWORD,
     next: String = "/dashboard",
     origin: String? = base,
@@ -148,6 +149,19 @@ class ProxyWebDashboardLoginTest : StringSpec() {
     setSessionCookie()?.substringAfter("=")?.substringBefore(";")?.takeIf { it.isNotEmpty() }
 
   private suspend fun HttpClient.loggedIn(): String = logIn().sessionToken().shouldNotBeNull()
+
+  // What the session check answers a request with [token], or with none.
+  private suspend fun HttpClient.sessionStatus(token: String? = null) =
+    get("$base/dashboard/session") { session(token) }.status
+
+  // A request as a browser makes it, in the Fetch Metadata [mode] it marks it with, sending a Basic login it saved.
+  private fun HttpRequestBuilder.browserBasic(
+    mode: String,
+    password: String = PASSWORD,
+  ) {
+    basicAuth(USERNAME, password)
+    header(SEC_FETCH_MODE, mode)
+  }
 
   init {
     "a page navigation without a session should go to the login page" {
@@ -177,7 +191,7 @@ class ProxyWebDashboardLoginTest : StringSpec() {
           it.headers[HttpHeaders.WWWAuthenticate].shouldBeNull()
         }
         runCatchingCancellable {
-          webSocket("ws://$LOOPBACK_HOST:$DASHBOARD_PORT/dashboard/events") { incoming.receive() }
+          webSocket(socketUrl) { incoming.receive() }
         }
           .exceptionOrNull()?.message.orEmpty() shouldContain "401"
       }
@@ -246,7 +260,7 @@ class ProxyWebDashboardLoginTest : StringSpec() {
           status shouldBe HttpStatusCode.OK
           bodyAsText() shouldContain """id="${ProxyDashboardHtml.LOGOUT_ID}""""
         }
-        get("$base/dashboard/session") { session(token) }.status shouldBe HttpStatusCode.NoContent
+        sessionStatus(token) shouldBe HttpStatusCode.NoContent
         page("/dashboard/login", token).apply {
           status shouldBe HttpStatusCode.SeeOther
           headers[HttpHeaders.Location] shouldBe "/dashboard"
@@ -256,7 +270,7 @@ class ProxyWebDashboardLoginTest : StringSpec() {
           header(HttpHeaders.Origin, base)
           header(HX_REQUEST_HEADER, "true")
         }.status shouldNotBe HttpStatusCode.Unauthorized
-        webSocket("ws://$LOOPBACK_HOST:$DASHBOARD_PORT/dashboard/events", request = { session(token) }) {
+        webSocket(socketUrl, request = { session(token) }) {
           (incoming.receive() as Frame.Text).readText() shouldContain "hx-swap-oob"
         }
       }
@@ -273,7 +287,7 @@ class ProxyWebDashboardLoginTest : StringSpec() {
           headers[HttpHeaders.Location] shouldBe "/dashboard/login"
           setSessionCookie().orEmpty() shouldContain "Max-Age=0"
         }
-        get("$base/dashboard/session") { session(token) }.status shouldBe HttpStatusCode.Unauthorized
+        sessionStatus(token) shouldBe HttpStatusCode.Unauthorized
       }
     }
 
@@ -288,7 +302,7 @@ class ProxyWebDashboardLoginTest : StringSpec() {
           session(token)
           header(HttpHeaders.Origin, "https://evil.example.com")
         }.status shouldBe HttpStatusCode.Forbidden
-        get("$base/dashboard/session") { session(token) }.status shouldBe HttpStatusCode.NoContent
+        sessionStatus(token) shouldBe HttpStatusCode.NoContent
       }
     }
 
@@ -313,9 +327,9 @@ class ProxyWebDashboardLoginTest : StringSpec() {
 
     "scripts should still log in with Basic Auth" {
       withProxy {
-        get("$base/dashboard") { basicAuth("admin", PASSWORD) }.status shouldBe HttpStatusCode.OK
+        get("$base/dashboard") { basicAuth(USERNAME, PASSWORD) }.status shouldBe HttpStatusCode.OK
         // A wrong one waits as a wrong form login does, so guessing through Basic Auth is no faster.
-        val (wrong, took) = measureTimedValue { get("$base/dashboard") { basicAuth("admin", "wrong") } }
+        val (wrong, took) = measureTimedValue { get("$base/dashboard") { basicAuth(USERNAME, "wrong") } }
         wrong.status shouldBe HttpStatusCode.Unauthorized
         took shouldBeGreaterThanOrEqualTo ProxyDashboardService.LOGIN_FAILURE_DELAY
       }
@@ -328,30 +342,18 @@ class ProxyWebDashboardLoginTest : StringSpec() {
       withProxy {
         val logs =
           captureLogs<ProxyDashboardService>(Level.DEBUG) {
-            page("/dashboard") {
-              basicAuth("admin", PASSWORD)
-              header(SEC_FETCH_MODE, "navigate")
-            }.apply {
+            page("/dashboard") { browserBasic("navigate") }.apply {
               status shouldBe HttpStatusCode.SeeOther
               headers[HttpHeaders.Location] shouldBe "/dashboard/login?next=%2Fdashboard"
             }
-            get("$base/dashboard/session") {
-              basicAuth("admin", PASSWORD)
-              header(SEC_FETCH_MODE, "cors")
-            }.status shouldBe HttpStatusCode.Unauthorized
+            get("$base/dashboard/session") { browserBasic("cors") }.status shouldBe HttpStatusCode.Unauthorized
             runCatchingCancellable {
               webSocket(
-                "ws://$LOOPBACK_HOST:$DASHBOARD_PORT/dashboard/events",
-                request = {
-                  basicAuth("admin", PASSWORD)
-                  header(SEC_FETCH_MODE, "websocket")
-                },
+                socketUrl,
+                request = { browserBasic("websocket") },
               ) { incoming.receive() }
             }.exceptionOrNull()?.message.orEmpty() shouldContain "401"
-            page("/dashboard") {
-              basicAuth("admin", "stale")
-              header(SEC_FETCH_MODE, "navigate")
-            }.status shouldBe HttpStatusCode.SeeOther
+            page("/dashboard") { browserBasic("navigate", password = "stale") }.status shouldBe HttpStatusCode.SeeOther
           }
         logs.none { "wrong login" in it.formattedMessage }.shouldBeTrue()
       }
@@ -371,8 +373,8 @@ class ProxyWebDashboardLoginTest : StringSpec() {
       withProxy(password = null) {
         page("/dashboard/login").status shouldBe HttpStatusCode.NotFound
         page("/dashboard").bodyAsText() shouldNotContain """id="${ProxyDashboardHtml.LOGOUT_ID}""""
-        get("$base/dashboard/session").status shouldBe HttpStatusCode.NoContent
-        listOf(page("/dashboard")).map { it.setSessionCookie() }.filterNotNull().shouldBeEmpty()
+        sessionStatus() shouldBe HttpStatusCode.NoContent
+        page("/dashboard").setSessionCookie().shouldBeNull()
       }
     }
   }
@@ -386,9 +388,7 @@ class ProxyWebDashboardLoginTest : StringSpec() {
     const val CONFIG_FILE = "config/test-configs/web-ui-origins.conf"
     const val ALLOWED_ORIGIN = "https://dash.example.com"
     const val PASSWORD = "s3cret-Passw0rd"
+    const val USERNAME = "admin"
     const val WRONG_USERNAME = "intruder"
-
-    // The header every request from a browser carries, and no script's.
-    const val SEC_FETCH_MODE = "Sec-Fetch-Mode"
   }
 }
