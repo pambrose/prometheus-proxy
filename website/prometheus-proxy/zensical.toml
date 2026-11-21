@@ -57,6 +57,7 @@ nav = [
   ]},
   { "Operations" = [
     { "Dashboard" = "web-dashboard.md" },
+    { "Agent Dashboard" = "agent-dashboard.md" },
     { "Running in Production" = "production.md" },
     { "Troubleshooting" = "troubleshooting.md" },
   ]},

@@ -54,6 +54,7 @@ import io.ktor.websocket.readText
 import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.common.TestPorts
 import io.prometheus.common.captureLogs
+import io.prometheus.common.dashboard.DashboardPage
 import io.prometheus.common.dashboard.DashboardServer
 import io.prometheus.common.dashboard.DashboardServer.Companion.ASSET_DIR
 import io.prometheus.common.dashboard.DashboardServer.Companion.HX_REQUEST_HEADER
@@ -258,7 +259,7 @@ class ProxyWebDashboardLoginTest : StringSpec() {
         val token = loggedIn()
         page("/dashboard", token).apply {
           status shouldBe HttpStatusCode.OK
-          bodyAsText() shouldContain """id="${ProxyDashboardHtml.LOGOUT_ID}""""
+          bodyAsText() shouldContain """id="${DashboardPage.LOGOUT_ID}""""
         }
         sessionStatus(token) shouldBe HttpStatusCode.NoContent
         page("/dashboard/login", token).apply {
@@ -408,7 +409,7 @@ class ProxyWebDashboardLoginTest : StringSpec() {
     "with no password set, there should be no login page and no Log out" {
       withProxy(password = null) {
         page("/dashboard/login").status shouldBe HttpStatusCode.NotFound
-        page("/dashboard").bodyAsText() shouldNotContain """id="${ProxyDashboardHtml.LOGOUT_ID}""""
+        page("/dashboard").bodyAsText() shouldNotContain """id="${DashboardPage.LOGOUT_ID}""""
         sessionStatus() shouldBe HttpStatusCode.NoContent
         page("/dashboard").setSessionCookie().shouldBeNull()
       }

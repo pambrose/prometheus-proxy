@@ -99,6 +99,13 @@ The proxy's live-updating web page (`proxy.dashboard`, default port `8094`) show
 connected agents, registered paths — including paths whose agent has gone — and recent scrape
 results. Off by default, and unauthenticated until a password is set. See [Dashboard](web-dashboard.md).
 
+### Agent dashboard
+
+The agent's own live-updating web page (`agent.dashboard`, default port `8095`) showing its connection to the proxy,
+each proxy endpoint's last connect error, every path with the proxy's reason for refusing one, and its filters,
+discovery, and settings: what the proxy's dashboard can't see. Off by default, and unauthenticated until a password is
+set. See [Agent Dashboard](agent-dashboard.md).
+
 ### Stale agent cleanup
 
 The proxy's periodic eviction of agents that have been inactive longer than

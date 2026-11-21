@@ -25,6 +25,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import io.prometheus.common.TestPorts
+import io.prometheus.common.dashboard.DashboardPage
 import io.prometheus.proxy.dashboard.DashboardFixtures.departedPathView
 import io.prometheus.proxy.dashboard.DashboardFixtures.renderFullPage
 import io.prometheus.proxy.dashboard.DashboardFixtures.snapshot
@@ -137,7 +138,7 @@ class PathColumnsHtmlTest : StringSpec() {
 
       // type="button", so a click can never submit anything should the table ever sit inside a form.
       html shouldContain """<button type="button" class="copy""""
-      html shouldContain """${ProxyDashboardHtml.COPY_ATTR}="http://app1:9090/metrics""""
+      html shouldContain """${DashboardPage.COPY_ATTR}="http://app1:9090/metrics""""
       html shouldContain """aria-label="Copy the target URL of /app_metrics""""
       // After the URL it copies, in the same cell.
       val button = html.indexOf("""id="${ProxyDashboardHtml.COPY_TARGET_ID_PREFIX}app_metrics"""")
@@ -149,7 +150,7 @@ class PathColumnsHtmlTest : StringSpec() {
       val bare = DashboardFixtures.pathView(path = "new_path")
       val html = ProxyDashboardHtml.pushFragment(snapshot(paths = [bare]), null, "/dashboard", DashboardLayout.PATH)
 
-      html shouldNotContain ProxyDashboardHtml.COPY_ATTR
+      html shouldNotContain DashboardPage.COPY_ATTR
       html shouldNotContain ProxyDashboardHtml.COPY_TARGET_ID_PREFIX
     }
 
@@ -160,7 +161,7 @@ class PathColumnsHtmlTest : StringSpec() {
       val html = ProxyDashboardHtml.pushFragment(snapshot(paths = [served]), null, "/dashboard", DashboardLayout.PATH)
 
       html shouldContain """id="${ProxyDashboardHtml.COPY_PROXY_ID_PREFIX}app_metrics""""
-      html shouldContain """${ProxyDashboardHtml.PROXY_PATH_ATTR}="/app_metrics""""
+      html shouldContain """${DashboardPage.PROXY_PATH_ATTR}="/app_metrics""""
       html shouldContain """aria-label="Copy the proxy URL of /app_metrics""""
       // After the path it copies, in the same cell, and before the target's button.
       val proxyButton = html.indexOf("""id="${ProxyDashboardHtml.COPY_PROXY_ID_PREFIX}app_metrics"""")
@@ -175,15 +176,15 @@ class PathColumnsHtmlTest : StringSpec() {
       val html =
         ProxyDashboardHtml.pushFragment(snapshot(paths = [departed]), null, "/dashboard", DashboardLayout.PATH)
 
-      html shouldNotContain ProxyDashboardHtml.PROXY_PATH_ATTR
+      html shouldNotContain DashboardPage.PROXY_PATH_ATTR
     }
 
     // On the page, not in the pushes: the port is the proxy's and doesn't change, and <body> is never swapped.
     "the page should carry the proxy's scrape port, and the pushes should not" {
       val page = renderFullPage(snapshot())
-      page shouldContain """${ProxyDashboardHtml.SCRAPE_PORT_ATTR}="${TestPorts.PROXY_HTTP_PORT}""""
+      page shouldContain """${DashboardPage.SCRAPE_PORT_ATTR}="${TestPorts.PROXY_HTTP_PORT}""""
       ProxyDashboardHtml.pushFragment(snapshot(), null, "/dashboard", DashboardLayout.PATH) shouldNotContain
-        ProxyDashboardHtml.SCRAPE_PORT_ATTR
+        DashboardPage.SCRAPE_PORT_ATTR
     }
 
     // The push loop replaces the whole table every frame. htmx refocuses the element carrying the id the
@@ -262,7 +263,7 @@ class PathColumnsHtmlTest : StringSpec() {
       val served = DashboardFixtures.pathView(path = "q_metrics", targetUrl = "http://h:9100/m?a=1&b=\"x\"")
       val html = ProxyDashboardHtml.pushFragment(snapshot(paths = [served]), null, "/dashboard", DashboardLayout.PATH)
 
-      html shouldContain """${ProxyDashboardHtml.COPY_ATTR}="http://h:9100/m?a=1&amp;b=&quot;x&quot;""""
+      html shouldContain """${DashboardPage.COPY_ATTR}="http://h:9100/m?a=1&amp;b=&quot;x&quot;""""
     }
   }
 }

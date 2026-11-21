@@ -24,6 +24,8 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldEndWith
 import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.string.shouldStartWith
+import io.prometheus.common.dashboard.DashboardCss
+import io.prometheus.common.dashboard.DashboardPage
 import io.prometheus.proxy.ActivityEntry
 import io.prometheus.proxy.ActivityKind
 import io.prometheus.proxy.dashboard.DashboardFixtures.activityEntry
@@ -80,7 +82,7 @@ class ActivityHtmlTest : StringSpec() {
 
       headers(html) shouldBe ["Time", "Event", "Agent", "Path", "Detail"]
       html shouldContain "<time datetime="
-      firstRow(html).drop(1) shouldBe ["connected", "agent-east", ProxyDashboardHtml.DASH, "From 10.0.1.14:5555"]
+      firstRow(html).drop(1) shouldBe ["connected", "agent-east", DashboardPage.DASH, "From 10.0.1.14:5555"]
       (html.indexOf("From 10.0.1.14:5555") < html.indexOf("/orders_metrics")) shouldBe true
     }
 
@@ -103,7 +105,7 @@ class ActivityHtmlTest : StringSpec() {
     "a line with no agent should show a dash for it" {
       val badToken = activityEntry(ActivityKind.BAD_TOKEN, agentName = "", paths = emptyList())
 
-      firstRow(activityPush([badToken]))[2] shouldBe ProxyDashboardHtml.DASH
+      firstRow(activityPush([badToken]))[2] shouldBe DashboardPage.DASH
     }
 
     "the Identity column should show while agent auth is on, the legacy token as a shared token" {
@@ -138,7 +140,7 @@ class ActivityHtmlTest : StringSpec() {
         this shouldContain "/team_b_metrics"
         this shouldNotContain "/orders_metrics"
         this shouldContain """<div class="match-count">Showing 1 of 3 events</div>"""
-        this shouldContain """${ProxyDashboardHtml.MATCH_COUNT_ATTR}="Showing 1 of 3 events""""
+        this shouldContain """${DashboardPage.MATCH_COUNT_ATTR}="Showing 1 of 3 events""""
       }
       activityPush(lines, RowFilter.of(null, problemsOnly = true)).apply {
         this shouldContain "rejected"
@@ -188,12 +190,12 @@ class ActivityHtmlTest : StringSpec() {
 
     "the column guide should follow the search, ahead of the pushed table, and no push carry it" {
       val page = activityPage()
-      val guide = page.indexOf("""<section class="column-guide" id="${ProxyDashboardHtml.COLUMN_GUIDE_ID}"""")
+      val guide = page.indexOf("""<section class="column-guide" id="${DashboardPage.COLUMN_GUIDE_ID}"""")
 
       (page.indexOf("</form>") in 0..<guide) shouldBe true
       (guide < page.indexOf("""id="${ProxyDashboardHtml.ACTIVITY_ID}"""")) shouldBe true
       activityPush(authEnabled = true).apply {
-        this shouldNotContain ProxyDashboardHtml.COLUMN_GUIDE_ID
+        this shouldNotContain DashboardPage.COLUMN_GUIDE_ID
         this shouldNotContain "<dt>"
       }
     }
@@ -206,7 +208,7 @@ class ActivityHtmlTest : StringSpec() {
       html shouldContain """id="${ProxyDashboardHtml.ACTIVITY_ID}" hx-swap-oob="true""""
       html shouldNotContain ProxyDashboardHtml.PATH_TABLE_ID
       html shouldNotContain ProxyDashboardHtml.AGENT_LIST_ID
-      html shouldContain ProxyDashboardHtml.STATUS_ID
+      html shouldContain DashboardPage.STATUS_ID
     }
 
     // As on the Paths view: the scroller stays, so a table scrolled sideways keeps its place when a push replaces it.
@@ -226,8 +228,8 @@ class ActivityHtmlTest : StringSpec() {
       val bare =
         ProxyDashboardHtml.pushFragment(snap, null, "/dashboard", DashboardLayout.ACTIVITY, 7, withActivity = false)
 
-      bare shouldStartWith """<span class="bar-right" id="${ProxyDashboardHtml.STATUS_ID}" hx-swap-oob="true" """
-      bare shouldContain """${ProxyDashboardHtml.VIEW_ATTR}="7""""
+      bare shouldStartWith """<span class="bar-right" id="${DashboardPage.STATUS_ID}" hx-swap-oob="true" """
+      bare shouldContain """${DashboardPage.VIEW_ATTR}="7""""
       bare shouldNotContain ProxyDashboardHtml.ACTIVITY_ID
       bare shouldEndWith "</span>"
       listOf(DashboardLayout.AGENT, DashboardLayout.PATH).forEach { layout ->
@@ -237,7 +239,7 @@ class ActivityHtmlTest : StringSpec() {
     }
 
     "the Detail column should wrap where the rest of the row doesn't" {
-      ProxyDashboardCss.CSS shouldContain ".ptable td.wrap { white-space:normal;"
+      DashboardCss.CSS shouldContain ".ptable td.wrap { white-space:normal;"
     }
   }
 }

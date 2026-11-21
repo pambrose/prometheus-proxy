@@ -31,6 +31,7 @@ import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.string.shouldStartWith
+import io.prometheus.common.BaseOptions
 import io.prometheus.common.BaseOptions.Companion.failOnInvalidConfig
 import io.prometheus.common.ConfigLoadException
 import io.prometheus.common.TestPorts.PROXY_DASHBOARD_PORT
@@ -115,12 +116,12 @@ class ProxyDashboardOptionsTest : StringSpec() {
     // Without a login the dashboard has no authentication, so listening on every interface earns a startup warning.
     // Only a literal wildcard address counts: a hostname is never resolved at startup just to decide whether to warn.
     "only a wildcard address counts as listening on all interfaces" {
-      ProxyOptions.isWildcardAddress("0.0.0.0").shouldBeTrue()
-      ProxyOptions.isWildcardAddress("::").shouldBeTrue()
-      ProxyOptions.isWildcardAddress("[::]").shouldBeTrue()
-      ProxyOptions.isWildcardAddress("127.0.0.1").shouldBeFalse()
-      ProxyOptions.isWildcardAddress("::1").shouldBeFalse()
-      ProxyOptions.isWildcardAddress("dashboard.internal").shouldBeFalse()
+      BaseOptions.isWildcardAddress("0.0.0.0").shouldBeTrue()
+      BaseOptions.isWildcardAddress("::").shouldBeTrue()
+      BaseOptions.isWildcardAddress("[::]").shouldBeTrue()
+      BaseOptions.isWildcardAddress("127.0.0.1").shouldBeFalse()
+      BaseOptions.isWildcardAddress("::1").shouldBeFalse()
+      BaseOptions.isWildcardAddress("dashboard.internal").shouldBeFalse()
     }
 
     // ==================== Refresh, Path History, and Activity ====================

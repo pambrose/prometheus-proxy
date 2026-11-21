@@ -26,6 +26,8 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.string.shouldNotStartWith
 import io.kotest.matchers.string.shouldStartWith
+import io.prometheus.common.dashboard.DashboardMessage
+import io.prometheus.common.dashboard.DashboardPage
 import io.prometheus.common.dashboard.DashboardServer
 import io.prometheus.proxy.ScrapeRecord
 import io.prometheus.proxy.dashboard.DashboardFixtures.departedPathView
@@ -96,7 +98,7 @@ class ProxyDashboardHtmlTest : StringSpec() {
       // the detail pane without re-rendering the page.
       html shouldContain """id="${ProxyDashboardHtml.AGENT_LIST_ID}""""
       html shouldContain """id="${ProxyDashboardHtml.DETAIL_ID}""""
-      html shouldContain """id="${ProxyDashboardHtml.STATUS_ID}""""
+      html shouldContain """id="${DashboardPage.STATUS_ID}""""
       html shouldContain """hx-swap-oob="true""""
     }
 
@@ -105,8 +107,8 @@ class ProxyDashboardHtmlTest : StringSpec() {
     "the Log out button should render only with a login, and in no push" {
       val withLogin = renderFullPage(snapshot(), loginEnabled = true)
       withLogin shouldContain """action="/dashboard/logout""""
-      withLogin shouldContain """id="${ProxyDashboardHtml.LOGOUT_ID}""""
-      renderFullPage(snapshot()) shouldNotContain """id="${ProxyDashboardHtml.LOGOUT_ID}""""
+      withLogin shouldContain """id="${DashboardPage.LOGOUT_ID}""""
+      renderFullPage(snapshot()) shouldNotContain """id="${DashboardPage.LOGOUT_ID}""""
       listOf(DashboardLayout.AGENT, DashboardLayout.PATH, DashboardLayout.ACTIVITY, null).forEach { layout ->
         ProxyDashboardHtml.pushFragment(snapshot(), null, "/dashboard", layout) shouldNotContain "logout"
       }
@@ -191,13 +193,13 @@ class ProxyDashboardHtmlTest : StringSpec() {
     // Browser-supplied input on a port with no auth: malformed content must degrade to "no selection"
     // rather than throw and drop the WebSocket session.
     "selection parsing should tolerate anything a browser might send" {
-      ProxyDashboardService.parseSelection("""{"select":"agent-7"}""") shouldBe "agent-7"
-      ProxyDashboardService.parseSelection("""{"select":null}""").shouldBeNull()
-      ProxyDashboardService.parseSelection("""{"select":""}""").shouldBeNull()
-      ProxyDashboardService.parseSelection("""{"other":"x"}""").shouldBeNull()
-      ProxyDashboardService.parseSelection("not json at all").shouldBeNull()
-      ProxyDashboardService.parseSelection("").shouldBeNull()
-      ProxyDashboardService.parseSelection("[1,2,3]").shouldBeNull()
+      DashboardMessage.selection("""{"select":"agent-7"}""") shouldBe "agent-7"
+      DashboardMessage.selection("""{"select":null}""").shouldBeNull()
+      DashboardMessage.selection("""{"select":""}""").shouldBeNull()
+      DashboardMessage.selection("""{"other":"x"}""").shouldBeNull()
+      DashboardMessage.selection("not json at all").shouldBeNull()
+      DashboardMessage.selection("").shouldBeNull()
+      DashboardMessage.selection("[1,2,3]").shouldBeNull()
     }
 
     // "This agent failed over to us" is the thing an operator cannot otherwise learn from one
@@ -223,10 +225,10 @@ class ProxyDashboardHtmlTest : StringSpec() {
     }
 
     "an agent's uptime should show its two largest units from a day up, then one" {
-      ProxyDashboardHtml.humanize(45.seconds) shouldBe "45s"
-      ProxyDashboardHtml.humanize(3.minutes + 59.seconds) shouldBe "3m"
-      ProxyDashboardHtml.humanize(2.hours + 5.minutes + 30.seconds) shouldBe "2h 5m"
-      ProxyDashboardHtml.humanize(1.days + 3.hours + 20.minutes) shouldBe "1d 3h"
+      DashboardPage.humanize(45.seconds) shouldBe "45s"
+      DashboardPage.humanize(3.minutes + 59.seconds) shouldBe "3m"
+      DashboardPage.humanize(2.hours + 5.minutes + 30.seconds) shouldBe "2h 5m"
+      DashboardPage.humanize(1.days + 3.hours + 20.minutes) shouldBe "1d 3h"
     }
 
     "the agent detail should show how long the agent has been connected" {
@@ -242,7 +244,7 @@ class ProxyDashboardHtmlTest : StringSpec() {
       val pathFrame = ProxyDashboardHtml.pushFragment(snapshot(), "1", "/dashboard", DashboardLayout.PATH)
       pathFrame shouldContain """id="${ProxyDashboardHtml.PATH_TABLE_ID}""""
       pathFrame shouldNotContain """id="${ProxyDashboardHtml.AGENT_LIST_ID}""""
-      pathFrame shouldContain """id="${ProxyDashboardHtml.STATUS_ID}""""
+      pathFrame shouldContain """id="${DashboardPage.STATUS_ID}""""
 
       val agentFrame = ProxyDashboardHtml.pushFragment(snapshot(), "1", "/dashboard", DashboardLayout.AGENT)
       agentFrame shouldContain """id="${ProxyDashboardHtml.AGENT_LIST_ID}""""
@@ -270,7 +272,7 @@ class ProxyDashboardHtmlTest : StringSpec() {
     // placeholder until the browser's message arrived, a flash on every connect and reconnect.
     "a push for a session with no known layout should carry only the status bar" {
       val frame = ProxyDashboardHtml.pushFragment(snapshot(), null, "/dashboard", layout = null)
-      frame shouldContain """id="${ProxyDashboardHtml.STATUS_ID}""""
+      frame shouldContain """id="${DashboardPage.STATUS_ID}""""
       frame shouldNotContain """id="${ProxyDashboardHtml.AGENT_LIST_ID}""""
       frame shouldNotContain """id="${ProxyDashboardHtml.DETAIL_ID}""""
       frame shouldNotContain """id="${ProxyDashboardHtml.PATH_TABLE_ID}""""
@@ -303,15 +305,15 @@ class ProxyDashboardHtmlTest : StringSpec() {
     }
 
     "view count parsing should tolerate anything a browser might send" {
-      ProxyDashboardService.parseSeq("""{"seq":12}""") shouldBe 12L
-      ProxyDashboardService.parseSeq("""{"select":"a1","layout":"AGENT","seq":3}""") shouldBe 3L
+      DashboardMessage.seq("""{"seq":12}""") shouldBe 12L
+      DashboardMessage.seq("""{"select":"a1","layout":"AGENT","seq":3}""") shouldBe 3L
       // Everything unexpected falls back to 0, which a page predating the field never compares against.
-      ProxyDashboardService.parseSeq("""{"seq":"12"}""") shouldBe 0L
-      ProxyDashboardService.parseSeq("""{"seq":-1}""") shouldBe 0L
-      ProxyDashboardService.parseSeq("""{"seq":1.5}""") shouldBe 0L
-      ProxyDashboardService.parseSeq("""{"seq":null}""") shouldBe 0L
-      ProxyDashboardService.parseSeq("""{"select":"a1"}""") shouldBe 0L
-      ProxyDashboardService.parseSeq("not json at all") shouldBe 0L
+      DashboardMessage.seq("""{"seq":"12"}""") shouldBe 0L
+      DashboardMessage.seq("""{"seq":-1}""") shouldBe 0L
+      DashboardMessage.seq("""{"seq":1.5}""") shouldBe 0L
+      DashboardMessage.seq("""{"seq":null}""") shouldBe 0L
+      DashboardMessage.seq("""{"select":"a1"}""") shouldBe 0L
+      DashboardMessage.seq("not json at all") shouldBe 0L
     }
 
     // ==================== Status bar ====================
@@ -335,7 +337,7 @@ class ProxyDashboardHtmlTest : StringSpec() {
     "the page should carry a polite live region for connection state" {
       val html = renderFullPage(snapshot())
 
-      html shouldContain """id="${ProxyDashboardHtml.ANNOUNCER_ID}""""
+      html shouldContain """id="${DashboardPage.ANNOUNCER_ID}""""
       html shouldContain """aria-live="polite""""
       html shouldContain """role="status""""
       html shouldContain "Connection to the proxy lost"
@@ -348,7 +350,7 @@ class ProxyDashboardHtmlTest : StringSpec() {
     "the live region must not be part of any pushed fragment" {
       (DashboardLayout.entries + null).forEach { layout ->
         ProxyDashboardHtml.pushFragment(snapshot(), "1", "/dashboard", layout) shouldNotContain
-          ProxyDashboardHtml.ANNOUNCER_ID
+          DashboardPage.ANNOUNCER_ID
       }
     }
 
@@ -531,6 +533,6 @@ class ProxyDashboardHtmlTest : StringSpec() {
 
   private companion object {
     // What the page script matches: the stamp inside the frame's first tag.
-    val VIEW_STAMP = Regex("""^<span[^>]*\s${ProxyDashboardHtml.VIEW_ATTR}="(\d+)"""")
+    val VIEW_STAMP = Regex("""^<span[^>]*\s${DashboardPage.VIEW_ATTR}="(\d+)"""")
   }
 }

@@ -24,6 +24,8 @@ internal class RequestFailureException(
   message: String,
   // Why the proxy rejected a registerPath (RegisterPathResponse.rejection_cause); unspecified for any other failure.
   val rejectionCause: PathRejectionCause = PathRejectionCause.REJECTION_CAUSE_UNSPECIFIED,
+  // The proxy's own words, without the call the message names, for the agent's dashboard.
+  val reason: String = message,
 ) : Exception(message) {
   companion object {
     private const val serialVersionUID = 8748724180953791199L

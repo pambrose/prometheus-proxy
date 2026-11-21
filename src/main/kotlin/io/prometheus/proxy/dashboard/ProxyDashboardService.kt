@@ -39,6 +39,7 @@ import io.ktor.server.routing.route
 import io.prometheus.Proxy
 import io.prometheus.common.dashboard.DashboardFrame
 import io.prometheus.common.dashboard.DashboardLogin
+import io.prometheus.common.dashboard.DashboardMessage
 import io.prometheus.common.dashboard.DashboardServer
 import io.prometheus.common.dashboard.DashboardServer.Companion.HX_REQUEST_HEADER
 import io.prometheus.common.dashboard.DashboardSettings
@@ -46,10 +47,6 @@ import io.prometheus.common.dashboard.DashboardSite
 import io.prometheus.proxy.ProxyEvent
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.longOrNull
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -130,7 +127,12 @@ internal class ProxyDashboardService(
       override suspend fun collect(): ProxySnapshot = ProxySnapshot.collect(proxy)
 
       override fun parseView(message: String): View =
-        View(parseLayout(message), parseSelection(message), parseSeq(message), parseFilter(message))
+        View(
+          parseLayout(message),
+          DashboardMessage.selection(message),
+          DashboardMessage.seq(message),
+          parseFilter(message),
+        )
 
       override fun frame(
         snapshot: ProxySnapshot,
@@ -317,79 +319,29 @@ internal class ProxyDashboardService(
 
   companion object {
     private val logger = logger {}
-    private val json = Json { ignoreUnknownKeys = true }
 
     /** The login page's heading. */
     internal const val LOGIN_HEADING = "Prometheus Proxy Dashboard"
 
     /**
-     * Reads `{"select": "<agentId>"}` from a session message.
-     *
-     * Returns null on anything unexpected: this is browser-supplied input on a port that has no auth,
-     * so malformed content must degrade to "no selection" rather than propagate an exception into the
-     * WebSocket loop and drop the session.
-     */
-    internal fun parseSelection(text: String): String? =
-      runCatching {
-        json.parseToJsonElement(text)
-          .jsonObject["select"]
-          ?.jsonPrimitive
-          ?.takeIf { it.isString }
-          ?.content
-          ?.takeIf { it.isNotEmpty() }
-      }.getOrNull()
-
-    /**
-     * Reads `{"layout": "PATH"}` from a session message, defaulting to [DashboardLayout.AGENT].
-     *
-     * Same contract as [parseSelection]: anything unexpected -- garbage, a missing field, an unknown
-     * layout name, or a browser predating the field -- resolves to the default rather than throwing
-     * inside the WebSocket loop. Falling back to the agent layout is the safe direction, since that is
-     * what the page served before layouts existed.
+     * Reads `{"layout": "PATH"}` from a session message, defaulting to [DashboardLayout.AGENT], what the page served
+     * before layouts existed (see [DashboardMessage.layout]).
      */
     internal fun parseLayout(text: String): DashboardLayout =
-      runCatching {
-        json.parseToJsonElement(text)
-          .jsonObject["layout"]
-          ?.jsonPrimitive
-          ?.takeIf { it.isString }
-          ?.content
-          ?.let { name -> DashboardLayout.entries.firstOrNull { it.name == name } }
-      }.getOrNull() ?: DashboardLayout.AGENT
-
-    /**
-     * Reads `{"seq": 12}`, the count of messages the page has sent, from a session message, defaulting to 0.
-     *
-     * Same contract as [parseSelection]: anything unexpected -- garbage, a missing field, a string, a fraction, or a
-     * negative number -- resolves to 0 rather than throwing inside the WebSocket loop. A page that predates the field
-     * sends none and ignores the stamp, so 0 changes nothing for it.
-     */
-    internal fun parseSeq(text: String): Long =
-      runCatching {
-        json.parseToJsonElement(text)
-          .jsonObject["seq"]
-          ?.jsonPrimitive
-          ?.takeUnless { it.isString }
-          ?.longOrNull
-          ?.takeIf { it >= 0 }
-      }.getOrNull() ?: 0L
+      DashboardMessage.layout(text, DashboardLayout.entries, DashboardLayout.AGENT)
 
     /**
      * Reads `{"search": "?q=team-a&problems=1"}`, the query of the page's URL, which holds the Paths view's filter,
      * from a session message, defaulting to [RowFilter.NONE].
      *
      * The URL's own query rather than fields of its own, so the filter has one format, which the `/paths` route reads
-     * too. Same contract as [parseSelection]: anything unexpected -- garbage, a missing field, a value of the wrong
-     * type, or a query that won't decode -- resolves to no filter rather than throwing inside the WebSocket loop.
+     * too. Same contract as [DashboardMessage.selection]: anything unexpected -- garbage, a missing field, a value of
+     * the wrong type, or a query that won't decode -- resolves to no filter rather than throwing inside the WebSocket
+     * loop.
      */
     internal fun parseFilter(text: String): RowFilter =
-      runCatching {
-        json.parseToJsonElement(text)
-          .jsonObject["search"]
-          ?.jsonPrimitive
-          ?.takeIf { it.isString }
-          ?.content
-          ?.let { RowFilter.of(parseQueryString(it.removePrefix("?"))) }
-      }.getOrNull() ?: RowFilter.NONE
+      DashboardMessage.search(text)
+        ?.let { runCatching { RowFilter.of(parseQueryString(it.removePrefix("?"))) }.getOrNull() }
+        ?: RowFilter.NONE
   }
 }

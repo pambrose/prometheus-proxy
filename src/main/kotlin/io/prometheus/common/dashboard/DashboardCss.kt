@@ -17,9 +17,11 @@
 package io.prometheus.common.dashboard
 
 /**
- * What every dashboard's stylesheet shares: the color tokens, light and dark, of the design system `docs/DESIGN.md`
- * records, with the contrast each pairing was measured at. The proxy's dashboard
- * ([io.prometheus.proxy.dashboard.ProxyDashboardCss]) and the login page ([LoginHtml]) both start from them.
+ * Every dashboard's stylesheet, inlined into each page's `<style>` (see [DashboardPage.dashboardHead]): the color
+ * tokens, light and dark, and the rules of the design system `docs/DESIGN.md` records, with the components they
+ * implement and the contrast each color pairing was measured at. The login page ([LoginHtml]) starts from the tokens.
+ *
+ * Apart from the markup because it answers to a different contract.
  */
 internal object DashboardCss {
   /** The color tokens, light and dark. */
@@ -44,4 +46,249 @@ internal object DashboardCss {
       }
     }
     """.trimIndent()
+
+  // The rules, after the tokens. Declared before CSS, which an object initializes in order.
+  private val RULES =
+    """
+    /* Visible to assistive tech, absent from the render. Used for the connection announcer and the
+       table caption, both of which duplicate something the layout already says visually. */
+    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden;
+      clip-path:inset(50%); white-space:nowrap; border:0; }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    /* Column flex rather than a `calc(100vh - 44px)` on the content: the bar's height is set by its own
+       content and changes with the touch-target rules below, so any hard-coded number is wrong on some
+       viewport. This makes the content region exactly the remaining space, whatever the bar measures. */
+    body { background:var(--bg); color:var(--ink); font-family:var(--mono); font-size:12.5px; line-height:1.5;
+           display:flex; flex-direction:column; min-height:100vh; }
+    body > main { flex:1; }
+    /* The tabs stand on the bar's bottom rule, so the bar has no bottom padding and sets its items on its floor; the
+       brand and the status carry their own, which puts their text on the tabs' line. One row above 720px: the status
+       wraps inside itself, so it never pushes the tabs off the rule. */
+    .bar { display:flex; align-items:flex-end; gap:10px; padding:8px 15px 0; border-bottom:1px solid var(--line);
+           background:var(--surface); }
+    .brand { font-weight:600; flex:none; padding-bottom:6px; }
+    /* Log out, at the bar's end, quieter than the tabs. */
+    .logout { flex:none; padding-bottom:5px; }
+    .logout button { font:inherit; font-size:11.5px; color:var(--ink-2); background:none; border:1px solid var(--line);
+      border-radius:3px; padding:1px 9px; cursor:pointer; }
+    .logout button:hover { color:var(--ink); background-color:var(--surface-2); }
+    .logout button:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+    .bar-right { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:2px 14px;
+      margin-left:auto; min-width:0; padding-bottom:6px; color:var(--ink-3); font-size:11.5px; }
+    /* Each stat stays whole; the row wraps between them rather than mid-phrase, which at 390px was
+       splitting "0 agents" across two lines. */
+    .bar-right > span { white-space:nowrap; }
+    .bar-right .ok { color:var(--ok); } .bar-right .warn { color:var(--warn); } .bar-right .crit { color:var(--crit); }
+    .conn { display:inline-flex; align-items:center; gap:6px; color:var(--ok); }
+    .conn .conn-down { display:none; }
+    .beacon { width:7px; height:7px; border-radius:50%; background:var(--ok); animation:pulse 2.4s ease-out infinite; }
+    @keyframes pulse { 0%{opacity:1} 70%{opacity:.4} 100%{opacity:1} }
+    /* Disconnected: green calm becomes red blink, and the label swaps to name the effort. The faster,
+       harder blink reads as "trying" rather than the solid dot of something simply dead. Driven off the
+       body class so a frozen status bar still flips, and it wins over the healthy rules by specificity. */
+    body.ws-down .conn { color:var(--crit); }
+    body.ws-down .conn .conn-live { display:none; }
+    body.ws-down .conn .conn-down { display:inline; }
+    body.ws-down .beacon { background:var(--crit); animation:blink 1s steps(2, start) infinite; }
+    @keyframes blink { 0%{opacity:1} 50%{opacity:.25} 100%{opacity:1} }
+    @media (prefers-reduced-motion: reduce) { .beacon, body.ws-down .beacon { animation:none } }
+    .md { display:grid; grid-template-columns:262px 1fr; }
+    .md-list { border-right:1px solid var(--line); background:var(--surface-2); }
+    .md-head, .section { display:flex; justify-content:space-between; padding:9px 15px; font-size:10px;
+      letter-spacing:.09em; text-transform:uppercase; color:var(--ink-3); font-weight:600;
+      border-bottom:1px solid var(--line); background:var(--surface-2); }
+    /* The current row's edge is 2px, as the current tab's is, and the left padding a pixel wider than the right, so
+       with the edge a row's text sits 18px in. */
+    .md-row { display:block; width:100%; text-align:left; font:inherit; cursor:pointer; background:none;
+      border:0; border-bottom:1px solid var(--line-soft); border-left:2px solid transparent;
+      padding:10px 15px 10px 16px; color:var(--ink); }
+    .md-row:hover { background:var(--surface-3); }
+    /* Inside the row, and inside a tab, which meets the strip below it. */
+    .md-row:focus-visible, .nav a:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
+    .md-row[aria-current="true"] { background:var(--surface); border-left-color:var(--accent); }
+    /* 11.5px, matching .bar-right and .hero-meta: this is the same job -- quiet supporting metadata --
+       and a separate 11px step for it was a size the hierarchy never used. */
+    .md-row .host { display:block; color:var(--ink-3); font-size:11.5px; margin-top:2px; }
+    .md-row .tag, .kv .k .tag { margin-left:7px; }
+    .md-detail { background:var(--surface); }
+    .hero { padding:14px 18px; border-bottom:1px solid var(--line); }
+    .hero-title { font-size:15px; font-weight:640; display:flex; align-items:center; gap:9px; }
+    .hero-meta { color:var(--ink-3); font-size:11.5px; margin-top:5px; }
+    .hero-failover { font-size:11.5px; margin-top:5px; display:flex; align-items:center; gap:8px; }
+    .tag.warn { background:var(--warn-soft); color:var(--warn); }
+    .tag { font-size:10px; background:var(--surface-3); color:var(--ink-2); padding:2px 7px; border-radius:20px; }
+    .kv { display:flex; gap:10px; padding:7px 18px; border-bottom:1px solid var(--line-soft); align-items:center; }
+    /* The same step the path table's rows take on hover, so a row is as easy to follow across in both views. */
+    .kv:hover { background:var(--surface-2); }
+    .kv .k { min-width:220px; } .kv .v { color:var(--ink-3); } .kv .t { color:var(--ink-3); min-width:64px; }
+    .led { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:7px; }
+    .led.ok { background:var(--ok); } .led.crit { background:var(--crit); }
+    .pill { font-size:10.5px; font-weight:600; padding:2px 7px; border-radius:20px; }
+    .pill.ok { background:var(--ok-soft); color:var(--ok); }
+    .pill.crit { background:var(--crit-soft); color:var(--crit); }
+    .empty { color:var(--ink-3); padding:14px 15px; }
+    .empty.pad { padding:22px 18px; }
+    .empty.gone { color:var(--crit); }
+    /* Folder tabs, their top corners rounded as a folder tab's are. The nav reaches 1px below the bar into its rule,
+       so a tab's bottom edge lies on the rule: every tab is outlined in the rule's colour across its top and down its
+       sides, and a tab at rest leaves the rule showing through its transparent bottom, so the outline and the rule
+       read as one line. The current tab's bottom is a 2px accent line that covers the rule beneath it, the tab's edge
+       as the selected row's left border is the row's; its bottom padding gives up the extra pixel, so it stands as
+       tall as the others. */
+    .nav { display:flex; align-items:flex-end; gap:2px; flex:none; margin:0 0 -1px 18px; }
+    .nav a { color:var(--ink-3); text-decoration:none; padding:7px 14px 6px; border:1px solid var(--line);
+      border-bottom-color:transparent; border-radius:6px 6px 0 0; background-clip:padding-box; }
+    .nav a:hover { background-color:var(--surface-2); color:var(--ink); }
+    .nav a.on { background-color:var(--surface-2); color:var(--ink); font-weight:600;
+      border-bottom:2px solid var(--accent); padding-bottom:5px; }
+    /* The tabs keep their own paint in forced colours, in system colours, so the current one is told apart by more
+       than its weight: every tab outlined in CanvasText as the rule is, a link at rest, and the current tab's bottom
+       line in Highlight. */
+    @media (forced-colors: active) {
+      .nav a { forced-color-adjust:none; color:LinkText; background-color:Canvas; border-color:CanvasText;
+        border-bottom-color:transparent; }
+      .nav a:hover { background-color:Canvas; text-decoration:underline; }
+      .nav a.on { color:CanvasText; background-color:Canvas; border-bottom-color:Highlight; }
+      .nav a:focus-visible { outline-color:Highlight; }
+    }
+    /* The focus ring of every control but a list row and a tab, whose rings are inset (above). */
+    .copy:focus-visible, .scrape-now:focus-visible, .close:focus-visible, .guide-toggle:focus-visible,
+    .filters input:focus-visible, .ptable td.links a:focus-visible {
+      outline:2px solid var(--accent); outline-offset:1px; }
+    /* The table is the one region that can outgrow a narrow viewport, so it scrolls inside its own
+       container rather than letting the page body scroll sideways. */
+    .scroller { overflow-x:auto; background:var(--surface); }
+    .ptable { width:100%; border-collapse:collapse; white-space:nowrap; }
+    .ptable th { text-align:left; font-size:10px; letter-spacing:.09em; text-transform:uppercase;
+      color:var(--ink-3); font-weight:600; padding:9px 15px; background:var(--surface-2);
+      border-bottom:1px solid var(--line); position:sticky; top:0; }
+    .ptable td { padding:8px 15px; border-bottom:1px solid var(--line-soft); }
+    .ptable .num { text-align:right; font-variant-numeric:tabular-nums; }
+    /* A column of marks, the Links column, centered under its header, which stands over the marks rather than at their
+       left. */
+    .ptable .center { text-align:center; }
+    .ptable .dim, .scrape-result .dim { color:var(--ink-3); }
+    .ptable tr:hover td { background:var(--surface-2); }
+    .ptable tr.departed td:first-child { color:var(--crit); }
+    /* The Activity table's Detail column, which holds a sentence, so it wraps where the rest of the row doesn't. */
+    .ptable td.wrap { white-space:normal; min-width:280px; }
+    /* The History and Links columns keep their content's width. A table in a window wider than it needs shares the
+       spare width among its columns, in proportion to their content, and the strip's width gave History a large share,
+       which opened a gap between the percentage and the links, centered in theirs; the other columns take it instead. */
+    .ptable td.history, .ptable td.links { width:1%; }
+    /* A path's links into other tools: the dimmed column's ink-3, underlined so they read as links, and ink on hover,
+       as the nav's are. */
+    .ptable td.links a { color:inherit; text-underline-offset:2px; }
+    .ptable td.links a:hover { color:var(--ink); }
+    /* A link drawn as its tool's brand mark (LinkIcon) rather than its name, which its title and aria-label carry: a
+       24px target, as the icon buttons are, its 16px mark painted in the brand's colour (--brand) through the mark as
+       a mask (--icon). The page's second stylesheet (linkIconCss) sets both per icon, so a push carries only the class.
+       An icon stands 4px from its neighbours, where two names take a separator. */
+    .ptable td.links a.icon { display:inline-flex; align-items:center; justify-content:center;
+      width:24px; height:24px; margin:-4px 0; vertical-align:middle; border-radius:20px; text-decoration:none; }
+    .ptable td.links a.icon + a, .ptable td.links a + a.icon { margin-left:4px; }
+    .ptable td.links a.icon::before { content:""; width:16px; height:16px; background:var(--brand);
+      -webkit-mask:var(--icon) center/contain no-repeat; mask:var(--icon) center/contain no-repeat; }
+    /* Hover rings the target rather than filling it as the icon buttons do: on surface-3 the light theme's marks fall
+       below 3:1 (2.90:1 and 2.75:1), where on surface-2, the hovered row's ground, they hold it. */
+    .ptable td.links a.icon:hover { box-shadow:inset 0 0 0 1px var(--ink-3); }
+    /* Forced colours replace the mark's paint, as they do the icon buttons', which would leave the link blank; LinkText
+       keeps it visible and reading as a link. */
+    @media (forced-colors: active) {
+      .ptable td.links a.icon::before { forced-color-adjust:none; background:LinkText; } }
+    /* An event's tag opens its cell, so it takes none of the gap that sets a tag apart from a name before it. */
+    .ptable td.event .tag, .sr-head span.tag { margin-left:0; }
+    /* The icon buttons: copy beside a path or target URL, scrape-now beside a path, and close on the scrape result.
+       Their icons are CSS masks painted in currentColor rather than inline SVG: the table is pushed whole every
+       refresh, and an SVG in every row would grow every frame. 24px meets the minimum target size, and the negative
+       margins keep one from making the row taller. */
+    .copy, .scrape-now, .close { display:inline-flex; align-items:center; justify-content:center; width:24px;
+      height:24px; margin:-4px 0 -4px 6px; padding:0; vertical-align:middle; border:0; border-radius:20px;
+      background:none; color:var(--ink-3); cursor:pointer; }
+    .copy {
+      --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linejoin='round'><rect x='5.25' y='5.25' width='8.5' height='8.5' rx='1.5'/><path d='M10.75 5.25v-2a1 1 0 0 0-1-1h-6.5a1 1 0 0 0-1 1v6.5a1 1 0 0 0 1 1h2'/></svg>"); }
+    .scrape-now {
+      --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M13 8a5 5 0 1 1-1.46-3.54'/><path d='M12.5 2.25v2.5H10'/></svg>"); }
+    .copy::before, .scrape-now::before, .close::before, .guide-toggle::before { content:""; width:13px; height:13px;
+      background:currentColor; -webkit-mask:var(--icon) center/contain no-repeat;
+      mask:var(--icon) center/contain no-repeat; }
+    .copy:hover, .scrape-now:hover, .close:hover { background:var(--surface-3); color:var(--ink); }
+    .copy.copied { color:var(--ok);
+      --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M3 8.5l3.25 3.25L13 5'/></svg>"); }
+    .copy.copy-failed { color:var(--crit); }
+    /* A cross, for a copy that failed and for closing the scrape result. */
+    .copy.copy-failed, .close {
+      --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round'><path d='M4 4l8 8M12 4l-8 8'/></svg>"); }
+    /* Forced colours replace every background, the mask's paint included, so the icon would vanish. */
+    @media (forced-colors: active) {
+      .copy::before, .scrape-now::before, .close::before, .guide-toggle::before { forced-color-adjust:none;
+        background:ButtonText; } }
+    /* A scrape-now's result, above the Paths table: a heading line, then the start of the body. The body is the one
+       block of a target's own text on the page, in a bounded box that scrolls rather than pushing the table away. */
+    .scrape-result { padding:10px 15px; background:var(--surface); border-bottom:1px solid var(--line); }
+    .sr-head { display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
+    .sr-head .close { margin-left:auto; }
+    .sr-path { font-weight:600; }
+    .sr-failure { margin-top:7px; color:var(--crit); }
+    .scrape-result pre { margin:9px 0 0; padding:8px 10px; max-height:240px; overflow:auto; font:inherit;
+      font-size:11.5px; color:var(--ink-2); background:var(--surface-2); border:1px solid var(--line-soft);
+      white-space:pre; }
+    .sr-note { margin-top:5px; font-size:11.5px; }
+    .tag.crit { background:var(--crit-soft); color:var(--crit); margin-left:7px; }
+    /* The Paths view's search, on the recessed plane like the table header below it. The input holds content, so it
+       is square; it takes focus as the rest of the page does. A checked box is neutral ink: the accent is kept for
+       focus and the current row. */
+    .filters { display:flex; flex-wrap:wrap; align-items:center; gap:16px; padding:9px 15px;
+      background:var(--surface-2); border-bottom:1px solid var(--line); }
+    .filters input[type=search] { font:inherit; color:var(--ink); background:var(--surface);
+      border:1px solid var(--line); border-radius:0; padding:5px 9px; width:min(440px, 100%); }
+    .filters input[type=search]::placeholder { color:var(--ink-3); }
+    .filters label { display:inline-flex; align-items:center; gap:7px; color:var(--ink-2); cursor:pointer; }
+    .filters input[type=checkbox] { accent-color:var(--ink-2); margin:0; }
+    /* The column guide's button, at the search's right end: a question mark and its name, in the checkbox label's ink-2
+       and ink on hover or while open, the accent kept for its focus ring. Named, since a bare "?" doesn't say what it
+       opens. */
+    .guide-toggle { display:inline-flex; align-items:center; gap:7px; min-height:24px; margin-left:auto; padding:0;
+      font:inherit; color:var(--ink-2); background:none; border:0; cursor:pointer;
+      --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><circle cx='8' cy='8' r='6.25'/><path d='M6.3 6.2a1.75 1.75 0 1 1 2.45 1.6c-.45.2-.75.55-.75 1.05v.4'/><circle cx='8' cy='11.4' r='.9' fill='black' stroke='none'/></svg>"); }
+    .guide-toggle:hover, .guide-toggle[aria-expanded="true"] { color:var(--ink); }
+    /* The column guide, under the search: what each of the table's columns holds. On the reading plane, as the scrape
+       result is, and a strip that pushes the table down rather than a layer over it, which would need a shadow and
+       cover the columns it explains. Each name is in the header's own Label type, so it reads as the header it
+       explains. */
+    .column-guide { padding:10px 15px; background:var(--surface); border-bottom:1px solid var(--line); }
+    .cg-head { display:flex; align-items:center; justify-content:space-between; }
+    .cg-head span, .column-guide dt { font-size:10px; letter-spacing:.09em; text-transform:uppercase;
+      color:var(--ink-3); font-weight:600; }
+    .column-guide dl { display:grid; grid-template-columns:max-content 1fr; align-items:baseline; gap:6px 18px;
+      margin-top:7px; }
+    .column-guide dd { color:var(--ink-2); }
+    .match-count { padding:7px 15px; color:var(--ink-3); font-size:11.5px; border-bottom:1px solid var(--line-soft); }
+    /* A path's recent scrapes, oldest first. Each <i> is a run of like results and paints a 4px dot every 6px, so a
+       healthy strip is one element however long it is. Round, as everything that reports state is. A full strip, at
+       the default 20 scrapes, is 120px, and until a history fills, its first run is .slot (not .empty, the empty
+       state's class): dots in the rule's colour for the scrapes still to come, so every row's strip is that wide. */
+    .hist { display:inline-flex; vertical-align:middle; margin:-2px 7px 0 0; }
+    .hist i { display:block; height:6px; width:calc(var(--n) * 6px);
+      background:radial-gradient(circle at 3px 3px, var(--dot) 2px, transparent 2.5px) 0 0 / 6px 6px repeat-x; }
+    .hist i.ok { --dot:var(--ok); } .hist i.crit { --dot:var(--crit); } .hist i.slot { --dot:var(--line); }
+    /* Forced colours drop backgrounds, the dots included. */
+    @media (forced-colors: active) { .hist i { forced-color-adjust:none; } }
+    /* Narrow, the tabs take a row of their own, the bar's last, so they still stand on its rule; the brand and the
+       status share the rows above. */
+    @media (max-width:720px) {
+      .md { grid-template-columns:1fr; } .md-list { border-right:0; border-bottom:1px solid var(--line); }
+      .bar { flex-wrap:wrap; row-gap:4px; }
+      .nav { order:1; flex-basis:100%; margin-left:0; }
+    }
+    /* Touch, not width: a 34px tab is a comfortable mouse target and a poor thumb one, and the two do
+       not correlate with viewport size -- a tablet is wide and touch-driven. The dense bar is kept for
+       pointer devices rather than spending vertical space everyone pays for. */
+    @media (pointer: coarse) {
+      .nav a, .nav a.on { min-height:44px; display:inline-flex; align-items:center; padding-top:0; padding-bottom:0; }
+    }
+    """.trimIndent()
+
+  /** The tokens and the rules. */
+  val CSS = TOKENS + "\n" + RULES
 }

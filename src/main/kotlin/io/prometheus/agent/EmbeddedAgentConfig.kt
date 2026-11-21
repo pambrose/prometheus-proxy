@@ -177,6 +177,48 @@ class EmbeddedAgentConfig private constructor(
     fun agentMetrics(port: Int): Builder = apply { agentMetricsPort = port }
 
     /**
+     * The port of the agent's dashboard, which shows its connection, each path and why the proxy refused one, and its
+     * settings; off unless one is given (`agent.dashboard.enabled` and `agent.dashboard.port`). Null turns it off
+     * again.
+     */
+    @get:JvmSynthetic
+    @set:JvmSynthetic
+    var dashboardPort: Int?
+      get() = values["dashboard.port"] as Int?
+      set(value) {
+        put("dashboard.enabled", value?.let { true })
+        put("dashboard.port", value)
+      }
+
+    /**
+     * Turns on the agent's dashboard, on [port], and listening on [host] when one is given, such as `127.0.0.1` to keep
+     * it local, and otherwise on every interface (`agent.dashboard.host`); sets [dashboardPort].
+     */
+    @JvmOverloads
+    fun dashboard(
+      port: Int,
+      host: String? = null,
+    ): Builder =
+      apply {
+        dashboardPort = port
+        put("dashboard.host", host)
+      }
+
+    /**
+     * Requires a login to the agent's dashboard, [username] and [password], from its login page or as Basic Auth
+     * (`agent.dashboard.username` and `agent.dashboard.password`). Without one, the dashboard asks for none.
+     */
+    @JvmOverloads
+    fun dashboardLogin(
+      password: String,
+      username: String = "admin",
+    ): Builder =
+      apply {
+        values["dashboard.password"] = password
+        values["dashboard.username"] = username
+      }
+
+    /**
      * Has the agent scrape the app it's embedded in: its metrics at `http://127.0.0.1:<port>/<metricsPath>`, served to
      * Prometheus at the proxy's [path]. A [username] and [password] are sent as Basic Auth; they're percent-encoded
      * into the URL, which the agent leaves out of its logs. Both empty means none.

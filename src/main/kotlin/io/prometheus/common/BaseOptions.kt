@@ -22,6 +22,7 @@ import com.beust.jcommander.DynamicParameter
 import com.beust.jcommander.JCommander
 import com.beust.jcommander.Parameter
 import com.beust.jcommander.ParameterException
+import com.google.common.net.InetAddresses
 import com.pambrose.common.util.runCatchingCancellable
 import com.pambrose.common.util.simpleClassName
 import com.typesafe.config.Config
@@ -36,6 +37,12 @@ import io.prometheus.common.EnvVars.ADMIN_ENABLED
 import io.prometheus.common.EnvVars.ADMIN_PORT
 import io.prometheus.common.EnvVars.CERT_CHAIN_FILE_PATH
 import io.prometheus.common.EnvVars.CERT_CHAIN_PEM
+import io.prometheus.common.EnvVars.DASHBOARD_ENABLED
+import io.prometheus.common.EnvVars.DASHBOARD_HOST
+import io.prometheus.common.EnvVars.DASHBOARD_PASSWORD
+import io.prometheus.common.EnvVars.DASHBOARD_PATH
+import io.prometheus.common.EnvVars.DASHBOARD_PORT
+import io.prometheus.common.EnvVars.DASHBOARD_USERNAME
 import io.prometheus.common.EnvVars.DEBUG_ENABLED
 import io.prometheus.common.EnvVars.KEEPALIVE_TIMEOUT_SECS
 import io.prometheus.common.EnvVars.KEEPALIVE_TIME_SECS
@@ -141,6 +148,51 @@ abstract class BaseOptions protected constructor(
    */
   @Parameter(names = ["-b", "--debug"], description = "Debug option enabled")
   var debugEnabled = false
+    private set
+
+  /**
+   * Enables the operational dashboard, served from its **own** port ([dashboardPort]) rather than the admin port. Off
+   * by default, matching the admin and metrics posture. Resolved from CLI → [DASHBOARD_ENABLED] env var →
+   * `<role>.dashboard.enabled` config, where the role is `proxy` or `agent`.
+   */
+  @Parameter(names = ["--dashboard"], description = "Operational dashboard enabled")
+  var dashboardEnabled = false
+    protected set
+
+  /**
+   * TCP port the operational dashboard listens on. Deliberately separate from the admin port so the dashboard can
+   * be firewalled independently of the k8s probe endpoints (`/ping`, `/healthcheck`).
+   * `-1` means "fall back to [DASHBOARD_PORT] env var, then `<role>.dashboard.port` config (default `8094` for the
+   * proxy, `8095` for the agent)".
+   */
+  @Parameter(names = ["--dashboard_port"], description = "Operational dashboard port")
+  var dashboardPort: Int = -1
+    protected set
+
+  /**
+   * Base HTTP path the operational dashboard is served from. Validated non-empty when [dashboardEnabled] is `true`.
+   */
+  @Parameter(names = ["--dashboard_path"], description = "Operational dashboard base path")
+  var dashboardPath = ""
+    protected set
+
+  /**
+   * Address the operational dashboard listens on. Empty means "fall back to [DASHBOARD_HOST] env var, then
+   * `<role>.dashboard.host` config (default `0.0.0.0`)". Without a login the dashboard has no authentication, so
+   * enabling it on a wildcard address logs a startup warning; `127.0.0.1` keeps it reachable only from this host.
+   */
+  @Parameter(names = ["--dashboard_host"], description = "Operational dashboard listen address")
+  var dashboardHost = ""
+    protected set
+
+  // The login the dashboard requires, from its login page or as HTTP Basic Auth: <role>.dashboard.username (default
+  // "admin") and password. A password turns it on; empty, the default, leaves the dashboard open. Each resolves from
+  // its env var, then its setting; there are no command-line flags, since a command line shows in `ps`. The password is
+  // never logged.
+  internal var dashboardUsername = ""
+    private set
+
+  internal var dashboardPassword = ""
     private set
 
   /**
@@ -480,6 +532,101 @@ abstract class BaseOptions protected constructor(
     }
 
   /**
+   * What `<role>.dashboard` holds that both roles resolve alike: its listener, its sessions, and its login.
+   */
+  internal class DashboardConfig(
+    val enabled: Boolean,
+    val port: Int,
+    val path: String,
+    val host: String,
+    val username: String,
+    val password: String,
+    val maxSessions: Int,
+    val refreshIntervalSecs: Int,
+    val allowedHosts: List<String>,
+  )
+
+  /**
+   * Resolves the dashboard's options for [role], `proxy` or `agent`, from [dashboard], the role's config, and, while
+   * the dashboard is on, checks and logs them to [log], the role's logger, warning when it listens on every interface
+   * without a login.
+   */
+  internal fun assignDashboardOptions(
+    role: String,
+    dashboard: DashboardConfig,
+    log: KLogger,
+  ) {
+    dashboardEnabled = resolveBooleanOption(dashboardEnabled, DASHBOARD_ENABLED, dashboard.enabled, "--dashboard")
+    log.info { "dashboardEnabled: $dashboardEnabled" }
+
+    dashboardPort = resolveIntOption(dashboardPort, DASHBOARD_PORT, dashboard.port)
+    require(dashboardPort in 1..65535) { "dashboardPort must be in 1..65535: $dashboardPort" }
+
+    dashboardPath = resolveStringOption(dashboardPath, DASHBOARD_PATH, dashboard.path)
+    dashboardHost = resolveStringOption(dashboardHost, DASHBOARD_HOST, dashboard.host)
+    dashboardUsername = DASHBOARD_USERNAME.getEnv(dashboard.username)
+    dashboardPassword = DASHBOARD_PASSWORD.getEnv(dashboard.password)
+
+    if (!dashboardEnabled)
+      return
+    require(dashboardPath.isNotEmpty()) { "dashboardPath is empty" }
+    require(dashboardHost.isNotBlank()) { "dashboardHost is blank" }
+    log.requirePositive("dashboard.maxSessions", dashboard.maxSessions)
+    // The push loop waits this long between pushes; a wait of 0 returns at once, spinning a thread.
+    log.requirePositive("dashboard.refreshIntervalSecs", dashboard.refreshIntervalSecs)
+    log.info { "dashboardHost: $dashboardHost, dashboardPort: $dashboardPort, dashboardPath: $dashboardPath" }
+    validateDashboardLogin(role)
+    logDashboardExposure(role, dashboard.allowedHosts, log)
+  }
+
+  // The login, masked, or, without one on a wildcard address, the warning that the dashboard is open to the network.
+  private fun logDashboardExposure(
+    role: String,
+    allowedHosts: List<String>,
+    log: KLogger,
+  ) {
+    if (dashboardPassword.isNotEmpty()) {
+      // Never the password.
+      log.info {
+        "dashboard login: on, dashboardUsername: ${AgentValues.shownValue(dashboardUsername)}, dashboardPassword: ***"
+      }
+      log.info {
+        "The dashboard requires a login, over plain HTTP, so its password crosses the network readable; put TLS in " +
+          "front of it, such as a reverse proxy, unless the network is trusted"
+      }
+    } else if (isWildcardAddress(dashboardHost)) {
+      val rebindingHint =
+        if (allowedHosts.isEmpty()) " Set $role.dashboard.allowedHosts to refuse unknown host names." else ""
+      log.warn {
+        "The dashboard has no authentication and listens on all interfaces ($dashboardHost:$dashboardPort). " +
+          "Set $role.dashboard.host (--dashboard_host) to 127.0.0.1, firewall the port, or set " +
+          "$role.dashboard.password (DASHBOARD_PASSWORD) to require a login.$rebindingHint"
+      }
+    }
+  }
+
+  /**
+   * Fails startup on a dashboard login the dashboard can't check, once a password turns it on: an empty username,
+   * a colon in it, where HTTP Basic Auth splits the username from the password, or a control character in either,
+   * such as the trailing newline of a secret read from a file, which no browser would send. No message includes a
+   * value. Without a password the username isn't used, so it isn't checked.
+   */
+  private fun validateDashboardLogin(role: String) {
+    if (dashboardPassword.isEmpty())
+      return
+    require(dashboardUsername.isNotEmpty()) {
+      "$role.dashboard.username (DASHBOARD_USERNAME) is empty, with $role.dashboard.password set"
+    }
+    require(':' !in dashboardUsername) {
+      "$role.dashboard.username can't contain a colon, where HTTP Basic Auth splits it from the password"
+    }
+    require(dashboardUsername.none { it.isISOControl() }) { "$role.dashboard.username contains a control character" }
+    require(dashboardPassword.none { it.isISOControl() }) {
+      "$role.dashboard.password contains a control character, such as a trailing newline"
+    }
+  }
+
+  /**
    * Resolves the options common to both Proxy and Agent in a single, shared order, ending with
    * [validateTlsConfig]. Each argument is the role-specific config default; the underlying `assign*`
    * helpers apply CLI > env > config precedence. Centralizing this avoids the two subclasses drifting
@@ -644,6 +791,16 @@ abstract class BaseOptions protected constructor(
   }
 
   internal companion object {
+    /**
+     * True when [host] is a literal wildcard address (`0.0.0.0`, `::`), which listens on every interface.
+     *
+     * Only a literal counts: a hostname is never resolved at startup just to decide whether to log a warning.
+     */
+    internal fun isWildcardAddress(host: String): Boolean {
+      val literal = host.removeSurrounding("[", "]")
+      return InetAddresses.isInetAddress(literal) && InetAddresses.forString(literal).isAnyLocalAddress
+    }
+
     private val logger = logger {}
     private val PROPS = ConfigParseOptions.defaults().setSyntax(ConfigSyntax.PROPERTIES)
     const val DEBUG = "debug"

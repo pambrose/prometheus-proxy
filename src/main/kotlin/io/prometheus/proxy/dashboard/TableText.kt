@@ -16,7 +16,7 @@
 
 package io.prometheus.proxy.dashboard
 
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.MATCH_COUNT_ATTR
+import io.prometheus.common.dashboard.DashboardPage.MATCH_COUNT_ATTR
 import kotlinx.html.DIV
 import kotlinx.html.THEAD
 import kotlinx.html.ThScope

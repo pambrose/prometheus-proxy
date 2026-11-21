@@ -256,12 +256,22 @@ internal class DashboardServer<V : Any, S : Any>(
   }
 
   // Why pageGuard refuses [request], or null when it may proceed.
-  private fun pageRefusal(request: ApplicationRequest): String? =
-    originRefusal(request)
-      ?: if (request.httpMethod != HttpMethod.Get && request.headers[HX_REQUEST_HEADER] != "true")
+  private fun pageRefusal(request: ApplicationRequest): String? {
+    val originRefused = originRefusal(request)
+    return when {
+      originRefused != null -> {
+        originRefused
+      }
+
+      request.httpMethod != HttpMethod.Get && request.headers[HX_REQUEST_HEADER] != "true" -> {
         "Only the dashboard's page may ask for this"
-      else
+      }
+
+      else -> {
         null
+      }
+    }
+  }
 
   // Why a request from [request]'s Origin is refused, or null when it may proceed (see isOriginAllowed).
   private fun originRefusal(request: ApplicationRequest): String? {
@@ -294,32 +304,55 @@ internal class DashboardServer<V : Any, S : Any>(
   // login page and answers anything else with a 401. Never with WWW-Authenticate, which would have a browser show its
   // own prompt. The login and logout routes need no session. Basic Auth is for scripts only (see isBrowser).
   private fun authCheck(login: DashboardLogin) =
-    createApplicationPlugin("DashboardAuthCheck") {
-      onCall { call ->
-        val request = call.request
-        val path = request.path()
-        if (path == loginPath || path == logoutPath || logins.isValid(request.cookies[sessionCookie]))
-          return@onCall
-        // A browser must use the login page: one that once saved a Basic login sends it with every request, which would
-        // skip the page and outlast Log out. So a browser's Basic login is ignored, and only a script's is read.
-        val header = if (isBrowser(request)) null else request.headers[HttpHeaders.Authorization]
-        if (header != null) {
-          val address = request.origin.remoteAddress
-          if (limiter.isBlocked(address)) {
-            call.response.header(HttpHeaders.RetryAfter, RETRY_AFTER_SECS)
-            call.respondText(LoginHtml.LIMITED, ContentType.Text.Plain, HttpStatusCode.TooManyRequests)
-            return@onCall
-          }
-          if (login.accepts(header))
-            return@onCall
-          recordBadLogin(address)
-        }
-        if (wantsPage(request))
-          call.seeOther("$loginPath?${LoginHtml.NEXT_FIELD}=${request.uri.encodeURLParameter()}")
-        else
-          call.respondText("Login required", ContentType.Text.Plain, HttpStatusCode.Unauthorized)
-      }
+    createApplicationPlugin("DashboardAuthCheck") { onCall { checkLogin(it, login) } }
+
+  private suspend fun checkLogin(
+    call: ApplicationCall,
+    login: DashboardLogin,
+  ) {
+    if (needsNoLogin(call.request))
+      return
+    // A browser must use the login page: one that once saved a Basic login sends it with every request, which would
+    // skip the page and outlast Log out. So a browser's Basic login is ignored, and only a script's is read.
+    val header = if (isBrowser(call.request)) null else call.request.headers[HttpHeaders.Authorization]
+    if (header == null || !basicLoginAnswered(call, header, login))
+      refuseWithoutLogin(call)
+  }
+
+  // Whether [request] may proceed without a login: one for the login or logout route, or with a valid session.
+  private fun needsNoLogin(request: ApplicationRequest): Boolean {
+    val path = request.path()
+    if (path == loginPath || path == logoutPath)
+      return true
+    return logins.isValid(request.cookies[sessionCookie])
+  }
+
+  // A script's Basic login, [header]: true when it is let in, or refused for the limit on wrong logins, which answers
+  // it here; false when it is wrong, which counts against the limit and is answered as no login is.
+  private suspend fun basicLoginAnswered(
+    call: ApplicationCall,
+    header: String,
+    login: DashboardLogin,
+  ): Boolean {
+    val address = call.request.origin.remoteAddress
+    if (limiter.isBlocked(address)) {
+      call.response.header(HttpHeaders.RetryAfter, RETRY_AFTER_SECS)
+      call.respondText(LoginHtml.LIMITED, ContentType.Text.Plain, HttpStatusCode.TooManyRequests)
+      return true
     }
+    if (login.accepts(header))
+      return true
+    recordBadLogin(address)
+    return false
+  }
+
+  // A request without a login: a page request goes to the login page, and anything else gets a 401.
+  private suspend fun refuseWithoutLogin(call: ApplicationCall) {
+    if (wantsPage(call.request))
+      call.seeOther("$loginPath?${LoginHtml.NEXT_FIELD}=${call.request.uri.encodeURLParameter()}")
+    else
+      call.respondText("Login required", ContentType.Text.Plain, HttpStatusCode.Unauthorized)
+  }
 
   // The login page, never cached or framed, for a page asked for without a session or after a wrong login.
   private suspend fun ApplicationCall.respondLogin(
@@ -330,7 +363,7 @@ internal class DashboardServer<V : Any, S : Any>(
   ) {
     response.header(HttpHeaders.CacheControl, "no-store")
     response.header("Content-Security-Policy", "frame-ancestors 'none'")
-    respondHtml(status) { renderLogin(settings.loginHeading, routeBase, next, username, alert) }
+    respondHtml(status) { renderLogin(LoginHtml.Form(settings.loginHeading, routeBase, next, username, alert)) }
   }
 
   // The login form's POST, behind originGuard: a body over MAX_LOGIN_BODY_BYTES (or of unknown length) refused unread,
@@ -362,8 +395,11 @@ internal class DashboardServer<V : Any, S : Any>(
   private fun sessionCookieHeader(
     token: String?,
     secure: Boolean = false,
-  ) = "$sessionCookie=${token.orEmpty()}; Max-Age=${if (token == null) 0 else DashboardSessions.MAX_AGE_SECS}; " +
-    "Path=$basePath; HttpOnly; SameSite=Lax" + if (secure) "; Secure" else ""
+  ): String {
+    val maxAge = if (token == null) 0 else DashboardSessions.MAX_AGE_SECS
+    val flags = if (secure) "; Secure" else ""
+    return "$sessionCookie=${token.orEmpty()}; Max-Age=$maxAge; Path=$basePath; HttpOnly; SameSite=Lax$flags"
+  }
 
   // A wrong login, from the form or Basic Auth: counted against the limit, and logged at WARN at most once a minute
   // for each address and at DEBUG otherwise, so a client guessing in a loop can't flood the log, never with the
@@ -384,20 +420,21 @@ internal class DashboardServer<V : Any, S : Any>(
 
   // Application-wide rather than route-scoped, so it runs before routing and covers every page, asset, and the
   // WebSocket. See isHostAllowed.
-  private val hostCheck =
-    createApplicationPlugin("DashboardHostCheck") {
-      onCall { call ->
-        val host = call.request.headers[HttpHeaders.Host]
-        if (!isHostAllowed(host, hostAllowlist)) {
-          logger.info {
-            "Refused a dashboard request for host $host; add it to ${settings.role}.dashboard.allowedHosts if expected"
-          }
-          call.respondText("Host not allowed", ContentType.Text.Plain, HttpStatusCode.Forbidden)
-        }
-      }
-    }
+  private val hostCheck = createApplicationPlugin("DashboardHostCheck") { onCall { checkHost(it) } }
 
-  private val server =
+  private suspend fun checkHost(call: ApplicationCall) {
+    val host = call.request.headers[HttpHeaders.Host]
+    if (!isHostAllowed(host, hostAllowlist)) {
+      logger.info {
+        "Refused a dashboard request for host $host; add it to ${settings.role}.dashboard.allowedHosts if expected"
+      }
+      call.respondText("Host not allowed", ContentType.Text.Plain, HttpStatusCode.Forbidden)
+    }
+  }
+
+  private val server = buildServer()
+
+  private fun buildServer() =
     embeddedServer(
       factory = CIO,
       configure = {
@@ -427,22 +464,11 @@ internal class DashboardServer<V : Any, S : Any>(
         // The served asset URLs carry their WebJar's version (ASSET_DIR, ICON_DIR), so a URL's content never changes
         // and a year-long max-age is safe. An unversioned URL would let a browser keep running a cached htmx after an
         // upgrade.
-        options { _, outgoing ->
-          if (CACHED_TYPES.any { outgoing.contentType?.match(it) == true })
-            CachingOptions(CacheControl.MaxAge(ASSET_MAX_AGE_SECS, visibility = CacheControl.Visibility.Public))
-          else
-            null
-        }
+        options { _, outgoing -> assetCaching(outgoing.contentType) }
       }
 
       routing {
-        // The dashboard lives under basePath (default /dashboard), so the bare root would otherwise 404. Send it to
-        // the dashboard. Skipped when basePath is already "/" -- there the site's page route owns the root, and a
-        // second handler would be a duplicate. Temporary rather than permanent: basePath is configurable,
-        // so a cached 301 would be wrong if it ever changed.
-        if (routeBase.isNotEmpty()) {
-          get("/") { call.respondRedirect(basePath, permanent = false) }
-        }
+        rootRedirect()
         settings.login?.also { loginRoutes(it) }
         // Whether this request may use the dashboard: the auth check answers first, so this is a 204 only when it may.
         // The page's script asks when its WebSocket closes, so an expired session lands on the login page.
@@ -452,6 +478,26 @@ internal class DashboardServer<V : Any, S : Any>(
         events()
       }
     }
+
+  // The dashboard lives under basePath (default /dashboard), so the bare root would otherwise 404. Send it to the
+  // dashboard. Skipped when basePath is already "/" -- there the site's page route owns the root, and a second handler
+  // would be a duplicate. Temporary rather than permanent: basePath is configurable, so a cached 301 would be wrong if
+  // it ever changed.
+  private fun Route.rootRedirect() {
+    if (routeBase.isNotEmpty())
+      get("/") { call.respondRedirect(basePath, permanent = false) }
+  }
+
+  // A year for what ASSET_DIR and ICON_DIR serve (see CachingHeaders above), and nothing for anything else.
+  private fun assetCaching(contentType: ContentType?): CachingOptions? {
+    val cached = CACHED_TYPES.any { contentType?.match(it) == true }
+    return if (cached)
+      CachingOptions(
+        CacheControl.MaxAge(ASSET_MAX_AGE_SECS, visibility = CacheControl.Visibility.Public),
+      )
+      else
+      null
+  }
 
   // The login page and its form, and Log out, only with a password set.
   private fun Route.loginRoutes(credentials: DashboardLogin) {
@@ -717,24 +763,19 @@ internal class DashboardServer<V : Any, S : Any>(
 
     // A path, and only a path: not too long, absolute, not protocol-relative, and with no character a browser could
     // read as starting a host (a backslash), nor a control character or whitespace.
-    private fun isPlainPath(path: String) =
-      when {
-        path.length > MAX_NEXT_LENGTH -> false
-        !path.startsWith("/") -> false
-        path.startsWith("//") -> false
-        else -> path.none { it == '\\' || it.isISOControl() || it.isWhitespace() }
-      }
+    private fun isPlainPath(path: String): Boolean {
+      val shaped = path.length <= MAX_NEXT_LENGTH && path.startsWith("/") && !path.startsWith("//")
+      return shaped && path.none { it == '\\' || it.isISOControl() || it.isWhitespace() }
+    }
 
     // A page of the dashboard at [routeBase], by the part of a path before its query: under the base, with no . or ..
     // segment, and not the login page.
     private fun isDashboardPage(
       pagePath: String,
       routeBase: String,
-    ) = when {
-      pagePath == "$routeBase/login" -> false
-      pagePath.split('/').any { it == "." || it == ".." } -> false
-      routeBase.isEmpty() -> true
-      else -> pagePath == routeBase || pagePath.startsWith("$routeBase/")
+    ): Boolean {
+      val underBase = routeBase.isEmpty() || pagePath == routeBase || pagePath.startsWith("$routeBase/")
+      return underBase && pagePath != "$routeBase/login" && pagePath.split('/').none { it == "." || it == ".." }
     }
 
     // Fetch Metadata's header, which every current browser sends with every request, a WebSocket handshake included,
@@ -813,17 +854,17 @@ internal class DashboardServer<V : Any, S : Any>(
     internal fun hostAllowlist(
       allowedHosts: Collection<String>,
       allowedOrigins: Collection<String>,
-    ): Set<String>? =
+    ): Set<String>? {
       if (allowedHosts.isEmpty())
-        null
-      else
-        buildSet {
-          add(LOCALHOST)
-          allowedHosts.mapNotNullTo(this) { hostName(it) }
-          allowedOrigins.mapNotNullTo(this) { origin ->
-            runCatching { URI(origin.trim()).host }.getOrNull()?.let(::hostName)
-          }
+        return null
+      return buildSet {
+        add(LOCALHOST)
+        allowedHosts.mapNotNullTo(this) { hostName(it) }
+        allowedOrigins.mapNotNullTo(this) { origin ->
+          runCatching { URI(origin.trim()).host }.getOrNull()?.let(::hostName)
         }
+      }
+    }
 
     // The host part of a Host header, an allowedHosts entry, or an origin's host: port and IPv6 brackets removed,
     // lowercased, and without a trailing dot. Null when empty or unparseable.

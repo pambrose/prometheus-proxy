@@ -1,0 +1,310 @@
+/*
+ * Copyright © 2026 Paul Ambrose
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package io.prometheus.agent.dashboard
+
+import io.prometheus.Agent
+import io.prometheus.BuildConfig
+import io.prometheus.agent.AgentGrpcService.ConnectFailure
+import io.prometheus.agent.AgentPathManager.PathContext
+import io.prometheus.agent.AgentPathManager.RegistrationFailure
+import io.prometheus.agent.PathSource
+import io.prometheus.agent.discovery.PathDiscoveryService.ReconcileFailure
+import io.prometheus.agent.filter.MetricFilter
+import io.prometheus.common.Utils.sanitizeUrl
+import kotlin.time.Duration
+import kotlin.time.Instant
+
+/** Where the agent stands with its proxy. */
+internal enum class ConnectionState(
+  val label: String,
+) {
+  /** Connected, its paths registered or being registered. */
+  CONNECTED("connected"),
+
+  /** Not connected, and no connect has failed since the last success: starting, or reconnecting after a drop. */
+  CONNECTING("connecting"),
+
+  /** Not connected, after a connect failed: the proxy is down, unreachable, or refuses the agent. */
+  FAILING("failing"),
+}
+
+/**
+ * One proxy endpoint, in the agent's failover order.
+ *
+ * @param current whether the agent is connected to it, or trying it now
+ * @param failure the latest failure to connect to it, until a connect to it succeeds
+ */
+internal data class EndpointView(
+  val spec: String,
+  val current: Boolean,
+  val failure: ConnectFailure? = null,
+)
+
+/**
+ * The agent's connection to its proxy, as only the agent can see it: the proxy shows nothing of an agent that can't
+ * reach it.
+ *
+ * @param since when the current connection began, while connected
+ * @param connects how many times the agent has connected
+ * @param failedOver whether the endpoint in use is not the first, the primary
+ * @param transport how the agent reaches its proxy: plaintext, TLS, or mutual TLS
+ * @param tokenSet whether the agent presents a token, never the token
+ */
+internal data class ConnectionView(
+  val state: ConnectionState,
+  val endpoints: List<EndpointView>,
+  val since: Instant? = null,
+  val connects: Int = 0,
+  val failedOver: Boolean = false,
+  val transport: String = "plaintext",
+  val tokenSet: Boolean = false,
+) {
+  /** The endpoint in use, or being tried. */
+  val endpoint: String get() = endpoints.firstOrNull { it.current }?.spec.orEmpty()
+}
+
+/** Where a path stands with the proxy. */
+internal enum class PathState(
+  val label: String,
+) {
+  /** Registered: the proxy routes the path's scrapes to this agent. */
+  REGISTERED("registered"),
+
+  /** Not registered: the proxy refused it, or couldn't be asked, for a cause that can clear, so it is tried again. */
+  RETRYING("retrying"),
+
+  /** Not registered: the proxy refused it for a cause that can't clear before the agent reconnects. */
+  REFUSED("refused"),
+
+  /** Not registered yet: the agent isn't connected, or hasn't reached it. */
+  PENDING("pending"),
+}
+
+/**
+ * A path's metric filter (`agent.filters`), and what it has done.
+ *
+ * @param failedOpen why it has let a scrape through unfiltered, or null when it never has
+ */
+internal data class FilterView(
+  val allow: List<String>,
+  val deny: List<String>,
+  val linesDropped: Long,
+  val bytesSaved: Long,
+  val failedOpen: String? = null,
+)
+
+/**
+ * One of the agent's paths, configured, discovered, or registered, and where it stands.
+ *
+ * @param path the path, without its leading slash
+ * @param name the name `agent.pathConfigs` gives it, empty for a discovered path
+ * @param url the URL it scrapes, its userinfo and query values redacted
+ * @param failure its last failure to register, until it registers
+ */
+internal data class AgentPathView(
+  val path: String,
+  val source: PathSource,
+  val url: String,
+  val state: PathState,
+  val name: String = "",
+  val labels: String = "",
+  val failure: RegistrationFailure? = null,
+  val filter: FilterView? = null,
+)
+
+/**
+ * The agent's path discovery (`agent.discovery`), and how its last read went.
+ *
+ * @param failure the last reconcile's failure, or null after a success
+ * @param entries how many entries the last good read found
+ * @param skipped the entries the last read dropped as unusable, missing a path or a URL, their URLs redacted
+ * @param collisions discovered paths that collide with static paths, which keep them
+ * @param duplicates discovered paths the file lists more than once
+ */
+internal data class DiscoveryView(
+  val file: String,
+  val intervalSecs: Int,
+  val failure: ReconcileFailure? = null,
+  val entries: Int = 0,
+  val skipped: List<Pair<String, String>> = emptyList(),
+  val collisions: List<String> = emptyList(),
+  val duplicates: List<String> = emptyList(),
+)
+
+/**
+ * What the agent's dashboard shows, read from the agent in one pass, so a page and a push render one moment.
+ *
+ * @param agentId the id the proxy gave the agent when it connected, empty while it isn't
+ * @param discovery the agent's path discovery, or null when it is off
+ * @param settings the agent's effective settings, by name, none of them a secret
+ */
+internal data class AgentSnapshot(
+  val agentName: String,
+  val agentId: String,
+  val launchId: String,
+  val version: String,
+  val uptime: Duration,
+  val backlog: Int,
+  val connection: ConnectionView,
+  val paths: List<AgentPathView>,
+  val discovery: DiscoveryView?,
+  val settings: List<Pair<String, String>>,
+) {
+  /** The paths not registered: refused, retrying, or still pending. */
+  val unregistered: List<AgentPathView> get() = paths.filter { it.state != PathState.REGISTERED }
+
+  companion object {
+    /** Reads the snapshot from [agent]. */
+    suspend fun collect(agent: Agent): AgentSnapshot =
+      AgentSnapshot(
+        agentName = agent.agentName,
+        agentId = agent.agentId,
+        launchId = agent.launchId,
+        version = "${BuildConfig.APP_VERSION}, released ${BuildConfig.APP_RELEASE_DATE}",
+        uptime = agent.upTime,
+        backlog = agent.scrapeRequestBacklogSize.load(),
+        connection = connection(agent),
+        paths = paths(agent),
+        discovery = discovery(agent),
+        settings = settings(agent),
+      )
+
+    private fun connection(agent: Agent): ConnectionView {
+      val grpc = agent.grpcService
+      val failures = grpc.connectFailuresByEndpoint
+      val connected = agent.isConnectedToProxy
+      val state =
+        when {
+          connected -> ConnectionState.CONNECTED
+          failures.isNotEmpty() -> ConnectionState.FAILING
+          else -> ConnectionState.CONNECTING
+        }
+      val current = grpc.currentEndpointIndex
+      return ConnectionView(
+        state = state,
+        endpoints = grpc.endpointSpecs.mapIndexed { i, spec -> EndpointView(spec, i == current, failures[spec]) },
+        since = agent.connectedAt,
+        connects = grpc.connects,
+        failedOver = current > 0,
+        transport = grpc.tlsDescription,
+        tokenSet = agent.options.agentToken.isNotEmpty(),
+      )
+    }
+
+    // Every path the agent knows: configured, discovered, registered, or refused, one row each, by path. Configured
+    // first, so a path's name and labels come from its config entry.
+    internal fun paths(agent: Agent): List<AgentPathView> {
+      val manager = agent.pathManager
+      val registered = manager.registeredPaths.associateBy { it.path }
+      val failures = manager.pathFailures
+      val known =
+        configured(agent) + discovered(agent) +
+          registered.values.map { KnownPath(it.path, it.source, it.url, labels = it.labels) } +
+          failures.map { (path, failure) -> KnownPath(path, failure.source, "") }
+      return known
+        .distinctBy { it.path }
+        .map { view(it, registered[it.path], failures[it.path], manager.filters[it.path]) }
+        .sortedBy { it.path }
+    }
+
+    // A path the agent knows, before it is joined to its registration, its failure, and its filter.
+    private class KnownPath(
+      val path: String,
+      val source: PathSource,
+      val url: String,
+      val name: String = "",
+      val labels: String = "",
+    )
+
+    private fun configured(agent: Agent): List<KnownPath> =
+      agent.pathManager.configuredPaths.map {
+        KnownPath(it.path.removePrefix("/"), PathSource.STATIC, it.url, it.name, it.labels)
+      }
+
+    // The usable entries discovery last read; an unusable one is among discovery's skipped entries instead.
+    private fun discovered(agent: Agent): List<KnownPath> =
+      agent.pathDiscoveryService?.discoveredEntries.orEmpty().filter { it.usable }.map {
+        KnownPath(it.path.removePrefix("/"), PathSource.DISCOVERED, it.url, labels = it.labels)
+      }
+
+    // [known] as the dashboard shows it: its registration's source, URL, and labels while it has one, its failure, and
+    // its filter.
+    private fun view(
+      known: KnownPath,
+      context: PathContext?,
+      failure: RegistrationFailure?,
+      filter: MetricFilter?,
+    ) = AgentPathView(
+      path = known.path,
+      source = context?.source ?: known.source,
+      url = sanitizeUrl(context?.url ?: known.url),
+      state = stateOf(context != null, failure),
+      name = known.name,
+      labels = context?.labels ?: known.labels,
+      failure = failure,
+      filter = filter?.let {
+        FilterView(it.allowPatterns, it.denyPatterns, it.linesDropped, it.bytesSaved, it.failedOpen)
+      },
+    )
+
+    private fun stateOf(
+      registered: Boolean,
+      failure: RegistrationFailure?,
+    ): PathState =
+      when {
+        registered -> PathState.REGISTERED
+        failure == null -> PathState.PENDING
+        failure.retrying -> PathState.RETRYING
+        else -> PathState.REFUSED
+      }
+
+    private suspend fun discovery(agent: Agent): DiscoveryView? {
+      val service = agent.pathDiscoveryService ?: return null
+      val config = agent.agentConfigVals.discovery
+      val conflicts = agent.pathManager.discoveryConflicts()
+      return DiscoveryView(
+        file = config.file.path,
+        intervalSecs = config.reconcileIntervalSecs,
+        failure = service.reconcileFailure,
+        entries = service.discoveredEntries.size,
+        skipped = service.skippedEntries.map { it.path to sanitizeUrl(it.url) },
+        collisions = conflicts.collisions,
+        duplicates = conflicts.duplicates,
+      )
+    }
+
+    // The settings an operator checks when a scrape misbehaves, as the agent resolved them. None is a secret: a token
+    // or a TLS key shows only whether it is set.
+    private fun settings(agent: Agent): List<Pair<String, String>> =
+      with(agent.options) {
+        listOf(
+          "Scrape timeout" to "${scrapeTimeoutSecs}s",
+          "Scrape retries" to "$scrapeMaxRetries",
+          "Chunked above" to "$chunkContentSizeKbs KB",
+          "Gzipped above" to "$minGzipSizeBytes bytes",
+          "Largest scrape" to "$maxContentLengthMBytes MB",
+          "HTTP clients" to "$maxConcurrentHttpClients at once, ${httpClientTimeoutSecs}s timeout",
+          "HTTP client cache" to "$maxCacheSize clients, $maxCacheAgeMins min old, $maxCacheIdleMins min idle",
+          "Target certificates" to if (trustAllX509Certificates) "not verified" else "verified",
+          "Consolidated" to if (consolidated) "yes" else "no",
+          "Transport filter" to if (transportFilterDisabled) "disabled" else "enabled",
+          "Admin" to if (adminEnabled) "on, port $adminPort" else "off",
+          "Metrics" to if (metricsEnabled) "on, port $metricsPort" else "off",
+        )
+      }
+  }
+}

@@ -787,6 +787,20 @@ announced to screen readers rather than signalled by colour alone.
 
 > 📖 **Docs site:** [Dashboard guide](https://prometheus-proxy.com/web-dashboard/) for the three layouts, the links, the status-bar gauges, and HA-pair behavior.
 
+#### The agent's dashboard
+
+The agent can serve a dashboard of its own, for what the proxy's can't see: an agent that can't connect, and a path the
+proxy refused. It shows the agent's connection, with the last error from each proxy endpoint while it can't connect,
+and every path, configured or discovered, with the proxy's reason for refusing one and when it's tried again, plus each
+path's metric filter, the agent's discovery file, and its settings. It is off by default, takes the same login settings
+as the proxy's (`agent.dashboard.password`, or `DASHBOARD_PASSWORD`), and listens on port 8095:
+
+```bash
+java -jar prometheus-agent.jar --config agent.conf --dashboard    # or DASHBOARD_ENABLED=true / agent.dashboard.enabled
+```
+
+> 📖 **Docs site:** [Agent Dashboard](https://prometheus-proxy.com/agent-dashboard/).
+
 ### Built-in Metrics
 
 Both proxy and agent expose their own metrics:

@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 
 ---
 
+## [Unreleased]
+
+### New Features
+
+- The agent can serve a dashboard of its own, on its own port (`agent.dashboard`, the `--dashboard*` flags and
+  `DASHBOARD_*` variables, default port 8095), off by default. It shows what the proxy's dashboard can't: the agent's
+  connection, with the last error from each proxy endpoint while it can't connect; every path, configured or
+  discovered, as registered, retrying, refused, or pending, with the proxy's reason for refusing one and when it's tried
+  again; each path's metric filter and what it has dropped; the discovery file and how its last read went; and the
+  settings the agent resolved, a token or key only as set. It takes the proxy dashboard's login
+  (`agent.dashboard.password`), Host and Origin checks, and session cap, and an embedded agent turns it on with
+  `EmbeddedAgentConfig`'s `dashboard(port, host)` and `dashboardLogin(password, username)`
+
 ## [4.6.1] - 2026-11-22
 
 ### New Features

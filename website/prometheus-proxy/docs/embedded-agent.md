@@ -172,14 +172,16 @@ returns the builder, whose methods chain and end with `build()`. A method called
 | `clientCertificatePem(certChainPem, privateKeyPem)`                | `agent.tls.certChainPem`, `agent.tls.privateKeyPem` | The agent's own certificate chain and key, as PEM or its base64, for a proxy that requires mutual TLS                                     |
 | `consolidated(consolidated)`                                       | `agent.consolidated`                                | Register the agent's paths in consolidated mode; `consolidated()` alone turns it on                                                       |
 | `agentMetrics(port)`                                               | `agent.metrics.enabled`, `agent.metrics.port`       | Turn on the agent's own metrics endpoint, which is off unless asked for                                                                   |
+| `dashboard(port, host)`                                            | `agent.dashboard.enabled`, `agent.dashboard.port`, `agent.dashboard.host` | Turn on the agent's [dashboard](agent-dashboard.md), which is off unless asked for; `host`, such as `127.0.0.1`, is optional |
+| `dashboardLogin(password, username)`                               | `agent.dashboard.password`, `agent.dashboard.username` | Require a login to the agent's dashboard; `username` defaults to `admin`                                                               |
 | `scrapeSelf(path, port, username, password, metricsPath, labels)` | `agent.pathConfigs`                                 | Scrape the app at `http://127.0.0.1:<port>/<metricsPath>` (default `metrics`) and serve it at `path`; the rest are optional               |
 | `path(path, url, username, password, labels)`                      | `agent.pathConfigs`                                 | Scrape any target at `url` and serve it at `path`; the rest are optional, and the URL then carries no credentials of its own              |
 | `setting(key, value)`                                              | the key, under `agent`                              | Any other setting, such as `http.clientTimeoutSecs`; it takes precedence over a method that sets the same key                             |
 
-In `embeddedAgent { }`, `name`, `proxy`, `token`, `consolidated`, and `agentMetricsPort` are properties too, so
-`name = "my-app"` does what `name("my-app")` does; `proxy` takes several endpoints separated by commas, as
-`PROXY_HOSTNAME` does, and `null` takes `name`, `proxy`, `token`, or `agentMetricsPort` out. Java sees only the
-methods.
+In `embeddedAgent { }`, `name`, `proxy`, `token`, `consolidated`, `agentMetricsPort`, and `dashboardPort` are properties
+too, so `name = "my-app"` does what `name("my-app")` does; `proxy` takes several endpoints separated by commas, as
+`PROXY_HOSTNAME` does, and `null` takes `name`, `proxy`, `token`, `agentMetricsPort`, or `dashboardPort` out. Java sees
+only the methods.
 
 A username and password are percent-encoded into the URL and sent as Basic Auth; both empty, as unset environment
 variables give, means none. Labels are a map of names to values. A value the builder can tell is wrong, such as a blank
@@ -304,6 +306,14 @@ Turn them off once the agent works. The admin port answers on every interface, w
 standalone agent (see [Production](production.md)). It must be one your application doesn't use: a port in use makes
 `start()` throw `IllegalStateException`. The [Embedded Demo](embedded-demo.md#debugging-the-agent)'s coffee shop turns
 them on, and its tour shows each one.
+
+### The Agent's Dashboard
+
+The agent's own [dashboard](agent-dashboard.md) shows what the admin endpoints and the proxy's dashboard can't: whether
+the agent is connected, and if not, the last error from each proxy endpoint, and each path, with the proxy's reason for
+refusing one. `DASHBOARD_ENABLED=true` in the app's environment turns it on, on port 8095 (`DASHBOARD_PORT` for
+another), and `dashboard(port = 8095, host = "127.0.0.1")` does it in code. Like the admin port, it has no login unless
+one is set, so keep it on an internal network or on `127.0.0.1`.
 
 ### Logs
 

@@ -16,8 +16,8 @@
 
 package io.prometheus.proxy.dashboard
 
+import io.prometheus.common.dashboard.DashboardPage.SAY_ATTR
 import io.prometheus.proxy.ScrapeDispatch
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.SAY_ATTR
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.statusPill
 import kotlinx.html.ButtonType
 import kotlinx.html.DIV

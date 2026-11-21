@@ -400,6 +400,22 @@ agent.name = "production-agent-01"
 
 If no name is provided, the agent uses `Unnamed-<hostname>`.
 
+## Dashboard
+
+The agent can serve a dashboard of its own, on its own port, off unless turned on: its connection to the proxy, each
+path and why the proxy refused one, its filters, discovery, and settings. See [Agent Dashboard](../agent-dashboard.md).
+
+```hocon
+agent {
+  dashboard {
+    enabled = true
+    port = 8095
+    host = "127.0.0.1"          // Keeps it on the agent's host; the default, "0.0.0.0", is every interface
+    password = ""               // Requires a login; better set as DASHBOARD_PASSWORD
+  }
+}
+```
+
 ## Full Example
 
 Here is a real-world config from the `examples/` directory:

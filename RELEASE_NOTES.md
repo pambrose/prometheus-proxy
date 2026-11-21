@@ -2,6 +2,19 @@
 
 ---
 
+## Unreleased
+
+_Not yet released_
+
+### New Features
+
+- **A dashboard on the agent.** Turn on `agent.dashboard.enabled` (or `--dashboard`, or `DASHBOARD_ENABLED=true` in
+  the agent's environment) and open `http://<agent>:8095/dashboard`. It shows what the proxy's dashboard can't see from
+  its side of the firewall: whether the agent is connected, and if not, the last error from each proxy endpoint; every
+  path, with the proxy's reason for refusing one and when it's tried again; each path's metric filter and what it has
+  dropped; the discovery file; and the agent's settings. It is off by default, and asks for a login once you set
+  `agent.dashboard.password` (or `DASHBOARD_PASSWORD`). An embedded agent turns it on with `dashboard(port, host)`.
+
 ## 4.6.1
 
 _Released 2026-11-22_

@@ -55,24 +55,24 @@ enum class EnvVars {
    */
   SD_TARGET_PREFIX,
 
-  /** Enables the Proxy's operational dashboard on its own port. Default `false`. */
+  /** Enables the proxy's or the agent's dashboard, on its own port. Default `false`. */
   DASHBOARD_ENABLED,
 
-  /** Listen port for the Proxy's operational dashboard. Default `8094`. */
+  /** Listen port for the proxy's or the agent's dashboard. Default `8094` for the proxy, `8095` for the agent. */
   DASHBOARD_PORT,
 
   /** Base HTTP path the operational dashboard is served from. Default `dashboard`. */
   DASHBOARD_PATH,
 
-  /** Listen address for the Proxy's operational dashboard. Default `0.0.0.0`. */
+  /** Listen address for the proxy's or the agent's dashboard. Default `0.0.0.0`. */
   DASHBOARD_HOST,
 
-  /** The username of the operational dashboard's login, which [DASHBOARD_PASSWORD] turns on. Default `admin`. */
+  /** The username of the dashboard's login, which [DASHBOARD_PASSWORD] turns on. Default `admin`. */
   DASHBOARD_USERNAME,
 
   /**
-   * Requires a login to the operational dashboard, [DASHBOARD_USERNAME] and this password, from its login page or, from
-   * a script, as HTTP Basic Auth. Empty, the default, leaves the dashboard open. Never logged.
+   * Requires a login to the proxy's or the agent's dashboard, [DASHBOARD_USERNAME] and this password, from its login
+   * page or, from a script, as HTTP Basic Auth. Empty, the default, leaves the dashboard open. Never logged.
    */
   DASHBOARD_PASSWORD,
 

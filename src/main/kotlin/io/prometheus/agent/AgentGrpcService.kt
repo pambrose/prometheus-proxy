@@ -32,6 +32,7 @@ import io.grpc.ClientInterceptors
 import io.grpc.ManagedChannel
 import io.prometheus.Agent
 import io.prometheus.agent.AgentOptions.Companion.DEFAULT_GRPC_PORT
+import io.prometheus.common.AgentValues.shownValue
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
 import io.prometheus.common.DeferredClientInterceptor
 import io.prometheus.common.Messages.BLANK_AGENT_ID_MSG
@@ -43,6 +44,7 @@ import io.prometheus.common.Utils.logStreamFailure
 import io.prometheus.common.Utils.HostPort
 import io.prometheus.common.Utils.parseEndpointList
 import io.prometheus.common.Utils.sanitizeUrl
+import io.prometheus.common.Utils.sanitizeUrlsInText
 import io.prometheus.grpc.ChunkedScrapeResponse
 import io.prometheus.grpc.ProxyServiceGrpcKt
 import io.prometheus.grpc.RegisterPathResponse
@@ -58,6 +60,9 @@ import io.prometheus.grpc.registerAgentRequest
 import io.prometheus.grpc.registerPathRequest
 import io.prometheus.grpc.summaryData
 import io.prometheus.grpc.unregisterPathRequest
+import kotlin.concurrent.atomics.AtomicInt
+import kotlin.time.Clock
+import kotlin.time.Instant
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
@@ -170,6 +175,29 @@ internal class AgentGrpcService(
     val key: String,
     val warnedAt: TimeMark,
   )
+
+  /** The last failure to connect to a proxy endpoint, for the agent's dashboard: what it was, and when. */
+  data class ConnectFailure(
+    val message: String,
+    val at: Instant,
+  )
+
+  // The latest connect failure for each proxy endpoint, until a connect to it succeeds, for the agent's dashboard,
+  // which shows an agent that can't reach its proxy, as the proxy's never can. Every failure, unlike connectFailures,
+  // which keeps only the ones logged at WARN. The endpoints are the configured list, so this stays as small.
+  private val lastConnectFailures = ConcurrentHashMap<String, ConnectFailure>()
+
+  /** The latest failure to connect to each proxy endpoint, by its `host:port`, until a connect to it succeeds. */
+  val connectFailuresByEndpoint: Map<String, ConnectFailure> get() = lastConnectFailures.toMap()
+
+  // The connects that succeeded, for the agent's dashboard.
+  private val connectCount = AtomicInt(0)
+
+  /** How many times the agent has connected to a proxy. */
+  val connects: Int get() = connectCount.load()
+
+  /** How the agent reaches its proxy: plaintext, TLS, or mutual TLS, as its connect log lines say it. */
+  val tlsDescription: String get() = tlsContext.desc()
 
   val agentHostName: String get() = currentEndpoint.host
   val agentPort: Int get() = currentEndpoint.port
@@ -354,6 +382,8 @@ internal class AgentGrpcService(
         unaryStub().connectAgent(EMPTY_INSTANCE)
 
       connectFailures.remove(proxyHost)
+      lastConnectFailures.remove(proxyHost)
+      connectCount += 1
       logger.info { "Connected to proxy at $proxyHost using ${tlsContext.desc()}" }
       agent.metrics { connectCount.labelValues(agent.launchId, "success").inc() }
       true
@@ -369,6 +399,8 @@ internal class AgentGrpcService(
       val failure = failureKey(e)
       val message =
         "Cannot connect to proxy at $proxyHost using ${tlsContext.desc()} - ${e.simpleClassName}: ${e.message}"
+      lastConnectFailures[proxyHost] =
+        ConnectFailure(shownValue(sanitizeUrlsInText("${e.simpleClassName}: ${e.message}")), Clock.System.now())
       // The first failure, and a change, at WARN with the stack trace for diagnosis; a repeat at DEBUG, and at WARN
       // again, without the stack trace, once the last WARN is CONNECT_FAILURE_REMINDER_INTERVAL old.
       val last = connectFailures[proxyHost]
@@ -453,7 +485,7 @@ internal class AgentGrpcService(
     ).apply {
       agent.markMsgSent()
       if (!valid)
-        throw RequestFailureException("registerPathOnProxy() - $reason", rejectionCause)
+        throw RequestFailureException("registerPathOnProxy() - $reason", rejectionCause, reason)
     }
 
   suspend fun unregisterPathOnProxy(pathVal: String): UnregisterPathResponse =

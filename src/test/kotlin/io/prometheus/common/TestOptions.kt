@@ -69,3 +69,16 @@ fun proxyOptionsFromConfig(
     file.delete()
   }
 }
+
+/** Writes [contents] to a temp file and builds [AgentOptions] from it via `--config`, as for the proxy. */
+fun agentOptionsFromConfig(
+  contents: String,
+  extraArgs: List<String> = emptyList(),
+): AgentOptions {
+  val file = createTempFile("test-config", ".conf").toFile().apply { writeText(contents.trimIndent()) }
+  try {
+    return agentOptions(["--config", file.absolutePath] + extraArgs, exitOnMissingConfig = false)
+  } finally {
+    file.delete()
+  }
+}

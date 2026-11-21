@@ -138,55 +138,10 @@ class ProxyOptions internal constructor(
   internal var blitzPath = ""
     private set
 
-  /**
-   * Enables the Proxy's operational dashboard, served from its **own** port ([dashboardPort]) rather
-   * than the admin or scrape port. Off by default, matching the admin and metrics posture.
-   * Resolved from CLI → [DASHBOARD_ENABLED] env var → `proxy.dashboard.enabled` config.
-   */
-  @Parameter(names = ["--dashboard"], description = "Operational dashboard enabled")
-  var dashboardEnabled = false
-    private set
-
-  /**
-   * TCP port the operational dashboard listens on. Deliberately separate from the admin port so the dashboard can
-   * be firewalled independently of the k8s probe endpoints (`/ping`, `/healthcheck`).
-   * `-1` means "fall back to [DASHBOARD_PORT] env var, then `proxy.dashboard.port` config (default `8094`)".
-   */
-  @Parameter(names = ["--dashboard_port"], description = "Operational dashboard port")
-  var dashboardPort: Int = -1
-    private set
-
-  /**
-   * Base HTTP path the operational dashboard is served from. Validated non-empty when [dashboardEnabled] is `true`.
-   */
-  @Parameter(names = ["--dashboard_path"], description = "Operational dashboard base path")
-  var dashboardPath = ""
-    private set
-
-  /**
-   * Address the operational dashboard listens on. Empty means "fall back to [DASHBOARD_HOST] env var, then
-   * `proxy.dashboard.host` config (default `0.0.0.0`)". Without a login ([dashboardPassword]) the dashboard has no
-   * authentication, so enabling it on a wildcard address logs a startup warning; `127.0.0.1` keeps it reachable only
-   * from the proxy host.
-   */
-  @Parameter(names = ["--dashboard_host"], description = "Operational dashboard listen address")
-  var dashboardHost = ""
-    private set
-
   // The Paths table's links into other tools, proxy.dashboard.links, parsed here so a template the dashboard can't use
   // fails startup. A list, so it can only be set in a config file. Declared above the init block that assigns it, or
   // its initializer would run after and empty it again.
   internal var dashboardLinks: List<PathLink> = emptyList()
-    private set
-
-  // The login the dashboard requires, from its login page or as HTTP Basic Auth: proxy.dashboard.username (default
-  // "admin") and password. A password turns it on; empty, the default, leaves the dashboard open. Each resolves from
-  // its env var, then its setting; there are no command-line flags, since a command line shows in `ps`. The password is
-  // never logged. Declared above the init block that assigns them, as dashboardLinks is.
-  internal var dashboardUsername = ""
-    private set
-
-  internal var dashboardPassword = ""
     private set
 
   /**
@@ -338,56 +293,34 @@ class ProxyOptions internal constructor(
     logger.info { "sdTargetPrefix: $sdTargetPrefix" }
   }
 
-  private fun assignDashboardOptions(dashboard: ConfigVals.Proxy2.Dashboard) {
-    dashboardEnabled = resolveBooleanOption(dashboardEnabled, DASHBOARD_ENABLED, dashboard.enabled, "--dashboard")
-    logger.info { "dashboardEnabled: $dashboardEnabled" }
-
-    dashboardPort = resolveIntOption(dashboardPort, DASHBOARD_PORT, dashboard.port)
-    require(dashboardPort in 1..65535) { "dashboardPort must be in 1..65535: $dashboardPort" }
-
-    dashboardPath = resolveStringOption(dashboardPath, DASHBOARD_PATH, dashboard.path)
-    dashboardHost = resolveStringOption(dashboardHost, DASHBOARD_HOST, dashboard.host)
-    dashboardUsername = DASHBOARD_USERNAME.getEnv(dashboard.username)
-    dashboardPassword = DASHBOARD_PASSWORD.getEnv(dashboard.password)
-
-    if (dashboardEnabled) {
-      require(dashboardPath.isNotEmpty()) { "dashboardPath is empty" }
-      require(dashboardHost.isNotBlank()) { "dashboardHost is blank" }
-      logger.requirePositive("dashboard.maxSessions", dashboard.maxSessions)
-      // The push loop waits this long between pushes; a wait of 0 returns at once, spinning a thread.
-      logger.requirePositive("dashboard.refreshIntervalSecs", dashboard.refreshIntervalSecs)
-      // At 0 no path would keep a scrape, so the path table would lose its history, its last scrapes, and every path
-      // whose agent has gone; a retention of 0 would drop a gone path at the next refresh.
-      logger.requirePositive("dashboard.pathHistorySize", dashboard.pathHistorySize)
-      logger.requirePositive("dashboard.departedPathRetentionSecs", dashboard.departedPathRetentionSecs)
-      // At 0 the activity feed would keep nothing, so a refused path or a bad token would again reach only the log.
-      logger.requirePositive("dashboard.activityLogSize", dashboard.activityLogSize)
-      dashboardLinks = PathLink.parseAll(dashboard.links.map { PathLink.Entry(it.name, it.url, it.icon) })
-      logger.info { "dashboard.links: ${dashboardLinks.joinToString { it.logged }.ifEmpty { "(none)" }}" }
-      logger.info { "dashboardHost: $dashboardHost, dashboardPort: $dashboardPort, dashboardPath: $dashboardPath" }
-      validateDashboardLogin()
-      if (dashboardPassword.isNotEmpty()) {
-        // Never the password.
-        logger.info {
-          "dashboard login: on, dashboardUsername: ${shownValue(dashboardUsername)}, dashboardPassword: ***"
-        }
-        logger.info {
-          "The dashboard requires a login, over plain HTTP, so its password crosses the network readable; put TLS in " +
-            "front of it, such as a reverse proxy, unless the network is trusted"
-        }
-      } else if (isWildcardAddress(dashboardHost)) {
-        val rebindingHint =
-          if (dashboard.allowedHosts.isEmpty())
-            " Set proxy.dashboard.allowedHosts to refuse unknown host names."
-          else
-            ""
-        logger.warn {
-          "The dashboard has no authentication and listens on all interfaces ($dashboardHost:$dashboardPort). " +
-            "Set proxy.dashboard.host (--dashboard_host) to 127.0.0.1, firewall the port, or set " +
-            "proxy.dashboard.password (DASHBOARD_PASSWORD) to require a login.$rebindingHint"
-        }
-      }
+  private fun assignDashboardOptions(dashboard: ConfigVals.Proxy2.Dashboard2) {
+    with(dashboard) {
+      assignDashboardOptions(
+        "proxy",
+        DashboardConfig(
+          enabled = enabled,
+          port = port,
+          path = path,
+          host = host,
+          username = username,
+          password = password,
+          maxSessions = maxSessions,
+          refreshIntervalSecs = refreshIntervalSecs,
+          allowedHosts = allowedHosts,
+        ),
+        logger,
+      )
     }
+    if (!dashboardEnabled)
+      return
+    // At 0 no path would keep a scrape, so the path table would lose its history, its last scrapes, and every path
+    // whose agent has gone; a retention of 0 would drop a gone path at the next refresh.
+    logger.requirePositive("dashboard.pathHistorySize", dashboard.pathHistorySize)
+    logger.requirePositive("dashboard.departedPathRetentionSecs", dashboard.departedPathRetentionSecs)
+    // At 0 the activity feed would keep nothing, so a refused path or a bad token would again reach only the log.
+    logger.requirePositive("dashboard.activityLogSize", dashboard.activityLogSize)
+    dashboardLinks = PathLink.parseAll(dashboard.links.map { PathLink.Entry(it.name, it.url, it.icon) })
+    logger.info { "dashboard.links: ${dashboardLinks.joinToString { it.logged }.ifEmpty { "(none)" }}" }
   }
 
   private fun assignGrpcConfigVals(proxyConfigVals: ConfigVals.Proxy2) {
@@ -530,27 +463,6 @@ class ProxyOptions internal constructor(
       .also { logger.info { "internal.$name: $it" } }
   }
 
-  /**
-   * Fails startup on a dashboard login the dashboard can't check, once a password turns it on: an empty username,
-   * a colon in it, where HTTP Basic Auth splits the username from the password, or a control character in either,
-   * such as the trailing newline of a secret read from a file, which no browser would send. No message includes a
-   * value. Without a password the username isn't used, so it isn't checked.
-   */
-  private fun validateDashboardLogin() {
-    if (dashboardPassword.isEmpty())
-      return
-    require(dashboardUsername.isNotEmpty()) {
-      "proxy.dashboard.username (DASHBOARD_USERNAME) is empty, with proxy.dashboard.password set"
-    }
-    require(':' !in dashboardUsername) {
-      "proxy.dashboard.username can't contain a colon, where HTTP Basic Auth splits it from the password"
-    }
-    require(dashboardUsername.none { it.isISOControl() }) { "proxy.dashboard.username contains a control character" }
-    require(dashboardPassword.none { it.isISOControl() }) {
-      "proxy.dashboard.password contains a control character, such as a trailing newline"
-    }
-  }
-
   internal companion object {
     private val logger = logger {}
 
@@ -585,15 +497,5 @@ class ProxyOptions internal constructor(
       authIdentityCount: Int,
       isTlsEnabled: Boolean,
     ): Boolean = (agentToken.isNotEmpty() || authIdentityCount > 0) && !isTlsEnabled
-
-    /**
-     * True when [host] is a literal wildcard address (`0.0.0.0`, `::`), which listens on every interface.
-     *
-     * Only a literal counts: a hostname is never resolved at startup just to decide whether to log a warning.
-     */
-    internal fun isWildcardAddress(host: String): Boolean {
-      val literal = host.removeSurrounding("[", "]")
-      return InetAddresses.isInetAddress(literal) && InetAddresses.forString(literal).isAnyLocalAddress
-    }
   }
 }

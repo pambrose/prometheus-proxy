@@ -20,7 +20,11 @@ import com.pambrose.common.util.runCatchingCancellable
 import com.pambrose.common.util.simpleClassName
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.agent.AgentPathManager
+import io.prometheus.common.AgentValues.shownValue
 import io.prometheus.common.Utils.failureKey
+import io.prometheus.common.Utils.sanitizeUrlsInText
+import kotlin.time.Clock
+import kotlin.time.Instant
 import kotlinx.coroutines.delay
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -53,7 +57,25 @@ internal class PathDiscoveryService(
 
   // The paths the source last read successfully, or null before the first good read. The live path map can't be the
   // last-known-good set: every connect clears it, so a reconnect while the file was unreadable registered nothing.
+  // Volatile, since the agent's dashboard reads it from another thread.
+  @Volatile
   private var lastGoodPaths: List<DiscoveredPath>? = null
+
+  // The last reconcile's failure, what it was and when, for the agent's dashboard; null after a success.
+  @Volatile
+  private var lastFailureShown: ReconcileFailure? = null
+
+  /** The entries the source last read successfully, empty before the first good read. */
+  val discoveredEntries: List<DiscoveredPath> get() = lastGoodPaths.orEmpty()
+
+  /** The last reconcile's failure, or null after a success, and before the first reconcile. */
+  val reconcileFailure: ReconcileFailure? get() = lastFailureShown
+
+  /** A reconcile's failure, for the agent's dashboard: what it was, and when. */
+  data class ReconcileFailure(
+    val message: String,
+    val at: Instant,
+  )
 
   // The entries the last read dropped as unusable, empty for a source that does not report them.
   val skippedEntries: List<DiscoveredPath>
@@ -97,7 +119,11 @@ internal class PathDiscoveryService(
       if (lastFailure != null)
         logger.info { "Path discovery reconcile succeeded again" }
       lastFailure = null
+      lastFailureShown = null
     }.onFailure { e ->
+      // Redacted, since the dashboard may have no login: a file's parse error can quote a line of it, a target's URL.
+      lastFailureShown =
+        ReconcileFailure(shownValue(sanitizeUrlsInText("${e.simpleClassName}: ${e.message}")), Clock.System.now())
       val failure = failureKey(e, withMessage = true)
       if (failure == lastFailure)
         logger.debug {

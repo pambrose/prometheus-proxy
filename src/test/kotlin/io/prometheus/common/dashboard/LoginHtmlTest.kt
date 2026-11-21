@@ -34,7 +34,7 @@ class LoginHtmlTest : StringSpec() {
     next: String = "/dashboard",
     username: String = "",
     alert: String? = null,
-  ) = createHTML().html { renderLogin(heading, routeBase, next, username, alert) }
+  ) = createHTML().html { renderLogin(LoginHtml.Form(heading, routeBase, next, username, alert)) }
 
   init {
     "the page has the heading, a form posting to the login route, and labeled fields" {

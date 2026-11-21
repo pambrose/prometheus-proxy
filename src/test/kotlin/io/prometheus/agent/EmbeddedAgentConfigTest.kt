@@ -122,6 +122,40 @@ class EmbeddedAgentConfigTest : StringSpec() {
       options.metricsEnabled.shouldBeFalse()
     }
 
+    // The agent's dashboard, off unless a port is given; its host and login are the builder's too.
+    "dashboard turns on the agent's dashboard, on its port and host, with a login when one is set" {
+      val options =
+        EmbeddedAgentConfig
+          .builder()
+          .dashboard(9195, "127.0.0.1")
+          .dashboardLogin(password = DASHBOARD_PASSWORD, username = "ops")
+          .build()
+          .options()
+
+      options.dashboardEnabled.shouldBeTrue()
+      options.dashboardPort shouldBe 9195
+      options.dashboardHost shouldBe "127.0.0.1"
+      options.dashboardUsername shouldBe "ops"
+      options.dashboardPassword shouldBe DASHBOARD_PASSWORD
+      EmbeddedAgentConfig.builder().build().options().dashboardEnabled.shouldBeFalse()
+    }
+
+    "the dashboard port is a property too, and its password stays out of toString" {
+      val config =
+        embeddedAgent {
+          dashboardPort = 9195
+          dashboardPort shouldBe 9195
+          dashboardLogin(password = DASHBOARD_PASSWORD)
+        }
+
+      config.options().dashboardUsername shouldBe "admin"
+      config.toString() shouldNotContain DASHBOARD_PASSWORD
+      embeddedAgent {
+        dashboardPort = 9195
+        dashboardPort = null
+      }.options().dashboardEnabled.shouldBeFalse()
+    }
+
     "a builder with nothing set gives the built-in defaults" {
       val options = EmbeddedAgentConfig.builder().build().options()
       options.proxyHostname shouldBe "localhost:50051"
@@ -246,6 +280,7 @@ class EmbeddedAgentConfigTest : StringSpec() {
   }
 
   companion object {
+    private const val DASHBOARD_PASSWORD = "dash-Passw0rd-9"
     private const val TOKEN = "0123456789abcdef0123456789abcdef"
 
     // Every character a URL's user info must escape, and some it need not

@@ -99,6 +99,9 @@ Explicitly **out of scope** for now: the Zensical documentation site at
 - Per-path metric filtering (allow/deny regexes, Prometheus-compatible anchoring); whole metric
   families are kept or dropped atomically, and filtering fails open on non-text or non-UTF-8 payloads.
 - TLS with optional mutual auth.
+- An agent dashboard (`agent.dashboard`, off by default) on the same design system and server code as the proxy's,
+  showing what the proxy's can't: an agent's connection while it can't reach the proxy, and each path the proxy
+  refused, with its reason. The same no-CDN constraint binds it.
 
 **Binding constraint — no CDN, no external assets.** Everything the dashboard serves must be
 self-contained in the JAR. htmx ships as a vendored WebJar for exactly this reason. No Google Fonts,

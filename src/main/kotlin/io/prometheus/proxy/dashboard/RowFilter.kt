@@ -18,6 +18,9 @@ package io.prometheus.proxy.dashboard
 
 import io.ktor.http.Parameters
 import io.prometheus.common.AgentValues
+import io.prometheus.common.dashboard.DashboardPage.PROBLEMS_ON
+import io.prometheus.common.dashboard.DashboardPage.PROBLEMS_PARAM
+import io.prometheus.common.dashboard.DashboardPage.QUERY_PARAM
 import io.prometheus.proxy.ActivityEntry
 
 /**
@@ -63,11 +66,6 @@ internal data class RowFilter(
 
   companion object {
     val NONE = RowFilter()
-
-    // The filter's URL parameters, which the search form submits and the page's script writes.
-    const val QUERY_PARAM = "q"
-    const val PROBLEMS_PARAM = "problems"
-    const val PROBLEMS_ON = "1"
 
     // A search box's worth: the query is browser input, on a port with no auth, matched against every row each push.
     internal const val MAX_QUERY_LENGTH = 200

@@ -852,6 +852,22 @@ whose text is white on the light accent (4.83:1) and `bg` on the dark one (6.94:
 `crit` left edge after a wrong login. It uses this system's color tokens, in both themes, and loads nothing. The Don'ts
 below still bind the dashboard itself; the exception is the login page alone.
 
+### Agent Dashboard
+
+The agent's own dashboard (`AgentDashboardHtml`), on this system without exception: the same tokens, bar, tabs, status
+bar, master–detail panes, key–value rows, and script, from `common/dashboard`. Two views:
+
+- **Paths**, the Agent list's layout: a row per path, its LED green while registered and red otherwise, by the No
+  Amber Dot Rule. A tag says which red: `retrying` (warn), `refused` (crit), or `pending` (neutral). The detail's hero
+  carries the same tag, `registered` included. Below it are the proxy's reason, its time, and when the path is tried
+  again, then the labels and the metric filter.
+- **Connection**: a hero whose LED is green only while connected, with `failed over` as on the agent detail. Then the
+  proxy endpoints, each a key–value row with a neutral `in use` or `trying` tag and its last connect error. Then
+  discovery and the settings.
+
+The status bar names the connection's state in its color, warn for `connecting`, where amber means true but not yet a
+failure, and counts the paths not registered in crit.
+
 ### Named Rules
 
 **The Still Interface Rule.** No CSS transitions. Hover, selection, and live swaps land instantly.
