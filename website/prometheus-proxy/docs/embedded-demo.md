@@ -70,17 +70,18 @@ under a minute.
 | Grafana (no sign-in needed; admin / admin to edit) | <http://localhost:3300> |
 | Prometheus | <http://localhost:9390> (alerts at `/alerts`) |
 | The coffee shop's metrics, through the proxy | <http://localhost:8380/coffee_shop_metrics> |
+| The agent's `/debug` page, on its admin port | <http://localhost:8393/debug> |
 
 The ports are the [Basics Demo](basics-demo.md)'s plus 300, so the two can run side by side. Every port binds to
 `127.0.0.1` only. To move one that is already taken, set `EMBEDDED_DEMO_APP_PORT`, `EMBEDDED_DEMO_DASHBOARD_PORT`,
-`EMBEDDED_DEMO_GRAFANA_PORT`, `EMBEDDED_DEMO_PROMETHEUS_PORT`, or `EMBEDDED_DEMO_PROXY_PORT`, for example
-`EMBEDDED_DEMO_GRAFANA_PORT=3301 make up`.
+`EMBEDDED_DEMO_GRAFANA_PORT`, `EMBEDDED_DEMO_PROMETHEUS_PORT`, `EMBEDDED_DEMO_PROXY_PORT`, or
+`EMBEDDED_DEMO_AGENT_ADMIN_PORT`, for example `EMBEDDED_DEMO_GRAFANA_PORT=3301 make up`.
 
 ## What's running
 
 | Service | Role |
 |---|---|
-| `coffee-shop` | The app, version 1.0: a Ktor server whose built-in customers order over HTTP, and whose baristas brew from a queue. It serves its metrics, with Ktor's HTTP and the JVM's, at `/metrics` behind Basic Auth. The agent runs inside it, started with [`embeddedAgent { }`](embedded-agent.md#configuring-in-code) from settings the app builds in code, and reads `/metrics` on `127.0.0.1`. |
+| `coffee-shop` | The app, version 1.0: a Ktor server whose built-in customers order over HTTP, and whose baristas brew from a queue. It serves its metrics, with Ktor's HTTP and the JVM's, at `/metrics` behind Basic Auth. The agent runs inside it, started with [`embeddedAgent { }`](embedded-agent.md#configuring-in-code) from settings the app builds in code, and reads `/metrics` on `127.0.0.1`. Its admin endpoints, `/debug` among them, are on port 8393, for debugging it. |
 | `coffee-shop-next` | Started only by `demo.sh deploy`: version 1.1 of the same image, beside 1.0, as a rolling deploy does. |
 | `load-balancer` | The coffee shop's one address, on port 8390, as a platform's load balancer is: it sends every request to 1.0, or to 1.1 once a deploy has stopped 1.0. |
 | `proxy` | The stock proxy image. It takes its TLS certificate and key as [PEM in environment variables](security/tls.md#certificates-as-environment-variables), and the agent's token from one too, with no file mounted. |
@@ -144,7 +145,8 @@ starts the agent and stops it with the app:
   [`docker/compose.yml`](https://github.com/pambrose/prometheus-proxy/blob/master/demos/embedded/docker/compose.yml),
   whose `x-coffee-shop-env` block gives the proxy's address and the name its certificate was issued to, and reads the
   token, the CA certificate, and the password for `/metrics` from `docker/.env`, which `make up` writes the first time
-  it runs.
+  it runs. It also turns on the agent's own metrics, its admin endpoints, and `/debug`, with `METRICS_ENABLED`,
+  `ADMIN_ENABLED`, and `DEBUG_ENABLED`, which the agent reads itself.
 
 ## The coffee shop in Grafana
 
@@ -181,12 +183,43 @@ through 1.0's agent, then 1.1 through 1.1's, with no gap in the graphs. The coff
 its load balancer sends requests to 1.0 while it runs, and to 1.1 once it has stopped, so the status page at
 <http://localhost:8390> now reads Version 1.1. `./demo.sh rollback` puts 1.0 back.
 
+## Debugging the agent
+
+When an embedded agent doesn't connect, or a path doesn't scrape, its admin endpoints show what it's doing. The coffee
+shop's environment turns them on with `ADMIN_ENABLED`, and its `/debug` page with `DEBUG_ENABLED`, with nothing in its
+code, and the demo publishes the port on `127.0.0.1:8393`. The agent reads them itself, from the `x-coffee-shop-env`
+block of the demo's `docker/compose.yml`, beside `METRICS_ENABLED`, which turns on the agent's own metrics:
+
+```yaml
+METRICS_ENABLED: "true"   # the agent's own metrics, on port 8083
+ADMIN_ENABLED: "true"     # its admin endpoints, on port 8093, published on 127.0.0.1:8393
+DEBUG_ENABLED: "true"     # adds /debug
+```
+
+`./demo.sh debug` calls each endpoint and shows what it answered:
+
+| Endpoint | What it answers |
+|---|---|
+| `/ping` | `pong`, while the agent is running, for a liveness probe |
+| `/version` | The agent's version, release date, and build time, as JSON |
+| `/healthcheck` | The agent's health checks, as JSON: its own health, not its connection, so it stays healthy while the proxy is down |
+| `/threaddump` | Every thread in the coffee shop's JVM, the app's as well as the agent's |
+| `/debug` | Only with `DEBUG_ENABLED`: the agent's name, the ID the proxy gave it when it connected, which is empty while it isn't connected, the proxy it's connected to or trying, and each path with the URL it scrapes, the password masked |
+
+Turn them off once the agent works, since the admin port has no authentication and `/threaddump` shows the app's
+threads: take `ADMIN_ENABLED` and `DEBUG_ENABLED` out of the app's environment and restart it, with no new build, and
+set them again when you need to look. `ADMIN_PORT` moves the port. In code, `setting("admin.enabled", true)` and
+`setting("admin.debugEnabled", true)` do the same, though the environment overrides them.
+[Debugging](embedded-agent.md#debugging) on the Embedded Agent page has more.
+
 ## The proxy goes away
 
 `./demo.sh proxy-stop` stops the proxy. The coffee shop keeps serving, and an order still goes through
 (`./demo.sh order`), since its agent retries in the background and the app never waits on it. Prometheus can't reach
-the proxy, so the graphs stop and `CoffeeShopDown` fires. `./demo.sh proxy-start` brings it back, and the agent
-reconnects within a few seconds and registers its paths again.
+the proxy, so the graphs stop and `CoffeeShopDown` fires. The agent's `/debug` page, <http://localhost:8393/debug>,
+shows an empty AgentId, since the agent has lost its connection, and the proxy it keeps trying, while its
+`/healthcheck` still reads healthy. `./demo.sh proxy-start` brings the proxy back, and the agent reconnects within a
+few seconds and registers its paths again.
 
 ## Secrets from the environment
 
@@ -206,6 +239,7 @@ no shell to write a variable to a file, takes its certificate and key as base64 
 | `demo.sh break-machine` / `fix-machine` | Every espresso drink fails, or is served again |
 | `demo.sh deploy` / `rollback` | Deploys version 1.1 beside 1.0 and stops 1.0, or puts 1.0 back |
 | `demo.sh proxy-stop` / `proxy-start` | Stops or starts the proxy |
+| `demo.sh debug` | Calls each of the agent's admin endpoints, and shows its `/debug` page |
 | `demo.sh secrets` | Shows where the secrets come from |
 | `make tour [PART=n]` | Walks through every scenario, from part 1 or the one given, pausing before each step |
 | `make status` | The containers, the coffee shop's state, and the URLs |

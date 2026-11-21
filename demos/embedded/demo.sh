@@ -31,6 +31,7 @@ DASHBOARD_URL="http://localhost:${EMBEDDED_DEMO_DASHBOARD_PORT:-8394}/dashboard"
 GRAFANA_URL="http://localhost:${EMBEDDED_DEMO_GRAFANA_PORT:-3300}"
 PROMETHEUS_URL="http://localhost:${EMBEDDED_DEMO_PROMETHEUS_PORT:-9390}"
 PROXY_URL="http://localhost:${EMBEDDED_DEMO_PROXY_PORT:-8380}"
+AGENT_ADMIN_URL="http://localhost:${EMBEDDED_DEMO_AGENT_ADMIN_PORT:-8393}"
 
 bold() { printf '\033[1m%s\033[0m\n' "$*"; }
 die() {
@@ -65,6 +66,14 @@ how_it_works() {
   printf '\033[36m%s\033[0m\n' "How it works:"
   wrap "  " "  " "$*"
 }
+# One of the agent's admin endpoints and what it answered, the answer's later lines indented under its first:
+# endpoint <path> <answer>
+endpoint() { awk -v path="$1" '{ printf "  %-13s %s\n", (NR == 1 ? path : ""), $0 }' <<<"$2"; }
+# What to do once the agent works, under its own heading, after what to watch for.
+once_it_works() {
+  printf '\033[36m%s\033[0m\n' "Once the agent works:"
+  wrap "  " "  " "$*"
+}
 # The command that undoes a scenario, or comes after it: follow_up <what> <command>
 follow_up() { printf '\033[36m%s:\033[0m %s\n' "$1" "$2"; }
 
@@ -94,6 +103,7 @@ Scenarios:
   rollback           Put 1.0 back, and remove 1.1
   proxy-stop         Stop the proxy
   proxy-start        Start it again
+  debug              Call each of the agent's admin endpoints, and show its /debug page
   secrets            Show where the coffee shop and the proxy get their secrets
 
 Drinks: espresso, latte, cappuccino, mocha, tea, cold-brew
@@ -108,6 +118,7 @@ print_urls() {
   echo "  Grafana:            $GRAFANA_URL"
   echo "  Prometheus:         $PROMETHEUS_URL"
   echo "  Through the proxy:  $PROXY_URL/coffee_shop_metrics"
+  echo "  Agent's /debug:     $AGENT_ADMIN_URL/debug"
   echo
   echo "Scenarios: $0 rush | break-machine | deploy | proxy-stop ...  (no arguments for help)"
   echo "Or walk through them all: $MAKE_NAME tour, or $0 tour"
@@ -442,7 +453,8 @@ TOUR_PARTS=(
   "2 A rush fills the queue, and more baristas drain it"
   "2 The espresso machine breaks, and an alert fires"
   "2 A deploy hands the path to the new version"
-  "2 The proxy goes away, and the shop keeps serving"
+  "2 The agent's admin endpoints, for debugging it"
+  "3 The proxy goes away, and the shop keeps serving"
   "2 The secrets come from the environment"
 )
 
@@ -512,13 +524,34 @@ cmd_tour() {
     step "Put version 1.0 back, so the tour can be run again." -- rollback
   fi
 
-  if part 6 "The proxy is what Prometheus scrapes through, but the app doesn't depend on it. Here the proxy" \
-    "goes away, and you see the shop keep serving while its metrics stop, then resume on their own."; then
-    step "Stop the proxy." -- proxy-stop
-    step "Once CoffeeShopDown has fired, start the proxy again." -- proxy-start
+  if part 6 "When an embedded agent doesn't connect, or a path doesn't scrape, its admin endpoints show what" \
+    "it's doing. The coffee shop's environment turns them on with ADMIN_ENABLED, and its /debug page with" \
+    "DEBUG_ENABLED, with nothing in its code."; then
+    step "Call each of the agent's admin endpoints, and read its /debug page." -- debug
+    instruct "Open the agent's /debug page: $AGENT_ADMIN_URL/debug" \
+      "It's there because the coffee shop's environment sets DEBUG_ENABLED=true, beside ADMIN_ENABLED=true. Keep" \
+      "it open: in the next part, the proxy goes away, and the page shows it."
+    instruct "Turn them on from the environment, or in code." \
+      "The coffee shop sets ADMIN_ENABLED=true and DEBUG_ENABLED=true in its environment (docker/compose.yml)," \
+      "and ADMIN_PORT moves the port from 8093, so turning them off once the agent works, or on again later, takes" \
+      "a restart and no new build. In code, setting(\"admin.enabled\", true) and" \
+      "setting(\"admin.debugEnabled\", true) do the same, though the environment overrides them."
   fi
 
-  if part 7 "The coffee shop and the proxy hold a token, TLS certificates, and a password, and neither reads" \
+  if part 7 "The proxy is what Prometheus scrapes through, but the app doesn't depend on it. Here the proxy" \
+    "goes away, and you see the shop keep serving while its metrics stop, then resume on their own, and the" \
+    "agent's /debug page show it losing the proxy and finding it again."; then
+    step "Stop the proxy." -- proxy-stop
+    instruct "Reload the agent's /debug page: $AGENT_ADMIN_URL/debug" \
+      "Its AgentId is empty: the agent has lost its connection, and has no ID until the proxy gives it one" \
+      "again. ProxyHost is the proxy it keeps trying. Its /healthcheck still reads healthy, since it reports the" \
+      "agent's own state, not its connection: $AGENT_ADMIN_URL/healthcheck"
+    step "Once CoffeeShopDown has fired, start the proxy again." -- proxy-start
+    instruct "Reload the agent's /debug page once more." \
+      "Its AgentId is back, the one the proxy gave it when it reconnected."
+  fi
+
+  if part 8 "The coffee shop and the proxy hold a token, TLS certificates, and a password, and neither reads" \
     "them from a file: the setup a platform that passes secrets as environment variables needs."; then
     step "Show where the coffee shop and the proxy get their secrets." -- secrets
     instruct "Read the website's Cloud Platforms page: https://prometheus-proxy.com/cloud-platforms/" \
@@ -676,6 +709,8 @@ main() {
     point "Grafana's 'Scrape' turns Down and its graphs stop, since Prometheus can't reach the proxy." \
       "After 15 seconds CoffeeShopDown fires on Prometheus's alerts page: $PROMETHEUS_URL/alerts"
     point "The coffee shop's log shows its agent retrying: $0 logs coffee-shop"
+    point "The agent's /debug page shows an empty AgentId, and the proxy it keeps trying, while its /healthcheck" \
+      "stays healthy: $0 debug"
     follow_up "To bring it back, run" "$0 proxy-start"
     ;;
   proxy-start)
@@ -686,11 +721,47 @@ main() {
     watch_for
     point "coffee-shop-1.0 reappears on the dashboard's Agents view, with its two paths."
     point "Grafana's graphs resume, with a gap for the time the proxy was down, and CoffeeShopDown resolves."
+    point "The agent's /debug page shows an AgentId again, the one the proxy gave it when it reconnected:" \
+      "$AGENT_ADMIN_URL/debug"
+    ;;
+  debug)
+    local health threads
+    answers "$AGENT_ADMIN_URL/ping" ||
+      die "the coffee shop's agent didn't answer at $AGENT_ADMIN_URL; is version 1.0 running? See '$0 status'"
+    # Each health check's name and result, from the JSON, which also holds a timestamp and a duration for each.
+    health="$(curl -fsS "$AGENT_ADMIN_URL/healthcheck" | grep -oE '"[a-z_]+":\{"healthy":(true|false)' |
+      sed -E -e 's/^"([a-z_]+)":\{"healthy":/\1: /' -e 's/: true$/: healthy/' -e 's/: false$/: unhealthy/' || true)"
+    # Each thread in the dump starts with its name in quotes.
+    threads="$(curl -fsS "$AGENT_ADMIN_URL/threaddump" | grep -c '^"' || true)"
+    bold "The agent's admin endpoints, on $AGENT_ADMIN_URL, and what each answered:"
+    endpoint /ping "$(curl -fsS "$AGENT_ADMIN_URL/ping")"
+    endpoint /version "$(curl -fsS "$AGENT_ADMIN_URL/version" |
+      sed -E 's/^.*"version":"([^"]*)".*"release_date":"([^"]*)".*"build_time":"([^"]*)".*$/\1, released \2, built \3/')"
+    endpoint /healthcheck "$health"
+    endpoint /threaddump "$threads threads: the coffee shop's JVM, the app's as well as the agent's"
+    endpoint /debug "the page below, which DEBUG_ENABLED adds"
+    echo
+    bold "The agent's /debug page, $AGENT_ADMIN_URL/debug:"
+    # awk ends the page's last line, which has no newline of its own, and leaves its blank lines empty.
+    curl -fsS "$AGENT_ADMIN_URL/debug" | awk '{ print ($0 == "" ? "" : "  " $0) }'
+    how_it_works "The agent in the coffee shop reads ADMIN_ENABLED=true from the container's environment" \
+      "(docker/compose.yml), which turns on its admin endpoints, and DEBUG_ENABLED=true, which adds /debug; without" \
+      "it, the admin port serves the other four. Nothing in the app's code sets them. They answer on port 8093 in" \
+      "the container, which the demo publishes on 127.0.0.1."
+    watch_for
+    point "/debug is the agent as it sees itself: its name, the ID the proxy gave it when it connected, which is" \
+      "empty while it isn't connected, the proxy it's connected to or trying, and each path with the URL the agent" \
+      "scrapes, the password masked. When a path doesn't scrape, its URL here is the first thing to check."
+    point "/healthcheck is the agent's own health, not its connection: it stays healthy while the proxy is down." \
+      "To see /debug tell them apart, run $0 proxy-stop, then $0 debug again."
+    point "/ping is for a liveness probe, and /version tells you which release of the agent the app runs."
+    once_it_works "Take ADMIN_ENABLED and DEBUG_ENABLED out of the app's environment, and restart it. The admin port" \
+      "has no authentication, and /threaddump shows every thread in the app."
     ;;
   secrets)
     local proxy_id
     bold "The coffee shop's settings for its agent, by name (their values stay in the container):"
-    "${COMPOSE[@]}" exec -T coffee-shop printenv | cut -d= -f1 | { grep -E '^(PROMETHEUS_|METRICS_)' || true; } |
+    "${COMPOSE[@]}" exec -T coffee-shop printenv | cut -d= -f1 | { grep -E '^(PROMETHEUS_|METRICS_(USER|PASSWORD)$)' || true; } |
       sort | sed 's/^/  /'
     bold "What the coffee shop's container holds, besides the JRE: the app, and no config file"
     "${COMPOSE[@]}" exec -T coffee-shop ls /app | sed 's/^/  /'

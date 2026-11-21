@@ -528,6 +528,23 @@ so it leaves your application's own logging alone. Your application's Logback co
 agent's loggers, since the library jar carries none of its own; the standalone agent's sets `io.grpc.internal` to WARN,
 which you may want too.
 
+To debug an embedded agent, start by turning on its admin endpoints and its `/debug` page, which are off unless asked
+for. The agent reads the app's environment itself, so they need no change to the code, and a restart turns them on or
+off:
+
+```bash
+ADMIN_ENABLED=true   # the admin endpoints, on port 8093 (ADMIN_PORT for another)
+DEBUG_ENABLED=true   # adds /debug
+```
+
+In code, `setting("admin.enabled", true)` and `setting("admin.debugEnabled", true)` do the same, though the environment
+overrides them. `/debug` shows the agent's name, the proxy it's connected to or trying, and each path with the URL it
+scrapes; `/healthcheck` stays healthy while the agent can't reach a proxy, which `EmbeddedAgentInfo.isConnected`
+reports. Turn them off once the agent works, and keep the admin port on an internal network while they're on, since it
+has no authentication. The docs site's [Debugging](https://prometheus-proxy.com/embedded-agent/#debugging) section lists
+every endpoint, and puts the agent on the project's Grafana Agents dashboard (`METRICS_ENABLED=true`), and the
+[embedded demo](demos/embedded)'s tour shows both.
+
 ### Service Discovery
 
 Enable Prometheus service discovery support:
