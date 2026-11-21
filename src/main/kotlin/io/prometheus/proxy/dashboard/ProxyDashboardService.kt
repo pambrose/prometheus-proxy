@@ -145,8 +145,9 @@ internal class ProxyDashboardService(
   private val dashboardHost: String,
   private val dashboardPort: Int,
   dashboardPath: String,
-  dashboardUsername: String = "",
-  dashboardPassword: String = "",
+  // The login every request must carry, from proxy.dashboard.username and password, once a password is set; null, the
+  // default, leaves the dashboard open.
+  private val login: DashboardLogin? = null,
 ) : GenericIdleService() {
   private val basePath = "/" + dashboardPath.trim('/')
 
@@ -267,9 +268,6 @@ internal class ProxyDashboardService(
     return "Origin not allowed"
   }
 
-  // The login every request must carry, proxy.dashboard.username and password, once a password is set; null, without
-  // one, the default, leaves the dashboard open.
-  private val login = if (dashboardPassword.isEmpty()) null else DashboardLogin(dashboardUsername, dashboardPassword)
   private val loginEnabled = login != null
 
   // The login page's sessions, and the cookie that carries one: named for the port, since a browser sends a host's
@@ -910,19 +908,33 @@ internal class ProxyDashboardService(
       next: String?,
       routeBase: String,
     ): String {
-      val base = routeBase.ifEmpty { "/" }
       val path = next.orEmpty()
-      val pathPart = path.substringBefore('?')
-      val underBase = routeBase.isEmpty() || pathPart == routeBase || pathPart.startsWith("$routeBase/")
-      val isSafe =
-        path.length <= MAX_NEXT_LENGTH &&
-          path.startsWith("/") &&
-          !path.startsWith("//") &&
-          path.none { it == '\\' || it.isISOControl() || it.isWhitespace() } &&
-          underBase &&
-          pathPart.split('/').none { it == "." || it == ".." } &&
-          pathPart != "$routeBase/login"
-      return if (isSafe) path else base
+      return if (isPlainPath(path) && isDashboardPage(path.substringBefore('?'), routeBase))
+        path
+      else
+        routeBase.ifEmpty { "/" }
+    }
+
+    // A path, and only a path: not too long, absolute, not protocol-relative, and with no character a browser could
+    // read as starting a host (a backslash), nor a control character or whitespace.
+    private fun isPlainPath(path: String) =
+      when {
+        path.length > MAX_NEXT_LENGTH -> false
+        !path.startsWith("/") -> false
+        path.startsWith("//") -> false
+        else -> path.none { it == '\\' || it.isISOControl() || it.isWhitespace() }
+      }
+
+    // A page of the dashboard at [routeBase], by the part of a path before its query: under the base, with no . or ..
+    // segment, and not the login page.
+    private fun isDashboardPage(
+      pagePath: String,
+      routeBase: String,
+    ) = when {
+      pagePath == "$routeBase/login" -> false
+      pagePath.split('/').any { it == "." || it == ".." } -> false
+      routeBase.isEmpty() -> true
+      else -> pagePath == routeBase || pagePath.startsWith("$routeBase/")
     }
 
     // Fetch Metadata's header, which every current browser sends with every request, a WebSocket handshake included,

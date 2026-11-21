@@ -365,7 +365,7 @@ class ProxyOptions internal constructor(
       dashboardLinks = PathLink.parseAll(dashboard.links.map { PathLink.Entry(it.name, it.url, it.icon) })
       logger.info { "dashboard.links: ${dashboardLinks.joinToString { it.logged }.ifEmpty { "(none)" }}" }
       logger.info { "dashboardHost: $dashboardHost, dashboardPort: $dashboardPort, dashboardPath: $dashboardPath" }
-      validateDashboardLogin(dashboardUsername, dashboardPassword)
+      validateDashboardLogin()
       if (dashboardPassword.isNotEmpty()) {
         // Never the password.
         logger.info {
@@ -530,6 +530,27 @@ class ProxyOptions internal constructor(
       .also { logger.info { "internal.$name: $it" } }
   }
 
+  /**
+   * Fails startup on a dashboard login the dashboard can't check, once a password turns it on: an empty username,
+   * a colon in it, where HTTP Basic Auth splits the username from the password, or a control character in either,
+   * such as the trailing newline of a secret read from a file, which no browser would send. No message includes a
+   * value. Without a password the username isn't used, so it isn't checked.
+   */
+  private fun validateDashboardLogin() {
+    if (dashboardPassword.isEmpty())
+      return
+    require(dashboardUsername.isNotEmpty()) {
+      "proxy.dashboard.username (DASHBOARD_USERNAME) is empty, with proxy.dashboard.password set"
+    }
+    require(':' !in dashboardUsername) {
+      "proxy.dashboard.username can't contain a colon, where HTTP Basic Auth splits it from the password"
+    }
+    require(dashboardUsername.none { it.isISOControl() }) { "proxy.dashboard.username contains a control character" }
+    require(dashboardPassword.none { it.isISOControl() }) {
+      "proxy.dashboard.password contains a control character, such as a trailing newline"
+    }
+  }
+
   internal companion object {
     private val logger = logger {}
 
@@ -573,30 +594,6 @@ class ProxyOptions internal constructor(
     internal fun isWildcardAddress(host: String): Boolean {
       val literal = host.removeSurrounding("[", "]")
       return InetAddresses.isInetAddress(literal) && InetAddresses.forString(literal).isAnyLocalAddress
-    }
-
-    /**
-     * Fails startup on a dashboard login the dashboard can't check, once a [password] turns it on: an empty [username],
-     * a colon in it, where HTTP Basic Auth splits the username from the password, or a control character in either,
-     * such as the trailing newline of a secret read from a file, which no browser would send. No message includes a
-     * value. Without a password the username isn't used, so it isn't checked.
-     */
-    internal fun validateDashboardLogin(
-      username: String,
-      password: String,
-    ) {
-      if (password.isEmpty())
-        return
-      require(username.isNotEmpty()) {
-        "proxy.dashboard.username (DASHBOARD_USERNAME) is empty, with proxy.dashboard.password set"
-      }
-      require(':' !in username) {
-        "proxy.dashboard.username can't contain a colon, where HTTP Basic Auth splits it from the password"
-      }
-      require(username.none { it.isISOControl() }) { "proxy.dashboard.username contains a control character" }
-      require(password.none { it.isISOControl() }) {
-        "proxy.dashboard.password contains a control character, such as a trailing newline"
-      }
     }
   }
 }

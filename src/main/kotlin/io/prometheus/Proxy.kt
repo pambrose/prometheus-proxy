@@ -58,6 +58,7 @@ import io.prometheus.proxy.ProxyPathManager
 import io.prometheus.proxy.RemovalReason
 import io.prometheus.proxy.ScrapeRecord
 import io.prometheus.proxy.ScrapeRequestManager
+import io.prometheus.proxy.dashboard.DashboardLogin
 import io.prometheus.proxy.dashboard.ProxyDashboardService
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -200,8 +201,7 @@ class Proxy(
         dashboardHost = options.dashboardHost,
         dashboardPort = options.dashboardPort,
         dashboardPath = options.dashboardPath,
-        dashboardUsername = options.dashboardUsername,
-        dashboardPassword = options.dashboardPassword,
+        login = options.dashboardPassword.ifEmpty { null }?.let { DashboardLogin(options.dashboardUsername, it) },
       )
     else
       null

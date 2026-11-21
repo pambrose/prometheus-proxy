@@ -268,7 +268,6 @@ class ProxyDashboardOptionsTest : StringSpec() {
     }
 
     "without a password, the login's username should go unchecked, since it isn't used" {
-      ProxyOptions.validateDashboardLogin("ops:team", "")
       proxyOptionsFromConfig("""proxy.dashboard.username = "ops:team" """, extraArgs = ["--dashboard"])
         .dashboardPassword shouldBe ""
     }
