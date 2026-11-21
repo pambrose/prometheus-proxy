@@ -28,6 +28,7 @@ import io.ktor.server.request.ApplicationRequest
 import io.ktor.server.request.header
 import io.prometheus.Proxy
 import io.prometheus.common.AgentValues.shownValue
+import io.prometheus.common.Exposition
 import io.prometheus.common.ScrapeResults
 import io.prometheus.proxy.ProxyUtils.DecodedContent
 import io.prometheus.proxy.ProxyUtils.unzip
@@ -59,7 +60,7 @@ internal object ScrapeDispatch {
   private val authHeaderWithoutTlsWarned = AtomicBoolean(false)
 
   // OpenMetrics end-of-stream marker, stripped from each consolidated agent's body and re-appended once.
-  internal const val EOF_MARKER = "# EOF"
+  internal const val EOF_MARKER = Exposition.EOF_MARKER
 
   // The proxy waited out scrapeRequestTimeoutSecs without the agent answering. Distinct from
   // upstream_timed_out, which is the agent answering promptly to report that its own fetch of the

@@ -22,6 +22,7 @@ import io.ktor.http.ContentType.Text
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.HttpStatusCode.Companion.NotFound
+import io.ktor.http.content.OutgoingContent
 import io.ktor.http.content.TextContent
 import io.ktor.http.withCharset
 import io.ktor.server.application.Application
@@ -125,10 +126,19 @@ internal object ProxyHttpConfig {
       call.respond(HttpStatusCode.InternalServerError)
     }
 
-    status(NotFound) { call, cause ->
-      call.respond(TextContent("${cause.value} ${cause.description}", Text.Plain.withCharset(Charsets.UTF_8), cause))
+    // The status line as plain text, for a 404 with nothing to say: an unknown route, or a scrape of a path no agent
+    // registered, whose results carry no body. A 404 a route gave a body of its own keeps it: the dashboards' Scrape
+    // now says there why it refused, which the status line used to replace, since the handler runs for every 404.
+    status(NotFound) { code ->
+      if (!content.hasBody)
+        call.respond(TextContent("${code.value} ${code.description}", Text.Plain.withCharset(Charsets.UTF_8), code))
     }
   }
+
+  // Whether a response carries a body: none for a bare status or an empty one, and one, to be safe, whenever its length
+  // isn't known, as a streamed body's isn't.
+  private val OutgoingContent.hasBody: Boolean
+    get() = this !is OutgoingContent.NoContent && contentLength != 0L
 
   private fun logClientGone(
     call: ApplicationCall,

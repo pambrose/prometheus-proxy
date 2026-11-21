@@ -15,7 +15,7 @@
  */
 @file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
 
-package io.prometheus.proxy.dashboard
+package io.prometheus.common.dashboard
 
 import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
@@ -23,7 +23,6 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import io.ktor.http.HttpStatusCode
-import io.prometheus.common.dashboard.DashboardPage
 import kotlin.time.Duration.Companion.milliseconds
 
 /** The scrape-now result panel's content, [ScrapeNowHtml]. */
@@ -39,6 +38,7 @@ class ScrapeNowHtmlTest : StringSpec() {
     contentType: String = "text/plain",
     families: Int = 1,
     samples: Int = 1,
+    filteredBytes: Long? = null,
   ) = ScrapeSummary(
     path = "orders_metrics",
     statusCode = statusCode,
@@ -52,9 +52,10 @@ class ScrapeNowHtmlTest : StringSpec() {
     failure = failure,
     excerpt = excerpt,
     isWhole = isWhole,
+    filteredBytes = filteredBytes,
   )
 
-  private fun done(summary: ScrapeSummary = summary()) = ScrapeNowHtml.render(ScrapeNow.Done(summary))
+  private fun done(summary: ScrapeSummary = summary()) = ScrapeNowHtml.render(ScrapeNowResult.Done(summary))
 
   init {
     "a finished scrape should show its status, path, and facts, then the start of the body" {
@@ -75,6 +76,15 @@ class ScrapeNowHtmlTest : StringSpec() {
         this shouldContain "The start of a 4.2 KB body"
         this shouldContain "· # EOF"
       }
+    }
+
+    // The agent's Scrape now shows the body as Prometheus gets it, after the path's metric filter, and both sizes.
+    "an agent's scrape should show its size after the filter, and a cut body should be the filtered one's start" {
+      done(summary(bytes = 92_160, filteredBytes = 30_720, isWhole = false)).apply {
+        this shouldContain "success · 120 ms · 90.0 KB · 30.0 KB after the filter · text/plain"
+        this shouldContain "The start of a 30.0 KB body"
+      }
+      done(summary(filteredBytes = 4300)) shouldNotContain "after the filter"
     }
 
     "a failed scrape should show its reason, and nothing about a body it didn't get" {
@@ -116,7 +126,9 @@ class ScrapeNowHtmlTest : StringSpec() {
     }
 
     "a refused scrape should say why" {
-      ScrapeNowHtml.render(ScrapeNow.Refused(HttpStatusCode.TooManyRequests, "4 dashboard scrapes are running")).apply {
+      ScrapeNowHtml.render(
+        ScrapeNowResult.Refused(HttpStatusCode.TooManyRequests, "4 dashboard scrapes are running"),
+      ).apply {
         this shouldContain """<span class="tag crit">not scraped</span>"""
         this shouldContain "4 dashboard scrapes are running"
         this shouldContain """${DashboardPage.SAY_ATTR}="Not scraped: 4 dashboard scrapes are running.""""

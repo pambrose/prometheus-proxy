@@ -19,10 +19,14 @@ package io.prometheus.agent.dashboard
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.decodeURLPart
+import io.ktor.http.withCharset
 import io.ktor.server.html.respondHtml
+import io.ktor.server.plugins.origin
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
+import io.ktor.server.routing.post
+import io.ktor.server.routing.route
 import io.prometheus.Agent
 import io.prometheus.common.dashboard.DashboardFrame
 import io.prometheus.common.dashboard.DashboardLogin
@@ -31,6 +35,7 @@ import io.prometheus.common.dashboard.DashboardServer
 import io.prometheus.common.dashboard.DashboardService
 import io.prometheus.common.dashboard.DashboardSettings
 import io.prometheus.common.dashboard.DashboardSite
+import io.prometheus.common.dashboard.ScrapeNowHtml
 import io.prometheus.common.dashboard.href
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
@@ -40,7 +45,8 @@ import kotlin.time.Duration.Companion.seconds
  * The agent's dashboard, served from its own Ktor server on its own port ([DashboardServer], which the proxy's
  * dashboard shares): what only the agent knows, which the proxy's dashboard can't show. Its connection, even while the
  * proxy can't see it; every path, with the proxy's reason for refusing one; and its filters, discovery, and settings.
- * It reads the agent's state and changes none of it.
+ * It reads the agent's state and changes none of it; its one action, Scrape now ([AgentScrapeNow]), scrapes a path's
+ * target from the agent, as Prometheus would through the proxy.
  *
  * Off by default (`agent.dashboard.enabled`), so an agent embedded in another app opens no port of its own unless
  * asked. Its updates come from the server's push loop, on its refresh interval: the agent has no event bus, so nothing
@@ -60,6 +66,9 @@ internal class AgentDashboardService(
   login: DashboardLogin? = null,
 ) : DashboardService<AgentView, AgentSnapshot>() {
   private val dashboardConfig = agent.agentConfigVals.dashboard
+
+  // Null unless agent.dashboard.scrapeNowEnabled, which leaves the route unregistered, so it answers 404.
+  private val scrapeNow = if (dashboardConfig.scrapeNowEnabled) AgentScrapeNow(agent) else null
 
   private val site =
     object : DashboardSite<AgentView, AgentSnapshot> {
@@ -102,7 +111,7 @@ internal class AgentDashboardService(
       site,
     )
 
-  // The agent's pages: its two views, and a selected path's.
+  // The agent's pages: its two views, a selected path's, and Scrape now.
   private fun Route.pageRoutes(server: DashboardServer<AgentView, AgentSnapshot>) {
     val routeBase = server.routeBase
     val loginEnabled = server.loginEnabled
@@ -126,6 +135,24 @@ internal class AgentDashboardService(
         call.respondHtml {
           with(AgentDashboardHtml) { renderPage(snapshot, AgentView(selectedPath = path), routeBase, loginEnabled) }
         }
+    }
+
+    // Behind pageGuard, as the proxy's is: a POST needs the header only the page's own script sends, so no page on
+    // another site can make the agent scrape.
+    scrapeNow?.also { scrapes ->
+      route("$routeBase/scrape") {
+        install(server.pageGuard)
+        post {
+          // The address, not the host name, which could cost a reverse DNS lookup on every click.
+          val result =
+            scrapes.scrape(call.request.queryParameters["path"].orEmpty(), call.request.origin.remoteAddress)
+          call.respondText(
+            ScrapeNowHtml.render(result),
+            ContentType.Text.Html.withCharset(Charsets.UTF_8),
+            result.status,
+          )
+        }
+      }
     }
   }
 

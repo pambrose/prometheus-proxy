@@ -53,6 +53,7 @@ import io.ktor.utils.io.InternalAPI
 import io.ktor.utils.io.readBuffer
 import io.prometheus.Agent
 import io.prometheus.agent.HttpClientCache.ClientKey
+import io.prometheus.agent.filter.FilterOutcome
 import io.prometheus.agent.filter.MetricFilter
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.ScrapeResults.Companion.errorCode
@@ -62,6 +63,7 @@ import io.prometheus.common.Utils.sanitizeUrl
 import io.prometheus.common.Utils.sanitizeUrlsInText
 import io.prometheus.common.hasTimeoutCause
 import io.prometheus.grpc.ScrapeRequest
+import io.prometheus.grpc.scrapeRequest
 import io.prometheus.metrics.core.datapoints.Timer
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.cancel
@@ -73,6 +75,7 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeSource
 
 /**
  * Scrapes actual metrics endpoints via HTTP and builds [ScrapeResults].
@@ -123,7 +126,8 @@ internal class AgentHttpService(
 
   suspend fun fetchScrapeUrl(scrapeRequest: ScrapeRequest): ScrapeResults {
     val pathContext = agent.pathManager[scrapeRequest.path]
-    val results =
+    val started = TimeSource.Monotonic.markNow()
+    val fetched =
       if (pathContext != null)
         fetchContentFromUrl(scrapeRequest, pathContext)
       else
@@ -131,13 +135,45 @@ internal class AgentHttpService(
     // Counted here, so every scrape the proxy asks for is counted under its type, however it ends. A scrape the proxy's
     // dashboard asked for is counted only as one, and its results are marked so the agent doesn't count them either:
     // the agent_scrape_* metrics count only Prometheus's scrapes, whose rates they report.
-    return if (scrapeRequest.dashboardScrape) {
-      agent.updateDashboardScrapeCounter()
-      results.asDashboardScrape()
-    } else {
-      agent.updateScrapeCounter(results.scrapeCounterMsg)
-      results
-    }
+    val results =
+      if (scrapeRequest.dashboardScrape) {
+        agent.updateDashboardScrapeCounter()
+        fetched.asDashboardScrape()
+      } else {
+        agent.updateScrapeCounter(fetched.scrapeCounterMsg)
+        fetched
+      }
+    // Recorded for the agent's dashboard, marked when the proxy's dashboard asked for it, and only for a path the agent
+    // serves: a ring for each path a proxy names would grow without end.
+    if (pathContext != null)
+      agent.scrapeHistory?.record(
+        pathContext.path,
+        AgentScrapeRecord.of(results, started.elapsedNow(), agent.options.chunkContentSizeBytes),
+      )
+    return results
+  }
+
+  /**
+   * One scrape of [url], filtered by [filter], for the agent's dashboard (its Scrape now), through the code a scrape
+   * the proxy asks for takes, so its result is what Prometheus would get. Counted and recorded nowhere: not in the
+   * `agent_scrape_*` metrics, `agent_dashboard_scrapes_total`, the filter's counts, or the path's history, which stay a
+   * record of the scrapes the proxy asked for. It waits at most [timeout] for the target, which is told so, asks it for
+   * text, since the dashboard shows the body, and fills in the failure reason, as a scrape with debug on does.
+   */
+  internal suspend fun fetchForDashboard(
+    url: String,
+    filter: MetricFilter?,
+    timeout: Duration,
+  ): ScrapeResults {
+    // Marked as a dashboard's, so the filter counts nothing; the request goes to no proxy, so nothing else reads it.
+    val request =
+      scrapeRequest {
+        accept = DASHBOARD_ACCEPT
+        scrapeTimeoutMillis = timeout.inWholeMilliseconds
+        debugEnabled = true
+        dashboardScrape = true
+      }
+    return fetchGuarded(url, request, filter)
   }
 
   // Times a scrape for agent_scrape_request_latency_seconds, unless the metrics are off or the proxy's dashboard asked
@@ -152,41 +188,55 @@ internal class AgentHttpService(
     val requestTimer = latencyTimer(req)
     // Add the incoming query params to the url
     val url = appendQueryParams(pathContext.url, req.encodedQueryParams)
-    val logUrl = sanitizeUrl(url)
-    logger.debug { "Fetching $pathContext ${if (url.isNotBlank()) "URL: $logUrl" else ""}" }
+    logger.debug { "Fetching $pathContext ${if (url.isNotBlank()) "URL: ${sanitizeUrl(url)}" else ""}" }
+    return try {
+      fetchGuarded(url, req, pathContext.filter)
+    } finally {
+      requestTimer?.observeDuration()
+    }
+  }
 
-    // Content is fetched here
-    val results =
-      try {
-        withTimeout(scrapeTimeout(req)) {
-          fetchContent(url, req, pathContext.filter)
-        }
-      } catch (e: Throwable) {
-        // Catch regular exceptions and HttpRequestTimeoutException (which is a CancellationException)
-        // but let other CancellationExceptions propagate (like system shutdown). Uses the shared
-        // cause-walk predicate so the catch branch and the status-code mapping agree (finding 34).
-        if (e is CancellationException && !e.hasTimeoutCause())
-          throw e
-
-        // Re-throw JVM Errors (OutOfMemoryError, StackOverflowError, etc.) so the agent terminates
-        // instead of swallowing them into a routine 503 result and running in a corrupted state.
-        // Mirrors the Error-rethrow policy at Agent.handleConnectionFailure() and connectAgent().
-        if (e is Error)
-          throw e
-
-        ScrapeResults(
-          srAgentId = req.agentId,
-          srScrapeId = req.scrapeId,
-          srStatusCode = errorCode(e, logUrl),
-          srFailureReason = scrapeFailureReason(e, req.debugEnabled),
-          srUrl = if (req.debugEnabled) logUrl else "",
-          // A fetch that got no answer: the agent's own timeout, or a refused connection, DNS failure, and the like.
-          scrapeCounterMsg = if (e.hasTimeoutCause()) TIMED_OUT_MSG else FAILURE_MSG,
-        )
-      } finally {
-        requestTimer?.observeDuration()
+  // Fetches [url] within the scrape's timeout, a failure becoming results that say why.
+  private suspend fun fetchGuarded(
+    url: String,
+    req: ScrapeRequest,
+    filter: MetricFilter?,
+  ): ScrapeResults =
+    try {
+      withTimeout(scrapeTimeout(req)) {
+        fetchContent(url, req, filter)
       }
-    return results
+    } catch (e: Throwable) {
+      failedResults(e, req, sanitizeUrl(url))
+    }
+
+  // The results of a fetch of [logUrl] that failed with [e], unless [e] must propagate.
+  private fun failedResults(
+    e: Throwable,
+    req: ScrapeRequest,
+    logUrl: String,
+  ): ScrapeResults {
+    // Catch regular exceptions and HttpRequestTimeoutException (which is a CancellationException)
+    // but let other CancellationExceptions propagate (like system shutdown). Uses the shared
+    // cause-walk predicate so the catch branch and the status-code mapping agree (finding 34).
+    if (e is CancellationException && !e.hasTimeoutCause())
+      throw e
+
+    // Re-throw JVM Errors (OutOfMemoryError, StackOverflowError, etc.) so the agent terminates
+    // instead of swallowing them into a routine 503 result and running in a corrupted state.
+    // Mirrors the Error-rethrow policy at Agent.handleConnectionFailure() and connectAgent().
+    if (e is Error)
+      throw e
+
+    return ScrapeResults(
+      srAgentId = req.agentId,
+      srScrapeId = req.scrapeId,
+      srStatusCode = errorCode(e, logUrl),
+      srFailureReason = scrapeFailureReason(e, req.debugEnabled),
+      srUrl = if (req.debugEnabled) logUrl else "",
+      // A fetch that got no answer: the agent's own timeout, or a refused connection, DNS failure, and the like.
+      scrapeCounterMsg = if (e.hasTimeoutCause()) TIMED_OUT_MSG else FAILURE_MSG,
+    )
   }
 
   // A scrape stops at the agent's scrapeTimeoutSecs, or sooner when the proxy forwards a shorter timeout from the
@@ -252,14 +302,7 @@ internal class AgentHttpService(
         // The body is never read, so cancel the call: a streaming request's cleanup otherwise waits for the body to
         // finish arriving, which a target that stalls after its headers drags out to the scrape timeout.
         response.cancel()
-        return ScrapeResults(
-          srAgentId = scrapeRequest.agentId,
-          srScrapeId = scrapeRequest.scrapeId,
-          srStatusCode = HttpStatusCode.PayloadTooLarge.value,
-          srUrl = if (scrapeRequest.debugEnabled) safeUrl else "",
-          srFailureReason = if (scrapeRequest.debugEnabled) msg else "",
-          scrapeCounterMsg = UNSUCCESSFUL_MSG,
-        )
+        return tooLarge(scrapeRequest, safeUrl, msg)
       }
 
       val contentType = response.headers[CONTENT_TYPE].orEmpty()
@@ -276,14 +319,7 @@ internal class AgentHttpService(
       if (contentByteSize > maxContentLength) {
         val msg = "Content size exceeds maximum allowed size of $maxContentLength bytes"
         logger.warn { "$msg for $safeUrl (scrapeId: ${scrapeRequest.scrapeId})" }
-        return ScrapeResults(
-          srAgentId = scrapeRequest.agentId,
-          srScrapeId = scrapeRequest.scrapeId,
-          srStatusCode = HttpStatusCode.PayloadTooLarge.value,
-          srUrl = if (scrapeRequest.debugEnabled) safeUrl else "",
-          srFailureReason = if (scrapeRequest.debugEnabled) msg else "",
-          scrapeCounterMsg = UNSUCCESSFUL_MSG,
-        )
+        return tooLarge(scrapeRequest, safeUrl, msg)
       }
 
       // Filter before the gzip decision so gzip and chunking both see the reduced payload. The
@@ -291,16 +327,7 @@ internal class AgentHttpService(
       // and filtering must not become a way around it. A null outcome means the filter deliberately
       // passed the payload through (unfilterable content type, or a body that is not valid UTF-8), so
       // no metrics are recorded and the raw bytes are used verbatim.
-      val outcome = filter?.filterBytes(contentBytes, contentType)
-      outcome?.also {
-        // Only paths whose filter actually ran ever create series here, so cardinality stays bounded. Labeled by the
-        // path's key, which fetchScrapeUrl looked the path up by, so a path's series is the same whichever proxy asked.
-        agent.metrics {
-          val path = AgentPathManager.requestedPathKey(scrapeRequest.path)
-          filterLinesDropped.labelValues(agent.launchId, path).inc(it.linesDropped.toDouble())
-          filterBytesSaved.labelValues(agent.launchId, path).inc(it.bytesSaved.toDouble())
-        }
-      }
+      val outcome = filter?.let { filtered(it, contentBytes, contentType, scrapeRequest) }
       val filteredBytes = outcome?.bytes ?: contentBytes
 
       val zipped = filteredBytes.size > agent.options.minGzipSizeBytes
@@ -316,6 +343,8 @@ internal class AgentHttpService(
         srContentAsZipped = if (zipped) filteredBytes.zip() else EMPTY_BYTE_ARRAY,
         srUrl = if (scrapeRequest.debugEnabled) safeUrl else "",
         scrapeCounterMsg = SUCCESS_MSG,
+        rawSize = contentBytes.size,
+        filteredSize = filteredBytes.size,
       )
     } else {
       ScrapeResults(
@@ -326,6 +355,42 @@ internal class AgentHttpService(
         srFailureReason = if (scrapeRequest.debugEnabled) "Unsuccessful response code $statusCode" else "",
         scrapeCounterMsg = UNSUCCESSFUL_MSG,
       )
+    }
+  }
+
+  // A scrape refused for a body over agent.http.maxContentLengthMBytes, as [msg] says; only debug sends the proxy why.
+  private fun tooLarge(
+    scrapeRequest: ScrapeRequest,
+    safeUrl: String,
+    msg: String,
+  ) = ScrapeResults(
+    srAgentId = scrapeRequest.agentId,
+    srScrapeId = scrapeRequest.scrapeId,
+    srStatusCode = HttpStatusCode.PayloadTooLarge.value,
+    srUrl = if (scrapeRequest.debugEnabled) safeUrl else "",
+    srFailureReason = if (scrapeRequest.debugEnabled) msg else "",
+    scrapeCounterMsg = UNSUCCESSFUL_MSG,
+  )
+
+  // [bytes] filtered by [filter]. What it drops is counted in the filter's counts and agent_filter_* only for a scrape
+  // Prometheus asked for: a dashboard's, the proxy's or the agent's own, counts nothing, as it counts in no
+  // agent_scrape_* metric.
+  private fun filtered(
+    filter: MetricFilter,
+    bytes: ByteArray,
+    contentType: String,
+    scrapeRequest: ScrapeRequest,
+  ): FilterOutcome? {
+    if (scrapeRequest.dashboardScrape)
+      return filter.previewBytes(bytes, contentType)
+    return filter.filterBytes(bytes, contentType)?.also {
+      // Only paths whose filter actually ran ever create series here, so cardinality stays bounded. Labeled by the
+      // path's key, which fetchScrapeUrl looked the path up by, so a path's series is the same whichever proxy asked.
+      agent.metrics {
+        val path = AgentPathManager.requestedPathKey(scrapeRequest.path)
+        filterLinesDropped.labelValues(agent.launchId, path).inc(it.linesDropped.toDouble())
+        filterBytesSaved.labelValues(agent.launchId, path).inc(it.bytesSaved.toDouble())
+      }
     }
   }
 
@@ -482,6 +547,9 @@ internal class AgentHttpService(
     private const val MAX_RETRY_DELAY_MS = 5000L
 
     private const val PROTOBUF_MEDIA_TYPE = "application/vnd.google.protobuf"
+
+    // What the agent dashboard's Scrape now asks a target for: text, which the dashboard shows, as the proxy's does.
+    private const val DASHBOARD_ACCEPT = "text/plain"
 
     // Prometheus's scrape timeout, which the proxy also reads from the scrape request.
     private const val SCRAPE_TIMEOUT_HEADER = "X-Prometheus-Scrape-Timeout-Seconds"

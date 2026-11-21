@@ -18,6 +18,7 @@ package io.prometheus.proxy.dashboard
 
 import io.prometheus.Proxy
 import io.prometheus.common.Utils.toJsonElement
+import io.prometheus.common.dashboard.DashboardPage
 import io.prometheus.proxy.ActivityEntry
 import io.prometheus.proxy.ActivityLog
 import io.prometheus.proxy.AgentAuthManager.Companion.LEGACY_IDENTITY_NAME
@@ -89,15 +90,7 @@ internal data class PathView(
    * table's history strip draws, one element per run.
    */
   val historyRuns: List<Pair<Boolean, Int>> by lazy(LazyThreadSafetyMode.PUBLICATION) {
-    buildList {
-      history.asReversed().forEach { record ->
-        val last = lastOrNull()
-        if (last != null && last.first == record.isSuccess)
-          set(lastIndex, last.first to last.second + 1)
-        else
-          add(record.isSuccess to 1)
-      }
-    }
+    DashboardPage.historyRuns(history.map { it.isSuccess })
   }
 
   /**

@@ -14,25 +14,25 @@
  * limitations under the License.
  */
 
-package io.prometheus.proxy.dashboard
+package io.prometheus.common.dashboard
 
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.isSuccess
 import io.prometheus.common.AgentValues
 import io.prometheus.common.Exposition
-import io.prometheus.proxy.ScrapeDispatch
-import io.prometheus.proxy.ScrapeRequestResponse
 import kotlin.time.Duration
 
 /**
- * What a scrape-now found, for the dashboard's result panel: how the scrape went, what came back, and the start of it.
+ * What a scrape-now found, for a dashboard's result panel ([ScrapeNowHtml]): how the scrape went, what came back, and
+ * the start of it.
  *
- * Built from the scrape's responses, one per agent of the path, merged as the scrape route merges them for Prometheus,
- * so the panel shows what Prometheus would have got.
+ * Built by [of] from the [RawScrape] a dashboard got: on the proxy's, the path's agents' responses merged as the scrape
+ * route merges them for Prometheus, so the panel shows what Prometheus would have got; on the agent's, the body of its
+ * own fetch of the target.
  *
- * @param outcome each agent's outcome label, as the proxy's scrape metrics name it ("success", "upstream_error", ...)
- * @param duration the slowest agent's
- * @param bytes the body's size before decoding, across the agents
+ * @param outcome how the scrape ended, as the role's scrape metrics name it ("success", "upstream_error", ...)
+ * @param duration how long the scrape took; on the proxy's, its slowest agent's
+ * @param bytes the body's size before decoding; on the proxy's, across the agents
  * @param families the metric families the body's `# HELP`, `# TYPE`, and `# UNIT` lines open, read as the agent's
  *   metric filter reads them (see [Exposition]), or 0 for a body in neither text format, such as protobuf (see
  *   [isText])
@@ -41,6 +41,8 @@ import kotlin.time.Duration
  * @param excerpt the start of the body, at most [MAX_EXCERPT_CHARS] characters, ending at a line break where it is cut,
  *   with each control character but a line break, a tab, and a carriage return escaped
  * @param isWhole whether [excerpt] is the whole body
+ * @param filteredBytes on the agent's, the body's size after the path's metric filter, which [excerpt] is the start
+ *   of; null on the proxy's, whose bodies arrive filtered
  */
 internal data class ScrapeSummary(
   val path: String,
@@ -55,6 +57,7 @@ internal data class ScrapeSummary(
   val failure: String,
   val excerpt: String,
   val isWhole: Boolean,
+  val filteredBytes: Long? = null,
 ) {
   val isSuccess: Boolean get() = statusCode.isSuccess()
 
@@ -69,36 +72,34 @@ internal data class ScrapeSummary(
     // Enough to recognize a payload and read its first families, little enough to show in a panel.
     const val MAX_EXCERPT_CHARS = 2048
 
-    // As much of an agent's failure reason as a log line shows.
+    // As much of a failure reason as a log line shows.
     private const val MAX_FAILURE_CHARS = 512
 
-    fun of(
-      path: String,
-      responses: List<ScrapeRequestResponse>,
-    ): ScrapeSummary {
-      val merged = ScrapeDispatch.mergeResponseResults(responses)
-      val text = merged.contentText
+    /**
+     * The summary of [raw]: its body's families and samples when it is in a text format, its end marker, and its start,
+     * with its failure's reason cut and escaped.
+     */
+    fun of(raw: RawScrape): ScrapeSummary {
+      val text = raw.text
       val excerpt = excerpt(text)
-      val contentType = merged.contentType.withoutParameters().toString()
       // Only a body in one of the text formats, the ones the agent's metric filter reads, has lines to count; a
       // protobuf body read as text would count its bytes as samples.
-      val counted = if (Exposition.isTextContentType(contentType)) text else ""
+      val counted = if (Exposition.isTextContentType(raw.contentType)) text else ""
       return ScrapeSummary(
-        path = path,
-        statusCode = merged.statusCode,
-        outcome = merged.updateMsgs.distinct().joinToString(", "),
-        duration = responses.maxOf { it.fetchDuration },
-        bytes = responses.sumOf { it.byteCount },
-        contentType = contentType,
+        path = raw.path,
+        statusCode = raw.statusCode,
+        outcome = raw.outcome,
+        duration = raw.duration,
+        bytes = raw.bytes,
+        contentType = raw.contentType,
         families = families(counted),
         samples = samples(counted),
         hasEof = endsWithEof(text),
-        failure = responses.firstOrNull { it.failureReason.isNotEmpty() }
-          ?.let { AgentValues.shownValue(it.failureReason, MAX_FAILURE_CHARS) }
-          .orEmpty(),
+        failure = if (raw.failure.isEmpty()) "" else AgentValues.shownValue(raw.failure, MAX_FAILURE_CHARS),
         // A body's own layout kept, and every other control character escaped, as a log line escapes it.
         excerpt = AgentValues.escaped(excerpt) { it == '\n' || it == '\t' || it == '\r' },
         isWhole = excerpt.length == text.length,
+        filteredBytes = raw.filteredBytes,
       )
     }
 
@@ -133,8 +134,29 @@ internal data class ScrapeSummary(
     // Whether the body's last line is the OpenMetrics end marker, without copying a body of several MB to trim it.
     private fun endsWithEof(text: String): Boolean {
       val end = text.indexOfLast { !it.isWhitespace() } + 1
-      val marker = ScrapeDispatch.EOF_MARKER
+      val marker = Exposition.EOF_MARKER
       return end >= marker.length && text.regionMatches(end - marker.length, marker, 0, marker.length)
     }
   }
 }
+
+/**
+ * A scrape as a dashboard's scrape-now got it, before [ScrapeSummary.of] summarizes it.
+ *
+ * @param bytes the body's size before decoding
+ * @param text the body, as the proxy gets it
+ * @param failure why it failed, as the role reported it, or empty
+ * @param filteredBytes on the agent's, the body's size after the path's metric filter, which [text] is then the body
+ *   of; null on the proxy's
+ */
+internal data class RawScrape(
+  val path: String,
+  val statusCode: HttpStatusCode,
+  val outcome: String,
+  val duration: Duration,
+  val bytes: Long,
+  val contentType: String,
+  val text: String,
+  val failure: String,
+  val filteredBytes: Long? = null,
+)

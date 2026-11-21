@@ -29,6 +29,7 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldNotContain
 import io.prometheus.Agent
+import io.prometheus.agent.AgentScrapeRecord
 import io.prometheus.agent.PathSource
 import io.prometheus.common.agentOptionsFromConfig
 import kotlin.io.path.createTempFile
@@ -45,6 +46,19 @@ class AgentSnapshotTest : StringSpec() {
   private fun agent(config: String): Agent =
     Agent(agentOptionsFromConfig(config), inProcessServerName = "agent-snapshot-${System.nanoTime()}", testMode = true)
       .also { created += it }
+
+  private fun scrape(statusCode: Int) =
+    AgentScrapeRecord(
+      statusCode = statusCode,
+      outcome = if (statusCode == 200) "success" else "unsuccessful",
+      durationMillis = 5,
+      bytes = 10,
+      filteredBytes = 10,
+      gzipped = false,
+      chunked = false,
+      failure = "",
+      fromProxyDashboard = false,
+    )
 
   init {
     afterTest {
@@ -140,6 +154,37 @@ class AgentSnapshotTest : StringSpec() {
       snapshot.connection.tokenSet.shouldBeTrue()
       snapshot.settings.toMap()["Scrape timeout"] shouldBe "7s"
       snapshot.settings.none { (name, value) -> "tok-3n7" in name || "tok-3n7" in value }.shouldBeTrue()
+    }
+
+    // Recorded only with the dashboard on, and joined to each path by its key, newest first, for the path's strip.
+    "with the dashboard on, each path should carry its recorded scrapes, newest first" {
+      val agent =
+        agent(
+          """
+          agent.dashboard { enabled = true, pathHistorySize = 7 }
+          agent.pathConfigs = [{ name = a, path = "/orders_metrics", url = "http://orders.invalid/metrics" }]
+          """,
+        )
+      val recorded = agent.scrapeHistory.shouldNotBeNull()
+      listOf(200, 503).forEach { recorded.record("orders_metrics", scrape(it)) }
+
+      AgentSnapshot.collect(agent).apply {
+        pathHistorySize shouldBe 7
+        scrapeNowEnabled.shouldBeTrue()
+        paths.single().apply {
+          history.map { it.statusCode } shouldContainExactly [503, 200]
+          lastScrape.shouldNotBeNull().statusCode shouldBe 503
+          historyRuns shouldContainExactly [true to 1, false to 1]
+        }
+      }
+    }
+
+    "with the dashboard off, the agent should keep no history, and Scrape now should follow its setting" {
+      agent("").scrapeHistory.shouldBeNull()
+      AgentSnapshot.collect(agent("agent.dashboard.scrapeNowEnabled = false")).apply {
+        scrapeNowEnabled.shouldBeFalse()
+        paths.forEach { it.history.shouldBeEmpty() }
+      }
     }
 
     "with discovery off, the snapshot should have none" {

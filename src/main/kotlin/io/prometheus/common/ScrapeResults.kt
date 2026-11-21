@@ -52,6 +52,10 @@ internal class ScrapeResults(
   // Whether the proxy's dashboard asked for the scrape rather than Prometheus (the request's dashboard_scrape). Never
   // sent to the proxy: it tells the agent to leave the result out of agent_scrape_result_count_total.
   val dashboardScrape: Boolean = false,
+  // The body's size as the target sent it, before the agent's metric filter, and after it, before gzip, or 0 for a
+  // scrape that got no body. Never sent to the proxy: the agent's dashboard records them (AgentScrapeRecord).
+  val rawSize: Int = 0,
+  val filteredSize: Int = 0,
 ) {
   // These results, marked as a scrape the proxy's dashboard asked for. Every other field is carried over as it is.
   fun asDashboardScrape() =
@@ -68,6 +72,8 @@ internal class ScrapeResults(
       srUrl = srUrl,
       scrapeCounterMsg = scrapeCounterMsg,
       dashboardScrape = true,
+      rawSize = rawSize,
+      filteredSize = filteredSize,
     )
 
   fun toScrapeResponse() =

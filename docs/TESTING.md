@@ -205,6 +205,16 @@ pins, and no jar on the classpath carries a `logback.xml`, which would replace t
   ends, isn't timed, and has its results marked, while the same scrape from Prometheus is counted and timed; a path
   asked for with leading slashes, as a proxy older than #416 asks, served and filtered as its key is, with its
   filter's series under the key
+- **AgentHttpServiceDashboardTest** — what the HTTP service keeps for the agent's dashboard: a scrape of a path the agent
+  serves recorded in its history with the body's size before and after the filter, a scrape the proxy's dashboard
+  asked for marked as one and left out of the filter's counts and metrics, which Prometheus's adds to (MockK), one of a
+  path it doesn't serve not recorded, and a failure recorded with its reason; and
+  the dashboard's own fetch (`fetchForDashboard`), which returns the filtered body and its size before the filter and
+  counts nothing, in the scrape metrics, the filter's counts, or the history (MockK), and says why it failed
+- **AgentScrapeHistoryTest** — each path's last scrapes as the agent saw them: newest first and bounded per path, keyed
+  without leading slashes, and past the paths the agent knows and a few gone ones, the path scraped least recently
+  dropped; and a record built from the agent's results, with the body's sizes, whether it was gzipped and chunked as
+  the gRPC service decides, a failure's reason cut and escaped, and a scrape the proxy's dashboard asked for marked
 - **AgentHttpServiceHeaderTest** — HTTP Accept header handling per-request (prevents stale headers in cached clients)
 - **AgentContextTest** — Agent context unique ID generation, validity, invalidation, ScrapeRequestWrapper management
 - **AgentContextManagerTest** — Context management: add/remove, concurrent access, chunked contexts
@@ -233,7 +243,8 @@ pins, and no jar on the classpath carries a `logback.xml`, which would replace t
   proxy's, path and host defaults, settable from the command line and read from the agent's config, not the proxy's;
   an out-of-range port, an empty path, a blank host, or a non-positive `maxSessions` or `refreshIntervalSecs` refused
   while it is on, with a `ConfigLoadException`; the login off with the username `admin` until a password is set, then
-  logged masked; and, without one, a warning on every interface that names the agent's settings
+  logged masked; without one, a warning on every interface that names the agent's settings; and a non-positive
+  `pathHistorySize` refused while it is on, and logged
 - **AgentClientInterceptorTest** — gRPC client interceptor that adds agent-id metadata to outbound calls
 - **AgentTokenClientInterceptorTest** — gRPC client interceptor that attaches the agent token header to outbound calls
 - **EndpointFailoverTest** — Proxy endpoint rotation: a failed connect or a rejected registration moves to the next
@@ -263,13 +274,22 @@ pins, and no jar on the classpath carries a `logback.xml`, which would replace t
 - **AgentSnapshotTest** (`dashboard/`) — `AgentSnapshot.collect`, from an agent built but never started: connecting
   to the first of its endpoints, with no id, no failure, and no connect yet; every configured path pending, sorted,
   with its URL's credentials and query redacted, its name and labels; a path's filter with its rules and nothing
-  dropped; the settings as the agent resolved them, with only whether a token is set; and no discovery while it is off
+  dropped; the settings as the agent resolved them, with only whether a token is set; no discovery while it is off;
+  with the dashboard on, each path's recorded scrapes, newest first, its strip's runs, and the history's size; and
+  with it off, no history, and Scrape now as its setting says
 - **AgentDashboardHtmlTest** (`dashboard/`) — the agent dashboard's markup: a path, a reason, and a URL escaped; a
   refused path's reason and "not until the agent reconnects"; a retry's wait as a countdown, and one already due as
   the next retry; an en dash for missing labels; the empty and gone detail panes; a failing connection's endpoints,
   each with its last error, the one being tried, and "failed over"; the title's count of refused and retrying paths
-  and a failing connection; a push's status bar first and stamped, with the regions of the page's view alone; and a
-  row's encoded selection URL and the script's agent views
+  and a failing connection; a push's status bar first and stamped, with the regions of the page's view alone; a
+  row's encoded selection URL and the script's agent views; a row's last result and history strip, a registered path
+  not scraped yet saying so; the detail pane's Recent scrapes, with the body's sizes, gzip, chunking, a failure's
+  reason escaped, and a scrape from the proxy's dashboard marked; and the Scrape now button in the pushed detail pane,
+  its result panel outside every push on the Paths view alone, and neither with Scrape now off
+- **AgentScrapeNowTest** (`dashboard/`) — the agent dashboard's Scrape now, its fetch stood in for: a configured path
+  scraped at its own URL through its own filter, though not registered, summarized with its sizes before and after
+  the filter; a gzipped body unzipped and a path asked for with a leading slash found; a failure's reason; a path the
+  agent doesn't know refused without a fetch, shown escaped; a path at most once a cooldown; and at most a few at once
 - **FileDiscoverySourceTest** (`discovery/`) — Discovery-file parsing: HOCON and JSON, empty or absent `paths`,
   rejection of missing files, malformed files and incomplete entries, and HOCON substitution resolution
 - **PathDiscoveryServiceTest** (`discovery/`) — A failed read reconciles the last good read, so a reconnect registers
@@ -308,8 +328,10 @@ Two support helpers also live here (not test classes themselves):
   Zipkin on, the server is built before `zipkinReporterService` is assigned and traces once it is
 - **ProxyHttpServiceTest** — ProxyHttpService string representation, lifecycle, and idle timeout: 45s when
   `http.idleTimeoutSecs` is -1, otherwise the configured value
-- **ProxyHttpConfigTest** — HTTP server config: Ktor compression, status pages, CORS; a call cancelled by a client
-  disconnect, or a write to one that has gone, is logged at DEBUG, while an unexpected exception still logs at WARN
+- **ProxyHttpConfigTest** — HTTP server config: Ktor compression, status pages, CORS; the status line given as the body
+  of a 404 without one, an unknown route's or an empty one, and a 404 with a body of its own keeping it; a call
+  cancelled by a client disconnect, or a write to one that has gone, is logged at DEBUG, while an unexpected exception
+  still logs at WARN
 - **ProxyHttpRoutesTest** — HTTP routing: path resolution, query params, error responses, compression,
   ensureLeadingSlash, and the service discovery route on and off; the scrape port's `nosniff` and sandbox headers;
   `recordScrapeOutcome`'s `/debug` line, scrape record, and event, each only while its consumer is on, with a huge
@@ -493,9 +515,6 @@ Two support helpers also live here (not test classes themselves):
   naming the browser; a path not registered, without an agent, or on a proxy not running refused; a path at most once a
   cooldown; at most a few at once; a failed scrape-now kept apart from a successful one in the feed; and a scrape-now
   asking for text and marked as the dashboard's, so the agent leaves it out of its scrape metrics
-- **ScrapeNowHtmlTest** (`dashboard/`) — the scrape-now result panel: the status, path, facts, and start of the body; a
-  body's families and samples shown only when it is in a text format, its content type either way; a cut body and an
-  EOF named; a failure's reason without a body; the body escaped; a refusal and why; and sizes in bytes, KB, or MB
 - **RowFilterTest** (`dashboard/`) — the Paths and Activity views' search: a query matching the path, any agent's
   name, the target URL, or the identity (the legacy token by its label, not its internal name), ignoring case, and a
   departed path's agent and identity, from its departure or its last scrape; "problems only" keeping failing and
@@ -578,6 +597,10 @@ One support helper also lives here (not a test class itself):
 - **MetricBuildersTest** — the metric builders keep no exemplars and only classic histogram buckets; a
   `sampledGauge` value that throws is reported as NaN instead of failing the scrape; and `setToCurrentTime` sets
   Unix seconds, which the dashboards' `time() - *_start_time_seconds` panels assume
+- **ScrapeNowHtmlTest** (`dashboard/`) — the scrape-now result panel, the proxy's and the agent's: the status, path,
+  facts, and start of the body; a body's families and samples shown only when it is in a text format, its content type
+  either way; a cut body and an EOF named; an agent's size after its filter, and a cut body as the filtered one's
+  start; a failure's reason without a body; the body escaped; a refusal and why; and sizes in bytes, KB, or MB
 - **ScrapeResultsTest** — ScrapeResults data class, error code mapping, timeout handling, protobuf conversion, and
   `asDashboardScrape`, which marks results without changing any other field or what is sent to the proxy
 - **SharedCollectorsTest** — the collectors every agent (or proxy) in a JVM shares register on the first acquire
@@ -724,8 +747,11 @@ mechanism that the standard suite cannot reach:
   endpoint's error, every path pending, the target's password kept off the page, and its WebSocket pushing the status
   bar at once and then the regions each view asks for; connected, one path registered and one refused, with the
   proxy's reason, the detail pane as a page and as htmx's fragment, the connection's endpoint, connects, and token,
-  and the root's redirect; with a password, the login page under the agent's name and a cookie named for the agent;
-  and no dashboard without `--dashboard`
+  and the root's redirect; a scrape through the proxy in the path's strip and Recent scrapes, and Scrape now fetching
+  the target from the agent through the path's filter, recorded nowhere, refused without the page's header or for a
+  path the agent doesn't know, saying why, and working with the proxy down; with Scrape now off, no button and no route; with a
+  password, the login page under the agent's name and a cookie named for the agent; and no dashboard without
+  `--dashboard`
 - **AgentDiscoveryTest** — dynamic target discovery: the agent reconciles a watched file's paths, adding,
   updating and removing them with no restart
 - **AgentMetricFilterTest** — per-path metric filtering: a denied metric family never reaches the proxy
@@ -788,7 +814,7 @@ mechanism that the standard suite cannot reach:
   a session kept open through a push that fails to render, and a scrape-now against a stub target returning what it
   had while the proxy's and the agent's scrape metrics, the History, and the agent's Recent scrapes stay as
   Prometheus's scrape left them and the agent counts it in `agent_dashboard_scrapes_total`, refused within its
-  cooldown, for an unknown path, without htmx's header, or from another origin, and absent when off; and an Activity
+  cooldown, for an unknown path, saying why, without htmx's header, or from another origin, and absent when off; and an Activity
   page sent its table over a real socket in the first frame rendered from its message, left out of the ticks after it
   while nothing is recorded, and sent again for a new message and once an agent's connection is recorded
 - **ProxyWebDashboardLoginTest** — the dashboard with a password set, split from ProxyWebDashboardTest, a proxy per

@@ -36,6 +36,7 @@ import io.prometheus.common.dashboard.DashboardServer
 import io.prometheus.common.dashboard.DashboardService
 import io.prometheus.common.dashboard.DashboardSettings
 import io.prometheus.common.dashboard.DashboardSite
+import io.prometheus.common.dashboard.ScrapeNowHtml
 import io.prometheus.common.dashboard.href
 import io.prometheus.proxy.ProxyEvent
 import kotlinx.coroutines.flow.Flow

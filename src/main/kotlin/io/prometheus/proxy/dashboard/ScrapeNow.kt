@@ -19,6 +19,11 @@ package io.prometheus.proxy.dashboard
 import io.ktor.http.HttpStatusCode
 import io.prometheus.Proxy
 import io.prometheus.common.KeyedThrottle
+import io.prometheus.common.dashboard.RawScrape
+import io.prometheus.common.dashboard.ScrapeNowResult
+import io.prometheus.common.dashboard.ScrapeNowResult.Done
+import io.prometheus.common.dashboard.ScrapeNowResult.Refused
+import io.prometheus.common.dashboard.ScrapeSummary
 import io.prometheus.proxy.ActivityKind
 import io.prometheus.proxy.ProxyPathManager
 import io.prometheus.proxy.ProxyPathManager.AgentContextInfo
@@ -61,27 +66,11 @@ internal class ScrapeNow(
   // MAX_REMEMBERED_PATHS paths asked about most recently; one asked about less recently is long past its cooldown.
   private val cooldowns = KeyedThrottle<String>(COOLDOWN, MAX_REMEMBERED_PATHS, timeSource)
 
-  /** What a scrape-now came to: a [Done] scrape, or a request [Refused] before any scrape, and why. */
-  sealed interface Result {
-    val status: HttpStatusCode
-  }
-
-  data class Done(
-    val summary: ScrapeSummary,
-  ) : Result {
-    override val status: HttpStatusCode get() = HttpStatusCode.OK
-  }
-
-  data class Refused(
-    override val status: HttpStatusCode,
-    val reason: String,
-  ) : Result
-
   /** Scrapes [path] for a browser at [client], unless the path or the limits refuse it. */
   suspend fun scrape(
     path: String,
     client: String,
-  ): Result {
+  ): ScrapeNowResult {
     val key = ProxyPathManager.pathKey(path)
     val shown = ProxyPathManager.shownPath(key)
     val info = proxy.pathManager.getAgentContextInfo(key)
@@ -102,7 +91,7 @@ internal class ScrapeNow(
   )
 
   // Holds one of the permits, which it gives back.
-  private suspend fun scrapeWithin(request: Request): Result =
+  private suspend fun scrapeWithin(request: Request): ScrapeNowResult =
     try {
       if (cooldowns.tryAcquire(request.key)) {
         Done(ScrapeSummary.of(request.key, submit(request.info, request.key))).also { record(request, it.summary) }
@@ -147,4 +136,28 @@ internal class ScrapeNow(
 
     private const val MAX_REMEMBERED_PATHS = 1000
   }
+}
+
+/**
+ * What a scrape-now of [path] found, from its [responses], one per agent of the path, merged as the scrape route merges
+ * them for Prometheus, so the panel shows what Prometheus would have got: the slowest agent's duration, the agents'
+ * bytes together, and the first agent's failure reason.
+ */
+internal fun ScrapeSummary.Companion.of(
+  path: String,
+  responses: List<ScrapeRequestResponse>,
+): ScrapeSummary {
+  val merged = ScrapeDispatch.mergeResponseResults(responses)
+  return ScrapeSummary.of(
+    RawScrape(
+      path = path,
+      statusCode = merged.statusCode,
+      outcome = merged.updateMsgs.distinct().joinToString(", "),
+      duration = responses.maxOf { it.fetchDuration },
+      bytes = responses.sumOf { it.byteCount },
+      contentType = merged.contentType.withoutParameters().toString(),
+      text = merged.contentText,
+      failure = responses.firstOrNull { it.failureReason.isNotEmpty() }?.failureReason.orEmpty(),
+    ),
+  )
 }

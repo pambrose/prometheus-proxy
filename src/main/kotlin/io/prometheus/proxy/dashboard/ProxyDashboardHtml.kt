@@ -36,6 +36,7 @@ import io.prometheus.common.dashboard.DashboardPage.dashboardHead
 import io.prometheus.common.dashboard.DashboardPage.humanize
 import io.prometheus.common.dashboard.DashboardPage.logoutForm
 import io.prometheus.common.dashboard.DashboardPage.pageTitle
+import io.prometheus.common.dashboard.DashboardPage.statusPill
 import io.prometheus.common.dashboard.DashboardPage.tabs
 import io.prometheus.common.dashboard.DashboardPage.timeOfDay
 import io.prometheus.common.dashboard.DashboardScript
@@ -46,7 +47,6 @@ import kotlinx.html.ButtonType
 import kotlinx.html.DIV
 import kotlinx.html.FORM
 import kotlinx.html.FlowContent
-import kotlinx.html.FlowOrPhrasingContent
 import kotlinx.html.FormMethod
 import io.prometheus.proxy.ScrapeRecord
 import io.prometheus.proxy.dashboard.ActivityHtml.activityTable
@@ -280,14 +280,6 @@ internal object ProxyDashboardHtml {
         }
       }
     }
-  }
-
-  /** A scrape's status code as a pill, `ok` for a success and `crit` for anything else, as every view shows one. */
-  internal fun FlowOrPhrasingContent.statusPill(
-    statusCode: Int,
-    isSuccess: Boolean,
-  ) {
-    span(if (isSuccess) "pill ok" else "pill crit") { +"$statusCode" }
   }
 
   /** Status counters. Driven by the timer rather than the event bus -- these drift, they do not change. */

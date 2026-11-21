@@ -9,12 +9,15 @@ can't show what happens on the agent's side of the firewall, and that's where th
 reach its proxy never appears there. A path the proxy refused never registers. A target the agent scrapes is behind the
 firewall too.
 
-The agent's own dashboard shows those. It runs on the agent, on a port of its own, and answers three questions:
+The agent's own dashboard shows those. It runs on the agent, on a port of its own, and answers four questions:
 
 - **Is the agent connected?** If not, why not: each proxy endpoint, in failover order, with the last error the agent
   got connecting to it.
 - **Is each path registered?** Every path the agent has, configured or discovered, and for one the proxy refused,
   the proxy's reason, whether it's retried, and when.
+- **Is each target answering?** Each path's recent scrapes as the agent saw them: the target's status, how long the
+  fetch took, and what the agent did with the body. A Scrape now button fetches a target from the agent at once,
+  whether or not the proxy has the path.
 - **What is the agent doing with it?** Each path's metric filter and what it has dropped, the agent's discovery file and
   how its last read went, and the settings the agent resolved.
 
@@ -39,6 +42,8 @@ The agent's own dashboard shows those. It runs on the agent, on a port of its ow
         path = "dashboard"          // Served at http://<agent>:8095/dashboard
         host = "0.0.0.0"            // "127.0.0.1" keeps it on the agent's host
         refreshIntervalSecs = 2     // How often the page is re-pushed
+        pathHistorySize = 20        // Recent scrapes kept per path
+        scrapeNowEnabled = true     // A Scrape now button on each path
         username = "admin"          // The login's username, once a password is set
         password = ""               // Requires a login; better set as DASHBOARD_PASSWORD
       }
@@ -86,9 +91,38 @@ light and a tag for where the path stands with the proxy:
 | refused    | red   | The proxy refused it for a cause that can't clear, such as an identity not allowed the path              |
 | pending    | gray  | Not registered yet: the agent isn't connected, or hasn't reached it                                      |
 
+Under its URL, a path the proxy has scraped shows the status of its last scrape, then its recent scrapes as a strip of
+dots, oldest on the left, green for a success and red for a failure, and the share that succeeded. A registered path the
+proxy hasn't scraped says so: Prometheus isn't asking for it.
+
 Select a path to see its URL, its labels, and, while it isn't registered, the proxy's reason, when it was refused, and
 when the agent tries it again. A path with a [metric filter](configuration/agent.md#metric-filtering) shows the
-filter's rules, how many lines and bytes it has dropped, and whether it has ever let a scrape through unfiltered.
+filter's rules, how many lines and bytes it has dropped from Prometheus's scrapes, and whether it has ever let a scrape
+through unfiltered.
+
+**Recent scrapes** lists the path's last scrapes, newest first, as many as `pathHistorySize` keeps: when each ran, the
+target's status, how long the agent's fetch took, and what the agent did with the body. That's its size as the target
+sent it, its size after the filter when the filter dropped anything, and whether it was gzipped and sent to the proxy
+in chunks. A failed scrape shows the agent's reason, such as a refused connection or its own timeout. A scrape the
+proxy's dashboard asked for, with its own Scrape now, is marked `from the proxy's dashboard`.
+
+The agent keeps these only while its dashboard is on, and only for scrapes the proxy asked for; it starts empty when
+the agent does.
+
+## Scrape now
+
+A selected path's **Scrape now** button fetches its target from the agent at once and shows the result above the list:
+the status, the size before and after the path's filter, its metric families and samples, and the start of the body as
+Prometheus would get it, after the filter. It works whether or not the proxy has the path, so the target of a path the
+proxy refused, or of an agent that can't connect, can still be checked.
+
+A browser names a path, never a URL: the agent scrapes only a path it has configured, discovered, or registered, at the
+URL it has for it. Like the proxy's, the button is limited to four scrapes at once and one per path every five seconds,
+and a scrape waits at most ten seconds for its target.
+
+A Scrape now leaves no trace in what the agent reports: not in its `agent_scrape_*` metrics,
+`agent_dashboard_scrapes_total`, its filter's counts, or the path's Recent scrapes. The agent logs it, with the address
+it came from. Turn the button off with `agent.dashboard.scrapeNowEnabled = false`.
 
 ## The Connection view
 

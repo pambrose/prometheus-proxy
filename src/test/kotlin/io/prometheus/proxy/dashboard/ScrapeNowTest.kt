@@ -25,6 +25,7 @@ import io.ktor.http.HttpStatusCode
 import io.mockk.every
 import io.mockk.mockk
 import io.prometheus.Proxy
+import io.prometheus.common.dashboard.ScrapeNowResult
 import io.prometheus.grpc.registerAgentRequest
 import io.prometheus.proxy.ActivityKind
 import io.prometheus.proxy.ActivityLog
@@ -78,7 +79,7 @@ class ScrapeNowTest : StringSpec() {
 
       val result = scrapes.scrape("orders_metrics", "10.9.9.9")
 
-      result.shouldBeInstanceOf<ScrapeNow.Done>().summary.apply {
+      result.shouldBeInstanceOf<ScrapeNowResult.Done>().summary.apply {
         path shouldBe "orders_metrics"
         statusCode shouldBe HttpStatusCode.OK
         samples shouldBe 1
@@ -108,28 +109,28 @@ class ScrapeNowTest : StringSpec() {
     // Each is refused before any scrape, so no stand-in is needed.
     "a path that isn't registered, or has no agent, or a proxy that isn't running should be refused" {
       ScrapeNow(proxy(info = null)).scrape("/nope", "c") shouldBe
-        ScrapeNow.Refused(HttpStatusCode.NotFound, "/nope isn't registered")
+        ScrapeNowResult.Refused(HttpStatusCode.NotFound, "/nope isn't registered")
       ScrapeNow(proxy(info = info(valid = false))).scrape("gone", "c") shouldBe
-        ScrapeNow.Refused(HttpStatusCode.ServiceUnavailable, "/gone has no agent connected")
+        ScrapeNowResult.Refused(HttpStatusCode.ServiceUnavailable, "/gone has no agent connected")
       ScrapeNow(proxy(running = false)).scrape("orders_metrics", "c") shouldBe
-        ScrapeNow.Refused(HttpStatusCode.ServiceUnavailable, "The proxy isn't running")
+        ScrapeNowResult.Refused(HttpStatusCode.ServiceUnavailable, "The proxy isn't running")
     }
 
     "a path should be scraped from the dashboard at most once a cooldown" {
       val time = TestTimeSource()
       val scrapes = ScrapeNow(proxy(), time, submit = { _, _ -> [ok] })
 
-      scrapes.scrape("orders_metrics", "c").shouldBeInstanceOf<ScrapeNow.Done>()
+      scrapes.scrape("orders_metrics", "c").shouldBeInstanceOf<ScrapeNowResult.Done>()
       scrapes.scrape("orders_metrics", "c") shouldBe
-        ScrapeNow.Refused(
+        ScrapeNowResult.Refused(
           HttpStatusCode.TooManyRequests,
           "/orders_metrics was scraped from the dashboard less than 5s ago",
         )
       // Another path isn't held up.
-      scrapes.scrape("payments_metrics", "c").shouldBeInstanceOf<ScrapeNow.Done>()
+      scrapes.scrape("payments_metrics", "c").shouldBeInstanceOf<ScrapeNowResult.Done>()
 
       time += ScrapeNow.COOLDOWN
-      scrapes.scrape("orders_metrics", "c").shouldBeInstanceOf<ScrapeNow.Done>()
+      scrapes.scrape("orders_metrics", "c").shouldBeInstanceOf<ScrapeNowResult.Done>()
     }
 
     // Clicks mustn't take the in-flight slots Prometheus's scrapes need.
@@ -148,12 +149,15 @@ class ScrapeNowTest : StringSpec() {
         eventually(5.seconds) { started.load() shouldBe ScrapeNow.MAX_CONCURRENT }
 
         scrapes.scrape("one_more", "c") shouldBe
-          ScrapeNow.Refused(HttpStatusCode.TooManyRequests, "${ScrapeNow.MAX_CONCURRENT} dashboard scrapes are running")
+          ScrapeNowResult.Refused(
+            HttpStatusCode.TooManyRequests,
+            "${ScrapeNow.MAX_CONCURRENT} dashboard scrapes are running",
+          )
 
         gate.complete(Unit)
-        running.awaitAll().forEach { it.shouldBeInstanceOf<ScrapeNow.Done>() }
+        running.awaitAll().forEach { it.shouldBeInstanceOf<ScrapeNowResult.Done>() }
       }
-      scrapes.scrape("one_more", "c").shouldBeInstanceOf<ScrapeNow.Done>()
+      scrapes.scrape("one_more", "c").shouldBeInstanceOf<ScrapeNowResult.Done>()
     }
 
     // The feed folds a burst of one browser's scrapes into a line, but only while they end alike.

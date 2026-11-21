@@ -24,6 +24,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldEndWith
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
+import io.prometheus.common.dashboard.ScrapeSummary
 import io.prometheus.proxy.ScrapeRequestResponse
 import kotlin.time.Duration.Companion.milliseconds
 

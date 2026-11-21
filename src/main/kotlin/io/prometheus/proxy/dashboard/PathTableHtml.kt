@@ -23,6 +23,8 @@ import io.prometheus.common.dashboard.DashboardPage.PROXY_PATH_ATTR
 import io.prometheus.common.dashboard.DashboardPage.SCRAPE_ID_PREFIX
 import io.prometheus.common.dashboard.DashboardPage.SCRAPE_RESULT_ID
 import io.prometheus.common.dashboard.DashboardPage.SCRAPE_URL_ATTR
+import io.prometheus.common.dashboard.DashboardPage.historyStrip
+import io.prometheus.common.dashboard.DashboardPage.statusPill
 import io.prometheus.common.dashboard.DashboardPage.timeOfDay
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.COPY_PROXY_ID_PREFIX
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.COPY_TARGET_ID_PREFIX
@@ -30,7 +32,6 @@ import io.prometheus.proxy.dashboard.ProxyDashboardHtml.LINK_ID_PREFIX
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.PATH_TABLE_ID
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.agentLabel
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.renderFilters
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.statusPill
 import kotlinx.html.BUTTON
 import kotlinx.html.ButtonType
 import kotlinx.html.DIV
@@ -42,7 +43,6 @@ import kotlinx.html.a
 import kotlinx.html.button
 import kotlinx.html.caption
 import kotlinx.html.div
-import kotlinx.html.i
 import kotlinx.html.span
 import kotlinx.html.style
 import kotlinx.html.table
@@ -310,45 +310,12 @@ internal object PathTableHtml {
     }
   }
 
-  /**
-   * The path's recent scrapes as a row of dots, oldest on the left, then the share that succeeded. Where the Status
-   * column says how the last scrape went, this says whether that is news: a target that fails every scrape and one
-   * that failed once in twenty read the same in Status alone.
-   *
-   * Drawn as one element per run of like results, each painting a dot per scrape as a repeating background, rather
-   * than an element per scrape: the table is pushed whole every refresh, so a healthy path's strip stays one element.
-   * The strip is one image to assistive tech, labelled with the same count the percentage gives.
-   *
-   * Until the history holds [ProxySnapshot.pathHistorySize] scrapes, faint dots keep the places of the ones still to
-   * come, on the left, so every strip is as wide as a full one: the newest scrape and the percentage sit in the same
-   * place on every row, and the column doesn't widen, pushing the Links column along, on every refresh as the
-   * histories fill.
-   */
+  /** The path's recent scrapes as a strip of dots, then the share that succeeded (see [DashboardPage.historyStrip]). */
   private fun TR.historyCell(
     path: PathView,
     snapshot: ProxySnapshot,
   ) {
-    td("dim history") {
-      val total = path.history.size
-      if (total == 0) {
-        +DASH
-      } else {
-        val succeeded = path.historySucceeded
-        val summary = "$succeeded of $total recent scrapes succeeded"
-        span("hist") {
-          attributes["role"] = "img"
-          attributes["aria-label"] = summary
-          attributes["title"] = summary
-          val toCome = snapshot.pathHistorySize - total
-          if (toCome > 0) i("slot") { attributes["style"] = "--n:$toCome" }
-          path.historyRuns.forEach { (ok, count) ->
-            i(if (ok) "ok" else "crit") { attributes["style"] = "--n:$count" }
-          }
-        }
-        // Floored, so a path with any failure never reads 100%.
-        +"${succeeded * 100 / total}%"
-      }
-    }
+    td("dim history") { historyStrip(path.historyRuns, snapshot.pathHistorySize) }
   }
 
   /**

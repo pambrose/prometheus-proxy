@@ -792,7 +792,8 @@ announced to screen readers rather than signalled by colour alone.
 The agent can serve a dashboard of its own, for what the proxy's can't see: an agent that can't connect, and a path the
 proxy refused. It shows the agent's connection, with the last error from each proxy endpoint while it can't connect,
 and every path, configured or discovered, with the proxy's reason for refusing one and when it's tried again, plus each
-path's metric filter, the agent's discovery file, and its settings. It is off by default, takes the same login settings
+path's recent scrapes as the agent saw them, a Scrape now button that fetches its target from the agent, each path's
+metric filter, the agent's discovery file, and its settings. It is off by default, takes the same login settings
 as the proxy's (`agent.dashboard.password`, or `DASHBOARD_PASSWORD`), and listens on port 8095:
 
 ```bash

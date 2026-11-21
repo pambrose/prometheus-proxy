@@ -14,6 +14,20 @@ _Not yet released_
   path, with the proxy's reason for refusing one and when it's tried again; each path's metric filter and what it has
   dropped; the discovery file; and the agent's settings. It is off by default, and asks for a login once you set
   `agent.dashboard.password` (or `DASHBOARD_PASSWORD`). An embedded agent turns it on with `dashboard(port, host)`.
+- **Each path's scrapes, as the agent saw them.** The agent's dashboard shows a path's recent scrapes: the target's
+  status, how long the fetch took, and how big the body was before and after the path's metric filter. Its Scrape now
+  button fetches a target from the agent right away, even for a path the proxy refused, and shows the start of what
+  Prometheus would get.
+
+### Bug Fixes
+
+- **Scrape now says why it refused a path.** Clicking Scrape now on a path that had just left the proxy showed only
+  "404 Not Found" instead of the reason.
+
+### Behavior Changes
+
+- **A dashboard's Scrape now no longer counts in the agent's filter metrics.** `agent_filter_lines_dropped_total` and
+  `agent_filter_bytes_saved_total` now count only Prometheus's scrapes, as the `agent_scrape_*` metrics already did.
 
 ## 4.6.1
 

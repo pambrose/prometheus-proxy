@@ -108,6 +108,16 @@ class AgentDashboardOptionsTest : StringSpec() {
       }
     }
 
+    // At 0 no path would keep a scrape, so every path's history strip and Recent scrapes would stay empty.
+    "a non-positive pathHistorySize should be refused while the dashboard is on, and logged while it is" {
+      shouldBeRejected {
+        agentOptionsFromConfig("""agent.dashboard { enabled = true, pathHistorySize = 0 }""")
+      }.message.shouldNotBeNull() shouldContain "dashboard.pathHistorySize"
+      agentOptionsFromConfig("""agent.dashboard { pathHistorySize = 0 }""").dashboardEnabled.shouldBeFalse()
+      captureLogs<AgentOptions>(Level.INFO) { options(["--dashboard"]) }
+        .map { it.formattedMessage } shouldContainElement "dashboard.pathHistorySize: 20"
+    }
+
     "the agent's login should be off, with the username admin, until a password is set" {
       options(["--dashboard"]).apply {
         dashboardUsername shouldBe "admin"
