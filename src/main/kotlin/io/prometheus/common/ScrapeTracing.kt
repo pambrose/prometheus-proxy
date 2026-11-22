@@ -118,6 +118,15 @@ internal class ScrapeTracing(
 
     const val TAG_PATH = "path"
 
+    /** On a forward span: how long, in milliseconds, the request waited in the agent's queue for its stream. */
+    const val TAG_QUEUE_WAIT = "queue.wait_ms"
+
+    /** On a fetch span the agent retried: how many retries it made (`agent.scrapeMaxRetries`). */
+    const val TAG_RETRIES = "retries"
+
+    /** On a fetch span of a path with a metric filter: how many lines the filter dropped. */
+    const val TAG_LINES_DROPPED = "filter.lines_dropped"
+
     /** A span's outcome when its scrape was cancelled before it ended. */
     const val CANCELLED = "cancelled"
 

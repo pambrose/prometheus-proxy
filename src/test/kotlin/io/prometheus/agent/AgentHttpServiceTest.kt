@@ -72,6 +72,14 @@ import io.prometheus.common.startAndAwaitReady
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.proxy.ProxyUtils.unzip
 import io.prometheus.common.ScrapeResults
+import io.prometheus.common.ScrapeTracing
+import io.prometheus.common.ScrapeTracing.Companion.TAG_LINES_DROPPED
+import io.prometheus.common.ScrapeTracing.Companion.TAG_PATH
+import io.prometheus.common.ScrapeTracing.Companion.TAG_RETRIES
+import io.prometheus.common.collectInto
+import brave.Tracing
+import brave.handler.MutableSpan
+import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
@@ -1446,6 +1454,82 @@ class AgentHttpServiceTest : StringSpec() {
       }
     }
 
+    // A traced fetch's span says how many times the agent retried it. Each retry tags it as it's made, so a fetch that
+    // failed after its retries has the tag too; a fetch never retried has none.
+    "a traced fetch's span should be tagged with how many times the agent retried it" {
+      val server =
+        embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
+          routing {
+            get("/failing") {
+              call.response.status(HttpStatusCode.InternalServerError)
+              call.respondText("unavailable")
+            }
+            get("/healthy") { call.respondText("up 1\n") }
+          }
+        }
+      val spans = CopyOnWriteArrayList<MutableSpan>()
+      val tracing = ScrapeTracing(Tracing.newBuilder().addSpanHandler(collectInto(spans)).build(), 1.0)
+
+      try {
+        val port = server.startAndAwaitReady()
+        val mockAgent = createMockAgentWithPaths(maxRetries = 1)
+        every { mockAgent.tracing } returns tracing
+        val service = AgentHttpService(mockAgent)
+        mockAgent.pathManager.registerPath("failing", "http://localhost:$port/failing")
+        mockAgent.pathManager.registerPath("healthy", "http://localhost:$port/healthy")
+
+        service.fetchScrapeUrl(scrapeRequest { path = "failing" }).srStatusCode shouldBe 500
+        service.fetchScrapeUrl(scrapeRequest { path = "healthy" }).srStatusCode shouldBe 200
+        service.close()
+
+        spans.single { it.tag(TAG_PATH) == "failing" }.tag(TAG_RETRIES) shouldBe "1"
+        spans.single { it.tag(TAG_PATH) == "healthy" }.tag(TAG_RETRIES).shouldBeNull()
+      } finally {
+        tracing.close()
+        server.stop(0, 0)
+      }
+    }
+
+    // A traced fetch of a filtered path says how many lines the filter dropped; a path without a filter says nothing.
+    "a traced fetch's span should be tagged with the lines its path's filter dropped" {
+      val mockAgent =
+        createMockAgentWithPaths(
+          filterHocon = """{ path = "filtered", metricNameAllow = [], metricNameDeny = ["denied_metric"] }""",
+        )
+      val server =
+        embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
+          routing {
+            get("/metrics") {
+              call.respondText(
+                "# TYPE allowed_metric counter\nallowed_metric 1\n# TYPE denied_metric counter\ndenied_metric 2\n",
+                ContentType.Text.Plain,
+              )
+            }
+          }
+        }
+      val spans = CopyOnWriteArrayList<MutableSpan>()
+      val tracing = ScrapeTracing(Tracing.newBuilder().addSpanHandler(collectInto(spans)).build(), 1.0)
+
+      try {
+        val port = server.startAndAwaitReady()
+        every { mockAgent.tracing } returns tracing
+        val service = AgentHttpService(mockAgent)
+        mockAgent.pathManager.registerPath("filtered", "http://localhost:$port/metrics")
+        mockAgent.pathManager.registerPath("unfiltered", "http://localhost:$port/metrics")
+
+        service.fetchScrapeUrl(scrapeRequest { path = "filtered" }).filterLinesDropped shouldBe 2
+        service.fetchScrapeUrl(scrapeRequest { path = "unfiltered" }).filterLinesDropped.shouldBeNull()
+        service.close()
+
+        // The denied family's TYPE line and its sample.
+        spans.single { it.tag(TAG_PATH) == "filtered" }.tag(TAG_LINES_DROPPED) shouldBe "2"
+        spans.single { it.tag(TAG_PATH) == "unfiltered" }.tag(TAG_LINES_DROPPED).shouldBeNull()
+      } finally {
+        tracing.close()
+        server.stop(0, 0)
+      }
+    }
+
     // The filter logs only the first scrape it lets through unfiltered for each reason; every one is counted.
     "a scrape a path's filter lets through unfiltered should be counted by why" {
       val (mockAgent, metrics) =
@@ -1554,7 +1638,7 @@ class AgentHttpServiceTest : StringSpec() {
       val spiedService = spyk(service)
       // Mock the internal fetchContent call to throw CancellationException
       coEvery {
-        spiedService.fetchContent(any<String>(), any(), any())
+        spiedService.fetchContent(any<String>(), any(), any(), any())
       } coAnswers {
         throw CancellationException("System shutdown")
       }
@@ -1584,7 +1668,7 @@ class AgentHttpServiceTest : StringSpec() {
 
       val spiedService = spyk(service)
       coEvery {
-        spiedService.fetchContent(any<String>(), any(), any())
+        spiedService.fetchContent(any<String>(), any(), any(), any())
       } coAnswers {
         throw OutOfMemoryError("test OOM")
       }
@@ -1609,7 +1693,7 @@ class AgentHttpServiceTest : StringSpec() {
 
       val spiedService = spyk(service)
       coEvery {
-        spiedService.fetchContent(any<String>(), any(), any())
+        spiedService.fetchContent(any<String>(), any(), any(), any())
       } coAnswers {
         throw StackOverflowError("test stack overflow")
       }
@@ -1677,7 +1761,7 @@ class AgentHttpServiceTest : StringSpec() {
       val spiedService = spyk(service)
       // HttpRequestTimeoutException is a CancellationException, but should be caught and converted to 408
       coEvery {
-        spiedService.fetchContent(any<String>(), any(), any())
+        spiedService.fetchContent(any<String>(), any(), any(), any())
       } coAnswers {
         throw io.ktor.client.plugins.HttpRequestTimeoutException("url", 1000L)
       }
@@ -2197,7 +2281,7 @@ class AgentHttpServiceTest : StringSpec() {
       val spiedService = spyk(service)
       // No cause-accepting constructor exists on CancellationException, so set it via initCause.
       coEvery {
-        spiedService.fetchContent(any<String>(), any(), any())
+        spiedService.fetchContent(any<String>(), any(), any(), any())
       } coAnswers {
         throw CancellationException("wrapped timeout").apply {
           initCause(io.ktor.client.plugins.HttpRequestTimeoutException("url", 1000L))

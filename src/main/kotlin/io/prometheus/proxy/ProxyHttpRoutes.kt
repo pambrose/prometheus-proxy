@@ -23,9 +23,11 @@ import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.http.ContentType
 import io.ktor.http.ContentType.Text
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.RequestConnectionPoint
 import io.ktor.http.formUrlEncode
 import io.ktor.http.isSuccess
 import io.ktor.http.withCharset
+import io.ktor.server.plugins.origin
 import io.ktor.server.request.path
 import io.ktor.server.routing.Routing
 import io.ktor.server.routing.RoutingContext
@@ -158,7 +160,8 @@ internal object ProxyHttpRoutes {
     // invalid_agent_context for one (isNotValid() is true for it), so there is always at least one. The scrape is
     // Prometheus's, ScrapeSpec's default origin, so the agent counts it in its own scrape metrics too.
     val scrape = ScrapeSpec(path, queryParams, ScrapeHeaders.of(call.request))
-    val results: List<ScrapeRequestResponse> = executeScrapeRequests(agentContextInfo, proxy, scrape)
+    val results: List<ScrapeRequestResponse> =
+      executeScrapeRequests(agentContextInfo, proxy, scrape, call.request.origin)
     return ScrapeDispatch.mergeResponseResults(results)
   }
 
@@ -166,10 +169,11 @@ internal object ProxyHttpRoutes {
     agentContextInfo: ProxyPathManager.AgentContextInfo,
     proxy: Proxy,
     scrape: ScrapeSpec,
+    client: RequestConnectionPoint,
   ): List<ScrapeRequestResponse> {
     val path = scrape.path
     val started = TimeSource.Monotonic.markNow()
-    val span = scrapeSpan(proxy, path, agentContextInfo.agentContexts.size)
+    val span = scrapeSpan(proxy, path, agentContextInfo.agentContexts.size, client)
     return span.traced(CLIENT_CANCELLED_LABEL, { responses -> endedAs(responses.map { it.updateMsg }) }) {
       submitAndRecord(agentContextInfo, proxy, scrape.copy(trace = span?.context()), started)
     }
@@ -220,9 +224,13 @@ internal object ProxyHttpRoutes {
     proxy: Proxy,
     path: String,
     agentCount: Int,
+    client: RequestConnectionPoint,
   ): Span? =
     proxy.tracing?.newTrace(SCRAPE_SPAN)?.apply {
       kind(Span.Kind.SERVER)
+      // Who scraped, which Zipkin shows as a server span's client: the address the connection came from, as the
+      // access log has it. Brave keeps only an IP address, so a client the server names by host is left out.
+      remoteIpAndPort(client.remoteAddress, client.remotePort)
       tag(TAG_PATH, path)
       tag("agents", agentCount.toString())
     }

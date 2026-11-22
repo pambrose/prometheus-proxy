@@ -58,8 +58,9 @@ All notable changes to this project are documented in this file.
   registration the proxy refused
 - The agents' Grafana dashboard has panels for them (connected and failover, heartbeats, retries and filter fail-open,
   Paths & Discovery, queue wait, and the dashboard's logins), `grafana/alerts.yml` adds AgentDisconnected,
-  AgentDiscoveryFailing, and AgentNotOnPrimary, the network demo's dashboard shows agents off their primary, and the
-  embedded demo's whether the coffee shop's agent is connected
+  AgentDiscoveryFailing, and AgentNotOnPrimary, the network demo's dashboard shows agents off their primary and its
+  alerts add NetworkAgentNotOnPrimary, and the embedded demo's dashboard shows whether the coffee shop's agent is
+  connected
 - The project has a logo, a suspension bridge in Prometheus orange (`website/prometheus-proxy/docs/images/logo.svg`,
   and `favicon.svg`, its cut for 16px): in the README's title, the docs site's header and tab icon, and both
   dashboards' tab icon, top bar, and login page
@@ -69,8 +70,10 @@ All notable changes to this project are documented in this file.
   same for every proxy and agent
 - Each scrape is a Zipkin trace of its own: the proxy's `scrape` span, a `forward` span for each of the path's agents,
   annotated when the request reaches the agent's stream, and the agent's `fetch` span of the target, which joins the
-  trace through `ScrapeRequest`'s new `trace_context`. Tracing showed only connections and registrations, since scrapes
-  ride long-lived streams
+  trace through `ScrapeRequest`'s new `trace_context`. The `scrape` span names the client that scraped as its remote
+  endpoint, the `forward` span the time the request waited in the agent's queue (`queue.wait_ms`), and the `fetch`
+  span the agent's retries and the lines the path's filter dropped. Tracing showed only connections and
+  registrations, since scrapes ride long-lived streams
 - `proxy.internal.zipkin.sampleRate` and `agent.internal.zipkin.sampleRate` (default 1.0) set the share of traces each
   side keeps, scrapes and gRPC calls alike, 0 or 0.01 to 1; the agent follows the proxy's decision for a scrape. The
   Settings view shows the rate

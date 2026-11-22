@@ -469,6 +469,9 @@ cmd_heal() {
       "against $(primary_link "$agent"), and the Activity view adds disconnected, back to primary, and connected:" \
       "$(agent_dashboard "$agent")/activity"
   done
+  if ((${#returned[@]} > 0)); then
+    point "Grafana's 'Agents off their primary' returns to 0, and NetworkAgentNotOnPrimary resolves."
+  fi
   for agent in ${lost[@]+"${lost[@]}"}; do
     point "$agent hasn't connected to either proxy in 20 seconds. To see why, run: $0 logs $agent"
   done
@@ -810,6 +813,9 @@ main() {
       point "In Grafana, every service is up again on 'Target health' within about 15 seconds, scraped through the" \
         "standby, and 'Connected agents, by proxy' moves to the standby. Only prometheus-proxy, the primary's own" \
         "metrics, stays down, and NetworkTargetDown fires for it alone."
+      point "Grafana's 'Agents off their primary' shows each agent at 1, the second endpoint in its list, from" \
+        "agent_proxy_endpoint_index, which each agent reports itself, and about 20 seconds later" \
+        "NetworkAgentNotOnPrimary fires for both."
       follow_up "To bring it back, run" "$0 proxy-up"
     else
       point "The standby had no agents, so nothing moves. Any agent connected to it would return to the primary."
@@ -826,7 +832,7 @@ main() {
     watch_for
     if [[ "$proxy" == proxy ]]; then
       point "The primary is back, but the agents stay on the standby: an agent goes back to the head of its list" \
-        "only when its connection drops."
+        "only when its connection drops. So NetworkAgentNotOnPrimary keeps firing, until heal sends them back."
       point "agent-branch's Connection view doesn't change. The agent stays on branch-to-standby, and branch-to-proxy" \
         "keeps its error, since only a connect through it clears that: $BRANCH_DASHBOARD_URL/connection"
       follow_up "To send them back to the primary, run" "$0 heal"
@@ -863,6 +869,8 @@ main() {
     point "At about 50 seconds the agent connects through $(standby_link "$agent"), and the standby's dashboard" \
       "shows it '(2 of 2)', 'failed over', while the primary is still up. $(other_agent "$agent") is untouched" \
       "throughout."
+    point "Grafana's 'Agents off their primary' shows $agent at 1, and about 20 seconds later" \
+      "NetworkAgentNotOnPrimary fires for it alone, until heal brings it back."
     point "$agent's Activity view keeps the whole sequence, newest first: disconnected, connect failed on" \
       "$(primary_link "$agent"), failed over to $(standby_link "$agent"), connected, and registered. The proxies" \
       "saw only the eviction and the new connection: $(agent_dashboard "$agent")/activity"

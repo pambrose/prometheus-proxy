@@ -25,6 +25,7 @@ import io.prometheus.Proxy
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
 import io.prometheus.common.MetricBuilders.rejectionCauseLabel
 import io.prometheus.common.ScrapeResults.Companion.toScrapeResults
+import io.prometheus.common.ScrapeTracing.Companion.TAG_QUEUE_WAIT
 import io.prometheus.common.AgentValues.truncate
 import io.prometheus.grpc.AgentInfo
 import io.prometheus.grpc.ChunkData
@@ -463,13 +464,17 @@ internal class ProxyServiceImpl(
   private suspend fun FlowCollector<ScrapeRequest>.emitScrapeRequests(agentContext: AgentContext) {
     while (proxy.isStartingOrRunning && agentContext.isValid()) {
       val wrapper = agentContext.readScrapeRequest()?.takeIf { isStillAwaited(it) } ?: continue
+      val queueWait = wrapper.ageDuration()
       // A dashboard's scrape-now is left out, as it is from the latency histogram.
       if (!wrapper.scrapeRequest.dashboardScrape)
-        proxy.metrics { scrapeQueueWait.observe(wrapper.ageDuration().toDouble(DurationUnit.SECONDS)) }
+        proxy.metrics { scrapeQueueWait.observe(queueWait.toDouble(DurationUnit.SECONDS)) }
       try {
         emit(wrapper.scrapeRequest)
-        // On the forward span, so the time the request waited in the agent's queue shows.
-        wrapper.traceSpan?.annotate("sent to agent")
+        // On the forward span, so the time the request waited in the agent's queue shows, and reads as a number.
+        wrapper.traceSpan?.apply {
+          annotate("sent to agent")
+          tag(TAG_QUEUE_WAIT, queueWait.inWholeMilliseconds.toString())
+        }
       } catch (e: CancellationException) {
         // Cancelled after polling the wrapper out of the queue but before delivering it: fail the
         // wrapper so the waiting HTTP handler gets a prompt error instead of blocking the full

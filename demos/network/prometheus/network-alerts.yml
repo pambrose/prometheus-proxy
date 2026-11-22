@@ -26,6 +26,19 @@ groups:
           summary: "{{ $labels.job }} evicted a silent agent"
           description: "An agent stopped sending heartbeats and was evicted after the proxy's inactivity limit."
 
+      # Each agent reports which of its proxy endpoints it's on (0, the first, is the primary). The agents stay on the
+      # standby once the primary returns, until their connections there drop, so this fires through proxy-up and
+      # resolves only after heal. With every link down nothing reports, so it doesn't fire then. The production rule,
+      # AgentNotOnPrimary in grafana/alerts.yml, waits 30 minutes.
+      - alert: NetworkAgentNotOnPrimary
+        expr: max by (job) (agent_proxy_endpoint_index) > 0
+        for: 15s
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.job }} is connected through its standby proxy"
+          description: "The agent failed over from the primary proxy and hasn't returned to it."
+
       # Built on the proxies' own metrics, which Prometheus scrapes directly, so it fires when every link is down; an
       # agent's own metrics come through its link, and would vanish with it. Summed over both proxies, since the
       # standby has none until the primary goes.

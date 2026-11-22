@@ -194,20 +194,24 @@ agent or the proxy.
 
 **A scrape's trace.** Each scrape Prometheus makes is a trace of its own:
 
-| Span      | Reported by | Covers                                                    | Tags                                                                                                   |
-|:----------|:------------|:----------------------------------------------------------|:-------------------------------------------------------------------------------------------------------|
-| `scrape`  | Proxy       | Prometheus's request, until the proxy answers it          | `path`, `agents`, `outcome`                                                                            |
-| `forward` | Proxy       | The request to one of the path's agents, until its result | `agentId`, `agentName`, `outcome`, `http.status_code`                                                  |
-| `fetch`   | Agent       | The agent's request to the target                         | `path`, `http.url`, `outcome`, `http.status_code`, `gzipped`, `chunked`, `bytes.raw`, `bytes.filtered` |
+| Span      | Reported by | Covers                                                    | Tags                                                                                                                                      |
+|:----------|:------------|:----------------------------------------------------------|:------------------------------------------------------------------------------------------------------------------------------------------|
+| `scrape`  | Proxy       | Prometheus's request, until the proxy answers it          | `path`, `agents`, `outcome`                                                                                                               |
+| `forward` | Proxy       | The request to one of the path's agents, until its result | `agentId`, `agentName`, `outcome`, `http.status_code`, `queue.wait_ms`                                                                    |
+| `fetch`   | Agent       | The agent's request to the target                         | `path`, `http.url`, `outcome`, `http.status_code`, `gzipped`, `chunked`, `bytes.raw`, `bytes.filtered`, `filter.lines_dropped`, `retries` |
 
-A path several agents serve has a `forward` span for each. Each `forward` span is annotated `sent to agent` when the
-request reaches the agent's stream, so the time it waited in the agent's queue shows. `outcome` is the scrape counters'
-label (see [Monitoring](monitoring.md)), and a span whose scrape failed is tagged as an error, which Zipkin shows in
-red. `bytes.raw` and `bytes.filtered` are the payload's size before and after the path's
-[metric filter](configuration/agent.md#metric-filtering). The proxy sends the trace with each request, so the agent's `fetch` span joins it;
-an agent tracing scrapes for a proxy that doesn't begins a trace for each fetch. A scrape from a dashboard's Scrape now
-isn't traced. The proxy doesn't join trace headers a scrape request carries: its scrape port takes requests from anyone,
-and a client that marked its trace sampled could make the proxy keep every one.
+A `scrape` span's remote endpoint is the address the request came from, which Zipkin shows as the span's client, so a
+trace says which Prometheus scraped. A path several agents serve has a `forward` span for each. Each `forward` span is
+annotated `sent to agent` when the request reaches the agent's stream, and `queue.wait_ms` is how long, in
+milliseconds, it waited in the agent's queue until then. `outcome` is the scrape counters' label (see
+[Monitoring](monitoring.md)), and a span whose scrape failed is tagged as an error, which Zipkin shows in red.
+`bytes.raw` and `bytes.filtered` are the payload's size before and after the path's
+[metric filter](configuration/agent.md#metric-filtering), and `filter.lines_dropped`, on a path with a filter, the
+lines it dropped. `retries`, on a fetch the agent retried (`agent.scrapeMaxRetries`), is how many retries it made,
+whether or not the last one succeeded. The proxy sends the trace with each request, so the agent's `fetch` span joins
+it; an agent tracing scrapes for a proxy that doesn't begins a trace for each fetch. A scrape from a dashboard's
+Scrape now isn't traced. The proxy doesn't join trace headers a scrape request carries: its scrape port takes requests
+from anyone, and a client that marked its trace sampled could make the proxy keep every one.
 
 **The gRPC calls.** Zipkin joins the agent's client side and the proxy's server side of each call into one span, so a
 trace names both services. Connecting and registering are unary calls (`connectAgent`, `registerAgent`, and a

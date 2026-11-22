@@ -56,6 +56,9 @@ internal class ScrapeResults(
   // scrape that got no body. Never sent to the proxy: the agent's dashboard records them (AgentScrapeRecord).
   val rawSize: Int = 0,
   val filteredSize: Int = 0,
+  // How many lines the path's metric filter dropped, or null when no filter ran: the path has none, or it let the
+  // body through unfiltered. Never sent to the proxy: the agent's fetch span is tagged with it.
+  val filterLinesDropped: Int? = null,
 ) {
   // Whether these results go to the proxy in chunks: a gzipped body of at least [chunkContentSizeBytes]. The one rule
   // for both AgentGrpcService, which sends them so, and the agent's dashboard, which records it (AgentScrapeRecord).
@@ -78,6 +81,7 @@ internal class ScrapeResults(
       dashboardScrape = true,
       rawSize = rawSize,
       filteredSize = filteredSize,
+      filterLinesDropped = filterLinesDropped,
     )
 
   fun toScrapeResponse() =
