@@ -100,8 +100,8 @@ shared. To move a port that is already taken, set `DEMO_DASHBOARD_PORT`, `DEMO_G
 
 ## The dashboard
 
-The proxy's dashboard has three views: one organized by agent, one by path, and one of what has happened, newest
-first. Select any screenshot on this page to see it full size.
+The proxy's dashboard has four views: one organized by agent, one by path, one of what has happened, newest first,
+and one of its settings. Select any screenshot on this page to see it full size.
 
 <figure markdown="span">
   ![The Agents view, with agent-east selected](images/demo/agents.webp#only-dark){ loading=lazy }

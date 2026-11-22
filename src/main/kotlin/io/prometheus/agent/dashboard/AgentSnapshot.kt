@@ -17,7 +17,6 @@
 package io.prometheus.agent.dashboard
 
 import io.prometheus.Agent
-import io.prometheus.BuildConfig
 import io.prometheus.agent.AgentPathManager.PathContext
 import io.prometheus.agent.AgentPathManager.RegistrationFailure
 import io.prometheus.agent.AgentScrapeRecord
@@ -26,6 +25,7 @@ import io.prometheus.agent.ShownFailure
 import io.prometheus.agent.filter.MetricFilter
 import io.prometheus.common.Utils.sanitizeUrl
 import io.prometheus.common.dashboard.DashboardPage
+import io.prometheus.common.dashboard.SettingsGroup
 import kotlin.time.Duration
 import kotlin.time.Instant
 import kotlinx.serialization.json.Json
@@ -166,7 +166,8 @@ internal data class DiscoveryView(
  *
  * @param agentId the id the proxy gave the agent when it connected, empty while it isn't
  * @param discovery the agent's path discovery, or null when it is off
- * @param settings the agent's effective settings, by name, none of them a secret
+ * @param settings the agent's settings, by group, none of them a secret, which its Settings view shows (see
+ *   [AgentSettings])
  * @param pathHistorySize the scrapes a path's history holds when full, `agent.dashboard.pathHistorySize`, which each
  *   path's strip keeps the places of
  * @param scrapeNowEnabled whether each path has a Scrape now button, `agent.dashboard.scrapeNowEnabled`
@@ -178,13 +179,12 @@ internal data class AgentSnapshot(
   val agentName: String,
   val agentId: String,
   val launchId: String,
-  val version: String,
   val uptime: Duration,
   val backlog: Int,
   val connection: ConnectionView,
   val paths: List<AgentPathView>,
   val discovery: DiscoveryView?,
-  val settings: List<Pair<String, String>>,
+  val settings: List<SettingsGroup> = emptyList(),
   val pathHistorySize: Int = 0,
   val scrapeNowEnabled: Boolean = false,
   val activity: List<AgentActivityEntry> = emptyList(),
@@ -194,20 +194,25 @@ internal data class AgentSnapshot(
   val unregistered: List<AgentPathView> get() = paths.filter { it.state != PathState.REGISTERED }
 
   companion object {
-    /** Reads the snapshot from [agent]. */
-    fun collect(agent: Agent): AgentSnapshot {
+    /**
+     * Reads the snapshot from [agent], with its [settings], which the dashboard reads once ([AgentSettings]), since
+     * they don't change while the agent runs, and passes to each collect.
+     */
+    fun collect(
+      agent: Agent,
+      settings: List<SettingsGroup> = emptyList(),
+    ): AgentSnapshot {
       val activity = agent.activityLog?.snapshot() ?: AgentActivityLog.Snapshot()
       return AgentSnapshot(
         agentName = agent.agentName,
         agentId = agent.agentId,
         launchId = agent.launchId,
-        version = "${BuildConfig.APP_VERSION}, released ${BuildConfig.APP_RELEASE_DATE}",
         uptime = agent.upTime,
         backlog = agent.scrapeRequestBacklogSize.load(),
         connection = connection(agent),
         paths = paths(agent),
         discovery = discovery(agent),
-        settings = settings(agent),
+        settings = settings,
         pathHistorySize = agent.agentConfigVals.dashboard.pathHistorySize,
         scrapeNowEnabled = agent.agentConfigVals.dashboard.scrapeNowEnabled,
         activity = activity.entries,
@@ -329,25 +334,5 @@ internal data class AgentSnapshot(
         duplicates = conflicts.duplicates,
       )
     }
-
-    // The settings an operator checks when a scrape misbehaves, as the agent resolved them. None is a secret: a token
-    // or a TLS key shows only whether it is set.
-    private fun settings(agent: Agent): List<Pair<String, String>> =
-      with(agent.options) {
-        listOf(
-          "Scrape timeout" to "${scrapeTimeoutSecs}s",
-          "Scrape retries" to "$scrapeMaxRetries",
-          "Chunked above" to "$chunkContentSizeKbs KB",
-          "Gzipped above" to "$minGzipSizeBytes bytes",
-          "Largest scrape" to "$maxContentLengthMBytes MB",
-          "HTTP clients" to "$maxConcurrentHttpClients at once, ${httpClientTimeoutSecs}s timeout",
-          "HTTP client cache" to "$maxCacheSize clients, $maxCacheAgeMins min old, $maxCacheIdleMins min idle",
-          "Target certificates" to if (trustAllX509Certificates) "not verified" else "verified",
-          "Consolidated" to if (consolidated) "yes" else "no",
-          "Transport filter" to if (transportFilterDisabled) "disabled" else "enabled",
-          "Admin" to if (adminEnabled) "on, port $adminPort" else "off",
-          "Metrics" to if (metricsEnabled) "on, port $metricsPort" else "off",
-        )
-      }
   }
 }

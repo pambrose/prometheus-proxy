@@ -125,8 +125,8 @@ The agent serves a dashboard of its own, from inside the roastery, at <http://lo
 turns it on with `DASHBOARD_ENABLED` and `DASHBOARD_PORT`, which the agent reads from its environment over what the
 roastery's code sets, so the code didn't change. Its Paths view lists `/roastery_metrics`, registered, with its recent
 scrapes. Select it to see each scrape the proxy asked for, and press Scrape now to have the agent read Actuator's
-metrics at once, from inside the roastery. The Activity view lists what has happened to the agent, newest first, and
-the Connection view its proxy endpoint and settings.
+metrics at once, from inside the roastery. The Activity view lists what has happened to the agent, newest first, the
+Connection view its proxy endpoint, and the Settings view its settings.
 
 `./demo.sh proxy-stop` stops the proxy, and its dashboard with it. The agent's still answers: its Connection view
 turns failing, with the error the agent got connecting to the proxy, and its Activity view adds disconnected and

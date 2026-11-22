@@ -58,6 +58,7 @@ import kotlinx.html.unsafe
 import kotlin.time.Clock
 import io.prometheus.common.dashboard.RowFilter
 import io.prometheus.common.dashboard.DashboardPage.barEnd
+import io.prometheus.common.dashboard.SettingsHtml.settingsInner
 
 /**
  * Which view a session is looking at.
@@ -65,7 +66,8 @@ import io.prometheus.common.dashboard.DashboardPage.barEnd
  * Carried per session rather than configured per proxy, because the layouts answer different
  * questions and an operator switches between them mid-incident: the agent view asks "what is this agent
  * doing", the path view asks "why isn't this target scraping", and the activity view asks "what just happened",
- * which is where a refusal shows, since a refused agent or path is in neither of the others.
+ * which is where a refusal shows, since a refused agent or path is in neither of the others. The settings view asks
+ * "how is this proxy set up", as it resolved its flags, env vars, config, and defaults.
  *
  * @param segment the layout's route below the dashboard's base, which the agent layout is served at itself
  * @param title the layout's name in the nav
@@ -79,6 +81,7 @@ internal enum class DashboardLayout(
   AGENT("", "Agents"),
   PATH("paths", "Paths", "path, agent, target, or identity"),
   ACTIVITY("activity", "Activity", "event, agent, identity, path, or detail"),
+  SETTINGS("settings", "Settings"),
 }
 
 /**
@@ -165,6 +168,10 @@ internal object ProxyDashboardHtml {
           main {
             renderActivity(snapshot, routeBase, filter)
           }
+        }
+
+        DashboardLayout.SETTINGS -> {
+          main { div { settingsInner(snapshot.settings, oob = false) } }
         }
       }
       // The one piece htmx does not model: telling the server which agent THIS session is viewing, so
@@ -384,9 +391,10 @@ internal object ProxyDashboardHtml {
    * page it no longer shows. The status region goes first, so the stamp is on the frame's first tag: the
    * page matches it there, anchored at the start, which no agent-supplied value can reach.
    *
-   * [withActivity] false leaves the Activity table out of an Activity frame, which then carries the status bar alone:
-   * the push loop passes it when the session's page already shows the table this frame would render (see
-   * io.prometheus.common.dashboard.ActivityTable). Every other region is rendered whatever it says.
+   * [changed] false leaves the Activity table out of an Activity frame, and the settings out of a Settings frame, which
+   * then carries the status bar alone: the push loop passes it when the session's page already shows what this frame
+   * would render (see io.prometheus.common.dashboard.ActivityTable and io.prometheus.common.dashboard.SettingsShown).
+   * Every other region is rendered whatever it says.
    */
   fun pushFragment(
     snapshot: ProxySnapshot,
@@ -395,7 +403,7 @@ internal object ProxyDashboardHtml {
     layout: DashboardLayout? = DashboardLayout.AGENT,
     viewSeq: Long = 0L,
     filter: RowFilter = RowFilter.NONE,
-    withActivity: Boolean = true,
+    changed: Boolean = true,
   ): String =
     buildString {
       append(createHTML().span("bar-right") { statusInner(snapshot, oob = true, viewSeq) })
@@ -411,7 +419,11 @@ internal object ProxyDashboardHtml {
         }
 
         DashboardLayout.ACTIVITY -> {
-          if (withActivity) append(createHTML().div { activityTable(snapshot, filter, oob = true) })
+          if (changed) append(createHTML().div { activityTable(snapshot, filter, oob = true) })
+        }
+
+        DashboardLayout.SETTINGS -> {
+          if (changed) append(createHTML().div { settingsInner(snapshot.settings, oob = true) })
         }
 
         null -> {}

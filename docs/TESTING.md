@@ -284,7 +284,7 @@ pins, and no jar on the classpath carries a `logback.xml`, which would replace t
 - **AgentSnapshotTest** (`dashboard/`) — `AgentSnapshot.collect`, from an agent built but never started: connecting
   to the first of its endpoints, with no id, no failure, and no connect yet; every configured path pending, sorted,
   with its URL's credentials and query redacted, its name and labels; a path's filter with its rules and nothing
-  dropped; the settings as the agent resolved them, with only whether a token is set; no discovery while it is off;
+  dropped; the settings it's given, and only whether a token is set; no discovery while it is off;
   with the dashboard on, each path's recorded scrapes, newest first, its strip's runs, and the history's size; and
   with it off, no history, and Scrape now as its setting says
 - **AgentDashboardHtmlTest** (`dashboard/`) — the agent dashboard's markup: a path, a reason, and a URL escaped; a
@@ -297,8 +297,13 @@ pins, and no jar on the classpath carries a `logback.xml`, which would replace t
   scrape from the proxy's dashboard marked; and the Scrape now button in the pushed detail pane, its result panel
   outside every push on the Paths view alone, and neither with Scrape now off; and the Activity view: newest first, a
   problem a crit tag and news a warn one, a run counted and its paths named, escaped, its search and column guide,
-  filtered with a count, its empty state, and its push carrying the table out of band, or not when told; and the stored
-  theme applied in the page's head, with the theme picker in the bar and in no push
+  filtered with a count, its empty state, and its push carrying the table out of band, or not when told; the Settings
+  view's groups, escaped, none of them on the Connection view, and its push carrying them out of band, or not when
+  told; and the stored theme applied in the page's head, with the theme picker in the bar and in no push
+- **AgentSettingsTest** (`dashboard/`) — the agent's Settings view (`AgentSettings`), from an agent built but never
+  started: its groups in order; what it resolved, its endpoints, the client timeout the deprecated `cioTimeoutSecs` set,
+  its trust store and TLS files, and its login's username; the defaults with nothing configured; discovery's file and
+  interval; and no token, password, PEM, or `-D` value anywhere in it
 - **AgentScrapeNowTest** (`dashboard/`) — the agent dashboard's Scrape now, its fetch stood in for: a configured path
   scraped at its own URL through its own filter, though not registered, summarized with its sizes before and after
   the filter; a gzipped body unzipped and a path asked for with a leading slash found; a failure's reason; a path the
@@ -471,9 +476,11 @@ Two support helpers also live here (not test classes themselves):
   stand in for), tolerant selection, layout, and view count parsing, the status bar's departed count, an agent's
   identity in its row and detail, the data `demos/basics/bin/screenshots.sh` reads (an agent row's id, name, and
   path count, the name escaped and through `agentLabel`, and the detail's scrape count) and the one width of a scrape
-  time it orders as text, links at a root mount, the nav, accessibility (the connection live region, outside every
-  push, and the page's language and main region), and the link icons' stylesheet (in the head only while a link shows
-  an icon, with each mark's URL under the route base, at a root mount too, and each colour per theme, and in no push)
+  time it orders as text, links at a root mount, the nav, the Settings view (its groups, escaped, on no other layout,
+  and its push carrying them out of band, or the status bar alone when told), accessibility (the connection live
+  region, outside every push, and the page's language and main region), and the link icons' stylesheet (in the head
+  only while a link shows an icon, with each mark's URL under the route base, at a root mount too, and each colour per
+  theme, and in no push)
 - **DashboardScriptTest** (`dashboard/`) — the page's script and the htmx it runs on: frames stamped below its message
   count dropped, the arrow keys switching views from anywhere but a text field, the column guide opened and closed from
   its button, its close button, and Escape from anywhere but a text field, the scrape-now request with htmx's header,
@@ -541,7 +548,12 @@ Two support helpers also live here (not test classes themselves):
   event, agent, identity, paths, or detail, and its problems kept; and identity labels
 - **ProxyDashboardServiceTest** (`dashboard/`) — the value a push compares to leave out an Activity table the page
   already shows (`ActivityTable`): equal for an unchanged feed and the same message, different on a change of the
-  feed, the search, "Problems only", or the message, and none for another layout
+  feed, the search, "Problems only", or the message, and none for another layout; and the settings, sent once a message
+  (`SettingsShown`), whatever the feed, and never mistaken for that message's Activity table
+- **ProxySettingsTest** (`dashboard/`) — the proxy's Settings view (`ProxySettings`), from a proxy built but never
+  started: its groups in order; what it resolved, each identity and its globs, its TLS files, a stale-agent check the
+  disabled transport filter forces on, and its links; the defaults, warning of an open agent port; the authentication
+  mode's wording and warnings; and no token, password, PEM, or `-D` value anywhere in it
 - **ProxySnapshotTest** (`dashboard/`) — Dashboard view models: eviction countdown, health thresholds, failover
   position, a path's history as runs of like results, oldest first, and `buildPathViews` joining registered paths to
   their history and latest scrape and surfacing departed ones with theirs: a path that departed before its first scrape,
@@ -572,6 +584,11 @@ One support helper also lives here (not a test class itself):
   standalone agent or proxy whose config URL carries credentials exits 1 on a setting it rejects, with one log line
   and no credentials or uncaught stack trace
 - **ConfigLoadExceptionTest** — The public exception embedded hosts catch: message-only and with-cause constructors
+- **CommonSettingsTest** (`dashboard/`) — the Settings groups both dashboards share (`CommonSettings`): the About
+  group with only the keys of the `-D` overrides; each TLS file named and a PEM only as set; the admin endpoints, the
+  metrics endpoint and its JVM metrics, the dashboard's address and login, never its password, Zipkin, and the log
+  level, `info` when unset; and where the config came from (`configShown`): a file, a URL with its credentials redacted, in memory, or the
+  built-in defaults
 - **ConfigWrappersTest** — Factory methods for AdminConfig, MetricsConfig, ZipkinConfig
 - **ConstantsTest** — Constant values (EMPTY_AGENT_ID_MSG, EMPTY_PATH_MSG, EMPTY_INSTANCE)
 - **DashboardLoginTest** (`dashboard/`) — a dashboard's login read from a request's `Authorization` header: the right
@@ -629,6 +646,9 @@ One support helper also lives here (not a test class itself):
 - **SharedCollectorsTest** — the collectors every agent (or proxy) in a JVM shares register on the first acquire
   and unregister, with their series cleared, on the last release; register again after a registry clear; and,
   when the registry rejects one, leave none of them registered
+- **SettingsViewTest** (`dashboard/`) — the Settings view's region both dashboards render (`SettingsHtml`): a section
+  header for each group and a row for each setting, escaped, a moment shown as a time, out of band in a push, and an
+  empty state; and the wording both use (`SettingText`), a secret only as set and TLS material only by its source
 - **SnapshotCacheTest** (`dashboard/`) — the snapshot cache a dashboard's pages and sessions render from: one collect
   per refresh interval however many reads, a fresh collect for the push loop's tick that the reads after it share,
   shared by concurrent reads, and none reused across a change, even one landing mid-collect
@@ -656,6 +676,8 @@ These support helpers also live here (not test classes themselves):
   that give TLS material as PEM
 - **TestOptions** — factories that build `ProxyOptions` / `AgentOptions` from a list, `ConfigVals` from a HOCON
   fragment merged with the reference config, and `ProxyOptions` from a temp config file
+- **SettingsTestSupport** (`dashboard/`) — lookups into a Settings view's groups (`group`, `value`) and all of its text
+  (`text`), to search for a secret, shared by `CommonSettingsTest`, `ProxySettingsTest`, and `AgentSettingsTest`
 - **EmbeddedTestServer** — `EmbeddedServer.startAndAwaitReady()`, which starts a Ktor server with `wait = false`
   and polls with real HTTP probes until it serves several consecutive clean replies before returning the port
 - **LogCapture** — `captureLogs<T>(level) { … }`, which runs a block and returns what `T`'s logger emitted,

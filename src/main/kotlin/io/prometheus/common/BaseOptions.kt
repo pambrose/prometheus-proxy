@@ -332,6 +332,26 @@ abstract class BaseOptions protected constructor(
   internal val trustCertCollectionSource: TlsSource
     get() = TlsSource("trustCertCollection", trustCertCollectionFilePath, trustCertCollectionPem)
 
+  /**
+   * Where the config was read from, for a dashboard's Settings view: in memory, for a config the host supplied; the
+   * file or URL from `--config` or the role's env var, a URL's credentials and query values redacted, as every
+   * message naming it is; or the built-in defaults, when neither names one.
+   */
+  internal val configShown: String
+    get() {
+      if (suppliedConfig != null)
+        return "in memory"
+      return when {
+        configName.isBlank() -> "built-in defaults"
+        configName.isUrlPrefix() -> sanitizeUrl(configName)
+        else -> configName
+      }
+    }
+
+  // The config file or URL to read: --config, or else the role's env var.
+  private val configName: String
+    get() = configSource.ifEmpty { System.getenv(envConfig).orEmpty() }
+
   private fun isFlagInArgs(vararg names: String): Boolean =
     cliArgs.any { arg -> names.any { name -> arg.equals(name, ignoreCase = true) } }
 
@@ -701,7 +721,7 @@ abstract class BaseOptions protected constructor(
     val fallback = ConfigFactory.load().resolve()
     val loaded =
       suppliedConfig?.withFallback(fallback) ?: readConfig(
-        configSource.ifEmpty { System.getenv(envConfig).orEmpty() },
+        configName,
         envConfig,
         ConfigParseOptions.defaults().setAllowMissing(false),
         fallback,

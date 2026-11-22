@@ -13,8 +13,8 @@ and how recent scrapes actually went.
 !!! warning "Off by default, and open until you set a password"
 
     The dashboard has **no TLS**, and **no authentication until you set a password** (`DASHBOARD_PASSWORD`; see
-    [Login](#login)). It shows agent names, hostnames, target URLs, labels and recent activity in one place, and
-    anyone who can reach it can have the proxy scrape a path and read the start of what it returns, so treat its port
+    [Login](#login)). It shows agent names, hostnames, target URLs, labels, recent activity, and the proxy's settings,
+    though never a token or password, in one place, and anyone who can reach it can have the proxy scrape a path and read the start of what it returns, so treat its port
     as internal and do not expose it publicly, with a login or without one.
 
     It listens on all interfaces by default, and without a login the proxy logs a warning at startup when it does. Set
@@ -134,7 +134,7 @@ either, such as the trailing newline of a password read from a file.
     TLS (list its public origin in `allowedOrigins`; see [Exposure](#exposure)), an SSH tunnel, or
     `kubectl port-forward`. A login doesn't make the port safe to expose publicly.
 
-## Three layouts
+## Four layouts
 
 The tabs in the top bar switch between them, and each is a real URL you can bookmark or share. The Left and Right
 arrow keys open the view before or after the current one, except while you're typing in the search.
@@ -144,12 +144,14 @@ arrow keys open the view before or after the current one, except while you're ty
 | **Agents** (`/dashboard`) | "what is this agent doing?" | agent list, drill into one |
 | **Paths** (`/dashboard/paths`) | "why isn't this target scraping?" | one flat row per path |
 | **Activity** (`/dashboard/activity`) | "what just happened?" | one row per event, newest first |
+| **Settings** (`/dashboard/settings`) | "how is this proxy set up?" | its settings, in groups |
 
 Start from **Paths** when Prometheus reports a target failing — that is the view organized the way the
 alert is. Use **Agents** when you already know which agent you care about. Use **Activity** when an agent's paths
-never appeared, or the agent never did: what the proxy refused is in no other view, since nothing was added.
+never appeared, or the agent never did: what the proxy refused is in no other view, since nothing was added. Use
+**Settings** to check what the proxy is running with.
 
-All three show times in your browser's time zone, as Grafana does, whatever zone the proxy runs in, so a failed
+Every layout shows times in your browser's time zone, as Grafana does, whatever zone the proxy runs in, so a failed
 scrape here and the spike it caused in a Grafana panel read the same clock. Hover over a time for its date and zone.
 
 ## The status bar
@@ -412,6 +414,34 @@ when the feed has changed, or your search has, so a row you are reading or selec
 
 The feed keeps the last `activityLogSize` rows (default 500), in memory only, so a restart empties it. It is a view of
 the recent past, for finding out why something didn't appear, not an audit log; the proxy's log has every event.
+
+## The Settings layout
+
+Every setting the proxy resolved from its flags, environment variables, config file, and defaults, so you can check
+what it runs with without reading its startup log:
+
+| Group | What it shows |
+|---|---|
+| About | the version, launch ID, when the proxy started, where its config came from, and the keys of any `-D` overrides |
+| Listeners | the scrape address, its idle timeout and request logging, the agent port, and blitz |
+| Agent authentication | off, a shared token, or how many identities; each identity's name and the path globs it may register; reflection; and the transport filter |
+| TLS | plaintext, TLS, or mutual TLS, and where each certificate and key comes from |
+| Scrapes | the scrape timeout, how many scrapes may be in flight, and the sizes and thresholds that turn the healthcheck unhealthy |
+| Agent limits | the stale-agent check, and the limits on what one agent may register and report |
+| gRPC server | handshake, keepalive, and connection age settings, with gRPC's default named where one is left unset |
+| Service discovery | the endpoint's path and target, and whether agents' `job` and `instance` labels are kept |
+| Dashboard | where it listens, its login's username, its limits, what it keeps, and its links |
+| Admin, Metrics, Tracing, Logging | each service's port and paths, the JVM metrics turned on, Zipkin, and the log level |
+
+No secret reaches the page. The agent token, each identity's token, the dashboard's password, and TLS material given as
+PEM show only as set or not set, and a `-D` override shows only its key, never its value. File paths, identity names,
+their globs, and the login's username are shown: they are what you check when an agent is refused or a scrape fails.
+
+A warning the proxy logs at startup shows here too: an agent port any reachable peer can register on, or agent tokens
+sent without TLS.
+
+The settings don't change while the proxy runs, so the page is sent them once when it opens, and a value you select
+stays selected. If the proxy restarts, the page reconnects and shows the new process's settings.
 
 ## Why it is on its own port
 

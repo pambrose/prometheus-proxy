@@ -336,7 +336,7 @@ class ProxyOptions internal constructor(
     logger.info { "reflectionDisabled: $reflectionDisabled" }
 
     handshakeTimeoutSecs = resolveLongOption(handshakeTimeoutSecs, HANDSHAKE_TIMEOUT_SECS, grpc.handshakeTimeoutSecs)
-    logger.requireDefaultOrPositive("grpc.handshakeTimeoutSecs", handshakeTimeoutSecs, "120")
+    logger.requireDefaultOrPositive("grpc.handshakeTimeoutSecs", handshakeTimeoutSecs, "$GRPC_HANDSHAKE_TIMEOUT_SECS")
 
     permitKeepAliveWithoutCalls =
       resolveBooleanOption(
@@ -349,7 +349,11 @@ class ProxyOptions internal constructor(
 
     permitKeepAliveTimeSecs =
       resolveLongOption(permitKeepAliveTimeSecs, PERMIT_KEEPALIVE_TIME_SECS, grpc.permitKeepAliveTimeSecs)
-    logger.requireDefaultOrPositive("grpc.permitKeepAliveTimeSecs", permitKeepAliveTimeSecs, "300")
+    logger.requireDefaultOrPositive(
+      "grpc.permitKeepAliveTimeSecs",
+      permitKeepAliveTimeSecs,
+      "$GRPC_PERMIT_KEEPALIVE_TIME_SECS",
+    )
 
     maxConnectionIdleSecs =
       resolveLongOption(maxConnectionIdleSecs, MAX_CONNECTION_IDLE_SECS, grpc.maxConnectionIdleSecs)
@@ -465,6 +469,11 @@ class ProxyOptions internal constructor(
 
   internal companion object {
     private val logger = logger {}
+
+    // gRPC's own defaults for the two settings it gives one, which -1 leaves in place, as the startup log and the
+    // dashboard's Settings view name them.
+    internal const val GRPC_HANDSHAKE_TIMEOUT_SECS = 120
+    internal const val GRPC_PERMIT_KEEPALIVE_TIME_SECS = 300
 
     /**
      * True when the agent gRPC port accepts any reachable peer: no per-agent identities, no legacy

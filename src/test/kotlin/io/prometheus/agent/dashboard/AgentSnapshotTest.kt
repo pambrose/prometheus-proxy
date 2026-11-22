@@ -36,8 +36,8 @@ import kotlin.io.path.createTempFile
 
 /**
  * [AgentSnapshot.collect], from an agent built but never started: its connection before the first connect, every
- * configured path pending, with its URL redacted and its filter, the agent's settings with no secret among them, and
- * no discovery while it is off. The states a running agent reaches, registered, refused, and retrying, and a failed
+ * configured path pending, with its URL redacted and its filter, the agent's settings, and no discovery while it is
+ * off. The states a running agent reaches, registered, refused, and retrying, and a failed
  * connect, are covered live in `AgentWebDashboardTest`.
  */
 class AgentSnapshotTest : StringSpec() {
@@ -148,12 +148,14 @@ class AgentSnapshotTest : StringSpec() {
       }
     }
 
-    "the agent's settings should show what it resolved, and only whether a token is set" {
-      val snapshot = AgentSnapshot.collect(agent("""agent { agentToken = "tok-3n7", scrapeTimeoutSecs = 7 }"""))
+    // The settings themselves are AgentSettingsTest's; the snapshot carries what the dashboard read once.
+    "the snapshot should carry the settings it's given, and its connection only whether a token is set" {
+      val agent = agent("""agent { agentToken = "tok-3n7", scrapeTimeoutSecs = 7 }""")
+      val snapshot = AgentSnapshot.collect(agent, AgentSettings.of(agent))
 
       snapshot.connection.tokenSet.shouldBeTrue()
-      snapshot.settings.toMap()["Scrape timeout"] shouldBe "7s"
-      snapshot.settings.none { (name, value) -> "tok-3n7" in name || "tok-3n7" in value }.shouldBeTrue()
+      snapshot.settings.flatMap { it.rows }.single { it.name == "Scrape timeout" }.value shouldBe "7s"
+      AgentSnapshot.collect(agent).settings.shouldBeEmpty()
     }
 
     // Recorded only with the dashboard on, and joined to each path by its key, newest first, for the path's strip.

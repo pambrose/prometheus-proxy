@@ -753,7 +753,7 @@ vanish exactly when you go looking), and how recent scrapes went:
 java -jar prometheus-proxy.jar --dashboard    # or DASHBOARD_ENABLED=true / proxy.dashboard.enabled
 ```
 
-Then open `http://proxy-host:8094/dashboard`. Three layouts share the page:
+Then open `http://proxy-host:8094/dashboard`. Four layouts share the page:
 
 - **Agents**: drill into one agent, its registered paths, and its recent scrapes.
 - **Paths**: one row per target, with a History of each path's recent scrapes, a search box and a **Problems only**
@@ -762,6 +762,8 @@ Then open `http://proxy-host:8094/dashboard`. Three layouts share the page:
   Prometheus, Grafana, or a runbook.
 - **Activity**: what the proxy did with its agents and their paths, newest first, including what it refused, such as
   a path an agent's identity may not register, which otherwise reaches only the proxy's log.
+- **Settings**: every setting the proxy resolved, from its listeners, agent authentication, and TLS to its limits and
+  gRPC settings, with a token, a password, or a PEM shown only as set or not set.
 
 Every layout names agents the same way, so they can be read against each other, and with agent authentication on,
 the identity each agent connected as. It runs on its own port — not the admin port — so it can be firewalled without
@@ -785,7 +787,7 @@ Accessibility: text and UI colors clear the WCAG AA contrast thresholds with a m
 4.59:1, the path table carries proper header semantics, and connection loss and recovery are
 announced to screen readers rather than signalled by colour alone.
 
-> 📖 **Docs site:** [Dashboard guide](https://prometheus-proxy.com/web-dashboard/) for the three layouts, the links, the status-bar gauges, and HA-pair behavior.
+> 📖 **Docs site:** [Dashboard guide](https://prometheus-proxy.com/web-dashboard/) for the layouts, the links, the status-bar gauges, and HA-pair behavior.
 
 #### The agent's dashboard
 
@@ -793,8 +795,8 @@ The agent can serve a dashboard of its own, for what the proxy's can't see: an a
 proxy refused. It shows the agent's connection, with the last error from each proxy endpoint while it can't connect,
 and every path, configured or discovered, with the proxy's reason for refusing one and when it's tried again, plus each
 path's recent scrapes as the agent saw them, a Scrape now button that fetches its target from the agent, each path's
-metric filter, the agent's discovery file, its settings, and an Activity view of what happened to its connection and
-paths. It is off by default, takes the same login settings as the proxy's (`agent.dashboard.password`, or
+metric filter, the agent's discovery file, an Activity view of what happened to its connection and paths, and a
+Settings view of every setting it resolved. It is off by default, takes the same login settings as the proxy's (`agent.dashboard.password`, or
 `DASHBOARD_PASSWORD`), and listens on port 8095; the agent's Helm chart turns it on with `dashboard.enabled`, and every
 demo turns it on for its agents:
 

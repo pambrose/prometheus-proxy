@@ -152,7 +152,8 @@ startup, in the roastery's log, that it listens on all interfaces without a logi
 
 Its Paths view lists `/roastery_metrics`, registered, with the recent scrapes the proxy asked for. Select it, and
 **Scrape now** has the agent read Actuator's metrics at once, from inside the roastery. The Activity view lists what has
-happened to the agent, newest first, and the Connection view its proxy endpoint and the settings it resolved.
+happened to the agent, newest first, the Connection view its proxy endpoint, and the Settings view the settings it
+resolved.
 
 `./demo.sh proxy-stop` stops the proxy, and the proxy's dashboard with it, but the agent's still answers. Its
 Connection view turns failing, with the error the agent got connecting to the proxy, and its Activity view adds

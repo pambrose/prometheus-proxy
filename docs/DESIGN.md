@@ -537,7 +537,7 @@ relative position in both panes.
 
 ### Navigation
 
-Folder tabs, one per layout: Agents, Paths, Activity.
+Folder tabs, one per layout: Agents, Paths, Activity, Settings.
 
 - **Style:** top corners rounded `6px`, `7px 14px 6px`, `ink-3` at rest, outlined in `line` across the
   top and down the sides, and open at the bottom. The tabs stand on the top bar's bottom rule: the nav
@@ -554,7 +554,7 @@ Folder tabs, one per layout: Agents, Paths, Activity.
   current tab is told apart by more than its weight: every tab outlined in `CanvasText` as the rule is,
   `LinkText` at rest, and the current tab in `CanvasText` with a `Highlight` bottom line. Its focus ring
   is `Highlight`.
-- **Behavior:** real navigation, not a swap. The three layouts are bookmarkable URLs, so they are links
+- **Behavior:** real navigation, not a swap. The layouts are bookmarkable URLs, so they are links
   in a `<nav>`, not ARIA tabs. **Keyboard:** Tab reaches each one; Left and Right open the layout before
   or after the current one, wrapping at the ends, from anywhere on the page but a text field, where they
   still move the caret. Not only from a focused tab: a click on a tab loads a page whose focus is on
@@ -672,6 +672,17 @@ auth is on.
   only when the feed has recorded something or the page's search has changed, so a row being read or selected stays
   put between events. Nothing in it reads the clock as it renders, so the table a page keeps is the one a push would
   have sent.
+
+### Settings List
+
+The Settings layout's one component, on both dashboards, built from parts already here: a Section Header per group
+(About, Listeners, TLS, …), without a count, and a Key–Value Row per setting, its name the key and its value as the
+process resolved it. A secret is never a value: a token, a password, or a PEM reads `set` or `not set`. The one time,
+when the process started, is the Path Table's local time of day.
+
+- **Pushes:** once per page. The settings don't change while the process runs, so the first frame after the page
+  connects carries them and every later one the Status Bar alone; a value being selected or copied stays put. A page
+  left open across a restart reconnects to the new process, which sends its own.
 
 ### History Strip
 
@@ -884,7 +895,7 @@ below still bind the dashboard itself; the exception is the login page alone.
 ### Agent Dashboard
 
 The agent's own dashboard (`AgentDashboardHtml`), on this system without exception: the same tokens, bar, tabs, status
-bar, master–detail panes, key–value rows, filtered table, and script, from `common/dashboard`. Three views:
+bar, master–detail panes, key–value rows, filtered table, and script, from `common/dashboard`. Four views:
 
 - **Paths**, the Agent list's layout: a row per path, its LED green while registered and red otherwise, by the No
   Amber Dot Rule. A tag says which red: `retrying` (warn), `refused` (crit), or `pending` (neutral). A third line,
@@ -896,11 +907,12 @@ bar, master–detail panes, key–value rows, filtered table, and script, from `
   panel sits above the master–detail panes, outside every push, as it sits above the Path Table.
 - **Connection**: a hero whose LED is green only while connected, with `failed over` as on the agent detail. Then the
   proxy endpoints, each a key–value row with a neutral `in use` or `trying` tag and its last connect error. Then
-  discovery and the settings.
+  discovery.
 - **Activity**, the proxy's Activity layout on the agent's events: the same search, column guide, and flat table
   (Time, Event, Path, Detail), newest first. A problem (`connect failed`, `refused`, `discovery failed`,
   `entries skipped`, `not filtered`) is a crit tag and news that isn't a fault (`disconnected`, `failed over`) a warn
   one, as `taken over` is on the proxy's; the rest is plain text, and ×N counts a run.
+- **Settings**, the proxy's Settings layout on the agent's settings: the Settings List.
 
 The status bar names the connection's state in its color, warn for `connecting`, where amber means true but not yet a
 failure, and counts the paths not registered in crit.

@@ -422,6 +422,13 @@ class ProxyWebDashboardTest : StringSpec() {
         }
         client.get("$base/dashboard/activity?problems=1").bodyAsText() shouldNotContain "connected</td>"
 
+        // The Settings view names the identity and the glob it may register, and never its token.
+        client.get("$base/dashboard/settings").bodyAsText().apply {
+          this shouldContain """<span class="k">Identity team_a</span><span class="v">paths ui_identity_*</span>"""
+          this shouldContain """<span class="k">Authentication</span><span class="v">1 identity; tokens sent"""
+          this shouldNotContain "web-ui-team-a-token"
+        }
+
         client.webSocket(socketUrl) {
           send(Frame.Text("""{"layout":"PATH","seq":1,"search":"?q=nothing-like-this"}"""))
           awaitFrame("No paths match the filter")
@@ -487,6 +494,7 @@ class ProxyWebDashboardTest : StringSpec() {
         // the routes registered under a root base actually answer, rather than passing because Ktor happens
         // to discard an empty path segment.
         client.get("$base/paths").status shouldBe HttpStatusCode.OK
+        client.get("$base/settings").status shouldBe HttpStatusCode.OK
         client.get("$base/$ASSET_DIR/htmx.min.js").status shouldBe HttpStatusCode.OK
         client.get("$base/agents/1").bodyAsText() shouldContain "<body"
       }
@@ -613,7 +621,7 @@ class ProxyWebDashboardTest : StringSpec() {
               send(Frame.Text("""{"layout":"AGENT"}"""))
               nextText() shouldContain "hx-swap-oob"
             }
-            verify(exactly = 0) { ProxySnapshot.collect(any()) }
+            verify(exactly = 0) { ProxySnapshot.collect(any(), any()) }
           } finally {
             unmockkObject(ProxySnapshot.Companion)
           }
@@ -804,7 +812,7 @@ class ProxyWebDashboardTest : StringSpec() {
             client.get("$base/dashboard/agents/1") { header(HX_REQUEST_HEADER, "true") }.status shouldBe
               HttpStatusCode.OK
           }
-          verify(exactly = 1) { ProxySnapshot.collect(any()) }
+          verify(exactly = 1) { ProxySnapshot.collect(any(), any()) }
         } finally {
           unmockkObject(ProxySnapshot.Companion)
         }

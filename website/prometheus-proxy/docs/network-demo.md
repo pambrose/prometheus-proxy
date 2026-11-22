@@ -321,7 +321,7 @@ clean slate, `make down && make up`.
 - The [Kubernetes Demo](kubernetes-demo.md) deploys the same proxy and agent with their Helm charts on two kind
   clusters, and shows Kubernetes driving the agent's targets and replacing its pod. It needs kind, `kubectl`, and Helm
   as well as Docker.
-- [Agent Dashboard](agent-dashboard.md) covers the agent's own dashboard: its Paths, Connection, and Activity views,
-  and Scrape now.
+- [Agent Dashboard](agent-dashboard.md) covers the agent's own dashboard: its Paths, Connection, Activity, and Settings
+  views, and Scrape now.
 - [Running in Production](production.md#high-availability) covers a standby proxy and the agent's ordered endpoints.
 - [Advanced Topics](advanced.md#stale-agent-cleanup) covers how the proxy evicts a silent agent.

@@ -43,6 +43,7 @@ import kotlinx.coroutines.flow.filter
 import kotlin.time.Duration.Companion.seconds
 import io.prometheus.common.dashboard.RowFilter
 import io.prometheus.common.dashboard.ActivityTable
+import io.prometheus.common.dashboard.SettingsShown
 
 /**
  * What a session's page shows: its layout and the agent selected in it, from the browser's latest message, and that
@@ -112,12 +113,15 @@ internal class ProxyDashboardService(
   // Null unless proxy.dashboard.scrapeNowEnabled, which leaves the route unregistered, so it answers 404.
   private val scrapeNow = if (dashboardConfig.scrapeNowEnabled) ScrapeNow(proxy) else null
 
+  // Read at the first collect, once the proxy's services are built, and kept: no setting changes while it runs.
+  private val settings by lazy { ProxySettings.of(proxy) }
+
   private val site =
     object : DashboardSite<ProxyView, ProxySnapshot> {
       // Topology changes wake the loop; scrape completions do not -- see the class KDoc.
       override val changes: Flow<Any?> = proxy.eventBus.flow.filter { it !is ProxyEvent.ScrapeCompleted }
 
-      override suspend fun collect(): ProxySnapshot = ProxySnapshot.collect(proxy)
+      override suspend fun collect(): ProxySnapshot = ProxySnapshot.collect(proxy, settings)
 
       override fun parseView(message: String): ProxyView =
         ProxyView(
@@ -135,9 +139,10 @@ internal class ProxyDashboardService(
       ): DashboardFrame {
         val seq = view?.seq ?: 0L
         val filter = view?.filter ?: RowFilter.NONE
-        // The Activity table goes only when it differs from the one the page shows; see ActivityTable. For another
-        // layout there is no table, and the flag changes nothing.
-        val activity = activityTable(snapshot, view?.layout, seq, filter)
+        // The Activity table goes only when it differs from the one the page shows, see ActivityTable, and the
+        // settings only to a page not yet sent them, see SettingsShown. For another layout neither flag changes
+        // anything.
+        val shown = shownRegion(snapshot, view?.layout, seq, filter)
         val text =
           ProxyDashboardHtml.pushFragment(
             snapshot,
@@ -146,9 +151,9 @@ internal class ProxyDashboardService(
             view?.layout,
             seq,
             filter,
-            withActivity = activity != sent,
+            changed = shown != sent,
           )
-        return DashboardFrame(text, activity)
+        return DashboardFrame(text, shown)
       }
 
       override fun Route.pages(server: DashboardServer<ProxyView, ProxySnapshot>) = pageRoutes(server)
@@ -172,7 +177,7 @@ internal class ProxyDashboardService(
       site,
     )
 
-  // The proxy's pages: the three layouts, an agent's detail, and scrape-now.
+  // The proxy's pages: the four layouts, an agent's detail, and scrape-now.
   private fun Route.pageRoutes(server: DashboardServer<ProxyView, ProxySnapshot>) {
     val routeBase = server.routeBase
     val loginEnabled = server.loginEnabled
@@ -250,13 +255,20 @@ internal class ProxyDashboardService(
     internal fun parseLayout(text: String): DashboardLayout =
       DashboardMessage.layout(text, DashboardLayout.entries, DashboardLayout.AGENT)
 
-    /** The table a push for [layout] renders from [snapshot], or null when [layout] has no Activity table. */
-    internal fun activityTable(
+    /**
+     * What a push for [layout] keeps for the next to compare with (DashboardFrame.sent): the Activity table it renders
+     * from [snapshot], that the Settings view was sent its settings, or null for a layout with neither.
+     */
+    internal fun shownRegion(
       snapshot: ProxySnapshot,
       layout: DashboardLayout?,
       seq: Long,
       filter: RowFilter,
-    ): ActivityTable? =
-      if (layout == DashboardLayout.ACTIVITY) ActivityTable(snapshot.activityChangeCount, seq, filter) else null
+    ): Any? =
+      when (layout) {
+        DashboardLayout.ACTIVITY -> ActivityTable(snapshot.activityChangeCount, seq, filter)
+        DashboardLayout.SETTINGS -> SettingsShown(seq)
+        else -> null
+      }
   }
 }

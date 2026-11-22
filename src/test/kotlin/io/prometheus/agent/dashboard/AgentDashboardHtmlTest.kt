@@ -33,6 +33,9 @@ import io.prometheus.agent.PathSource
 import io.prometheus.agent.ShownFailure
 import io.prometheus.agent.dashboard.AgentDashboardHtml.renderPage
 import io.prometheus.common.dashboard.DashboardPage
+import io.prometheus.common.dashboard.Setting
+import io.prometheus.common.dashboard.SettingsGroup
+import io.prometheus.common.dashboard.SettingsHtml
 import kotlinx.html.html
 import kotlinx.html.stream.createHTML
 import kotlin.time.Duration.Companion.minutes
@@ -58,13 +61,12 @@ class AgentDashboardHtmlTest : StringSpec() {
     agentName = "agent-7",
     agentId = "12",
     launchId = "launch-1",
-    version = "Version: test",
     uptime = 5.minutes,
     backlog = 0,
     connection = connection,
     paths = paths,
     discovery = null,
-    settings = ["Scrape timeout" to "15s"],
+    settings = [SettingsGroup("Scraping", [Setting("Scrape timeout", "15s"), Setting("Trust store", "<JDK default>")])],
     pathHistorySize = 5,
     scrapeNowEnabled = scrapeNow,
     activity = activity,
@@ -372,8 +374,42 @@ class AgentDashboardHtmlTest : StringSpec() {
         this shouldStartWith """<span class="bar-right" id="${DashboardPage.STATUS_ID}" hx-swap-oob="true""""
         this shouldContain """id="${AgentDashboardHtml.ACTIVITY_ID}" hx-swap-oob="true""""
       }
-      AgentDashboardHtml.pushFragment(snapshot(activity = activity), view, "/dashboard", withActivity = false)
+      AgentDashboardHtml.pushFragment(snapshot(activity = activity), view, "/dashboard", changed = false)
         .apply { this shouldNotContain AgentDashboardHtml.ACTIVITY_ID }
+    }
+
+    // The settings moved from the bottom of the Connection view to a view of their own.
+    "the Settings view should show each group's settings, escaped, and the Connection view none of them" {
+      page(snapshot(), layout = AgentLayout.SETTINGS).apply {
+        this shouldContain """<div id="${SettingsHtml.SETTINGS_ID}">"""
+        this shouldContain """<div class="section"><span>Scraping</span></div>"""
+        this shouldContain """<span class="k">Scrape timeout</span><span class="v">15s</span>"""
+        this shouldContain "&lt;JDK default&gt;"
+        this shouldContain """href="/dashboard/settings" class="on" aria-current="page">Settings</a>"""
+      }
+      page(snapshot(), layout = AgentLayout.CONNECTION).apply {
+        this shouldNotContain "Scrape timeout"
+        this shouldNotContain """<span>Settings</span>"""
+        this shouldContain """<a href="/dashboard/settings">Settings</a>"""
+      }
+      page(snapshot().copy(settings = emptyList()), layout = AgentLayout.SETTINGS) shouldContain "No settings to show"
+    }
+
+    // Sent once to a page, which then keeps them selectable; the frames after carry the status bar alone.
+    "a push for the Settings view should carry the settings out of band, or the status bar alone when told to" {
+      val view = AgentView(AgentLayout.SETTINGS, seq = 2)
+      AgentDashboardHtml.pushFragment(snapshot(), view, "/dashboard").apply {
+        this shouldStartWith
+          """<span class="bar-right" id="${DashboardPage.STATUS_ID}" hx-swap-oob="true" ${DashboardPage.VIEW_ATTR}="2""""
+        this shouldContain """<div id="${SettingsHtml.SETTINGS_ID}" hx-swap-oob="true">"""
+        this shouldNotContain DashboardPage.ANNOUNCER_ID
+      }
+      AgentDashboardHtml.pushFragment(snapshot(), view, "/dashboard", changed = false).apply {
+        this shouldNotContain SettingsHtml.SETTINGS_ID
+        this shouldNotContain "Scrape timeout"
+      }
+      AgentDashboardHtml.pushFragment(snapshot(), AgentView(AgentLayout.CONNECTION), "/dashboard") shouldNotContain
+        SettingsHtml.SETTINGS_ID
     }
 
     "the agent's page should apply a stored theme in its head, with the theme picker in its bar and in no push" {
@@ -389,7 +425,7 @@ class AgentDashboardHtmlTest : StringSpec() {
       val snapshot = snapshot([AgentPathView("a b", PathSource.STATIC, "", PathState.PENDING)])
       page(snapshot).apply {
         this shouldContain """hx-get="/dashboard/paths/a%20b""""
-        this shouldContain """var LAYOUTS = {"connection":"CONNECTION","activity":"ACTIVITY"};"""
+        this shouldContain """var LAYOUTS = {"connection":"CONNECTION","activity":"ACTIVITY","settings":"SETTINGS"};"""
         this shouldContain "Connection to the agent lost. Reconnecting."
         this shouldContain "if (window.__agentUiInit) { window.__agentUiInit(); return; }"
       }

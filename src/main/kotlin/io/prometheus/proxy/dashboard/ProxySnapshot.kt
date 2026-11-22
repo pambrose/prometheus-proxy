@@ -19,6 +19,7 @@ package io.prometheus.proxy.dashboard
 import io.prometheus.Proxy
 import io.prometheus.common.Utils.toJsonElement
 import io.prometheus.common.dashboard.DashboardPage
+import io.prometheus.common.dashboard.SettingsGroup
 import io.prometheus.proxy.ActivityEntry
 import io.prometheus.proxy.ActivityLog
 import io.prometheus.proxy.AgentAuthManager.Companion.LEGACY_IDENTITY_NAME
@@ -197,6 +198,8 @@ internal data class ProxySnapshot(
   // The scrapes a path's history holds when full, proxy.dashboard.pathHistorySize, which each row's History strip
   // keeps a place for; 0 keeps none.
   val pathHistorySize: Int = 0,
+  // The proxy's settings, by group, none of them a secret, which the Settings view shows (see ProxySettings).
+  val settings: List<SettingsGroup> = emptyList(),
 ) {
   fun agent(agentId: String): AgentView? = agents.firstOrNull { it.agentId == agentId }
 
@@ -315,8 +318,14 @@ internal data class ProxySnapshot(
      * Cost is three monitor acquisitions per call (the path map, the path history, the activity log),
      * taken one after another and never nested, regardless of how many sessions are connected, which is
      * why the caller collects once and fans out rather than collecting per session.
+     *
+     * [settings] are the proxy's, which the dashboard reads once ([ProxySettings]), since they don't change while the
+     * proxy runs, and passes to each collect. A default that read them would run inside every mock's matcher too.
      */
-    fun collect(proxy: Proxy): ProxySnapshot {
+    fun collect(
+      proxy: Proxy,
+      settings: List<SettingsGroup> = emptyList(),
+    ): ProxySnapshot {
       val internal = proxy.proxyConfigVals.internal
 
       // One monitor acquire; values are immutable so they are safe to hold onto.
@@ -343,36 +352,7 @@ internal data class ProxySnapshot(
       val history = proxy.pathHistory?.snapshot(pathInfos.keys) ?: PathHistory.Snapshot()
       val paths = buildPathViews(registered, history)
 
-      // Derived from the registered list only: a departed path has no agent to attribute it to, and the
-      // agent-centric layout is by definition showing agents that are still here.
-      val pathsByAgent =
-        paths
-          .filterNot { it.isDeparted }
-          .flatMap { view -> view.agentIds.map { it to view } }
-          .groupBy({ it.first }, { it.second })
-
-      // Materialize the live entry set before reading fields off it.
-      val agents =
-        proxy.agentContextManager.agentContextEntries
-          .map { (agentId, context) ->
-            AgentView(
-              agentId = agentId,
-              agentName = context.agentName,
-              hostName = context.hostName,
-              remoteAddr = context.remoteAddr,
-              launchId = context.launchId,
-              consolidated = context.consolidated,
-              isValid = context.isValid(),
-              connectTime = context.connectTime,
-              inactivity = context.inactivityDuration,
-              backlogSize = context.scrapeRequestBacklogSize,
-              paths = pathsByAgent[agentId].orEmpty(),
-              proxyEndpoints = context.proxyEndpoints,
-              currentEndpointIndex = context.currentEndpointIndex,
-              identity = context.identityName,
-            )
-          }
-          .sortedBy { it.agentName }
+      val agents = agentViews(proxy, paths)
 
       // The lines and their change count in one read, so the count never claims lines the snapshot doesn't hold.
       val activity = proxy.activityLog?.snapshot() ?: ActivityLog.Snapshot()
@@ -399,7 +379,44 @@ internal data class ProxySnapshot(
         scrapeNowEnabled = proxy.proxyConfigVals.dashboard.scrapeNowEnabled,
         links = proxy.options.dashboardLinks,
         pathHistorySize = proxy.proxyConfigVals.dashboard.pathHistorySize,
+        settings = settings,
       )
+    }
+
+    // Each connected agent, by name, with the live paths it serves.
+    private fun agentViews(
+      proxy: Proxy,
+      paths: List<PathView>,
+    ): List<AgentView> {
+      // Derived from the registered list only: a departed path has no agent to attribute it to, and the
+      // agent-centric layout is by definition showing agents that are still here.
+      val pathsByAgent =
+        paths
+          .filterNot { it.isDeparted }
+          .flatMap { view -> view.agentIds.map { it to view } }
+          .groupBy({ it.first }, { it.second })
+
+      // Materialize the live entry set before reading fields off it.
+      return proxy.agentContextManager.agentContextEntries
+        .map { (agentId, context) ->
+          AgentView(
+            agentId = agentId,
+            agentName = context.agentName,
+            hostName = context.hostName,
+            remoteAddr = context.remoteAddr,
+            launchId = context.launchId,
+            consolidated = context.consolidated,
+            isValid = context.isValid(),
+            connectTime = context.connectTime,
+            inactivity = context.inactivityDuration,
+            backlogSize = context.scrapeRequestBacklogSize,
+            paths = pathsByAgent[agentId].orEmpty(),
+            proxyEndpoints = context.proxyEndpoints,
+            currentEndpointIndex = context.currentEndpointIndex,
+            identity = context.identityName,
+          )
+        }
+        .sortedBy { it.agentName }
     }
   }
 }
