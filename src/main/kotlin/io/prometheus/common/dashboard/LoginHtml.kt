@@ -30,6 +30,7 @@ import kotlinx.html.input
 import kotlinx.html.label
 import kotlinx.html.main
 import kotlinx.html.meta
+import kotlinx.html.script
 import kotlinx.html.style
 import kotlinx.html.title
 import kotlinx.html.unsafe
@@ -79,6 +80,8 @@ internal object LoginHtml {
       meta(charset = "utf-8")
       title("Log in · $heading")
       meta(name = "viewport", content = "width=device-width, initial-scale=1")
+      // The theme the dashboard's button left, so the login page doesn't show the other one.
+      script { unsafe { raw(DashboardPage.THEME_SCRIPT) } }
       style { unsafe { raw(STYLE) } }
     }
     body("login") {
@@ -133,7 +136,6 @@ internal object LoginHtml {
     """
     :root { --on-accent:var(--surface);
       --sans:Inter,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; }
-    @media (prefers-color-scheme: dark) { :root { --on-accent:var(--bg); } }
     * { box-sizing:border-box; margin:0; padding:0; }
     /* The space left over goes 2:3 above and below the form, so it sits 40% of the way down, not in the middle. */
     body.login { min-height:100vh; display:flex; flex-direction:column; align-items:center; padding:32px 16px;
@@ -160,7 +162,7 @@ internal object LoginHtml {
       .card, input, button { border:1px solid CanvasText; }
       .alert { border-left-color:Mark; }
     }
-    """.trimIndent()
+    """.trimIndent() + "\n" + DashboardCss.darkRule(":root", "--on-accent:var(--bg);")
 
   // The whole stylesheet, built once. Declared after CSS, which an object initializes in order.
   private val STYLE = DashboardCss.TOKENS + "\n" + CSS

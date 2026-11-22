@@ -30,6 +30,7 @@ import io.prometheus.proxy.ActivityEntry
 import io.prometheus.proxy.ActivityKind
 import io.prometheus.proxy.dashboard.DashboardFixtures.activityEntry
 import io.prometheus.proxy.dashboard.DashboardFixtures.renderFullPage
+import io.prometheus.common.dashboard.RowFilter
 
 /**
  * The Activity view, [ActivityHtml]: the feed's table, its tags and bursts, its Identity column, its search and empty

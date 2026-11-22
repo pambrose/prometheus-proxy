@@ -24,28 +24,49 @@ package io.prometheus.common.dashboard
  * Apart from the markup because it answers to a different contract.
  */
 internal object DashboardCss {
-  /** The color tokens, light and dark. */
+  // The page's theme, as the bar's button sets it on <html> (DashboardPage.themeToggle): absent for auto, which follows
+  // the system's, or light or dark.
+  private const val AUTO_DARK = """:root:not([data-theme="light"])"""
+  private const val SET_DARK = """:root[data-theme="dark"]"""
+
+  /**
+   * [declarations] for [selector] in the dark theme: under the system's dark preference unless the page is set to
+   * light, and whenever it is set to dark. Each dark rule is written once, here, so the two can't drift apart.
+   */
+  fun darkRule(
+    selector: String,
+    declarations: String,
+  ): String {
+    fun scoped(root: String) = if (selector == ":root") root else "$root $selector"
+    return "@media (prefers-color-scheme: dark) {\n  ${scoped(AUTO_DARK)} { $declarations }\n}\n" +
+      "${scoped(SET_DARK)} { $declarations }"
+  }
+
+  private const val DARK_TOKENS =
+    "--bg:#0d1015; --surface:#151a21; --surface-2:#1c222b; --surface-3:#242c37; " +
+      "--line:#2b333f; --line-soft:#212934; --ink:#e7ebf1; --ink-2:#a4aebc; --ink-3:#858f9d; " +
+      "--accent:#ff7043; --ok:#3fb950; --ok-soft:#12251a; --warn:#d29922; --warn-soft:#2a2110; " +
+      "--crit:#f85149; --crit-soft:#2d1512;"
+
+  /**
+   * The color tokens, light and dark, the dark ones for the system's dark preference and a page set to dark alike, and
+   * the color scheme the browser draws its own widgets in, such as scrollbars, which follows the same choice.
+   */
   val TOKENS =
     """
     /* Every quiet colour is set so its *worst* pairing still clears 4.5:1, not just its pairing with
        --surface. --ink-3 is the binding case: it lands on --surface-2 under the table and section
        headers, which is a full step closer than the reading plane. */
-    :root {
+    :root { color-scheme:light dark;
       --bg:#f2f5f8; --surface:#fff; --surface-2:#e9edf2; --surface-3:#dde3ea;
       --line:#cfd7e0; --line-soft:#e3e9ef; --ink:#131820; --ink-2:#48525f; --ink-3:#626b77;
       --accent:#c8461f; --ok:#1a7a42; --ok-soft:#e3f4ea; --warn:#8a5d08; --warn-soft:#f9f0da;
       --crit:#c02a20; --crit-soft:#fbe6e4;
       --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
     }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg:#0d1015; --surface:#151a21; --surface-2:#1c222b; --surface-3:#242c37;
-        --line:#2b333f; --line-soft:#212934; --ink:#e7ebf1; --ink-2:#a4aebc; --ink-3:#858f9d;
-        --accent:#ff7043; --ok:#3fb950; --ok-soft:#12251a; --warn:#d29922; --warn-soft:#2a2110;
-        --crit:#f85149; --crit-soft:#2d1512;
-      }
-    }
-    """.trimIndent()
+    :root[data-theme="light"] { color-scheme:light; }
+    :root[data-theme="dark"] { color-scheme:dark; }
+    """.trimIndent() + "\n" + darkRule(":root", DARK_TOKENS)
 
   // The rules, after the tokens. Declared before CSS, which an object initializes in order.
   private val RULES =
@@ -67,12 +88,12 @@ internal object DashboardCss {
     .bar { display:flex; align-items:flex-end; gap:10px; padding:8px 15px 0; border-bottom:1px solid var(--line);
            background:var(--surface); }
     .brand { font-weight:600; flex:none; padding-bottom:6px; }
-    /* Log out, at the bar's end, quieter than the tabs. */
-    .logout { flex:none; padding-bottom:5px; }
-    .logout button { font:inherit; font-size:11.5px; color:var(--ink-2); background:none; border:1px solid var(--line);
-      border-radius:3px; padding:1px 9px; cursor:pointer; }
-    .logout button:hover { color:var(--ink); background-color:var(--surface-2); }
-    .logout button:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+    /* The theme button and Log out, at the bar's end, quieter than the tabs. */
+    .theme, .logout { flex:none; padding-bottom:5px; }
+    .theme button, .logout button { font:inherit; font-size:11.5px; color:var(--ink-2); background:none;
+      border:1px solid var(--line); border-radius:3px; padding:1px 9px; cursor:pointer; white-space:nowrap; }
+    .theme button:hover, .logout button:hover { color:var(--ink); background-color:var(--surface-2); }
+    .theme button:focus-visible, .logout button:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
     .bar-right { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:2px 14px;
       margin-left:auto; min-width:0; padding-bottom:6px; color:var(--ink-3); font-size:11.5px; }
     /* Each stat stays whole; the row wraps between them rather than mid-phrase, which at 390px was

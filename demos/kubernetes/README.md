@@ -4,8 +4,9 @@ A self-contained demo of Prometheus Proxy deployed the way a platform team would
 [kind](https://kind.sigs.k8s.io/) clusters on one laptop: a monitoring cluster with the proxy, its web dashboard, and
 Prometheus, and a target cluster, behind the "firewall", with a set of simulated services and the agent. Both are
 installed with the project's own Helm charts, from [`charts/`](../../charts). It shows that the target
-cluster exposes nothing, that annotating a Service is all it takes for Prometheus to scrape it, that Kubernetes
-replaces a lost agent by itself, and what a change to the agent's config costs next to a change to its targets.
+cluster exposes nothing, how `kubectl port-forward` reaches the agent's own dashboard inside it all the same, that
+annotating a Service is all it takes for Prometheus to scrape it, that Kubernetes replaces a lost agent by itself, and
+what a change to the agent's config costs next to a change to its targets.
 Unlike the other demos, it needs kind, `kubectl`, and Helm as well as Docker: see [What you need](#what-you-need).
 
 It follows the [network demo](../network), which follows the [basics demo](../basics): those two show the
@@ -17,9 +18,10 @@ the deployment itself.
 
 ```
  pp-target (kind cluster, behind the "firewall"; no port mapped to the host, every Service ClusterIP)
-   apps:        orders, payments, shipping (and search, in part 2): Services annotated prometheus-proxy/path
+   apps:        orders, payments, shipping (and search, in part 3): Services annotated prometheus-proxy/path
    monitoring:  targets-sync ── watches the Services ──► agent-targets ConfigMap ──► mounted in the agent's pod
-                prometheus-agent (the agent chart): scrapes each Service in the cluster
+                prometheus-agent (the agent chart): scrapes each Service in the cluster, and serves its dashboard
+                on :8095 in its pod, which kubectl port-forward brings to localhost:8295 (./demo.sh agent-dashboard)
                     │  gRPC, outbound only, across Docker's kind network
                     ▼
  pp-monitoring (kind cluster, outside the firewall)
@@ -65,11 +67,12 @@ To show it without a network connection, run `make up` once beforehand and leave
 | What | URL |
 |---|---|
 | Proxy dashboard | <http://localhost:8294/dashboard> |
+| Agent dashboard | <http://localhost:8295/dashboard>, while `./demo.sh agent-dashboard` runs |
 | Prometheus | <http://localhost:9290> (targets at `/targets`) |
 | The proxy's service discovery | <http://localhost:8280/discovery> |
 | `kubectl` | `kubectl --context kind-pp-monitoring …` and `kubectl --context kind-pp-target …` |
 
-`make open` opens the dashboard and Prometheus's targets in your browser.
+`make open` opens the proxy dashboard and Prometheus's targets in your browser.
 
 Every port is the basics demo's plus 200, so all the demos can run at once. kind publishes them when it creates
 `pp-monitoring`, so to move one that's already taken, set its variable when the cluster is created, and for every
@@ -78,6 +81,13 @@ command after, for example `KUBERNETES_DEMO_PROMETHEUS_PORT=9291 make up`. The v
 link into Prometheus keeps the default port (`config/proxy.conf`). A running cluster keeps the ports it was created
 with, and `make up` says so if they differ: `make down` first. Every port binds to `127.0.0.1` only. The dashboard runs
 without its login, so this setup is for a laptop, not for anything shared.
+
+The agent dashboard's port, 8295, isn't one kind publishes: `pp-target` publishes none, and the agent chart leaves the
+dashboard off the agent's Service. `./demo.sh agent-dashboard` reaches it as the chart's notes tell an operator to,
+with `kubectl --context kind-pp-target -n monitoring port-forward deploy/prometheus-agent 8295:8095`, in the
+foreground. It holds the port only while it runs, on `localhost` only, and `KUBERNETES_DEMO_AGENT_DASHBOARD_PORT` moves
+it without recreating a cluster. A port-forward reaches one pod, so it ends when the agent's pod is replaced, as
+`delete-agent-pod` and `change-config` do: run it again. The agent's dashboard runs without its login too.
 
 kind adds a `kind-pp-monitoring` and a `kind-pp-target` context to your kubeconfig. `demo.sh` names the context on
 every command, and puts back the context that was current when it creates a cluster.
@@ -89,7 +99,7 @@ every command, and puts back the context that was current when it creates a clus
 | `pp-monitoring` / `monitoring` | `prometheus-proxy` | The proxy, from the `prometheus-proxy` chart (`values/proxy.yaml`). Its dashboard is on, service discovery tells Prometheus about every path the agent registers, and its gRPC port is a NodePort (the chart's `agentService`), for the agent in the other cluster. |
 | `pp-monitoring` / `monitoring` | `prometheus` | Prometheus, from a plain Deployment (`k8s/monitoring.yaml`). Its one job finds every target through the proxy's `/discovery`, and scrapes each through the proxy, every 5s with a 4s timeout. |
 | `pp-monitoring` / `monitoring` | `proxy-dashboard`, `proxy-scrape`, `prometheus` Services | The demo's NodePort Services, which kind publishes on the host's `127.0.0.1`. The chart leaves the dashboard out of its own Service. |
-| `pp-target` / `monitoring` | `prometheus-agent` | The agent, from the `prometheus-agent` chart (`values/agent.yaml`), named for its pod. It dials the proxy's NodePort on `pp-monitoring`'s node, and its token comes from a Secret. Its one static path is its own metrics; the services come from discovery. |
+| `pp-target` / `monitoring` | `prometheus-agent` | The agent, from the `prometheus-agent` chart (`values/agent.yaml`), named for its pod. It dials the proxy's NodePort on `pp-monitoring`'s node, and its token comes from a Secret. Its one static path is its own metrics; the services come from discovery. Its dashboard is on (`dashboard.enabled`), on port 8095 in its pod only, not on its Service. |
 | `pp-target` / `monitoring` | `targets-sync` | Lists and watches the Services in `apps`, and writes each annotated `prometheus-proxy/path` into the agent's targets ConfigMap, `agent-targets` (`sync/targets_sync.py`). Part of the demo, not the product. |
 | `pp-target` / `apps` | `orders`, `payments`, `shipping` | The simulated services (`app/services_app.py`), one per pod, each behind a ClusterIP Service annotated `prometheus-proxy/path`. Traffic follows a 5-minute "day", so the graphs move. |
 
@@ -111,11 +121,42 @@ These are the earlier demos' proxy and agent, now deployed with their Helm chart
 - `helm list` shows the proxy chart in `pp-monitoring` and the agent chart in `pp-target`: the charts the project
   ships, with nothing but a values file each.
 - Prometheus's config names no target in `pp-target`. Its one job asks the proxy's `/discovery` what to scrape.
-- Open the dashboard. One agent is connected, named for its pod, `prometheus-agent-<hash>-<id>`, the name `kubectl`
-  shows, with four paths: its own metrics (source **cfg**, from its config) and the three services (source **disc**,
-  from discovery). Prometheus's targets page shows all four up.
+- Open the proxy dashboard. One agent is connected, named for its pod, `prometheus-agent-<hash>-<id>`, the name
+  `kubectl` shows, with four paths: its own metrics (source **cfg**, from its config) and the three services (source
+  **disc**, from discovery). Prometheus's targets page shows all four up.
 
-### 2. Annotate a Service, and Prometheus scrapes it
+### 2. The agent's own dashboard, reached with kubectl port-forward
+
+The proxy dashboard shows what the proxy sees. The agent's own dashboard shows its side of the firewall: its
+connection, each path's registration and recent scrapes, and its discovery. See
+[Agent Dashboard](https://prometheus-proxy.com/agent-dashboard/) for each view.
+
+```bash
+./demo.sh agent-dashboard   # in a second terminal: kubectl port-forward to the agent's dashboard, until Ctrl-C
+```
+
+- `values/agent.yaml` turns the dashboard on with the chart's `dashboard.enabled`, and the chart leaves its port, 8095,
+  off the agent's Service, so nothing new is exposed. `agent-dashboard` runs `kubectl port-forward`, which carries
+  `localhost:8295` through `pp-target`'s API server to the agent's pod: only someone `kubectl` lets into the cluster
+  can reach it.
+- The Paths view lists the agent's four paths, each **registered** with the proxy: `agent_metrics`, **static**, from
+  its config, and the three services, **discovered**, with the cluster-local URLs the agent scrapes. The dots beside
+  each are its recent scrapes, one for each scrape Prometheus sent through the proxy. Open it at
+  <http://localhost:8295/dashboard>
+- Select `/orders_metrics`. Recent scrapes lists its last scrapes as the agent saw them: the target's status, how long
+  the fetch took, and the body's size. Scrape now has the agent fetch the target at once, from inside `pp-target`, the
+  only place its address resolves: `http://orders.apps.svc.cluster.local:8000/metrics`
+- The Connection view shows the agent connected to the proxy's NodePort, under its pod's name. Under Discovery is the
+  file the chart mounts from `agent-targets`, `/app/discovery/targets.conf`, read every 5 seconds, with its last read,
+  and under Settings what the agent resolved from `config/agent.conf`, such as its 3-second scrape timeout.
+- The Activity view lists what the agent did since its pod started, newest first. Read from the bottom, it connected to
+  the proxy, then registered its static path, and its three discovered ones on a line of their own. Each line is in the
+  agent's log too, but the log stays behind the firewall and scrolls away.
+- Keep it open through the parts that follow. Part 3's new path appears on it. Parts 4 and 5 replace the agent's pod,
+  which ends the port-forward: run `./demo.sh agent-dashboard` again to reach the new one, whose Activity view starts
+  empty, since the agent keeps it in memory.
+
+### 3. Annotate a Service, and Prometheus scrapes it
 
 ```bash
 ./demo.sh add-service     # deploys search, then its Service, annotated prometheus-proxy/path: search_metrics
@@ -126,8 +167,10 @@ These are the earlier demos' proxy and agent, now deployed with their Helm chart
   the ConfigMap into the agent's pod, the agent re-reads it, and registers the path: in the proxy's `/discovery` 1 to
   7 seconds after the Service was created (nine runs), and in Prometheus within its 5-second discovery refresh after
   that.
-- The dashboard's Paths view shows `search_metrics` with source **disc**. The agent's pod is the same one, with no
-  restarts: nothing restarted, and no other path missed a scrape.
+- The proxy dashboard's Paths view shows `search_metrics` with source **disc**. The agent's pod is the same one, with
+  no restarts: nothing restarted, and no other path missed a scrape.
+- On the agent's dashboard, `search_metrics` joins the Paths view, **discovered** and **registered**, Discovery on the
+  Connection view counts four entries, and the Activity view adds a **registered** line for it.
 - The delay is mostly the kubelet's. It copies a changed ConfigMap into the pods that mount it on its periodic sync,
   every `syncFrequency`, which is a minute on a production kubelet; `kind/pp-target.yaml` lowers it to 5 seconds. With
   the default, the same change took 63 to 74 seconds to reach a pod (six runs, in `pp-monitoring`, which keeps it), and
@@ -139,11 +182,11 @@ These are the earlier demos' proxy and agent, now deployed with their Helm chart
 
 The path leaves `/discovery` 3 to 10 seconds after the annotation goes (three runs), again without a restart, and
 `remove-service` then deletes search. Deleting a Service whose path is still registered would fail its scrapes until
-the agent heard.
+the agent heard. The agent's Activity view adds an **unregistered** line for the path.
 
 The basics demo shows dynamic discovery itself, from a file; this part shows Kubernetes driving it.
 
-### 3. Kubernetes replaces a deleted agent pod in about a second
+### 4. Kubernetes replaces a deleted agent pod in about a second
 
 ```bash
 ./demo.sh delete-agent-pod   # deletes the agent's pod; its Deployment starts another
@@ -154,10 +197,13 @@ The basics demo shows dynamic discovery itself, from a file; this part shows Kub
   as it shuts down.
 - Scrapes through the proxy fail for about a second meanwhile (0.9 to 1.0 seconds in three runs), so a Prometheus
   scrape that lands in it fails, and the next succeeds. Nobody touched the agent.
-- The dashboard's Activity view shows the old pod's paths leaving and the new pod's arriving. In Prometheus, each
+- The proxy dashboard's Activity view shows the old pod's paths leaving and the new pod's arriving. In Prometheus, each
   target's `agent` label is the pod's name, so a new pod starts new series, as a `pod` label would.
+- `./demo.sh agent-dashboard` ends with the old pod, since a port-forward reaches one pod. Run it again: the new pod's
+  Activity view lists only its own start, its connect and registrations. The proxy saw both pods, but each agent sees
+  only its own.
 
-### 4. A config change restarts the agent; a targets change doesn't
+### 5. A config change restarts the agent; a targets change doesn't
 
 ```bash
 ./demo.sh change-config      # helm upgrade with config/agent-change.conf added to the agent's main config
@@ -169,8 +215,10 @@ The basics demo shows dynamic discovery itself, from a file; this part shows Kub
 - That's a gap: scrapes through the proxy fail for about 1.3 seconds (1.3 to 1.4 in six runs), and the new pod's agent
   is on the dashboard about 2 seconds after the upgrade began. Its `agent_metrics` now carries the JVM's metrics, so
   `count({job="prometheus-agent"})` in Prometheus jumps from about 30 series to over 200.
-- Compare part 2, where the targets changed and nothing restarted. That's why the agent chart keeps its targets in a
+- Compare part 3, where the targets changed and nothing restarted. That's why the agent chart keeps its targets in a
   ConfigMap of their own, which the agent re-reads in place, and its main config, which only a restart applies, apart.
+- The port-forward ends with the old pod here too; run `./demo.sh agent-dashboard` again. The new pod's dashboard is
+  on, since `--reuse-values` keeps the chart's `dashboard.enabled` from `values/agent.yaml`.
 
 ```bash
 ./demo.sh restore-config     # back to config/agent.conf alone: another replacement
@@ -184,6 +232,7 @@ The basics demo shows dynamic discovery itself, from a file; this part shows Kub
 | `demo.sh add-service` / `remove-service` | Deploys the search service and then its Service, annotated `prometheus-proxy/path`; or removes the annotation and then deletes both | `kubectl apply` / `kubectl annotate ... prometheus-proxy/path-`; targets-sync rewrites the `agent-targets` ConfigMap, which the kubelet copies into the agent's pod |
 | `demo.sh delete-agent-pod` | Deletes the agent's pod, and reports when its replacement registered and how long scrapes failed | `kubectl delete pod`; the agent's Deployment starts a replacement |
 | `demo.sh change-config` / `restore-config` | Upgrades the agent chart with or without `config/agent-change.conf`, and reports the replacement the same way | `helm upgrade --set-file config=...`; the config's checksum on the pod template makes the Deployment replace the pod |
+| `demo.sh agent-dashboard` | Forwards `localhost:8295` to the agent's dashboard, in the foreground, until Ctrl-C or the agent's pod is replaced | `kubectl port-forward deploy/prometheus-agent 8295:8095`, through `pp-target`'s API server |
 | `make tour [PART=n]` | Walks through the guided tour above, from part 1 or the one given, pausing before each step |  |
 | `make status` | Both clusters' pods and Services, the Helm releases, and the URLs |  |
 | `make logs [SERVICE=name]` | Follows a workload's logs: `agent` (the default), `proxy`, `prometheus`, `targets-sync`, or a service |  |
@@ -195,22 +244,22 @@ The basics demo shows dynamic discovery itself, from a file; this part shows Kub
 | File | What it sets up |
 |---|---|
 | `kind/pp-monitoring.yaml` | The monitoring cluster: its node image, and the host ports kind publishes its NodePorts on |
-| `kind/pp-target.yaml` | The target cluster: its node image, no host ports, and the kubelet's 5-second `syncFrequency` for part 2 |
+| `kind/pp-target.yaml` | The target cluster: its node image, no host ports, and the kubelet's 5-second `syncFrequency` for part 3 |
 | `values/proxy.yaml` | The proxy chart's values: the token's Secret, the dashboard, and a NodePort `agentService` |
-| `values/agent.yaml` | The agent chart's values: the token's Secret, discovery from `agent-targets` every 5 seconds, and `AGENT_NAME` from the pod's name |
+| `values/agent.yaml` | The agent chart's values: the token's Secret, discovery from `agent-targets` every 5 seconds, the agent's dashboard, and `AGENT_NAME` from the pod's name |
 | `config/proxy.conf` | The proxy's config, which `demo.sh` passes to the chart with `--set-file`: the dashboard and its link into Prometheus, and service discovery |
 | `config/agent.conf` | The agent's main config: its scrape timeout, and its one static path, its own metrics |
-| `config/agent-change.conf` | Part 4's change: the agent's JVM metrics, which `change-config` appends to `agent.conf` |
+| `config/agent-change.conf` | Part 5's change: the agent's JVM metrics, which `change-config` appends to `agent.conf` |
 | `k8s/monitoring.yaml` | `pp-monitoring`'s namespace, Prometheus, and the demo's NodePort Services |
 | `k8s/target.yaml` | `pp-target`'s namespaces, and targets-sync with its RBAC |
 | `k8s/agent-targets.yaml` | The agent's targets ConfigMap, created empty once; targets-sync owns its contents |
-| `k8s/services.yaml`, `k8s/search.yaml` | The simulated services, each a Deployment and an annotated ClusterIP Service; search is part 2's |
+| `k8s/services.yaml`, `k8s/search.yaml` | The simulated services, each a Deployment and an annotated ClusterIP Service; search is part 3's |
 | `prometheus/prometheus.yml` | One HTTP service discovery job against the proxy |
 | `app/services_app.py` | The simulated services |
 | `sync/targets_sync.py` | targets-sync |
 | `Makefile` | The demo's targets: `make up`, `make up-local` (which runs the proxy and agent built from this checkout, for trying a change to them), `down`, `status`, `open`, `tour`, and `logs`, which `make help` lists, and `screenshots`, which it leaves out, since it's for maintaining the site |
-| `demo.sh` | Creating and deleting the clusters, installing the charts, and the scenarios. Its `NEEDS_RELEASE_AFTER` is the latest release that predates what the demo shows: until a later one is out, `make up` builds the proxy and agent from this checkout, as `make up-local` does, so set it to the latest release when the demo comes to use something unreleased |
-| `bin/screenshots.sh` | The Kubernetes Demo page's screenshots, in the dark and light themes. `make screenshots` builds and starts the demo, waits a minute so the agent's uptime reads in minutes, plays parts 1 to 3, and writes them to `website/prometheus-proxy/docs/images/kubernetes-demo/` (needs Chrome, ImageMagick 7, and `cwebp`). While checking a change, `SKIP_UPTIME_WAIT=1` skips the minute, and `WAIT_SECS` sets how long each wait for a scene may take before the script fails (default 150) |
+| `demo.sh` | Creating and deleting the clusters, installing the charts, the scenarios, and `agent-dashboard`. Its `NEEDS_RELEASE_AFTER` is the latest release that predates what the demo shows: until a later one is out, `make up` builds the proxy and agent from this checkout, as `make up-local` does, so set it to the latest release when the demo comes to use something unreleased |
+| `bin/screenshots.sh` | The Kubernetes Demo page's screenshots, in the dark and light themes. `make screenshots` builds and starts the demo, waits a minute so the agent's uptime reads in minutes, plays parts 1, 3, and 4, and writes them to `website/prometheus-proxy/docs/images/kubernetes-demo/` (needs Chrome, ImageMagick 7, and `cwebp`). While checking a change, `SKIP_UPTIME_WAIT=1` skips the minute, and `WAIT_SECS` sets how long each wait for a scene may take before the script fails (default 150) |
 
 How `make up` wires the two clusters together:
 
@@ -255,7 +304,7 @@ the same Service, so each of its series appears twice in what Prometheus gets. P
 drops the second, logging `Error on ingesting samples with different value but same timestamp` for each target on
 every scrape, and counting them in `prometheus_target_scrapes_sample_duplicate_timestamp_total` (115 in the first 40
 seconds here). `up` stays 1, and each service is scraped twice as often. The agents' own metrics don't collide, since
-each carries its `launch_id`. One agent per cluster, which Kubernetes replaces in about a second (part 3), avoids it.
+each carries its `launch_id`. One agent per cluster, which Kubernetes replaces in about a second (part 4), avoids it.
 
 ## Troubleshooting
 
@@ -267,5 +316,10 @@ each carries its `launch_id`. One agent per cluster, which Kubernetes replaces i
   `make up` installs the agent with the current one.
 - **A Service doesn't appear**: `make logs SERVICE=targets-sync` shows what it wrote, and why it skipped a Service.
 - **kind or Helm is too old**: `demo.sh` needs kind 0.33.0 or later, for its node image, and Helm 3 or 4.
+- **`./demo.sh agent-dashboard` stops with `lost connection to pod`**: the agent's pod was replaced; run it again. If
+  it can't listen on 8295, another program holds it: set `KUBERNETES_DEMO_AGENT_DASHBOARD_PORT`. If it says the
+  dashboard is off, the agent was installed before the demo turned it on: `make up` upgrades it.
 - The proxy logs a warning at startup that the dashboard has no authentication, and the agent one that its token
-  crosses without TLS. Both are expected here, and are why every port binds to `127.0.0.1`.
+  crosses without TLS. The agent also logs a WARN that its dashboard has no authentication and listens on all
+  interfaces. All are expected here: every published port binds to `127.0.0.1`, and the agent's dashboard is on no
+  Service, so only `kubectl port-forward` reaches it.

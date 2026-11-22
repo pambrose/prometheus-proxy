@@ -24,6 +24,7 @@ import kotlin.time.Clock
 import kotlin.time.Instant
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
+import kotlin.concurrent.atomics.AtomicReference
 
 /**
  * Bidirectional channel pair for a single agent-to-proxy connection.
@@ -44,6 +45,19 @@ internal class AgentConnectionContext(
 ) {
   /** When the connection began, for the agent's dashboard. */
   val startedAt: Instant = Clock.System.now()
+
+  private val firstFailure = AtomicReference<Throwable?>(null)
+
+  /**
+   * The first failure of one of the connection's tasks, which ended it, for the agent dashboard's activity feed; null
+   * while none has failed, and for a connection that ended without a failure. The tasks cancelled after it don't count.
+   */
+  val endedBy: Throwable? get() = firstFailure.load()
+
+  /** Notes [e], a connection task's failure, as what ended the connection, unless one came first. */
+  fun noteFailure(e: Throwable) {
+    firstFailure.compareAndSet(null, e)
+  }
 
   private var disconnected by atomicBoolean(false)
   private val scrapeRequestActionsChannel = Channel<ScrapeRequestAction>(backlogCapacity)

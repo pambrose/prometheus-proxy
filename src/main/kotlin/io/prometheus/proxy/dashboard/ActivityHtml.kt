@@ -23,7 +23,6 @@ import io.prometheus.proxy.ActivityKind
 import io.prometheus.proxy.ActivityLog
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.ACTIVITY_ID
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.agentLabel
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.renderFilters
 import kotlinx.html.DIV
 import kotlinx.html.FlowContent
 import kotlinx.html.TBODY
@@ -36,6 +35,12 @@ import kotlinx.html.tbody
 import kotlinx.html.td
 import kotlinx.html.thead
 import kotlinx.html.tr
+import io.prometheus.common.dashboard.RowFilter
+import io.prometheus.common.dashboard.TableColumn
+import io.prometheus.common.dashboard.TableText
+import io.prometheus.common.dashboard.columnHeaders
+import io.prometheus.common.dashboard.filteredTableStart
+import io.prometheus.common.dashboard.DashboardPage.renderFilters
 
 /**
  * The Activity view: the proxy's recent comings and goings, newest first, with the search above them.
@@ -47,7 +52,7 @@ import kotlinx.html.tr
  * The lines come from [io.prometheus.proxy.ActivityLog], which keeps them bounded and folds a burst into one.
  */
 internal object ActivityHtml {
-  /** The search and the table, as the page first renders them; see [ProxyDashboardHtml.renderFilters]. */
+  /** The search and the table, as the page first renders them; see `DashboardPage.renderFilters`. */
   fun FlowContent.renderActivity(
     snapshot: ProxySnapshot,
     routeBase: String,

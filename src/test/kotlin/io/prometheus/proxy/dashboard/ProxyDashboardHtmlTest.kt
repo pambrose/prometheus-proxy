@@ -27,6 +27,7 @@ import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.string.shouldNotStartWith
 import io.kotest.matchers.string.shouldStartWith
 import io.prometheus.common.dashboard.DashboardMessage
+import io.prometheus.common.dashboard.DashboardCss
 import io.prometheus.common.dashboard.DashboardPage
 import io.prometheus.common.dashboard.DashboardServer
 import io.prometheus.proxy.ScrapeRecord
@@ -477,9 +478,9 @@ class ProxyDashboardHtmlTest : StringSpec() {
         """.links a.icon-prometheus { --icon:url("$dir/prometheus.svg"); --brand:${LinkIcon.PROMETHEUS.lightColor}; }"""
       head shouldContain
         """.links a.icon-grafana { --icon:url("$dir/grafana.svg"); --brand:${LinkIcon.GRAFANA.lightColor}; }"""
-      // Prometheus's colour is the same in both themes, so only Grafana's changes in the dark one.
-      head shouldContain
-        "@media (prefers-color-scheme: dark) {\n  .links a.icon-grafana { --brand:${LinkIcon.GRAFANA.darkColor}; }\n}"
+      // Prometheus's colour is the same in both themes, so only Grafana's changes in the dark one, whether the system's
+      // or the one the page is set to.
+      head shouldContain DashboardCss.darkRule(".links a.icon-grafana", "--brand:${LinkIcon.GRAFANA.darkColor};")
       head shouldNotContain "icon-prometheus { --brand"
     }
 

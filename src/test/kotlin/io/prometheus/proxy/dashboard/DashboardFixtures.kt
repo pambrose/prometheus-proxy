@@ -33,6 +33,7 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
+import io.prometheus.common.dashboard.RowFilter
 
 /**
  * Shared builders for the dashboard view models.

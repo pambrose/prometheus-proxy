@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Retakes the screenshots on the website's Kubernetes Demo page (website/prometheus-proxy/docs/kubernetes-demo.md) from
-# the running demo: it plays the page's scenarios, parts 1 to 3, captures the dashboard and Prometheus in headless
+# the running demo: it plays the page's scenarios, parts 1, 3, and 4, captures the dashboard and Prometheus in headless
 # Chrome at twice the pixel density, each a whole window, and writes lossless WebP to
 # website/prometheus-proxy/docs/images/kubernetes-demo/: <name>.webp in the dark theme and <name>-light.webp in the
 # light one, which the page shows by the reader's theme. It puts the demo back to normal when it finishes, or when it
@@ -213,13 +213,13 @@ wait_until "the agent's recent scrapes" has_scrapes "$DASHBOARD_URL/agents/$id" 
 shoot_fixed agent "$DASHBOARD_URL/agents/$id"
 shoot_fixed targets "$PROMETHEUS_URL/targets" 8000
 
-step "Part 2: annotate a Service, and Prometheus scrapes it"
+step "Part 3: annotate a Service, and Prometheus scrapes it"
 "$DEMO" add-service >/dev/null
 wait_until "search up in Prometheus" prometheus_has 'up{job="search"} == 1'
 shoot_table discovered /paths
 "$DEMO" remove-service >/dev/null
 
-step "Part 3: Kubernetes replaces a deleted agent pod in about a second"
+step "Part 4: Kubernetes replaces a deleted agent pod in about a second"
 "$DEMO" delete-agent-pod >/dev/null
 # The Activity view lists the old pod's paths leaving and the new pod's arriving, newest first.
 wait_until "the new agent's scrapes" normal

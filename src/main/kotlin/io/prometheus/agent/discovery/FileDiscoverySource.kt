@@ -21,6 +21,8 @@ import com.typesafe.config.ConfigParseOptions
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.common.Utils.sanitizeUrl
 import java.io.File
+import io.prometheus.agent.AgentActivityKind
+import io.prometheus.agent.AgentActivityLog
 
 /**
  * Reads discovered paths from a local HOCON/JSON file (HOCON is a JSON superset, so either parses).
@@ -39,6 +41,8 @@ import java.io.File
  */
 internal class FileDiscoverySource(
   private val filePath: String,
+  // The agent dashboard's activity feed, when the dashboard is on, told of the entries a read skips when they change.
+  private val activityLog: AgentActivityLog? = null,
 ) : PathDiscoverySource,
   SkippedEntryReporter {
   // What the last read dropped, so the same bad file is reported once -- as AgentPathManager does for the paths a
@@ -86,6 +90,10 @@ internal class FileDiscoverySource(
     } else if (dropped.isNotEmpty()) {
       val described = dropped.map { "(path='${it.path}', url='${sanitizeUrl(it.url)}')" }
       logger.warn { "Skipping ${dropped.size} discovery entries needing a path and a url: $described" }
+      activityLog?.record(
+        AgentActivityKind.DISCOVERY_SKIPPED,
+        detail = "${dropped.size} entries need a path and a url: ${described.joinToString(", ")}",
+      )
     }
   }
 

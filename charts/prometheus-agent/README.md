@@ -51,6 +51,31 @@ One replica is enough for availability: the Deployment replaces a failed pod, an
 again once it starts and connects. Consolidated mode suits agents whose answers differ, such as separate releases that
 each scrape their own instance of a service whose series carry an instance label.
 
+## The agent's dashboard
+
+The agent's dashboard (`dashboard.enabled`) shows what the proxy's can't: whether the agent is connected, and if not,
+the last error from each proxy endpoint; every path, with the proxy's reason for refusing one; each path's recent
+scrapes; and what has happened to the agent. It stays off the Service, so you reach it with `kubectl port-forward`:
+
+```bash
+helm upgrade prometheus-agent ./charts/prometheus-agent --namespace monitoring --reuse-values \
+  --set dashboard.enabled=true
+kubectl -n monitoring port-forward deploy/prometheus-agent 8095
+```
+
+Then open <http://localhost:8095/dashboard>. To have it ask for a login as well, put a password in a Secret and name it
+in `dashboard.login.existingSecret`; the username is `admin` unless you set `dashboard.login.username`:
+
+```bash
+kubectl -n monitoring create secret generic prometheus-agent-dashboard --from-literal=password='<a long password>'
+helm upgrade prometheus-agent ./charts/prometheus-agent --namespace monitoring --reuse-values \
+  --set dashboard.enabled=true --set dashboard.login.existingSecret=prometheus-agent-dashboard
+```
+
+Create the Secret with `--from-literal`, not from a file that ends in a newline: the agent refuses a password with a
+control character in it. The dashboard serves plain HTTP, so the password is protected only by the port-forward's
+tunnel.
+
 ## Values
 
 | Value                                    | Default                                    | Description                                                                        |
@@ -71,6 +96,9 @@ each scrape their own instance of a service whose series carry an instance label
 | `tls.overrideAuthority`                  | `""`                                       | The name to verify the proxy's certificate against                                 |
 | `admin.enabled` / `admin.port`           | `true` / `8093`                            | `/ping` and `/healthcheck`, used by the probes                                     |
 | `metrics.enabled` / `metrics.port`       | `true` / `8083`                            | The agent's own metrics                                                            |
+| `dashboard.enabled` / `dashboard.port`   | `false` / `8095`                           | The agent's dashboard; not on the Service, so use `port-forward`                   |
+| `dashboard.login.existingSecret`         | `""`                                       | Secret holding the dashboard's password (`DASHBOARD_PASSWORD`), at `key`           |
+| `dashboard.login.username`               | `admin`                                    | The username the dashboard's login takes (`DASHBOARD_USERNAME`)                    |
 | `service.enabled`                        | `true`                                     | A Service for the metrics port                                                     |
 | `serviceMonitor.enabled`                 | `false`                                    | A Prometheus Operator ServiceMonitor for the agent's own metrics                   |
 | `javaToolOptions`                        | `-XX:MaxRAMPercentage=75.0`                | `JAVA_TOOL_OPTIONS`                                                                |

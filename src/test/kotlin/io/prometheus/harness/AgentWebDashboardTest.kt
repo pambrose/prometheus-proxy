@@ -272,6 +272,53 @@ class AgentWebDashboardTest : StringSpec() {
       }
     }
 
+    // What the agent's log says, in order, on the dashboard: connecting, a refused path, and, once the proxy goes away,
+    // the disconnect and the failing connects, each pushed to an open Activity page as it happens.
+    "the Activity view should show the agent's connection and paths, and push the proxy going away" {
+      val proxy =
+        startProxy(
+          args = ["--agent_port", "$AGENT_DASHBOARD_UI_GRPC_PORT"],
+          proxyPort = AGENT_DASHBOARD_UI_HTTP_PORT,
+          configArgs = ["--config", CONFIG_FILE],
+        )
+      val agent = dashboardAgent(AGENT_DASHBOARD_UI_GRPC_PORT, AGENT_DASHBOARD_UI_DASHBOARD_PORT)
+      val base = "http://$LOOPBACK_HOST:$AGENT_DASHBOARD_UI_DASHBOARD_PORT"
+      val client = HttpClient(CIO) { install(WebSockets) }
+      var proxyStopped = false
+      try {
+        agent.awaitInitialConnection(30.seconds).shouldBeTrue()
+        eventually(30.seconds) {
+          client.get("$base/dashboard/activity").bodyAsText().apply {
+            this shouldContain ">connected<"
+            this shouldContain "/agent_dash_allowed_metrics"
+            this shouldContain """<span class="tag crit">refused</span>"""
+            this shouldContain "is not authorized to register path /agent_dash_forbidden_metrics"
+          }
+        }
+        client.get("$base/dashboard/activity?q=forbidden").bodyAsText() shouldContain "Showing 1 of"
+
+        client.webSocket("ws://$LOOPBACK_HOST:$AGENT_DASHBOARD_UI_DASHBOARD_PORT/dashboard/events") {
+          send(Frame.Text("""{"select":null,"layout":"ACTIVITY","seq":1}"""))
+          firstFrame { """id="${AgentDashboardHtml.ACTIVITY_ID}"""" in it }
+          proxy.stopSync(10.seconds)
+          proxyStopped = true
+          firstFrame {
+            """<span class="tag warn">disconnected</span>""" in it &&
+              """<span class="tag crit">connect failed</span>""" in it
+          }.apply {
+            this shouldContain """id="${AgentDashboardHtml.ACTIVITY_ID}" hx-swap-oob="true""""
+            this shouldContain "$LOOPBACK_HOST:$AGENT_DASHBOARD_UI_GRPC_PORT"
+            // The disconnect says why: the stream's failure, which a connection task met and logged.
+            this shouldContain "$LOOPBACK_HOST:$AGENT_DASHBOARD_UI_GRPC_PORT: StatusException"
+          }
+        }
+      } finally {
+        client.close()
+        agent.stopSync(10.seconds)
+        if (!proxyStopped) proxy.stopSync(10.seconds)
+      }
+    }
+
     "with Scrape now off, the agent's dashboard should have no button and no route for it" {
       val agent =
         dashboardAgent(

@@ -215,8 +215,17 @@ internal class AgentGrpcService(
     grpcLock.withLock {
       if (endpoints.size <= 1)
         return@withLock false
+      val from = currentEndpoint.spec
+      val leavingPrimary = endpointIndex == 0
       endpointIndex = (endpointIndex + 1) % endpoints.size
       logger.info { "Trying next proxy endpoint: ${currentEndpoint.spec}" }
+      // Leaving the primary is the news for the activity feed; cycling on through the backups in the same outage isn't.
+      if (leavingPrimary)
+        agent.activityLog?.record(
+          AgentActivityKind.FAILED_OVER,
+          detail = "from $from to ${currentEndpoint.spec}",
+          group = from,
+        )
       true
     }
 
@@ -232,6 +241,7 @@ internal class AgentGrpcService(
       if (endpointIndex != 0) {
         endpointIndex = 0
         logger.info { "Returning to primary proxy endpoint: ${currentEndpoint.spec}" }
+        agent.activityLog?.record(AgentActivityKind.FAILED_BACK, detail = "to ${currentEndpoint.spec}")
       }
     }
 
@@ -378,6 +388,7 @@ internal class AgentGrpcService(
       lastConnectFailed = false
       successfulConnects += 1
       logger.info { "Connected to proxy at $proxyHost using ${tlsContext.desc()}" }
+      agent.activityLog?.record(AgentActivityKind.CONNECTED, detail = proxyHost, group = proxyHost)
       agent.metrics { connectCount.labelValues(agent.launchId, "success").inc() }
       true
     }.getOrElse { e ->
@@ -401,6 +412,12 @@ internal class AgentGrpcService(
         last?.key != failure -> {
           connectFailures[proxyHost] = LoggedFailure(failure, timeSource.markNow(), latest)
           logger.warn(e) { message }
+          // In the activity feed only when it is new or changes, as at WARN here: its repeats would fill the feed.
+          agent.activityLog?.record(
+            AgentActivityKind.CONNECT_FAILED,
+            detail = "$proxyHost: ${latest.message}",
+            group = "$proxyHost $failure",
+          )
         }
 
         last.warnedAt.elapsedNow() >= CONNECT_FAILURE_REMINDER_INTERVAL -> {

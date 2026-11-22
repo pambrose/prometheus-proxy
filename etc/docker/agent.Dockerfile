@@ -41,8 +41,8 @@ WORKDIR /app
 
 COPY ./build/libs/prometheus-agent.jar /app/prometheus-agent.jar
 
-# Default ports: metrics (8083) and admin (8093).
-EXPOSE 8083 8093
+# Default ports: metrics (8083), admin (8093), and the dashboard (8095), each off unless turned on.
+EXPOSE 8083 8093 8095
 
 CMD []
 

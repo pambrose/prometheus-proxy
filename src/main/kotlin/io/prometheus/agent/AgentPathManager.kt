@@ -40,6 +40,7 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
+import io.prometheus.grpc.PathRejectionCause
 
 /**
  * Ownership of a registered path. [STATIC] means "not managed by discovery" — config-driven
@@ -187,7 +188,9 @@ internal class AgentPathManager(
       }
       .mapNotNull { cfg ->
         val path = cfg.path.removePrefix("/")
-        MetricFilter.createOrNull(cfg.metricNameAllow, cfg.metricNameDeny, path)?.let { path to it }
+        MetricFilter.createOrNull(cfg.metricNameAllow, cfg.metricNameDeny, path) { reason ->
+          agent.activityLog?.record(AgentActivityKind.FILTER_FAILED_OPEN, path, reason, reason)
+        }?.let { path to it }
       }
       .toMap()
 
@@ -309,6 +312,14 @@ internal class AgentPathManager(
   ) {
     val kind = source.name.lowercase()
     val retrying = retryingIn(retryIn)
+    // In the activity feed when logged at WARN: a refusal, and not each retry's repeat of it. Grouped by the proxy's
+    // cause, as the proxy's own feed groups them, since each of its reasons names its path: a burst of paths refused
+    // for one cause is one line. A proxy that sends no cause is grouped by its reason.
+    if (!e.retryable || !repeat) {
+      val reason = ShownFailure.of(e.reason).message
+      val cause = e.rejectionCause.takeUnless { it == PathRejectionCause.REJECTION_CAUSE_UNSPECIFIED }?.name ?: reason
+      agent.activityLog?.record(AgentActivityKind.PATH_REFUSED, path, reason, cause)
+    }
     when {
       !e.retryable -> logger.warn { "Proxy rejected $kind path /$path, not retrying: ${e.message}" }
       !repeat -> logger.warn { "Proxy rejected $kind path /$path, $retrying: ${e.message}" }
@@ -529,6 +540,7 @@ internal class AgentPathManager(
     }
     pathContextMap[path] = PathContext(pathId, path, url, labelsJson, source, filter)
     registrationFailures -= path
+    agent.activityLog?.record(AgentActivityKind.PATH_REGISTERED, path, source.name.lowercase(), source.name)
   }
 
   // Lock-free unregistration body; callers MUST hold pathMutex (see doRegisterPath).
@@ -549,9 +561,12 @@ internal class AgentPathManager(
     registrationFailures -= path
     if (pathContext == null) {
       logger.info { "No path value /$path found in pathContextMap when unregistering" }
-    } else if (!agent.isTestMode) {
-      logger.info { "Unregistered /$path for ${sanitizeUrl(pathContext.url)}" }
+      return
     }
+    if (!agent.isTestMode)
+      logger.info { "Unregistered /$path for ${sanitizeUrl(pathContext.url)}" }
+    val source = pathContext.source.name
+    agent.activityLog?.record(AgentActivityKind.PATH_UNREGISTERED, path, source.lowercase(), source)
   }
 
   // Records [e], the latest failure to register [path], for the agent's dashboard. The proxy's answer is a refusal,

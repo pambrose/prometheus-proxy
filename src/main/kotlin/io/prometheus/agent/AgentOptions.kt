@@ -370,9 +370,12 @@ class AgentOptions internal constructor(
         ),
         logger,
       )
-      // At 0 no path would keep a scrape, so every path's history strip and Recent scrapes would stay empty.
-      if (dashboardEnabled)
+      // At 0 no path would keep a scrape, so every path's history strip and Recent scrapes would stay empty, and the
+      // activity feed would keep no line.
+      if (dashboardEnabled) {
         logger.requirePositive("dashboard.pathHistorySize", pathHistorySize)
+        logger.requirePositive("dashboard.activityLogSize", activityLogSize)
+      }
     }
 
     validateInternalConfigVals(agentConfigVals.internal)

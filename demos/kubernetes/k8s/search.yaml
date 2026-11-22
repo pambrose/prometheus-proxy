@@ -1,4 +1,4 @@
-# Part 2's service (`demo.sh add-service`): search, deployed like the others in services.yaml, its Service annotated
+# Part 3's service (`demo.sh add-service`): search, deployed like the others in services.yaml, its Service annotated
 # prometheus-proxy/path. The Service is all it takes for Prometheus to scrape it through the proxy: targets-sync adds
 # it to the agent's targets, the kubelet copies the ConfigMap into the agent's pod, and the agent registers the path,
 # without restarting. add-service applies the Deployment first, selecting it by its label, which the Service doesn't

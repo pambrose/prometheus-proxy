@@ -18,6 +18,8 @@
 
 package io.prometheus.agent.discovery
 
+import io.prometheus.agent.AgentActivityLog
+import io.prometheus.agent.AgentActivityKind
 import ch.qos.logback.classic.Level
 import io.grpc.Status
 import io.grpc.StatusException
@@ -48,6 +50,21 @@ import kotlin.time.Duration.Companion.seconds
 
 class PathDiscoveryServiceTest : StringSpec() {
   init {
+    // A file that fails every read is one line in the agent dashboard's feed, as it is one WARN in the log.
+    "a discovery failure should be recorded in the activity feed when it is new or changes, not while it repeats" {
+      val log = AgentActivityLog(capacity = 20)
+      val failures = ArrayDeque(["missing", "missing", "unparseable"])
+      val service =
+        PathDiscoveryService(mockk(relaxed = true), { throw IOException(failures.removeFirst()) }, 30, log)
+      repeat(3) { service.reconcileOnce() }
+
+      log.snapshot().entries.map { it.kind to it.detail } shouldBe
+        [
+          AgentActivityKind.DISCOVERY_FAILED to "IOException: unparseable",
+          AgentActivityKind.DISCOVERY_FAILED to "IOException: missing",
+        ]
+    }
+
     "a read failure before any successful read should reconcile nothing, keeping the live set" {
       val pathManager = mockk<AgentPathManager>(relaxed = true)
       val service = PathDiscoveryService(pathManager, { throw IOException("boom") }, 30)

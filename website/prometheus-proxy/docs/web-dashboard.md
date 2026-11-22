@@ -161,6 +161,10 @@ or **departed** (their agent has gone) when there are any, and two health gauges
 The browser tab's title counts the failing and departed paths too, as `(3 problems) prometheus-proxy`, so a
 dashboard left in a background tab still says when something is wrong.
 
+At the bar's end, the **Theme** button sets the dashboard light or dark. It starts at **auto**, which follows your
+system's light or dark setting, and each press moves to **light**, then **dark**, then back to **auto**. The browser
+remembers the choice for that dashboard, and its login page uses it too.
+
 ### The live indicator
 
 The **live** indicator is the connection's own status, not the proxy's. If the proxy restarts or the

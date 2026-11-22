@@ -21,8 +21,14 @@ services:
       PROMETHEUS_PROXY_AUTHORITY: foo.test.google.fr
       METRICS_USER: ${METRICS_USER:-}
       METRICS_PASSWORD: ${METRICS_PASSWORD:-}
+      # The agent's own dashboard, which the agent turns on from its environment, over what the roastery's code sets,
+      # so the code needs no change. It has no password, so the agent warns at startup that it listens on every
+      # interface without a login: the container's, whose port is published on 127.0.0.1 only.
+      DASHBOARD_ENABLED: "true"
+      DASHBOARD_PORT: "8495"
     ports:
       - "127.0.0.1:${SPRING_BOOT_DEMO_APP_PORT:-8490}:8080"  # The status page and Actuator, for curl
+      - "127.0.0.1:${SPRING_BOOT_DEMO_AGENT_DASHBOARD_PORT:-8495}:8495"  # The agent's dashboard
     depends_on:
       proxy:
         condition: service_started

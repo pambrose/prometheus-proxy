@@ -35,6 +35,7 @@ import io.prometheus.common.dashboard.DashboardPage.scrapeNowButton
 import io.prometheus.common.dashboard.DashboardPage.scrapeResultPanel
 import io.prometheus.common.dashboard.DashboardPage.size
 import io.prometheus.common.dashboard.DashboardPage.tabs
+import io.prometheus.common.dashboard.DashboardPage.themeToggle
 import io.prometheus.common.dashboard.DashboardPage.timeOfDay
 import io.prometheus.common.dashboard.DashboardScript
 import io.prometheus.common.dashboard.DashboardView
@@ -52,31 +53,38 @@ import kotlinx.html.span
 import kotlinx.html.stream.createHTML
 import kotlinx.html.unsafe
 import kotlin.time.Clock
+import io.prometheus.common.dashboard.RowFilter
+import io.prometheus.agent.dashboard.AgentActivityHtml.renderActivity
+import io.prometheus.agent.dashboard.AgentActivityHtml.activityTable
 
 /**
- * Which view of the agent's dashboard a session is looking at: its paths, where each stands with the proxy, or its
- * connection to the proxy, with its settings.
+ * Which view of the agent's dashboard a session is looking at: its paths, where each stands with the proxy; its
+ * connection to the proxy, with its settings; or its activity, what happened to them.
  *
  * @param segment the view's route below the dashboard's base, which the Paths view is served at itself
  * @param title the view's name in the tabs
+ * @param searchFields what the view's search matches, for the Activity view's filtered table
  */
 internal enum class AgentLayout(
   override val segment: String,
   override val title: String,
+  override val searchFields: String = "",
 ) : DashboardView {
   PATHS("", "Paths"),
   CONNECTION("connection", "Connection"),
+  ACTIVITY("activity", "Activity", "event, path, or detail"),
 }
 
 /**
- * What a page of the agent's dashboard shows: its [layout], the path selected in it, and the count of messages its
- * browser has sent, [seq], which every frame is stamped with, as on the proxy's dashboard. One value, so a push reads
- * all of it at once.
+ * What a page of the agent's dashboard shows: its [layout], the path selected in it, the count of messages its browser
+ * has sent, [seq], which every frame is stamped with, as on the proxy's dashboard, and the Activity view's [filter].
+ * One value, so a push reads all of it at once.
  */
 internal data class AgentView(
   val layout: AgentLayout = AgentLayout.PATHS,
   val selectedPath: String? = null,
   val seq: Long = 0L,
+  val filter: RowFilter = RowFilter.NONE,
 )
 
 /**
@@ -90,6 +98,7 @@ internal object AgentDashboardHtml {
   const val PATH_LIST_ID = "path-list"
   const val DETAIL_ID = "detail"
   const val CONNECTION_ID = "connection-pane"
+  const val ACTIVITY_ID = "activity"
 
   // A row's id is this and its path, so a keyboard user keeps their place in the list across the push that replaces it.
   // No region id starts with it, so no path can give a row the id of a region.
@@ -136,6 +145,7 @@ internal object AgentDashboardHtml {
         span("brand") { +BRAND }
         tabs(AgentLayout.entries, layout, routeBase)
         span("bar-right") { statusInner(snapshot, oob = false) }
+        themeToggle()
         if (loginEnabled) logoutForm(routeBase)
       }
       announcer()
@@ -151,6 +161,10 @@ internal object AgentDashboardHtml {
         AgentLayout.CONNECTION -> {
           main { div { connectionInner(snapshot, oob = false) } }
         }
+
+        AgentLayout.ACTIVITY -> {
+          main { renderActivity(snapshot, routeBase, view.filter) }
+        }
       }
       script { unsafe { raw(SCRIPT) } }
     }
@@ -159,12 +173,14 @@ internal object AgentDashboardHtml {
   /**
    * One WebSocket frame carrying the regions [view] shows, as top-level siblings, the status bar first, stamped with
    * the view's message count, as the proxy's are (see ProxyDashboardHtml.pushFragment). A null [view], before the page
-   * says which it shows, carries the status bar alone.
+   * says which it shows, carries the status bar alone. [withActivity] false leaves the Activity view's table out, for a
+   * page that already shows it (see AgentDashboardService).
    */
   fun pushFragment(
     snapshot: AgentSnapshot,
     view: AgentView?,
     routeBase: String,
+    withActivity: Boolean = true,
   ): String =
     buildString {
       append(createHTML().span("bar-right") { statusInner(snapshot, oob = true, view?.seq ?: 0L) })
@@ -177,6 +193,10 @@ internal object AgentDashboardHtml {
 
         AgentLayout.CONNECTION -> {
           append(createHTML().div { connectionInner(snapshot, oob = true) })
+        }
+
+        AgentLayout.ACTIVITY -> {
+          if (withActivity) append(createHTML().div { activityTable(snapshot, view.filter, oob = true) })
         }
 
         null -> {}

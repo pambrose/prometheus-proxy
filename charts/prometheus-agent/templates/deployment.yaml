@@ -51,7 +51,7 @@ spec:
           {{- end }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          {{- if or .Values.metrics.enabled .Values.admin.enabled }}
+          {{- if or .Values.metrics.enabled .Values.admin.enabled .Values.dashboard.enabled }}
           ports:
             {{- if .Values.metrics.enabled }}
             - name: metrics
@@ -60,6 +60,10 @@ spec:
             {{- if .Values.admin.enabled }}
             - name: admin
               containerPort: {{ .Values.admin.port }}
+            {{- end }}
+            {{- if .Values.dashboard.enabled }}
+            - name: dashboard
+              containerPort: {{ .Values.dashboard.port }}
             {{- end }}
           {{- end }}
           env:
@@ -75,6 +79,19 @@ spec:
               value: {{ .Values.metrics.enabled | quote }}
             - name: METRICS_PORT
               value: {{ .Values.metrics.port | quote }}
+            - name: DASHBOARD_ENABLED
+              value: {{ .Values.dashboard.enabled | quote }}
+            - name: DASHBOARD_PORT
+              value: {{ .Values.dashboard.port | quote }}
+            {{- with .Values.dashboard.login.existingSecret }}
+            - name: DASHBOARD_USERNAME
+              value: {{ $.Values.dashboard.login.username | quote }}
+            - name: DASHBOARD_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ . }}
+                  key: {{ $.Values.dashboard.login.key }}
+            {{- end }}
             {{- with .Values.agentToken.existingSecret }}
             - name: AGENT_TOKEN
               valueFrom:

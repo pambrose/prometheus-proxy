@@ -103,8 +103,8 @@ results. Off by default, and unauthenticated until a password is set. See [Dashb
 
 The agent's own live-updating web page (`agent.dashboard`, default port `8095`) showing its connection to the proxy,
 each proxy endpoint's last connect error, every path with the proxy's reason for refusing one and its recent scrapes as
-the agent saw them, and its filters, discovery, and settings: what the proxy's dashboard can't see. A Scrape now button
-fetches a path's target from the agent. Off by default, and unauthenticated until a password is
+the agent saw them, its filters, discovery, and settings, and an activity feed of what happened to them: what the
+proxy's dashboard can't see. A Scrape now button fetches a path's target from the agent. Off by default, and unauthenticated until a password is
 set. See [Agent Dashboard](agent-dashboard.md).
 
 ### Stale agent cleanup

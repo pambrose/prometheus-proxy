@@ -19,12 +19,16 @@
 package io.prometheus.agent.dashboard
 
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.ints.shouldBeLessThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.string.shouldStartWith
 import io.prometheus.agent.AgentPathManager.RegistrationFailure
+import io.prometheus.agent.AgentActivityEntry
+import io.prometheus.agent.AgentActivityKind
 import io.prometheus.agent.AgentScrapeRecord
+import io.prometheus.common.dashboard.RowFilter
 import io.prometheus.agent.PathSource
 import io.prometheus.agent.ShownFailure
 import io.prometheus.agent.dashboard.AgentDashboardHtml.renderPage
@@ -49,6 +53,7 @@ class AgentDashboardHtmlTest : StringSpec() {
     paths: List<AgentPathView> = emptyList(),
     connection: ConnectionView = ConnectionView(ConnectionState.CONNECTED, [EndpointView("proxy:50051", true)]),
     scrapeNow: Boolean = true,
+    activity: List<AgentActivityEntry> = emptyList(),
   ) = AgentSnapshot(
     agentName = "agent-7",
     agentId = "12",
@@ -62,7 +67,36 @@ class AgentDashboardHtmlTest : StringSpec() {
     settings = ["Scrape timeout" to "15s"],
     pathHistorySize = 5,
     scrapeNowEnabled = scrapeNow,
+    activity = activity,
+    activityChangeCount = activity.size.toLong(),
   )
+
+  private fun line(
+    kind: AgentActivityKind,
+    path: String = "",
+    detail: String = "",
+    count: Int = 1,
+  ) = AgentActivityEntry(
+    at,
+    kind,
+    if (path.isEmpty()) emptyList() else [path],
+    count,
+    detail,
+    pathCount = if (path.isEmpty()) 0 else count,
+  )
+
+  private val activity =
+    [
+      line(AgentActivityKind.CONNECT_FAILED, detail = "proxy-a:50051: StatusException: UNAVAILABLE"),
+      line(AgentActivityKind.FAILED_OVER, detail = "from proxy-a:50051 to proxy-b:50051", count = 3),
+      line(AgentActivityKind.PATH_REFUSED, "<script>x</script>", "not authorized"),
+      line(AgentActivityKind.PATH_REGISTERED, "orders", "static", count = 7),
+    ]
+
+  private fun activityPage(filter: RowFilter = RowFilter.NONE) =
+    createHTML().html {
+      renderPage(snapshot(activity = activity), AgentView(AgentLayout.ACTIVITY, filter = filter), "/dashboard")
+    }
 
   private fun scrape(
     statusCode: Int = 200,
@@ -300,11 +334,62 @@ class AgentDashboardHtmlTest : StringSpec() {
       page(snapshot([scraped()]), layout = AgentLayout.CONNECTION) shouldNotContain panel
     }
 
+    // Newest first, a problem a crit tag and news a warn one, a run counted, and the search and column guide above.
+    "the Activity view should list what happened, its problems in red, and a burst counted" {
+      activityPage().apply {
+        this shouldContain """<form action="/dashboard/activity" method="get" class="filters" role="search">"""
+        this shouldContain "Filter by event, path, or detail"
+        this shouldContain """<span class="tag crit">connect failed</span>"""
+        this shouldContain """<span class="tag warn">failed over</span><span class="dim"> ×3</span>"""
+        this shouldContain """registered<span class="dim"> ×7</span>"""
+        // The path a burst names, and the count it doesn't.
+        this shouldContain """/orders<span class="dim"> and 6 more</span>"""
+        this shouldContain "&lt;script&gt;x&lt;/script&gt;"
+        this shouldNotContain "<script>x</script>"
+        listOf("Time", "Event", "Path", "Detail").forEach { this shouldContain "<dt>$it</dt>" }
+        this.indexOf("connect failed") shouldBeLessThan this.indexOf(">registered<")
+      }
+    }
+
+    "the Activity view should keep only the lines its filter matches, and say how many" {
+      // The column guide names every kind, so only the table's own markup is matched.
+      activityPage(RowFilter.of("orders", problemsOnly = false)).apply {
+        this shouldContain "Showing 1 of 4 events"
+        this shouldNotContain """<span class="tag crit">connect failed</span>"""
+      }
+      activityPage(RowFilter.of(null, problemsOnly = true)).apply {
+        this shouldContain "Showing 2 of 4 events"
+        this shouldNotContain """registered<span class="dim">"""
+      }
+      createHTML().html { renderPage(snapshot(), AgentView(AgentLayout.ACTIVITY), "/dashboard") } shouldContain
+        "Nothing has happened yet"
+    }
+
+    // As on the proxy's: a frame carries the feed only when it differs from the one the page shows.
+    "a push for the Activity view should carry the feed out of band, or the status bar alone when told to" {
+      val view = AgentView(AgentLayout.ACTIVITY, seq = 4)
+      AgentDashboardHtml.pushFragment(snapshot(activity = activity), view, "/dashboard").apply {
+        this shouldStartWith """<span class="bar-right" id="${DashboardPage.STATUS_ID}" hx-swap-oob="true""""
+        this shouldContain """id="${AgentDashboardHtml.ACTIVITY_ID}" hx-swap-oob="true""""
+      }
+      AgentDashboardHtml.pushFragment(snapshot(activity = activity), view, "/dashboard", withActivity = false)
+        .apply { this shouldNotContain AgentDashboardHtml.ACTIVITY_ID }
+    }
+
+    "the agent's page should apply a stored theme in its head, with the theme button in its bar and in no push" {
+      page(snapshot()).apply {
+        substringBefore("</head>") shouldContain DashboardPage.THEME_SCRIPT
+        this shouldContain """<div class="theme"><button type="button" id="${DashboardPage.THEME_TOGGLE_ID}""""
+      }
+      AgentDashboardHtml.pushFragment(snapshot(), AgentView(), "/dashboard") shouldNotContain
+        DashboardPage.THEME_TOGGLE_ID
+    }
+
     "a path row should select it by its URL, encoded, and the page's script should know the agent's views" {
       val snapshot = snapshot([AgentPathView("a b", PathSource.STATIC, "", PathState.PENDING)])
       page(snapshot).apply {
         this shouldContain """hx-get="/dashboard/paths/a%20b""""
-        this shouldContain """var LAYOUTS = {"connection":"CONNECTION"};"""
+        this shouldContain """var LAYOUTS = {"connection":"CONNECTION","activity":"ACTIVITY"};"""
         this shouldContain "Connection to the agent lost. Reconnecting."
         this shouldContain "if (window.__agentUiInit) return;"
       }

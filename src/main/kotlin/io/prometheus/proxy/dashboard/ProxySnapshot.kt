@@ -188,7 +188,7 @@ internal data class ProxySnapshot(
   // The activity feed, newest first; empty with the dashboard off, when nothing records.
   val activity: List<ActivityEntry> = emptyList(),
   // The activity log's change count as [activity] was read with it: equal counts mean equal feeds, which is how the
-  // push loop knows a session's page already shows this feed (see ProxyDashboardService.ActivityTable).
+  // push loop knows a session's page already shows this feed (see io.prometheus.common.dashboard.ActivityTable).
   val activityChangeCount: Long = 0L,
   // Whether each live path has a Scrape button, proxy.dashboard.scrapeNowEnabled.
   val scrapeNowEnabled: Boolean = false,

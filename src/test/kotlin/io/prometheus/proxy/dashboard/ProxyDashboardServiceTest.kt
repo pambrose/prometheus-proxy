@@ -22,7 +22,8 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
-import io.prometheus.proxy.dashboard.ProxyDashboardService.ActivityTable
+import io.prometheus.common.dashboard.ActivityTable
+import io.prometheus.common.dashboard.RowFilter
 
 /**
  * The value a push compares to leave out an Activity table the page already shows. The rules every dashboard shares

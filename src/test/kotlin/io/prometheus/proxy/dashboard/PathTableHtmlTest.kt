@@ -30,6 +30,7 @@ import io.prometheus.proxy.dashboard.DashboardFixtures.departedPathView
 import io.prometheus.proxy.dashboard.DashboardFixtures.iconLinks
 import io.prometheus.proxy.dashboard.DashboardFixtures.renderFullPage
 import io.prometheus.proxy.dashboard.DashboardFixtures.scrapeRecord
+import io.prometheus.common.dashboard.RowFilter
 
 /**
  * The Paths view's table and search, [PathTableHtml]: the History column, the Identity column, the Links column, the
@@ -406,21 +407,21 @@ class PathTableHtmlTest : StringSpec() {
 
     // The socket carries the URL's query as is, so it reads the same as the /paths route does.
     "filter parsing should read the URL's query and tolerate anything a browser might send" {
-      ProxyDashboardService.parseFilter("""{"layout":"PATH","search":"?q=east&problems=1"}""") shouldBe
+      RowFilter.fromMessage("""{"layout":"PATH","search":"?q=east&problems=1"}""") shouldBe
         RowFilter("east", problemsOnly = true)
-      ProxyDashboardService.parseFilter("""{"search":"q=team%20a"}""") shouldBe RowFilter("team a")
-      ProxyDashboardService.parseFilter("""{"search":"?q=++west++"}""") shouldBe RowFilter("west")
+      RowFilter.fromMessage("""{"search":"q=team%20a"}""") shouldBe RowFilter("team a")
+      RowFilter.fromMessage("""{"search":"?q=++west++"}""") shouldBe RowFilter("west")
       // Cut, since every push matches it against every row.
-      ProxyDashboardService.parseFilter("""{"search":"?q=${"x".repeat(500)}"}""").query.length shouldBe
+      RowFilter.fromMessage("""{"search":"?q=${"x".repeat(500)}"}""").query.length shouldBe
         RowFilter.MAX_QUERY_LENGTH
       // Only "1" turns problems on, as the form's checkbox sends it.
-      ProxyDashboardService.parseFilter("""{"search":"?problems=true"}""") shouldBe RowFilter.NONE
+      RowFilter.fromMessage("""{"search":"?problems=true"}""") shouldBe RowFilter.NONE
       // Anything else is no filter.
-      ProxyDashboardService.parseFilter("""{"search":""}""") shouldBe RowFilter.NONE
-      ProxyDashboardService.parseFilter("""{"search":12}""") shouldBe RowFilter.NONE
-      ProxyDashboardService.parseFilter("""{"search":"?q=%zz"}""") shouldBe RowFilter.NONE
-      ProxyDashboardService.parseFilter("""{"select":"a1"}""") shouldBe RowFilter.NONE
-      ProxyDashboardService.parseFilter("not json at all") shouldBe RowFilter.NONE
+      RowFilter.fromMessage("""{"search":""}""") shouldBe RowFilter.NONE
+      RowFilter.fromMessage("""{"search":12}""") shouldBe RowFilter.NONE
+      RowFilter.fromMessage("""{"search":"?q=%zz"}""") shouldBe RowFilter.NONE
+      RowFilter.fromMessage("""{"select":"a1"}""") shouldBe RowFilter.NONE
+      RowFilter.fromMessage("not json at all") shouldBe RowFilter.NONE
     }
 
     // ==================== Column guide ====================

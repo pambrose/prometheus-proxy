@@ -37,6 +37,8 @@ import io.prometheus.common.dashboard.DashboardPage.SCRAPE_URL_ATTR
 import io.prometheus.common.dashboard.DashboardPage.STATUS_ID
 import io.prometheus.common.dashboard.DashboardPage.TITLE_ATTR
 import io.prometheus.common.dashboard.DashboardPage.VIEW_ATTR
+import io.prometheus.common.dashboard.DashboardPage.THEME_KEY
+import io.prometheus.common.dashboard.DashboardPage.THEME_TOGGLE_ID
 
 /**
  * A dashboard page's one script, which each dashboard's renderer inlines. Apart from the renderers so each stays a size
@@ -348,6 +350,34 @@ internal class DashboardScript(
         var toggle = document.getElementById('$COLUMN_GUIDE_TOGGLE_ID');
         if (toggle) toggle.focus();
       }
+      // The theme: auto, which follows the system's, then light, then dark, from the bar's button, and kept in this
+      // browser. The head applies a stored one before the page draws (DashboardPage.THEME_SCRIPT); this shows it on the
+      // button, and on a press moves to the next, stores it, applies it, and says it. Auto is stored as nothing.
+      var THEMES = ['auto', 'light', 'dark'];
+      function storedTheme() {
+        try {
+          var t = localStorage.getItem('$THEME_KEY');
+          return THEMES.indexOf(t) > 0 ? t : 'auto';
+        } catch (e) { return 'auto'; }
+      }
+      function showTheme(t) {
+        var btn = document.getElementById('$THEME_TOGGLE_ID');
+        if (!btn) return;
+        var next = THEMES[(THEMES.indexOf(t) + 1) % THEMES.length];
+        btn.textContent = 'Theme: ' + t;
+        btn.title = 'Theme: ' + t + (t === 'auto' ? ", as your system's" : '') + '; press for ' + next;
+      }
+      function nextTheme() {
+        var t = THEMES[(THEMES.indexOf(storedTheme()) + 1) % THEMES.length];
+        try {
+          if (t === 'auto') localStorage.removeItem('$THEME_KEY'); else localStorage.setItem('$THEME_KEY', t);
+        } catch (e) {}
+        if (t === 'auto') document.documentElement.removeAttribute('data-theme');
+        else document.documentElement.setAttribute('data-theme', t);
+        showTheme(t);
+        say('Theme: ' + t + '.');
+      }
+      showTheme(storedTheme());
       // One listener on <body> for every button in the table, the result panel, and the column guide: the push loop
       // replaces the table every frame, so a button's own listener would last one frame.
       document.body.addEventListener('click', function (evt) {
@@ -359,6 +389,7 @@ internal class DashboardScript(
         if (copy) copyFrom(copy);
         else if (scrape) scrapeNow(scrape);
         else if (evt.target.closest('#$COLUMN_GUIDE_TOGGLE_ID')) showGuide(!guideOpen());
+        else if (evt.target.closest('#$THEME_TOGGLE_ID')) nextTheme();
         else if (panel && evt.target.closest('button.close')) closeScrapeResult(panel);
         else if (guide && evt.target.closest('button.close')) closeGuide();
       });

@@ -403,8 +403,8 @@ If no name is provided, the agent uses `Unnamed-<hostname>`.
 ## Dashboard
 
 The agent can serve a dashboard of its own, on its own port, off unless turned on: its connection to the proxy, each
-path and why the proxy refused one, each path's recent scrapes and a Scrape now button, its filters, discovery, and
-settings. See [Agent Dashboard](../agent-dashboard.md).
+path and why the proxy refused one, each path's recent scrapes and a Scrape now button, its filters, discovery,
+settings, and what has happened to it. See [Agent Dashboard](../agent-dashboard.md).
 
 ```hocon
 agent {

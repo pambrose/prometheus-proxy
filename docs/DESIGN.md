@@ -255,9 +255,10 @@ accent is the only warm hue in the system, which is why it can be used so sparin
 (The Row Links' brand marks carry their tools' own colors, which are not tokens and stay inside the mark.)
 
 Every token exists as a light/dark pair; the frontmatter carries both (`accent` / `accent-dark`). The
-light theme is `:root`; the dark theme is a `prefers-color-scheme: dark` override. Neither is a tinted
-derivative of the other — the dark status colors are re-picked for a dark ground, not algorithmically
-dimmed.
+light theme is `:root`; the dark theme is an override that applies under `prefers-color-scheme: dark` unless
+the page is set to light, and whenever it is set to dark (`DashboardCss.darkRule`, which writes each dark
+rule once for both). Neither is a tinted derivative of the other — the dark status colors are re-picked for a
+dark ground, not algorithmically dimmed. The page follows the system by default; the Theme Button sets it.
 
 ### Primary
 
@@ -811,6 +812,15 @@ because the paths counter reports *registrations*, so a departed path is deliber
 which without explanation reads as the bar contradicting the table directly beneath it. Every stat
 carries `white-space: nowrap` so a narrow viewport wraps between stats rather than through one.
 
+### Theme Button
+
+At the bar's end, before Log out, in Log out's quiet bordered style: `Theme: auto`, then `light`, then `dark`,
+and round again. Auto follows the system's preference and is the default. The choice is kept in the browser's
+`localStorage`, one per dashboard, since each is its own origin, and a script in the head applies it as
+`<html data-theme>` before the page draws, so a page set to light never flashes dark; the login page applies
+it too. Outside the status bar's pushed region, like Log out, so no frame resets it, and its change is said in
+the Connection Announcer.
+
 ### Connection Announcer
 
 A visually-hidden `role="status" aria-live="polite"` region, written by the WebSocket lifecycle
@@ -855,7 +865,7 @@ below still bind the dashboard itself; the exception is the login page alone.
 ### Agent Dashboard
 
 The agent's own dashboard (`AgentDashboardHtml`), on this system without exception: the same tokens, bar, tabs, status
-bar, master–detail panes, key–value rows, and script, from `common/dashboard`. Two views:
+bar, master–detail panes, key–value rows, filtered table, and script, from `common/dashboard`. Three views:
 
 - **Paths**, the Agent list's layout: a row per path, its LED green while registered and red otherwise, by the No
   Amber Dot Rule. A tag says which red: `retrying` (warn), `refused` (crit), or `pending` (neutral). A third line,
@@ -868,6 +878,10 @@ bar, master–detail panes, key–value rows, and script, from `common/dashboard
 - **Connection**: a hero whose LED is green only while connected, with `failed over` as on the agent detail. Then the
   proxy endpoints, each a key–value row with a neutral `in use` or `trying` tag and its last connect error. Then
   discovery and the settings.
+- **Activity**, the proxy's Activity layout on the agent's events: the same search, column guide, and flat table
+  (Time, Event, Path, Detail), newest first. A problem (`connect failed`, `refused`, `discovery failed`,
+  `entries skipped`, `not filtered`) is a crit tag and news that isn't a fault (`disconnected`, `failed over`) a warn
+  one, as `taken over` is on the proxy's; the rest is plain text, and ×N counts a run.
 
 The status bar names the connection's state in its color, warn for `connecting`, where amber means true but not yet a
 failure, and counts the paths not registered in crit.

@@ -1,6 +1,6 @@
 # The Prometheus Proxy network demo: a proxy and its standby, each with its dashboard, two agents behind a simulated
-# firewall, a simulated WAN between them (Toxiproxy), a set of simulated services, and Prometheus, Grafana, and Zipkin
-# in front. See ../README.md. From demos/network:
+# firewall, each with a dashboard of its own, a simulated WAN between them (Toxiproxy), a set of simulated services, and
+# Prometheus, Grafana, and Zipkin in front. See ../README.md. From demos/network:
 #
 #   make up        # starts everything, with the proxy and agent of the latest release, from Docker Hub
 #   make up-local  # the same, with the proxy and agent built from this checkout
@@ -12,8 +12,9 @@
 # Every published port binds to 127.0.0.1 only: the dashboards have no authentication, Grafana lets anyone view it
 # without signing in, and its admin password is the default, which suits a demo on a laptop and nothing else. Each
 # default port is the basics demo's plus 100, so the two demos can run at once. Set NETWORK_DEMO_DASHBOARD_PORT,
-# NETWORK_DEMO_STANDBY_DASHBOARD_PORT, NETWORK_DEMO_PROXY_PORT, NETWORK_DEMO_PROMETHEUS_PORT,
-# NETWORK_DEMO_GRAFANA_PORT, or NETWORK_DEMO_ZIPKIN_PORT to move a host port that's already taken.
+# NETWORK_DEMO_STANDBY_DASHBOARD_PORT, NETWORK_DEMO_HQ_DASHBOARD_PORT, NETWORK_DEMO_BRANCH_DASHBOARD_PORT,
+# NETWORK_DEMO_PROXY_PORT, NETWORK_DEMO_PROMETHEUS_PORT, NETWORK_DEMO_GRAFANA_PORT, or NETWORK_DEMO_ZIPKIN_PORT to move
+# a host port that's already taken.
 
 name: prometheus-proxy-network-demo
 
@@ -101,11 +102,16 @@ services:
       retries: 15
     restart: on-failure
 
+  # Each agent's dashboard listens on the port its config sets (agent.dashboard.port), published here on the same port.
+  # The two agents' ports differ, since a browser sends a host's cookies to every port on it, and a dashboard names its
+  # session cookie for the port it listens on.
   agent-hq:
     <<: *agent
     hostname: hq-01
     volumes:
       - ../config/agent-hq.conf:/app/agent.conf:ro
+    ports:
+      - "127.0.0.1:${NETWORK_DEMO_HQ_DASHBOARD_PORT:-8196}:8196"  # agent-hq's dashboard
 
   agent-branch:
     <<: *agent
@@ -116,6 +122,8 @@ services:
     volumes:
       - ../config/agent-branch.conf:/app/agent-branch.conf:ro
       - ../config/agent-branch-filtered.conf:/app/agent-branch-filtered.conf:ro
+    ports:
+      - "127.0.0.1:${NETWORK_DEMO_BRANCH_DASHBOARD_PORT:-8197}:8197"  # agent-branch's dashboard
 
   # The applications behind the firewall, simulated (app/network_app.py).
   network-app:

@@ -10,6 +10,19 @@ The agent re-reads it every {{ .Values.discovery.reconcileIntervalSecs }}s, afte
 
 Check that it connected and registered its paths:
   kubectl -n {{ .Release.Namespace }} logs deploy/{{ include "prometheus-agent.fullname" . }}
+{{- if .Values.dashboard.enabled }}
+{{- if .Values.dashboard.login.existingSecret }}
+
+The agent's dashboard is not on the Service, and asks for the login ({{ .Values.dashboard.login.username }}, with the
+password in the {{ .Values.dashboard.login.existingSecret }} Secret). Reach it with:
+{{- else }}
+
+The agent's dashboard is not on the Service (it is unauthenticated; set dashboard.login.existingSecret to require a
+login). Reach it with:
+{{- end }}
+  kubectl -n {{ .Release.Namespace }} port-forward deploy/{{ include "prometheus-agent.fullname" . }} {{ .Values.dashboard.port }}
+then open http://localhost:{{ .Values.dashboard.port }}/dashboard
+{{- end }}
 {{- if not (or .Values.agentToken.existingSecret .Values.tls.secretName) }}
 
 The connection to the proxy is plaintext and presents no token. If the proxy requires either, set

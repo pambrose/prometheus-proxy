@@ -24,6 +24,10 @@ tls:
   overrideAuthority: proxy.example.com
 serviceMonitor:
   enabled: true
+dashboard:
+  enabled: true
+  login:
+    existingSecret: prometheus-agent-dashboard
 extraArgs: [ -Dagent.scrapeTimeoutSecs=30 ]
 env:
   - name: AGENT_NAME

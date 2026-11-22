@@ -16,7 +16,13 @@ discovery:
   existingConfigMap: agent-targets
   reconcileIntervalSecs: 5
 
-# The agent's name is its pod's, so the dashboard lists it under the name kubectl shows, and a replacement pod
+# The agent's own dashboard, on the chart's port, 8095, in the agent's pod. The chart leaves it off the agent's Service,
+# and pp-target maps no port to the host, so `demo.sh agent-dashboard` reaches it with kubectl port-forward. It runs
+# without its login, as the proxy's does here, so the agent logs a warning about it at startup.
+dashboard:
+  enabled: true
+
+# The agent's name is its pod's, so the proxy dashboard lists it under the name kubectl shows, and a replacement pod
 # appears under its own.
 env:
   - name: AGENT_NAME

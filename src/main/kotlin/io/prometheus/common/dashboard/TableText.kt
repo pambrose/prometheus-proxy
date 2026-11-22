@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.prometheus.proxy.dashboard
+package io.prometheus.common.dashboard
 
 import io.prometheus.common.dashboard.DashboardPage.MATCH_COUNT_ATTR
 import kotlinx.html.DIV
@@ -25,8 +25,8 @@ import kotlinx.html.th
 import kotlinx.html.tr
 
 /**
- * What a filtered table says when it has no rows to show, and what its rows are: the Paths and Activity views' tables
- * differ only in these, and in the rows themselves.
+ * What a filtered table says when it has no rows to show, and what its rows are: the dashboards' filtered tables differ
+ * only in these, and in the rows themselves.
  *
  * @param noun what a row is, in the plural, for "Showing N of M <noun>"
  * @param empty with no rows at all
@@ -44,7 +44,7 @@ internal class TableText(
  * One column of a filtered table: its header, and what the column guide says it holds.
  *
  * Each view builds its list of these once per render, and both the header row ([columnHeaders]) and the column guide
- * ([ProxyDashboardHtml.renderFilters]) iterate it, so a column can't reach the header without an explanation, and the
+ * ([DashboardPage.renderFilters]) iterate it, so a column can't reach the header without an explanation, and the
  * guide lists a column exactly when the table shows it.
  *
  * @param label the header's text, which the guide names the column by
@@ -78,7 +78,7 @@ internal fun THEAD.columnHeaders(columns: List<TableColumn>) {
 }
 
 /**
- * The start of a filtered table's region, which the Paths and Activity views share: the match count, which the page's
+ * The start of a filtered table's region, which every filtered table shares: the match count, which the page's
  * script says aloud once per change of filter, then the empty state when no row is left, or the "Showing N of M" line
  * when a filter hides some. Returns whether there are rows for the caller to render below it.
  *
