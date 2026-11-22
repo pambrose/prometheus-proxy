@@ -90,6 +90,11 @@ Only these types are part of the supported, documented public API. Everything el
 - `io.prometheus.agent.EmbeddedAgentConfig` and `embeddedAgent { }` (an embedded agent's settings built in code with
   typed methods, for Java through `EmbeddedAgentConfig.builder()`, and started with `start()`; it builds the `Config`
   `startAsyncAgent(Config)` takes)
+- `io.prometheus.agent.MetricsSource` (a host's metrics, which the agent reads in-process for a path added with the
+  builder's `source()`, in place of a URL; a source is code, so it reaches the agent in `AgentOptions.metricsSources`,
+  not in the `Config` tree, and `AgentHttpService.fetchFromSource` reads it with a target's limits and filter, calling
+  it in a scope of its own, so a call that ignores the timeout's interrupt holds only its own thread, and anything it
+  throws but a `VirtualMachineError` fails only its scrape)
 - `io.prometheus.agent.EmbeddedAgentInfo` (handle returned by `Agent.startAsyncAgent`, with the agent's connection,
   `isConnected` and `proxyEndpoint`, read live for a host's health check)
 - `io.prometheus.common.EnvVars`

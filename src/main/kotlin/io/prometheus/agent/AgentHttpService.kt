@@ -27,6 +27,7 @@ import io.prometheus.common.MetricBuilders.metricLabel
 import io.ktor.util.AttributeKey
 import com.google.common.net.HttpHeaders.ACCEPT
 import com.google.common.net.HttpHeaders.CONTENT_TYPE
+import com.pambrose.common.util.runCatchingCancellable
 import com.pambrose.common.util.simpleClassName
 import com.pambrose.common.util.zip
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
@@ -53,6 +54,7 @@ import io.ktor.http.URLBuilder
 import io.ktor.http.Url
 import io.ktor.http.takeFrom
 import io.ktor.http.isSuccess
+import io.ktor.http.parseQueryString
 import io.ktor.utils.io.InternalAPI
 import io.ktor.utils.io.readBuffer
 import io.prometheus.Agent
@@ -69,6 +71,7 @@ import io.prometheus.common.ScrapeTracing.Companion.endedAs
 import io.prometheus.common.ScrapeTracing.Companion.traced
 import io.prometheus.common.Utils.EMPTY_BYTE_ARRAY
 import io.prometheus.common.Utils.appendQueryParams
+import io.prometheus.common.Utils.causeChain
 import io.prometheus.common.Utils.sanitizeUrl
 import io.prometheus.common.Utils.sanitizeUrlsInText
 import io.prometheus.common.hasTimeoutCause
@@ -76,10 +79,19 @@ import io.prometheus.grpc.ScrapeRequest
 import io.prometheus.grpc.scrapeRequest
 import io.prometheus.metrics.core.datapoints.Timer
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withTimeout
 import kotlinx.io.readByteArray
+import java.io.ByteArrayOutputStream
+import java.io.IOException
 import java.math.BigDecimal
+import java.util.concurrent.ConcurrentHashMap
 import javax.net.ssl.X509TrustManager
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -133,6 +145,13 @@ internal class AgentHttpService(
         )
       }
     }
+
+  // Where a MetricsSource is called, apart from the scrape that asks, so a call that won't return holds only its own
+  // thread (see callSource); cancelled by close().
+  private val sourceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+  // The sources whose last call outlasted its scrape and hasn't returned, which aren't called again until it does.
+  private val stuckSources: MutableSet<MetricsSource> = ConcurrentHashMap.newKeySet()
 
   suspend fun fetchScrapeUrl(scrapeRequest: ScrapeRequest): ScrapeResults {
     val pathContext = agent.pathManager[scrapeRequest.path]
@@ -209,12 +228,14 @@ internal class AgentHttpService(
    * the proxy asks for takes, so its result is what Prometheus would get. Counted and recorded nowhere: not in the
    * `agent_scrape_*` metrics, `agent_dashboard_scrapes_total`, the filter's counts, or the path's history, which stay a
    * record of the scrapes the proxy asked for. It waits at most [timeout] for the target, which is told so, asks it for
-   * text, since the dashboard shows the body, and fills in the failure reason, as a scrape with debug on does.
+   * text, since the dashboard shows the body, and fills in the failure reason, as a scrape with debug on does. A path
+   * served in-process is read from its [source], in place of [url].
    */
   internal suspend fun fetchForDashboard(
     url: String,
     filter: MetricFilter?,
     timeout: Duration,
+    source: MetricsSource? = null,
   ): ScrapeResults {
     // Marked as a dashboard's, so the filter counts nothing; the request goes to no proxy, so nothing else reads it.
     val request =
@@ -224,7 +245,7 @@ internal class AgentHttpService(
         debugEnabled = true
         dashboardScrape = true
       }
-    return fetchGuarded(url, request, filter)
+    return fetchGuarded(ScrapeTarget(url, source), request, filter)
   }
 
   // Times a scrape for agent_scrape_request_latency_seconds, unless the metrics are off or the proxy's dashboard asked
@@ -238,30 +259,87 @@ internal class AgentHttpService(
     span: Span?,
   ): ScrapeResults {
     val requestTimer = latencyTimer(req)
-    // Add the incoming query params to the url
-    val url = appendQueryParams(pathContext.url, req.encodedQueryParams)
+    // Add the incoming query params to the url; a source gets those it takes from the request (see fetchFromSource).
+    val target = pathContext.target
+    val url = if (target.source == null) appendQueryParams(target.url, req.encodedQueryParams) else target.url
     logger.debug { "Fetching $pathContext ${if (url.isNotBlank()) "URL: ${sanitizeUrl(url)}" else ""}" }
     return try {
-      fetchGuarded(url, req, pathContext.filter, span)
+      fetchGuarded(target.copy(url = url), req, pathContext.filter, span)
     } finally {
       requestTimer?.observeDuration()
     }
   }
 
-  // Fetches [url] within the scrape's timeout, a failure becoming results that say why.
+  // Fetches [target], its URL or its source, within the scrape's timeout, a failure becoming results that say why.
   private suspend fun fetchGuarded(
-    url: String,
+    target: ScrapeTarget,
     req: ScrapeRequest,
     filter: MetricFilter?,
     span: Span? = null,
   ): ScrapeResults =
     try {
       withTimeout(scrapeTimeout(req)) {
-        fetchContent(url, req, filter, span)
+        val source = target.source
+        if (source == null)
+          fetchContent(target.url, req, filter, span)
+        else
+          fetchFromSource(source, target.url, req, filter)
       }
     } catch (e: Throwable) {
-      failedResults(e, req, sanitizeUrl(url))
+      failedResults(e, req, sanitizeUrl(target.url))
     }
+
+  // Reads [source], a path served in-process, whose target shows as [label], as a target's body is read: on a thread
+  // it may block, which the scrape's timeout interrupts, in a text format the scrape accepts, up to maxContentLength,
+  // and through [filter]. A source that fails fails the scrape, as a target that can't be reached does.
+  private suspend fun fetchFromSource(
+    source: MetricsSource,
+    label: String,
+    req: ScrapeRequest,
+    filter: MetricFilter?,
+  ): ScrapeResults {
+    val out = CappedBytes(maxContentLength)
+    val written = runCatchingCancellable { callSource(source, req, out) }
+    // Checked first, so a source that caught the cap's exception, or wrapped it in its own, is refused all the same.
+    if (out.exceeded) {
+      val msg = "Content size exceeds maximum allowed size of $maxContentLength bytes"
+      logger.warn { "$msg for $label (scrapeId: ${req.scrapeId})" }
+      return tooLarge(req, label, msg)
+    }
+    val contentType = written.getOrThrow().ifBlank { TEXT_FORMAT }
+    return scrapedResults(ScrapedBody(out.toByteArray(), contentType, HttpStatusCode.OK.value), label, req, filter)
+  }
+
+  // Calls [source] for [req], writing to [out], apart from the scrape: its timeout interrupts the call and stops
+  // waiting for it, so a source stuck in a call that ignores interrupts, such as a socket read, holds a thread of its
+  // own, but not the scrape, the agent's other scrapes, or its shutdown. Until that call returns, the source isn't
+  // called again, so stuck calls don't pile up. What the source throws fails only the scrape (see sourceFailure).
+  private suspend fun callSource(
+    source: MetricsSource,
+    req: ScrapeRequest,
+    out: CappedBytes,
+  ): String {
+    if (source in stuckSources)
+      throw IOException("The source's last call, which outlasted its scrape's timeout, hasn't returned")
+    val call =
+      sourceScope.async {
+        try {
+          runInterruptible { source.write(textOnlyAccept(req.accept), requestedNames(req.encodedQueryParams), out) }
+        } catch (e: Throwable) {
+          throw sourceFailure(e, cancelled = !isActive)
+        }
+      }
+    try {
+      return call.await()
+    } finally {
+      // Abandoned, the scrape having timed out or been cancelled: interrupt the call, and wait no longer for it.
+      if (!call.isCompleted) {
+        stuckSources += source
+        call.invokeOnCompletion { stuckSources -= source }
+        call.cancel()
+      }
+    }
+  }
 
   // The results of a fetch of [logUrl] that failed with [e], unless [e] must propagate.
   private fun failedResults(
@@ -353,7 +431,6 @@ internal class AgentHttpService(
     val statusCode = response.status.value
     val safeUrl = sanitizeUrl(url)
     return if (response.status.isSuccess()) {
-      val maxContentLength = agent.options.maxContentLengthMBytes * 1024L * 1024L
       val contentLength = response.headers[HttpHeaders.ContentLength]?.toLongOrNull()
       if (contentLength != null && contentLength > maxContentLength) {
         val msg = "Content length $contentLength exceeds maximum allowed size $maxContentLength"
@@ -381,32 +458,7 @@ internal class AgentHttpService(
         logger.warn { "$msg for $safeUrl (scrapeId: ${scrapeRequest.scrapeId})" }
         return tooLarge(scrapeRequest, safeUrl, msg)
       }
-
-      // Filter before the gzip decision so gzip and chunking both see the reduced payload. The
-      // maxContentLength guard above deliberately runs against the RAW bytes: it is a memory bound,
-      // and filtering must not become a way around it. A null outcome means the filter deliberately
-      // passed the payload through (unfilterable content type, or a body that is not valid UTF-8), so
-      // no metrics are recorded and the raw bytes are used verbatim.
-      val outcome = filter?.let { filtered(it, contentBytes, contentType, scrapeRequest) }
-      val filteredBytes = outcome?.bytes ?: contentBytes
-
-      val zipped = filteredBytes.size > agent.options.minGzipSizeBytes
-      ScrapeResults(
-        srAgentId = scrapeRequest.agentId,
-        srScrapeId = scrapeRequest.scrapeId,
-        srValidResponse = true,
-        srStatusCode = statusCode,
-        srContentType = contentType,
-        srZipped = zipped,
-        // A filtered payload is already in hand as text -- don't decode the bytes it was just encoded to.
-        srContentAsText = if (zipped) "" else (outcome?.text ?: filteredBytes.decodeToString()),
-        srContentAsZipped = if (zipped) filteredBytes.zip() else EMPTY_BYTE_ARRAY,
-        srUrl = if (scrapeRequest.debugEnabled) safeUrl else "",
-        scrapeCounterMsg = SUCCESS_LABEL,
-        rawSize = contentBytes.size,
-        filteredSize = filteredBytes.size,
-        filterLinesDropped = outcome?.linesDropped,
-      )
+      scrapedResults(ScrapedBody(contentBytes, contentType, statusCode), safeUrl, scrapeRequest, filter)
     } else {
       ScrapeResults(
         srAgentId = scrapeRequest.agentId,
@@ -417,6 +469,44 @@ internal class AgentHttpService(
         scrapeCounterMsg = UNSUCCESSFUL_MSG,
       )
     }
+  }
+
+  // agent.http.maxContentLengthMBytes, in bytes: the most of a target's body, or of what a source writes, that's read.
+  private val maxContentLength: Long get() = agent.options.maxContentLengthMBytes * 1024L * 1024L
+
+  // The results of a scrape that got [body] from the target at [safeUrl].
+  private fun scrapedResults(
+    body: ScrapedBody,
+    safeUrl: String,
+    scrapeRequest: ScrapeRequest,
+    filter: MetricFilter?,
+  ): ScrapeResults {
+    val contentBytes = body.bytes
+    // Filter before the gzip decision so gzip and chunking both see the reduced payload. The
+    // maxContentLength guard deliberately runs against the RAW bytes: it is a memory bound,
+    // and filtering must not become a way around it. A null outcome means the filter deliberately
+    // passed the payload through (unfilterable content type, or a body that is not valid UTF-8), so
+    // no metrics are recorded and the raw bytes are used verbatim.
+    val outcome = filter?.let { filtered(it, contentBytes, body.contentType, scrapeRequest) }
+    val filteredBytes = outcome?.bytes ?: contentBytes
+
+    val zipped = filteredBytes.size > agent.options.minGzipSizeBytes
+    return ScrapeResults(
+      srAgentId = scrapeRequest.agentId,
+      srScrapeId = scrapeRequest.scrapeId,
+      srValidResponse = true,
+      srStatusCode = body.statusCode,
+      srContentType = body.contentType,
+      srZipped = zipped,
+      // A filtered payload is already in hand as text -- don't decode the bytes it was just encoded to.
+      srContentAsText = if (zipped) "" else (outcome?.text ?: filteredBytes.decodeToString()),
+      srContentAsZipped = if (zipped) filteredBytes.zip() else EMPTY_BYTE_ARRAY,
+      srUrl = if (scrapeRequest.debugEnabled) safeUrl else "",
+      scrapeCounterMsg = SUCCESS_LABEL,
+      rawSize = contentBytes.size,
+      filteredSize = filteredBytes.size,
+      filterLinesDropped = outcome?.linesDropped,
+    )
   }
 
   // A scrape refused for a body over agent.http.maxContentLengthMBytes, as [msg] says; only debug sends the proxy why.
@@ -554,6 +644,7 @@ internal class AgentHttpService(
     protocol == other.protocol && host.equals(other.host, ignoreCase = true) && port == other.port
 
   suspend fun close() {
+    sourceScope.cancel()
     httpClientCache.close()
   }
 
@@ -649,6 +740,47 @@ internal class AgentHttpService(
         .filterNot { it.substringBefore(';').trim().equals(PROTOBUF_MEDIA_TYPE, ignoreCase = true) }
         .joinToString(",") { it.trim() }
 
+    // The content type of a source that names none: the Prometheus text format, which a scrape always accepts.
+    private const val TEXT_FORMAT = "text/plain; version=0.0.4; charset=utf-8"
+
+    // The metric families a scrape asks for with name[] parameters, as the Prometheus client libraries read them; empty
+    // for all of them.
+    // What the agent makes of [e], which a source's call threw: the call's own cancellation, when it was [cancelled],
+    // or a VirtualMachineError, as they are, and an exception as it is; but an Error, or a CancellationException or
+    // InterruptedException the source threw itself, as an IOException, so it fails the scrape and not the agent.
+    private fun sourceFailure(
+      e: Throwable,
+      cancelled: Boolean,
+    ): Throwable {
+      // runInterruptible gives an InterruptedException as a CancellationException caused by it, which the coroutines'
+      // stack trace recovery can wrap again
+      val interrupted = (e as? CancellationException)?.causeChain()?.firstOrNull { it is InterruptedException }
+      val thrown = interrupted ?: e
+      return when {
+        e is CancellationException && cancelled -> {
+          e
+        }
+
+        thrown is VirtualMachineError -> {
+          thrown
+        }
+
+        thrown is Error || thrown is CancellationException || thrown is InterruptedException -> {
+          IOException("The source threw ${thrown.simpleClassName}: ${thrown.message}", thrown)
+        }
+
+        else -> {
+          thrown
+        }
+      }
+    }
+
+    private fun requestedNames(encodedQueryParams: String): Set<String> =
+      if (encodedQueryParams.isBlank())
+        emptySet()
+      else
+        parseQueryString(encodedQueryParams).getAll("name[]").orEmpty().toSet()
+
     // Ktor's own default is 20; a metrics endpoint needs a hop or two at most.
     private const val MAX_REDIRECTS = 5
 
@@ -671,6 +803,44 @@ internal class AgentHttpService(
         srUrl = if (scrapeRequest.debugEnabled) "None" else "",
         srFailureReason = if (scrapeRequest.debugEnabled) "Invalid path: ${scrapeRequest.path}" else "",
       )
+    }
+  }
+}
+
+// A successful scrape's body, within maxContentLength: its [bytes], their [contentType], and the [statusCode] the
+// target answered with.
+private class ScrapedBody(
+  val bytes: ByteArray,
+  val contentType: String,
+  val statusCode: Int,
+)
+
+// What a MetricsSource writes, up to [limit] bytes, as a target's body is read only up to the limit: a write past it
+// throws, and [exceeded] records it, so a source that catches the exception is refused all the same.
+private class CappedBytes(
+  private val limit: Long,
+) : ByteArrayOutputStream() {
+  var exceeded = false
+    private set
+
+  override fun write(b: Int) {
+    reserve(1)
+    super.write(b)
+  }
+
+  override fun write(
+    b: ByteArray,
+    off: Int,
+    len: Int,
+  ) {
+    reserve(len)
+    super.write(b, off, len)
+  }
+
+  private fun reserve(len: Int) {
+    if (size() + len.toLong() > limit) {
+      exceeded = true
+      throw IOException("Metrics exceed the maximum allowed size of $limit bytes")
     }
   }
 }

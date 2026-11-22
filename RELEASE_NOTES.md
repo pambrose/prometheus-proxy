@@ -25,6 +25,10 @@ _Not yet released_
 - **Every setting, on both dashboards.** A new Settings view on the proxy's dashboard and the agent's shows every setting
   the process is running with, from its ports, authentication, and TLS to its limits and timeouts, so you can check
   them without reading the startup log. Tokens, passwords, and private keys show only as set or not set.
+- **Metrics without an endpoint.** An app that embeds the agent can hand it its metrics registry with
+  `source(path, source)`, instead of serving its metrics at a URL for the agent to scrape: no `/metrics` endpoint,
+  port, or password to set up. The Embedded Agent page shows it for the Prometheus Java client's registry, which
+  Micrometer's uses too.
 - **Light or dark, your choice.** Both dashboards have a theme picker in the top bar: light, dark, or auto, which
   follows your system and is where it starts. Your browser remembers it.
 - **The proxy counts what happens to its agents.** New metrics count agents disconnecting and why, connects and

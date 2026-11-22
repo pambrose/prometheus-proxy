@@ -121,10 +121,13 @@ internal class AgentPathManager(
   suspend fun pathMapSize(): Int = agent.grpcService.pathMapSize()
 
   // A blank path or url could never register, and registerPaths does not catch the require() that would reject it,
-  // so one config typo would fail every connect attempt. Dropped here instead, the way discovery drops its own.
+  // so one config typo would fail every connect attempt. Dropped here instead, the way discovery drops its own. The
+  // paths an embedded host serves in-process (EmbeddedAgentConfig.Builder.source) come after the config's, and are
+  // checked with them, so one can't take a configured path, or a path the proxy would refuse.
   val pathConfigs: List<PathConfig> =
     agentConfigVals.pathConfigs
       .map { PathConfig(name = it.name, path = it.path, url = it.url, labels = it.labels) }
+      .plus(agent.options.metricsSources)
       .filter { config ->
         config.usable.also {
           if (!it)
@@ -230,7 +233,7 @@ internal class AgentPathManager(
     repeat: Boolean,
   ): RequestFailureException? =
     try {
-      registerPath(config.path, config.url, config.labels)
+      registerPath(config.path, config.url, config.labels, config.metricsSource)
       rejectedStaticPaths -= config
       null
     } catch (e: RequestFailureException) {
@@ -362,7 +365,8 @@ internal class AgentPathManager(
     pathVal: String,
     url: String,
     labels: String = "{}",
-  ) = pathMutex.withLock { doRegisterPath(pathVal, url, labels, PathSource.STATIC) }
+    metricsSource: MetricsSource? = null,
+  ) = pathMutex.withLock { doRegisterPath(pathVal, ScrapeTarget(url, metricsSource), labels, PathSource.STATIC) }
 
   suspend fun unregisterPath(pathVal: String) = pathMutex.withLock { doUnregisterPath(pathVal) }
 
@@ -488,7 +492,7 @@ internal class AgentPathManager(
     runCatchingCancellable {
       if (current != null)
         doUnregisterPath(path)
-      doRegisterPath(path, entry.url, entry.labels, PathSource.DISCOVERED)
+      doRegisterPath(path, ScrapeTarget(entry.url), entry.labels, PathSource.DISCOVERED)
     }.onSuccess {
       discoveredRejections -= path
     }.onFailure { e ->
@@ -529,10 +533,11 @@ internal class AgentPathManager(
   // than the locking registerPath wrapper.
   private suspend fun doRegisterPath(
     pathVal: String,
-    url: String,
+    target: ScrapeTarget,
     labels: String,
     source: PathSource,
   ) {
+    val url = target.url
     require(pathVal.isNotBlank()) { BLANK_PATH_MSG }
     require(url.isNotBlank()) { "Blank URL" }
 
@@ -550,7 +555,7 @@ internal class AgentPathManager(
           if (filter != null) " with a metric filter" else ""
       }
     }
-    pathContextMap[path] = PathContext(pathId, path, url, labelsJson, source, filter)
+    pathContextMap[path] = PathContext(pathId, path, url, labelsJson, source, filter, target.source)
     registrationFailures -= path
     agent.activityLog?.record(AgentActivityKind.PATH_REGISTERED, path, source.name.lowercase(), source.name)
   }
@@ -731,13 +736,18 @@ internal class AgentPathManager(
     val failure: String? = null,
   )
 
-  // Strongly-typed view of a single `agent.pathConfigs` entry, replacing the prior magic-string map.
+  // Strongly-typed view of a single `agent.pathConfigs` entry, replacing the prior magic-string map, or of a path an
+  // embedded host serves in-process, whose [metricsSource] the agent reads in place of its [url], IN_PROCESS_TARGET.
   data class PathConfig(
     val name: String,
     val path: String,
     val url: String,
     val labels: String,
+    val metricsSource: MetricsSource? = null,
   ) {
+    // What a scrape of this path reads.
+    val target: ScrapeTarget get() = ScrapeTarget(url, metricsSource)
+
     // Name wrapped in double-quotes for the toPlainText() display, preserving the original format.
     val quotedName: String get() = "\"$name\""
 
@@ -753,7 +763,12 @@ internal class AgentPathManager(
     val labels: String,
     val source: PathSource,
     val filter: MetricFilter? = null,
+    // What the agent reads in place of [url], for a path an embedded host serves in-process.
+    val metricsSource: MetricsSource? = null,
   ) {
+    // What a scrape of this path reads.
+    val target: ScrapeTarget get() = ScrapeTarget(url, metricsSource)
+
     // Whether this path still points at [url] with [labels]; reconcileDiscoveredPaths re-registers it when not.
     fun matches(
       url: String,

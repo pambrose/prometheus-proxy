@@ -179,14 +179,17 @@ snippets, which `website/prometheus-proxy/zensical.toml` resolves by file name. 
 regions; **EmbeddedAgentKotlinExample** and **EmbeddedAgentJavaExample** are the embedded-agent examples on the
 Embedded Agent page, and **EmbeddedAgentConfigKotlinExample** and **EmbeddedAgentConfigJavaExample** the ones that
 start an agent from an in-memory config, on that page and the Cloud Platforms page, compiled with the tests so that a
-change to `Agent.startAsyncAgent()` that breaks them fails the build. **KtorHostExample**, in `src/test/kotlin/hosts/`,
+change to `Agent.startAsyncAgent()` that breaks them fails the build. **EmbeddedAgentSourceKotlinExample** and
+**EmbeddedAgentSourceJavaExample** hand the agent a registry as a `MetricsSource`, on the Embedded Agent page;
+`MetricsSourceTest` runs the Kotlin one against a real registry. **KtorHostExample**, in `src/test/kotlin/hosts/`,
 is the Cloud Platforms page's Ktor module that starts and stops the agent; it lives outside `website/` because it needs
 a Ktor server, which the build below doesn't give a host.
 
 The tests compile those examples against the project's own classpath, which a build that embeds the agent doesn't
 get: it gets what the published POM gives it, resolved by its own build tool. `make consumer-check`, which CI's
 `consumer-check` job runs, covers that. It publishes this checkout to the local Maven repository and has
-`etc/consumer-check/check.sh` build `etc/consumer-check`, a Maven project that depends only on that artifact. The
+`etc/consumer-check/check.sh` build `etc/consumer-check`, a Maven project that depends on that artifact, and on the
+Prometheus client's exposition formats, which the `MetricsSource` examples write a registry with, as their host does. The
 check fails unless the examples compile there (a public type's supertype at runtime scope broke the Java one),
 Maven resolves Jackson, every netty-tcnative native, Netty, and protobuf at the versions `gradle/libs.versions.toml`
 pins, and no jar on the classpath carries a `logback.xml`, which would replace the host application's logging config.
@@ -294,7 +297,15 @@ pins, and no jar on the classpath carries a `logback.xml`, which would replace t
   back intact, an empty pair means none, and `path` refuses credentials for a URL that has its own, as the agent's
   parser reads it; labels become JSON; `setting()` takes precedence over a method; `toString()` shows what `setting()`
   sets but not the token, a password, a PEM, or a path's credentials; and a blank path, an out-of-range port, or a URL
-  with no scheme throws `ConfigLoadException`
+  with no scheme throws `ConfigLoadException`; `source()` adds an in-process path, with or without labels, that
+  reaches the agent's options but not the config tree, shows in `toString()` as `in-process`, and fails `start()` when
+  another path or the proxy's rules forbid its path
+- **MetricsSourceTest** — a path served by a `MetricsSource`: scraped in-process in the content type the source names
+  (the text format when it names none), asked in a text format the scrape accepts for the families named with
+  `name[]`, filtered, refused past `maxContentLengthMBytes` whether written in arrays or a byte at a time, interrupted
+  at the scrape timeout, failed when the source throws, an `Error` or its own cancellation or interrupt included, and
+  read by the dashboard's fetch, which counts nothing; a call that ignores the interrupt times out on time, and the
+  source isn't called again until it returns; and the docs site's registry source, run against a real registry
 - **EmbeddedAgentInfoTest** — EmbeddedAgentInfo data class (launchId, agentName storage), and its connection,
   `isConnected` and `proxyEndpoint`, read live from the agent
 - **RequestFailureExceptionTest** — RequestFailureException custom exception class
@@ -326,7 +337,8 @@ pins, and no jar on the classpath carries a `logback.xml`, which would replace t
 - **AgentScrapeNowTest** (`dashboard/`) — the agent dashboard's Scrape now, its fetch stood in for: a configured path
   scraped at its own URL through its own filter, though not registered, summarized with its sizes before and after
   the filter; a gzipped body unzipped and a path asked for with a leading slash found; a failure's reason; a path the
-  agent doesn't know refused without a fetch, shown escaped; a path at most once a cooldown; and at most a few at once
+  agent doesn't know refused without a fetch, shown escaped; a path at most once a cooldown; at most a few at once;
+  and a path served in-process read through its source
 - **FileDiscoverySourceTest** (`discovery/`) — Discovery-file parsing: HOCON and JSON, empty or absent `paths`,
   rejection of missing files, malformed files and incomplete entries, and HOCON substitution resolution; and the entries
   a read skips told to the activity feed once per change
@@ -872,8 +884,8 @@ mechanism that the standard suite cannot reach:
   setting it can't use; the handle's `isConnected` and `proxyEndpoint` report the connection once the proxy serves the
   agent's path, go false after `shutdown()` or once the proxy goes away, and are false before the first connection; a
   path given a username and password with the builder reaches a target that demands them as Basic Auth, whatever their
-  characters; and a config served from a URL with
-  credentials that holds a setting the agent rejects, whether its options or its constructor reject it, throws
+  characters; a path the builder's `source()` adds serves what its source writes, through the proxy; and a config
+  served from a URL with credentials that holds a setting the agent rejects, whether its options or its constructor reject it, throws
   `ConfigLoadException`, with the credentials in none of its messages, its cause chain, or the log
 - **EmbeddedAgentMetricsTest** — with metrics on, an agent started again after `shutdown()` and two agents at
   once each connect and count their own connects without a registry clear in between; a stopped agent's series go

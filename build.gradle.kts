@@ -188,6 +188,8 @@ dependencies {
   testImplementation(libs.lincheck)
   testImplementation(libs.mockk)
   testImplementation(libs.testcontainers)
+  // The docs site's MetricsSource examples (src/test/*/website) write a registry with it, as an embedder does.
+  testImplementation(libs.prometheus.metrics.exposition.textformats)
 }
 
 // Raises every Netty module grpc-netty brings (4.2.17.Final) to the patched release in libs.versions.toml. netty-tcnative

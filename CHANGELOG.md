@@ -37,6 +37,10 @@ All notable changes to this project are documented in this file.
 - Both dashboards have a theme picker at the end of the top bar: three buttons, light, dark, and auto, the default,
   which follows the system's light or dark setting. The browser keeps the choice for each dashboard and applies it
   before the page draws, and the login page uses it too
+- An embedded agent can serve its host's metrics in-process: `EmbeddedAgentConfig`'s `source(path, source)` takes a
+  `MetricsSource`, which the agent asks for each scrape in a text format Prometheus accepts, for the families it names
+  with `name[]`, so the app needs no metrics endpoint, port, or credentials for the agent. The scrape timeout,
+  `http.maxContentLengthMBytes`, and the path's filter apply as to a URL, and the path's target shows as `in-process`
 - Every demo turns on its agents' dashboards and shows the agent's side in its tour; the basics demo adds `proxy-down`
   and `proxy-up`, the spring-boot demo `proxy-stop` and `proxy-start`, and the kubernetes demo `agent-dashboard`, which
   port-forwards to the agent's

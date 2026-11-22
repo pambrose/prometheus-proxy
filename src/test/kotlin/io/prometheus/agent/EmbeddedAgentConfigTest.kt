@@ -22,9 +22,12 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
+import io.kotest.matchers.types.shouldBeInstanceOf
+import io.kotest.matchers.types.shouldBeSameInstanceAs
 import io.prometheus.common.ConfigLoadException
 import io.prometheus.common.TestCerts.CA_CERT
 import io.prometheus.common.TestCerts.CLIENT_CERT
@@ -221,6 +224,60 @@ class EmbeddedAgentConfigTest : StringSpec() {
         .labels shouldBe """{"job":"my-app","team":"a b"}"""
     }
 
+    // A source is code, which no config tree can hold, so the agent gets it apart from the tree, as a static path.
+    "source adds a path the agent serves in-process, which the config tree leaves out" {
+      val source = MetricsSource { _, _, _ -> "" }
+      val config = embeddedAgent { source(path = "/app_metrics", source = source, labels = mapOf("job" to "app")) }
+
+      config.agentOptions().metricsSources.single().apply {
+        path shouldBe "app_metrics"
+        url shouldBe IN_PROCESS_TARGET
+        labels shouldBe """{"job":"app"}"""
+        metricsSource shouldBeSameInstanceAs source
+      }
+      config.toConfig().hasPath("agent.pathConfigs").shouldBeFalse()
+      config.options().metricsSources.shouldBeEmpty()
+    }
+
+    "a source path without labels gets the empty JSON object pathConfigs gives" {
+      embeddedAgent { source("app_metrics") { _, _, _ -> "" } }
+        .agentOptions()
+        .metricsSources
+        .single()
+        .labels shouldBe "{}"
+    }
+
+    // A source in hand, as from Java, goes after the path, with labels between them or not.
+    "source takes a source value after the path, with or without labels" {
+      val source = MetricsSource { _, _, _ -> "" }
+      val sources =
+        embeddedAgent {
+          source("a", source)
+          source("b", mapOf("job" to "b"), source)
+        }.agentOptions().metricsSources
+
+      sources.map { it.path to it.labels } shouldBe listOf("a" to "{}", "b" to """{"job":"b"}""")
+      sources.forEach { it.metricsSource shouldBeSameInstanceAs source }
+    }
+
+    "toString shows a source path as in-process" {
+      embeddedAgent { source("app_metrics") { _, _, _ -> "" } }.toString() shouldContain "app_metrics=in-process"
+    }
+
+    // The agent checks a source path as it checks a pathConfigs entry, at startup, where it can be fixed.
+    "a source path that a pathConfigs entry also names, or that the proxy would refuse, fails the agent's start" {
+      listOf(
+        embeddedAgent {
+          path("app_metrics", "http://127.0.0.1:9100/metrics")
+          source("/app_metrics") { _, _, _ -> "" }
+        },
+        embeddedAgent { source("app metrics") { _, _, _ -> "" } },
+      ).forEach { config ->
+        val failure = runCatching { config.start(logBanner = false) }.onSuccess { it.shutdown() }.exceptionOrNull()
+        failure.shouldBeInstanceOf<ConfigLoadException>().message.orEmpty() shouldContain "metrics"
+      }
+    }
+
     "setting sets any agent setting by its key, ahead of a builder method's" {
       val options =
         embeddedAgent {
@@ -274,6 +331,7 @@ class EmbeddedAgentConfigTest : StringSpec() {
       shouldThrow<ConfigLoadException> { embeddedAgent { scrapeSelf(" ", 8080) } }
       shouldThrow<ConfigLoadException> { embeddedAgent { scrapeSelf("app", 0) } }
       shouldThrow<ConfigLoadException> { embeddedAgent { path("", "http://host/metrics") } }
+      shouldThrow<ConfigLoadException> { embeddedAgent { source("/") { _, _, _ -> "" } } }
       shouldThrow<ConfigLoadException> { embeddedAgent { path("app", "sidecar:9100/metrics", "user", "pw") } }
       shouldThrow<ConfigLoadException> { embeddedAgent { agentMetrics(70000) }.options() }
     }

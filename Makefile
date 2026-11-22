@@ -357,7 +357,7 @@ ci-build:  ## The CI workflow's build job: compile, lint, detekt, the tests, and
 
 # CI's consumer-check job. A Maven build that embeds the agent resolves the published POM by Maven's rules, which the
 # repo's Gradle builds don't follow, so this publishes the artifact to the local Maven repository, needing no GPG key,
-# as publish-local-snapshot does, and has etc/consumer-check/check.sh build a Maven project that depends only on it.
+# as publish-local-snapshot does, and has etc/consumer-check/check.sh build a Maven project that embeds it.
 consumer-check: _publish-consumer-check  ## Build a Maven project that embeds the agent against this checkout's POM, and check what it resolves (needs mvn)
 	./etc/consumer-check/check.sh $(CONSUMER_CHECK_VERSION)
 
