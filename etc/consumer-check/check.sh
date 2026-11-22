@@ -50,8 +50,10 @@ tcnative="$(catalog_version tcnative)"
 netty="$(catalog_version netty)"
 protobuf="$(catalog_version protoc)"
 kotlin="$(catalog_version kotlin)"
+prometheus_metrics="$(catalog_version prometheus)"
 
-mvn=(mvn -B -q -f "$root/etc/consumer-check/pom.xml" "-Dprometheus-proxy.version=$version" "-Dkotlin.version=$kotlin")
+mvn=(mvn -B -q -f "$root/etc/consumer-check/pom.xml" "-Dprometheus-proxy.version=$version" "-Dkotlin.version=$kotlin" \
+  "-Dprometheus-metrics.version=$prometheus_metrics")
 
 failed=()
 fail() {

@@ -28,6 +28,9 @@ These are the entry points intended for embedders and integrators:
   built in code with a typed method for each: [embeddedAgent][io.prometheus.agent.embeddedAgent]
   from Kotlin, [EmbeddedAgentConfig.builder][io.prometheus.agent.EmbeddedAgentConfig.Companion.builder]
   from Java.
+- [MetricsSource][io.prometheus.agent.MetricsSource] — an embedded Agent's host's metrics, read
+  in-process for a path, in place of a URL, with
+  [EmbeddedAgentConfig.Builder.source][io.prometheus.agent.EmbeddedAgentConfig.Builder.source].
 - [EmbeddedAgentInfo][io.prometheus.agent.EmbeddedAgentInfo] — lifecycle handle returned by
   [Agent.startAsyncAgent][io.prometheus.Agent.Companion.startAsyncAgent] when running an Agent
   inside a host JVM.

@@ -21,6 +21,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.http.HttpStatusCode
 import io.prometheus.Agent
 import io.prometheus.agent.AgentPathManager
+import io.prometheus.agent.ScrapeTarget
 import io.prometheus.agent.filter.MetricFilter
 import io.prometheus.common.AgentValues
 import io.prometheus.common.ScrapeResults
@@ -40,8 +41,9 @@ import kotlin.time.TimeSource
  * size before the filter too. It works whether or not the proxy has the path, so the target of a path the proxy refused
  * can still be checked.
  *
- * Only a path the agent has configured, discovered, or registered is scraped, at the URL the agent has for it: a
- * browser names a path, never a URL, so it can't point the agent at an address of its choosing.
+ * Only a path the agent has configured, discovered, or registered is scraped, at the URL the agent has for it, or
+ * through its source when the agent's host serves it in-process: a browser names a path, never a URL, so it can't
+ * point the agent at an address of its choosing.
  *
  * A Scrape now leaves no trace in what the agent reports: not in its `agent_scrape_*` metrics,
  * `agent_dashboard_scrapes_total`, the filter's counts, or the path's Recent scrapes, which stay a record of the
@@ -51,13 +53,14 @@ import kotlin.time.TimeSource
  * Bounded, as the proxy's is, so clicks can't crowd out the scrapes the proxy asks for: within [ScrapeNowLimits], and
  * the target is waited on for at most [TIMEOUT].
  *
- * @param fetch how a path's target is scraped, given its URL and filter; the agent's own fetch unless a test stands in
+ * @param fetch how a path's target is scraped, given it and the path's filter; the agent's own fetch unless a test
+ *   stands in
  */
 internal class AgentScrapeNow(
   private val agent: Agent,
   private val timeSource: TimeSource = TimeSource.Monotonic,
-  private val fetch: suspend (String, MetricFilter?) -> ScrapeResults = { url, filter ->
-    agent.agentHttpService.fetchForDashboard(url, filter, TIMEOUT)
+  private val fetch: suspend (ScrapeTarget, MetricFilter?) -> ScrapeResults = { target, filter ->
+    agent.agentHttpService.fetchForDashboard(target.url, filter, TIMEOUT, target.source)
   },
 ) {
   private val limits = ScrapeNowLimits(timeSource)
@@ -68,28 +71,30 @@ internal class AgentScrapeNow(
     client: String,
   ): ScrapeNowResult {
     val key = AgentPathManager.requestedPathKey(path)
-    val url = urlOf(key)
+    val target = targetOf(key)
     val shown = AgentValues.shownValue(key)
-    return if (url == null)
+    return if (target == null)
       Refused(HttpStatusCode.NotFound, "/$shown isn't configured, discovered, or registered")
     else
-      limits.within(key, shown) { scraped(key, url, client) }
+      limits.within(key, shown) { scraped(key, target, client) }
   }
 
-  // The URL the agent has for [key]: its registration's, which is the one the proxy's scrapes reach, or else its
+  // The target the agent has for [key]: its registration's, which is the one the proxy's scrapes reach, or else its
   // config entry's or its discovery entry's. Null for a path the agent doesn't know.
-  private fun urlOf(key: String): String? =
-    agent.pathManager[key]?.url
-      ?: agent.pathManager.pathConfigs.firstOrNull { it.path.removePrefix("/") == key }?.url
-      ?: agent.pathDiscoveryService?.discoveredEntries?.firstOrNull { it.path.removePrefix("/") == key }?.url
+  private fun targetOf(key: String): ScrapeTarget? =
+    agent.pathManager[key]?.target
+      ?: agent.pathManager.pathConfigs.firstOrNull { it.path.removePrefix("/") == key }?.target
+      ?: agent.pathDiscoveryService?.discoveredEntries?.firstOrNull { it.path.removePrefix("/") == key }?.let {
+        ScrapeTarget(it.url)
+      }
 
   private suspend fun scraped(
     key: String,
-    url: String,
+    target: ScrapeTarget,
     client: String,
   ): ScrapeNowResult {
     val started = timeSource.markNow()
-    val results = fetch(url, agent.pathManager.filtersByPath[key])
+    val results = fetch(target, agent.pathManager.filtersByPath[key])
     return Done(summaryOf(key, results, started.elapsedNow())).also { logScrape(it.summary, client) }
   }
 

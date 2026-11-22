@@ -1,13 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  A Maven project that depends only on com.pambrose:prometheus-proxy, as an application that embeds the agent does.
+  A Maven project that depends on com.pambrose:prometheus-proxy, as an application that embeds the agent does, and on
+  the Prometheus client's exposition formats, which the MetricsSource examples write a registry with, as their host does.
   `make consumer-check` publishes this checkout to the local Maven repository and runs check.sh, which builds this
   project against what Maven resolves from the published POM. The repo's own builds resolve through Gradle, which
   honors the published BOM imports and conflict rules that Maven doesn't, so only a Maven build like this one sees what
   a Maven embedder gets.
 
   The sources are the docs site's embedded-agent examples, compiled in place rather than copied, so the examples on
-  the Embedded Agent and Cloud Platforms pages are the ones checked. check.sh passes the two versions below; the build writes under the
+  the Embedded Agent and Cloud Platforms pages are the ones checked. check.sh passes the versions below; the build writes under the
   repo's build/consumer-check, beside check.sh's resolution reports.
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
@@ -20,9 +21,11 @@
   <version>1</version>
 
   <properties>
-    <!-- Set by check.sh: the version make consumer-check published, and Kotlin's from gradle/libs.versions.toml. -->
+    <!-- Set by check.sh: the version make consumer-check published, and Kotlin's and the Prometheus Java client's from
+         gradle/libs.versions.toml. -->
     <prometheus-proxy.version>unset</prometheus-proxy.version>
     <kotlin.version>unset</kotlin.version>
+    <prometheus-metrics.version>unset</prometheus-metrics.version>
     <repo.root>${project.basedir}/../..</repo.root>
     <!-- The oldest Java the published artifact supports (jvm in gradle/libs.versions.toml). -->
     <maven.compiler.release>17</maven.compiler.release>
@@ -34,6 +37,13 @@
       <groupId>com.pambrose</groupId>
       <artifactId>prometheus-proxy</artifactId>
       <version>${prometheus-proxy.version}</version>
+    </dependency>
+    <!-- ExpositionFormats, which the MetricsSource examples write a registry with, declared as the docs site tells an
+         embedder to: the agent, and Micrometer's Prometheus registry, bring it at runtime only. -->
+    <dependency>
+      <groupId>io.prometheus</groupId>
+      <artifactId>prometheus-metrics-exposition-textformats</artifactId>
+      <version>${prometheus-metrics.version}</version>
     </dependency>
   </dependencies>
 
@@ -71,6 +81,7 @@
           <includes>
             <include>website/EmbeddedAgentJavaExample.java</include>
             <include>website/EmbeddedAgentConfigJavaExample.java</include>
+            <include>website/EmbeddedAgentSourceJavaExample.java</include>
           </includes>
         </configuration>
       </plugin>

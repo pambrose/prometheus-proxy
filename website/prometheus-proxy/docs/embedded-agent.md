@@ -78,6 +78,44 @@ from Kotlin, or `EmbeddedAgentConfig.builder()` from Java, and call `start()`:
   as they do over a config file: give your application's own settings other names, unless you mean the agent to read
   them. `AGENT_CONFIG` isn't read.
 
+### Metrics Served In-Process
+
+An app with a metrics registry can hand it to the agent instead of serving it at a URL: `source(path, source)` takes a
+`MetricsSource`, which the agent asks for the app's metrics on each scrape, in-process. The app then needs no metrics
+endpoint, port, or credentials for the agent, and the agent opens no connection to it. Written for the Prometheus Java
+client's registry, which Micrometer's `PrometheusMeterRegistry` gives with `getPrometheusRegistry()`, it takes a few
+lines. `ExpositionFormats` is in `io.prometheus:prometheus-metrics-exposition-textformats`, which Micrometer's
+Prometheus registry and the agent bring at runtime only, so declare it, at the Prometheus Java client version your
+build already has:
+
+=== "Kotlin"
+
+    ```kotlin
+    --8<-- "EmbeddedAgentSourceKotlinExample.kt:embedded-kotlin-source"
+    ```
+
+=== "Java"
+
+    ```java
+    --8<-- "EmbeddedAgentSourceJavaExample.java:embedded-java-source"
+    ```
+
+- **The agent asks in a format it can carry:** the Prometheus text format or OpenMetrics, as Prometheus's `Accept`
+  header allows, without the protobuf it can't, and for only the metric families Prometheus names with `name[]`
+  parameters, if it names any. The source returns the content type it wrote; an empty one means the text format.
+- **It's read as a target's body is,** on a thread it can block: up to `agent.http.maxContentLengthMBytes`, past which
+  the write fails and the scrape is refused, and through the path's
+  [metric filter](configuration/agent.md#metric-filtering). Calls can overlap, as scrapes do, so the source must be
+  safe to call from several threads, as a registry's scrape is.
+- **A source's trouble stays in its scrape.** At the scrape timeout, the agent interrupts the call and answers without
+  waiting for it; a call that ignores the interrupt, such as one blocked on a socket read, keeps its thread, and the
+  source isn't called again until it returns. Whatever the source throws, an `Error` included, fails the scrape, as a
+  target that can't be reached does, and the agent goes on.
+- **The path's target shows as `in-process`** on both dashboards and in the agent's log, where a scraped path shows its
+  URL, and Scrape now on the agent's dashboard reads the source.
+- **The path is checked as a `pathConfigs` entry is:** one that another path also names, or that the proxy would refuse,
+  fails `start()`. A source is code, so `toConfig()` leaves it out: start the agent with the builder's `start()`.
+
 ### A `Config` of Your Own
 
 For a setting the builder has no method for, `setting(key, value)` sets it by its key, relative to `agent`, such as
@@ -100,7 +138,9 @@ A Spring Boot app runs the agent from a bean, so it starts and stops with the ap
   agent disconnects, the proxy drops its paths, and no scrape reaches a server that's going away.
 - **Actuator's metrics:** with `micrometer-registry-prometheus` on the classpath, Actuator serves them at
   `/actuator/prometheus`, so `scrapeSelf` takes `"actuator/prometheus"` as its `metricsPath`, with the credentials the
-  app's Spring Security asks for.
+  app's Spring Security asks for. Or the agent reads the registry in-process, with `source` and the app's
+  `PrometheusRegistry` bean ([Metrics Served In-Process](#metrics-served-in-process)), and `/actuator/prometheus` needn't
+  be exposed at all.
 - **The settings:** a `@ConfigurationProperties` record can hold them, with `application.yml` reading each from the
   environment, as `${PROMETHEUS_AGENT_TOKEN:}` does. Give it a `toString` that leaves the secrets out, so the app can
   log it.
@@ -161,7 +201,7 @@ use), with the startup failure as its cause. A failed start releases everything 
 An embedded agent's settings, built in code (see [Configuring in Code](#configuring-in-code)). From Kotlin,
 `embeddedAgent { … }` builds one, its block calling the builder's methods; from Java, `EmbeddedAgentConfig.builder()`
 returns the builder, whose methods chain and end with `build()`. A method called twice keeps its last value, and
-`scrapeSelf` and `path` add a path each time.
+`scrapeSelf`, `path`, and `source` add a path each time.
 
 | Builder method                                                     | Sets                                                | Description                                                                                                                               |
 |:-------------------------------------------------------------------|:----------------------------------------------------|:------------------------------------------------------------------------------------------------------------------------------------------|
@@ -176,6 +216,7 @@ returns the builder, whose methods chain and end with `build()`. A method called
 | `dashboardLogin(password, username)`                               | `agent.dashboard.password`, `agent.dashboard.username` | Require a login to the agent's dashboard; `username` defaults to `admin`                                                               |
 | `scrapeSelf(path, port, username, password, metricsPath, labels)` | `agent.pathConfigs`                                 | Scrape the app at `http://127.0.0.1:<port>/<metricsPath>` (default `metrics`) and serve it at `path`; the rest are optional               |
 | `path(path, url, username, password, labels)`                      | `agent.pathConfigs`                                 | Scrape any target at `url` and serve it at `path`; the rest are optional, and the URL then carries no credentials of its own              |
+| `source(path, source)`, `source(path, labels, source)`             | none: it's code                                     | Serve what the `MetricsSource` writes at `path`, read in-process ([Metrics Served In-Process](#metrics-served-in-process)), with the path's labels or none |
 | `setting(key, value)`                                              | the key, under `agent`                              | Any other setting, such as `http.clientTimeoutSecs`; it takes precedence over a method that sets the same key                             |
 
 In `embeddedAgent { }`, `name`, `proxy`, `token`, `consolidated`, `agentMetricsPort`, and `dashboardPort` are properties
@@ -190,8 +231,8 @@ path or a port out of range, throws `ConfigLoadException`, as `start()` does for
 | `EmbeddedAgentConfig` member | Type                 | Description                                                                                            |
 |:-----------------------------|:---------------------|:-------------------------------------------------------------------------------------------------------|
 | `start(logBanner)`           | `EmbeddedAgentInfo`  | Starts the agent, as `startAsyncAgent(config)` does, and throws as it does; `logBanner` defaults to `true` |
-| `toConfig()`                 | `Config`             | The settings as the tree a config file holds, rooted at `agent`                                        |
-| `toString()`                 | `String`             | The settings, with the token, passwords, and PEMs shown only as set, and a path's credentials masked, so an app can log them |
+| `toConfig()`                 | `Config`             | The settings as the tree a config file holds, rooted at `agent`, without the paths `source` adds       |
+| `toString()`                 | `String`             | The settings, with the token, passwords, and PEMs shown only as set, a path's credentials masked, and a `source` path as `in-process`, so an app can log them |
 
 ### `EmbeddedAgentInfo`
 

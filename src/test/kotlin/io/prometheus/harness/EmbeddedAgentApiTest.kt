@@ -26,6 +26,11 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldHaveLength
 import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.types.shouldBeInstanceOf
+import io.ktor.client.HttpClient
+import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
@@ -44,6 +49,7 @@ import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.harness.support.withEmbeddedAgentScraped
 import kotlin.io.path.createTempFile
 import kotlin.time.Duration.Companion.seconds
+import io.ktor.client.engine.cio.CIO as ClientCIO
 import io.ktor.server.cio.CIO as ServerCIO
 
 // The public embedded entry point, end to end. AgentTest pins the failure contract for a config that can't
@@ -153,6 +159,28 @@ class EmbeddedAgentApiTest : StringSpec() {
         agentPort = GRPC_PORT,
         targetCredentials = "agent" to "p@ss:w/rd%#+ ?&é",
       )
+    }
+
+    // A host hands the agent its metrics in code, with no URL and no port of its own: the proxy serves what the source
+    // writes, in the content type it names, beside a path the agent scrapes over HTTP.
+    "an agent built with a source serves the host's metrics in-process, through the proxy" {
+      withEmbeddedAgentScraped(
+        httpPort = HTTP_PORT,
+        agentPort = GRPC_PORT,
+        configure = {
+          source("in_process_metrics") { _, _, out ->
+            out.write("in_process_metric 42.0\n".toByteArray())
+            "text/plain; version=0.0.4; charset=utf-8"
+          }
+        },
+      ) { _, _ ->
+        HttpClient(ClientCIO).use { client ->
+          val response = client.get("http://$LOOPBACK_HOST:$HTTP_PORT/in_process_metrics")
+          response.status shouldBe HttpStatusCode.OK
+          response.bodyAsText() shouldContain "in_process_metric 42.0"
+          response.headers[HttpHeaders.ContentType].orEmpty() shouldContain "version=0.0.4"
+        }
+      }
     }
 
     // The in-memory overload is always embedded: a setting the agent can't use throws, and never exits the JVM.

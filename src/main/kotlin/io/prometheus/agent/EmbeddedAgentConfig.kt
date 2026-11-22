@@ -51,9 +51,17 @@ import kotlinx.serialization.json.JsonPrimitive
  */
 class EmbeddedAgentConfig private constructor(
   private val config: Config,
+  // The paths served in-process (Builder.source), which no Config can hold.
+  private val sources: List<AgentPathManager.PathConfig>,
 ) {
-  /** The settings as the `Config` tree a config file would hold, rooted at `agent`. */
+  /**
+   * The settings as the `Config` tree a config file would hold, rooted at `agent`. The paths [source][Builder.source]
+   * adds aren't in it, since a [MetricsSource] is code: an agent started from the tree alone doesn't serve them.
+   */
   fun toConfig(): Config = config
+
+  // The options the agent starts with: the tree's settings, and the paths served in-process.
+  internal fun agentOptions(): AgentOptions = AgentOptions(config, sources)
 
   /**
    * Starts an agent with these settings, as [Agent.startAsyncAgent][io.prometheus.Agent.Companion.startAsyncAgent]
@@ -64,19 +72,28 @@ class EmbeddedAgentConfig private constructor(
    * @throws IllegalStateException if the agent fails to start.
    */
   @JvmOverloads
-  fun start(logBanner: Boolean = true): EmbeddedAgentInfo = Agent.startAsyncAgent(config, logBanner)
+  fun start(logBanner: Boolean = true): EmbeddedAgentInfo =
+    Agent.startEmbedded(exitOnMissingConfig = false, logBanner = logBanner) { agentOptions() }
 
   /**
    * The settings, [setting][Builder.setting]'s included, with the token, a password, and each PEM shown only as set or
-   * not, and the credentials in a path's URL masked, so an app can log it.
+   * not, and the credentials in a path's URL masked, so an app can log it. A path served in-process shows as such.
    */
-  override fun toString(): String = "EmbeddedAgentConfig(${shown(config.getObject("agent").unwrapped())})"
+  override fun toString(): String {
+    val shownSources =
+      if (sources.isEmpty())
+        ""
+      else
+        sources.joinToString(prefix = ", sources={", postfix = "}") { "${it.path}=${it.url}" }
+    return "EmbeddedAgentConfig(${shown(config.getObject("agent").unwrapped())}$shownSources)"
+  }
 
   /**
    * Builds an [EmbeddedAgentConfig]. Each method returns the builder, so calls chain in Java and read as statements in
-   * Kotlin's [embeddedAgent] block; a method called twice keeps its last value, and [path] and [scrapeSelf] add a path
-   * each time. Anything the builder has no method for, [setting] sets by its key. A value the builder can tell is
-   * wrong, such as a port out of range, throws [ConfigLoadException], as [start] does for one the agent rejects.
+   * Kotlin's [embeddedAgent] block; a method called twice keeps its last value, and [path], [scrapeSelf], and [source]
+   * add a path each time. Anything the builder has no method for, [setting] sets by its key. A value the builder can
+   * tell is wrong, such as a port out of range, throws [ConfigLoadException], as [start] does for one the agent
+   * rejects.
    *
    * In Kotlin, a setting that takes one value is a property too, so `name = "my-app"` does what `name("my-app")` does;
    * Java sees only the methods.
@@ -86,6 +103,7 @@ class EmbeddedAgentConfig private constructor(
     // tree, so they take precedence.
     private val values = linkedMapOf<String, Any>()
     private val paths = mutableListOf<Map<String, String>>()
+    private val sources = mutableListOf<AgentPathManager.PathConfig>()
     private val settings = linkedMapOf<String, Any>()
 
     /** The agent's name, as the proxy's dashboard and logs show it (`agent.name`). */
@@ -268,8 +286,42 @@ class EmbeddedAgentConfig private constructor(
             put("name", path.removePrefix("/"))
             put("path", path.removePrefix("/"))
             put("url", target)
-            if (labels.isNotEmpty()) put("labels", JsonObject(labels.mapValues { JsonPrimitive(it.value) }).toString())
+            labelsJson(labels)?.also { put("labels", it) }
           }
+      }
+
+    /**
+     * Has the agent serve [source], the app's own metrics read in-process, to Prometheus at the proxy's [path]: the app
+     * needs no metrics endpoint, port, or credentials for the agent to read them, and the agent opens no connection to
+     * it. A [path] that a `pathConfigs` entry or another path also names, or one the proxy would refuse, fails
+     * [EmbeddedAgentConfig.start], as such a `pathConfigs` entry does. The path's target shows as `in-process`. See
+     * [MetricsSource] for how the agent calls it. [source] comes last, so a Kotlin lambda can follow the call.
+     */
+    fun source(
+      path: String,
+      source: MetricsSource,
+    ): Builder = source(path, emptyMap(), source)
+
+    /**
+     * Has the agent serve [source] at [path], as the [source] without labels does, with [labels], the path's labels in
+     * the proxy's service discovery.
+     */
+    fun source(
+      path: String,
+      labels: Map<String, String>,
+      source: MetricsSource,
+    ): Builder =
+      apply {
+        val normalized = path.removePrefix("/")
+        if (normalized.isBlank()) invalid("A path is required")
+        sources +=
+          AgentPathManager.PathConfig(
+            name = normalized,
+            path = normalized,
+            url = IN_PROCESS_TARGET,
+            labels = labelsJson(labels) ?: "{}",
+            metricsSource = source,
+          )
       }
 
     /**
@@ -302,8 +354,12 @@ class EmbeddedAgentConfig private constructor(
           ->
           tree.withValue("agent.$key", ConfigValueFactory.fromAnyRef(value))
         }
-      return EmbeddedAgentConfig(config)
+      return EmbeddedAgentConfig(config, sources.toList())
     }
+
+    // A path's labels as the JSON pathConfigs takes, or null for none.
+    private fun labelsJson(labels: Map<String, String>): String? =
+      if (labels.isEmpty()) null else JsonObject(labels.mapValues { JsonPrimitive(it.value) }).toString()
 
     // A username and password as a URL's user info, "user:password@", each percent-encoded as the agent decodes it;
     // empty when both are empty or absent, as unset env vars give.

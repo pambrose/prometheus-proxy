@@ -1046,7 +1046,8 @@ class Agent(
       logBanner: Boolean = true,
     ): EmbeddedAgentInfo = startEmbedded(exitOnMissingConfig = false, logBanner) { AgentOptions(config) }
 
-    private fun startEmbedded(
+    // Internal for EmbeddedAgentConfig.start, whose options hold the paths served in-process, which no Config can.
+    internal fun startEmbedded(
       exitOnMissingConfig: Boolean,
       logBanner: Boolean,
       options: () -> AgentOptions,

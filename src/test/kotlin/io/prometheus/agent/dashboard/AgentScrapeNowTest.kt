@@ -25,11 +25,16 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeSameInstanceAs
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.types.shouldBeInstanceOf
 import io.ktor.http.HttpStatusCode
 import io.prometheus.Agent
+import io.prometheus.agent.IN_PROCESS_TARGET
+import io.prometheus.agent.MetricsSource
+import io.prometheus.agent.ScrapeTarget
+import io.prometheus.agent.embeddedAgent
 import io.prometheus.agent.filter.MetricFilter
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.agentOptionsFromConfig
@@ -76,12 +81,14 @@ class AgentScrapeNowTest : StringSpec() {
     val results: ScrapeResults = ok(),
   ) {
     val asked = mutableListOf<Pair<String, MetricFilter?>>()
+    val sources = mutableListOf<MetricsSource?>()
 
     suspend fun fetch(
-      url: String,
+      target: ScrapeTarget,
       filter: MetricFilter?,
     ): ScrapeResults {
-      asked += url to filter
+      asked += target.url to filter
+      sources += target.source
       return results
     }
   }
@@ -117,6 +124,24 @@ class AgentScrapeNowTest : StringSpec() {
         samples shouldBe 1
         excerpt shouldBe BODY
       }
+    }
+
+    // A path an embedded host serves from code has no URL to fetch: the scrape goes through its source.
+    "a path served in-process should be scraped through its source" {
+      val source = MetricsSource { _, _, _ -> "" }
+      val agent =
+        Agent(
+          embeddedAgent { source(path = "app_metrics", source = source) }.agentOptions(),
+          inProcessServerName = "agent-scrape-now-${System.nanoTime()}",
+          testMode = true,
+        ).also { created += it }
+      val fetches = Fetches()
+
+      AgentScrapeNow(agent, fetch = fetches::fetch).scrape("app_metrics", "c")
+        .shouldBeInstanceOf<ScrapeNowResult.Done>()
+
+      fetches.asked.single().first shouldBe IN_PROCESS_TARGET
+      fetches.sources.single() shouldBeSameInstanceAs source
     }
 
     "a gzipped body should be shown unzipped, and a path asked for with a leading slash found" {
