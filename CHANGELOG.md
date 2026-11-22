@@ -126,6 +126,10 @@ All notable changes to this project are documented in this file.
 
 ### Build & Tooling
 
+- CodeScene no longer rates the Kotlin sources on Primitive Obsession, String Heavy Function Arguments, Excess Number of
+  Function Arguments, or Global Conditionals, which flagged the code's intended shape and pushed changes into
+  workarounds; its function-level rules (Complex Method, Bumpy Road Ahead, Complex Conditional, nesting, Large Method)
+  still apply, and detekt still bounds parameter lists
 - The tests take less than half as long: `make tests` reruns only the tests rather than every task, the harness
   profile defaults to MINI, as in CI (`make medium-tests` replaces `make mini-tests`), and specs that waited out fixed
   timeouts or sleeps, or built the Docker images while skipped, no longer do
