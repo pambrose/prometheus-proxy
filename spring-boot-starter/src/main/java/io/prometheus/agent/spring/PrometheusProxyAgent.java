@@ -73,21 +73,25 @@ public class PrometheusProxyAgent implements SmartLifecycle {
       agent = started;
       logger.info(
           "Prometheus agent {} started; it connects to the proxy at {}", started.getAgentName(), properties.getProxy());
-    } catch (Exception e) {
-      // Whatever stopped it: a setting the agent rejects (ConfigLoadException), a key its config can't hold, a
-      // customizer's own failure, or a checked exception Kotlin throws undeclared, such as its start timing out
+    } catch (RuntimeException e) {
+      // A setting the agent rejects (ConfigLoadException), a key its config can't hold, or a customizer's own failure
       if (properties.isRequired()) {
-        throw e instanceof RuntimeException runtime
-            ? runtime
-            : new IllegalStateException("The Prometheus agent could not start", e);
+        throw e;
       }
-      logger.error("The Prometheus agent could not start, so it stays off: {}", reason(e));
+      stayOff(e);
+    } catch (Exception e) {
+      // A checked exception, which Kotlin throws undeclared, such as the agent's start timing out
+      if (properties.isRequired()) {
+        throw new IllegalStateException("The Prometheus agent could not start", e);
+      }
+      stayOff(e);
     }
   }
 
-  // An exception's message, or its class for one without
-  private static String reason(Exception e) {
-    return e.getMessage() == null ? e.getClass().getName() : e.getMessage();
+  // Logs why the agent didn't start: its exception's message, or its class for one without
+  private static void stayOff(Exception e) {
+    String reason = e.getMessage() == null ? e.getClass().getName() : e.getMessage();
+    logger.error("The Prometheus agent could not start, so it stays off: {}", reason);
   }
 
   @Override

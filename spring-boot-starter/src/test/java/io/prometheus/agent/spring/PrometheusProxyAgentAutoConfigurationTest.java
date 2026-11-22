@@ -40,6 +40,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.env.SystemEnvironmentPropertySource;
 
+// Each test asserts inside the context runner's lambda, the Spring Boot idiom, where PMD's rule doesn't look
+@SuppressWarnings("PMD.JUnitTestsShouldIncludeAssert")
 class PrometheusProxyAgentAutoConfigurationTest {
   private static final String PEM = "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----";
 
