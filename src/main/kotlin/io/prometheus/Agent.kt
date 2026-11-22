@@ -16,6 +16,7 @@
 
 package io.prometheus
 
+import io.prometheus.common.MetricBuilders.setToCurrentTime
 import com.codahale.metrics.health.HealthCheck
 import com.google.common.util.concurrent.RateLimiter
 import com.pambrose.common.concurrent.await
@@ -343,7 +344,14 @@ class Agent(
       FileDiscoverySource(discovery.file.path, activityLog),
       discovery.reconcileIntervalSecs,
       activityLog,
-    )
+    ) { succeeded ->
+      metrics {
+        val outcome = if (succeeded) AgentMetrics.OUTCOME_SUCCESS else AgentMetrics.OUTCOME_FAILURE
+        discoveryReconcileCount.labelValues(launchId, outcome).inc()
+        if (succeeded)
+          discoveryLastSuccess.labelValues(launchId).setToCurrentTime()
+      }
+    }
   }
 
   override fun run() {
@@ -399,12 +407,14 @@ class Agent(
       throw e
     } finally {
       // Not as the agent stops: its dashboard is stopping too.
-      if (isRunning)
+      if (isRunning) {
         activityLog?.record(
           AgentActivityKind.DISCONNECTED,
           detail = listOfNotNull(proxyHost, cause?.let { ShownFailure.of(it).message }).joinToString(": "),
           group = proxyHost,
         )
+        metrics { disconnectCount.labelValues(launchId).inc() }
+      }
     }
     logger.info { "connectToProxy() completed" }
   }
@@ -517,7 +527,7 @@ class Agent(
     // A false return means the result was dropped because the connection closed
     // mid-scrape; surface it as a metric so the loss is observable, not silent.
     if (!connectionContext.sendScrapeResults(scrapeResponse))
-      updateScrapeResultCounter(scrapeResponse, "dropped")
+      updateScrapeResultCounter(scrapeResponse, AgentMetrics.RESULT_DROPPED)
   }
 
   // Blocks on the reconnect rate limiter to pace reconnect attempts, then logs the wait.

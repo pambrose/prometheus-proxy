@@ -18,6 +18,9 @@
 
 package io.prometheus.common
 
+import io.prometheus.agent.AgentPathManager
+import io.prometheus.metrics.core.metrics.Gauge
+import io.prometheus.agent.AgentMetrics
 import io.prometheus.metrics.model.snapshots.MetricSnapshot
 import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.mockk.every
@@ -59,10 +62,19 @@ internal fun mockAgentForMetrics(): Agent {
   val mockAgentHttpService = mockk<AgentHttpService>(relaxed = true)
   every { mockAgentHttpService.httpClientCache } returns mockHttpClientCache
 
+  val mockPathManager = mockk<AgentPathManager>(relaxed = true)
+  every { mockPathManager.registeredPaths } returns emptyList()
+
   val mockAgent = mockk<Agent>(relaxed = true)
   every { mockAgent.launchId } returns "test-launch-id"
+  every { mockAgent.agentName } returns "test-agent"
   every { mockAgent.scrapeRequestBacklogSize } returns AtomicInt(0)
   every { mockAgent.agentHttpService } returns mockAgentHttpService
+  every { mockAgent.pathManager } returns mockPathManager
+  every { mockAgent.isConnectedToProxy } returns false
+  // An agent without discovery or a dashboard, unless a spec stubs them.
+  every { mockAgent.pathDiscoveryService } returns null
+  every { mockAgent.dashboardService } returns null
 
   return mockAgent
 }
@@ -119,3 +131,48 @@ internal fun registeredMetricNames(): List<String> =
 /** The default registry's snapshot of the [T] family named [name], which must be registered. */
 internal inline fun <reified T : MetricSnapshot> registeredSnapshot(name: String): T =
   PrometheusRegistry.defaultRegistry.scrape().filterIsInstance<T>().single { it.metadata.name == name }
+
+/**
+ * The agent's counterpart of [CountingProxyMetrics]: a relaxed [AgentMetrics] whose collectors are real and never
+ * registered, labeled as the agent's are, `launch_id` first. [installOn] routes a mocked or spied agent's
+ * `metrics { }` blocks to them.
+ */
+internal class CountingAgentMetrics {
+  val metrics: AgentMetrics = mockk(relaxed = true)
+  val scrapeResults = stub({ scrapeResultCount }, counter("scrape_results", "launch_id", "type"))
+  val connects = stub({ connectCount }, counter("connects", "launch_id", "type"))
+  val disconnects = stub({ disconnectCount }, counter("disconnects", "launch_id"))
+  val endpointAdvances = stub({ endpointAdvanceCount }, counter("endpoint_advances", "launch_id"))
+  val heartbeats = stub({ heartbeatCount }, counter("heartbeats", "launch_id", "outcome"))
+  val pathRejections = stub({ pathRejectionCount }, counter("path_rejections", "launch_id", "cause"))
+  val discoveryReconciles = stub({ discoveryReconcileCount }, counter("discovery_reconciles", "launch_id", "outcome"))
+  val discoveryLastSuccess =
+    stub({ discoveryLastSuccess }, Gauge.builder().name("discovery_last_success").labelNames("launch_id").build())
+  val scrapeRetries = stub({ scrapeRetryCount }, counter("scrape_retries", "launch_id"))
+  val filterFailOpen = stub({ filterFailOpenCount }, counter("filter_fail_open", "launch_id", "path", "reason"))
+  val filterLinesDropped = stub({ filterLinesDropped }, counter("filter_lines_dropped", "launch_id", "path"))
+  val filterBytesSaved = stub({ filterBytesSaved }, counter("filter_bytes_saved", "launch_id", "path"))
+  val dashboardLogins = stub({ dashboardLoginCount }, counter("dashboard_logins", "launch_id", "outcome"))
+  val queueWait: Histogram =
+    stub({ scrapeQueueWait }, Histogram.builder().name("queue_wait").labelNames("launch_id").build())
+
+  /** How many observations the queue-wait histogram holds, across launch IDs. */
+  val queueWaitCount: Long get() = queueWait.collect().dataPoints.sumOf { it.count }
+
+  /** Routes [agent]'s `metrics { }` blocks, a mock's or a spy's, to these collectors; returns [agent]. */
+  fun installOn(agent: Agent): Agent =
+    agent.also {
+      every { it.metrics(any<AgentMetrics.() -> Unit>()) } answers { firstArg<AgentMetrics.() -> Unit>()(metrics) }
+    }
+
+  // [collector], which [metrics] answers for the member [member] reads.
+  private fun <T : Any> stub(
+    member: AgentMetrics.() -> T,
+    collector: T,
+  ): T = collector.also { every { metrics.member() } returns it }
+
+  private fun counter(
+    name: String,
+    vararg labelNames: String,
+  ): Counter = Counter.builder().name(name).labelNames(*labelNames).build()
+}

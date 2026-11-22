@@ -189,7 +189,10 @@ pins, and no jar on the classpath carries a `logback.xml`, which would replace t
   gRPC shutdown that throws (a MockK constructor mock) still stops the admin and metrics servers and closes the client
   cache; and a scrape result is counted under its type unless the proxy's dashboard asked for its scrape, which
   `agent_dashboard_scrapes_total` counts instead
-- **AgentGrpcServiceTest** — gRPC service: scrape request/response streaming, heartbeats, registration, error handling,
+- **AgentGrpcServiceTest** — gRPC service: scrape request/response streaming, heartbeats, registration, error handling;
+  a connect counted once the proxy registered the agent, a refused registration as rejected; each endpoint advance and
+  each heartbeat sent counted, by outcome; a scrape request's wait for its scrape recorded, not a dashboard's; and a
+  result counted as sent once a writer takes it, and as dropped when the stream fails first;
   channel shutdown; with Zipkin on, the channel is built before `zipkinReporterService` is assigned, and every channel a
   reconnect builds traces through one `Tracing`; a repeated connect failure logs one WARN, compared by gRPC status code
   (or class), including against a port that accepts TCP but never answers HTTP/2; a connect the proxy refuses with
@@ -203,7 +206,8 @@ pins, and no jar on the classpath carries a `logback.xml`, which would replace t
   commits past its 1 MiB per-RPC limit and lets go; over the in-process transport, which reports no message sizes,
   it never committed, so the agent kept every chunk until it builds an in-process channel without retry (November
   #43, found while fixing #41)
-- **AgentHttpServiceTest** — HTTP service: scraping endpoints, compression support, response handling, timeout behavior,
+- **AgentHttpServiceTest** — HTTP service: scraping endpoints, compression support, response handling, timeout behavior;
+  a retry of Prometheus's scrape counted and a dashboard's not; a scrape a filter lets through unfiltered counted by why;
   error cases; a scrape the proxy's dashboard asked for is counted only in `agent_dashboard_scrapes_total`, however it
   ends, isn't timed, and has its results marked, while the same scrape from Prometheus is counted and timed; a path
   asked for with leading slashes, as a proxy older than #416 asks, served and filtered as its key is, with its
@@ -232,7 +236,8 @@ pins, and no jar on the classpath carries a `logback.xml`, which would replace t
   scrape-request backlog count, kept as `AgentGrpcService` and the scrape loop keep it, never goes negative and returns
   to zero once the connection closes -- including a queued request `close()` drains and a sender blocked on a full
   channel as it closes -- and no accepted scrape result is lost by the close
-- **AgentPathManagerTest** — Path registration/unregistration, path lookup, concurrent access; a discovered path's
+- **AgentPathManagerTest** — Path registration/unregistration, path lookup, concurrent access; every refusal of a path
+  counted by its cause; a discovered path's
   repeating registration failure logs one WARN, compared by gRPC status code, so timeouts whose descriptions differ only
   in the elapsed time log one, while a rejection for another reason is warned about again; so do a static path's
   repeating failed retry, until the proxy answers in between, and a stale discovered path's repeating failed unregister,
@@ -260,7 +265,10 @@ pins, and no jar on the classpath carries a `logback.xml`, which would replace t
 - **EndpointFailoverTest** — Proxy endpoint rotation: a failed connect or a rejected registration moves to the next
   endpoint, a dropped registered connection returns to the primary, and whether each case reuses or rebuilds the channel
 - **AgentMetricsTest** — Prometheus metrics registration and gauge/counter updates; `agent_dashboard_scrapes_total`
-  counts under `launch_id` alone, and an agent's series goes when its metrics close while another agent's stays
+  counts under `launch_id` alone, and an agent's series goes when its metrics close while another agent's stays; the
+  connection, path, discovery, and dashboard series registered; `agent_build_info`'s launch ID, name, and version; an
+  agent's counters with a known set of labels at zero from the start, discovery's and the dashboard's only when it has
+  them; and the sampled gauges reporting the connection, the endpoint, the paths by source, and the dashboard's pages
 - **AgentBacklogDriftTest** — scrapeRequestBacklogSize drift when sendScrapeRequestAction fails
 - **HttpClientCacheTest** — HTTP client caching with TTL/idle eviction, keyed by auth credentials
 - **HttpClientCacheCancellationTest** — a scrape cancelled while the client cache is busy still releases its client,
@@ -314,8 +322,9 @@ pins, and no jar on the classpath carries a `logback.xml`, which would replace t
 - **PathDiscoveryServiceTest** (`discovery/`) — A failed read reconciles the last good read, so a reconnect registers
   its paths again, and reconciles nothing before the first; a successful read, including an empty one, reconciles the
   desired set; a repeating failure logs one WARN, compared by gRPC status code, or by class and message without one, so
-  timeouts whose descriptions differ only in the elapsed time log one, while a different read error is news; and a
-  read's failure told to the activity feed when it is new or changes, not while it repeats
+  timeouts whose descriptions differ only in the elapsed time log one, while a different read error is news; a
+  read's failure told to the activity feed when it is new or changes, not while it repeats; and every reconcile reported
+  for the agent's metrics by whether it succeeded
 - **MetricFilterTest** (`filter/`) — Allow/deny filtering: fully anchored regexes, deny winning over allow, whole
   families dropped or kept (HELP/TYPE/UNIT lines, histogram, summary and OpenMetrics series), line endings preserved;
   and why a filter lets a scrape through unfiltered, told once per cause
@@ -704,7 +713,8 @@ These support helpers also live here (not test classes themselves):
   and `AgentMetrics` read when they are built and scraped, for the metrics specs and `misc/DashboardMetricNamesTest`;
   and `CountingProxyMetrics`, a relaxed `ProxyMetrics` whose counters are real, unregistered collectors, so a spec reads
   what a call counted (a relaxed mock's labeled counter can't be incremented: its `labelValues` answers a plain
-  `DataPoint`); and `registeredMetricNames()` / `registeredSnapshot<T>(name)`, what the default registry holds
+  `DataPoint`); `CountingAgentMetrics`, the agent's counterpart, its collectors labeled `launch_id` first; and
+  `registeredMetricNames()` / `registeredSnapshot<T>(name)`, what the default registry holds
 - **DeadlineExceeded** — `deadlineExceeded(elapsed)`, a `DEADLINE_EXCEEDED` `StatusException` described as
   grpc-java describes one, elapsed time included, for the specs that check a repeating failure is compared by its
   status code rather than its message
@@ -819,7 +829,8 @@ mechanism that the standard suite cannot reach:
   saying why, and working with the proxy down; with Scrape now off, no button and no route; with a password, the login
   page under the agent's name and a cookie named for the agent; and no dashboard without `--dashboard`; and its Activity
   view showing the agent connecting and a refused path, filtered, and pushing the disconnect, with the failure that
-  ended it, and failing connects to an open page when the proxy stops
+  ended it, and failing connects to an open page when the proxy stops; and, with the agent's metrics on, its connect, its
+  refused path, its disconnect, and its dashboard sign-in counted
 - **AgentDiscoveryTest** — dynamic target discovery: the agent reconciles a watched file's paths, adding,
   updating and removing them with no restart
 - **AgentMetricFilterTest** — per-path metric filtering: a denied metric family never reaches the proxy

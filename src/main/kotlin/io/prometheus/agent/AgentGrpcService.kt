@@ -23,6 +23,7 @@ import com.pambrose.common.delegate.AtomicDelegates.atomicBoolean
 import com.pambrose.common.dsl.GrpcDsl.channel
 import com.pambrose.common.util.hostInfo
 import com.pambrose.common.util.runCatchingCancellable
+import io.prometheus.common.MetricBuilders.metricLabel
 import com.pambrose.common.util.simpleClassName
 import com.pambrose.common.utils.TlsContext
 import com.pambrose.common.utils.TlsContext.Companion.PLAINTEXT_CONTEXT
@@ -66,6 +67,7 @@ import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
 import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.consumeAsFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.io.ByteArrayInputStream
 import java.util.concurrent.ConcurrentHashMap
@@ -77,6 +79,7 @@ import kotlin.concurrent.atomics.plusAssign
 import kotlin.concurrent.withLock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.TimeMark
+import kotlin.time.DurationUnit
 import kotlin.time.TimeSource
 
 /**
@@ -92,6 +95,24 @@ internal enum class HeartBeatResult {
 
   /** The heartbeat RPC failed (deadline/transport/other); tolerated up to a threshold before reconnecting. */
   TRANSIENT_FAILURE,
+}
+
+/**
+ * A message for the proxy and, on a result's last message (a whole result, or a chunked one's summary), the [results]
+ * it completes, which agent_scrape_result_count_total counts under [type] once gRPC takes the message to send, or as
+ * dropped when the connection ends with it still queued. Counting it as it was queued counted a result the stream's
+ * failure then discarded as sent.
+ */
+internal class Outgoing<T>(
+  private val message: T,
+  private val results: ScrapeResults? = null,
+  private val type: String = "",
+) {
+  /** The message, its result counted under [countedAs]: its [type], unless it was dropped. */
+  fun counted(
+    agent: Agent,
+    countedAs: String = type,
+  ): T = message.also { results?.also { agent.updateScrapeResultCounter(it, countedAs) } }
 }
 
 /**
@@ -221,6 +242,7 @@ internal class AgentGrpcService(
       val leavingPrimary = endpointIndex == 0
       endpointIndex = (endpointIndex + 1) % endpoints.size
       logger.info { "Trying next proxy endpoint: ${currentEndpoint.spec}" }
+      agent.metrics { endpointAdvanceCount.labelValues(agent.launchId).inc() }
       // Leaving the primary is the news for the activity feed; cycling on through the backups in the same outage isn't.
       if (leavingPrimary)
         agent.activityLog?.record(
@@ -391,7 +413,6 @@ internal class AgentGrpcService(
       successfulConnects += 1
       logger.info { "Connected to proxy at $proxyHost using ${tlsContext.desc()}" }
       agent.activityLog?.record(AgentActivityKind.CONNECTED, detail = proxyHost, group = proxyHost)
-      agent.metrics { connectCount.labelValues(agent.launchId, "success").inc() }
       true
     }.getOrElse { e ->
       // Re-throw JVM Errors (OutOfMemoryError, StackOverflowError, etc.) so they propagate to
@@ -399,7 +420,7 @@ internal class AgentGrpcService(
       // routine "couldn't connect, will retry". Only transient connection failures return false.
       if (e is Error)
         throw e
-      agent.metrics { connectCount.labelValues(agent.launchId, "failure").inc() }
+      countConnect(AgentMetrics.CONNECT_FAILURE)
       // Compared by gRPC status code, or by class without one, since a deadline's description changes every attempt
       // (November #9).
       val failure = failureKey(e)
@@ -460,14 +481,22 @@ internal class AgentGrpcService(
         proxyEndpoints.addAll(this@AgentGrpcService.endpointSpecs)
         currentEndpointIndex = this@AgentGrpcService.currentEndpointIndex
       }
-    unaryStub().registerAgent(request)
-      .also { response ->
-        agent.markMsgSent()
-        if (!response.valid)
-          throw RequestFailureException.fromProxy("registerAgent", response.reason)
-      }
+    // agent_connect_count_total counts the connect here, once the proxy has answered the registration: a proxy that
+    // took the connection and then refused the agent showed only successes.
+    val response =
+      runCatchingCancellable { unaryStub().registerAgent(request) }
+        .onFailure { countConnect(AgentMetrics.CONNECT_FAILURE) }
+        .getOrThrow()
+    agent.markMsgSent()
+    if (!response.valid) {
+      countConnect(AgentMetrics.CONNECT_REJECTED)
+      throw RequestFailureException.fromProxy("registerAgent", response.reason)
+    }
+    countConnect(AgentMetrics.CONNECT_SUCCESS)
     initialConnectionLatch.countDown()
   }
+
+  private fun countConnect(type: String) = agent.metrics { connectCount.labelValues(agent.launchId, type).inc() }
 
   suspend fun pathMapSize(): Int =
     unaryStub().pathMapSize(
@@ -546,7 +575,7 @@ internal class AgentGrpcService(
       // Log at WARN with the throwable attached so the stack trace is preserved (finding 13).
       logger.warn(e) { "Heartbeat failure: ${e.simpleClassName} - ${e.message}" }
       HeartBeatResult.TRANSIENT_FAILURE
-    }
+    }.also { result -> agent.metrics { heartbeatCount.labelValues(agent.launchId, result.metricLabel).inc() } }
   }
 
   suspend fun readRequestsFromProxy(
@@ -564,8 +593,19 @@ internal class AgentGrpcService(
         // Not the whole message: a scrape request carries the Authorization header Prometheus sent.
         logger.debug { "readRequestsFromProxy(): scrapeId=${grpcRequest.scrapeId} path=${grpcRequest.path}" }
         agent.scrapeRequestBacklogSize += 1
+        val received = TimeSource.Monotonic.markNow()
         try {
-          connectionContext.sendScrapeRequestAction { agentHttpService.fetchScrapeUrl(grpcRequest) }
+          connectionContext.sendScrapeRequestAction {
+            // How long it waited for one of maxConcurrentHttpClients; a dashboard's scrape is left out, as from the
+            // agent's other scrape metrics.
+            if (!grpcRequest.dashboardScrape)
+              agent.metrics {
+                scrapeQueueWait.labelValues(
+                  agent.launchId,
+                ).observe(received.elapsedNow().toDouble(DurationUnit.SECONDS))
+              }
+            agentHttpService.fetchScrapeUrl(grpcRequest)
+          }
         } catch (e: Exception) {
           agent.decrementBacklog(1)
           throw e
@@ -576,18 +616,18 @@ internal class AgentGrpcService(
   private suspend fun processScrapeResults(
     agent: Agent,
     connectionContext: AgentConnectionContext,
-    nonChunkedChannel: Channel<ScrapeResponse>,
-    chunkedChannel: Channel<ChunkedScrapeResponse>,
+    nonChunkedChannel: Channel<Outgoing<ScrapeResponse>>,
+    chunkedChannel: Channel<Outgoing<ChunkedScrapeResponse>>,
   ) {
     for (scrapeResults in connectionContext.scrapeResults()) {
       try {
-        forwardScrapeResult(agent, scrapeResults, nonChunkedChannel, chunkedChannel)
+        forwardScrapeResult(scrapeResults, nonChunkedChannel, chunkedChannel)
       } catch (e: ClosedSendChannelException) {
         // A sibling writer coroutine closed the response channels (e.g. a transient gRPC failure
         // triggered closeAll()). The fully-computed result can no longer be delivered on this
         // connection, so count it as dropped -- mirroring AgentConnectionContext.sendScrapeResults()
         // -- rather than losing it silently, then propagate so the producer stops.
-        agent.updateScrapeResultCounter(scrapeResults, "dropped")
+        agent.updateScrapeResultCounter(scrapeResults, AgentMetrics.RESULT_DROPPED)
         throw e
       }
       agent.markMsgSent()
@@ -595,17 +635,15 @@ internal class AgentGrpcService(
   }
 
   private suspend fun forwardScrapeResult(
-    agent: Agent,
     scrapeResults: ScrapeResults,
-    nonChunkedChannel: Channel<ScrapeResponse>,
-    chunkedChannel: Channel<ChunkedScrapeResponse>,
+    nonChunkedChannel: Channel<Outgoing<ScrapeResponse>>,
+    chunkedChannel: Channel<Outgoing<ChunkedScrapeResponse>>,
   ) {
     val scrapeId = scrapeResults.srScrapeId
 
     if (!scrapeResults.srZipped) {
       logger.debug { "Writing non-chunked msg scrapeId: $scrapeId length: ${scrapeResults.srContentAsText.length}" }
-      nonChunkedChannel.send(scrapeResults.toScrapeResponse())
-      agent.updateScrapeResultCounter(scrapeResults, "non-gzipped")
+      nonChunkedChannel.send(Outgoing(scrapeResults.toScrapeResponse(), scrapeResults, "non-gzipped"))
     } else {
       val zipped = scrapeResults.srContentAsZipped
       val chunkContentSize = options.chunkContentSizeBytes
@@ -614,13 +652,12 @@ internal class AgentGrpcService(
 
       if (!scrapeResults.isChunked(chunkContentSize)) {
         logger.debug { "Writing zipped non-chunked msg scrapeId: $scrapeId length: ${zipped.size}" }
-        nonChunkedChannel.send(scrapeResults.toScrapeResponse())
-        agent.updateScrapeResultCounter(scrapeResults, "gzipped")
+        nonChunkedChannel.send(Outgoing(scrapeResults.toScrapeResponse(), scrapeResults, "gzipped"))
       } else {
         scrapeResults.toScrapeResponseHeader()
           .also {
             logger.debug { "Writing header length: ${zipped.size} for scrapeId: $scrapeId " }
-            chunkedChannel.send(it)
+            chunkedChannel.send(Outgoing(it))
           }
 
         var totalByteCount = 0
@@ -647,7 +684,7 @@ internal class AgentGrpcService(
             }
           }.also {
             logger.debug { "Writing chunk $totalChunkCount for scrapeId: $scrapeId" }
-            chunkedChannel.send(it)
+            chunkedChannel.send(Outgoing(it))
           }
         }
 
@@ -660,8 +697,7 @@ internal class AgentGrpcService(
           }
         }.also {
           logger.debug { "Writing summary totalChunkCount: $totalChunkCount for scrapeID: $scrapeId" }
-          chunkedChannel.send(it)
-          agent.updateScrapeResultCounter(scrapeResults, "chunked")
+          chunkedChannel.send(Outgoing(it, scrapeResults, "chunked"))
         }
       }
     }
@@ -671,8 +707,8 @@ internal class AgentGrpcService(
     agent: Agent,
     connectionContext: AgentConnectionContext,
   ) {
-    val nonChunkedChannel = Channel<ScrapeResponse>(UNLIMITED)
-    val chunkedChannel = Channel<ChunkedScrapeResponse>(UNLIMITED)
+    val nonChunkedChannel = Channel<Outgoing<ScrapeResponse>>(UNLIMITED)
+    val chunkedChannel = Channel<Outgoing<ChunkedScrapeResponse>>(UNLIMITED)
 
     fun closeAll() {
       // close() drains N buffered scrape actions; decrement the backlog by that count here too (mirroring
@@ -682,6 +718,11 @@ internal class AgentGrpcService(
       if (drained > 0) agent.decrementBacklog(drained)
       nonChunkedChannel.close()
       chunkedChannel.close()
+      // What a writer hadn't taken won't reach the proxy: a result counted as sent only once gRPC took it is
+      // counted as dropped instead.
+      listOf(nonChunkedChannel, chunkedChannel).forEach { channel ->
+        generateSequence { channel.tryReceive().getOrNull() }.forEach { it.counted(agent, AgentMetrics.RESULT_DROPPED) }
+      }
     }
 
     // Shared per-stream failure policy: run [block], and on a non-cancellation failure log it (tagged
@@ -718,13 +759,13 @@ internal class AgentGrpcService(
       // Ends by disconnection from server
       launch(Dispatchers.IO) {
         runStreamTask("writeResponsesToProxy") {
-          grpcStub.writeResponsesToProxy(nonChunkedChannel.consumeAsFlow())
+          grpcStub.writeResponsesToProxy(nonChunkedChannel.consumeAsFlow().map { it.counted(agent) })
         }
       }
 
       launch(Dispatchers.IO) {
         runStreamTask("writeChunkedResponsesToProxy") {
-          grpcStub.writeChunkedResponsesToProxy(chunkedChannel.consumeAsFlow())
+          grpcStub.writeChunkedResponsesToProxy(chunkedChannel.consumeAsFlow().map { it.counted(agent) })
         }
       }
     }

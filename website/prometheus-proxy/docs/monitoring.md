@@ -216,17 +216,40 @@ script's right Basic Auth logs in on every request, so it isn't counted.
 |:-----------------------------------|:--------------------|:----------------------------------------------------------------------------------------------|
 | `agent_scrape_request_count_total` | `launch_id`, `type` | Scrape requests processed (`success`, `unsuccessful`, `timed_out`, `failure`, `invalid_path`) |
 | `agent_scrape_result_count_total`  | `launch_id`, `type` | Results sent (`non-gzipped`, `gzipped`, `chunked`, `dropped`)                                 |
-| `agent_connect_count_total`        | `launch_id`, `type` | Connection attempts (`success`, `failure`)                                                    |
+| `agent_connect_count_total`        | `launch_id`, `type` | Connection attempts (`success`, `failure`, `rejected`)                                        |
+| `agent_disconnects_total`          | `launch_id`         | Connections to the proxy that ended                                                           |
+| `agent_endpoint_advances_total`    | `launch_id`         | Moves to the next proxy endpoint after a failed connect                                       |
+| `agent_heartbeats_total`           | `launch_id`, `outcome` | Heartbeats sent (`success`, `evicted`, `transient_failure`)                                |
+| `agent_path_rejections_total`      | `launch_id`, `cause` | Path registrations the proxy refused, by the cause it gave                                   |
+| `agent_discovery_reconciles_total` | `launch_id`, `outcome` | Path discovery reconciles (`success`, `failure`)                                           |
+| `agent_scrape_retries_total`       | `launch_id`         | Retries of a target's request, under `agent.scrapeMaxRetries`                                 |
 | `agent_filter_lines_dropped_total` | `launch_id`, `path` | Lines removed by the path's metric filter                                                     |
 | `agent_filter_bytes_saved_total`   | `launch_id`, `path` | Bytes saved before gzip by the metric filter                                                  |
+| `agent_filter_fail_open_total`     | `launch_id`, `path`, `reason` | Scrapes the filter passed through unfiltered (`non_text`, `invalid_utf8`)           |
 | `agent_dashboard_scrapes_total`    | `launch_id`         | Scrapes the proxy's dashboard asked for, which the `agent_scrape_*` metrics leave out         |
+| `agent_dashboard_logins_total`     | `launch_id`, `outcome` | The agent dashboard's logins (`success`, `failure`, `blocked`)                             |
 
 The `launch_id` label identifies each agent instance: an agent gets a new one each time it starts, and each of several
 agents embedded in one JVM has its own. `unsuccessful` means the target answered with a non-2xx status or a response
 over `agent.http.maxContentLengthMBytes`; `timed_out` means the target didn't answer within the agent's scrape
 timeout; `failure` means the fetch failed without an answer, such as a refused connection or a DNS failure;
-`invalid_path` means the proxy asked for a path the agent doesn't serve; `dropped` is a result lost because the
-connection to the proxy closed before it was sent.
+`invalid_path` means the proxy asked for a path the agent doesn't serve. A result counts as sent once gRPC takes it
+to send, and as `dropped` when the connection to the proxy closes first.
+
+A connect counts as `success` once the proxy has registered the agent, as `rejected` when the proxy refuses the
+registration, and as `failure` when it can't be made or registered. `agent_disconnects_total` counts each connection
+that then ends, however it ends, and `agent_endpoint_advances_total` each move to the next endpoint in
+`agent.proxy.endpoints` after a failed connect; a return to the primary shows as `agent_proxy_endpoint_index` going back
+to 0. A heartbeat is `evicted` when the proxy no longer knows the agent.
+
+`agent_path_rejections_total` counts every refusal, retries included, while the agent's dashboard and log show a path's
+first; its `cause` is the cause the proxy gave, lowercased, or `unspecified` from a proxy that predates it.
+`agent_discovery_reconciles_total` counts each poll of the discovery file, a failure keeping the paths read last, and
+`agent_filter_fail_open_total` each scrape a filter let through unfiltered, which the agent logs only the first time.
+
+The connection's counters, the heartbeats', the path rejections', and the retries' expose each value of their labels at
+zero from the start, and discovery's and the dashboard's logins' do on an agent that has them, so `increase()` and
+`rate()` see the first event.
 
 The `agent_scrape_*` counters and latency histogram count only Prometheus's scrapes. A
 [scrape from the dashboard](web-dashboard.md#scrape-now) counts in `agent_dashboard_scrapes_total` instead, whatever
@@ -239,19 +262,31 @@ use. See that section for what the filter does and does not drop.
 
 ### Histograms
 
-| Metric                                 | Labels                    | Description                        |
-|:---------------------------------------|:--------------------------|:-----------------------------------|
-| `agent_scrape_request_latency_seconds` | `launch_id`, `agent_name` | Time to fetch from target endpoint |
+| Metric                                 | Labels                    | Description                                                  |
+|:---------------------------------------|:--------------------------|:-------------------------------------------------------------|
+| `agent_scrape_request_latency_seconds` | `launch_id`, `agent_name` | Time to fetch from target endpoint                           |
+| `agent_scrape_queue_wait_seconds`      | `launch_id`               | Time a scrape request waited before its scrape started       |
 
-It has the proxy latency histogram's buckets, up to 90s, past the agent's 15s scrape timeout.
+Both have the proxy latency histogram's buckets, up to 90s, past the agent's 15s scrape timeout. The queue wait is the
+time a request waited for one of `agent.maxConcurrentHttpClients`; it leaves out a dashboard's scrape, as the latency
+histogram does.
 
 ### Gauges
 
-| Metric                      | Labels      | Description                    |
-|:----------------------------|:------------|:-------------------------------|
-| `agent_start_time_seconds`  | `launch_id` | Agent start time (Unix epoch)  |
-| `agent_scrape_backlog_size` | `launch_id` | Pending scrape requests queued |
-| `agent_client_cache_size`   | `launch_id` | Number of cached HTTP clients  |
+| Metric                                           | Labels                             | Description                                                |
+|:-------------------------------------------------|:-----------------------------------|:-----------------------------------------------------------|
+| `agent_start_time_seconds`                       | `launch_id`                        | Agent start time (Unix epoch)                              |
+| `agent_build_info`                               | `launch_id`, `agent_name`, `version` | Always 1                                                 |
+| `agent_connected`                                | `launch_id`                        | 1 while connected to a proxy and registered, else 0        |
+| `agent_proxy_endpoint_index`                     | `launch_id`                        | The endpoint in use, by its place in `agent.proxy.endpoints`: 0 is the primary |
+| `agent_paths`                                    | `launch_id`, `source`              | Paths registered with the proxy (`static`, `discovered`)   |
+| `agent_discovery_last_success_timestamp_seconds` | `launch_id`                        | Path discovery's last successful reconcile (Unix epoch)    |
+| `agent_dashboard_sessions`                       | `launch_id`                        | The agent dashboard's open pages, with the dashboard on    |
+| `agent_scrape_backlog_size`                      | `launch_id`                        | Pending scrape requests queued                             |
+| `agent_client_cache_size`                        | `launch_id`                        | Number of cached HTTP clients                              |
+
+An agent's metrics reach Prometheus through the proxy unless it scrapes the agent directly, so a disconnected agent
+can't report `agent_connected` as 0: its job's `up` goes to 0 instead.
 
 ---
 
@@ -363,11 +398,13 @@ Key panels to monitor:
 
 | Section             | What to Watch                                                                         |
 |:--------------------|:--------------------------------------------------------------------------------------|
-| **Overview**        | Unexpected agent count changes                                                        |
-| **Connections**     | Failure spikes indicate proxy or network issues                                       |
-| **Scrape Activity** | Imbalanced load; unsuccessful scrapes point at a failing target; any `dropped` result |
-| **Latency**         | Per-agent latency outliers point to slow targets                                      |
-| **Agent Internals** | Growing backlog means the agent is falling behind                                     |
+| **Overview**          | Unexpected agent count changes; an agent not connected, or on a backup endpoint; each agent's version |
+| **Connections**       | Failure spikes indicate proxy or network issues; a rejected connect is the proxy refusing the agent   |
+| **Scrape Activity**   | Imbalanced load; unsuccessful scrapes point at a failing target; any `dropped` result; retries; a filter letting scrapes through unfiltered |
+| **Paths & Discovery** | A path the proxy keeps refusing, by cause; a discovery file that fails to read                        |
+| **Latency**           | Per-agent latency outliers point to slow targets; queue wait climbing means too few `maxConcurrentHttpClients` |
+| **Agent Internals**   | Growing backlog means the agent is falling behind                                                     |
+| **Dashboard**         | Wrong or blocked logins to an agent's dashboard                                                       |
 
 Every agent panel keys on `job`, so scrape each agent in its own job, as in
 [Scraping Internal Metrics](#scraping-internal-metrics).

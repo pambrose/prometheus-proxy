@@ -26,12 +26,10 @@ import io.prometheus.common.MetricBuilders.gauge
 import io.prometheus.common.MetricBuilders.histogram
 import io.prometheus.common.MetricBuilders.sampledGauge
 import io.prometheus.common.MetricBuilders.setToCurrentTime
+import io.prometheus.common.MetricBuilders.REJECTION_CAUSES
 import io.prometheus.common.MetricBuilders.metricLabel
 import io.prometheus.common.SharedCollectors
 import io.prometheus.common.dashboard.DashboardLoginOutcome
-import io.prometheus.grpc.PathRejectionCause
-import io.prometheus.grpc.PathRejectionCause.REJECTION_CAUSE_UNSPECIFIED
-import io.prometheus.grpc.PathRejectionCause.UNRECOGNIZED
 import io.prometheus.grpc.ProxyServiceGrpc
 import io.prometheus.metrics.core.metrics.GaugeWithCallback
 import io.prometheus.metrics.core.metrics.Histogram
@@ -226,12 +224,9 @@ internal class ProxyMetrics(
         labelNames("reason")
       }
 
-    // The causes a rejected path can carry: not an accepted path's, nor the one protobuf gives an unknown value.
-    private val REJECTED_CAUSES = PathRejectionCause.entries - setOf(REJECTION_CAUSE_UNSPECIFIED, UNRECOGNIZED)
-
     // Every rejection, by its PathRejectionCause, not only the first for a path, which the activity feed notes.
     private val PATH_REJECTION_COUNT =
-      counter(startingAtZero = REJECTED_CAUSES.map { it.metricLabel }) {
+      counter(startingAtZero = REJECTION_CAUSES) {
         name("proxy_path_rejections_total")
         help("Proxy path registrations rejected, by cause")
         labelNames("cause")

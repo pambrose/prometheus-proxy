@@ -16,6 +16,9 @@
 
 package io.prometheus.common
 
+import io.prometheus.grpc.PathRejectionCause.UNRECOGNIZED
+import io.prometheus.grpc.PathRejectionCause.REJECTION_CAUSE_UNSPECIFIED
+import io.prometheus.grpc.PathRejectionCause
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.metrics.core.datapoints.GaugeDataPoint
 import io.prometheus.metrics.core.metrics.Counter
@@ -72,6 +75,16 @@ internal object MetricBuilders {
 
   /** The enum entry as a metric's label gives it: its name, lowercased, such as `not_authorized`. */
   val Enum<*>.metricLabel: String get() = name.lowercase()
+
+  // The causes a refused path can carry: not an accepted path's, nor the one protobuf gives an unknown value.
+  private val REJECTED = PathRejectionCause.entries - setOf(REJECTION_CAUSE_UNSPECIFIED, UNRECOGNIZED)
+
+  /** The `cause` labels of the path rejection counters, the proxy's and the agent's: each cause a refusal carries. */
+  val REJECTION_CAUSES = REJECTED.map { it.metricLabel }
+
+  /** [cause] as a path rejection counter's `cause` label gives it; `unspecified` from a proxy predating the field. */
+  fun rejectionCauseLabel(cause: PathRejectionCause): String =
+    if (cause in REJECTED) cause.metricLabel else "unspecified"
 
   fun gauge(block: Gauge.Builder.() -> Unit): Gauge = Gauge.builder().withoutExemplars().apply(block).build()
 

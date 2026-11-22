@@ -18,6 +18,7 @@
 
 package io.prometheus.agent
 
+import io.prometheus.common.CountingAgentMetrics
 import ch.qos.logback.classic.Level
 import io.grpc.Status
 import io.grpc.StatusException
@@ -547,6 +548,24 @@ class AgentPathManagerTest : StringSpec() {
           Triple(AgentActivityKind.PATH_UNREGISTERED, ["kept_metrics"], "static"),
           Triple(AgentActivityKind.PATH_REGISTERED, ["found_metrics"], "discovered"),
         ]
+    }
+
+    // The log and the activity feed show a path's first refusal; agent_path_rejections_total counts every one, by
+    // the cause the proxy gave.
+    "every refusal of a path should be counted by its cause" {
+      val agent = createMockAgent(pathConfigsHocon = """{ name = d, path = denied_metrics, url = "http://denied/m" }""")
+      val counts = CountingAgentMetrics().also { it.installOn(agent) }
+      val manager = AgentPathManager(agent)
+      coEvery { agent.grpcService.registerPathOnProxy("denied_metrics", any(), any(), any()) } throws
+        RequestFailureException(
+          "registerPathOnProxy() - Agent identity 'team_a' is not authorized to register path /denied_metrics",
+          rejectionCause = PathRejectionCause.NOT_AUTHORIZED,
+        )
+
+      // Registered on each connect, so a second connect is refused again.
+      repeat(2) { runCatching { manager.registerPaths() } }
+
+      counts.pathRejections.labelValues(agent.launchId, "not_authorized").get() shouldBe 2.0
     }
 
     "a refusal should be recorded with the proxy's reason" {

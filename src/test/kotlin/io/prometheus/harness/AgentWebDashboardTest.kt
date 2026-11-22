@@ -18,6 +18,11 @@
 
 package io.prometheus.harness
 
+import io.kotest.matchers.doubles.shouldBeGreaterThan
+import io.prometheus.metrics.model.snapshots.GaugeSnapshot
+import io.prometheus.metrics.model.snapshots.CounterSnapshot
+import io.prometheus.common.registeredSnapshot
+import io.prometheus.common.TestPorts.AGENT_DASHBOARD_UI_METRICS_PORT
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeTrue
@@ -84,6 +89,18 @@ class AgentWebDashboardTest : StringSpec() {
       configArgs = ["--config", CONFIG_FILE],
       args = ["--proxy", "$LOOPBACK_HOST:$grpcPort", "--dashboard", "--dashboard_port", "$dashboardPort"] + extraArgs,
     )
+
+  // The agent's counter [name], from the default registry, by the value of its [label], or "" without one.
+  private fun agentCounts(
+    name: String,
+    label: String? = null,
+  ): Map<String, Double> =
+    registeredSnapshot<CounterSnapshot>(name).dataPoints.associate {
+      (label?.let { l -> it.labels.get(l) } ?: "") to it.value
+    }
+
+  // The agent's sampled gauge [name], from the default registry.
+  private fun agentGauge(name: String): Double = registeredSnapshot<GaugeSnapshot>(name).dataPoints.single().value
 
   private suspend fun DefaultClientWebSocketSession.nextText() = (incoming.receive() as Frame.Text).readText()
 
@@ -326,6 +343,39 @@ class AgentWebDashboardTest : StringSpec() {
       }
     }
 
+    // The metrics count what the Activity view shows: the connect, once the proxy registered the agent, the path it
+    // refused, by cause, and the disconnect once the proxy goes away, with the connects that then fail.
+    "the agent's metrics should count its connect, its refused path, and its disconnect" {
+      val proxy =
+        startProxy(
+          args = ["--agent_port", "$AGENT_DASHBOARD_UI_GRPC_PORT"],
+          proxyPort = AGENT_DASHBOARD_UI_HTTP_PORT,
+          configArgs = ["--config", CONFIG_FILE],
+        )
+      val agent = dashboardAgent(AGENT_DASHBOARD_UI_GRPC_PORT, AGENT_DASHBOARD_UI_DASHBOARD_PORT, METRICS_ARGS)
+      var proxyStopped = false
+      try {
+        agent.awaitInitialConnection(30.seconds).shouldBeTrue()
+        eventually(30.seconds) {
+          agentCounts("agent_connect_count", "type")["success"] shouldBe 1.0
+          agentCounts("agent_path_rejections", "cause")["not_authorized"].shouldNotBeNull() shouldBeGreaterThan 0.0
+          agentGauge("agent_connected") shouldBe 1.0
+        }
+
+        proxy.stopSync(10.seconds)
+        proxyStopped = true
+
+        eventually(30.seconds) {
+          agentCounts("agent_disconnects")[""] shouldBe 1.0
+          agentCounts("agent_connect_count", "type")["failure"].shouldNotBeNull() shouldBeGreaterThan 0.0
+          agentGauge("agent_connected") shouldBe 0.0
+        }
+      } finally {
+        agent.stopSync(10.seconds)
+        if (!proxyStopped) proxy.stopSync(10.seconds)
+      }
+    }
+
     "with Scrape now off, the agent's dashboard should have no button and no route for it" {
       val agent =
         dashboardAgent(
@@ -354,7 +404,7 @@ class AgentWebDashboardTest : StringSpec() {
         dashboardAgent(
           AGENT_DASHBOARD_UI_DOWN_GRPC_PORT,
           AGENT_DASHBOARD_UI_LOGIN_DASHBOARD_PORT,
-          extraArgs = ["-Dagent.dashboard.password=$PASSWORD"],
+          extraArgs = ["-Dagent.dashboard.password=$PASSWORD"] + METRICS_ARGS,
         )
       val base = "http://$LOOPBACK_HOST:$AGENT_DASHBOARD_UI_LOGIN_DASHBOARD_PORT"
       val client = HttpClient(CIO) { followRedirects = false }
@@ -380,6 +430,8 @@ class AgentWebDashboardTest : StringSpec() {
           headers[HttpHeaders.SetCookie].shouldNotBeNull() shouldStartWith
             "${DashboardServer.cookieName("agent", AGENT_DASHBOARD_UI_LOGIN_DASHBOARD_PORT)}="
         }
+        // Counted in agent_dashboard_logins_total, as the proxy's dashboard counts its own.
+        agentCounts("agent_dashboard_logins", "outcome")["success"] shouldBe 1.0
       } finally {
         client.close()
         agent.stopSync(10.seconds)
@@ -402,6 +454,9 @@ class AgentWebDashboardTest : StringSpec() {
 
   private companion object {
     const val CONFIG_FILE = "config/test-configs/agent-dashboard.conf"
+
+    // The agent's metrics on, so its metrics { } blocks count, on a port of the spec's own.
+    val METRICS_ARGS = listOf("--metrics", "--metrics_port", "$AGENT_DASHBOARD_UI_METRICS_PORT")
 
     // Registered at runtime against a stub, with a filter in CONFIG_FILE that drops the go_ family.
     const val SCRAPED_PATH = "agent_dash_allowed_scraped"

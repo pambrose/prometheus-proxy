@@ -23,7 +23,7 @@ import io.grpc.Status
 import io.grpc.StatusException
 import io.prometheus.Proxy
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
-import io.prometheus.common.MetricBuilders.metricLabel
+import io.prometheus.common.MetricBuilders.rejectionCauseLabel
 import io.prometheus.common.ScrapeResults.Companion.toScrapeResults
 import io.prometheus.common.AgentValues.truncate
 import io.prometheus.grpc.AgentInfo
@@ -327,7 +327,7 @@ internal class ProxyServiceImpl(
       if (rejection != null) {
         reason = rejection.reason
         rejectionCause = rejection.cause
-        proxy.metrics { pathRejectionCount.labelValues(rejection.cause.metricLabel).inc() }
+        proxy.metrics { pathRejectionCount.labelValues(rejectionCauseLabel(rejection.cause)).inc() }
       }
       pathCount = proxy.pathManager.pathMapSize
     }

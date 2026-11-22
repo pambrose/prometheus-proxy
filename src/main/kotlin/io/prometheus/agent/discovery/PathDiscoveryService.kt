@@ -52,6 +52,8 @@ internal class PathDiscoveryService(
   private val intervalSecs: Int,
   // The agent dashboard's activity feed, when the dashboard is on, told of a failure when it is new or changes.
   private val activityLog: AgentActivityLog? = null,
+  // Told how each reconcile went, for the agent's metrics: true for a success.
+  private val onReconcile: (succeeded: Boolean) -> Unit = {},
 ) {
   // The last reconcile's failure, as Utils.failureKey gives it to compare with the next, and as the agent's dashboard
   // shows it, or null after a success; see reconcileOnce. Volatile, since the dashboard reads it from another thread.
@@ -117,7 +119,9 @@ internal class PathDiscoveryService(
       if (lastFailure != null)
         logger.info { "Path discovery reconcile succeeded again" }
       lastFailure = null
+      onReconcile(true)
     }.onFailure { e ->
+      onReconcile(false)
       val failure = failureKey(e, withMessage = true)
       val shown = ShownFailure.of(e)
       if (failure == lastFailure?.key) {

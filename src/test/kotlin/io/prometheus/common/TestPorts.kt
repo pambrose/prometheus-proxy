@@ -245,6 +245,7 @@ object TestPorts {
   const val AGENT_DASHBOARD_UI_DOWN_GRPC_PORT = 9749
   const val AGENT_DASHBOARD_UI_DOWN_DASHBOARD_PORT = 9750
   const val AGENT_DASHBOARD_UI_LOGIN_DASHBOARD_PORT = 9751
+  const val AGENT_DASHBOARD_UI_METRICS_PORT = 9753
 
   // ProxyTest and AgentTest: what a real proxy or agent binds in the garbage-collection and failed-startup cases.
   // These came from ServerSocket(0), released and bound again later, so another connection could take one in between
