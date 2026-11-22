@@ -60,36 +60,42 @@ public class PrometheusProxyAgent implements SmartLifecycle {
   @Override
   public void start() {
     if (isBlank(properties.getProxy())) {
-      if (properties.isRequired()) {
-        throw new IllegalStateException(PROXY_UNSET + ", and prometheus-proxy.agent.required is true");
-      }
-      logger.info("{}, so the Prometheus agent stays off", PROXY_UNSET);
+      withoutAProxy();
       return;
     }
     try {
-      EmbeddedAgentConfig config = config();
-      logger.info("Starting the Prometheus agent with {}", config);
-      EmbeddedAgentInfo started = config.start(false);
-      agent = started;
-      logger.info(
-          "Prometheus agent {} started; it connects to the proxy at {}", started.getAgentName(), properties.getProxy());
+      launch();
     } catch (RuntimeException e) {
       // A setting the agent rejects (ConfigLoadException), a key its config can't hold, or a customizer's own failure
-      if (properties.isRequired()) {
-        throw e;
-      }
-      stayOff(e);
+      failed(e, e);
     } catch (Exception e) {
       // A checked exception, which Kotlin throws undeclared, such as the agent's start timing out
-      if (properties.isRequired()) {
-        throw new IllegalStateException("The Prometheus agent could not start", e);
-      }
-      stayOff(e);
+      failed(e, new IllegalStateException("The Prometheus agent could not start", e));
     }
   }
 
-  // Logs why the agent didn't start: its exception's message, or its class for one without
-  private static void stayOff(Exception e) {
+  // No proxy: the agent stays off, as on a developer's machine, unless it's required
+  private void withoutAProxy() {
+    if (properties.isRequired()) {
+      throw new IllegalStateException(PROXY_UNSET + ", and prometheus-proxy.agent.required is true");
+    }
+    logger.info("{}, so the Prometheus agent stays off", PROXY_UNSET);
+  }
+
+  private void launch() {
+    EmbeddedAgentConfig config = config();
+    logger.info("Starting the Prometheus agent with {}", config);
+    EmbeddedAgentInfo started = config.start(false);
+    agent = started;
+    logger.info(
+        "Prometheus agent {} started; it connects to the proxy at {}", started.getAgentName(), properties.getProxy());
+  }
+
+  // A start that threw e: a required agent fails the app with thrown, and any other stays off, logging why
+  private void failed(Exception e, RuntimeException thrown) {
+    if (properties.isRequired()) {
+      throw thrown;
+    }
     String reason = e.getMessage() == null ? e.getClass().getName() : e.getMessage();
     logger.error("The Prometheus agent could not start, so it stays off: {}", reason);
   }
