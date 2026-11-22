@@ -68,7 +68,8 @@ simple-icons = "16.2.0"
 # common-utils brings (JVM instrumentation, exposition formats, exporters) resolve to the same version as
 # prometheus-metrics-core, even when this one moves ahead of common-utils.
 prometheus = "1.10.0"
-# Only the embedded demo's app (demos/embedded/app) uses Micrometer, as a Ktor app that embeds the agent would.
+# The embedded demo's app (demos/embedded/app) uses Micrometer, as a Ktor app that embeds the agent would, and the
+# Spring Boot starter (spring-boot-starter/) brings its Prometheus registry, whose version an app's Spring Boot sets.
 micrometer = "1.18.0"
 dropwizard = "4.2.40"
 # Dropwizard metrics-json (common-utils' service-utils) brings Jackson 2.12.7, which has CVE-2025-52999 and
@@ -77,6 +78,11 @@ dropwizard = "4.2.40"
 # number since 2.20, so its version is jackson's major.minor, which build.gradle.kts checks.
 jackson = "2.23.0"
 jacksonAnnotations = "2.23"
+
+# Spring Boot
+# What the Spring Boot starter (spring-boot-starter/) compiles and tests against, through this BOM. Its POM names no
+# Spring Boot artifact, so an app runs it with the app's own Spring Boot.
+spring-boot = "4.2.0"
 
 # Tracing
 zipkin = "6.3.1"
@@ -150,6 +156,7 @@ ktor-server-websockets = { module = "io.ktor:ktor-server-websockets", version.re
 ktor-server-auth = { module = "io.ktor:ktor-server-auth", version.ref = "ktor" }
 ktor-server-metrics-micrometer = { module = "io.ktor:ktor-server-metrics-micrometer", version.ref = "ktor" }
 micrometer-registry-prometheus = { module = "io.micrometer:micrometer-registry-prometheus", version.ref = "micrometer" }
+spring-boot-dependencies = { module = "org.springframework.boot:spring-boot-dependencies", version.ref = "spring-boot" }
 
 # WebJars
 webjar-htmx = { module = "org.webjars.npm:htmx.org", version.ref = "htmx" }
@@ -159,8 +166,8 @@ webjar-simple-icons = { module = "org.webjars.npm:simple-icons", version.ref = "
 # Metrics
 prometheus-metrics-bom = { module = "io.prometheus:prometheus-metrics-bom", version.ref = "prometheus" }
 prometheus-metrics-core = { module = "io.prometheus:prometheus-metrics-core", version.ref = "prometheus" }
-# ExpositionFormats, which the docs site's MetricsSource examples write a registry with; common-utils, and Micrometer's
-# Prometheus registry, bring it at runtime only
+# ExpositionFormats, which the docs site's MetricsSource examples and the Spring Boot starter's RegistryMetricsSource
+# write a registry with; common-utils, and Micrometer's Prometheus registry, bring it at runtime only
 prometheus-metrics-exposition-textformats = { module = "io.prometheus:prometheus-metrics-exposition-textformats", version.ref = "prometheus" }
 dropwizard-metrics = { module = "io.dropwizard.metrics:metrics-healthchecks", version.ref = "dropwizard" }
 jackson-bom = { module = "com.fasterxml.jackson:jackson-bom", version.ref = "jackson" }

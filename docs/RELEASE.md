@@ -16,8 +16,8 @@ Steps 1-3 are edits to merge to `master`. After that, `make release` runs steps 
 - every file step 2 lists mentions the version, and none still has the previous release's version where step 2
   bumps it (an image tag, the Maven coordinate or `<version>`, a chart's `version` or `appVersion`, a `git clone`'s
   `--branch`, or the backticked examples);
-- the version isn't a pre-release, its tag (if one exists) points at this commit, and it isn't already on Maven
-  Central or Docker Hub;
+- the version isn't a pre-release, its tag (if one exists) points at this commit, and neither the agent nor the
+  Spring Boot starter is already on Maven Central at it, nor the images on Docker Hub;
 - the GPG setup and Maven Central credentials `publish-maven-central` needs are in place (step 6), and Docker is
   running.
 
@@ -80,8 +80,10 @@ is, unreleased pages included.
 5) Build the standalone fat jars: `make distro`. This produces `build/libs/prometheus-agent.jar` and
    `build/libs/prometheus-proxy.jar`.
 
-6) Publish the release artifact to Maven Central: `make publish-maven-central`
-   (runs `./gradlew publishAndReleaseToMavenCentral`). To publish a snapshot instead, use
+6) Publish the release artifacts to Maven Central, the agent (`com.pambrose:prometheus-proxy`) and the Spring Boot
+   starter (`com.pambrose:prometheus-proxy-spring-boot-starter`, from `spring-boot-starter/`), at the same version:
+   `make publish-maven-central` (runs `./gradlew publishAndReleaseToMavenCentral`, which publishes both). To publish a
+   snapshot instead, use
    `make publish-snapshot`, which needs the same setup. Each target's prerequisites, which `make release-check`
    runs too, check that setup first and name what's missing:
    - `_check-gpg-env`, the signing key: `GPG_SIGNING_KEY_ID` is set, GPG holds its secret key, and the keychain

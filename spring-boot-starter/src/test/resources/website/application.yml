@@ -1,0 +1,14 @@
+# The docs site's Spring Boot Starter page shows this file from here to its end marker, and StarterExamplesTest binds
+# it, so the page's property names are the starter's.
+# --8<-- [start:starter-yaml]
+spring:
+  application:
+    name: roastery
+
+prometheus-proxy:
+  agent:
+    # Unset, as on a developer's machine, the agent stays off
+    proxy: ${PROMETHEUS_PROXY:}
+    token: ${PROMETHEUS_AGENT_TOKEN:}
+    trust-certificate: ${PROMETHEUS_PROXY_CERT:}
+# --8<-- [end:starter-yaml]

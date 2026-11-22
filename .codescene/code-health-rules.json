@@ -1,5 +1,5 @@
 {
-  "usage": "EmbeddedAgentConfig is a public builder whose settings are strings (name, endpoints, token, PEM text, paths, URLs, credentials), and whose scrapeSelf and path take named, defaulted arguments that give Java its overloads; its argument count and string-heavy arguments are its API's shape, so those rules are off for it alone.",
+  "usage": "EmbeddedAgentConfig is a public builder whose settings are strings (name, endpoints, token, PEM text, paths, URLs, credentials), and whose scrapeSelf and path take named, defaulted arguments that give Java its overloads; its argument count and string-heavy arguments are its API's shape, so those rules are off for it alone. The Spring Boot starter's PrometheusProxyAgentProperties is the same settings as Spring Boot binds them, a JavaBean with a setter for each, so its primitive and string arguments are its shape too.",
   "rule_sets": [
     {
       "matching_content_path": "src/main/kotlin/io/prometheus/agent/EmbeddedAgentConfig.kt",
@@ -8,6 +8,19 @@
           "name": "Excess Number of Function Arguments",
           "weight": 0.0
         },
+        {
+          "name": "Primitive Obsession",
+          "weight": 0.0
+        },
+        {
+          "name": "String Heavy Function Arguments",
+          "weight": 0.0
+        }
+      ]
+    },
+    {
+      "matching_content_path": "spring-boot-starter/src/main/java/io/prometheus/agent/spring/PrometheusProxyAgentProperties.java",
+      "rules": [
         {
           "name": "Primitive Obsession",
           "weight": 0.0

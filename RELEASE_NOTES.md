@@ -29,6 +29,10 @@ _Not yet released_
   `source(path, source)`, instead of serving its metrics at a URL for the agent to scrape: no `/metrics` endpoint,
   port, or password to set up. The Embedded Agent page shows it for the Prometheus Java client's registry, which
   Micrometer's uses too.
+- **A Spring Boot starter.** Add `prometheus-proxy-spring-boot-starter` to a Spring Boot app and set the proxy's
+  address: the agent starts and stops with the app, serves its metrics to Prometheus without `/actuator/prometheus`
+  or a web server, and shows its connection in `/actuator/health`. The new Spring Boot Starter page lists its
+  properties.
 - **Light or dark, your choice.** Both dashboards have a theme picker in the top bar: light, dark, or auto, which
   follows your system and is where it starts. Your browser remembers it.
 - **The proxy counts what happens to its agents.** New metrics count agents disconnecting and why, connects and
@@ -55,6 +59,9 @@ _Not yet released_
 
 - **Scrape now says why it refused a path.** Clicking Scrape now on a path that had just left the proxy showed only
   "404 Not Found" instead of the reason.
+- **No secrets in an embedded agent's logged settings.** `EmbeddedAgentConfig.toString()` hid a token or a private
+  key only when its setting's name had the usual case; one named in lowercase, as Spring Boot names one from an
+  environment variable, was shown.
 
 ### Behavior Changes
 

@@ -41,6 +41,11 @@ All notable changes to this project are documented in this file.
   `MetricsSource`, which the agent asks for each scrape in a text format Prometheus accepts, for the families it names
   with `name[]`, so the app needs no metrics endpoint, port, or credentials for the agent. The scrape timeout,
   `http.maxContentLengthMBytes`, and the path's filter apply as to a URL, and the path's target shows as `in-process`
+- A Spring Boot starter, `com.pambrose:prometheus-proxy-spring-boot-starter`, released with the agent at its version:
+  with `prometheus-proxy.agent.proxy` set, a Spring Boot 4 app runs an embedded agent that starts and stops with it,
+  serves the app's `PrometheusRegistry` bean in-process at `/<spring.application.name>_metrics`, and reports its
+  connection as Actuator's `prometheusAgent` health component. Its other `prometheus-proxy.agent.*` properties map onto
+  `EmbeddedAgentConfig`'s settings, and a `PrometheusProxyAgentCustomizer` bean changes them in code
 - Every demo turns on its agents' dashboards and shows the agent's side in its tour; the basics demo adds `proxy-down`
   and `proxy-up`, the spring-boot demo `proxy-stop` and `proxy-start`, and the kubernetes demo `agent-dashboard`, which
   port-forwards to the agent's
@@ -87,6 +92,9 @@ All notable changes to this project are documented in this file.
 - The dashboard's Scrape now result said only "404 Not Found" when it refused a path that isn't registered, rather than
   why: the scrape port's handler that gives a bare 404 its status line as a body replaced every 404's body. It now
   fills in only a 404 that has none
+- `EmbeddedAgentConfig.toString()` showed a token or a PEM that `setting()` set under a key in another case, such as
+  `agenttoken` or `tls.privatekeypem`, which Spring Boot gives a map key read from an environment variable. It now
+  matches a secret's key in any case
 
 ### Behavior Changes
 

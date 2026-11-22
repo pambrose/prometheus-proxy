@@ -71,6 +71,15 @@ class SiteVersionTest : StringSpec() {
           output shouldBe "1.2.3"
         }
 
+        // The Spring Boot starter's Gradle coordinate, released at the agent's version, is one a bump can miss too
+        val starter = """implementation("com.pambrose:prometheus-proxy-spring-boot-starter:1.2.4")"""
+        File(dir, "starter.txt").writeText(starter)
+        siteVersion("SITE_VERSION_SOURCES=${dir.path}").apply {
+          exitCode.shouldNotBeZero()
+          errors shouldContain "1.2.4"
+        }
+        File(dir, "starter.txt").delete()
+
         File(dir, "other.txt").writeText("image: pambrose/prometheus-agent:1.2.4\n")
         siteVersion("SITE_VERSION_SOURCES=${dir.path}").apply {
           exitCode.shouldNotBeZero()

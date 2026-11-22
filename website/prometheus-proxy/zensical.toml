@@ -52,6 +52,7 @@ nav = [
   { "Features" = [
     { "Service Discovery" = "service-discovery.md" },
     { "Embedded Agent" = "embedded-agent.md" },
+    { "Spring Boot Starter" = "spring-boot-starter.md" },
     { "Monitoring" = "monitoring.md" },
     { "Grafana & Alerting" = "grafana.md" },
   ]},
