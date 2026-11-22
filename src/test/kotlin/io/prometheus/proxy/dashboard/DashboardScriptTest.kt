@@ -254,10 +254,12 @@ class DashboardScriptTest : StringSpec() {
     }
 
     // htmx 4 refetches the page on every back or forward and runs the inline scripts of what it swaps in.
-    // Without the guard each navigation would stack another set of listeners.
-    "the page script should run only once per document" {
+    // Without the guard each navigation would stack another set of listeners. The swap brings a new theme picker,
+    // served with nothing pressed, so a second run marks it, and does nothing else.
+    "the page script should run only once per document, a second run marking the theme picker swapped in" {
       val page = renderFullPage(snapshot())
-      page shouldContain "if (window.__proxyUiInit) return;"
+      page shouldContain "if (window.__proxyUiInit) { window.__proxyUiInit(); return; }"
+      page shouldContain "window.__proxyUiInit = showTheme;"
     }
 
     // The extension's default backoff doubles up to a minute and only resets on a successful open, so a

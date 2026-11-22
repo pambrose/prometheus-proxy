@@ -25,11 +25,9 @@ import io.prometheus.common.dashboard.DashboardPage.announcer
 import io.prometheus.common.dashboard.DashboardPage.connectionIndicator
 import io.prometheus.common.dashboard.DashboardPage.dashboardHead
 import io.prometheus.common.dashboard.DashboardPage.humanize
-import io.prometheus.common.dashboard.DashboardPage.logoutForm
 import io.prometheus.common.dashboard.DashboardPage.pageTitle
 import io.prometheus.common.dashboard.DashboardPage.statusPill
 import io.prometheus.common.dashboard.DashboardPage.tabs
-import io.prometheus.common.dashboard.DashboardPage.themePicker
 import io.prometheus.common.dashboard.DashboardPage.timeOfDay
 import io.prometheus.common.dashboard.DashboardScript
 import io.prometheus.common.dashboard.DashboardView
@@ -59,6 +57,7 @@ import kotlinx.html.title
 import kotlinx.html.unsafe
 import kotlin.time.Clock
 import io.prometheus.common.dashboard.RowFilter
+import io.prometheus.common.dashboard.DashboardPage.barEnd
 
 /**
  * Which view a session is looking at.
@@ -144,8 +143,7 @@ internal object ProxyDashboardHtml {
         span("brand") { +BRAND }
         renderNav(routeBase, layout)
         renderStatus(snapshot)
-        themePicker()
-        if (loginEnabled) logoutForm(routeBase)
+        barEnd(loginEnabled, routeBase)
       }
       announcer()
 

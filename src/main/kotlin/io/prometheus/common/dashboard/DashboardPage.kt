@@ -236,10 +236,10 @@ internal object DashboardPage {
   /**
    * The theme picker, at the bar's end, after the status and outside it, which a push replaces: a button for light, one
    * for dark, and one for auto, which follows the system's, in the order the system's appearance settings list them.
-   * Each is an icon, named for assistive tech and in its tooltip. Served with auto pressed, the default; the page's
-   * script presses the one the head applied from this browser's storage, keeps the tooltips, and sets and stores a
-   * theme on a press (see DashboardScript). The stylesheet marks the theme in force from `<html data-theme>`, so the
-   * mark is right before the script runs.
+   * Each is an icon, named for its theme. Which is pressed, and the tooltips, are the page's script's, which reads the
+   * theme the head applied from this browser's storage, which the server can't know, and sets and stores a theme on a
+   * press (see DashboardScript). The stylesheet marks the theme in force from `<html data-theme>`, so the mark is right
+   * before the script runs.
    */
   fun FlowContent.themePicker() {
     div("theme") {
@@ -250,11 +250,23 @@ internal object DashboardPage {
         button(type = ButtonType.button, classes = "theme-$theme") {
           attributes[THEME_CHOICE_ATTR] = theme
           attributes["aria-label"] = name
-          attributes["aria-pressed"] = (theme == "auto").toString()
-          attributes["title"] =
-            if (theme == "auto") "Theme: auto, following your system (current)" else "Theme: $theme"
         }
       }
+    }
+  }
+
+  /**
+   * The bar's end, after the status and outside it, which a push replaces: the theme picker, then Log out when
+   * [loginEnabled]. One box, which sizes the two alike, so Log out is as tall as the picker however tall a coarse
+   * pointer makes it.
+   */
+  fun FlowContent.barEnd(
+    loginEnabled: Boolean,
+    routeBase: String,
+  ) {
+    div("bar-end") {
+      themePicker()
+      if (loginEnabled) logoutForm(routeBase)
     }
   }
 

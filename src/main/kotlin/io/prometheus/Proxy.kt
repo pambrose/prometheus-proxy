@@ -357,8 +357,10 @@ class Proxy(
       val _ = metrics
     }
     runCatching { super.startUp() }
-      .onFailure { closeMetrics() }
-      .getOrThrow()
+      .onFailure { e ->
+        closeMetrics()
+        throw e
+      }
 
     // Guava calls shutDown() only after startUp() succeeds, so when a sub-service fails to start, stop the ones that
     // started, most recent first, then what super.startUp() started; super.shutDown() also removes its shutdown hook.

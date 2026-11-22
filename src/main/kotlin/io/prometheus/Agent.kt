@@ -805,8 +805,10 @@ class Agent(
       }
       super.startUp()
       dashboardService?.startSync()
-    }.onFailure { releaseAfterFailedStartUp() }
-      .getOrThrow()
+    }.onFailure { e ->
+      releaseAfterFailedStartUp()
+      throw e
+    }
   }
 
   // super.startUp() stops the admin, metrics and Zipkin services it started when it fails (common-utils 5.0.0), but

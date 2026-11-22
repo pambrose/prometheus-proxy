@@ -391,7 +391,7 @@ class AgentDashboardHtmlTest : StringSpec() {
         this shouldContain """hx-get="/dashboard/paths/a%20b""""
         this shouldContain """var LAYOUTS = {"connection":"CONNECTION","activity":"ACTIVITY"};"""
         this shouldContain "Connection to the agent lost. Reconnecting."
-        this shouldContain "if (window.__agentUiInit) return;"
+        this shouldContain "if (window.__agentUiInit) { window.__agentUiInit(); return; }"
       }
     }
   }

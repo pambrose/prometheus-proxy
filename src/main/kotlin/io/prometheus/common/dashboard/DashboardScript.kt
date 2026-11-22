@@ -74,9 +74,10 @@ internal class DashboardScript(
       // htmx 4 runs the inline scripts of content it swaps in, and every back or forward navigation
       // refetches the page and swaps it into <body>, so this script runs again on each one. The body, its
       // listeners, and the socket all survive that swap, so a second run would only stack another set of
-      // listeners, and one announce per navigation would become two, then three.
-      if (window.__${subject}UiInit) return;
-      window.__${subject}UiInit = true;
+      // listeners, and one announce per navigation would become two, then three. A second run only marks the theme
+      // picker the swap brought, served with nothing pressed (showTheme, below), which no push redraws.
+      if (window.__${subject}UiInit) { window.__${subject}UiInit(); return; }
+      window.__${subject}UiInit = showTheme;
       // The dashboard's base, from the socket's URL. The page's route is what follows it: matched there, rather than by
       // the URL's last segment, a base or a selected row's id named like a view can't be taken for that view.
       var base = (document.body.getAttribute('hx-ws:connect') || '').replace(/\/events$/, '');
@@ -356,14 +357,11 @@ internal class DashboardScript(
       // page's own, which the stylesheet marks on its button. This keeps each button's pressed state and tooltip in
       // step with it, auto's naming the system's theme as that changes, and on a press applies the theme, stores it,
       // and says it. Auto is stored as nothing.
-      var systemDark = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+      var systemDark = window.matchMedia('(prefers-color-scheme: dark)');
       function currentTheme() { return document.documentElement.getAttribute('data-theme') || 'auto'; }
       function themeTitle(t, current) {
         var title = 'Theme: ' + t;
-        if (t === 'auto') {
-          title += ', following your system';
-          if (systemDark) title += ', now ' + (systemDark.matches ? 'dark' : 'light');
-        }
+        if (t === 'auto') title += ', following your system, now ' + (systemDark.matches ? 'dark' : 'light');
         return t === current ? title + ' (current)' : title;
       }
       function showTheme() {
@@ -385,9 +383,10 @@ internal class DashboardScript(
         say('Theme: ' + t + '.');
       }
       showTheme();
-      if (systemDark && systemDark.addEventListener) systemDark.addEventListener('change', showTheme);
-      // One listener on <body> for every button in the table, the result panel, and the column guide: the push loop
-      // replaces the table every frame, so a button's own listener would last one frame.
+      systemDark.addEventListener('change', showTheme);
+      // One listener on <body> for every button in the table, the result panel, the column guide, and the theme picker:
+      // the push loop replaces the table every frame, and a back or forward the picker, so a button's own listener
+      // would last one frame.
       document.body.addEventListener('click', function (evt) {
         if (!evt.target.closest) return;
         var copy = evt.target.closest('button.copy');
