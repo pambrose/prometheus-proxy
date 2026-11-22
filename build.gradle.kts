@@ -249,6 +249,22 @@ fun Project.configureKotlin() {
     options.encoding = "UTF-8"
   }
 
+  // No Java source uses its own source set's Kotlin classes: main's are the generated protobuf and gRPC classes and
+  // ConfigVals, and test's are the docs' Java examples, which use only main's classes. The Kotlin plugin still puts each
+  // source set's Kotlin classes on its Java compile's classpath, so each Java compile waited for the Kotlin one, about
+  // 45s in CI's build job. Without them the two run at once; kotlinc reads the Java sources, so it never waited on javac.
+  // Set once every project is evaluated, since the Kotlin plugin adds its classes in a configure action of its own that
+  // would otherwise run after this one.
+  // The classes and testClasses lifecycle tasks reached their Kotlin compiles only through the Java ones, so they depend
+  // on them directly; the tasks that read the classes, the tests and the jars among them, find them through the source
+  // sets' outputs either way.
+  gradle.projectsEvaluated {
+    tasks.named<JavaCompile>("compileJava") { classpath = sourceSets.main.get().compileClasspath }
+    tasks.named<JavaCompile>("compileTestJava") { classpath = sourceSets.test.get().compileClasspath }
+  }
+  tasks.named("classes") { dependsOn("compileKotlin") }
+  tasks.named("testClasses") { dependsOn("compileTestKotlin") }
+
   tasks.named("build") {
     mustRunAfter("clean")
   }
