@@ -51,6 +51,7 @@ import io.prometheus.metrics.core.datapoints.CounterDataPoint
 import io.prometheus.metrics.core.metrics.Counter
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.awaitOnDaemonThread
+import io.prometheus.common.CountingProxyMetrics
 import io.prometheus.common.captureLogs
 import io.prometheus.common.testConfigVals
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
@@ -87,7 +88,8 @@ import kotlin.time.TestTimeSource
 class ProxyServiceImplTest : StringSpec() {
   // The chunk-failure counters, stubbed individually so a test can tell which counter and stage label moved.
   private class ChunkFailureCounters {
-    val metrics = mockk<ProxyMetrics>(relaxed = true)
+    // Real collectors for the counters these tests don't check: a relaxed mock's labeled counter can't be incremented.
+    val metrics = CountingProxyMetrics().metrics
     val chunkStage = mockk<CounterDataPoint>(relaxed = true)
     val summaryStage = mockk<CounterDataPoint>(relaxed = true)
     val abandoned = mockk<Counter>(relaxed = true)
@@ -115,7 +117,8 @@ class ProxyServiceImplTest : StringSpec() {
     isRunning: Boolean = true,
     // Still inside Proxy.startUp(): the gRPC server is up and taking agents, but the proxy isn't RUNNING yet.
     isStarting: Boolean = false,
-    metrics: ProxyMetrics = mockk(relaxed = true),
+    // Real collectors behind a relaxed mock: a relaxed mock's labeled counter can't be incremented.
+    metrics: ProxyMetrics = CountingProxyMetrics().metrics,
     scrapeRequestManager: ScrapeRequestManager? = null,
     agentContextManager: AgentContextManager? = null,
   ): Proxy {
@@ -1655,6 +1658,7 @@ class ProxyServiceImplTest : StringSpec() {
       every { scrapeRequestManager.assignScrapeResults(any(), any()) } answers {
         callCount++
         if (callCount == 1) error("Simulated processing failure")
+        true
       }
 
       val service = ProxyServiceImpl(proxy)

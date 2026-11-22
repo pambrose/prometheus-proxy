@@ -30,10 +30,13 @@ import io.prometheus.metrics.model.registry.PrometheusRegistry
  * registry is cleared in between, as the tests do, the next [acquire] registers them again.
  *
  * @param sentinelName the name of a metric among [collectors], used to tell whether they are still registered
+ * @param onRegister run each time the collectors are registered, after [release] cleared them or the registry was
+ *   cleared: where the series that start at zero (MetricBuilders.startingAtZero) are created again
  */
 internal class SharedCollectors<T : Any>(
   private val sentinelName: String,
   private val collectors: List<Collector>,
+  private val onRegister: () -> Unit = {},
 ) {
   private val registry get() = PrometheusRegistry.defaultRegistry
 
@@ -78,5 +81,6 @@ internal class SharedCollectors<T : Any>(
       registered.forEach { registry.unregister(it) }
       throw e
     }
+    onRegister()
   }
 }

@@ -109,7 +109,12 @@ internal class ProxyGrpcService(
       // here later cannot be left open. gRPC runs server-wide interceptors before per-service ones, so an
       // unrecognized token is rejected (call.close) before any other interceptor or handler runs.
       if (proxy.agentAuthManager.isEnabled)
-        intercept(AgentAuthServerInterceptor(proxy.agentAuthManager, proxy.activityLog))
+        intercept(
+          AgentAuthServerInterceptor(proxy.agentAuthManager, proxy.activityLog) { missing ->
+            val reason = if (missing) ProxyMetrics.AUTH_MISSING_TOKEN else ProxyMetrics.AUTH_UNKNOWN_TOKEN
+            proxy.metrics { agentAuthFailureCount.labelValues(reason).inc() }
+          },
+        )
 
       val interceptors: List<ServerInterceptor> =
         buildList {

@@ -45,6 +45,9 @@ internal enum class RemovalReason(
   STREAM_TERMINATED("Stream terminated (transport filter disabled)", ActivityKind.AGENT_DISCONNECTED),
   ;
 
+  /** The reason as the `reason` label of `proxy_agent_disconnects_total` gives it, such as `eviction`. */
+  val metricLabel: String get() = name.lowercase()
+
   /** What the activity feed says caused the departure, given `proxy.internal.maxAgentInactivitySecs`. */
   fun activityCause(maxInactivitySecs: Int): String =
     when (this) {

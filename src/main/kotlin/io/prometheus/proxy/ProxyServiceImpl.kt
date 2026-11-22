@@ -58,6 +58,7 @@ import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.flow
 import kotlin.concurrent.atomics.AtomicLong
 import kotlin.concurrent.atomics.fetchAndIncrement
+import kotlin.time.DurationUnit
 
 /**
  * Server-side implementation of the `ProxyService` gRPC service.
@@ -80,6 +81,7 @@ internal class ProxyServiceImpl(
     if (proxy.options.transportFilterDisabled) {
       val msg = "Agent (false) and Proxy (true) do not have matching transportFilterDisabled config values"
       logger.error { msg }
+      countRefusal(ProxyMetrics.REFUSAL_TRANSPORT_FILTER_MISMATCH)
       throw StatusException(Status.FAILED_PRECONDITION.withDescription(msg))
     }
 
@@ -93,10 +95,10 @@ internal class ProxyServiceImpl(
     if (!proxy.options.transportFilterDisabled) {
       val msg = "Agent (true) and Proxy (false) do not have matching transportFilterDisabled config values"
       logger.error { msg }
+      countRefusal(ProxyMetrics.REFUSAL_TRANSPORT_FILTER_MISMATCH)
       throw StatusException(Status.FAILED_PRECONDITION.withDescription(msg))
     }
 
-    proxy.metrics { connectCount.inc() }
     // With no transport filter there is no connection-assigned agentId to bind later calls to, so bind them
     // to the auth identity this call presented instead (see identityMismatchReason). Empty when auth is off.
     val agentContext = AgentContext(UNKNOWN_ADDRESS, callerIdentityName())
@@ -109,10 +111,17 @@ internal class ProxyServiceImpl(
       val msg =
         "The proxy already has $maxAgents agents connected with this agent's identity, its " +
           "proxy.internal.maxAgentsPerIdentity limit; retry once one disconnects"
+      countRefusal(ProxyMetrics.REFUSAL_IDENTITY_LIMIT)
       throw StatusException(Status.RESOURCE_EXHAUSTED.withDescription(msg))
     }
+    // Counted once the connect is accepted, as connectAgent counts it; a refused one counts as a refusal.
+    proxy.metrics { connectCount.inc() }
     return agentInfo { agentId = agentContext.agentId }
   }
+
+  private fun countRefusal(reason: String) = proxy.metrics { agentConnectRefusalCount.labelValues(reason).inc() }
+
+  private fun countBindingMismatch(rpcName: String) = proxy.metrics { bindingMismatchCount.labelValues(rpcName).inc() }
 
   /**
    * Rejects a request whose `agentId` is not the one the transport assigned to this connection.
@@ -136,6 +145,7 @@ internal class ProxyServiceImpl(
     } else {
       val shown = shownAgentId(requestAgentId)
       logger.warn { "Agent on connection $connectionAgentId sent agentId $shown to $rpcName(); rejecting" }
+      countBindingMismatch(rpcName)
       "agentId $shown does not match the connection's agentId ($rpcName)"
     }
   }
@@ -164,6 +174,7 @@ internal class ProxyServiceImpl(
       "Identity '$callerIdentityName' sent $rpcName() for agentId ${agentContext.agentId}, " +
         "which connected as identity '${agentContext.authIdentityName}'; rejecting"
     }
+    countBindingMismatch(rpcName)
     return "agentId ${agentContext.agentId} is bound to a different agent identity ($rpcName)"
   }
 
@@ -315,6 +326,7 @@ internal class ProxyServiceImpl(
       if (rejection != null) {
         reason = rejection.reason
         rejectionCause = rejection.cause
+        proxy.metrics { pathRejectionCount.labelValues(ProxyMetrics.pathRejectionLabel(rejection.cause)).inc() }
       }
       pathCount = proxy.pathManager.pathMapSize
     }
@@ -376,7 +388,6 @@ internal class ProxyServiceImpl(
   override suspend fun sendHeartBeat(request: HeartBeatRequest) =
     proxy.agentContextManager.getAgentContext(request.agentId)
       .let { agentContext ->
-        proxy.metrics { heartbeatCount.inc() }
         // Bound like every other agent RPC: a spoofed heartbeat would otherwise keep another agent's
         // context from ever being evicted.
         val failureReason =
@@ -388,8 +399,12 @@ internal class ProxyServiceImpl(
             } else {
               identityMismatchReason(agentContext, "sendHeartBeat")
             }
-        if (failureReason == null)
+        // Only an accepted heartbeat is counted: a refused one, usually from an agent the proxy evicted, is in the
+        // eviction or binding mismatch counts.
+        if (failureReason == null) {
           agentContext?.markActivityTime(false)
+          proxy.metrics { heartbeatCount.inc() }
+        }
         heartBeatResponse {
           valid = failureReason == null
           if (failureReason != null)
@@ -447,6 +462,9 @@ internal class ProxyServiceImpl(
   private suspend fun FlowCollector<ScrapeRequest>.emitScrapeRequests(agentContext: AgentContext) {
     while (proxy.isStartingOrRunning && agentContext.isValid()) {
       val wrapper = agentContext.readScrapeRequest()?.takeIf { isStillAwaited(it) } ?: continue
+      // A dashboard's scrape-now is left out, as it is from the latency histogram.
+      if (!wrapper.scrapeRequest.dashboardScrape)
+        proxy.metrics { scrapeQueueWait.observe(wrapper.ageDuration().toDouble(DurationUnit.SECONDS)) }
       try {
         emit(wrapper.scrapeRequest)
       } catch (e: CancellationException) {
@@ -486,11 +504,13 @@ internal class ProxyServiceImpl(
       identityMismatchReason(owner, rpcName) == null
     } else {
       (owner.agentId == connectionAgentId).also { owned ->
-        if (!owned)
+        if (!owned) {
           logger.warn {
             "Agent on connection $connectionAgentId sent $rpcName() data for scrapeId $scrapeId, " +
               "which was sent to agent ${owner.agentId}; ignoring"
           }
+          countBindingMismatch(rpcName)
+        }
       }
     }
 
@@ -547,7 +567,8 @@ internal class ProxyServiceImpl(
         // Whatever becomes of the result: one whose scrape is no longer tracked still proves the agent is alive.
         sender.markActive(response.agentId)
         try {
-          proxy.scrapeRequestManager.assignScrapeResults(response.toScrapeResults(), isOwner)
+          if (!proxy.scrapeRequestManager.assignScrapeResults(response.toScrapeResults(), isOwner))
+            countLateResult()
         } catch (e: CancellationException) {
           throw e
         } catch (e: Exception) {
@@ -566,6 +587,12 @@ internal class ProxyServiceImpl(
     }.onFailure { logResponseStreamFailure("writeResponsesToProxy", it) }
     return EMPTY_INSTANCE
   }
+
+  private fun countLateResult() = proxy.metrics { lateScrapeResultCount.inc() }
+
+  // A chunked transfer that ended unfinished, its scrape gone before its result was assigned. Each transfer has one
+  // remover (see Proxy.releaseRemovedAgent), and each counts it, so it's counted once.
+  private fun countAbandonedTransfer() = proxy.metrics { chunkedTransfersAbandoned.inc() }
 
   // Logs why a response stream failed, unless the proxy is stopping or the stream was just cancelled. A starting proxy
   // logs it too: see Proxy.isStartingOrRunning.
@@ -649,6 +676,7 @@ internal class ProxyServiceImpl(
       val wrapper = proxy.scrapeRequestManager.getScrapeRequest(scrapeId)
       if (wrapper == null) {
         logger.debug { "Received chunked header for unknown scrapeId: $scrapeId" }
+        countLateResult()
         return
       }
       if (!isOwner(wrapper))
@@ -677,8 +705,10 @@ internal class ProxyServiceImpl(
         // The scrape's handler stops tracking it and then removes its transfer, so checking again once the transfer is
         // stored means that if the handler returned in between, one of the two removes it (November #13).
         !proxy.scrapeRequestManager.containsScrapeRequest(scrapeId) -> {
-          contextManager.removeChunkedContext(scrapeId, context)
-          logger.debug { "Dropped the chunked header for scrapeId: $scrapeId, whose scrape ended as it arrived" }
+          if (contextManager.removeChunkedContext(scrapeId, context)) {
+            logger.debug { "Dropped the chunked header for scrapeId: $scrapeId, whose scrape ended as it arrived" }
+            countAbandonedTransfer()
+          }
         }
 
         else -> {
@@ -704,8 +734,10 @@ internal class ProxyServiceImpl(
       proxy.scrapeRequestManager.containsScrapeRequest(scrapeId).also { tracked ->
         if (!tracked) {
           activeScrapeIds -= scrapeId
-          if (contextManager.removeChunkedContext(scrapeId, context))
+          if (contextManager.removeChunkedContext(scrapeId, context)) {
             logger.debug { "Dropped the chunked transfer for scrapeId: $scrapeId, whose scrape has ended" }
+            countAbandonedTransfer()
+          }
         }
       }
 
@@ -764,6 +796,7 @@ internal class ProxyServiceImpl(
         // (November #13).
         if (!proxy.scrapeRequestManager.containsScrapeRequest(summaryScrapeId)) {
           logger.debug { "Dropped the chunked transfer for scrapeId: $summaryScrapeId, whose scrape has ended" }
+          countAbandonedTransfer()
           return
         }
         logger.debug {
@@ -773,7 +806,9 @@ internal class ProxyServiceImpl(
         }
         try {
           val scrapeResults = context.applySummary(summaryChunkCount, summaryByteCount, summaryChecksum)
-          proxy.scrapeRequestManager.assignScrapeResults(scrapeResults, isOwner)
+          // The scrape can end between the check above and here; its transfer, already removed, was then abandoned.
+          if (!proxy.scrapeRequestManager.assignScrapeResults(scrapeResults, isOwner))
+            countAbandonedTransfer()
         } catch (e: ChunkValidationException) {
           logger.error(e) { "Summary validation failed for scrapeId: $summaryScrapeId" }
           proxy.scrapeRequestManager.failScrapeRequest(
@@ -809,7 +844,7 @@ internal class ProxyServiceImpl(
               "Chunked transfer abandoned: stream terminated before summary received",
               ProxyFailure.AGENT_DISCONNECTED,
             )
-            proxy.metrics { chunkedTransfersAbandoned.inc() }
+            countAbandonedTransfer()
           }
       }
     }

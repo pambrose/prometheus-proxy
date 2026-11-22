@@ -208,8 +208,8 @@ In the Paths view, a removed path that had been scraped stays listed as `gone`, 
 - In the dashboard, click agent-west-2. Its **idle** time climbs and the **evicted in** countdown runs.
 - A consolidated path waits for all of its agents, so `/shipping_metrics` stalls while agent-west-2 is frozen.
 - After 30 seconds the proxy evicts it. **DemoAgentEvicted** fires, its own `/agent_west_2_metrics` path shows as
-  `gone` (the status bar counts it as departed), the **Prometheus Proxy** dashboard's **Agent Events** panel records
-  the eviction, and agent-west-1 carries shipping alone.
+  `gone` (the status bar counts it as departed), Grafana's **Agent disconnects at the proxy, by reason** shows it as
+  an `eviction`, and agent-west-1 carries shipping alone.
 
 ```bash
 ./demo.sh agent-thaw      # it reconnects and registers again
@@ -231,6 +231,9 @@ register only the paths its patterns allow.
 - The Agents and Paths views can't show a refusal, since the proxy added nothing. The **Activity** view lists it as
   `rejected`, with the proxy's reason, searched here for the contractor's agent:
   <http://localhost:8094/dashboard/activity?q=agent-rogue>
+- Grafana's **Path rejections at the proxy, by cause** counts it as `not_authorized`, the cause the proxy gave the
+  agent. The proxy counts every refusal in `proxy_path_rejections_total`, so an alert can catch a path that keeps
+  being refused.
 
 ### 9. An agent's own dashboard shows a refused path and a lost proxy
 

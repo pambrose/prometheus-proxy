@@ -989,7 +989,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Agents each proxy evicted in the last minute, after 30s without a heartbeat.",
+      "description": "Agents each proxy removed in the last minute: eviction (30s without a heartbeat) or termination (the connection closed).",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -1080,12 +1080,12 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (job) (increase(proxy_eviction_count_total[1m]))",
-          "legendFormat": "{{job}}",
+          "expr": "sum by (job, reason) (increase(proxy_agent_disconnects_total[1m])) > 0",
+          "legendFormat": "{{job}}: {{reason}}",
           "refId": "A"
         }
       ],
-      "title": "Evictions, by proxy",
+      "title": "Disconnects, by proxy and reason",
       "type": "timeseries"
     },
     {
@@ -1166,6 +1166,81 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
+      "description": "How long scrapes waited at each proxy before the agent's stream took them. It climbs when an agent can't keep up, and stays low when the time goes to the WAN or the target.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "axisPlacement": "auto",
+            "gradientMode": "opacity",
+            "scaleDistribution": {
+              "type": "log",
+              "log": 10
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 37
+      },
+      "id": 17,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le, job) (rate(proxy_scrape_queue_wait_seconds_bucket[$__rate_interval])))",
+          "legendFormat": "{{job}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Queue wait at the proxies, p95 by proxy",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
       "description": "Alerts firing now, from the demo's fast rules (demos/network/prometheus/network-alerts.yml).",
       "fieldConfig": {
         "defaults": {
@@ -1215,7 +1290,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 37
+        "y": 45
       },
       "id": 16,
       "options": {

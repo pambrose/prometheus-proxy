@@ -175,7 +175,7 @@ internal class ProxyDashboardService(
         icons = LinkIcon.entries.associate { it.fileName to it.resource },
       ),
       site,
-    )
+    ) { outcome -> proxy.metrics { dashboardLoginCount.labelValues(outcome.label).inc() } }
 
   // The proxy's pages: the four layouts, an agent's detail, and scrape-now.
   private fun Route.pageRoutes(server: DashboardServer<ProxyView, ProxySnapshot>) {

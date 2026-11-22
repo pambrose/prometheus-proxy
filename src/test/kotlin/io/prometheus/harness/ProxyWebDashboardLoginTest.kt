@@ -62,6 +62,7 @@ import io.prometheus.common.dashboard.DashboardServer.Companion.SEC_FETCH_MODE
 import io.prometheus.common.dashboard.LoginHtml
 import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.metrics.model.registry.PrometheusRegistry
+import io.prometheus.metrics.model.snapshots.CounterSnapshot
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml
 import io.prometheus.proxy.dashboard.ProxyDashboardService
 import kotlinx.coroutines.withTimeout
@@ -83,6 +84,8 @@ class ProxyWebDashboardLoginTest : StringSpec() {
   private suspend fun withProxy(
     path: String = "dashboard",
     password: String? = PASSWORD,
+    // Whether the proxy's metrics are on, so its proxy.metrics { } blocks count.
+    metrics: Boolean = false,
     block: suspend HttpClient.() -> Unit,
   ) {
     PrometheusRegistry.defaultRegistry.clear()
@@ -92,6 +95,7 @@ class ProxyWebDashboardLoginTest : StringSpec() {
           addAll(["--agent_port", "$GRPC_PORT", "--dashboard", "--dashboard_port", "$DASHBOARD_PORT"])
           addAll(["--dashboard_path", path])
           password?.also { add("-Dproxy.dashboard.password=$it") }
+          if (metrics) addAll(["--metrics", "--metrics_port", "$METRICS_PORT"])
         },
         proxyPort = HTTP_PORT,
         configArgs = ["--config", CONFIG_FILE],
@@ -351,6 +355,27 @@ class ProxyWebDashboardLoginTest : StringSpec() {
       }
     }
 
+    // proxy_dashboard_logins_total: a sign-in on the login page, a wrong login from the page or a script, and one
+    // refused for the limit. A script's right Basic Auth logs in on every request, so it isn't counted as a sign-in.
+    "each login should be counted by its outcome" {
+      withProxy(metrics = true) {
+        logIn().status shouldBe HttpStatusCode.SeeOther
+        get("$base/dashboard") { basicAuth(USERNAME, PASSWORD) }.status shouldBe HttpStatusCode.OK
+        get("$base/dashboard") { basicAuth(USERNAME, "wrong") }.status shouldBe HttpStatusCode.Unauthorized
+        repeat(DashboardServer.MAX_BAD_LOGINS_PER_ADDRESS - 1) { logIn(password = "wrong") }
+        logIn().status shouldBe HttpStatusCode.TooManyRequests
+
+        val logins =
+          PrometheusRegistry.defaultRegistry.scrape()
+            .filterIsInstance<CounterSnapshot>()
+            .single { it.metadata.name == "proxy_dashboard_logins" }
+            .dataPoints
+            .associate { it.labels.get("outcome") to it.value }
+        logins shouldBe
+          mapOf("success" to 1.0, "failure" to DashboardServer.MAX_BAD_LOGINS_PER_ADDRESS.toDouble(), "blocked" to 1.0)
+      }
+    }
+
     // The login is checked when a page's WebSocket opens; a socket outlives that, so the push loop closes one whose
     // session has ended, and Log out wakes it at once. The page then asks for its session and gets the login page.
     "an open dashboard's WebSocket should close when its session ends" {
@@ -420,6 +445,7 @@ class ProxyWebDashboardLoginTest : StringSpec() {
     const val HTTP_PORT = TestPorts.DASHBOARD_UI_LOGIN_HTTP_PORT
     const val GRPC_PORT = TestPorts.DASHBOARD_UI_LOGIN_GRPC_PORT
     const val DASHBOARD_PORT = TestPorts.DASHBOARD_UI_LOGIN_DASHBOARD_PORT
+    const val METRICS_PORT = TestPorts.DASHBOARD_UI_LOGIN_METRICS_PORT
 
     // allowedOrigins lists ALLOWED_ORIGIN, an https origin, as a reverse proxy's would be.
     const val CONFIG_FILE = "config/test-configs/web-ui-origins.conf"

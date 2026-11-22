@@ -235,6 +235,7 @@ object TestPorts {
   const val DASHBOARD_UI_LOGIN_HTTP_PORT = 9743
   const val DASHBOARD_UI_LOGIN_GRPC_PORT = 9744
   const val DASHBOARD_UI_LOGIN_DASHBOARD_PORT = 9745
+  const val DASHBOARD_UI_LOGIN_METRICS_PORT = 9752
 
   // AgentWebDashboardTest: the agent's dashboard, with its proxy up and with it down (nothing listens on the down
   // case's gRPC port), and with a login.

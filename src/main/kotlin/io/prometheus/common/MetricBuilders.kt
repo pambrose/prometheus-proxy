@@ -47,6 +47,14 @@ internal object MetricBuilders {
 
   fun counter(block: Counter.Builder.() -> Unit): Counter = Counter.builder().withoutExemplars().apply(block).build()
 
+  /**
+   * Creates this counter's series for each of [values], its one label's known values, at zero. A series created by its
+   * first increment starts at 1, which increase() and rate() can't tell from a counter that was always 1, so a
+   * dashboard or an alert on a rare event, such as one path refused, saw nothing until it happened twice. Only for a
+   * label whose values are a known, bounded set.
+   */
+  fun Counter.startingAtZero(values: Iterable<String>): Counter = apply { values.forEach { labelValues(it) } }
+
   fun gauge(block: Gauge.Builder.() -> Unit): Gauge = Gauge.builder().withoutExemplars().apply(block).build()
 
   fun histogram(block: Histogram.Builder.() -> Unit): Histogram =

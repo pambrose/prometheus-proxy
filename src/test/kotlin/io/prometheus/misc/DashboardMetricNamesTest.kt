@@ -185,6 +185,15 @@ class DashboardMetricNamesTest : StringSpec() {
       ALERT_RULES to ::ruleExprs,
     )
 
+  // The demos' dashboards and alert rules that query the proxy's or agent's series, with the queries each holds.
+  private val demoSources: Map<String, (String) -> List<String>> =
+    mapOf(
+      "demos/basics/grafana/dashboards/demo-overview.json" to ::dashboardExprs,
+      "demos/basics/prometheus/demo-alerts.yml" to ::ruleExprs,
+      "demos/network/grafana/dashboards/network-overview.json" to ::dashboardExprs,
+      "demos/network/prometheus/network-alerts.yml" to ::ruleExprs,
+    )
+
   init {
     beforeSpec {
       PrometheusRegistry.defaultRegistry.clear()
@@ -212,6 +221,17 @@ class DashboardMetricNamesTest : StringSpec() {
         // as a query with nothing to check.
         names.filterValues { it.isEmpty() }.keys.shouldBeEmpty()
         names.values.flatten().filterNot { it in exposed }.distinct().shouldBeEmpty()
+      }
+    }
+
+    // The demos' dashboards and alerts query their apps' series too, which aren't the proxy's or agent's to check, so
+    // only their proxy and agent series are. A demo panel naming one that isn't exposed shows no data on the page the
+    // demo's tour sends a reader to.
+    demoSources.forEach { (file, extract) ->
+      "every proxy and agent series queried in $file should be exposed" {
+        val names = extract(File(file).readText()).flatMap(::metricNames).filterNot { it == "up" }
+        names.shouldNotBeEmpty()
+        names.filterNot { it in exposed }.distinct().shouldBeEmpty()
       }
     }
 

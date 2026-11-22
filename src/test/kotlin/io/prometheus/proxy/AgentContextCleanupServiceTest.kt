@@ -31,6 +31,7 @@ import io.mockk.spyk
 import io.mockk.verify
 import io.prometheus.Proxy
 import io.prometheus.common.ConfigVals
+import io.prometheus.common.CountingProxyMetrics
 import io.prometheus.common.captureLogs
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.measureTime
@@ -175,6 +176,40 @@ class AgentContextCleanupServiceTest : StringSpec() {
         events.map { it.level } shouldBe listOf(if (announced) Level.INFO else Level.DEBUG)
         verify(exactly = if (announced) 1 else 0) { mockMetrics.agentEvictionCount }
       }
+    }
+
+    // The transport filter, or the agent's stream ending, can remove the context between the sweep finding it stale and
+    // removing it. That removal was the agent disconnecting, and the eviction that found nothing left to remove still
+    // counted in proxy_eviction_count_total.
+    "an eviction that finds the context already removed should not count" {
+      val agentContextManager = AgentContextManager(isTestMode = true)
+      val staleAgentContext = mockk<AgentContext>(relaxed = true)
+      every { staleAgentContext.agentId } returns "departed-agent"
+      every { staleAgentContext.inactivityDuration } returns 5.seconds
+      every { staleAgentContext.announced } returns true
+      agentContextManager.addAgentContext(staleAgentContext, announce = false)
+
+      val counts = CountingProxyMetrics()
+      val mockProxy = counts.installOn(mockk<Proxy>(relaxed = true))
+      every { mockProxy.agentContextManager } returns agentContextManager
+      // Another remover got there first: this removal finds nothing.
+      every { mockProxy.removeAgentContext(any(), any()) } answers {
+        agentContextManager.removeFromContextManager(firstArg<String>(), secondArg<RemovalReason>())
+        null
+      }
+
+      val service =
+        AgentContextCleanupService(
+          mockProxy,
+          createConfigVals(maxAgentInactivitySecs = 1, staleAgentCheckPauseSecs = 1),
+        )
+      service.startAsync()
+      eventually(5.seconds) {
+        verify(exactly = 1) { mockProxy.removeAgentContext("departed-agent", RemovalReason.EVICTION) }
+      }
+      service.stopAsync().awaitTerminated()
+
+      counts.evictions.get() shouldBe 0.0
     }
 
     "cleanup should not evict active agent" {

@@ -17,6 +17,7 @@
 package io.prometheus.proxy
 
 import com.pambrose.common.util.ensureLeadingSlash
+import com.pambrose.common.util.runCatchingCancellable
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.http.ContentType
 import io.ktor.http.ContentType.Text
@@ -63,6 +64,9 @@ internal object ProxyHttpRoutes {
   // Prometheus hung up before the agent answered, usually because its scrape timeout is shorter than the proxy's.
   internal const val CLIENT_CANCELLED_LABEL = "client_cancelled"
 
+  // The scrape threw, and the client got a 500.
+  internal const val INTERNAL_ERROR_LABEL = "internal_error"
+
   // nginx's non-standard 499 (Client Closed Request): the client left, so no status ever reached it.
   private val CLIENT_CLOSED_REQUEST = HttpStatusCode(499, "Client Closed Request")
 
@@ -107,14 +111,18 @@ internal object ProxyHttpRoutes {
         "Servicing request for path: ${ProxyPathManager.shownPath(path)}$withParams"
       }
 
+      // A scrape that throws ends as StatusPages' 500, which no outcome would otherwise count. Cancellation, a client
+      // hanging up, is rethrown uncounted here: the scrape's own handling counts it as client_cancelled.
       val responseResults =
-        when {
-          !proxy.isRunning -> ProxyUtils.proxyNotRunningResponse()
-          path.isBlank() -> ProxyUtils.emptyPathResponse(proxy)
-          path == FAVICON_FILENAME -> ProxyUtils.invalidPathResponse(path, proxy)
-          proxy.isBlitzRequest(path) -> ResponseResults(contentText = "42")
-          else -> processRequestsBasedOnPath(proxy, path, queryParams)
-        }
+        runCatchingCancellable {
+          when {
+            !proxy.isRunning -> ProxyUtils.proxyNotRunningResponse()
+            path.isBlank() -> ProxyUtils.emptyPathResponse(proxy)
+            path == FAVICON_FILENAME -> ProxyUtils.invalidPathResponse(path, proxy)
+            proxy.isBlitzRequest(path) -> ResponseResults(contentText = "42")
+            else -> processRequestsBasedOnPath(proxy, path, queryParams)
+          }
+        }.onFailure { incrementScrapeRequestCount(proxy, INTERNAL_ERROR_LABEL) }.getOrThrow()
 
       responseResults.updateMsgs.forEach { incrementScrapeRequestCount(proxy, it) }
       call.respondWith(responseResults.contentText, responseResults.contentType, responseResults.statusCode)

@@ -22,12 +22,17 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.inspectors.forAll
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.collections.shouldContain
+import io.kotest.matchers.collections.shouldContainAll
+import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.doubles.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.ranges.shouldBeIn
 import io.kotest.matchers.shouldBe
+import io.mockk.every
+import io.prometheus.BuildConfig
 import io.prometheus.common.mockProxyForMetrics
 import io.prometheus.metrics.model.registry.PrometheusRegistry
+import io.prometheus.metrics.model.snapshots.CounterSnapshot
 import io.prometheus.metrics.model.snapshots.GaugeSnapshot
 import io.prometheus.metrics.model.snapshots.Labels
 import kotlin.time.Clock
@@ -44,6 +49,15 @@ class ProxyMetricsTest : StringSpec() {
       .toSet()
 
   private val openMetrics = mutableListOf<ProxyMetrics>()
+
+  // The names of the metric families registered in the default registry.
+  private fun registeredNames(): List<String> = PrometheusRegistry.defaultRegistry.scrape().map { it.metadata.name }
+
+  private fun buildInfo(): GaugeSnapshot =
+    PrometheusRegistry.defaultRegistry.scrape().filterIsInstance<GaugeSnapshot>().single {
+      it.metadata.name ==
+      "proxy_build_info"
+    }
 
   private fun opened(metrics: ProxyMetrics): ProxyMetrics = metrics.also { openMetrics += it }
 
@@ -363,6 +377,105 @@ class ProxyMetricsTest : StringSpec() {
       metrics.agentDisplacementCount.inc()
 
       metrics.agentDisplacementCount.get() shouldBe initialValue + 1
+    }
+
+    // ==================== Added series ====================
+
+    // Each is in SHARED, so it's registered with the rest: one left out would be missing from /metrics.
+    "the counters, histogram, and gauges added for agents, rejections, and the dashboard should be registered" {
+      opened(ProxyMetrics(mockProxyForMetrics()))
+
+      registeredNames() shouldContainAll
+        listOf(
+          "proxy_agent_disconnects",
+          "proxy_agent_auth_failures",
+          "proxy_agent_connect_refusals",
+          "proxy_path_rejections",
+          "proxy_binding_mismatches",
+          "proxy_late_scrape_results",
+          "proxy_scrape_queue_wait_seconds",
+          "proxy_dashboard_logins",
+          "proxy_dashboard_sessions",
+          "proxy_build_info",
+        )
+    }
+
+    // Another proxy in the JVM keeps the gauge registered, so only the closed proxy's series may go.
+    "proxy_build_info should carry each proxy's version and launch ID, and lose a proxy's series when it closes" {
+      val leaving = mockProxyForMetrics().also { every { it.launchId } returns "leaving-launch" }
+      val staying = mockProxyForMetrics().also { every { it.launchId } returns "staying-launch" }
+      val leavingMetrics = ProxyMetrics(leaving)
+      opened(ProxyMetrics(staying))
+
+      fun launchIds() = buildInfo().dataPoints.map { it.labels.get("launch_id") }.toSet()
+
+      launchIds() shouldBe setOf("leaving-launch", "staying-launch")
+      buildInfo().dataPoints.forAll { it.labels.get("version") shouldBe BuildConfig.APP_VERSION }
+
+      leavingMetrics.close()
+      launchIds() shouldBe setOf("staying-launch")
+    }
+
+    "the proxy metrics, build info included, should be unregistered when the last proxy closes" {
+      ProxyMetrics(mockProxyForMetrics()).close()
+
+      registeredNames() shouldNotContain "proxy_build_info"
+    }
+
+    "proxy_dashboard_sessions should report the open dashboard pages" {
+      val proxy = mockProxyForMetrics()
+      every { proxy.dashboardSessionsOpen } returns 3
+      opened(ProxyMetrics(proxy))
+
+      val sessions =
+        PrometheusRegistry.defaultRegistry.scrape()
+          .filterIsInstance<GaugeSnapshot>()
+          .single { it.metadata.name == "proxy_dashboard_sessions" }
+      sessions.dataPoints.single().value shouldBe 3.0
+    }
+
+    // A series created by its first increment starts at 1, so increase() and rate() saw nothing of a single rejection
+    // or eviction, and the demo's panels and the alerts built on them stayed empty until a second one.
+    "each labeled counter whose label has a known set of values should expose them all at zero" {
+      opened(ProxyMetrics(mockProxyForMetrics()))
+
+      fun labels(
+        name: String,
+        label: String,
+      ) = PrometheusRegistry.defaultRegistry.scrape()
+        .filterIsInstance<CounterSnapshot>()
+        .single { it.metadata.name == name }
+        .dataPoints
+        .map { it.labels.get(label) }
+        .toSet()
+
+      labels("proxy_chunk_validation_failures", "stage") shouldBe setOf("chunk", "summary")
+      labels("proxy_agent_disconnects", "reason") shouldBe setOf("eviction", "termination", "stream_terminated")
+      labels("proxy_agent_auth_failures", "reason") shouldBe setOf("missing_token", "unknown_token")
+      labels("proxy_agent_connect_refusals", "reason") shouldBe setOf("identity_limit", "transport_filter_mismatch")
+      labels("proxy_path_rejections", "cause") shouldBe
+        setOf(
+          "held_by_another_identity",
+          "consolidation_mismatch",
+          "not_authorized",
+          "invalid_path",
+          "invalid_agent",
+          "binding_mismatch",
+          "path_limit_reached",
+        )
+      labels("proxy_binding_mismatches", "rpc") shouldContainAll
+        listOf("registerAgent", "registerPath", "sendHeartBeat", "readRequestsFromProxy", "writeResponsesToProxy")
+      labels("proxy_dashboard_logins", "outcome") shouldBe setOf("success", "failure", "blocked")
+    }
+
+    "the queue wait histogram should keep the scrape latency buckets" {
+      val metrics = opened(ProxyMetrics(mockProxyForMetrics()))
+      metrics.scrapeQueueWait.observe(0.2)
+
+      val buckets = metrics.scrapeQueueWait.collect().dataPoints.single().classicBuckets
+      metrics.scrapeQueueWait.clear()
+      buckets.map { it.upperBound } shouldBe
+        listOf(.005, .01, .025, .05, .1, .25, .5, 1.0, 2.5, 5.0, 10.0, 15.0, 30.0, 60.0, 90.0, Double.POSITIVE_INFINITY)
     }
 
     // ==================== Label Tests ====================

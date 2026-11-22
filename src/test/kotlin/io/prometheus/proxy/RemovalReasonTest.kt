@@ -52,5 +52,10 @@ class RemovalReasonTest : StringSpec() {
       TERMINATION.activityCause(45) shouldBe "Connection closed"
       STREAM_TERMINATED.activityCause(45) shouldBe "Stream terminated (transport filter disabled)"
     }
+
+    // The docs, the Grafana dashboards, and the alerts name these values; renaming an entry mustn't rename a label.
+    "each reason should give proxy_agent_disconnects_total its label" {
+      RemovalReason.entries.map { it.metricLabel } shouldBe listOf("eviction", "termination", "stream_terminated")
+    }
   }
 }

@@ -67,8 +67,10 @@ internal class AgentContextCleanupService(
           val message =
             "Evicting agentId $agentId after $inactiveTime (max $maxAgentInactivityTime) of inactivity: $agentContext"
           if (announced) logger.info { message } else logger.debug { message }
-          proxy.removeAgentContext(agentId, RemovalReason.EVICTION)
-          if (announced)
+          // Counted only when this removed it: the transport filter, or the agent's stream ending, can remove the same
+          // context in between, and that removal is a disconnect, not an eviction.
+          val evicted = proxy.removeAgentContext(agentId, RemovalReason.EVICTION) != null
+          if (announced && evicted)
             proxy.metrics { agentEvictionCount.inc() }
         } else {
           logger.debug {

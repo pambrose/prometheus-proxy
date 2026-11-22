@@ -332,7 +332,8 @@ Two support helpers also live here (not test classes themselves):
 
 - **ProxyTest** — Proxy main class lifecycle, agent info retrieval, JSON serialization, stale agent cleanup;
   `removeAgentContext` counts each chunked transfer it reclaims as abandoned, and never one the stream's sweep counted,
-  and puts the agent's departure in the activity feed, an eviction as a problem, with the paths it served
+  and puts the agent's departure in the activity feed, an eviction as a problem, with the paths it served; and counts an
+  announced agent's removal in `proxy_agent_disconnects_total` by its reason, and not an unannounced connection's
 - **ProxyServiceImplTest** — gRPC implementation: registerAgent (recording the identity the call authenticated as for
   the dashboard, without binding the context to it, and the connect in the activity feed), registerPath (a path the
   identity may not register noted as a rejection), heartbeat, scrape responses, chunked responses; a result or a chunked transfer for a scrape sent to another agent neither completes nor fails it, even
@@ -343,6 +344,13 @@ Two support helpers also live here (not test classes themselves):
   agent connected as), and a late result doesn't count as a completed request; with the transport filter disabled, a
   scrape-request stream that names an agentId before it is assigned neither streams nor removes the context another identity then
   connects with under it, and 10,000 connects by one identity leave at most `maxAgentsPerIdentity` agents
+- **ProxyServiceImplMetricsTest** — what each RPC counts, read from real collectors (`CountingProxyMetrics`): a
+  connect only once accepted, and a refused one as a refusal by reason (a `transportFilterDisabled` mismatch, the
+  `maxAgentsPerIdentity` limit); a heartbeat only once accepted; every path rejection by its cause, not only a path's
+  first; a call naming another connection's agentId, or a result for a scrape sent to another agent, as a binding
+  mismatch for its RPC; a result, or a chunked transfer's header, for a scrape no longer tracked as late; a transfer
+  whose scrape ends before its chunk or its summary as abandoned, once; and the queue wait of Prometheus's scrapes, not
+  a dashboard's
 - **ProxyGrpcServiceTest** — gRPC server configuration: each handshake, keepalive, and connection-age option reaches
   the server builder (a MockK builder) and an unset one leaves gRPC's default, and the transport filter; reflection
   is not served when disabled, and when enabled it requires a valid agent token if agent auth is configured; with
@@ -360,14 +368,15 @@ Two support helpers also live here (not test classes themselves):
   `//path` or `///path`, which Ktor routes as `/path`, is sent to the agent as Prometheus's scrape, labeled in the
   per-path metrics, and shown on `/debug` and the dashboard under the path's registered key, with its query unchanged,
   and the blitz, favicon, and unknown-path answers see it with one slash; a blitz path configured with a leading slash is answered at `/path`
-  and `//path` and can't be registered; the route logs a client's path and query cut and escaped; and the
-  defaults of `ResponseResults`, the route's answer
+  and `//path` and can't be registered; the route logs a client's path and query cut and escaped; a scrape that
+  throws counts as `internal_error`; and the defaults of `ResponseResults`, the route's answer
 - **ScrapeDispatchTest** — sending a scrape to a path's agents and merging their answers, which the scrape route and
   the dashboard's scrape-now share: each outcome `submitScrapeRequest` labels (the agent disconnecting before or during
   the scrape, the proxy's timeout or one it is given, the in-flight limit, the agent's backlog cap, the proxy stopping,
   an invalid response, a target's 404 or 500, invalid gzip, a zip bomb, and a success, plain or gzipped), the labels a
   target's status maps to, and a non-exposition content type served as text/plain; a huge agent content type is logged
-  cut and escaped; a handler that times out or is cancelled drops its scrape's unfinished chunked transfer;
+  cut and escaped; a handler that times out or is cancelled drops its scrape's unfinished chunked transfer, counted as
+  abandoned once;
   `submitScrapeRequests` answers in the agents' order and records nothing the proxy reports; a scrape request carries
   its `ScrapeSpec`'s query, headers, and origin (Prometheus or the dashboard) to the agent; an Authorization header
   sent without TLS is warned about once; `ScrapeHeaders` reads Prometheus's scrape timeout; and `mergeResponseResults`
@@ -393,10 +402,11 @@ Two support helpers also live here (not test classes themselves):
   access; a conditional removal takes only the context it is given; concurrent adds never pass an identity's
   agent limit, a removal frees a slot, and a refused add logs a WARN, and goes in the activity feed, at most once a
   minute for each identity
-- **AgentContextCleanupServiceTest** — Stale agent eviction (removes agents inactive beyond maxAgentInactivitySecs)
+- **AgentContextCleanupServiceTest** — Stale agent eviction (removes agents inactive beyond maxAgentInactivitySecs);
+  an eviction that finds the context already removed isn't counted
 - **RemovalReasonTest** — why the proxy removed an agent's context: each reason logs as its string always did, only an
   eviction is a problem in the activity feed, and each gives the feed its cause, an eviction naming
-  `proxy.internal.maxAgentInactivitySecs`
+  `proxy.internal.maxAgentInactivitySecs`, and `proxy_agent_disconnects_total` its label
 - **ChunkedContextTest** — Chunk accumulation, CRC32 checksum validation, header/chunk/trailer sequencing
 - **ProxyOptionsTest** — CLI parsing, defaults, validation, TLS settings, gRPC options, the `proxy.internal` limits,
   and the agent-port authentication warnings; an `http.idleTimeoutSecs` of 0 or a negative other than -1, and a
@@ -421,7 +431,10 @@ Two support helpers also live here (not test classes themselves):
 - **ProxyServerTransportFilterTest** — gRPC transport filter: agent context creation on connection, cleanup on
   disconnect, and a transport that ends after its eviction logging at INFO only for an announced agent
 - **ProxyUtilsTest** — Helper functions: invalidAgentContextResponse, respondWith
-- **ProxyMetricsTest** — Prometheus metrics registration and gauge/counter updates
+- **ProxyMetricsTest** — Prometheus metrics registration and gauge/counter updates; the agent, rejection, queue-wait,
+  and dashboard series registered with the rest; `proxy_build_info`'s version and launch ID, a closed proxy's series
+  removed while another proxy keeps the gauge; `proxy_dashboard_sessions` reporting the open pages; and the labeled
+  counters' known labels exposed at zero before anything is counted
 - **ActivityLogTest** — the dashboard's activity feed: lines newest first with each event's agent and time, the oldest
   dropped once full, a burst from one agent folded into one line that counts it and names its first paths, bursts from
   agents registering at once each one line, a burst ending at its window or at another agent, kind, or group, a source's
@@ -462,7 +475,8 @@ Two support helpers also live here (not test classes themselves):
   config file through a MockK `Proxy`, the reserved name fails startup as `Invalid configuration:`
 - **AgentAuthServerInterceptorTest** — gRPC auth interceptor: a valid token exposes the resolved identity in the
   context; a missing, unknown or same-length wrong token closes the call with UNAUTHENTICATED, and goes in the
-  activity feed, naming its host, a host's repeats counted on its line
+  activity feed, naming its host, a host's repeats counted on its line; and every refused call is reported for
+  `proxy_agent_auth_failures_total`, saying whether it sent a token
 - **ProxyEventBusTest** — Dashboard event bus: ordered delivery, non-blocking emit with no subscriber, no replay to a
   late subscriber, fan-out to multiple subscribers, and AgentContextManager emitting on connect only
 - **ProxyDashboardHtmlTest** (`dashboard/`) — Dashboard renderer: the Log out button only with a login and in no push,
@@ -644,7 +658,8 @@ One support helper also lives here (not a test class itself):
 - **ScrapeResultsTest** — ScrapeResults data class, error code mapping, timeout handling, protobuf conversion, and
   `asDashboardScrape`, which marks results without changing any other field or what is sent to the proxy
 - **SharedCollectorsTest** — the collectors every agent (or proxy) in a JVM shares register on the first acquire
-  and unregister, with their series cleared, on the last release; register again after a registry clear; and,
+  and unregister, with their series cleared, on the last release; register again after a registry clear; run
+  `onRegister` at each registration, so the series it makes start at zero again after a release cleared them; and,
   when the registry rejects one, leave none of them registered
 - **SettingsViewTest** (`dashboard/`) — the Settings view's region both dashboards render (`SettingsHtml`): a section
   header for each group and a row for each setting, escaped, a moment shown as a time, out of band in a push, and an
@@ -683,7 +698,10 @@ These support helpers also live here (not test classes themselves):
 - **LogCapture** — `captureLogs<T>(level) { … }`, which runs a block and returns what `T`'s logger emitted,
   optionally at a lower level, restoring the logger's appenders and level afterward
 - **MetricsMocks** — `mockProxyForMetrics()` / `mockAgentForMetrics()`, mocks that stub only what `ProxyMetrics`
-  and `AgentMetrics` read when they are built and scraped, for the metrics specs and `misc/DashboardMetricNamesTest`
+  and `AgentMetrics` read when they are built and scraped, for the metrics specs and `misc/DashboardMetricNamesTest`;
+  and `CountingProxyMetrics`, a relaxed `ProxyMetrics` whose counters are real, unregistered collectors, so a spec reads
+  what a call counted (a relaxed mock's labeled counter can't be incremented: its `labelValues` answers a plain
+  `DataPoint`)
 - **DeadlineExceeded** — `deadlineExceeded(elapsed)`, a `DEADLINE_EXCEEDED` `StatusException` described as
   grpc-java describes one, elapsed time included, for the specs that check a repeating failure is compared by its
   status code rather than its message
@@ -875,7 +893,8 @@ mechanism that the standard suite cannot reach:
   with a 429 and `Retry-After`, the right one included, from the form or as Basic Auth; an open page's WebSocket closed
   once its session ends (`VIOLATED_POLICY`), without waiting for a reconnect; a browser's saved Basic
   login (a request with `Sec-Fetch-Mode`) ignored, the page, `/session`, and the WebSocket included, and not logged as
-  wrong; a root mount's login at `/login`; and, with no password, no login page and no Log out
+  wrong; a root mount's login at `/login`; with no password, no login page and no Log out; and each login counted in
+  `proxy_dashboard_logins_total` by outcome, a script's right Basic Auth not counted as a sign-in
 - **TlsMutualAuthRejectionTest** — the negative mutual-TLS path over a real Netty handshake, which the
   in-process TLS specs cannot perform (item 28 in `docs/archive/CODE_REVIEW_JUNE_2026.md`)
 - **TlsPemTest** — TLS over Netty with every certificate and key given as PEM, none as a file: the proxy's as base64

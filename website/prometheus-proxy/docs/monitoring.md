@@ -83,15 +83,22 @@ Since 4.3.0, three more groups are available, also off by default:
 
 ### Counters
 
-| Metric                                    | Labels  | Description                                     |
-|:------------------------------------------|:--------|:------------------------------------------------|
-| `proxy_scrape_requests_total`             | `type`  | Scrape request outcomes (see below)             |
-| `proxy_connect_count_total`               | --      | Agent connection count                          |
-| `proxy_eviction_count_total`              | --      | Stale agent evictions                           |
-| `proxy_heartbeat_count_total`             | --      | Heartbeats received from agents                 |
-| `proxy_chunk_validation_failures_total`   | `stage` | Chunk integrity failures (`chunk` or `summary`) |
-| `proxy_chunked_transfers_abandoned_total` | --      | Chunked transfers abandoned mid-stream          |
-| `proxy_agent_displacement_total`          | --      | Path registrations that displaced another agent |
+| Metric                                    | Labels    | Description                                                     |
+|:------------------------------------------|:----------|:----------------------------------------------------------------|
+| `proxy_scrape_requests_total`             | `type`    | Scrape request outcomes (see below)                             |
+| `proxy_connect_count_total`               | --        | Agent connects the proxy accepted                               |
+| `proxy_agent_connect_refusals_total`      | `reason`  | Agent connects refused (see below)                              |
+| `proxy_agent_disconnects_total`           | `reason`  | Agents the proxy removed: `eviction`, `termination`, `stream_terminated` |
+| `proxy_eviction_count_total`              | --        | Stale agent evictions                                           |
+| `proxy_heartbeat_count_total`             | --        | Heartbeats the proxy accepted                                   |
+| `proxy_agent_auth_failures_total`         | `reason`  | Agent calls refused for their token: `missing_token`, `unknown_token` |
+| `proxy_path_rejections_total`             | `cause`   | Path registrations refused, by cause (see below)                |
+| `proxy_binding_mismatches_total`          | `rpc`     | Agent calls naming another agent or identity than their connection's |
+| `proxy_late_scrape_results_total`         | --        | Scrape results that arrived after their scrape had ended        |
+| `proxy_chunk_validation_failures_total`   | `stage`   | Chunk integrity failures (`chunk` or `summary`)                 |
+| `proxy_chunked_transfers_abandoned_total` | --        | Chunked transfers whose scrape ended before they finished       |
+| `proxy_agent_displacement_total`          | --        | Path registrations that displaced another agent                 |
+| `proxy_dashboard_logins_total`            | `outcome` | Dashboard logins: `success`, `failure`, `blocked`               |
 
 **`proxy_scrape_requests_total` type labels:**
 
@@ -115,6 +122,34 @@ Since 4.3.0, three more groups are available, also off by default:
 | `invalid_gzip`          | Gzip decompression failed                                           |
 | `proxy_stopped`         | Proxy is shutting down (503)                                        |
 | `invalid_agent_context` | All agents for the path are in an invalid state                     |
+| `internal_error`        | The scrape threw, and the client got a 500                          |
+
+**Agents and paths the proxy refused:**
+
+- `proxy_agent_connect_refusals_total`'s `reason` is `identity_limit`, a connect past
+  `proxy.internal.maxAgentsPerIdentity` (with `transportFilterDisabled`), or `transport_filter_mismatch`, an agent and
+  proxy that disagree on `transportFilterDisabled`. A refused connect isn't in `proxy_connect_count_total`.
+- `proxy_path_rejections_total`'s `cause` is the reason the agent is told, lowercased: `held_by_another_identity`,
+  `consolidation_mismatch`, `not_authorized`, `invalid_path`, `invalid_agent`, `binding_mismatch`, or
+  `path_limit_reached`. Every rejection counts, retries included, while the dashboard's Activity view shows a path's
+  first.
+- `proxy_agent_auth_failures_total` counts every refused call, though the proxy's warning about a host's bad token is
+  logged at most once a minute. An agent with a wrong token reconnects every few seconds, so it climbs steadily.
+- `proxy_binding_mismatches_total` stays at zero for the stock agent. Its `rpc` label names the call, such as
+  `registerPath` or `writeResponsesToProxy`.
+
+Each of these counters exposes every value of its label at zero from the start, so `increase()` and `rate()`, and an
+alert built on them, see the first event rather than only a second one.
+
+**Agents that leave:** `proxy_agent_disconnects_total` counts each agent the proxy removes, by why:
+`eviction` (no contact within `maxAgentInactivitySecs`, also in `proxy_eviction_count_total`), `termination` (its
+connection closed), or `stream_terminated` (its scrape stream ended, with `transportFilterDisabled`). A connection that
+never authenticated, such as a port probe, isn't counted.
+
+**Late and abandoned results:** a result that arrives after its scrape ended, usually at Prometheus's or the proxy's
+timeout, counts in `proxy_late_scrape_results_total`. The scrape itself was already counted as `timed_out` or
+`client_cancelled`. A chunked transfer under way when its scrape ends counts once in
+`proxy_chunked_transfers_abandoned_total`.
 
 !!! tip "Proxy-side and agent-side pairs"
 
@@ -133,17 +168,24 @@ Since 4.3.0, three more groups are available, also off by default:
 
 ### Histograms
 
-| Metric                                 | Labels             | Description                               |
-|:---------------------------------------|:-------------------|:------------------------------------------|
-| `proxy_scrape_request_latency_seconds` | `path`, `outcome`  | End-to-end scrape latency                 |
-| `proxy_scrape_response_bytes`          | `path`, `encoding` | Response payload size after decompression |
+| Metric                                 | Labels             | Description                                                   |
+|:---------------------------------------|:-------------------|:--------------------------------------------------------------|
+| `proxy_scrape_request_latency_seconds` | `path`, `outcome`  | End-to-end scrape latency                                     |
+| `proxy_scrape_queue_wait_seconds`      | --                 | Time a scrape waited before the agent's stream took it        |
+| `proxy_scrape_response_bytes`          | `path`, `encoding` | Response payload size after decompression                     |
 
 A path's series are removed when its last registration goes away, whether it is unregistered or its agent disconnects, so a retired path stops appearing on `/metrics`. A scrape still in flight when that happens is not recorded, so it cannot bring the series back.
 
 The latency histogram's `outcome` label takes the `proxy_scrape_requests_total` `type` values above, so latency can be split
 by result.
 
+`proxy_scrape_queue_wait_seconds` is the part of the end-to-end latency spent waiting behind the agent's other scrapes.
+When the latency climbs and the queue wait climbs with it, the agent is busy; when the queue wait stays low, the time
+is in the network or the target. Like the latency histogram, it leaves out the dashboard's Scrape now.
+
 Latency buckets: 5ms, 10ms, 25ms, 50ms, 100ms, 250ms, 500ms, 1s, 2.5s, 5s, 10s, 15s, 30s, 60s, 90s
+
+The queue wait histogram has the same buckets.
 
 Response size buckets: 1KB, 10KB, 100KB, 500KB, 1MB, 5MB, 10MB
 
@@ -152,11 +194,17 @@ Response size buckets: 1KB, 10KB, 100KB, 500KB, 1MB, 5MB, 10MB
 | Metric                                | Description                                    |
 |:--------------------------------------|:-----------------------------------------------|
 | `proxy_start_time_seconds`            | Proxy start time (Unix epoch), by `launch_id`  |
+| `proxy_build_info`                    | Always 1, by `launch_id` and `version`         |
 | `proxy_agent_map_size`                | Number of connected agents                     |
 | `proxy_path_map_size`                 | Number of registered scrape paths              |
 | `proxy_scrape_map_size`               | Number of in-flight scrape requests            |
 | `proxy_chunk_context_map_size`        | Number of in-flight chunked transfers          |
 | `proxy_cumulative_agent_backlog_size` | Total queued scrape requests across all agents |
+| `proxy_dashboard_sessions`            | Dashboard pages open                           |
+
+`proxy_dashboard_logins_total` counts a sign-in on the login page as `success`, a wrong login, from the page or a
+script's Basic Auth, as `failure`, and a login refused because its address made too many wrong ones as `blocked`. A
+script's right Basic Auth logs in on every request, so it isn't counted.
 
 ---
 
@@ -214,6 +262,7 @@ Prometheus --- HTTP GET ---> Proxy                        Agent
                               |                             |
                   records the start time                    |
                               |                             |
+                  queueWait.observe(age)                    |
                   writeScrapeRequest() -- gRPC stream --> fetchScrapeUrl()
                               |                     agentLatency.startTimer()
                               |                             |
@@ -293,15 +342,17 @@ java -jar prometheus-agent.jar --admin
 
 Key panels to monitor:
 
-| Section             | What to Watch                                                                                                        |
-|:--------------------|:---------------------------------------------------------------------------------------------------------------------|
-| **Overview**        | Success rate dropping below 99%, error count spikes                                                                  |
-| **Throughput**      | Sudden changes in request volume or error ratio                                                                      |
-| **Latency**         | P99 creeping up indicates slow targets or network issues                                                             |
-| **Payload**         | Unexpectedly large responses, gzip vs plain distribution                                                             |
-| **Internal State**  | Growing backlog means agents can't keep up; agents heartbeat only when idle, so zero heartbeats is normal under load |
-| **Errors & Events** | Which error types dominate, frequent evictions                                                                       |
-| **Chunk Health**    | Any chunk validation failure or abandoned transfer                                                                   |
+| Section                   | What to Watch                                                                                                        |
+|:--------------------------|:---------------------------------------------------------------------------------------------------------------------|
+| **Overview**              | Success rate dropping below 99%, error count spikes, each proxy's version                                            |
+| **Throughput**            | Sudden changes in request volume or error ratio                                                                      |
+| **Latency**               | P99 creeping up indicates slow targets or network issues; queue wait climbing with it means a busy agent            |
+| **Payload**               | Unexpectedly large responses, gzip vs plain distribution                                                             |
+| **Internal State**        | Growing backlog means agents can't keep up; agents heartbeat only when idle, so zero heartbeats is normal under load |
+| **Errors & Events**       | Which error types dominate; agents disconnecting, and why; refused connects; results arriving after a timeout        |
+| **Security & Rejections** | Agents refused for their token, paths refused and why, any binding mismatch                                          |
+| **Chunk Health**          | Any chunk validation failure or abandoned transfer                                                                   |
+| **Dashboard**             | Wrong or blocked dashboard logins, and how many pages are open                                                       |
 
 The **Job** and **Instance** pickers pick out one proxy when Prometheus scrapes more than one, such as a
 high-availability pair.

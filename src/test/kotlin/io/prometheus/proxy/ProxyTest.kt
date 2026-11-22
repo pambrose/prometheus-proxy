@@ -32,6 +32,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.spyk
 import io.prometheus.Proxy
+import io.prometheus.common.CountingProxyMetrics
 import io.prometheus.common.TestPorts.PROXY_FAILED_START_ADMIN_PORT
 import io.prometheus.common.TestPorts.PROXY_FAILED_START_METRICS_PORT
 import io.prometheus.common.TestPorts.PROXY_FAILED_SUB_SERVICE_ADMIN_PORT
@@ -577,6 +578,25 @@ class ProxyTest : StringSpec() {
       mockProxy.metrics { invoked = true }
 
       invoked.shouldBeTrue()
+    }
+
+    // Only evictions were counted, so an agent whose connection kept closing showed nothing in the proxy's metrics. A
+    // connection that never authenticated, such as a port probe, isn't an agent, so its removal isn't counted.
+    "an agent's removal should count as a disconnect by its reason, and an unannounced connection's should not" {
+      val proxy = spyk(createTestProxy())
+      val counts = CountingProxyMetrics().also { it.installOn(proxy) }
+
+      RemovalReason.entries.forEach { reason ->
+        val agent = createAgentContext().also { proxy.agentContextManager.addAgentContext(it) }
+        proxy.removeAgentContext(agent.agentId, reason)
+      }
+      val probe = AgentContext("probe-remote").also { proxy.agentContextManager.addAgentContext(it, announce = false) }
+      proxy.removeAgentContext(probe.agentId, RemovalReason.TERMINATION)
+
+      RemovalReason.entries.associate {
+        it.metricLabel to counts.agentDisconnects.labelValues(it.metricLabel).get()
+      } shouldBe
+        mapOf("eviction" to 1.0, "termination" to 1.0, "stream_terminated" to 1.0)
     }
 
     // An eviction is the agent going quiet, the problem the feed exists to show; a closed connection is an agent
