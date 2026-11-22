@@ -186,7 +186,8 @@ failover as it happens: the endpoint it's on or trying, and the last error it go
   **via branch-to-standby:50054 (2 of 2)**, marked **failed over**. Nobody touched the agents.
 - Grafana: within about 15 seconds every service is up again on **Target health**, scraped through the standby, and
   **Connected agents, by proxy** has moved to the standby. Only `prometheus-proxy`, the primary's own metrics, stays
-  red, and **NetworkTargetDown** fires for it alone.
+  red, and **NetworkTargetDown** fires for it alone. **Agents off their primary** shows each agent at 1, the second
+  endpoint in its list, from `agent_proxy_endpoint_index`, which each agent reports itself.
 - agent-branch's Connection view reads **connecting**, then **failing**, as its connect through branch-to-proxy:50053
   fails, then **connected** through branch-to-standby:50054, marked **failed over**. Under **Proxy endpoints**,
   branch-to-proxy:50053 keeps the error its connect got: a proxy that's down shows there, not only in the agent's log.
@@ -232,7 +233,8 @@ what the agent tries.
   fires. Grafana's **Disconnects, by proxy and reason** shows it as an `eviction` at the primary. This is the proxy's
   side, as in the basics demo's frozen agent; here we watch the agent's.
 - At about 50 seconds agent-branch connects through its other link: the standby's dashboard shows it **via
-  branch-to-standby:50054 (2 of 2)**, failed over, while the primary is still up. agent-hq is untouched throughout.
+  branch-to-standby:50054 (2 of 2)**, failed over, while the primary is still up, and Grafana's **Agents off their
+  primary** shows it at 1. agent-hq is untouched throughout.
 - agent-branch's **Activity** view, <http://localhost:8197/dashboard/activity>, keeps the whole sequence:
   **disconnected**, **connect failed** on branch-to-proxy:50053, **failed over** to branch-to-standby:50054,
   **connected**, and **registered**. The proxies saw only the eviction and the new connection.

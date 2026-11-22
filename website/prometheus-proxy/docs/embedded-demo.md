@@ -169,10 +169,10 @@ starts the agent and stops it with the app:
   <figcaption>The Coffee Shop dashboard during a rush, with the espresso machine broken</figcaption>
 </figure>
 
-Grafana opens on the Coffee Shop dashboard: the shop right now, drinks served by type, orders by outcome, the queue
-against the baristas, brew time, the order counter's HTTP statuses, and, below them, Ktor's HTTP latency, the JVM's
-heap, and how long each scrape through the proxy took. Here a rush has filled the queue, and with the espresso machine
-broken, about three orders in four fail, and `CoffeeShopErrors` fires.
+Grafana opens on the Coffee Shop dashboard: the shop right now, whether its agent is connected to the proxy, drinks
+served by type, orders by outcome, the queue against the baristas, brew time, the order counter's HTTP statuses, and,
+below them, Ktor's HTTP latency, the JVM's heap, and how long each scrape through the proxy took. Here a rush has filled
+the queue, and with the espresso machine broken, about three orders in four fail, and `CoffeeShopErrors` fires.
 
 ```bash
 ./demo.sh rush            # customers order three times as often
@@ -238,7 +238,7 @@ Docker to publish its port, which the demo binds to `127.0.0.1`.
 
 `./demo.sh proxy-stop` stops the proxy. The coffee shop keeps serving, and an order still goes through
 (`./demo.sh order`), since its agent retries in the background and the app never waits on it. Prometheus can't reach
-the proxy, so the graphs stop and `CoffeeShopDown` fires. The agent's `/debug` page, <http://localhost:8393/debug>,
+the proxy, so the graphs stop, Grafana's **Agent** reads Disconnected, and `CoffeeShopDown` fires. The agent's `/debug` page, <http://localhost:8393/debug>,
 shows an empty AgentId, since the agent has lost its connection, and the proxy it keeps trying, while its
 `/healthcheck` still reads healthy. On the agent's dashboard, the Connection view,
 <http://localhost:8395/dashboard/connection>, reads `failing`, with the error the agent's last try to reach

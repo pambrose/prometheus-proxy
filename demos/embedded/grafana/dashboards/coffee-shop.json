@@ -347,7 +347,7 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 3,
+        "w": 4,
         "x": 14,
         "y": 1
       },
@@ -424,7 +424,7 @@
       "gridPos": {
         "h": 4,
         "w": 3,
-        "x": 17,
+        "x": 18,
         "y": 1
       },
       "fieldConfig": {
@@ -499,8 +499,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 4,
-        "x": 20,
+        "w": 3,
+        "x": 21,
         "y": 1
       },
       "fieldConfig": {
@@ -559,9 +559,11 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "max(agent_connected{job=\"coffee-shop-agent\"})",
+          "expr": "max(agent_connected{job=\"coffee-shop-agent\"}) or on() vector(0)",
           "legendFormat": "",
-          "refId": "A"
+          "refId": "A",
+          "instant": true,
+          "range": false
         }
       ]
     },
