@@ -171,7 +171,7 @@ internal class AgentHttpService(
   }
 
   // Fetches the scrape of [pathContext], null for a path the agent doesn't serve, and records it, in the metrics and
-  // the path's history. [span], the fetch's, is tagged with each retry.
+  // the path's history.
   private suspend fun fetchAndRecord(
     scrapeRequest: ScrapeRequest,
     pathContext: AgentPathManager.PathContext?,
@@ -248,8 +248,7 @@ internal class AgentHttpService(
     }
   }
 
-  // Fetches [url] within the scrape's timeout, a failure becoming results that say why. [span], the fetch's if it's
-  // traced, is tagged with each retry.
+  // Fetches [url] within the scrape's timeout, a failure becoming results that say why.
   private suspend fun fetchGuarded(
     url: String,
     req: ScrapeRequest,

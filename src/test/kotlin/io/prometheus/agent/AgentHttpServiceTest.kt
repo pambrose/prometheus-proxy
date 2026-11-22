@@ -72,12 +72,10 @@ import io.prometheus.common.startAndAwaitReady
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.proxy.ProxyUtils.unzip
 import io.prometheus.common.ScrapeResults
-import io.prometheus.common.ScrapeTracing
 import io.prometheus.common.ScrapeTracing.Companion.TAG_LINES_DROPPED
 import io.prometheus.common.ScrapeTracing.Companion.TAG_PATH
 import io.prometheus.common.ScrapeTracing.Companion.TAG_RETRIES
-import io.prometheus.common.collectInto
-import brave.Tracing
+import io.prometheus.common.collectingScrapeTracing
 import brave.handler.MutableSpan
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.CancellationException
@@ -1454,9 +1452,15 @@ class AgentHttpServiceTest : StringSpec() {
       }
     }
 
-    // A traced fetch's span says how many times the agent retried it. Each retry tags it as it's made, so a fetch that
-    // failed after its retries has the tag too; a fetch never retried has none.
-    "a traced fetch's span should be tagged with how many times the agent retried it" {
+    // A traced fetch's span says how many times the agent retried it, tagged as each retry is made, so a fetch that
+    // failed after its retries has it too, and how many lines its path's filter dropped. A fetch never retried, of a
+    // path without a filter, has neither.
+    "a traced fetch's span should be tagged with its retries and the lines its path's filter dropped" {
+      val mockAgent =
+        createMockAgentWithPaths(
+          filterHocon = """{ path = "filtered", metricNameAllow = [], metricNameDeny = ["denied_metric"] }""",
+          maxRetries = 1,
+        )
       val server =
         embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
           routing {
@@ -1464,41 +1468,6 @@ class AgentHttpServiceTest : StringSpec() {
               call.response.status(HttpStatusCode.InternalServerError)
               call.respondText("unavailable")
             }
-            get("/healthy") { call.respondText("up 1\n") }
-          }
-        }
-      val spans = CopyOnWriteArrayList<MutableSpan>()
-      val tracing = ScrapeTracing(Tracing.newBuilder().addSpanHandler(collectInto(spans)).build(), 1.0)
-
-      try {
-        val port = server.startAndAwaitReady()
-        val mockAgent = createMockAgentWithPaths(maxRetries = 1)
-        every { mockAgent.tracing } returns tracing
-        val service = AgentHttpService(mockAgent)
-        mockAgent.pathManager.registerPath("failing", "http://localhost:$port/failing")
-        mockAgent.pathManager.registerPath("healthy", "http://localhost:$port/healthy")
-
-        service.fetchScrapeUrl(scrapeRequest { path = "failing" }).srStatusCode shouldBe 500
-        service.fetchScrapeUrl(scrapeRequest { path = "healthy" }).srStatusCode shouldBe 200
-        service.close()
-
-        spans.single { it.tag(TAG_PATH) == "failing" }.tag(TAG_RETRIES) shouldBe "1"
-        spans.single { it.tag(TAG_PATH) == "healthy" }.tag(TAG_RETRIES).shouldBeNull()
-      } finally {
-        tracing.close()
-        server.stop(0, 0)
-      }
-    }
-
-    // A traced fetch of a filtered path says how many lines the filter dropped; a path without a filter says nothing.
-    "a traced fetch's span should be tagged with the lines its path's filter dropped" {
-      val mockAgent =
-        createMockAgentWithPaths(
-          filterHocon = """{ path = "filtered", metricNameAllow = [], metricNameDeny = ["denied_metric"] }""",
-        )
-      val server =
-        embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
-          routing {
             get("/metrics") {
               call.respondText(
                 "# TYPE allowed_metric counter\nallowed_metric 1\n# TYPE denied_metric counter\ndenied_metric 2\n",
@@ -1508,22 +1477,26 @@ class AgentHttpServiceTest : StringSpec() {
           }
         }
       val spans = CopyOnWriteArrayList<MutableSpan>()
-      val tracing = ScrapeTracing(Tracing.newBuilder().addSpanHandler(collectInto(spans)).build(), 1.0)
+      val tracing = collectingScrapeTracing(spans)
 
       try {
         val port = server.startAndAwaitReady()
         every { mockAgent.tracing } returns tracing
         val service = AgentHttpService(mockAgent)
+        mockAgent.pathManager.registerPath("failing", "http://localhost:$port/failing")
         mockAgent.pathManager.registerPath("filtered", "http://localhost:$port/metrics")
         mockAgent.pathManager.registerPath("unfiltered", "http://localhost:$port/metrics")
 
-        service.fetchScrapeUrl(scrapeRequest { path = "filtered" }).filterLinesDropped shouldBe 2
-        service.fetchScrapeUrl(scrapeRequest { path = "unfiltered" }).filterLinesDropped.shouldBeNull()
+        listOf("failing", "filtered", "unfiltered").forEach { service.fetchScrapeUrl(scrapeRequest { path = it }) }
         service.close()
 
+        val (failing, filtered, unfiltered) =
+          listOf("failing", "filtered", "unfiltered").map { path -> spans.single { it.tag(TAG_PATH) == path } }
+        failing.tag(TAG_RETRIES) shouldBe "1"
         // The denied family's TYPE line and its sample.
-        spans.single { it.tag(TAG_PATH) == "filtered" }.tag(TAG_LINES_DROPPED) shouldBe "2"
-        spans.single { it.tag(TAG_PATH) == "unfiltered" }.tag(TAG_LINES_DROPPED).shouldBeNull()
+        filtered.tag(TAG_LINES_DROPPED) shouldBe "2"
+        unfiltered.tag(TAG_RETRIES).shouldBeNull()
+        unfiltered.tag(TAG_LINES_DROPPED).shouldBeNull()
       } finally {
         tracing.close()
         server.stop(0, 0)

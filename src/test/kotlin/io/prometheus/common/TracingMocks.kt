@@ -16,6 +16,7 @@
 
 package io.prometheus.common
 
+import brave.Tracing
 import brave.handler.MutableSpan
 import brave.handler.SpanHandler
 import brave.propagation.TraceContext
@@ -29,3 +30,9 @@ internal fun collectInto(spans: MutableCollection<MutableSpan>): SpanHandler =
       cause: Cause,
     ): Boolean = spans.add(span)
   }
+
+/** A real [ScrapeTracing] at [sampleRate] whose finished spans land in [spans]; close it when done. */
+internal fun collectingScrapeTracing(
+  spans: MutableCollection<MutableSpan>,
+  sampleRate: Double = 1.0,
+): ScrapeTracing = ScrapeTracing(Tracing.newBuilder().addSpanHandler(collectInto(spans)).build(), sampleRate)

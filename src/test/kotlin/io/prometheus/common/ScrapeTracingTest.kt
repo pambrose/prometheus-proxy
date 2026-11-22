@@ -46,7 +46,7 @@ class ScrapeTracingTest : StringSpec() {
   // A ScrapeTracing at [sampleRate] whose finished spans land in [finished].
   private fun scrapeTracing(sampleRate: Double): ScrapeTracing {
     finished.clear()
-    return ScrapeTracing(Tracing.newBuilder().addSpanHandler(collectInto(finished)).build(), sampleRate)
+    return collectingScrapeTracing(finished, sampleRate)
   }
 
   // A scrape's three spans, as the proxy and the agent make them: the scrape, its forward to an agent, and the agent's

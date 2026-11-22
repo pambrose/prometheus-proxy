@@ -245,6 +245,7 @@ class InProcessZipkinTest : StringSpec() {
       bodies.flatMap { body ->
         Json.parseToJsonElement(body).jsonArray.map { element ->
           val span = element.jsonObject
+          val remote = span["remoteEndpoint"]?.jsonObject
           ReportedSpan(
             traceId = span.getValue("traceId").jsonPrimitive.content,
             id = span.getValue("id").jsonPrimitive.content,
@@ -253,8 +254,8 @@ class InProcessZipkinTest : StringSpec() {
             kind = span["kind"]?.jsonPrimitive?.content,
             serviceName = span["localEndpoint"]?.jsonObject?.get("serviceName")?.jsonPrimitive?.content,
             tags = span["tags"]?.jsonObject?.mapValues { (_, value) -> value.jsonPrimitive.content }.orEmpty(),
-            remoteIp = span["remoteEndpoint"]?.jsonObject?.let { it["ipv4"] ?: it["ipv6"] }?.jsonPrimitive?.content,
-            remotePort = span["remoteEndpoint"]?.jsonObject?.get("port")?.jsonPrimitive?.content?.toInt(),
+            remoteIp = (remote?.get("ipv4") ?: remote?.get("ipv6"))?.jsonPrimitive?.content,
+            remotePort = remote?.get("port")?.jsonPrimitive?.content?.toInt(),
           )
         }
       }
