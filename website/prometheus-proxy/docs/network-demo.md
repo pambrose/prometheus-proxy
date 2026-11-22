@@ -193,7 +193,8 @@ no manual step: its dashboard shows each one via its link to the standby, **(2 o
 the agent's [ordered endpoints](configuration/agent.md#proxy-failover). Prometheus discovers through both proxies, so
 within about 15 seconds every service is up again in Grafana, scraped through the standby; only `prometheus-proxy`, the
 primary's own metrics, stays down, and **NetworkTargetDown** fires for it alone. Grafana's **Agents off their primary**
-shows each agent at 1, the second endpoint in its list, from `agent_proxy_endpoint_index`, which each agent reports.
+shows each agent at 1, the second endpoint in its list, from `agent_proxy_endpoint_index`, which each agent reports,
+and about 20 seconds later **NetworkAgentNotOnPrimary** fires for both.
 
 agent-branch's own dashboard shows the failover from the agent's side, which no proxy can. Its
 [Connection view](agent-dashboard.md#the-connection-view), <http://localhost:8197/dashboard/connection>, reads
@@ -205,10 +206,11 @@ agent went through, newest first: **disconnected**, **connect failed** on `branc
 `branch-to-standby:50054`, **connected**, and **registered**, one line for its three paths.
 
 `./demo.sh proxy-up` brings the primary back, but the agents stay on the standby: an agent returns to the head of its
-list only when its connection drops. agent-branch's Connection view doesn't change, and `branch-to-proxy:50053` keeps
-its error until a connect through it succeeds. `./demo.sh heal` closes each agent's connection through its standby
-link once, and they return to the primary within seconds: agent-branch's Activity view adds **disconnected**, **back
-to primary**, and **connected**, and its Connection view drops the **failed over** tag.
+list only when its connection drops. **NetworkAgentNotOnPrimary** keeps firing, agent-branch's Connection view
+doesn't change, and `branch-to-proxy:50053` keeps its error until a connect through it succeeds. `./demo.sh heal`
+closes each agent's connection through its standby link once, and they return to the primary within seconds, which
+resolves the alert: agent-branch's Activity view adds **disconnected**, **back to primary**, and **connected**, and
+its Connection view drops the **failed over** tag.
 
 ### A link goes silent; the agent detects it and fails over
 
@@ -231,7 +233,8 @@ link, where the connect waits out its 30-second deadline (`agent.grpc.unaryDeadl
 which has heard nothing, evicts the agent after 30 seconds of silence (`proxy.internal.maxAgentInactivitySecs`, which
 the demo sets to 30), and **NetworkAgentEvicted** fires. At about 50 seconds agent-branch connects through its link to
 the standby, failed over, while the primary is still up, and Grafana's **Agents off their primary** shows it at 1.
-agent-hq is untouched throughout.
+About 20 seconds later **NetworkAgentNotOnPrimary** fires for agent-branch alone, until `./demo.sh heal` brings it
+back. agent-hq is untouched throughout.
 
 agent-branch's Connection view, <http://localhost:8197/dashboard/connection>, shows the agent's side of the wait: from
 about 20 seconds it reads **connecting**, with `branch-to-proxy:50053` tagged **trying**, until the connect's deadline

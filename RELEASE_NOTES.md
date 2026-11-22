@@ -43,9 +43,9 @@ _Not yet released_
   proxy's host and the port Prometheus scrapes, or `Agent: agent-east`, the agent's name, so several open dashboards are
   told apart at a glance.
 - **Each scrape, traced.** With Zipkin on, each scrape Prometheus makes is now a trace of its own, from the proxy
-  through the agent to the target, showing how long the scrape waited for its agent, how long the target took, and why
-  a scrape failed. Set `sampleRate` under `proxy.internal.zipkin` and `agent.internal.zipkin` to keep a share of traces
-  instead of all of them.
+  through the agent to the target, showing which Prometheus asked, how long the scrape waited for its agent, how long
+  the target took and how often the agent retried it, and why a scrape failed. Set `sampleRate` under
+  `proxy.internal.zipkin` and `agent.internal.zipkin` to keep a share of traces instead of all of them.
 
 ### Bug Fixes
 

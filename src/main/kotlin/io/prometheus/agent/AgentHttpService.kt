@@ -62,7 +62,9 @@ import io.prometheus.agent.filter.MetricFilter
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.ScrapeResults.Companion.errorCode
 import io.prometheus.common.ScrapeTracing.Companion.FETCH_SPAN
+import io.prometheus.common.ScrapeTracing.Companion.TAG_LINES_DROPPED
 import io.prometheus.common.ScrapeTracing.Companion.TAG_PATH
+import io.prometheus.common.ScrapeTracing.Companion.TAG_RETRIES
 import io.prometheus.common.ScrapeTracing.Companion.endedAs
 import io.prometheus.common.ScrapeTracing.Companion.traced
 import io.prometheus.common.Utils.EMPTY_BYTE_ARRAY
@@ -134,8 +136,9 @@ internal class AgentHttpService(
 
   suspend fun fetchScrapeUrl(scrapeRequest: ScrapeRequest): ScrapeResults {
     val pathContext = agent.pathManager[scrapeRequest.path]
-    return fetchSpan(scrapeRequest, pathContext).traced(ended = { tagged(it) }) {
-      fetchAndRecord(scrapeRequest, pathContext)
+    val span = fetchSpan(scrapeRequest, pathContext)
+    return span.traced(ended = { tagged(it) }) {
+      fetchAndRecord(scrapeRequest, pathContext, span)
     }
   }
 
@@ -155,14 +158,16 @@ internal class AgentHttpService(
         pathContext?.also { tag("http.url", sanitizeUrl(it.url)) }
       }
 
-  // Tags a fetch span with what the fetch got: its outcome, the target's status, and the payload's size before and
-  // after the path's filter, as it went to the proxy.
+  // Tags a fetch span with what the fetch got: its outcome, the target's status, the payload's size before and after
+  // the path's filter, as it went to the proxy, and the lines the filter dropped. Its retries are tagged as each is
+  // made (see newHttpClient), so a fetch that failed after them has them too.
   private fun Span.tagged(results: ScrapeResults) {
     endedAs(listOf(results.scrapeCounterMsg), results.srStatusCode)
     tag("gzipped", results.srZipped.toString())
     tag("chunked", results.isChunked(agent.options.chunkContentSizeBytes).toString())
     tag("bytes.raw", results.rawSize.toString())
     tag("bytes.filtered", results.filteredSize.toString())
+    results.filterLinesDropped?.also { tag(TAG_LINES_DROPPED, it.toString()) }
   }
 
   // Fetches the scrape of [pathContext], null for a path the agent doesn't serve, and records it, in the metrics and
@@ -170,11 +175,12 @@ internal class AgentHttpService(
   private suspend fun fetchAndRecord(
     scrapeRequest: ScrapeRequest,
     pathContext: AgentPathManager.PathContext?,
+    span: Span?,
   ): ScrapeResults {
     val started = TimeSource.Monotonic.markNow()
     val fetched =
       if (pathContext != null)
-        fetchContentFromUrl(scrapeRequest, pathContext)
+        fetchContentFromUrl(scrapeRequest, pathContext, span)
       else
         handleInvalidPath(scrapeRequest)
     // Counted here, so every scrape the proxy asks for is counted under its type, however it ends. A scrape the proxy's
@@ -229,13 +235,14 @@ internal class AgentHttpService(
   private suspend fun fetchContentFromUrl(
     req: ScrapeRequest,
     pathContext: AgentPathManager.PathContext,
+    span: Span?,
   ): ScrapeResults {
     val requestTimer = latencyTimer(req)
     // Add the incoming query params to the url
     val url = appendQueryParams(pathContext.url, req.encodedQueryParams)
     logger.debug { "Fetching $pathContext ${if (url.isNotBlank()) "URL: ${sanitizeUrl(url)}" else ""}" }
     return try {
-      fetchGuarded(url, req, pathContext.filter)
+      fetchGuarded(url, req, pathContext.filter, span)
     } finally {
       requestTimer?.observeDuration()
     }
@@ -246,10 +253,11 @@ internal class AgentHttpService(
     url: String,
     req: ScrapeRequest,
     filter: MetricFilter?,
+    span: Span? = null,
   ): ScrapeResults =
     try {
       withTimeout(scrapeTimeout(req)) {
-        fetchContent(url, req, filter)
+        fetchContent(url, req, filter, span)
       }
     } catch (e: Throwable) {
       failedResults(e, req, sanitizeUrl(url))
@@ -299,13 +307,14 @@ internal class AgentHttpService(
     url: String,
     scrapeRequest: ScrapeRequest,
     filter: MetricFilter? = null,
+    span: Span? = null,
   ): ScrapeResults {
     val clientKey = with(Url(url)) { ClientKey(user, password) }
     val entry = httpClientCache.getOrCreateClient(clientKey) { newHttpClient(clientKey) }
     try {
       // A streaming request, so the body is read only by buildScrapeResults, which stops at the size limit. A plain
       // request reads the whole body into the heap before its response block runs, however large it is.
-      return entry.client.prepareGet(url, prepareRequestHeaders(scrapeRequest)).execute { response ->
+      return entry.client.prepareGet(url, prepareRequestHeaders(scrapeRequest, span)).execute { response ->
         buildScrapeResults(response, url, scrapeRequest, filter)
       }
     } finally {
@@ -313,7 +322,10 @@ internal class AgentHttpService(
     }
   }
 
-  private fun prepareRequestHeaders(request: ScrapeRequest): HttpRequestBuilder.() -> Unit =
+  private fun prepareRequestHeaders(
+    request: ScrapeRequest,
+    span: Span?,
+  ): HttpRequestBuilder.() -> Unit =
     {
       val limit = scrapeTimeout(request)
       logger.debug { "Setting scrape timeout = $limit" }
@@ -323,6 +335,7 @@ internal class AgentHttpService(
       header(SCRAPE_TIMEOUT_HEADER, limit.toHeaderSeconds())
       if (!request.dashboardScrape)
         attributes.put(PROMETHEUS_SCRAPE, Unit)
+      span?.also { attributes.put(FETCH_TRACE_SPAN, it) }
 
       // Set non-default headers
       // The scrape travels to Prometheus as text, so the target is asked only for a text format; see textOnlyAccept.
@@ -392,6 +405,7 @@ internal class AgentHttpService(
         scrapeCounterMsg = SUCCESS_LABEL,
         rawSize = contentBytes.size,
         filteredSize = filteredBytes.size,
+        filterLinesDropped = outcome?.linesDropped,
       )
     } else {
       ScrapeResults(
@@ -481,6 +495,8 @@ internal class AgentHttpService(
               request.headers.append("x-retry-count", retryCount.toString())
               if (request.attributes.contains(PROMETHEUS_SCRAPE))
                 agent.metrics { scrapeRetryCount.labelValues(agent.launchId).inc() }
+              // Each retry's count replaces the last's, so the fetch's span ends with how many there were.
+              request.attributes.getOrNull(FETCH_TRACE_SPAN)?.tag(TAG_RETRIES, retryCount.toString())
             }
             exponentialDelay(maxDelayMs = MAX_RETRY_DELAY_MS)
           }
@@ -546,6 +562,9 @@ internal class AgentHttpService(
 
     // On a request for Prometheus's scrape, not a dashboard's: agent_scrape_retries_total counts its retries.
     private val PROMETHEUS_SCRAPE = AttributeKey<Unit>("PrometheusScrape")
+
+    // On a request for a traced fetch: its span, which each retry tags. A retry's request copies its attributes.
+    private val FETCH_TRACE_SPAN = AttributeKey<Span>("FetchTraceSpan")
 
     // The failure reason is sent to the proxy -- which writes it to its activity log -- even with debug off,
     // and HTTP client exception messages embed the request URL, credentials included.

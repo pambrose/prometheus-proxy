@@ -24,6 +24,10 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldNotBeEmpty
+import io.kotest.matchers.collections.shouldNotContain
+import io.kotest.matchers.ints.shouldBeGreaterThan
+import io.kotest.matchers.longs.shouldBeGreaterThanOrEqual
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.ktor.client.HttpClient
@@ -116,7 +120,14 @@ class InProcessZipkinTest : StringSpec() {
           forward.parentId shouldBe scrape.id
           fetch.parentId shouldBe forward.id
           scrape.tags.getValue("path") shouldBe PATH
+          // The client that scraped, as Zipkin shows it: here the spec's own, on loopback.
+          scrape.remoteIp.shouldNotBeNull()
+          scrape.remotePort.shouldNotBeNull() shouldBeGreaterThan 0
+          forward.tags.getValue(ScrapeTracing.TAG_QUEUE_WAIT).toLong() shouldBeGreaterThanOrEqual 0L
           fetch.tags.getValue("outcome") shouldBe "success"
+          // Never retried, and the path has no filter.
+          fetch.tags.keys shouldNotContain ScrapeTracing.TAG_RETRIES
+          fetch.tags.keys shouldNotContain ScrapeTracing.TAG_LINES_DROPPED
           spans.filter { it.name.orEmpty().contains(ScrapeTracing.HEARTBEAT_METHOD.lowercase()) }.shouldBeEmpty()
         }
       } finally {
@@ -234,6 +245,7 @@ class InProcessZipkinTest : StringSpec() {
       bodies.flatMap { body ->
         Json.parseToJsonElement(body).jsonArray.map { element ->
           val span = element.jsonObject
+          val remote = span["remoteEndpoint"]?.jsonObject
           ReportedSpan(
             traceId = span.getValue("traceId").jsonPrimitive.content,
             id = span.getValue("id").jsonPrimitive.content,
@@ -242,6 +254,8 @@ class InProcessZipkinTest : StringSpec() {
             kind = span["kind"]?.jsonPrimitive?.content,
             serviceName = span["localEndpoint"]?.jsonObject?.get("serviceName")?.jsonPrimitive?.content,
             tags = span["tags"]?.jsonObject?.mapValues { (_, value) -> value.jsonPrimitive.content }.orEmpty(),
+            remoteIp = (remote?.get("ipv4") ?: remote?.get("ipv6"))?.jsonPrimitive?.content,
+            remotePort = remote?.get("port")?.jsonPrimitive?.content?.toInt(),
           )
         }
       }
@@ -255,6 +269,8 @@ class InProcessZipkinTest : StringSpec() {
     val kind: String?,
     val serviceName: String?,
     val tags: Map<String, String>,
+    val remoteIp: String?,
+    val remotePort: Int?,
   )
 
   companion object {

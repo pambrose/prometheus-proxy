@@ -529,8 +529,9 @@ cmd_tour() {
       "It opens on the 'Coffee Shop' dashboard, with no sign-in needed."
     instruct "Look at the top section, 'The coffee shop, scraped through its embedded agent'." \
       "Its first row is the shop right now: drinks served a minute, the queue, the baristas, the rush, the espresso" \
-      "machine, and whether Prometheus's last scrape through the proxy succeeded. Below them are drinks by type," \
-      "orders by outcome, the queue against the baristas, brew time, and the order counter's HTTP statuses."
+      "machine, whether Prometheus's last scrape through the proxy succeeded, and whether the agent is connected" \
+      "to the proxy. Below them are drinks by type, orders by outcome, the queue against the baristas, brew time," \
+      "and the order counter's HTTP statuses."
     instruct "Look at the section titled 'The app and its runtime'." \
       "These are Ktor's HTTP latency and the JVM's heap, from Micrometer, as any Ktor app has, and how long each" \
       "scrape through the proxy took. Nothing in the app had to change for Prometheus to get them."
@@ -770,7 +771,8 @@ main() {
     watch_for
     point "The coffee shop keeps serving: its status page counts drinks as before, and an order still goes through:" \
       "$0 order"
-    point "Grafana's 'Scrape' turns Down and its graphs stop, since Prometheus can't reach the proxy." \
+    point "Grafana's 'Scrape' turns Down, 'Agent' reads Disconnected, and its graphs stop, since Prometheus" \
+      "can't reach the proxy." \
       "After 15 seconds CoffeeShopDown fires on Prometheus's alerts page: $PROMETHEUS_URL/alerts"
     point "The coffee shop's log shows its agent retrying: $0 logs coffee-shop"
     point "The agent's /debug page shows an empty AgentId, and the proxy it keeps trying, while its /healthcheck" \
