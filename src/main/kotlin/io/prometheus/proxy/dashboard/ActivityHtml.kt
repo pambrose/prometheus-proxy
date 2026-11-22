@@ -23,19 +23,24 @@ import io.prometheus.proxy.ActivityKind
 import io.prometheus.proxy.ActivityLog
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.ACTIVITY_ID
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.agentLabel
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.renderFilters
 import kotlinx.html.DIV
 import kotlinx.html.FlowContent
 import kotlinx.html.TBODY
-import kotlinx.html.TR
 import kotlinx.html.caption
 import kotlinx.html.div
-import kotlinx.html.span
 import kotlinx.html.table
 import kotlinx.html.tbody
 import kotlinx.html.td
 import kotlinx.html.thead
 import kotlinx.html.tr
+import io.prometheus.common.dashboard.RowFilter
+import io.prometheus.common.dashboard.TableColumn
+import io.prometheus.common.dashboard.TableText
+import io.prometheus.common.dashboard.columnHeaders
+import io.prometheus.common.dashboard.filteredTableStart
+import io.prometheus.common.dashboard.DashboardPage.renderFilters
+import io.prometheus.common.dashboard.activityEventCell
+import io.prometheus.common.dashboard.activityPathsCell
 
 /**
  * The Activity view: the proxy's recent comings and goings, newest first, with the search above them.
@@ -47,7 +52,7 @@ import kotlinx.html.tr
  * The lines come from [io.prometheus.proxy.ActivityLog], which keeps them bounded and folds a burst into one.
  */
 internal object ActivityHtml {
-  /** The search and the table, as the page first renders them; see [ProxyDashboardHtml.renderFilters]. */
+  /** The search and the table, as the page first renders them; see `DashboardPage.renderFilters`. */
   fun FlowContent.renderActivity(
     snapshot: ProxySnapshot,
     routeBase: String,
@@ -102,14 +107,15 @@ internal object ActivityHtml {
       help = "When it happened, or a burst began, in your time zone; hover over it for the date.",
     )
 
-  // Read from ActivityKind, so a new problem kind can't be left out of the guide.
+  // Read from ActivityKind, so a new problem or notice kind can't be left out of the guide.
   private val PROBLEM_KINDS = ActivityKind.entries.filter { it.isProblem }.joinToString { it.label }
+  private val NOTICE_KINDS = ActivityKind.entries.filter { it.isNotice }.joinToString { it.label }
 
-  // The tags eventCell draws: a problem's crit, a take-over's warn, and a burst's count.
+  // The tags activityEventCell draws: a problem's crit, a take-over's warn, and a burst's count.
   private val EVENT =
     TableColumn(
       label = "Event",
-      help = "What happened; problems are red ($PROBLEM_KINDS), ${ActivityKind.PATH_TAKEN_OVER.label} is amber, " +
+      help = "What happened; problems are red ($PROBLEM_KINDS), $NOTICE_KINDS is amber, " +
         "and ×N counts a burst of like events.",
     )
   private val AGENT =
@@ -141,40 +147,13 @@ internal object ActivityHtml {
   ) {
     tr {
       td { timeOfDay(entry.at) }
-      eventCell(entry)
+      activityEventCell(entry.kind.label, entry.kind.isProblem, entry.kind.isNotice, entry.count)
       // Named as the other views name it, so a line can be read against the agent list.
       td { +(entry.agentName.takeIf { it.isNotEmpty() }?.let(::agentLabel) ?: DASH) }
       if (showIdentity) td("dim") { +(identityLabel(entry.identity) ?: DASH) }
-      pathsCell(entry)
+      activityPathsCell(entry.paths, entry.count - entry.paths.size)
       // The one column that wraps: a rejection's reason is a sentence.
       td("dim wrap") { +entry.detail.ifEmpty { DASH } }
-    }
-  }
-
-  // A problem is a crit tag and a take-over a warn one, which is news but not a fault: a redeploy takes over every path
-  // its old agent held. The rest is plain text, the ordinary coming and going. A burst says how many it folded.
-  private fun TR.eventCell(entry: ActivityEntry) {
-    td("event") {
-      val kind = entry.kind
-      when {
-        kind.isProblem -> span("tag crit") { +kind.label }
-        kind == ActivityKind.PATH_TAKEN_OVER -> span("tag warn") { +kind.label }
-        else -> +kind.label
-      }
-      if (entry.count > 1) span("dim") { +" ×${entry.count}" }
-    }
-  }
-
-  // The paths a line concerns: a burst names its first few and counts the rest.
-  private fun TR.pathsCell(entry: ActivityEntry) {
-    td {
-      if (entry.paths.isEmpty()) {
-        +DASH
-      } else {
-        +entry.paths.joinToString(", ") { "/$it" }
-        val more = entry.count - entry.paths.size
-        if (more > 0) span("dim") { +" and $more more" }
-      }
     }
   }
 }

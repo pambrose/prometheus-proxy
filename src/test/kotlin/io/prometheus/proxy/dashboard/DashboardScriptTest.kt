@@ -94,6 +94,21 @@ class DashboardScriptTest : StringSpec() {
 
     // The script tells the server which layout the page shows, from its URL, on every announce. The map comes from
     // DashboardLayout, so a new layout can't be left out of it.
+    // Auto, light, or dark, from the bar button, kept in this browser; the head applies it before the page draws.
+    "the page should apply a stored theme in its head, and its script should cycle the bar's theme button" {
+      val page = renderFullPage(snapshot())
+      page.substringBefore("</head>") shouldContain DashboardPage.THEME_SCRIPT
+      page shouldContain """<button type="button" id="${DashboardPage.THEME_TOGGLE_ID}""""
+      page shouldContain "var THEMES = ['auto', 'light', 'dark'];"
+      page shouldContain "localStorage.setItem('${DashboardPage.THEME_KEY}', t)"
+      // The theme in force is the page's own, as the head applied it, so a store that refuses writes can't stick it.
+      page shouldContain "return document.documentElement.getAttribute('data-theme') || 'auto';"
+      page.substringAfter("var THEMES") shouldNotContain "localStorage.getItem"
+      page shouldContain "evt.target.closest('#${DashboardPage.THEME_TOGGLE_ID}')"
+      // Outside every pushed region, so no frame resets it.
+      ProxyDashboardHtml.pushFragment(snapshot(), null, "/dashboard") shouldNotContain DashboardPage.THEME_TOGGLE_ID
+    }
+
     "the page script should name each layout by its route" {
       renderFullPage(snapshot()) shouldContain """var LAYOUTS = {"paths":"PATH","activity":"ACTIVITY"};"""
     }

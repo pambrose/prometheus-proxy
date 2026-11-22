@@ -190,11 +190,14 @@ pins, and no jar on the classpath carries a `logback.xml`, which would replace t
   cache; and a scrape result is counted under its type unless the proxy's dashboard asked for its scrape, which
   `agent_dashboard_scrapes_total` counts instead
 - **AgentGrpcServiceTest** — gRPC service: scrape request/response streaming, heartbeats, registration, error handling,
-  channel shutdown; with Zipkin on, the channel is built before `zipkinReporterService` is assigned, and every channel
-  a reconnect builds traces through one `Tracing`; a repeated connect failure logs one WARN, compared by gRPC status
-  code (or class), including against a port that accepts TCP but never answers HTTP/2; a connect the proxy refuses
-  with `RESOURCE_EXHAUSTED` is a failed connect, which the agent retries; each result is counted under its type
-  (non-gzipped, gzipped, chunked, or dropped) through `Agent.updateScrapeResultCounter`
+  channel shutdown; with Zipkin on, the channel is built before `zipkinReporterService` is assigned, and every channel a
+  reconnect builds traces through one `Tracing`; a repeated connect failure logs one WARN, compared by gRPC status code
+  (or class), including against a port that accepts TCP but never answers HTTP/2; a connect the proxy refuses with
+  `RESOURCE_EXHAUSTED` is a failed connect, which the agent retries; each result is counted under its type (non-gzipped,
+  gzipped, chunked, or dropped) through `Agent.updateScrapeResultCounter`; and for the activity feed, a connect
+  recorded, and a failure only when it is new or changes, and failing over from the primary and back recorded, but
+  cycling on through the backups not; and a failure recorded again after a connect elsewhere, as after a failback to a
+  primary still down
 - **AgentGrpcStreamRetentionTest** — a chunk the proxy has read is no longer reachable while the agent's chunked
   stream stays open, checked with weak references after 2 MiB of 1 KiB chunks. Over Netty, gRPC's retry buffer
   commits past its 1 MiB per-RPC limit and lets go; over the in-process transport, which reports no message sizes,
@@ -211,6 +214,11 @@ pins, and no jar on the classpath carries a `logback.xml`, which would replace t
   path it doesn't serve not recorded, and a failure recorded with its reason; and
   the dashboard's own fetch (`fetchForDashboard`), which returns the filtered body and its size before the filter and
   counts nothing, in the scrape metrics, the filter's counts, or the history (MockK), and says why it failed
+- **AgentActivityLogTest** — the agent dashboard's activity feed: newest first and bounded, a burst of like events one
+  line, counted and naming its first paths, like events further apart lines of their own, the same event repeated one
+  line however long since but never past another, a path repeated counted once, a connect or a disconnect starting a run
+  no later event folds back past, a reason from outside cut and escaped, and a change count that every line and fold
+  moves, which its changes flow carries
 - **AgentScrapeHistoryTest** — each path's last scrapes as the agent saw them: newest first and bounded per path, keyed
   without leading slashes, and past the paths the agent knows and a few gone ones, the path scraped least recently
   dropped; and a record built from the agent's results, with the body's sizes, whether it was gzipped and chunked as
@@ -218,18 +226,20 @@ pins, and no jar on the classpath carries a `logback.xml`, which would replace t
 - **AgentHttpServiceHeaderTest** — HTTP Accept header handling per-request (prevents stale headers in cached clients)
 - **AgentContextTest** — Agent context unique ID generation, validity, invalidation, ScrapeRequestWrapper management
 - **AgentContextManagerTest** — Context management: add/remove, concurrent access, chunked contexts
-- **AgentConnectionContextTest** — Connection state, close/drain behavior, concurrent scrape request handling
+- **AgentConnectionContextTest** — Connection state, close/drain behavior, concurrent scrape request handling; and the
+  first of its tasks' failures kept as what ended it
 - **AgentConnectionContextLincheckTest** — Lincheck (tagged `Lincheck`, run by `make lincheck-tests`): the agent's
   scrape-request backlog count, kept as `AgentGrpcService` and the scrape loop keep it, never goes negative and returns
   to zero once the connection closes -- including a queued request `close()` drains and a sender blocked on a full
   channel as it closes -- and no accepted scrape result is lost by the close
 - **AgentPathManagerTest** — Path registration/unregistration, path lookup, concurrent access; a discovered path's
-  repeating registration failure logs one WARN, compared by gRPC status code, so timeouts whose descriptions differ
-  only in the elapsed time log one, while a rejection for another reason is warned about again; so do a static path's
-  repeating failed retry, until the proxy answers in between, and a stale discovered path's repeating failed
-  unregister, until the path returns to the file; a static path whose retries fail in transport backs off as a
-  rejected one does, and still registers once the proxy accepts it; a lookup strips a requested path's leading
-  slashes, and only them
+  repeating registration failure logs one WARN, compared by gRPC status code, so timeouts whose descriptions differ only
+  in the elapsed time log one, while a rejection for another reason is warned about again; so do a static path's
+  repeating failed retry, until the proxy answers in between, and a stale discovered path's repeating failed unregister,
+  until the path returns to the file; a static path whose retries fail in transport backs off as a rejected one does,
+  and still registers once the proxy accepts it; a lookup strips a requested path's leading slashes, and only them; and
+  for the activity feed, a path registered, refused once with the proxy's reason, and unregistered, static or
+  discovered, paths refused for one cause one line, and filters failing open for different reasons apart
 - **AgentPathManagerLincheckTest** — Lincheck, stress only (tagged `Lincheck`): static registration, unregistration, and
   discovery reconciles race over a real in-process gRPC connection; once they finish, the agent's local path map and
   the proxy's registrations for it agree exactly
@@ -240,11 +250,11 @@ pins, and no jar on the classpath carries a `logback.xml`, which would replace t
   trusted certificate as PEM text
 - **AgentDashboardOptionsTest** — the agent dashboard's options, `agent.dashboard` and the `--dashboard*` flags, which
   the agent resolves as the proxy resolves its own: off by default, on port 8095 apart from the admin port and the
-  proxy's, path and host defaults, settable from the command line and read from the agent's config, not the proxy's;
-  an out-of-range port, an empty path, a blank host, or a non-positive `maxSessions` or `refreshIntervalSecs` refused
-  while it is on, with a `ConfigLoadException`; the login off with the username `admin` until a password is set, then
-  logged masked; without one, a warning on every interface that names the agent's settings; and a non-positive
-  `pathHistorySize` refused while it is on, and logged
+  proxy's, path and host defaults, settable from the command line and read from the agent's config, not the proxy's; an
+  out-of-range port, an empty path, a blank host, or a non-positive `maxSessions` or `refreshIntervalSecs` refused while
+  it is on, with a `ConfigLoadException`; the login off with the username `admin` until a password is set, then logged
+  masked; without one, a warning on every interface that names the agent's settings; and a non-positive
+  `pathHistorySize` refused while it is on, and logged (`pathHistorySize`, `activityLogSize`)
 - **AgentClientInterceptorTest** — gRPC client interceptor that adds agent-id metadata to outbound calls
 - **AgentTokenClientInterceptorTest** — gRPC client interceptor that attaches the agent token header to outbound calls
 - **EndpointFailoverTest** — Proxy endpoint rotation: a failed connect or a rejected registration moves to the next
@@ -278,26 +288,32 @@ pins, and no jar on the classpath carries a `logback.xml`, which would replace t
   with the dashboard on, each path's recorded scrapes, newest first, its strip's runs, and the history's size; and
   with it off, no history, and Scrape now as its setting says
 - **AgentDashboardHtmlTest** (`dashboard/`) — the agent dashboard's markup: a path, a reason, and a URL escaped; a
-  refused path's reason and "not until the agent reconnects"; a retry's wait as a countdown, and one already due as
-  the next retry; an en dash for missing labels; the empty and gone detail panes; a failing connection's endpoints,
-  each with its last error, the one being tried, and "failed over"; the title's count of refused and retrying paths
-  and a failing connection; a push's status bar first and stamped, with the regions of the page's view alone; a
-  row's encoded selection URL and the script's agent views; a row's last result and history strip, a registered path
-  not scraped yet saying so; the detail pane's Recent scrapes, with the body's sizes, gzip, chunking, a failure's
-  reason escaped, and a scrape from the proxy's dashboard marked; and the Scrape now button in the pushed detail pane,
-  its result panel outside every push on the Paths view alone, and neither with Scrape now off
+  refused path's reason and "not until the agent reconnects"; a retry's wait as a countdown, and one already due as the
+  next retry; an en dash for missing labels; the empty and gone detail panes; a failing connection's endpoints, each
+  with its last error, the one being tried, and "failed over"; the title's count of refused and retrying paths and a
+  failing connection; a push's status bar first and stamped, with the regions of the page's view alone; a row's encoded
+  selection URL and the script's agent views; a row's last result and history strip, a registered path not scraped yet
+  saying so; the detail pane's Recent scrapes, with the body's sizes, gzip, chunking, a failure's reason escaped, and a
+  scrape from the proxy's dashboard marked; and the Scrape now button in the pushed detail pane, its result panel
+  outside every push on the Paths view alone, and neither with Scrape now off; and the Activity view: newest first, a
+  problem a crit tag and news a warn one, a run counted and its paths named, escaped, its search and column guide,
+  filtered with a count, its empty state, and its push carrying the table out of band, or not when told; and the stored
+  theme applied in the page's head, with the Theme button in the bar and in no push
 - **AgentScrapeNowTest** (`dashboard/`) — the agent dashboard's Scrape now, its fetch stood in for: a configured path
   scraped at its own URL through its own filter, though not registered, summarized with its sizes before and after
   the filter; a gzipped body unzipped and a path asked for with a leading slash found; a failure's reason; a path the
   agent doesn't know refused without a fetch, shown escaped; a path at most once a cooldown; and at most a few at once
 - **FileDiscoverySourceTest** (`discovery/`) — Discovery-file parsing: HOCON and JSON, empty or absent `paths`,
-  rejection of missing files, malformed files and incomplete entries, and HOCON substitution resolution
+  rejection of missing files, malformed files and incomplete entries, and HOCON substitution resolution; and the entries
+  a read skips told to the activity feed once per change
 - **PathDiscoveryServiceTest** (`discovery/`) — A failed read reconciles the last good read, so a reconnect registers
   its paths again, and reconciles nothing before the first; a successful read, including an empty one, reconciles the
-  desired set; a repeating failure logs one WARN, compared by gRPC status code, or by class and message without one,
-  so timeouts whose descriptions differ only in the elapsed time log one, while a different read error is news
+  desired set; a repeating failure logs one WARN, compared by gRPC status code, or by class and message without one, so
+  timeouts whose descriptions differ only in the elapsed time log one, while a different read error is news; and a
+  read's failure told to the activity feed when it is new or changes, not while it repeats
 - **MetricFilterTest** (`filter/`) — Allow/deny filtering: fully anchored regexes, deny winning over allow, whole
-  families dropped or kept (HELP/TYPE/UNIT lines, histogram, summary and OpenMetrics series), line endings preserved
+  families dropped or kept (HELP/TYPE/UNIT lines, histogram, summary and OpenMetrics series), line endings preserved;
+  and why a filter lets a scrape through unfiltered, told once per cause
 
 Two support helpers also live here (not test classes themselves):
 
@@ -459,16 +475,17 @@ Two support helpers also live here (not test classes themselves):
   push, and the page's language and main region), and the link icons' stylesheet (in the head only while a link shows
   an icon, with each mark's URL under the route base, at a root mount too, and each colour per theme, and in no push)
 - **DashboardScriptTest** (`dashboard/`) — the page's script and the htmx it runs on: frames stamped below its message
-  count dropped, the arrow keys switching views from anywhere but a text field, the column guide opened and closed
-  from its button, its close button, and Escape from anywhere but a text field, the scrape-now request with htmx's
-  header, each layout named by its route, an ended session sent to the login page (a session check on the socket's
-  close, and a reload on a refused scrape), the WebSocket connection indicator (both labels in the status region, the
-  lifecycle events it flips on and the ones it must not, a close while the tab is hidden ignored, a lost connection
-  announced once per outage, the capped reconnect backoff, and the stylesheet's disconnected treatment), no htmx 2
-  WebSocket names, history pushes heard on the document, copy clicks from one listener on the body (the clipboard
-  fallback outside a secure context, a proxy URL from the page's own host and the scrape port, and the result announced
-  and put back after each push), scrape times in the viewer's zone before each swap, one run per document, error
-  responses kept from being swapped in, and the htmx config ahead of the versioned htmx script
+  count dropped, the arrow keys switching views from anywhere but a text field, the column guide opened and closed from
+  its button, its close button, and Escape from anywhere but a text field, the scrape-now request with htmx's header,
+  each layout named by its route, an ended session sent to the login page (a session check on the socket's close, and a
+  reload on a refused scrape), the WebSocket connection indicator (both labels in the status region, the lifecycle
+  events it flips on and the ones it must not, a close while the tab is hidden ignored, a lost connection announced once
+  per outage, the capped reconnect backoff, and the stylesheet's disconnected treatment), no htmx 2 WebSocket names,
+  history pushes heard on the document, copy clicks from one listener on the body (the clipboard fallback outside a
+  secure context, a proxy URL from the page's own host and the scrape port, and the result announced and put back after
+  each push), scrape times in the viewer's zone before each swap, one run per document, error responses kept from being
+  swapped in, and the htmx config ahead of the versioned htmx script; and the stored theme applied in the head and the
+  Theme button cycling it, outside every push
 - **PathColumnsHtmlTest** (`dashboard/`) — the Paths view's long-standing columns: a row per path with its target,
   source, and last scrape, and dashes for what a path lacks (no time for one never scraped); its agent named as the
   agent list names it, never by internal id, with the same placeholder before it registers and a consolidated path's
@@ -561,16 +578,20 @@ One support helper also lives here (not a test class itself):
   base64, or one with no colon refused, never thrown on; the scheme matched in any case; a split at the first colon,
   so a password may contain one; non-ASCII values compared as UTF-8; the login page's form accepted only with both
   halves right; and neither value in its `toString`
-- **DashboardServerTest** (`dashboard/`) — the request rules every dashboard shares (`DashboardServer`): where a
-  login may send the browser (`safeNext`: a page under the base, never off-site, a protocol-relative or backslashed
-  path, a `.` or `..` segment, or the login page itself, at a root mount too), the session cookie named for the role
-  and the port, so a proxy's and an agent's on one host differ, the WebSocket Origin check (own host,
-  `allowedOrigins`, foreign or malformed origins refused), and the opt-in `allowedHosts` Host check against DNS
-  rebinding
+- **DashboardServerTest** (`dashboard/`) — the request rules every dashboard shares (`DashboardServer`): where a login
+  may send the browser (`safeNext`: a page under the base, never off-site, a protocol-relative or backslashed path, a
+  `.` or `..` segment, or the login page itself, at a root mount too), the session cookie named for the role and the
+  port, so a proxy's and an agent's on one host differ, the WebSocket Origin check (own host, `allowedOrigins`, foreign
+  or malformed origins refused), and the opt-in `allowedHosts` Host check against DNS rebinding; and changes waking the
+  push loop at once, then at most once an interval, with the latest
 - **DashboardSessionsTest** (`dashboard/`) — a dashboard's login-page sessions: a new one valid and a token never
   issued, null, or empty not; 43 base64url characters, distinct each time; ended 24 hours after its last request,
   which a request restarts, and a check that isn't a request doesn't; 7 days after it began however recently used;
   ended by removal; the least recently used dropped past the cap; and an expired one forgotten
+- **DashboardThemeTest** (`dashboard/`) — the dashboards' theme: a dark rule written for the system's dark preference
+  unless the page is set to light and for a page set to dark, with a selector or at `:root`; the tokens' dark colours
+  under both, and the browser's own widgets following the choice; the head's script applying only a stored light or
+  dark; and the Theme button starting at auto
 - **DeferredInterceptorsTest** — the client and server interceptors that build their delegate on the first call, once,
   and again on a later call if building it failed, which lets the Zipkin tracing interceptors be installed before the
   reporter they need exists
@@ -590,7 +611,7 @@ One support helper also lives here (not a test class itself):
   login route with labeled, autocompleting, length-capped fields and one Log in button; after a failure the alert, the
   username kept, and the password focused, and without one neither; the alert for too many wrong logins; the next path
   and the username escaped; a root mount posting to `/login`; nothing loaded from anywhere; and the dashboard's color
-  tokens, in both themes
+  tokens, in both themes; and the dashboard's stored theme applied in its head, its one, inline, script
 - **LoginLimiterTest** (`dashboard/`) — a dashboard's limit on wrong logins: an address under it let in, one at it
   refused and no other, let in again once its oldest wrong login is a minute old; every address refused at the overall
   limit, until its oldest is a minute old; and at most so many addresses remembered, the least recent going first
@@ -743,15 +764,17 @@ chunked transfer crosses the spec's transport:
 The classes above all run that same standard suite. These run their own scenario instead, each pinning one
 mechanism that the standard suite cannot reach:
 
-- **AgentWebDashboardTest** — the agent's dashboard, served by a real agent: with its proxy down, failing, with the
-  endpoint's error, every path pending, the target's password kept off the page, and its WebSocket pushing the status
-  bar at once and then the regions each view asks for; connected, one path registered and one refused, with the
-  proxy's reason, the detail pane as a page and as htmx's fragment, the connection's endpoint, connects, and token,
-  and the root's redirect; a scrape through the proxy in the path's strip and Recent scrapes, and Scrape now fetching
-  the target from the agent through the path's filter, recorded nowhere, refused without the page's header or for a
-  path the agent doesn't know, saying why, and working with the proxy down; with Scrape now off, no button and no route; with a
-  password, the login page under the agent's name and a cookie named for the agent; and no dashboard without
-  `--dashboard`
+- **AgentWebDashboardTest** — the agent's dashboard, served by a real agent, and each path row's `data-path` and
+  `data-state`, which `demos/basics/bin/screenshots.sh` reads: with its proxy down, failing, with the endpoint's error,
+  every path pending, the target's password kept off the page, and its WebSocket pushing the status bar at once and then
+  the regions each view asks for; connected, one path registered and one refused, with the proxy's reason, the detail
+  pane as a page and as htmx's fragment, the connection's endpoint, connects, and token, and the root's redirect; a
+  scrape through the proxy in the path's strip and Recent scrapes, and Scrape now fetching the target from the agent
+  through the path's filter, recorded nowhere, refused without the page's header or for a path the agent doesn't know,
+  saying why, and working with the proxy down; with Scrape now off, no button and no route; with a password, the login
+  page under the agent's name and a cookie named for the agent; and no dashboard without `--dashboard`; and its Activity
+  view showing the agent connecting and a refused path, filtered, and pushing the disconnect, with the failure that
+  ended it, and failing connects to an open page when the proxy stops
 - **AgentDiscoveryTest** — dynamic target discovery: the agent reconciles a watched file's paths, adding,
   updating and removing them with no restart
 - **AgentMetricFilterTest** — per-path metric filtering: a denied metric family never reaches the proxy

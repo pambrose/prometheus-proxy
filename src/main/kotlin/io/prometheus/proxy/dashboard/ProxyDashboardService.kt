@@ -18,7 +18,6 @@ package io.prometheus.proxy.dashboard
 
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
-import io.ktor.http.parseQueryString
 import io.ktor.http.withCharset
 import io.ktor.server.application.install
 import io.ktor.server.html.respondHtml
@@ -42,6 +41,8 @@ import io.prometheus.proxy.ProxyEvent
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
 import kotlin.time.Duration.Companion.seconds
+import io.prometheus.common.dashboard.RowFilter
+import io.prometheus.common.dashboard.ActivityTable
 
 /**
  * What a session's page shows: its layout and the agent selected in it, from the browser's latest message, and that
@@ -123,7 +124,7 @@ internal class ProxyDashboardService(
           parseLayout(message),
           DashboardMessage.selection(message),
           DashboardMessage.seq(message),
-          parseFilter(message),
+          RowFilter.fromMessage(message),
         )
 
       override fun frame(
@@ -136,7 +137,7 @@ internal class ProxyDashboardService(
         val filter = view?.filter ?: RowFilter.NONE
         // The Activity table goes only when it differs from the one the page shows; see ActivityTable. For another
         // layout there is no table, and the flag changes nothing.
-        val activity = ActivityTable.of(snapshot, view?.layout, seq, filter)
+        val activity = activityTable(snapshot, view?.layout, seq, filter)
         val text =
           ProxyDashboardHtml.pushFragment(
             snapshot,
@@ -238,44 +239,6 @@ internal class ProxyDashboardService(
     }
   }
 
-  /**
-   * What a push's Activity table is rendered from. A frame for the Activity view carries the table only when this
-   * differs from what the last frame sent to the page carried; otherwise it carries the status bar alone.
-   *
-   * The table went to every Activity page on every refresh, though the feed changes only when the proxy records
-   * something, so a page rewrote the table someone was reading every couple of seconds, undoing a text selection, to
-   * show the same rows. Nothing in the table depends on when it is rendered: each time is the event's own, which the
-   * page converts to the viewer's zone as the frame arrives, and the Identity column follows `proxy.auth`, fixed at
-   * startup. So a table that isn't sent again shows what one sent again would.
-   *
-   * Equal values render equal tables: the change count covers every line and its count, and the rest is what the
-   * page's view contributes. A frame for another layout has no value ([of] returns null), so a page that comes back to
-   * the Activity view, as a back or forward navigation does without a new socket, is sent the table again.
-   *
-   * @param changeCount the activity log's change count, as the snapshot read it with the lines
-   * @param seq the count of the message the page's view came from. A new message, even one asking for the same filter,
-   *   is sent the table again: the page drops a frame stamped below the count it has sent (see
-   *   ProxyDashboardHtml.pushFragment), so the frame that carried the last table may never have been shown, and a back
-   *   or forward navigation replaces the page's table with the one its GET rendered before the page says so
-   * @param filter the search and "Problems only" the table is filtered by
-   */
-  internal data class ActivityTable(
-    val changeCount: Long,
-    val seq: Long,
-    val filter: RowFilter,
-  ) {
-    companion object {
-      /** The table a push for [layout] renders from [snapshot], or null when [layout] has no Activity table. */
-      fun of(
-        snapshot: ProxySnapshot,
-        layout: DashboardLayout?,
-        seq: Long,
-        filter: RowFilter,
-      ): ActivityTable? =
-        if (layout == DashboardLayout.ACTIVITY) ActivityTable(snapshot.activityChangeCount, seq, filter) else null
-    }
-  }
-
   companion object {
     /** The login page's heading. */
     internal const val LOGIN_HEADING = "Prometheus Proxy Dashboard"
@@ -287,18 +250,13 @@ internal class ProxyDashboardService(
     internal fun parseLayout(text: String): DashboardLayout =
       DashboardMessage.layout(text, DashboardLayout.entries, DashboardLayout.AGENT)
 
-    /**
-     * Reads `{"search": "?q=team-a&problems=1"}`, the query of the page's URL, which holds the Paths view's filter,
-     * from a session message, defaulting to [RowFilter.NONE].
-     *
-     * The URL's own query rather than fields of its own, so the filter has one format, which the `/paths` route reads
-     * too. Same contract as [DashboardMessage.selection]: anything unexpected -- garbage, a missing field, a value of
-     * the wrong type, or a query that won't decode -- resolves to no filter rather than throwing inside the WebSocket
-     * loop.
-     */
-    internal fun parseFilter(text: String): RowFilter =
-      DashboardMessage.search(text)
-        ?.let { runCatching { RowFilter.of(parseQueryString(it.removePrefix("?"))) }.getOrNull() }
-        ?: RowFilter.NONE
+    /** The table a push for [layout] renders from [snapshot], or null when [layout] has no Activity table. */
+    internal fun activityTable(
+      snapshot: ProxySnapshot,
+      layout: DashboardLayout?,
+      seq: Long,
+      filter: RowFilter,
+    ): ActivityTable? =
+      if (layout == DashboardLayout.ACTIVITY) ActivityTable(snapshot.activityChangeCount, seq, filter) else null
   }
 }

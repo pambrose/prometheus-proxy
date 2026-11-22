@@ -521,6 +521,111 @@ class AgentPathManagerTest : StringSpec() {
       manager["c_metrics"].shouldNotBeNull()
     }
 
+    // What the agent dashboard's activity feed shows: a path registered, refused once (its retries' repeats only at
+    // DEBUG in the log, and not at all in the feed), and unregistered.
+    "registering, refusing, and unregistering a path should be recorded in the activity feed" {
+      val log = AgentActivityLog(capacity = 20)
+      val agent = createMockAgent()
+      every { agent.activityLog } returns log
+      val manager = AgentPathManager(agent)
+      coEvery { agent.grpcService.registerPathOnProxy("denied_metrics", any(), any(), any()) } throws
+        RequestFailureException(
+          "registerPathOnProxy() - Agent identity 'team_a' is not authorized to register path /denied_metrics",
+          rejectionCause = PathRejectionCause.NOT_AUTHORIZED,
+        )
+
+      manager.registerPath("kept_metrics", "http://kept/metrics")
+      runCatching { manager.registerPath("denied_metrics", "http://denied/metrics") }
+      manager.unregisterPath("kept_metrics")
+      manager.reconcileDiscoveredPaths(
+        [DiscoveredPath(name = "d", path = "found_metrics", url = "http://found/m", labels = "{}")],
+      )
+
+      log.snapshot().entries.map { Triple(it.kind, it.paths, it.detail) }.reversed() shouldBe
+        [
+          Triple(AgentActivityKind.PATH_REGISTERED, ["kept_metrics"], "static"),
+          Triple(AgentActivityKind.PATH_UNREGISTERED, ["kept_metrics"], "static"),
+          Triple(AgentActivityKind.PATH_REGISTERED, ["found_metrics"], "discovered"),
+        ]
+    }
+
+    "a refusal should be recorded with the proxy's reason" {
+      val log = AgentActivityLog(capacity = 20)
+      val agent = createMockAgent(pathConfigsHocon = """{ name = d, path = denied_metrics, url = "http://denied/m" }""")
+      every { agent.activityLog } returns log
+      val manager = AgentPathManager(agent)
+      coEvery { agent.grpcService.registerPathOnProxy("denied_metrics", any(), any(), any()) } throws
+        RequestFailureException(
+          "registerPathOnProxy() - Agent identity 'team_a' is not authorized to register path /denied_metrics",
+          rejectionCause = PathRejectionCause.NOT_AUTHORIZED,
+        )
+
+      runCatching { manager.registerPaths() }
+
+      log.snapshot().entries.single().apply {
+        kind shouldBe AgentActivityKind.PATH_REFUSED
+        paths shouldBe ["denied_metrics"]
+        detail shouldContain "is not authorized to register path /denied_metrics"
+      }
+    }
+
+    // Each of the proxy's reasons names its path, so grouping by reason gave every refused path a line of its own, and
+    // an identity refused all its paths filled the feed on every connect.
+    "refusals of several paths for one cause should be one line, and two causes two" {
+      val log = AgentActivityLog(capacity = 20)
+      val agent =
+        createMockAgent(
+          pathConfigsHocon =
+            """
+            { name = a, path = a_metrics, url = "http://a/m" },
+            { name = b, path = b_metrics, url = "http://b/m" },
+            { name = c, path = c_metrics, url = "http://c/m" }
+            """,
+        )
+      every { agent.activityLog } returns log
+      val manager = AgentPathManager(agent)
+      listOf("a_metrics" to PathRejectionCause.NOT_AUTHORIZED, "b_metrics" to PathRejectionCause.NOT_AUTHORIZED)
+        .forEach { (path, cause) ->
+          coEvery { agent.grpcService.registerPathOnProxy(path, any(), any(), any()) } throws
+            RequestFailureException.fromProxy("registerPathOnProxy", "not authorized to register path /$path", cause)
+        }
+      coEvery { agent.grpcService.registerPathOnProxy("c_metrics", any(), any(), any()) } throws
+        RequestFailureException.fromProxy(
+          "registerPathOnProxy",
+          "path /c_metrics is served by another identity",
+          PathRejectionCause.HELD_BY_ANOTHER_IDENTITY,
+        )
+
+      runCatching { manager.registerPaths() }
+
+      log.snapshot().entries.map { it.paths to it.count }.reversed() shouldBe
+        [["a_metrics", "b_metrics"] to 2, ["c_metrics"] to 1]
+    }
+
+    // Two paths' filters failing open for different reasons are two lines, each with its reason.
+    "filters letting scrapes through for different reasons should be recorded apart" {
+      val log = AgentActivityLog(capacity = 20)
+      val agent =
+        createMockAgent(
+          filtersHocon =
+            """
+            { path = a_metrics, metricNameAllow = [], metricNameDeny = ["go_.*"] },
+            { path = b_metrics, metricNameAllow = [], metricNameDeny = ["go_.*"] }
+            """,
+        )
+      every { agent.activityLog } returns log
+      val manager = AgentPathManager(agent)
+
+      manager.filtersByPath.getValue("a_metrics").filterBytes("up 1\n".encodeToByteArray(), "application/json")
+      manager.filtersByPath.getValue("b_metrics").filterBytes(byteArrayOf(0xC3.toByte(), 0x28), "text/plain")
+
+      log.snapshot().entries.map { it.paths to it.detail }.reversed() shouldBe
+        [
+          ["a_metrics"] to "a scrape's content type, application/json, was not text",
+          ["b_metrics"] to "a scrape's body was not valid UTF-8",
+        ]
+    }
+
     fun rejectPath(
       grpcService: AgentGrpcService,
       path: String,

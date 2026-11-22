@@ -31,6 +31,7 @@ import io.prometheus.proxy.dashboard.DashboardFixtures.departedPathView
 import io.prometheus.proxy.dashboard.DashboardFixtures.departure
 import io.prometheus.proxy.dashboard.DashboardFixtures.pathView
 import io.prometheus.proxy.dashboard.DashboardFixtures.scrapeRecord
+import io.prometheus.common.dashboard.RowFilter
 
 class RowFilterTest : StringSpec() {
   private val payments =

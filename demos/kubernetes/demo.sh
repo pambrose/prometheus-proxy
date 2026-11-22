@@ -30,13 +30,13 @@ AGENT_IMAGE=prometheus-proxy-demo/agent:local
 RELEASED_IMAGES=(pambrose/prometheus-proxy pambrose/prometheus-agent)
 # The demo shows what came after this release, so until a later one is out, up builds the proxy and agent from this
 # checkout, as up-local does. When the demo comes to use something unreleased, set this to the latest release.
-NEEDS_RELEASE_AFTER=4.4.2
+NEEDS_RELEASE_AFTER=4.6.1
 # The chart values that choose the proxy's and the agent's images, which up and up-local set.
 PROXY_IMAGE_VALUES=()
 AGENT_IMAGE_VALUES=()
 # The kind release the node image in kind/*.yaml was built for.
 MIN_KIND_VERSION=0.33.0
-# The services `make up` deploys (k8s/services.yaml); part 2 adds search (k8s/search.yaml).
+# The services `make up` deploys (k8s/services.yaml); part 3 adds search (k8s/search.yaml).
 SERVICES=(orders payments shipping)
 
 # The host ports kind publishes pp-monitoring's NodePorts on (kind/pp-monitoring.yaml), read as it creates the cluster.
@@ -46,6 +46,10 @@ PROXY_PORT="${KUBERNETES_DEMO_PROXY_PORT:-8280}"
 DASHBOARD_URL="http://localhost:$DASHBOARD_PORT/dashboard"
 PROMETHEUS_URL="http://localhost:$PROMETHEUS_PORT"
 PROXY_URL="http://localhost:$PROXY_PORT"
+# The host port `demo.sh agent-dashboard` forwards to the agent's dashboard with kubectl port-forward, held only while
+# it runs: pp-target publishes no port, and the agent chart leaves the dashboard off the agent's Service.
+AGENT_DASHBOARD_PORT="${KUBERNETES_DEMO_AGENT_DASHBOARD_PORT:-8295}"
+AGENT_DASHBOARD_URL="http://localhost:$AGENT_DASHBOARD_PORT/dashboard"
 
 bold() { printf '\033[1m%s\033[0m\n' "$*"; }
 die() {
@@ -93,6 +97,7 @@ Lifecycle:
   down                     Delete both kind clusters
   status                   Show both clusters' pods and Services, the Helm releases, and the URLs
   open                     Open the proxy dashboard and Prometheus's targets in the browser
+  agent-dashboard          Forward the agent's dashboard to localhost:$AGENT_DASHBOARD_PORT with kubectl port-forward
   logs [name]              Follow a workload's logs: agent (the default), proxy, prometheus, targets-sync, or a service
   tour [part]              Walk through the demo's guided tour, pausing before each step (from part 1, or the one given)
 
@@ -112,6 +117,7 @@ print_urls() {
   echo
   bold "Prometheus Proxy Kubernetes demo"
   echo "  Proxy dashboard:  $DASHBOARD_URL"
+  echo "  Agent dashboard:  $AGENT_DASHBOARD_URL  (while $0 agent-dashboard runs)"
   echo "  Prometheus:       $PROMETHEUS_URL"
   echo "  Proxy discovery:  $PROXY_URL/discovery"
   echo "  kubectl:          kubectl --context kind-$MONITORING ...   kubectl --context kind-$TARGET ..."
@@ -205,7 +211,8 @@ create_cluster() {
   fi
 }
 
-# A running pp-monitoring keeps the ports it was created with; say so, rather than print URLs that don't answer.
+# A running pp-monitoring keeps the ports it was created with; say so, rather than print URLs that don't answer. The
+# agent dashboard's port isn't one of them: kubectl port-forward holds it only while agent-dashboard runs.
 check_ports() {
   local port want node_port
   for node_port in 30094:"$DASHBOARD_PORT" 30090:"$PROMETHEUS_PORT" 30080:"$PROXY_PORT"; do
@@ -419,7 +426,7 @@ install_target() {
 # Checks the ports and the tools, before anything is built, pulled, or created.
 check_up() {
   local port
-  for port in "$DASHBOARD_PORT" "$PROMETHEUS_PORT" "$PROXY_PORT"; do
+  for port in "$DASHBOARD_PORT" "$PROMETHEUS_PORT" "$PROXY_PORT" "$AGENT_DASHBOARD_PORT"; do
     [[ "$port" =~ ^[0-9]+$ ]] || die "'$port' isn't a port number"
   done
   check_tools
@@ -555,6 +562,31 @@ cmd_logs() {
   esac
 }
 
+# Forwards a host port to the agent's dashboard, in the foreground, as the agent chart's notes tell an operator to:
+# pp-target publishes no port, and the chart leaves the dashboard off the agent's Service. kubectl port-forward goes
+# through the API server to one pod, so it ends when that pod is replaced.
+cmd_agent_dashboard() {
+  local port
+  [[ "$AGENT_DASHBOARD_PORT" =~ ^[0-9]+$ ]] || die "'$AGENT_DASHBOARD_PORT' isn't a port number"
+  cluster_exists "$TARGET" || die "the demo isn't running; start it with '$MAKE_NAME up' in demos/kubernetes"
+  # The dashboard's container port, which the chart adds, named dashboard, only with dashboard.enabled on.
+  port="$("${TK[@]}" -n monitoring get deployment prometheus-agent \
+    -o jsonpath='{.spec.template.spec.containers[0].ports[?(@.name=="dashboard")].containerPort}')" ||
+    die "the agent isn't installed in $TARGET; start the demo with '$MAKE_NAME up'"
+  [[ -n "$port" ]] || die "the agent's dashboard is off; '$MAKE_NAME up' installs the agent with it on"
+  bold "Forwarding localhost:$AGENT_DASHBOARD_PORT to port $port, the agent's dashboard, in its pod in $TARGET"
+  wrap "  " "  " "Open the agent's dashboard: $AGENT_DASHBOARD_URL"
+  wrap "  " "  " "This runs until you press Ctrl-C, or until the agent's pod is replaced, as delete-agent-pod and" \
+    "change-config do. Then run $0 agent-dashboard again, to reach the new pod."
+  if ! show kubectl --context "kind-$TARGET" -n monitoring port-forward deploy/prometheus-agent \
+    "$AGENT_DASHBOARD_PORT:$port"; then
+    echo
+    wrap "" "" "The port-forward ended. If the agent's pod was replaced, run $0 agent-dashboard again to reach the" \
+      "new one; if port $AGENT_DASHBOARD_PORT is taken, set KUBERNETES_DEMO_AGENT_DASHBOARD_PORT to another."
+    exit 1
+  fi
+}
+
 # Prints a command, then runs it, so the audience sees what was asked of kubectl or helm.
 show() {
   printf '\033[36m$ %s\033[0m\n' "$*"
@@ -580,6 +612,8 @@ cmd_clusters() {
   point "Each cluster runs one of the charts the project ships, installed with nothing but a values file."
   point "Prometheus's one job asks the proxy's /discovery what to scrape, so its config names no target in $TARGET."
   point "On the proxy dashboard the agent is listed under its pod's name, $(agent_pod): $DASHBOARD_URL"
+  point "The agent's Service lists only its metrics port, 8083. Its own dashboard, on 8095 in its pod, is on no" \
+    "Service, so only kubectl reaches it: $0 agent-dashboard forwards it to $AGENT_DASHBOARD_URL"
 }
 
 # Deploys search, then creates its annotated Service once its pod is ready, as a team would deploy an app and then
@@ -608,8 +642,11 @@ cmd_add_service() {
     "syncFrequency, a minute by default, which this demo lowers to 5 seconds: most of the time above. The agent" \
     "re-reads the file and registers each new path."
   watch_for
-  point "On the dashboard's Paths view, search_metrics appears with source 'disc'. The agent's pod is the same one," \
-    "with no restarts, and no other path missed a scrape."
+  point "On the proxy dashboard's Paths view, search_metrics appears with source 'disc'. The agent's pod is the" \
+    "same one, with no restarts, and no other path missed a scrape."
+  point "On the agent's dashboard, with $0 agent-dashboard running, search_metrics joins the Paths view," \
+    "discovered and registered, the Connection view counts four discovery entries, and the Activity view adds a" \
+    "registered line for it: $AGENT_DASHBOARD_URL"
   point "Prometheus finds search_metrics within its 5-second discovery refresh, and scrapes it through the proxy." \
     "Open its targets page to see it: $PROMETHEUS_URL/targets"
   follow_up "To undo it, run" "$0 remove-service"
@@ -642,6 +679,8 @@ cmd_remove_service() {
   watch_for
   point "The agent unregistered the path, again without restarting, and Prometheus drops the target at its next" \
     "discovery refresh."
+  point "On the agent's dashboard, search_metrics leaves the Paths view, and the Activity view adds an unregistered" \
+    "line for it."
 }
 
 cmd_delete_agent_pod() {
@@ -660,6 +699,9 @@ cmd_delete_agent_pod() {
   point "A Prometheus scrape that landed in the gap measured above failed, and the next one succeeded."
   point "In Prometheus, each target's agent label is the pod's name, so the new pod starts new series, as a pod" \
     "label would."
+  point "If $0 agent-dashboard was running, it ended with the old pod, since a port-forward reaches one pod. Run" \
+    "it again: the new pod's Activity view starts with its own connect and registrations, since each agent keeps" \
+    "its activity in memory, while the proxy dashboard's Activity view saw both pods."
 }
 
 cmd_change_config() {
@@ -679,8 +721,10 @@ cmd_change_config() {
       "paths."
     point "The new pod's agent_metrics carries the JVM's metrics, so count({job=\"prometheus-agent\"}) in Prometheus" \
       "climbs from about 30 series to over 200."
-    point "Compare part 2, where the targets changed and nothing restarted. That's why the agent chart keeps its" \
+    point "Compare part 3, where the targets changed and nothing restarted. That's why the agent chart keeps its" \
       "targets in a ConfigMap of their own, which the agent re-reads in place."
+    point "If $0 agent-dashboard was running, it ended with the old pod; run it again. The new pod's dashboard is" \
+      "on too, since --reuse-values keeps the chart's dashboard.enabled from values/agent.yaml."
     follow_up "To undo it, run" "$0 restore-config"
   fi
   rm -f "$config"
@@ -805,8 +849,9 @@ check_tour_from() {
 # Each part's title, after about how many minutes it takes to show.
 TOUR_PARTS=(
   "3 The Helm charts on two clusters, with no inbound access"
+  "3 The agent's own dashboard, reached with kubectl port-forward"
   "3 Annotate a Service, and Prometheus scrapes it"
-  "2 Kubernetes replaces a deleted agent pod in about a second"
+  "3 Kubernetes replaces a deleted agent pod in about a second"
   "3 A config change restarts the agent; a targets change doesn't"
 )
 
@@ -828,23 +873,58 @@ cmd_tour() {
       "All four targets are up, each scraped through the proxy."
   fi
 
-  if part 2 "targets-sync, a small controller in this demo, watches the Services in the apps namespace and writes" \
+  if part 2 "The proxy dashboard shows what the proxy sees. The agent's own dashboard shows its side of the" \
+    "firewall: its connection, each path's registration and recent scrapes, and its discovery. $TARGET exposes" \
+    "nothing, and the agent chart leaves the dashboard off the agent's Service, so here you reach it as the chart's" \
+    "notes tell an operator to, with kubectl port-forward, and keep it open for the parts that follow."; then
+    instruct "In a second terminal, in demos/kubernetes, run ./demo.sh agent-dashboard" \
+      "It runs kubectl port-forward, which carries localhost:$AGENT_DASHBOARD_PORT through $TARGET's API server to" \
+      "port 8095 in the agent's pod, and listens on localhost only. Nothing new is exposed: only someone kubectl" \
+      "lets into $TARGET can reach the dashboard. values/agent.yaml turns it on, with the chart's dashboard.enabled."
+    instruct "Open the agent's dashboard: $AGENT_DASHBOARD_URL" \
+      "The Paths view lists the agent's four paths, each registered with the proxy: agent_metrics, static, from" \
+      "its config, and the three services, discovered, with the cluster-local URLs the agent scrapes. The dots" \
+      "beside each are its recent scrapes, one for each scrape Prometheus sent through the proxy, green for a" \
+      "success."
+    instruct "Select /orders_metrics, then press Scrape now." \
+      "Recent scrapes lists the path's last scrapes as the agent saw them: when each ran, the target's status, how" \
+      "long the fetch took, and the body's size. Scrape now has the agent fetch the target at once, and shows the" \
+      "result above the list: its status, its metric families and samples, and the start of the body. The agent" \
+      "fetched it from inside $TARGET, the only place its address resolves:" \
+      "http://orders.apps.svc.cluster.local:8000/metrics"
+    instruct "Open the Connection view: $AGENT_DASHBOARD_URL/connection" \
+      "The agent is connected to the proxy's NodePort on $MONITORING's node, under its pod's name. Under Discovery" \
+      "is the file the chart mounts from the agent-targets ConfigMap, /app/discovery/targets.conf, read every 5" \
+      "seconds, with three entries and its last read ok. Settings shows what the agent resolved from" \
+      "config/agent.conf, such as its 3-second scrape timeout."
+    instruct "Open the Activity view: $AGENT_DASHBOARD_URL/activity" \
+      "It lists what the agent did since its pod started, newest first. From the bottom: it connected to the proxy," \
+      "then registered its static path, and its three discovered ones on a line of their own. Each line is in the" \
+      "agent's log too, but the log stays behind the firewall and scrolls away. The agent keeps the list in" \
+      "memory, so each new pod starts its own."
+  fi
+
+  if part 3 "targets-sync, a small controller in this demo, watches the Services in the apps namespace and writes" \
     "each one annotated prometheus-proxy/path into the agent's targets ConfigMap, which the agent re-reads." \
     "Here you deploy a new service, and see it scraped without restarting anything."; then
     step "Deploy the search service, then create its Service, annotated prometheus-proxy/path: search_metrics." \
       -- add-service
-    step "Once you've seen search_metrics on the dashboard and in Prometheus, remove the annotation, then" \
+    step "Once you've seen search_metrics on both dashboards and in Prometheus, remove the annotation, then" \
       "delete search once its path has gone." -- remove-service
   fi
 
-  if part 3 "Here you delete the agent's pod, as a failed node or an eviction would, and see Kubernetes replace" \
+  if part 4 "Here you delete the agent's pod, as a failed node or an eviction would, and see Kubernetes replace" \
     "it with nobody touching the agent."; then
     step "Delete the agent's pod." -- delete-agent-pod
-    instruct "Open the dashboard's Activity view." \
+    instruct "Open the proxy dashboard's Activity view." \
       "It shows the old pod's paths leaving and the new pod's arriving."
+    instruct "Run ./demo.sh agent-dashboard again, and open the agent's Activity view: $AGENT_DASHBOARD_URL/activity" \
+      "The port-forward in the second terminal ended with the old pod, since it reaches one pod. The new pod's" \
+      "Activity view lists only its own start: it connected, and registered every path. The proxy saw both pods," \
+      "but each agent sees only its own."
   fi
 
-  if part 4 "The agent chart keeps the agent's targets apart from its main config. Part 2 changed the targets," \
+  if part 5 "The agent chart keeps the agent's targets apart from its main config. Part 3 changed the targets," \
     "and nothing restarted. Here you change the main config, which only a restart applies."; then
     step "Upgrade the agent chart with a main config that also turns on the agent's JVM metrics." -- change-config
     step "Upgrade the agent chart with the original config again, which replaces the pod once more." \
@@ -867,6 +947,7 @@ main() {
   status) cmd_status ;;
   open) cmd_open ;;
   logs) cmd_logs "$@" ;;
+  agent-dashboard) cmd_agent_dashboard ;;
   tour) cmd_tour "$@" ;;
   clusters) cmd_clusters ;;
   add-service) cmd_add_service ;;

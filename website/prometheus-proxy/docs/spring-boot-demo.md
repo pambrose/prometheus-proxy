@@ -17,6 +17,9 @@ It shows what's particular to Spring Boot:
 - the versions of the agent's libraries that Spring Boot's dependency management picks;
 - a graceful shutdown that takes the agent down first.
 
+The agent's own [dashboard](agent-dashboard.md) is on too, turned on by the environment with no change to the
+roastery's code, and shows the proxy stopping and starting again from the agent's side.
+
 The [Embedded Demo](embedded-demo.md)'s coffee shop shows the rest with an app in Kotlin.
 
 ``` mermaid
@@ -25,7 +28,7 @@ graph LR
   P[Prometheus :9090] -->|scrapes /roastery_metrics| Proxy[Proxy, dashboard :8094]
   %% The agent connects out to the proxy, so its arrow points back. The invisible link keeps the app to the right.
   Proxy ~~~ Agent
-  Agent[embedded agent, a SmartLifecycle bean] -->|gRPC over TLS, with a token| Proxy
+  Agent[embedded agent, a SmartLifecycle bean, dashboard :8495] -->|gRPC over TLS, with a token| Proxy
   Agent -->|reads /actuator/prometheus on 127.0.0.1| App[roastery: Spring Boot, Actuator behind Spring Security]
 
   subgraph host[Proxy host]
@@ -74,18 +77,20 @@ a minute.
 |---|---|
 | The roastery's status page | <http://localhost:8490> |
 | Proxy dashboard | <http://localhost:8494/dashboard> |
+| The roastery agent's dashboard | <http://localhost:8495/dashboard> |
 | Prometheus | <http://localhost:9490> |
 | The roastery's metrics, through the proxy | <http://localhost:8480/roastery_metrics> |
 
 The ports are the [Basics Demo](basics-demo.md)'s plus 400, so the demos can run side by side. Every port binds to
 `127.0.0.1` only. To move one that is already taken, set `SPRING_BOOT_DEMO_APP_PORT`, `SPRING_BOOT_DEMO_DASHBOARD_PORT`,
-`SPRING_BOOT_DEMO_PROMETHEUS_PORT`, or `SPRING_BOOT_DEMO_PROXY_PORT`, for example `SPRING_BOOT_DEMO_APP_PORT=8491 make up`.
+`SPRING_BOOT_DEMO_AGENT_DASHBOARD_PORT`, `SPRING_BOOT_DEMO_PROMETHEUS_PORT`, or `SPRING_BOOT_DEMO_PROXY_PORT`, for
+example `SPRING_BOOT_DEMO_APP_PORT=8491 make up`.
 
 ## What's running
 
 | Service | Role |
 |---|---|
-| `roastery` | A Spring Boot app in Java that roasts a batch of beans every two seconds and ships some to the coffee shop every five, counting both in Micrometer meters. Actuator serves them, with the JVM's and Tomcat's, at `/actuator/prometheus`, behind Spring Security's Basic Auth. The agent runs inside it, and reads `/actuator/prometheus` on `127.0.0.1`. |
+| `roastery` | A Spring Boot app in Java that roasts a batch of beans every two seconds and ships some to the coffee shop every five, counting both in Micrometer meters. Actuator serves them, with the JVM's and Tomcat's, at `/actuator/prometheus`, behind Spring Security's Basic Auth. The agent runs inside it, and reads `/actuator/prometheus` on `127.0.0.1`. Its dashboard is on, at port 8495, from the environment. |
 | `proxy` | The stock proxy image, which takes its TLS certificate and key, and the agent's token, from environment variables, with no file mounted. Its dashboard is on. |
 | `prometheus` | Scrapes the roastery's path through the proxy every 5s, and the proxy's own metrics. |
 
@@ -127,6 +132,35 @@ which starts the agent against a proxy and scrapes through it, so a Spring Boot 
 there. Were one to break it, a property in the app's pom sets that library back: `kotlin-serialization.version`,
 `jackson-2-bom.version`, `logback.version`, or `grpc-java.version`.
 
+## The agent's dashboard
+
+The agent serves a [dashboard](agent-dashboard.md) of its own, from inside the roastery, at
+<http://localhost:8495/dashboard>. The demo's compose file turns it on with two environment variables, which the agent
+reads itself, over what the app's code sets, so the roastery's code didn't change:
+
+```yaml
+services:
+  roastery:
+    environment:
+      DASHBOARD_ENABLED: "true"
+      DASHBOARD_PORT: "8495"
+```
+
+In code, the builder's `.dashboard(8495)` turns it on the same way. It has no password here, so the agent warns at
+startup, in the roastery's log, that it listens on all interfaces without a login; the demo publishes its port on
+`127.0.0.1` only.
+
+Its Paths view lists `/roastery_metrics`, registered, with the recent scrapes the proxy asked for. Select it, and
+**Scrape now** has the agent read Actuator's metrics at once, from inside the roastery. The Activity view lists what has
+happened to the agent, newest first, and the Connection view its proxy endpoint and the settings it resolved.
+
+`./demo.sh proxy-stop` stops the proxy, and the proxy's dashboard with it, but the agent's still answers. Its
+Connection view turns failing, with the error the agent got connecting to the proxy, and its Activity view adds
+disconnected and connect failed. The roastery keeps serving, and its health stays UP while the agent's component turns
+UNKNOWN. Scrape now still reads the roastery's metrics, since it doesn't need the proxy. `./demo.sh proxy-start`
+brings the proxy back: the agent connects within a few seconds and registers its path again, and the Activity view
+adds connected and registered.
+
 ## A graceful shutdown
 
 `./demo.sh stop-app` stops the roastery with SIGTERM, as a platform does on a deploy or a scale-down. The agent, in the
@@ -148,6 +182,7 @@ Graceful shutdown complete
 | `./demo.sh peek` | Tries `/actuator/prometheus` without the password, then reads it through the proxy |
 | `./demo.sh health` | Shows the agent in Actuator's `/actuator/health`: connected, and to which proxy |
 | `./demo.sh versions` | Compares the versions of the agent's libraries in the roastery with the agent's own |
+| `./demo.sh proxy-stop` / `proxy-start` | Stops the proxy, or starts it again, which the agent's dashboard shows |
 | `./demo.sh stop-app` / `start-app` | Stops the roastery with SIGTERM, or starts it again |
 | `make status` | The containers, the roastery's state, and the URLs |
 | `make logs SERVICE=roastery` | Follows one service's log |
@@ -158,6 +193,7 @@ Graceful shutdown complete
   and lists the files that set it up. The roastery's code is in `demos/spring-boot/app`.
 - [Embedded Agent](embedded-agent.md#in-spring-boot) covers the agent in a Spring Boot app, and the API the roastery
   uses.
+- [Agent Dashboard](agent-dashboard.md) covers the agent's dashboard: its views, and the settings that turn it on.
 - The [Embedded Demo](embedded-demo.md) runs a Kotlin app with the agent embedded under load, with Grafana, alerts, a
   deploy, the proxy going away, and secrets from the environment.
 - [Cloud Platforms](cloud-platforms.md) sets an app with the agent embedded up for real, and

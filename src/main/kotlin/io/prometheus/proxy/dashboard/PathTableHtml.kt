@@ -30,7 +30,6 @@ import io.prometheus.proxy.dashboard.ProxyDashboardHtml.COPY_TARGET_ID_PREFIX
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.LINK_ID_PREFIX
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.PATH_TABLE_ID
 import io.prometheus.proxy.dashboard.ProxyDashboardHtml.agentLabel
-import io.prometheus.proxy.dashboard.ProxyDashboardHtml.renderFilters
 import kotlinx.html.BUTTON
 import kotlinx.html.ButtonType
 import kotlinx.html.DIV
@@ -50,6 +49,13 @@ import kotlinx.html.td
 import kotlinx.html.thead
 import kotlinx.html.tr
 import kotlinx.html.unsafe
+import io.prometheus.common.dashboard.RowFilter
+import io.prometheus.common.dashboard.TableColumn
+import io.prometheus.common.dashboard.TableText
+import io.prometheus.common.dashboard.columnHeaders
+import io.prometheus.common.dashboard.filteredTableStart
+import io.prometheus.common.dashboard.alignment
+import io.prometheus.common.dashboard.DashboardPage.renderFilters
 
 /**
  * The Paths view: every path on one row, joined with its recent scrapes, and the search above it.
@@ -61,7 +67,7 @@ import kotlinx.html.unsafe
  * helpers both layouts need: [agentLabel], which both must name an agent through, and [scrapeTime].
  */
 internal object PathTableHtml {
-  /** The search and the table, as the page first renders them; see [ProxyDashboardHtml.renderFilters]. */
+  /** The search and the table, as the page first renders them; see `DashboardPage.renderFilters`. */
   fun FlowContent.renderPathTable(
     snapshot: ProxySnapshot,
     routeBase: String,

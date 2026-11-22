@@ -34,6 +34,22 @@ class MetricFilterTest : StringSpec() {
   ) = MetricFilter.createOrNull(allow, deny, "test_path").shouldNotBeNull()
 
   init {
+    // The agent dashboard's activity feed is told once per cause, as the log's WARN is, since a target that answers in
+    // protobuf would otherwise say so on every scrape.
+    "a filter that lets a scrape through unfiltered should say why once per cause" {
+      val reasons = mutableListOf<String>()
+      val filter =
+        MetricFilter.createOrNull(emptyList(), listOf("go_.*"), "test_path") { reasons += it }.shouldNotBeNull()
+      repeat(2) { filter.filterBytes("up 1\n".encodeToByteArray(), "application/vnd.google.protobuf") }
+      repeat(2) { filter.filterBytes(byteArrayOf(0xC3.toByte(), 0x28), "text/plain") }
+
+      reasons shouldBe
+        [
+          "a scrape's content type, application/vnd.google.protobuf, was not text",
+          "a scrape's body was not valid UTF-8",
+        ]
+    }
+
     // For the agent's dashboard, which shows a path's filter's effect whether or not the agent's metrics are on.
     "a filter should count what it has dropped across scrapes, and say when it let one through unfiltered" {
       val filter = filter(deny = ["noise"])

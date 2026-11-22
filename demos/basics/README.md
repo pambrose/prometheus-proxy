@@ -1,9 +1,9 @@
 # Basics demo
 
-A self-contained demo of Prometheus Proxy. It runs the proxy with its web dashboard, three agents behind a simulated
-firewall, a set of simulated services, and Prometheus and Grafana, all on one laptop, and shows live traffic,
-failures and recovery, redundancy, dynamic discovery, stale-agent eviction, per-team identities, and a misconfigured
-duplicate agent.
+A self-contained demo of Prometheus Proxy. It runs the proxy with its web dashboard, three agents with theirs behind a
+simulated firewall, a set of simulated services, and Prometheus and Grafana, all on one laptop, and shows live
+traffic, failures and recovery, redundancy, dynamic discovery, stale-agent eviction, per-team identities, an agent's
+view of a refused path and a lost proxy, and a misconfigured duplicate agent.
 
 The website's [Basics Demo](https://prometheus-proxy.com/basics-demo/) page walks through the same
 scenarios with screenshots of the dashboard and Grafana.
@@ -21,13 +21,13 @@ flowchart TB
 
   subgraph inside["Inside the firewall, which the demo simulates"]
     subgraph east["East data center"]
-      agentEast["agent-east<br/>configured and<br/>discovered paths"]
+      agentEast["agent-east<br/>configured and<br/>discovered paths<br/>dashboard :8095"]
     end
     subgraph west["West data center: a redundant pair"]
-      agentWest1["agent-west-1"]
-      agentWest2["agent-west-2"]
+      agentWest1["agent-west-1<br/>dashboard :8096"]
+      agentWest2["agent-west-2<br/>dashboard :8097"]
     end
-    scenario["agent-rogue and<br/>agent-east-copy,<br/>started by scenarios"]
+    scenario["agent-rogue and<br/>agent-east-copy,<br/>started by scenarios<br/>dashboards :8098, :8099"]
     app[("demo-app<br/>the simulated services")]
   end
 
@@ -78,27 +78,32 @@ that it starts in under a minute, even without a network connection.
 | What | URL |
 |---|---|
 | Proxy dashboard | <http://localhost:8094/dashboard> |
+| agent-east's dashboard | <http://localhost:8095/dashboard> |
+| agent-west-1's and agent-west-2's dashboards | <http://localhost:8096/dashboard>, <http://localhost:8097/dashboard> |
+| agent-rogue's and agent-east-copy's dashboards, while their scenarios run | <http://localhost:8098/dashboard>, <http://localhost:8099/dashboard> |
 | Grafana (no sign-in needed; admin / admin to edit) | <http://localhost:3000> |
 | Prometheus | <http://localhost:9090> (alerts at `/alerts`) |
 | The proxy's service discovery | <http://localhost:8080/discovery> |
 
-`make open` opens the proxy dashboard, Grafana, and Prometheus's alerts in your browser.
+`make open` opens the proxy's dashboard, agent-east's, Grafana, and Prometheus's alerts in your browser.
 
 If a port is already taken, move it, for example with `DEMO_GRAFANA_PORT=3001 make up`. The variables are
-`DEMO_DASHBOARD_PORT`, `DEMO_GRAFANA_PORT`, `DEMO_PROMETHEUS_PORT`, and `DEMO_PROXY_PORT`; the dashboard's links into
+`DEMO_DASHBOARD_PORT`, `DEMO_GRAFANA_PORT`, `DEMO_PROMETHEUS_PORT`, and `DEMO_PROXY_PORT`, and for the agents'
+dashboards `DEMO_AGENT_EAST_DASHBOARD_PORT`, `DEMO_AGENT_WEST_1_DASHBOARD_PORT`, `DEMO_AGENT_WEST_2_DASHBOARD_PORT`,
+`DEMO_AGENT_ROGUE_DASHBOARD_PORT`, and `DEMO_AGENT_EAST_COPY_DASHBOARD_PORT`; the proxy dashboard's links into
 Prometheus and Grafana keep the default ports (`config/proxy.conf`). Every port binds to `127.0.0.1` only. The
-dashboard runs without a login, but for part 10 of the tour, and Grafana uses its default admin password, so this
-setup is for a laptop, not for anything shared.
+dashboards run without a login, but for the proxy's in part 11 of the tour, and Grafana uses its default admin
+password, so this setup is for a laptop, not for anything shared.
 
 ## What's running
 
 | Service | Role |
 |---|---|
 | `proxy` | The proxy, outside the firewall. Its dashboard is on; service discovery tells Prometheus about every path the agents register. |
-| `agent-east` | The agent in the "east" data center. It scrapes the orders, payments, inventory, and catalog services, the proxy's own metrics, its own, and whatever its discovery file lists. |
-| `agent-west-1`, `agent-west-2` | A redundant pair in the "west" data center. Both run consolidated and serve `shipping_metrics`, and the proxy merges their two replicas. |
-| `agent-rogue` | Not started by default. `demo.sh rogue-agent` starts a contractor's agent whose identity may register only `contractor_*` paths, and which tries to register `payments_metrics` too. |
-| `agent-east-copy` | Not started by default. `demo.sh duplicate-agent` starts a second copy of agent-east's config, without consolidated mode. |
+| `agent-east` | The agent in the "east" data center. It scrapes the orders, payments, inventory, and catalog services, the proxy's own metrics, its own, and whatever its discovery file lists. Its own dashboard is on port 8095. |
+| `agent-west-1`, `agent-west-2` | A redundant pair in the "west" data center. Both run consolidated and serve `shipping_metrics`, and the proxy merges their two replicas. Their dashboards are on ports 8096 and 8097. |
+| `agent-rogue` | Not started by default. `demo.sh rogue-agent` starts a contractor's agent whose identity may register only `contractor_*` paths, and which tries to register `payments_metrics` too. Its dashboard is on port 8098. |
+| `agent-east-copy` | Not started by default. `demo.sh duplicate-agent` starts a second copy of agent-east's config, without consolidated mode. Its dashboard is on port 8099. |
 | `demo-app` | The simulated services (`app/demo_app.py`). Traffic follows a 5-minute "day", so the graphs move. It also writes agent-east's discovery file. |
 | `prometheus` | Scrapes every path through the proxy every 5s, with no target in its config. It loads the project's alerting rules (`grafana/alerts.yml`) and the demo's fast ones (`prometheus/demo-alerts.yml`). |
 | `grafana` | Opens on the **Prometheus Proxy Demo** dashboard. The project's own **Prometheus Proxy** and **Prometheus Agents** dashboards (`grafana/*.json`) are linked from its top bar. |
@@ -223,12 +228,56 @@ register only the paths its patterns allow.
 - Its `/payments_metrics` is refused, and the command prints the proxy's log line: *Agent identity 'contractor' denied
   registration of path /payments_metrics*. Payments keeps coming from agent-east, untouched: with a shared token, the
   newer agent would have taken the path over.
+- The Agents and Paths views can't show a refusal, since the proxy added nothing. The **Activity** view lists it as
+  `rejected`, with the proxy's reason, searched here for the contractor's agent:
+  <http://localhost:8094/dashboard/activity?q=agent-rogue>
+
+### 9. An agent's own dashboard shows a refused path and a lost proxy
+
+The proxy's dashboard shows only what reaches the proxy. A path the proxy refused, or a proxy an agent can't reach,
+shows on the agent's side, so each agent here serves a dashboard of its own, on a port of its own (`agent.dashboard`
+in `config/agent-*.conf`). This part starts with agent-rogue, which part 8 left running.
+
+- agent-rogue's **Paths** view gives each path a light, green while the proxy routes the path's scrapes to this agent.
+  `/contractor_metrics` is green, and `/payments_metrics` is red, tagged `refused`:
+  <http://localhost:8098/dashboard>
+- Click `/payments_metrics`. Under **Refused by the proxy** is the proxy's reason, *Agent identity 'contractor' is not
+  authorized to register path /payments_metrics*. Asking again wouldn't change the answer, so the agent doesn't try
+  the path again until it reconnects.
+- Its **Activity** view lists what has happened to the agent, newest first. Its entries show the agent connecting to
+  the proxy, registering `/contractor_metrics`, and being refused `/payments_metrics`. **Problems only** leaves just
+  the refusal.
 
 ```bash
 ./demo.sh rogue-agent-stop
 ```
 
-### 9. A duplicate agent takes over the paths, and the proxy logs the fix
+- agent-east's **Connection** view shows it connected to `proxy:50051`, its one proxy endpoint, with its discovery file
+  and settings below: <http://localhost:8095/dashboard/connection>
+
+```bash
+./demo.sh proxy-down      # stops the proxy
+```
+
+- The proxy's dashboard goes with it, but agent-east's keeps answering, since it runs on the agent. Its Connection
+  view turns `failing`, and `proxy:50051` shows the error from the agent's last try. The agent tries again every 3
+  seconds.
+- Its **Activity** view lists `disconnected`, then `connect failed`, once rather than for each retry. On its **Paths**
+  view every path turns red, tagged `pending`.
+- Select `/orders_metrics` there and click its **Scrape now** button, the circular arrow after its name. The agent
+  fetches the orders service at once and shows a 200, with the metrics Prometheus would get: the target is fine, and
+  what's lost is the way to the proxy. Scrape now works whether or not the proxy has the path.
+- Prometheus can't reach the proxy either, so every target turns DOWN on Grafana's **Target health**.
+
+```bash
+./demo.sh proxy-up        # starts it again
+```
+
+- Within a few seconds agent-east connects and registers its paths again: its Connection view turns `connected`, its
+  paths turn green, and **Activity** lists `connected` and `registered`. A new proxy holds nothing from the old one,
+  so the proxy's dashboard starts its histories over.
+
+### 10. A duplicate agent takes over the paths, and the proxy logs the fix
 
 ```bash
 ./demo.sh duplicate-agent    # a second copy of agent-east, without consolidated mode
@@ -239,12 +288,14 @@ register only the paths its patterns allow.
 - They settle. agent-east stays connected without paths rather than reconnecting and taking them back, which used to
   make two such agents swap the paths every few seconds. The command prints the proxy's log line, which names both
   agents and says the fix: `agent.consolidated = true` on each, if both should serve the paths.
+- The copy's own dashboard lists the six paths, each green, since the proxy accepted every one:
+  <http://localhost:8099/dashboard>
 
 ```bash
 ./demo.sh duplicate-agent-stop   # removes the copy, and restarts agent-east to register again
 ```
 
-### 10. A login for the dashboard
+### 11. A login for the dashboard
 
 ```bash
 ./demo.sh login       # restarts the proxy with a dashboard password in its environment
@@ -280,6 +331,7 @@ resources.
 | `demo.sh agent-stop` / `agent-start [agent]` | Stops or starts an agent (default `agent-west-2`) | `docker compose stop` / `start`: the agent's connection closes as it exits |
 | `demo.sh agent-freeze` / `agent-thaw [agent]` | Pauses or resumes an agent's container (default `agent-west-2`) | `docker compose pause` / `unpause`: the connection stays open but silent, so the proxy evicts the agent after 30 seconds |
 | `demo.sh rogue-agent` / `rogue-agent-stop` | Starts or removes the contractor's agent | Starts or removes `agent-rogue` (compose profile `rogue`), which presents the contractor identity's token, allowed only `contractor_*` paths |
+| `demo.sh proxy-down` / `proxy-up` | Stops or starts the proxy | `docker compose stop` / `start proxy`: each agent's connection closes, and the agent tries again every 3 seconds (`agent.internal.reconnectPauseSecs`) until the proxy is back |
 | `demo.sh login` / `login-off` | Turns the dashboard's login on (`admin`, password `admin`) or off | Restarts the proxy with or without `DASHBOARD_PASSWORD`, from `DEMO_DASHBOARD_PASSWORD` in `docker/compose.yml` |
 | `demo.sh duplicate-agent` / `duplicate-agent-stop` | Starts a second copy of agent-east, or removes it and restarts agent-east | Starts or removes `agent-east-copy` (profile `duplicate`): agent-east's config under another name, not consolidated |
 | `make tour [PART=n]` | Walks through the guided tour above, from part 1 or the one given, pausing before each step |  |
@@ -293,17 +345,17 @@ The services are `orders`, `payments`, `inventory`, `catalog`, and `shipping`, p
 
 | File | What it sets up |
 |---|---|
-| `docker/compose.yml` | The services, their ports, and their images, and the proxy's dashboard password for part 10 |
+| `docker/compose.yml` | The services, their ports, and their images, and the proxy's dashboard password for part 11 |
 | `config/proxy.conf` | The dashboard, service discovery, the per-agent identities, and a 30-second eviction limit, so part 7 fits a demo |
-| `config/agent-duplicate.conf` | agent-east's config under another name, for part 9 |
-| `config/agent-*.conf` | Each agent's proxy endpoint, identity token, paths, and their labels (the `job` Prometheus uses), discovery for agent-east, consolidated mode for the west pair, and a 3-second scrape timeout |
+| `config/agent-duplicate.conf` | agent-east's config under another name, with a dashboard port of its own, for part 10 |
+| `config/agent-*.conf` | Each agent's proxy endpoint, identity token, dashboard port, paths, and their labels (the `job` Prometheus uses), discovery for agent-east, consolidated mode for the west pair, and a 3-second scrape timeout |
 | `prometheus/prometheus.yml` | One HTTP service discovery job against the proxy |
 | `prometheus/demo-alerts.yml` | The fast demo alerts |
 | `grafana/` | The provisioned datasource, dashboard folder, and demo dashboard |
 | `app/demo_app.py` | The simulated services and their control API |
 | `Makefile` | The demo's targets: `make up`, `make up-local` (which runs the proxy and agent built from this checkout, for trying a change to them), `down`, `status`, `open`, `tour`, and `logs`, which `make help` lists, and `screenshots`, which it leaves out, since it's for maintaining the site |
 | `demo.sh` | Starting, stopping, and the scenarios. Its `NEEDS_RELEASE_AFTER` is the latest release that predates what the demo shows: until a later one is out, `make up` builds the proxy and agent from this checkout, as `make up-local` does, so set it to the latest release when the demo comes to use something unreleased |
-| `bin/screenshots.sh` | The Basics Demo page's screenshots, and the Dashboard page's of the login page, in the dark and light themes. `make screenshots` builds and starts the demo, waits a minute so the agents' uptimes read in minutes, plays the scenarios, and writes them to `website/prometheus-proxy/docs/images/demo/` (needs Chrome, ImageMagick 7, and `cwebp`). While checking a change, `SKIP_UPTIME_WAIT=1` skips the minute, so the shots show uptimes in seconds and aren't for the site, and `WAIT_SECS` sets how long each wait for a scene may take before the script fails (default 150): `make screenshots SKIP_UPTIME_WAIT=1 WAIT_SECS=60` |
+| `bin/screenshots.sh` | The Basics Demo page's screenshots, agent-rogue's dashboard among them, and the Dashboard page's of the login page, in the dark and light themes. `make screenshots` builds and starts the demo, waits a minute so the agents' uptimes read in minutes, plays the scenarios, and writes them to `website/prometheus-proxy/docs/images/demo/` (needs Chrome, ImageMagick 7, and `cwebp`). While checking a change, `SKIP_UPTIME_WAIT=1` skips the minute, so the shots show uptimes in seconds and aren't for the site, and `WAIT_SECS` sets how long each wait for a scene may take before the script fails (default 150): `make screenshots SKIP_UPTIME_WAIT=1 WAIT_SECS=60` |
 
 From the repository root, `make check-rules` validates the Prometheus config and both rule files with promtool, and
 `ConfigFileKeysTest` checks every key in `config/*.conf` against `config/config.conf`, and that each file loads as the
@@ -319,6 +371,8 @@ and Prometheus doesn't notice one at all, so `make up` reloads Prometheus's conf
 - **The dashboard is empty, or shows only some agents**: the agents connect a few seconds after the proxy starts.
   Give it ten seconds, or check `make logs SERVICE=agent-east`.
 - **A scenario left things in an odd state**: `./demo.sh recover`, `undiscover`, `agent-thaw`, `agent-start`,
-  `rogue-agent-stop`, and `duplicate-agent-stop` undo every scenario. For a clean slate, `make down && make up`.
-- The proxy logs a warning at startup that the dashboard has no authentication. That's expected here, and is why
-  every port binds to `127.0.0.1`.
+  `rogue-agent-stop`, `proxy-up`, and `duplicate-agent-stop` undo every scenario. For a clean slate,
+  `make down && make up`.
+- The proxy logs a warning at startup that the dashboard has no authentication, and each agent logs the same for its
+  own, which listens on every interface in its container. That's expected here, and is why every port binds to
+  `127.0.0.1`.

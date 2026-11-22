@@ -104,9 +104,11 @@ class LoginHtmlTest : StringSpec() {
       page(routeBase = "", next = "/").also { it shouldContain """action="/login"""" }
     }
 
+    // Its one script is the theme's, inline, which loads nothing.
     "the page loads nothing from anywhere" {
       page().apply {
-        this shouldNotContain "<script"
+        Regex("<script").findAll(this).count() shouldBe 1
+        this shouldContain "<script>${DashboardPage.THEME_SCRIPT}</script>"
         this shouldNotContain "src="
         this shouldNotContain "http://"
         this shouldNotContain "https://"
@@ -127,6 +129,14 @@ class LoginHtmlTest : StringSpec() {
         this shouldContain DashboardCss.TOKENS
         this shouldContain "prefers-color-scheme: dark"
         this shouldContain "var(--accent)"
+      }
+    }
+
+    // The dashboard's theme, as its button left it, so the login page doesn't flash the other one before the dashboard.
+    "it should apply the theme the dashboard was set to, in its head" {
+      page().apply {
+        substringBefore("</head>") shouldContain DashboardPage.THEME_SCRIPT
+        this shouldContain DashboardCss.darkRule(":root", "--on-accent:var(--bg);")
       }
     }
   }

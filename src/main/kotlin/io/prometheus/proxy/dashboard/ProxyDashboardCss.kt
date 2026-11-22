@@ -42,11 +42,8 @@ internal object ProxyDashboardCss {
         appendLine(".links a.icon-${icon.slug} { --icon:url(\"$url\"); --brand:${icon.lightColor}; }")
       }
       // Only the icons whose colour changes with the theme need a rule in the dark one.
-      val perTheme = icons.filter { it.darkColor != it.lightColor }
-      if (perTheme.isNotEmpty()) {
-        appendLine("@media (prefers-color-scheme: dark) {")
-        for (icon in perTheme) appendLine("  .links a.icon-${icon.slug} { --brand:${icon.darkColor}; }")
-        appendLine("}")
-      }
+      icons
+        .filter { it.darkColor != it.lightColor }
+        .forEach { appendLine(DashboardCss.darkRule(".links a.icon-${it.slug}", "--brand:${it.darkColor};")) }
     }.trimEnd()
 }

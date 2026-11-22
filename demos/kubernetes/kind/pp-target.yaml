@@ -7,7 +7,7 @@
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 # The kubelet copies a changed ConfigMap into the pods that mount it on its periodic sync, every syncFrequency (1m by
-# default) plus jitter. 5 seconds brings part 2's agent-targets change to the agent in seconds rather than in up to
+# default) plus jitter. 5 seconds brings part 3's agent-targets change to the agent in seconds rather than in up to
 # about a minute, as on a production kubelet.
 kubeadmConfigPatches:
   - |

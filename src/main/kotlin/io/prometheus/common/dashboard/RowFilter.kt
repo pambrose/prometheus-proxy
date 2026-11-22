@@ -14,17 +14,19 @@
  * limitations under the License.
  */
 
-package io.prometheus.proxy.dashboard
+package io.prometheus.common.dashboard
 
 import io.ktor.http.Parameters
+import io.ktor.http.parseQueryString
 import io.prometheus.common.AgentValues
 import io.prometheus.common.dashboard.DashboardPage.PROBLEMS_ON
 import io.prometheus.common.dashboard.DashboardPage.PROBLEMS_PARAM
 import io.prometheus.common.dashboard.DashboardPage.QUERY_PARAM
-import io.prometheus.proxy.ActivityEntry
 
 /**
- * Which rows the Paths and Activity views show: those matching a search, and optionally only the problems.
+ * Which rows a dashboard's filtered table shows, the proxy's Paths and Activity views' and the agent's Activity view's:
+ * those matching a search, and optionally only the problems. Each dashboard says how a row of its own matches, by what
+ * the row shows and whether it is a problem ([matches]).
  *
  * Applied on the server, to the table each push renders, rather than in the browser: the push replaces the table every
  * refresh, so a filter applied to the page would be undone by the next frame. It lives in the page's URL
@@ -32,10 +34,8 @@ import io.prometheus.proxy.ActivityEntry
  * both read by [of]: the URL a page is opened at, and that URL's query in each WebSocket message, so a change applies
  * at once without a reload.
  *
- * @param query matched case-insensitively against what a row shows: for a path, the path, its agents' names, its target
- *   URL, and its identity; for an activity line, the event, the agent's name, the identity, the paths, and the detail
- * @param problemsOnly keep only the problems: a path whose last scrape failed or whose agent has gone
- *   ([PathView.isProblem]), and an event an operator has to act on ([io.prometheus.proxy.ActivityKind.isProblem])
+ * @param query matched case-insensitively against what a row shows
+ * @param problemsOnly keep only the problems, the rows an operator has to act on
  */
 internal data class RowFilter(
   val query: String = "",
@@ -44,25 +44,15 @@ internal data class RowFilter(
   /** Whether any row could be hidden, which is when the table says how many it shows. */
   val isActive: Boolean get() = query.isNotEmpty() || problemsOnly
 
-  fun matches(path: PathView): Boolean = matches(path.isProblem) { path.searchFields() }
-
-  fun matches(entry: ActivityEntry): Boolean = matches(entry.kind.isProblem) { entry.searchFields() }
-
-  // A row that is a problem, if only problems are kept, and that shows the query in one of its [fields], if there is
-  // one.
-  private fun matches(
+  /**
+   * Whether a row is shown: one that is a problem, [isProblem], if only problems are kept, and that shows the query in
+   * one of its [fields], what the row shows, if there is one.
+   */
+  fun matches(
     isProblem: Boolean,
     fields: () -> List<String>,
   ): Boolean =
     (!problemsOnly || isProblem) && (query.isEmpty() || fields().any { it.contains(query, ignoreCase = true) })
-
-  // What the row shows: an identity as its label reads, and the agent the row names (servingAgent): the first of
-  // agentNames, or for a departed path with none, the one its last scrape names.
-  private fun PathView.searchFields(): List<String> =
-    listOfNotNull(path, targetUrl, servingAgent, identityLabel(identity)) + agentNames
-
-  private fun ActivityEntry.searchFields(): List<String> =
-    listOfNotNull(kind.label, agentName, identityLabel(identity), detail) + paths
 
   companion object {
     val NONE = RowFilter()
@@ -78,5 +68,19 @@ internal data class RowFilter(
 
     /** A filter from a URL's query parameters, as the search form writes them. */
     fun of(parameters: Parameters) = of(parameters[QUERY_PARAM], parameters[PROBLEMS_PARAM] == PROBLEMS_ON)
+
+    /**
+     * Reads `{"search": "?q=team-a&problems=1"}`, the query of the page's URL, which holds the view's filter, from a
+     * session message, defaulting to [NONE].
+     *
+     * The URL's own query rather than fields of its own, so the filter has one format, which the view's route reads
+     * too. Same contract as [DashboardMessage.selection]: anything unexpected -- garbage, a missing field, a value of
+     * the wrong type, or a query that won't decode -- resolves to no filter rather than throwing inside the WebSocket
+     * loop.
+     */
+    fun fromMessage(text: String): RowFilter =
+      DashboardMessage.search(text)
+        ?.let { runCatching { of(parseQueryString(it.removePrefix("?"))) }.getOrNull() }
+        ?: NONE
   }
 }

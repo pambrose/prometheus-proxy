@@ -3,9 +3,9 @@
 A self-contained demo of Prometheus Proxy's agent embedded in an app. A coffee shop, a small Ktor app with built-in
 customers, runs the agent inside its own JVM. The agent connects to a proxy, and Prometheus and Grafana sit beside
 the proxy, as they would on a proxy host in the cloud. The demo runs on one laptop and shows the app's metrics
-reaching Grafana with no port opened for them. It also shows a rush, a failure that fires an alert, a deploy that
-hands the agent's paths to the new version, the proxy going away while the app keeps serving, and secrets that come
-from the environment.
+reaching Grafana with no port opened for them. It also shows the agent's own dashboard, served from inside the app, a
+rush, a failure that fires an alert, a deploy that hands the agent's paths to the new version, the proxy going away
+while the app keeps serving, and secrets that come from the environment.
 
 It's the setup the website's [Cloud Platforms](https://prometheus-proxy.com/cloud-platforms/) page
 describes, on one machine, and the website's
@@ -18,9 +18,9 @@ flowchart TB
     lb["load-balancer :8390<br/>the shop's one address"]
     subgraph app["coffee-shop: one container, one JVM"]
       ktor["Ktor app<br/>/metrics behind Basic Auth"]
-      agent["embedded agent<br/>config built in memory"]
+      agent["embedded agent<br/>config built in memory<br/>dashboard :8395"]
     end
-    next["coffee-shop-next<br/>version 1.1, started<br/>by a deploy"]
+    next["coffee-shop-next<br/>version 1.1, started<br/>by a deploy<br/>agent dashboard :8396"]
   end
 
   subgraph host["The proxy host"]
@@ -80,23 +80,27 @@ under a minute.
 | Grafana (no sign-in needed; admin / admin to edit) | <http://localhost:3300> |
 | Prometheus | <http://localhost:9390> (alerts at `/alerts`) |
 | The coffee shop's metrics, through the proxy | <http://localhost:8380/coffee_shop_metrics> |
+| The coffee shop agent's dashboard | <http://localhost:8395/dashboard> |
+| Version 1.1's agent's dashboard, after `./demo.sh deploy` | <http://localhost:8396/dashboard> |
 | The agent's `/debug` page, on its admin port | <http://localhost:8393/debug> |
 
-`make open` opens the coffee shop, the proxy dashboard, Grafana, and Prometheus's alerts in your browser.
+`make open` opens the coffee shop, the proxy's and the agent's dashboards, Grafana, and Prometheus's alerts in your
+browser.
 
 The ports are the basics demo's plus 300, so the demos can run side by side. If a port is already taken, move it, for
 example with `EMBEDDED_DEMO_GRAFANA_PORT=3301 make up`. The variables are `EMBEDDED_DEMO_APP_PORT`,
 `EMBEDDED_DEMO_DASHBOARD_PORT`, `EMBEDDED_DEMO_GRAFANA_PORT`, `EMBEDDED_DEMO_PROMETHEUS_PORT`,
-`EMBEDDED_DEMO_PROXY_PORT`, and `EMBEDDED_DEMO_AGENT_ADMIN_PORT`. Every port binds to `127.0.0.1` only. The dashboard
-and the agent's admin endpoints have no authentication, the coffee shop's knobs need none, and Grafana uses its default
-admin password, so this setup is for a laptop, not for anything shared.
+`EMBEDDED_DEMO_PROXY_PORT`, `EMBEDDED_DEMO_AGENT_ADMIN_PORT`, `EMBEDDED_DEMO_AGENT_DASHBOARD_PORT`, and
+`EMBEDDED_DEMO_NEXT_AGENT_DASHBOARD_PORT`. Every port binds to `127.0.0.1` only. The dashboards and the agent's admin
+endpoints have no authentication, the coffee shop's knobs need none, and Grafana uses its default admin password, so
+this setup is for a laptop, not for anything shared.
 
 ## What's running
 
 | Service | Role |
 |---|---|
-| `coffee-shop` | The app, version 1.0 (`app/`): a Ktor server whose built-in customers order over HTTP, and whose baristas brew from a queue. It serves its metrics, with Ktor's HTTP and the JVM's, at `/metrics` behind Basic Auth. The prometheus-proxy agent runs inside it, started from the app's code with a config built in memory from its environment, and reads `/metrics` on `127.0.0.1`. Its admin endpoints, `/debug` among them, are on port 8393, for debugging it. |
-| `coffee-shop-next` | Not started by default. `demo.sh deploy` starts version 1.1 of the same image beside 1.0, as a rolling deploy does. |
+| `coffee-shop` | The app, version 1.0 (`app/`): a Ktor server whose built-in customers order over HTTP, and whose baristas brew from a queue. It serves its metrics, with Ktor's HTTP and the JVM's, at `/metrics` behind Basic Auth. The prometheus-proxy agent runs inside it, started from the app's code with a config built in memory from its environment, and reads `/metrics` on `127.0.0.1`. Its admin endpoints, `/debug` among them, are on port 8393, for debugging it, and its [dashboard](https://prometheus-proxy.com/agent-dashboard/) on port 8395. |
+| `coffee-shop-next` | Not started by default. `demo.sh deploy` starts version 1.1 of the same image beside 1.0, as a rolling deploy does. Its agent's dashboard is on port 8396. |
 | `load-balancer` | Caddy (`config/Caddyfile`), the coffee shop's one address, on port 8390, as a platform's load balancer is. It sends every request to 1.0, or to 1.1 once a deploy has stopped 1.0, so the status page, the order counter, and the knobs keep answering at the same URL through a deploy. |
 | `proxy` | The stock proxy image, which takes its TLS certificate and key, and the agents' token, from environment variables, with no file mounted. Its agent port is reachable only on the compose network; its dashboard is on. |
 | `prometheus` | Scrapes the coffee shop's paths through the proxy every 5s, and the proxy's own metrics. It loads the project's alerting rules (`grafana/alerts.yml`) and the coffee shop's (`prometheus/embedded-alerts.yml`). |
@@ -130,7 +134,35 @@ its metrics to the internet. Here the agent runs inside the app instead, and con
 - Open the proxy dashboard. One agent is connected, `coffee-shop-1.0`, named after the app's version, with two paths:
   the coffee shop's metrics, and the agent's own. It connected to the proxy over TLS.
 
-### 2. The coffee shop's metrics in Grafana
+### 2. The agent's own dashboard, served from inside the app
+
+The proxy's dashboard shows only what reaches the proxy. The agent serves a
+[dashboard of its own](https://prometheus-proxy.com/agent-dashboard/), from inside the app, that shows its side: its
+connection, each path's registration, its scrapes as it saw them, and what it did, in order.
+
+- Open it at <http://localhost:8395/dashboard>. Its **Paths** view lists the agent's two paths, each `registered`: the
+  proxy routes their scrapes to this agent. Beside each are the status of its last scrape and a strip of its recent
+  scrapes, which fills as Prometheus scrapes every five seconds.
+- Select `coffee_shop_metrics`. Its URL is the app's own `/metrics` on `127.0.0.1`, its credentials masked, and
+  **Recent scrapes** lists the scrapes Prometheus asked for, newest first. **Scrape now** fetches `/metrics` at once,
+  from inside the app, with the credentials the agent holds, and shows the status, the size, the metric families and
+  samples, and the start of the body. It works whether or not the proxy has the path, so when a path doesn't scrape, it
+  tells you whether the app answers its agent.
+- The **Connection** view, <http://localhost:8395/dashboard/connection>, reads `connected`, to `proxy:50051`, over
+  TLS, and lists the settings the agent resolved, its token shown only as set. In part 8, it says why the agent can't
+  connect.
+- The **Activity** view, <http://localhost:8395/dashboard/activity>, lists what the agent did, newest first: the two
+  paths `registered`, above `connected`. If the agent tried before the proxy was listening, a `connect failed` sits
+  below them.
+
+The coffee shop's environment turns it on, with nothing in its code: `DASHBOARD_ENABLED: "true"` in the
+`x-coffee-shop-env` block of `docker/compose.yml`, for both versions, and a `DASHBOARD_PORT` for each, 8395 for 1.0 and
+8396 for 1.1, which the agent reads itself. Turning it off, or on again, takes a restart and no new build. In code,
+`dashboard(port = 8395)` in `embeddedAgent { }` does the same, though the environment overrides it. It has no login
+unless `DASHBOARD_PASSWORD` sets one, so the demo publishes it on `127.0.0.1`; on a platform, its port would stay on the
+internal network.
+
+### 3. The coffee shop's metrics in Grafana
 
 Open Grafana. It lands on the **Coffee Shop** dashboard.
 
@@ -141,7 +173,7 @@ Open Grafana. It lands on the **Coffee Shop** dashboard.
   long each scrape through the proxy took.
 - The **Prometheus Agents** link opens the project's agents dashboard, which shows the embedded agent like any other.
 
-### 3. A rush fills the queue, and more baristas drain it
+### 4. A rush fills the queue, and more baristas drain it
 
 The customers order about one and a half drinks a second, which three baristas keep up with.
 
@@ -154,7 +186,7 @@ The customers order about one and a half drinks a second, which three baristas k
 The queue climbs on the status page and in **Queue and baristas**. Once it holds 40, the counter turns customers away
 with a 429, and **Orders / sec, by outcome** shows them rejected. Eight baristas drain it.
 
-### 4. The espresso machine breaks, and an alert fires
+### 5. The espresso machine breaks, and an alert fires
 
 ```bash
 ./demo.sh break-machine
@@ -165,7 +197,7 @@ Every espresso drink fails with a 503, about three orders in four. **Espresso** 
 show by outcome and by HTTP status, and after 10 seconds `CoffeeShopErrors` fires on Prometheus's alerts page. The
 proxy and the agent are untouched: the metrics report the failure, they don't fail.
 
-### 5. A deploy hands the path to the new version
+### 6. A deploy hands the path to the new version
 
 ```bash
 ./demo.sh deploy        # starts version 1.1 beside 1.0, then stops 1.0
@@ -175,10 +207,15 @@ proxy and the agent are untouched: the metrics report the failure, they don't fa
 Version 1.1's agent registers the same paths with the same token, and the proxy gives each path to the newer
 registration; the command prints the proxy's log line. 1.0's agent stays connected without paths until its app stops.
 The coffee shop's page, at the same address, now reads Version 1.1: its load balancer sends requests to 1.0 while it
-runs and to 1.1 once it has stopped. On the dashboard, `coffee-shop-1.1` has the paths, and in Grafana the graphs go
-on without a gap.
+runs and to 1.1 once it has stopped. On the proxy dashboard, `coffee-shop-1.1` has the paths, and in Grafana the graphs
+go on without a gap.
 
-### 6. The agent's admin endpoints, for debugging it
+Each version's agent has its own dashboard, inside its own app. 1.1's, at <http://localhost:8396/dashboard>, lists the
+two paths registered. 1.0's agent isn't told the proxy gave its paths to 1.1, so until 1.0 stopped, its dashboard still
+read them as registered: which agent holds a path is the proxy dashboard's to show. 1.0's dashboard stops with its app,
+and answers again, starting over, after the rollback.
+
+### 7. The agent's admin endpoints, for debugging it
 
 When an embedded agent doesn't connect, or a path doesn't scrape, its admin endpoints show what it's doing. The coffee
 shop's environment turns them on with `ADMIN_ENABLED`, and its `/debug` page with `DEBUG_ENABLED`, with nothing in its
@@ -213,7 +250,7 @@ threads: take `ADMIN_ENABLED` and `DEBUG_ENABLED` out of the app's environment a
 set them again when you need to look. `ADMIN_PORT` moves the port. In code, `setting("admin.enabled", true)` and
 `setting("admin.debugEnabled", true)` do the same, though the environment overrides them.
 
-### 7. The proxy goes away, and the shop keeps serving
+### 8. The proxy goes away, and the shop keeps serving
 
 ```bash
 ./demo.sh proxy-stop
@@ -228,7 +265,15 @@ has lost its connection, and the proxy it keeps trying, while its `/healthcheck`
 back, the agent reconnects within a few seconds and registers its paths again, `/debug` shows the AgentId the proxy gave
 it, and the graphs resume, with a gap for the time the proxy was down.
 
-### 8. The secrets come from the environment
+The agent's dashboard shows the outage more directly. While the proxy is gone, its **Connection** view,
+<http://localhost:8395/dashboard/connection>, reads `failing`, with the error the agent's last try to reach
+`proxy:50051` got, and its paths read `pending`. A proxy that's down, a wrong port, a refused token, and a TLS mismatch
+each show there, which makes it the first place to look when an agent won't connect. Once the proxy is back, the newest
+lines of its **Activity** view, <http://localhost:8395/dashboard/activity>, read from the bottom up, tell the outage in
+order: `disconnected`, `connect failed`, then `connected` and the paths `registered`. **Problems only** keeps just the
+`connect failed` lines.
+
+### 9. The secrets come from the environment
 
 ```bash
 ./demo.sh secrets
@@ -276,7 +321,7 @@ machine.
 |---|---|
 | `app/` | The coffee shop: a Gradle project of its own, outside the repository's build, which reads the repository's version catalog (`settings.gradle.kts`). `Main.kt` is the Ktor module and its routes, `CoffeeShop.kt` the queue and baristas, `Customers.kt` the customers, who order over HTTP, `ShopMetrics.kt` its Micrometer meters, and `PrometheusAgent.kt` the embedded agent, started from a config built in memory. With `-PlocalProxy` it builds against this checkout's library (a composite build), as `make up-local` and CI do. |
 | `app/Dockerfile` | Builds the coffee shop's image: compiled inside Docker against the latest release (`make up`), or from the build on the host (`make up-local`) |
-| `docker/compose.yml` | The services, their ports, their images, and the secrets they read from `docker/.env`; the coffee shop's environment also turns on its agent's own metrics, admin endpoints, and `/debug` |
+| `docker/compose.yml` | The services, their ports, their images, and the secrets they read from `docker/.env`; the coffee shop's environment also turns on its agent's own metrics, admin endpoints, `/debug`, and dashboard |
 | `config/proxy.conf` | The proxy's dashboard and metrics; its TLS and token come from the environment |
 | `config/Caddyfile` | The load balancer: 1.0 first, then 1.1, retrying a request whose version has gone |
 | `prometheus/prometheus.yml` | The coffee shop's two paths through the proxy, and the proxy's own metrics |
@@ -296,10 +341,13 @@ that breaks it fails the build.
 - **`port is already allocated`**: another service holds the port. Move it with the variables above.
 - **The first `make up` is slow**: it downloads Gradle's dependencies to build the coffee shop; Docker keeps them, so
   the next build takes seconds.
-- **The dashboard shows no agent**: the coffee shop's agent connects a few seconds after the proxy starts. Give it ten
-  seconds, or check `make logs SERVICE=coffee-shop`, and `./demo.sh debug` for the proxy it's trying.
+- **The proxy dashboard shows no agent**: the coffee shop's agent connects a few seconds after the proxy starts. Give
+  it ten seconds, or check the Connection view of the agent's dashboard, <http://localhost:8395/dashboard/connection>,
+  for the proxy it's trying and why it can't connect, or `make logs SERVICE=coffee-shop`.
 - **A scenario left things in an odd state**: `./demo.sh calm`, `fix-machine`, `rollback`, and `proxy-start` undo every
   scenario. For a clean slate, `make down && make up`.
 - **New secrets**: delete `docker/.env`, and the next `make up` writes a new one, with a new token and password.
-- The proxy logs a warning at startup that the dashboard has no authentication. That's expected here, and is why
+- The proxy logs a warning at startup that its dashboard has no authentication. That's expected here, and is why
   every port binds to `127.0.0.1`.
+- The coffee shop logs a warning at startup that its agent's dashboard has no authentication and listens on all
+  interfaces. Inside the container it has to, for Docker to publish its port, which binds to `127.0.0.1` on the host.

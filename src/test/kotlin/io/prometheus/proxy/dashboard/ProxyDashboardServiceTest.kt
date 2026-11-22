@@ -22,7 +22,8 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
-import io.prometheus.proxy.dashboard.ProxyDashboardService.ActivityTable
+import io.prometheus.common.dashboard.ActivityTable
+import io.prometheus.common.dashboard.RowFilter
 
 /**
  * The value a push compares to leave out an Activity table the page already shows. The rules every dashboard shares
@@ -35,7 +36,7 @@ class ProxyDashboardServiceTest : StringSpec() {
     changeCount: Long,
     seq: Long,
     filter: RowFilter,
-  ) = ActivityTable.of(
+  ) = ProxyDashboardService.activityTable(
       DashboardFixtures.snapshot(activityChangeCount = changeCount),
       DashboardLayout.ACTIVITY,
       seq,
@@ -71,7 +72,7 @@ class ProxyDashboardServiceTest : StringSpec() {
       val snapshot = DashboardFixtures.snapshot(activityChangeCount = 4)
 
       listOf(DashboardLayout.AGENT, DashboardLayout.PATH, null).forEach { layout ->
-        ActivityTable.of(snapshot, layout, seq = 3, RowFilter.NONE).shouldBeNull()
+        ProxyDashboardService.activityTable(snapshot, layout, seq = 3, RowFilter.NONE).shouldBeNull()
       }
     }
   }

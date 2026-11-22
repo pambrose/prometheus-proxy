@@ -61,6 +61,7 @@ import io.prometheus.common.ScrapeResults
 import io.prometheus.common.deadlineExceeded
 import io.prometheus.common.Utils.HostPort
 import io.prometheus.common.TestPorts.PROMETHEUS_PORT
+import io.prometheus.common.TestPorts.PROXY_ADMIN_PORT
 import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.grpc.ChunkedScrapeResponse
@@ -117,6 +118,7 @@ class AgentGrpcServiceTest : StringSpec() {
     keepAliveTimeoutSecs: Long = -1L,
     keepAliveWithoutCalls: Boolean = false,
     transportFilterDisabled: Boolean = false,
+    activityLog: AgentActivityLog? = null,
   ): Agent {
     val mockOptions = mockk<AgentOptions>(relaxed = true)
 
@@ -141,6 +143,7 @@ class AgentGrpcServiceTest : StringSpec() {
     every { mockAgent.isRunning } returns true
     every { mockAgent.isZipkinEnabled } returns false
     every { mockAgent.proxyHost } returns proxyHostname
+    every { mockAgent.activityLog } returns activityLog
     // metrics() is a no-op in tests; invoking the block with a relaxed mock
     // would cause ClassCastException because relaxed Counter mocks don't return Counter.Child
     every { mockAgent.metrics(any<AgentMetrics.() -> Unit>()) } answers {}
@@ -154,9 +157,10 @@ class AgentGrpcServiceTest : StringSpec() {
     proxySpec: String,
     transportFilterDisabled: Boolean = false,
     timeSource: TimeSource = TimeSource.Monotonic,
+    activityLog: AgentActivityLog? = null,
     block: suspend (AgentGrpcService) -> Unit,
   ) {
-    val agent = createMockAgent(proxySpec, transportFilterDisabled = transportFilterDisabled)
+    val agent = createMockAgent(proxySpec, transportFilterDisabled = transportFilterDisabled, activityLog = activityLog)
     val service = AgentGrpcService(agent, agent.options, "test-server", timeSource)
     try {
       block(service)
@@ -172,8 +176,9 @@ class AgentGrpcServiceTest : StringSpec() {
     proxySpec: String,
     transportFilterDisabled: Boolean = false,
     timeSource: TimeSource = TimeSource.Monotonic,
+    activityLog: AgentActivityLog? = null,
     block: suspend (AgentGrpcService, ProxyServiceGrpcKt.ProxyServiceCoroutineStub) -> Unit,
-  ) = withService(proxySpec, transportFilterDisabled, timeSource) { service ->
+  ) = withService(proxySpec, transportFilterDisabled, timeSource, activityLog) { service ->
     val stub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
     service.grpcStub = stub
     service.unaryDeadlineSecs = 0
@@ -1757,6 +1762,73 @@ class AgentGrpcServiceTest : StringSpec() {
       } finally {
         service.shutDown()
       }
+    }
+
+    // ==================== Activity Feed ====================
+
+    // The feed records what the log says at WARN or INFO: a connect, and a failure when it is new or changes, not
+    // each repeat of one, which would fill the feed through a long outage.
+    "connectAgent should record a connect, and a failure only when it is new or changes" {
+      val log = AgentActivityLog(capacity = 20)
+      withStubbedService("localhost:$PROXY_AGENT_PORT", activityLog = log) { service, mockStub ->
+        coEvery { mockStub.connectAgent(any(), any<Metadata>()) } throws
+          StatusException(Status.UNAVAILABLE.withDescription("proxy down"))
+        repeat(3) { service.connectAgent().shouldBeFalse() }
+        coEvery { mockStub.connectAgent(any(), any<Metadata>()) } throws
+          StatusException(Status.UNAUTHENTICATED.withDescription("bad token"))
+        service.connectAgent().shouldBeFalse()
+        coEvery { mockStub.connectAgent(any(), any<Metadata>()) } returns EMPTY_INSTANCE
+        service.connectAgent().shouldBeTrue()
+      }
+
+      log.snapshot().entries.map { it.kind to it.detail }.apply {
+        this shouldBe
+          [
+            AgentActivityKind.CONNECTED to "localhost:$PROXY_AGENT_PORT",
+            AgentActivityKind.CONNECT_FAILED to
+              "localhost:$PROXY_AGENT_PORT: StatusException: UNAUTHENTICATED: bad token",
+            AgentActivityKind.CONNECT_FAILED to
+              "localhost:$PROXY_AGENT_PORT: StatusException: UNAVAILABLE: proxy down",
+          ]
+      }
+    }
+
+    // A failure the endpoint still holds from before is news again once the agent has connected elsewhere since: after
+    // a failback to a primary that is still down, the feed says why it failed this time.
+    "a failure should be recorded again after a connect elsewhere, though its endpoint never connected" {
+      val log = AgentActivityLog(capacity = 20)
+      withStubbedService("first:$PROXY_AGENT_PORT,second:$PROXY_HTTP_PORT", activityLog = log) { service, mockStub ->
+        val down = StatusException(Status.UNAVAILABLE.withDescription("proxy down"))
+        every { service.agent.proxyHost } returns "first:$PROXY_AGENT_PORT"
+        coEvery { mockStub.connectAgent(any(), any<Metadata>()) } throws down
+        service.connectAgent().shouldBeFalse()
+        every { service.agent.proxyHost } returns "second:$PROXY_HTTP_PORT"
+        coEvery { mockStub.connectAgent(any(), any<Metadata>()) } returns EMPTY_INSTANCE
+        service.connectAgent().shouldBeTrue()
+        every { service.agent.proxyHost } returns "first:$PROXY_AGENT_PORT"
+        coEvery { mockStub.connectAgent(any(), any<Metadata>()) } throws down
+        repeat(2) { service.connectAgent().shouldBeFalse() }
+      }
+
+      log.snapshot().entries.map { it.kind } shouldBe
+        [AgentActivityKind.CONNECT_FAILED, AgentActivityKind.CONNECTED, AgentActivityKind.CONNECT_FAILED]
+    }
+
+    // Leaving the primary is the news; cycling on through the backups during the same outage is not.
+    "failing over from the primary, and back to it, should be recorded, and cycling through the backups not" {
+      val log = AgentActivityLog(capacity = 20)
+      withService("first:$PROXY_AGENT_PORT,second:$PROXY_HTTP_PORT,third:$PROXY_ADMIN_PORT", activityLog = log) {
+        it.advanceEndpoint()
+        it.advanceEndpoint()
+        it.resetEndpoint()
+        it.resetEndpoint()
+      }
+
+      log.snapshot().entries.map { it.kind to it.detail } shouldBe
+        [
+          AgentActivityKind.FAILED_BACK to "to first:$PROXY_AGENT_PORT",
+          AgentActivityKind.FAILED_OVER to "from first:$PROXY_AGENT_PORT to second:$PROXY_HTTP_PORT",
+        ]
     }
 
     // ==================== Failover Endpoint Rotation ====================

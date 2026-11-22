@@ -58,11 +58,11 @@ it one step at a time: what to open, what to look for, and how each step does wh
 
 | Demo | What you'll see | Tour |
 |---|---|---|
-| [Basics](demos/basics) | The proxy, its live dashboard, and three agents behind a simulated firewall, with Prometheus and Grafana. A service fails and another hangs, a redundant pair of agents keeps a path up, new targets appear without a restart, a frozen agent is evicted, the proxy refuses a path an agent's identity doesn't allow, and the dashboard asks for a login. | 10 parts, about 24 minutes |
-| [Network](demos/network) | The same proxy and agents with a simulated WAN between them, and a standby proxy. A far link, a thin one fixed by filtering at the agent, a proxy that goes away, a link that dies silently, a flaky link traced in Zipkin, and the whole WAN going down. | 7 parts, about 21 minutes |
-| [Kubernetes](demos/kubernetes) | The project's Helm charts on two kind clusters. The target cluster exposes nothing, annotating a Service is all it takes for Prometheus to scrape it, Kubernetes replaces a lost agent by itself, and a config change costs a restart where a target change doesn't. Needs kind, `kubectl`, and Helm as well as Docker. | 4 parts, about 11 minutes |
-| [Embedded (Ktor)](demos/embedded) | A Ktor coffee shop with the agent embedded in it, its metrics in Grafana with no port opened for them. A rush fills the queue, a broken machine fires an alert, a deploy hands the agent's paths to the new version, the shop keeps serving while the proxy is away, and every secret comes from the environment. | 7 parts, about 15 minutes |
-| [Spring Boot](demos/spring-boot) | A Spring Boot roastery, written in Java, with the agent embedded through `EmbeddedAgentConfig.builder()`. The agent starts and stops with the app, reports its connection in Actuator's health, reads Actuator's metrics behind Spring Security, runs with the versions of its libraries Spring Boot picks, and goes first in a graceful shutdown. | 4 parts, about 8 minutes |
+| [Basics](demos/basics) | The proxy, its live dashboard, and three agents behind a simulated firewall, with Prometheus and Grafana. A service fails and another hangs, a redundant pair of agents keeps a path up, new targets appear without a restart, a frozen agent is evicted, the proxy refuses a path an agent's identity doesn't allow, an agent's own dashboard shows the refusal and a lost proxy from its side, and the dashboard asks for a login. | 11 parts, about 28 minutes |
+| [Network](demos/network) | The same proxy and agents with a simulated WAN between them, and a standby proxy. A far link, a thin one fixed by filtering at the agent, a proxy that goes away, a link that dies silently, a flaky link traced in Zipkin, and the whole WAN going down, each also seen from the agent's own dashboard. | 7 parts, about 24 minutes |
+| [Kubernetes](demos/kubernetes) | The project's Helm charts on two kind clusters. The target cluster exposes nothing, annotating a Service is all it takes for Prometheus to scrape it, Kubernetes replaces a lost agent by itself, and a config change costs a restart where a target change doesn't, with the agent's own dashboard reached through `kubectl port-forward`. Needs kind, `kubectl`, and Helm as well as Docker. | 5 parts, about 15 minutes |
+| [Embedded (Ktor)](demos/embedded) | A Ktor coffee shop with the agent embedded in it, its metrics in Grafana with no port opened for them. A rush fills the queue, a broken machine fires an alert, a deploy hands the agent's paths to the new version, the shop keeps serving while the proxy is away, the agent's own dashboard runs inside the app, and every secret comes from the environment. | 9 parts, about 23 minutes |
+| [Spring Boot](demos/spring-boot) | A Spring Boot roastery, written in Java, with the agent embedded through `EmbeddedAgentConfig.builder()`. The agent starts and stops with the app, reports its connection in Actuator's health, reads Actuator's metrics behind Spring Security, runs with the versions of its libraries Spring Boot picks, serves its own dashboard from inside the app, and goes first in a graceful shutdown. | 5 parts, about 11 minutes |
 
 Start with the basics demo. The proxy and agent are the released images, from Docker Hub, so there's nothing to build:
 on macOS or Linux, the basics, network, embedded, and Spring Boot demos need only
@@ -793,8 +793,10 @@ The agent can serve a dashboard of its own, for what the proxy's can't see: an a
 proxy refused. It shows the agent's connection, with the last error from each proxy endpoint while it can't connect,
 and every path, configured or discovered, with the proxy's reason for refusing one and when it's tried again, plus each
 path's recent scrapes as the agent saw them, a Scrape now button that fetches its target from the agent, each path's
-metric filter, the agent's discovery file, and its settings. It is off by default, takes the same login settings
-as the proxy's (`agent.dashboard.password`, or `DASHBOARD_PASSWORD`), and listens on port 8095:
+metric filter, the agent's discovery file, its settings, and an Activity view of what happened to its connection and
+paths. It is off by default, takes the same login settings as the proxy's (`agent.dashboard.password`, or
+`DASHBOARD_PASSWORD`), and listens on port 8095; the agent's Helm chart turns it on with `dashboard.enabled`, and every
+demo turns it on for its agents:
 
 ```bash
 java -jar prometheus-agent.jar --config agent.conf --dashboard    # or DASHBOARD_ENABLED=true / agent.dashboard.enabled

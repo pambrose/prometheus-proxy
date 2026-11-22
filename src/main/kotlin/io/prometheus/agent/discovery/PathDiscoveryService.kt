@@ -26,6 +26,8 @@ import kotlinx.coroutines.delay
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
+import io.prometheus.agent.AgentActivityKind
+import io.prometheus.agent.AgentActivityLog
 
 /**
  * Polls a [PathDiscoverySource] on an interval and reconciles the agent's discovered paths.
@@ -48,6 +50,8 @@ internal class PathDiscoveryService(
   private val pathManager: AgentPathManager,
   private val source: PathDiscoverySource,
   private val intervalSecs: Int,
+  // The agent dashboard's activity feed, when the dashboard is on, told of a failure when it is new or changes.
+  private val activityLog: AgentActivityLog? = null,
 ) {
   // The last reconcile's failure, as Utils.failureKey gives it to compare with the next, and as the agent's dashboard
   // shows it, or null after a success; see reconcileOnce. Volatile, since the dashboard reads it from another thread.
@@ -115,13 +119,17 @@ internal class PathDiscoveryService(
       lastFailure = null
     }.onFailure { e ->
       val failure = failureKey(e, withMessage = true)
-      if (failure == lastFailure?.key)
+      val shown = ShownFailure.of(e)
+      if (failure == lastFailure?.key) {
         logger.debug {
           "Path discovery reconcile failed again; keeping the paths last read: ${e.simpleClassName}: ${e.message}"
         }
-      else
+      } else {
         logger.warn(e) { "Path discovery reconcile failed; keeping the paths last read" }
-      lastFailure = LastFailure(failure, ShownFailure.of(e))
+        // In the activity feed as at WARN: when it is new or changes, not while it repeats.
+        activityLog?.record(AgentActivityKind.DISCOVERY_FAILED, detail = shown.message, group = failure)
+      }
+      lastFailure = LastFailure(failure, shown)
     }
   }
 

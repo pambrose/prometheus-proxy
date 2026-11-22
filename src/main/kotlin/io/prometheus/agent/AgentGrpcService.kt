@@ -168,10 +168,12 @@ internal class AgentGrpcService(
   // The endpoints are the configured list, so this stays as small.
   private val connectFailures = ConcurrentHashMap<String, LoggedFailure>()
 
+  // [connects] is how many connects had succeeded when the activity feed was last told of the failure.
   private class LoggedFailure(
     val key: String,
     val warnedAt: TimeMark,
     val latest: ShownFailure,
+    val connects: Int,
   )
 
   /** The latest failure to connect to each proxy endpoint, by its `host:port`, until a connect to it succeeds. */
@@ -215,8 +217,17 @@ internal class AgentGrpcService(
     grpcLock.withLock {
       if (endpoints.size <= 1)
         return@withLock false
+      val from = currentEndpoint.spec
+      val leavingPrimary = endpointIndex == 0
       endpointIndex = (endpointIndex + 1) % endpoints.size
       logger.info { "Trying next proxy endpoint: ${currentEndpoint.spec}" }
+      // Leaving the primary is the news for the activity feed; cycling on through the backups in the same outage isn't.
+      if (leavingPrimary)
+        agent.activityLog?.record(
+          AgentActivityKind.FAILED_OVER,
+          detail = "from $from to ${currentEndpoint.spec}",
+          group = from,
+        )
       true
     }
 
@@ -232,6 +243,7 @@ internal class AgentGrpcService(
       if (endpointIndex != 0) {
         endpointIndex = 0
         logger.info { "Returning to primary proxy endpoint: ${currentEndpoint.spec}" }
+        agent.activityLog?.record(AgentActivityKind.FAILED_BACK, detail = "to ${currentEndpoint.spec}")
       }
     }
 
@@ -378,6 +390,7 @@ internal class AgentGrpcService(
       lastConnectFailed = false
       successfulConnects += 1
       logger.info { "Connected to proxy at $proxyHost using ${tlsContext.desc()}" }
+      agent.activityLog?.record(AgentActivityKind.CONNECTED, detail = proxyHost, group = proxyHost)
       agent.metrics { connectCount.labelValues(agent.launchId, "success").inc() }
       true
     }.getOrElse { e ->
@@ -397,19 +410,29 @@ internal class AgentGrpcService(
       // The first failure, and a change, at WARN with the stack trace for diagnosis; a repeat at DEBUG, and at WARN
       // again, without the stack trace, once the last WARN is CONNECT_FAILURE_REMINDER_INTERVAL old.
       val last = connectFailures[proxyHost]
+      // The activity feed is told of a failure when it is new or changes, as the log's WARN is, and again once a
+      // connect has succeeded since, elsewhere, as when the agent fails back to a primary still down; its repeats would
+      // fill the feed.
+      val connects = successfulConnects.load()
+      if (last?.key != failure || last.connects != connects)
+        agent.activityLog?.record(
+          AgentActivityKind.CONNECT_FAILED,
+          detail = "$proxyHost: ${latest.message}",
+          group = "$proxyHost $failure",
+        )
       when {
         last?.key != failure -> {
-          connectFailures[proxyHost] = LoggedFailure(failure, timeSource.markNow(), latest)
+          connectFailures[proxyHost] = LoggedFailure(failure, timeSource.markNow(), latest, connects)
           logger.warn(e) { message }
         }
 
         last.warnedAt.elapsedNow() >= CONNECT_FAILURE_REMINDER_INTERVAL -> {
-          connectFailures[proxyHost] = LoggedFailure(failure, timeSource.markNow(), latest)
+          connectFailures[proxyHost] = LoggedFailure(failure, timeSource.markNow(), latest, connects)
           logger.warn { "$message (still failing, retrying every few seconds)" }
         }
 
         else -> {
-          connectFailures[proxyHost] = LoggedFailure(failure, last.warnedAt, latest)
+          connectFailures[proxyHost] = LoggedFailure(failure, last.warnedAt, latest, connects)
           logger.debug { message }
         }
       }

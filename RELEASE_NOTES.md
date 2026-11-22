@@ -18,6 +18,12 @@ _Not yet released_
   status, how long the fetch took, and how big the body was before and after the path's metric filter. Its Scrape now
   button fetches a target from the agent right away, even for a path the proxy refused, and shows the start of what
   Prometheus would get.
+- **What happened to the agent.** The agent's dashboard has an Activity view: the agent connecting, losing its
+  connection and why, failing over, and its paths registered or refused, in order, so you can see what happened while
+  nobody was watching. The agent's Helm chart can turn the dashboard on (`dashboard.enabled`), and every demo now shows
+  its agents' dashboards.
+- **Light or dark, your choice.** Both dashboards have a Theme button in the top bar. It starts at auto, following
+  your system, and each press switches to light, then dark, then back. Your browser remembers it.
 
 ### Bug Fixes
 

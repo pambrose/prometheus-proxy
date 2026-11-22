@@ -1,7 +1,7 @@
 # The simulated services in pp-target (app/services_app.py, one service per pod), each with a ClusterIP Service in the
 # apps namespace annotated prometheus-proxy/path, so targets-sync lists it in the agent's targets. demo.sh applies it
 # with `kubectl --context kind-pp-target apply -f k8s/services.yaml`, and creates their script, the services-app
-# ConfigMap, from app/services_app.py. Part 2's search service is in search.yaml.
+# ConfigMap, from app/services_app.py. Part 3's search service is in search.yaml.
 
 apiVersion: apps/v1
 kind: Deployment

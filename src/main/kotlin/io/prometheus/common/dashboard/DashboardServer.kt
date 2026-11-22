@@ -84,6 +84,11 @@ import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.minusAssign
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.transform
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.delay
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * What one dashboard is configured with.
@@ -575,12 +580,14 @@ internal class DashboardServer<V : Any, S : Any>(
     server.start()
     scope.launch { pushLoop() }
     scope.launch {
-      // Conflated, so a burst (a fleet reconnecting at once) collapses into a single collect.
-      site.changes.collect {
-        // Retire the cached snapshot so no page or session renders a state older than the change.
-        snapshots.invalidate()
-        wake.trySend(Unit)
-      }
+      site.changes
+        // Retire the cached snapshot at each change, so no page renders a state older than it.
+        .onEach { snapshots.invalidate() }
+        // A burst, such as a fleet reconnecting at once, or an agent registering thousands of paths as it connects,
+        // wakes the loop at once and then at most once an interval, rather than once a change: each wake renders and
+        // sends every open page.
+        .spaced(CHANGE_PUSH_INTERVAL)
+        .collect { wake.trySend(Unit) }
     }
   }
 
@@ -661,6 +668,20 @@ internal class DashboardServer<V : Any, S : Any>(
     }.toMap()
 
   companion object {
+    // How often a burst of changes wakes the push loop at most, after the first change, which wakes it at once.
+    private val CHANGE_PUSH_INTERVAL = 250.milliseconds
+
+    /**
+     * [this] with its values spaced at least [interval] apart: the first at once, then, after each interval, the latest
+     * that came during it, the ones between dropped. Never blocks the emitter, which a dashboard's change source, such
+     * as an event bus, must not wait on.
+     */
+    internal fun <T> Flow<T>.spaced(interval: Duration): Flow<T> =
+      conflate().transform {
+        emit(it)
+        delay(interval)
+      }
+
     private val logger = logger {}
 
     // Generated from libs.versions.toml, since the WebJar classpath layout embeds the version. Reading

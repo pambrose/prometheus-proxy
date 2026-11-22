@@ -40,15 +40,25 @@ import kotlinx.html.style
 import kotlinx.html.time
 import kotlinx.html.title
 import kotlinx.html.unsafe
+import kotlinx.html.FORM
+import kotlinx.html.InputType
+import kotlinx.html.input
+import kotlinx.html.label
+import kotlinx.html.section
+import kotlinx.html.dl
+import kotlinx.html.dt
+import kotlinx.html.dd
 
 /**
  * One of a dashboard's views, as its tabs, its routes, and its page's script know it: an enum entry's [name], the route
- * [segment] below the dashboard's base, empty for the view served at the base itself, and the [title] its tab shows.
+ * [segment] below the dashboard's base, empty for the view served at the base itself, the [title] its tab shows, and,
+ * for a view with a filtered table, the [searchFields] its search says it matches, empty for one without.
  */
 internal interface DashboardView {
   val name: String
   val segment: String
   val title: String
+  val searchFields: String
 }
 
 /**
@@ -104,6 +114,21 @@ internal object DashboardPage {
   // The Log out form, in the bar, with a login set.
   const val LOGOUT_ID = "logout"
 
+  // The theme button, in the bar, and where the theme it sets is kept: this browser's localStorage, which is the
+  // dashboard's own, since a dashboard's origin includes its port.
+  const val THEME_TOGGLE_ID = "theme-toggle"
+  const val THEME_KEY = "prometheus-dashboard-theme"
+
+  /**
+   * Applies the theme the bar's button left in this browser, light or dark, to `<html>` as its `data-theme`, which the
+   * stylesheet's dark rules read (see DashboardCss.darkRule); none, the default, is auto, which follows the system's.
+   * In the head, before the page draws, so a page set to light never flashes dark first. Anything else stored, or no
+   * storage at all, leaves auto.
+   */
+  const val THEME_SCRIPT =
+    "(function () { try { var t = localStorage.getItem('$THEME_KEY'); " +
+      "if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {} })();"
+
   // An en dash for "the agent never told us", kept distinct from an empty cell, which would read as a
   // rendering bug rather than as absent data.
   const val DASH = "\u2013"
@@ -141,6 +166,7 @@ internal object DashboardPage {
   ) {
     title(title)
     meta(name = "viewport", content = "width=device-width, initial-scale=1")
+    script { unsafe { raw(THEME_SCRIPT) } }
     style { unsafe { raw(DashboardCss.CSS) } }
     extra()
     // Ahead of the scripts: htmx reads its config once, when htmx.min.js loads.
@@ -206,6 +232,21 @@ internal object DashboardPage {
     }
   }
 
+  /**
+   * The theme button, at the bar's end, after the status and outside it, which a push replaces: auto, which follows the
+   * system's, then light, then dark, and round again. It reads auto as served; the page's script shows the theme this
+   * browser stored, and changes and stores it on a press (see DashboardScript).
+   */
+  fun FlowContent.themeToggle() {
+    div("theme") {
+      button(type = ButtonType.button) {
+        attributes["id"] = THEME_TOGGLE_ID
+        attributes["title"] = "Theme: auto, as your system's; press for light"
+        +"Theme: auto"
+      }
+    }
+  }
+
   /** Log out, at the bar's end, after the status and outside it, which a push replaces: a form the browser posts. */
   fun FlowContent.logoutForm(routeBase: String) {
     form(action = "$routeBase/logout", method = FormMethod.post, classes = "logout") {
@@ -240,6 +281,81 @@ internal object DashboardPage {
       attributes["datetime"] = Instant.fromEpochSeconds(at.epochSeconds).toString()
       // java.time's formatter, since the standard library has none that takes a zone.
       +timeFormat.format(at.toJavaInstant())
+    }
+  }
+
+  /**
+   * The search above [view]'s filtered table, which submits to the view's own route and says what it searches
+   * ([DashboardView.searchFields]), and under it the guide to the table's [columns], which the button at the search's
+   * end opens.
+   *
+   * Both sit outside the table's out-of-band region, so a push never replaces the input someone is typing in, nor
+   * closes the guide someone is reading. The search is a plain GET form, so it works without the page's script, by
+   * navigating to `?q=…&problems=1`; the script applies a change as it is typed instead, and keeps the URL in step, and
+   * opens and closes the guide (see DashboardScript).
+   */
+  fun FlowContent.renderFilters(
+    routeBase: String,
+    view: DashboardView,
+    filter: RowFilter,
+    columns: List<TableColumn>,
+  ) {
+    form(action = view.href(routeBase), method = FormMethod.get, classes = "filters") {
+      attributes["role"] = "search"
+      input(type = InputType.search, name = QUERY_PARAM) {
+        attributes["id"] = FILTER_QUERY_ID
+        attributes["aria-label"] = "Filter ${view.title.lowercase()}"
+        attributes["placeholder"] = "Filter by ${view.searchFields}"
+        attributes["maxlength"] = "${RowFilter.MAX_QUERY_LENGTH}"
+        attributes["autocomplete"] = "off"
+        value = filter.query
+      }
+      label {
+        input(type = InputType.checkBox, name = PROBLEMS_PARAM) {
+          attributes["id"] = FILTER_PROBLEMS_ID
+          value = PROBLEMS_ON
+          checked = filter.problemsOnly
+        }
+        +"Problems only"
+      }
+      columnGuideToggle()
+    }
+    columnGuide(columns)
+  }
+
+  // A plain button, not a submit: it opens the guide and changes nothing the form sends.
+  private fun FORM.columnGuideToggle() {
+    button(type = ButtonType.button, classes = "guide-toggle") {
+      attributes["id"] = COLUMN_GUIDE_TOGGLE_ID
+      attributes["aria-expanded"] = "false"
+      attributes["aria-controls"] = COLUMN_GUIDE_ID
+      +"Column guide"
+    }
+  }
+
+  /**
+   * What each of the table's [columns] holds, one row a column, named as its header names it. A strip that pushes the
+   * table down rather than a layer over it, which would need a shadow and cover the columns it explains. Hidden until
+   * its button opens it, on each page load.
+   */
+  private fun FlowContent.columnGuide(columns: List<TableColumn>) {
+    section("column-guide") {
+      attributes["id"] = COLUMN_GUIDE_ID
+      attributes["aria-label"] = "Column guide"
+      attributes["hidden"] = "hidden"
+      div("cg-head") {
+        span { +"Columns" }
+        button(type = ButtonType.button, classes = "close") {
+          attributes["aria-label"] = "Close the column guide"
+          attributes["title"] = "Close"
+        }
+      }
+      dl {
+        columns.forEach { column ->
+          dt { +column.label }
+          dd { +column.help }
+        }
+      }
     }
   }
 

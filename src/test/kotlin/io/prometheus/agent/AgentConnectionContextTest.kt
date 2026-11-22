@@ -42,6 +42,17 @@ import kotlin.time.Duration.Companion.seconds
 
 class AgentConnectionContextTest : StringSpec() {
   init {
+    // What ended the connection, for the agent dashboard's activity feed: the first of its tasks to fail, not the ones
+    // that failed after it as the connection came down.
+    "a connection should keep the first failure that ended it" {
+      val context = AgentConnectionContext(10)
+      context.endedBy shouldBe null
+      val first = IllegalStateException("stream reset")
+      context.noteFailure(first)
+      context.noteFailure(IllegalStateException("later"))
+      context.endedBy shouldBe first
+    }
+
     "close should disconnect context and return 0 when empty" {
       val context = AgentConnectionContext(128)
       context.connected.shouldBeTrue()

@@ -19,7 +19,7 @@ IMAGES=(prometheus-proxy-demo/proxy:local prometheus-proxy-demo/agent:local)
 RELEASED_IMAGES=(pambrose/prometheus-proxy pambrose/prometheus-agent)
 # The demo shows what came after this release, so until a later one is out, up builds the proxy and agent from this
 # checkout, as up-local does. When the demo comes to use something unreleased, set this to the latest release.
-NEEDS_RELEASE_AFTER=4.6.0
+NEEDS_RELEASE_AFTER=4.6.1
 # The dashboard password the login scenario gives the proxy. A demo's, in a public file, as Grafana's admin password
 # is: never use it anywhere else.
 LOGIN_PASSWORD="admin"
@@ -33,6 +33,12 @@ DASHBOARD_URL="http://localhost:${DEMO_DASHBOARD_PORT:-8094}/dashboard"
 GRAFANA_URL="http://localhost:${DEMO_GRAFANA_PORT:-3000}"
 PROMETHEUS_URL="http://localhost:${DEMO_PROMETHEUS_PORT:-9090}"
 PROXY_URL="http://localhost:${DEMO_PROXY_PORT:-8080}"
+# Each agent's own dashboard, on a port of its own (agent.dashboard in its config, published in docker/compose.yml).
+EAST_DASHBOARD_URL="http://localhost:${DEMO_AGENT_EAST_DASHBOARD_PORT:-8095}/dashboard"
+WEST_1_DASHBOARD_URL="http://localhost:${DEMO_AGENT_WEST_1_DASHBOARD_PORT:-8096}/dashboard"
+WEST_2_DASHBOARD_URL="http://localhost:${DEMO_AGENT_WEST_2_DASHBOARD_PORT:-8097}/dashboard"
+ROGUE_DASHBOARD_URL="http://localhost:${DEMO_AGENT_ROGUE_DASHBOARD_PORT:-8098}/dashboard"
+COPY_DASHBOARD_URL="http://localhost:${DEMO_AGENT_EAST_COPY_DASHBOARD_PORT:-8099}/dashboard"
 
 bold() { printf '\033[1m%s\033[0m\n' "$*"; }
 die() {
@@ -79,7 +85,7 @@ Lifecycle:
   up-local                 Start it with the proxy and agent built from this checkout (needs a JDK 17 or later)
   down                     Stop the demo and remove its containers, network, and volume
   status                   Show the containers, the simulated services' state, and the URLs
-  open                     Open the dashboard, Grafana, and Prometheus in the browser
+  open                     Open the proxy's and agent-east's dashboards, Grafana, and Prometheus in the browser
   logs [service]           Follow the logs (proxy, agent-east, demo-app, ...)
   tour [part]              Walk through the demo's guided tour, pausing before each step (from part 1, or the one given)
 
@@ -95,6 +101,8 @@ Scenarios:
   agent-thaw [agent]       Unfreeze it; it reconnects
   rogue-agent              Start a contractor's agent that tries to register payments_metrics
   rogue-agent-stop         Stop and remove it
+  proxy-down               Stop the proxy, so every agent loses it
+  proxy-up                 Start it again; the agents reconnect
   duplicate-agent          Start a second copy of agent-east, without consolidated mode
   duplicate-agent-stop     Remove it, and restart agent-east so it registers its paths again
   login                    Restart the proxy with the dashboard's login on (admin, password $LOGIN_PASSWORD)
@@ -109,6 +117,9 @@ print_urls() {
   echo
   bold "Prometheus Proxy basics demo"
   echo "  Proxy dashboard:  $DASHBOARD_URL"
+  echo "  Agent dashboards: $EAST_DASHBOARD_URL  (agent-east)"
+  echo "                    $WEST_1_DASHBOARD_URL  (agent-west-1)"
+  echo "                    $WEST_2_DASHBOARD_URL  (agent-west-2)"
   echo "  Grafana:          $GRAFANA_URL"
   echo "  Prometheus:       $PROMETHEUS_URL"
   echo "  Proxy discovery:  $PROXY_URL/discovery"
@@ -291,6 +302,9 @@ start_demo() {
   done
 
   wait_for "$DASHBOARD_URL" "The proxy dashboard" login
+  wait_for "$EAST_DASHBOARD_URL" "agent-east's dashboard"
+  wait_for "$WEST_1_DASHBOARD_URL" "agent-west-1's dashboard"
+  wait_for "$WEST_2_DASHBOARD_URL" "agent-west-2's dashboard"
   wait_for "$PROMETHEUS_URL/-/ready" "Prometheus"
   wait_for "$GRAFANA_URL/api/health" "Grafana"
   print_urls
@@ -321,7 +335,7 @@ cmd_open() {
     print_urls
     return
   fi
-  for url in "$DASHBOARD_URL" "$GRAFANA_URL" "$PROMETHEUS_URL/alerts"; do
+  for url in "$DASHBOARD_URL" "$EAST_DASHBOARD_URL" "$GRAFANA_URL" "$PROMETHEUS_URL/alerts"; do
     "$opener" "$url"
   done
 }
@@ -444,6 +458,7 @@ TOUR_PARTS=(
   "2 New services appear without a restart"
   "2 The proxy evicts an agent that goes silent"
   "2 Per-team tokens restrict which paths an agent can register"
+  "4 An agent's own dashboard shows a refused path and a lost proxy"
   "2 A duplicate agent takes over the paths, and the proxy logs the fix"
   "2 A login for the dashboard"
 )
@@ -547,17 +562,49 @@ cmd_tour() {
     "register a path that belongs to another team."; then
     step "Start a contractor's agent, which tries to register /contractor_metrics and /payments_metrics." \
       -- rogue-agent
-    step "Stop and remove the contractor's agent." -- rogue-agent-stop
+    instruct "Search the proxy dashboard's Activity view for agent-rogue: $DASHBOARD_URL/activity?q=agent-rogue" \
+      "It lists agent-rogue connected, its /contractor_metrics registered, and its /payments_metrics rejected, with" \
+      "the proxy's reason. The Agents and Paths views can't show a refusal, since the proxy added nothing."
   fi
 
-  if part 9 "Someone deploys agent-east's config a second time by mistake, without consolidated mode. Here you" \
+  if part 9 "The proxy's dashboard shows only what reaches the proxy. A path the proxy refused, or a proxy an agent" \
+    "can't reach, shows on the agent's side, so each agent in this demo serves a dashboard of its own, on a port of" \
+    "its own. Here you read agent-rogue's refusal on its own dashboard, then stop the proxy and watch agent-east" \
+    "lose it and get it back."; then
+    instruct "Open agent-rogue's dashboard: $ROGUE_DASHBOARD_URL" \
+      "It opens on the Paths view, which lists every path the agent has, each with a light that's green while the" \
+      "proxy routes the path's scrapes to this agent. /contractor_metrics is green. /payments_metrics is red, tagged" \
+      "refused: the refusal the proxy's Activity view showed, seen from the agent's side."
+    instruct "Click /payments_metrics." \
+      "Its details open. Under 'Refused by the proxy' is the proxy's reason: Agent identity 'contractor' is not" \
+      "authorized to register path /payments_metrics. Asking again wouldn't change the answer, so the agent doesn't" \
+      "try the path again until it reconnects, as 'Next try' says."
+    instruct "Switch to the Activity view." \
+      "It lists what has happened to the agent, newest first. Its entries show the agent connecting to the proxy," \
+      "registering /contractor_metrics, and being refused /payments_metrics, with the same reason. Checking Problems" \
+      "only leaves just the refusal."
+    step "Stop and remove the contractor's agent." -- rogue-agent-stop
+    instruct "Open agent-east's dashboard on its Connection view: $EAST_DASHBOARD_URL/connection" \
+      "agent-east is connected to proxy:50051, its one proxy endpoint. Below that are its discovery file and the" \
+      "settings it resolved."
+    step "Stop the proxy, as an outage or a bad deploy would. The proxy's dashboard goes with it, but agent-east's" \
+      "keeps answering, since it runs on the agent." -- proxy-down
+    instruct "On agent-east's dashboard, open the Paths view, click /orders_metrics, then Scrape now." \
+      "Scrape now is the circular arrow after the path's name in its details. The agent fetches the orders service" \
+      "at once and shows the result: status 200, the metric families and samples, and the start of the body" \
+      "Prometheus would get. The target is fine; what's broken is the way to the proxy. Scrape now works whether or" \
+      "not the proxy has the path, so it checks a target even while the agent can't connect."
+    step "Start the proxy again." -- proxy-up
+  fi
+
+  if part 10 "Someone deploys agent-east's config a second time by mistake, without consolidated mode. Here you" \
     "see what the proxy does with the two agents, and what it tells the operator."; then
     step "Start a second copy of agent-east, without consolidated mode." -- duplicate-agent
     step "Remove the copy, and restart agent-east so it registers its paths again." -- duplicate-agent-stop
   fi
 
-  if part 10 "The dashboard can ask for a login, with a password from the proxy's environment. Here you turn it" \
-    "on, sign in and out, and turn it off again. It comes last because it restarts the proxy."; then
+  if part 11 "The proxy's dashboard can ask for a login, with a password from the proxy's environment. Here you" \
+    "turn it on, sign in and out, and turn it off again. It comes last because it restarts the proxy."; then
     step "Restart the proxy with a password for its dashboard." -- login
     instruct "Reload the dashboard: $DASHBOARD_URL" \
       "It shows the login page instead. Sign in as admin, with the password $LOGIN_PASSWORD, and it opens the page" \
@@ -739,6 +786,8 @@ main() {
     point "The proxy refuses its /payments_metrics, and logs the refusal; the log line is printed below."
     point "/payments_metrics keeps coming from agent-east, untouched. With one token shared by everyone, the newer" \
       "agent would have taken the path over."
+    point "agent-rogue's own dashboard shows the refusal from its side: /payments_metrics tagged refused, and the" \
+      "proxy's reason once you select it, at $ROGUE_DASHBOARD_URL"
     follow_up "To remove it, run" "$0 rogue-agent-stop"
     proxy_said "denied registration of path /payments_metrics"
     ;;
@@ -749,6 +798,36 @@ main() {
       "so the proxy removes the agent and its path at once."
     watch_for
     point "agent-rogue leaves the dashboard at once, and /contractor_metrics goes with it."
+    ;;
+  proxy-down)
+    "${COMPOSE[@]}" stop proxy
+    bold "The proxy stopped: every agent has lost it"
+    how_it_works "This runs docker compose stop proxy, which stops the proxy's container, as an outage or a bad" \
+      "deploy would. Each agent's gRPC connection closes as the proxy exits, and the agent tries to connect again" \
+      "every 3 seconds (agent.internal.reconnectPauseSecs) until the proxy is back. An agent's dashboard runs on the" \
+      "agent, so it keeps answering, and shows what the agent sees."
+    watch_for
+    point "Within a few seconds, agent-east's Connection view turns from connected to failing, and proxy:50051 shows" \
+      "the error the agent got trying it, at $EAST_DASHBOARD_URL/connection"
+    point "Its Activity view lists disconnected, then connect failed, which carries the same error. The feed lists" \
+      "the failure once, not each retry."
+    point "On its Paths view, every path's light turns red, tagged pending: with no proxy, none is registered."
+    point "The proxy's dashboard doesn't answer, and Prometheus can't reach the proxy either: in Grafana, every" \
+      "target turns DOWN on 'Target health'."
+    follow_up "To start it again, run" "$0 proxy-up"
+    ;;
+  proxy-up)
+    "${COMPOSE[@]}" start proxy
+    wait_for "$DASHBOARD_URL" "The proxy dashboard" login
+    bold "The proxy started again"
+    how_it_works "This runs docker compose start proxy, which starts the stopped container again, as it was. A new" \
+      "proxy holds nothing from the old one: each agent connects on its next try and registers its paths again, and" \
+      "the proxy's dashboard starts its histories over."
+    watch_for
+    point "Within a few seconds, agent-east's Connection view turns back to connected, and on its Paths view every" \
+      "path's light turns green again: each one is registered."
+    point "Its Activity view lists connected, then its paths registered."
+    point "The agents are back on the proxy's dashboard, each with its paths, and Grafana's targets turn green again."
     ;;
   duplicate-agent)
     "${COMPOSE[@]}" --profile duplicate up --detach --no-deps agent-east-copy
@@ -764,6 +843,8 @@ main() {
       "which used to make two such agents swap the paths every few seconds."
     point "The proxy's log line, printed below, names both agents and gives the fix: set agent.consolidated = true" \
       "on each, if both should serve the paths."
+    point "The copy's own dashboard lists the six paths, each with a green light, since the proxy accepted every one," \
+      "at $COPY_DASHBOARD_URL"
     follow_up "To undo it, run" "$0 duplicate-agent-stop"
     proxy_said "keeps its connection without paths"
     ;;

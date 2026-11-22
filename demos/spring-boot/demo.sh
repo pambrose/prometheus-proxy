@@ -17,9 +17,9 @@ COMPOSE=(docker compose -f "$DEMO_DIR/docker/compose.yml")
 # built either way, against the latest release (up) or this checkout (up-local).
 IMAGES=(prometheus-proxy-demo/proxy:local prometheus-proxy-demo/spring-boot-app:local)
 RELEASED_PROXY_IMAGE=pambrose/prometheus-proxy
-# The demo shows what came after this release (EmbeddedAgentConfig, and TLS certificates as environment variables),
-# so until a later one is out, up builds everything from this checkout, as up-local does.
-NEEDS_RELEASE_AFTER=4.5.0
+# The demo shows what came after this release (the agent's own dashboard), so until a later one is out, up builds
+# everything from this checkout, as up-local does.
+NEEDS_RELEASE_AFTER=4.6.1
 # The version up-local publishes this checkout's library at, to the local Maven repository, for the roastery's Maven
 # build: never a released one, so nothing mistakes it for one.
 LOCAL_LIBRARY_VERSION="$(sed -n 's/^version=//p' "$REPO_DIR/gradle.properties")"
@@ -30,6 +30,8 @@ CERTS_DIR="$REPO_DIR/testing/certs"
 
 APP_URL="http://localhost:${SPRING_BOOT_DEMO_APP_PORT:-8490}"
 DASHBOARD_URL="http://localhost:${SPRING_BOOT_DEMO_DASHBOARD_PORT:-8494}/dashboard"
+# The roastery's agent's own dashboard, which compose.yml turns on from the environment
+AGENT_DASHBOARD_URL="http://localhost:${SPRING_BOOT_DEMO_AGENT_DASHBOARD_PORT:-8495}/dashboard"
 PROMETHEUS_URL="http://localhost:${SPRING_BOOT_DEMO_PROMETHEUS_PORT:-9490}"
 PROXY_URL="http://localhost:${SPRING_BOOT_DEMO_PROXY_PORT:-8480}"
 # Prometheus's graph of the batches roasted a minute, by origin: rate(roastery_batches_roasted_total[1m]), with its
@@ -82,7 +84,7 @@ Lifecycle:
                      or later, and Maven)
   down               Stop the demo and remove its containers and network
   status             Show the containers, the roastery's state, and the URLs
-  open               Open the roastery, the proxy dashboard, and Prometheus in the browser
+  open               Open the roastery, the proxy's and the agent's dashboards, and Prometheus in the browser
   logs [service]     Follow the logs (roastery, proxy, prometheus)
   tour [part]        Walk through the demo's guided tour, pausing before each step (from part 1, or the one given)
 
@@ -92,6 +94,8 @@ Scenarios:
   health             Show the agent in Actuator's /actuator/health: connected, and to which proxy
   versions           Compare the versions of the agent's libraries the roastery runs, which Spring Boot picked, with
                      the agent's own
+  proxy-stop         Stop the proxy: the roastery keeps serving, and its agent's dashboard shows it retrying
+  proxy-start        Start it again
   stop-app           Stop the roastery, as a platform does, with SIGTERM
   start-app          Start it again
 EOF
@@ -102,10 +106,11 @@ print_urls() {
   bold "Prometheus Proxy Spring Boot demo"
   echo "  Roastery:           $APP_URL"
   echo "  Proxy dashboard:    $DASHBOARD_URL"
+  echo "  Agent dashboard:    $AGENT_DASHBOARD_URL"
   echo "  Prometheus:         $PROMETHEUS_URL"
   echo "  Through the proxy:  $PROXY_URL/roastery_metrics"
   echo
-  echo "Scenarios: $0 settings | peek | versions | stop-app ...  (no arguments for help)"
+  echo "Scenarios: $0 settings | peek | proxy-stop | stop-app ...  (no arguments for help)"
   echo "Or walk through them all: $MAKE_NAME tour, or $0 tour"
 }
 
@@ -277,6 +282,7 @@ start_demo() {
 
   wait_for "$APP_URL/actuator/health" "The roastery"
   wait_for "$DASHBOARD_URL" "The proxy dashboard"
+  wait_for "$AGENT_DASHBOARD_URL" "The agent's dashboard"
   wait_for "$PROMETHEUS_URL/-/ready" "Prometheus"
   print_urls
 }
@@ -305,7 +311,7 @@ cmd_open() {
     print_urls
     return
   fi
-  for url in "$APP_URL" "$DASHBOARD_URL" "$GRAPH_URL"; do
+  for url in "$APP_URL" "$DASHBOARD_URL" "$AGENT_DASHBOARD_URL" "$GRAPH_URL"; do
     "$opener" "$url"
   done
 }
@@ -458,6 +464,7 @@ TOUR_PARTS=(
   "2 A Spring Boot app with the agent embedded"
   "2 Actuator's metrics, behind Spring Security, through the proxy"
   "2 What Spring Boot's dependency management picked"
+  "3 The agent's own dashboard, with the proxy stopped and started"
   "2 A graceful shutdown takes the agent down first"
 )
 
@@ -495,7 +502,30 @@ cmd_tour() {
     step "Compare the versions." -- versions
   fi
 
-  if part 4 "A platform stops an app with SIGTERM, on a deploy or a scale-down. Spring Boot shuts down" \
+  if part 4 "The agent serves a dashboard of its own, from inside the roastery, which shows the agent's side of" \
+    "its connection: whether it's connected, whether the proxy took its path, and the scrapes it answered. The demo" \
+    "turns it on with two environment variables the agent reads itself, DASHBOARD_ENABLED and DASHBOARD_PORT, so" \
+    "the roastery's code didn't change."; then
+    instruct "Open the roastery agent's dashboard: $AGENT_DASHBOARD_URL" \
+      "Its Paths view lists the agent's one path, /roastery_metrics, registered, with a green light. Under its URL" \
+      "are the status of its last scrape and a strip of its recent ones, a new one every five seconds as" \
+      "Prometheus scrapes the proxy."
+    instruct "Select /roastery_metrics, then press Scrape now." \
+      "The path's page shows its URL, with the credentials redacted, and its Recent scrapes, newest first: each" \
+      "one's status, how long the agent took to read /actuator/prometheus, and the size of what it read." \
+      "Scrape now has the agent read the target at once, from inside the roastery, and shows the status, the" \
+      "metric families and samples, and the start of Actuator's metrics as Prometheus would get them."
+    instruct "Open the Activity view: $AGENT_DASHBOARD_URL/activity" \
+      "It lists what has happened to the agent, newest first: registered, for /roastery_metrics, and under it" \
+      "connected, to the proxy, from when the roastery started."
+    instruct "Open the Connection view, and keep it open: $AGENT_DASHBOARD_URL/connection" \
+      "It reads connected, and lists the agent's one proxy endpoint, proxy:50051, with no error, then the settings" \
+      "the agent resolved."
+    step "Stop the proxy, as when a proxy host goes away." -- proxy-stop
+    step "Start the proxy again." -- proxy-start
+  fi
+
+  if part 5 "A platform stops an app with SIGTERM, on a deploy or a scale-down. Spring Boot shuts down" \
     "gracefully, and the agent, a lifecycle bean in the last phase, stops first."; then
     instruct "Keep the proxy dashboard's Agents view open." \
       "You'll watch the roastery's agent leave it."
@@ -533,9 +563,10 @@ main() {
   tour) cmd_tour "$@" ;;
   settings)
     bold "The roastery logged its agent's settings, as Spring Boot bound them, and the agent starting:"
-    # The latest start's three lines, as the log keeps every start's
-    log_lines roastery "Starting the Prometheus agent|Prometheus agent .* started|Registered .* as /" | tail -3 |
-      sed -E 's/^.* : //; s/^/  /'
+    # The latest start's three lines, as the log keeps every start's, and the agent registers its path again on each
+    # reconnect (proxy-start)
+    log_lines roastery "Starting the Prometheus agent|Prometheus agent .* started|Registered .* as /" |
+      awk '/Starting the Prometheus agent/ { n = 0 } n++ < 3' | tail -3 | sed -E 's/^.* : //; s/^/  /'
     how_it_works "AgentSettings, a @ConfigurationProperties record, binds roastery.monitoring from application.yml," \
       "whose values read the environment: PROMETHEUS_PROXY, PROMETHEUS_AGENT_TOKEN, PROMETHEUS_PROXY_CERT, and the" \
       "rest, the names the coffee shop uses. Its toString leaves the secrets out, so the app can log it." \
@@ -572,10 +603,43 @@ main() {
       "it, and UNKNOWN when it's off or reconnecting. Not DOWN: the roastery keeps serving without its agent, so a" \
       "lost proxy leaves the app's health UP, and a platform that checks it keeps sending it requests."
     watch_for
-    point "With the proxy stopped (docker compose -f docker/compose.yml stop proxy), the component turns UNKNOWN" \
-      "within a few seconds while the app stays UP; once the proxy is back (start proxy), it's UP again."
+    point "With the proxy stopped ($0 proxy-stop), the component turns UNKNOWN within a few seconds while the" \
+      "app stays UP; once the proxy is back ($0 proxy-start), it's UP again."
     ;;
   versions) cmd_versions ;;
+  proxy-stop)
+    "${COMPOSE[@]}" stop proxy
+    bold "The proxy has stopped"
+    how_it_works "This runs docker compose stop proxy. The roastery's agent loses its connection and retries every" \
+      "few seconds, in the background, while the roastery keeps roasting and serving. The proxy's dashboard went" \
+      "with the proxy, but the agent's own runs inside the roastery, so it still answers, and shows what the agent" \
+      "sees from its side of the connection."
+    watch_for
+    point "The agent dashboard's Connection view turns failing within a few seconds, and shows the error the agent" \
+      "got connecting to proxy:50051: $AGENT_DASHBOARD_URL/connection"
+    point "Its Activity view adds disconnected, then connect failed, which isn't listed again as each retry fails" \
+      "the same way: $AGENT_DASHBOARD_URL/activity"
+    point "On its Paths view, /roastery_metrics turns pending, and its scrapes stop, since Prometheus can't reach the" \
+      "proxy. Scrape now, which doesn't need the proxy, still reads the roastery's metrics: $AGENT_DASHBOARD_URL"
+    point "Actuator's health shows the agent's component UNKNOWN, while the roastery's own health stays UP:" \
+      "$0 health"
+    follow_up "To bring it back, run" "$0 proxy-start"
+    ;;
+  proxy-start)
+    "${COMPOSE[@]}" start proxy
+    bold "The proxy has started"
+    how_it_works "This runs docker compose start proxy. The roastery's agent, still retrying, connects within a few" \
+      "seconds, and registers its path again. Nothing in the roastery was restarted or told."
+    watch_for
+    point "The agent dashboard's Connection view reads connected again, and the endpoint's error is gone:" \
+      "$AGENT_DASHBOARD_URL/connection"
+    point "Its Activity view adds connected, then registered, for /roastery_metrics:" \
+      "$AGENT_DASHBOARD_URL/activity"
+    point "On its Paths view, /roastery_metrics is registered again, and its scrapes resume now that Prometheus" \
+      "reaches the proxy."
+    point "roastery-1.0 is back on the proxy dashboard's Agents view: $DASHBOARD_URL"
+    point "Once the agent has reconnected, Actuator's health shows its component UP again: $0 health"
+    ;;
   stop-app)
     local stops
     stops="$(log_count proxy "Removed path /roastery_metrics")"
@@ -587,6 +651,8 @@ main() {
     watch_for
     point "roastery-1.0 leaves the proxy dashboard's Agents view, and its path goes with it."
     said proxy "Removed path /roastery_metrics" "$stops"
+    point "The agent's dashboard, which runs in the roastery, stops with the agent: its page says it's reconnecting" \
+      "until the roastery is back."
     point "In the roastery's log, the agent stopped before Tomcat began its graceful shutdown:"
     log_lines roastery "Stopping the Prometheus agent|Commencing graceful shutdown|Graceful shutdown complete" |
       tail -3 | sed -E 's/^.* : //; s/^/    /'

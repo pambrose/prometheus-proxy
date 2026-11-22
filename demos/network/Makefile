@@ -42,7 +42,7 @@ down:  ## Stop the demo and remove its containers and network
 status:  ## Show the containers, the WAN's links and their toxics, and the URLs
 	@$(DEMO) status
 
-open:  ## Open both proxy dashboards, Grafana, and Prometheus's alerts in the browser
+open:  ## Open both proxy dashboards, agent-branch's dashboard, Grafana, and Prometheus's alerts in the browser
 	@$(DEMO) open
 
 tour:  ## Walk through the demo's guided tour, pausing before each step (PART=n starts from part n)

@@ -76,6 +76,9 @@ internal class MetricFilter private constructor(
   private val path: String,
   private val allow: List<Regex>,
   private val deny: List<Regex>,
+  // Told why, once per cause, when the filter first lets a scrape through unfiltered: the agent dashboard's activity
+  // feed.
+  private val onFailedOpen: (String) -> Unit,
 ) {
   // Latched the first time each fail-open guard trips. A scrape recurs every scrape interval forever,
   // so an unguarded warn would be a permanent log-spam source. Scoped to this filter instance -- which
@@ -105,7 +108,7 @@ internal class MetricFilter private constructor(
     get() =
       when {
         contentTypeWarned.load() -> "a scrape's content type was not text"
-        invalidUtf8Warned.load() -> "a scrape's body was not valid UTF-8"
+        invalidUtf8Warned.load() -> INVALID_UTF8
         else -> null
       }
 
@@ -135,8 +138,10 @@ internal class MetricFilter private constructor(
     contentType: String,
   ): FilterOutcome? {
     if (!isFilterableContentType(contentType)) {
-      if (contentTypeWarned.compareAndSet(expectedValue = false, newValue = true))
+      if (contentTypeWarned.compareAndSet(expectedValue = false, newValue = true)) {
         logger.warn { "Skipping metric filter for /$path: content type \"$contentType\" is not text" }
+        onFailedOpen("a scrape's content type, $contentType, was not text")
+      }
       return null
     }
 
@@ -152,8 +157,10 @@ internal class MetricFilter private constructor(
         null
       }
     if (decoded == null) {
-      if (invalidUtf8Warned.compareAndSet(expectedValue = false, newValue = true))
+      if (invalidUtf8Warned.compareAndSet(expectedValue = false, newValue = true)) {
         logger.warn { "Skipping metric filter for /$path: response body is not valid UTF-8" }
+        onFailedOpen(INVALID_UTF8)
+      }
       return null
     }
 
@@ -259,17 +266,22 @@ internal class MetricFilter private constructor(
      * "no filter" stays a distinct state rather than an identity transform.
      *
      * @param path the config path these rules belong to, used only in the invalid-regex message
+     * @param onFailedOpen told why, once per cause, when the filter first lets a scrape through unfiltered: the agent
+     *   dashboard's activity feed
      * @throws IllegalArgumentException if any pattern fails to compile
      */
     fun createOrNull(
       allow: List<String>,
       deny: List<String>,
       path: String,
+      onFailedOpen: (String) -> Unit = {},
     ): MetricFilter? =
       if (allow.isEmpty() && deny.isEmpty())
         null
       else
-        MetricFilter(path, allow.map { compile(it, path) }, deny.map { compile(it, path) })
+        MetricFilter(path, allow.map { compile(it, path) }, deny.map { compile(it, path) }, onFailedOpen)
+
+    private const val INVALID_UTF8 = "a scrape's body was not valid UTF-8"
 
     private fun compile(
       pattern: String,

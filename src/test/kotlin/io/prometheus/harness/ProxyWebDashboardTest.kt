@@ -849,7 +849,7 @@ class ProxyWebDashboardTest : StringSpec() {
     }
 
     // The push loop leaves the Activity table out of a frame when the page already shows the table that frame would
-    // carry (ProxyDashboardService.ActivityTable), so a reader's table isn't rewritten every refresh to show the same
+    // carry (ActivityTable), so a reader's table isn't rewritten every refresh to show the same
     // rows. The comparison has unit tests; this runs it through the real loop and socket, at the config's 1s refresh.
     // A tick can land on either side of a browser's message, so each step reads frames until the one it is about,
     // rather than counting them, and then the next QUIET_FRAMES, at least one of which is a tick.

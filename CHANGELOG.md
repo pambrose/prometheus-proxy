@@ -22,6 +22,19 @@ All notable changes to this project are documented in this file.
   failed. A Scrape now button (`agent.dashboard.scrapeNowEnabled`, on by default) fetches a path's target from the
   agent at once, whether or not the proxy has the path, and shows the start of the body after the filter; it is counted
   in no metric and kept out of the path's history
+- The agent's dashboard has an Activity view of what happened to the agent (`agent.dashboard.activityLogSize`, default
+  500 lines, in memory): connected, disconnected with why, connect failed, failed over and back, paths registered,
+  refused with the proxy's reason, and unregistered, the discovery file failing or skipping entries, and a filter
+  letting a scrape through unfiltered. A burst of like events is one line, and so is the same event repeated, so a long
+  outage stays one line; a page showing the view updates as each line is added
+- The agent's Helm chart turns on the agent's dashboard with `dashboard.enabled` (port 8095, kept off the Service and
+  reached with `kubectl port-forward`), with a login from `dashboard.login.existingSecret`
+- Both dashboards have a Theme button at the end of the top bar: auto, the default, which follows the system's light or
+  dark setting, then light, then dark. The browser keeps the choice for each dashboard and applies it before the page
+  draws, and the login page uses it too
+- Every demo turns on its agents' dashboards and shows the agent's side in its tour; the basics demo adds `proxy-down`
+  and `proxy-up`, the spring-boot demo `proxy-stop` and `proxy-start`, and the kubernetes demo `agent-dashboard`, which
+  port-forwards to the agent's
 
 ### Bug Fixes
 

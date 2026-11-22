@@ -101,8 +101,9 @@ Explicitly **out of scope** for now: the Zensical documentation site at
 - TLS with optional mutual auth.
 - An agent dashboard (`agent.dashboard`, off by default) on the same design system and server code as the proxy's,
   showing what the proxy's can't: an agent's connection while it can't reach the proxy, each path the proxy
-  refused, with its reason, and each path's scrapes as the agent saw them, with a Scrape now that fetches a target
-  from the agent and, like the proxy's, is counted nowhere. The same no-CDN constraint binds it.
+  refused, with its reason, each path's scrapes as the agent saw them, with a Scrape now that fetches a target
+  from the agent and, like the proxy's, is counted nowhere, and an activity feed of what happened to the agent's
+  connection and paths. The same no-CDN constraint binds it.
 
 **Binding constraint — no CDN, no external assets.** Everything the dashboard serves must be
 self-contained in the JAR. htmx ships as a vendored WebJar for exactly this reason. No Google Fonts,

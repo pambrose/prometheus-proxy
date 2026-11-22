@@ -121,9 +121,11 @@ aren't in the proto: a scrape result is sent in chunks once its gzipped size rea
   `common/dashboard/DashboardServer`, which serves a `DashboardSite`: the proxy's is in `ProxyDashboardService`, and the
   agent's (`agent.dashboard`, off by default) in `agent/dashboard/AgentDashboardService`, which reads the agent's
   connection, path registration failures, filters, discovery, and each path's recent scrapes (`AgentScrapeHistory`,
-  filled by `AgentHttpService.fetchScrapeUrl`) through `AgentSnapshot`, and serves the agent's own Scrape now
-  (`AgentScrapeNow`). `DashboardPage`,
-  `DashboardScript`, and `DashboardCss` are the page, script, and stylesheet both render with.
+  filled by `AgentHttpService.fetchScrapeUrl`) through `AgentSnapshot`, serves the agent's own Scrape now
+  (`AgentScrapeNow`), and shows an Activity feed (`AgentActivityLog`, recorded where the agent logs each event at WARN
+  or INFO, never a DEBUG repeat, and whose changes wake the push loop). `DashboardPage`, `DashboardScript`, and
+  `DashboardCss` are the page, script, and stylesheet both render with, and `RowFilter` and `TableText` the filtered
+  tables of both Activity views and the proxy's Paths view.
   The Links column's brand icons (`LinkIcon`) come from the Simple Icons WebJar, of which the build's
   `extractDashboardIcons` copies only the SVGs `LinkIcon` names into the main resources, so the 7.5 MB WebJar stays off
   the runtime classpath and out of the POM and the fat JARs; a new icon needs its slug in `configureDashboardIcons` too.

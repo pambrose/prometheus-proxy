@@ -1,5 +1,5 @@
-# The Prometheus Proxy basics demo: a proxy with its dashboard on, three agents behind a simulated firewall, a set
-# of simulated services, and Prometheus and Grafana in front. See ../README.md. From demos/basics:
+# The Prometheus Proxy basics demo: a proxy with its dashboard on, three agents with theirs behind a simulated
+# firewall, a set of simulated services, and Prometheus and Grafana in front. See ../README.md. From demos/basics:
 #
 #   make up        # starts everything, with the proxy and agent of the latest release, from Docker Hub
 #   make up-local  # the same, with the proxy and agent built from this checkout
@@ -8,16 +8,21 @@
 # Compose resolves every relative path here against this file's directory, demos/basics/docker: the demo's configs
 # are one level up, and the repository root three.
 #
-# Every published port binds to 127.0.0.1 only: the dashboard has no login unless ./demo.sh login turns it on, Grafana
-# lets anyone view it without signing in, and its admin password is the default, which suits a demo on a laptop and
-# nothing else. Set
-# DEMO_DASHBOARD_PORT, DEMO_GRAFANA_PORT, DEMO_PROMETHEUS_PORT, or DEMO_PROXY_PORT to move a host port that's already
-# taken.
+# Every published port binds to 127.0.0.1 only: the proxy's dashboard has no login unless ./demo.sh login turns it on,
+# the agents' dashboards have none, Grafana lets anyone view it without signing in, and its admin password is the
+# default, which suits a demo on a laptop and nothing else. Set DEMO_DASHBOARD_PORT, DEMO_GRAFANA_PORT,
+# DEMO_PROMETHEUS_PORT, or DEMO_PROXY_PORT, or for an agent's dashboard DEMO_AGENT_EAST_DASHBOARD_PORT,
+# DEMO_AGENT_WEST_1_DASHBOARD_PORT, DEMO_AGENT_WEST_2_DASHBOARD_PORT, DEMO_AGENT_ROGUE_DASHBOARD_PORT, or
+# DEMO_AGENT_EAST_COPY_DASHBOARD_PORT, to move a host port that's already taken.
 
 name: prometheus-proxy-demo
 
 # The three agents share one image: the latest release's, which demo.sh pulls and tags as this one (make up), or one
 # built from this checkout's agent jar (make up-local, which builds with --build).
+#
+# Each agent serves its own dashboard (agent.dashboard in its config), published on its service below rather than
+# here: each listens on a port of its own, in its container as well as on the host, since a dashboard names its login's
+# session cookie after the port it listens on, and a browser sends localhost's cookies to every port.
 x-agent: &agent
   image: prometheus-proxy-demo/agent:local
   build:
@@ -58,18 +63,24 @@ services:
     volumes:
       - ../config/agent-east.conf:/app/agent.conf:ro
       - discovery:/discovery:ro
+    ports:
+      - "127.0.0.1:${DEMO_AGENT_EAST_DASHBOARD_PORT:-8095}:8095"  # agent-east's dashboard
 
   agent-west-1:
     <<: *agent
     hostname: west-dc-01
     volumes:
       - ../config/agent-west-1.conf:/app/agent.conf:ro
+    ports:
+      - "127.0.0.1:${DEMO_AGENT_WEST_1_DASHBOARD_PORT:-8096}:8096"  # agent-west-1's dashboard
 
   agent-west-2:
     <<: *agent
     hostname: west-dc-02
     volumes:
       - ../config/agent-west-2.conf:/app/agent.conf:ro
+    ports:
+      - "127.0.0.1:${DEMO_AGENT_WEST_2_DASHBOARD_PORT:-8097}:8097"  # agent-west-2's dashboard
 
   # A contractor's agent reaching for a path its identity may not register; started only by `demo.sh rogue-agent`.
   agent-rogue:
@@ -78,6 +89,8 @@ services:
     profiles: [rogue]
     volumes:
       - ../config/agent-rogue.conf:/app/agent.conf:ro
+    ports:
+      - "127.0.0.1:${DEMO_AGENT_ROGUE_DASHBOARD_PORT:-8098}:8098"  # agent-rogue's dashboard
 
   # agent-east's config deployed a second time by mistake; started only by `demo.sh duplicate-agent`.
   agent-east-copy:
@@ -87,6 +100,8 @@ services:
     volumes:
       - ../config/agent-east.conf:/app/agent-east.conf:ro
       - ../config/agent-duplicate.conf:/app/agent.conf:ro
+    ports:
+      - "127.0.0.1:${DEMO_AGENT_EAST_COPY_DASHBOARD_PORT:-8099}:8099"  # agent-east-copy's dashboard
 
   # The applications behind the firewall, simulated; it also writes agent-east's discovery file (app/demo_app.py).
   demo-app:

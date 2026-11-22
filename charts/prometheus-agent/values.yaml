@@ -77,6 +77,18 @@ metrics:
   enabled: true
   port: 8083
 
+# The agent's dashboard: its connection to the proxy, each path and why the proxy refused one, each path's recent
+# scrapes, and its activity. The port is not added to the Service; reach it with kubectl port-forward. Unauthenticated
+# unless login.existingSecret names a Secret holding a password (DASHBOARD_PASSWORD), which then requires a login, on
+# the dashboard's login page, with login.username (DASHBOARD_USERNAME). The dashboard serves plain HTTP.
+dashboard:
+  enabled: false
+  port: 8095
+  login:
+    username: admin
+    existingSecret: ""
+    key: password
+
 # A Service exposing the metrics port, for Prometheus to scrape the agent itself.
 service:
   enabled: true

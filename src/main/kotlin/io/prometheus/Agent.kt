@@ -84,6 +84,9 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource.Monotonic
+import io.prometheus.agent.AgentActivityLog
+import io.prometheus.agent.AgentActivityKind
+import io.prometheus.agent.ShownFailure
 
 /**
  * Prometheus Agent that connects to a Proxy to enable metrics scraping across firewalls.
@@ -213,6 +216,11 @@ class Agent(
     scrapeRequestBacklogSize.update { maxOf(it - delta, 0) }
   }
 
+  // What happened to the agent's connection, paths, discovery, and filters, for its dashboard's activity feed. Null
+  // unless the dashboard is on, as scrapeHistory is. Declared first: the path manager and discovery record into it.
+  internal val activityLog: AgentActivityLog? =
+    if (options.dashboardEnabled) AgentActivityLog(agentConfigVals.dashboard.activityLogSize) else null
+
   internal val pathManager = AgentPathManager(this)
   internal val pathDiscoveryService: PathDiscoveryService? = createPathDiscoveryService()
   internal val grpcService = AgentGrpcService(this, options, inProcessServerName)
@@ -330,7 +338,12 @@ class Agent(
     if (!discovery.enabled)
       return null
     logger.info { "Path discovery enabled from file: ${discovery.file.path}" }
-    return PathDiscoveryService(pathManager, FileDiscoverySource(discovery.file.path), discovery.reconcileIntervalSecs)
+    return PathDiscoveryService(
+      pathManager,
+      FileDiscoverySource(discovery.file.path, activityLog),
+      discovery.reconcileIntervalSecs,
+      activityLog,
+    )
   }
 
   override fun run() {
@@ -353,7 +366,9 @@ class Agent(
     }
   }
 
-  // One connection attempt: connect and register, then run the connection's tasks until it ends.
+  // One connection attempt: connect and register, then run the connection's tasks until it ends. Catches Throwable only
+  // to name what ended a connection in the activity feed, and rethrows it.
+  @Suppress("TooGenericExceptionCaught")
   private suspend fun connectToProxy(endpointFailover: EndpointFailover) {
     // A non-empty agentId means the previous attempt connected. EndpointFailover combines that with whether
     // the attempt also registered to choose between failing back to the primary and failing forward.
@@ -375,6 +390,28 @@ class Agent(
     if (!grpcService.connectAgent())
       return
 
+    // Connected, so however the connection ends, the activity feed hears of it, and why, when an exception ended it.
+    var cause: Throwable? = null
+    try {
+      cause = registerAndServe(endpointFailover)
+    } catch (e: Throwable) {
+      cause = e
+      throw e
+    } finally {
+      // Not as the agent stops: its dashboard is stopping too.
+      if (isRunning)
+        activityLog?.record(
+          AgentActivityKind.DISCONNECTED,
+          detail = listOfNotNull(proxyHost, cause?.let { ShownFailure.of(it).message }).joinToString(": "),
+          group = proxyHost,
+        )
+    }
+    logger.info { "connectToProxy() completed" }
+  }
+
+  // Registers the agent and its paths on the connection connectAgent made, then serves it until it ends, and returns
+  // the failure that ended it, the first of its tasks to fail, or null for one that ended without a failure.
+  private suspend fun registerAndServe(endpointFailover: EndpointFailover): Throwable? {
     grpcService.registerAgent(initialConnectionLatch)
     pathManager.registerPaths()
     endpointFailover.registrationSucceeded()
@@ -391,7 +428,7 @@ class Agent(
     } finally {
       liveConnection.store(null)
     }
-    logger.info { "connectToProxy() completed" }
+    return connectionContext.endedBy
   }
 
   // Each task runs for the connection's lifetime; on completion launchConnectionTask closes the shared
@@ -513,8 +550,11 @@ class Agent(
     return launch(Dispatchers.IO) {
       runCatchingCancellable { block() }
         .onFailure { e ->
-          if (isRunning)
+          if (isRunning) {
             logger.logStreamFailure(name, e)
+            // What ended the connection, for the activity feed's disconnect.
+            connectionContext.noteFailure(e)
+          }
         }
     }.apply {
       invokeOnCompletion {

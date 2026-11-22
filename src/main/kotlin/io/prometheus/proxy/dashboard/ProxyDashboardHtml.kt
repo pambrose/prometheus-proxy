@@ -17,15 +17,6 @@
 package io.prometheus.proxy.dashboard
 
 import io.prometheus.common.dashboard.DashboardPage
-import io.prometheus.common.dashboard.DashboardPage.ANNOUNCER_ID
-import io.prometheus.common.dashboard.DashboardPage.COLUMN_GUIDE_ID
-import io.prometheus.common.dashboard.DashboardPage.COLUMN_GUIDE_TOGGLE_ID
-import io.prometheus.common.dashboard.DashboardPage.DASH
-import io.prometheus.common.dashboard.DashboardPage.FILTER_PROBLEMS_ID
-import io.prometheus.common.dashboard.DashboardPage.FILTER_QUERY_ID
-import io.prometheus.common.dashboard.DashboardPage.HTMX_CONFIG
-import io.prometheus.common.dashboard.DashboardPage.LOGOUT_ID
-import io.prometheus.common.dashboard.DashboardPage.NAV_ID
 import io.prometheus.common.dashboard.DashboardPage.SCRAPE_PORT_ATTR
 import io.prometheus.common.dashboard.DashboardPage.STATUS_ID
 import io.prometheus.common.dashboard.DashboardPage.TITLE_ATTR
@@ -38,16 +29,12 @@ import io.prometheus.common.dashboard.DashboardPage.logoutForm
 import io.prometheus.common.dashboard.DashboardPage.pageTitle
 import io.prometheus.common.dashboard.DashboardPage.statusPill
 import io.prometheus.common.dashboard.DashboardPage.tabs
+import io.prometheus.common.dashboard.DashboardPage.themeToggle
 import io.prometheus.common.dashboard.DashboardPage.timeOfDay
 import io.prometheus.common.dashboard.DashboardScript
-import io.prometheus.common.dashboard.DashboardServer
 import io.prometheus.common.dashboard.DashboardView
-import io.prometheus.common.dashboard.href
-import kotlinx.html.ButtonType
 import kotlinx.html.DIV
-import kotlinx.html.FORM
 import kotlinx.html.FlowContent
-import kotlinx.html.FormMethod
 import io.prometheus.proxy.ScrapeRecord
 import io.prometheus.proxy.dashboard.ActivityHtml.activityTable
 import io.prometheus.proxy.dashboard.ActivityHtml.renderActivity
@@ -55,20 +42,12 @@ import io.prometheus.proxy.dashboard.PathTableHtml.linkIconStyle
 import io.prometheus.proxy.dashboard.PathTableHtml.pathTable
 import io.prometheus.proxy.dashboard.PathTableHtml.renderPathTable
 import kotlinx.html.HTML
-import kotlinx.html.InputType
-import kotlinx.html.NAV
 import kotlinx.html.SPAN
 import kotlinx.html.a
 import kotlinx.html.body
 import kotlinx.html.button
-import kotlinx.html.dd
 import kotlinx.html.div
-import kotlinx.html.dl
-import kotlinx.html.dt
-import kotlinx.html.form
 import kotlinx.html.head
-import kotlinx.html.input
-import kotlinx.html.label
 import kotlinx.html.main
 import kotlinx.html.meta
 import kotlinx.html.nav
@@ -76,16 +55,10 @@ import kotlinx.html.script
 import kotlinx.html.section
 import kotlinx.html.span
 import kotlinx.html.stream.createHTML
-import kotlinx.html.style
 import kotlinx.html.title
-import kotlinx.html.time
 import kotlinx.html.unsafe
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import kotlin.time.Clock
-import kotlin.time.Duration
-import kotlin.time.Instant
-import kotlin.time.toJavaInstant
+import io.prometheus.common.dashboard.RowFilter
 
 /**
  * Which view a session is looking at.
@@ -102,7 +75,7 @@ import kotlin.time.toJavaInstant
 internal enum class DashboardLayout(
   override val segment: String,
   override val title: String,
-  val searchFields: String = "",
+  override val searchFields: String = "",
 ) : DashboardView {
   AGENT("", "Agents"),
   PATH("paths", "Paths", "path, agent, target, or identity"),
@@ -171,6 +144,7 @@ internal object ProxyDashboardHtml {
         span("brand") { +BRAND }
         renderNav(routeBase, layout)
         renderStatus(snapshot)
+        themeToggle()
         if (loginEnabled) logoutForm(routeBase)
       }
       announcer()
@@ -207,80 +181,6 @@ internal object ProxyDashboardHtml {
     routeBase: String,
     layout: DashboardLayout,
   ) = tabs(DashboardLayout.entries, layout, routeBase)
-
-  /**
-   * The search above [layout]'s table, which submits to the layout's own route, and under it the guide to the table's
-   * [columns], which the button at the search's end opens.
-   *
-   * Both sit outside the table's out-of-band region, so a push never replaces the input someone is typing in, nor
-   * closes the guide someone is reading. The search is a plain GET form, so it works without the page's script, by
-   * navigating to `?q=…&problems=1`; the script applies a change as it is typed instead, and keeps the URL in step, and
-   * opens and closes the guide (see DashboardScript).
-   */
-  internal fun FlowContent.renderFilters(
-    routeBase: String,
-    layout: DashboardLayout,
-    filter: RowFilter,
-    columns: List<TableColumn>,
-  ) {
-    form(action = layout.href(routeBase), method = FormMethod.get, classes = "filters") {
-      attributes["role"] = "search"
-      input(type = InputType.search, name = DashboardPage.QUERY_PARAM) {
-        attributes["id"] = FILTER_QUERY_ID
-        attributes["aria-label"] = "Filter ${layout.title.lowercase()}"
-        attributes["placeholder"] = "Filter by ${layout.searchFields}"
-        attributes["maxlength"] = "${RowFilter.MAX_QUERY_LENGTH}"
-        attributes["autocomplete"] = "off"
-        value = filter.query
-      }
-      label {
-        input(type = InputType.checkBox, name = DashboardPage.PROBLEMS_PARAM) {
-          attributes["id"] = FILTER_PROBLEMS_ID
-          value = DashboardPage.PROBLEMS_ON
-          checked = filter.problemsOnly
-        }
-        +"Problems only"
-      }
-      columnGuideToggle()
-    }
-    columnGuide(columns)
-  }
-
-  // A plain button, not a submit: it opens the guide and changes nothing the form sends.
-  private fun FORM.columnGuideToggle() {
-    button(type = ButtonType.button, classes = "guide-toggle") {
-      attributes["id"] = COLUMN_GUIDE_TOGGLE_ID
-      attributes["aria-expanded"] = "false"
-      attributes["aria-controls"] = COLUMN_GUIDE_ID
-      +"Column guide"
-    }
-  }
-
-  /**
-   * What each of the table's [columns] holds, one row a column, named as its header names it. A strip that pushes the
-   * table down rather than a layer over it, which would need a shadow and cover the columns it explains. Hidden until
-   * its button opens it, on each page load.
-   */
-  private fun FlowContent.columnGuide(columns: List<TableColumn>) {
-    section("column-guide") {
-      attributes["id"] = COLUMN_GUIDE_ID
-      attributes["aria-label"] = "Column guide"
-      attributes["hidden"] = "hidden"
-      div("cg-head") {
-        span { +"Columns" }
-        button(type = ButtonType.button, classes = "close") {
-          attributes["aria-label"] = "Close the column guide"
-          attributes["title"] = "Close"
-        }
-      }
-      dl {
-        columns.forEach { column ->
-          dt { +column.label }
-          dd { +column.help }
-        }
-      }
-    }
-  }
 
   /** Status counters. Driven by the timer rather than the event bus -- these drift, they do not change. */
   fun FlowContent.renderStatus(
@@ -488,7 +388,7 @@ internal object ProxyDashboardHtml {
    *
    * [withActivity] false leaves the Activity table out of an Activity frame, which then carries the status bar alone:
    * the push loop passes it when the session's page already shows the table this frame would render (see
-   * ProxyDashboardService.ActivityTable). Every other region is rendered whatever it says.
+   * io.prometheus.common.dashboard.ActivityTable). Every other region is rendered whatever it says.
    */
   fun pushFragment(
     snapshot: ProxySnapshot,

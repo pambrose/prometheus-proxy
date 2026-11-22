@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Retakes the screenshots on the website's Basics Demo page (website/prometheus-proxy/docs/basics-demo.md), and the
-# login page's on its Dashboard page (web-dashboard.md), from the running demo: it plays the page's scenarios, captures the dashboard and Grafana in headless Chrome at twice the pixel
-# density in both themes, each a whole window, and writes lossless WebP to website/prometheus-proxy/docs/images/demo/:
+# login page's on its Dashboard page (web-dashboard.md), from the running demo: it plays the page's scenarios, captures
+# the proxy's dashboard, agent-rogue's, and Grafana in headless Chrome at twice the pixel density in both themes, each
+# a whole window, and writes lossless WebP to website/prometheus-proxy/docs/images/demo/:
 # <name>.webp in the dark theme and <name>-light.webp in the light one, which the page shows by the reader's theme. It
 # puts the demo back to normal when it finishes, or when it fails.
 #
@@ -24,6 +25,7 @@ DEMO="$DEMO_DIR/demo.sh"
 OUT_DIR="$REPO_DIR/website/prometheus-proxy/docs/images/demo"
 
 DASHBOARD_URL="http://localhost:${DEMO_DASHBOARD_PORT:-8094}/dashboard"
+ROGUE_DASHBOARD_URL="http://localhost:${DEMO_AGENT_ROGUE_DASHBOARD_PORT:-8098}/dashboard"
 GRAFANA_URL="http://localhost:${DEMO_GRAFANA_PORT:-3000}"
 PROMETHEUS_URL="http://localhost:${DEMO_PROMETHEUS_PORT:-9090}"
 
@@ -128,6 +130,19 @@ has_scrapes() {
   count="$(curl -fsS "$1" 2>/dev/null | grep -Eo 'data-scrape-count="[0-9]+"' | grep -Eo '[0-9]+' | head -1)"
   [[ -n "$count" ]] && ((count >= $2))
 }
+
+# The state agent-rogue's own dashboard gives one of its paths, or nothing. Each row of its Paths view carries its path
+# and its state as data attributes (pathListInner in AgentDashboardHtml.kt), which this reads rather than the row's
+# text, as agent_row does on the proxy's. The path's closing quote keeps one path from matching a longer one.
+rogue_path_state() {
+  local html
+  html="$(curl -fsS "$ROGUE_DASHBOARD_URL" 2>/dev/null)" || return 0
+  attr data-state "$(grep -Eo '<[a-z]+ [^>]*data-path="[^"]*"[^>]*>' <<<"$html" | grep -F "data-path=\"$1\"" |
+    head -1 || true)"
+}
+
+# Whether agent-rogue's dashboard shows its payments path refused, as once the proxy has turned it away.
+rogue_payments_refused() { [[ "$(rogue_path_state payments_metrics)" == refused ]]; }
 
 # Whether agent-east is listed with no paths, as once its copy has taken them.
 east_has_no_paths() { [[ "$(attr data-path-count "$(agent_row agent-east)")" == 0 ]]; }
@@ -312,6 +327,9 @@ step "A contractor's agent refused another team's path"
 wait_until "the proxy to refuse agent-rogue's payments path" \
   bash -c "curl -fsS '$DASHBOARD_URL/activity?q=agent-rogue' | grep -q 'not authorized to register path /payments_metrics'"
 shoot_table activity "/activity?q=agent-rogue"
+# The same refusal on agent-rogue's own dashboard, with the path selected, so the shot shows the proxy's reason.
+wait_until "agent-rogue's dashboard to show its payments path refused" rogue_payments_refused
+shoot_fixed agent "$ROGUE_DASHBOARD_URL/paths/payments_metrics"
 "$DEMO" rogue-agent-stop >/dev/null 2>&1
 
 # Last, since turning the login on and off restarts the proxy, which starts the dashboard's histories over. The login
@@ -323,7 +341,7 @@ shoot_fixed login "$DASHBOARD_URL/login"
 
 step "Writing WebP to ${OUT_DIR#"$REPO_DIR"/}"
 mkdir -p "$OUT_DIR"
-for name in agents paths outage grafana duplicate discovered evicting evicted activity login; do
+for name in agents paths outage grafana duplicate discovered evicting evicted activity agent login; do
   for theme in "${THEMES[@]}"; do
     file="$(named "$name" "$theme")"
     cwebp -quiet -lossless -z 9 "$WORK/$file.png" -o "$OUT_DIR/$file.webp"

@@ -30,6 +30,8 @@ import kotlin.time.Duration
 import kotlin.time.Instant
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
+import io.prometheus.agent.AgentActivityEntry
+import io.prometheus.agent.AgentActivityLog
 
 /** Where the agent stands with its proxy. */
 internal enum class ConnectionState(
@@ -168,6 +170,9 @@ internal data class DiscoveryView(
  * @param pathHistorySize the scrapes a path's history holds when full, `agent.dashboard.pathHistorySize`, which each
  *   path's strip keeps the places of
  * @param scrapeNowEnabled whether each path has a Scrape now button, `agent.dashboard.scrapeNowEnabled`
+ * @param activity the activity feed's lines, newest first (see [io.prometheus.agent.AgentActivityLog])
+ * @param activityChangeCount the activity log's change count, read with [activity], which a push compares to tell a
+ *   feed that changed from one that didn't
  */
 internal data class AgentSnapshot(
   val agentName: String,
@@ -182,14 +187,17 @@ internal data class AgentSnapshot(
   val settings: List<Pair<String, String>>,
   val pathHistorySize: Int = 0,
   val scrapeNowEnabled: Boolean = false,
+  val activity: List<AgentActivityEntry> = emptyList(),
+  val activityChangeCount: Long = 0L,
 ) {
   /** The paths not registered: refused, retrying, or still pending. */
   val unregistered: List<AgentPathView> get() = paths.filter { it.state != PathState.REGISTERED }
 
   companion object {
     /** Reads the snapshot from [agent]. */
-    fun collect(agent: Agent): AgentSnapshot =
-      AgentSnapshot(
+    fun collect(agent: Agent): AgentSnapshot {
+      val activity = agent.activityLog?.snapshot() ?: AgentActivityLog.Snapshot()
+      return AgentSnapshot(
         agentName = agent.agentName,
         agentId = agent.agentId,
         launchId = agent.launchId,
@@ -202,7 +210,10 @@ internal data class AgentSnapshot(
         settings = settings(agent),
         pathHistorySize = agent.agentConfigVals.dashboard.pathHistorySize,
         scrapeNowEnabled = agent.agentConfigVals.dashboard.scrapeNowEnabled,
+        activity = activity.entries,
+        activityChangeCount = activity.changeCount,
       )
+    }
 
     private fun connection(agent: Agent): ConnectionView {
       val grpc = agent.grpcService

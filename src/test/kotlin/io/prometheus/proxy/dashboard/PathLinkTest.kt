@@ -213,9 +213,9 @@ class PathLinkTest : StringSpec() {
     // WCAG 1.4.11's 3:1 for a non-text mark, rather than text's 4.5:1, since the link's name is in its tooltip and its
     // aria-label too; on --surface-2, a hovered row's ground and the tighter of the two a row has (see docs/DESIGN.md).
     "every icon's colour should clear 3:1 against a hovered row in each theme" {
-      // The light theme's, then the dark theme's.
+      // The light theme's, then the dark theme's, which the system's dark preference and a page set to dark share.
       val grounds =
-        Regex("""--surface-2:(#[0-9a-f]{6})""").findAll(DashboardCss.CSS).map { it.groupValues[1] }.toList()
+        Regex("""--surface-2:(#[0-9a-f]{6})""").findAll(DashboardCss.CSS).map { it.groupValues[1] }.distinct().toList()
       grounds.size shouldBe 2
 
       LinkIcon.entries.forEach { icon ->

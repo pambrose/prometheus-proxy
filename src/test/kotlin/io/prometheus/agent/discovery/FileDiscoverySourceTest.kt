@@ -18,6 +18,8 @@
 
 package io.prometheus.agent.discovery
 
+import io.prometheus.agent.AgentActivityLog
+import io.prometheus.agent.AgentActivityKind
 import ch.qos.logback.classic.Level
 import com.typesafe.config.ConfigException
 import io.kotest.assertions.throwables.shouldThrow
@@ -38,6 +40,20 @@ class FileDiscoverySourceTest : StringSpec() {
   }
 
   init {
+    // Reported once per change, as the log's WARN is, so a file re-read every interval is one line in the feed.
+    "skipped entries should be recorded in the activity feed when the set of them changes" {
+      val log = AgentActivityLog(capacity = 20)
+      val path = writeTemp("""paths = [{ path = "no_url", url = "" }, { path = "", url = "http://no.path" }]""")
+      val source = FileDiscoverySource(path, log)
+      repeat(2) { source.read() }
+
+      log.snapshot().entries.single().apply {
+        kind shouldBe AgentActivityKind.DISCOVERY_SKIPPED
+        count shouldBe 1
+        detail shouldContain "2 entries need a path and a url"
+      }
+    }
+
     "parses a valid HOCON discovery file (labels/name defaulted)" {
       val path = writeTemp(
         """

@@ -9,7 +9,7 @@ can't show what happens on the agent's side of the firewall, and that's where th
 reach its proxy never appears there. A path the proxy refused never registers. A target the agent scrapes is behind the
 firewall too.
 
-The agent's own dashboard shows those. It runs on the agent, on a port of its own, and answers four questions:
+The agent's own dashboard shows those. It runs on the agent, on a port of its own, and answers five questions:
 
 - **Is the agent connected?** If not, why not: each proxy endpoint, in failover order, with the last error the agent
   got connecting to it.
@@ -20,6 +20,8 @@ The agent's own dashboard shows those. It runs on the agent, on a port of its ow
   whether or not the proxy has the path.
 - **What is the agent doing with it?** Each path's metric filter and what it has dropped, the agent's discovery file and
   how its last read went, and the settings the agent resolved.
+- **What happened?** The agent's connection made, lost, and failed over, its paths registered and refused, and its
+  discovery file failing, in the order they happened.
 
 !!! warning "Off by default, and open until you set a password"
 
@@ -44,6 +46,7 @@ The agent's own dashboard shows those. It runs on the agent, on a port of its ow
         refreshIntervalSecs = 2     // How often the page is re-pushed
         pathHistorySize = 20        // Recent scrapes kept per path
         scrapeNowEnabled = true     // A Scrape now button on each path
+        activityLogSize = 500       // Lines kept in the Activity view
         username = "admin"          // The login's username, once a password is set
         password = ""               // Requires a login; better set as DASHBOARD_PASSWORD
       }
@@ -72,6 +75,17 @@ The agent's own dashboard shows those. It runs on the agent, on a port of its ow
     }.start()
     ```
 
+=== "Helm"
+
+    ```bash
+    helm upgrade prometheus-agent ./charts/prometheus-agent --namespace monitoring --reuse-values \
+      --set dashboard.enabled=true
+    kubectl -n monitoring port-forward deploy/prometheus-agent 8095
+    ```
+
+    The chart keeps the port off its Service, so you reach it with `kubectl port-forward`;
+    `dashboard.login.existingSecret` names a Secret holding the login's password.
+
 Then open `http://<agent-host>:8095/dashboard`.
 
 The flags and the environment variables are the proxy's, read by whichever process reads them, as the admin and
@@ -84,12 +98,12 @@ The default view lists every path the agent knows about: those in `agent.pathCon
 [discovery file](configuration/agent.md#dynamic-target-discovery) lists, and any registered at runtime. Each row has a
 light and a tag for where the path stands with the proxy:
 
-| State      | Light | Meaning                                                                                                  |
-|:-----------|:------|:---------------------------------------------------------------------------------------------------------|
-| registered | green | The proxy routes the path's scrapes to this agent                                                        |
-| retrying   | amber | The proxy refused it for a cause that can clear, such as another agent holding it, or couldn't be asked |
-| refused    | red   | The proxy refused it for a cause that can't clear, such as an identity not allowed the path              |
-| pending    | gray  | Not registered yet: the agent isn't connected, or hasn't reached it                                      |
+| State      | Light | Tag     | Meaning                                                                                                  |
+|:-----------|:------|:--------|:---------------------------------------------------------------------------------------------------------|
+| registered | green | none    | The proxy routes the path's scrapes to this agent                                                        |
+| retrying   | red   | amber   | The proxy refused it for a cause that can clear, such as another agent holding it, or couldn't be asked |
+| refused    | red   | red     | The proxy refused it for a cause that can't clear, such as an identity not allowed the path              |
+| pending    | red   | neutral | Not registered yet: the agent isn't connected, or hasn't reached it                                      |
 
 Under its URL, a path the proxy has scraped shows the status of its last scrape, then its recent scrapes as a strip of
 dots, oldest on the left, green for a success and red for a failure, and the share that succeeded. A registered path the
@@ -137,9 +151,34 @@ The connection's state, `connected`, `connecting`, or `failing`, and the endpoin
 - **Settings**: the scrape timeout and retries, chunking and gzip thresholds, HTTP client limits, and whether the agent
   verifies targets' certificates, as the agent resolved them. A token or a TLS key shows only whether it is set.
 
+## The Activity view
+
+What has happened to the agent, newest first: the history the other views can't show, since they show only how
+things stand now. It's where you see that a path was refused just after the agent failed over, or that a connection
+dropped and came back while nobody was watching.
+
+| Event            | Shown as | When                                                                             |
+|:-----------------|:---------|:---------------------------------------------------------------------------------|
+| connected        | plain    | The agent connected to a proxy endpoint                                          |
+| disconnected     | amber    | A connection ended, with why when an error ended it                              |
+| connect failed   | red      | A connect to an endpoint failed; a repeat of the same failure isn't listed again |
+| failed over      | amber    | The agent left its first endpoint for the next                                   |
+| back to primary  | plain    | The agent went back to its first endpoint                                        |
+| registered       | plain    | The proxy accepted a path, configured, discovered, or registered at runtime      |
+| refused          | red      | The proxy refused a path, with its reason                                        |
+| unregistered     | plain    | A path was removed, such as one that left the discovery file                     |
+| discovery failed | red      | The discovery file couldn't be read, so the agent keeps the paths it last read   |
+| entries skipped  | red      | The discovery file listed entries without a path or a URL                        |
+| not filtered     | red      | A path's metric filter let a scrape through unfiltered, with why                 |
+
+Like events in a burst share a line, such as the agent registering its paths as it connects, counted and naming the
+first few paths. The same event again, such as failing over on every retry through a long outage, adds to the line
+it repeats. The view keeps `activityLogSize` lines (500), in memory, so a restart empties it. The search filters by
+event, path, or detail, and **Problems only** keeps the red lines. The view updates as each line is added.
+
 ## The status bar
 
-The bar along the top shows, on either view:
+The bar along the top shows, on every view:
 
 - whether the page is live, as on the proxy's dashboard;
 - the agent's connection state and endpoint;
@@ -147,4 +186,6 @@ The bar along the top shows, on either view:
 - its backlog of scrapes waiting to run.
 
 The tab's title counts the problems, each path refused or retrying and a failing connection, so a dashboard in a
-background tab still says when something is wrong.
+background tab still says when something is wrong. At the bar's end, the **Theme** button sets the dashboard light or
+dark, or **auto**, the default, which follows your system's, as on the proxy's
+[dashboard](web-dashboard.md#the-status-bar); the browser remembers the choice for each dashboard.
