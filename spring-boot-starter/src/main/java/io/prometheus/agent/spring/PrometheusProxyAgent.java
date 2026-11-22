@@ -57,8 +57,12 @@ public class PrometheusProxyAgent implements SmartLifecycle {
     this.context = context;
   }
 
+  /** Starts the agent, unless it's running already, which Spring checks too. */
   @Override
   public void start() {
+    if (agent != null) {
+      return;
+    }
     if (isBlank(properties.getProxy())) {
       withoutAProxy();
       return;
@@ -87,8 +91,9 @@ public class PrometheusProxyAgent implements SmartLifecycle {
     logger.info("Starting the Prometheus agent with {}", config);
     EmbeddedAgentInfo started = config.start(false);
     agent = started;
-    logger.info(
-        "Prometheus agent {} started; it connects to the proxy at {}", started.getAgentName(), properties.getProxy());
+    // No proxy named: a customizer, or the agent's own PROXY_HOSTNAME, can override the property's. The line above
+    // gives the settings, and the agent logs the proxy it connects to.
+    logger.info("Prometheus agent {} started", started.getAgentName());
   }
 
   // A start that threw e: a required agent fails the app with thrown, and any other stays off, logging why

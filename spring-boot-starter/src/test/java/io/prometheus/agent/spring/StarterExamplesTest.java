@@ -22,7 +22,6 @@ import io.prometheus.metrics.model.registry.PrometheusRegistry;
 import java.io.IOException;
 import java.net.ServerSocket;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.core.env.PropertySource;
@@ -40,7 +39,7 @@ class StarterExamplesTest {
 
   private final ApplicationContextRunner runner =
       new ApplicationContextRunner()
-          .withConfiguration(AutoConfigurations.of(PrometheusProxyAgentAutoConfiguration.class))
+          .withConfiguration(PrometheusProxyAgentAutoConfigurationTest.STARTER)
           .withBean(PrometheusRegistry.class, PrometheusRegistry::new);
 
   @Test

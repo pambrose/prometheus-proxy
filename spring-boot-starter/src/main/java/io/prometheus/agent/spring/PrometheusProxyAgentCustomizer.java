@@ -21,7 +21,9 @@ import io.prometheus.agent.EmbeddedAgentConfig;
 /**
  * Changes the agent's settings in code, for what properties can't hold, such as a certificate read from a vault or a
  * second {@link io.prometheus.agent.MetricsSource}. Each customizer bean is called, in its {@code @Order}, after the
- * {@code prometheus-proxy.agent.*} properties are applied, so it can override them, and just before the agent starts.
+ * {@code prometheus-proxy.agent.*} properties are applied, and just before the agent starts. A builder method it calls
+ * replaces what a property set, but not a {@code settings.<key>} property: that's a {@code setting()}, which takes
+ * precedence over the builder's methods whatever their order. To change one, call {@code setting()} with its key.
  *
  * <pre>{@code
  * @Bean
