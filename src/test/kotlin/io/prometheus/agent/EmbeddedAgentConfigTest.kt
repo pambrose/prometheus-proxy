@@ -326,6 +326,22 @@ class EmbeddedAgentConfigTest : StringSpec() {
       listOf("from-the-builder", TOKEN, PASSWORD).forEach { shown shouldNotContain it }
     }
 
+    // Spring Boot lowercases a map key read from an environment variable, as the starter's settings.* gives them: a
+    // secret's key in any case stays out, as the toString an app logs mustn't show a token or a PEM.
+    "toString leaves out a secret whose key is in another case" {
+      val shown =
+        embeddedAgent {
+          setting("agenttoken", TOKEN)
+          setting("tls.privatekeypem", PEM)
+          setting("dashboard.PASSWORD", PASSWORD)
+        }.toString()
+
+      shown shouldContain "agenttoken=(set)"
+      shown shouldContain "privatekeypem=(set)"
+      shown shouldContain "PASSWORD=(set)"
+      listOf(TOKEN, PEM, PASSWORD).forEach { shown shouldNotContain it }
+    }
+
     // As a setting the agent rejects throws ConfigLoadException when it starts, so does a value the builder rejects.
     "a blank path, a port out of range, or a URL with no scheme throws ConfigLoadException" {
       shouldThrow<ConfigLoadException> { embeddedAgent { scrapeSelf(" ", 8080) } }
@@ -343,5 +359,8 @@ class EmbeddedAgentConfigTest : StringSpec() {
 
     // Every character a URL's user info must escape, and some it need not
     private const val PASSWORD = "p@ss:w/rd%#+ ?&é"
+
+    // Shaped like a private key, so a key that isn't masked shows it
+    private const val PEM = "-----BEGIN PRIVATE KEY-----MIIEvQIBADANBg-----END PRIVATE KEY-----"
   }
 }

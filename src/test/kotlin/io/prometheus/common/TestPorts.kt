@@ -270,6 +270,12 @@ object TestPorts {
   const val ZIPKIN_BOTH_HTTP_PORT = 9713
   const val ZIPKIN_UNSAMPLED_HTTP_PORT = 9714
 
+  // The Spring Boot starter's PrometheusProxyAgentIntegrationTest (spring-boot-starter/, in Java, which can't import
+  // this): its proxy's scrape and agent ports, bound while the root project's tests run beside it in `build`. Listed
+  // here so TestPortsTest keeps every root spec off them; the starter's test repeats the numbers.
+  const val STARTER_PROXY_HTTP_PORT = 11400
+  const val STARTER_PROXY_AGENT_PORT = 11401
+
   // First port of the block each standard harness suite registers scrape targets on (startPort + i)
   const val HARNESS_DEFAULT_START_PORT = 9600
   const val IN_PROCESS_NO_ADMIN_START_PORT = 10100

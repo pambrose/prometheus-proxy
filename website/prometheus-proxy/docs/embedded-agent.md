@@ -130,8 +130,9 @@ Azure Container Apps, or another platform, with the proxy on AWS, GCP, Azure, Di
 
 ## In Spring Boot
 
-A Spring Boot app runs the agent from a bean, so it starts and stops with the app. The
-[Spring Boot Demo](spring-boot-demo.md)'s roastery does each of these:
+The [Spring Boot Starter](spring-boot-starter.md) does all of this for a Spring Boot app, from a dependency and a few
+properties, reading the app's metrics in-process. To wire the agent yourself, run it from a bean, so it starts and stops
+with the app, as the [Spring Boot Demo](spring-boot-demo.md)'s roastery does, with each of these:
 
 - **A `SmartLifecycle` bean** in the last phase, the default, starts the agent once the web server is serving, so the
   agent's first scrape finds the app's metrics, and stops it first on shutdown, before the web server drains: the

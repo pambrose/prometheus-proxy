@@ -20,6 +20,29 @@ dependencies {
 </dependencies>
 <!-- --8<-- [end:maven-dependency] -->
 
+<!-- --8<-- [start:starter-maven-dependency] -->
+<!-- pom.xml, under a spring-boot-starter-parent -->
+<dependencies>
+  <dependency>
+    <groupId>com.pambrose</groupId>
+    <artifactId>prometheus-proxy-spring-boot-starter</artifactId>
+    <version>4.6.1</version>
+  </dependency>
+  <dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-actuator</artifactId>
+  </dependency>
+</dependencies>
+<!-- --8<-- [end:starter-maven-dependency] -->
+
+// --8<-- [start:starter-gradle-dependency]
+// build.gradle.kts, with Spring Boot's dependency management (the io.spring.dependency-management plugin)
+dependencies {
+  implementation("com.pambrose:prometheus-proxy-spring-boot-starter:4.6.1")
+  implementation("org.springframework.boot:spring-boot-starter-actuator")
+}
+// --8<-- [end:starter-gradle-dependency]
+
 // --8<-- [start:embedded-agent-config]
 // Minimal config for an embedded agent:
 agent {

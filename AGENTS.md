@@ -61,6 +61,17 @@ and runs its `RoasteryAgentTest`, which starts the agent against a proxy in the 
 change to the builder's Java surface, or a Spring Boot release that breaks the agent at runtime, fails there. Its
 `prometheus-proxy.version` is a release version literal.
 
+The Spring Boot starter, `spring-boot-starter/`, is the build's one subproject (`:spring-boot-starter`), in Java,
+published alongside the agent at its version as `com.pambrose:prometheus-proxy-spring-boot-starter`: auto-configuration
+(`io.prometheus.agent.spring`) that runs an embedded agent as a `SmartLifecycle` bean from the `prometheus-proxy.agent.*`
+properties and serves the app's `PrometheusRegistry` bean in-process (`RegistryMetricsSource`). Its POM names no Spring
+Boot artifact and imports no BOM, so an app's own Spring Boot is the one it runs with: the Spring Boot artifacts are
+`compileOnly`, through the BOM at `spring-boot` in `libs.versions.toml`, and its JUnit 5 tests run the agent at Spring
+Boot's versions, enforced as an app's dependency management enforces them (`./gradlew :spring-boot-starter:test`, part
+of `build`). Kover, detekt, and kotlinter cover only the root project. Its `compileJava` runs in full and isn't cached,
+since an incremental compile drops the configuration metadata's descriptions (`ConfigurationMetadataTest`), and the
+docs site's Spring Boot Starter page shows a YAML file and a customizer from its tests, which `StarterExamplesTest` runs.
+
 ## Architecture
 
 A **Prometheus Proxy** system enabling Prometheus to scrape metrics from endpoints behind firewalls.

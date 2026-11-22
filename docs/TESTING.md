@@ -296,7 +296,8 @@ pins, and no jar on the classpath carries a `logback.xml`, which would replace t
   `scrapeSelf` and `path` percent-encode a username and password into the URL so a password with any character decodes
   back intact, an empty pair means none, and `path` refuses credentials for a URL that has its own, as the agent's
   parser reads it; labels become JSON; `setting()` takes precedence over a method; `toString()` shows what `setting()`
-  sets but not the token, a password, a PEM, or a path's credentials; and a blank path, an out-of-range port, or a URL
+  sets but not the token, a password, a PEM, or a path's credentials, whatever their keys' case, as Spring Boot
+  lowercases a key from an environment variable; and a blank path, an out-of-range port, or a URL
   with no scheme throws `ConfigLoadException`; `source()` adds an in-process path, with or without labels, that
   reaches the agent's options but not the config tree, shows in `toString()` as `in-process`, and fails `start()` when
   another path or the proxy's rules forbid its path
@@ -805,7 +806,7 @@ These support helpers also live here (not test classes themselves):
   instead of only in the container suite
 - **SiteVersionTest** — `make site-version` prints the version the docs site's image tags and Maven coordinate give:
   the Docker examples' tag, a release version, whatever `gradle.properties` holds. It skips `latest` and a full stop
-  after a tag, and fails when the site gives two versions or none. `bin/docker-*.sh` read their version from it, not
+  after a tag, and fails when the site gives two versions or none, the Spring Boot starter's coordinate counted. `bin/docker-*.sh` read their version from it, not
   from `gradle.properties`, whose `-SNAPSHOT` between releases has no image
 - **TestingGuideTest** — every `*Test.kt` under `src/test/kotlin` is named in its package's section of this
   document, and every support file under `src/test` is named somewhere in it
@@ -1045,6 +1046,38 @@ overrides, a small CI-safe default table runs (a baseline row, an agents × endp
 and a consolidated-fan-out row). Setting **any** `SCALE_*` variable collapses the run to a single tuned
 scenario built from those values (with modest fallbacks), letting the inputs be dialed up via
 `make scaling-tests SCALE_...=...` without editing code.
+
+### Spring Boot Starter Tests (`spring-boot-starter/`)
+
+The starter is a Java subproject, so its tests are JUnit 5 with AssertJ, in the Spring Boot idiom, under
+`spring-boot-starter/src/test/java/`. `./gradlew :spring-boot-starter:test` runs them, and so does `build`. They run
+at Spring Boot's versions of the agent's libraries, enforced as an app's dependency management enforces them, so the
+agent runs with what it gets in an app. `TestingGuideTest` reads only the root project's specs, so name new ones here.
+
+- **PrometheusProxyAgentAutoConfigurationTest** — the auto-configuration, through `ApplicationContextRunner`: the agent
+  stays off without a proxy, starts and stops with the context with one, and isn't made with `enabled=false`; each
+  property becomes its `EmbeddedAgentConfig` setting, with the secrets out of `toString`; the default name (the app's,
+  with its build's version) and path (`<app>_metrics`, or `application_metrics`); the registry served, or not with
+  `source=none` or no `PrometheusRegistry` bean; `settings` keys keeping their case from a properties file, and losing
+  it from an environment variable; customizers running after the properties in their order; `required` failing the
+  app without a proxy, on a bad setting, or on a customizer's failure, a checked exception included, and the app
+  running without the agent otherwise, whatever stopped it: a setting the builder or the agent rejects, a certificate
+  it can't read, a `settings` key its config can't hold, or a customizer that throws; and the `prometheusAgent` health
+  indicator, UNKNOWN while off or connecting, turned off by
+  `management.health.prometheusagent.enabled`, and absent without spring-boot-health, which the app then starts
+  without.
+- **PrometheusProxyAgentIntegrationTest** — a `@SpringBootTest` app with Actuator and no web server, its agent pointed
+  at a proxy in the same JVM, on fixed ports that the root project's `TestPorts` lists (`STARTER_PROXY_*`): the proxy serves the app's Micrometer meter and Spring Boot's JVM metrics at
+  `/roastery_metrics`, its service discovery has the path's labels, and the health component is UP with the agent's
+  name and proxy.
+- **RegistryMetricsSourceTest** — a `PrometheusRegistry` written in the text format or OpenMetrics, as the scrape
+  accepts, and only the families it names.
+- **ConfigurationMetadataTest** — the configuration metadata in the jar, which IDEs complete the properties from: every
+  property has a description, and the defaults are the fields' initial values. An incremental compile drops the
+  descriptions, so the build compiles the starter in full.
+- **StarterExamplesTest** — the Spring Boot Starter page's examples: `website/application.yml`, in the test resources,
+  reads the agent's settings from the environment, and `website.AgentCustomizations`, with its stand-ins
+  **SecretStore** and **BatchJobs**, sets the certificate and serves a second registry.
 
 ## Testing Patterns
 

@@ -381,12 +381,16 @@ class EmbeddedAgentConfig private constructor(
 
     private fun invalid(message: String): Nothing = throw ConfigLoadException(message)
 
-    // A setting as toString shows it: a secret or a PEM only as set or not, and a URL with its credentials masked.
+    // A setting as toString shows it: a secret or a PEM only as set or not, and a URL with its credentials masked. A
+    // key is matched in any case, as Spring Boot lowercases one read from an environment variable.
     private fun shown(
       value: Any?,
       key: String = "",
     ): String {
-      val secret = key == "agentToken" || key.endsWith("Pem") || key.contains("password", ignoreCase = true)
+      val secret =
+        key.equals("agentToken", ignoreCase = true) ||
+          key.endsWith("Pem", ignoreCase = true) ||
+          key.contains("password", ignoreCase = true)
       return when {
         value is Map<*, *> -> {
           value.entries

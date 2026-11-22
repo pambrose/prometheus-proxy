@@ -114,12 +114,13 @@ jobs:
           build-mode: manual
 
       # CodeQL reads the code as the compiler sees it, so the compile skips Gradle's caches and daemon and runs the
-      # Kotlin compiler in-process rather than in its own daemon.
+      # Kotlin compiler in-process rather than in its own daemon. compileJava takes in the Spring Boot starter, which is
+      # in Java, and the root project's generated Java.
       - name: Compile
         run: >-
           ./gradlew --no-daemon --no-build-cache --no-configuration-cache
           -Pkotlin.compiler.execution.strategy=in-process
-          clean compileKotlin compileTestKotlin
+          clean compileKotlin compileTestKotlin compileJava compileTestJava
 
       - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
