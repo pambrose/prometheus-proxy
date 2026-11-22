@@ -65,6 +65,23 @@ class PathDiscoveryServiceTest : StringSpec() {
         ]
     }
 
+    // The agent counts each reconcile by outcome, the repeats of a lasting failure included, which the log and the
+    // activity feed leave out.
+    "every reconcile should be reported by whether it succeeded" {
+      val outcomes = mutableListOf<Boolean>()
+      val reads = ArrayDeque([false, false, true])
+      val service =
+        PathDiscoveryService(
+          mockk(relaxed = true),
+          { if (reads.removeFirst()) emptyList() else throw IOException("missing") },
+          30,
+        ) { succeeded -> outcomes += succeeded }
+
+      repeat(3) { service.reconcileOnce() }
+
+      outcomes shouldBe [false, false, true]
+    }
+
     "a read failure before any successful read should reconcile nothing, keeping the live set" {
       val pathManager = mockk<AgentPathManager>(relaxed = true)
       val service = PathDiscoveryService(pathManager, { throw IOException("boom") }, 30)

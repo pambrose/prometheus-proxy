@@ -16,6 +16,7 @@
 
 package io.prometheus.agent
 
+import io.prometheus.common.MetricBuilders.rejectionCauseLabel
 import com.pambrose.common.util.runCatchingCancellable
 import com.pambrose.common.util.simpleClassName
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
@@ -310,6 +311,8 @@ internal class AgentPathManager(
     repeat: Boolean,
     retryIn: Duration?,
   ) {
+    // Every refusal, the retries' repeats too, which the log and the activity feed leave out.
+    agent.metrics { pathRejectionCount.labelValues(agent.launchId, rejectionCauseLabel(e.rejectionCause)).inc() }
     val kind = source.name.lowercase()
     val retrying = retryingIn(retryIn)
     if (e.retryable && repeat) {

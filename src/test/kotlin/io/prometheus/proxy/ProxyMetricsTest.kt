@@ -18,6 +18,7 @@
 
 package io.prometheus.proxy
 
+import io.prometheus.common.registeredCounts
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.inspectors.forAll
 import io.kotest.matchers.booleans.shouldBeFalse
@@ -437,7 +438,7 @@ class ProxyMetricsTest : StringSpec() {
       fun labels(
         name: String,
         label: String,
-      ) = registeredSnapshot<CounterSnapshot>(name).dataPoints.map { it.labels.get(label) }.toSet()
+      ) = registeredCounts(name, label).keys
 
       labels("proxy_chunk_validation_failures", "stage") shouldBe setOf("chunk", "summary")
       labels("proxy_agent_disconnects", "reason") shouldBe setOf("eviction", "termination", "stream_terminated")

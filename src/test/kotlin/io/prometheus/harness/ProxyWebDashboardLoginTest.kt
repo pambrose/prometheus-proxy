@@ -18,6 +18,7 @@
 
 package io.prometheus.harness
 
+import io.prometheus.common.registeredCounts
 import ch.qos.logback.classic.Level
 import com.pambrose.common.util.runCatchingCancellable
 import io.kotest.core.spec.style.StringSpec
@@ -366,9 +367,7 @@ class ProxyWebDashboardLoginTest : StringSpec() {
         repeat(DashboardServer.MAX_BAD_LOGINS_PER_ADDRESS - 1) { logIn(password = "wrong") }
         logIn().status shouldBe HttpStatusCode.TooManyRequests
 
-        val logins =
-          registeredSnapshot<CounterSnapshot>("proxy_dashboard_logins").dataPoints
-            .associate { it.labels.get("outcome") to it.value }
+        val logins = registeredCounts("proxy_dashboard_logins", "outcome")
         logins shouldBe
           mapOf("success" to 1.0, "failure" to DashboardServer.MAX_BAD_LOGINS_PER_ADDRESS.toDouble(), "blocked" to 1.0)
       }

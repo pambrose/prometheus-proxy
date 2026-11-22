@@ -16,6 +16,7 @@
 
 package io.prometheus
 
+import io.prometheus.common.MetricBuilders.setToCurrentTime
 import com.codahale.metrics.health.HealthCheck
 import com.google.common.util.concurrent.RateLimiter
 import com.pambrose.common.concurrent.await
@@ -343,7 +344,16 @@ class Agent(
       FileDiscoverySource(discovery.file.path, activityLog),
       discovery.reconcileIntervalSecs,
       activityLog,
-    )
+    ) { succeeded ->
+      metrics {
+        discoveryReconcileCount.labelValues(
+          launchId,
+          if (succeeded) AgentMetrics.SUCCESS else AgentMetrics.FAILURE,
+        ).inc()
+        if (succeeded)
+          discoveryLastSuccess.labelValues(launchId).setToCurrentTime()
+      }
+    }
   }
 
   override fun run() {
@@ -387,8 +397,10 @@ class Agent(
     scrapeRequestBacklogSize.store(0)
     lastMsgSentMark = clock.markNow()
 
-    if (!grpcService.connectAgent())
+    if (!grpcService.connectAgent()) {
+      metrics { connectCount.labelValues(launchId, AgentMetrics.FAILURE).inc() }
       return
+    }
 
     // Connected, so however the connection ends, the activity feed hears of it, and why, when an exception ended it.
     var cause: Throwable? = null
@@ -412,21 +424,30 @@ class Agent(
   // Registers the agent and its paths on the connection connectAgent made, then serves it until it ends, and returns
   // the failure that ended it, the first of its tasks to fail, or null for one that ended without a failure.
   private suspend fun registerAndServe(endpointFailover: EndpointFailover): Throwable? {
-    grpcService.registerAgent(initialConnectionLatch)
-    pathManager.registerPaths()
-    endpointFailover.registrationSucceeded()
-    // Signal that any config-driven paths have been registered. CountDownLatch(1) ignores
-    // subsequent countDowns, so only the first successful connect cycle matters.
-    initialPathsRegisteredLatch.countDown()
-
+    // The connect attempt counts once the proxy has answered the registration: a proxy that took the connection and
+    // then refused the agent counted as a success.
+    runCatchingCancellable { grpcService.registerAgent(initialConnectionLatch) }
+      .also { result ->
+        val outcome = AgentMetrics.connectOutcome(result.exceptionOrNull())
+        metrics { connectCount.labelValues(launchId, outcome).inc() }
+      }.getOrThrow()
     // Close connectionContext when disconnected from the server or the service is shutdown and isRunning is false
     val connectionContext =
       AgentConnectionContext(agentConfigVals.internal.scrapeRequestBacklogUnhealthySize * BACKLOG_CAPACITY_MULTIPLIER)
-    liveConnection.store(connectionContext)
     try {
+      pathManager.registerPaths()
+      endpointFailover.registrationSucceeded()
+      // Signal that any config-driven paths have been registered. CountDownLatch(1) ignores
+      // subsequent countDowns, so only the first successful connect cycle matters.
+      initialPathsRegisteredLatch.countDown()
+
+      liveConnection.store(connectionContext)
       coroutineScope { launchConnectionTasks(connectionContext) }
     } finally {
       liveConnection.store(null)
+      // Only a connection that registered ends as a disconnect, as only one that did counted as a connect.
+      if (isRunning)
+        metrics { disconnectCount.labelValues(launchId).inc() }
     }
     return connectionContext.endedBy
   }
@@ -517,7 +538,7 @@ class Agent(
     // A false return means the result was dropped because the connection closed
     // mid-scrape; surface it as a metric so the loss is observable, not silent.
     if (!connectionContext.sendScrapeResults(scrapeResponse))
-      updateScrapeResultCounter(scrapeResponse, "dropped")
+      updateScrapeResultCounter(scrapeResponse, AgentMetrics.RESULT_DROPPED)
   }
 
   // Blocks on the reconnect rate limiter to pace reconnect attempts, then logs the wait.
@@ -732,8 +753,11 @@ class Agent(
     type: String,
   ) {
     if (!results.dashboardScrape)
-      metrics { scrapeResultCount.labelValues(launchId, type).inc() }
+      countScrapeResult(type)
   }
+
+  /** Counts a result of Prometheus's scrape, sent or dropped, under [type]; see updateScrapeResultCounter. */
+  internal fun countScrapeResult(type: String) = metrics { scrapeResultCount.labelValues(launchId, type).inc() }
 
   /** Counts a scrape the proxy's dashboard asked for, which the `agent_scrape_*` metrics leave out. */
   internal fun updateDashboardScrapeCounter() = metrics { dashboardScrapeCount.labelValues(launchId).inc() }

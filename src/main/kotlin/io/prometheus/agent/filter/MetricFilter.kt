@@ -34,6 +34,15 @@ internal data class FilterResult(
   val linesDropped: Int,
 )
 
+/** Why a filter let a scrape through unfiltered; its metricLabel is agent_filter_fail_open_total's `reason`. */
+internal enum class FailOpenReason {
+  /** The scrape's content type wasn't text. */
+  NON_TEXT,
+
+  /** The scrape's body wasn't valid UTF-8. */
+  INVALID_UTF8,
+}
+
 /**
  * Outcome of filtering one scraped payload's raw bytes.
  *
@@ -45,6 +54,7 @@ internal data class FilterResult(
  * @param linesDropped how many lines the filter removed
  * @param bytesSaved how many bytes filtering removed from the raw payload
  */
+
 internal class FilterOutcome(
   val bytes: ByteArray,
   val text: String,
@@ -118,13 +128,15 @@ internal class MetricFilter private constructor(
    * Fails open on a non-text [contentType] or a body that is not valid UTF-8, warning once per
    * condition. A `null` return means "use the raw bytes" and is distinct from a filter that ran and
    * happened to drop nothing, so a fail-open scrape never records filter metrics. What it drops is added to
-   * [linesDropped] and [bytesSaved]; [previewBytes] filters alike and adds nothing.
+   * [linesDropped] and [bytesSaved]; [previewBytes] filters alike and adds nothing. [onFailOpen] is told why each
+   * fail-open happened, every time, for agent_filter_fail_open_total; the warning is logged only the first.
    */
   fun filterBytes(
     bytes: ByteArray,
     contentType: String,
+    onFailOpen: (FailOpenReason) -> Unit = {},
   ): FilterOutcome? =
-    previewBytes(bytes, contentType)?.also {
+    previewBytes(bytes, contentType, onFailOpen)?.also {
       droppedLines += it.linesDropped.toLong()
       savedBytes += it.bytesSaved.toLong()
     }
@@ -136,8 +148,10 @@ internal class MetricFilter private constructor(
   fun previewBytes(
     bytes: ByteArray,
     contentType: String,
+    onFailOpen: (FailOpenReason) -> Unit = {},
   ): FilterOutcome? {
     if (!isFilterableContentType(contentType)) {
+      onFailOpen(FailOpenReason.NON_TEXT)
       if (contentTypeWarned.compareAndSet(expectedValue = false, newValue = true)) {
         logger.warn { "Skipping metric filter for /$path: content type \"$contentType\" is not text" }
         onFailedOpen("a scrape's content type, $contentType, was not text")
@@ -157,6 +171,7 @@ internal class MetricFilter private constructor(
         null
       }
     if (decoded == null) {
+      onFailOpen(FailOpenReason.INVALID_UTF8)
       if (invalidUtf8Warned.compareAndSet(expectedValue = false, newValue = true)) {
         logger.warn { "Skipping metric filter for /$path: response body is not valid UTF-8" }
         onFailedOpen(INVALID_UTF8)
