@@ -16,6 +16,7 @@
 
 package io.prometheus
 
+import io.prometheus.common.MetricBuilders.metricLabel
 import com.codahale.metrics.health.HealthCheck
 import com.google.common.collect.EvictingQueue
 import com.google.common.util.concurrent.Service

@@ -2249,19 +2249,6 @@ class ProxyServiceImplTest : StringSpec() {
     // the chunked transfer of a scrape that was sent to a different agent -- defeating per-agent path
     // authorization. Results are now accepted only from the agent the scrape was sent to.
 
-    suspend fun <T> onConnection(
-      connectionAgentId: String,
-      block: suspend () -> T,
-    ): T {
-      val context = Context.current().withValue(ProxyServerInterceptor.CONNECTION_AGENT_ID_KEY, connectionAgentId)
-      val previous = context.attach()
-      return try {
-        block()
-      } finally {
-        context.detach(previous)
-      }
-    }
-
     // The scrape the HTTP handler tracks (or is about to track) for another agent; its scrapeId is the one an intruder
     // aims at.
     fun victimScrape(victimAgent: AgentContext = AgentContext("victim-host")) =
@@ -2544,19 +2531,6 @@ class ProxyServiceImplTest : StringSpec() {
     // Through the chunked RPC the intruder couldn't fill the victim's scrape, since its chunks and summary were checked
     // once the scrape was tracked, but the transfer it opened was swept at the end of its stream, failing the victim's
     // scrape as abandoned.
-    fun chunkedHeaderFrom(
-      agentId: String,
-      scrapeId: Long,
-    ) = chunkedScrapeResponse {
-      header = headerData {
-        headerValidResponse = true
-        headerScrapeId = scrapeId
-        headerAgentId = agentId
-        headerStatusCode = 200
-        headerContentType = "text/plain"
-      }
-    }
-
     "writeChunkedResponsesToProxy should not let a non-owner open a transfer for a scrape tracked before its header" {
       val victim = victimScrape()
       val scrapeRequestManager = spyk(ScrapeRequestManager())
@@ -2752,21 +2726,6 @@ class ProxyServiceImplTest : StringSpec() {
     // stream open: an agent that answered a scrape on writeResponsesToProxy, and then sent that scrape's chunks but no
     // summary, kept up to maxZippedContentSizeMBytes, plus a header of up to 4 MiB, per scrape. Each check below runs
     // while the stream is still open, since the end-of-stream sweep removes whatever is left.
-
-    fun chunkFor(
-      scrapeId: Long,
-      data: ByteArray,
-      count: Int = 1,
-      checksum: CRC32 = CRC32().apply { update(data) },
-    ) = chunkedScrapeResponse {
-      chunk = chunkData {
-        chunkScrapeId = scrapeId
-        chunkCount = count
-        chunkByteCount = data.size
-        chunkChecksum = checksum.value
-        chunkBytes = ByteString.copyFrom(data)
-      }
-    }
 
     "writeChunkedResponsesToProxy should drop a transfer whose scrape was answered on the other stream" {
       val owner = AgentContext("owner-host")
@@ -3404,37 +3363,6 @@ class ProxyServiceImplTest : StringSpec() {
 
     // How long an agent below has been idle when the next message arrives.
     val idle = 40.seconds
-
-    fun resultFrom(
-      sender: String,
-      id: Long,
-    ) = scrapeResponse {
-      agentId = sender
-      scrapeId = id
-      validResponse = true
-      statusCode = 200
-      contentAsText = "metric 1"
-    }
-
-    // A whole chunked transfer for [id] from [sender]: its header, one chunk, and its summary.
-    fun transferFrom(
-      sender: String,
-      id: Long,
-    ): List<ChunkedScrapeResponse> {
-      val data = "metric 1".toByteArray()
-      return listOf(
-        chunkedHeaderFrom(sender, id),
-        chunkFor(id, data),
-        chunkedScrapeResponse {
-          summary = summaryData {
-            summaryScrapeId = id
-            summaryChunkCount = 1
-            summaryByteCount = data.size
-            summaryChecksum = CRC32().apply { update(data) }.value
-          }
-        },
-      )
-    }
 
     // An agent context in [contextManager], as a connected agent's is, whose times are read on [clock].
     fun registeredAgent(

@@ -172,10 +172,5 @@ class DashboardServerTest : StringSpec() {
       allowed("", listOf("dash.internal")).shouldBeFalse()
       allowed("not a host:port:junk", listOf("dash.internal")).shouldBeFalse()
     }
-
-    // The docs, the Grafana dashboards, and the alerts name these values of <role>_dashboard_logins_total's outcome.
-    "each login outcome should give the logins counter its label" {
-      DashboardLoginOutcome.entries.map { it.label } shouldBe listOf("success", "failure", "blocked")
-    }
   }
 }

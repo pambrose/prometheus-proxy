@@ -24,7 +24,6 @@ import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldNotContain
-import io.kotest.matchers.shouldBe
 import io.prometheus.metrics.core.metrics.Counter
 import io.prometheus.metrics.core.metrics.Gauge
 import io.prometheus.metrics.model.registry.PrometheusRegistry
@@ -55,25 +54,26 @@ class SharedCollectorsTest : StringSpec() {
 
     // The last release clears the collectors, so series made to start at zero when they were built were gone when the
     // next instance registered them again.
-    "each registration should run onRegister, so the series it makes are back after the last release cleared them" {
-      val counter = Counter.builder().name("shared_test_zeroed").labelNames("reason").build()
-      val sentinel = Gauge.builder().name("shared_test_zeroed_sentinel").build()
-      var registrations = 0
-      val shared =
-        SharedCollectors<String>("shared_test_zeroed_sentinel", listOf(counter, sentinel)) {
-          registrations += 1
-          counter.labelValues("known")
+    "each registration should create the series a counter starts at zero, which the last release cleared" {
+      val counter =
+        MetricBuilders.counter(startingAtZero = listOf("known")) {
+          name("shared_test_zeroed")
+          labelNames("reason")
         }
+      val sentinel = Gauge.builder().name("shared_test_zeroed_sentinel").build()
+      val shared = SharedCollectors<String>("shared_test_zeroed_sentinel", listOf(counter, sentinel))
+
+      fun series() = counter.collect().dataPoints.map { it.labels.get("reason") to it.value }
 
       shared.acquire("a", "first")
-      shared.acquire("b", "second")
+      series() shouldContainExactly listOf("known" to 0.0)
+      counter.labelValues("known").inc()
       shared.release("a")
-      shared.release("b")
-      shared.acquire("c", "third")
+      series().shouldBeEmpty()
 
-      registrations shouldBe 2
-      counter.collect().dataPoints.map { it.labels.get("reason") } shouldContainExactly listOf("known")
-      shared.release("c")
+      shared.acquire("b", "second")
+      series() shouldContainExactly listOf("known" to 0.0)
+      shared.release("b")
     }
 
     "an acquire after the registry was cleared should register the collectors again" {

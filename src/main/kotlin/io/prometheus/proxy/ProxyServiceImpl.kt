@@ -23,6 +23,7 @@ import io.grpc.Status
 import io.grpc.StatusException
 import io.prometheus.Proxy
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
+import io.prometheus.common.MetricBuilders.metricLabel
 import io.prometheus.common.ScrapeResults.Companion.toScrapeResults
 import io.prometheus.common.AgentValues.truncate
 import io.prometheus.grpc.AgentInfo
@@ -326,7 +327,7 @@ internal class ProxyServiceImpl(
       if (rejection != null) {
         reason = rejection.reason
         rejectionCause = rejection.cause
-        proxy.metrics { pathRejectionCount.labelValues(ProxyMetrics.pathRejectionLabel(rejection.cause)).inc() }
+        proxy.metrics { pathRejectionCount.labelValues(rejection.cause.metricLabel).inc() }
       }
       pathCount = proxy.pathManager.pathMapSize
     }
@@ -568,7 +569,7 @@ internal class ProxyServiceImpl(
         sender.markActive(response.agentId)
         try {
           if (!proxy.scrapeRequestManager.assignScrapeResults(response.toScrapeResults(), isOwner))
-            countLateResult()
+            proxy.metrics { lateScrapeResultCount.inc() }
         } catch (e: CancellationException) {
           throw e
         } catch (e: Exception) {
@@ -588,10 +589,7 @@ internal class ProxyServiceImpl(
     return EMPTY_INSTANCE
   }
 
-  private fun countLateResult() = proxy.metrics { lateScrapeResultCount.inc() }
-
-  // A chunked transfer that ended unfinished, its scrape gone before its result was assigned. Each transfer has one
-  // remover (see Proxy.releaseRemovedAgent), and each counts it, so it's counted once.
+  // A chunked transfer its scrape ended before; see Proxy.releaseRemovedAgent for why each counts once.
   private fun countAbandonedTransfer() = proxy.metrics { chunkedTransfersAbandoned.inc() }
 
   // Logs why a response stream failed, unless the proxy is stopping or the stream was just cancelled. A starting proxy
@@ -676,7 +674,7 @@ internal class ProxyServiceImpl(
       val wrapper = proxy.scrapeRequestManager.getScrapeRequest(scrapeId)
       if (wrapper == null) {
         logger.debug { "Received chunked header for unknown scrapeId: $scrapeId" }
-        countLateResult()
+        proxy.metrics { lateScrapeResultCount.inc() }
         return
       }
       if (!isOwner(wrapper))

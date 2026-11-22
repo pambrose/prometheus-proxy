@@ -115,8 +115,8 @@ internal class DashboardSettings(
 )
 
 /**
- * How a dashboard login went, which the server tells its owner of (`onLogin`) and the owner counts in its
- * `<role>_dashboard_logins_total`.
+ * How a dashboard login went, which the server tells its owner of (`onLogin`), such as for the proxy to count in
+ * `proxy_dashboard_logins_total`.
  */
 internal enum class DashboardLoginOutcome {
   /**
@@ -130,10 +130,6 @@ internal enum class DashboardLoginOutcome {
 
   /** A login refused unchecked, its address over the limit on wrong ones. */
   BLOCKED,
-  ;
-
-  /** The outcome as the metric's `outcome` label gives it. */
-  val label: String get() = name.lowercase()
 }
 
 /**

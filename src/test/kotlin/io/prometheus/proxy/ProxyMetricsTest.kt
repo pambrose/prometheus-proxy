@@ -31,6 +31,8 @@ import io.kotest.matchers.shouldBe
 import io.mockk.every
 import io.prometheus.BuildConfig
 import io.prometheus.common.mockProxyForMetrics
+import io.prometheus.common.registeredMetricNames
+import io.prometheus.common.registeredSnapshot
 import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.metrics.model.snapshots.CounterSnapshot
 import io.prometheus.metrics.model.snapshots.GaugeSnapshot
@@ -49,15 +51,6 @@ class ProxyMetricsTest : StringSpec() {
       .toSet()
 
   private val openMetrics = mutableListOf<ProxyMetrics>()
-
-  // The names of the metric families registered in the default registry.
-  private fun registeredNames(): List<String> = PrometheusRegistry.defaultRegistry.scrape().map { it.metadata.name }
-
-  private fun buildInfo(): GaugeSnapshot =
-    PrometheusRegistry.defaultRegistry.scrape().filterIsInstance<GaugeSnapshot>().single {
-      it.metadata.name ==
-      "proxy_build_info"
-    }
 
   private fun opened(metrics: ProxyMetrics): ProxyMetrics = metrics.also { openMetrics += it }
 
@@ -385,7 +378,7 @@ class ProxyMetricsTest : StringSpec() {
     "the counters, histogram, and gauges added for agents, rejections, and the dashboard should be registered" {
       opened(ProxyMetrics(mockProxyForMetrics()))
 
-      registeredNames() shouldContainAll
+      registeredMetricNames() shouldContainAll
         listOf(
           "proxy_agent_disconnects",
           "proxy_agent_auth_failures",
@@ -407,10 +400,16 @@ class ProxyMetricsTest : StringSpec() {
       val leavingMetrics = ProxyMetrics(leaving)
       opened(ProxyMetrics(staying))
 
-      fun launchIds() = buildInfo().dataPoints.map { it.labels.get("launch_id") }.toSet()
+      fun launchIds() =
+        registeredSnapshot<GaugeSnapshot>("proxy_build_info").dataPoints.map {
+        it.labels.get("launch_id")
+      }.toSet()
 
       launchIds() shouldBe setOf("leaving-launch", "staying-launch")
-      buildInfo().dataPoints.forAll { it.labels.get("version") shouldBe BuildConfig.APP_VERSION }
+      registeredSnapshot<GaugeSnapshot>("proxy_build_info").dataPoints.forAll {
+        it.labels.get("version") shouldBe
+        BuildConfig.APP_VERSION
+      }
 
       leavingMetrics.close()
       launchIds() shouldBe setOf("staying-launch")
@@ -419,7 +418,7 @@ class ProxyMetricsTest : StringSpec() {
     "the proxy metrics, build info included, should be unregistered when the last proxy closes" {
       ProxyMetrics(mockProxyForMetrics()).close()
 
-      registeredNames() shouldNotContain "proxy_build_info"
+      registeredMetricNames() shouldNotContain "proxy_build_info"
     }
 
     "proxy_dashboard_sessions should report the open dashboard pages" {
@@ -427,11 +426,7 @@ class ProxyMetricsTest : StringSpec() {
       every { proxy.dashboardSessionsOpen } returns 3
       opened(ProxyMetrics(proxy))
 
-      val sessions =
-        PrometheusRegistry.defaultRegistry.scrape()
-          .filterIsInstance<GaugeSnapshot>()
-          .single { it.metadata.name == "proxy_dashboard_sessions" }
-      sessions.dataPoints.single().value shouldBe 3.0
+      registeredSnapshot<GaugeSnapshot>("proxy_dashboard_sessions").dataPoints.single().value shouldBe 3.0
     }
 
     // A series created by its first increment starts at 1, so increase() and rate() saw nothing of a single rejection
@@ -442,12 +437,7 @@ class ProxyMetricsTest : StringSpec() {
       fun labels(
         name: String,
         label: String,
-      ) = PrometheusRegistry.defaultRegistry.scrape()
-        .filterIsInstance<CounterSnapshot>()
-        .single { it.metadata.name == name }
-        .dataPoints
-        .map { it.labels.get(label) }
-        .toSet()
+      ) = registeredSnapshot<CounterSnapshot>(name).dataPoints.map { it.labels.get(label) }.toSet()
 
       labels("proxy_chunk_validation_failures", "stage") shouldBe setOf("chunk", "summary")
       labels("proxy_agent_disconnects", "reason") shouldBe setOf("eviction", "termination", "stream_terminated")

@@ -18,6 +18,8 @@
 
 package io.prometheus.common
 
+import io.prometheus.metrics.model.snapshots.MetricSnapshot
+import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.mockk.every
 import io.mockk.mockk
 import io.prometheus.Agent
@@ -72,37 +74,20 @@ internal fun mockAgentForMetrics(): Agent {
  */
 internal class CountingProxyMetrics {
   val metrics: ProxyMetrics = mockk(relaxed = true)
-  val scrapeRequests = counter("scrape_requests", "type")
-  val connects = counter("connects")
-  val heartbeats = counter("heartbeats")
-  val evictions = counter("evictions")
-  val abandonedTransfers = counter("abandoned_transfers")
-  val chunkValidationFailures = counter("chunk_validation_failures", "stage")
-  val agentDisconnects = counter("agent_disconnects", "reason")
-  val authFailures = counter("auth_failures", "reason")
-  val connectRefusals = counter("connect_refusals", "reason")
-  val pathRejections = counter("path_rejections", "cause")
-  val bindingMismatches = counter("binding_mismatches", "rpc")
-  val lateResults = counter("late_results")
-  val dashboardLogins = counter("dashboard_logins", "outcome")
-  val queueWait: Histogram = Histogram.builder().name("queue_wait").build()
-
-  init {
-    every { metrics.scrapeRequestCount } returns scrapeRequests
-    every { metrics.connectCount } returns connects
-    every { metrics.heartbeatCount } returns heartbeats
-    every { metrics.agentEvictionCount } returns evictions
-    every { metrics.chunkedTransfersAbandoned } returns abandonedTransfers
-    every { metrics.chunkValidationFailures } returns chunkValidationFailures
-    every { metrics.agentDisconnectCount } returns agentDisconnects
-    every { metrics.agentAuthFailureCount } returns authFailures
-    every { metrics.agentConnectRefusalCount } returns connectRefusals
-    every { metrics.pathRejectionCount } returns pathRejections
-    every { metrics.bindingMismatchCount } returns bindingMismatches
-    every { metrics.lateScrapeResultCount } returns lateResults
-    every { metrics.dashboardLoginCount } returns dashboardLogins
-    every { metrics.scrapeQueueWait } returns queueWait
-  }
+  val scrapeRequests = stub({ scrapeRequestCount }, counter("scrape_requests", "type"))
+  val connects = stub({ connectCount }, counter("connects"))
+  val heartbeats = stub({ heartbeatCount }, counter("heartbeats"))
+  val evictions = stub({ agentEvictionCount }, counter("evictions"))
+  val abandonedTransfers = stub({ chunkedTransfersAbandoned }, counter("abandoned_transfers"))
+  val chunkValidationFailures = stub({ chunkValidationFailures }, counter("chunk_validation_failures", "stage"))
+  val agentDisconnects = stub({ agentDisconnectCount }, counter("agent_disconnects", "reason"))
+  val authFailures = stub({ agentAuthFailureCount }, counter("auth_failures", "reason"))
+  val connectRefusals = stub({ agentConnectRefusalCount }, counter("connect_refusals", "reason"))
+  val pathRejections = stub({ pathRejectionCount }, counter("path_rejections", "cause"))
+  val bindingMismatches = stub({ bindingMismatchCount }, counter("binding_mismatches", "rpc"))
+  val lateResults = stub({ lateScrapeResultCount }, counter("late_results"))
+  val dashboardLogins = stub({ dashboardLoginCount }, counter("dashboard_logins", "outcome"))
+  val queueWait: Histogram = stub({ scrapeQueueWait }, Histogram.builder().name("queue_wait").build())
 
   /** How many observations the queue-wait histogram holds. */
   val queueWaitCount: Long get() = queueWait.collect().dataPoints.sumOf { it.count }
@@ -113,8 +98,24 @@ internal class CountingProxyMetrics {
       every { it.metrics(any<ProxyMetrics.() -> Unit>()) } answers { firstArg<ProxyMetrics.() -> Unit>()(metrics) }
     }
 
+  // [collector], which [metrics] answers for the member [member] reads.
+  private fun <T : Any> stub(
+    member: ProxyMetrics.() -> T,
+    collector: T,
+  ): T = collector.also { every { metrics.member() } returns it }
+
   private fun counter(
     name: String,
     vararg labelNames: String,
   ): Counter = Counter.builder().name(name).labelNames(*labelNames).build()
 }
+
+/** The names of the metric families registered in the default registry. */
+internal fun registeredMetricNames(): List<String> =
+  PrometheusRegistry.defaultRegistry.scrape().map {
+  it.metadata.name
+}
+
+/** The default registry's snapshot of the [T] family named [name], which must be registered. */
+internal inline fun <reified T : MetricSnapshot> registeredSnapshot(name: String): T =
+  PrometheusRegistry.defaultRegistry.scrape().filterIsInstance<T>().single { it.metadata.name == name }

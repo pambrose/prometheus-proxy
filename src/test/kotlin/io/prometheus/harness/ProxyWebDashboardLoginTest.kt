@@ -54,6 +54,7 @@ import io.ktor.websocket.readText
 import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.common.TestPorts
 import io.prometheus.common.captureLogs
+import io.prometheus.common.registeredSnapshot
 import io.prometheus.common.dashboard.DashboardPage
 import io.prometheus.common.dashboard.DashboardServer
 import io.prometheus.common.dashboard.DashboardServer.Companion.ASSET_DIR
@@ -366,10 +367,7 @@ class ProxyWebDashboardLoginTest : StringSpec() {
         logIn().status shouldBe HttpStatusCode.TooManyRequests
 
         val logins =
-          PrometheusRegistry.defaultRegistry.scrape()
-            .filterIsInstance<CounterSnapshot>()
-            .single { it.metadata.name == "proxy_dashboard_logins" }
-            .dataPoints
+          registeredSnapshot<CounterSnapshot>("proxy_dashboard_logins").dataPoints
             .associate { it.labels.get("outcome") to it.value }
         logins shouldBe
           mapOf("success" to 1.0, "failure" to DashboardServer.MAX_BAD_LOGINS_PER_ADDRESS.toDouble(), "blocked" to 1.0)

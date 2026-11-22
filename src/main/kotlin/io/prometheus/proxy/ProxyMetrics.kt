@@ -26,10 +26,12 @@ import io.prometheus.common.MetricBuilders.gauge
 import io.prometheus.common.MetricBuilders.histogram
 import io.prometheus.common.MetricBuilders.sampledGauge
 import io.prometheus.common.MetricBuilders.setToCurrentTime
-import io.prometheus.common.MetricBuilders.startingAtZero
+import io.prometheus.common.MetricBuilders.metricLabel
 import io.prometheus.common.SharedCollectors
 import io.prometheus.common.dashboard.DashboardLoginOutcome
 import io.prometheus.grpc.PathRejectionCause
+import io.prometheus.grpc.PathRejectionCause.REJECTION_CAUSE_UNSPECIFIED
+import io.prometheus.grpc.PathRejectionCause.UNRECOGNIZED
 import io.prometheus.grpc.ProxyServiceGrpc
 import io.prometheus.metrics.core.metrics.GaugeWithCallback
 import io.prometheus.metrics.core.metrics.Histogram
@@ -142,12 +144,6 @@ internal class ProxyMetrics(
     const val REFUSAL_IDENTITY_LIMIT = "identity_limit"
     const val REFUSAL_TRANSPORT_FILTER_MISMATCH = "transport_filter_mismatch"
 
-    // The causes a rejected path never carries: an accepted path's, and the one protobuf gives an unknown value.
-    private val NO_REJECTION = setOf(PathRejectionCause.REJECTION_CAUSE_UNSPECIFIED, PathRejectionCause.UNRECOGNIZED)
-
-    /** [cause] as `proxy_path_rejections_total`'s `cause` label gives it, such as `not_authorized`. */
-    fun pathRejectionLabel(cause: PathRejectionCause): String = cause.name.lowercase()
-
     private val SCRAPE_REQUEST_COUNT =
       counter {
         name("proxy_scrape_requests_total")
@@ -190,7 +186,7 @@ internal class ProxyMetrics(
       }
 
     private val CHUNK_VALIDATION_FAILURES =
-      counter {
+      counter(startingAtZero = listOf(STAGE_CHUNK, STAGE_SUMMARY)) {
         name("proxy_chunk_validation_failures_total")
         help("Proxy chunk validation failures")
         labelNames("stage")
@@ -208,32 +204,34 @@ internal class ProxyMetrics(
         help("Proxy agent path displacement events")
       }
 
-    // Why the proxy removed an agent's context (RemovalReason.metricLabel). Counted only for an agent that had
-    // announced itself, as the activity feed shows it, so a port probe that never authenticated isn't an agent leaving.
+    // By RemovalReason; see Proxy.releaseRemovedAgent for which removals count.
     private val AGENT_DISCONNECT_COUNT =
-      counter {
+      counter(startingAtZero = RemovalReason.entries.map { it.metricLabel }) {
         name("proxy_agent_disconnects_total")
         help("Proxy agent disconnects, by why the proxy removed the agent")
         labelNames("reason")
       }
 
     private val AGENT_AUTH_FAILURE_COUNT =
-      counter {
+      counter(startingAtZero = listOf(AUTH_MISSING_TOKEN, AUTH_UNKNOWN_TOKEN)) {
         name("proxy_agent_auth_failures_total")
         help("Proxy agent calls refused for a missing or unknown agent token")
         labelNames("reason")
       }
 
     private val AGENT_CONNECT_REFUSAL_COUNT =
-      counter {
+      counter(startingAtZero = listOf(REFUSAL_IDENTITY_LIMIT, REFUSAL_TRANSPORT_FILTER_MISMATCH)) {
         name("proxy_agent_connect_refusals_total")
         help("Proxy agent connects refused")
         labelNames("reason")
       }
 
+    // The causes a rejected path can carry: not an accepted path's, nor the one protobuf gives an unknown value.
+    private val REJECTED_CAUSES = PathRejectionCause.entries - setOf(REJECTION_CAUSE_UNSPECIFIED, UNRECOGNIZED)
+
     // Every rejection, by its PathRejectionCause, not only the first for a path, which the activity feed notes.
     private val PATH_REJECTION_COUNT =
-      counter {
+      counter(startingAtZero = REJECTED_CAUSES.map { it.metricLabel }) {
         name("proxy_path_rejections_total")
         help("Proxy path registrations rejected, by cause")
         labelNames("cause")
@@ -242,7 +240,7 @@ internal class ProxyMetrics(
     // An agent naming an agentId, or answering a scrape, that isn't its connection's, or calling as another identity
     // than the one its agent connected as. A stock agent never does; the rpc label is one of the service's methods.
     private val BINDING_MISMATCH_COUNT =
-      counter {
+      counter(startingAtZero = ProxyServiceGrpc.getServiceDescriptor().methods.mapNotNull { it.bareMethodName }) {
         name("proxy_binding_mismatches_total")
         help("Proxy agent calls refused for naming another agent or identity than their connection's")
         labelNames("rpc")
@@ -265,10 +263,9 @@ internal class ProxyMetrics(
         classicUpperBounds(*SCRAPE_LATENCY_BUCKETS)
       }
 
-    // A login-page sign-in, a wrong login (from the page or a script's Basic Auth), or one refused for the limit on
-    // wrong ones. A script's right Basic Auth logs in on every request, so it isn't counted as a sign-in.
+    // By DashboardLoginOutcome, which says what counts as each.
     private val DASHBOARD_LOGIN_COUNT =
-      counter {
+      counter(startingAtZero = DashboardLoginOutcome.entries.map { it.metricLabel }) {
         name("proxy_dashboard_logins_total")
         help("Proxy dashboard logins, by outcome")
         labelNames("outcome")
@@ -317,21 +314,6 @@ internal class ProxyMetrics(
       size: (Proxy) -> Number,
     ): GaugeWithCallback = sampledGauge(name, help) { report { SHARED.instances().sumOf { size(it).toDouble() } } }
 
-    // The causes a rejected path can carry, and the service's methods, the values of two labels below.
-    private val REJECTION_CAUSES = PathRejectionCause.entries.filterNot { it in NO_REJECTION }.map(::pathRejectionLabel)
-    private val RPC_NAMES = ProxyServiceGrpc.getServiceDescriptor().methods.mapNotNull { it.bareMethodName }
-
-    // The labeled counters' known series, at zero, each time the collectors are registered: release() clears them.
-    private fun startCountersAtZero() {
-      CHUNK_VALIDATION_FAILURES.startingAtZero(listOf(STAGE_CHUNK, STAGE_SUMMARY))
-      AGENT_DISCONNECT_COUNT.startingAtZero(RemovalReason.entries.map { it.metricLabel })
-      AGENT_AUTH_FAILURE_COUNT.startingAtZero(listOf(AUTH_MISSING_TOKEN, AUTH_UNKNOWN_TOKEN))
-      AGENT_CONNECT_REFUSAL_COUNT.startingAtZero(listOf(REFUSAL_IDENTITY_LIMIT, REFUSAL_TRANSPORT_FILTER_MISMATCH))
-      PATH_REJECTION_COUNT.startingAtZero(REJECTION_CAUSES)
-      BINDING_MISMATCH_COUNT.startingAtZero(RPC_NAMES)
-      DASHBOARD_LOGIN_COUNT.startingAtZero(DashboardLoginOutcome.entries.map { it.label })
-    }
-
     // The proxies in one JVM, normally just one, share these: the counters add up across them, and so do the
     // sampled gauges.
     private val SHARED: SharedCollectors<Proxy> =
@@ -365,7 +347,6 @@ internal class ProxyMetrics(
             CUMULATIVE_AGENT_BACKLOG_SIZE,
             DASHBOARD_SESSIONS,
           ),
-        onRegister = ::startCountersAtZero,
       )
   }
 }

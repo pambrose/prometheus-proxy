@@ -344,6 +344,9 @@ Two support helpers also live here (not test classes themselves):
   agent connected as), and a late result doesn't count as a completed request; with the transport filter disabled, a
   scrape-request stream that names an agentId before it is assigned neither streams nor removes the context another identity then
   connects with under it, and 10,000 connects by one identity leave at most `maxAgentsPerIdentity` agents
+- **ProxyServiceMessages** — what an agent sends `ProxyServiceImpl`, for the specs that call its RPCs directly:
+  `resultFrom`, `chunkedHeaderFrom`, `chunkFor`, `transferFrom` (a header, one chunk, and a summary), and
+  `onConnection`, which runs a call on the connection the transport filter assigned an agentId to
 - **ProxyServiceImplMetricsTest** — what each RPC counts, read from real collectors (`CountingProxyMetrics`): a
   connect only once accepted, and a refused one as a refusal by reason (a `transportFilterDisabled` mismatch, the
   `maxAgentsPerIdentity` limit); a heartbeat only once accepted; every path rejection by its cause, not only a path's
@@ -406,7 +409,7 @@ Two support helpers also live here (not test classes themselves):
   an eviction that finds the context already removed isn't counted
 - **RemovalReasonTest** — why the proxy removed an agent's context: each reason logs as its string always did, only an
   eviction is a problem in the activity feed, and each gives the feed its cause, an eviction naming
-  `proxy.internal.maxAgentInactivitySecs`, and `proxy_agent_disconnects_total` its label
+  `proxy.internal.maxAgentInactivitySecs`
 - **ChunkedContextTest** — Chunk accumulation, CRC32 checksum validation, header/chunk/trailer sequencing
 - **ProxyOptionsTest** — CLI parsing, defaults, validation, TLS settings, gRPC options, the `proxy.internal` limits,
   and the agent-port authentication warnings; an `http.idleTimeoutSecs` of 0 or a negative other than -1, and a
@@ -658,9 +661,9 @@ One support helper also lives here (not a test class itself):
 - **ScrapeResultsTest** — ScrapeResults data class, error code mapping, timeout handling, protobuf conversion, and
   `asDashboardScrape`, which marks results without changing any other field or what is sent to the proxy
 - **SharedCollectorsTest** — the collectors every agent (or proxy) in a JVM shares register on the first acquire
-  and unregister, with their series cleared, on the last release; register again after a registry clear; run
-  `onRegister` at each registration, so the series it makes start at zero again after a release cleared them; and,
-  when the registry rejects one, leave none of them registered
+  and unregister, with their series cleared, on the last release; register again after a registry clear; create a
+  counter's series that start at zero again at each registration, after a release cleared them; and, when the registry
+  rejects one, leave none of them registered
 - **SettingsViewTest** (`dashboard/`) — the Settings view's region both dashboards render (`SettingsHtml`): a section
   header for each group and a row for each setting, escaped, a moment shown as a time, out of band in a push, and an
   empty state; and the wording both use (`SettingText`), a secret only as set and TLS material only by its source
@@ -701,7 +704,7 @@ These support helpers also live here (not test classes themselves):
   and `AgentMetrics` read when they are built and scraped, for the metrics specs and `misc/DashboardMetricNamesTest`;
   and `CountingProxyMetrics`, a relaxed `ProxyMetrics` whose counters are real, unregistered collectors, so a spec reads
   what a call counted (a relaxed mock's labeled counter can't be incremented: its `labelValues` answers a plain
-  `DataPoint`)
+  `DataPoint`); and `registeredMetricNames()` / `registeredSnapshot<T>(name)`, what the default registry holds
 - **DeadlineExceeded** — `deadlineExceeded(elapsed)`, a `DEADLINE_EXCEEDED` `StatusException` described as
   grpc-java describes one, elapsed time included, for the specs that check a repeating failure is compared by its
   status code rather than its message
