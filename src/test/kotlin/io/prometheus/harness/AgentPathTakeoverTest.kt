@@ -76,10 +76,13 @@ class AgentPathTakeoverTest : StringSpec() {
 
           agentB.stopSync(10.seconds)
 
-          // The same agentId: the first agent took the path back on its connection, without reconnecting.
-          eventually(5.seconds) { ownerOf(SHARED_PATH) shouldBe agentA.agentId }
-          agentA.pathManager.registeredPaths.map { it.path } shouldBe listOf(SHARED_PATH)
-          agentA.pathManager.takenOverContexts.shouldBeEmpty()
+          // The same agentId: the first agent took the path back on its connection, without reconnecting. The proxy
+          // records the path before it answers, so the agent's side follows a moment later.
+          eventually(5.seconds) {
+            ownerOf(SHARED_PATH) shouldBe agentA.agentId
+            agentA.pathManager.registeredPaths.map { it.path } shouldBe listOf(SHARED_PATH)
+            agentA.pathManager.takenOverContexts.shouldBeEmpty()
+          }
           client.get("http://localhost:$PATH_TAKEOVER_HTTP_PORT/$SHARED_PATH").status shouldBe HttpStatusCode.OK
         } finally {
           stopAll(agentA, agentB)
