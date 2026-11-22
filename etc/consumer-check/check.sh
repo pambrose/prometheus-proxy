@@ -23,6 +23,8 @@
 #   - protobuf-java, protobuf-java-util, and protobuf-kotlin resolve at protoc's version, which is ahead of the 3.x grpc
 #     depends on: the code protoc generates needs a runtime at least that new, and without the pins Maven chose between
 #     the two majors by declaration order;
+#   - every module of the Prometheus Java client resolves at the catalog's version, one release, as the agent's own
+#     build aligns them through the client's BOM, which Maven doesn't import from the POM;
 #   - no jar on the classpath carries a Logback config, which would replace the host application's own (#19), and the
 #     library jar still carries reference.conf;
 #   - the docs site's embedded-agent examples compile (#20).
@@ -120,6 +122,13 @@ done
 bad="$(echo "$protobuf_resolved" | not_at '' "$protobuf" | joined)"
 [ -z "$bad" ] || fail "Protobuf isn't at $protobuf: $bad"
 
+echo "==> Prometheus Java client: $prometheus_metrics"
+prometheus_resolved="$(resolved '^io[.]prometheus$')"
+indented <<< "$prometheus_resolved"
+[ -n "$prometheus_resolved" ] || fail "Prometheus Java client: no module is resolved"
+bad="$(echo "$prometheus_resolved" | not_at '' "$prometheus_metrics" | joined)"
+[ -z "$bad" ] || fail "the Prometheus Java client isn't at $prometheus_metrics in every module: $bad"
+
 echo "==> Logback: no config on the classpath"
 library=""
 while IFS= read -r jar; do
@@ -135,7 +144,9 @@ elif ! unzip -Z1 "$library" | awk '$0 == "reference.conf" { found = 1 } END { ex
 fi
 
 echo "==> Compiling the docs site's embedded-agent examples"
-"${mvn[@]}" clean compile || fail "the embedded-agent examples don't compile against the published POM"
+# With the examples profile's exposition formats, which the MetricsSource examples need as their host does; the checks
+# above resolve without it, as an application that depends only on the agent does.
+"${mvn[@]}" -Pexamples clean compile || fail "the embedded-agent examples don't compile against the published POM"
 
 if [ "${#failed[@]}" -gt 0 ]; then
   echo >&2

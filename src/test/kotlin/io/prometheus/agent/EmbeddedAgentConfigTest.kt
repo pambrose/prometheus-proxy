@@ -264,18 +264,29 @@ class EmbeddedAgentConfigTest : StringSpec() {
       embeddedAgent { source("app_metrics") { _, _, _ -> "" } }.toString() shouldContain "app_metrics=in-process"
     }
 
-    // The agent checks a source path as it checks a pathConfigs entry, at startup, where it can be fixed.
+    // The agent checks a source path as it checks a pathConfigs entry, at startup, where it can be fixed, and names it
+    // as what added it, since no pathConfigs entry holds it.
     "a source path that a pathConfigs entry also names, or that the proxy would refuse, fails the agent's start" {
-      listOf(
-        embeddedAgent {
-          path("app_metrics", "http://127.0.0.1:9100/metrics")
-          source("/app_metrics") { _, _, _ -> "" }
-        },
-        embeddedAgent { source("app metrics") { _, _, _ -> "" } },
-      ).forEach { config ->
-        val failure = runCatching { config.start(logBanner = false) }.onSuccess { it.shutdown() }.exceptionOrNull()
-        failure.shouldBeInstanceOf<ConfigLoadException>().message.orEmpty() shouldContain "metrics"
-      }
+      fun startFailure(config: EmbeddedAgentConfig): String =
+        runCatching { config.start(logBanner = false) }
+          .onSuccess { it.shutdown() }
+          .exceptionOrNull()
+          .shouldBeInstanceOf<ConfigLoadException>()
+          .message
+          .orEmpty()
+
+      val duplicate =
+        startFailure(
+          embeddedAgent {
+            path("app_metrics", "http://127.0.0.1:9100/metrics")
+            source("/app_metrics") { _, _, _ -> "" }
+          },
+        )
+      duplicate shouldContain "Path /app_metrics is given by agent.pathConfigs entry \"app_metrics\" and source()"
+
+      val refused = startFailure(embeddedAgent { source("app metrics") { _, _, _ -> "" } })
+      refused shouldContain "source() was given path 'app metrics', which the proxy refuses"
+      refused shouldNotContain "pathConfigs"
     }
 
     "setting sets any agent setting by its key, ahead of a builder method's" {

@@ -87,10 +87,12 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withTimeout
+import kotlinx.io.Buffer
 import kotlinx.io.readByteArray
-import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.io.OutputStream
 import java.math.BigDecimal
+import java.util.Objects
 import java.util.concurrent.ConcurrentHashMap
 import javax.net.ssl.X509TrustManager
 import kotlin.time.Duration
@@ -286,7 +288,7 @@ internal class AgentHttpService(
           fetchFromSource(source, target.url, req, filter)
       }
     } catch (e: Throwable) {
-      failedResults(e, req, sanitizeUrl(target.url))
+      failedResults(e, req, target)
     }
 
   // Reads [source], a path served in-process, whose target shows as [label], as a target's body is read: on a thread
@@ -341,12 +343,13 @@ internal class AgentHttpService(
     }
   }
 
-  // The results of a fetch of [logUrl] that failed with [e], unless [e] must propagate.
+  // The results of a fetch of [target], its URL or its source, that failed with [e], unless [e] must propagate.
   private fun failedResults(
     e: Throwable,
     req: ScrapeRequest,
-    logUrl: String,
+    target: ScrapeTarget,
   ): ScrapeResults {
+    val logUrl = sanitizeUrl(target.url)
     // Catch regular exceptions and HttpRequestTimeoutException (which is a CancellationException)
     // but let other CancellationExceptions propagate (like system shutdown). Uses the shared
     // cause-walk predicate so the catch branch and the status-code mapping agree (finding 34).
@@ -362,7 +365,7 @@ internal class AgentHttpService(
     return ScrapeResults(
       srAgentId = req.agentId,
       srScrapeId = req.scrapeId,
-      srStatusCode = errorCode(e, logUrl),
+      srStatusCode = errorCode(e, logUrl, inProcess = target.source != null),
       srFailureReason = scrapeFailureReason(e, req.debugEnabled),
       srUrl = if (req.debugEnabled) logUrl else "",
       // A fetch that got no answer: the agent's own timeout, or a refused connection, DNS failure, and the like.
@@ -816,29 +819,43 @@ private class ScrapedBody(
 )
 
 // What a MetricsSource writes, up to [limit] bytes, as a target's body is read only up to the limit: a write past it
-// throws, and [exceeded] records it, so a source that catches the exception is refused all the same.
+// throws, and [exceeded] records it, so a source that catches the exception is refused all the same. The bytes go into
+// a segmented buffer, as a target's body does, not an array that doubles as it grows, so a body near the limit takes
+// about twice the limit with its copy into toByteArray()'s, not three times. Each write is atomic, so a source writing
+// from several threads at once neither loses bytes nor passes the limit between one write's check and its bytes.
 private class CappedBytes(
   private val limit: Long,
-) : ByteArrayOutputStream() {
+) : OutputStream() {
+  private val buffer = Buffer()
+
+  // Read on the scrape's thread, set on whichever thread the source wrote from
+  @Volatile
   var exceeded = false
     private set
 
+  @Synchronized
   override fun write(b: Int) {
     reserve(1)
-    super.write(b)
+    buffer.writeByte(b.toByte())
   }
 
+  @Synchronized
   override fun write(
     b: ByteArray,
     off: Int,
     len: Int,
   ) {
+    Objects.checkFromIndexSize(off, len, b.size)
     reserve(len)
-    super.write(b, off, len)
+    buffer.write(b, off, off + len)
   }
 
+  // The bytes written, which this takes out
+  @Synchronized
+  fun toByteArray(): ByteArray = buffer.readByteArray()
+
   private fun reserve(len: Int) {
-    if (size() + len.toLong() > limit) {
+    if (buffer.size + len > limit) {
       exceeded = true
       throw IOException("Metrics exceed the maximum allowed size of $limit bytes")
     }

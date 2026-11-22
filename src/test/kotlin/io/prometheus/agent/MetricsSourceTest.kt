@@ -18,6 +18,7 @@
 
 package io.prometheus.agent
 
+import ch.qos.logback.classic.Level
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
@@ -32,6 +33,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import io.prometheus.Agent
 import io.prometheus.common.ScrapeResults
+import io.prometheus.common.captureLogs
 import io.prometheus.common.testConfigVals
 import io.prometheus.grpc.ScrapeRequest
 import io.prometheus.grpc.registerPathResponse
@@ -205,6 +207,30 @@ class MetricsSourceTest : StringSpec() {
       }
     }
 
+    // The agent made no HTTP request, so its log says what failed: the source.
+    "a source that throws should be logged as the source's failure, not an HTTP request's" {
+      val lines =
+        captureLogs<ScrapeResults>(Level.WARN) {
+          scraped { _, _, _ -> throw IOException("registry closed") }
+        }.map { it.formattedMessage }
+
+      lines.any { it.startsWith("The in-process source failed") && "registry closed" in it }.shouldBeTrue()
+      lines.none { "HTTP request" in it }.shouldBeTrue()
+    }
+
+    // A source may write from several threads at once, as a registry's collectors can; each write is atomic, so every
+    // byte arrives.
+    "a source that writes from several threads at once should have every byte it wrote" {
+      val results =
+        scraped { _, _, out ->
+          List(WRITERS) { writer -> thread { repeat(WRITES) { out.write('a'.code + writer) } } }.forEach { it.join() }
+          ""
+        }
+
+      results.srStatusCode shouldBe 200
+      results.rawSize shouldBe WRITERS * WRITES
+    }
+
     // The limit is a memory bound, as it is on a target's body, so the source is stopped as it passes it.
     "a source that writes more than maxContentLengthMBytes should be stopped, and the scrape refused" {
       var written = 0L
@@ -376,6 +402,10 @@ class MetricsSourceTest : StringSpec() {
     const val PROTOBUF = "application/vnd.google.protobuf;proto=io.prometheus.client.MetricFamily;encoding=delimited"
     const val OPEN_METRICS = "application/openmetrics-text; version=1.0.0; charset=utf-8"
     const val TEXT_FORMAT = "text/plain; version=0.0.4; charset=utf-8"
+
+    // The threads a source writes from at once, and the single-byte writes each makes
+    const val WRITERS = 8
+    const val WRITES = 5_000
 
     val BODY =
       """

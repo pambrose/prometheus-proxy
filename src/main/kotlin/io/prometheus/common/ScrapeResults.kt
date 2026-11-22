@@ -131,9 +131,12 @@ internal class ScrapeResults(
         srUrl = url,
       )
 
+    // The status of a scrape of [url] that failed with [e], logged as an HTTP request's failure, or, for a path an
+    // embedded host serves [inProcess], as its source's, since the agent made no request.
     fun errorCode(
       e: Throwable,
       url: String,
+      inProcess: Boolean = false,
     ): Int {
       // Exception messages embed the request URL, credentials included, so the logs carry only the exception type and
       // its redacted message. The throwable itself is never logged: a rendered stack trace would print the raw message.
@@ -145,17 +148,14 @@ internal class ScrapeResults(
         return RequestTimeout.value
       }
 
-      return when (e) {
-        is IOException -> {
-          logger.warn { "Failed HTTP request: $url $detail" }
-          ServiceUnavailable.value
-        }
-
-        else -> {
-          logger.warn { "fetchScrapeUrl() - $url $detail" }
-          ServiceUnavailable.value
+      logger.warn {
+        when {
+          inProcess -> "The in-process source failed $detail"
+          e is IOException -> "Failed HTTP request: $url $detail"
+          else -> "fetchScrapeUrl() - $url $detail"
         }
       }
+      return ServiceUnavailable.value
     }
   }
 }

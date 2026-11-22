@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  A Maven project that depends on com.pambrose:prometheus-proxy, as an application that embeds the agent does, and on
-  the Prometheus client's exposition formats, which the MetricsSource examples write a registry with, as their host does.
+  A Maven project that depends on com.pambrose:prometheus-proxy, as an application that embeds the agent does. Its
+  examples profile adds the Prometheus client's exposition formats, which the MetricsSource examples write a registry
+  with, as their host does; only check.sh's compile uses it, so what it checks Maven resolves is what an application
+  that depends only on the agent gets, and not versions this project's own declaration chose by nearest-wins.
   `make consumer-check` publishes this checkout to the local Maven repository and runs check.sh, which builds this
   project against what Maven resolves from the published POM. The repo's own builds resolve through Gradle, which
   honors the published BOM imports and conflict rules that Maven doesn't, so only a Maven build like this one sees what
@@ -38,14 +40,22 @@
       <artifactId>prometheus-proxy</artifactId>
       <version>${prometheus-proxy.version}</version>
     </dependency>
-    <!-- ExpositionFormats, which the MetricsSource examples write a registry with, declared as the docs site tells an
-         embedder to: the agent, and Micrometer's Prometheus registry, bring it at runtime only. -->
-    <dependency>
-      <groupId>io.prometheus</groupId>
-      <artifactId>prometheus-metrics-exposition-textformats</artifactId>
-      <version>${prometheus-metrics.version}</version>
-    </dependency>
   </dependencies>
+
+  <profiles>
+    <profile>
+      <id>examples</id>
+      <dependencies>
+        <!-- ExpositionFormats, which the MetricsSource examples write a registry with, declared as the docs site tells
+             an embedder to: the agent, and Micrometer's Prometheus registry, bring it at runtime only. -->
+        <dependency>
+          <groupId>io.prometheus</groupId>
+          <artifactId>prometheus-metrics-exposition-textformats</artifactId>
+          <version>${prometheus-metrics.version}</version>
+        </dependency>
+      </dependencies>
+    </profile>
+  </profiles>
 
   <build>
     <directory>${repo.root}/build/consumer-check/target</directory>

@@ -188,11 +188,13 @@ a Ktor server, which the build below doesn't give a host.
 The tests compile those examples against the project's own classpath, which a build that embeds the agent doesn't
 get: it gets what the published POM gives it, resolved by its own build tool. `make consumer-check`, which CI's
 `consumer-check` job runs, covers that. It publishes this checkout to the local Maven repository and has
-`etc/consumer-check/check.sh` build `etc/consumer-check`, a Maven project that depends on that artifact, and on the
-Prometheus client's exposition formats, which the `MetricsSource` examples write a registry with, as their host does. The
-check fails unless the examples compile there (a public type's supertype at runtime scope broke the Java one),
-Maven resolves Jackson, every netty-tcnative native, Netty, and protobuf at the versions `gradle/libs.versions.toml`
-pins, and no jar on the classpath carries a `logback.xml`, which would replace the host application's logging config.
+`etc/consumer-check/check.sh` build `etc/consumer-check`, a Maven project that depends on that artifact alone. Its
+`examples` profile adds the Prometheus client's exposition formats, which the `MetricsSource` examples write a registry
+with, as their host does, for the compile only, so the resolution checks see what an application that depends only on
+the agent gets. The check fails unless the examples compile there (a public type's supertype at runtime scope broke the
+Java one), Maven resolves Jackson, every netty-tcnative native, Netty, protobuf, and every module of the Prometheus
+Java client at the versions `gradle/libs.versions.toml` pins, and no jar on the classpath carries a `logback.xml`,
+which would replace the host application's logging config.
 
 ## Test Categories
 
@@ -300,11 +302,13 @@ pins, and no jar on the classpath carries a `logback.xml`, which would replace t
   lowercases a key from an environment variable; and a blank path, an out-of-range port, or a URL
   with no scheme throws `ConfigLoadException`; `source()` adds an in-process path, with or without labels, that
   reaches the agent's options but not the config tree, shows in `toString()` as `in-process`, and fails `start()` when
-  another path or the proxy's rules forbid its path
+  another path or the proxy's rules forbid its path, with a message that names it as `source()`'s, not a
+  `pathConfigs` entry
 - **MetricsSourceTest** — a path served by a `MetricsSource`: scraped in-process in the content type the source names
   (the text format when it names none), asked in a text format the scrape accepts for the families named with
   `name[]`, filtered, refused past `maxContentLengthMBytes` whether written in arrays or a byte at a time, interrupted
   at the scrape timeout, failed when the source throws, an `Error` or its own cancellation or interrupt included, and
+  logged as the source's failure, not an HTTP request's; every byte kept when it writes from several threads at once;
   read by the dashboard's fetch, which counts nothing; a call that ignores the interrupt times out on time, and the
   source isn't called again until it returns; and the docs site's registry source, run against a real registry
 - **EmbeddedAgentInfoTest** — EmbeddedAgentInfo data class (launchId, agentName storage), and its connection,
