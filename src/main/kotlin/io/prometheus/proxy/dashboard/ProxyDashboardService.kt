@@ -246,8 +246,8 @@ internal class ProxyDashboardService(
   }
 
   companion object {
-    /** The login page's heading. */
-    internal const val LOGIN_HEADING = "Prometheus Proxy Dashboard"
+    /** The login page's heading, under the logo and the product's name. */
+    internal const val LOGIN_HEADING = "Proxy Dashboard"
 
     /**
      * Reads `{"layout": "PATH"}` from a session message, defaulting to [DashboardLayout.AGENT], what the page served

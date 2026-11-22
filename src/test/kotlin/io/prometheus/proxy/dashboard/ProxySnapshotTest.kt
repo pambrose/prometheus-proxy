@@ -18,6 +18,7 @@
 
 package io.prometheus.proxy.dashboard
 
+import com.pambrose.common.util.hostInfo
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
@@ -454,7 +455,7 @@ class ProxySnapshotTest : StringSpec() {
 
     // The wiring the tests above can't see: a recorded scrape reaches its agent's scrapes through the path history, and
     // the activity log's change count arrives with its lines. The proxy is built and never started, so binds nothing.
-    "a collect should read agents' scrapes from the path history, and the activity log with its change count" {
+    "a collect should read the proxy's host, agents' scrapes from the path history, and the activity log" {
       val proxy =
         Proxy(
           options = ProxyOptions(listOf("--dashboard")),
@@ -467,6 +468,8 @@ class ProxySnapshotTest : StringSpec() {
       proxy.recordScrape(DashboardFixtures.scrapeRecord(agentId = agent.agentId, path = "orders_metrics"))
 
       val first = ProxySnapshot.collect(proxy)
+      first.hostName shouldBe hostInfo.hostName
+      first.dashboardName shouldBe "Proxy: ${hostInfo.hostName}:${proxy.scrapePort}"
       first.scrapesOf(agent.agentId).map { it.path } shouldBe ["orders_metrics"]
       first.activity shouldBe log.entries()
       first.activityChangeCount shouldBe log.snapshot().changeCount

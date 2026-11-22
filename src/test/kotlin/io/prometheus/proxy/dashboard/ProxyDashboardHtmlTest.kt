@@ -28,6 +28,8 @@ import io.kotest.matchers.string.shouldNotStartWith
 import io.kotest.matchers.string.shouldStartWith
 import io.prometheus.common.dashboard.DashboardMessage
 import io.prometheus.common.dashboard.DashboardCss
+import io.prometheus.common.TestPorts
+import io.prometheus.common.dashboard.DashboardLogo
 import io.prometheus.common.dashboard.DashboardPage
 import io.prometheus.common.dashboard.DashboardServer
 import io.prometheus.common.dashboard.Setting
@@ -467,6 +469,25 @@ class ProxyDashboardHtmlTest : StringSpec() {
       page shouldNotContain "\"//"
       // The Agents link is the root itself, which must stay "/" rather than collapse to an empty href.
       page shouldContain """href="/" class="on""""
+    }
+
+    // Which proxy this is, its host and the port Prometheus scrapes, so two proxies' dashboards are told apart at a
+    // glance. Outside every pushed region, so it goes out once, with the page, and no push carries its data URL.
+    "the bar should show the logo's small cut beside the proxy's host and scrape port, and no push should carry it" {
+      DashboardFixtures.PROXY_NAME shouldBe "Proxy: proxy-host:${TestPorts.PROXY_HTTP_PORT}"
+      renderFullPage(snapshot()).replace(Regex(">\\s+<"), "><") shouldContain
+        """<span class="brand"><img alt="" src="${DashboardLogo.SMALL_LOGO_URL}" """ +
+        """width="${DashboardLogo.BRAND_LOGO_SIZE}" height="${DashboardLogo.BRAND_LOGO_SIZE}">""" +
+        """<span class="brand-name">${DashboardFixtures.PROXY_NAME}</span></span>"""
+      listOf(DashboardLayout.AGENT, DashboardLayout.PATH, DashboardLayout.ACTIVITY, null).forEach { layout ->
+        ProxyDashboardHtml.pushFragment(snapshot(), null, "/dashboard", layout) shouldNotContain
+          DashboardLogo.SMALL_LOGO_URL
+      }
+    }
+
+    "the page should carry the logo as its icon, inline in its head" {
+      renderFullPage(snapshot()).substringBefore("</head>") shouldContain
+        """<link href="${DashboardLogo.SMALL_LOGO_URL}" rel="icon" type="image/svg+xml">"""
     }
 
     // ==================== Link icons ====================

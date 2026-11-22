@@ -32,6 +32,11 @@ _Not yet released_
   long a scrape waits for its agent, and `proxy_build_info` shows each proxy's version. The proxy's Grafana dashboard
   and the demos' dashboards chart them, and two new alerts catch an agent with a bad token and a path the proxy keeps
   refusing.
+- **A logo.** Prometheus Proxy has a logo, a suspension bridge in Prometheus orange, on the docs site, in the README,
+  and on both dashboards: in the browser tab, the top bar, and the login page.
+- **Which proxy or agent is this?** Each dashboard's top bar and browser tab now name it: `Proxy: proxy:8080`, the
+  proxy's host and the port Prometheus scrapes, or `Agent: agent-east`, the agent's name, so several open dashboards are
+  told apart at a glance.
 
 ### Bug Fixes
 
@@ -45,6 +50,9 @@ _Not yet released_
 - **The proxy's connect, heartbeat, and eviction counts mean what they say.** `proxy_connect_count_total` and
   `proxy_heartbeat_count_total` no longer count connects and heartbeats the proxy refused, and an eviction is counted
   only when it removed the agent.
+- **A new look for the login page and Log out.** The login page shows the logo and Prometheus Proxy, with Proxy
+  Dashboard or Agent Dashboard under it, and Log out, at the end of the top bar, is now an exit icon; hover over it for
+  its name.
 
 ## 4.6.1
 

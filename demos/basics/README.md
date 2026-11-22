@@ -306,8 +306,8 @@ in `config/agent-*.conf`). This part starts with agent-rogue, which part 8 left 
 ```
 
 - Reload the dashboard: it shows its login page. Sign in as `admin`, with the password `admin`, and it opens the page
-  you asked for; **Log out**, at the right end of the top bar, signs you out. A wrong password shows "Invalid username
-  or password", and the proxy logs it at WARN.
+  you asked for; **Log out**, the exit icon at the right end of the top bar, signs you out. A wrong password shows
+  "Invalid username or password", and the proxy logs it at WARN.
 - The password comes from the proxy's environment, `DEMO_DASHBOARD_PASSWORD` in `docker/compose.yml`, not from
   `config/proxy.conf`, so it never sits in a file. A script sends the login as HTTP Basic Auth instead:
   `curl -u admin:admin http://localhost:8094/dashboard/paths`.

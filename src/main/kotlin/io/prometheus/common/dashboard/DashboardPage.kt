@@ -16,6 +16,7 @@
 
 package io.prometheus.common.dashboard
 
+import io.prometheus.common.dashboard.DashboardLogo.favicon
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -111,8 +112,9 @@ internal object DashboardPage {
   // tab.
   const val TITLE_ATTR = "data-title"
 
-  // The Log out form, in the bar, with a login set.
+  // The Log out form, in the bar, with a login set, and its button's name, for assistive tech and in its tooltip.
   const val LOGOUT_ID = "logout"
+  const val LOGOUT_LABEL = "Log out"
 
   // The theme picker, in the bar, whose buttons each name their theme in THEME_CHOICE_ATTR; and where the theme it sets
   // is kept: this browser's localStorage, which is the dashboard's own, since a dashboard's origin includes its port.
@@ -157,8 +159,8 @@ internal object DashboardPage {
     """{"noSwap":[204,304,"4xx","5xx"],"ws":{"reconnectDelay":500,"reconnectMaxDelay":2000,"reconnectJitter":0.125}}"""
 
   /**
-   * The page's head: its [title], the stylesheet, any [extra] style after it, and htmx with its WebSocket extension,
-   * from the versioned asset route under [routeBase].
+   * The page's head: its [title], its icon, the stylesheet, any [extra] style after it, and htmx with its WebSocket
+   * extension, from the versioned asset route under [routeBase].
    */
   fun HEAD.dashboardHead(
     title: String,
@@ -167,6 +169,7 @@ internal object DashboardPage {
   ) {
     title(title)
     meta(name = "viewport", content = "width=device-width, initial-scale=1")
+    favicon()
     script { unsafe { raw(THEME_SCRIPT) } }
     style { unsafe { raw(DashboardCss.CSS) } }
     extra()
@@ -270,11 +273,17 @@ internal object DashboardPage {
     }
   }
 
-  /** Log out, at the bar's end, after the status and outside it, which a push replaces: a form the browser posts. */
+  /**
+   * Log out, at the bar's end, after the status and outside it, which a push replaces: a form the browser posts, whose
+   * button is an exit icon, named [LOGOUT_LABEL] for assistive tech and in its tooltip.
+   */
   fun FlowContent.logoutForm(routeBase: String) {
     form(action = "$routeBase/logout", method = FormMethod.post, classes = "logout") {
       attributes["id"] = LOGOUT_ID
-      button(type = ButtonType.submit) { +"Log out" }
+      button(type = ButtonType.submit) {
+        attributes["aria-label"] = LOGOUT_LABEL
+        attributes["title"] = LOGOUT_LABEL
+      }
     }
   }
 

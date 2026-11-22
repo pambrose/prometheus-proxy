@@ -199,12 +199,16 @@ when it opens, and again after the agent restarts.
 
 The bar along the top shows, on every view:
 
+- which agent the page is, after the logo: its name, as `Agent: agent-east`, the one the Settings view gives
+  (`agent.name`, or `Unnamed-` and its host's name when none is set), so the dashboards of several agents are told
+  apart at a glance;
 - whether the page is live, as on the proxy's dashboard;
 - the agent's connection state and endpoint;
 - how many paths it has, and how many aren't registered;
 - its backlog of scrapes waiting to run.
 
-The tab's title counts the problems, each path refused or retrying and a failing connection, so a dashboard in a
-background tab still says when something is wrong. At the bar's end, the theme picker sets the dashboard light or
+The tab's title names the agent the same way and counts the problems, each path refused or retrying and a failing
+connection, as `(2 problems) Agent: agent-east`, so a dashboard in a background tab still says when something is
+wrong. At the bar's end, the theme picker sets the dashboard light or
 dark, or **auto**, the default, which follows your system's, as on the proxy's
 [dashboard](web-dashboard.md#the-status-bar); the browser remembers the choice for each dashboard.

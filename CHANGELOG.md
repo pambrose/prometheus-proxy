@@ -49,6 +49,12 @@ All notable changes to this project are documented in this file.
 - The proxy's Grafana dashboard has panels for them (queue wait, disconnects by reason, Security & Rejections, and the
   dashboard's logins), `grafana/alerts.yml` adds ProxyAgentAuthFailures and ProxyPathRejections, and the basics and
   network demos' dashboards show disconnects, path rejections, and queue wait
+- The project has a logo, a suspension bridge in Prometheus orange (`website/prometheus-proxy/docs/images/logo.svg`,
+  and `favicon.svg`, its cut for 16px): in the README's title, the docs site's header and tab icon, and both
+  dashboards' tab icon, top bar, and login page
+- Each dashboard's top bar and tab title say which process it is: `Proxy: <host>:<port>`, the host's name as the
+  machine gives it and `proxy.http.port`, or `Agent: <name>`, `agent.name`. A name past 48 characters is cut with an
+  ellipsis and shown whole in its tooltip. The tab titles read `prometheus-proxy` and `prometheus-agent` before
 
 ### Bug Fixes
 
@@ -65,6 +71,10 @@ All notable changes to this project are documented in this file.
   accepts, `proxy_eviction_count_total` only an eviction that removed the agent, and
   `proxy_chunked_transfers_abandoned_total` also a transfer whose scrape ended first, at a timeout or when Prometheus
   hung up
+- The dashboards' login page shows the logo and "Prometheus Proxy" over the dashboard's name, "Proxy Dashboard" or
+  "Agent Dashboard", where it read "Prometheus Proxy Dashboard" or "Prometheus Agent Dashboard", and its tab title is
+  `Log in · Proxy Dashboard · Prometheus Proxy`. Log out, in the top bar, is an exit icon, named Log out in its tooltip
+  and for screen readers
 
 ## [4.6.1] - 2026-11-22
 

@@ -77,6 +77,12 @@ custom_dir = "overrides"
 
 language = "en"
 
+# The header's logo, and the tab's icon, the logo's small-size cut, whose heavier strokes stay legible at 16px. The
+# dashboards' tab icon and the mark in their bar (DashboardLogo.SMALL_LOGO_SVG) are the same cut, and LogoTest keeps the
+# two the same.
+logo = "images/logo.svg"
+favicon = "images/favicon.svg"
+
 features = [
     "announce.dismiss",
     "content.action.edit",

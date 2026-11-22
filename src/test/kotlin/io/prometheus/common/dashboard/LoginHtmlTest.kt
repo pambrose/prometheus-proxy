@@ -40,7 +40,7 @@ class LoginHtmlTest : StringSpec() {
     "the page has the heading, a form posting to the login route, and labeled fields" {
       page().apply {
         this shouldContain "<h1>$HEADING</h1>"
-        this shouldContain "<title>Log in · $HEADING</title>"
+        this shouldContain "<title>Log in · $HEADING · ${LoginHtml.PRODUCT}</title>"
         this shouldContain """action="/dashboard/login""""
         this shouldContain """method="post""""
         this shouldContain """name="${LoginHtml.USERNAME_FIELD}""""
@@ -60,8 +60,18 @@ class LoginHtmlTest : StringSpec() {
     "the page should carry the heading it is given, escaped" {
       page(heading = "Prometheus <Agent> Dashboard").apply {
         this shouldContain "<h1>Prometheus &lt;Agent&gt; Dashboard</h1>"
-        this shouldContain "<title>Log in · Prometheus &lt;Agent&gt; Dashboard</title>"
+        this shouldContain "<title>Log in · Prometheus &lt;Agent&gt; Dashboard · ${LoginHtml.PRODUCT}</title>"
         this shouldNotContain HEADING
+      }
+    }
+
+    // Both dashboards' pages: the logo and the product's name on a line, and the dashboard's name, the heading, under.
+    "the logo and the product's name should sit over the heading" {
+      page().replace(Regex(">\\s+<"), "><").apply {
+        this shouldContain
+          """<header class="brand"><p class="product">""" +
+          """<img alt="" src="${DashboardLogo.LOGO_URL}" width="42" height="42">${LoginHtml.PRODUCT}</p>""" +
+          """<h1>$HEADING</h1></header>"""
       }
     }
 
@@ -104,12 +114,12 @@ class LoginHtmlTest : StringSpec() {
       page(routeBase = "", next = "/").also { it shouldContain """action="/login"""" }
     }
 
-    // Its one script is the theme's, inline, which loads nothing.
+    // Its one script is the theme's and its one image the logo, both inline, which load nothing.
     "the page loads nothing from anywhere" {
       page().apply {
         Regex("<script").findAll(this).count() shouldBe 1
         this shouldContain "<script>${DashboardPage.THEME_SCRIPT}</script>"
-        this shouldNotContain "src="
+        Regex("""src="(?!data:)""").containsMatchIn(this) shouldBe false
         this shouldNotContain "http://"
         this shouldNotContain "https://"
       }
@@ -139,9 +149,15 @@ class LoginHtmlTest : StringSpec() {
         this shouldContain DashboardCss.darkRule(":root", "--on-accent:var(--bg);")
       }
     }
+
+    // Inline, since the login page loads nothing before a login.
+    "it should carry the dashboard's icon in its head" {
+      page().substringBefore("</head>") shouldContain FAVICON_LINK
+    }
   }
 
   companion object {
     private const val HEADING = "Prometheus Test Dashboard"
+    private val FAVICON_LINK = """<link href="${DashboardLogo.SMALL_LOGO_URL}" rel="icon" type="image/svg+xml">"""
   }
 }

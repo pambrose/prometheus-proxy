@@ -810,7 +810,11 @@ label, both in the top bar.
 ### Status Bar
 
 `surface`, `8px 15px 0`, Meta type in `ink-3`: no bottom padding, because the tabs stand on the bar's rule,
-and the brand mark and the counters carry `6px` of their own, which sets their text on the tabs' line. One
+and the brand mark and the counters carry `6px` of their own, which sets their text on the tabs' line. The brand mark
+leads with the logo's small-size cut, `18px`, `7px` before the dashboard's name (`DashboardLogo.brand`) and centered on
+its line, which is taller, so the mark changes neither the bar's height nor the name's place. The name says which
+process the page is, `Proxy: ` and the proxy's host and scrape port, or `Agent: ` and the agent's name, cut with an
+ellipsis past 48 characters (`DashboardLogo.BRAND_MAX_CHARS`) and given whole in its tooltip. One
 row above 720px, where the counters wrap within themselves rather than push the tabs off the rule. Left to
 right: the brand mark, the layout's tabs, then the
 connection beacon and a run of counters — agents, paths, and the internal chunk/scrape gauges, which
@@ -818,7 +822,7 @@ turn `warn` as they approach their thresholds.
 
 A **failing count** joins the run in `crit` whenever a registered path's last scrape failed (`2 failing`),
 and the bar carries the tab's title, which counts the paths failing or departed, the ones "Problems only"
-keeps, and reads `(3 problems) prometheus-proxy`, so a dashboard in a background tab still says something is
+keeps, and reads `(3 problems) Proxy: proxy:8080`, so a dashboard in a background tab still says something is
 wrong.
 
 A **departed count** joins the run in `crit` whenever any path is departed (`3 departed`). It exists
@@ -850,6 +854,14 @@ The choice is kept in the browser's `localStorage`, one per dashboard, since eac
 in the head applies it as `<html data-theme>` before the page draws, so a page set to light never flashes dark;
 the login page applies it too. Outside the status bar's pushed region, like Log out, so no frame resets it, and
 its change is said in the Connection Announcer.
+
+### Log Out Button
+
+At the bar's end, after the Theme Picker, with a login set: one icon button, an exit (a door with an arrow leaving
+it), in the picker's quiet border, a form the browser posts. It is `30px` wide, a picker button's width with the
+border, and as tall as the picker through the bar's end (`46px` wide under a coarse pointer); its `13px` glyph is a
+CSS mask in `ink-2`, `ink` on hover, `ButtonText` in forced colours, as the picker's are. It is named "Log out" for
+assistive tech and in its tooltip, which the server renders, since nothing about it changes.
 
 ### Connection Announcer
 
@@ -885,12 +897,15 @@ inventing it is a design decision, not an extraction.
 
 The page a browser gets, before anything else, once `proxy.dashboard.password` is set (`LoginHtml`). **The one
 deliberate exception to this system**, styled after Grafana's login page at the maintainer's request (2026-11-20): a
-full-page radial gradient from `surface-3` to `bg`, one 400px column, centered across and 40% of the way down, a 28px
-weight-500 "Prometheus Proxy Dashboard" heading in a system sans-serif stack (Inter, then `system-ui`), labels above
-40px fields on `surface-2` with a 4px radius, an 8px-radius `surface` card, one full-width `accent`-filled Log in button
-whose text is white on the light accent (4.83:1) and `bg` on the dark one (6.94:1), and a `crit-soft` alert with a
-`crit` left edge after a wrong login. It uses this system's color tokens, in both themes, and loads nothing. The Don'ts
-below still bind the dashboard itself; the exception is the login page alone.
+full-page radial gradient from `surface-3` to `bg`, one 400px column, centered across and 40% of the way down, the
+logo (42px, inline) beside a 28px weight-600 "Prometheus Proxy", and under them the heading, the dashboard's name
+("Proxy Dashboard" or "Agent Dashboard") at 17px weight 500 in `ink-2`, midway between that line and the card as the
+eye reads it (27px from the product name's baseline, which the logo's legs hang below, to its capitals, and 28.5px from
+its baseline to the card's edge, which its descenders take 3.5px of), in a system sans-serif stack (Inter, then
+`system-ui`), labels above 40px fields on `surface-2` with a 4px radius, an 8px-radius `surface` card, one full-width
+`accent`-filled Log in button whose text is white on the light accent (4.83:1) and `bg` on the dark one (6.94:1), and a
+`crit-soft` alert with a `crit` left edge after a wrong login. It uses this system's color tokens, in both themes, and
+loads nothing. The Don'ts below still bind the dashboard itself; the exception is the login page alone.
 
 ### Agent Dashboard
 

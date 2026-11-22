@@ -87,13 +87,23 @@ internal object DashboardCss {
        wraps inside itself, so it never pushes the tabs off the rule. */
     .bar { display:flex; align-items:flex-end; gap:10px; padding:8px 15px 0; border-bottom:1px solid var(--line);
            background:var(--surface); }
-    .brand { font-weight:600; flex:none; padding-bottom:6px; }
+    /* The logo's small-size cut beside the name, centered on its line, which the mark is shorter than, so the bar's
+       height and the name's place on the tabs' line are as they were without it. */
+    .brand { display:flex; align-items:center; gap:7px; font-weight:600; flex:none; padding-bottom:6px; }
+    .brand img { flex:none; }
+    /* The dashboard's name, cut with an ellipsis past DashboardLogo.BRAND_MAX_CHARS characters of its monospaced type,
+       which a ch measures. */
+    .brand-name { max-width:${DashboardLogo.BRAND_MAX_CHARS}ch; overflow:hidden; text-overflow:ellipsis;
+      white-space:nowrap; }
     /* The bar's end: the theme picker and Log out, quieter than the tabs, in one box that stretches each to the
        taller's height, so Log out is as tall as the picker however tall a coarse pointer makes it. */
     .bar-end { display:flex; align-items:stretch; gap:10px; flex:none; margin-bottom:5px; }
+    /* Log out: an exit icon, a door with an arrow leaving it, in the picker's quiet border, as wide as one of its
+       buttons and, through the bar's end, as tall as the picker; its glyph a CSS mask in currentColor as theirs are. */
     .logout { display:flex; }
-    .logout button { font:inherit; font-size:11.5px; color:var(--ink-2); background:none;
-      border:1px solid var(--line); border-radius:3px; padding:1px 9px; cursor:pointer; white-space:nowrap; }
+    .logout button { display:inline-flex; align-items:center; justify-content:center; width:30px; padding:0;
+      color:var(--ink-2); background:none; border:1px solid var(--line); border-radius:3px; cursor:pointer;
+      --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M6.5 2.75H3.75a1 1 0 0 0-1 1v8.5a1 1 0 0 0 1 1H6.5'/><path d='M10.25 5l3 3-3 3M13.25 8H6.75'/></svg>"); }
     .theme button:hover, .logout button:hover { color:var(--ink); background-color:var(--surface-2); }
     .theme button:focus-visible, .logout button:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
     /* The theme picker: light, dark, and auto, a row of icon buttons in Log out's quiet border, each a 24px target, the
@@ -254,7 +264,8 @@ internal object DashboardCss {
       --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linejoin='round'><rect x='5.25' y='5.25' width='8.5' height='8.5' rx='1.5'/><path d='M10.75 5.25v-2a1 1 0 0 0-1-1h-6.5a1 1 0 0 0-1 1v6.5a1 1 0 0 0 1 1h2'/></svg>"); }
     .scrape-now {
       --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M13 8a5 5 0 1 1-1.46-3.54'/><path d='M12.5 2.25v2.5H10'/></svg>"); }
-    .copy::before, .scrape-now::before, .close::before, .guide-toggle::before, .theme button::before { content:"";
+    .copy::before, .scrape-now::before, .close::before, .guide-toggle::before, .logout button::before,
+      .theme button::before { content:"";
       width:13px; height:13px; background:currentColor; -webkit-mask:var(--icon) center/contain no-repeat;
       mask:var(--icon) center/contain no-repeat; }
     .copy:hover, .scrape-now:hover, .close:hover { background:var(--surface-3); color:var(--ink); }
@@ -266,7 +277,8 @@ internal object DashboardCss {
       --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round'><path d='M4 4l8 8M12 4l-8 8'/></svg>"); }
     /* Forced colours replace every background, the mask's paint included, so the icon would vanish. */
     @media (forced-colors: active) {
-      .copy::before, .scrape-now::before, .close::before, .guide-toggle::before, .theme button::before {
+      .copy::before, .scrape-now::before, .close::before, .guide-toggle::before, .logout button::before,
+      .theme button::before {
         forced-color-adjust:none; background:ButtonText; } }
     /* A scrape-now's result, above the Paths table: a heading line, then the start of the body. The body is the one
        block of a target's own text on the page, in a bounded box that scrolls rather than pushing the table away. */
@@ -332,6 +344,7 @@ internal object DashboardCss {
     @media (pointer: coarse) {
       .nav a, .nav a.on { min-height:44px; display:inline-flex; align-items:center; padding-top:0; padding-bottom:0; }
       .theme button { width:44px; height:44px; }
+      .logout button { width:46px; }
     }
     """.trimIndent()
 
