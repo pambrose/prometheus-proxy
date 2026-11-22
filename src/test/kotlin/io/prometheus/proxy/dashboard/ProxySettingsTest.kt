@@ -24,7 +24,9 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.prometheus.Proxy
 import io.prometheus.common.TestCerts
-import io.prometheus.common.dashboard.SettingsGroup
+import io.prometheus.common.dashboard.group
+import io.prometheus.common.dashboard.text
+import io.prometheus.common.dashboard.value
 import io.prometheus.common.proxyOptionsFromConfig
 
 /**
@@ -41,17 +43,6 @@ class ProxySettingsTest : StringSpec() {
     inProcessServerName = "proxy-settings-${System.nanoTime()}",
     testMode = true,
   )
-
-  private fun List<SettingsGroup>.group(title: String): SettingsGroup = single { it.title == title }
-
-  private fun List<SettingsGroup>.value(
-    title: String,
-    name: String,
-  ): String = group(title).rows.single { it.name == name }.value
-
-  // Every name and value the view shows, to search for a secret.
-  private fun List<SettingsGroup>.text(): String =
-    joinToString("\n") { group -> group.title + "\n" + group.rows.joinToString("\n") { "${it.name}: ${it.value}" } }
 
   private val keyBase64 = TestCerts.base64(TestCerts.SERVER_KEY)
 

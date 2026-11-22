@@ -21,6 +21,8 @@ import com.pambrose.common.service.MetricsConfig
 import com.pambrose.common.service.ZipkinConfig
 import io.prometheus.BuildConfig
 import io.prometheus.common.BaseOptions
+import com.pambrose.common.util.ensureLeadingSlash
+import io.prometheus.common.dashboard.SettingText.grpcDefault
 import io.prometheus.common.dashboard.SettingText.names
 import io.prometheus.common.dashboard.SettingText.onOff
 import io.prometheus.common.dashboard.SettingText.secs
@@ -99,7 +101,7 @@ internal object CommonSettings {
         Setting(
           "Endpoints",
           listOf(admin.pingPath, admin.versionPath, admin.healthCheckPath, admin.threadDumpPath)
-            .joinToString(", ") { "/${it.removePrefix("/")}" },
+            .joinToString(", ") { it.ensureLeadingSlash() },
         ),
         Setting("Debug servlet", onOff(debugEnabled)),
       ) + extra,
@@ -110,7 +112,7 @@ internal object CommonSettings {
     SettingsGroup(
       "Metrics",
       listOf(
-        Setting("Metrics", onOff(metrics.enabled) { "port ${metrics.port}, /${metrics.path.removePrefix("/")}" }),
+        Setting("Metrics", onOff(metrics.enabled) { "port ${metrics.port}, ${metrics.path.ensureLeadingSlash()}" }),
         Setting("JVM metrics", names(jvmExports(metrics), empty = "none")),
       ),
     )
@@ -143,8 +145,11 @@ internal object CommonSettings {
       SettingsGroup(
         "Dashboard",
         listOf(
-          Setting("Listening on", "${options.dashboardHost}:${options.dashboardPort}/${options.dashboardPath}"),
-          Setting("Login", onOff(options.dashboardPassword.isNotEmpty()) { "username ${options.dashboardUsername}" }),
+          Setting(
+            "Listening on",
+            "${options.dashboardHost}:${options.dashboardPort}${options.dashboardPath.ensureLeadingSlash()}",
+          ),
+          Setting("Login", onOff(options.dashboardLogin != null) { "username ${options.dashboardUsername}" }),
           Setting("Refresh", "every ${secs(refreshIntervalSecs)}"),
           Setting("Path history", "$pathHistorySize scrapes"),
           Setting("Activity feed", "$activityLogSize lines"),
@@ -164,13 +169,24 @@ internal object CommonSettings {
         Setting(
           "Zipkin",
           onOff(zipkin.enabled) {
-            "${zipkin.hostname}:${zipkin.port}/${zipkin.path.removePrefix("/")}, service ${zipkin.serviceName}"
+            "${zipkin.hostname}:${zipkin.port}${zipkin.path.ensureLeadingSlash()}, service ${zipkin.serviceName}"
           },
         ),
       ),
     )
 
-  /** The log level, as the startup log names it. */
-  fun logging(options: BaseOptions): SettingsGroup =
-    SettingsGroup("Logging", listOf(Setting("Log level", options.logLevel.ifEmpty { "info" })))
+  /** The log level, [logLevel], as the startup log names it. */
+  fun logging(logLevel: String): SettingsGroup =
+    SettingsGroup("Logging", listOf(Setting("Log level", logLevel.ifEmpty { "info" })))
+
+  /** The transport filter, which both sides turn off alike, behind a reverse proxy such as nginx. */
+  fun transportFilter(options: BaseOptions): Setting =
+    Setting("Transport filter", if (options.transportFilterDisabled) "disabled" else "enabled")
+
+  /** The gRPC keepalive both sides resolve alike, each -1 left to gRPC's default. */
+  fun keepalive(options: BaseOptions): List<Setting> =
+    listOf(
+      Setting("Keepalive time", grpcDefault(options.keepAliveTimeSecs)),
+      Setting("Keepalive timeout", grpcDefault(options.keepAliveTimeoutSecs)),
+    )
 }

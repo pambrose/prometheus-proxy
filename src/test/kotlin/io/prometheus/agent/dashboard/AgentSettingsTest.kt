@@ -26,7 +26,8 @@ import io.prometheus.Agent
 import io.prometheus.agent.createTempKeyStore
 import io.prometheus.common.TestCerts
 import io.prometheus.common.agentOptionsFromConfig
-import io.prometheus.common.dashboard.SettingsGroup
+import io.prometheus.common.dashboard.text
+import io.prometheus.common.dashboard.value
 
 /**
  * [AgentSettings], from an agent built but never started: what it resolved, worded as the view shows it, and no secret
@@ -45,15 +46,6 @@ class AgentSettingsTest : StringSpec() {
       inProcessServerName = "agent-settings-${System.nanoTime()}",
       testMode = true,
     ).also { created += it }
-
-  private fun List<SettingsGroup>.value(
-    title: String,
-    name: String,
-  ): String = single { it.title == title }.rows.single { it.name == name }.value
-
-  // Every name and value the view shows, to search for a secret.
-  private fun List<SettingsGroup>.text(): String =
-    joinToString("\n") { group -> group.title + "\n" + group.rows.joinToString("\n") { "${it.name}: ${it.value}" } }
 
   private val keyBase64 = TestCerts.base64(TestCerts.CLIENT_KEY)
 

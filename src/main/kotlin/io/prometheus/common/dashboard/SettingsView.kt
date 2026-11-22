@@ -17,7 +17,6 @@
 package io.prometheus.common.dashboard
 
 import io.prometheus.common.TlsSource
-import io.prometheus.common.dashboard.DashboardPage.DASH
 import io.prometheus.common.dashboard.DashboardPage.timeOfDay
 import kotlinx.html.DIV
 import kotlinx.html.div
@@ -28,7 +27,7 @@ import kotlin.time.Instant
  * One row of a dashboard's Settings view: a setting's [name] and its [value] as the process resolved it, from its
  * flags, env vars, config, and defaults. Never a secret: a token, a password, or a PEM shows only whether it is set.
  *
- * @param at a moment the row shows before its value, in the browser's time zone, as every time on the page is
+ * @param at a moment the row shows in place of its value, in the browser's time zone, as every time on the page is
  */
 internal data class Setting(
   val name: String,
@@ -71,16 +70,7 @@ internal object SettingsHtml {
     groups.forEach { group ->
       div("section") { span { +group.title } }
       group.rows.forEach { setting ->
-        div("kv") {
-          span("k") { +setting.name }
-          span("v") {
-            setting.at?.also {
-              timeOfDay(it)
-              if (setting.value.isNotEmpty()) +" "
-            }
-            +setting.value
-          }
-        }
+        kv(setting.name) { if (setting.at != null) timeOfDay(setting.at) else +setting.value }
       }
     }
   }
@@ -138,6 +128,6 @@ internal object SettingText {
   /** [values] as a list, or [empty] for none. */
   fun names(
     values: Collection<String>,
-    empty: String = DASH,
+    empty: String,
   ): String = values.joinToString(", ").ifEmpty { empty }
 }

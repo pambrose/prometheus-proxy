@@ -67,12 +67,9 @@ class SettingsViewTest : StringSpec() {
       }
     }
 
-    "a setting with a moment should show it as a time, before any value" {
-      val at = Instant.parse("2026-11-21T12:34:56Z")
-      render([SettingsGroup("About", [Setting("Started", "", at), Setting("Checked", "ok", at)])]).apply {
-        this shouldContain """<span class="k">Started</span><span class="v"><time datetime="2026-11-21T12:34:56Z">"""
-        this shouldContain """</time> ok</span>"""
-      }
+    "a setting with a moment should show it as a time" {
+      render([SettingsGroup("About", [Setting("Started", "", Instant.parse("2026-11-21T12:34:56Z"))])]) shouldContain
+        """<span class="k">Started</span><span class="v"><time datetime="2026-11-21T12:34:56Z">"""
     }
 
     "a push should carry the region out of band, and no groups should say so" {
@@ -94,8 +91,7 @@ class SettingsViewTest : StringSpec() {
       SettingText.limit(0, "bytes") shouldBe "unlimited"
       SettingText.limit(512) shouldBe "512"
       SettingText.limit(512, "characters") shouldBe "512 characters"
-      SettingText.names(["a", "b"]) shouldBe "a, b"
-      SettingText.names(emptyList()) shouldBe DASH
+      SettingText.names(["a", "b"], empty = DASH) shouldBe "a, b"
       SettingText.names(emptyList(), empty = "none") shouldBe "none"
     }
 

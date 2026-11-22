@@ -587,7 +587,7 @@ One support helper also lives here (not a test class itself):
 - **CommonSettingsTest** (`dashboard/`) — the Settings groups both dashboards share (`CommonSettings`): the About
   group with only the keys of the `-D` overrides; each TLS file named and a PEM only as set; the admin endpoints, the
   metrics endpoint and its JVM metrics, the dashboard's address and login, never its password, Zipkin, and the log
-  level; and where the config came from (`configShown`): a file, a URL with its credentials redacted, in memory, or the
+  level, `info` when unset; and where the config came from (`configShown`): a file, a URL with its credentials redacted, in memory, or the
   built-in defaults
 - **ConfigWrappersTest** — Factory methods for AdminConfig, MetricsConfig, ZipkinConfig
 - **ConstantsTest** — Constant values (EMPTY_AGENT_ID_MSG, EMPTY_PATH_MSG, EMPTY_INSTANCE)
@@ -676,6 +676,8 @@ These support helpers also live here (not test classes themselves):
   that give TLS material as PEM
 - **TestOptions** — factories that build `ProxyOptions` / `AgentOptions` from a list, `ConfigVals` from a HOCON
   fragment merged with the reference config, and `ProxyOptions` from a temp config file
+- **SettingsTestSupport** (`dashboard/`) — lookups into a Settings view's groups (`group`, `value`) and all of its text
+  (`text`), to search for a secret, shared by `CommonSettingsTest`, `ProxySettingsTest`, and `AgentSettingsTest`
 - **EmbeddedTestServer** — `EmbeddedServer.startAndAwaitReady()`, which starts a Ktor server with `wait = false`
   and polls with real HTTP probes until it serves several consecutive clean replies before returning the port
 - **LogCapture** — `captureLogs<T>(level) { … }`, which runs a block and returns what `T`'s logger emitted,

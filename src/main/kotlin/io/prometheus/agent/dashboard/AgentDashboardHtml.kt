@@ -29,6 +29,7 @@ import io.prometheus.common.dashboard.DashboardPage.announcer
 import io.prometheus.common.dashboard.DashboardPage.connectionIndicator
 import io.prometheus.common.dashboard.DashboardPage.dashboardHead
 import io.prometheus.common.dashboard.DashboardPage.humanize
+import io.prometheus.common.dashboard.kv
 import io.prometheus.common.dashboard.DashboardPage.pageTitle
 import io.prometheus.common.dashboard.DashboardPage.scrapeNowButton
 import io.prometheus.common.dashboard.DashboardPage.scrapeResultPanel
@@ -423,16 +424,6 @@ internal object AgentDashboardHtml {
     )
     kv("Colliding with static paths", discovery.collisions.joinToString(", ") { "/$it" }.ifEmpty { DASH })
     kv("Listed twice", discovery.duplicates.joinToString(", ") { "/$it" }.ifEmpty { DASH })
-  }
-
-  private fun DIV.kv(
-    name: String,
-    value: String,
-  ) {
-    div("kv") {
-      span("k") { +name }
-      span("v") { +value }
-    }
   }
 
   // A path's state as a tag, which says what its LED can't: a lamp is binary (docs/DESIGN.md, The No Amber Dot Rule),

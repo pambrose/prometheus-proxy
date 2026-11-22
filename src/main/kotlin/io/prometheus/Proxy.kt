@@ -70,6 +70,7 @@ import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -247,6 +248,13 @@ class Proxy(
 
   // How agents reach the proxy, plaintext or TLS, for the dashboard's Settings view.
   internal val tlsDescription: String get() = grpcService.tlsDescription
+
+  // How long an idle scrape connection stays open, its -1 resolved to the default, for the dashboard's Settings view.
+  internal val scrapeIdleTimeout: Duration get() = httpService.idleTimeout
+
+  // Whether the stale-agent cleanup runs: as configured, or forced on by a disabled transport filter (see
+  // agentCleanupService), for the dashboard's Settings view.
+  internal val isStaleAgentCheckRunning: Boolean get() = agentCleanupService != null
 
   // Null unless the stale-agent cleanup runs: when explicitly enabled, or forced on when the transport filter is
   // disabled (there's then no per-connection disconnect detection, so it's the only cleanup mechanism). Built here,

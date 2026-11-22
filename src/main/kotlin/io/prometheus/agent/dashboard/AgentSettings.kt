@@ -27,7 +27,7 @@ import io.prometheus.common.dashboard.CommonSettings
 import io.prometheus.common.dashboard.DashboardValues
 import io.prometheus.common.dashboard.DashboardPage.DASH
 import io.prometheus.common.dashboard.Setting
-import io.prometheus.common.dashboard.SettingText.grpcDefault
+import io.prometheus.common.dashboard.SettingText.names
 import io.prometheus.common.dashboard.SettingText.onOff
 import io.prometheus.common.dashboard.SettingText.secret
 import io.prometheus.common.dashboard.SettingText.secs
@@ -52,7 +52,7 @@ internal object AgentSettings {
         agent.upTime,
         leading = listOf(Setting("Agent name", agent.agentName)),
       ),
-      proxyConnection(options, config.internal),
+      proxyConnection(agent),
       scraping(agent),
       paths(agent),
       CommonSettings.tls(
@@ -64,27 +64,25 @@ internal object AgentSettings {
       CommonSettings.admin(newAdminConfig(options.adminEnabled, options.adminPort, config.admin), options.debugEnabled),
       CommonSettings.metrics(newMetricsConfig(options.metricsEnabled, options.metricsPort, config.metrics)),
       CommonSettings.tracing(newZipkinConfig(config.internal.zipkin)),
-      CommonSettings.logging(options),
+      CommonSettings.logging(options.logLevel),
     )
   }
 
   // How the agent reaches its proxies and keeps the connection: the endpoints it tries, in order, its token, never the
   // token itself, its gRPC settings, and its heartbeat.
-  private fun proxyConnection(
-    options: AgentOptions,
-    internal: ConfigVals.Agent.Internal,
-  ): SettingsGroup =
-    SettingsGroup(
+  private fun proxyConnection(agent: Agent): SettingsGroup {
+    val options = agent.options
+    val internal = agent.agentConfigVals.internal
+    return SettingsGroup(
       "Proxy connection",
       listOf(
-        Setting("Proxy endpoints", options.proxyHostname.split(",").joinToString(", ")),
+        Setting("Proxy endpoints", names(agent.grpcService.endpointSpecs, empty = DASH)),
         Setting("Token", secret(options.agentToken)),
         Setting("Consolidated", yesNo(options.consolidated)),
-        Setting("Transport filter", if (options.transportFilterDisabled) "disabled" else "enabled"),
+        CommonSettings.transportFilter(options),
         Setting("Reconnect pause", secs(internal.reconnectPauseSecs)),
         Setting("Unary deadline", secs(options.unaryDeadlineSecs)),
-        Setting("Keepalive time", grpcDefault(options.keepAliveTimeSecs)),
-        Setting("Keepalive timeout", grpcDefault(options.keepAliveTimeoutSecs)),
+      ) + CommonSettings.keepalive(options) + listOf(
         Setting("Keepalive without calls", yesNo(options.keepAliveWithoutCalls)),
         Setting(
           "Heartbeat",
@@ -95,6 +93,7 @@ internal object AgentSettings {
         ),
       ),
     )
+  }
 
   // How the agent fetches its targets: its limits, its HTTP clients, and whether it verifies a target's certificate.
   private fun scraping(agent: Agent): SettingsGroup =

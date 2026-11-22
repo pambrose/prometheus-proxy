@@ -341,13 +341,16 @@ abstract class BaseOptions protected constructor(
     get() {
       if (suppliedConfig != null)
         return "in memory"
-      val source = configSource.ifEmpty { System.getenv(envConfig).orEmpty() }
       return when {
-        source.isBlank() -> "built-in defaults"
-        source.isUrlPrefix() -> sanitizeUrl(source)
-        else -> source
+        configName.isBlank() -> "built-in defaults"
+        configName.isUrlPrefix() -> sanitizeUrl(configName)
+        else -> configName
       }
     }
+
+  // The config file or URL to read: --config, or else the role's env var.
+  private val configName: String
+    get() = configSource.ifEmpty { System.getenv(envConfig).orEmpty() }
 
   private fun isFlagInArgs(vararg names: String): Boolean =
     cliArgs.any { arg -> names.any { name -> arg.equals(name, ignoreCase = true) } }
@@ -718,7 +721,7 @@ abstract class BaseOptions protected constructor(
     val fallback = ConfigFactory.load().resolve()
     val loaded =
       suppliedConfig?.withFallback(fallback) ?: readConfig(
-        configSource.ifEmpty { System.getenv(envConfig).orEmpty() },
+        configName,
         envConfig,
         ConfigParseOptions.defaults().setAllowMissing(false),
         fallback,

@@ -39,8 +39,6 @@ import kotlin.time.Duration.Companion.minutes
  * `ProxySettingsTest` and `AgentSettingsTest`.
  */
 class CommonSettingsTest : StringSpec() {
-  private fun SettingsGroup.value(name: String): String = rows.single { it.name == name }.value
-
   private fun metrics(enabled: Boolean) =
     MetricsConfig(
       enabled = enabled,
@@ -157,10 +155,8 @@ class CommonSettingsTest : StringSpec() {
       CommonSettings.tracing(ZipkinConfig(true, "zipkin", 9411, "/api/v2/spans", "prometheus-proxy"))
         .value("Zipkin") shouldBe "on, zipkin:9411/api/v2/spans, service prometheus-proxy"
       CommonSettings.tracing(ZipkinConfig(false, "zipkin", 9411, "api/v2/spans", "x")).value("Zipkin") shouldBe "off"
-      CommonSettings.logging(proxyOptionsFromConfig("")).value("Log level") shouldBe "info"
-      // INFO, the test JVM's own level: resolving a level sets the root logger's for the whole JVM, and a quieter one
-      // would hide the log lines later specs read.
-      CommonSettings.logging(proxyOptionsFromConfig("""proxy.logLevel = "INFO"""")).value("Log level") shouldBe "INFO"
+      CommonSettings.logging("").value("Log level") shouldBe "info"
+      CommonSettings.logging("warn").value("Log level") shouldBe "warn"
     }
 
     // Parsed only, so the URL is never fetched: what the view shows is the URL as every message names it.

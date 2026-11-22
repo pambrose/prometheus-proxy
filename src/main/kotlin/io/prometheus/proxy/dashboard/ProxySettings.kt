@@ -16,6 +16,7 @@
 
 package io.prometheus.proxy.dashboard
 
+import com.pambrose.common.util.ensureLeadingSlash
 import io.prometheus.Proxy
 import io.prometheus.common.ConfigVals
 import io.prometheus.common.ConfigWrappers.newAdminConfig
@@ -29,7 +30,6 @@ import io.prometheus.common.dashboard.SettingText.limit
 import io.prometheus.common.dashboard.SettingText.onOff
 import io.prometheus.common.dashboard.SettingText.secs
 import io.prometheus.common.dashboard.SettingsGroup
-import io.prometheus.proxy.ProxyHttpService
 import io.prometheus.proxy.ProxyOptions
 import io.prometheus.proxy.ScrapeDispatch
 
@@ -52,7 +52,7 @@ internal object ProxySettings {
       authentication(options, config),
       CommonSettings.tls(options, proxy.tlsDescription),
       scrapes(proxy),
-      agentLimits(options, config.internal),
+      agentLimits(proxy),
       grpc(options),
       serviceDiscovery(options, config.service.discovery),
       dashboard(options, config.dashboard),
@@ -63,23 +63,24 @@ internal object ProxySettings {
       ),
       CommonSettings.metrics(newMetricsConfig(options.metricsEnabled, options.metricsPort, config.metrics)),
       CommonSettings.tracing(newZipkinConfig(config.internal.zipkin)),
-      CommonSettings.logging(options),
+      CommonSettings.logging(options.logLevel),
     )
   }
 
   // Where Prometheus and the agents reach the proxy, and the file blitz.io's verification fetches.
   private fun listeners(proxy: Proxy): SettingsGroup {
     val http = proxy.proxyConfigVals.http
-    val idleTimeout =
-      if (http.idleTimeoutSecs == -1) ProxyHttpService.DEFAULT_IDLE_TIMEOUT_SECS else http.idleTimeoutSecs
     return SettingsGroup(
       "Listeners",
       listOf(
         Setting("Scrapes (Prometheus)", "${http.host}:${proxy.scrapePort}"),
-        Setting("Idle scrape connections", "closed after ${secs(idleTimeout)}"),
+        Setting("Idle scrape connections", "closed after ${secs(proxy.scrapeIdleTimeout.inWholeSeconds)}"),
         Setting("Request logging", onOff(http.requestLoggingEnabled)),
         Setting("Agents (gRPC)", "port ${proxy.options.proxyAgentPort}"),
-        Setting("Blitz", onOff(proxy.proxyConfigVals.internal.blitz.enabled) { "/${proxy.options.blitzPath}" }),
+        Setting(
+          "Blitz",
+          onOff(proxy.proxyConfigVals.internal.blitz.enabled) { proxy.options.blitzPath.ensureLeadingSlash() },
+        ),
       ),
     )
   }
@@ -100,7 +101,7 @@ internal object ProxySettings {
         identityRows +
         listOf(
           Setting("gRPC reflection", onOff(!options.reflectionDisabled)),
-          Setting("Transport filter", if (options.transportFilterDisabled) "disabled" else "enabled"),
+          CommonSettings.transportFilter(options),
         ),
     )
   }
@@ -141,17 +142,13 @@ internal object ProxySettings {
   private fun scrapes(proxy: Proxy): SettingsGroup {
     val internal = proxy.proxyConfigVals.internal
     val options = proxy.options
+    val backlogFull = ScrapeDispatch.maxAgentBacklog(proxy)
     return SettingsGroup(
       "Scrapes",
       listOf(
         Setting("Scrape timeout", secs(internal.scrapeRequestTimeoutSecs)),
         Setting("Max in flight", "${internal.maxInFlightScrapeRequests} scrapes"),
-        Setting(
-          "Agent backlog",
-          "unhealthy at ${internal.scrapeRequestBacklogUnhealthySize}, full at ${ScrapeDispatch.maxAgentBacklog(
-            proxy,
-          )}",
-        ),
+        Setting("Agent backlog", "unhealthy at ${internal.scrapeRequestBacklogUnhealthySize}, full at $backlogFull"),
         Setting("Scrapes in flight", "unhealthy at ${options.scrapeRequestMapUnhealthySize}"),
         Setting("Chunked transfers", "unhealthy at ${options.chunkContextMapUnhealthySize}"),
         Setting("Largest zipped content", "${internal.maxZippedContentSizeMBytes} MB"),
@@ -161,29 +158,18 @@ internal object ProxySettings {
   }
 
   // When an idle agent is evicted, and the bounds on what one agent may register and report.
-  private fun agentLimits(
-    options: ProxyOptions,
-    internal: ConfigVals.Proxy2.Internal2,
-  ): SettingsGroup {
-    // Forced on with the transport filter disabled, which leaves no other way to notice an agent gone (see Proxy).
-    val staleCheck = internal.staleAgentCheckEnabled || options.transportFilterDisabled
-    val forced = if (!internal.staleAgentCheckEnabled &&
-      staleCheck
-    )
-      ", forced on by the disabled transport filter"
-      else
-      ""
+  private fun agentLimits(proxy: Proxy): SettingsGroup {
+    val internal = proxy.proxyConfigVals.internal
+    val pause = secs(internal.staleAgentCheckPauseSecs)
+    val inactivity = secs(internal.maxAgentInactivitySecs)
+    // The cleanup runs as configured, or forced on by a disabled transport filter (see Proxy.agentCleanupService).
+    val forced = if (internal.staleAgentCheckEnabled) "" else ", forced on by the disabled transport filter"
     return SettingsGroup(
       "Agent limits",
       listOf(
         Setting(
           "Stale agent check",
-          onOff(staleCheck) {
-            "every ${secs(
-              internal.staleAgentCheckPauseSecs,
-            )}, evicting after ${secs(internal.maxAgentInactivitySecs)} " +
-              "idle$forced"
-          },
+          onOff(proxy.isStaleAgentCheckRunning) { "every $pause, evicting after $inactivity idle$forced" },
         ),
         Setting("Paths per agent", limit(internal.maxPathsPerAgent)),
         Setting("Path length", limit(internal.maxPathLength, "characters")),
@@ -201,15 +187,21 @@ internal object ProxySettings {
     SettingsGroup(
       "gRPC server",
       listOf(
-        Setting("Handshake timeout", grpcDefault(options.handshakeTimeoutSecs, "120s")),
-        Setting("Keepalive time", grpcDefault(options.keepAliveTimeSecs)),
-        Setting("Keepalive timeout", grpcDefault(options.keepAliveTimeoutSecs)),
-        Setting("Keepalive without calls", if (options.permitKeepAliveWithoutCalls) "permitted" else "not permitted"),
-        Setting("Min keepalive interval", grpcDefault(options.permitKeepAliveTimeSecs, "300s")),
-        Setting("Max connection idle", grpcDefault(options.maxConnectionIdleSecs, "no limit")),
-        Setting("Max connection age", grpcDefault(options.maxConnectionAgeSecs, "no limit")),
-        Setting("Connection age grace", grpcDefault(options.maxConnectionAgeGraceSecs, "no limit")),
-      ),
+        Setting(
+          "Handshake timeout",
+          grpcDefault(options.handshakeTimeoutSecs, secs(ProxyOptions.GRPC_HANDSHAKE_TIMEOUT_SECS)),
+        ),
+      ) + CommonSettings.keepalive(options) +
+        listOf(
+          Setting("Keepalive without calls", if (options.permitKeepAliveWithoutCalls) "permitted" else "not permitted"),
+          Setting(
+            "Min keepalive interval",
+            grpcDefault(options.permitKeepAliveTimeSecs, secs(ProxyOptions.GRPC_PERMIT_KEEPALIVE_TIME_SECS)),
+          ),
+          Setting("Max connection idle", grpcDefault(options.maxConnectionIdleSecs, "no limit")),
+          Setting("Max connection age", grpcDefault(options.maxConnectionAgeSecs, "no limit")),
+          Setting("Connection age grace", grpcDefault(options.maxConnectionAgeGraceSecs, "no limit")),
+        ),
     )
 
   // The HTTP service discovery endpoint Prometheus can read the paths from.
@@ -220,7 +212,7 @@ internal object ProxySettings {
     SettingsGroup(
       "Service discovery",
       listOf(
-        Setting("Service discovery", onOff(options.sdEnabled) { "/${options.sdPath.removePrefix("/")}" }),
+        Setting("Service discovery", onOff(options.sdEnabled) { options.sdPath.ensureLeadingSlash() }),
         Setting("Target", options.sdTargetPrefix),
         Setting("Agents' job and instance labels", if (discovery.reserveJobAndInstanceLabels) "dropped" else "kept"),
       ),
