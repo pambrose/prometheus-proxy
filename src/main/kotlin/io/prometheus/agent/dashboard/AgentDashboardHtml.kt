@@ -35,7 +35,7 @@ import io.prometheus.common.dashboard.DashboardPage.scrapeNowButton
 import io.prometheus.common.dashboard.DashboardPage.scrapeResultPanel
 import io.prometheus.common.dashboard.DashboardPage.size
 import io.prometheus.common.dashboard.DashboardPage.tabs
-import io.prometheus.common.dashboard.DashboardPage.themeToggle
+import io.prometheus.common.dashboard.DashboardPage.themePicker
 import io.prometheus.common.dashboard.DashboardPage.timeOfDay
 import io.prometheus.common.dashboard.DashboardScript
 import io.prometheus.common.dashboard.DashboardView
@@ -145,7 +145,7 @@ internal object AgentDashboardHtml {
         span("brand") { +BRAND }
         tabs(AgentLayout.entries, layout, routeBase)
         span("bar-right") { statusInner(snapshot, oob = false) }
-        themeToggle()
+        themePicker()
         if (loginEnabled) logoutForm(routeBase)
       }
       announcer()

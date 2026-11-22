@@ -29,7 +29,7 @@ import io.prometheus.common.dashboard.DashboardPage.logoutForm
 import io.prometheus.common.dashboard.DashboardPage.pageTitle
 import io.prometheus.common.dashboard.DashboardPage.statusPill
 import io.prometheus.common.dashboard.DashboardPage.tabs
-import io.prometheus.common.dashboard.DashboardPage.themeToggle
+import io.prometheus.common.dashboard.DashboardPage.themePicker
 import io.prometheus.common.dashboard.DashboardPage.timeOfDay
 import io.prometheus.common.dashboard.DashboardScript
 import io.prometheus.common.dashboard.DashboardView
@@ -144,7 +144,7 @@ internal object ProxyDashboardHtml {
         span("brand") { +BRAND }
         renderNav(routeBase, layout)
         renderStatus(snapshot)
-        themeToggle()
+        themePicker()
         if (loginEnabled) logoutForm(routeBase)
       }
       announcer()

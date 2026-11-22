@@ -376,13 +376,13 @@ class AgentDashboardHtmlTest : StringSpec() {
         .apply { this shouldNotContain AgentDashboardHtml.ACTIVITY_ID }
     }
 
-    "the agent's page should apply a stored theme in its head, with the theme button in its bar and in no push" {
+    "the agent's page should apply a stored theme in its head, with the theme picker in its bar and in no push" {
       page(snapshot()).apply {
         substringBefore("</head>") shouldContain DashboardPage.THEME_SCRIPT
-        this shouldContain """<div class="theme"><button type="button" id="${DashboardPage.THEME_TOGGLE_ID}""""
+        this shouldContain """<div class="theme" id="${DashboardPage.THEME_PICKER_ID}" role="group""""
       }
       AgentDashboardHtml.pushFragment(snapshot(), AgentView(), "/dashboard") shouldNotContain
-        DashboardPage.THEME_TOGGLE_ID
+        DashboardPage.THEME_PICKER_ID
     }
 
     "a path row should select it by its URL, encoded, and the page's script should know the agent's views" {

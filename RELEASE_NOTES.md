@@ -22,8 +22,8 @@ _Not yet released_
   connection and why, failing over, and its paths registered or refused, in order, so you can see what happened while
   nobody was watching. The agent's Helm chart can turn the dashboard on (`dashboard.enabled`), and every demo now shows
   its agents' dashboards.
-- **Light or dark, your choice.** Both dashboards have a Theme button in the top bar. It starts at auto, following
-  your system, and each press switches to light, then dark, then back. Your browser remembers it.
+- **Light or dark, your choice.** Both dashboards have a theme picker in the top bar: light, dark, or auto, which
+  follows your system and is where it starts. Your browser remembers it.
 
 ### Bug Fixes
 

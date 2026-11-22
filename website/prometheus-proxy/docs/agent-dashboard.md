@@ -186,6 +186,6 @@ The bar along the top shows, on every view:
 - its backlog of scrapes waiting to run.
 
 The tab's title counts the problems, each path refused or retrying and a failing connection, so a dashboard in a
-background tab still says when something is wrong. At the bar's end, the **Theme** button sets the dashboard light or
+background tab still says when something is wrong. At the bar's end, the theme picker sets the dashboard light or
 dark, or **auto**, the default, which follows your system's, as on the proxy's
 [dashboard](web-dashboard.md#the-status-bar); the browser remembers the choice for each dashboard.
