@@ -17,7 +17,11 @@ import org.jetbrains.dokka.gradle.engine.parameters.VisibilityModifier
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import org.jmailen.gradle.kotlinter.tasks.FormatTask
 import org.jmailen.gradle.kotlinter.tasks.LintTask
-import java.time.LocalDate
+import org.gradle.process.ExecOperations
+import java.io.ByteArrayOutputStream
+import java.io.OutputStream
+import java.time.Instant
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 
@@ -42,19 +46,42 @@ plugins {
 // Version and group are defined in gradle.properties; a bump also updates the files step 2 of docs/RELEASE.md lists
 providers.gradleProperty("overrideVersion").orNull?.let { version = it }
 
-// ValueSources are read fresh on each build (configuration-cache-safe), so APP_RELEASE_DATE and
-// BUILD_TIME reflect the actual build time rather than a frozen configuration-cache value.
-abstract class CurrentDateValueSource : ValueSource<String, ValueSourceParameters.None> {
-  override fun obtain(): String =
-    LocalDate.now().format(DateTimeFormatter.ofPattern("MM/dd/yyyy"))
+// BUILD_TIME and APP_RELEASE_DATE are the time of the commit the build is from, so every build of a commit makes the
+// same BuildConfig. Stamped with the current time, as they were, BuildConfig changed on every Gradle invocation, which
+// recompiled main each time, dropped the configuration cache, and kept compileJava, compileTestKotlin, and the tests
+// from ever being up to date or coming from the build cache. A ValueSource is read on every build
+// (configuration-cache-safe), so a new commit restamps them. Without git, or outside a repository, it's the current
+// time.
+abstract class CommitTimeValueSource : ValueSource<Long, CommitTimeValueSource.Parameters> {
+  interface Parameters : ValueSourceParameters {
+    val repoDir: DirectoryProperty
+  }
+
+  @get:Inject
+  abstract val execOperations: ExecOperations
+
+  override fun obtain(): Long {
+    val output = ByteArrayOutputStream()
+    val commitSecs =
+      runCatching {
+        execOperations.exec {
+          commandLine("git", "log", "-1", "--format=%ct")
+          workingDir = parameters.repoDir.get().asFile
+          standardOutput = output
+          errorOutput = OutputStream.nullOutputStream()
+          isIgnoreExitValue = true
+        }
+        output.toString().trim().toLongOrNull()
+      }.getOrNull()
+    return commitSecs?.let { it * 1000 } ?: System.currentTimeMillis()
+  }
 }
 
-abstract class CurrentTimeValueSource : ValueSource<Long, ValueSourceParameters.None> {
-  override fun obtain(): Long = System.currentTimeMillis()
-}
-
-val releaseDate = providers.of(CurrentDateValueSource::class) {}
-val buildTime = providers.of(CurrentTimeValueSource::class) {}
+val buildTime = providers.of(CommitTimeValueSource::class) { parameters.repoDir.set(layout.projectDirectory) }
+val releaseDate =
+  buildTime.map { millis ->
+    Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("MM/dd/yyyy"))
+  }
 
 val basePackage = "io.prometheus"
 val displayName = "Prometheus Proxy"
@@ -284,6 +311,19 @@ fun Project.configureTesting() {
       providers.gradleProperty("harnessConfig").orNull
         ?: providers.environmentVariable(harnessConfigEnv).orNull
     harnessConfig?.let { environment(harnessConfigEnv, it) }
+
+    // Gradle doesn't count a Test task's environment among its inputs, and BuildConfig is the same for every build of a
+    // commit, so the tests can be up to date or come from the build cache: a result from one harness profile would be
+    // reused for another, and the container specs' SKIPPED placeholders for a run that enables them. The profile is an
+    // input, and so is whether the container specs run; a run that enables them always runs, since they test Docker
+    // images Gradle can't see.
+    inputs.property(harnessConfigEnv, harnessConfig.orEmpty())
+    val runContainerTests = providers.environmentVariable("RUN_CONTAINER_TESTS").orNull == "true"
+    inputs.property("runContainerTests", runContainerTests)
+    if (runContainerTests) {
+      outputs.upToDateWhen { false }
+      outputs.cacheIf("the container specs test Docker images, which aren't inputs") { false }
+    }
 
     // Scale the test JVM heap to the harness load. LARGE+ generates multi-MB scrape payloads
     // and runs them through 2000+ sequential calls; the default 512m heap OOMs in bodyAsText().

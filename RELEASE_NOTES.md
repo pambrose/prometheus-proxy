@@ -67,6 +67,8 @@ _Not yet released_
   its name.
 - **Heartbeats are no longer traced.** An idle agent's heartbeat every few seconds no longer fills Zipkin. The
   `grpcReportingEnabled` Zipkin setting, which never did anything, is gone; a config that sets it still loads.
+- **The release date is the release commit's.** The version the proxy and agent print, and the dashboards' Settings,
+  give the date of the commit a build is from rather than the day it was built.
 
 ## 4.6.1
 

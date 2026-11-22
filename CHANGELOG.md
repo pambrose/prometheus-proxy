@@ -102,6 +102,19 @@ All notable changes to this project are documented in this file.
   and for screen readers
 - `sendHeartBeat` calls are no longer traced
 - The unimplemented `internal.zipkin.grpcReportingEnabled` setting is removed; a config that sets it still loads
+- `BuildConfig.BUILD_TIME` and the release date the version and the dashboards show are the time of the commit the
+  build is from, not of the build, so every build of a commit is the same
+
+### Build & Tooling
+
+- The tests take less than half as long: `make tests` reruns only the tests rather than every task, the harness
+  profile defaults to MINI, as in CI (`make medium-tests` replaces `make mini-tests`), and specs that waited out fixed
+  timeouts or sleeps, or built the Docker images while skipped, no longer do
+- CI's build job is one Gradle invocation, and builds the embedded demo in the `consumer-check` job instead
+  (`make embedded-demo-check`, also in `make ci`)
+- With BuildConfig the same for every build of a commit, main isn't recompiled on each Gradle invocation, and compiled
+  classes and test results can come from the build cache; the harness profile is a test input, and a run of the
+  container specs always runs
 
 ## [4.6.1] - 2026-11-22
 

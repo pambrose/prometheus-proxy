@@ -21,8 +21,9 @@ package io.prometheus.harness
 import com.pambrose.common.dsl.KtorDsl.get
 import com.pambrose.common.dsl.KtorDsl.withHttpClient
 import com.pambrose.common.util.simpleClassName
-import com.pambrose.common.util.sleep
+import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.matchers.collections.shouldNotBeEmpty
+import io.kotest.matchers.doubles.shouldBeGreaterThan
 import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -49,6 +50,7 @@ import io.prometheus.harness.support.ProxyCallTestArgs
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.harness.support.withPrefix
+import kotlinx.coroutines.runBlocking
 import kotlin.time.Duration.Companion.seconds
 
 class NettyTestWithAdminMetricsTest :
@@ -83,11 +85,15 @@ class NettyTestWithAdminMetricsTest :
             scrapeTimeoutSecs = DEFAULT_SCRAPE_TIMEOUT_SECS,
             chunkContentSizeKbs = DEFAULT_CHUNK_SIZE_KBS,
             maxConcurrentClients = HARNESS_CONFIG.concurrentClients,
+            args = ["-Dagent.internal.heartbeatMaxInactivitySecs=1"],
           )
         },
         actions = {
-          // Wait long enough to trigger heartbeat for code coverage
-          sleep(15.seconds)
+          // Waits for a heartbeat, so the heartbeat runs over Netty for code coverage. A second without traffic sends
+          // one (heartbeatMaxInactivitySecs above), where the default 5s had this sleep 15s. The proxy's counter is
+          // shared by every spec in the JVM, so it's compared with its value now.
+          val heartbeats = proxy.metrics.heartbeatCount.get()
+          runBlocking { eventually(10.seconds) { proxy.metrics.heartbeatCount.get() shouldBeGreaterThan heartbeats } }
         },
       )
     }

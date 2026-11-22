@@ -104,11 +104,11 @@ object ContainerTestSupport {
   // per image (21 of them, 4.16GB, measured before this change). A stable tag plus deleteOnExit=false
   // inverts that: the tag outlives the run, so the image it names is never stranded by its own run.
   //
-  // A third leak outlived that fix. The build cache only helps when the jar is unchanged, and it never
-  // is: BuildConfig.BUILD_TIME is regenerated on every Gradle build, so each run misses the COPY cache,
-  // moves the tag to a new image, and strands the previous one (with its classic-builder intermediates).
-  // That was one ~591MB dangling image per image per run. [buildReplacingPrevious] removes the image
-  // the tag used to name once the new build has taken the tag.
+  // A third leak outlived that fix. The build cache only helps when the jar is unchanged, and a new commit
+  // changes it (BuildConfig.BUILD_TIME is the commit's time; it was each build's, which changed the jar on
+  // every run), so the build misses the COPY cache, moves the tag to a new image, and strands the previous
+  // one (with its classic-builder intermediates): one ~591MB dangling image per image each time.
+  // [buildReplacingPrevious] removes the image the tag used to name once the new build has taken the tag.
   //
   // Keeping the tags also puts them outside bin/docker-clean-tests.sh's localhost/testcontainers/
   // selector by construction, so routine cleanup cannot undo the reuse; `docker-clean --built` removes

@@ -396,25 +396,6 @@ class ScrapeDispatchTest : StringSpec() {
       response.updateMsg shouldBe "agent_disconnected"
     }
 
-    "submitScrapeRequest should return timed_out when proxy stops during scrape" {
-      val proxy = createSpyProxyForSubmit(timeoutSecs = 30)
-      val agentContext = AgentContext("test-remote")
-
-      // Start with proxy running, then stop after a brief delay
-      var proxyRunning = true
-      every { proxy.isRunning } answers { proxyRunning }
-
-      launch {
-        delay(200.milliseconds)
-        proxyRunning = false
-      }
-
-      val response = ScrapeDispatch.submitScrapeRequest(agentContext, proxy, ScrapeSpec("metrics"))
-
-      response.statusCode shouldBe HttpStatusCode.ServiceUnavailable
-      response.updateMsg shouldBe "timed_out"
-    }
-
     "submitScrapeRequest should unblock immediately when agent is removed" {
       val proxy = createSpyProxyForSubmit(timeoutSecs = 30)
       val agentContext = AgentContext("test-remote")

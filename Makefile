@@ -1,7 +1,7 @@
 .PHONY: default help stop clean clean-all stubs build tibuild refresh jars \
-        tests mini-tests xxl-tests nh-tests ip-tests netty-tests tls-tests \
+        tests medium-tests xxl-tests nh-tests ip-tests netty-tests tls-tests \
         lincheck-tests tla-checks check-rules helm-lint zizmor codescene \
-        container-tests scaling-tests all-tests ci ci-build consumer-check spring-boot-demo-check \
+        container-tests scaling-tests all-tests ci ci-build consumer-check spring-boot-demo-check embedded-demo-check \
         demos-up demos-up-local demos-down \
         _publish-consumer-check regen-certs \
         docker-build docker-scan docker-clean docker-clean-dry \
@@ -122,7 +122,7 @@ CHARTS := prometheus-proxy prometheus-agent
 
 # The jobs of the CI workflow (.github/workflows/ci.yml) that `make ci` runs, quickest first; build-site is its docs-site
 # job, and ci-build its build job. Keep the list, and ci-build's steps, in step with that workflow.
-CI_JOBS := tla-checks check-rules helm-lint build-site consumer-check spring-boot-demo-check ci-build
+CI_JOBS := tla-checks check-rules helm-lint build-site consumer-check spring-boot-demo-check embedded-demo-check ci-build
 
 # The version consumer-check publishes to the local Maven repository and builds against. Never a released version,
 # which the local repository may already hold from Maven Central, so the check always reads what this checkout builds.
@@ -208,14 +208,16 @@ refresh:  ## Refresh dependencies
 jars:  ## Build the prometheus-{agent,proxy} fat jars
 	$(GRADLE) agentJar proxyJar
 
-tests:  ## Rerun every check, lint and tests, without the Lincheck and container specs (all-tests runs them)
-	$(GRADLE) --rerun-tasks check
+# --rerun runs the tests even when nothing they read changed; the other tasks of check, lint and detekt among them, run
+# only when theirs did. --rerun-tasks, used before, also recompiled everything from scratch on every run.
+tests:  ## Run every check, lint and tests, rerunning the tests, without the Lincheck and container specs (all-tests runs them)
+	$(GRADLE) check test --rerun
 
-mini-tests:  ## make tests with the MINI harness profile
-	$(GRADLE) --rerun-tasks check -PharnessConfig=MINI
+medium-tests:  ## make tests with the MEDIUM harness profile (a load run: 1000 sequential scrapes per transport)
+	$(GRADLE) check test --rerun -PharnessConfig=MEDIUM
 
 xxl-tests:  ## make tests with the XXLARGE harness profile
-	$(GRADLE) --rerun-tasks check -PharnessConfig=XXLARGE
+	$(GRADLE) check test --rerun -PharnessConfig=XXLARGE
 
 nh-tests:  ## Run only the non-harness unit tests
 	$(GRADLE) test --tests "io.prometheus.agent.*" --tests "io.prometheus.proxy.*" --tests "io.prometheus.common.*" --tests "io.prometheus.misc.*"
@@ -346,12 +348,11 @@ demos-up-local:  ## The same, with every demo built from this checkout (needs a 
 demos-down:  ## Stop every demo: remove their containers and networks, and the Kubernetes demo's kind clusters
 	$(call run_demos,down)
 
-# ci.yml sets HARNESS_CONFIG=MINI for the whole job, so both Gradle runs see it; were it to differ, the test task would
-# be out of date and koverXmlReport would rerun the tests. --continue still writes the coverage report when a coverage
-# floor fails, but not when a test fails: the kover tasks depend on the test task, so Gradle skips them.
-ci-build:  ## The CI workflow's build job: compile, lint, and detekt, then the tests and coverage floors (MINI harness)
-	HARNESS_CONFIG=MINI $(GRADLE) clean build -x test
-	HARNESS_CONFIG=MINI $(GRADLE) --continue test koverVerify koverVerifyPerClass koverXmlReport koverLog
+# One Gradle invocation, as in ci.yml: the code compiles once, and lint, detekt, and the fat JARs run alongside the tests.
+# --continue still runs the tests past a lint failure, and writes the coverage report when a coverage floor fails, but
+# not when a test fails: the kover tasks depend on the test task, so Gradle skips them.
+ci-build:  ## The CI workflow's build job: compile, lint, detekt, the tests, and the coverage floors (MINI harness)
+	HARNESS_CONFIG=MINI $(GRADLE) --continue clean build koverVerify koverVerifyPerClass koverXmlReport koverLog
 
 # CI's consumer-check job. A Maven build that embeds the agent resolves the published POM by Maven's rules, which the
 # repo's Gradle builds don't follow, so this publishes the artifact to the local Maven repository, needing no GPG key,
@@ -368,6 +369,12 @@ spring-boot-demo-check: _publish-consumer-check  ## Build and test the Spring Bo
 # The artifact both checks build against, published once however many of them a make run asks for.
 _publish-consumer-check: _require-version
 	$(GRADLE) -PoverrideVersion=$(CONSUMER_CHECK_VERSION) publishToMavenLocal
+
+# Also in CI's consumer-check job: builds the embedded demo's coffee shop (demos/embedded/app), a Gradle project of its
+# own that embeds the agent through the public API, against this checkout (a composite build, which lints it too), so a
+# change to Agent.startAsyncAgent or the config tree it takes that breaks the demo fails here.
+embedded-demo-check:  ## Build the embedded demo's coffee shop against this checkout
+	$(GRADLE) -p demos/embedded/app -PlocalProxy build
 
 docker-clean-dry:  ## Preview what `make docker-clean` would reclaim (removes nothing)
 	@./bin/docker-clean-tests.sh --dry-run --cache
