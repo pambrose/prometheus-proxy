@@ -16,7 +16,6 @@
 
 package io.prometheus.proxy
 
-import brave.grpc.GrpcTracing
 import com.codahale.metrics.health.HealthCheck
 import com.pambrose.common.concurrent.GenericIdleService
 import com.pambrose.common.concurrent.genericServiceListener
@@ -57,11 +56,6 @@ internal class ProxyGrpcService(
   private val port: Int = -1,
   private val inProcessName: String = "",
 ) : GenericIdleService() {
-  // Named for proxy.internal.zipkin.serviceName. The Proxy builds this service, and with it the server below, before
-  // its initServletService assigns zipkinReporterService, so the tracing interceptor reads it when the first call
-  // arrives, not when installed (November #7).
-  private val tracing by lazy { proxy.zipkinReporterService.newTracing() }
-  private val grpcTracing by lazy { GrpcTracing.create(tracing) }
   private val grpcServer: Server
   private val tlsContext: TlsContext
   val healthCheck: HealthCheck
@@ -120,8 +114,9 @@ internal class ProxyGrpcService(
         buildList {
           if (!options.transportFilterDisabled)
             add(ProxyServerInterceptor(proxy))
+          // The Proxy builds this service, and with it the server, before its tracing can be: see Proxy.tracing.
           if (proxy.isZipkinEnabled)
-            add(DeferredServerInterceptor { grpcTracing.newServerInterceptor() })
+            add(DeferredServerInterceptor { checkNotNull(proxy.tracing).grpcTracing.newServerInterceptor() })
         }
 
       addService(ServerInterceptors.intercept(proxyService.bindService(), interceptors))
@@ -142,8 +137,6 @@ internal class ProxyGrpcService(
   }
 
   override fun shutDown() {
-    if (proxy.isZipkinEnabled)
-      tracing.close()
     grpcServer.shutdownGracefully(SHUTDOWN_GRACE)
   }
 

@@ -83,6 +83,9 @@ internal object MetricBuilders {
   /** The `cause` labels of the path rejection counters, the proxy's and the agent's: each cause a refusal carries. */
   val REJECTION_CAUSES = REJECTED.map { it.metricLabel }
 
+  /** A scrape's outcome label when it succeeded, the proxy's and the agent's, which a scrape's span is tagged with. */
+  const val SUCCESS_LABEL = "success"
+
   /** The `outcome` labels of the dashboard login counters, the proxy's and the agent's. */
   val LOGIN_OUTCOMES = DashboardLoginOutcome.entries.map { it.metricLabel }
 

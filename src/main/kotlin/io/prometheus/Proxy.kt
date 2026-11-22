@@ -41,6 +41,7 @@ import io.prometheus.common.Utils.getVersionDesc
 import io.prometheus.common.Utils.toJsonElement
 import io.prometheus.common.AgentValues.isValidLabelName
 import io.prometheus.common.AgentValues.labelsProblem
+import io.prometheus.common.scrapeTracingHolder
 import io.prometheus.proxy.ActivityLog
 import io.prometheus.proxy.AgentAuthManager
 import io.prometheus.proxy.AgentContext
@@ -273,6 +274,10 @@ class Proxy(
   private val metricsHolder = lazy { ProxyMetrics(this) }
   internal val metrics by metricsHolder
 
+  // Null with Zipkin off; built on the first gRPC call, or the first scrape (see scrapeTracingHolder).
+  private val tracingHolder = scrapeTracingHolder(proxyConfigVals.internal.zipkin.sampleRate)
+  internal val tracing by tracingHolder
+
   internal val pathManager by lazy { ProxyPathManager(this, isTestMode) }
   internal val agentContextManager = AgentContextManager(isTestMode, eventBus, activityLog = activityLog)
   internal val scrapeRequestManager = ScrapeRequestManager()
@@ -422,6 +427,9 @@ class Proxy(
     dashboardService?.stopSync()
     httpService.stopSync()
     agentCleanupService?.stopSync()
+    // After the services that trace, and before super.shutDown() stops the reporter, which sends what's still queued.
+    if (tracingHolder.isInitialized())
+      tracing?.close()
     closeMetrics()
     super.shutDown()
   }

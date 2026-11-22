@@ -62,7 +62,7 @@ internal object ProxySettings {
         listOf(Setting("Recent requests on /debug", "${config.admin.recentRequestsQueueSize}")),
       ),
       CommonSettings.metrics(newMetricsConfig(options.metricsEnabled, options.metricsPort, config.metrics)),
-      CommonSettings.tracing(newZipkinConfig(config.internal.zipkin)),
+      CommonSettings.tracing(newZipkinConfig(config.internal.zipkin), config.internal.zipkin.sampleRate),
       CommonSettings.logging(options.logLevel),
     )
   }

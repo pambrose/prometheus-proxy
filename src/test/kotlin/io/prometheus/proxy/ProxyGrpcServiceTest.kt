@@ -21,8 +21,6 @@ package io.prometheus.proxy
 import brave.Span
 import brave.Tracing
 import brave.handler.MutableSpan
-import brave.handler.SpanHandler
-import brave.propagation.TraceContext
 import com.pambrose.common.dsl.GrpcDsl.channel
 import com.pambrose.common.service.ZipkinReporterService
 import com.pambrose.common.utils.TlsContext.Companion.PLAINTEXT_CONTEXT
@@ -55,6 +53,8 @@ import io.prometheus.agent.AgentTokenClientInterceptor
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
 import io.prometheus.common.GrpcConstants.META_AGENT_ID_KEY
 import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
+import io.prometheus.common.collectInto
+import io.prometheus.common.scrapeTracingHolder
 import io.prometheus.grpc.PathRejectionCause
 import io.prometheus.grpc.ProxyServiceGrpc
 import io.prometheus.grpc.RegisterPathResponse
@@ -384,6 +384,9 @@ class ProxyGrpcServiceTest : StringSpec() {
       every { proxy.isZipkinEnabled } returns true
       every { proxy.zipkinReporterService } throws
         UninitializedPropertyAccessException("lateinit property zipkinReporterService has not been initialized")
+      // As Proxy.tracing is: built from the reporter on first use.
+      val proxyTracing = proxy.scrapeTracingHolder(1.0)
+      every { proxy.tracing } answers { proxyTracing.value }
 
       val spans = LinkedBlockingQueue<MutableSpan>()
       val tracing = Tracing.newBuilder().addSpanHandler(collectInto(spans)).build()
@@ -402,16 +405,6 @@ class ProxyGrpcServiceTest : StringSpec() {
       }
     }
   }
-
-  // A span handler that keeps each span a Tracing finishes.
-  private fun collectInto(spans: LinkedBlockingQueue<MutableSpan>) =
-    object : SpanHandler() {
-      override fun end(
-        context: TraceContext,
-        span: MutableSpan,
-        cause: Cause,
-      ): Boolean = spans.add(span)
-    }
 
   // A mocked proxy, with the transport filter on, whose agent-context and path managers are real, so a test can see
   // what a call over the wire does to them.

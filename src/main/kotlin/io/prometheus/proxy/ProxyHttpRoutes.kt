@@ -16,6 +16,7 @@
 
 package io.prometheus.proxy
 
+import brave.Span
 import com.pambrose.common.util.ensureLeadingSlash
 import com.pambrose.common.util.runCatchingCancellable
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
@@ -31,11 +32,16 @@ import io.ktor.server.routing.RoutingContext
 import io.ktor.server.routing.get
 import io.prometheus.Proxy
 import io.prometheus.common.AgentValues.shownValue
+import io.prometheus.common.ScrapeTracing.Companion.SCRAPE_SPAN
+import io.prometheus.common.ScrapeTracing.Companion.TAG_PATH
+import io.prometheus.common.ScrapeTracing.Companion.endedAs
+import io.prometheus.common.ScrapeTracing.Companion.traced
 import io.prometheus.common.Utils.sanitizeQueryParams
 import io.prometheus.proxy.ProxyConstants.FAVICON_FILENAME
 import io.prometheus.proxy.ProxyUtils.incrementScrapeRequestCount
 import io.prometheus.proxy.ProxyUtils.respondWith
 import io.prometheus.proxy.ScrapeDispatch.MAX_SHOWN_RESULT_CHARS
+import kotlin.time.TimeMark
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlin.time.Duration
@@ -163,6 +169,19 @@ internal object ProxyHttpRoutes {
   ): List<ScrapeRequestResponse> {
     val path = scrape.path
     val started = TimeSource.Monotonic.markNow()
+    val span = scrapeSpan(proxy, path, agentContextInfo.agentContexts.size)
+    return span.traced(CLIENT_CANCELLED_LABEL, { responses -> endedAs(responses.map { it.updateMsg }) }) {
+      submitAndRecord(agentContextInfo, proxy, scrape.copy(trace = span?.context()), started)
+    }
+  }
+
+  private suspend fun submitAndRecord(
+    agentContextInfo: ProxyPathManager.AgentContextInfo,
+    proxy: Proxy,
+    scrape: ScrapeSpec,
+    started: TimeMark,
+  ): List<ScrapeRequestResponse> {
+    val path = scrape.path
     return try {
       // submitScrapeRequests answers in the agents' order, so zipping recovers which agent produced which response.
       // That keeps provenance at the one site that needs it, rather than as a field on the response.
@@ -193,6 +212,20 @@ internal object ProxyHttpRoutes {
       throw e
     }
   }
+
+  // A Prometheus scrape's span, which begins its trace: Prometheus sends no trace of its own, and the propagation
+  // headers a client can send the unauthenticated scrape port aren't joined, so a client can't make the proxy keep
+  // every trace. Null with Zipkin off.
+  private fun scrapeSpan(
+    proxy: Proxy,
+    path: String,
+    agentCount: Int,
+  ): Span? =
+    proxy.tracing?.newTrace(SCRAPE_SPAN)?.apply {
+      kind(Span.Kind.SERVER)
+      tag(TAG_PATH, path)
+      tag("agents", agentCount.toString())
+    }
 
   private fun recordClientCancelled(
     agentContextInfo: ProxyPathManager.AgentContextInfo,

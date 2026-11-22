@@ -115,6 +115,10 @@ message ScrapeRequest {
   // of Prometheus's scrapes. Additive both ways: an agent predating it ignores it and counts the scrape as
   // Prometheus's, and a proxy predating it leaves it false.
   bool dashboard_scrape = 9;
+  // The proxy's trace of the scrape, as B3 propagation headers, so the agent's span of its fetch joins it. Empty when
+  // the proxy traces nothing, and then the agent, with its own tracing on, starts a trace of its own. Additive both
+  // ways: an agent predating it ignores it, and a proxy predating it leaves it empty.
+  map<string, string> trace_context = 10;
 }
 
 message ScrapeResponse {

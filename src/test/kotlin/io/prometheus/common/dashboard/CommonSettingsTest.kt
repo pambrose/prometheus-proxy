@@ -152,9 +152,12 @@ class CommonSettingsTest : StringSpec() {
     }
 
     "the Tracing and Logging groups should show Zipkin and the log level" {
-      CommonSettings.tracing(ZipkinConfig(true, "zipkin", 9411, "/api/v2/spans", "prometheus-proxy"))
-        .value("Zipkin") shouldBe "on, zipkin:9411/api/v2/spans, service prometheus-proxy"
-      CommonSettings.tracing(ZipkinConfig(false, "zipkin", 9411, "api/v2/spans", "x")).value("Zipkin") shouldBe "off"
+      CommonSettings.tracing(ZipkinConfig(true, "zipkin", 9411, "/api/v2/spans", "prometheus-proxy"), 1.0)
+        .value("Zipkin") shouldBe "on, zipkin:9411/api/v2/spans, service prometheus-proxy, sampling 100%"
+      CommonSettings.tracing(ZipkinConfig(true, "zipkin", 9411, "api/v2/spans", "x"), 0.07)
+        .value("Zipkin") shouldBe "on, zipkin:9411/api/v2/spans, service x, sampling 7%"
+      CommonSettings.tracing(ZipkinConfig(false, "zipkin", 9411, "api/v2/spans", "x"), 1.0)
+        .value("Zipkin") shouldBe "off"
       CommonSettings.logging("").value("Log level") shouldBe "info"
       CommonSettings.logging("warn").value("Log level") shouldBe "warn"
     }

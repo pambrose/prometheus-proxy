@@ -75,6 +75,20 @@ internal fun KLogger.requirePositive(
 }
 
 /**
+ * Requires [value], a Zipkin sample rate, to be 0 or from 0.01 to 1, the rates Brave's counting sampler takes, then
+ * logs it as `name: value`. Checked here, at startup, since the sampler is built only on the first traced call.
+ */
+internal fun KLogger.requireSampleRate(
+  name: String,
+  value: Double,
+) {
+  require(value == 0.0 || value in MIN_SAMPLE_RATE..1.0) { "$name must be 0, or from 0.01 to 1: $value" }
+  info { "$name: $value" }
+}
+
+private const val MIN_SAMPLE_RATE = 0.01
+
+/**
  * Requires [value], a gRPC timeout or keepalive setting or the scrape port's idle timeout, to be -1 or positive, then
  * logs it as `name: value`. -1 is the sentinel that keeps the built-in default, gRPC's (the `> -1L` guards in
  * ProxyGrpcService rely on it) or ProxyHttpService's, and is logged as `name: default ([default])`. Any other

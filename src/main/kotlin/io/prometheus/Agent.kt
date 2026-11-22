@@ -51,6 +51,7 @@ import io.prometheus.agent.RequestFailureException
 import io.prometheus.agent.dashboard.AgentDashboardService
 import io.prometheus.agent.discovery.FileDiscoverySource
 import io.prometheus.agent.discovery.PathDiscoveryService
+import io.prometheus.common.scrapeTracingHolder
 import io.prometheus.metrics.core.datapoints.Timer
 import io.prometheus.common.BaseOptions.Companion.DEBUG
 import io.prometheus.common.BaseOptions.Companion.failOnInvalidConfig
@@ -272,6 +273,11 @@ class Agent(
   internal val launchId = randomId(15)
   private val metricsHolder = lazy { AgentMetrics(this) }
   internal val metrics by metricsHolder
+
+  // Null with Zipkin off. One for the agent's life, shared by every channel a reconnect builds, and built on the first
+  // call (see scrapeTracingHolder).
+  private val tracingHolder = scrapeTracingHolder(agentConfigVals.internal.zipkin.sampleRate)
+  internal val tracing by tracingHolder
 
   internal val agentConfigVals: ConfigVals.Agent get() = configVals.agent
 
@@ -835,33 +841,31 @@ class Agent(
     }
   }
 
+  // What this class's constructor built and startup started, released whether startup failed or the agent stops. The
+  // tracing closes after the services that trace, and before super.shutDown() stops the reporter, which sends what's
+  // still queued. listOf, not a collection literal: Dokka 2.3.0 can't translate a public class's property initialized
+  // with one, and fails the KDoc build.
+  private val releaseSteps: List<() -> Unit> =
+    listOf(
+      { dashboardService?.stopSync() },
+      { grpcService.shutDown() },
+      { runBlocking { agentHttpService.close() } },
+      { if (tracingHolder.isInitialized()) tracing?.close() },
+      { closeMetrics() },
+    )
+
   // super.startUp() stops the admin, metrics and Zipkin services it started when it fails (common-utils 5.0.0), but
   // not the gRPC channel and HTTP client cache this class's constructor built. Each step runs whether or not the
   // other succeeds.
   private fun releaseAfterFailedStartUp() {
-    val steps: List<() -> Unit> =
-      [
-        { dashboardService?.stopSync() },
-        { grpcService.shutDown() },
-        { runBlocking { agentHttpService.close() } },
-        { closeMetrics() },
-      ]
-    steps.runEach().forEach { e -> logger.debug(e) { "Releasing after a failed startup: ${e.message}" } }
+    releaseSteps.runEach().forEach { e -> logger.debug(e) { "Releasing after a failed startup: ${e.message}" } }
   }
 
   // Every step runs even when an earlier one fails, so a gRPC shutdown that throws can't leave the client cache open,
   // or the admin and metrics servers that super.shutDown() stops running. The first failure is rethrown with the rest
   // attached as suppressed exceptions.
   override fun shutDown() {
-    val steps: List<() -> Unit> =
-      [
-        { dashboardService?.stopSync() },
-        { grpcService.shutDown() },
-        { runBlocking { agentHttpService.close() } },
-        { closeMetrics() },
-        { super.shutDown() },
-      ]
-    val failures = steps.runEach()
+    val failures = (releaseSteps + { super.shutDown() }).runEach()
     failures.firstOrNull()?.let { first ->
       failures.drop(1).forEach(first::addSuppressed)
       throw first

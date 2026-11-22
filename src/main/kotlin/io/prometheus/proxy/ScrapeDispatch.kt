@@ -16,6 +16,8 @@
 
 package io.prometheus.proxy
 
+import brave.Span
+import brave.propagation.TraceContext
 import com.pambrose.common.util.simpleClassName
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.http.ContentType
@@ -29,7 +31,11 @@ import io.ktor.server.request.header
 import io.prometheus.Proxy
 import io.prometheus.common.AgentValues.shownValue
 import io.prometheus.common.Exposition
+import io.prometheus.common.MetricBuilders.SUCCESS_LABEL
 import io.prometheus.common.ScrapeResults
+import io.prometheus.common.ScrapeTracing.Companion.FORWARD_SPAN
+import io.prometheus.common.ScrapeTracing.Companion.endedAs
+import io.prometheus.common.ScrapeTracing.Companion.traced
 import io.prometheus.proxy.ProxyUtils.DecodedContent
 import io.prometheus.proxy.ProxyUtils.unzip
 import kotlinx.coroutines.async
@@ -151,7 +157,33 @@ internal object ScrapeDispatch {
     proxy: Proxy,
     scrape: ScrapeSpec,
   ): ScrapeRequestResponse {
-    val scrapeRequest = createScrapeRequest(agentContext, proxy, scrape)
+    val span = forwardSpan(agentContext, proxy, scrape)
+    return span.traced(ended = { endedAs(listOf(it.updateMsg), it.statusCode.value) }) {
+      awaitScrapeResponse(agentContext, proxy, scrape, span)
+    }
+  }
+
+  // The span of [scrape]'s request to [agentContext], in the trace the scrape route began for it; null for a scrape
+  // that isn't traced, a dashboard's among them. The agent's identity is its own to report, so it's cut and escaped.
+  private fun forwardSpan(
+    agentContext: AgentContext,
+    proxy: Proxy,
+    scrape: ScrapeSpec,
+  ): Span? =
+    scrape.trace?.let { parent ->
+      proxy.tracing?.newChild(parent, FORWARD_SPAN)?.apply {
+        tag("agentId", shownValue(agentContext.agentId))
+        tag("agentName", shownValue(agentContext.agentName))
+      }
+    }
+
+  private suspend fun awaitScrapeResponse(
+    agentContext: AgentContext,
+    proxy: Proxy,
+    scrape: ScrapeSpec,
+    span: Span?,
+  ): ScrapeRequestResponse {
+    val scrapeRequest = createScrapeRequest(agentContext, proxy, scrape, span)
     val timeoutTime = scrape.timeout ?: proxy.proxyConfigVals.internal.scrapeRequestTimeoutSecs.seconds
 
     // A terminal response here means the agent disconnected or the request timed out.
@@ -320,7 +352,7 @@ internal object ScrapeDispatch {
       contentText = decoded.text,
       failureReason = scrapeResults.srFailureReason,
       url = scrapeResults.srUrl,
-      updateMsg = "success",
+      updateMsg = SUCCESS_LABEL,
       fetchDuration = scrapeRequest.ageDuration(),
       // The byte count already computed during unzip (gzipped) or the small plain payload's length, so the size need
       // not be measured again by re-encoding the decoded text.
@@ -352,6 +384,7 @@ internal object ScrapeDispatch {
     agentContext: AgentContext,
     proxy: Proxy,
     scrape: ScrapeSpec,
+    span: Span?,
   ): ScrapeRequestWrapper {
     val headers = scrape.headers
     val authHeader = headers.authorization
@@ -368,6 +401,8 @@ internal object ScrapeDispatch {
       debugEnabledVal = proxy.options.debugEnabled,
       scrapeTimeoutVal = headers.scrapeTimeout,
       dashboardScrapeVal = scrape.origin == ScrapeOrigin.DASHBOARD,
+      traceSpan = span,
+      traceContextVal = span?.let { proxy.tracing?.contextOf(it) }.orEmpty(),
     )
   }
 
@@ -401,6 +436,8 @@ internal enum class ScrapeOrigin {
  * @param headers what the request that started the scrape asks for
  * @param timeout how long the proxy waits for each agent's answer; null for `proxy.internal.scrapeRequestTimeoutSecs`
  * @param origin who asked for the scrape, which the agent is told
+ * @param trace the trace the scrape route began for the scrape, which each agent's forward span joins; null for a
+ *   scrape that isn't traced
  */
 internal data class ScrapeSpec(
   val path: String,
@@ -408,6 +445,7 @@ internal data class ScrapeSpec(
   val headers: ScrapeHeaders = ScrapeHeaders(),
   val timeout: Duration? = null,
   val origin: ScrapeOrigin = ScrapeOrigin.PROMETHEUS,
+  val trace: TraceContext? = null,
 )
 
 /**

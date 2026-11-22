@@ -468,6 +468,8 @@ internal class ProxyServiceImpl(
         proxy.metrics { scrapeQueueWait.observe(wrapper.ageDuration().toDouble(DurationUnit.SECONDS)) }
       try {
         emit(wrapper.scrapeRequest)
+        // On the forward span, so the time the request waited in the agent's queue shows.
+        wrapper.traceSpan?.annotate("sent to agent")
       } catch (e: CancellationException) {
         // Cancelled after polling the wrapper out of the queue but before delivering it: fail the
         // wrapper so the waiting HTTP handler gets a prompt error instead of blocking the full

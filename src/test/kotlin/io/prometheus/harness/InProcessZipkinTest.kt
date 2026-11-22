@@ -22,6 +22,7 @@ import com.google.common.util.concurrent.Service
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -39,14 +40,18 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import io.prometheus.common.LOOPBACK_HOST
+import io.prometheus.common.ScrapeTracing
 import io.prometheus.common.TestPorts.ZIPKIN_AGENT_HTTP_PORT
 import io.prometheus.common.TestPorts.ZIPKIN_BOTH_HTTP_PORT
 import io.prometheus.common.TestPorts.ZIPKIN_PROXY_HTTP_PORT
 import io.prometheus.common.TestPorts.ZIPKIN_UNREACHABLE_PORT
+import io.prometheus.common.TestPorts.ZIPKIN_UNSAMPLED_HTTP_PORT
 import io.prometheus.common.startAndAwaitReady
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.metrics.model.registry.PrometheusRegistry
+import kotlin.time.Duration
+import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -79,7 +84,9 @@ class InProcessZipkinTest : StringSpec() {
     }
 
     // What the website's Zipkin section describes: each side reports its gRPC spans under its configured serviceName,
-    // and the proxy's server span joins the trace the agent's client span started.
+    // and the proxy's server span joins the trace the agent's client span started. A scrape is a trace of its own: the
+    // proxy's scrape span, a forward span for the agent, and the agent's fetch span, which joins it through the context
+    // the proxy sent with the request. The agent idles long enough to heartbeat, which is never traced.
     "with Zipkin enabled on both sides, each should report its spans under its configured service name" {
       val collector = SpanCollector()
       val collectorPort = collector.start()
@@ -87,7 +94,8 @@ class InProcessZipkinTest : StringSpec() {
         scrapeRoundTrip(
           httpPort = ZIPKIN_BOTH_HTTP_PORT,
           proxyArgs = zipkinArgs("proxy", collectorPort, PROXY_SERVICE_NAME),
-          agentArgs = zipkinArgs("agent", collectorPort, AGENT_SERVICE_NAME),
+          agentArgs = zipkinArgs("agent", collectorPort, AGENT_SERVICE_NAME) + HEARTBEAT_EVERY_SECOND,
+          idleBeforeStop = 3.seconds,
         )
 
         // Stopping each side flushed its reporter, so every span it finished has been posted.
@@ -98,7 +106,37 @@ class InProcessZipkinTest : StringSpec() {
           clientSpans.shouldNotBeEmpty()
           serverSpans.shouldNotBeEmpty()
           serverSpans.map { it.traceId }.intersect(clientSpans.map { it.traceId }.toSet()).shouldNotBeEmpty()
+
+          val scrape = spans.single { it.name == ScrapeTracing.SCRAPE_SPAN }
+          val forward = spans.single { it.name == ScrapeTracing.FORWARD_SPAN }
+          val fetch = spans.single { it.name == ScrapeTracing.FETCH_SPAN }
+          listOf(scrape.serviceName, forward.serviceName, fetch.serviceName) shouldBe
+            [PROXY_SERVICE_NAME, PROXY_SERVICE_NAME, AGENT_SERVICE_NAME]
+          listOf(forward.traceId, fetch.traceId) shouldBe [scrape.traceId, scrape.traceId]
+          forward.parentId shouldBe scrape.id
+          fetch.parentId shouldBe forward.id
+          scrape.tags.getValue("path") shouldBe PATH
+          fetch.tags.getValue("outcome") shouldBe "success"
+          spans.filter { it.name.orEmpty().contains(ScrapeTracing.HEARTBEAT_METHOD.lowercase()) }.shouldBeEmpty()
         }
+      } finally {
+        collector.stop()
+      }
+    }
+
+    // A sample rate of 0 keeps nothing: neither a scrape's spans nor the gRPC calls'.
+    "at a sample rate of 0, neither side should report a span" {
+      val collector = SpanCollector()
+      val collectorPort = collector.start()
+      try {
+        scrapeRoundTrip(
+          httpPort = ZIPKIN_UNSAMPLED_HTTP_PORT,
+          proxyArgs = zipkinArgs("proxy", collectorPort) + "-Dproxy.internal.zipkin.sampleRate=0",
+          agentArgs = zipkinArgs("agent", collectorPort) + "-Dagent.internal.zipkin.sampleRate=0",
+        )
+
+        // Stopping each side flushed its reporter, so a span either had been posted by then or never will be.
+        collector.spans().shouldBeEmpty()
       } finally {
         collector.stop()
       }
@@ -111,6 +149,7 @@ class InProcessZipkinTest : StringSpec() {
     httpPort: Int,
     proxyArgs: List<String> = emptyList(),
     agentArgs: List<String> = emptyList(),
+    idleBeforeStop: Duration = Duration.ZERO,
   ) {
     PrometheusRegistry.defaultRegistry.clear()
 
@@ -139,6 +178,7 @@ class InProcessZipkinTest : StringSpec() {
             response.status shouldBe HttpStatusCode.OK
             response.bodyAsText() shouldContain METRIC_LINE.trim()
           }
+          delay(idleBeforeStop)
 
           agent.stopSync(STOP_TIMEOUT)
           agent.state() shouldBe Service.State.TERMINATED
@@ -196,8 +236,12 @@ class InProcessZipkinTest : StringSpec() {
           val span = element.jsonObject
           ReportedSpan(
             traceId = span.getValue("traceId").jsonPrimitive.content,
+            id = span.getValue("id").jsonPrimitive.content,
+            parentId = span["parentId"]?.jsonPrimitive?.content,
+            name = span["name"]?.jsonPrimitive?.content,
             kind = span["kind"]?.jsonPrimitive?.content,
             serviceName = span["localEndpoint"]?.jsonObject?.get("serviceName")?.jsonPrimitive?.content,
+            tags = span["tags"]?.jsonObject?.mapValues { (_, value) -> value.jsonPrimitive.content }.orEmpty(),
           )
         }
       }
@@ -205,8 +249,12 @@ class InProcessZipkinTest : StringSpec() {
 
   private data class ReportedSpan(
     val traceId: String,
+    val id: String,
+    val parentId: String?,
+    val name: String?,
     val kind: String?,
     val serviceName: String?,
+    val tags: Map<String, String>,
   )
 
   companion object {
@@ -218,5 +266,9 @@ class InProcessZipkinTest : StringSpec() {
     private const val AGENT_SERVICE_NAME = "zipkin-test-agent"
 
     private val STOP_TIMEOUT = 10.seconds
+
+    // So an agent idling a few seconds heartbeats: after a second without a message, checked every 100 ms.
+    private val HEARTBEAT_EVERY_SECOND =
+      ["-Dagent.internal.heartbeatMaxInactivitySecs=1", "-Dagent.internal.heartbeatCheckPauseMillis=100"]
   }
 }

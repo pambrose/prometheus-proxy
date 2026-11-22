@@ -105,7 +105,7 @@ shared. To move a port that is already taken, set `NETWORK_DEMO_DASHBOARD_PORT`,
 | `network-app` | The simulated services. Their traffic follows a 5-minute "day", so the graphs move. |
 | `prometheus` | Scrapes every agent's paths through whichever proxy advertises them, every 5 seconds with a 4-second timeout, and both proxies' own metrics directly, from its own side of the WAN. It loads a few fast demo alerts. |
 | `grafana` | Opens on the demo's dashboard: scrape time per agent, target health, payload size, connects, connected agents per proxy, evictions, bytes a filter saved, and firing alerts. |
-| `zipkin` | Receives a span from every proxy and agent for each gRPC call between them. |
+| `zipkin` | Receives a span from every proxy and agent for each gRPC call between them but heartbeats, and each scrape's spans. |
 
 ## Scenarios
 
@@ -251,9 +251,9 @@ registered and then dropped retries from the head of the list. Grafana's **Agent
 agent stays on `branch-to-proxy:50053`, with no **failed over** tag; its Activity view shows each drop as
 **disconnected**, then **connected** and **registered**.
 
-Every proxy and agent reports a [Zipkin](advanced.md#zipkin-tracing) span for each gRPC call between them, under its
-own service name. In Zipkin, the search is `serviceName` = `agent-branch`. Open
-<http://localhost:9511/zipkin/?serviceName=agent-branch>, which fills that search in, and click **Run Query**.
+Every proxy and agent reports a [Zipkin](advanced.md#zipkin-tracing) span for each gRPC call between them but
+heartbeats, under its own service name. In Zipkin, the search is `serviceName` = `agent-branch` and `spanName` =
+`proxyservice/connectagent`. Open <http://localhost:9511/zipkin/?serviceName=agent-branch&spanName=proxyservice%2Fconnectagent>, which fills that search in, and click **Run Query**.
 
 <figure markdown="span">
   ![A reconnect's connectagent call, traced from agent-branch to the proxy](images/network-demo/tracing.webp){ loading=lazy }
@@ -264,6 +264,11 @@ Each reconnect is a `connectagent` trace, then `registeragent` and a `registerpa
 agent's client side and the proxy's server side of each call into one span, so a trace names both services, and its
 annotations mark when the agent sent the call and the proxy answered it. A connection's scrape streams are traced too,
 and appear as the connection closes, each about 15 seconds long: as long as the connection lasted.
+
+Each scrape is a trace of its own: the proxy's `scrape` span, a `forward` span for the agent it went to, and under that
+agent-branch's `fetch` of the target, which joins the trace the proxy sent with the request. Open
+<http://localhost:9511/zipkin/?serviceName=agent-branch&spanName=fetch> and click **Run Query**. A failed scrape's spans are red: the one in flight as a connection drops ends its
+`forward` span as `agent_disconnected`.
 
 ### The whole WAN goes down: an alert fires, and the agents reconnect
 

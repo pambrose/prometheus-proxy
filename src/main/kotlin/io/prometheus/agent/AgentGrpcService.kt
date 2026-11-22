@@ -19,7 +19,6 @@
 package io.prometheus.agent
 
 import kotlin.concurrent.atomics.AtomicBoolean
-import brave.grpc.GrpcTracing
 import com.pambrose.common.delegate.AtomicDelegates.atomicBoolean
 import com.pambrose.common.dsl.GrpcDsl.channel
 import com.pambrose.common.util.hostInfo
@@ -166,13 +165,9 @@ internal class AgentGrpcService(
   // stop-vs-reconnect ordering decisive rather than racy.
   private var shutDownRequested by atomicBoolean(false)
 
-  // Named for agent.internal.zipkin.serviceName. One Tracing for the service's life, shared by every channel a
-  // reconnect builds. The constructor builds the first channel before Agent's initServletService assigns
-  // zipkinReporterService, so the interceptor each channel installs reads it on the first call, not when installed
-  // (November #7).
-  private val tracing by lazy { agent.zipkinReporterService.newTracing() }
-  private val grpcTracing by lazy { GrpcTracing.create(tracing) }
-  private val tracingInterceptor = DeferredClientInterceptor { grpcTracing.newClientInterceptor() }
+  // Installed on every channel a reconnect builds, but built once, on the first call: see Agent.tracing.
+  private val tracingInterceptor =
+    DeferredClientInterceptor { checkNotNull(agent.tracing).grpcTracing.newClientInterceptor() }
 
   internal lateinit var grpcStub: ProxyServiceGrpcKt.ProxyServiceCoroutineStub
 
@@ -323,8 +318,6 @@ internal class AgentGrpcService(
 
   // Must be called while holding grpcLock
   private fun shutDownLocked() {
-    if (agent.isZipkinEnabled)
-      tracing.close()
     shutDownChannelLocked()
   }
 
@@ -362,9 +355,9 @@ internal class AgentGrpcService(
 
       logger.info { "Creating gRPC stubs" }
 
-      // Only tear down the channel on reconnect, NOT tracing: tracing/grpcTracing are one-shot lazy
-      // fields, so closing tracing here would leave every channel built after the first reconnect
-      // intercepting over a closed Tracing. tracing is closed once, in the final shutDown() (finding 8).
+      // Only tear down the channel on reconnect, NOT tracing: Agent.tracing is one-shot, so closing it here
+      // would leave every channel built after the first reconnect intercepting over a closed Tracing. The
+      // agent closes it once, as it stops (finding 8).
       if (grpcStarted)
         shutDownChannelLocked()
 
