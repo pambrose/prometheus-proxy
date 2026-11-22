@@ -167,8 +167,9 @@ internal network.
 Open Grafana. It lands on the **Coffee Shop** dashboard.
 
 - **The coffee shop, scraped through its embedded agent**: the shop right now, drinks served a minute, the queue, the
-  baristas, the rush, the espresso machine, and whether the last scrape through the proxy succeeded, then drinks by
-  type, orders by outcome, the queue against the baristas, brew time, and the order counter's HTTP statuses.
+  baristas, the rush, the espresso machine, whether the last scrape through the proxy succeeded, and whether the agent
+  is connected to the proxy, then drinks by type, orders by outcome, the queue against the baristas, brew time, and the
+  order counter's HTTP statuses.
 - **The app and its runtime**: Ktor's HTTP latency and the JVM's heap, from Micrometer, as any Ktor app has, and how
   long each scrape through the proxy took.
 - The **Prometheus Agents** link opens the project's agents dashboard, which shows the embedded agent like any other.
@@ -260,7 +261,7 @@ set them again when you need to look. `ADMIN_PORT` moves the port. In code, `set
 ```
 
 The agent retries in the background, and the app's requests never wait on it. Grafana's **Scrape** turns
-Down, its graphs stop, and `CoffeeShopDown` fires. The agent's `/debug` page shows an empty AgentId, since the agent
+Down, **Agent** reads Disconnected, its graphs stop, and `CoffeeShopDown` fires. The agent's `/debug` page shows an empty AgentId, since the agent
 has lost its connection, and the proxy it keeps trying, while its `/healthcheck` still reads healthy. Once the proxy is
 back, the agent reconnects within a few seconds and registers its paths again, `/debug` shows the AgentId the proxy gave
 it, and the graphs resume, with a gap for the time the proxy was down.
