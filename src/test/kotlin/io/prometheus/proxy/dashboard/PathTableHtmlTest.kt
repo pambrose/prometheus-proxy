@@ -500,7 +500,7 @@ class PathTableHtmlTest : StringSpec() {
 
     "the column guide's button should take focus as the other controls do, and keep its icon in forced colours" {
       DashboardCss.CSS shouldContain ".close:focus-visible, .guide-toggle:focus-visible,"
-      DashboardCss.CSS shouldContain ".close::before, .guide-toggle::before { forced-color-adjust:none;"
+      DashboardCss.CSS shouldContain Regex("""\.guide-toggle::before[^{]*\{\s*forced-color-adjust:none;""")
     }
 
     // ==================== Scrape now ====================

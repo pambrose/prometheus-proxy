@@ -114,13 +114,14 @@ internal object DashboardPage {
   // The Log out form, in the bar, with a login set.
   const val LOGOUT_ID = "logout"
 
-  // The theme button, in the bar, and where the theme it sets is kept: this browser's localStorage, which is the
-  // dashboard's own, since a dashboard's origin includes its port.
-  const val THEME_TOGGLE_ID = "theme-toggle"
+  // The theme picker, in the bar, whose buttons each name their theme in THEME_CHOICE_ATTR; and where the theme it sets
+  // is kept: this browser's localStorage, which is the dashboard's own, since a dashboard's origin includes its port.
+  const val THEME_PICKER_ID = "theme-picker"
+  const val THEME_CHOICE_ATTR = "data-theme-choice"
   const val THEME_KEY = "prometheus-dashboard-theme"
 
   /**
-   * Applies the theme the bar's button left in this browser, light or dark, to `<html>` as its `data-theme`, which the
+   * Applies the theme the bar's picker left in this browser, light or dark, to `<html>` as its `data-theme`, which the
    * stylesheet's dark rules read (see DashboardCss.darkRule); none, the default, is auto, which follows the system's.
    * In the head, before the page draws, so a page set to light never flashes dark first. Anything else stored, or no
    * storage at all, leaves auto.
@@ -233,17 +234,39 @@ internal object DashboardPage {
   }
 
   /**
-   * The theme button, at the bar's end, after the status and outside it, which a push replaces: auto, which follows the
-   * system's, then light, then dark, and round again. It reads auto as served; the page's script shows the theme this
-   * browser stored, and changes and stores it on a press (see DashboardScript).
+   * The theme picker, at the bar's end, after the status and outside it, which a push replaces: a button for light, one
+   * for dark, and one for auto, which follows the system's, in the order the system's appearance settings list them.
+   * Each is an icon, named for its theme. Which is pressed, and the tooltips, are the page's script's, which reads the
+   * theme the head applied from this browser's storage, which the server can't know, and sets and stores a theme on a
+   * press (see DashboardScript). The stylesheet marks the theme in force from `<html data-theme>`, so the mark is right
+   * before the script runs.
    */
-  fun FlowContent.themeToggle() {
+  fun FlowContent.themePicker() {
     div("theme") {
-      button(type = ButtonType.button) {
-        attributes["id"] = THEME_TOGGLE_ID
-        attributes["title"] = "Theme: auto, as your system's; press for light"
-        +"Theme: auto"
+      attributes["id"] = THEME_PICKER_ID
+      attributes["role"] = "group"
+      attributes["aria-label"] = "Theme"
+      for ((theme, name) in listOf("light" to "Light", "dark" to "Dark", "auto" to "Auto")) {
+        button(type = ButtonType.button, classes = "theme-$theme") {
+          attributes[THEME_CHOICE_ATTR] = theme
+          attributes["aria-label"] = name
+        }
       }
+    }
+  }
+
+  /**
+   * The bar's end, after the status and outside it, which a push replaces: the theme picker, then Log out when
+   * [loginEnabled]. One box, which sizes the two alike, so Log out is as tall as the picker however tall a coarse
+   * pointer makes it.
+   */
+  fun FlowContent.barEnd(
+    loginEnabled: Boolean,
+    routeBase: String,
+  ) {
+    div("bar-end") {
+      themePicker()
+      if (loginEnabled) logoutForm(routeBase)
     }
   }
 

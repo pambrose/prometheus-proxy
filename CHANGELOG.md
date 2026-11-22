@@ -29,9 +29,9 @@ All notable changes to this project are documented in this file.
   outage stays one line; a page showing the view updates as each line is added
 - The agent's Helm chart turns on the agent's dashboard with `dashboard.enabled` (port 8095, kept off the Service and
   reached with `kubectl port-forward`), with a login from `dashboard.login.existingSecret`
-- Both dashboards have a Theme button at the end of the top bar: auto, the default, which follows the system's light or
-  dark setting, then light, then dark. The browser keeps the choice for each dashboard and applies it before the page
-  draws, and the login page uses it too
+- Both dashboards have a theme picker at the end of the top bar: three buttons, light, dark, and auto, the default,
+  which follows the system's light or dark setting. The browser keeps the choice for each dashboard and applies it
+  before the page draws, and the login page uses it too
 - Every demo turns on its agents' dashboards and shows the agent's side in its tour; the basics demo adds `proxy-down`
   and `proxy-up`, the spring-boot demo `proxy-stop` and `proxy-start`, and the kubernetes demo `agent-dashboard`, which
   port-forwards to the agent's

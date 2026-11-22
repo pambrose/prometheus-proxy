@@ -24,7 +24,7 @@ package io.prometheus.common.dashboard
  * Apart from the markup because it answers to a different contract.
  */
 internal object DashboardCss {
-  // The page's theme, as the bar's button sets it on <html> (DashboardPage.themeToggle): absent for auto, which follows
+  // The page's theme, as the bar's picker sets it on <html> (DashboardPage.themePicker): absent for auto, which follows
   // the system's, or light or dark.
   private const val AUTO_DARK = """:root:not([data-theme="light"])"""
   private const val SET_DARK = """:root[data-theme="dark"]"""
@@ -88,12 +88,36 @@ internal object DashboardCss {
     .bar { display:flex; align-items:flex-end; gap:10px; padding:8px 15px 0; border-bottom:1px solid var(--line);
            background:var(--surface); }
     .brand { font-weight:600; flex:none; padding-bottom:6px; }
-    /* The theme button and Log out, at the bar's end, quieter than the tabs. */
-    .theme, .logout { flex:none; padding-bottom:5px; }
-    .theme button, .logout button { font:inherit; font-size:11.5px; color:var(--ink-2); background:none;
+    /* The bar's end: the theme picker and Log out, quieter than the tabs, in one box that stretches each to the
+       taller's height, so Log out is as tall as the picker however tall a coarse pointer makes it. */
+    .bar-end { display:flex; align-items:stretch; gap:10px; flex:none; margin-bottom:5px; }
+    .logout { display:flex; }
+    .logout button { font:inherit; font-size:11.5px; color:var(--ink-2); background:none;
       border:1px solid var(--line); border-radius:3px; padding:1px 9px; cursor:pointer; white-space:nowrap; }
     .theme button:hover, .logout button:hover { color:var(--ink); background-color:var(--surface-2); }
     .theme button:focus-visible, .logout button:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+    /* The theme picker: light, dark, and auto, a row of icon buttons in Log out's quiet border, each a 24px target, the
+       minimum size, its glyph a CSS mask in currentColor as the table's icon buttons' are. The theme in force is marked
+       as the current tab is, by a 2px accent line along its bottom, on the tonal step with its glyph in --ink; and from
+       <html data-theme>, which the head sets before the page draws, so the mark is right before the script runs. */
+    .theme { display:flex; border:1px solid var(--line); border-radius:3px; }
+    .theme button { display:inline-flex; align-items:center; justify-content:center; width:28px; height:24px;
+      padding:0; border:0; border-top:2px solid transparent; border-bottom:2px solid transparent; background:none;
+      color:var(--ink-2); cursor:pointer; }
+    .theme button + button { border-left:1px solid var(--line-soft); }
+    :root:not([data-theme]) .theme-auto, :root[data-theme="light"] .theme-light,
+    :root[data-theme="dark"] .theme-dark { color:var(--ink); background-color:var(--surface-2);
+      border-bottom-color:var(--accent); }
+    .theme-light { --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round'><circle cx='8' cy='8' r='2.75'/><path d='M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1.06 1.06M11.54 11.54l1.06 1.06M3.4 12.6l1.06-1.06M11.54 4.46l1.06-1.06'/></svg>"); }
+    .theme-dark { --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linejoin='round'><path d='M13.5 9.75A5.75 5.75 0 1 1 6.25 2.5a4.75 4.75 0 0 0 7.25 7.25z'/></svg>"); }
+    .theme-auto { --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5'><circle cx='8' cy='8' r='5.75'/><path d='M8 2.25a5.75 5.75 0 0 0 0 11.5z' fill='black'/></svg>"); }
+    /* Forced colours replace every background, the masks' paint included, and every border colour. The picker keeps
+       its own paint, in system colours, through the tokens it reads: the glyphs in ButtonText, and the theme in
+       force's line, and the focus ring, in Highlight, as the current tab's are. */
+    @media (forced-colors: active) {
+      .theme { --ink:ButtonText; --surface-2:ButtonFace; --line-soft:ButtonText; --accent:Highlight; }
+      .theme button { forced-color-adjust:none; color:ButtonText; background-color:ButtonFace; }
+    }
     .bar-right { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:2px 14px;
       margin-left:auto; min-width:0; padding-bottom:6px; color:var(--ink-3); font-size:11.5px; }
     /* Each stat stays whole; the row wraps between them rather than mid-phrase, which at 390px was
@@ -230,8 +254,8 @@ internal object DashboardCss {
       --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linejoin='round'><rect x='5.25' y='5.25' width='8.5' height='8.5' rx='1.5'/><path d='M10.75 5.25v-2a1 1 0 0 0-1-1h-6.5a1 1 0 0 0-1 1v6.5a1 1 0 0 0 1 1h2'/></svg>"); }
     .scrape-now {
       --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M13 8a5 5 0 1 1-1.46-3.54'/><path d='M12.5 2.25v2.5H10'/></svg>"); }
-    .copy::before, .scrape-now::before, .close::before, .guide-toggle::before { content:""; width:13px; height:13px;
-      background:currentColor; -webkit-mask:var(--icon) center/contain no-repeat;
+    .copy::before, .scrape-now::before, .close::before, .guide-toggle::before, .theme button::before { content:"";
+      width:13px; height:13px; background:currentColor; -webkit-mask:var(--icon) center/contain no-repeat;
       mask:var(--icon) center/contain no-repeat; }
     .copy:hover, .scrape-now:hover, .close:hover { background:var(--surface-3); color:var(--ink); }
     .copy.copied { color:var(--ok);
@@ -242,8 +266,8 @@ internal object DashboardCss {
       --icon:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round'><path d='M4 4l8 8M12 4l-8 8'/></svg>"); }
     /* Forced colours replace every background, the mask's paint included, so the icon would vanish. */
     @media (forced-colors: active) {
-      .copy::before, .scrape-now::before, .close::before, .guide-toggle::before { forced-color-adjust:none;
-        background:ButtonText; } }
+      .copy::before, .scrape-now::before, .close::before, .guide-toggle::before, .theme button::before {
+        forced-color-adjust:none; background:ButtonText; } }
     /* A scrape-now's result, above the Paths table: a heading line, then the start of the body. The body is the one
        block of a target's own text on the page, in a bounded box that scrolls rather than pushing the table away. */
     .scrape-result { padding:10px 15px; background:var(--surface); border-bottom:1px solid var(--line); }
@@ -307,6 +331,7 @@ internal object DashboardCss {
        pointer devices rather than spending vertical space everyone pays for. */
     @media (pointer: coarse) {
       .nav a, .nav a.on { min-height:44px; display:inline-flex; align-items:center; padding-top:0; padding-bottom:0; }
+      .theme button { width:44px; height:44px; }
     }
     """.trimIndent()
 

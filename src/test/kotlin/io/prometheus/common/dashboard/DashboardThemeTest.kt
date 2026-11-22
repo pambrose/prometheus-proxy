@@ -22,7 +22,8 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
-import io.prometheus.common.dashboard.DashboardPage.themeToggle
+import io.prometheus.common.dashboard.DashboardPage.barEnd
+import io.prometheus.common.dashboard.DashboardPage.themePicker
 import kotlinx.html.div
 import kotlinx.html.stream.createHTML
 
@@ -69,12 +70,48 @@ class DashboardThemeTest : StringSpec() {
       }
     }
 
-    "the theme button should start at auto, the default, which the page's script then shows as stored" {
-      createHTML().div { themeToggle() }.apply {
+    // Light, dark, and auto, each a press away, in the order the system's own appearance settings list them. Each is
+    // named for its theme; which is pressed, and the tooltips, are the page's script's, which reads the theme the head
+    // applied (see DashboardScriptTest), since the server can't know it.
+    "the theme picker should offer light, dark, and auto, each a button named for its theme" {
+      createHTML().div { themePicker() }.apply {
         this shouldContain
-          """<div class="theme"><button type="button" id="${DashboardPage.THEME_TOGGLE_ID}""""
-        this shouldContain ">Theme: auto</button>"
-        this shouldNotContain "data-theme"
+          """<div class="theme" id="${DashboardPage.THEME_PICKER_ID}" role="group" aria-label="Theme">"""
+        Regex("<button[^>]*>").findAll(this).map { it.value }.toList() shouldBe
+          listOf("light" to "Light", "dark" to "Dark", "auto" to "Auto").map { (theme, name) ->
+            val choice = """${DashboardPage.THEME_CHOICE_ATTR}="$theme""""
+            """<button type="button" class="theme-$theme" $choice aria-label="$name">"""
+          }
+        this shouldNotContain "aria-pressed"
+        this shouldNotContain "title="
+      }
+    }
+
+    // One box for the bar's end, which sizes its controls alike, so Log out is as tall as the picker however tall a
+    // coarse pointer makes it.
+    "the bar's end should hold the theme picker, then Log out with a login, in one box that sizes them alike" {
+      createHTML(prettyPrint = false).div { barEnd(loginEnabled = true, routeBase = "/dashboard") }.apply {
+        this shouldContain """<div class="bar-end"><div class="theme" id="${DashboardPage.THEME_PICKER_ID}""""
+        substringAfter(DashboardPage.THEME_PICKER_ID) shouldContain """action="/dashboard/logout""""
+      }
+      createHTML().div { barEnd(loginEnabled = false, routeBase = "/dashboard") } shouldNotContain "logout"
+      DashboardCss.CSS.apply {
+        this shouldContain ".bar-end { display:flex; align-items:stretch;"
+        this shouldNotContain "min-height:26px"
+      }
+    }
+
+    // From <html data-theme>, which the head sets before the page draws, so the mark is right before the page's script
+    // runs; and the current tab's mark, an accent line along the bottom, so a tonal step isn't the only sign.
+    "the picker should mark the theme in force from the page's own data-theme, as the current tab is marked" {
+      DashboardCss.CSS.apply {
+        this shouldContain """:root:not([data-theme]) .theme-auto, :root[data-theme="light"] .theme-light,"""
+        this shouldContain
+          """:root[data-theme="dark"] .theme-dark { color:var(--ink); background-color:var(--surface-2);"""
+        this shouldContain "border-bottom-color:var(--accent); }"
+        // Its glyphs are the icon buttons', and keep their paint in forced colours as theirs do.
+        this shouldContain Regex("""\.theme button::before \{\s*content:"";""")
+        this shouldContain Regex("""\.theme button::before \{\s*forced-color-adjust:none; background:ButtonText;""")
       }
     }
   }

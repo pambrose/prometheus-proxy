@@ -298,7 +298,7 @@ pins, and no jar on the classpath carries a `logback.xml`, which would replace t
   outside every push on the Paths view alone, and neither with Scrape now off; and the Activity view: newest first, a
   problem a crit tag and news a warn one, a run counted and its paths named, escaped, its search and column guide,
   filtered with a count, its empty state, and its push carrying the table out of band, or not when told; and the stored
-  theme applied in the page's head, with the Theme button in the bar and in no push
+  theme applied in the page's head, with the theme picker in the bar and in no push
 - **AgentScrapeNowTest** (`dashboard/`) — the agent dashboard's Scrape now, its fetch stood in for: a configured path
   scraped at its own URL through its own filter, though not registered, summarized with its sizes before and after
   the filter; a gzipped body unzipped and a path asked for with a leading slash found; a failure's reason; a path the
@@ -483,9 +483,10 @@ Two support helpers also live here (not test classes themselves):
   per outage, the capped reconnect backoff, and the stylesheet's disconnected treatment), no htmx 2 WebSocket names,
   history pushes heard on the document, copy clicks from one listener on the body (the clipboard fallback outside a
   secure context, a proxy URL from the page's own host and the scrape port, and the result announced and put back after
-  each push), scrape times in the viewer's zone before each swap, one run per document, error responses kept from being
-  swapped in, and the htmx config ahead of the versioned htmx script; and the stored theme applied in the head and the
-  Theme button cycling it, outside every push
+  each push), scrape times in the viewer's zone before each swap, one run per document, a second marking the theme
+  picker swapped in, error responses kept from being swapped in, and the htmx config ahead of the versioned htmx script;
+  and the stored theme applied in the head and the picker's buttons setting it, pressed and titled by the theme in
+  force, outside every push
 - **PathColumnsHtmlTest** (`dashboard/`) — the Paths view's long-standing columns: a row per path with its target,
   source, and last scrape, and dashes for what a path lacks (no time for one never scraped); its agent named as the
   agent list names it, never by internal id, with the same placeholder before it registers and a consolidated path's
@@ -591,7 +592,8 @@ One support helper also lives here (not a test class itself):
 - **DashboardThemeTest** (`dashboard/`) — the dashboards' theme: a dark rule written for the system's dark preference
   unless the page is set to light and for a page set to dark, with a selector or at `:root`; the tokens' dark colours
   under both, and the browser's own widgets following the choice; the head's script applying only a stored light or
-  dark; and the Theme button starting at auto
+  dark; and the theme picker offering light, dark, and auto, each named for its theme, marking the theme in force from
+  the page's `data-theme` with the icon buttons' glyphs, and sharing the bar's end with Log out in one box
 - **DeferredInterceptorsTest** — the client and server interceptors that build their delegate on the first call, once,
   and again on a later call if building it failed, which lets the Zipkin tracing interceptors be installed before the
   reporter they need exists

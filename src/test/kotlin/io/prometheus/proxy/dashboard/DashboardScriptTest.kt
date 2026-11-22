@@ -94,19 +94,24 @@ class DashboardScriptTest : StringSpec() {
 
     // The script tells the server which layout the page shows, from its URL, on every announce. The map comes from
     // DashboardLayout, so a new layout can't be left out of it.
-    // Auto, light, or dark, from the bar button, kept in this browser; the head applies it before the page draws.
-    "the page should apply a stored theme in its head, and its script should cycle the bar's theme button" {
+    // Light, dark, or auto, from the bar's picker, kept in this browser; the head applies it before the page draws.
+    "the page should apply a stored theme in its head, and its script should set the theme a picker button names" {
       val page = renderFullPage(snapshot())
       page.substringBefore("</head>") shouldContain DashboardPage.THEME_SCRIPT
-      page shouldContain """<button type="button" id="${DashboardPage.THEME_TOGGLE_ID}""""
-      page shouldContain "var THEMES = ['auto', 'light', 'dark'];"
+      page shouldContain """<div class="theme" id="${DashboardPage.THEME_PICKER_ID}" role="group""""
+      page shouldContain
+        "evt.target.closest('#${DashboardPage.THEME_PICKER_ID} [${DashboardPage.THEME_CHOICE_ATTR}]')"
       page shouldContain "localStorage.setItem('${DashboardPage.THEME_KEY}', t)"
       // The theme in force is the page's own, as the head applied it, so a store that refuses writes can't stick it.
       page shouldContain "return document.documentElement.getAttribute('data-theme') || 'auto';"
-      page.substringAfter("var THEMES") shouldNotContain "localStorage.getItem"
-      page shouldContain "evt.target.closest('#${DashboardPage.THEME_TOGGLE_ID}')"
+      page.substringAfter("function currentTheme") shouldNotContain "localStorage.getItem"
+      // Each button's pressed state and tooltip follow the theme in force; auto's names the system's theme, and
+      // follows it as it changes.
+      page shouldContain "btn.setAttribute('aria-pressed', String(t === current));"
+      page shouldContain "matchMedia('(prefers-color-scheme: dark)')"
+      page shouldContain "systemDark.addEventListener('change', showTheme)"
       // Outside every pushed region, so no frame resets it.
-      ProxyDashboardHtml.pushFragment(snapshot(), null, "/dashboard") shouldNotContain DashboardPage.THEME_TOGGLE_ID
+      ProxyDashboardHtml.pushFragment(snapshot(), null, "/dashboard") shouldNotContain DashboardPage.THEME_PICKER_ID
     }
 
     "the page script should name each layout by its route" {
@@ -249,10 +254,12 @@ class DashboardScriptTest : StringSpec() {
     }
 
     // htmx 4 refetches the page on every back or forward and runs the inline scripts of what it swaps in.
-    // Without the guard each navigation would stack another set of listeners.
-    "the page script should run only once per document" {
+    // Without the guard each navigation would stack another set of listeners. The swap brings a new theme picker,
+    // served with nothing pressed, so a second run marks it, and does nothing else.
+    "the page script should run only once per document, a second run marking the theme picker swapped in" {
       val page = renderFullPage(snapshot())
-      page shouldContain "if (window.__proxyUiInit) return;"
+      page shouldContain "if (window.__proxyUiInit) { window.__proxyUiInit(); return; }"
+      page shouldContain "window.__proxyUiInit = showTheme;"
     }
 
     // The extension's default backoff doubles up to a minute and only resets on a successful open, so a

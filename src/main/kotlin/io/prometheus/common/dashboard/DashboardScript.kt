@@ -38,7 +38,8 @@ import io.prometheus.common.dashboard.DashboardPage.STATUS_ID
 import io.prometheus.common.dashboard.DashboardPage.TITLE_ATTR
 import io.prometheus.common.dashboard.DashboardPage.VIEW_ATTR
 import io.prometheus.common.dashboard.DashboardPage.THEME_KEY
-import io.prometheus.common.dashboard.DashboardPage.THEME_TOGGLE_ID
+import io.prometheus.common.dashboard.DashboardPage.THEME_CHOICE_ATTR
+import io.prometheus.common.dashboard.DashboardPage.THEME_PICKER_ID
 
 /**
  * A dashboard page's one script, which each dashboard's renderer inlines. Apart from the renderers so each stays a size
@@ -73,9 +74,10 @@ internal class DashboardScript(
       // htmx 4 runs the inline scripts of content it swaps in, and every back or forward navigation
       // refetches the page and swaps it into <body>, so this script runs again on each one. The body, its
       // listeners, and the socket all survive that swap, so a second run would only stack another set of
-      // listeners, and one announce per navigation would become two, then three.
-      if (window.__${subject}UiInit) return;
-      window.__${subject}UiInit = true;
+      // listeners, and one announce per navigation would become two, then three. A second run only marks the theme
+      // picker the swap brought, served with nothing pressed (showTheme, below), which no push redraws.
+      if (window.__${subject}UiInit) { window.__${subject}UiInit(); return; }
+      window.__${subject}UiInit = showTheme;
       // The dashboard's base, from the socket's URL. The page's route is what follows it: matched there, rather than by
       // the URL's last segment, a base or a selected row's id named like a view can't be taken for that view.
       var base = (document.body.getAttribute('hx-ws:connect') || '').replace(/\/events$/, '');
@@ -350,42 +352,52 @@ internal class DashboardScript(
         var toggle = document.getElementById('$COLUMN_GUIDE_TOGGLE_ID');
         if (toggle) toggle.focus();
       }
-      // The theme: auto, which follows the system's, then light, then dark, from the bar's button, and kept in this
-      // browser. The head applies a stored one before the page draws (DashboardPage.THEME_SCRIPT), so the theme in force
-      // is the page's own; this shows it on the button, and on a press moves to the next, applies it, stores it, and
-      // says it. Auto is stored as nothing.
-      var THEMES = ['auto', 'light', 'dark'];
+      // The theme: light, dark, or auto, which follows the system's, from the bar's picker, and kept in this browser.
+      // The head applies a stored one before the page draws (DashboardPage.THEME_SCRIPT), so the theme in force is the
+      // page's own, which the stylesheet marks on its button. This keeps each button's pressed state and tooltip in
+      // step with it, auto's naming the system's theme as that changes, and on a press applies the theme, stores it,
+      // and says it. Auto is stored as nothing.
+      var systemDark = window.matchMedia('(prefers-color-scheme: dark)');
       function currentTheme() { return document.documentElement.getAttribute('data-theme') || 'auto'; }
-      function themeAfter(t) { return THEMES[(THEMES.indexOf(t) + 1) % THEMES.length]; }
-      function showTheme(t) {
-        var btn = document.getElementById('$THEME_TOGGLE_ID');
-        if (!btn) return;
-        btn.textContent = 'Theme: ' + t;
-        btn.title = 'Theme: ' + t + (t === 'auto' ? ", as your system's" : '') + '; press for ' + themeAfter(t);
+      function themeTitle(t, current) {
+        var title = 'Theme: ' + t;
+        if (t === 'auto') title += ', following your system, now ' + (systemDark.matches ? 'dark' : 'light');
+        return t === current ? title + ' (current)' : title;
       }
-      function nextTheme() {
-        var t = themeAfter(currentTheme());
+      function showTheme() {
+        var current = currentTheme();
+        document.querySelectorAll('#$THEME_PICKER_ID [$THEME_CHOICE_ATTR]').forEach(function (btn) {
+          var t = btn.getAttribute('$THEME_CHOICE_ATTR');
+          btn.setAttribute('aria-pressed', String(t === current));
+          btn.title = themeTitle(t, current);
+        });
+      }
+      function chooseTheme(t) {
+        if (t === currentTheme()) return;
         if (t === 'auto') document.documentElement.removeAttribute('data-theme');
         else document.documentElement.setAttribute('data-theme', t);
         try {
           if (t === 'auto') localStorage.removeItem('$THEME_KEY'); else localStorage.setItem('$THEME_KEY', t);
         } catch (e) {}
-        showTheme(t);
+        showTheme();
         say('Theme: ' + t + '.');
       }
-      showTheme(currentTheme());
-      // One listener on <body> for every button in the table, the result panel, and the column guide: the push loop
-      // replaces the table every frame, so a button's own listener would last one frame.
+      showTheme();
+      systemDark.addEventListener('change', showTheme);
+      // One listener on <body> for every button in the table, the result panel, the column guide, and the theme picker:
+      // the push loop replaces the table every frame, and a back or forward the picker, so a button's own listener
+      // would last one frame.
       document.body.addEventListener('click', function (evt) {
         if (!evt.target.closest) return;
         var copy = evt.target.closest('button.copy');
         var scrape = evt.target.closest('button.scrape-now');
         var panel = evt.target.closest('#$SCRAPE_RESULT_ID');
         var guide = evt.target.closest('#$COLUMN_GUIDE_ID');
+        var theme = evt.target.closest('#$THEME_PICKER_ID [$THEME_CHOICE_ATTR]');
         if (copy) copyFrom(copy);
         else if (scrape) scrapeNow(scrape);
         else if (evt.target.closest('#$COLUMN_GUIDE_TOGGLE_ID')) showGuide(!guideOpen());
-        else if (evt.target.closest('#$THEME_TOGGLE_ID')) nextTheme();
+        else if (theme) chooseTheme(theme.getAttribute('$THEME_CHOICE_ATTR'));
         else if (panel && evt.target.closest('button.close')) closeScrapeResult(panel);
         else if (guide && evt.target.closest('button.close')) closeGuide();
       });

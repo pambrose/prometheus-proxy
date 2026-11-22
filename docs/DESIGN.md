@@ -258,7 +258,7 @@ Every token exists as a light/dark pair; the frontmatter carries both (`accent` 
 light theme is `:root`; the dark theme is an override that applies under `prefers-color-scheme: dark` unless
 the page is set to light, and whenever it is set to dark (`DashboardCss.darkRule`, which writes each dark
 rule once for both). Neither is a tinted derivative of the other — the dark status colors are re-picked for a
-dark ground, not algorithmically dimmed. The page follows the system by default; the Theme Button sets it.
+dark ground, not algorithmically dimmed. The page follows the system by default; the Theme Picker sets it.
 
 ### Primary
 
@@ -302,9 +302,11 @@ Three levels, each shipping as a **solid** and a **soft** companion.
 
 ### Named Rules
 
-**The Two Places Rule.** The accent appears on focus rings and the current item's edge: the
-selected row's 2px left edge and the current tab's 2px bottom edge, which mean the same thing. Nowhere else. It never fills a background, never sets body type, never becomes a button, never appears in a
-chart. Its rarity is what makes selection findable in a field of monospace at a glance.
+**The Two Places Rule.** The accent appears on focus rings and the current item's edge: the selected row's 2px
+left edge, the current tab's 2px bottom edge, and the 2px bottom edge of the Theme Picker's button for the
+theme in force, which all mean the same thing. Nowhere else. It never fills a background, never sets body
+type, never becomes a button, never appears in a chart. Its rarity is what makes selection findable in a field
+of monospace at a glance.
 
 **The Paired Status Rule.** Solid status colors carry meaning on type, dots, and borders. Soft status
 colors have exactly one job: backing a pill or tag. A soft color never becomes a row background, a
@@ -478,9 +480,10 @@ and no container is ever softened toward them. Apart from the tabs' top corners 
 `6px`, no `8px` radius in the system, and introducing one would blur a distinction that currently does
 real work.
 
-Borders carry the remaining form language: 1px hairlines for structure, among them the tabs' `line`
-outlines, and the two current-item edges in `accent`, the only borders in the system thicker than a
-hairline: the row item's 2px left border, transparent at rest, and the current tab's 2px bottom.
+Borders carry the remaining form language: 1px hairlines for structure, among them the tabs' `line` outlines,
+and the current-item edges in `accent`, the only borders in the system thicker than a hairline: the row item's
+2px left border, transparent at rest, the current tab's 2px bottom, and the Theme Picker's 2px bottom,
+transparent at rest, under a transparent 2px top that keeps its glyph centred.
 
 ### Named Rules
 
@@ -812,14 +815,30 @@ because the paths counter reports *registrations*, so a departed path is deliber
 which without explanation reads as the bar contradicting the table directly beneath it. Every stat
 carries `white-space: nowrap` so a narrow viewport wraps between stats rather than through one.
 
-### Theme Button
+### Theme Picker
 
-At the bar's end, before Log out, in Log out's quiet bordered style: `Theme: auto`, then `light`, then `dark`,
-and round again. Auto follows the system's preference and is the default. The choice is kept in the browser's
-`localStorage`, one per dashboard, since each is its own origin, and a script in the head applies it as
-`<html data-theme>` before the page draws, so a page set to light never flashes dark; the login page applies
-it too. Outside the status bar's pushed region, like Log out, so no frame resets it, and its change is said in
-the Connection Announcer.
+At the bar's end, before Log out, in Log out's quiet border: three icon buttons in one group, light (a sun),
+dark (a moon), and auto (a half-filled circle), in the order the system's own appearance settings list them, so
+each theme is one press away and none is passed through on the way to another. Auto follows the system's
+preference and is the default.
+
+- **Size:** each button is a `24px`-tall target, the minimum size, `44px` square under a coarse pointer. It
+  shares the bar's end with Log out in one box that stretches each to the taller's height, so Log out is as
+  tall as the group at either size.
+- **Rest:** transparent, a `13px` glyph in `ink-2`, a CSS mask in `currentColor`, as the Copy Button's glyphs
+  are. The buttons are parted by `line-soft`. **Hover:** `surface-2`, glyph in `ink`.
+- **Current:** marked as the current tab is, by a `2px` `accent` line along its bottom, on `surface-2` with its
+  glyph in `ink`, so the tonal step is never the only sign. The mark comes from `<html data-theme>`, not from the
+  script, so it is right before the script runs. In forced colours the glyphs are `ButtonText` and the line
+  `Highlight`.
+- **Names:** each button is named for assistive tech (Light, Dark, Auto). The script, which alone knows the
+  stored theme, sets each one's `aria-pressed` and tooltip, and again on the new picker a back or forward
+  swaps in: the theme, auto's which way the system leans now, and "(current)" on the one in force.
+
+The choice is kept in the browser's `localStorage`, one per dashboard, since each is its own origin, and a script
+in the head applies it as `<html data-theme>` before the page draws, so a page set to light never flashes dark;
+the login page applies it too. Outside the status bar's pushed region, like Log out, so no frame resets it, and
+its change is said in the Connection Announcer.
 
 ### Connection Announcer
 

@@ -29,13 +29,11 @@ import io.prometheus.common.dashboard.DashboardPage.announcer
 import io.prometheus.common.dashboard.DashboardPage.connectionIndicator
 import io.prometheus.common.dashboard.DashboardPage.dashboardHead
 import io.prometheus.common.dashboard.DashboardPage.humanize
-import io.prometheus.common.dashboard.DashboardPage.logoutForm
 import io.prometheus.common.dashboard.DashboardPage.pageTitle
 import io.prometheus.common.dashboard.DashboardPage.scrapeNowButton
 import io.prometheus.common.dashboard.DashboardPage.scrapeResultPanel
 import io.prometheus.common.dashboard.DashboardPage.size
 import io.prometheus.common.dashboard.DashboardPage.tabs
-import io.prometheus.common.dashboard.DashboardPage.themeToggle
 import io.prometheus.common.dashboard.DashboardPage.timeOfDay
 import io.prometheus.common.dashboard.DashboardScript
 import io.prometheus.common.dashboard.DashboardView
@@ -56,6 +54,7 @@ import kotlin.time.Clock
 import io.prometheus.common.dashboard.RowFilter
 import io.prometheus.agent.dashboard.AgentActivityHtml.renderActivity
 import io.prometheus.agent.dashboard.AgentActivityHtml.activityTable
+import io.prometheus.common.dashboard.DashboardPage.barEnd
 
 /**
  * Which view of the agent's dashboard a session is looking at: its paths, where each stands with the proxy; its
@@ -145,8 +144,7 @@ internal object AgentDashboardHtml {
         span("brand") { +BRAND }
         tabs(AgentLayout.entries, layout, routeBase)
         span("bar-right") { statusInner(snapshot, oob = false) }
-        themeToggle()
-        if (loginEnabled) logoutForm(routeBase)
+        barEnd(loginEnabled, routeBase)
       }
       announcer()
       when (layout) {

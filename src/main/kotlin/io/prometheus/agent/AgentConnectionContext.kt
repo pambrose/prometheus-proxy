@@ -56,7 +56,8 @@ internal class AgentConnectionContext(
 
   /** Notes [e], a connection task's failure, as what ended the connection, unless one came first. */
   fun noteFailure(e: Throwable) {
-    firstFailure.compareAndSet(null, e)
+    // False when a failure came first, which keeps it.
+    val _ = firstFailure.compareAndSet(null, e)
   }
 
   private var disconnected by atomicBoolean(false)
