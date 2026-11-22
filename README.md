@@ -1,4 +1,4 @@
-# <img src="website/prometheus-proxy/docs/images/logo.svg" alt="" width="48" height="48" align="center"> Prometheus Proxy
+# <img src="website/prometheus-proxy/docs/images/logo.svg" alt="" width="48" height="48" align="top"> Prometheus Proxy
 
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/pambrose/prometheus-proxy)](https://github.com/pambrose/prometheus-proxy/releases)
 [![Maven Central](https://img.shields.io/maven-central/v/com.pambrose/prometheus-proxy)](https://central.sonatype.com/artifact/com.pambrose/prometheus-proxy)
