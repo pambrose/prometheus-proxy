@@ -346,8 +346,10 @@ class Agent(
       activityLog,
     ) { succeeded ->
       metrics {
-        val outcome = if (succeeded) AgentMetrics.OUTCOME_SUCCESS else AgentMetrics.OUTCOME_FAILURE
-        discoveryReconcileCount.labelValues(launchId, outcome).inc()
+        discoveryReconcileCount.labelValues(
+          launchId,
+          if (succeeded) AgentMetrics.SUCCESS else AgentMetrics.FAILURE,
+        ).inc()
         if (succeeded)
           discoveryLastSuccess.labelValues(launchId).setToCurrentTime()
       }
@@ -395,8 +397,10 @@ class Agent(
     scrapeRequestBacklogSize.store(0)
     lastMsgSentMark = clock.markNow()
 
-    if (!grpcService.connectAgent())
+    if (!grpcService.connectAgent()) {
+      metrics { connectCount.labelValues(launchId, AgentMetrics.FAILURE).inc() }
       return
+    }
 
     // Connected, so however the connection ends, the activity feed hears of it, and why, when an exception ended it.
     var cause: Throwable? = null
@@ -407,14 +411,12 @@ class Agent(
       throw e
     } finally {
       // Not as the agent stops: its dashboard is stopping too.
-      if (isRunning) {
+      if (isRunning)
         activityLog?.record(
           AgentActivityKind.DISCONNECTED,
           detail = listOfNotNull(proxyHost, cause?.let { ShownFailure.of(it).message }).joinToString(": "),
           group = proxyHost,
         )
-        metrics { disconnectCount.labelValues(launchId).inc() }
-      }
     }
     logger.info { "connectToProxy() completed" }
   }
@@ -422,21 +424,30 @@ class Agent(
   // Registers the agent and its paths on the connection connectAgent made, then serves it until it ends, and returns
   // the failure that ended it, the first of its tasks to fail, or null for one that ended without a failure.
   private suspend fun registerAndServe(endpointFailover: EndpointFailover): Throwable? {
-    grpcService.registerAgent(initialConnectionLatch)
-    pathManager.registerPaths()
-    endpointFailover.registrationSucceeded()
-    // Signal that any config-driven paths have been registered. CountDownLatch(1) ignores
-    // subsequent countDowns, so only the first successful connect cycle matters.
-    initialPathsRegisteredLatch.countDown()
-
+    // The connect attempt counts once the proxy has answered the registration: a proxy that took the connection and
+    // then refused the agent counted as a success.
+    runCatchingCancellable { grpcService.registerAgent(initialConnectionLatch) }
+      .also { result ->
+        val outcome = AgentMetrics.connectOutcome(result.exceptionOrNull())
+        metrics { connectCount.labelValues(launchId, outcome).inc() }
+      }.getOrThrow()
     // Close connectionContext when disconnected from the server or the service is shutdown and isRunning is false
     val connectionContext =
       AgentConnectionContext(agentConfigVals.internal.scrapeRequestBacklogUnhealthySize * BACKLOG_CAPACITY_MULTIPLIER)
-    liveConnection.store(connectionContext)
     try {
+      pathManager.registerPaths()
+      endpointFailover.registrationSucceeded()
+      // Signal that any config-driven paths have been registered. CountDownLatch(1) ignores
+      // subsequent countDowns, so only the first successful connect cycle matters.
+      initialPathsRegisteredLatch.countDown()
+
+      liveConnection.store(connectionContext)
       coroutineScope { launchConnectionTasks(connectionContext) }
     } finally {
       liveConnection.store(null)
+      // Only a connection that registered ends as a disconnect, as only one that did counted as a connect.
+      if (isRunning)
+        metrics { disconnectCount.labelValues(launchId).inc() }
     }
     return connectionContext.endedBy
   }
@@ -742,8 +753,11 @@ class Agent(
     type: String,
   ) {
     if (!results.dashboardScrape)
-      metrics { scrapeResultCount.labelValues(launchId, type).inc() }
+      countScrapeResult(type)
   }
+
+  /** Counts a result of Prometheus's scrape, sent or dropped, under [type]; see updateScrapeResultCounter. */
+  internal fun countScrapeResult(type: String) = metrics { scrapeResultCount.labelValues(launchId, type).inc() }
 
   /** Counts a scrape the proxy's dashboard asked for, which the `agent_scrape_*` metrics leave out. */
   internal fun updateDashboardScrapeCounter() = metrics { dashboardScrapeCount.labelValues(launchId).inc() }

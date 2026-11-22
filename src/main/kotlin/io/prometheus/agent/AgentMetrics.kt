@@ -22,7 +22,7 @@ import io.prometheus.Agent
 import io.prometheus.BuildConfig
 import io.prometheus.common.MetricBuilders.REJECTION_CAUSES
 import io.prometheus.common.MetricBuilders.metricLabel
-import io.prometheus.common.dashboard.DashboardLoginOutcome
+import io.prometheus.common.MetricBuilders.LOGIN_OUTCOMES
 import io.prometheus.metrics.core.metrics.Gauge
 import io.prometheus.common.MetricBuilders.SCRAPE_LATENCY_BUCKETS
 import io.prometheus.common.MetricBuilders.counter
@@ -66,32 +66,27 @@ internal class AgentMetrics(
     SHARED.acquire(agent.launchId, agent)
     START_TIME.labelValues(agent.launchId).setToCurrentTime()
     BUILD_INFO.labelValues(agent.launchId, agent.agentName, BuildConfig.APP_VERSION).set(1.0)
-    startAtZero()
-  }
-
-  // This agent's series of the counters whose labels have a known set of values, at zero, so increase() and rate() see
-  // the first event rather than only a second one. Discovery's and the dashboard's only when the agent has them.
-  private fun startAtZero() {
-    val launchId = agent.launchId
-
-    fun Counter.atZero(values: List<String> = listOf()) =
-      if (values.isEmpty()) labelValues(launchId) else values.forEach { labelValues(launchId, it) }
-
-    CONNECT_COUNT.atZero(listOf(CONNECT_SUCCESS, CONNECT_FAILURE, CONNECT_REJECTED))
-    DISCONNECT_COUNT.atZero()
-    ENDPOINT_ADVANCE_COUNT.atZero()
-    HEARTBEAT_COUNT.atZero(HeartBeatResult.entries.map { it.metricLabel })
-    PATH_REJECTION_COUNT.atZero(REJECTION_CAUSES)
-    SCRAPE_RETRY_COUNT.atZero()
-    if (agent.pathDiscoveryService != null)
-      DISCOVERY_RECONCILE_COUNT.atZero(listOf(OUTCOME_SUCCESS, OUTCOME_FAILURE))
-    if (agent.dashboardService != null)
-      DASHBOARD_LOGIN_COUNT.atZero(DashboardLoginOutcome.entries.map { it.metricLabel })
+    // Each counter's known series, at zero, so increase() and rate() see the first event rather than only a second one.
+    PER_LAUNCH.filter { it.startsFor(agent) }.forEach { it.startAtZero(agent.launchId) }
   }
 
   override fun close() {
-    LABELED.forEach { (metric, labelNames) -> metric.removeSeriesOf(labelNames, agent.launchId) }
+    PER_LAUNCH.forEach { it.metric.removeIf { labelValues -> labelValues.first() == agent.launchId } }
     SHARED.release(agent.launchId)
+  }
+
+  /**
+   * A metric whose series carry `launch_id` first, which [close] removes for the closing agent. [atZero] are the series
+   * each agent starts at zero, by the values of its labels after `launch_id`: [EACH] of a label's known values, or
+   * [LAUNCH_ONLY] for a counter labeled by `launch_id` alone. [startsFor] says whether an agent has them, as only one
+   * with discovery has discovery's.
+   */
+  private class PerLaunch(
+    val metric: StatefulMetric<*, *>,
+    private val atZero: List<List<String>> = emptyList(),
+    val startsFor: (Agent) -> Boolean = { true },
+  ) {
+    fun startAtZero(launchId: String) = atZero.forEach { (metric as Counter).labelValues(launchId, *it.toTypedArray()) }
   }
 
   companion object {
@@ -101,14 +96,29 @@ internal class AgentMetrics(
     private const val PATH = "path"
     private const val START_TIME_NAME = "agent_start_time_seconds"
     private const val OUTCOME = "outcome"
-    const val CONNECT_SUCCESS = "success"
-    const val CONNECT_FAILURE = "failure"
-    const val CONNECT_REJECTED = "rejected"
-    const val OUTCOME_SUCCESS = "success"
-    const val OUTCOME_FAILURE = "failure"
-    const val FAIL_OPEN_NON_TEXT = "non_text"
-    const val FAIL_OPEN_INVALID_UTF8 = "invalid_utf8"
+    const val SUCCESS = "success"
+    const val FAILURE = "failure"
+    const val REJECTED = "rejected"
+    const val RESULT_NON_GZIPPED = "non-gzipped"
+    const val RESULT_GZIPPED = "gzipped"
+    const val RESULT_CHUNKED = "chunked"
     const val RESULT_DROPPED = "dropped"
+
+    /**
+     * A connect attempt's outcome, from how registering the agent ended: [SUCCESS] for no [failure], [REJECTED] for
+     * the proxy refusing the registration, and [FAILURE] for anything else.
+     */
+    fun connectOutcome(failure: Throwable?): String =
+      when (failure) {
+        null -> SUCCESS
+        is RequestFailureException -> REJECTED
+        else -> FAILURE
+      }
+
+    // The values of a label each agent starts at zero, as PerLaunch takes them.
+    private fun each(values: List<String>) = values.map { listOf(it) }
+
+    private val LAUNCH_ONLY = listOf(emptyList<String>())
 
     private val SCRAPE_REQUEST_COUNT =
       counter {
@@ -226,7 +236,7 @@ internal class AgentMetrics(
       }
 
     // From the agent receiving a scrape request to its scrape starting: time spent waiting for one of
-    // maxConcurrentHttpClients. Prometheus's scrapes only.
+    // agent.http.maxConcurrentClients. Prometheus's scrapes only.
     private val SCRAPE_QUEUE_WAIT: Histogram =
       histogram {
         name("agent_scrape_queue_wait_seconds")
@@ -292,9 +302,9 @@ internal class AgentMetrics(
     private val PATHS: GaugeWithCallback =
       sampledGauge("agent_paths", "Agent paths registered with the proxy, by source", LAUNCH_ID, "source") {
         SHARED.instances().forEach { agent ->
-          val paths = agent.pathManager.registeredPaths
+          val counts = agent.pathManager.registeredPaths.groupingBy { it.source }.eachCount()
           PathSource.entries.forEach { source ->
-            report(agent.launchId, source.metricLabel) { paths.count { it.source == source }.toDouble() }
+            report(agent.launchId, source.metricLabel) { (counts[source] ?: 0).toDouble() }
           }
         }
       }
@@ -307,70 +317,39 @@ internal class AgentMetrics(
         }
       }
 
-    // The metrics with series per launch_id, and their label names in order, launch_id first.
-    private val LABELED: List<Pair<StatefulMetric<*, *>, List<String>>> =
+    // Each metric whose series carry launch_id first, and the series each agent starts at zero.
+    private val PER_LAUNCH: List<PerLaunch> =
       listOf(
-        SCRAPE_REQUEST_COUNT to listOf(LAUNCH_ID, TYPE),
-        SCRAPE_RESULT_COUNT to listOf(LAUNCH_ID, TYPE),
-        CONNECT_COUNT to listOf(LAUNCH_ID, TYPE),
-        SCRAPE_REQUEST_LATENCY to listOf(LAUNCH_ID, AGENT_NAME),
-        FILTER_LINES_DROPPED to listOf(LAUNCH_ID, PATH),
-        FILTER_BYTES_SAVED to listOf(LAUNCH_ID, PATH),
-        DASHBOARD_SCRAPE_COUNT to listOf(LAUNCH_ID),
-        DISCONNECT_COUNT to listOf(LAUNCH_ID),
-        ENDPOINT_ADVANCE_COUNT to listOf(LAUNCH_ID),
-        HEARTBEAT_COUNT to listOf(LAUNCH_ID, OUTCOME),
-        PATH_REJECTION_COUNT to listOf(LAUNCH_ID, "cause"),
-        DISCOVERY_RECONCILE_COUNT to listOf(LAUNCH_ID, OUTCOME),
-        DISCOVERY_LAST_SUCCESS to listOf(LAUNCH_ID),
-        SCRAPE_RETRY_COUNT to listOf(LAUNCH_ID),
-        FILTER_FAIL_OPEN_COUNT to listOf(LAUNCH_ID, PATH, "reason"),
-        SCRAPE_QUEUE_WAIT to listOf(LAUNCH_ID),
-        DASHBOARD_LOGIN_COUNT to listOf(LAUNCH_ID, OUTCOME),
-        START_TIME to listOf(LAUNCH_ID),
-        BUILD_INFO to listOf(LAUNCH_ID, AGENT_NAME, "version"),
+        PerLaunch(SCRAPE_REQUEST_COUNT),
+        PerLaunch(
+          SCRAPE_RESULT_COUNT,
+          each(listOf(RESULT_NON_GZIPPED, RESULT_GZIPPED, RESULT_CHUNKED, RESULT_DROPPED)),
+        ),
+        PerLaunch(CONNECT_COUNT, each(listOf(SUCCESS, FAILURE, REJECTED))),
+        PerLaunch(SCRAPE_REQUEST_LATENCY),
+        PerLaunch(FILTER_LINES_DROPPED),
+        PerLaunch(FILTER_BYTES_SAVED),
+        PerLaunch(DASHBOARD_SCRAPE_COUNT),
+        PerLaunch(DISCONNECT_COUNT, LAUNCH_ONLY),
+        PerLaunch(ENDPOINT_ADVANCE_COUNT, LAUNCH_ONLY),
+        PerLaunch(HEARTBEAT_COUNT, each(HeartBeatResult.entries.map { it.metricLabel })),
+        PerLaunch(PATH_REJECTION_COUNT, each(REJECTION_CAUSES)),
+        PerLaunch(DISCOVERY_RECONCILE_COUNT, each(listOf(SUCCESS, FAILURE))) { it.pathDiscoveryService != null },
+        PerLaunch(DISCOVERY_LAST_SUCCESS),
+        PerLaunch(SCRAPE_RETRY_COUNT, LAUNCH_ONLY),
+        PerLaunch(FILTER_FAIL_OPEN_COUNT),
+        PerLaunch(SCRAPE_QUEUE_WAIT),
+        PerLaunch(DASHBOARD_LOGIN_COUNT, each(LOGIN_OUTCOMES)) { it.dashboardService != null },
+        PerLaunch(START_TIME),
+        PerLaunch(BUILD_INFO),
       )
-
-    // Reads the series back with collect(), which is fine at a shutdown: an agent has a few dozen at most.
-    private fun StatefulMetric<*, *>.removeSeriesOf(
-      labelNames: List<String>,
-      launchId: String,
-    ) = collect().dataPoints
-      .map { point -> labelNames.map { point.labels.get(it).orEmpty() } }
-      .filter { it.first() == launchId }
-      .forEach { remove(*it.toTypedArray()) }
 
     private val SHARED: SharedCollectors<Agent> =
       SharedCollectors(
         sentinelName = START_TIME_NAME,
         collectors =
-          listOf(
-            SCRAPE_REQUEST_COUNT,
-            SCRAPE_RESULT_COUNT,
-            CONNECT_COUNT,
-            SCRAPE_REQUEST_LATENCY,
-            FILTER_LINES_DROPPED,
-            FILTER_BYTES_SAVED,
-            DASHBOARD_SCRAPE_COUNT,
-            DISCONNECT_COUNT,
-            ENDPOINT_ADVANCE_COUNT,
-            HEARTBEAT_COUNT,
-            PATH_REJECTION_COUNT,
-            DISCOVERY_RECONCILE_COUNT,
-            DISCOVERY_LAST_SUCCESS,
-            SCRAPE_RETRY_COUNT,
-            FILTER_FAIL_OPEN_COUNT,
-            SCRAPE_QUEUE_WAIT,
-            DASHBOARD_LOGIN_COUNT,
-            START_TIME,
-            BUILD_INFO,
-            SCRAPE_BACKLOG_SIZE,
-            CLIENT_CACHE_SIZE,
-            CONNECTED,
-            PROXY_ENDPOINT_INDEX,
-            PATHS,
-            DASHBOARD_SESSIONS,
-          ),
+          PER_LAUNCH.map { it.metric } +
+            listOf(SCRAPE_BACKLOG_SIZE, CLIENT_CACHE_SIZE, CONNECTED, PROXY_ENDPOINT_INDEX, PATHS, DASHBOARD_SESSIONS),
       )
   }
 }

@@ -16,6 +16,7 @@
 
 package io.prometheus.common
 
+import io.prometheus.common.dashboard.DashboardLoginOutcome
 import io.prometheus.grpc.PathRejectionCause.UNRECOGNIZED
 import io.prometheus.grpc.PathRejectionCause.REJECTION_CAUSE_UNSPECIFIED
 import io.prometheus.grpc.PathRejectionCause
@@ -81,6 +82,9 @@ internal object MetricBuilders {
 
   /** The `cause` labels of the path rejection counters, the proxy's and the agent's: each cause a refusal carries. */
   val REJECTION_CAUSES = REJECTED.map { it.metricLabel }
+
+  /** The `outcome` labels of the dashboard login counters, the proxy's and the agent's. */
+  val LOGIN_OUTCOMES = DashboardLoginOutcome.entries.map { it.metricLabel }
 
   /** [cause] as a path rejection counter's `cause` label gives it; `unspecified` from a proxy predating the field. */
   fun rejectionCauseLabel(cause: PathRejectionCause): String =

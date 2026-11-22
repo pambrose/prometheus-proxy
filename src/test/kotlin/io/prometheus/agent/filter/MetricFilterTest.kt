@@ -50,6 +50,20 @@ class MetricFilterTest : StringSpec() {
         ]
     }
 
+    // The warning and the activity feed hear of each reason once; agent_filter_fail_open_total counts every scrape.
+    "every scrape the filter lets through unfiltered should be reported with why" {
+      val filter = filter(deny = ["noise"])
+      val reasons = mutableListOf<FailOpenReason>()
+
+      repeat(2) {
+        filter.filterBytes("up 1\n".encodeToByteArray(), "application/vnd.google.protobuf") { reasons += it }
+      }
+      filter.filterBytes(byteArrayOf(0xC3.toByte(), 0x28), "text/plain") { reasons += it }
+      filter.filterBytes("up 1\n".encodeToByteArray(), "text/plain") { reasons += it }
+
+      reasons shouldBe [FailOpenReason.NON_TEXT, FailOpenReason.NON_TEXT, FailOpenReason.INVALID_UTF8]
+    }
+
     // For the agent's dashboard, which shows a path's filter's effect whether or not the agent's metrics are on.
     "a filter should count what it has dropped across scrapes, and say when it let one through unfiltered" {
       val filter = filter(deny = ["noise"])

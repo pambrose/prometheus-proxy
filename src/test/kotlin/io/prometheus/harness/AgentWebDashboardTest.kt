@@ -18,6 +18,7 @@
 
 package io.prometheus.harness
 
+import io.prometheus.common.registeredCounts
 import io.kotest.matchers.doubles.shouldBeGreaterThan
 import io.prometheus.metrics.model.snapshots.GaugeSnapshot
 import io.prometheus.metrics.model.snapshots.CounterSnapshot
@@ -89,15 +90,6 @@ class AgentWebDashboardTest : StringSpec() {
       configArgs = ["--config", CONFIG_FILE],
       args = ["--proxy", "$LOOPBACK_HOST:$grpcPort", "--dashboard", "--dashboard_port", "$dashboardPort"] + extraArgs,
     )
-
-  // The agent's counter [name], from the default registry, by the value of its [label], or "" without one.
-  private fun agentCounts(
-    name: String,
-    label: String? = null,
-  ): Map<String, Double> =
-    registeredSnapshot<CounterSnapshot>(name).dataPoints.associate {
-      (label?.let { l -> it.labels.get(l) } ?: "") to it.value
-    }
 
   // The agent's sampled gauge [name], from the default registry.
   private fun agentGauge(name: String): Double = registeredSnapshot<GaugeSnapshot>(name).dataPoints.single().value
@@ -357,8 +349,8 @@ class AgentWebDashboardTest : StringSpec() {
       try {
         agent.awaitInitialConnection(30.seconds).shouldBeTrue()
         eventually(30.seconds) {
-          agentCounts("agent_connect_count", "type")["success"] shouldBe 1.0
-          agentCounts("agent_path_rejections", "cause")["not_authorized"].shouldNotBeNull() shouldBeGreaterThan 0.0
+          registeredCounts("agent_connect_count", "type")["success"] shouldBe 1.0
+          registeredCounts("agent_path_rejections", "cause")["not_authorized"].shouldNotBeNull() shouldBeGreaterThan 0.0
           agentGauge("agent_connected") shouldBe 1.0
         }
 
@@ -366,8 +358,8 @@ class AgentWebDashboardTest : StringSpec() {
         proxyStopped = true
 
         eventually(30.seconds) {
-          agentCounts("agent_disconnects")[""] shouldBe 1.0
-          agentCounts("agent_connect_count", "type")["failure"].shouldNotBeNull() shouldBeGreaterThan 0.0
+          registeredCounts("agent_disconnects")[""] shouldBe 1.0
+          registeredCounts("agent_connect_count", "type")["failure"].shouldNotBeNull() shouldBeGreaterThan 0.0
           agentGauge("agent_connected") shouldBe 0.0
         }
       } finally {
@@ -431,7 +423,7 @@ class AgentWebDashboardTest : StringSpec() {
             "${DashboardServer.cookieName("agent", AGENT_DASHBOARD_UI_LOGIN_DASHBOARD_PORT)}="
         }
         // Counted in agent_dashboard_logins_total, as the proxy's dashboard counts its own.
-        agentCounts("agent_dashboard_logins", "outcome")["success"] shouldBe 1.0
+        registeredCounts("agent_dashboard_logins", "outcome")["success"] shouldBe 1.0
       } finally {
         client.close()
         agent.stopSync(10.seconds)

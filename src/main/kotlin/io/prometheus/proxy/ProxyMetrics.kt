@@ -26,10 +26,10 @@ import io.prometheus.common.MetricBuilders.gauge
 import io.prometheus.common.MetricBuilders.histogram
 import io.prometheus.common.MetricBuilders.sampledGauge
 import io.prometheus.common.MetricBuilders.setToCurrentTime
+import io.prometheus.common.MetricBuilders.LOGIN_OUTCOMES
 import io.prometheus.common.MetricBuilders.REJECTION_CAUSES
 import io.prometheus.common.MetricBuilders.metricLabel
 import io.prometheus.common.SharedCollectors
-import io.prometheus.common.dashboard.DashboardLoginOutcome
 import io.prometheus.grpc.ProxyServiceGrpc
 import io.prometheus.metrics.core.metrics.GaugeWithCallback
 import io.prometheus.metrics.core.metrics.Histogram
@@ -260,7 +260,7 @@ internal class ProxyMetrics(
 
     // By DashboardLoginOutcome, which says what counts as each.
     private val DASHBOARD_LOGIN_COUNT =
-      counter(startingAtZero = DashboardLoginOutcome.entries.map { it.metricLabel }) {
+      counter(startingAtZero = LOGIN_OUTCOMES) {
         name("proxy_dashboard_logins_total")
         help("Proxy dashboard logins, by outcome")
         labelNames("outcome")

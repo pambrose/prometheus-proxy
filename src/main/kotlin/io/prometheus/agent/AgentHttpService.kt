@@ -21,6 +21,7 @@
 
 package io.prometheus.agent
 
+import io.prometheus.common.MetricBuilders.metricLabel
 import io.ktor.util.AttributeKey
 import com.google.common.net.HttpHeaders.ACCEPT
 import com.google.common.net.HttpHeaders.CONTENT_TYPE
@@ -278,7 +279,7 @@ internal class AgentHttpService(
       // Prometheus scrapes them directly.
       header(SCRAPE_TIMEOUT_HEADER, limit.toHeaderSeconds())
       if (!request.dashboardScrape)
-        attributes.put(COUNTS_RETRIES, Unit)
+        attributes.put(PROMETHEUS_SCRAPE, Unit)
 
       // Set non-default headers
       // The scrape travels to Prometheus as text, so the target is asked only for a text format; see textOnlyAccept.
@@ -386,22 +387,17 @@ internal class AgentHttpService(
   ): FilterOutcome? {
     if (scrapeRequest.dashboardScrape)
       return filter.previewBytes(bytes, contentType)
-    val outcome = filter.filterBytes(bytes, contentType)
     // Only paths with a filter ever create series here, so cardinality stays bounded. Labeled by the path's key, which
     // fetchScrapeUrl looked the path up by, so a path's series is the same whichever proxy asked.
-    agent.metrics {
-      val path = AgentPathManager.requestedPathKey(scrapeRequest.path)
-      if (outcome == null) {
-        // The filter let the body through unfiltered; MetricFilter logs only the first time for each reason.
-        val reason =
-          if (MetricFilter.isFilterableContentType(contentType))
-            AgentMetrics.FAIL_OPEN_INVALID_UTF8
-          else
-            AgentMetrics.FAIL_OPEN_NON_TEXT
-        filterFailOpenCount.labelValues(agent.launchId, path, reason).inc()
-      } else {
-        filterLinesDropped.labelValues(agent.launchId, path).inc(outcome.linesDropped.toDouble())
-        filterBytesSaved.labelValues(agent.launchId, path).inc(outcome.bytesSaved.toDouble())
+    val path = AgentPathManager.requestedPathKey(scrapeRequest.path)
+    val outcome =
+      filter.filterBytes(bytes, contentType) { reason ->
+        agent.metrics { filterFailOpenCount.labelValues(agent.launchId, path, reason.metricLabel).inc() }
+      }
+    outcome?.also {
+      agent.metrics {
+        filterLinesDropped.labelValues(agent.launchId, path).inc(it.linesDropped.toDouble())
+        filterBytesSaved.labelValues(agent.launchId, path).inc(it.bytesSaved.toDouble())
       }
     }
     return outcome
@@ -440,8 +436,7 @@ internal class AgentHttpService(
             }
             modifyRequest { request ->
               request.headers.append("x-retry-count", retryCount.toString())
-              // A retry of Prometheus's scrape, not of a dashboard's.
-              if (request.attributes.contains(COUNTS_RETRIES))
+              if (request.attributes.contains(PROMETHEUS_SCRAPE))
                 agent.metrics { scrapeRetryCount.labelValues(agent.launchId).inc() }
             }
             exponentialDelay(maxDelayMs = MAX_RETRY_DELAY_MS)
@@ -506,8 +501,8 @@ internal class AgentHttpService(
   companion object {
     private val logger = logger {}
 
-    // On a request for Prometheus's scrape, whose retries agent_scrape_retries_total counts; not on a dashboard's.
-    private val COUNTS_RETRIES = AttributeKey<Unit>("CountsRetries")
+    // On a request for Prometheus's scrape, not a dashboard's: agent_scrape_retries_total counts its retries.
+    private val PROMETHEUS_SCRAPE = AttributeKey<Unit>("PrometheusScrape")
 
     // The failure reason is sent to the proxy -- which writes it to its activity log -- even with debug off,
     // and HTTP client exception messages embed the request URL, credentials included.

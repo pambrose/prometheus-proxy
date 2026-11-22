@@ -18,6 +18,7 @@
 
 package io.prometheus.agent
 
+import io.prometheus.common.registeredCounts
 import io.prometheus.agent.dashboard.AgentDashboardService
 import io.mockk.mockk
 import io.kotest.inspectors.forAll
@@ -315,11 +316,11 @@ class AgentMetricsTest : StringSpec() {
       fun values(
         name: String,
         label: String? = null,
-      ) = registeredSnapshot<CounterSnapshot>(name).dataPoints
-        .filter { it.labels.get("launch_id") == "test-launch-id" }
-        .associate { (label?.let { l -> it.labels.get(l) } ?: "") to it.value }
+      ) = registeredCounts(name, label, launchId = "test-launch-id")
 
       values("agent_connect_count", "type") shouldBe mapOf("success" to 0.0, "failure" to 0.0, "rejected" to 0.0)
+      values("agent_scrape_result_count", "type") shouldBe
+        mapOf("non-gzipped" to 0.0, "gzipped" to 0.0, "chunked" to 0.0, "dropped" to 0.0)
       values("agent_heartbeats", "outcome") shouldBe
         mapOf("success" to 0.0, "evicted" to 0.0, "transient_failure" to 0.0)
       values("agent_path_rejections", "cause").keys shouldBe MetricBuilders.REJECTION_CAUSES.toSet()
@@ -340,13 +341,15 @@ class AgentMetricsTest : StringSpec() {
       every { agent.dashboardService } returns mockk(relaxed = true)
       opened(AgentMetrics(agent))
 
-      fun labels(
-        name: String,
-        label: String,
-      ) = registeredSnapshot<CounterSnapshot>(name).dataPoints.map { it.labels.get(label) }.toSet()
+      registeredCounts("agent_discovery_reconciles", "outcome").keys shouldBe setOf("success", "failure")
+      registeredCounts("agent_dashboard_logins", "outcome").keys shouldBe setOf("success", "failure", "blocked")
+    }
 
-      labels("agent_discovery_reconciles", "outcome") shouldBe setOf("success", "failure")
-      labels("agent_dashboard_logins", "outcome") shouldBe setOf("success", "failure", "blocked")
+    // What agent_connect_count_total counts an attempt as, from how registering the agent ended.
+    "a connect attempt should count as a success once registered, rejected when refused, and a failure otherwise" {
+      AgentMetrics.connectOutcome(null) shouldBe "success"
+      AgentMetrics.connectOutcome(RequestFailureException.fromProxy("registerAgent", "refused")) shouldBe "rejected"
+      AgentMetrics.connectOutcome(IllegalStateException("UNAVAILABLE")) shouldBe "failure"
     }
 
     "the sampled gauges should report the agent's connection, endpoint, paths by source, and dashboard pages" {

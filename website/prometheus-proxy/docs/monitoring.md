@@ -217,7 +217,7 @@ script's right Basic Auth logs in on every request, so it isn't counted.
 | `agent_scrape_request_count_total` | `launch_id`, `type` | Scrape requests processed (`success`, `unsuccessful`, `timed_out`, `failure`, `invalid_path`) |
 | `agent_scrape_result_count_total`  | `launch_id`, `type` | Results sent (`non-gzipped`, `gzipped`, `chunked`, `dropped`)                                 |
 | `agent_connect_count_total`        | `launch_id`, `type` | Connection attempts (`success`, `failure`, `rejected`)                                        |
-| `agent_disconnects_total`          | `launch_id`         | Connections to the proxy that ended                                                           |
+| `agent_disconnects_total`          | `launch_id`         | Registered connections to the proxy that ended                                                |
 | `agent_endpoint_advances_total`    | `launch_id`         | Moves to the next proxy endpoint after a failed connect                                       |
 | `agent_heartbeats_total`           | `launch_id`, `outcome` | Heartbeats sent (`success`, `evicted`, `transient_failure`)                                |
 | `agent_path_rejections_total`      | `launch_id`, `cause` | Path registrations the proxy refused, by the cause it gave                                   |
@@ -237,8 +237,8 @@ timeout; `failure` means the fetch failed without an answer, such as a refused c
 to send, and as `dropped` when the connection to the proxy closes first.
 
 A connect counts as `success` once the proxy has registered the agent, as `rejected` when the proxy refuses the
-registration, and as `failure` when it can't be made or registered. `agent_disconnects_total` counts each connection
-that then ends, however it ends, and `agent_endpoint_advances_total` each move to the next endpoint in
+registration, and as `failure` when it can't be made or registered. `agent_disconnects_total` counts each registered
+connection that ends, however it ends, and `agent_endpoint_advances_total` each move to the next endpoint in
 `agent.proxy.endpoints` after a failed connect; a return to the primary shows as `agent_proxy_endpoint_index` going back
 to 0. A heartbeat is `evicted` when the proxy no longer knows the agent.
 
@@ -268,7 +268,7 @@ use. See that section for what the filter does and does not drop.
 | `agent_scrape_queue_wait_seconds`      | `launch_id`               | Time a scrape request waited before its scrape started       |
 
 Both have the proxy latency histogram's buckets, up to 90s, past the agent's 15s scrape timeout. The queue wait is the
-time a request waited for one of `agent.maxConcurrentHttpClients`; it leaves out a dashboard's scrape, as the latency
+time a request waited for one of `agent.http.maxConcurrentClients`; it leaves out a dashboard's scrape, as the latency
 histogram does.
 
 ### Gauges
@@ -402,7 +402,7 @@ Key panels to monitor:
 | **Connections**       | Failure spikes indicate proxy or network issues; a rejected connect is the proxy refusing the agent   |
 | **Scrape Activity**   | Imbalanced load; unsuccessful scrapes point at a failing target; any `dropped` result; retries; a filter letting scrapes through unfiltered |
 | **Paths & Discovery** | A path the proxy keeps refusing, by cause; a discovery file that fails to read                        |
-| **Latency**           | Per-agent latency outliers point to slow targets; queue wait climbing means too few `maxConcurrentHttpClients` |
+| **Latency**           | Per-agent latency outliers point to slow targets; queue wait climbing means too few `agent.http.maxConcurrentClients` |
 | **Agent Internals**   | Growing backlog means the agent is falling behind                                                     |
 | **Dashboard**         | Wrong or blocked logins to an agent's dashboard                                                       |
 

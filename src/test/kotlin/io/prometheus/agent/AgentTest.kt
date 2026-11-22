@@ -452,8 +452,9 @@ class AgentTest : StringSpec() {
         agent.updateScrapeResultCounter(results.asDashboardScrape(), "dropped")
         agent.updateDashboardScrapeCounter()
 
+        // Every type starts at zero; only Prometheus's scrape counted, the dashboard's two left out.
         agent.metrics.scrapeResultCount.collect().dataPoints.associate { it.labels.get("type") to it.value } shouldBe
-          mapOf("non-gzipped" to 1.0)
+          mapOf("non-gzipped" to 1.0, "gzipped" to 0.0, "chunked" to 0.0, "dropped" to 0.0)
         agent.metrics.dashboardScrapeCount.labelValues(agent.launchId).get() shouldBe 1.0
       } finally {
         agent.metrics.close()

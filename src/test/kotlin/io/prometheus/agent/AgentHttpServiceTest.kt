@@ -18,6 +18,8 @@
 
 package io.prometheus.agent
 
+import io.prometheus.common.MetricBuilders.metricLabel
+import io.prometheus.agent.filter.FailOpenReason
 import io.kotest.inspectors.forAll
 import io.prometheus.common.CountingAgentMetrics
 import ch.qos.logback.classic.Level
@@ -1466,8 +1468,8 @@ class AgentHttpServiceTest : StringSpec() {
 
         repeat(2) { service.fetchScrapeUrl(scrapeRequest { path = "metrics" }) }
 
-        listOf(AgentMetrics.FAIL_OPEN_NON_TEXT, AgentMetrics.FAIL_OPEN_INVALID_UTF8).forAll { reason ->
-          metrics.filterFailOpenCount.labelValues("test-launch-id", "metrics", reason).get() shouldBe 1.0
+        FailOpenReason.entries.forAll { reason ->
+          metrics.filterFailOpenCount.labelValues("test-launch-id", "metrics", reason.metricLabel).get() shouldBe 1.0
         }
         service.close()
       } finally {

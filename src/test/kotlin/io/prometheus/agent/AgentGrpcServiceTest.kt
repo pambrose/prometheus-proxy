@@ -18,6 +18,7 @@
 
 package io.prometheus.agent
 
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.Flow
 import io.kotest.assertions.withClue
 import io.prometheus.common.MetricBuilders.metricLabel
@@ -141,7 +142,7 @@ class AgentGrpcServiceTest : StringSpec() {
 
     val mockAgent = mockk<Agent>(relaxed = true)
     every { mockAgent.agentId } returns "test-agent-123"
-    every { mockAgent.launchId } returns "launch-123"
+    every { mockAgent.launchId } returns LAUNCH_ID
     every { mockAgent.agentName } returns "test-agent"
     every { mockAgent.options } returns mockOptions
     every { mockAgent.isRunning } returns true
@@ -202,7 +203,7 @@ class AgentGrpcServiceTest : StringSpec() {
   }
 
   // The next message queued for the proxy, taken as gRPC takes it to send, which counts the result it completes.
-  private fun <T> Channel<Outgoing<T>>.taken(agent: Agent): T = tryReceive().getOrThrow().counted(agent)
+  private fun <T> Channel<Outgoing<T>>.taken(agent: Agent): T = tryReceive().getOrThrow().sent(agent)
 
   // A span handler that keeps each span a Tracing finishes.
   private fun collectInto(spans: LinkedBlockingQueue<MutableSpan>) =
@@ -1067,7 +1068,7 @@ class AgentGrpcServiceTest : StringSpec() {
       callProcessScrapeResults(service, agent, connectionContext, nonChunkedChannel, chunkedChannel)
 
       // Queued, not yet counted: it counts once gRPC takes it to send.
-      verify(exactly = 0) { agent.updateScrapeResultCounter(any(), any()) }
+      verify(exactly = 0) { agent.countScrapeResult(any()) }
       val result = nonChunkedChannel.taken(agent)
       result.scrapeId shouldBe 42L
       result.contentAsText shouldBe "metric_name 1.0"
@@ -1076,7 +1077,7 @@ class AgentGrpcServiceTest : StringSpec() {
       // Chunked channel should be empty
       chunkedChannel.tryReceive().isSuccess.shouldBeFalse()
       // Counted through the agent, which leaves out the result of a scrape the dashboard asked for.
-      verify(exactly = 1) { agent.updateScrapeResultCounter(any(), "non-gzipped") }
+      verify(exactly = 1) { agent.countScrapeResult(AgentMetrics.RESULT_NON_GZIPPED) }
 
       service.shutDown()
     }
@@ -1108,14 +1109,14 @@ class AgentGrpcServiceTest : StringSpec() {
 
       callProcessScrapeResults(service, agent, connectionContext, nonChunkedChannel, chunkedChannel)
 
-      verify(exactly = 0) { agent.updateScrapeResultCounter(any(), any()) }
+      verify(exactly = 0) { agent.countScrapeResult(any()) }
       val result = nonChunkedChannel.taken(agent)
       result.scrapeId shouldBe 99L
       result.zipped shouldBe true
 
       // Chunked channel should be empty
       chunkedChannel.tryReceive().isSuccess.shouldBeFalse()
-      verify(exactly = 1) { agent.updateScrapeResultCounter(any(), "gzipped") }
+      verify(exactly = 1) { agent.countScrapeResult(AgentMetrics.RESULT_GZIPPED) }
 
       service.shutDown()
     }
@@ -1158,7 +1159,7 @@ class AgentGrpcServiceTest : StringSpec() {
       val capturedChunked: MutableList<ChunkedScrapeResponse> = []
       while (true) {
         val item = chunkedChannel.tryReceive()
-        if (item.isSuccess) capturedChunked.add(item.getOrThrow().counted(agent)) else break
+        if (item.isSuccess) capturedChunked.add(item.getOrThrow().sent(agent)) else break
       }
 
       // Should have: 1 header + N chunks + 1 summary
@@ -1189,7 +1190,7 @@ class AgentGrpcServiceTest : StringSpec() {
         crc.update(chunk.chunk.chunkBytes.toByteArray())
       }
       summary.summary.summaryChecksum shouldBe crc.value
-      verify(exactly = 1) { agent.updateScrapeResultCounter(any(), "chunked") }
+      verify(exactly = 1) { agent.countScrapeResult(AgentMetrics.RESULT_CHUNKED) }
 
       service.shutDown()
     }
@@ -1469,8 +1470,8 @@ class AgentGrpcServiceTest : StringSpec() {
       withService("localhost:$PROXY_AGENT_PORT") { service ->
         val connectionContext = AgentConnectionContext(128)
         // A sibling writer's closeAll() has already closed the response channels.
-        val nonChunkedChannel = Channel<Outgoing<ScrapeResponse>>(UNLIMITED).apply { close() }
-        val chunkedChannel = Channel<Outgoing<ChunkedScrapeResponse>>(UNLIMITED)
+        val nonChunkedChannel = AgentGrpcService.outgoingChannel<ScrapeResponse>(service.agent).apply { close() }
+        val chunkedChannel = AgentGrpcService.outgoingChannel<ChunkedScrapeResponse>(service.agent)
 
         connectionContext.sendScrapeResults(
           ScrapeResults(
@@ -1491,10 +1492,9 @@ class AgentGrpcServiceTest : StringSpec() {
           }
         ((thrown as? InvocationTargetException)?.targetException ?: thrown)
           .shouldBeInstanceOf<ClosedSendChannelException>()
-        // The only count is the "dropped" one: the non-gzipped success count sits after the send that
-        // failed, so it is never reached.
-        verify(exactly = 1) { service.agent.updateScrapeResultCounter(any(), any()) }
-        verify(exactly = 1) { service.agent.updateScrapeResultCounter(any(), "dropped") }
+        // The only count is the "dropped" one, which the channel makes of the message it couldn't take.
+        verify(exactly = 1) { service.agent.countScrapeResult(any()) }
+        verify(exactly = 1) { service.agent.countScrapeResult(AgentMetrics.RESULT_DROPPED) }
       }
     }
 
@@ -1903,39 +1903,6 @@ class AgentGrpcServiceTest : StringSpec() {
     }
     // ==================== what the agent counts ====================
 
-    // agent_connect_count_total counted a success as the transport connected, before the proxy answered the agent's
-    // registration, so a proxy that refused the agent showed only successes. A connect counts once registered.
-    "a connect should count only once the proxy has registered the agent, and a refused registration as rejected" {
-      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
-        val counts = CountingAgentMetrics().also { it.installOn(service.agent) }
-
-        fun connects(type: String) = counts.connects.labelValues(LAUNCH_ID, type).get()
-
-        coEvery { mockStub.connectAgent(any(), any<Metadata>()) } returns EMPTY_INSTANCE
-        service.connectAgent().shouldBeTrue()
-        connects(AgentMetrics.CONNECT_SUCCESS) shouldBe 0.0
-
-        coEvery { mockStub.registerAgent(any(), any<Metadata>()) } returns registerAgentResponse { valid = true }
-        service.registerAgent(CountDownLatch(1))
-        connects(AgentMetrics.CONNECT_SUCCESS) shouldBe 1.0
-
-        coEvery { mockStub.registerAgent(any(), any<Metadata>()) } returns
-          registerAgentResponse {
-            valid = false
-            reason = "refused"
-          }
-        shouldThrow<RequestFailureException> { service.registerAgent(CountDownLatch(1)) }
-        connects(AgentMetrics.CONNECT_REJECTED) shouldBe 1.0
-
-        coEvery { mockStub.registerAgent(any(), any<Metadata>()) } throws StatusException(Status.UNAVAILABLE)
-        shouldThrow<StatusException> { service.registerAgent(CountDownLatch(1)) }
-        coEvery { mockStub.connectAgent(any(), any<Metadata>()) } throws RuntimeException("Connection refused")
-        service.connectAgent().shouldBeFalse()
-        connects(AgentMetrics.CONNECT_FAILURE) shouldBe 2.0
-        connects(AgentMetrics.CONNECT_SUCCESS) shouldBe 1.0
-      }
-    }
-
     "advanceEndpoint should count each move to the next endpoint, and a single endpoint none" {
       withService("first:$PROXY_AGENT_PORT,second:$PROXY_HTTP_PORT") { service ->
         val counts = CountingAgentMetrics().also { it.installOn(service.agent) }
@@ -1988,22 +1955,18 @@ class AgentGrpcServiceTest : StringSpec() {
     }
 
     "a scrape request should record how long it waited to start, unless a dashboard asked for it" {
-      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
-      val counts = CountingAgentMetrics().also { it.installOn(agent) }
-      val service = AgentGrpcService(agent, agent.options, "test-server")
-      val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
-      every { mockStub.readRequestsFromProxy(any(), any()) } returns
-        flowOf(
-          scrapeRequest { scrapeId = 1L },
-          scrapeRequest {
-          scrapeId = 2L
-          dashboardScrape = true
-        },
-        )
-      service.grpcStub = mockStub
-      val connectionContext = AgentConnectionContext(128)
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
+        val counts = CountingAgentMetrics().also { it.installOn(service.agent) }
+        every { mockStub.readRequestsFromProxy(any(), any()) } returns
+          flowOf(
+            scrapeRequest { scrapeId = 1L },
+            scrapeRequest {
+              scrapeId = 2L
+              dashboardScrape = true
+            },
+          )
+        val connectionContext = AgentConnectionContext(128)
 
-      try {
         service.readRequestsFromProxy(mockk(relaxed = true), connectionContext)
         counts.queueWaitCount shouldBe 0L
 
@@ -2011,33 +1974,24 @@ class AgentGrpcServiceTest : StringSpec() {
         repeat(2) { actions.tryReceive().getOrThrow().invoke() }
 
         counts.queueWaitCount shouldBe 1L
-      } finally {
-        service.shutDown()
       }
     }
 
-    // Each result counts as sent once gRPC takes it from its channel; what a failed stream left queued counts as
-    // dropped. Counted as it was queued, a result the failure discarded counted as sent.
-    "a result should count as sent once a writer takes it, and as dropped when the stream fails first" {
-      listOf(true, false).forEach { writerTakes ->
-        val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
-        val service = AgentGrpcService(agent, agent.options, "test-server")
-        val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
+    // A result counts as sent once gRPC takes it from its channel; what a failed stream left queued, which gRPC
+    // cancels, discarding it, counts as dropped. Counted as it was queued, a result the failure discarded counted as
+    // sent, and draining the channels afterward found nothing: the cancel had already emptied the failed stream's.
+    "a result should count as sent once a writer takes it, and one a failed writer left queued as dropped" {
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
+        val agent = service.agent
         coEvery { mockStub.writeResponsesToProxy(any(), any()) } coAnswers {
-          if (writerTakes) {
-            arg<Flow<ScrapeResponse>>(0).collect()
-            EMPTY_INSTANCE
-          } else {
-            // Fails after the results are queued, without taking any.
-            delay(200.milliseconds)
-            throw IllegalStateException("boom")
-          }
+          // Takes the first result, then fails, as a stream does when its connection breaks.
+          arg<Flow<ScrapeResponse>>(0).first()
+          throw StatusException(Status.UNAVAILABLE)
         }
         coEvery { mockStub.writeChunkedResponsesToProxy(any(), any()) } coAnswers {
           arg<Flow<ChunkedScrapeResponse>>(0).collect()
           EMPTY_INSTANCE
         }
-        service.grpcStub = mockStub
         val connectionContext = AgentConnectionContext(128)
         repeat(2) { id ->
           connectionContext.sendScrapeResults(
@@ -2046,19 +2000,10 @@ class AgentGrpcServiceTest : StringSpec() {
         }
         connectionContext.close()
 
-        try {
-          withTimeout(10.seconds) { service.writeResponsesToProxyUntilDisconnected(agent, connectionContext) }
-        } finally {
-          service.shutDown()
-        }
+        withTimeout(10.seconds) { service.writeResponsesToProxyUntilDisconnected(agent, connectionContext) }
 
-        // Counted through the agent, which leaves out the result of a scrape the dashboard asked for.
-        withClue(if (writerTakes) "writer took them" else "writer failed") {
-          verify(exactly = if (writerTakes) 2 else 0) { agent.updateScrapeResultCounter(any(), "non-gzipped") }
-          verify(exactly = if (writerTakes) 0 else 2) {
-            agent.updateScrapeResultCounter(any(), AgentMetrics.RESULT_DROPPED)
-          }
-        }
+        verify(exactly = 1) { agent.countScrapeResult(AgentMetrics.RESULT_NON_GZIPPED) }
+        verify(exactly = 1) { agent.countScrapeResult(AgentMetrics.RESULT_DROPPED) }
       }
     }
   }

@@ -1246,7 +1246,7 @@
         "legend": { "calcs": [], "displayMode": "list", "placement": "bottom" },
         "tooltip": { "mode": "single", "sort": "none" }
       },
-      "description": "How long scrape requests waited for one of agent.maxConcurrentHttpClients before their scrape started."
+      "description": "How long scrape requests waited for one of agent.http.maxConcurrentClients before their scrape started."
     },
     {
       "collapsed": false,
