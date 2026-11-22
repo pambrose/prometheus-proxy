@@ -34,6 +34,7 @@ import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.ktor.client.HttpClient
+import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType.Text
 import io.ktor.http.HttpStatusCode
@@ -53,6 +54,7 @@ import io.prometheus.agent.RequestFailureException
 import io.prometheus.common.TestPorts
 import io.prometheus.common.captureLogs
 import io.prometheus.proxy.ProxyServiceImpl
+import io.prometheus.proxy.ScrapeHeaders
 import io.prometheus.harness.HarnessConstants.HARNESS_CONFIG
 import io.prometheus.harness.HarnessConstants.MAX_DELAY_MILLIS
 import io.prometheus.harness.HarnessConstants.MIN_DELAY_MILLIS
@@ -146,7 +148,11 @@ internal object HarnessTests {
       awaitPortReady(agentPort)
       pathManager.registerPath("/$proxyPath", "$agentPort/$agentPath".withPrefix())
 
-      KtorDsl.blockingGet("$proxyPort/$proxyPath".withPrefix()) { response ->
+      // The client's scrape timeout stops the scrape at a second, where the agent's own scrapeTimeoutSecs took three.
+      KtorDsl.blockingGet(
+        url = "$proxyPort/$proxyPath".withPrefix(),
+        setUp = { header(ScrapeHeaders.SCRAPE_TIMEOUT_HEADER, "1") },
+      ) { response ->
         response.status shouldBe HttpStatusCode.RequestTimeout
       }
 

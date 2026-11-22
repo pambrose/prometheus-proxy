@@ -38,7 +38,9 @@ import java.util.jar.JarFile
 // charts' securityContext names by number, the JVM's user and encodings, and the NOTICE and LICENSE files the JARs
 // redistribute.
 class ContainersPackagingTest : StringSpec() {
-  private val images = listOf("proxy" to proxyImage, "agent" to agentImage)
+  // Lazy: proxyImage and agentImage build their images when first read, and a disabled run constructs this spec too,
+  // which built both images in every default test run that found Docker, CI's build job among them.
+  private val images by lazy { listOf("proxy" to proxyImage, "agent" to agentImage) }
   private val fatJars = listOf("build/libs/prometheus-proxy.jar", "build/libs/prometheus-agent.jar")
 
   private fun entryText(

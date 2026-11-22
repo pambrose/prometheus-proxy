@@ -60,7 +60,9 @@ import io.prometheus.common.startAndAwaitReady
 import io.ktor.util.cio.ChannelWriteException
 import io.ktor.utils.io.ClosedWriteChannelException
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.IOException
+import kotlin.time.Duration.Companion.seconds
 import org.slf4j.event.Level
 import ch.qos.logback.classic.Level as LogbackLevel
 import io.ktor.server.cio.CIO as ServerCIO
@@ -486,7 +488,9 @@ class ProxyHttpConfigTest : StringSpec() {
     "configureKtorServer should log a write to a disconnected client at DEBUG, not WARN" {
       val events =
         captureProxyHttpConfigLogs { client, baseUrl ->
-          runCatchingCancellable { client.get("$baseUrl/write-failed") }
+          // The server sends nothing once its write has failed, so the request would wait out the client's 15s
+          // request timeout; the handler has logged long before this one.
+          withTimeoutOrNull(2.seconds) { runCatchingCancellable { client.get("$baseUrl/write-failed") } }
         }
 
       events.map { it.formattedMessage }.filter { "ChannelWriteException" in it }.shouldNotBeEmpty()

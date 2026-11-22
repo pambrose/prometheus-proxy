@@ -18,9 +18,11 @@
 
 package io.prometheus.harness
 
+import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.string.shouldContain
 import io.prometheus.Agent
 import io.prometheus.Proxy
 import io.prometheus.agent.AgentOptions
@@ -29,6 +31,7 @@ import io.prometheus.common.TestPorts
 import io.prometheus.harness.HarnessConstants.CONFIG_ARG
 import io.prometheus.harness.support.TestUtils.stopAll
 import io.prometheus.proxy.ProxyOptions
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 // Pre-shared agent-token authentication (security doc item #1). Both cases use the Netty transport
@@ -59,9 +62,12 @@ class AgentTokenAuthTest : StringSpec() {
       val agent = startAgent(AGENT_PORT_BAD, token = "wrong-token")
 
       try {
-        // Wrong token => every RPC is rejected with UNAUTHENTICATED, so the agent keeps retrying
-        // and never registers. awaitInitialConnection returns false once the timeout elapses.
-        agent.awaitInitialConnection(5.seconds).shouldBeFalse()
+        // Wrong token => every RPC is rejected with UNAUTHENTICATED, so the agent keeps retrying and never registers.
+        // Waiting for the first refusal, rather than a fixed 5s without a connect, also shows the agent tried.
+        eventually(10.seconds) {
+          agent.grpcService.connectFailuresByEndpoint.values.single().message shouldContain "UNAUTHENTICATED"
+        }
+        agent.awaitInitialConnection(Duration.ZERO).shouldBeFalse()
       } finally {
         stopAll(proxy, agent)
       }

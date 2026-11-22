@@ -7,7 +7,7 @@ This file provides guidance to AI coding agents when working with code in this r
 All commands from project root.
 
 ```bash
-./gradlew --rerun-tasks check            # Force rerun all checks (lint + tests)
+./gradlew check test --rerun             # All checks (lint + tests), rerunning the tests (make tests)
 ./gradlew agentJar proxyJar              # Generate standalone JARs
 ./gradlew generateProto                  # Regenerate protobuf stubs
 make ci                                  # Run the CI workflow's jobs locally (needs Docker)
@@ -47,8 +47,9 @@ demo's `up`, `up-local`, or `down` in turn (its `DEMOS` list), and keep going pa
 
 The embedded demo's coffee shop, `demos/embedded/app`, is a Gradle project of its own, outside the root build, that
 embeds the agent through the public API and reads `gradle/libs.versions.toml` (its Ktor and Micrometer entries are
-there for it). CI builds it against the checkout, `./gradlew -p demos/embedded/app -PlocalProxy build` (a composite
-build, which lints it too), so a change to `Agent.startAsyncAgent` or the config tree it takes must keep it compiling.
+there for it). CI's `consumer-check` job builds it against the checkout with `make embedded-demo-check`
+(`./gradlew -p demos/embedded/app -PlocalProxy build`, a composite build, which lints it too), so a change to
+`Agent.startAsyncAgent` or the config tree it takes must keep it compiling.
 IntelliJ imports it as a second linked Gradle project (`.idea/gradle.xml`); its `gradle/wrapper/gradle-wrapper.properties`
 is a symlink to the root's, so the IDE syncs it with the root's Gradle instead of generating a wrapper of its own.
 
@@ -160,7 +161,7 @@ per-section `assign*` function it belongs to.
 
 `-PoverrideVersion` keeps its `override` prefix because it intentionally only applies when supplied (so the `gradle.properties` default is never accidentally cleared).
 
-`BuildConfig.APP_RELEASE_DATE` and `BuildConfig.BUILD_TIME` are populated each build via `ValueSource`, so they reflect the actual build time and are not overridable. As a side effect, the configuration cache invalidates and `BuildConfig` regenerates on every build; release artifacts are therefore not byte-for-byte reproducible.
+`BuildConfig.APP_RELEASE_DATE` and `BuildConfig.BUILD_TIME` are the time of the commit the build is from (`git log -1 --format=%ct`, read by a `ValueSource`; the current time without git), and are not overridable. Every build of a commit therefore makes the same `BuildConfig`, so main isn't recompiled on each Gradle invocation, the configuration cache is reused, and compiled classes and test results can come from the build cache; a release shows the release commit's date. Stamped with the current time, as they once were, they defeated all three.
 
 Releases follow `docs/RELEASE.md`: after the version bump and changelogs are merged, `make release` publishes to Maven
 Central and Docker Hub, gated by `make release-check` (clean, up-to-date `master` on which every check, and each CI

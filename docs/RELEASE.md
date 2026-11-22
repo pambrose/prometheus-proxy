@@ -2,8 +2,8 @@
 
 The version is defined once in `gradle.properties` (`version=…`) and read from there by Gradle, the
 `Makefile` (`VERSION`), and the Docker image tags. `BuildConfig.APP_RELEASE_DATE` and
-`BuildConfig.BUILD_TIME` are generated automatically on each build, so there is no release date to edit
-by hand.
+`BuildConfig.BUILD_TIME` are generated from the time of the commit the build is from, so there is no release
+date to edit by hand.
 
 Steps 1-3 are edits to merge to `master`. After that, `make release` runs steps 4-6 and 8 from a clean, up-to-date
 `master` checkout. It first runs `make release-check`, which publishes nothing and fails unless:

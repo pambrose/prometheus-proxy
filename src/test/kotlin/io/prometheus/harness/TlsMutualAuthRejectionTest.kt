@@ -19,8 +19,10 @@
 package io.prometheus.harness
 
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
+import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
+import io.kotest.matchers.maps.shouldNotBeEmpty
 import io.prometheus.Agent
 import io.prometheus.Proxy
 import io.prometheus.agent.AgentOptions
@@ -32,6 +34,7 @@ import io.prometheus.proxy.ProxyOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 // Item 28: negative-path coverage for mutual TLS. TlsWithMutualAuthTest and TlsNoMutualAuthTest cover
@@ -79,9 +82,10 @@ class TlsMutualAuthRejectionTest : StringSpec() {
       val agent = Agent(options = agentOptions, testMode = true) { startSync() }
 
       try {
-        // The handshake fails (no client cert), so the agent keeps retrying and never registers.
-        // awaitInitialConnection returns false once the timeout elapses.
-        agent.awaitInitialConnection(5.seconds).shouldBeFalse()
+        // The handshake fails (no client cert), so the agent keeps retrying and never registers. Waiting for the first
+        // refusal, rather than a fixed 5s without a connect, also shows the agent tried.
+        eventually(10.seconds) { agent.grpcService.connectFailuresByEndpoint.shouldNotBeEmpty() }
+        agent.awaitInitialConnection(Duration.ZERO).shouldBeFalse()
       } finally {
         // The test block is itself a suspend function, so suspend via coroutineScope rather than
         // blocking the thread with runBlocking (mirrors the teardown in HarnessTests).

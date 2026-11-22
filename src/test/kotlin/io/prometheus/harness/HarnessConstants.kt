@@ -18,7 +18,7 @@ package io.prometheus.harness
 
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.common.TestPorts
-import io.prometheus.harness.HarnessConfig.MEDIUM
+import io.prometheus.harness.HarnessConfig.MINI
 import java.io.File
 
 object HarnessConstants {
@@ -27,7 +27,8 @@ object HarnessConstants {
   val HARNESS_CONFIG: HarnessConfig
 
   init {
-    val defaultValue = MEDIUM
+    // MINI, as CI runs; the heavier profiles are for load runs (make medium-tests, make xxl-tests).
+    val defaultValue = MINI
     val harnessConfigName = System.getenv("HARNESS_CONFIG") ?: defaultValue.name
     HARNESS_CONFIG =
       runCatching {

@@ -5,8 +5,8 @@ This document describes the test suite structure and how to run tests for the pr
 ## Running Tests
 
 ```bash
-# Run all tests (lint + tests)
-./gradlew --rerun-tasks check
+# Run all checks (lint + tests), rerunning the tests even when nothing they read changed
+./gradlew check test --rerun
 
 # Run all tests only
 ./gradlew test
@@ -27,8 +27,8 @@ This document describes the test suite structure and how to run tests for the pr
 ### Make Targets
 
 ```bash
-make tests            # Rerun all checks (lint + tests); the container tests are SKIPPED
-make mini-tests       # `make tests` with the MINI harness profile (fastest)
+make tests            # All checks (lint + tests), rerunning the tests; the container tests are SKIPPED
+make medium-tests     # `make tests` with the MEDIUM harness profile (a load run; the default is MINI, as in CI)
 make xxl-tests        # `make tests` with the XXLARGE harness profile (heaviest; 8g test heap)
 make nh-tests         # Unit tests only (agent, proxy, common, misc — no harness)
 make ip-tests         # In-process integration tests only
@@ -43,9 +43,10 @@ make all-tests        # Full suite: `make tests` + `make lincheck-tests` + `make
 make consumer-check   # Publish to the local Maven repository at a throwaway -consumer-check-SNAPSHOT
                       #   version, then build etc/consumer-check, a Maven project that embeds the agent
                       #   (see below); needs mvn
+make embedded-demo-check  # Build the embedded demo's coffee shop against this checkout (CI's consumer-check job)
 make ci               # The CI workflow's jobs, run in turn: TLA+, alerting rules, Helm charts, the docs
-                      #   site (`make build-site`), the consumer check, and the build job (`make ci-build`:
-                      #   MINI tests + coverage floors); needs Docker
+                      #   site (`make build-site`), the consumer check and the demos built against it, and the
+                      #   build job (`make ci-build`: MINI tests + coverage floors); needs Docker
 ```
 
 The suite builds its proxy and agent images under stable tags, so runs reuse them and a clean run now
@@ -951,7 +952,8 @@ Two more live one level up, in `harness/` itself:
 
 - **HarnessConfig** — Enum defining test scale configs (MINI, SMALL, MEDIUM, LARGE, XLARGE, XXLARGE)
 - **HarnessConstants** — Test constants (ports, delays, config paths) and the active `HarnessConfig`, selected by
-  the `HARNESS_CONFIG` env var (default MEDIUM)
+  the `HARNESS_CONFIG` env var or `-PharnessConfig` (default MINI, as CI runs; `make medium-tests` and
+  `make xxl-tests` run the heavier profiles)
 
 ### Container Tests (`containers/`)
 
