@@ -672,8 +672,9 @@ One support helper also lives here (not a test class itself):
 - **ScrapeTracingTest** — a scrape's spans, the proxy's scrape and forward spans and the agent's fetch span, form one
   trace, the fetch joining it through the context the proxy sends; at a sample rate of 0 none is kept, the agent's
   included; a context that carries no trace begins one at the agent's rate; a rate keeps exactly its share; a heartbeat
-  is never sampled and every other gRPC call is at the rate; a span's outcome, status, and error tags; and closing
-  closes the process's tracing
+  is never sampled and every other gRPC call is at the rate; a span's outcome, status, and error tags; `traced`
+  finishing its span with what the block returned, a cancellation, or the error it threw, and running the block alone
+  without a span; and closing closes the process's tracing
 - **SharedCollectorsTest** — the collectors every agent (or proxy) in a JVM shares register on the first acquire
   and unregister, with their series cleared, on the last release; register again after a registry clear; create a
   counter's series that start at zero again at each registration, after a release cleared them; and, when the registry
@@ -714,6 +715,8 @@ These support helpers also live here (not test classes themselves):
   and polls with real HTTP probes until it serves several consecutive clean replies before returning the port
 - **LogCapture** — `captureLogs<T>(level) { … }`, which runs a block and returns what `T`'s logger emitted,
   optionally at a lower level, restoring the logger's appenders and level afterward
+- **TracingMocks** — `collectInto(spans)`, a span handler that keeps each span a Tracing finishes, for the specs that
+  read what was traced
 - **MetricsMocks** — `mockProxyForMetrics()` / `mockAgentForMetrics()`, mocks that stub only what `ProxyMetrics`
   and `AgentMetrics` read when they are built and scraped, for the metrics specs and `misc/DashboardMetricNamesTest`;
   and `CountingProxyMetrics`, a relaxed `ProxyMetrics` whose counters are real, unregistered collectors, so a spec reads

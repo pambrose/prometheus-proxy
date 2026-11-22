@@ -20,6 +20,7 @@ import brave.Span
 import brave.Tracing
 import brave.grpc.GrpcTracing
 import brave.propagation.Propagation
+import brave.propagation.TraceContext
 import brave.rpc.RpcRequest
 import brave.rpc.RpcRequestMatchers.methodEquals
 import brave.rpc.RpcRuleSampler
@@ -28,6 +29,10 @@ import brave.sampler.CountingSampler
 import brave.sampler.Matchers
 import brave.sampler.Sampler
 import brave.sampler.SamplerFunction
+import com.pambrose.common.service.GenericService
+import io.prometheus.common.MetricBuilders.SUCCESS_LABEL
+import io.prometheus.grpc.ProxyServiceGrpc
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * A proxy's or an agent's tracing: of its gRPC calls, and of each scrape, which rides a long-lived stream that the gRPC
@@ -45,8 +50,10 @@ internal class ScrapeTracing(
   sampleRate: Double,
 ) : AutoCloseable {
   // CountingSampler, not Sampler.create: below 0.01 that samples by trace ID, which isn't known yet when a rule or a
-  // scrape's root decides, so every decision would have been the same.
+  // scrape's span decides, so every decision would have been the same.
   private val sampler: Sampler = CountingSampler.create(sampleRate.toFloat())
+
+  // Decides a span that begins a trace, or whose parent hasn't decided; a child of one that has follows it.
   private val scrapeSampler = SamplerFunction<Unit> { sampler.isSampled(0L) }
   private val tracer = tracing.tracer()
   private val injector =
@@ -68,13 +75,13 @@ internal class ScrapeTracing(
     GrpcTracing.create(RpcTracing.newBuilder(tracing).clientSampler(rpcSampler).serverSampler(rpcSampler).build())
 
   /** A started span named [name] that begins a trace, kept at the sample rate. */
-  fun newTrace(name: String): Span = tracer.nextSpanWithParent(scrapeSampler, Unit, null).name(name).start()
+  fun newTrace(name: String): Span = started(null, name)
 
-  /** A started span named [name] in [parent]'s trace, kept when [parent] is. */
+  /** A started span named [name] in [parent]'s trace, kept when that trace is. */
   fun newChild(
-    parent: Span,
+    parent: TraceContext,
     name: String,
-  ): Span = tracer.newChild(parent.context()).name(name).start()
+  ): Span = started(parent, name)
 
   /**
    * A started span named [name] in the trace [context] carries, as [contextOf] gives it, kept when that trace is; or,
@@ -83,13 +90,7 @@ internal class ScrapeTracing(
   fun joined(
     context: Map<String, String>,
     name: String,
-  ): Span {
-    val extracted = extractor.extract(context)
-    return if (extracted.context() == null && extracted.sampled() == null)
-      newTrace(name)
-    else
-      tracer.nextSpan(extracted).name(name).start()
-  }
+  ): Span = started(extractor.extract(context).context(), name)
 
   /** [span]'s trace, as the propagation headers a ScrapeRequest's trace_context carries to the agent. */
   fun contextOf(span: Span): Map<String, String> =
@@ -97,9 +98,14 @@ internal class ScrapeTracing(
 
   override fun close() = tracing.close()
 
+  private fun started(
+    parent: TraceContext?,
+    name: String,
+  ): Span = tracer.nextSpanWithParent(scrapeSampler, Unit, parent).name(name).start()
+
   companion object {
-    // As the proto names the RPC: Brave's gRPC instrumentation matches the bare method name.
-    internal const val HEARTBEAT_METHOD = "sendHeartBeat"
+    // Brave's gRPC instrumentation matches the bare method name, as the generated stub gives it.
+    internal val HEARTBEAT_METHOD: String = checkNotNull(ProxyServiceGrpc.getSendHeartBeatMethod().bareMethodName)
 
     /** The proxy's span of a scrape, from Prometheus's request to its answer. */
     const val SCRAPE_SPAN = "scrape"
@@ -110,23 +116,10 @@ internal class ScrapeTracing(
     /** The agent's span of its fetch of the target. */
     const val FETCH_SPAN = "fetch"
 
-    /** Annotates a forward span when the proxy hands the request to the agent's stream, so its queue wait shows. */
-    const val SENT_ANNOTATION = "sent to agent"
-
     const val TAG_PATH = "path"
-    const val TAG_OUTCOME = "outcome"
-    const val TAG_STATUS = "http.status_code"
-    const val TAG_AGENTS = "agents"
-    const val TAG_AGENT_ID = "agent.id"
-    const val TAG_AGENT_NAME = "agent.name"
-    const val TAG_URL = "http.url"
-    const val TAG_GZIPPED = "gzipped"
-    const val TAG_CHUNKED = "chunked"
-    const val TAG_RAW_BYTES = "bytes.raw"
-    const val TAG_FILTERED_BYTES = "bytes.filtered"
 
-    // The scrape counters' label for a scrape that succeeded, the proxy's and the agent's.
-    private const val SUCCESS = "success"
+    /** A span's outcome when its scrape was cancelled before it ended. */
+    const val CANCELLED = "cancelled"
 
     /**
      * Tags this span with how its scrape ended: [outcomes], the scrape counters' labels of its results, more than one
@@ -139,10 +132,37 @@ internal class ScrapeTracing(
     ): Span =
       apply {
         val distinct = outcomes.distinct()
-        tag(TAG_OUTCOME, distinct.joinToString(","))
-        statusCode?.also { tag(TAG_STATUS, it.toString()) }
-        if (distinct.any { it != SUCCESS })
-          tag("error", distinct.filterNot { it == SUCCESS }.joinToString(","))
+        tag("outcome", distinct.joinToString(","))
+        statusCode?.also { tag("http.status_code", it.toString()) }
+        val failed = distinct - SUCCESS_LABEL
+        if (failed.isNotEmpty())
+          tag("error", failed.joinToString(","))
       }
+
+    /**
+     * Runs [block] in this span, and finishes the span however [block] ends: tagged by [ended] with what it returned,
+     * as [cancelledAs] when it was cancelled, or with the error it threw. Without a span, runs [block] alone.
+     */
+    inline fun <T> Span?.traced(
+      cancelledAs: String = CANCELLED,
+      ended: Span.(T) -> Unit,
+      block: () -> T,
+    ): T {
+      if (this == null)
+        return block()
+      return runCatching(block)
+        .onSuccess { ended(it) }
+        .onFailure { if (it is CancellationException) endedAs(listOf(cancelledAs)) else error(it) }
+        .also { finish() }
+        .getOrThrow()
+    }
   }
 }
+
+/**
+ * The holder of a proxy's or an agent's tracing, null with Zipkin off, named for its zipkin.serviceName and kept at
+ * [sampleRate]. Built on first use: each builds its gRPC server or channel, with its tracing interceptor, before
+ * initServletService assigns zipkinReporterService, so the interceptor reads this on the first call (November #7).
+ */
+internal fun GenericService<*>.scrapeTracingHolder(sampleRate: Double): Lazy<ScrapeTracing?> =
+  lazy { if (isZipkinEnabled) ScrapeTracing(zipkinReporterService.newTracing(), sampleRate) else null }

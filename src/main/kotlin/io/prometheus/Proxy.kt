@@ -37,11 +37,11 @@ import io.prometheus.common.ConfigWrappers.newAdminConfig
 import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import io.prometheus.common.Messages.BLANK_AGENT_ID_MSG
-import io.prometheus.common.ScrapeTracing
 import io.prometheus.common.Utils.getVersionDesc
 import io.prometheus.common.Utils.toJsonElement
 import io.prometheus.common.AgentValues.isValidLabelName
 import io.prometheus.common.AgentValues.labelsProblem
+import io.prometheus.common.scrapeTracingHolder
 import io.prometheus.proxy.ActivityLog
 import io.prometheus.proxy.AgentAuthManager
 import io.prometheus.proxy.AgentContext
@@ -274,16 +274,8 @@ class Proxy(
   private val metricsHolder = lazy { ProxyMetrics(this) }
   internal val metrics by metricsHolder
 
-  // Named for proxy.internal.zipkin.serviceName, and null with Zipkin off. Built on first use: the gRPC server installs
-  // its tracing interceptor before initServletService assigns zipkinReporterService, so the interceptor reads this when
-  // the first call arrives (November #7), and the scrape route when the first scrape does.
-  private val tracingHolder =
-    lazy {
-      if (isZipkinEnabled)
-        ScrapeTracing(zipkinReporterService.newTracing(), proxyConfigVals.internal.zipkin.sampleRate)
-      else
-        null
-    }
+  // Null with Zipkin off; built on the first gRPC call, or the first scrape (see scrapeTracingHolder).
+  private val tracingHolder = scrapeTracingHolder(proxyConfigVals.internal.zipkin.sampleRate)
   internal val tracing by tracingHolder
 
   internal val pathManager by lazy { ProxyPathManager(this, isTestMode) }

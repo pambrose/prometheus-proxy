@@ -33,14 +33,15 @@ import io.ktor.server.routing.get
 import io.prometheus.Proxy
 import io.prometheus.common.AgentValues.shownValue
 import io.prometheus.common.ScrapeTracing.Companion.SCRAPE_SPAN
-import io.prometheus.common.ScrapeTracing.Companion.TAG_AGENTS
 import io.prometheus.common.ScrapeTracing.Companion.TAG_PATH
 import io.prometheus.common.ScrapeTracing.Companion.endedAs
+import io.prometheus.common.ScrapeTracing.Companion.traced
 import io.prometheus.common.Utils.sanitizeQueryParams
 import io.prometheus.proxy.ProxyConstants.FAVICON_FILENAME
 import io.prometheus.proxy.ProxyUtils.incrementScrapeRequestCount
 import io.prometheus.proxy.ProxyUtils.respondWith
 import io.prometheus.proxy.ScrapeDispatch.MAX_SHOWN_RESULT_CHARS
+import kotlin.time.TimeMark
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlin.time.Duration
@@ -169,10 +170,22 @@ internal object ProxyHttpRoutes {
     val path = scrape.path
     val started = TimeSource.Monotonic.markNow()
     val span = scrapeSpan(proxy, path, agentContextInfo.agentContexts.size)
+    return span.traced(CLIENT_CANCELLED_LABEL, { responses -> endedAs(responses.map { it.updateMsg }) }) {
+      submitAndRecord(agentContextInfo, proxy, scrape.copy(trace = span?.context()), started)
+    }
+  }
+
+  private suspend fun submitAndRecord(
+    agentContextInfo: ProxyPathManager.AgentContextInfo,
+    proxy: Proxy,
+    scrape: ScrapeSpec,
+    started: TimeMark,
+  ): List<ScrapeRequestResponse> {
+    val path = scrape.path
     return try {
       // submitScrapeRequests answers in the agents' order, so zipping recovers which agent produced which response.
       // That keeps provenance at the one site that needs it, rather than as a field on the response.
-      ScrapeDispatch.submitScrapeRequests(agentContextInfo, proxy, scrape.copy(trace = span))
+      ScrapeDispatch.submitScrapeRequests(agentContextInfo, proxy, scrape)
           .also { responses ->
             agentContextInfo.agentContexts.zip(responses).forEach { (agentContext, response) ->
               recordScrapeOutcome(path, agentContext, response, proxy)
@@ -190,17 +203,13 @@ internal object ProxyHttpRoutes {
               response.encoding?.also { observeResponseBytes(path, it, response.byteCount.toDouble()) }
             }
           }
-          .also { responses -> span?.endedAs(responses.map { it.updateMsg }) }
     } catch (e: CancellationException) {
       // Ktor cancels the call when Prometheus hangs up, usually at a scrape timeout shorter than the proxy's. The
       // bookkeeping above runs only after awaitAll() returns, so without this the most common real failure -- a
       // target slower than Prometheus but faster than the proxy -- would vanish from the scrape metrics, /debug,
       // and the dashboard. Nothing in it suspends, so it runs to completion in the cancelled coroutine.
       recordClientCancelled(agentContextInfo, proxy, path, started.elapsedNow())
-      span?.endedAs(listOf(CLIENT_CANCELLED_LABEL))
       throw e
-    } finally {
-      span?.finish()
     }
   }
 
@@ -215,7 +224,7 @@ internal object ProxyHttpRoutes {
     proxy.tracing?.newTrace(SCRAPE_SPAN)?.apply {
       kind(Span.Kind.SERVER)
       tag(TAG_PATH, path)
-      tag(TAG_AGENTS, agentCount.toString())
+      tag("agents", agentCount.toString())
     }
 
   private fun recordClientCancelled(

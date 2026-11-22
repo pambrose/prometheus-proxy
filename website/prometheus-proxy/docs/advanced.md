@@ -197,7 +197,7 @@ agent or the proxy.
 | Span      | Reported by | Covers                                                    | Tags                                                                                                   |
 |:----------|:------------|:----------------------------------------------------------|:-------------------------------------------------------------------------------------------------------|
 | `scrape`  | Proxy       | Prometheus's request, until the proxy answers it          | `path`, `agents`, `outcome`                                                                            |
-| `forward` | Proxy       | The request to one of the path's agents, until its result | `agent.id`, `agent.name`, `outcome`, `http.status_code`                                                |
+| `forward` | Proxy       | The request to one of the path's agents, until its result | `agentId`, `agentName`, `outcome`, `http.status_code`                                                  |
 | `fetch`   | Agent       | The agent's request to the target                         | `path`, `http.url`, `outcome`, `http.status_code`, `gzipped`, `chunked`, `bytes.raw`, `bytes.filtered` |
 
 A path several agents serve has a `forward` span for each. Each `forward` span is annotated `sent to agent` when the

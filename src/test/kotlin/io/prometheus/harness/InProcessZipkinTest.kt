@@ -117,7 +117,7 @@ class InProcessZipkinTest : StringSpec() {
           fetch.parentId shouldBe forward.id
           scrape.tags.getValue("path") shouldBe PATH
           fetch.tags.getValue("outcome") shouldBe "success"
-          spans.filter { it.name.orEmpty().contains("sendheartbeat") }.shouldBeEmpty()
+          spans.filter { it.name.orEmpty().contains(ScrapeTracing.HEARTBEAT_METHOD.lowercase()) }.shouldBeEmpty()
         }
       } finally {
         collector.stop()

@@ -18,7 +18,8 @@
 
 package io.prometheus.agent
 
-import io.prometheus.common.ScrapeTracing
+import io.prometheus.common.collectInto
+import io.prometheus.common.scrapeTracingHolder
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.Flow
 import io.kotest.assertions.withClue
@@ -29,8 +30,6 @@ import io.kotest.matchers.string.shouldNotContain
 import brave.Span
 import brave.Tracing
 import brave.handler.MutableSpan
-import brave.handler.SpanHandler
-import brave.propagation.TraceContext
 import com.pambrose.common.concurrent.await
 import com.pambrose.common.service.ZipkinReporterService
 import com.pambrose.common.util.zip
@@ -205,16 +204,6 @@ class AgentGrpcServiceTest : StringSpec() {
 
   // The next message queued for the proxy, taken as gRPC takes it to send, which counts the result it completes.
   private fun <T> Channel<Outgoing<T>>.taken(agent: Agent): T = tryReceive().getOrThrow().sent(agent)
-
-  // A span handler that keeps each span a Tracing finishes.
-  private fun collectInto(spans: LinkedBlockingQueue<MutableSpan>) =
-    object : SpanHandler() {
-      override fun end(
-        context: TraceContext,
-        span: MutableSpan,
-        cause: Cause,
-      ): Boolean = spans.add(span)
-    }
 
   init {
     "parseProxyHostname should extract hostname and port correctly" {
@@ -2010,7 +1999,7 @@ class AgentGrpcServiceTest : StringSpec() {
 
   // Has [this] mocked agent build its tracing from its reporter on first use, as Agent.tracing does.
   private fun Agent.tracesFromReporter() {
-    val tracing = lazy { ScrapeTracing(zipkinReporterService.newTracing(), 1.0) }
+    val tracing = scrapeTracingHolder(1.0)
     every { this@tracesFromReporter.tracing } answers { tracing.value }
   }
 

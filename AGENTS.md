@@ -119,8 +119,9 @@ aren't in the proto: a scrape result is sent in chunks once its gzipped size rea
   and built on first use (the reporter is assigned after the gRPC server and channel are built). It samples gRPC calls
   with an `RpcRuleSampler` that never samples `sendHeartBeat`, and traces each scrape: the proxy's `scrape` span
   (`ProxyHttpRoutes`) and a `forward` span per agent (`ScrapeDispatch`), whose context rides `ScrapeRequest`'s
-  `trace_context` to the agent's `fetch` span (`AgentHttpService`). Pass spans explicitly, never put them in scope:
-  Brave's current span is thread-local, which coroutines break.
+  `trace_context` to the agent's `fetch` span (`AgentHttpService`). Each span's lifecycle goes through
+  `ScrapeTracing.traced`, which tags how its block ended and finishes it. Pass spans explicitly, never put them in
+  scope: Brave's current span is thread-local, which coroutines break.
 - **Metric filtering**: `MetricFilter` (per-path `agent.filters`) drops whole metric families in `AgentHttpService` before gzip/chunking; fails open on non-text or non-UTF-8 payloads.
 - **Dashboard**: Ktor + htmx (WebJar, no CDN) on its own port, fed by the `ProxyEvent` bus; see `proxy/dashboard/`.
   What a dashboard shares, its server, login, guards, versioned assets, sessions, and push loop, is

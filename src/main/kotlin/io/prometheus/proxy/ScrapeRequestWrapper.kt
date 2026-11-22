@@ -63,7 +63,8 @@ internal class ScrapeRequestWrapper(
       // So the agent counts a scrape the dashboard asked for apart from Prometheus's.
       dashboardScrape = dashboardScrapeVal
       // So the agent's span of its fetch joins traceSpan's trace.
-      traceContext.putAll(traceContextVal)
+      if (traceContextVal.isNotEmpty())
+        traceContext.putAll(traceContextVal)
     }
 
   @Volatile

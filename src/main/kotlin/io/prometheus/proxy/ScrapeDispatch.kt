@@ -17,6 +17,7 @@
 package io.prometheus.proxy
 
 import brave.Span
+import brave.propagation.TraceContext
 import com.pambrose.common.util.simpleClassName
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.http.ContentType
@@ -30,14 +31,13 @@ import io.ktor.server.request.header
 import io.prometheus.Proxy
 import io.prometheus.common.AgentValues.shownValue
 import io.prometheus.common.Exposition
+import io.prometheus.common.MetricBuilders.SUCCESS_LABEL
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.ScrapeTracing.Companion.FORWARD_SPAN
-import io.prometheus.common.ScrapeTracing.Companion.TAG_AGENT_ID
-import io.prometheus.common.ScrapeTracing.Companion.TAG_AGENT_NAME
 import io.prometheus.common.ScrapeTracing.Companion.endedAs
+import io.prometheus.common.ScrapeTracing.Companion.traced
 import io.prometheus.proxy.ProxyUtils.DecodedContent
 import io.prometheus.proxy.ProxyUtils.unzip
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.ClosedSendChannelException
@@ -83,9 +83,6 @@ internal object ScrapeDispatch {
   // Each agent's queue is capped at this multiple of scrapeRequestBacklogUnhealthySize, matching how the agent
   // sizes its own request channel.
   private const val BACKLOG_CAPACITY_MULTIPLIER = 2
-
-  // A forward span's outcome when its scrape was cancelled before the agent answered.
-  private const val CANCELLED_OUTCOME = "cancelled"
 
   // The most characters /debug keeps, or a log line shows, of an agent's per-scrape failure reason, URL, or content
   // type: what a chunked transfer's header keeps of each, so a unary result, bounded only by gRPC's 4 MiB message
@@ -161,15 +158,8 @@ internal object ScrapeDispatch {
     scrape: ScrapeSpec,
   ): ScrapeRequestResponse {
     val span = forwardSpan(agentContext, proxy, scrape)
-    return try {
+    return span.traced(ended = { endedAs(listOf(it.updateMsg), it.statusCode.value) }) {
       awaitScrapeResponse(agentContext, proxy, scrape, span)
-        .also { span?.endedAs(listOf(it.updateMsg), it.statusCode.value) }
-    } catch (e: CancellationException) {
-      // Prometheus hung up, or the proxy is stopping.
-      span?.endedAs(listOf(CANCELLED_OUTCOME))
-      throw e
-    } finally {
-      span?.finish()
     }
   }
 
@@ -182,8 +172,8 @@ internal object ScrapeDispatch {
   ): Span? =
     scrape.trace?.let { parent ->
       proxy.tracing?.newChild(parent, FORWARD_SPAN)?.apply {
-        tag(TAG_AGENT_ID, shownValue(agentContext.agentId))
-        tag(TAG_AGENT_NAME, shownValue(agentContext.agentName))
+        tag("agentId", shownValue(agentContext.agentId))
+        tag("agentName", shownValue(agentContext.agentName))
       }
     }
 
@@ -362,7 +352,7 @@ internal object ScrapeDispatch {
       contentText = decoded.text,
       failureReason = scrapeResults.srFailureReason,
       url = scrapeResults.srUrl,
-      updateMsg = "success",
+      updateMsg = SUCCESS_LABEL,
       fetchDuration = scrapeRequest.ageDuration(),
       // The byte count already computed during unzip (gzipped) or the small plain payload's length, so the size need
       // not be measured again by re-encoding the decoded text.
@@ -446,6 +436,8 @@ internal enum class ScrapeOrigin {
  * @param headers what the request that started the scrape asks for
  * @param timeout how long the proxy waits for each agent's answer; null for `proxy.internal.scrapeRequestTimeoutSecs`
  * @param origin who asked for the scrape, which the agent is told
+ * @param trace the trace the scrape route began for the scrape, which each agent's forward span joins; null for a
+ *   scrape that isn't traced
  */
 internal data class ScrapeSpec(
   val path: String,
@@ -453,7 +445,7 @@ internal data class ScrapeSpec(
   val headers: ScrapeHeaders = ScrapeHeaders(),
   val timeout: Duration? = null,
   val origin: ScrapeOrigin = ScrapeOrigin.PROMETHEUS,
-  val trace: Span? = null,
+  val trace: TraceContext? = null,
 )
 
 /**
