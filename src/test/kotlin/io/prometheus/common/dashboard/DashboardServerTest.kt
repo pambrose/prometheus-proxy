@@ -29,6 +29,11 @@ import io.prometheus.common.dashboard.DashboardServer.Companion.hostAllowlist
 import io.prometheus.common.dashboard.DashboardServer.Companion.isHostAllowed
 import io.prometheus.common.dashboard.DashboardServer.Companion.isOriginAllowed
 import io.prometheus.common.dashboard.DashboardServer.Companion.safeNext
+import io.prometheus.common.dashboard.DashboardServer.Companion.spaced
+import kotlinx.coroutines.flow.asFlow
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.runBlocking
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * [DashboardServer]'s rules for a request: where a login may send the browser, the session cookie's name, the Origin
@@ -44,6 +49,16 @@ class DashboardServerTest : StringSpec() {
   ) = isHostAllowed(host, hostAllowlist(allowedHosts, allowedOrigins))
 
   init {
+    // A burst of changes, such as an agent registering two thousand paths as it connects, wakes the push loop at once
+    // and then at most once an interval, with the latest, rather than once a change: a push renders and sends every
+    // open page.
+    "changes should wake the push loop at once, then at most once an interval, with the latest" {
+      val woken =
+        runBlocking { (1..20).asFlow().spaced(200.milliseconds).toList() }
+
+      woken shouldBe [1, 20]
+    }
+
     // Where a successful login goes: the page it was asked for, but only a page of this dashboard, so a link to the
     // login page can't send a browser off-site with a fresh session.
     "safeNext should keep a path under the dashboard's base and send anything else to the base" {

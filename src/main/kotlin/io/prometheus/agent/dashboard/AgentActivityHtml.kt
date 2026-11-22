@@ -30,15 +30,15 @@ import io.prometheus.common.dashboard.filteredTableStart
 import kotlinx.html.DIV
 import kotlinx.html.FlowContent
 import kotlinx.html.TBODY
-import kotlinx.html.TR
 import kotlinx.html.caption
 import kotlinx.html.div
-import kotlinx.html.span
 import kotlinx.html.table
 import kotlinx.html.tbody
 import kotlinx.html.td
 import kotlinx.html.thead
 import kotlinx.html.tr
+import io.prometheus.common.dashboard.activityEventCell
+import io.prometheus.common.dashboard.activityPathsCell
 
 /**
  * Whether the agent's Activity view shows [entry]: its event, its paths, and its detail are what it shows, and it is a
@@ -121,36 +121,10 @@ internal object AgentActivityHtml {
   private fun TBODY.activityRow(entry: AgentActivityEntry) {
     tr {
       td { timeOfDay(entry.at) }
-      eventCell(entry)
-      pathsCell(entry)
+      activityEventCell(entry.kind.label, entry.kind.isProblem, entry.kind.isNotice, entry.count)
+      activityPathsCell(entry.paths, entry.pathCount - entry.paths.size)
       // The one column that wraps: a refusal's reason is a sentence.
       td("dim wrap") { +entry.detail.ifEmpty { DASH } }
-    }
-  }
-
-  // A problem is a crit tag and news a warn one; the rest is plain text. A run says how many it folded.
-  private fun TR.eventCell(entry: AgentActivityEntry) {
-    td("event") {
-      val kind = entry.kind
-      when {
-        kind.isProblem -> span("tag crit") { +kind.label }
-        kind.isNotice -> span("tag warn") { +kind.label }
-        else -> +kind.label
-      }
-      if (entry.count > 1) span("dim") { +" ×${entry.count}" }
-    }
-  }
-
-  // The paths a line concerns: a run names its first few and counts the rest.
-  private fun TR.pathsCell(entry: AgentActivityEntry) {
-    td {
-      if (entry.paths.isEmpty()) {
-        +DASH
-      } else {
-        +entry.paths.joinToString(", ") { "/$it" }
-        val more = entry.pathCount - entry.paths.size
-        if (more > 0) span("dim") { +" and $more more" }
-      }
     }
   }
 }

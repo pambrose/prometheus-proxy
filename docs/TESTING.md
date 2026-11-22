@@ -196,7 +196,8 @@ pins, and no jar on the classpath carries a `logback.xml`, which would replace t
   `RESOURCE_EXHAUSTED` is a failed connect, which the agent retries; each result is counted under its type (non-gzipped,
   gzipped, chunked, or dropped) through `Agent.updateScrapeResultCounter`; and for the activity feed, a connect
   recorded, and a failure only when it is new or changes, and failing over from the primary and back recorded, but
-  cycling on through the backups not
+  cycling on through the backups not; and a failure recorded again after a connect elsewhere, as after a failback to a
+  primary still down
 - **AgentGrpcStreamRetentionTest** — a chunk the proxy has read is no longer reachable while the agent's chunked
   stream stays open, checked with weak references after 2 MiB of 1 KiB chunks. Over Netty, gRPC's retry buffer
   commits past its 1 MiB per-RPC limit and lets go; over the in-process transport, which reports no message sizes,
@@ -577,12 +578,12 @@ One support helper also lives here (not a test class itself):
   base64, or one with no colon refused, never thrown on; the scheme matched in any case; a split at the first colon,
   so a password may contain one; non-ASCII values compared as UTF-8; the login page's form accepted only with both
   halves right; and neither value in its `toString`
-- **DashboardServerTest** (`dashboard/`) — the request rules every dashboard shares (`DashboardServer`): where a
-  login may send the browser (`safeNext`: a page under the base, never off-site, a protocol-relative or backslashed
-  path, a `.` or `..` segment, or the login page itself, at a root mount too), the session cookie named for the role
-  and the port, so a proxy's and an agent's on one host differ, the WebSocket Origin check (own host,
-  `allowedOrigins`, foreign or malformed origins refused), and the opt-in `allowedHosts` Host check against DNS
-  rebinding
+- **DashboardServerTest** (`dashboard/`) — the request rules every dashboard shares (`DashboardServer`): where a login
+  may send the browser (`safeNext`: a page under the base, never off-site, a protocol-relative or backslashed path, a
+  `.` or `..` segment, or the login page itself, at a root mount too), the session cookie named for the role and the
+  port, so a proxy's and an agent's on one host differ, the WebSocket Origin check (own host, `allowedOrigins`, foreign
+  or malformed origins refused), and the opt-in `allowedHosts` Host check against DNS rebinding; and changes waking the
+  push loop at once, then at most once an interval, with the latest
 - **DashboardSessionsTest** (`dashboard/`) — a dashboard's login-page sessions: a new one valid and a token never
   issued, null, or empty not; 43 base64url characters, distinct each time; ended 24 hours after its last request,
   which a request restarts, and a check that isn't a request doesn't; 7 days after it began however recently used;

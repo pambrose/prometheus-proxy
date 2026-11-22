@@ -168,10 +168,12 @@ internal class AgentGrpcService(
   // The endpoints are the configured list, so this stays as small.
   private val connectFailures = ConcurrentHashMap<String, LoggedFailure>()
 
+  // [connects] is how many connects had succeeded when the activity feed was last told of the failure.
   private class LoggedFailure(
     val key: String,
     val warnedAt: TimeMark,
     val latest: ShownFailure,
+    val connects: Int,
   )
 
   /** The latest failure to connect to each proxy endpoint, by its `host:port`, until a connect to it succeeds. */
@@ -408,25 +410,29 @@ internal class AgentGrpcService(
       // The first failure, and a change, at WARN with the stack trace for diagnosis; a repeat at DEBUG, and at WARN
       // again, without the stack trace, once the last WARN is CONNECT_FAILURE_REMINDER_INTERVAL old.
       val last = connectFailures[proxyHost]
+      // The activity feed is told of a failure when it is new or changes, as the log's WARN is, and again once a
+      // connect has succeeded since, elsewhere, as when the agent fails back to a primary still down; its repeats would
+      // fill the feed.
+      val connects = successfulConnects.load()
+      if (last?.key != failure || last.connects != connects)
+        agent.activityLog?.record(
+          AgentActivityKind.CONNECT_FAILED,
+          detail = "$proxyHost: ${latest.message}",
+          group = "$proxyHost $failure",
+        )
       when {
         last?.key != failure -> {
-          connectFailures[proxyHost] = LoggedFailure(failure, timeSource.markNow(), latest)
+          connectFailures[proxyHost] = LoggedFailure(failure, timeSource.markNow(), latest, connects)
           logger.warn(e) { message }
-          // In the activity feed only when it is new or changes, as at WARN here: its repeats would fill the feed.
-          agent.activityLog?.record(
-            AgentActivityKind.CONNECT_FAILED,
-            detail = "$proxyHost: ${latest.message}",
-            group = "$proxyHost $failure",
-          )
         }
 
         last.warnedAt.elapsedNow() >= CONNECT_FAILURE_REMINDER_INTERVAL -> {
-          connectFailures[proxyHost] = LoggedFailure(failure, timeSource.markNow(), latest)
+          connectFailures[proxyHost] = LoggedFailure(failure, timeSource.markNow(), latest, connects)
           logger.warn { "$message (still failing, retrying every few seconds)" }
         }
 
         else -> {
-          connectFailures[proxyHost] = LoggedFailure(failure, last.warnedAt, latest)
+          connectFailures[proxyHost] = LoggedFailure(failure, last.warnedAt, latest, connects)
           logger.debug { message }
         }
       }

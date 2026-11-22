@@ -312,19 +312,28 @@ internal class AgentPathManager(
   ) {
     val kind = source.name.lowercase()
     val retrying = retryingIn(retryIn)
-    // In the activity feed when logged at WARN: a refusal, and not each retry's repeat of it. Grouped by the proxy's
-    // cause, as the proxy's own feed groups them, since each of its reasons names its path: a burst of paths refused
-    // for one cause is one line. A proxy that sends no cause is grouped by its reason.
-    if (!e.retryable || !repeat) {
-      val reason = ShownFailure.of(e.reason).message
-      val cause = e.rejectionCause.takeUnless { it == PathRejectionCause.REJECTION_CAUSE_UNSPECIFIED }?.name ?: reason
-      agent.activityLog?.record(AgentActivityKind.PATH_REFUSED, path, reason, cause)
+    if (e.retryable && repeat) {
+      logger.debug { "Proxy still rejects $kind path /$path, $retrying: ${e.message}" }
+      return
     }
-    when {
-      !e.retryable -> logger.warn { "Proxy rejected $kind path /$path, not retrying: ${e.message}" }
-      !repeat -> logger.warn { "Proxy rejected $kind path /$path, $retrying: ${e.message}" }
-      else -> logger.debug { "Proxy still rejects $kind path /$path, $retrying: ${e.message}" }
-    }
+    recordRefusal(path, e)
+    if (e.retryable)
+      logger.warn { "Proxy rejected $kind path /$path, $retrying: ${e.message}" }
+    else
+      logger.warn { "Proxy rejected $kind path /$path, not retrying: ${e.message}" }
+  }
+
+  // The proxy's refusal of [path], in the activity feed, as at WARN in the log: a refusal, and not each retry's repeat
+  // of it. Grouped by the proxy's cause, as the proxy's own feed groups them, since each of its reasons names its path,
+  // so a burst of paths refused for one cause is one line. A proxy that sends no cause is grouped by its reason.
+  private fun recordRefusal(
+    path: String,
+    e: RequestFailureException,
+  ) {
+    val log = agent.activityLog ?: return
+    val reason = ShownFailure.of(e.reason).message
+    val cause = e.rejectionCause.takeUnless { it == PathRejectionCause.REJECTION_CAUSE_UNSPECIFIED }?.name ?: reason
+    log.record(AgentActivityKind.PATH_REFUSED, path, reason, cause)
   }
 
   // How a log line says when a path is retried, given its backoff's [wait]. A zero wait means the next tick of the

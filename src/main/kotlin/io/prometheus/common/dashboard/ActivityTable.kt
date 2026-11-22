@@ -16,6 +16,11 @@
 
 package io.prometheus.common.dashboard
 
+import io.prometheus.common.dashboard.DashboardPage.DASH
+import kotlinx.html.TR
+import kotlinx.html.span
+import kotlinx.html.td
+
 /**
  * What a push's Activity table is rendered from, the proxy's or the agent's. A frame for an Activity view carries the
  * table only when this differs from what the last frame sent to the page carried; otherwise it carries the status bar
@@ -42,6 +47,40 @@ internal data class ActivityTable(
   val changeCount: Long,
   val seq: Long,
   val filter: RowFilter,
+)
+
+/**
+ * An Activity table's Event cell, as both dashboards' feeds draw it: [label] as a crit tag for a problem, [isProblem],
+ * a warn one for news that isn't a fault, [isNotice], and plain text otherwise, then ×N for a run of [count] like
+ * events.
+ */
+internal fun TR.activityEventCell(
+  label: String,
+  isProblem: Boolean,
+  isNotice: Boolean,
+  count: Int,
 ) {
-  companion object
+  td("event") {
+    when {
+      isProblem -> span("tag crit") { +label }
+      isNotice -> span("tag warn") { +label }
+      else -> +label
+    }
+    if (count > 1) span("dim") { +" ×$count" }
+  }
+}
+
+/** An Activity table's Path cell: the [paths] a line names, and the [more] it concerns besides, or a dash for none. */
+internal fun TR.activityPathsCell(
+  paths: List<String>,
+  more: Int,
+) {
+  td {
+    if (paths.isEmpty()) {
+      +DASH
+    } else {
+      +paths.joinToString(", ") { "/$it" }
+      if (more > 0) span("dim") { +" and $more more" }
+    }
+  }
 }

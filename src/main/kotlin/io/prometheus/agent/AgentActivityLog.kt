@@ -22,7 +22,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlin.time.Clock
-import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
@@ -74,15 +73,11 @@ internal data class AgentActivityEntry(
   val group: String = "",
   val pathCount: Int = paths.size,
 ) {
-  // Whether [next] is one more of this line's burst: like it, and within [window] of the burst's start.
-  fun isBurstJoinedBy(
-    next: AgentActivityEntry,
-    window: Duration,
-  ): Boolean = kind == next.kind && group == next.group && next.at - at < window
+  // Whether [next] is the same kind of event, in the same group, which a burst's events share.
+  fun isLike(next: AgentActivityEntry): Boolean = kind == next.kind && group == next.group
 
   // Whether [next] is this line's event again, which joins it however long since.
-  fun isRepeatedBy(next: AgentActivityEntry): Boolean =
-    kind == next.kind && group == next.group && detail == next.detail && paths == next.paths
+  fun isRepeatedBy(next: AgentActivityEntry): Boolean = isLike(next) && detail == next.detail && paths == next.paths
 
   // This line with [next] folded in: counted, and its path counted and named too, while the line names fewer than the
   // sample's, unless the line names it already.
@@ -191,41 +186,37 @@ internal class AgentActivityLog(
    */
   fun snapshot(): Snapshot = synchronized(lines) { Snapshot(changeCount, lines.reversed()) }
 
-  // Folds [entry] into the newest line when it repeats it, or else into the line of its burst, the newest line within
-  // the window it can join that no connect or disconnect follows, and returns whether there was one. A connect or a
-  // disconnect joins no burst. Callers MUST hold lines' monitor.
+  // Folds [entry] into the line it joins (see [joinable]), and returns whether there was one. Callers MUST hold lines'
+  // monitor.
   private fun join(entry: AgentActivityEntry): Boolean {
-    val newest = lines.lastOrNull()
-    val at =
-      when {
-        newest != null && newest.isRepeatedBy(entry) -> lines.lastIndex
-        entry.kind.isBoundary -> -1
-        else -> burstLine(entry)
-      }
+    val at = joinable(entry)
     if (at >= 0)
       lines[at] = lines[at].joinedBy(entry)
     return at >= 0
   }
 
-  // The index of the line of [entry]'s burst, the newest line within the window it can join that no connect or
-  // disconnect follows, or -1 for none. Callers MUST hold lines' monitor.
+  // The index of the line [entry] joins, or -1 for none: the newest line, when [entry] repeats it, or else the line of
+  // its burst. A connect or a disconnect joins only a line it repeats. Callers MUST hold lines' monitor.
+  private fun joinable(entry: AgentActivityEntry): Int =
+    when {
+      lines.lastOrNull()?.isRepeatedBy(entry) == true -> lines.lastIndex
+      entry.kind.isBoundary -> -1
+      else -> burstLine(entry)
+    }
+
+  // The newest line like [entry] within the window of its burst's start, or -1 for none. Lines are in the order their
+  // bursts began, so the search ends at the first line outside the window, and at a connect or a disconnect, which
+  // starts a run no later event folds back past. Callers MUST hold lines' monitor.
   private fun burstLine(entry: AgentActivityEntry): Int {
     for (i in lines.indices.reversed()) {
       val line = lines[i]
-      if (endsSearch(line, entry))
+      if (line.kind.isBoundary || entry.at - line.at >= COALESCE_WINDOW)
         break
-      if (line.isBurstJoinedBy(entry, COALESCE_WINDOW))
+      if (line.isLike(entry))
         return i
     }
     return -1
   }
-
-  // Whether a search for [entry]'s burst stops at [line]: one older than the window, or a connect or a disconnect,
-  // which starts a new run.
-  private fun endsSearch(
-    line: AgentActivityEntry,
-    entry: AgentActivityEntry,
-  ): Boolean = line.kind.isBoundary || entry.at - line.at >= COALESCE_WINDOW
 
   // Callers MUST hold lines' monitor.
   private fun append(entry: AgentActivityEntry) {
@@ -243,7 +234,7 @@ internal class AgentActivityLog(
     const val MAX_SAMPLE_PATHS = 3
 
     // What a line keeps of each value.
-    const val MAX_FIELD_CHARS = 256
-    const val MAX_DETAIL_CHARS = 512
+    private const val MAX_FIELD_CHARS = 256
+    private const val MAX_DETAIL_CHARS = 512
   }
 }

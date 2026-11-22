@@ -29,10 +29,12 @@ import kotlin.time.Instant
  * @param label how the feed's Event column reads
  * @param isProblem whether "Problems only" keeps it: something an operator has to act on, where the rest is the
  *   ordinary coming and going of agents and paths
+ * @param isNotice whether it is news but not a fault, which the feed marks amber
  */
 internal enum class ActivityKind(
   val label: String,
   val isProblem: Boolean = false,
+  val isNotice: Boolean = false,
 ) {
   AGENT_CONNECTED("connected"),
   AGENT_DISCONNECTED("disconnected"),
@@ -41,7 +43,9 @@ internal enum class ActivityKind(
   BAD_TOKEN("bad token", isProblem = true),
   PATH_REGISTERED("registered"),
   PATH_UNREGISTERED("unregistered"),
-  PATH_TAKEN_OVER("taken over"),
+
+  // A redeploy takes over every path its old agent held.
+  PATH_TAKEN_OVER("taken over", isNotice = true),
   PATH_REJECTED("rejected", isProblem = true),
 
   // A scrape made from the dashboard, named so a scrape no one at Prometheus asked for can be traced to a browser.

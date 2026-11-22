@@ -101,6 +101,9 @@ class DashboardScriptTest : StringSpec() {
       page shouldContain """<button type="button" id="${DashboardPage.THEME_TOGGLE_ID}""""
       page shouldContain "var THEMES = ['auto', 'light', 'dark'];"
       page shouldContain "localStorage.setItem('${DashboardPage.THEME_KEY}', t)"
+      // The theme in force is the page's own, as the head applied it, so a store that refuses writes can't stick it.
+      page shouldContain "return document.documentElement.getAttribute('data-theme') || 'auto';"
+      page.substringAfter("var THEMES") shouldNotContain "localStorage.getItem"
       page shouldContain "evt.target.closest('#${DashboardPage.THEME_TOGGLE_ID}')"
       // Outside every pushed region, so no frame resets it.
       ProxyDashboardHtml.pushFragment(snapshot(), null, "/dashboard") shouldNotContain DashboardPage.THEME_TOGGLE_ID

@@ -119,15 +119,16 @@ internal class PathDiscoveryService(
       lastFailure = null
     }.onFailure { e ->
       val failure = failureKey(e, withMessage = true)
-      if (failure == lastFailure?.key)
+      val shown = ShownFailure.of(e)
+      if (failure == lastFailure?.key) {
         logger.debug {
           "Path discovery reconcile failed again; keeping the paths last read: ${e.simpleClassName}: ${e.message}"
         }
-      else
+      } else {
         logger.warn(e) { "Path discovery reconcile failed; keeping the paths last read" }
-      val shown = ShownFailure.of(e)
-      if (failure != lastFailure?.key)
+        // In the activity feed as at WARN: when it is new or changes, not while it repeats.
         activityLog?.record(AgentActivityKind.DISCOVERY_FAILED, detail = shown.message, group = failure)
+      }
       lastFailure = LastFailure(failure, shown)
     }
   }

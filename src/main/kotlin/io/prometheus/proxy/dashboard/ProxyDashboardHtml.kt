@@ -17,15 +17,6 @@
 package io.prometheus.proxy.dashboard
 
 import io.prometheus.common.dashboard.DashboardPage
-import io.prometheus.common.dashboard.DashboardPage.ANNOUNCER_ID
-import io.prometheus.common.dashboard.DashboardPage.COLUMN_GUIDE_ID
-import io.prometheus.common.dashboard.DashboardPage.COLUMN_GUIDE_TOGGLE_ID
-import io.prometheus.common.dashboard.DashboardPage.DASH
-import io.prometheus.common.dashboard.DashboardPage.FILTER_PROBLEMS_ID
-import io.prometheus.common.dashboard.DashboardPage.FILTER_QUERY_ID
-import io.prometheus.common.dashboard.DashboardPage.HTMX_CONFIG
-import io.prometheus.common.dashboard.DashboardPage.LOGOUT_ID
-import io.prometheus.common.dashboard.DashboardPage.NAV_ID
 import io.prometheus.common.dashboard.DashboardPage.SCRAPE_PORT_ATTR
 import io.prometheus.common.dashboard.DashboardPage.STATUS_ID
 import io.prometheus.common.dashboard.DashboardPage.TITLE_ATTR
@@ -41,14 +32,9 @@ import io.prometheus.common.dashboard.DashboardPage.tabs
 import io.prometheus.common.dashboard.DashboardPage.themeToggle
 import io.prometheus.common.dashboard.DashboardPage.timeOfDay
 import io.prometheus.common.dashboard.DashboardScript
-import io.prometheus.common.dashboard.DashboardServer
 import io.prometheus.common.dashboard.DashboardView
-import io.prometheus.common.dashboard.href
-import kotlinx.html.ButtonType
 import kotlinx.html.DIV
-import kotlinx.html.FORM
 import kotlinx.html.FlowContent
-import kotlinx.html.FormMethod
 import io.prometheus.proxy.ScrapeRecord
 import io.prometheus.proxy.dashboard.ActivityHtml.activityTable
 import io.prometheus.proxy.dashboard.ActivityHtml.renderActivity
@@ -56,20 +42,12 @@ import io.prometheus.proxy.dashboard.PathTableHtml.linkIconStyle
 import io.prometheus.proxy.dashboard.PathTableHtml.pathTable
 import io.prometheus.proxy.dashboard.PathTableHtml.renderPathTable
 import kotlinx.html.HTML
-import kotlinx.html.InputType
-import kotlinx.html.NAV
 import kotlinx.html.SPAN
 import kotlinx.html.a
 import kotlinx.html.body
 import kotlinx.html.button
-import kotlinx.html.dd
 import kotlinx.html.div
-import kotlinx.html.dl
-import kotlinx.html.dt
-import kotlinx.html.form
 import kotlinx.html.head
-import kotlinx.html.input
-import kotlinx.html.label
 import kotlinx.html.main
 import kotlinx.html.meta
 import kotlinx.html.nav
@@ -77,18 +55,10 @@ import kotlinx.html.script
 import kotlinx.html.section
 import kotlinx.html.span
 import kotlinx.html.stream.createHTML
-import kotlinx.html.style
 import kotlinx.html.title
-import kotlinx.html.time
 import kotlinx.html.unsafe
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import kotlin.time.Clock
-import kotlin.time.Duration
-import kotlin.time.Instant
-import kotlin.time.toJavaInstant
 import io.prometheus.common.dashboard.RowFilter
-import io.prometheus.common.dashboard.TableColumn
 
 /**
  * Which view a session is looking at.

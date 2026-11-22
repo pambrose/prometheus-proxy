@@ -18,7 +18,6 @@ package io.prometheus.proxy.dashboard
 
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
-import io.ktor.http.parseQueryString
 import io.ktor.http.withCharset
 import io.ktor.server.application.install
 import io.ktor.server.html.respondHtml
@@ -138,7 +137,7 @@ internal class ProxyDashboardService(
         val filter = view?.filter ?: RowFilter.NONE
         // The Activity table goes only when it differs from the one the page shows; see ActivityTable. For another
         // layout there is no table, and the flag changes nothing.
-        val activity = ActivityTable.of(snapshot, view?.layout, seq, filter)
+        val activity = activityTable(snapshot, view?.layout, seq, filter)
         val text =
           ProxyDashboardHtml.pushFragment(
             snapshot,
@@ -250,14 +249,14 @@ internal class ProxyDashboardService(
      */
     internal fun parseLayout(text: String): DashboardLayout =
       DashboardMessage.layout(text, DashboardLayout.entries, DashboardLayout.AGENT)
+
+    /** The table a push for [layout] renders from [snapshot], or null when [layout] has no Activity table. */
+    internal fun activityTable(
+      snapshot: ProxySnapshot,
+      layout: DashboardLayout?,
+      seq: Long,
+      filter: RowFilter,
+    ): ActivityTable? =
+      if (layout == DashboardLayout.ACTIVITY) ActivityTable(snapshot.activityChangeCount, seq, filter) else null
   }
 }
-
-/** The table a push for [layout] renders from [snapshot], or null when [layout] has no Activity table. */
-internal fun ActivityTable.Companion.of(
-  snapshot: ProxySnapshot,
-  layout: DashboardLayout?,
-  seq: Long,
-  filter: RowFilter,
-): ActivityTable? =
-  if (layout == DashboardLayout.ACTIVITY) ActivityTable(snapshot.activityChangeCount, seq, filter) else null

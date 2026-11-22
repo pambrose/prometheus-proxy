@@ -1793,6 +1793,27 @@ class AgentGrpcServiceTest : StringSpec() {
       }
     }
 
+    // A failure the endpoint still holds from before is news again once the agent has connected elsewhere since: after
+    // a failback to a primary that is still down, the feed says why it failed this time.
+    "a failure should be recorded again after a connect elsewhere, though its endpoint never connected" {
+      val log = AgentActivityLog(capacity = 20)
+      withStubbedService("first:$PROXY_AGENT_PORT,second:$PROXY_HTTP_PORT", activityLog = log) { service, mockStub ->
+        val down = StatusException(Status.UNAVAILABLE.withDescription("proxy down"))
+        every { service.agent.proxyHost } returns "first:$PROXY_AGENT_PORT"
+        coEvery { mockStub.connectAgent(any(), any<Metadata>()) } throws down
+        service.connectAgent().shouldBeFalse()
+        every { service.agent.proxyHost } returns "second:$PROXY_HTTP_PORT"
+        coEvery { mockStub.connectAgent(any(), any<Metadata>()) } returns EMPTY_INSTANCE
+        service.connectAgent().shouldBeTrue()
+        every { service.agent.proxyHost } returns "first:$PROXY_AGENT_PORT"
+        coEvery { mockStub.connectAgent(any(), any<Metadata>()) } throws down
+        repeat(2) { service.connectAgent().shouldBeFalse() }
+      }
+
+      log.snapshot().entries.map { it.kind } shouldBe
+        [AgentActivityKind.CONNECT_FAILED, AgentActivityKind.CONNECTED, AgentActivityKind.CONNECT_FAILED]
+    }
+
     // Leaving the primary is the news; cycling on through the backups during the same outage is not.
     "failing over from the primary, and back to it, should be recorded, and cycling through the backups not" {
       val log = AgentActivityLog(capacity = 20)

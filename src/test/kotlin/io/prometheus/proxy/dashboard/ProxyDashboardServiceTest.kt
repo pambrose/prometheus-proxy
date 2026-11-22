@@ -36,7 +36,7 @@ class ProxyDashboardServiceTest : StringSpec() {
     changeCount: Long,
     seq: Long,
     filter: RowFilter,
-  ) = ActivityTable.of(
+  ) = ProxyDashboardService.activityTable(
       DashboardFixtures.snapshot(activityChangeCount = changeCount),
       DashboardLayout.ACTIVITY,
       seq,
@@ -72,7 +72,7 @@ class ProxyDashboardServiceTest : StringSpec() {
       val snapshot = DashboardFixtures.snapshot(activityChangeCount = 4)
 
       listOf(DashboardLayout.AGENT, DashboardLayout.PATH, null).forEach { layout ->
-        ActivityTable.of(snapshot, layout, seq = 3, RowFilter.NONE).shouldBeNull()
+        ProxyDashboardService.activityTable(snapshot, layout, seq = 3, RowFilter.NONE).shouldBeNull()
       }
     }
   }
