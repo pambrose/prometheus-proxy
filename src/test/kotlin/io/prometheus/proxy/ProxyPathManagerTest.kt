@@ -2042,6 +2042,21 @@ class ProxyPathManagerTest : StringSpec() {
       waitingNotices(oldAgent).shouldBeEmpty()
     }
 
+    // A waiting list kept a disconnected agent's context, and all it holds, until the path's entry next changed.
+    "an agent that disconnects should no longer wait on any path" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val oldAgent = noticed("launch-old")
+      val newAgent = noticed("launch-new")
+      manager.addPath("metrics", "{}", oldAgent)
+      manager.addPath("metrics", "{}", newAgent)
+      manager.getAgentContextInfo("metrics").shouldNotBeNull().waiting shouldBe listOf(oldAgent)
+
+      oldAgent.invalidate()
+      manager.removeFromPathManager(oldAgent.agentId, RemovalReason.TERMINATION)
+
+      manager.getAgentContextInfo("metrics").shouldNotBeNull().waiting.shouldBeEmpty()
+    }
+
     "a path should keep at most MAX_WAITERS_PER_PATH waiting agents, the latest displaced" {
       val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
       val max = ProxyPathManager.MAX_WAITERS_PER_PATH

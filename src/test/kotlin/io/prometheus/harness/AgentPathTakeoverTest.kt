@@ -37,9 +37,10 @@ import io.prometheus.Agent
 import io.prometheus.Proxy
 import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.common.TestPorts.PATH_TAKEOVER_HTTP_PORT
-import io.prometheus.common.agentOptions
-import io.prometheus.common.proxyOptions
 import io.prometheus.common.startAndAwaitReady
+import io.prometheus.harness.support.TestUtils.startAgent
+import io.prometheus.harness.support.TestUtils.startProxy
+import io.prometheus.harness.support.TestUtils.stopAll
 import io.prometheus.metrics.model.registry.PrometheusRegistry
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -57,8 +58,8 @@ class AgentPathTakeoverTest : StringSpec() {
   init {
     "a displaced agent should show the path taken over, and take it back once the other agent leaves" {
       withProxyAndTarget { serverName, client, targetUrl ->
-        val agentA = startAgent(serverName, "takeover-agent-a")
-        val agentB = startAgent(serverName, "takeover-agent-b")
+        val agentA = connectedAgent(serverName, "takeover-agent-a")
+        val agentB = connectedAgent(serverName, "takeover-agent-b")
         try {
           agentA.pathManager.registerPath(SHARED_PATH, targetUrl)
           eventually(10.seconds) { ownerOf(SHARED_PATH) shouldBe agentA.agentId }
@@ -79,9 +80,9 @@ class AgentPathTakeoverTest : StringSpec() {
           eventually(5.seconds) { ownerOf(SHARED_PATH) shouldBe agentA.agentId }
           agentA.pathManager.registeredPaths.map { it.path } shouldBe listOf(SHARED_PATH)
           agentA.pathManager.takenOverContexts.shouldBeEmpty()
-          client.get("http://localhost:$HTTP_PORT/$SHARED_PATH").status shouldBe HttpStatusCode.OK
+          client.get("http://localhost:$PATH_TAKEOVER_HTTP_PORT/$SHARED_PATH").status shouldBe HttpStatusCode.OK
         } finally {
-          stopAgents(agentA, agentB)
+          stopAll(agentA, agentB)
         }
       }
     }
@@ -90,8 +91,8 @@ class AgentPathTakeoverTest : StringSpec() {
     // with a heartbeat. Its own stream reaches it whatever it's doing.
     "a displaced agent busy with its other paths should still be told" {
       withProxyAndTarget { serverName, client, targetUrl ->
-        val agentA = startAgent(serverName, "takeover-agent-a")
-        val agentB = startAgent(serverName, "takeover-agent-b")
+        val agentA = connectedAgent(serverName, "takeover-agent-a")
+        val agentB = connectedAgent(serverName, "takeover-agent-b")
         try {
           agentA.pathManager.registerPath(SHARED_PATH, targetUrl)
           agentA.pathManager.registerPath(OWN_PATH, targetUrl)
@@ -101,7 +102,7 @@ class AgentPathTakeoverTest : StringSpec() {
             val scrapes =
               launch {
                 while (isActive) {
-                  client.get("http://localhost:$HTTP_PORT/$OWN_PATH")
+                  client.get("http://localhost:$PATH_TAKEOVER_HTTP_PORT/$OWN_PATH")
                   delay(100.milliseconds)
                 }
               }
@@ -114,7 +115,7 @@ class AgentPathTakeoverTest : StringSpec() {
           }
           agentA.pathManager.registeredPaths.map { it.path } shouldBe listOf(OWN_PATH)
         } finally {
-          stopAgents(agentA, agentB)
+          stopAll(agentA, agentB)
         }
       }
     }
@@ -134,46 +135,30 @@ class AgentPathTakeoverTest : StringSpec() {
         routing { get("/metrics") { call.respondText("up 1\n") } }
       }
     val targetPort = target.startAndAwaitReady()
-    val started =
-      Proxy(
-        options = proxyOptions(CONFIG_ARG + listOf("-Dproxy.admin.enabled=false", "-Dproxy.metrics.enabled=false")),
-        proxyPort = HTTP_PORT,
-        inProcessServerName = serverName,
-        testMode = true,
-      ) { startSync() }
+    val started = startProxy(serverName, proxyPort = PATH_TAKEOVER_HTTP_PORT, configArgs = CONFIG_ARG)
     proxy = started
     val client = HttpClient(CIO)
     try {
       block(serverName, client, "http://localhost:$targetPort/metrics")
     } finally {
       client.close()
-      runCatching { started.stopSync(10.seconds) }
+      stopAll(started)
       proxy = null
       target.stop(0, 0)
     }
   }
 
   // An agent of a launch of its own, named [name], connected to the proxy in-process.
-  private fun startAgent(
+  private fun connectedAgent(
     serverName: String,
     name: String,
-  ): Agent {
-    val args = CONFIG_ARG + listOf("-Dagent.name=$name", "-Dagent.admin.enabled=false", "-Dagent.metrics.enabled=false")
-    return Agent(
-      options = agentOptions(args, exitOnMissingConfig = false),
-      inProcessServerName = serverName,
-      testMode = true,
-    ) { startSync() }.also { it.awaitInitialConnection(10.seconds).shouldBeTrue() }
-  }
-
-  private fun stopAgents(vararg agents: Agent) {
-    agents.filter { it.isRunning }.forEach { runCatching { it.stopSync(5.seconds) } }
-  }
+  ): Agent =
+    startAgent(serverName, args = listOf("-Dagent.name=$name"), configArgs = CONFIG_ARG)
+      .also { it.awaitInitialConnection(10.seconds).shouldBeTrue() }
 
   companion object {
     private const val SHARED_PATH = "takeover_shared_metrics"
     private const val OWN_PATH = "takeover_own_metrics"
-    private const val HTTP_PORT = PATH_TAKEOVER_HTTP_PORT
     private val CONFIG_ARG = listOf("--config", "config/test-configs/path-takeover.conf")
   }
 }

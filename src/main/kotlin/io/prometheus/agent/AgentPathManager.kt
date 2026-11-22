@@ -394,12 +394,10 @@ internal class AgentPathManager(
     }
     val holder = holderOf(notice)
     var prior: TakenOver? = null
-    val takenOver =
-      takenOverPaths.compute(path) { _, current ->
-        prior = current
-        takenOverBy(holder, current)
-      }.let(::checkNotNull)
-    registrationFailures[path] = takenOver.failure()
+    takenOverPaths.compute(path) { _, current ->
+      prior = current
+      takenOverBy(holder, current)
+    }
     when {
       holder.isEmpty() -> logger.info { "No agent serves path /$path any more; taking it back" }
       prior?.holder == holder -> logger.debug { "Path /$path is still held by ${shownValue(holder)}" }
@@ -417,16 +415,19 @@ internal class AgentPathManager(
 
   // The takeover a notice naming [holder], empty for none, makes of [current]. With no holder the path's next try is
   // due at once. Otherwise the backoff carries on: the proxy names the holder again after each refused try, and
-  // starting the backoff over would retry at its first wait for as long as the other agent holds the path.
+  // starting the backoff over would retry at its first wait for as long as the other agent holds the path. A notice
+  // naming the holder [current] already names changes nothing: it can land before the refusal it came with, which
+  // advances the backoff of the takeover it tried, the same object.
   private fun takenOverBy(
     holder: String,
     current: TakenOver?,
   ): TakenOver {
     val now = timeSource.markNow()
-    return if (holder.isEmpty())
-      TakenOver(holder, RetryBackoff(current?.backoff?.wait ?: staticRetryInterval, now))
-    else
-      TakenOver(holder, current?.backoff ?: RetryBackoff(staticRetryInterval, now + staticRetryInterval))
+    if (holder.isEmpty())
+      return TakenOver(holder, RetryBackoff(current?.backoff?.wait ?: staticRetryInterval, now))
+    if (current != null && current.holder == holder)
+      return current
+    return TakenOver(holder, current?.backoff ?: RetryBackoff(staticRetryInterval, now + staticRetryInterval))
   }
 
   // Reports that the proxy gave [path] to [holder]: news, so at WARN and in the activity feed, as the proxy's own feed
@@ -443,11 +444,13 @@ internal class AgentPathManager(
     agent.activityLog?.record(AgentActivityKind.PATH_TAKEN_OVER, path, "By $holder", holder)
   }
 
-  // Tries to take back each taken-over path whose retry is due, as a reclaim, which the proxy refuses while a live
-  // agent of another launch holds it. Each path is isolated, as in retryRejectedStaticPaths.
+  // Tries to take back each taken-over path whose retry is due within RECLAIM_WINDOW, as a reclaim, which the proxy
+  // refuses while a live agent of another launch holds it. Each path's refusal sets its own next try, so the tries of
+  // many taken-over paths spread out, and waking for each alone made every round scan them all once per path. Each
+  // path is isolated, as in retryRejectedStaticPaths.
   suspend fun reclaimTakenOverPaths() {
-    for ((path, takenOver) in takenOverPaths.toList()) {
-      if (!takenOver.backoff.isDue)
+    for ((path, takenOver) in takenOverPaths) {
+      if (takenOver.backoff.remaining > RECLAIM_WINDOW)
         continue
       pathMutex.withLock {
         val context = pathContextMap[path]
@@ -485,34 +488,25 @@ internal class AgentPathManager(
     val cause = rejection?.rejectionCause
     val updated =
       takenOverPaths.computeIfPresent(path) { _, current ->
-        if (current === tried)
-          TakenOver(current.holder, nextBackoff(current.backoff, staticRetryInterval), cause)
-        else
-          current
+        if (current === tried) tried.refusedFor(rejection, nextBackoff(tried.backoff, staticRetryInterval)) else current
       } ?: return
+    val retryIn = updated.backoff.wait
     when {
-      rejection == null -> {
-        registrationFailures[path] = updated.failure()
-        logger.debug { "Failed to take back path /$path, ${retryingIn(updated.backoff.wait)}: ${e.simpleClassName}" }
+      rejection == null -> logger.debug {
+        "Failed to take back path /$path, ${retryingIn(retryIn)}: ${e.simpleClassName}"
       }
 
-      cause == HELD_BY_ANOTHER_AGENT -> {
-        registrationFailures[path] = updated.failure()
-        logRejection(source, path, rejection, repeat = true, retryIn = updated.backoff.wait)
-      }
+      cause == HELD_BY_ANOTHER_AGENT -> logRejection(source, path, rejection, repeat = true, retryIn = retryIn)
 
-      else -> {
-        recordFailure(path, rejection, retrying = true, retryAt = updated.backoff.dueAt)
-        logRejection(source, path, rejection, repeat = tried.refusal == cause, retryIn = updated.backoff.wait)
-      }
+      else -> logRejection(source, path, rejection, repeat = tried.refusal == cause, retryIn = retryIn)
     }
   }
 
   // Runs reclaimTakenOverPaths while [active] holds -- Agent.connectToProxy's reclaim task -- sleeping until the next
-  // path's try is due, or until a notice, with none taken over.
+  // path's try is due within RECLAIM_WINDOW, or until a notice, with none taken over.
   suspend fun reclaimTakenOverPathsWhile(active: () -> Boolean) {
     while (active()) {
-      val wait = takenOverPaths.values.minOfOrNull { (-it.backoff.dueAt.elapsedNow()).coerceAtLeast(Duration.ZERO) }
+      val wait = takenOverPaths.values.minOfOrNull { it.backoff.remaining }?.minus(RECLAIM_WINDOW)
       when {
         wait == null -> reclaimWake.receive()
         wait > Duration.ZERO -> withTimeoutOrNull(wait) { reclaimWake.receive() }
@@ -548,11 +542,8 @@ internal class AgentPathManager(
 
       // Forget the rejections of paths no longer desired.
       discoveredRejections.keys.retainAll(desiredByPath.keys)
-      // And their registration failures: every recorded failure is a configured path's, a desired discovered one's, or
-      // a taken-over one's.
-      registrationFailures.keys.retainAll {
-        it in configuredStaticPaths || it in desiredByPath || takenOverPaths.containsKey(it)
-      }
+      // And their registration failures: every recorded failure is a configured path's or a desired discovered one's.
+      registrationFailures.keys.retainAll { it in configuredStaticPaths || it in desiredByPath }
 
       // Register new discovered paths and re-register changed ones (unregister-then-register keeps the
       // local mapping and the proxy's stored labels in agreement).
@@ -802,10 +793,14 @@ internal class AgentPathManager(
   val registeredPaths: List<PathContext> get() = pathContextMap.values.filterNot { takenOverPaths.containsKey(it.path) }
 
   /** The paths the proxy said another agent took over, which this agent takes back once no agent serves them. */
-  val takenOverContexts: List<PathContext> get() = pathContextMap.values.filter { takenOverPaths.containsKey(it.path) }
+  val takenOverContexts: List<PathContext> get() = takenOverPaths.keys.mapNotNull { pathContextMap[it] }
 
-  /** Each path's last failure to register, by normalized path, until it registers (see [RegistrationFailure]). */
-  val pathFailures: Map<String, RegistrationFailure> get() = registrationFailures.toMap()
+  /**
+   * Each path's last failure to register, by normalized path, until it registers (see [RegistrationFailure]), and each
+   * taken-over path's takeover, or the proxy's refusal of its last try for another cause.
+   */
+  val pathFailures: Map<String, RegistrationFailure>
+    get() = registrationFailures + takenOverPaths.mapValues { it.value.shown }
 
   /**
    * The discovered paths last found colliding with a static path, and those the discovery file lists twice. A plain
@@ -865,6 +860,9 @@ internal class AgentPathManager(
     // The rejection causes that clear while the agent stays connected: a live agent holds the path, and it leaves
     // eventually. No other cause does, including none (a proxy predating the field) and one this agent doesn't know.
     private val RETRYABLE_CAUSES = setOf(HELD_BY_ANOTHER_IDENTITY, CONSOLIDATION_MISMATCH, HELD_BY_ANOTHER_AGENT)
+
+    // How close together reclaims are tried in one pass; see reclaimTakenOverPaths.
+    private val RECLAIM_WINDOW = 1.seconds
 
     private val RequestFailureException.retryable: Boolean
       get() = rejectionCause in RETRYABLE_CAUSES
@@ -929,6 +927,9 @@ internal class AgentPathManager(
     val dueAt: TimeMark,
   ) {
     val isDue: Boolean get() = dueAt.hasPassedNow()
+
+    // How long until it is up, zero once it is.
+    val remaining: Duration get() = (-dueAt.elapsedNow()).coerceAtLeast(Duration.ZERO)
   }
 
   // A path the proxy gave to [holder], another agent's name as the proxy told it, or empty once no agent serves it,
@@ -938,11 +939,30 @@ internal class AgentPathManager(
     val holder: String,
     val backoff: RetryBackoff,
     val refusal: PathRejectionCause? = null,
+    // How the agent's dashboard shows the path meanwhile: the takeover, or the proxy's refusal for another cause.
+    val shown: RegistrationFailure = takeoverFailure(holder, backoff),
   ) {
-    // How the agent's dashboard shows the path meanwhile.
-    fun failure(): RegistrationFailure {
-      val reason = if (holder.isEmpty()) "Taken over by another agent, which has left" else "Taken over by $holder"
-      return RegistrationFailure(ShownFailure.of(reason), true, true, backoff.dueAt, takenOver = true)
+    // This takeover once [rejection], or a failure that kept the proxy from answering, refused the try made with it,
+    // to be tried again after [next]. A refusal while another agent holds the path is what the takeover shows.
+    fun refusedFor(
+      rejection: RequestFailureException?,
+      next: RetryBackoff,
+    ): TakenOver {
+      val cause = rejection?.rejectionCause
+      if (rejection == null || cause == HELD_BY_ANOTHER_AGENT)
+        return TakenOver(holder, next, cause)
+      val shown = RegistrationFailure(ShownFailure.of(rejection.reason), true, true, next.dueAt)
+      return TakenOver(holder, next, cause, shown)
+    }
+
+    companion object {
+      private fun takeoverFailure(
+        holder: String,
+        backoff: RetryBackoff,
+      ): RegistrationFailure {
+        val reason = if (holder.isEmpty()) "Taken over by another agent, which has left" else "Taken over by $holder"
+        return RegistrationFailure(ShownFailure.of(reason), true, true, backoff.dueAt, takenOver = true)
+      }
     }
   }
 

@@ -22,6 +22,7 @@ import io.prometheus.common.CountingAgentMetrics
 import ch.qos.logback.classic.Level
 import io.grpc.Status
 import io.grpc.StatusException
+import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
@@ -2129,6 +2130,27 @@ class AgentPathManagerTest : StringSpec() {
       manager.pathFailures.getValue("metrics").reason.message shouldContain "agent-b"
     }
 
+    // The proxy names the holder on the notices stream before it answers the refused reclaim, so the notice can land
+    // first. Taken as a new takeover, it left the refused try's backoff where it was, and the agent tried again at
+    // once, as fast as the proxy could refuse it.
+    "a notice naming the same holder during a refused reclaim should not keep the backoff from growing" {
+      val clock = TestTimeSource()
+      val agent = createMockAgent()
+      val grpc = agent.grpcService
+      val manager = AgentPathManager(agent, clock)
+      manager.registerPath("metrics", METRICS_URL)
+      manager.notePathNotice(takenNotice("metrics", "agent-a"))
+      coEvery { grpc.reclaimPathOnProxy(any(), any(), any(), any()) } answers {
+        manager.notePathNotice(takenNotice("metrics", "agent-a"))
+        throw RequestFailureException.fromProxy("registerPathOnProxy", "held", PathRejectionCause.HELD_BY_ANOTHER_AGENT)
+      }
+
+      // Due at 10s, then 20s later at 30s: the 20s tick doesn't try again.
+      clock.tick(times = 2, step = 10.seconds) { manager.reclaimTakenOverPaths() }
+
+      coVerify(exactly = 1) { grpc.reclaimPathOnProxy(any(), any(), any(), any()) }
+    }
+
     // Freed, the path can go to an agent of another identity, which the proxy names as the reason, not a takeover.
     "a reclaim refused for another cause that can clear should show the proxy's reason, and warn once" {
       val clock = TestTimeSource()
@@ -2247,9 +2269,7 @@ class AgentPathManagerTest : StringSpec() {
         val loop = launch { manager.reclaimTakenOverPathsWhile { active.load() } }
         manager.notePathNotice(takenNotice("metrics", "agent-east-copy"))
         manager.notePathNotice(freeNotice("metrics"))
-        withTimeout(5.seconds) {
-          while (manager.registeredPaths.isEmpty()) delay(10.milliseconds)
-        }
+        eventually(5.seconds) { manager.registeredPaths.map { it.path } shouldBe listOf("metrics") }
         active.store(false)
         loop.cancel()
       }
@@ -2257,7 +2277,7 @@ class AgentPathManagerTest : StringSpec() {
   }
 }
 
-private const val METRICS_URL = "http://localhost:9999/metrics"
+private const val METRICS_URL = "http://localhost:$PROXY_HTTP_PORT/metrics"
 
 private fun takenNotice(
   path: String,

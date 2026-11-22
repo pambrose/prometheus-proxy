@@ -1022,32 +1022,20 @@ class AgentGrpcServiceTest : StringSpec() {
     // A proxy predating notices has no such method. Ending the task would end the connection, and the agent would
     // reconnect to that proxy without end.
     "readPathNoticesFromProxy should wait out the connection on a proxy that predates it" {
-      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
-      val service = AgentGrpcService(agent, agent.options, "test-server")
-      val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
-      every { mockStub.readPathNoticesFromProxy(any(), any()) } returns
-        flow { throw StatusException(Status.UNIMPLEMENTED) }
-      service.grpcStub = mockStub
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
+        every { mockStub.readPathNoticesFromProxy(any(), any()) } returns
+          flow { throw StatusException(Status.UNIMPLEMENTED) }
 
-      try {
         withTimeoutOrNull(300.milliseconds) { service.readPathNoticesFromProxy() }.shouldBeNull()
-      } finally {
-        service.shutDown()
       }
     }
 
     "readPathNoticesFromProxy should end the connection on any other failure" {
-      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
-      val service = AgentGrpcService(agent, agent.options, "test-server")
-      val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
-      every { mockStub.readPathNoticesFromProxy(any(), any()) } returns
-        flow { throw StatusException(Status.UNAVAILABLE) }
-      service.grpcStub = mockStub
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
+        every { mockStub.readPathNoticesFromProxy(any(), any()) } returns
+          flow { throw StatusException(Status.UNAVAILABLE) }
 
-      try {
         shouldThrow<StatusException> { service.readPathNoticesFromProxy() }.status.code shouldBe Status.Code.UNAVAILABLE
-      } finally {
-        service.shutDown()
       }
     }
 

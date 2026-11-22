@@ -86,6 +86,13 @@ internal class ProxyPathManager(
     // Whether [agentContext] is among the path's agents.
     fun serves(agentContext: AgentContext) = agentContexts.any { it.agentId == agentContext.agentId }
 
+    // This entry without [agentId] among the agents waiting on it, or this entry when it isn't.
+    fun withoutWaiter(agentId: String): AgentContextInfo {
+      if (waiting.none { it.agentId == agentId })
+        return this
+      return copy(waiting = waiting.filterNot { it.agentId == agentId })
+    }
+
     // The data-class form without agentTargets or waiting. /debug prints every entry inside the pathMap lock, and every
     // agent's target, each up to maxTargetUrlLength, would multiply what it prints; the first agent's is targetUrl
     // already.
@@ -484,7 +491,7 @@ internal class ProxyPathManager(
       return null
     val holder =
       agentInfo.agentContexts.firstOrNull {
-        it.agentId != agentContext.agentId && it.isValid() && it.launchId != agentContext.launchId
+        it.isValid() && it.launchId != agentContext.launchId
       } ?: return null
     val reason =
       "Path /$path is served by agentId ${holder.agentId} (${shownValue(holder.agentName)}), of another launch; " +
@@ -492,7 +499,8 @@ internal class ProxyPathManager(
     if (agentContext.recordRejection(path, HELD_BY_ANOTHER_AGENT)) logger.info { reason } else logger.debug { reason }
     // The holder the agent was told of may have left since, and the path gone to this one.
     tellHolder(path, holder, [agentContext])
-    pathMap[path] = agentInfo.copy(waiting = waitersOf(agentInfo.waiting + agentContext, agentInfo.agentContexts))
+    if (agentInfo.waiting.none { it.agentId == agentContext.agentId })
+      pathMap[path] = agentInfo.copy(waiting = waitersOf(agentInfo.waiting + agentContext, agentInfo.agentContexts))
     return PathRejection(reason, HELD_BY_ANOTHER_AGENT)
   }
 
@@ -518,7 +526,7 @@ internal class ProxyPathManager(
     entry: AgentContextInfo,
   ): AgentContextInfo {
     val updated =
-      if (agentContexts.any { it.agentId == agentContext.agentId })
+      if (serves(agentContext))
         agentContexts.map { if (it.agentId == agentContext.agentId) agentContext else it }
       else
         agentContexts + agentContext
@@ -548,7 +556,8 @@ internal class ProxyPathManager(
     // The agents already waiting on the path are told too, so none names an agent that no longer holds it. Oldest
     // first, so the waiting list keeps the agents displaced last.
     val told = tellHolder(path, agentContext, agentInfo?.waiting.orEmpty() + displacedContexts)
-    pathMap[path] = entry.copy(waiting = waitersOf(told, entry.agentContexts))
+    // tellHolder kept only agents that can wait: valid, of another launch, and reading notices.
+    pathMap[path] = if (told.isEmpty()) entry else entry.copy(waiting = told.takeLast(MAX_WAITERS_PER_PATH))
     displacedContexts.forEach { settleDisplaced(path, agentContext, it, told = it in told) }
     return displaced
   }
@@ -564,6 +573,8 @@ internal class ProxyPathManager(
     val told =
       contexts.filter { it.isValid() && it.launchId != agentContext.launchId && it.acceptsPathNotices }
         .distinctBy { it.agentId }
+    if (told.isEmpty())
+      return told
     val notice =
       pathNotice {
         this.path = path
@@ -711,6 +722,8 @@ internal class ProxyPathManager(
         // Snapshot the agent's entries first, since dropping it from a path changes pathMap.
         val served = pathMap.filterValues { info -> info.agentContexts.any { it.agentId == agentId } }
         served.forEach { dropAgentFromPath(it.key, it.value, agentId) }
+        // Nor does it wait on any path now: a waiting list kept it, and all it holds, until the path's entry changed.
+        pathMap.replaceAll { _, info -> info.withoutWaiter(agentId) }
         // The sweep took every path the agent served.
         pathCounts.remove(agentId)
         served.size to served.keys.count { it !in pathMap }
@@ -733,10 +746,10 @@ internal class ProxyPathManager(
     val remaining = agentInfo.agentContexts.filterNot { it.agentId == agentId }
     if (remaining.isEmpty()) {
       pathMap.remove(path)
-      // No agent serves the path now, so the agents waiting on it are told, and each tries to take it back.
-      agentInfo.waiting
-        .filter { it.isValid() && it.agentId != agentId }
-        .forEach { it.queuePathNotice(pathNotice { this.path = path }) }
+      // No agent serves the path now, so the agents waiting on it are told, and each tries to take it back. A waiter
+      // that has since disconnected refuses the notice.
+      val free = pathNotice { this.path = path }
+      agentInfo.waiting.forEach { it.queuePathNotice(free) }
       // The dashboard keeps showing the path, marked gone, with what this entry showed: from its scrapes alone, a path
       // never scraped had no row, and none had a target. Recorded under the lock, as the activity feed is, since the
       // history's monitor is a leaf, so the departure is ordered with the path's next registration, which forgets it.

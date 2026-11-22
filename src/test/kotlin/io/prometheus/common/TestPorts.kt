@@ -110,12 +110,12 @@ object TestPorts {
 
   // EmbeddedAgentMetricsTest
   const val EMBEDDED_METRICS_HTTP_PORT = 9595
-
-  // AgentPathTakeoverTest
-  const val PATH_TAKEOVER_HTTP_PORT = 9754
   const val EMBEDDED_METRICS_GRPC_PORT = 9596
   const val EMBEDDED_METRICS_AGENT_1_PORT = 9597
   const val EMBEDDED_METRICS_AGENT_2_PORT = 9598
+
+  // AgentPathTakeoverTest
+  const val PATH_TAKEOVER_HTTP_PORT = 9754
 
   // AgentProxyFailoverTest
   const val FAILOVER_PROXY_A_HTTP_PORT = 9530
