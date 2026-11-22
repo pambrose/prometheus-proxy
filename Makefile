@@ -208,19 +208,20 @@ refresh:  ## Refresh dependencies
 jars:  ## Build the prometheus-{agent,proxy} fat jars
 	$(GRADLE) agentJar proxyJar
 
-# --rerun runs the tests even when nothing they read changed; the other tasks of check, lint and detekt among them, run
-# only when theirs did. --rerun-tasks, used before, also recompiled everything from scratch on every run.
+# --rerun runs the tests, in their two partitions (unitTest and harnessTest; see configureTestPartitions in
+# build.gradle.kts), even when nothing they read changed; the other tasks of check, lint and detekt among them, run only
+# when theirs did. --rerun-tasks, used before, also recompiled everything from scratch on every run.
 tests:  ## Run every check, lint and tests, rerunning the tests, without the Lincheck and container specs (all-tests runs them)
-	$(GRADLE) check test --rerun
+	$(GRADLE) check unitTest --rerun harnessTest --rerun
 
 medium-tests:  ## make tests with the MEDIUM harness profile (a load run: 1000 sequential scrapes per transport)
-	$(GRADLE) check test --rerun -PharnessConfig=MEDIUM
+	$(GRADLE) check unitTest --rerun harnessTest --rerun -PharnessConfig=MEDIUM
 
 xxl-tests:  ## make tests with the XXLARGE harness profile
-	$(GRADLE) check test --rerun -PharnessConfig=XXLARGE
+	$(GRADLE) check unitTest --rerun harnessTest --rerun -PharnessConfig=XXLARGE
 
-nh-tests:  ## Run only the non-harness unit tests
-	$(GRADLE) test --tests "io.prometheus.agent.*" --tests "io.prometheus.proxy.*" --tests "io.prometheus.common.*" --tests "io.prometheus.misc.*"
+nh-tests:  ## Run every spec outside the harness
+	$(GRADLE) unitTest
 
 ip-tests:  ## Run in-process harness tests
 	$(GRADLE) test --tests "io.prometheus.harness.InProcess*"

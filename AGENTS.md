@@ -7,7 +7,7 @@ This file provides guidance to AI coding agents when working with code in this r
 All commands from project root.
 
 ```bash
-./gradlew check test --rerun             # All checks (lint + tests), rerunning the tests (make tests)
+./gradlew check unitTest --rerun harnessTest --rerun  # All checks (lint + tests), rerunning the tests (make tests)
 ./gradlew agentJar proxyJar              # Generate standalone JARs
 ./gradlew generateProto                  # Regenerate protobuf stubs
 make ci                                  # Run the CI workflow's jobs locally (needs Docker)
@@ -191,6 +191,13 @@ Integration tests in `src/test/kotlin/io/prometheus/harness/`:
 - `NettyTest*` — tests over actual network transport
 - `TlsNoMutualAuthTest` / `TlsWithMutualAuthTest` — TLS communication tests
 - `support/HarnessSetup.kt` — base class that sets up proxy+agent in test mode; it clears the default registry before each spec and has common-utils' `SystemMetrics` forget it (`SystemMetrics.forget`), so every spec's proxy and agent serve the JVM metric groups
+
+A run of every spec splits them between two Test tasks Gradle runs at once, each in its own JVM
+(`configureTestPartitions` in `build.gradle.kts`): `harnessTest`, the `harness/` specs, which bind fixed ports and so run
+one at a time, and `unitTest`, the rest; `test` only depends on both. A spec that starts a proxy and agent through
+`HarnessSetup` or `TestUtils`, or binds a `HARNESS_*` port, goes in `harness/` (`TestPortsTest` checks). A run with
+`--tests` or `-x test` isn't split. To recompute coverage from the last run without rerunning it, exclude both
+partitions: `./gradlew koverVerify koverVerifyPerClass -x unitTest -x harnessTest`.
 
 Container tests in `src/test/kotlin/io/prometheus/containers/` — a full Testcontainers suite that builds the proxy and agent images from `etc/docker/*.Dockerfile`, stands them up alongside an `nginx:1.31-alpine` metrics stub and a `prom/prometheus:v3.14.0` container, and verifies the full Prometheus → proxy → agent → endpoint scrape path. Shared container/network/HTTP/PromQL factories live in `support/ContainerTestSupport.kt`; `ls` that directory
 for the current spec list.

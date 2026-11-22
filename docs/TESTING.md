@@ -6,9 +6,9 @@ This document describes the test suite structure and how to run tests for the pr
 
 ```bash
 # Run all checks (lint + tests), rerunning the tests even when nothing they read changed
-./gradlew check test --rerun
+./gradlew check unitTest --rerun harnessTest --rerun
 
-# Run all tests only
+# Run all tests only: the harness specs and the rest, in two JVMs at once (see below)
 ./gradlew test
 
 # Run specific test class
@@ -24,13 +24,23 @@ This document describes the test suite structure and how to run tests for the pr
 ./gradlew koverHtmlReport
 ```
 
+A run of every spec splits them between two Test tasks that Gradle runs at the same time, each in a JVM of its own:
+`harnessTest`, the specs in `harness/`, which bind fixed ports (`TestPorts`' `HARNESS_*` ports and their own) and so
+run one at a time, and `unitTest`, all the others. `test` runs only those two, so `./gradlew test`, `check`, `build`,
+and the Kover tasks still run every spec; each task's reports are under `build/reports/tests/<task>` and
+`build/test-results/<task>`. A spec that starts a proxy and an agent through `HarnessSetup` or `TestUtils`, or binds a
+`HARNESS_*` port, belongs in `harness/`, which `TestPortsTest` checks, or it could collide with a harness spec running
+alongside it. A run that names specs with `--tests`, IntelliJ's among them, or excludes `test` with `-x test`, isn't
+split: `test` runs the specs it names in one JVM, as before. To recompute coverage from the last run without rerunning
+it, exclude both partitions: `./gradlew koverVerify koverVerifyPerClass -x unitTest -x harnessTest`.
+
 ### Make Targets
 
 ```bash
 make tests            # All checks (lint + tests), rerunning the tests; the container tests are SKIPPED
 make medium-tests     # `make tests` with the MEDIUM harness profile (a load run; the default is MINI, as in CI)
 make xxl-tests        # `make tests` with the XXLARGE harness profile (heaviest; 8g test heap)
-make nh-tests         # Unit tests only (agent, proxy, common, misc — no harness)
+make nh-tests         # Every spec outside the harness (`./gradlew unitTest`)
 make ip-tests         # In-process integration tests only
 make netty-tests      # Netty integration tests only
 make tls-tests        # TLS integration tests only
@@ -151,7 +161,7 @@ src/test/kotlin/io/prometheus/
 ├── common/         # Shared utility and metrics tests, plus the test-only support most specs share
 ├── proxy/          # Proxy component tests
 │   └── dashboard/  # Dashboard renderer tests and fixtures
-├── misc/           # Cross-cutting tests (admin paths, config classes, options, packaging, CI, the docs' names)
+├── misc/           # Cross-cutting tests (config classes, options, packaging, CI, the docs' names)
 ├── harness/        # Integration tests: real proxy + agent, in-process or over Netty; scale configs
 │   └── support/    # Harness infrastructure (setup, the standard suite)
 └── containers/     # Testcontainers end-to-end tests, gated on RUN_CONTAINER_TESTS
@@ -733,9 +743,6 @@ These support helpers also live here (not test classes themselves):
 
 ### Unit Tests — Misc (`misc/`)
 
-- **AdminDefaultPathTest** — Admin endpoints with default paths (ping, version, health, thread dump)
-- **AdminEmptyPathTest** — Admin endpoints with empty paths (disables endpoints)
-- **AdminNonDefaultPathTest** — Admin endpoints with custom paths
 - **CiHygieneTest** — every job in `.github/workflows` sets `timeout-minutes`, every tool image the `Makefile` runs
   (`*_IMAGE`) and every third-party image `ContainerTestSupport` gives the container suite is pinned by digest, in a
   form Testcontainers pulls by digest, the suite's Prometheus is the `Makefile`'s, every image each demo's compose file
@@ -832,6 +839,9 @@ chunked transfer crosses the spec's transport:
 The classes above all run that same standard suite. These run their own scenario instead, each pinning one
 mechanism that the standard suite cannot reach:
 
+- **AdminDefaultPathTest** — Admin endpoints with default paths (ping, version, health, thread dump)
+- **AdminEmptyPathTest** — Admin endpoints with empty paths (disables endpoints)
+- **AdminNonDefaultPathTest** — Admin endpoints with custom paths
 - **AgentWebDashboardTest** — the agent's dashboard, served by a real agent, and each path row's `data-path` and
   `data-state`, which `demos/basics/bin/screenshots.sh` reads: with its proxy down, failing, with the endpoint's error,
   every path pending, the target's password kept off the page, and its WebSocket pushing the status bar at once and then

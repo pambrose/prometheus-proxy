@@ -349,6 +349,49 @@ fun Project.configureTesting() {
       showStandardStreams = false
     }
   }
+
+  configureTestPartitions()
+}
+
+// The harness specs bind fixed ports (TestPorts' HARNESS_* ports, and each spec's own), so they run one at a time; the
+// other specs bind none of theirs, which TestPortsTest checks. A run of every spec therefore splits them between two
+// Test tasks, unitTest and harnessTest, which Gradle runs at the same time, each in a JVM of its own, so neither shares
+// the default registry or a log capture with the other. test runs neither itself, only both, so `./gradlew test`, check,
+// build, and the Kover tasks still run every spec. A run that names specs with --tests, as IntelliJ's do, or excludes
+// test with -x test, leaves test as it was: the specs it runs, in one JVM, or none.
+fun Project.configureTestPartitions() {
+  val startParameter = gradle.startParameter
+  val testsNamed = startParameter.taskRequests.any { "--tests" in it.args }
+  val testExcluded = startParameter.excludedTaskNames.any { it == "test" || it == ":test" }
+  if (testsNamed || testExcluded) return
+
+  // Partitioned by class file, which picks the specs Gradle hands Kotest, rather than by test filter: Kotest takes a
+  // filter's include patterns and ignores its excludes, so an excluding filter ran every spec.
+  val harnessClasses = "io/prometheus/harness/**"
+  val testSourceSet = sourceSets.test.get()
+
+  fun registerPartition(
+    name: String,
+    description: String,
+    selectClasses: Test.() -> Unit,
+  ) = tasks.register<Test>(name) {
+    this.description = description
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+    testClassesDirs = testSourceSet.output.classesDirs
+    classpath = testSourceSet.runtimeClasspath
+    useJUnitPlatform()
+    selectClasses()
+  }
+
+  val unitTest = registerPartition("unitTest", "Runs every spec outside the harness.") { exclude(harnessClasses) }
+  val harnessTest = registerPartition("harnessTest", "Runs the harness specs, one at a time.") { include(harnessClasses) }
+
+  tasks.test {
+    enabled = false
+    dependsOn(unitTest, harnessTest)
+  }
+  // Kover leaves a disabled Test task out of its reports anyway; this says so.
+  kover { currentProject { instrumentation { disabledForTestTasks.add("test") } } }
 }
 
 fun Project.configureGrpc() {

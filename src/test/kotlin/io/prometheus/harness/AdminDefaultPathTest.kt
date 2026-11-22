@@ -16,7 +16,7 @@
 
 @file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
 
-package io.prometheus.misc
+package io.prometheus.harness
 
 import com.pambrose.common.dsl.KtorDsl
 import com.pambrose.common.dsl.blockingGet
@@ -27,16 +27,15 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldStartWith
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
-import io.prometheus.common.ConfigVals
-import io.prometheus.common.TestPorts.ADMIN_CUSTOM_PATH_ADMIN_PORT
 import io.prometheus.harness.HarnessConstants.PROXY_PORT
 import io.prometheus.harness.support.HarnessSetup
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.harness.support.withPrefix
 
-class AdminNonDefaultPathTest : StringSpec() {
-  private val proxyConfigVals: ConfigVals.Proxy2 by lazy { proxy.configVals.proxy }
+class AdminDefaultPathTest : StringSpec() {
+  private val agentConfigVals by lazy { agent.agentConfigVals }
+  private val proxyConfigVals by lazy { proxy.proxyConfigVals }
 
   companion object : HarnessSetup()
 
@@ -44,18 +43,7 @@ class AdminNonDefaultPathTest : StringSpec() {
     beforeSpec {
       setupProxyAndAgent(
         proxyPort = PROXY_PORT,
-        proxySetup = {
-          startProxy(
-            adminEnabled = true,
-            args = [
-              "-Dproxy.admin.port=$ADMIN_CUSTOM_PATH_ADMIN_PORT",
-              "-Dproxy.admin.pingPath=pingPath2",
-              "-Dproxy.admin.versionPath=versionPath2",
-              "-Dproxy.admin.healthCheckPath=healthCheckPath2",
-              "-Dproxy.admin.threadDumpPath=threadDumpPath2",
-            ],
-          )
-        },
+        proxySetup = { startProxy(adminEnabled = true) },
         agentSetup = { startAgent(adminEnabled = true) },
       )
     }
@@ -66,9 +54,15 @@ class AdminNonDefaultPathTest : StringSpec() {
 
     "proxy ping path should respond with pong" {
       proxyConfigVals.admin.apply {
-        port shouldBe ADMIN_CUSTOM_PATH_ADMIN_PORT
-        pingPath shouldBe "pingPath2"
+        KtorDsl.blockingGet("$port/$pingPath".withPrefix()) { response ->
+          response.status shouldBe HttpStatusCode.OK
+          response.bodyAsText() shouldStartWith "pong"
+        }
+      }
+    }
 
+    "agent ping path should respond with pong" {
+      agentConfigVals.admin.apply {
         KtorDsl.blockingGet("$port/$pingPath".withPrefix()) { response ->
           response.status shouldBe HttpStatusCode.OK
           response.bodyAsText() shouldStartWith "pong"
@@ -77,10 +71,16 @@ class AdminNonDefaultPathTest : StringSpec() {
     }
 
     "proxy version path should return version info" {
-      proxyConfigVals.admin.apply {
-        port shouldBe ADMIN_CUSTOM_PATH_ADMIN_PORT
-        versionPath shouldBe "versionPath2"
+      agentConfigVals.admin.apply {
+        KtorDsl.blockingGet("$port/$versionPath".withPrefix()) { response ->
+          response.status shouldBe HttpStatusCode.OK
+          response.bodyAsText() shouldContain "version"
+        }
+      }
+    }
 
+    "agent version path should return version info" {
+      agentConfigVals.admin.apply {
         KtorDsl.blockingGet("$port/$versionPath".withPrefix()) { response ->
           response.status shouldBe HttpStatusCode.OK
           response.bodyAsText() shouldContain "version"
@@ -90,8 +90,15 @@ class AdminNonDefaultPathTest : StringSpec() {
 
     "proxy health check path should return health status" {
       proxyConfigVals.admin.apply {
-        healthCheckPath shouldBe "healthCheckPath2"
+        KtorDsl.blockingGet("$port/$healthCheckPath".withPrefix()) { response ->
+          response.status shouldBe HttpStatusCode.OK
+          response.bodyAsText().length shouldBeGreaterThan 10
+        }
+      }
+    }
 
+    "agent health check path should return health status" {
+      agentConfigVals.admin.apply {
         KtorDsl.blockingGet("$port/$healthCheckPath".withPrefix()) { response ->
           response.status shouldBe HttpStatusCode.OK
           response.bodyAsText().length shouldBeGreaterThan 10
@@ -101,9 +108,17 @@ class AdminNonDefaultPathTest : StringSpec() {
 
     "proxy thread dump path should return thread dump" {
       proxyConfigVals.admin.apply {
-        threadDumpPath shouldBe "threadDumpPath2"
-
         KtorDsl.blockingGet("$port/$threadDumpPath".withPrefix()) { response ->
+          response.status shouldBe HttpStatusCode.OK
+          response.bodyAsText().length shouldBeGreaterThan 10
+        }
+      }
+    }
+
+    "agent thread dump path should return thread dump" {
+      agentConfigVals.admin.apply {
+        KtorDsl.blockingGet("$port/$threadDumpPath".withPrefix()) { response ->
+          response.status shouldBe HttpStatusCode.OK
           response.bodyAsText().length shouldBeGreaterThan 10
         }
       }

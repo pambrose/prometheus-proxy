@@ -21,6 +21,7 @@ package io.prometheus.common
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
+import java.io.File
 import java.lang.reflect.Modifier
 
 class TestPortsTest : StringSpec() {
@@ -54,10 +55,36 @@ class TestPortsTest : StringSpec() {
 
       ephemeral shouldBe emptyMap()
     }
+
+    // A run of every spec puts the harness specs in one JVM and the rest in another, at the same time (unitTest and
+    // harnessTest in build.gradle.kts). The harness specs share fixed ports, so a spec elsewhere that started a proxy
+    // and agent the harness's way, or bound one of its ports, would collide with whichever harness spec was running,
+    // as an intermittent bind failure. The Lincheck specs are exempt: they run on their own (make lincheck-tests).
+    "only a harness spec should start a proxy and agent the harness's way, or bind a harness port" {
+      val harnessDir = File("src/test/kotlin/io/prometheus/harness")
+      val exempt = setOf("TestPorts.kt", "TestPortsTest.kt")
+      val outside =
+        File("src/test")
+          .walkTopDown()
+          .filter { it.isFile && it.extension in setOf("kt", "java") }
+          .filterNot { it.startsWith(harnessDir) || it.name in exempt || it.name.endsWith("LincheckTest.kt") }
+          .filter { file -> file.readLines().filterNot { it.isComment() }.any { HARNESS_USE.containsMatchIn(it) } }
+          .map { it.invariantSeparatorsPath }
+          .toList()
+
+      outside shouldBe emptyList()
+    }
   }
+
+  private fun String.isComment() = trimStart().let { it.startsWith("//") || it.startsWith("*") || it.startsWith("/*") }
 
   companion object {
     // The lower bound of Linux's default range; macOS's (49152) is higher still.
     private const val EPHEMERAL_RANGE_START = 32768
+
+    // HarnessSetup and TestUtils' startProxy and startAgent bind the HARNESS_* ports unless told otherwise, and
+    // HarnessConstants.PROXY_PORT is one of them.
+    private val HARNESS_USE =
+      Regex("""HarnessSetup|TestUtils\.start(Proxy|Agent)|HARNESS_[A-Z_]*PORT|HarnessConstants\.PROXY_PORT""")
   }
 }
