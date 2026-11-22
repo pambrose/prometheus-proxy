@@ -349,11 +349,12 @@ demos-up-local:  ## The same, with every demo built from this checkout (needs a 
 demos-down:  ## Stop every demo: remove their containers and networks, and the Kubernetes demo's kind clusters
 	$(call run_demos,down)
 
-# One Gradle invocation, as in ci.yml: the code compiles once, and lint, detekt, and the fat JARs run alongside the tests.
-# --continue still runs the tests past a lint failure, and writes the coverage report when a coverage floor fails, but
-# not when a test fails: the kover tasks depend on the test task, so Gradle skips them.
+# One Gradle invocation, as in ci.yml: the code compiles once, and lint and detekt run alongside the compile; check, not
+# build, since the fat JARs are container-tests', helm-smoke's, and image-scan's to build and test. --continue still
+# runs the tests past a lint failure, and writes the coverage report when a coverage floor fails, but not when a test
+# fails: the kover tasks depend on the test task, so Gradle skips them.
 ci-build:  ## The CI workflow's build job: compile, lint, detekt, the tests, and the coverage floors (MINI harness)
-	HARNESS_CONFIG=MINI $(GRADLE) --continue clean build koverVerify koverVerifyPerClass koverXmlReport koverLog
+	HARNESS_CONFIG=MINI $(GRADLE) --continue clean check koverVerify koverVerifyPerClass koverXmlReport koverLog
 
 # CI's consumer-check job. A Maven build that embeds the agent resolves the published POM by Maven's rules, which the
 # repo's Gradle builds don't follow, so this publishes the artifact to the local Maven repository, needing no GPG key,

@@ -127,6 +127,8 @@ All notable changes to this project are documented in this file.
   the test task builds the fat JARs, so `make container-tests` and CI's job are one Gradle invocation. The scaling
   spec starts its containers in batches, and the failover spec's agent no longer waits out a 30s connect deadline
   re-probing the stopped proxy
+- The Java compiles no longer wait for the Kotlin ones, since no Java source uses its own source set's Kotlin classes,
+  and CI's build job runs `check` rather than `build`, leaving the fat JARs to the jobs that build and test them
 
 ## [4.6.1] - 2026-11-22
 
