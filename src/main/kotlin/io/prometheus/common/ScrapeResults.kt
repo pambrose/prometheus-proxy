@@ -34,7 +34,6 @@ import io.prometheus.grpc.chunkedScrapeResponse
 import io.prometheus.grpc.headerData
 import io.prometheus.grpc.scrapeResponse
 import kotlinx.coroutines.TimeoutCancellationException
-import java.io.IOException
 import java.net.http.HttpConnectTimeoutException
 
 internal class ScrapeResults(
@@ -131,6 +130,8 @@ internal class ScrapeResults(
         srUrl = url,
       )
 
+    // The status of a scrape of [url], the target as the agent shows it, that failed with [e]. The log names the
+    // target, not how it was fetched: a path an embedded host serves shows as in-process, with no request made.
     fun errorCode(
       e: Throwable,
       url: String,
@@ -141,21 +142,12 @@ internal class ScrapeResults(
 
       // Detect wrapped timeout exceptions (Ktor sometimes wraps them) via the shared cause-walk.
       if (e.hasTimeoutCause()) {
-        logger.warn { "fetchScrapeUrl() timed out - $url $detail" }
+        logger.warn { "Scrape of $url timed out $detail" }
         return RequestTimeout.value
       }
 
-      return when (e) {
-        is IOException -> {
-          logger.warn { "Failed HTTP request: $url $detail" }
-          ServiceUnavailable.value
-        }
-
-        else -> {
-          logger.warn { "fetchScrapeUrl() - $url $detail" }
-          ServiceUnavailable.value
-        }
-      }
+      logger.warn { "Scrape of $url failed $detail" }
+      return ServiceUnavailable.value
     }
   }
 }

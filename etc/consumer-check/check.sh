@@ -23,6 +23,8 @@
 #   - protobuf-java, protobuf-java-util, and protobuf-kotlin resolve at protoc's version, which is ahead of the 3.x grpc
 #     depends on: the code protoc generates needs a runtime at least that new, and without the pins Maven chose between
 #     the two majors by declaration order;
+#   - every module of the Prometheus Java client resolves at the catalog's version, one release, as the agent's own
+#     build aligns them through the client's BOM, which Maven doesn't import from the POM;
 #   - no jar on the classpath carries a Logback config, which would replace the host application's own (#19), and the
 #     library jar still carries reference.conf;
 #   - the docs site's embedded-agent examples compile (#20).
@@ -84,8 +86,8 @@ resolved() {
     }' "$deps"
 }
 
-# The lines read whose artifact matches the first argument and whose version isn't the second.
-not_at() { awk -F: -v artifact="$1" -v want="$2" '$2 ~ artifact && $NF != want'; }
+# The lines read whose version isn't the argument.
+not_at() { awk -F: -v want="$1" '$NF != want'; }
 
 echo "==> Jackson: $jackson, and jackson-annotations $jackson_annotations"
 jackson_resolved="$(resolved '^com[.]fasterxml[.]jackson')"
@@ -103,11 +105,11 @@ tcnative_resolved="$(resolved '^io[.]netty$' | awk -F: '$2 ~ /^netty-tcnative/')
 indented <<< "$tcnative_resolved"
 natives="$(echo "$tcnative_resolved" | awk -F: 'NF == 4' | wc -l | tr -d ' ')"
 [ "$natives" -gt 0 ] || fail "netty-tcnative: no per-platform native jar is resolved"
-bad="$(echo "$tcnative_resolved" | not_at '' "$tcnative" | joined)"
+bad="$(echo "$tcnative_resolved" | not_at "$tcnative" | joined)"
 [ -z "$bad" ] || fail "netty-tcnative isn't at $tcnative on every platform: $bad"
 
 echo "==> Netty: $netty"
-bad="$(resolved '^io[.]netty$' | awk -F: '$2 !~ /^netty-tcnative/' | not_at '' "$netty" | joined)"
+bad="$(resolved '^io[.]netty$' | awk -F: '$2 !~ /^netty-tcnative/' | not_at "$netty" | joined)"
 [ -z "$bad" ] || fail "Netty isn't at $netty: $bad"
 
 echo "==> Protobuf: $protobuf"
@@ -117,8 +119,15 @@ for module in protobuf-java protobuf-java-util protobuf-kotlin; do
   echo "$protobuf_resolved" | awk -F: -v m="$module" '$2 == m { found = 1 } END { exit !found }' \
     || fail "Protobuf: $module isn't resolved"
 done
-bad="$(echo "$protobuf_resolved" | not_at '' "$protobuf" | joined)"
+bad="$(echo "$protobuf_resolved" | not_at "$protobuf" | joined)"
 [ -z "$bad" ] || fail "Protobuf isn't at $protobuf: $bad"
+
+echo "==> Prometheus Java client: $prometheus_metrics"
+prometheus_resolved="$(resolved '^io[.]prometheus$')"
+indented <<< "$prometheus_resolved"
+[ -n "$prometheus_resolved" ] || fail "Prometheus Java client: no module is resolved"
+bad="$(echo "$prometheus_resolved" | not_at "$prometheus_metrics" | joined)"
+[ -z "$bad" ] || fail "the Prometheus Java client isn't at $prometheus_metrics in every module: $bad"
 
 echo "==> Logback: no config on the classpath"
 library=""
@@ -135,7 +144,9 @@ elif ! unzip -Z1 "$library" | awk '$0 == "reference.conf" { found = 1 } END { ex
 fi
 
 echo "==> Compiling the docs site's embedded-agent examples"
-"${mvn[@]}" clean compile || fail "the embedded-agent examples don't compile against the published POM"
+# With the examples profile's exposition formats, which the MetricsSource examples need as their host does; the checks
+# above resolve without it, as an application that depends only on the agent does.
+"${mvn[@]}" -Pexamples clean compile || fail "the embedded-agent examples don't compile against the published POM"
 
 if [ "${#failed[@]}" -gt 0 ]; then
   echo >&2

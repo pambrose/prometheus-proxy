@@ -139,25 +139,28 @@ internal class AgentPathManager(
       }
       .also { configs ->
         // Keyed by normalized path, like agent.filters below, so a second entry would silently replace the first's URL.
-        val duplicates = configs.groupingBy { it.path.removePrefix("/") }.eachCount().filterValues { it > 1 }.keys
+        val duplicates = configs.groupBy { it.path.removePrefix("/") }.filterValues { it.size > 1 }
         require(duplicates.isEmpty()) {
-          "agent.pathConfigs has more than one entry for path ${duplicates.joinToString { "/$it" }}; keep one"
+          duplicates.entries.joinToString("; ", postfix = "; keep one") { (path, given) ->
+            "Path /${shownValue(path)} is given by ${given.joinToString(" and ") { it.origin }}"
+          }
         }
         // The proxy refuses a path no scrape can reach for a character in it (November #16), so such an entry fails
         // here, at startup, where it can be fixed, rather than at every connect.
         configs.forEach { c ->
-          pathCharacterProblem(c.path.removePrefix("/"))?.also { problem ->
-            throw IllegalArgumentException(
-              "agent.pathConfigs entry ${shownValue(c.quotedName)} has path '${shownValue(c.path)}', which the proxy " +
-                "refuses: $problem",
-            )
+          val problem = pathCharacterProblem(c.path.removePrefix("/"))
+          require(problem == null) {
+            "Path '${shownValue(c.path)}', given by ${c.origin}, is one the proxy refuses: $problem"
           }
         }
         // The proxy leaves labels it can't serve out of service discovery, so say so at startup, where it can be fixed.
         // A warning, not a failure: labels matter only to service discovery, and the path still serves scrapes.
         configs.forEach { c ->
           labelsProblem(c.labels)?.also {
-            logger.warn { "pathConfigs entry ${c.quotedName} has labels service discovery will leave out: $it" }
+            logger.warn {
+              "Path /${shownValue(c.path.removePrefix("/"))}, given by ${c.origin}, has labels service discovery " +
+                "will leave out: $it"
+            }
           }
         }
       }
@@ -747,6 +750,11 @@ internal class AgentPathManager(
   ) {
     // What a scrape of this path reads.
     val target: ScrapeTarget get() = ScrapeTarget(url, metricsSource)
+
+    // Where a startup message says this path came from: a pathConfigs entry, by its name, or, for a path an embedded
+    // host serves in-process, the builder method that added it, since no pathConfigs entry holds it.
+    val origin: String
+      get() = if (metricsSource != null) "source()" else "agent.pathConfigs entry ${shownValue(quotedName)}"
 
     // Name wrapped in double-quotes for the toPlainText() display, preserving the original format.
     val quotedName: String get() = "\"$name\""
