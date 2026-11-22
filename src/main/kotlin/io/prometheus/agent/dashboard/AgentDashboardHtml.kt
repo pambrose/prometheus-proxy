@@ -20,6 +20,7 @@ import io.ktor.http.encodeURLPathPart
 import io.prometheus.agent.AgentPathManager.RegistrationFailure
 import io.prometheus.agent.dashboard.AgentScrapesHtml.recentScrapes
 import io.prometheus.agent.dashboard.AgentScrapesHtml.scrapesLine
+import io.prometheus.common.dashboard.DashboardLogo.brand
 import io.prometheus.common.dashboard.DashboardPage
 import io.prometheus.common.dashboard.DashboardPage.DASH
 import io.prometheus.common.dashboard.DashboardPage.STATUS_ID
@@ -113,8 +114,6 @@ internal object AgentDashboardHtml {
   /** The route segment a selected path follows: `<base>/paths/<path>`. */
   const val SELECTION_SEGMENT = "paths"
 
-  private const val BRAND = "prometheus-agent"
-
   // The page's script (DashboardScript), for the agent's views: Paths at the base, a path selected at paths/<path>.
   private val SCRIPT =
     DashboardScript(subject = "agent", views = AgentLayout.entries, selectionSegment = SELECTION_SEGMENT).js
@@ -144,7 +143,7 @@ internal object AgentDashboardHtml {
       // Loading hx-ws.min.js is what enables the extension; htmx 4 has no hx-ext.
       attributes["hx-ws:connect"] = "$routeBase/events"
       div("bar") {
-        span("brand") { +BRAND }
+        brand(snapshot.dashboardName)
         tabs(AgentLayout.entries, layout, routeBase)
         span("bar-right") { statusInner(snapshot, oob = false) }
         barEnd(loginEnabled, routeBase)
@@ -460,6 +459,6 @@ internal object AgentDashboardHtml {
    */
   internal fun pageTitle(snapshot: AgentSnapshot): String {
     val paths = snapshot.paths.count { it.state == PathState.REFUSED || it.state == PathState.RETRYING }
-    return pageTitle(BRAND, paths + if (snapshot.connection.state == ConnectionState.FAILING) 1 else 0)
+    return pageTitle(snapshot.dashboardName, paths + if (snapshot.connection.state == ConnectionState.FAILING) 1 else 0)
   }
 }

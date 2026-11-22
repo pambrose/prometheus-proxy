@@ -133,7 +133,7 @@ class AgentWebDashboardTest : StringSpec() {
           this shouldContain
             """${AgentDashboardHtml.PATH_ATTR}="agent_dash_forbidden_metrics" ${AgentDashboardHtml.STATE_ATTR}="pending""""
           this shouldContain "2 not registered"
-          this shouldContain "<title>(1 problem) prometheus-agent</title>"
+          this shouldContain "<title>(1 problem) Agent: ${agent.agentName}</title>"
           // The target's password never reaches the page.
           this shouldNotContain "s3cret"
         }

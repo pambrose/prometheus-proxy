@@ -315,9 +315,9 @@ agent-east, which registers its paths again.
 </figure>
 
 Reload the dashboard and it shows its [login page](web-dashboard.md#login). Sign in as `admin`, with the password
-`admin`, and it opens the page you asked for; **Log out**, at the right end of the top bar, signs you out. The password
-comes from the proxy's environment, `DEMO_DASHBOARD_PASSWORD` in `docker/compose.yml`, not from `config/proxy.conf`,
-so it never sits in a file, and a script sends the login as HTTP Basic Auth instead:
+`admin`, and it opens the page you asked for; **Log out**, the exit icon at the right end of the top bar, signs you
+out. The password comes from the proxy's environment, `DEMO_DASHBOARD_PASSWORD` in `docker/compose.yml`, not from
+`config/proxy.conf`, so it never sits in a file, and a script sends the login as HTTP Basic Auth instead:
 `curl -u admin:admin http://localhost:8094/dashboard/paths`. A restart clears what the proxy holds in memory, so the
 tour does this last: the agents reconnect within a few seconds, and the dashboard's histories start over.
 `./demo.sh login-off` restarts the proxy without the password.

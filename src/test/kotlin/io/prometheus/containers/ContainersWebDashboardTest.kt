@@ -22,6 +22,7 @@ import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.string.shouldContain
 import io.prometheus.common.TestPorts.PROXY_DASHBOARD_PORT
+import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.common.dashboard.DashboardServer.Companion.ASSET_DIR
 import io.prometheus.containers.support.ContainerTestSupport.agentContainer
 import io.prometheus.containers.support.ContainerTestSupport.containerTestsEnabled
@@ -73,7 +74,8 @@ class ContainersWebDashboardTest : StringSpec() {
           // real AgentContext state through the whole stack.
           eventually(60.seconds) {
             val body = httpClient.bodyOf("$uiUrl/dashboard")
-            body shouldContain "prometheus-proxy"
+            // The bar names the proxy by its container's host name, which Docker makes up, and its scrape port.
+            body shouldContain Regex("""<span class="brand-name">Proxy: [^<:]+:$PROXY_HTTP_PORT</span>""")
             body shouldContain "test-agent"
           }
 

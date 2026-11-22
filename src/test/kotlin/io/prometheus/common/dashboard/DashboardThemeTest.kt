@@ -23,6 +23,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import io.prometheus.common.dashboard.DashboardPage.barEnd
+import io.prometheus.common.dashboard.DashboardPage.logoutForm
 import io.prometheus.common.dashboard.DashboardPage.themePicker
 import kotlinx.html.div
 import kotlinx.html.stream.createHTML
@@ -98,6 +99,21 @@ class DashboardThemeTest : StringSpec() {
       DashboardCss.CSS.apply {
         this shouldContain ".bar-end { display:flex; align-items:stretch;"
         this shouldNotContain "min-height:26px"
+      }
+    }
+
+    // An exit icon rather than words, named for assistive tech and in its tooltip, its glyph a mask as the picker's
+    // are, which keeps its paint in forced colours as theirs does.
+    "Log out should be an exit icon, named Log out" {
+      createHTML(prettyPrint = false).div { logoutForm(routeBase = "/dashboard") }.apply {
+        val label = DashboardPage.LOGOUT_LABEL
+        this shouldContain """<button type="submit" aria-label="$label" title="$label"></button>"""
+      }
+      DashboardCss.CSS.apply {
+        this shouldContain Regex("""\.logout button \{[^}]*--icon:url\("data:image/svg\+xml,""")
+        this shouldContain Regex("""\.logout button::before,\s*\.theme button::before \{\s*content:"";""")
+        val forced = """\{\s*forced-color-adjust:none; background:ButtonText;"""
+        this shouldContain Regex("""\.logout button::before,\s*\.theme button::before $forced""")
       }
     }
 

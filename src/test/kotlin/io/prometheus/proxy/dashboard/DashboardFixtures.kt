@@ -45,6 +45,12 @@ import io.prometheus.common.dashboard.RowFilter
  * about — which is what makes the assertions readable.
  */
 internal object DashboardFixtures {
+  /** The proxy's host in [snapshot], which the bar and the tab's title name with the scrape port. */
+  const val PROXY_HOST = "proxy-host"
+
+  /** The dashboard's name for [snapshot], as the bar and the tab's title give it. */
+  val PROXY_NAME = "Proxy: $PROXY_HOST:${TestPorts.PROXY_HTTP_PORT}"
+
   // lastScrape is shorthand for a one-record history, since a path view's last scrape is its history's newest.
   fun pathView(
     path: String = "app_metrics",
@@ -174,6 +180,7 @@ internal object DashboardFixtures {
     activityChangeCount = activityChangeCount,
     scrapeNowEnabled = scrapeNowEnabled,
     links = links,
+    hostName = PROXY_HOST,
   )
 
   /** Links into Prometheus and Grafana for the path's job label, each shown as its tool's brand icon, as the demo's. */

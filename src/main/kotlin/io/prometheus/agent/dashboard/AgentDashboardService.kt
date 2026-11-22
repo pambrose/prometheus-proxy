@@ -181,7 +181,7 @@ internal class AgentDashboardService(
   }
 
   companion object {
-    /** The login page's heading. */
-    internal const val LOGIN_HEADING = "Prometheus Agent Dashboard"
+    /** The login page's heading, under the logo and the product's name. */
+    internal const val LOGIN_HEADING = "Agent Dashboard"
   }
 }

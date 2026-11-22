@@ -16,6 +16,7 @@
 
 package io.prometheus.proxy.dashboard
 
+import io.prometheus.common.dashboard.DashboardLogo.brand
 import io.prometheus.common.dashboard.DashboardPage
 import io.prometheus.common.dashboard.DashboardPage.SCRAPE_PORT_ATTR
 import io.prometheus.common.dashboard.DashboardPage.STATUS_ID
@@ -143,7 +144,7 @@ internal object ProxyDashboardHtml {
       attributes[SCRAPE_PORT_ATTR] = "${snapshot.scrapePort}"
 
       div("bar") {
-        span("brand") { +BRAND }
+        brand(snapshot.dashboardName)
         renderNav(routeBase, layout)
         renderStatus(snapshot)
         barEnd(loginEnabled, routeBase)
@@ -457,7 +458,8 @@ internal object ProxyDashboardHtml {
    * dashboard left in a background tab still says when something is wrong. Counted by [PathView.isProblem], as the
    * "Problems only" filter counts them, so the title and the filtered table agree.
    */
-  private fun pageTitle(snapshot: ProxySnapshot): String = pageTitle(BRAND, snapshot.paths.count { it.isProblem })
+  private fun pageTitle(snapshot: ProxySnapshot): String =
+    pageTitle(snapshot.dashboardName, snapshot.paths.count { it.isProblem })
 
   // The page's script (DashboardScript), for the proxy's layouts: the agent layout at the base, an agent selected at
   // agents/<id>.
@@ -465,5 +467,4 @@ internal object ProxyDashboardHtml {
     DashboardScript(subject = "proxy", views = DashboardLayout.entries, selectionSegment = "agents").js
 
   private const val UNASSIGNED = "Unassigned"
-  private const val BRAND = "prometheus-proxy"
 }

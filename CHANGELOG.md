@@ -60,6 +60,12 @@ All notable changes to this project are documented in this file.
   Paths & Discovery, queue wait, and the dashboard's logins), `grafana/alerts.yml` adds AgentDisconnected,
   AgentDiscoveryFailing, and AgentNotOnPrimary, the network demo's dashboard shows agents off their primary, and the
   embedded demo's whether the coffee shop's agent is connected
+- The project has a logo, a suspension bridge in Prometheus orange (`website/prometheus-proxy/docs/images/logo.svg`,
+  and `favicon.svg`, its cut for 16px): in the README's title, the docs site's header and tab icon, and both
+  dashboards' tab icon, top bar, and login page
+- Each dashboard's top bar and tab title say which process it is: `Proxy: <host>:<port>`, the host's name as the
+  machine gives it and `proxy.http.port`, or `Agent: <name>`, `agent.name`. A name past 48 characters is cut with an
+  ellipsis and shown whole in its tooltip. The tab titles read `prometheus-proxy` and `prometheus-agent` before
 
 ### Bug Fixes
 
@@ -79,6 +85,10 @@ All notable changes to this project are documented in this file.
 - `agent_connect_count_total{type="success"}` counts a connect once the proxy has registered the agent, rather than as
   the connection opens, and `agent_scrape_result_count_total` counts a result as sent once gRPC takes it to send, and
   as `dropped` when the connection ends first
+- The dashboards' login page shows the logo and "Prometheus Proxy" over the dashboard's name, "Proxy Dashboard" or
+  "Agent Dashboard", where it read "Prometheus Proxy Dashboard" or "Prometheus Agent Dashboard", and its tab title is
+  `Log in · Proxy Dashboard · Prometheus Proxy`. Log out, in the top bar, is an exit icon, named Log out in its tooltip
+  and for screen readers
 
 ## [4.6.1] - 2026-11-22
 

@@ -32,6 +32,8 @@ import io.prometheus.common.dashboard.RowFilter
 import io.prometheus.agent.PathSource
 import io.prometheus.agent.ShownFailure
 import io.prometheus.agent.dashboard.AgentDashboardHtml.renderPage
+import io.prometheus.common.dashboard.DashboardLogo
+import io.prometheus.common.dashboard.DashboardCss
 import io.prometheus.common.dashboard.DashboardPage
 import io.prometheus.common.dashboard.Setting
 import io.prometheus.common.dashboard.SettingsGroup
@@ -251,11 +253,11 @@ class AgentDashboardHtmlTest : StringSpec() {
       val refused = AgentPathView("a", PathSource.STATIC, "", PathState.REFUSED)
       val retrying = AgentPathView("b", PathSource.STATIC, "", PathState.RETRYING)
       val pending = AgentPathView("c", PathSource.STATIC, "", PathState.PENDING)
-      AgentDashboardHtml.pageTitle(snapshot()) shouldBe "prometheus-agent"
-      AgentDashboardHtml.pageTitle(snapshot([refused, pending])) shouldBe "(1 problem) prometheus-agent"
+      AgentDashboardHtml.pageTitle(snapshot()) shouldBe "Agent: agent-7"
+      AgentDashboardHtml.pageTitle(snapshot([refused, pending])) shouldBe "(1 problem) Agent: agent-7"
       AgentDashboardHtml.pageTitle(
         snapshot([refused, retrying], ConnectionView(ConnectionState.FAILING, [EndpointView("p:1", true)])),
-      ) shouldBe "(3 problems) prometheus-agent"
+      ) shouldBe "(3 problems) Agent: agent-7"
     }
 
     "a push should carry the status bar first, stamped, and the regions of the view the page shows" {
@@ -410,6 +412,32 @@ class AgentDashboardHtmlTest : StringSpec() {
       }
       AgentDashboardHtml.pushFragment(snapshot(), AgentView(AgentLayout.CONNECTION), "/dashboard") shouldNotContain
         SettingsHtml.SETTINGS_ID
+    }
+
+    // Which agent this is, by the name its Settings view gives, so two agents' dashboards are told apart at a glance.
+    // Outside every pushed region, so it goes out once, with the page, and no push carries its data URL.
+    "the agent's bar should show the logo's small-size cut beside the agent's name, and no push should carry it" {
+      page(snapshot()).replace(Regex(">\\s+<"), "><") shouldContain
+        """<span class="brand"><img alt="" src="${DashboardLogo.SMALL_LOGO_URL}" """ +
+        """width="${DashboardLogo.BRAND_LOGO_SIZE}" height="${DashboardLogo.BRAND_LOGO_SIZE}">""" +
+        """<span class="brand-name">Agent: agent-7</span></span>"""
+      AgentLayout.entries.forEach { layout ->
+        AgentDashboardHtml.pushFragment(snapshot(), AgentView(layout), "/dashboard") shouldNotContain
+          DashboardLogo.SMALL_LOGO_URL
+      }
+    }
+
+    // An agent's name is its config's, any length: past the limit the bar cuts it, and its tooltip gives it whole.
+    "a name too long for the bar should be cut there, and given whole in its tooltip" {
+      val long = "a".repeat(DashboardLogo.BRAND_MAX_CHARS)
+      page(snapshot().copy(agentName = long)) shouldContain """<span class="brand-name" title="Agent: $long">"""
+      page(snapshot()) shouldContain """<span class="brand-name">"""
+      DashboardCss.CSS shouldContain ".brand-name { max-width:${DashboardLogo.BRAND_MAX_CHARS}ch; overflow:hidden;"
+    }
+
+    "the agent's page should carry the logo as its icon, inline in its head" {
+      page(snapshot()).substringBefore("</head>") shouldContain
+        """<link href="${DashboardLogo.SMALL_LOGO_URL}" rel="icon" type="image/svg+xml">"""
     }
 
     "the agent's page should apply a stored theme in its head, with the theme picker in its bar and in no push" {

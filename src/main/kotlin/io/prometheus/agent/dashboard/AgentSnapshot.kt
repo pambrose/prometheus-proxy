@@ -193,6 +193,9 @@ internal data class AgentSnapshot(
   /** The paths not registered: refused, retrying, or still pending. */
   val unregistered: List<AgentPathView> get() = paths.filter { it.state != PathState.REGISTERED }
 
+  /** Which agent this is, in the bar and the tab's title: its name, as the Settings view gives it too. */
+  val dashboardName: String get() = "Agent: $agentName"
+
   companion object {
     /**
      * Reads the snapshot from [agent], with its [settings], which the dashboard reads once ([AgentSettings]), since

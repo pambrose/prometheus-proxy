@@ -102,10 +102,10 @@ The username and password have no command-line flags, since a command line shows
 environment, or from a Secret on a platform that has them, rather than in a config file others can read.
 
 A login starts a session, which the browser keeps in a cookie. It ends after 24 hours without a request, 7 days after
-the login, or with **Log out**, at the end of the top bar. The proxy keeps sessions in memory, so a restart signs
-everyone out; a page left open then goes to the login page by itself. The cookie is `HttpOnly`, `SameSite=Lax`, named
-for the dashboard's port (so two proxies on one host keep their own), and `Secure` when the browser reached the
-dashboard over `https`, as through a reverse proxy.
+the login, or with **Log out**, the exit icon at the end of the top bar. The proxy keeps sessions in memory, so a
+restart signs everyone out; a page left open then goes to the login page by itself. The cookie is `HttpOnly`,
+`SameSite=Lax`, named for the dashboard's port (so two proxies on one host keep their own), and `Secure` when the
+browser reached the dashboard over `https`, as through a reverse proxy.
 
 A script sends the login with each request as HTTP Basic Auth instead, and needs no session. A browser can't: it always
 gets the login page, even with a Basic login it saved for the dashboard's address earlier, so Log out signs it out.
@@ -156,12 +156,14 @@ scrape here and the spike it caused in a Grafana panel read the same clock. Hove
 
 ## The status bar
 
-The bar across the top appears in every layout. Left to right it shows the connection's **live**
-indicator, the current **agents** and **paths** counts, how many paths are **failing** (their last scrape failed)
-or **departed** (their agent has gone) when there are any, and two health gauges, **chunks** and **scrapes**.
+The bar across the top appears in every layout. It starts with the logo and which proxy the page is: its host's name
+and the port Prometheus scrapes, as `Proxy: proxy:8080`, so the dashboards of several proxies are told apart at a
+glance. After the tabs it shows the connection's **live** indicator, the current **agents** and **paths** counts, how
+many paths are **failing** (their last scrape failed) or **departed** (their agent has gone) when there are any, and two
+health gauges, **chunks** and **scrapes**.
 
-The browser tab's title counts the failing and departed paths too, as `(3 problems) prometheus-proxy`, so a
-dashboard left in a background tab still says when something is wrong.
+The browser tab's title names the proxy the same way and counts the failing and departed paths too, as
+`(3 problems) Proxy: proxy:8080`, so a dashboard left in a background tab still says when something is wrong.
 
 At the bar's end, the theme picker sets the dashboard **light** (the sun) or **dark** (the moon), or **auto** (the
 half-filled circle), the default, which follows your system's light or dark setting. The theme in force is underlined,

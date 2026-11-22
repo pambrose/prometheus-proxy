@@ -609,7 +609,7 @@ cmd_tour() {
     instruct "Reload the dashboard: $DASHBOARD_URL" \
       "It shows the login page instead. Sign in as admin, with the password $LOGIN_PASSWORD, and it opens the page" \
       "you asked for, with the agents reconnected."
-    instruct "Click Log out, at the right end of the top bar." \
+    instruct "Click Log out, the exit icon at the right end of the top bar." \
       "Your session ends, and the login page comes back."
     step "Restart the proxy without the password." -- login-off
   fi
@@ -870,8 +870,8 @@ main() {
       "file. A restart clears what the proxy holds in memory: the agents reconnect within a few seconds and" \
       "register their paths again, and the dashboard's histories start over."
     watch_for
-    point "Reloading the dashboard shows its login page. Signing in opens the page you asked for, and Log out, at the" \
-      "right end of the top bar, signs you out."
+    point "Reloading the dashboard shows its login page. Signing in opens the page you asked for, and Log out, the" \
+      "exit icon at the right end of the top bar, signs you out."
     point "A wrong password shows 'Invalid username or password', and the proxy logs it at WARN, at most once a" \
       "minute for each address. To see it, run $0 logs proxy"
     point "A script sends the login as HTTP Basic Auth instead: curl -u admin:$LOGIN_PASSWORD $DASHBOARD_URL/paths" \

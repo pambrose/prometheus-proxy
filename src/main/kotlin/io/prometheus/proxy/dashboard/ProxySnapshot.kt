@@ -16,6 +16,7 @@
 
 package io.prometheus.proxy.dashboard
 
+import com.pambrose.common.util.hostInfo
 import io.prometheus.Proxy
 import io.prometheus.common.Utils.toJsonElement
 import io.prometheus.common.dashboard.DashboardPage
@@ -200,7 +201,12 @@ internal data class ProxySnapshot(
   val pathHistorySize: Int = 0,
   // The proxy's settings, by group, none of them a secret, which the Settings view shows (see ProxySettings).
   val settings: List<SettingsGroup> = emptyList(),
+  // The name of the proxy's host, as the machine gives it, which agents report theirs by too.
+  val hostName: String = "",
 ) {
+  /** Which proxy this is, in the bar and the tab's title: its host and the port Prometheus scrapes. */
+  val dashboardName: String get() = "Proxy: $hostName:$scrapePort"
+
   fun agent(agentId: String): AgentView? = agents.firstOrNull { it.agentId == agentId }
 
   /**
@@ -380,6 +386,7 @@ internal data class ProxySnapshot(
         links = proxy.options.dashboardLinks,
         pathHistorySize = proxy.proxyConfigVals.dashboard.pathHistorySize,
         settings = settings,
+        hostName = hostInfo.hostName,
       )
     }
 

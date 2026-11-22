@@ -37,6 +37,11 @@ _Not yet released_
   let through unfiltered, discovery's reads, and dashboard logins, and record how long a scrape waits to start, and
   `agent_build_info` shows each agent's version. The agents' Grafana dashboard charts them, and new alerts catch an
   agent that's disconnected, one stuck on a backup proxy, and a discovery file that can't be read.
+- **A logo.** Prometheus Proxy has a logo, a suspension bridge in Prometheus orange, on the docs site, in the README,
+  and on both dashboards: in the browser tab, the top bar, and the login page.
+- **Which proxy or agent is this?** Each dashboard's top bar and browser tab now name it: `Proxy: proxy:8080`, the
+  proxy's host and the port Prometheus scrapes, or `Agent: agent-east`, the agent's name, so several open dashboards are
+  told apart at a glance.
 
 ### Bug Fixes
 
@@ -53,6 +58,9 @@ _Not yet released_
 - **The agent's connect and result counts mean what they say.** `agent_connect_count_total` counts a connect as a
   success once the proxy has registered the agent, and as `rejected` when the proxy refuses it, and a result counts as
   sent only once it's on its way, with one a dropped connection loses counted as `dropped`.
+- **A new look for the login page and Log out.** The login page shows the logo and Prometheus Proxy, with Proxy
+  Dashboard or Agent Dashboard under it, and Log out, at the end of the top bar, is now an exit icon; hover over it for
+  its name.
 
 ## 4.6.1
 

@@ -767,6 +767,10 @@ These support helpers also live here (not test classes themselves):
 - **LogbackConfigTest** — the fat JARs' `logback.xml` (`src/shadow/resources`, kept out of the library jar), loaded
   from inside a JAR, and `logback/docker-logback.xml`, loaded from disk, configure without a WARN status, so neither
   makes logback print its status list at every start
+- **LogoTest** — the website's header (`zensical.toml`'s `logo`), the README's title, and the dashboards' login pages
+  show the logo, `website/prometheus-proxy/docs/images/logo.svg`, and the website's tabs (`favicon`) and the
+  dashboards' tabs and bars show its small-size cut, `favicon.svg`; the dashboards carry both inline
+  (`DashboardLogo.LOGO_SVG` and `SMALL_LOGO_SVG`) as the same markup
 - **OptionsTest** — ProxyOptions and AgentOptions config file loading
 - **ShadowServiceFilesTest** — every class listed in the pinned fat-JAR service files
   (`src/shadow/resources/META-INF/services/`) loads and implements its service, so a stale provider name fails here

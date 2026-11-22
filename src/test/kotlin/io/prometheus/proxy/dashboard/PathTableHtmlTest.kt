@@ -24,6 +24,7 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldEndWith
 import io.kotest.matchers.string.shouldNotContain
 import io.prometheus.common.dashboard.DashboardCss
+import io.prometheus.proxy.dashboard.DashboardFixtures.PROXY_NAME
 import io.prometheus.common.dashboard.DashboardPage
 import io.prometheus.common.dashboard.DashboardServer
 import io.prometheus.proxy.dashboard.DashboardFixtures.departedPathView
@@ -543,22 +544,22 @@ class PathTableHtmlTest : StringSpec() {
       // A departed path counts once, as departed, not again as failing.
       html shouldContain "<span class=\"crit\">1 failing</span>"
       html shouldContain "<span class=\"crit\">1 departed</span>"
-      html shouldContain """${DashboardPage.TITLE_ATTR}="(2 problems) prometheus-proxy""""
-      renderFullPage(snapshot([failing, departed])) shouldContain "<title>(2 problems) prometheus-proxy</title>"
+      html shouldContain """${DashboardPage.TITLE_ATTR}="(2 problems) $PROXY_NAME""""
+      renderFullPage(snapshot([failing, departed])) shouldContain "<title>(2 problems) $PROXY_NAME</title>"
     }
 
     "a single problem should read in the singular" {
       val failing = path("app_metrics").copy(history = [scrapeRecord(statusCode = 503)])
 
-      pathPush([failing]) shouldContain """${DashboardPage.TITLE_ATTR}="(1 problem) prometheus-proxy""""
+      pathPush([failing]) shouldContain """${DashboardPage.TITLE_ATTR}="(1 problem) $PROXY_NAME""""
     }
 
     "a healthy proxy's status bar should name no failing paths, and its title no problems" {
       val html = pathPush()
 
       html shouldNotContain "failing"
-      html shouldContain """${DashboardPage.TITLE_ATTR}="prometheus-proxy""""
-      renderFullPage(snapshot()) shouldContain "<title>prometheus-proxy</title>"
+      html shouldContain """${DashboardPage.TITLE_ATTR}="$PROXY_NAME""""
+      renderFullPage(snapshot()) shouldContain "<title>$PROXY_NAME</title>"
     }
   }
 }
