@@ -119,6 +119,10 @@ All notable changes to this project are documented in this file.
   harness specs, which share fixed ports, and `unitTest`, the rest; `test` runs both, and a run with `--tests` or
   `-x test` isn't split. `TestPortsTest` fails on a spec outside `harness/` that starts a proxy and agent the harness's
   way or binds a harness port, and the admin-path specs move to `harness/`
+- The container specs take half as long: a run of only them runs three at a time, and with `RUN_CONTAINER_TESTS=true`
+  the test task builds the fat JARs, so `make container-tests` and CI's job are one Gradle invocation. The scaling
+  spec starts its containers in batches, and the failover spec's agent no longer waits out a 30s connect deadline
+  re-probing the stopped proxy
 
 ## [4.6.1] - 2026-11-22
 

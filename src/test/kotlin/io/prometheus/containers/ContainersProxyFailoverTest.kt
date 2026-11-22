@@ -83,6 +83,11 @@ class ContainersProxyFailoverTest : StringSpec() {
             internal {
               reconnectPauseSecs = 1
             }
+            // Once A is gone, the agent's re-probe of it can hang, resolving A's alias or connecting to its old address,
+            // until the connect's deadline, which at the default 30s was most of this spec's run.
+            grpc {
+              unaryDeadlineSecs = 5
+            }
           }
           """.trimIndent()
 

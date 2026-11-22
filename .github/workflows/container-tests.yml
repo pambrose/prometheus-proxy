@@ -42,13 +42,15 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
 
-      - name: Build agent and proxy fat JARs
-        run: ./gradlew agentJar proxyJar
-
-      - name: Run Testcontainers smoke test
+      # One Gradle invocation: with RUN_CONTAINER_TESTS set, the test task depends on the fat JARs the images are built
+      # from, and the specs run three at a time (ContainerTestsConfig). Meanwhile the images' base layers are pulled in
+      # the background, so the first spec to build an image doesn't wait on them; if a pull fails, that build pulls them.
+      - name: Build the fat JARs and run the container specs
         env:
           RUN_CONTAINER_TESTS: 'true'
-        run: ./gradlew test --tests "io.prometheus.containers.*"
+        run: |
+          grep -h '^FROM .*@sha256:' etc/docker/*.Dockerfile | awk '{print $2}' | sort -u | xargs -n1 docker pull -q > /dev/null &
+          ./gradlew test --tests "io.prometheus.containers.*"
 
       - name: Upload test reports on failure
         if: failure()
