@@ -288,7 +288,7 @@ internal class AgentHttpService(
           fetchFromSource(source, target.url, req, filter)
       }
     } catch (e: Throwable) {
-      failedResults(e, req, target)
+      failedResults(e, req, sanitizeUrl(target.url))
     }
 
   // Reads [source], a path served in-process, whose target shows as [label], as a target's body is read: on a thread
@@ -343,13 +343,12 @@ internal class AgentHttpService(
     }
   }
 
-  // The results of a fetch of [target], its URL or its source, that failed with [e], unless [e] must propagate.
+  // The results of a fetch of [logUrl] that failed with [e], unless [e] must propagate.
   private fun failedResults(
     e: Throwable,
     req: ScrapeRequest,
-    target: ScrapeTarget,
+    logUrl: String,
   ): ScrapeResults {
-    val logUrl = sanitizeUrl(target.url)
     // Catch regular exceptions and HttpRequestTimeoutException (which is a CancellationException)
     // but let other CancellationExceptions propagate (like system shutdown). Uses the shared
     // cause-walk predicate so the catch branch and the status-code mapping agree (finding 34).
@@ -365,7 +364,7 @@ internal class AgentHttpService(
     return ScrapeResults(
       srAgentId = req.agentId,
       srScrapeId = req.scrapeId,
-      srStatusCode = errorCode(e, logUrl, inProcess = target.source != null),
+      srStatusCode = errorCode(e, logUrl),
       srFailureReason = scrapeFailureReason(e, req.debugEnabled),
       srUrl = if (req.debugEnabled) logUrl else "",
       // A fetch that got no answer: the agent's own timeout, or a refused connection, DNS failure, and the like.

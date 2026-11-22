@@ -86,8 +86,8 @@ resolved() {
     }' "$deps"
 }
 
-# The lines read whose artifact matches the first argument and whose version isn't the second.
-not_at() { awk -F: -v artifact="$1" -v want="$2" '$2 ~ artifact && $NF != want'; }
+# The lines read whose version isn't the argument.
+not_at() { awk -F: -v want="$1" '$NF != want'; }
 
 echo "==> Jackson: $jackson, and jackson-annotations $jackson_annotations"
 jackson_resolved="$(resolved '^com[.]fasterxml[.]jackson')"
@@ -105,11 +105,11 @@ tcnative_resolved="$(resolved '^io[.]netty$' | awk -F: '$2 ~ /^netty-tcnative/')
 indented <<< "$tcnative_resolved"
 natives="$(echo "$tcnative_resolved" | awk -F: 'NF == 4' | wc -l | tr -d ' ')"
 [ "$natives" -gt 0 ] || fail "netty-tcnative: no per-platform native jar is resolved"
-bad="$(echo "$tcnative_resolved" | not_at '' "$tcnative" | joined)"
+bad="$(echo "$tcnative_resolved" | not_at "$tcnative" | joined)"
 [ -z "$bad" ] || fail "netty-tcnative isn't at $tcnative on every platform: $bad"
 
 echo "==> Netty: $netty"
-bad="$(resolved '^io[.]netty$' | awk -F: '$2 !~ /^netty-tcnative/' | not_at '' "$netty" | joined)"
+bad="$(resolved '^io[.]netty$' | awk -F: '$2 !~ /^netty-tcnative/' | not_at "$netty" | joined)"
 [ -z "$bad" ] || fail "Netty isn't at $netty: $bad"
 
 echo "==> Protobuf: $protobuf"
@@ -119,14 +119,14 @@ for module in protobuf-java protobuf-java-util protobuf-kotlin; do
   echo "$protobuf_resolved" | awk -F: -v m="$module" '$2 == m { found = 1 } END { exit !found }' \
     || fail "Protobuf: $module isn't resolved"
 done
-bad="$(echo "$protobuf_resolved" | not_at '' "$protobuf" | joined)"
+bad="$(echo "$protobuf_resolved" | not_at "$protobuf" | joined)"
 [ -z "$bad" ] || fail "Protobuf isn't at $protobuf: $bad"
 
 echo "==> Prometheus Java client: $prometheus_metrics"
 prometheus_resolved="$(resolved '^io[.]prometheus$')"
 indented <<< "$prometheus_resolved"
 [ -n "$prometheus_resolved" ] || fail "Prometheus Java client: no module is resolved"
-bad="$(echo "$prometheus_resolved" | not_at '' "$prometheus_metrics" | joined)"
+bad="$(echo "$prometheus_resolved" | not_at "$prometheus_metrics" | joined)"
 [ -z "$bad" ] || fail "the Prometheus Java client isn't at $prometheus_metrics in every module: $bad"
 
 echo "==> Logback: no config on the classpath"

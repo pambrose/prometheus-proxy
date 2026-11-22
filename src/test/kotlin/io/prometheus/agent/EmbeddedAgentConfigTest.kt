@@ -285,7 +285,7 @@ class EmbeddedAgentConfigTest : StringSpec() {
       duplicate shouldContain "Path /app_metrics is given by agent.pathConfigs entry \"app_metrics\" and source()"
 
       val refused = startFailure(embeddedAgent { source("app metrics") { _, _, _ -> "" } })
-      refused shouldContain "source() was given path 'app metrics', which the proxy refuses"
+      refused shouldContain "Path 'app metrics', given by source(), is one the proxy refuses"
       refused shouldNotContain "pathConfigs"
     }
 

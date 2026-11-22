@@ -207,14 +207,14 @@ class MetricsSourceTest : StringSpec() {
       }
     }
 
-    // The agent made no HTTP request, so its log says what failed: the source.
-    "a source that throws should be logged as the source's failure, not an HTTP request's" {
+    // The agent made no HTTP request, so its log names the target, in-process, not how it was fetched.
+    "a source that throws should be logged as its scrape's failure, not an HTTP request's" {
       val lines =
         captureLogs<ScrapeResults>(Level.WARN) {
           scraped { _, _, _ -> throw IOException("registry closed") }
         }.map { it.formattedMessage }
 
-      lines.any { it.startsWith("The in-process source failed") && "registry closed" in it }.shouldBeTrue()
+      lines.any { it.startsWith("Scrape of $IN_PROCESS_TARGET failed") && "registry closed" in it }.shouldBeTrue()
       lines.none { "HTTP request" in it }.shouldBeTrue()
     }
 

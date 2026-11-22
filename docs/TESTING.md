@@ -308,9 +308,9 @@ which would replace the host application's logging config.
   (the text format when it names none), asked in a text format the scrape accepts for the families named with
   `name[]`, filtered, refused past `maxContentLengthMBytes` whether written in arrays or a byte at a time, interrupted
   at the scrape timeout, failed when the source throws, an `Error` or its own cancellation or interrupt included, and
-  logged as the source's failure, not an HTTP request's; every byte kept when it writes from several threads at once;
-  read by the dashboard's fetch, which counts nothing; a call that ignores the interrupt times out on time, and the
-  source isn't called again until it returns; and the docs site's registry source, run against a real registry
+  logged as a failed scrape of `in-process`, not an HTTP request; every byte kept when it writes from several threads
+  at once; read by the dashboard's fetch, which counts nothing; a call that ignores the interrupt times out on time,
+  and the source isn't called again until it returns; and the docs site's registry source, run against a real registry
 - **EmbeddedAgentInfoTest** — EmbeddedAgentInfo data class (launchId, agentName storage), and its connection,
   `isConnected` and `proxyEndpoint`, read live from the agent
 - **RequestFailureExceptionTest** — RequestFailureException custom exception class

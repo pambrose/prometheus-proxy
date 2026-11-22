@@ -149,13 +149,18 @@ internal class AgentPathManager(
         // here, at startup, where it can be fixed, rather than at every connect.
         configs.forEach { c ->
           val problem = pathCharacterProblem(c.path.removePrefix("/"))
-          require(problem == null) { c.refusal(problem.orEmpty()) }
+          require(problem == null) {
+            "Path '${shownValue(c.path)}', given by ${c.origin}, is one the proxy refuses: $problem"
+          }
         }
         // The proxy leaves labels it can't serve out of service discovery, so say so at startup, where it can be fixed.
         // A warning, not a failure: labels matter only to service discovery, and the path still serves scrapes.
         configs.forEach { c ->
           labelsProblem(c.labels)?.also {
-            logger.warn { "${c.origin} has labels service discovery will leave out: $it" }
+            logger.warn {
+              "Path /${shownValue(c.path.removePrefix("/"))}, given by ${c.origin}, has labels service discovery " +
+                "will leave out: $it"
+            }
           }
         }
       }
@@ -746,17 +751,10 @@ internal class AgentPathManager(
     // What a scrape of this path reads.
     val target: ScrapeTarget get() = ScrapeTarget(url, metricsSource)
 
-    // What a startup message calls this path: a pathConfigs entry by its name, and a path an embedded host serves
-    // in-process by the builder method that added it, since no pathConfigs entry holds it.
+    // Where a startup message says this path came from: a pathConfigs entry, by its name, or, for a path an embedded
+    // host serves in-process, the builder method that added it, since no pathConfigs entry holds it.
     val origin: String
       get() = if (metricsSource != null) "source()" else "agent.pathConfigs entry ${shownValue(quotedName)}"
-
-    // Why the agent won't start with this path, which the proxy would refuse for [problem].
-    fun refusal(problem: String): String =
-      if (metricsSource != null)
-        "source() was given path '${shownValue(path)}', which the proxy refuses: $problem"
-      else
-        "$origin has path '${shownValue(path)}', which the proxy refuses: $problem"
 
     // Name wrapped in double-quotes for the toPlainText() display, preserving the original format.
     val quotedName: String get() = "\"$name\""
