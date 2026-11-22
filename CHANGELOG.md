@@ -115,6 +115,10 @@ All notable changes to this project are documented in this file.
 - With BuildConfig the same for every build of a commit, main isn't recompiled on each Gradle invocation, and compiled
   classes and test results can come from the build cache; the harness profile is a test input, and a run of the
   container specs always runs
+- A run of every spec splits them between two Test tasks that run at once, each in its own JVM: `harnessTest`, the
+  harness specs, which share fixed ports, and `unitTest`, the rest; `test` runs both, and a run with `--tests` or
+  `-x test` isn't split. `TestPortsTest` fails on a spec outside `harness/` that starts a proxy and agent the harness's
+  way or binds a harness port, and the admin-path specs move to `harness/`
 
 ## [4.6.1] - 2026-11-22
 

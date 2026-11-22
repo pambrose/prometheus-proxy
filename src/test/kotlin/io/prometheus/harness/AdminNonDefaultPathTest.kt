@@ -16,22 +16,26 @@
 
 @file:Suppress("UndocumentedPublicClass", "UndocumentedPublicFunction")
 
-package io.prometheus.misc
+package io.prometheus.harness
 
 import com.pambrose.common.dsl.KtorDsl
 import com.pambrose.common.dsl.blockingGet
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.comparables.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldStartWith
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.prometheus.common.ConfigVals
-import io.prometheus.common.TestPorts.ADMIN_EMPTY_PATH_ADMIN_PORT
+import io.prometheus.common.TestPorts.ADMIN_CUSTOM_PATH_ADMIN_PORT
 import io.prometheus.harness.HarnessConstants.PROXY_PORT
 import io.prometheus.harness.support.HarnessSetup
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.harness.support.withPrefix
 
-class AdminEmptyPathTest : StringSpec() {
+class AdminNonDefaultPathTest : StringSpec() {
   private val proxyConfigVals: ConfigVals.Proxy2 by lazy { proxy.configVals.proxy }
 
   companion object : HarnessSetup()
@@ -44,11 +48,11 @@ class AdminEmptyPathTest : StringSpec() {
           startProxy(
             adminEnabled = true,
             args = [
-              "-Dproxy.admin.port=$ADMIN_EMPTY_PATH_ADMIN_PORT",
-              "-Dproxy.admin.pingPath=\"\"",
-              "-Dproxy.admin.versionPath=\"\"",
-              "-Dproxy.admin.healthCheckPath=\"\"",
-              "-Dproxy.admin.threadDumpPath=\"\"",
+              "-Dproxy.admin.port=$ADMIN_CUSTOM_PATH_ADMIN_PORT",
+              "-Dproxy.admin.pingPath=pingPath2",
+              "-Dproxy.admin.versionPath=versionPath2",
+              "-Dproxy.admin.healthCheckPath=healthCheckPath2",
+              "-Dproxy.admin.threadDumpPath=threadDumpPath2",
             ],
           )
         },
@@ -60,44 +64,47 @@ class AdminEmptyPathTest : StringSpec() {
       takeDownProxyAndAgent()
     }
 
-    "proxy ping path should return not found when empty" {
+    "proxy ping path should respond with pong" {
       proxyConfigVals.admin.apply {
-        port shouldBe ADMIN_EMPTY_PATH_ADMIN_PORT
-        pingPath shouldBe ""
+        port shouldBe ADMIN_CUSTOM_PATH_ADMIN_PORT
+        pingPath shouldBe "pingPath2"
 
         KtorDsl.blockingGet("$port/$pingPath".withPrefix()) { response ->
-          response.status shouldBe HttpStatusCode.NotFound
+          response.status shouldBe HttpStatusCode.OK
+          response.bodyAsText() shouldStartWith "pong"
         }
       }
     }
 
-    "proxy version path should return not found when empty" {
+    "proxy version path should return version info" {
       proxyConfigVals.admin.apply {
-        port shouldBe ADMIN_EMPTY_PATH_ADMIN_PORT
-        versionPath shouldBe ""
+        port shouldBe ADMIN_CUSTOM_PATH_ADMIN_PORT
+        versionPath shouldBe "versionPath2"
 
         KtorDsl.blockingGet("$port/$versionPath".withPrefix()) { response ->
-          response.status shouldBe HttpStatusCode.NotFound
+          response.status shouldBe HttpStatusCode.OK
+          response.bodyAsText() shouldContain "version"
         }
       }
     }
 
-    "proxy health check path should return not found when empty" {
+    "proxy health check path should return health status" {
       proxyConfigVals.admin.apply {
-        healthCheckPath shouldBe ""
+        healthCheckPath shouldBe "healthCheckPath2"
 
         KtorDsl.blockingGet("$port/$healthCheckPath".withPrefix()) { response ->
-          response.status shouldBe HttpStatusCode.NotFound
+          response.status shouldBe HttpStatusCode.OK
+          response.bodyAsText().length shouldBeGreaterThan 10
         }
       }
     }
 
-    "proxy thread dump path should return not found when empty" {
+    "proxy thread dump path should return thread dump" {
       proxyConfigVals.admin.apply {
-        threadDumpPath shouldBe ""
+        threadDumpPath shouldBe "threadDumpPath2"
 
         KtorDsl.blockingGet("$port/$threadDumpPath".withPrefix()) { response ->
-          response.status shouldBe HttpStatusCode.NotFound
+          response.bodyAsText().length shouldBeGreaterThan 10
         }
       }
     }
