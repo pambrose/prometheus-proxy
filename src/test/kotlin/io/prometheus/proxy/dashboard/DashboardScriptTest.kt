@@ -115,7 +115,8 @@ class DashboardScriptTest : StringSpec() {
     }
 
     "the page script should name each layout by its route" {
-      renderFullPage(snapshot()) shouldContain """var LAYOUTS = {"paths":"PATH","activity":"ACTIVITY"};"""
+      renderFullPage(snapshot()) shouldContain
+        """var LAYOUTS = {"paths":"PATH","activity":"ACTIVITY","settings":"SETTINGS"};"""
     }
 
     // ==================== Connection indicator ====================

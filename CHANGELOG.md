@@ -29,6 +29,11 @@ All notable changes to this project are documented in this file.
   outage stays one line; a page showing the view updates as each line is added
 - The agent's Helm chart turns on the agent's dashboard with `dashboard.enabled` (port 8095, kept off the Service and
   reached with `kubectl port-forward`), with a login from `dashboard.login.existingSecret`
+- Both dashboards have a Settings view (`/dashboard/settings`) of every setting the process resolved, in groups: the
+  proxy's listeners, agent authentication with each identity's path globs, TLS, scrape and agent limits, gRPC server
+  settings, service discovery, dashboard, admin, metrics, tracing, and logging, and the agent's proxy connection,
+  scraping, paths, TLS, and the same services. A token, a password, or a PEM shows only as set, and a `-D` override only
+  its key. The agent's settings move to it from the bottom of its Connection view
 - Both dashboards have a theme picker at the end of the top bar: three buttons, light, dark, and auto, the default,
   which follows the system's light or dark setting. The browser keeps the choice for each dashboard and applies it
   before the page draws, and the login page uses it too

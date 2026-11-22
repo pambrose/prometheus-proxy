@@ -42,12 +42,14 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlin.time.Duration.Companion.seconds
 import io.prometheus.common.dashboard.ActivityTable
 import io.prometheus.common.dashboard.RowFilter
+import io.prometheus.common.dashboard.SettingsShown
 import kotlinx.coroutines.flow.drop
 
 /**
  * The agent's dashboard, served from its own Ktor server on its own port ([DashboardServer], which the proxy's
  * dashboard shares): what only the agent knows, which the proxy's dashboard can't show. Its connection, even while the
- * proxy can't see it; every path, with the proxy's reason for refusing one; and its filters, discovery, and settings.
+ * proxy can't see it; every path, with the proxy's reason for refusing one; its filters and discovery; and its
+ * settings.
  * It reads the agent's state and changes none of it; its one action, Scrape now ([AgentScrapeNow]), scrapes a path's
  * target from the agent, as Prometheus would through the proxy.
  *
@@ -73,12 +75,15 @@ internal class AgentDashboardService(
   // Null unless agent.dashboard.scrapeNowEnabled, which leaves the route unregistered, so it answers 404.
   private val scrapeNow = if (dashboardConfig.scrapeNowEnabled) AgentScrapeNow(agent) else null
 
+  // Read at the first collect, once the agent's services are built, and kept: no setting changes while it runs.
+  private val settings by lazy { AgentSettings.of(agent) }
+
   private val site =
     object : DashboardSite<AgentView, AgentSnapshot> {
       // A new line of the activity feed; the first value is the count at the start, which is no change.
       override val changes: Flow<Any?> = agent.activityLog?.changes?.drop(1) ?: emptyFlow()
 
-      override suspend fun collect(): AgentSnapshot = AgentSnapshot.collect(agent)
+      override suspend fun collect(): AgentSnapshot = AgentSnapshot.collect(agent, settings)
 
       // The script sends the selected path as the page's URL has it, percent-encoded.
       override fun parseView(message: String): AgentView =
@@ -89,18 +94,22 @@ internal class AgentDashboardService(
           RowFilter.fromMessage(message),
         )
 
-      // The Activity table goes only when it differs from the one the page shows; see ActivityTable.
+      // The Activity table goes only when it differs from the one the page shows, see ActivityTable, and the settings
+      // only to a page not yet sent them, see SettingsShown.
       override fun frame(
         snapshot: AgentSnapshot,
         view: AgentView?,
         sent: Any?,
         routeBase: String,
       ): DashboardFrame {
-        val activity =
-          view?.takeIf { it.layout == AgentLayout.ACTIVITY }
-            ?.let { ActivityTable(snapshot.activityChangeCount, it.seq, it.filter) }
-        val text = AgentDashboardHtml.pushFragment(snapshot, view, routeBase, withActivity = activity != sent)
-        return DashboardFrame(text, activity)
+        val shown =
+          when (view?.layout) {
+            AgentLayout.ACTIVITY -> ActivityTable(snapshot.activityChangeCount, view.seq, view.filter)
+            AgentLayout.SETTINGS -> SettingsShown(view.seq)
+            else -> null
+          }
+        val text = AgentDashboardHtml.pushFragment(snapshot, view, routeBase, changed = shown != sent)
+        return DashboardFrame(text, shown)
       }
 
       override fun Route.pages(server: DashboardServer<AgentView, AgentSnapshot>) = pageRoutes(server)
@@ -123,7 +132,7 @@ internal class AgentDashboardService(
       site,
     )
 
-  // The agent's pages: its three views, a selected path's, and Scrape now.
+  // The agent's pages: its four views, a selected path's, and Scrape now.
   private fun Route.pageRoutes(server: DashboardServer<AgentView, AgentSnapshot>) {
     val routeBase = server.routeBase
     val loginEnabled = server.loginEnabled

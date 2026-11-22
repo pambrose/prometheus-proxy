@@ -245,6 +245,9 @@ class Proxy(
     else
       ProxyGrpcService(proxy = this, inProcessName = inProcessServerName)
 
+  // How agents reach the proxy, plaintext or TLS, for the dashboard's Settings view.
+  internal val tlsDescription: String get() = grpcService.tlsDescription
+
   // Null unless the stale-agent cleanup runs: when explicitly enabled, or forced on when the transport filter is
   // disabled (there's then no per-connection disconnect detection, so it's the only cleanup mechanism). Built here,
   // not on first use in startUp(), so init can register it before initServletService builds the ServiceManager.

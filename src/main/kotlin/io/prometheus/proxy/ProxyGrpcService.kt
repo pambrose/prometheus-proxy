@@ -63,11 +63,15 @@ internal class ProxyGrpcService(
   private val tracing by lazy { proxy.zipkinReporterService.newTracing() }
   private val grpcTracing by lazy { GrpcTracing.create(tracing) }
   private val grpcServer: Server
+  private val tlsContext: TlsContext
   val healthCheck: HealthCheck
+
+  /** How agents reach the proxy: plaintext, TLS, or TLS with mutual auth, as the startup log names it. */
+  val tlsDescription: String get() = tlsContext.desc()
 
   init {
     val options = proxy.options
-    val tlsContext =
+    tlsContext =
       if (options.isTlsEnabled)
         TlsMaterial.serverContext(
           certChain = options.certChainSource,

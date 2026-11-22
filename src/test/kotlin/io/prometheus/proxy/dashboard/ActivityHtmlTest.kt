@@ -227,14 +227,14 @@ class ActivityHtmlTest : StringSpec() {
     "a push without the activity table should carry the status bar alone, and leave the other layouts' regions" {
       val snap = snapshot()
       val bare =
-        ProxyDashboardHtml.pushFragment(snap, null, "/dashboard", DashboardLayout.ACTIVITY, 7, withActivity = false)
+        ProxyDashboardHtml.pushFragment(snap, null, "/dashboard", DashboardLayout.ACTIVITY, 7, changed = false)
 
       bare shouldStartWith """<span class="bar-right" id="${DashboardPage.STATUS_ID}" hx-swap-oob="true" """
       bare shouldContain """${DashboardPage.VIEW_ATTR}="7""""
       bare shouldNotContain ProxyDashboardHtml.ACTIVITY_ID
       bare shouldEndWith "</span>"
       listOf(DashboardLayout.AGENT, DashboardLayout.PATH).forEach { layout ->
-        ProxyDashboardHtml.pushFragment(snap, null, "/dashboard", layout, withActivity = false) shouldBe
+        ProxyDashboardHtml.pushFragment(snap, null, "/dashboard", layout, changed = false) shouldBe
           ProxyDashboardHtml.pushFragment(snap, null, "/dashboard", layout)
       }
     }

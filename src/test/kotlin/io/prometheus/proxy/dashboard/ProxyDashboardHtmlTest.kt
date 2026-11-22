@@ -30,6 +30,9 @@ import io.prometheus.common.dashboard.DashboardMessage
 import io.prometheus.common.dashboard.DashboardCss
 import io.prometheus.common.dashboard.DashboardPage
 import io.prometheus.common.dashboard.DashboardServer
+import io.prometheus.common.dashboard.Setting
+import io.prometheus.common.dashboard.SettingsGroup
+import io.prometheus.common.dashboard.SettingsHtml
 import io.prometheus.proxy.ScrapeRecord
 import io.prometheus.proxy.dashboard.DashboardFixtures.departedPathView
 import io.prometheus.proxy.dashboard.DashboardFixtures.renderFullPage
@@ -286,7 +289,7 @@ class ProxyDashboardHtmlTest : StringSpec() {
     // a row click and a tick rendered from the previous selection. It reads the stamp from the frame's first
     // tag, so the status region must come first, in every layout.
     "a push should stamp its view count on the frame's first tag" {
-      listOf(DashboardLayout.AGENT, DashboardLayout.PATH, null).forEach { layout ->
+      listOf(DashboardLayout.AGENT, DashboardLayout.PATH, DashboardLayout.SETTINGS, null).forEach { layout ->
         val frame = ProxyDashboardHtml.pushFragment(snapshot(), "1", "/dashboard", layout, viewSeq = 7)
         VIEW_STAMP.find(frame)?.groupValues?.get(1) shouldBe "7"
       }
@@ -513,6 +516,7 @@ class ProxyDashboardHtmlTest : StringSpec() {
       ProxyDashboardService.parseLayout("""{"layout":"PATH"}""") shouldBe DashboardLayout.PATH
       ProxyDashboardService.parseLayout("""{"layout":"AGENT"}""") shouldBe DashboardLayout.AGENT
       ProxyDashboardService.parseLayout("""{"layout":"ACTIVITY"}""") shouldBe DashboardLayout.ACTIVITY
+      ProxyDashboardService.parseLayout("""{"layout":"SETTINGS"}""") shouldBe DashboardLayout.SETTINGS
       // Everything unexpected falls back to the layout the page served before layouts existed.
       ProxyDashboardService.parseLayout("""{"layout":"SIDEWAYS"}""") shouldBe DashboardLayout.AGENT
       ProxyDashboardService.parseLayout("""{"select":"a1"}""") shouldBe DashboardLayout.AGENT
@@ -528,7 +532,40 @@ class ProxyDashboardHtmlTest : StringSpec() {
       page shouldContain """<a href="/dashboard/activity">Activity</a>"""
       renderFullPage(snapshot(), DashboardLayout.ACTIVITY) shouldContain
         """href="/dashboard/activity" class="on" aria-current="page">Activity</a>"""
+      page shouldContain """<a href="/dashboard/settings">Settings</a>"""
+      renderFullPage(snapshot(), DashboardLayout.SETTINGS) shouldContain
+        """href="/dashboard/settings" class="on" aria-current="page">Settings</a>"""
       agentPage shouldNotContain "aria-current=\"page\""
+    }
+
+    "the Settings page should show each group's settings, and no other layout's regions" {
+      val settings = [SettingsGroup("Agent authentication", [Setting("Identity <team>", "paths orders_*")])]
+      renderFullPage(snapshot().copy(settings = settings), DashboardLayout.SETTINGS).apply {
+        this shouldContain """<div id="${SettingsHtml.SETTINGS_ID}">"""
+        this shouldContain """<div class="section"><span>Agent authentication</span></div>"""
+        this shouldContain """<span class="k">Identity &lt;team&gt;</span><span class="v">paths orders_*</span>"""
+        this shouldNotContain """id="${ProxyDashboardHtml.AGENT_LIST_ID}""""
+        this shouldNotContain """id="${ProxyDashboardHtml.PATH_TABLE_ID}""""
+      }
+      renderFullPage(snapshot().copy(settings = settings)) shouldNotContain """id="${SettingsHtml.SETTINGS_ID}""""
+    }
+
+    // Sent once to a page, which then keeps a selected value selected; the frames after carry the status bar alone.
+    "a Settings push should carry the settings out of band, or the status bar alone when told to" {
+      val snapshot = snapshot().copy(settings = [SettingsGroup("Logging", [Setting("Log level", "info")])])
+      ProxyDashboardHtml.pushFragment(snapshot, null, "/dashboard", DashboardLayout.SETTINGS, viewSeq = 3).apply {
+        this shouldStartWith """<span class="bar-right" id="${DashboardPage.STATUS_ID}" hx-swap-oob="true""""
+        this shouldContain """<div id="${SettingsHtml.SETTINGS_ID}" hx-swap-oob="true">"""
+        this shouldNotContain """id="${ProxyDashboardHtml.AGENT_LIST_ID}""""
+      }
+      ProxyDashboardHtml
+        .pushFragment(snapshot, null, "/dashboard", DashboardLayout.SETTINGS, viewSeq = 3, changed = false)
+        .apply {
+          this shouldContain DashboardPage.STATUS_ID
+          this shouldNotContain SettingsHtml.SETTINGS_ID
+        }
+      ProxyDashboardHtml.pushFragment(snapshot, null, "/dashboard", DashboardLayout.PATH) shouldNotContain
+        SettingsHtml.SETTINGS_ID
     }
   }
 

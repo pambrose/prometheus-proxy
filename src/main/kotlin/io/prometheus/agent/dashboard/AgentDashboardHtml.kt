@@ -55,10 +55,11 @@ import io.prometheus.common.dashboard.RowFilter
 import io.prometheus.agent.dashboard.AgentActivityHtml.renderActivity
 import io.prometheus.agent.dashboard.AgentActivityHtml.activityTable
 import io.prometheus.common.dashboard.DashboardPage.barEnd
+import io.prometheus.common.dashboard.SettingsHtml.settingsInner
 
 /**
  * Which view of the agent's dashboard a session is looking at: its paths, where each stands with the proxy; its
- * connection to the proxy, with its settings; or its activity, what happened to them.
+ * connection to the proxy; its activity, what happened to them; or its settings, as it resolved them.
  *
  * @param segment the view's route below the dashboard's base, which the Paths view is served at itself
  * @param title the view's name in the tabs
@@ -72,6 +73,7 @@ internal enum class AgentLayout(
   PATHS("", "Paths"),
   CONNECTION("connection", "Connection"),
   ACTIVITY("activity", "Activity", "event, path, or detail"),
+  SETTINGS("settings", "Settings"),
 }
 
 /**
@@ -90,7 +92,7 @@ internal data class AgentView(
  * Server-rendered markup for the agent's dashboard, on the design system the proxy's shares ([DashboardPage]).
  *
  * It shows what only the agent knows: its connection when the proxy can't see it, each path the proxy refused, and
- * why, and its filters, discovery, and settings. As on the proxy's, every update is a WebSocket frame of out-of-band
+ * why, its filters and discovery, and its settings. As on the proxy's, every update is a WebSocket frame of out-of-band
  * regions, rendered here.
  */
 internal object AgentDashboardHtml {
@@ -163,6 +165,10 @@ internal object AgentDashboardHtml {
         AgentLayout.ACTIVITY -> {
           main { renderActivity(snapshot, routeBase, view.filter) }
         }
+
+        AgentLayout.SETTINGS -> {
+          main { div { settingsInner(snapshot.settings, oob = false) } }
+        }
       }
       script { unsafe { raw(SCRIPT) } }
     }
@@ -171,14 +177,14 @@ internal object AgentDashboardHtml {
   /**
    * One WebSocket frame carrying the regions [view] shows, as top-level siblings, the status bar first, stamped with
    * the view's message count, as the proxy's are (see ProxyDashboardHtml.pushFragment). A null [view], before the page
-   * says which it shows, carries the status bar alone. [withActivity] false leaves the Activity view's table out, for a
-   * page that already shows it (see AgentDashboardService).
+   * says which it shows, carries the status bar alone. [changed] false leaves out the Activity view's table, or the
+   * Settings view's settings, for a page that already shows them (see AgentDashboardService).
    */
   fun pushFragment(
     snapshot: AgentSnapshot,
     view: AgentView?,
     routeBase: String,
-    withActivity: Boolean = true,
+    changed: Boolean = true,
   ): String =
     buildString {
       append(createHTML().span("bar-right") { statusInner(snapshot, oob = true, view?.seq ?: 0L) })
@@ -194,7 +200,11 @@ internal object AgentDashboardHtml {
         }
 
         AgentLayout.ACTIVITY -> {
-          if (withActivity) append(createHTML().div { activityTable(snapshot, view.filter, oob = true) })
+          if (changed) append(createHTML().div { activityTable(snapshot, view.filter, oob = true) })
+        }
+
+        AgentLayout.SETTINGS -> {
+          if (changed) append(createHTML().div { settingsInner(snapshot.settings, oob = true) })
         }
 
         null -> {}
@@ -369,9 +379,6 @@ internal object AgentDashboardHtml {
       }
     }
     snapshot.discovery?.also { discoverySection(it) }
-    div("section") { span { +"Settings" } }
-    kv("Version", snapshot.version)
-    snapshot.settings.forEach { (name, value) -> kv(name, value) }
   }
 
   private fun heroMeta(snapshot: AgentSnapshot): String {

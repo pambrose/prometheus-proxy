@@ -253,7 +253,8 @@ in `config/agent-*.conf`). This part starts with agent-rogue, which part 8 left 
 ```
 
 - agent-east's **Connection** view shows it connected to `proxy:50051`, its one proxy endpoint, with its discovery file
-  and settings below: <http://localhost:8095/dashboard/connection>
+  below: <http://localhost:8095/dashboard/connection>, and its **Settings** view what it resolved:
+  <http://localhost:8095/dashboard/settings>
 
 ```bash
 ./demo.sh proxy-down      # stops the proxy

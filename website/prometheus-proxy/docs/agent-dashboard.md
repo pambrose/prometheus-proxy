@@ -27,7 +27,7 @@ The agent's own dashboard shows those. It runs on the agent, on a port of its ow
 
     Like the proxy's, the agent's dashboard has **no TLS**, and **no authentication until you set a password**
     (`agent.dashboard.password`, or `DASHBOARD_PASSWORD`). It shows the agent's paths, target URLs (their passwords
-    masked), and proxy endpoints, so treat its port as internal.
+    masked), proxy endpoints, and settings (never a token or password), so treat its port as internal.
 
     It listens on all interfaces by default, and without a login the agent logs a warning at startup when it does. Set
     `agent.dashboard.host` (or `--dashboard_host`) to `127.0.0.1` to keep it on the agent's host.
@@ -148,8 +148,8 @@ The connection's state, `connected`, `connecting`, or `failing`, and the endpoin
   in the agent's log.
 - **Discovery**, when it's on: the file, how often it's read, whether the last read failed, and the entries it skipped,
   missing a path or a URL, or found colliding with a static path or listed twice.
-- **Settings**: the scrape timeout and retries, chunking and gzip thresholds, HTTP client limits, and whether the agent
-  verifies targets' certificates, as the agent resolved them. A token or a TLS key shows only whether it is set.
+
+The agent's settings are on the [Settings view](#the-settings-view).
 
 ## The Activity view
 
@@ -175,6 +175,25 @@ Like events in a burst share a line, such as the agent registering its paths as 
 first few paths. The same event again, such as failing over on every retry through a long outage, adds to the line
 it repeats. The view keeps `activityLogSize` lines (500), in memory, so a restart empties it. The search filters by
 event, path, or detail, and **Problems only** keeps the red lines. The view updates as each line is added.
+
+## The Settings view
+
+Every setting the agent resolved from its flags, environment variables, config, and defaults, as on the proxy's
+[Settings layout](web-dashboard.md#the-settings-layout):
+
+| Group | What it shows |
+|---|---|
+| About | the version, the agent's name, its launch ID, when it started, where its config came from, and the keys of any `-D` overrides |
+| Proxy connection | the proxy endpoints in failover order, whether a token is set, consolidated mode, the transport filter, the reconnect pause, gRPC deadlines and keepalive, and the heartbeat |
+| Scraping | the scrape timeout and retries, chunking and gzip thresholds, the largest scrape, HTTP client limits and cache, and how targets' certificates are checked |
+| Paths | how many paths are configured and filtered, how a refused path is retried, the backlog threshold, and discovery |
+| TLS | plaintext, TLS, or mutual TLS, where each certificate and key comes from, and the override authority |
+| Dashboard | where it listens, its login's username, its limits, and what it keeps |
+| Admin, Metrics, Tracing, Logging | each service's port and paths, the JVM metrics turned on, Zipkin, and the log level |
+
+No secret reaches the page: the agent's token, the trust store's password, the dashboard's password, and TLS material
+given as PEM show only as set or not set, and a `-D` override shows only its key. The page is sent the settings once
+when it opens, and again after the agent restarts.
 
 ## The status bar
 

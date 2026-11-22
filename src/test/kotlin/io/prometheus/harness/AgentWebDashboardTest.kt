@@ -111,6 +111,13 @@ class AgentWebDashboardTest : StringSpec() {
             this shouldContain "token set"
           }
         }
+        // The agent's settings, on their own view: its token only as set, never the token.
+        client.get("$base/dashboard/settings").bodyAsText().apply {
+          this shouldContain """<div class="section"><span>Proxy connection</span></div>"""
+          this shouldContain """<span class="k">Token</span><span class="v">set</span>"""
+          this shouldContain """<span class="k">Proxy endpoints</span><span class="v">$endpoint</span>"""
+          this shouldNotContain "agent-dashboard-team-a-token"
+        }
         client.get("$base/dashboard").bodyAsText().apply {
           this shouldContain
             """${AgentDashboardHtml.PATH_ATTR}="agent_dash_allowed_metrics" ${AgentDashboardHtml.STATE_ATTR}="pending""""
