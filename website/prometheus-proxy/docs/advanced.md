@@ -23,6 +23,10 @@ on both proxy and agent:
 In this mode the proxy also limits the agents connected as one auth identity, which is every agent when
 agent auth is off; see [Transport Filter](configuration/proxy.md#transport-filter).
 
+Nginx closes a gRPC stream that sends nothing for `grpc_read_timeout` (60 seconds by default), and an agent's
+connection ends with any of its streams. The stream that tells an agent another agent took one of its paths sends a
+keepalive every 30 seconds for that reason, so keep `grpc_read_timeout` above that.
+
 Example Nginx and proxy configuration files are available in the repository:
 
 - [`nginx/docker/nginx.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/nginx/docker/nginx.conf)
@@ -50,8 +54,11 @@ With [per-agent identities](security/index.md#per-agent-identities-and-path-auth
 identity's registration is rejected while the first agent is connected.
 
 The displaced agent stays connected without the path, so two agents configured with the same path settle with
-the later one serving it. Only a connection the agent itself has since replaced, one of the same launch, is
-disconnected when it loses its last path. To serve a path from both agents, make them consolidated.
+the later one serving it. The proxy tells the displaced agent, whose [dashboard](agent-dashboard.md) and log show the
+path as taken over, and the agent takes the path back once no agent serves it, as when a rolling deploy's new version
+stops, without reconnecting. While the other agent serves the path it only waits, so the two never take it from each
+other. Only a connection the agent itself has since replaced, one of the same launch, is disconnected when it loses its
+last path. To serve a path from both agents, make them consolidated.
 
 In **consolidated mode**, multiple agents can register the same path:
 
@@ -216,7 +223,8 @@ from anyone, and a client that marked its trace sampled could make the proxy kee
 **The gRPC calls.** Zipkin joins the agent's client side and the proxy's server side of each call into one span, so a
 trace names both services. Connecting and registering are unary calls (`connectAgent`, `registerAgent`, and a
 `registerPath` for each path), each traced as it completes. `sendHeartBeat`, which an idle agent sends every few
-seconds, is never traced. Scrapes travel over long-lived streams (`readRequestsFromProxy`, `writeResponsesToProxy`, and
+seconds, is never traced, and neither is `readPathNoticesFromProxy`, a stream that lasts the connection and tells the
+agent only when another agent takes one of its paths. Scrapes travel over long-lived streams (`readRequestsFromProxy`, `writeResponsesToProxy`, and
 `writeChunkedResponsesToProxy`), and a stream's span completes only when the stream ends, so it appears when its
 connection closes, lasting as long as it did; each scrape's own trace shows the scrape.
 

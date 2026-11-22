@@ -206,15 +206,15 @@ proxy and the agent are untouched: the metrics report the failure, they don't fa
 ```
 
 Version 1.1's agent registers the same paths with the same token, and the proxy gives each path to the newer
-registration; the command prints the proxy's log line. 1.0's agent stays connected without paths until its app stops.
+registration; the command prints the proxy's log line. 1.0's agent, told so, stays connected without paths until its
+app stops, ready to take them back should 1.1 go away first, as a failed deploy's new version does.
 The coffee shop's page, at the same address, now reads Version 1.1: its load balancer sends requests to 1.0 while it
 runs and to 1.1 once it has stopped. On the proxy dashboard, `coffee-shop-1.1` has the paths, and in Grafana the graphs
 go on without a gap.
 
 Each version's agent has its own dashboard, inside its own app. 1.1's, at <http://localhost:8396/dashboard>, lists the
-two paths registered. 1.0's agent isn't told the proxy gave its paths to 1.1, so until 1.0 stopped, its dashboard still
-read them as registered: which agent holds a path is the proxy dashboard's to show. 1.0's dashboard stops with its app,
-and answers again, starting over, after the rollback.
+two paths registered. Until 1.0 stopped, its dashboard showed them as `retrying`, taken over by `coffee-shop-1.1`.
+1.0's dashboard stops with its app, and answers again, starting over, after the rollback.
 
 ### 7. The agent's admin endpoints, for debugging it
 

@@ -101,7 +101,7 @@ light and a tag for where the path stands with the proxy:
 | State      | Light | Tag     | Meaning                                                                                                  |
 |:-----------|:------|:--------|:---------------------------------------------------------------------------------------------------------|
 | registered | green | none    | The proxy routes the path's scrapes to this agent                                                        |
-| retrying   | red   | amber   | The proxy refused it for a cause that can clear, such as another agent holding it, or couldn't be asked |
+| retrying   | red   | amber   | The proxy refused it for a cause that can clear, such as another agent holding it, or couldn't be asked, or another agent took it over |
 | refused    | red   | red     | The proxy refused it for a cause that can't clear, such as an identity not allowed the path              |
 | pending    | red   | neutral | Not registered yet: the agent isn't connected, or hasn't reached it                                      |
 
@@ -110,7 +110,9 @@ dots, oldest on the left, green for a success and red for a failure, and the sha
 proxy hasn't scraped says so: Prometheus isn't asking for it.
 
 Select a path to see its URL, its labels, and, while it isn't registered, the proxy's reason, when it was refused, and
-when the agent tries it again. A path with a [metric filter](configuration/agent.md#metric-filtering) shows the
+when the agent tries it again. A path another agent took over, without consolidated mode, as a redeploy's new version
+or a copy of the agent deployed by mistake does, says so, and names that agent: the agent waits while the other serves
+the path, and takes it back as soon as no agent does, without reconnecting. A path with a [metric filter](configuration/agent.md#metric-filtering) shows the
 filter's rules, how many lines and bytes it has dropped from Prometheus's scrapes, and whether it has ever let a scrape
 through unfiltered.
 
@@ -166,6 +168,7 @@ dropped and came back while nobody was watching.
 | back to primary  | plain    | The agent went back to its first endpoint                                        |
 | registered       | plain    | The proxy accepted a path, configured, discovered, or registered at runtime      |
 | refused          | red      | The proxy refused a path, with its reason                                        |
+| taken over       | amber    | The proxy gave a path to another agent, which it names                           |
 | unregistered     | plain    | A path was removed, such as one that left the discovery file                     |
 | discovery failed | red      | The discovery file couldn't be read, so the agent keeps the paths it last read   |
 | entries skipped  | red      | The discovery file listed entries without a path or a URL                        |

@@ -31,6 +31,8 @@ import com.google.protobuf.ByteString.copyFrom
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.grpc.ClientInterceptors
 import io.grpc.ManagedChannel
+import io.grpc.Status
+import io.grpc.StatusException
 import io.prometheus.Agent
 import io.prometheus.agent.AgentOptions.Companion.DEFAULT_GRPC_PORT
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
@@ -46,6 +48,7 @@ import io.prometheus.common.Utils.parseEndpointList
 import io.prometheus.common.Utils.sanitizeUrl
 import io.prometheus.grpc.ChunkedScrapeResponse
 import io.prometheus.grpc.ProxyServiceGrpcKt
+import io.prometheus.grpc.RegisterPathRequestKt
 import io.prometheus.grpc.RegisterPathResponse
 import io.prometheus.grpc.ScrapeRequest
 import io.prometheus.grpc.ScrapeResponse
@@ -62,6 +65,7 @@ import io.prometheus.grpc.unregisterPathRequest
 import kotlin.concurrent.atomics.AtomicInt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
 import kotlinx.coroutines.channels.ClosedSendChannelException
@@ -494,6 +498,8 @@ internal class AgentGrpcService(
         // a failover is a reconnect, so the proxy learns the index at the moment it becomes true.
         proxyEndpoints.addAll(this@AgentGrpcService.endpointSpecs)
         currentEndpointIndex = this@AgentGrpcService.currentEndpointIndex
+        // Every connection reads them; see readPathNoticesFromProxy.
+        pathNotices = true
       }
     unaryStub().registerAgent(request)
       .also { response ->
@@ -521,18 +527,42 @@ internal class AgentGrpcService(
     urlVal: String,
     sourceVal: String,
   ): RegisterPathResponse =
+    sendRegisterPath(pathVal) {
+      labels = labelsJson
+      // The target and its origin are known only here. Reported at registration because that is the
+      // one moment they are established -- a path is re-registered rather than mutated in place.
+      // Redacted here: the proxy shows the target on its dashboard and /debug page.
+      targetUrl = sanitizeUrl(urlVal)
+      pathSource = sourceVal
+    }
+
+  // A registration of a path the proxy said another agent took over, which it refuses while a live agent of another
+  // launch serves it; see AgentPathManager.notePathNotice. Otherwise as registerPathOnProxy.
+  suspend fun reclaimPathOnProxy(
+    pathVal: String,
+    labelsJson: String,
+    urlVal: String,
+    sourceVal: String,
+  ): RegisterPathResponse =
+    sendRegisterPath(pathVal) {
+      labels = labelsJson
+      targetUrl = sanitizeUrl(urlVal)
+      pathSource = sourceVal
+      reclaim = true
+    }
+
+  // Registers [pathVal] for this agent, with what [fill] sets, and throws the proxy's refusal.
+  private suspend fun sendRegisterPath(
+    pathVal: String,
+    fill: RegisterPathRequestKt.Dsl.() -> Unit,
+  ): RegisterPathResponse =
     unaryStub().registerPath(
       registerPathRequest {
         require(agent.agentId.isNotBlank()) { BLANK_AGENT_ID_MSG }
         require(pathVal.isNotBlank()) { BLANK_PATH_MSG }
         agentId = agent.agentId
         path = pathVal
-        labels = labelsJson
-        // The target and its origin are known only here. Reported at registration because that is the
-        // one moment they are established -- a path is re-registered rather than mutated in place.
-        // Redacted here: the proxy shows the target on its dashboard and /debug page.
-        targetUrl = sanitizeUrl(urlVal)
-        pathSource = sourceVal
+        fill()
       },
     ).apply {
       agent.markMsgSent()
@@ -582,6 +612,26 @@ internal class AgentGrpcService(
       logger.warn(e) { "Heartbeat failure: ${e.simpleClassName} - ${e.message}" }
       HeartBeatResult.TRANSIENT_FAILURE
     }.also { result -> agent.metrics { heartbeatCount.labelValues(agent.launchId, result.metricLabel).inc() } }
+  }
+
+  // Hands the path manager each notice the proxy sends about a path another agent took from this one, for the
+  // connection's lifetime. A proxy predating notices answers UNIMPLEMENTED: this then waits out the connection, since a
+  // task that ends ends the connection, and the agent would reconnect to that proxy without end. A path taken over
+  // there stays shown as registered, as before. Any other end ends the connection, as the scrape request stream's does.
+  suspend fun readPathNoticesFromProxy() {
+    val agentInfo =
+      agentInfo {
+        require(agent.agentId.isNotBlank()) { BLANK_AGENT_ID_MSG }
+        agentId = agent.agentId
+      }
+    try {
+      grpcStub.readPathNoticesFromProxy(agentInfo).collect { notice -> agent.pathManager.notePathNotice(notice) }
+    } catch (e: StatusException) {
+      if (e.status.code != Status.Code.UNIMPLEMENTED)
+        throw e
+      logger.info { "Proxy $agentHostName predates path notices; a path another agent takes over stays shown here" }
+      awaitCancellation()
+    }
   }
 
   suspend fun readRequestsFromProxy(

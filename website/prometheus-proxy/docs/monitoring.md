@@ -130,9 +130,11 @@ Since 4.3.0, three more groups are available, also off by default:
   `proxy.internal.maxAgentsPerIdentity` (with `transportFilterDisabled`), or `transport_filter_mismatch`, an agent and
   proxy that disagree on `transportFilterDisabled`. A refused connect isn't in `proxy_connect_count_total`.
 - `proxy_path_rejections_total`'s `cause` is the reason the agent is told, lowercased: `held_by_another_identity`,
-  `consolidation_mismatch`, `not_authorized`, `invalid_path`, `invalid_agent`, `binding_mismatch`, or
-  `path_limit_reached`. Every rejection counts, retries included, while the dashboard's Activity view shows a path's
-  first.
+  `consolidation_mismatch`, `not_authorized`, `invalid_path`, `invalid_agent`, `binding_mismatch`,
+  `path_limit_reached`, or `held_by_another_agent`, a displaced agent's attempt to take back a path another agent still
+  serves, which it repeats until that agent leaves. Every rejection counts, retries included, while the dashboard's
+  Activity view shows a path's first, and leaves out `held_by_another_agent`, which the path's `taken over` line
+  already explains.
 - `proxy_agent_auth_failures_total` counts every refused call, though the proxy's warning about a host's bad token is
   logged at most once a minute. An agent with a wrong token reconnects every few seconds, so it climbs steadily.
 - `proxy_binding_mismatches_total` stays at zero for the stock agent. Its `rpc` label names the call, such as

@@ -195,9 +195,10 @@ same paths with the same token, and the proxy gives each one to the newer regist
 through 1.0's agent, then 1.1 through 1.1's, with no gap in the graphs. The coffee shop keeps one address throughout:
 its load balancer sends requests to 1.0 while it runs, and to 1.1 once it has stopped, so the status page at
 <http://localhost:8390> now reads Version 1.1. Each version's agent has its own dashboard, inside its own app: 1.1's,
-at <http://localhost:8396/dashboard>, lists the two paths registered. 1.0's agent isn't told the proxy gave its paths
-away, so until 1.0 stops, its own dashboard still reads them as registered: which agent holds a path is the proxy
-dashboard's to show. `./demo.sh rollback` puts 1.0 back.
+at <http://localhost:8396/dashboard>, lists the two paths registered. The proxy tells 1.0's agent it gave the paths
+away, so until 1.0 stops, its own dashboard shows them as `retrying`, taken over by `coffee-shop-1.1`, and had 1.1
+stopped first, as a failed deploy's new version does, 1.0's agent would have taken them back within seconds.
+`./demo.sh rollback` puts 1.0 back.
 
 ## Debugging the agent
 

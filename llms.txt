@@ -52,6 +52,7 @@ Key RPCs:
 - `writeResponsesToProxy` - client-streaming: agent sends scrape responses back
 - `writeChunkedResponsesToProxy` - client-streaming: chunked responses for large payloads (>32KB default)
 - `sendHeartBeat` - keepalive during inactivity (default 5s)
+- `readPathNoticesFromProxy` - server-streaming: proxy tells a displaced agent another agent took its path, or that the path is free, so it takes it back (`registerPath` with `reclaim`)
 
 ### Key Mechanisms
 

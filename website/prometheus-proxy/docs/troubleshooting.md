@@ -173,14 +173,15 @@ The proxy logs the reason and returns `valid = false` to the agent:
 | `Non-consolidated agent rejected for consolidated path`     | The reverse of the above — same fix.                                        |
 | `Agent identity '…' denied registration of path /…` (the agent logs `… is not authorized to register path /…`) | The path matches none of the `paths` patterns of the agent's [`proxy.auth` identity](security/index.md#per-agent-identities-and-path-authorization). Add a pattern that covers it, or rename the path. |
 | `Path /… is served by identity '…'; identity '…' cannot take it over` (or `join it`) | A live agent of another identity serves the path. The agent retries, and registers the path once that agent is gone. To move the path, stop the old agent; for both to serve it, give them the same identity and consolidated mode. |
+| `Path /… is served by agentId … (…), of another launch; agentId … takes it back once that agent leaves` (INFO) | Not a fault. Another agent took the path over, and this one, told so, is waiting to take it back; see [An agent is connected but serves no paths](#an-agent-is-connected-but-serves-no-paths). |
 | `Path /… is N characters, over proxy.internal.maxPathLength (…)` | Shorten the path, or raise the limit ([Internal Settings](configuration/proxy.md#internal-settings)). |
 | `Labels for path /… are N bytes, over proxy.internal.maxLabelsSizeBytes (…)` | Trim the path's `labels`, or raise the limit. |
 | `Agent … already serves N paths, the proxy.internal.maxPathsPerAgent limit (…); path /… refused` | Spread the paths across more agents, or raise the limit. |
 | `Invalid path: /… is the service discovery path, which the proxy serves itself` | The proxy serves that path itself, as it does `favicon.ico` and, when enabled, the [Blitz verification path](service-discovery.md#labels). Rename it. |
 
 See [Consolidated Mode](advanced.md#consolidated-mode) for the all-or-nothing rule. The agent retries the
-consolidation and identity conflicts, which clear once the agents serving the path leave; it doesn't retry
-the others while it stays connected.
+consolidation and identity conflicts, and a path another agent took over, which clear once the agents serving the path
+leave; it doesn't retry the others while it stays connected.
 
 The proxy logs the first rejection of a path for an agent connection at WARN, and an identical repeat at
 DEBUG -- an agent retries a rejection that can clear, and a lasting conflict would otherwise fill the log.
@@ -196,9 +197,14 @@ serves a path, and the agent it displaced stays connected without it. The proxy 
 agentId 1 keeps its connection without paths after agentId 2, of another launch, took over /orders_metrics; ...
 ```
 
+The proxy tells the displaced agent, which logs a WARN naming the agent that took the path, and its
+[dashboard](agent-dashboard.md) shows the path `retrying`, taken over by that agent. It takes the path back once no
+agent serves it, within seconds, without reconnecting, and never while the other agent does.
+
 If both agents should serve the paths, set `agent.consolidated = true` on each. If only one should, remove the
 paths from the other's config, or stop it. Earlier versions disconnected the displaced agent, so the two took the
-paths from each other in turn, each reconnecting every few seconds.
+paths from each other in turn, each reconnecting every few seconds. Agents and proxies predating the notice show a
+taken-over path as registered on the displaced agent, which takes it back only when it reconnects.
 
 ---
 

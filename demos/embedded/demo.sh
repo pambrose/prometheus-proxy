@@ -565,8 +565,9 @@ cmd_tour() {
     instruct "Open version 1.1's agent dashboard: $NEXT_AGENT_DASHBOARD_URL" \
       "Each version's agent serves its own dashboard, from inside its own app. 1.1's lists the two paths registered," \
       "with Prometheus's scrapes arriving, and its Activity view shows it connecting and registering them. 1.0's" \
-      "stopped with its app. Until then, it still read the paths as registered: the proxy doesn't tell an agent when" \
-      "it gives one of its paths to another, so which agent holds a path is the proxy dashboard's to show."
+      "stopped with its app. Until then, it showed the paths as retrying, taken over by coffee-shop-1.1: the proxy" \
+      "tells an agent when it gives one of its paths to another, and the agent takes the path back if the other" \
+      "goes away first, as a failed deploy's new version does."
     step "Put version 1.0 back, so the tour can be run again." -- rollback
   fi
 
@@ -729,9 +730,10 @@ main() {
     bold "Version 1.1 serves the shop and its paths, and version 1.0 has stopped"
     how_it_works "This starts coffee-shop-next, version 1.1 of the same image, which the compose file keeps in a" \
       "profile of its own, deploy. Its agent registers the same paths as 1.0's, with the same token, and the proxy" \
-      "gives each path to the newer registration, as the log line above shows. 1.0's agent stays connected without" \
-      "paths until its app stops, which this then does, as the end of a rolling deploy would. The load balancer in" \
-      "front of the shop, its one address, sends requests to 1.0 while it runs, and to 1.1 once it has stopped."
+      "gives each path to the newer registration, as the log line above shows, and tells 1.0's agent. That agent" \
+      "stays connected without paths, ready to take them back should 1.1 go away, until its app stops, which this" \
+      "then does, as the end of a rolling deploy would. The load balancer in front of the shop, its one address," \
+      "sends requests to 1.0 while it runs, and to 1.1 once it has stopped."
     watch_for
     point "The coffee shop's page, $APP_URL, now reads Version 1.1, at the same address. 1.1 is a new process, so" \
       "its counts start from zero, and its queue, baristas, and machine are as the shop opened: the knobs now act" \
@@ -740,9 +742,10 @@ main() {
       "stops."
     point "Version 1.1's agent has a dashboard of its own, inside its app, which lists the two paths registered:" \
       "$NEXT_AGENT_DASHBOARD_URL"
-    point "1.0's agent isn't told the proxy gave its paths to 1.1: until 1.0 stopped, its dashboard still read them" \
-      "as registered, though no more scrapes reached them. Its dashboard stopped with its app, and answers again" \
-      "after a rollback: $AGENT_DASHBOARD_URL"
+    point "The proxy told 1.0's agent it gave the paths to 1.1: until 1.0 stopped, its dashboard showed them as" \
+      "retrying, taken over by coffee-shop-1.1. Had 1.1 stopped first, as a failed deploy's does, 1.0's agent would" \
+      "have taken them back within seconds. Its dashboard stopped with its app, and answers again after a rollback:" \
+      "$AGENT_DASHBOARD_URL"
     point "In Grafana, the graphs go on without a gap: Prometheus scraped the path through 1.0's agent, then 1.1's," \
       "and rate() takes the counters starting again in its stride."
     follow_up "To put 1.0 back, run" "$0 rollback"

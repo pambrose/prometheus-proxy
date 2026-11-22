@@ -46,6 +46,7 @@ internal enum class AgentActivityKind(
   FAILED_BACK("back to primary"),
   PATH_REGISTERED("registered"),
   PATH_REFUSED("refused", isProblem = true),
+  PATH_TAKEN_OVER("taken over", isNotice = true),
   PATH_UNREGISTERED("unregistered"),
   DISCOVERY_FAILED("discovery failed", isProblem = true),
   DISCOVERY_SKIPPED("entries skipped", isProblem = true),

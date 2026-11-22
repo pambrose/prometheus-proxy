@@ -289,15 +289,20 @@ in `config/agent-*.conf`). This part starts with agent-rogue, which part 8 left 
 
 - Someone deployed agent-east's config twice. The copy registers the same paths, with the same identity, and the
   newer registration takes each one: the dashboard shows agent-east-copy with 6 paths and agent-east with 0.
-- They settle. agent-east stays connected without paths rather than reconnecting and taking them back, which used to
-  make two such agents swap the paths every few seconds. The command prints the proxy's log line, which names both
-  agents and says the fix: `agent.consolidated = true` on each, if both should serve the paths.
+- They settle. agent-east stays connected without paths, and waits rather than taking them back, which used to make
+  two such agents swap the paths every few seconds. The command prints the proxy's log line, which names both agents
+  and says the fix: `agent.consolidated = true` on each, if both should serve the paths.
+- The proxy told agent-east. Its own dashboard, <http://localhost:8095/dashboard>, lists its six paths as `retrying`,
+  each taken over by agent-east-copy, and its **Activity** view has the takeover.
 - The copy's own dashboard lists the six paths, each green, since the proxy accepted every one:
   <http://localhost:8099/dashboard>
 
 ```bash
-./demo.sh duplicate-agent-stop   # removes the copy, and restarts agent-east to register again
+./demo.sh duplicate-agent-stop   # removes the copy; agent-east takes its paths back
 ```
+
+The proxy tells agent-east, which was waiting, that no agent serves its paths any more, and it takes them back within
+seconds, on the connection it kept, with no restart.
 
 ### 11. A login for the dashboard
 
@@ -337,7 +342,7 @@ resources.
 | `demo.sh rogue-agent` / `rogue-agent-stop` | Starts or removes the contractor's agent | Starts or removes `agent-rogue` (compose profile `rogue`), which presents the contractor identity's token, allowed only `contractor_*` paths |
 | `demo.sh proxy-down` / `proxy-up` | Stops or starts the proxy | `docker compose stop` / `start proxy`: each agent's connection closes, and the agent tries again every 3 seconds (`agent.internal.reconnectPauseSecs`) until the proxy is back |
 | `demo.sh login` / `login-off` | Turns the dashboard's login on (`admin`, password `admin`) or off | Restarts the proxy with or without `DASHBOARD_PASSWORD`, from `DEMO_DASHBOARD_PASSWORD` in `docker/compose.yml` |
-| `demo.sh duplicate-agent` / `duplicate-agent-stop` | Starts a second copy of agent-east, or removes it and restarts agent-east | Starts or removes `agent-east-copy` (profile `duplicate`): agent-east's config under another name, not consolidated |
+| `demo.sh duplicate-agent` / `duplicate-agent-stop` | Starts a second copy of agent-east, or removes it, and agent-east takes its paths back | Starts or removes `agent-east-copy` (profile `duplicate`): agent-east's config under another name, not consolidated |
 | `make tour [PART=n]` | Walks through the guided tour above, from part 1 or the one given, pausing before each step |  |
 | `make status` | The containers, the services' modes, and the URLs |  |
 | `make logs [SERVICE=name]` | Follows the logs, of every service or the one given |  |

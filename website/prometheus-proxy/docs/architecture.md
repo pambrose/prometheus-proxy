@@ -65,6 +65,7 @@ The communication between Proxy and Agent uses a bidirectional gRPC protocol def
 | `writeResponsesToProxy`        | Client-streaming | Agent sends scrape responses back                |
 | `writeChunkedResponsesToProxy` | Client-streaming | Agent sends chunked responses for large payloads |
 | `sendHeartBeat`                | Unary            | Keep-alive during periods of inactivity          |
+| `readPathNoticesFromProxy`     | Server-streaming | Proxy tells agent another agent took its path, or that the path is free again |
 
 ## Chunking
 

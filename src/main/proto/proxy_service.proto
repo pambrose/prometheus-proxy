@@ -18,6 +18,10 @@ message RegisterAgentRequest {
   // an agent predating them simply leaves them unset.
   repeated string proxy_endpoints = 7;
   int32 current_endpoint_index = 8;
+  // Whether the agent reads readPathNoticesFromProxy, and so can be told that another agent took a path over and when
+  // that path is free again. Additive both ways: a proxy keeps no notices for an agent predating it, which leaves it
+  // false, and a proxy predating it ignores it.
+  bool path_notices = 9;
 }
 
 message RegisterAgentResponse {
@@ -44,6 +48,10 @@ message RegisterPathRequest {
   // A PathSource name -- STATIC or DISCOVERED. Carried as a string rather than an enum so an agent
   // running ahead of the proxy can add a source without the proxy failing to parse it.
   string path_source = 5;
+  // Register the path only if no live agent of another launch serves it: an agent sends it for a path the proxy told
+  // it was taken over, so it takes the path back once the other agent leaves, never from it while it stays. A proxy
+  // predating it ignores it, which is why an agent sends it only after that proxy sent it a notice.
+  bool reclaim = 6;
 }
 
 message RegisterPathResponse {
@@ -75,6 +83,8 @@ enum PathRejectionCause {
   // The agent already registered proxy.internal.maxPathsPerAgent paths on this connection. Clears only as it frees
   // paths, so an agent doesn't retry it.
   PATH_LIMIT_REACHED = 7;
+  // The registration was a reclaim, and a live agent of another launch serves the path. Clears once that agent leaves.
+  HELD_BY_ANOTHER_AGENT = 8;
 }
 
 message UnregisterPathRequest {
@@ -97,6 +107,16 @@ message PathMapSizeResponse {
 
 message AgentInfo {
   string agent_id = 1;
+}
+
+// What the proxy tells an agent about a path it took from it: that another agent holds it now, or, with both held_by
+// fields empty, that no agent serves it any more. A notice is the path's current state, not an event, so a later one
+// for the same path replaces an earlier one the agent hasn't read yet.
+message PathNotice {
+  // The path, without its leading slash.
+  string path = 1;
+  string held_by_agent_id = 2;
+  string held_by_agent_name = 3;
 }
 
 message ScrapeRequest {
@@ -209,6 +229,11 @@ service ProxyService {
   }
 
   rpc sendHeartBeat (HeartBeatRequest) returns (HeartBeatResponse) {
+  }
+
+  // The notices about paths another agent took from this one, for the connection's lifetime. Only an agent that sent
+  // path_notices at registration calls it; a proxy predating it answers UNIMPLEMENTED.
+  rpc readPathNoticesFromProxy (AgentInfo) returns (stream PathNotice) {
   }
 }
 

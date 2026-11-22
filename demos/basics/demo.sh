@@ -104,7 +104,7 @@ Scenarios:
   proxy-down               Stop the proxy, so every agent loses it
   proxy-up                 Start it again; the agents reconnect
   duplicate-agent          Start a second copy of agent-east, without consolidated mode
-  duplicate-agent-stop     Remove it, and restart agent-east so it registers its paths again
+  duplicate-agent-stop     Remove it; agent-east takes its paths back
   login                    Restart the proxy with the dashboard's login on (admin, password $LOGIN_PASSWORD)
   login-off                Restart it with the login off
 
@@ -600,7 +600,7 @@ cmd_tour() {
   if part 10 "Someone deploys agent-east's config a second time by mistake, without consolidated mode. Here you" \
     "see what the proxy does with the two agents, and what it tells the operator."; then
     step "Start a second copy of agent-east, without consolidated mode." -- duplicate-agent
-    step "Remove the copy, and restart agent-east so it registers its paths again." -- duplicate-agent-stop
+    step "Remove the copy, and watch agent-east take its paths back." -- duplicate-agent-stop
   fi
 
   if part 11 "The proxy's dashboard can ask for a login, with a password from the proxy's environment. Here you" \
@@ -840,8 +840,10 @@ main() {
     watch_for
     point "The copy registers the same paths with the same identity, and the newer registration takes each one: the" \
       "dashboard shows agent-east-copy with agent-east's paths, and agent-east with 0."
-    point "The two settle. agent-east stays connected without paths rather than reconnecting to take them back," \
-      "which used to make two such agents swap the paths every few seconds."
+    point "The two settle. agent-east stays connected without paths, and waits rather than taking them back, which" \
+      "used to make two such agents swap the paths every few seconds."
+    point "The proxy told agent-east. Its own dashboard lists its six paths as retrying, each taken over by" \
+      "agent-east-copy, and its Activity view has the takeover, at $EAST_DASHBOARD_URL"
     point "The proxy's log line, printed below, names both agents and gives the fix: set agent.consolidated = true" \
       "on each, if both should serve the paths."
     point "The copy's own dashboard lists the six paths, each with a green light, since the proxy accepted every one," \
@@ -851,14 +853,12 @@ main() {
     ;;
   duplicate-agent-stop)
     "${COMPOSE[@]}" --profile duplicate rm --stop --force agent-east-copy
-    "${COMPOSE[@]}" restart agent-east
-    bold "agent-east-copy removed, and agent-east restarted"
-    how_it_works "This stops and removes the agent-east-copy container, and its paths leave with it. agent-east kept" \
-      "its connection without paths and doesn't take them back on its own, so this then restarts it with docker" \
-      "compose restart, and it registers the paths in its config as it starts."
+    bold "agent-east-copy removed"
+    how_it_works "This stops and removes the agent-east-copy container, and its paths leave with it. The proxy tells" \
+      "agent-east, which was waiting for them, that no agent serves them any more."
     watch_for
-    point "The paths left with the copy. agent-east, which kept none, registers them again as it starts, within a" \
-      "few seconds."
+    point "agent-east takes its six paths back within seconds, on the connection it kept, with no restart: its" \
+      "dashboard lists them registered again, and the proxy's shows agent-east serving them."
     ;;
   "" | help | -h | --help) usage ;;
   login)

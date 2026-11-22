@@ -66,6 +66,7 @@ import io.prometheus.grpc.chunkedScrapeResponse
 import io.prometheus.grpc.headerData
 import io.prometheus.grpc.heartBeatRequest
 import io.prometheus.grpc.pathMapSizeRequest
+import io.prometheus.grpc.pathNotice
 import io.prometheus.grpc.registerAgentRequest
 import io.prometheus.grpc.registerPathRequest
 import io.prometheus.grpc.scrapeResponse
@@ -76,11 +77,14 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.util.zip.CRC32
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TestTimeSource
 
@@ -992,6 +996,101 @@ class ProxyServiceImplTest : StringSpec() {
       exception.status.code shouldBe Status.PERMISSION_DENIED.code
       // Draining the victim's scrape queue must not happen.
       coVerify(exactly = 0) { victimContext.readScrapeRequest() }
+    }
+
+    // ==================== Path Notice and Reclaim Tests ====================
+
+    "registerPath should pass the reclaim flag to addPath" {
+      val proxy = createMockProxy()
+      val mockAgentContext = mockk<AgentContext>(relaxed = true)
+      every { mockAgentContext.agentId } returns "reclaiming-agent"
+      every { proxy.agentContextManager.getAgentContext("reclaiming-agent") } returns mockAgentContext
+      val pathManager = proxy.pathManager
+      every { pathManager.addPath("metrics", any(), mockAgentContext, any()) } returns null
+
+      ProxyServiceImpl(proxy).registerPath(
+        registerPathRequest {
+          agentId = "reclaiming-agent"
+          path = "metrics"
+          reclaim = true
+        },
+      )
+
+      verify { pathManager.addPath("metrics", any(), mockAgentContext, match { it.reclaim }) }
+    }
+
+    "readPathNoticesFromProxy should emit the context's path notices" {
+      val proxy = createMockProxy()
+      val context = AgentContext("remote")
+      every { proxy.agentContextManager.getAgentContext(context.agentId) } returns context
+      val notice = pathNotice {
+        path = "metrics"
+        heldByAgentId = "taker"
+        heldByAgentName = "taker-name"
+      }
+      context.queuePathNotice(notice)
+
+      ProxyServiceImpl(proxy).readPathNoticesFromProxy(agentInfo { agentId = context.agentId }).first() shouldBe notice
+    }
+
+    // A stream that sends nothing is closed by a reverse proxy in front of the proxy, such as nginx after its
+    // grpc_read_timeout, and its end ends the agent's connection. A notice with no path keeps it open.
+    "readPathNoticesFromProxy should send a keepalive while no notice comes" {
+      val proxy = createMockProxy()
+      val context = AgentContext("remote")
+      every { proxy.agentContextManager.getAgentContext(context.agentId) } returns context
+
+      val first =
+        ProxyServiceImpl(proxy, pathNoticeKeepalive = 50.milliseconds)
+          .readPathNoticesFromProxy(agentInfo { agentId = context.agentId })
+          .first()
+
+      first.path shouldBe ""
+    }
+
+    // The stream ends with the context; with the transport filter disabled, readRequestsFromProxy removes it.
+    "readPathNoticesFromProxy should end once the context is invalidated, without removing it" {
+      val proxy = createMockProxy(transportFilterDisabled = true)
+      val context = AgentContext("remote")
+      every { proxy.agentContextManager.getAgentContext(context.agentId) } returns context
+      context.invalidate()
+
+      ProxyServiceImpl(proxy).readPathNoticesFromProxy(agentInfo { agentId = context.agentId }).toList().shouldBeEmpty()
+
+      verify(exactly = 0) { proxy.removeAgentContext(any(), any()) }
+      verify(exactly = 0) { proxy.removeAgentContextIfCurrent(any(), any()) }
+    }
+
+    "readPathNoticesFromProxy should reject a request whose agentId is not the connection's" {
+      val proxy = createMockProxy()
+      val victimContext = AgentContext("victim")
+      every { proxy.agentContextManager.getAgentContext(victimContext.agentId) } returns victimContext
+
+      val context = Context.current().withValue(ProxyServerInterceptor.CONNECTION_AGENT_ID_KEY, "attacker-agent")
+      val previous = context.attach()
+      val exception =
+        try {
+          shouldThrow<StatusException> {
+            ProxyServiceImpl(proxy).readPathNoticesFromProxy(agentInfo { agentId = victimContext.agentId }).collect {}
+          }
+        } finally {
+          context.detach(previous)
+        }
+
+      exception.status.code shouldBe Status.PERMISSION_DENIED.code
+      exception.status.description shouldContain "readPathNoticesFromProxy"
+    }
+
+    "readPathNoticesFromProxy should throw NOT_FOUND when agent context is missing" {
+      val proxy = createMockProxy()
+      every { proxy.agentContextManager.getAgentContext("missing-agent") } returns null
+
+      val exception =
+        shouldThrow<StatusException> {
+          ProxyServiceImpl(proxy).readPathNoticesFromProxy(agentInfo { agentId = "missing-agent" }).collect {}
+        }
+
+      exception.status.code shouldBe Status.NOT_FOUND.code
     }
 
     "unregisterPath should succeed with valid agent context" {

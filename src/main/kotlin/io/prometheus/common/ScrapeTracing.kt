@@ -39,7 +39,8 @@ import kotlin.coroutines.cancellation.CancellationException
  * spans can't show one scrape of.
  *
  * Both are kept at [sampleRate], except heartbeats, which never are: an idle agent sends one every few seconds, and
- * they buried the calls a trace is wanted for. A scrape's spans are passed from call to call, never put in scope:
+ * they buried the calls a trace is wanted for. Nor is the path notices stream, which lasts the connection and carries
+ * nothing a trace is wanted for. A scrape's spans are passed from call to call, never put in scope:
  * Brave's current span is thread-local, which a coroutine that moves between threads breaks.
  *
  * @param tracing the process's tracing, from its Zipkin reporter, which [close] closes
@@ -67,6 +68,7 @@ internal class ScrapeTracing(
   internal val rpcSampler: SamplerFunction<RpcRequest> =
     RpcRuleSampler.newBuilder()
       .putRule(methodEquals<RpcRequest>(HEARTBEAT_METHOD), Sampler.NEVER_SAMPLE)
+      .putRule(methodEquals<RpcRequest>(PATH_NOTICES_METHOD), Sampler.NEVER_SAMPLE)
       .putRule(Matchers.alwaysMatch<RpcRequest>(), sampler)
       .build()
 
@@ -106,6 +108,8 @@ internal class ScrapeTracing(
   companion object {
     // Brave's gRPC instrumentation matches the bare method name, as the generated stub gives it.
     internal val HEARTBEAT_METHOD: String = checkNotNull(ProxyServiceGrpc.getSendHeartBeatMethod().bareMethodName)
+    internal val PATH_NOTICES_METHOD: String =
+      checkNotNull(ProxyServiceGrpc.getReadPathNoticesFromProxyMethod().bareMethodName)
 
     /** The proxy's span of a scrape, from Prometheus's request to its answer. */
     const val SCRAPE_SPAN = "scrape"

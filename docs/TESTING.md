@@ -877,6 +877,11 @@ mechanism that the standard suite cannot reach:
 - **AgentPathAuthTest** — per-agent identity with path-glob authorization, over Netty so the token header
   actually crosses the wire; a security boundary. Its `proxy.auth` list is in `config/test-configs/path-auth.conf`,
   read through `HarnessConstants.localConfigFile`
+- **AgentPathTakeoverTest** — two agents of different launches register the same exclusive path, and the later
+  takes it over: the proxy tells the first, which shows the path as taken over rather than registered, waits while
+  the second holds it, and takes it back on its own connection, within seconds of the second leaving, which a 60s
+  retry couldn't do; and the first is told while scrapes of its other path keep it busy. Its config is
+  `config/test-configs/path-takeover.conf`
 - **AgentProxyFailoverTest** — the agent lands on its second endpoint once the first proxy stops. Netty
   only: an in-process channel ignores host and port, so failover cannot be expressed there
 - **AgentRejectedPathRetryTest** — a static path rejected because a live agent of another identity serves it

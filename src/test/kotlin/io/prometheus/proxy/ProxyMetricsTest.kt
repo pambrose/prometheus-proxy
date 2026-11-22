@@ -453,9 +453,17 @@ class ProxyMetricsTest : StringSpec() {
           "invalid_agent",
           "binding_mismatch",
           "path_limit_reached",
+          "held_by_another_agent",
         )
       labels("proxy_binding_mismatches", "rpc") shouldContainAll
-        listOf("registerAgent", "registerPath", "sendHeartBeat", "readRequestsFromProxy", "writeResponsesToProxy")
+        listOf(
+          "registerAgent",
+          "registerPath",
+          "sendHeartBeat",
+          "readRequestsFromProxy",
+          "readPathNoticesFromProxy",
+          "writeResponsesToProxy",
+        )
       labels("proxy_dashboard_logins", "outcome") shouldBe setOf("success", "failure", "blocked")
     }
 

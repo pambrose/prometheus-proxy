@@ -120,6 +120,14 @@ class ScrapeTracingTest : StringSpec() {
       }
     }
 
+    // The notices stream lasts as long as the connection and carries nothing a trace is wanted for.
+    "the path notices stream should never be sampled" {
+      ScrapeTracing.PATH_NOTICES_METHOD shouldBe "readPathNoticesFromProxy"
+      scrapeTracing(1.0).use { tracing ->
+        tracing.rpcSampler.trySample(call(ScrapeTracing.PATH_NOTICES_METHOD)) shouldBe false
+      }
+    }
+
     "a span should be tagged with its scrape's outcomes and status, and as an error unless every one succeeded" {
       scrapeTracing(1.0).use { tracing ->
         tracing.newTrace(SCRAPE_SPAN).endedAs(listOf("success", "success"), 200).finish()
