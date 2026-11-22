@@ -65,7 +65,8 @@ All notable changes to this project are documented in this file.
   dashboards' tab icon, top bar, and login page
 - Each dashboard's top bar and tab title say which process it is: `Proxy: <host>:<port>`, the host's name as the
   machine gives it and `proxy.http.port`, or `Agent: <name>`, `agent.name`. A name past 48 characters is cut with an
-  ellipsis and shown whole in its tooltip. The tab titles read `prometheus-proxy` and `prometheus-agent` before
+  ellipsis and shown whole in its tooltip. The tab titles read `prometheus-proxy` and `prometheus-agent` before, the
+  same for every proxy and agent
 - Each scrape is a Zipkin trace of its own: the proxy's `scrape` span, a `forward` span for each of the path's agents,
   annotated when the request reaches the agent's stream, and the agent's `fetch` span of the target, which joins the
   trace through `ScrapeRequest`'s new `trace_context`. Tracing showed only connections and registrations, since scrapes
