@@ -95,6 +95,13 @@ All notable changes to this project are documented in this file.
 - `EmbeddedAgentConfig.toString()` showed a token or a PEM that `setting()` set under a key in another case, such as
   `agenttoken` or `tls.privatekeypem`, which Spring Boot gives a map key read from an environment variable. It now
   matches a secret's key in any case
+- An agent whose path another agent took over, without consolidated mode, is now told. Its dashboard showed the path
+  registered for as long as the other agent held it, and once that agent left, the path went unserved until the
+  displaced agent reconnected, which a failed rolling deploy's old version never did. It now shows the path `retrying`,
+  taken over by the other agent, in its log and Activity view too, and takes the path back within seconds of no agent
+  serving it, without reconnecting, never while the other agent serves it. Its attempts count in the rejection metrics
+  as the new cause `held_by_another_agent`. The proxy tells it on a stream of its own, which sends a keepalive every
+  30 seconds so a reverse proxy such as nginx doesn't close it. Agents and proxies predating this behave as before
 
 ### Behavior Changes
 

@@ -175,6 +175,19 @@ class AgentDashboardHtmlTest : StringSpec() {
       }
     }
 
+    // The proxy took nothing from the agent: it gave the path to another agent, which the agent waits out.
+    "a path another agent took over should say so, with who holds it, as retrying" {
+      val failure = refusal(reason = "Taken over by agent-east-copy", retrying = true).copy(takenOver = true)
+      val path =
+        AgentPathView("orders", PathSource.STATIC, "http://orders/metrics", PathState.RETRYING, failure = failure)
+      page(snapshot([path]), selected = "orders").apply {
+        this shouldContain "Taken over by another agent"
+        this shouldNotContain "Refused by the proxy"
+        this shouldContain "Taken over by agent-east-copy"
+        this shouldContain """<span class="tag warn">retrying</span>"""
+      }
+    }
+
     "a retry's wait should read as a countdown, and one already due as the next retry" {
       val clock = TestTimeSource()
       val due = clock.markNow() + 90.seconds

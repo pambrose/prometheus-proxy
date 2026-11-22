@@ -297,10 +297,11 @@ holds nothing from the old one, so the proxy's dashboard starts its histories ov
 
 Someone deployed agent-east's config twice. The copy registers the same paths with the same identity, and the newer
 registration takes each one: agent-east-copy serves all six, and agent-east stays connected with none. The two
-settle; agent-east doesn't reconnect and take the paths back, which used to make two such agents swap them every few
+settle; agent-east waits rather than taking the paths back, which used to make two such agents swap them every few
 seconds. The command prints the proxy's log line, which names both agents and gives the fix: `agent.consolidated =
-true` on each, if both should serve the paths. `./demo.sh duplicate-agent-stop` removes the copy and restarts
-agent-east, which registers its paths again.
+true` on each, if both should serve the paths. The proxy told agent-east, whose own dashboard lists its six paths as
+`retrying`, each taken over by agent-east-copy. `./demo.sh duplicate-agent-stop` removes the copy, and agent-east,
+told that no agent serves its paths any more, takes them back within seconds, with no restart.
 
 ### A login for the dashboard
 
@@ -335,7 +336,7 @@ tour does this last: the agents reconnect within a few seconds, and the dashboar
 | `demo.sh rogue-agent` / `rogue-agent-stop` | Starts or removes the contractor's agent | Starts or removes `agent-rogue` (compose profile `rogue`), which presents the contractor identity's token, allowed only `contractor_*` paths |
 | `demo.sh proxy-down` / `proxy-up` | Stops or starts the proxy | `docker compose stop` / `start proxy`: each agent's connection closes, and the agent tries again every 3 seconds (`agent.internal.reconnectPauseSecs`) until the proxy is back |
 | `demo.sh login` / `login-off` | Turns the dashboard's login on (`admin`, password `admin`) or off | Restarts the proxy with or without `DASHBOARD_PASSWORD`, from `DEMO_DASHBOARD_PASSWORD` in `docker/compose.yml` |
-| `demo.sh duplicate-agent` / `duplicate-agent-stop` | Starts a second copy of agent-east, or removes it and restarts agent-east | Starts or removes `agent-east-copy` (profile `duplicate`): agent-east's config under another name, not consolidated |
+| `demo.sh duplicate-agent` / `duplicate-agent-stop` | Starts a second copy of agent-east, or removes it, and agent-east takes its paths back | Starts or removes `agent-east-copy` (profile `duplicate`): agent-east's config under another name, not consolidated |
 | `make tour [PART=n]` | Walks through every scenario, from part 1 or the one given, pausing before each step |  |
 | `make status` | The containers, the services' modes, and the URLs |  |
 | `make logs [SERVICE=name]` | Follows the logs, of every service or the one given |  |

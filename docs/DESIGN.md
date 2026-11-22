@@ -917,7 +917,8 @@ bar, master–detail panes, key–value rows, filtered table, and script, from `
   in the row's secondary type, carries the path's last Status Pill and its History strip, the Path Table's, once the
   proxy has scraped it, or says a registered path isn't scraped yet. The detail's hero carries the
   same tag, `registered` included, and the Scrape now icon button. Below it are the proxy's reason, its time, and when
-  the path is tried again, then the labels, the metric filter, and Recent scrapes: key–value rows of time, Status
+  the path is tried again, under `Taken over by another agent` for a path the proxy gave to another agent, a `retrying`
+  one, then the labels, the metric filter, and Recent scrapes: key–value rows of time, Status
   Pill, and what the agent did with the body, a scrape from the proxy's dashboard tagged neutral. The scrape-now result
   panel sits above the master–detail panes, outside every push, as it sits above the Path Table.
 - **Connection**: a hero whose LED is green only while connected, with `failed over` as on the agent detail. Then the
@@ -925,8 +926,8 @@ bar, master–detail panes, key–value rows, filtered table, and script, from `
   discovery.
 - **Activity**, the proxy's Activity layout on the agent's events: the same search, column guide, and flat table
   (Time, Event, Path, Detail), newest first. A problem (`connect failed`, `refused`, `discovery failed`,
-  `entries skipped`, `not filtered`) is a crit tag and news that isn't a fault (`disconnected`, `failed over`) a warn
-  one, as `taken over` is on the proxy's; the rest is plain text, and ×N counts a run.
+  `entries skipped`, `not filtered`) is a crit tag and news that isn't a fault (`disconnected`, `failed over`,
+  `taken over`) a warn one, as `taken over` is on the proxy's; the rest is plain text, and ×N counts a run.
 - **Settings**, the proxy's Settings layout on the agent's settings: the Settings List.
 
 The status bar names the connection's state in its color, warn for `connecting`, where amber means true but not yet a

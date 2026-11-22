@@ -253,6 +253,7 @@ _tla-tools:
 tla-checks: _tla-tools  ## Model-check the TLA+ specs in specs/tla (the quick configs; fetches the pinned TLA+ tools if needed)
 	$(TLC) -metadir $(CURDIR)/build/tla/AgentFailover -config AgentFailover.cfg AgentFailover.tla
 	$(TLC) -metadir $(CURDIR)/build/tla/ProxyRegistry -config ProxyRegistry.cfg ProxyRegistry.tla
+	$(TLC) -metadir $(CURDIR)/build/tla/ProxyRegistryReclaim -config ProxyRegistryReclaim.cfg ProxyRegistry.tla
 
 # Each demo's Prometheus config is checked as the demo's Prometheus sees it, with the rule files the demo mounts where
 # its rule_files glob looks, so promtool also checks the demo's alerting rules and that the config loads them. The

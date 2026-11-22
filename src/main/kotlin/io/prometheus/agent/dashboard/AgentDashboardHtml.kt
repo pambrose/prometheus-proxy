@@ -316,7 +316,13 @@ internal object AgentDashboardHtml {
 
   // Why the path isn't registered: the proxy's reason, or what kept it from answering, when, and when it's next tried.
   private fun DIV.failureSection(failure: RegistrationFailure) {
-    div("section") { span { +if (failure.refused) "Refused by the proxy" else "Couldn't reach the proxy" } }
+    val heading =
+      when {
+        failure.takenOver -> "Taken over by another agent"
+        failure.refused -> "Refused by the proxy"
+        else -> "Couldn't reach the proxy"
+      }
+    div("section") { span { +heading } }
     div("kv") {
       span("t") { timeOfDay(failure.reason.at) }
       span("v") { +failure.reason.message.ifEmpty { DASH } }

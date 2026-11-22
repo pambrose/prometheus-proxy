@@ -301,7 +301,9 @@ events. A displaced agent of another launch stays connected without the path, so
 two agents claiming the same exclusive path settle with the later one serving it,
 and the counter rises once per path rather than on every reconnect; a redeploy or
 a deliberate failover looks the same. The proxy logs, at INFO, each agent left
-connected without paths and the agent that took them. A live agent's path is
+connected without paths and the agent that took them, and tells the displaced
+agent, which takes the path back once no agent serves it; each refused attempt
+counts in `proxy_path_rejections_total` as `held_by_another_agent`. A live agent's path is
 displaced only by an agent of the same auth identity, as in a redeploy; another
 identity's registration is rejected and logged at WARN instead.
 

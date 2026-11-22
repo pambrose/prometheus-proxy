@@ -79,6 +79,7 @@ import io.prometheus.grpc.agentInfo
 import io.prometheus.grpc.heartBeatResponse
 import io.prometheus.grpc.registerAgentResponse
 import io.prometheus.grpc.registerPathResponse
+import io.prometheus.grpc.pathNotice
 import io.prometheus.grpc.scrapeRequest
 import io.prometheus.grpc.unregisterPathResponse
 import io.prometheus.common.captureLogs
@@ -91,10 +92,12 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.consumeAsFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import java.lang.reflect.InvocationTargetException
 import java.net.InetAddress
 import java.net.ServerSocket
@@ -669,6 +672,17 @@ class AgentGrpcServiceTest : StringSpec() {
       }
     }
 
+    // What makes the proxy keep notices for the agent, which only an agent that reads them may say.
+    "registerAgent should say the agent reads path notices" {
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
+        coEvery { mockStub.registerAgent(any(), any<Metadata>()) } returns registerAgentResponse { valid = true }
+
+        service.registerAgent(CountDownLatch(1))
+
+        coVerify { mockStub.registerAgent(match { it.pathNotices }, any<Metadata>()) }
+      }
+    }
+
     "registerAgent should throw RequestFailureException on invalid response" {
       withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
         coEvery { mockStub.registerAgent(any(), any<Metadata>()) } returns registerAgentResponse {
@@ -939,6 +953,101 @@ class AgentGrpcServiceTest : StringSpec() {
 
         result shouldBe HeartBeatResult.SUCCESS
         coVerify { mockStub.sendHeartBeat(match { it.agentId == "test-agent-123" }, any<Metadata>()) }
+      }
+    }
+
+    // ==================== reclaimPathOnProxy Tests ====================
+
+    // A reclaim is a registration the proxy refuses while a live agent of another launch serves the path.
+    "reclaimPathOnProxy should send the registration as a reclaim, and registerPathOnProxy not" {
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
+        coEvery { mockStub.registerPath(any(), any<Metadata>()) } returns registerPathResponse { valid = true }
+
+        service.reclaimPathOnProxy("metrics", "{}", "http://ops:s3cret@t/metrics", "DISCOVERED")
+        service.registerPathOnProxy("other", "{}", "http://t/metrics", "STATIC")
+
+        coVerify {
+          mockStub.registerPath(
+            match {
+              it.path == "metrics" && it.reclaim && it.pathSource == "DISCOVERED" && "s3cret" !in it.targetUrl
+            },
+            any<Metadata>(),
+          )
+        }
+        coVerify { mockStub.registerPath(match { it.path == "other" && !it.reclaim }, any<Metadata>()) }
+      }
+    }
+
+    "reclaimPathOnProxy should throw the proxy's refusal, with its cause" {
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
+        coEvery { mockStub.registerPath(any(), any<Metadata>()) } returns
+          registerPathResponse {
+            valid = false
+            reason = "held"
+            rejectionCause = PathRejectionCause.HELD_BY_ANOTHER_AGENT
+          }
+
+        val e =
+          shouldThrow<RequestFailureException> { service.reclaimPathOnProxy("metrics", "{}", "http://t/m", "STATIC") }
+
+        e.rejectionCause shouldBe PathRejectionCause.HELD_BY_ANOTHER_AGENT
+      }
+    }
+
+    // ==================== readPathNoticesFromProxy Tests ====================
+
+    "readPathNoticesFromProxy should hand each notice to the path manager" {
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
+      val pathManager = mockk<AgentPathManager>(relaxed = true)
+      every { agent.pathManager } returns pathManager
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+      val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
+      val notice = pathNotice {
+        path = "metrics"
+        heldByAgentId = "holder"
+      }
+      every { mockStub.readPathNoticesFromProxy(any(), any()) } returns flowOf(notice)
+      service.grpcStub = mockStub
+
+      try {
+        service.readPathNoticesFromProxy()
+      } finally {
+        service.shutDown()
+      }
+
+      verify { pathManager.notePathNotice(notice) }
+      verify { mockStub.readPathNoticesFromProxy(match { it.agentId == "test-agent-123" }, any()) }
+    }
+
+    // A proxy predating notices has no such method. Ending the task would end the connection, and the agent would
+    // reconnect to that proxy without end.
+    "readPathNoticesFromProxy should wait out the connection on a proxy that predates it" {
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+      val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
+      every { mockStub.readPathNoticesFromProxy(any(), any()) } returns
+        flow { throw StatusException(Status.UNIMPLEMENTED) }
+      service.grpcStub = mockStub
+
+      try {
+        withTimeoutOrNull(300.milliseconds) { service.readPathNoticesFromProxy() }.shouldBeNull()
+      } finally {
+        service.shutDown()
+      }
+    }
+
+    "readPathNoticesFromProxy should end the connection on any other failure" {
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+      val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
+      every { mockStub.readPathNoticesFromProxy(any(), any()) } returns
+        flow { throw StatusException(Status.UNAVAILABLE) }
+      service.grpcStub = mockStub
+
+      try {
+        shouldThrow<StatusException> { service.readPathNoticesFromProxy() }.status.code shouldBe Status.Code.UNAVAILABLE
+      } finally {
+        service.shutDown()
       }
     }
 

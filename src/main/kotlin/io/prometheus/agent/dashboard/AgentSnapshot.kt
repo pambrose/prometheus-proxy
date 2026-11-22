@@ -243,8 +243,9 @@ internal data class AgentSnapshot(
       )
     }
 
-    // Every path the agent knows: configured, discovered, or registered, one row each, by path. Configured first, so a
-    // path's name and labels come from its config entry. A path whose registration failed is configured or discovered.
+    // Every path the agent knows: configured, discovered, registered, or taken over by another agent, one row each, by
+    // path. Configured first, so a path's name and labels come from its config entry. A path whose registration failed
+    // is configured or discovered; one taken over may have been registered at runtime, which only its context shows.
     internal fun paths(agent: Agent): List<AgentPathView> {
       val manager = agent.pathManager
       val registered = manager.registeredPaths.associateBy { it.path }
@@ -252,7 +253,9 @@ internal data class AgentSnapshot(
       val histories = agent.scrapeHistory?.snapshot().orEmpty()
       val known =
         configured(agent) + discovered(agent) +
-          registered.values.map { KnownPath(it.path, it.source, it.url, labels = it.labels) }
+          (registered.values + manager.takenOverContexts).map {
+            KnownPath(it.path, it.source, it.url, labels = it.labels)
+          }
       return known
         .distinctBy { it.path }
         .map {

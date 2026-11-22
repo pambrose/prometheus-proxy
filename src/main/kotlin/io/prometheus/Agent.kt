@@ -469,6 +469,15 @@ class Agent(
       startHeartBeat(connectionContext)
     }
 
+    // The proxy's notices about paths another agent took over, and the task that takes each back once it's free.
+    launchConnectionTask(connectionContext, "readPathNoticesFromProxy") {
+      grpcService.readPathNoticesFromProxy()
+    }
+
+    launchConnectionTask(connectionContext, "reclaimTakenOverPaths") {
+      pathManager.reclaimTakenOverPathsWhile { isConnectionLive(connectionContext) }
+    }
+
     // Dynamic target discovery: reconcile discovered paths for the connection's lifetime. Another task ending cancels
     // it (see launchConnectionTask); it also polls isRunning/connected, as a backstop, as startHeartBeat does.
     pathDiscoveryService?.let { service ->

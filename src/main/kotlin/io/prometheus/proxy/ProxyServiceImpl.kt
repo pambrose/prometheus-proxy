@@ -33,6 +33,7 @@ import io.prometheus.grpc.ChunkedScrapeResponse
 import io.prometheus.grpc.ChunkedScrapeResponse.ChunkOneOfCase
 import io.prometheus.grpc.HeartBeatRequest
 import io.prometheus.grpc.PathMapSizeRequest
+import io.prometheus.grpc.PathNotice
 import io.prometheus.grpc.PathRejectionCause.BINDING_MISMATCH
 import io.prometheus.grpc.PathRejectionCause.INVALID_AGENT
 import io.prometheus.grpc.PathRejectionCause.NOT_AUTHORIZED
@@ -60,6 +61,8 @@ import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.flow
 import kotlin.concurrent.atomics.AtomicLong
 import kotlin.concurrent.atomics.fetchAndIncrement
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.DurationUnit
 
 /**
@@ -78,6 +81,8 @@ import kotlin.time.DurationUnit
  */
 internal class ProxyServiceImpl(
   private val proxy: Proxy,
+  // How long the path notices stream goes without sending before it sends a keepalive; see readPathNoticesFromProxy.
+  private val pathNoticeKeepalive: Duration = PATH_NOTICE_KEEPALIVE,
 ) : ProxyServiceGrpcKt.ProxyServiceCoroutineImplBase() {
   override suspend fun connectAgent(request: Empty): Empty {
     if (proxy.options.transportFilterDisabled) {
@@ -315,6 +320,7 @@ internal class ProxyServiceImpl(
                     pathSource = request.pathSource,
                     // Only the same identity may take over a path a live agent already serves.
                     identityName = identity?.name.orEmpty(),
+                    reclaim = request.reclaim,
                   ),
                 )
             result.also { agentContext.markActivityTime(false) }
@@ -426,7 +432,7 @@ internal class ProxyServiceImpl(
     flow {
       // Looked up, and checked, before the try/finally, so a call that is refused never reaches the cleanup, and the
       // context the cleanup removes is the one checked and streamed.
-      val agentContext = readableAgentContext(request.agentId)
+      val agentContext = readableAgentContext(request.agentId, "readRequestsFromProxy")
       try {
         emitScrapeRequests(agentContext)
       } finally {
@@ -437,8 +443,23 @@ internal class ProxyServiceImpl(
       }
     }
 
+  // Sends the agent the notices about paths another agent took from it, until the proxy stops or the context is
+  // invalidated; see ProxyPathManager.takeOverPath. Unlike readRequestsFromProxy, its end removes nothing, even with
+  // the transport filter disabled: the scrape request stream, which every agent reads, does that. Notices are rare, and
+  // a reverse proxy in front of this one closes a stream that sends nothing for a while, nginx after its
+  // grpc_read_timeout (60s by default), which would end the agent's connection, so it sends a notice with no path,
+  // which the agent ignores, after pathNoticeKeepalive with nothing else.
+  override fun readPathNoticesFromProxy(request: AgentInfo): Flow<PathNotice> =
+    flow {
+      val agentContext = readableAgentContext(request.agentId, "readPathNoticesFromProxy")
+      while (proxy.isStartingOrRunning) {
+        val notices = agentContext.awaitPathNotices(pathNoticeKeepalive) ?: break
+        if (notices.isEmpty()) emit(KEEPALIVE_NOTICE) else notices.forEach { emit(it) }
+      }
+    }
+
   /**
-   * The context whose scrape requests this connection may read: [agentId]'s, from one lookup.
+   * The context whose scrape requests or path notices this connection may read: [agentId]'s, from one lookup.
    *
    * Throws PERMISSION_DENIED when the transport belongs to another agentId, or the caller's auth identity isn't the one
    * the context is bound to, and NOT_FOUND when there is no context. The identity was checked on one lookup and the
@@ -446,11 +467,14 @@ internal class ProxyServiceImpl(
    * free, and then streamed the context another identity connected with under it, or, when the second lookup also
    * found nothing, removed that context as its stream ended (November #14).
    */
-  private fun readableAgentContext(agentId: String): AgentContext {
+  private fun readableAgentContext(
+    agentId: String,
+    rpcName: String,
+  ): AgentContext {
     val agentContext = proxy.agentContextManager.getAgentContext(agentId)
     val denial =
-      connectionMismatchReason(agentId, "readRequestsFromProxy")
-        ?: agentContext?.let { identityMismatchReason(it, "readRequestsFromProxy") }
+      connectionMismatchReason(agentId, rpcName)
+        ?: agentContext?.let { identityMismatchReason(it, rpcName) }
     if (denial != null)
       throw StatusException(Status.PERMISSION_DENIED.withDescription(denial))
     return agentContext
@@ -859,6 +883,10 @@ internal class ProxyServiceImpl(
     private val logger = logger {}
     private val PATH_ID_GENERATOR = AtomicLong(0L)
     private const val RPC_NAME = "writeChunkedResponsesToProxy"
+
+    // Under nginx's default grpc_read_timeout (60s) and Envoy's stream_idle_timeout (5m).
+    internal val PATH_NOTICE_KEEPALIVE = 30.seconds
+    private val KEEPALIVE_NOTICE: PathNotice = PathNotice.getDefaultInstance()
     internal const val UNKNOWN_ADDRESS = "Unknown"
 
     // The most characters a chunked transfer keeps of each string in its header; see boundedHeader. A fixed bound, not

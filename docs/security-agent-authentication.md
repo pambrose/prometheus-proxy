@@ -44,8 +44,8 @@ deployment.
    sequential, so the proxy checks that the caller is the agent it names:
    - **Transport filter enabled (the default).** `ProxyServerTransportFilter` assigns an agentId to each connection
      and `ProxyServerInterceptor` publishes it on the gRPC context. `registerAgent`, `registerPath`,
-     `unregisterPath`, `readRequestsFromProxy`, and `sendHeartBeat` reject a request whose agentId is not the
-     connection's. Scrape results — unary and chunked — are accepted only from the agent the scrape was sent to.
+     `unregisterPath`, `readRequestsFromProxy`, `readPathNoticesFromProxy`, and `sendHeartBeat` reject a request whose
+     agentId is not the connection's. Scrape results — unary and chunked — are accepted only from the agent the scrape was sent to.
    - **Transport filter disabled (`transportFilterDisabled`, for example behind nginx).** There is no
      connection-assigned agentId. Instead, `connectAgentWithTransportFilterDisabled` records the caller's identity
      on the new agent context, and the same calls, including scrape results, must present that identity. Each call
@@ -99,9 +99,11 @@ These code paths define the default, unauthenticated behavior:
   matches the proxy's. With no identities configured, no token or client identity is required.
 - `proxy/ProxyServiceImpl.kt` → `proxy/ProxyPathManager.kt` — `registerPath()` → `addPath()`. For a
   non-consolidated registration of a path that already has a non-consolidated owner, the proxy overwrites the
-  path when the owner connected with the same identity or is no longer valid, increments
-  `agentDisplacementCount`, and invalidates the displaced agent's context if it holds no other paths. A live owner
-  of another identity keeps the path.
+  path when the owner connected with the same identity or is no longer valid, and increments
+  `agentDisplacementCount`. It invalidates the displaced agent's context only when it holds no other paths and is of
+  the registering agent's launch; one of another launch stays connected, is told who took the path, and may take it
+  back with a reclaim, which the proxy refuses while a live agent of another launch serves it. A live owner of
+  another identity keeps the path.
 - `proxy/ProxyGrpcService.kt` — installs `AgentAuthServerInterceptor` for every service on the agent port only when
   `AgentAuthManager` holds at least one identity, and registers the reflection service only when
   `reflectionDisabled` is false (the default is true).

@@ -23,12 +23,15 @@ import com.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.pambrose.common.dsl.GuavaDsl.toStringElements
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.AgentValues.shownValue
+import io.prometheus.grpc.PathNotice
 import io.prometheus.grpc.PathRejectionCause
 import io.prometheus.grpc.RegisterAgentRequest
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.Channel.Factory.CONFLATED
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
 import kotlinx.coroutines.channels.ClosedSendChannelException
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.AtomicInt
@@ -36,6 +39,7 @@ import kotlin.concurrent.atomics.AtomicLong
 import kotlin.concurrent.atomics.incrementAndFetch
 import kotlin.concurrent.atomics.minusAssign
 import kotlin.time.Clock
+import kotlin.time.Duration
 import kotlin.time.Instant
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
@@ -80,6 +84,12 @@ internal class AgentContext(
   // the connection, so a reconnect is told afresh.
   private val loggedPathRejections = ConcurrentHashMap<String, PathRejectionCause>()
 
+  // The notices about paths another agent took from this one that its readPathNoticesFromProxy stream hasn't sent yet,
+  // the latest for each path; see ProxyPathManager.takeOverPath. Guarded by its own monitor, a leaf, since the path
+  // manager queues them under pathMap. The signal wakes the stream; it's conflated, as one wake reads them all.
+  private val pendingPathNotices = LinkedHashMap<String, PathNotice>()
+  private val pathNoticeSignal = Channel<Unit>(CONFLATED)
+
   /**
    * Wall-clock instant this context was created, i.e. when the agent connected.
    *
@@ -110,6 +120,10 @@ internal class AgentContext(
   var agentName: String by nonNullableReference("Unassigned")
     private set
   var consolidated: Boolean by atomicBoolean(false)
+    private set
+
+  /** Whether the agent reads the path notices stream, so the proxy keeps notices for it; see [queuePathNotice]. */
+  var acceptsPathNotices: Boolean by atomicBoolean(false)
     private set
 
   /**
@@ -159,6 +173,7 @@ internal class AgentContext(
     agentName = request.agentName
     hostName = request.hostName
     consolidated = request.consolidated
+    acceptsPathNotices = request.pathNotices
     proxyEndpoints = request.proxyEndpointsList.toList()
     currentEndpointIndex = request.currentEndpointIndex
   }
@@ -221,9 +236,50 @@ internal class AgentContext(
     loggedPathRejections.remove(path)
   }
 
+  /**
+   * Queues [notice] for the agent's path notices stream, in place of any unread notice for the same path.
+   *
+   * Returns false, without queueing, once the context is invalidated, or when [MAX_PENDING_PATH_NOTICES] other paths
+   * are already waiting: an agent that stops reading them can't grow them without end.
+   */
+  fun queuePathNotice(notice: PathNotice): Boolean {
+    val queued =
+      synchronized(pendingPathNotices) {
+        val room = notice.path in pendingPathNotices || pendingPathNotices.size < MAX_PENDING_PATH_NOTICES
+        (valid && room).also { if (it) pendingPathNotices[notice.path] = notice }
+      }
+    if (queued)
+      pathNoticeSignal.trySend(Unit)
+    return queued
+  }
+
+  // Drops [path]'s unread notice once the agent registers the path again, which makes the notice stale.
+  fun forgetPathNotice(path: String) {
+    synchronized(pendingPathNotices) { pendingPathNotices.remove(path) }
+  }
+
+  /**
+   * Waits for unread path notices and takes them all, or returns null once the context is invalidated, or none once
+   * [timeout] passes with no notice.
+   */
+  suspend fun awaitPathNotices(timeout: Duration = Duration.INFINITE): List<PathNotice>? {
+    while (true) {
+      val signal = withTimeoutOrNull(timeout) { pathNoticeSignal.receiveCatching() } ?: return emptyList()
+      signal.getOrNull() ?: return null
+      val notices =
+        synchronized(pendingPathNotices) {
+          pendingPathNotices.values.toList().also { pendingPathNotices.clear() }
+        }
+      if (notices.isNotEmpty())
+        return notices
+    }
+  }
+
   fun invalidate() {
     valid = false
     scrapeRequestNotifier.close()
+    pathNoticeSignal.close()
+    synchronized(pendingPathNotices) { pendingPathNotices.clear() }
     // Drain any buffered scrape requests and FAIL them with an agent-disconnected result (not a bare
     // channel close) so a waiting HTTP handler's awaitCompleted() sees a truthful agent_disconnected instead of a
     // null result that submitScrapeRequest would mislabel as timed_out (finding 15).
@@ -278,5 +334,9 @@ internal class AgentContext(
 
     // How many rejected paths one connection's memo keeps; see recordRejection.
     internal const val MAX_REMEMBERED_REJECTIONS = 1_000
+
+    // How many paths' notices one connection holds unread; see queuePathNotice. An agent can lose every path at once,
+    // up to proxy.internal.maxPathsPerAgent's default, and reads them as fast as they come.
+    internal const val MAX_PENDING_PATH_NOTICES = 20_000
   }
 }

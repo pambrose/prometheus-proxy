@@ -28,9 +28,15 @@ import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldNotContain
+import io.mockk.every
+import io.mockk.mockk
 import io.prometheus.Agent
+import io.prometheus.agent.AgentPathManager
+import io.prometheus.agent.AgentPathManager.PathContext
+import io.prometheus.agent.AgentPathManager.RegistrationFailure
 import io.prometheus.agent.AgentScrapeRecord
 import io.prometheus.agent.PathSource
+import io.prometheus.agent.ShownFailure
 import io.prometheus.common.agentOptionsFromConfig
 import kotlin.io.path.createTempFile
 
@@ -112,6 +118,36 @@ class AgentSnapshotTest : StringSpec() {
     }
 
     // An empty object, however it's spaced, is how the config and the agent say "no labels", so the page shows none.
+    // Registered at runtime, the path is neither configured nor discovered, so only its context gives it a row.
+    "a path another agent took over should keep its row, as retrying" {
+      val context = PathContext(1L, "runtime_metrics", "http://ops:s3cret@t/metrics", "{}", PathSource.STATIC)
+      val manager =
+        mockk<AgentPathManager>(relaxed = true) {
+          every { pathConfigs } returns emptyList()
+          every { registeredPaths } returns emptyList()
+          every { takenOverContexts } returns listOf(context)
+          every { filtersByPath } returns emptyMap()
+          every { pathFailures } returns
+            mapOf(
+              "runtime_metrics" to
+                RegistrationFailure(ShownFailure.of("Taken over by b"), true, true, null, takenOver = true),
+            )
+        }
+      val agent =
+        mockk<Agent>(relaxed = true) {
+          every { pathManager } returns manager
+          every { scrapeHistory } returns null
+          every { pathDiscoveryService } returns null
+        }
+
+      AgentSnapshot.paths(agent).single().apply {
+        path shouldBe "runtime_metrics"
+        state shouldBe PathState.RETRYING
+        url shouldNotContain "s3cret"
+        failure.shouldNotBeNull().takenOver.shouldBeTrue()
+      }
+    }
+
     "a path's empty labels object should read as no labels" {
       val snapshot =
         AgentSnapshot.collect(

@@ -26,6 +26,7 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.maps.shouldBeEmpty
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
@@ -42,7 +43,9 @@ import io.prometheus.agent.discovery.DiscoveredPath
 import io.prometheus.common.testConfigVals
 import io.prometheus.common.TestPorts.PROMETHEUS_PORT
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
+import io.prometheus.grpc.PathNotice
 import io.prometheus.grpc.PathRejectionCause
+import io.prometheus.grpc.pathNotice
 import io.prometheus.grpc.registerPathResponse
 import io.prometheus.grpc.unregisterPathResponse
 import io.prometheus.common.captureLogs
@@ -1566,7 +1569,12 @@ class AgentPathManagerTest : StringSpec() {
     // Only a rejection by a live agent holding the path clears while the agent stays connected. No other cause
     // does, including none (a proxy predating the field) and one this agent doesn't recognize.
     "registerPaths should keep a rejected static path for retrying only for a cause that can clear" {
-      val clearing = setOf(PathRejectionCause.HELD_BY_ANOTHER_IDENTITY, PathRejectionCause.CONSOLIDATION_MISMATCH)
+      val clearing =
+        setOf(
+          PathRejectionCause.HELD_BY_ANOTHER_IDENTITY,
+          PathRejectionCause.CONSOLIDATION_MISMATCH,
+          PathRejectionCause.HELD_BY_ANOTHER_AGENT,
+        )
       for (cause in PathRejectionCause.entries) {
         val (manager, _) = managerRejectingMetrics2(cause)
         manager.registerPaths()
@@ -1948,5 +1956,317 @@ class AgentPathManagerTest : StringSpec() {
 
       manager["discovered"].shouldNotBeNull().filter.shouldNotBeNull()
     }
+    // ==================== Taken-Over Path Tests ====================
+
+    // Nothing told an agent the proxy gave its path to another agent, so its dashboard showed the path registered for
+    // as long as the other held it. The path stays known, so a scrape sent before the takeover still finds it.
+    "a takeover notice should show the path as taken over rather than registered" {
+      val agent = createMockAgent()
+      val manager = AgentPathManager(agent)
+      manager.registerPath("metrics", METRICS_URL)
+
+      manager.notePathNotice(takenNotice("metrics", "agent-east-copy"))
+
+      manager["metrics"].shouldNotBeNull()
+      manager.registeredPaths.shouldBeEmpty()
+      manager.takenOverContexts.map { it.path } shouldBe listOf("metrics")
+      val failure = manager.pathFailures.getValue("metrics")
+      failure.takenOver.shouldBeTrue()
+      failure.retrying.shouldBeTrue()
+      failure.reason.message shouldContain "agent-east-copy"
+    }
+
+    "a takeover should be logged at WARN and recorded in the activity feed once, however often it's told" {
+      val log = AgentActivityLog(capacity = 20)
+      val agent = createMockAgent()
+      every { agent.activityLog } returns log
+      val manager = AgentPathManager(agent)
+      manager.registerPath("metrics", METRICS_URL)
+
+      val warnings =
+        captureLogs<AgentPathManager>(Level.WARN) {
+          manager.notePathNotice(takenNotice("metrics", "agent-east-copy"))
+          manager.notePathNotice(takenNotice("metrics", "agent-east-copy"))
+        }
+
+      warnings.single().formattedMessage shouldContain "agent-east-copy"
+      val takeovers = log.snapshot().entries.filter { it.kind == AgentActivityKind.PATH_TAKEN_OVER }
+      takeovers.single().detail shouldContain "agent-east-copy"
+    }
+
+    // The holder's name is another agent's own words, so a line break in it could forge a log line.
+    "a takeover should show the holder's name escaped" {
+      val agent = createMockAgent()
+      val manager = AgentPathManager(agent)
+      manager.registerPath("metrics", METRICS_URL)
+
+      val warnings =
+        captureLogs<AgentPathManager>(Level.WARN) {
+          manager.notePathNotice(takenNotice("metrics", "evil\nINFO forged"))
+        }
+
+      warnings.single().formattedMessage shouldNotContain "\n"
+      manager.pathFailures.getValue("metrics").reason.message shouldNotContain "\n"
+    }
+
+    // The proxy sends a notice with no path to keep the stream open.
+    "a keepalive notice should be ignored" {
+      val agent = createMockAgent()
+      val manager = AgentPathManager(agent)
+      manager.registerPath("metrics", METRICS_URL)
+
+      manager.notePathNotice(pathNotice {})
+
+      manager.takenOverContexts.shouldBeEmpty()
+      manager.registeredPaths.map { it.path } shouldBe listOf("metrics")
+    }
+
+    "a notice about a path the agent doesn't serve should be ignored" {
+      val manager = AgentPathManager(createMockAgent())
+
+      manager.notePathNotice(takenNotice("metrics", "agent-east-copy"))
+
+      manager.takenOverContexts.shouldBeEmpty()
+      manager.pathFailures.shouldBeEmpty()
+    }
+
+    // Only a reclaim, which the proxy refuses while a live agent of another launch holds the path, keeps the two from
+    // taking it from each other every few seconds.
+    "a taken-over path should be registered again as a reclaim once its retry is due" {
+      val clock = TestTimeSource()
+      val agent = createMockAgent()
+      val grpc = agent.grpcService
+      val manager = AgentPathManager(agent, clock)
+      manager.registerPath("metrics", METRICS_URL, """{"job":"j"}""")
+      manager.notePathNotice(takenNotice("metrics", "agent-east-copy"))
+      coEvery { grpc.reclaimPathOnProxy(any(), any(), any(), any()) } returns
+        registerPathResponse {
+          valid = true
+          pathId = 2L
+        }
+
+      // Due after rejectedPathRetrySecs (10s by default).
+      manager.reclaimTakenOverPaths()
+      coVerify(exactly = 0) { grpc.reclaimPathOnProxy(any(), any(), any(), any()) }
+      clock += 10.seconds
+      manager.reclaimTakenOverPaths()
+
+      coVerify(exactly = 1) {
+        grpc.reclaimPathOnProxy("metrics", """{"job":"j"}""", METRICS_URL, "STATIC")
+      }
+      manager.registeredPaths.map { it.path } shouldBe listOf("metrics")
+      manager.takenOverContexts.shouldBeEmpty()
+      manager.pathFailures.shouldBeEmpty()
+    }
+
+    "a refused reclaim should keep the path taken over and wait longer before the next" {
+      val clock = TestTimeSource()
+      val agent = createMockAgent()
+      val grpc = agent.grpcService
+      val manager = AgentPathManager(agent, clock)
+      manager.registerPath("metrics", METRICS_URL)
+      manager.notePathNotice(takenNotice("metrics", "agent-east-copy"))
+      coEvery { grpc.reclaimPathOnProxy(any(), any(), any(), any()) } throws
+        RequestFailureException.fromProxy("registerPathOnProxy", "held", PathRejectionCause.HELD_BY_ANOTHER_AGENT)
+
+      clock.tick(times = 4, step = 10.seconds) { manager.reclaimTakenOverPaths() }
+
+      // Due at 10s, then 20s later at 30s: the 40s tick doesn't try again.
+      coVerify(exactly = 2) { grpc.reclaimPathOnProxy(any(), any(), any(), any()) }
+      manager.takenOverContexts.map { it.path } shouldBe listOf("metrics")
+      manager.pathFailures.getValue("metrics").takenOver.shouldBeTrue()
+    }
+
+    // The proxy says so as the holder leaves, so the agent takes the path back at once rather than after its backoff.
+    "a notice that the path is free should make its reclaim due at once" {
+      val clock = TestTimeSource()
+      val agent = createMockAgent()
+      val grpc = agent.grpcService
+      val manager = AgentPathManager(agent, clock)
+      manager.registerPath("metrics", METRICS_URL)
+      manager.notePathNotice(takenNotice("metrics", "agent-east-copy"))
+      coEvery { grpc.reclaimPathOnProxy(any(), any(), any(), any()) } returns
+        registerPathResponse { valid = true }
+
+      manager.notePathNotice(freeNotice("metrics"))
+      manager.reclaimTakenOverPaths()
+
+      manager.registeredPaths.map { it.path } shouldBe listOf("metrics")
+    }
+
+    "a notice that the path is free should say its holder has left" {
+      val agent = createMockAgent()
+      val manager = AgentPathManager(agent)
+      manager.registerPath("metrics", METRICS_URL)
+      manager.notePathNotice(takenNotice("metrics", "agent-east-copy"))
+
+      manager.notePathNotice(freeNotice("metrics"))
+
+      manager.pathFailures.getValue("metrics").reason.message shouldContain "has left"
+    }
+
+    // The proxy names the current holder after each refused reclaim, and a notice naming it reset the wait to its
+    // first, so the agent retried every rejectedPathRetrySecs for as long as the other agent held the path.
+    "a notice naming a new holder should keep the reclaim's backoff" {
+      val clock = TestTimeSource()
+      val agent = createMockAgent()
+      val grpc = agent.grpcService
+      val manager = AgentPathManager(agent, clock)
+      manager.registerPath("metrics", METRICS_URL)
+      manager.notePathNotice(takenNotice("metrics", "agent-a"))
+      coEvery { grpc.reclaimPathOnProxy(any(), any(), any(), any()) } throws
+        RequestFailureException.fromProxy("registerPathOnProxy", "held", PathRejectionCause.HELD_BY_ANOTHER_AGENT)
+      clock += 10.seconds
+      manager.reclaimTakenOverPaths()
+
+      // Refused at 10s, so the next try is due at 30s, whoever holds the path.
+      clock += 5.seconds
+      manager.notePathNotice(takenNotice("metrics", "agent-b"))
+      clock += 10.seconds
+      manager.reclaimTakenOverPaths()
+
+      coVerify(exactly = 1) { grpc.reclaimPathOnProxy(any(), any(), any(), any()) }
+      manager.pathFailures.getValue("metrics").reason.message shouldContain "agent-b"
+    }
+
+    // Freed, the path can go to an agent of another identity, which the proxy names as the reason, not a takeover.
+    "a reclaim refused for another cause that can clear should show the proxy's reason, and warn once" {
+      val clock = TestTimeSource()
+      val agent = createMockAgent()
+      val grpc = agent.grpcService
+      val manager = AgentPathManager(agent, clock)
+      manager.registerPath("metrics", METRICS_URL)
+      manager.notePathNotice(freeNotice("metrics"))
+      coEvery { grpc.reclaimPathOnProxy(any(), any(), any(), any()) } throws
+        RequestFailureException.fromProxy(
+          "registerPathOnProxy",
+          "Path /metrics is served by identity 'team-b'",
+          PathRejectionCause.HELD_BY_ANOTHER_IDENTITY,
+        )
+
+      val warnings =
+        captureLogs<AgentPathManager>(Level.WARN) {
+          clock.tick(times = 4, step = 10.seconds) { manager.reclaimTakenOverPaths() }
+        }
+
+      warnings.filter { "team-b" in it.formattedMessage } shouldHaveSize 1
+      manager.pathFailures.getValue("metrics").apply {
+        reason.message shouldContain "team-b"
+        takenOver.shouldBeFalse()
+        retrying.shouldBeTrue()
+      }
+      manager.takenOverContexts.map { it.path } shouldBe listOf("metrics")
+    }
+
+    "a reclaim refused for a cause that can't clear should drop the path, which shows refused" {
+      val clock = TestTimeSource()
+      val agent = createMockAgent()
+      val grpc = agent.grpcService
+      val manager = AgentPathManager(agent, clock)
+      manager.registerPath("metrics", METRICS_URL)
+      manager.notePathNotice(freeNotice("metrics"))
+      coEvery { grpc.reclaimPathOnProxy(any(), any(), any(), any()) } throws
+        RequestFailureException.fromProxy("registerPathOnProxy", "limit", PathRejectionCause.PATH_LIMIT_REACHED)
+
+      manager.reclaimTakenOverPaths()
+
+      manager["metrics"].shouldBeNull()
+      manager.takenOverContexts.shouldBeEmpty()
+      val failure = manager.pathFailures.getValue("metrics")
+      failure.retrying.shouldBeFalse()
+      failure.takenOver.shouldBeFalse()
+    }
+
+    // Registered the usual way, a taken-over discovered path would be taken back at once, on every reconcile.
+    "reconcile should leave a taken-over discovered path to its reclaim, and keep an edit for it" {
+      val agent = createMockAgent(agentHocon = "discovery.enabled = true")
+      val grpc = agent.grpcService
+      val manager = AgentPathManager(agent)
+      manager.reconcileDiscoveredPaths([DiscoveredPath("d", "discovered", METRICS_URL, "{}")])
+      manager.notePathNotice(takenNotice("discovered", "agent-east-copy"))
+
+      manager.reconcileDiscoveredPaths([DiscoveredPath("d", "discovered", METRICS_URL, "{}")])
+      manager.reconcileDiscoveredPaths([DiscoveredPath("d", "discovered", "http://edited/metrics", "{}")])
+
+      coVerify(exactly = 1) { grpc.registerPathOnProxy("discovered", any(), any(), any()) }
+      coVerify(exactly = 0) { grpc.unregisterPathOnProxy(any()) }
+      manager.takenOverContexts.single().url shouldBe "http://edited/metrics"
+      manager.pathFailures.getValue("discovered").takenOver.shouldBeTrue()
+    }
+
+    // The proxy no longer maps the path to this agent, so it would refuse the unregister.
+    "unregistering a taken-over path should drop it without asking the proxy" {
+      val agent = createMockAgent()
+      val grpc = agent.grpcService
+      val manager = AgentPathManager(agent)
+      manager.registerPath("metrics", METRICS_URL)
+      manager.notePathNotice(takenNotice("metrics", "agent-east-copy"))
+
+      manager.unregisterPath("metrics")
+
+      coVerify(exactly = 0) { grpc.unregisterPathOnProxy(any()) }
+      manager["metrics"].shouldBeNull()
+      manager.takenOverContexts.shouldBeEmpty()
+      manager.pathFailures.shouldBeEmpty()
+    }
+
+    // Waiting to take a path back isn't refused for good, so the connection mustn't end as one serving nothing.
+    "a taken-over static path should still count as served" {
+      val agent = createMockAgent(pathConfigsHocon = """{ name = m, path = metrics, url = "$METRICS_URL" }""")
+      val manager = AgentPathManager(agent)
+      manager.registerPaths()
+
+      manager.notePathNotice(takenNotice("metrics", "agent-east-copy"))
+
+      manager.servesNoStaticPath().shouldBeFalse()
+    }
+
+    "a reconnect should forget taken-over paths" {
+      val agent = createMockAgent()
+      val manager = AgentPathManager(agent)
+      manager.registerPath("metrics", METRICS_URL)
+      manager.notePathNotice(takenNotice("metrics", "agent-east-copy"))
+
+      manager.clear()
+
+      manager.takenOverContexts.shouldBeEmpty()
+      manager.pathFailures.shouldBeEmpty()
+    }
+
+    // The retry loop sleeps while nothing is taken over, and a notice wakes it.
+    "the reclaim loop should take a freed path back as soon as it's told" {
+      val agent = createMockAgent()
+      val grpc = agent.grpcService
+      val manager = AgentPathManager(agent)
+      manager.registerPath("metrics", METRICS_URL)
+      coEvery { grpc.reclaimPathOnProxy(any(), any(), any(), any()) } returns
+        registerPathResponse { valid = true }
+      val active = AtomicBoolean(true)
+
+      coroutineScope {
+        val loop = launch { manager.reclaimTakenOverPathsWhile { active.load() } }
+        manager.notePathNotice(takenNotice("metrics", "agent-east-copy"))
+        manager.notePathNotice(freeNotice("metrics"))
+        withTimeout(5.seconds) {
+          while (manager.registeredPaths.isEmpty()) delay(10.milliseconds)
+        }
+        active.store(false)
+        loop.cancel()
+      }
+    }
   }
 }
+
+private const val METRICS_URL = "http://localhost:9999/metrics"
+
+private fun takenNotice(
+  path: String,
+  holderName: String,
+): PathNotice =
+  pathNotice {
+    this.path = path
+    heldByAgentId = "holder-id"
+    heldByAgentName = holderName
+  }
+
+private fun freeNotice(path: String): PathNotice = pathNotice { this.path = path }

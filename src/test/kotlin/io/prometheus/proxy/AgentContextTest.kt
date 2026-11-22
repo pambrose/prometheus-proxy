@@ -36,13 +36,16 @@ import kotlin.time.TestTimeSource
 import kotlin.time.TimeSource
 import io.mockk.mockk
 import io.mockk.verify
+import io.prometheus.grpc.PathNotice
 import io.prometheus.grpc.PathRejectionCause
 import io.prometheus.grpc.RegisterAgentRequest
+import io.prometheus.grpc.pathNotice
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.time.Clock
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 class AgentContextTest : StringSpec() {
@@ -63,6 +66,79 @@ class AgentContextTest : StringSpec() {
       context.recordRejection("path1", PathRejectionCause.NOT_AUTHORIZED).shouldBeTrue()
       context.forgetRejection("path2")
       context.recordRejection("one-too-many", PathRejectionCause.INVALID_PATH).shouldBeTrue()
+    }
+
+    // ==================== Path Notice Tests ====================
+
+    "acceptsPathNotices should follow the agent's registration" {
+      val context = AgentContext("remote")
+      context.acceptsPathNotices.shouldBeFalse()
+
+      context.assignProperties(RegisterAgentRequest.newBuilder().setPathNotices(true).build())
+
+      context.acceptsPathNotices.shouldBeTrue()
+    }
+
+    // A notice is the path's current state, so a later one replaces an earlier one the agent hasn't read, in place.
+    "awaitPathNotices should return the latest notice for each path, in the order the paths were first queued" {
+      val context = AgentContext("remote")
+      context.queuePathNotice(noticeOf("a", "taker-1")).shouldBeTrue()
+      context.queuePathNotice(noticeOf("b", "taker-1")).shouldBeTrue()
+      context.queuePathNotice(noticeOf("a", "")).shouldBeTrue()
+
+      context.awaitPathNotices() shouldBe listOf(noticeOf("a", ""), noticeOf("b", "taker-1"))
+    }
+
+    "awaitPathNotices should wait for a notice, and take each one once" {
+      val context = AgentContext("remote")
+      val waiting = async { context.awaitPathNotices() }
+
+      context.queuePathNotice(noticeOf("a", "taker-1"))
+
+      waiting.await() shouldBe listOf(noticeOf("a", "taker-1"))
+      context.queuePathNotice(noticeOf("b", "taker-1"))
+      context.awaitPathNotices() shouldBe listOf(noticeOf("b", "taker-1"))
+    }
+
+    // The notices stream sends a keepalive when nothing comes, so it can tell a quiet wait from the context's end.
+    "awaitPathNotices should return no notices once its timeout passes, and null once the context is invalidated" {
+      val context = AgentContext("remote")
+
+      context.awaitPathNotices(50.milliseconds) shouldBe emptyList()
+      context.invalidate()
+      context.awaitPathNotices(50.milliseconds).shouldBeNull()
+    }
+
+    "forgetPathNotice should drop a path's unread notice" {
+      val context = AgentContext("remote")
+      context.queuePathNotice(noticeOf("a", "taker-1"))
+      context.queuePathNotice(noticeOf("b", "taker-1"))
+
+      context.forgetPathNotice("a")
+
+      context.awaitPathNotices() shouldBe listOf(noticeOf("b", "taker-1"))
+    }
+
+    "awaitPathNotices should return null once the context is invalidated, and queuePathNotice should refuse" {
+      val context = AgentContext("remote")
+      context.queuePathNotice(noticeOf("a", "taker-1"))
+
+      context.invalidate()
+
+      context.awaitPathNotices().shouldBeNull()
+      context.queuePathNotice(noticeOf("b", "taker-1")).shouldBeFalse()
+    }
+
+    // An agent that stops reading can't grow the unread notices without end; a path already waiting still takes a
+    // newer notice.
+    "queuePathNotice should hold at most MAX_PENDING_PATH_NOTICES unread paths" {
+      val context = AgentContext("remote")
+      val cap = AgentContext.MAX_PENDING_PATH_NOTICES
+
+      (1..cap).all { context.queuePathNotice(noticeOf("path$it", "taker-1")) }.shouldBeTrue()
+
+      context.queuePathNotice(noticeOf("one-too-many", "taker-1")).shouldBeFalse()
+      context.queuePathNotice(noticeOf("path1", "")).shouldBeTrue()
     }
 
     // ==================== Creation Tests ====================
@@ -106,6 +182,7 @@ class AgentContextTest : StringSpec() {
       every { request.consolidated } returns true
       every { request.proxyEndpointsList } returns LazyStringArrayList()
       every { request.currentEndpointIndex } returns 0
+      every { request.pathNotices } returns false
 
       context.assignProperties(request)
 
@@ -555,6 +632,7 @@ class AgentContextTest : StringSpec() {
       every { request.consolidated } returns false
       every { request.proxyEndpointsList } returns LazyStringArrayList()
       every { request.currentEndpointIndex } returns 0
+      every { request.pathNotices } returns false
       context.assignProperties(request)
 
       context.launchId shouldBe "launch-abc"
@@ -571,3 +649,13 @@ class AgentContextTest : StringSpec() {
     }
   }
 }
+
+private fun noticeOf(
+  path: String,
+  heldByName: String,
+): PathNotice =
+  pathNotice {
+    this.path = path
+    heldByAgentName = heldByName
+    heldByAgentId = if (heldByName.isEmpty()) "" else "id-$heldByName"
+  }

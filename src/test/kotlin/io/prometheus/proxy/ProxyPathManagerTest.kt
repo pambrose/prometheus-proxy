@@ -42,13 +42,17 @@ import io.mockk.verify
 import io.prometheus.Proxy
 import io.prometheus.common.captureLogs
 import io.prometheus.common.proxyOptions
+import io.prometheus.grpc.PathNotice
 import io.prometheus.grpc.PathRejectionCause
 import io.prometheus.grpc.RegisterAgentRequest
+import io.prometheus.grpc.pathNotice
 import io.prometheus.grpc.registerAgentRequest
 import io.prometheus.proxy.ProxyPathManager.PathMetadata
 import kotlin.concurrent.atomics.AtomicLong
 import kotlin.concurrent.atomics.incrementAndFetch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.milliseconds
 import io.kotest.matchers.maps.shouldHaveSize as mapShouldHaveSize
 
 @Suppress("LargeClass")
@@ -111,6 +115,7 @@ class ProxyPathManagerTest : StringSpec() {
     launch: String,
     name: String = "agent",
     consolidated: Boolean = false,
+    pathNotices: Boolean = false,
   ): AgentContext =
     AgentContext(remote).apply {
       assignProperties(
@@ -118,9 +123,35 @@ class ProxyPathManagerTest : StringSpec() {
           launchId = launch
           agentName = name
           this.consolidated = consolidated
+          this.pathNotices = pathNotices
         },
       )
     }
+
+  // A real context of the launch [launch] whose agent reads path notices, as one of this version does.
+  private fun noticed(
+    launch: String,
+    name: String = "agent-$launch",
+  ): AgentContext = launched("remote-$launch", launch, name, pathNotices = true)
+
+  // The notices [context] has waiting, or none: awaitPathNotices waits for one, so a context with none times out.
+  private suspend fun waitingNotices(context: AgentContext): List<PathNotice> =
+    withTimeoutOrNull(200.milliseconds) { context.awaitPathNotices() }.orEmpty()
+
+  // A notice that [holder] took [path], or, with no holder, that no agent serves it any more.
+  private fun noticeOf(
+    path: String,
+    holder: AgentContext? = null,
+  ): PathNotice =
+    pathNotice {
+      this.path = path
+      if (holder != null) {
+        heldByAgentId = holder.agentId
+        heldByAgentName = holder.agentName
+      }
+    }
+
+  private val reclaim = PathMetadata(reclaim = true)
 
   // A manager whose proxy records departures into a real path history, which it returns beside it, as a proxy with the
   // dashboard on does.
@@ -1801,6 +1832,229 @@ class ProxyPathManagerTest : StringSpec() {
       messages.filter { "OLD-NAME" in it || "NEW-NAME" in it }.shouldBeEmpty()
     }
 
+    // ==================== Path Notice and Reclaim Tests ====================
+
+    // Nothing told the displaced agent, so its dashboard showed the path as registered for as long as the other agent
+    // held it, and it never took the path back once that agent left.
+    "a displaced agent of another launch that reads path notices should be told who took the path" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val oldAgent = noticed("launch-old")
+      val newAgent = noticed("launch-new", name = "NEW-NAME")
+
+      manager.addPath("metrics", "{}", oldAgent)
+      manager.addPath("metrics", "{}", newAgent)
+
+      waitingNotices(oldAgent) shouldBe listOf(noticeOf("metrics", newAgent))
+      waitingNotices(newAgent).shouldBeEmpty()
+    }
+
+    // A context of the taker's own launch is a stale copy of it, and an agent predating notices never reads them.
+    "a displaced agent of the same launch, or one that doesn't read path notices, should not be told" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val stale = launched("remote-stale", "launch-1", pathNotices = true)
+      val fresh = launched("remote-fresh", "launch-1", pathNotices = true)
+      val older = launched("remote-older", "launch-older")
+      val taker = noticed("launch-taker")
+
+      manager.addPath("a", "{}", stale)
+      manager.addPath("a", "{}", fresh)
+      manager.addPath("b", "{}", older)
+      manager.addPath("b", "{}", taker)
+
+      waitingNotices(stale).shouldBeEmpty()
+      waitingNotices(older).shouldBeEmpty()
+    }
+
+    // Taking the path back from a live agent is what made two such agents swap it every few seconds.
+    "a reclaim should be refused while a live agent of another launch serves the path" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val oldAgent = noticed("launch-old")
+      val newAgent = noticed("launch-new")
+      manager.addPath("metrics", "{}", oldAgent)
+      manager.addPath("metrics", "{}", newAgent)
+
+      val rejection = manager.addPath("metrics", "{}", oldAgent, reclaim).shouldNotBeNull()
+
+      rejection.cause shouldBe PathRejectionCause.HELD_BY_ANOTHER_AGENT
+      rejection.reason shouldContain newAgent.agentId
+      manager.getAgentContextInfo("metrics").shouldNotBeNull().agentContexts shouldBe listOf(newAgent)
+      manager.pathCountFor(oldAgent.agentId) shouldBe 0
+      manager.pathCountFor(newAgent.agentId) shouldBe 1
+    }
+
+    "a reclaim should be accepted over an invalid holder, a holder of its own launch, or itself" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+
+      val gone = noticed("launch-gone")
+      val reclaimer = noticed("launch-reclaimer")
+      manager.addPath("a", "{}", gone)
+      gone.invalidate()
+      manager.addPath("a", "{}", reclaimer, reclaim).shouldBeNull()
+
+      val stale = launched("remote-stale", "launch-reclaimer", pathNotices = true)
+      manager.addPath("b", "{}", stale)
+      manager.addPath("b", "{}", reclaimer, reclaim).shouldBeNull()
+      stale.isValid().shouldBeFalse()
+
+      manager.addPath("a", "{}", reclaimer, reclaim).shouldBeNull()
+      manager.pathCountFor(reclaimer.agentId) shouldBe 2
+    }
+
+    // The identity rule decides first, so an identity's agent isn't told to wait for a path it may never hold.
+    "a reclaim of a path another identity serves should be refused for the identity" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val holder = noticed("launch-holder")
+      val reclaimer = noticed("launch-reclaimer")
+      manager.addPath("metrics", "{}", holder, PathMetadata(identityName = "team-a"))
+
+      val rejection =
+        manager.addPath("metrics", "{}", reclaimer, PathMetadata(identityName = "team-b", reclaim = true))
+
+      rejection.shouldNotBeNull().cause shouldBe PathRejectionCause.HELD_BY_ANOTHER_IDENTITY
+    }
+
+    // The holder's name is the agent's own words, so a line break in it could forge a log line.
+    "a refused reclaim should show the holder's name escaped" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val oldAgent = noticed("launch-old")
+      val newAgent = noticed("launch-new", name = "evil\nINFO forged")
+      manager.addPath("metrics", "{}", oldAgent)
+      manager.addPath("metrics", "{}", newAgent)
+
+      val rejection = manager.addPath("metrics", "{}", oldAgent, reclaim).shouldNotBeNull()
+
+      rejection.reason shouldNotContain "\n"
+      rejection.reason shouldContain "evil"
+    }
+
+    // A waiting state, not a fault: logged once at INFO, and left out of the activity feed, which has the takeover.
+    "a refused reclaim should log once at INFO and stay out of the activity feed" {
+      val (manager, log) = managerWithActivity()
+      val oldAgent = noticed("launch-old")
+      val newAgent = noticed("launch-new")
+      manager.addPath("metrics", "{}", oldAgent)
+      manager.addPath("metrics", "{}", newAgent)
+
+      val logs =
+        rejectionLogs(newAgent.agentId) {
+          manager.addPath("metrics", "{}", oldAgent, reclaim)
+          manager.addPath("metrics", "{}", oldAgent, reclaim)
+        }.filter { "takes it back" in it.formattedMessage }
+
+      logs.map { it.level } shouldBe listOf(Level.INFO, Level.DEBUG)
+      log.entries().map { it.kind } shouldBe listOf(ActivityKind.PATH_TAKEN_OVER, ActivityKind.PATH_REGISTERED)
+    }
+
+    "an agent waiting on a path should be told it's free when its holder unregisters it" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val oldAgent = noticed("launch-old")
+      val newAgent = noticed("launch-new")
+      manager.addPath("metrics", "{}", oldAgent)
+      manager.addPath("metrics", "{}", newAgent)
+      waitingNotices(oldAgent)
+
+      manager.removePath("metrics", newAgent.agentId)
+
+      waitingNotices(oldAgent) shouldBe listOf(noticeOf("metrics"))
+    }
+
+    "an agent waiting on a path should be told it's free when its holder disconnects" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val oldAgent = noticed("launch-old")
+      val newAgent = noticed("launch-new")
+      manager.addPath("metrics", "{}", oldAgent)
+      manager.addPath("metrics", "{}", newAgent)
+      waitingNotices(oldAgent)
+
+      newAgent.invalidate()
+      manager.removeFromPathManager(newAgent.agentId, RemovalReason.TERMINATION)
+
+      waitingNotices(oldAgent) shouldBe listOf(noticeOf("metrics"))
+    }
+
+    // Freed, the path can go to a third agent before the waiting one takes it back. Refused, the waiting agent waits
+    // on the new holder, and is told when that one leaves too.
+    "an agent whose reclaim is refused should be told when the path's new holder leaves" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val waiting = noticed("launch-waiting")
+      val first = noticed("launch-first")
+      val second = noticed("launch-second")
+      manager.addPath("metrics", "{}", waiting)
+      manager.addPath("metrics", "{}", first)
+      manager.removePath("metrics", first.agentId)
+      manager.addPath("metrics", "{}", second)
+      waitingNotices(waiting)
+
+      manager.addPath("metrics", "{}", waiting, reclaim).shouldNotBeNull()
+      manager.removePath("metrics", second.agentId)
+
+      waitingNotices(waiting) shouldBe listOf(noticeOf("metrics"))
+    }
+
+    // The first agent's dashboard named the second as the path's holder after the third had taken it.
+    "the agents waiting on a path should be told who holds it when a third agent takes it, and still wait" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val first = noticed("launch-first")
+      val second = noticed("launch-second")
+      val third = noticed("launch-third")
+      manager.addPath("metrics", "{}", first)
+      manager.addPath("metrics", "{}", second)
+      manager.addPath("metrics", "{}", third)
+
+      waitingNotices(first) shouldBe listOf(noticeOf("metrics", third))
+      waitingNotices(second) shouldBe listOf(noticeOf("metrics", third))
+      manager.removePath("metrics", third.agentId)
+
+      waitingNotices(first) shouldBe listOf(noticeOf("metrics"))
+      waitingNotices(second) shouldBe listOf(noticeOf("metrics"))
+    }
+
+    // Freed, the path went to another agent before this one took it back, so the holder it was told of is gone.
+    "a refused reclaim should tell the agent who holds the path now" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val waiting = noticed("launch-waiting")
+      val first = noticed("launch-first")
+      val second = noticed("launch-second")
+      manager.addPath("metrics", "{}", waiting)
+      manager.addPath("metrics", "{}", first)
+      manager.removePath("metrics", first.agentId)
+      manager.addPath("metrics", "{}", second)
+      waitingNotices(waiting)
+
+      manager.addPath("metrics", "{}", waiting, reclaim).shouldNotBeNull()
+
+      waitingNotices(waiting) shouldBe listOf(noticeOf("metrics", second))
+    }
+
+    // The notice was about a path it now holds again, so the agent mustn't read it after its registration.
+    "an agent that takes a path back should stop waiting on it, and lose its unread notice" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val oldAgent = noticed("launch-old")
+      val newAgent = noticed("launch-new")
+      manager.addPath("metrics", "{}", oldAgent)
+      manager.addPath("metrics", "{}", newAgent)
+      manager.removePath("metrics", newAgent.agentId)
+
+      manager.addPath("metrics", "{}", oldAgent, reclaim).shouldBeNull()
+      waitingNotices(oldAgent).shouldBeEmpty()
+      manager.removePath("metrics", oldAgent.agentId)
+
+      waitingNotices(oldAgent).shouldBeEmpty()
+    }
+
+    "a path should keep at most MAX_WAITERS_PER_PATH waiting agents, the latest displaced" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val max = ProxyPathManager.MAX_WAITERS_PER_PATH
+      val agents = (0..max + 1).map { noticed("launch-$it") }
+      agents.forEach { manager.addPath("metrics", "{}", it) }
+      agents.forEach { waitingNotices(it) }
+
+      manager.removePath("metrics", agents.last().agentId)
+
+      waitingNotices(agents.first()).shouldBeEmpty()
+      agents.drop(1).dropLast(1).forEach { waitingNotices(it) shouldBe listOf(noticeOf("metrics")) }
+    }
+
     "overwriting path should not invalidate displaced agent that has other paths" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
@@ -1845,6 +2099,7 @@ class ProxyPathManagerTest : StringSpec() {
           every { consolidated } returns true
           every { proxyEndpointsList } returns LazyStringArrayList()
           every { currentEndpointIndex } returns 0
+          every { pathNotices } returns false
         },
       )
       val consolidated2 = AgentContext("remote-c2")
@@ -1856,6 +2111,7 @@ class ProxyPathManagerTest : StringSpec() {
           every { consolidated } returns true
           every { proxyEndpointsList } returns LazyStringArrayList()
           every { currentEndpointIndex } returns 0
+          every { pathNotices } returns false
         },
       )
       val newAgent = AgentContext("remote-new")
