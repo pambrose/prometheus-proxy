@@ -65,19 +65,24 @@ internal class ScrapeRequestManager {
    *
    * The drop is logged at DEBUG: a scrape that hits Prometheus's timeout usually gets its answer just after the handler
    * stopped tracking it, and the handler already records that as `client_cancelled` or `timed_out` (November #3).
+   *
+   * Returns whether the scrape was still tracked, owned or not, so the caller can count a result that came too late.
    */
   fun assignScrapeResults(
     scrapeResults: ScrapeResults,
     isOwner: (ScrapeRequestWrapper) -> Boolean,
-  ) {
+  ): Boolean {
     val scrapeId = scrapeResults.srScrapeId
-    scrapeRequestMapView[scrapeId]
-      ?.also { wrapper ->
-        if (isOwner(wrapper)) {
-          wrapper.complete(scrapeResults)
-          wrapper.agentContext.markActivityTime(true)
-        }
-      } ?: logger.debug { "Missing ScrapeRequestWrapper for scrapeId: $scrapeId (likely timed out)" }
+    val wrapper = scrapeRequestMapView[scrapeId]
+    if (wrapper == null) {
+      logger.debug { "Missing ScrapeRequestWrapper for scrapeId: $scrapeId (likely timed out)" }
+      return false
+    }
+    if (isOwner(wrapper)) {
+      wrapper.complete(scrapeResults)
+      wrapper.agentContext.markActivityTime(true)
+    }
+    return true
   }
 
   // Completes a request the proxy fails itself, rather than the agent answering it; [failure] gives its outcome label

@@ -41,6 +41,7 @@ import io.mockk.mockk
 import io.mockk.spyk
 import io.mockk.verify
 import io.prometheus.Proxy
+import io.prometheus.common.CountingProxyMetrics
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.common.captureLogs
@@ -446,6 +447,23 @@ class ScrapeDispatchTest : StringSpec() {
       response.updateMsg shouldBe "timed_out"
       openDuring shouldBe 1
       openAfter shouldBe 0
+    }
+
+    // The handler's drop of a transfer was logged at DEBUG and counted nowhere, though the stream's sweep and an
+    // agent's removal each counted theirs as abandoned. The stream's sweep, when it ends, finds the transfer gone, so
+    // it's counted once.
+    "submitScrapeRequest should count the unfinished chunked transfer it drops as abandoned, once" {
+      val proxy = createSpyProxyForSubmit(timeoutSecs = 1)
+      val counts = CountingProxyMetrics().also { it.installOn(proxy) }
+      val agentContext = AgentContext("test-remote")
+
+      val (response, _, _) =
+        withUnfinishedTransfer(proxy, agentContext) {
+          ScrapeDispatch.submitScrapeRequest(agentContext, proxy, ScrapeSpec("metrics"))
+        }
+
+      response.updateMsg shouldBe "timed_out"
+      counts.abandonedTransfers.get() shouldBe 1.0
     }
 
     "submitScrapeRequest should drop its scrape's unfinished chunked transfer when Prometheus hangs up" {

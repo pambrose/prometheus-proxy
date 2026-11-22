@@ -62,6 +62,23 @@ groups:
         annotations:
           summary: "Proxy is evicting stale agents repeatedly"
 
+      # An agent with a wrong or missing token reconnects every few seconds and never appears, so the refused calls are
+      # the only sign of it.
+      - alert: ProxyAgentAuthFailures
+        expr: sum by (reason) (rate(proxy_agent_auth_failures_total[5m])) > 0
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "Proxy is refusing agent calls for their token ({{ $labels.reason }})"
+
+      # A path an agent keeps asking for and the proxy keeps refusing is a target Prometheus never scrapes.
+      - alert: ProxyPathRejections
+        expr: sum by (cause) (rate(proxy_path_rejections_total[5m])) > 0
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: "Proxy keeps refusing path registrations ({{ $labels.cause }})"
+
   - name: prometheus-agent
     rules:
       - alert: AgentConnectFailures

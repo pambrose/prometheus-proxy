@@ -119,6 +119,19 @@ class AgentAuthServerInterceptorTest : StringSpec() {
       verify(exactly = 0) { mockHandler.startCall(any(), any()) }
     }
 
+    // The proxy counts each in proxy_agent_auth_failures_total, by whether a token was sent; the warning is throttled
+    // by host, but the count isn't, and a call with the right token isn't one.
+    "every refused call should be reported, saying whether it sent a token, and an accepted one should not" {
+      val refused = mutableListOf<Boolean>()
+      val interceptor = AgentAuthServerInterceptor(authManager) { missing -> refused += missing }
+
+      repeat(2) { interceptor.interceptCall(refusedCall(), headersWithToken("nope"), mockk(relaxed = true)) }
+      interceptor.interceptCall(refusedCall(), headersWithToken(null), mockk(relaxed = true))
+      interceptor.interceptCall(refusedCall(), headersWithToken("s3cret"), mockk(relaxed = true))
+
+      refused shouldBe listOf(false, false, true)
+    }
+
     // A wrong token is the usual reason a new agent never appears, and nothing else on the dashboard shows it.
     "a bad token should go in the activity feed, naming the host it came from, a host's repeats counted on its line" {
       val log = ActivityLog(100)

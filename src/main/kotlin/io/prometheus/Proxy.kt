@@ -16,6 +16,7 @@
 
 package io.prometheus
 
+import io.prometheus.common.MetricBuilders.metricLabel
 import com.codahale.metrics.health.HealthCheck
 import com.google.common.collect.EvictingQueue
 import com.google.common.util.concurrent.Service
@@ -212,6 +213,10 @@ class Proxy(
       )
     else
       null
+
+  /** How many browsers have the dashboard open; 0 with the dashboard off. Sampled by `proxy_dashboard_sessions`. */
+  internal val dashboardSessionsOpen: Int get() = dashboardService?.sessionsOpen ?: 0
+
   private val recentReqs: EvictingQueue<String> = EvictingQueue.create(proxyConfigVals.admin.recentRequestsQueueSize)
 
   // The dashboard's activity feed: agents and paths coming, going, and refused. Null unless the dashboard is on, since
@@ -542,12 +547,13 @@ class Proxy(
     if (agentContext?.announced == true) {
       eventBus.emit(ProxyEvent.AgentDisconnected(agentId, reason))
       recordDeparture(agentContext, reason, servedPaths)
+      metrics { agentDisconnectCount.labelValues(reason.metricLabel).inc() }
     }
     // Proactively reclaim any in-flight chunked-transfer buffers for this agent rather than waiting for each stream's
-    // orphan sweep, and count them as abandoned, as the sweep does (November #2). Each transfer has one remover --
-    // this, the stream's sweep, a chunk or summary that finds its scrape gone, or the scrape's HTTP handler -- so none
-    // is counted twice. Reclaimed before the requests are failed below: a failed request's handler removes its
-    // transfer as it returns, and one it got to first would go uncounted.
+    // orphan sweep, and count them as abandoned (November #2). Each transfer has one remover -- this, the stream's
+    // sweep, a header, chunk, or summary that finds its scrape gone, or the scrape's HTTP handler -- and each counts
+    // the transfer it removes, so every abandoned transfer is counted once. Reclaimed before the requests are failed
+    // below, so this reclaim, rather than each failed request's handler, counts them and logs the reclaim.
     agentContextManager.removeChunkedContextsForAgent(agentId)
       .also { reclaimed ->
         if (reclaimed.isNotEmpty()) {

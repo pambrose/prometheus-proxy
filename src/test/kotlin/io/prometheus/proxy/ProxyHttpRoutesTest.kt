@@ -46,6 +46,7 @@ import io.mockk.slot
 import io.mockk.spyk
 import io.mockk.verify
 import io.prometheus.Proxy
+import io.prometheus.common.CountingProxyMetrics
 import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
@@ -564,6 +565,22 @@ class ProxyHttpRoutesTest : StringSpec() {
       } finally {
         server.stop(0, 0)
       }
+    }
+
+    // A scrape that threw ended as a 500 that no outcome counted, so proxy_scrape_requests_total never showed it.
+    "a scrape that throws should count as internal_error" {
+      val proxy = createSpyProxyForRoutes()
+      val counts = CountingProxyMetrics().also { it.installOn(proxy) }
+      val pathManager = spyk(proxy.pathManager)
+      // Only this path: the readiness probe that starts the server reaches the scrape route too.
+      every { pathManager.getAgentContextInfo("orders_metrics") } throws IllegalStateException("broken path map")
+      every { proxy.pathManager } returns pathManager
+
+      withScrapeRoutes(proxy) { port, client ->
+        client.get("http://localhost:$port/orders_metrics").status shouldBe HttpStatusCode.InternalServerError
+      }
+
+      counts.scrapeRequests.labelValues(ProxyHttpRoutes.INTERNAL_ERROR_LABEL).get() shouldBe 1.0
     }
 
     "handleClientRequests should return NotFound for unregistered path" {

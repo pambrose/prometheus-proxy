@@ -16,6 +16,7 @@
 
 package io.prometheus.proxy.dashboard
 
+import io.prometheus.common.MetricBuilders.metricLabel
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.withCharset
@@ -175,7 +176,7 @@ internal class ProxyDashboardService(
         icons = LinkIcon.entries.associate { it.fileName to it.resource },
       ),
       site,
-    )
+    ) { outcome -> proxy.metrics { dashboardLoginCount.labelValues(outcome.metricLabel).inc() } }
 
   // The proxy's pages: the four layouts, an agent's detail, and scrape-now.
   private fun Route.pageRoutes(server: DashboardServer<ProxyView, ProxySnapshot>) {

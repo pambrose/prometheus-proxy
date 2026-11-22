@@ -19,22 +19,29 @@
 package io.prometheus.proxy
 
 import io.prometheus.Proxy
+import io.prometheus.BuildConfig
 import io.prometheus.common.MetricBuilders.SCRAPE_LATENCY_BUCKETS
 import io.prometheus.common.MetricBuilders.counter
 import io.prometheus.common.MetricBuilders.gauge
 import io.prometheus.common.MetricBuilders.histogram
 import io.prometheus.common.MetricBuilders.sampledGauge
 import io.prometheus.common.MetricBuilders.setToCurrentTime
+import io.prometheus.common.MetricBuilders.metricLabel
 import io.prometheus.common.SharedCollectors
+import io.prometheus.common.dashboard.DashboardLoginOutcome
+import io.prometheus.grpc.PathRejectionCause
+import io.prometheus.grpc.PathRejectionCause.REJECTION_CAUSE_UNSPECIFIED
+import io.prometheus.grpc.PathRejectionCause.UNRECOGNIZED
+import io.prometheus.grpc.ProxyServiceGrpc
 import io.prometheus.metrics.core.metrics.GaugeWithCallback
 import io.prometheus.metrics.core.metrics.Histogram
 import java.util.concurrent.ConcurrentHashMap
 
 /**
  * A proxy's handle on the proxy metrics, which every proxy in the JVM shares (see [SharedCollectors]). Creating one
- * adds the proxy to them, registering them if it is the first, and [close] removes the proxy, its start time, and the
- * per-path series it recorded. The counters carry no launch_id, so they add up across the proxies, and go when the
- * last proxy closes.
+ * adds the proxy to them, registering them if it is the first, and [close] removes the proxy, its start time and build
+ * info, and the per-path series it recorded. The counters carry no launch_id, so they add up across the proxies, and go
+ * when the last proxy closes.
  */
 internal class ProxyMetrics(
   proxy: Proxy,
@@ -50,15 +57,25 @@ internal class ProxyMetrics(
   val chunkValidationFailures = CHUNK_VALIDATION_FAILURES
   val chunkedTransfersAbandoned = CHUNKED_TRANSFERS_ABANDONED
   val agentDisplacementCount = AGENT_DISPLACEMENT_COUNT
+  val agentDisconnectCount = AGENT_DISCONNECT_COUNT
+  val agentAuthFailureCount = AGENT_AUTH_FAILURE_COUNT
+  val agentConnectRefusalCount = AGENT_CONNECT_REFUSAL_COUNT
+  val pathRejectionCount = PATH_REJECTION_COUNT
+  val bindingMismatchCount = BINDING_MISMATCH_COUNT
+  val lateScrapeResultCount = LATE_SCRAPE_RESULT_COUNT
+  val scrapeQueueWait: Histogram = SCRAPE_QUEUE_WAIT
+  val dashboardLoginCount = DASHBOARD_LOGIN_COUNT
 
   init {
     SHARED.acquire(launchId, proxy)
     START_TIME.labelValues(launchId).setToCurrentTime()
+    BUILD_INFO.labelValues(launchId, BuildConfig.APP_VERSION).set(1.0)
   }
 
   override fun close() {
     pathSeries.keys.forEach { removePathSeries(it) }
     START_TIME.remove(launchId)
+    BUILD_INFO.remove(launchId, BuildConfig.APP_VERSION)
     SHARED.release(launchId)
   }
 
@@ -122,6 +139,10 @@ internal class ProxyMetrics(
     const val STAGE_SUMMARY = "summary"
     const val ENCODING_GZIPPED = "gzipped"
     const val ENCODING_PLAIN = "plain"
+    const val AUTH_MISSING_TOKEN = "missing_token"
+    const val AUTH_UNKNOWN_TOKEN = "unknown_token"
+    const val REFUSAL_IDENTITY_LIMIT = "identity_limit"
+    const val REFUSAL_TRANSPORT_FILTER_MISMATCH = "transport_filter_mismatch"
 
     private val SCRAPE_REQUEST_COUNT =
       counter {
@@ -165,7 +186,7 @@ internal class ProxyMetrics(
       }
 
     private val CHUNK_VALIDATION_FAILURES =
-      counter {
+      counter(startingAtZero = listOf(STAGE_CHUNK, STAGE_SUMMARY)) {
         name("proxy_chunk_validation_failures_total")
         help("Proxy chunk validation failures")
         labelNames("stage")
@@ -183,11 +204,85 @@ internal class ProxyMetrics(
         help("Proxy agent path displacement events")
       }
 
+    // By RemovalReason; see Proxy.releaseRemovedAgent for which removals count.
+    private val AGENT_DISCONNECT_COUNT =
+      counter(startingAtZero = RemovalReason.entries.map { it.metricLabel }) {
+        name("proxy_agent_disconnects_total")
+        help("Proxy agent disconnects, by why the proxy removed the agent")
+        labelNames("reason")
+      }
+
+    private val AGENT_AUTH_FAILURE_COUNT =
+      counter(startingAtZero = listOf(AUTH_MISSING_TOKEN, AUTH_UNKNOWN_TOKEN)) {
+        name("proxy_agent_auth_failures_total")
+        help("Proxy agent calls refused for a missing or unknown agent token")
+        labelNames("reason")
+      }
+
+    private val AGENT_CONNECT_REFUSAL_COUNT =
+      counter(startingAtZero = listOf(REFUSAL_IDENTITY_LIMIT, REFUSAL_TRANSPORT_FILTER_MISMATCH)) {
+        name("proxy_agent_connect_refusals_total")
+        help("Proxy agent connects refused")
+        labelNames("reason")
+      }
+
+    // The causes a rejected path can carry: not an accepted path's, nor the one protobuf gives an unknown value.
+    private val REJECTED_CAUSES = PathRejectionCause.entries - setOf(REJECTION_CAUSE_UNSPECIFIED, UNRECOGNIZED)
+
+    // Every rejection, by its PathRejectionCause, not only the first for a path, which the activity feed notes.
+    private val PATH_REJECTION_COUNT =
+      counter(startingAtZero = REJECTED_CAUSES.map { it.metricLabel }) {
+        name("proxy_path_rejections_total")
+        help("Proxy path registrations rejected, by cause")
+        labelNames("cause")
+      }
+
+    // An agent naming an agentId, or answering a scrape, that isn't its connection's, or calling as another identity
+    // than the one its agent connected as. A stock agent never does; the rpc label is one of the service's methods.
+    private val BINDING_MISMATCH_COUNT =
+      counter(startingAtZero = ProxyServiceGrpc.getServiceDescriptor().methods.mapNotNull { it.bareMethodName }) {
+        name("proxy_binding_mismatches_total")
+        help("Proxy agent calls refused for naming another agent or identity than their connection's")
+        labelNames("rpc")
+      }
+
+    // A result, or the header of a chunked one, for a scrape whose handler had already returned, usually at
+    // Prometheus's or the proxy's timeout, which the handler counted.
+    private val LATE_SCRAPE_RESULT_COUNT =
+      counter {
+        name("proxy_late_scrape_results_total")
+        help("Proxy scrape results that arrived after their scrape had ended")
+      }
+
+    // From the scrape's submission to the proxy handing it to the agent's stream: the part of the end-to-end latency
+    // spent waiting behind the agent's other scrapes. Prometheus's scrapes only, as in the latency histogram.
+    private val SCRAPE_QUEUE_WAIT: Histogram =
+      histogram {
+        name("proxy_scrape_queue_wait_seconds")
+        help("Proxy scrape request wait before the agent's stream took it, in seconds")
+        classicUpperBounds(*SCRAPE_LATENCY_BUCKETS)
+      }
+
+    // By DashboardLoginOutcome, which says what counts as each.
+    private val DASHBOARD_LOGIN_COUNT =
+      counter(startingAtZero = DashboardLoginOutcome.entries.map { it.metricLabel }) {
+        name("proxy_dashboard_logins_total")
+        help("Proxy dashboard logins, by outcome")
+        labelNames("outcome")
+      }
+
     private val START_TIME =
       gauge {
         name(START_TIME_NAME)
         labelNames(LAUNCH_ID)
         help("Proxy start time in seconds")
+      }
+
+    private val BUILD_INFO =
+      gauge {
+        name("proxy_build_info")
+        labelNames(LAUNCH_ID, "version")
+        help("Proxy build information, always 1")
       }
 
     private val AGENT_MAP_SIZE =
@@ -208,6 +303,9 @@ internal class ProxyMetrics(
       summedGauge("proxy_cumulative_agent_backlog_size", "Proxy cumulative agent backlog size") {
         it.agentContextManager.totalAgentScrapeRequestBacklogSize
       }
+
+    private val DASHBOARD_SESSIONS =
+      summedGauge("proxy_dashboard_sessions", "Proxy dashboard pages open") { it.dashboardSessionsOpen }
 
     // A size every proxy keeps, added up across the proxies in the JVM.
     private fun summedGauge(
@@ -232,12 +330,22 @@ internal class ProxyMetrics(
             CHUNK_VALIDATION_FAILURES,
             CHUNKED_TRANSFERS_ABANDONED,
             AGENT_DISPLACEMENT_COUNT,
+            AGENT_DISCONNECT_COUNT,
+            AGENT_AUTH_FAILURE_COUNT,
+            AGENT_CONNECT_REFUSAL_COUNT,
+            PATH_REJECTION_COUNT,
+            BINDING_MISMATCH_COUNT,
+            LATE_SCRAPE_RESULT_COUNT,
+            SCRAPE_QUEUE_WAIT,
+            DASHBOARD_LOGIN_COUNT,
             START_TIME,
+            BUILD_INFO,
             AGENT_MAP_SIZE,
             CHUNK_CONTEXT_MAP_SIZE,
             PATH_MAP_SIZE,
             SCRAPE_MAP_SIZE,
             CUMULATIVE_AGENT_BACKLOG_SIZE,
+            DASHBOARD_SESSIONS,
           ),
       )
   }

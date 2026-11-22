@@ -20,7 +20,7 @@ Two dashboards ship in the repository:
 
 | File | Covers |
 |:-----|:-------|
-| [`grafana/prometheus-proxy.json`](https://github.com/pambrose/prometheus-proxy/blob/master/grafana/prometheus-proxy.json) | Proxy health, throughput, latency, payload sizes, internal state, errors |
+| [`grafana/prometheus-proxy.json`](https://github.com/pambrose/prometheus-proxy/blob/master/grafana/prometheus-proxy.json) | Proxy health, throughput, latency and queue wait, payload sizes, internal state, errors, agent disconnects, rejected agents and paths, dashboard logins |
 | [`grafana/prometheus-agents.json`](https://github.com/pambrose/prometheus-proxy/blob/master/grafana/prometheus-agents.json) | Agent health, connections, scrape activity, per-agent latency |
 
 ### Importing
@@ -62,7 +62,9 @@ the proxy's scrape job to be named `prometheus-proxy`.
 
     `proxy_start_time_seconds` and `agent_start_time_seconds` carry a `launch_id` that each proxy
     or agent instance gets when it starts; a change in `launch_id` (or a sudden reset of
-    `*_start_time_seconds`) flags a restart on a dashboard or alert.
+    `*_start_time_seconds`) flags a restart on a dashboard or alert. `proxy_build_info` carries the same
+    `launch_id` and the proxy's `version`, so an upgrade shows as a new version on the proxy dashboard's Version
+    stat.
 
 ## See also
 

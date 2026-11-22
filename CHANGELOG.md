@@ -40,6 +40,15 @@ All notable changes to this project are documented in this file.
 - Every demo turns on its agents' dashboards and shows the agent's side in its tour; the basics demo adds `proxy-down`
   and `proxy-up`, the spring-boot demo `proxy-stop` and `proxy-start`, and the kubernetes demo `agent-dashboard`, which
   port-forwards to the agent's
+- The proxy counts more of what happens to its agents: `proxy_agent_disconnects_total` (by `reason`: eviction,
+  termination, stream_terminated), `proxy_agent_connect_refusals_total`, `proxy_agent_auth_failures_total`,
+  `proxy_path_rejections_total` (every refusal, by `cause`), `proxy_binding_mismatches_total`, and
+  `proxy_late_scrape_results_total`; `proxy_scrape_queue_wait_seconds`, the time a scrape waits for its agent's stream;
+  `proxy_dashboard_logins_total` and `proxy_dashboard_sessions`; and `proxy_build_info`, by `launch_id` and `version`.
+  A scrape that throws now counts in `proxy_scrape_requests_total` as `internal_error`
+- The proxy's Grafana dashboard has panels for them (queue wait, disconnects by reason, Security & Rejections, and the
+  dashboard's logins), `grafana/alerts.yml` adds ProxyAgentAuthFailures and ProxyPathRejections, and the basics and
+  network demos' dashboards show disconnects, path rejections, and queue wait
 
 ### Bug Fixes
 
@@ -52,6 +61,10 @@ All notable changes to this project are documented in this file.
 - A scrape the proxy dashboard's Scrape now makes no longer counts in the agent's `agent_filter_lines_dropped_total`
   and `agent_filter_bytes_saved_total`, or in the lines and bytes the agent's dashboard shows a filter dropping: like
   the `agent_scrape_*` metrics, they count only Prometheus's scrapes
+- `proxy_connect_count_total` and `proxy_heartbeat_count_total` count only the connects and heartbeats the proxy
+  accepts, `proxy_eviction_count_total` only an eviction that removed the agent, and
+  `proxy_chunked_transfers_abandoned_total` also a transfer whose scrape ended first, at a timeout or when Prometheus
+  hung up
 
 ## [4.6.1] - 2026-11-22
 

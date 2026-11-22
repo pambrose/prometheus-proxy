@@ -27,6 +27,11 @@ _Not yet released_
   them without reading the startup log. Tokens, passwords, and private keys show only as set or not set.
 - **Light or dark, your choice.** Both dashboards have a theme picker in the top bar: light, dark, or auto, which
   follows your system and is where it starts. Your browser remembers it.
+- **The proxy counts what happens to its agents.** New metrics count agents disconnecting and why, connects and
+  paths the proxy refused and why, calls with a bad agent token, results that arrive too late, dashboard logins, and how
+  long a scrape waits for its agent, and `proxy_build_info` shows each proxy's version. The proxy's Grafana dashboard
+  and the demos' dashboards chart them, and two new alerts catch an agent with a bad token and a path the proxy keeps
+  refusing.
 
 ### Bug Fixes
 
@@ -37,6 +42,9 @@ _Not yet released_
 
 - **A dashboard's Scrape now no longer counts in the agent's filter metrics.** `agent_filter_lines_dropped_total` and
   `agent_filter_bytes_saved_total` now count only Prometheus's scrapes, as the `agent_scrape_*` metrics already did.
+- **The proxy's connect, heartbeat, and eviction counts mean what they say.** `proxy_connect_count_total` and
+  `proxy_heartbeat_count_total` no longer count connects and heartbeats the proxy refused, and an eviction is counted
+  only when it removed the agent.
 
 ## 4.6.1
 

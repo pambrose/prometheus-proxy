@@ -229,7 +229,8 @@ what the agent tries.
   reads **connecting**, with branch-to-proxy:50053 tagged **trying**, until the deadline passes, and then that endpoint
   gets its error, `DEADLINE_EXCEEDED`, and the agent fails over.
 - Meanwhile the primary, which hears nothing, evicts the agent at about 30 seconds, and **NetworkAgentEvicted**
-  fires. This is the proxy's side, as in the basics demo's frozen agent; here we watch the agent's.
+  fires. Grafana's **Disconnects, by proxy and reason** shows it as an `eviction` at the primary. This is the proxy's
+  side, as in the basics demo's frozen agent; here we watch the agent's.
 - At about 50 seconds agent-branch connects through its other link: the standby's dashboard shows it **via
   branch-to-standby:50054 (2 of 2)**, failed over, while the primary is still up. agent-hq is untouched throughout.
 - agent-branch's **Activity** view, <http://localhost:8197/dashboard/activity>, keeps the whole sequence:
@@ -249,8 +250,9 @@ what the agent tries.
 - The link closes each connection once it has carried 170 KB toward the proxy, about 15 seconds of agent-branch's
   traffic. Each time, the agent reconnects within milliseconds and stays on the primary: a connection that registered
   and then dropped retries from the head of the list.
-- Grafana's **Agent connects, by agent** climbs. Most scrapes succeed; the one in flight as a connection drops fails as
-  `agent_disconnected` in **Scrape outcomes at the proxies**.
+- Grafana's **Agent connects, by agent** climbs, and **Disconnects, by proxy and reason** shows each drop at the
+  primary as a `termination`: the connection closed, rather than going quiet. Most scrapes succeed; the one in flight as
+  a connection drops fails as `agent_disconnected` in **Scrape outcomes at the proxies**.
 - On agent-branch's Connection view, the line under its state counts its connects, one more with each drop, and it
   stays on branch-to-proxy:50053 with no **failed over** tag. Its Activity view shows each drop as **disconnected**,
   then **connected** and **registered**.

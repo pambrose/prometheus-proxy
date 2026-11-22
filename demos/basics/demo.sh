@@ -757,8 +757,8 @@ main() {
     [[ -z "$other" ]] || point "/shipping_metrics stalls while $agent is frozen, because the proxy waits for every" \
       "agent of a consolidated path."
     point "After 30 seconds of silence the proxy evicts $agent, and the DemoAgentEvicted alert fires. Its own path," \
-      "/${agent//-/_}_metrics, shows as 'gone' on the Paths view, and the 'Agent Events' panel of Grafana's" \
-      "'Prometheus Proxy' dashboard records the eviction."
+      "/${agent//-/_}_metrics, shows as 'gone' on the Paths view, and Grafana's 'Agent disconnects at the proxy," \
+      "by reason' shows it as an eviction."
     [[ -z "$other" ]] || point "$other carries /shipping_metrics alone from then on."
     follow_up "To unfreeze it, run" "$0 agent-thaw$(agent_suffix "$agent")"
     ;;
@@ -788,6 +788,7 @@ main() {
       "agent would have taken the path over."
     point "agent-rogue's own dashboard shows the refusal from its side: /payments_metrics tagged refused, and the" \
       "proxy's reason once you select it, at $ROGUE_DASHBOARD_URL"
+    point "Grafana's 'Path rejections at the proxy, by cause' counts the refusal as not_authorized."
     follow_up "To remove it, run" "$0 rogue-agent-stop"
     proxy_said "denied registration of path /payments_metrics"
     ;;

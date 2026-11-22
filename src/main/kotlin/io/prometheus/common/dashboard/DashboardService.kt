@@ -41,6 +41,9 @@ internal abstract class DashboardService<V : Any, S : Any> : GenericIdleService(
         HealthCheck.Result.unhealthy("$simpleClassName is not running")
     }
 
+  /** How many browsers have the page open. */
+  val sessionsOpen: Int get() = server.sessionsOpen
+
   init {
     addListener(genericServiceListener(logger), MoreExecutors.directExecutor())
   }

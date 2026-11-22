@@ -210,7 +210,10 @@ internal object ScrapeDispatch {
       // keeps its stream open (November #13). It must go after the request: readHeader stores a transfer and then
       // checks that its request is still tracked, so whichever of the two runs second sees the other's change.
       proxy.agentContextManager.removeChunkedContext(scrapeId)
-        ?.also { logger.debug { "Dropped the unfinished chunked transfer for scrapeId: $scrapeId" } }
+        ?.also {
+          logger.debug { "Dropped the unfinished chunked transfer for scrapeId: $scrapeId" }
+          proxy.metrics { chunkedTransfersAbandoned.inc() }
+        }
     }
   }
 

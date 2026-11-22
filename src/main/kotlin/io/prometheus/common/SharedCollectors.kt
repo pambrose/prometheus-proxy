@@ -27,7 +27,8 @@ import io.prometheus.metrics.model.registry.PrometheusRegistry
  * with metrics on, a second agent in one JVM, or one started again after a shutdown, failed on its first connect and
  * retried forever. These collectors are built once, registered when the first instance [acquire]s them, and
  * unregistered and cleared when the last one [release]s them, so a stopped instance's series don't outlive it. If the
- * registry is cleared in between, as the tests do, the next [acquire] registers them again.
+ * registry is cleared in between, as the tests do, the next [acquire] registers them again. Each registration creates
+ * the series of a counter built with values starting at zero again, since [release] cleared them.
  *
  * @param sentinelName the name of a metric among [collectors], used to tell whether they are still registered
  */
@@ -78,5 +79,6 @@ internal class SharedCollectors<T : Any>(
       registered.forEach { registry.unregister(it) }
       throw e
     }
+    collectors.forEach(MetricBuilders::startKnownSeriesAtZero)
   }
 }

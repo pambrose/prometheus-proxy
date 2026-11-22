@@ -22,6 +22,8 @@ import io.prometheus.metrics.core.metrics.Counter
 import io.prometheus.metrics.core.metrics.Gauge
 import io.prometheus.metrics.core.metrics.GaugeWithCallback
 import io.prometheus.metrics.core.metrics.Histogram
+import io.prometheus.metrics.model.registry.Collector
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Clock
 
 /**
@@ -45,7 +47,31 @@ internal object MetricBuilders {
   val SCRAPE_LATENCY_BUCKETS =
     doubleArrayOf(.005, .01, .025, .05, .1, .25, .5, 1.0, 2.5, 5.0, 10.0, 15.0, 30.0, 60.0, 90.0)
 
-  fun counter(block: Counter.Builder.() -> Unit): Counter = Counter.builder().withoutExemplars().apply(block).build()
+  // Each counter built with startingAtZero, with those values. The counters are built once per JVM and never let go.
+  private val zeroStarted = ConcurrentHashMap<Collector, List<String>>()
+
+  /**
+   * A counter, with a series at zero for each of [startingAtZero], the known values of its one label, whenever
+   * [SharedCollectors] registers it ([startKnownSeriesAtZero]). A series created by its first increment starts at 1,
+   * which increase() and rate() can't tell from a counter that was always 1, so a dashboard or an alert on a rare
+   * event, such as one path refused, saw nothing until it happened twice. Only for a label whose values are a known,
+   * bounded set.
+   */
+  fun counter(
+    startingAtZero: Iterable<String> = emptyList(),
+    block: Counter.Builder.() -> Unit,
+  ): Counter =
+    Counter.builder().withoutExemplars().apply(block).build().also { counter ->
+      startingAtZero.toList().takeIf { it.isNotEmpty() }?.also { zeroStarted[counter] = it }
+    }
+
+  /** Creates [collector]'s series at zero, if it's a counter built with values starting at zero. */
+  fun startKnownSeriesAtZero(collector: Collector) {
+    zeroStarted[collector]?.forEach { (collector as Counter).labelValues(it) }
+  }
+
+  /** The enum entry as a metric's label gives it: its name, lowercased, such as `not_authorized`. */
+  val Enum<*>.metricLabel: String get() = name.lowercase()
 
   fun gauge(block: Gauge.Builder.() -> Unit): Gauge = Gauge.builder().withoutExemplars().apply(block).build()
 

@@ -52,6 +52,30 @@ class SharedCollectorsTest : StringSpec() {
       counter.collect().dataPoints.shouldBeEmpty()
     }
 
+    // The last release clears the collectors, so series made to start at zero when they were built were gone when the
+    // next instance registered them again.
+    "each registration should create the series a counter starts at zero, which the last release cleared" {
+      val counter =
+        MetricBuilders.counter(startingAtZero = listOf("known")) {
+          name("shared_test_zeroed")
+          labelNames("reason")
+        }
+      val sentinel = Gauge.builder().name("shared_test_zeroed_sentinel").build()
+      val shared = SharedCollectors<String>("shared_test_zeroed_sentinel", listOf(counter, sentinel))
+
+      fun series() = counter.collect().dataPoints.map { it.labels.get("reason") to it.value }
+
+      shared.acquire("a", "first")
+      series() shouldContainExactly listOf("known" to 0.0)
+      counter.labelValues("known").inc()
+      shared.release("a")
+      series().shouldBeEmpty()
+
+      shared.acquire("b", "second")
+      series() shouldContainExactly listOf("known" to 0.0)
+      shared.release("b")
+    }
+
     "an acquire after the registry was cleared should register the collectors again" {
       val sentinel = Gauge.builder().name("shared_test_cleared_sentinel").build()
       val shared = SharedCollectors<String>("shared_test_cleared_sentinel", listOf(sentinel))

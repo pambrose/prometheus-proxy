@@ -55,6 +55,9 @@ internal class AgentAuthServerInterceptor(
   private val authManager: AgentAuthManager,
   private val activityLog: ActivityLog? = null,
   private val badTokenWarnings: KeyedThrottle<String> = KeyedThrottle(BAD_TOKEN_WARNING_INTERVAL, MAX_BAD_TOKEN_HOSTS),
+  // Told of each refused call, with whether it sent no token at all; the proxy counts them in
+  // proxy_agent_auth_failures_total. Every one, unlike the warning, which is throttled by host.
+  private val onRefused: (missing: Boolean) -> Unit = {},
 ) : ServerInterceptor {
   override fun <ReqT, RespT> interceptCall(
     call: ServerCall<ReqT, RespT>,
@@ -86,6 +89,7 @@ internal class AgentAuthServerInterceptor(
       }
     val token = if (missing) "No agent token" else "An unknown agent token"
     activityLog?.recordFromSource(host, ActivityKind.BAD_TOKEN, "$token, from $host")
+    onRefused(missing)
   }
 
   private companion object {

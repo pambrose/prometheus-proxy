@@ -115,6 +115,24 @@ internal class DashboardSettings(
 )
 
 /**
+ * How a dashboard login went, which the server tells its owner of (`onLogin`), such as for the proxy to count in
+ * `proxy_dashboard_logins_total`.
+ */
+internal enum class DashboardLoginOutcome {
+  /**
+   * A right login on the login page, which starts a session. A script's right Basic Auth isn't one: it logs in on every
+   * request.
+   */
+  SUCCESS,
+
+  /** A wrong login, from the login page or a script's Basic Auth. */
+  FAILURE,
+
+  /** A login refused unchecked, its address over the limit on wrong ones. */
+  BLOCKED,
+}
+
+/**
  * A pushed frame's HTML, and what the site keeps of it for the next push to compare with (see [DashboardSite.frame]).
  */
 internal class DashboardFrame(
@@ -174,6 +192,8 @@ internal interface DashboardSite<V : Any, S : Any> {
 internal class DashboardServer<V : Any, S : Any>(
   val settings: DashboardSettings,
   private val site: DashboardSite<V, S>,
+  // Told how each login went, for the owner's metrics; see DashboardLoginOutcome for what counts as one.
+  private val onLogin: (DashboardLoginOutcome) -> Unit = {},
 ) {
   /** The base path, with a leading slash; `/` at a root mount. */
   val basePath = "/" + settings.path.trim('/')
@@ -329,6 +349,7 @@ internal class DashboardServer<V : Any, S : Any>(
   ): Boolean {
     val address = call.request.origin.remoteAddress
     if (limiter.isBlocked(address)) {
+      onLogin(DashboardLoginOutcome.BLOCKED)
       call.response.header(HttpHeaders.RetryAfter, RETRY_AFTER_SECS)
       call.respondText(LoginHtml.LIMITED, ContentType.Text.Plain, HttpStatusCode.TooManyRequests)
       return true
@@ -371,12 +392,14 @@ internal class DashboardServer<V : Any, S : Any>(
     val next = safeNext(form[LoginHtml.NEXT_FIELD], routeBase)
     val address = request.origin.remoteAddress
     if (limiter.isBlocked(address)) {
+      onLogin(DashboardLoginOutcome.BLOCKED)
       response.header(HttpHeaders.RetryAfter, RETRY_AFTER_SECS)
       respondLogin(next, username, LoginHtml.LIMITED, HttpStatusCode.TooManyRequests)
     } else if (login.accepts(username, form[LoginHtml.PASSWORD_FIELD].orEmpty())) {
       // Secure when the browser reached the dashboard over https, as through a TLS-terminating reverse proxy.
       val secure = request.headers[HttpHeaders.Origin]?.startsWith("https://", ignoreCase = true) == true
       response.header(HttpHeaders.SetCookie, sessionCookieHeader(logins.create(), secure))
+      onLogin(DashboardLoginOutcome.SUCCESS)
       seeOther(next)
     } else {
       recordBadLogin(address)
@@ -398,6 +421,7 @@ internal class DashboardServer<V : Any, S : Any>(
   // for each address and at DEBUG otherwise, so a client guessing in a loop can't flood the log, never with the
   // username it gave, which is the client's own text. The one that reaches the limit is logged at WARN too.
   private fun recordBadLogin(address: String) {
+    onLogin(DashboardLoginOutcome.FAILURE)
     val limited = limiter.recordFailure(address)
     val message = "Refused a dashboard request from $address with a wrong login"
     if (badLoginWarnings.tryAcquire(address))
