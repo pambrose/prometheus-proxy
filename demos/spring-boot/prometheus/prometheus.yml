@@ -7,8 +7,8 @@ global:
   scrape_timeout: 4s
 
 scrape_configs:
-  # The roastery's metrics, which its agent reads from Actuator's /actuator/prometheus on 127.0.0.1. The instance names
-  # the app rather than the proxy its metrics come through.
+  # The roastery's metrics, which its agent reads from the app's metrics registry, in-process. The instance names the app
+  # rather than the proxy its metrics come through.
   - job_name: roastery
     metrics_path: /roastery_metrics
     static_configs:

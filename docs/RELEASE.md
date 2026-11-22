@@ -57,8 +57,8 @@ is, unreleased pages included.
      `demos/kubernetes/README.md`, `demos/embedded/README.md`, and `demos/spring-boot/README.md`, and the website's
      `basics-demo.md`, `network-demo.md`, `kubernetes-demo.md`, `embedded-demo.md`, `spring-boot-demo.md`, and
      `getting-started.md`.
-   - `demos/spring-boot/app/pom.xml` — `prometheus-proxy.version`, the release the Spring Boot demo's roastery
-     builds against with `make up`.
+   - `demos/spring-boot/app/pom.xml` — `prometheus-proxy.version`, the release of the Spring Boot starter the Spring
+     Boot demo's roastery builds against with `make up`.
    - This step, and the matching line in `.claude/skills/publishing-release/SKILL.md`.
 
    `RELEASE_VERSION_FILES` in the `Makefile` lists these files for `make release-check`; keep it in step with this

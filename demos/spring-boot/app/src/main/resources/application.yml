@@ -1,5 +1,7 @@
 spring:
   application:
+    # The starter names the agent after it and the build's version, roastery-1.0, and serves the app's metrics at the
+    # proxy's /roastery_metrics
     name: roastery
   # How long Spring Boot's graceful shutdown waits for each phase, the agent's among them
   lifecycle:
@@ -13,8 +15,9 @@ management:
   endpoints:
     web:
       exposure:
-        include: health, prometheus
-  # The components' details, the agent's among them (PrometheusAgentHealthIndicator); the demo publishes the app on
+        # Health alone: the agent reads the metrics registry in-process, so /actuator/prometheus isn't exposed
+        include: health
+  # The components' details, the agent's among them (the starter's prometheusAgent); the demo publishes the app on
   # 127.0.0.1 only
   endpoint:
     health:
@@ -25,13 +28,15 @@ logging:
     # gRPC's internal logging, as the standalone agent sets it (see the docs site's Embedded Agent page)
     io.grpc.internal: WARN
 
-# The embedded agent's settings (AgentSettings), from the environment the coffee shop and the docs site's Cloud
-# Platforms page use. Without PROMETHEUS_PROXY, as on a developer's machine, the agent stays off.
-roastery:
-  monitoring:
-    proxy-endpoint: ${PROMETHEUS_PROXY:}
+# The website's Spring Boot Demo page shows the agent's settings from here to the end marker.
+# --8<-- [start:agent-settings]
+# The embedded agent's settings, which the Spring Boot starter binds, from the environment the coffee shop and the docs
+# site's Cloud Platforms page use. Without PROMETHEUS_PROXY, as on a developer's machine, the agent stays off.
+prometheus-proxy:
+  agent:
+    proxy: ${PROMETHEUS_PROXY:}
     token: ${PROMETHEUS_AGENT_TOKEN:}
-    certificate: ${PROMETHEUS_PROXY_CERT:}
+    # The certificate the proxy's is signed with, as PEM or its base64, and the name it was issued to
+    trust-certificate: ${PROMETHEUS_PROXY_CERT:}
     authority: ${PROMETHEUS_PROXY_AUTHORITY:prometheus-proxy}
-    metrics-user: ${METRICS_USER:}
-    metrics-password: ${METRICS_PASSWORD:}
+# --8<-- [end:agent-settings]

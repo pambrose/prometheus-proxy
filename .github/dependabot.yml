@@ -178,7 +178,7 @@ updates:
         patterns: ["*"]
     ignore:
       # The release the demo builds against with make up, which each release bumps (docs/RELEASE.md step 2).
-      - dependency-name: "com.pambrose:prometheus-proxy"
+      - dependency-name: "com.pambrose:prometheus-proxy-spring-boot-starter"
 
   # The Kubernetes demo's third-party images in its manifests (demos/kubernetes/k8s), which the docker ecosystem reads:
   # the Python image its simulated services and targets-sync run on, pinned by tag and digest. Its kind node image

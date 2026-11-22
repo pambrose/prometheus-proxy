@@ -22,9 +22,10 @@ import org.springframework.test.context.DynamicPropertySource;
 
 /**
  * The roastery's agent, run: a proxy in this JVM, the roastery started by Spring Boot with its agent pointed at it,
- * and a scrape through the proxy that comes back with Actuator's metrics. It runs the agent's gRPC, Netty, and
- * serialization at the versions Spring Boot's dependency management picks for them, which compiling the roastery
- * never loads, so a Spring Boot release that breaks the agent at runtime fails here, in make spring-boot-demo-check.
+ * and a scrape through the proxy that comes back with the metrics the starter reads from the app's registry. It runs the
+ * starter as an app gets it from Maven, and the agent's gRPC, Netty, and serialization at the versions Spring Boot's
+ * dependency management picks for them, which compiling the roastery never loads, so a Spring Boot release that breaks
+ * the agent at runtime fails here, in make spring-boot-demo-check.
  */
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
@@ -53,10 +54,7 @@ class RoasteryAgentTest {
             false,
             null);
     proxy.startAsync().awaitRunning();
-    registry.add("roastery.monitoring.proxy-endpoint", () -> "localhost:" + agentPort);
-    registry.add("roastery.monitoring.metrics-user", () -> "agent");
-    // A password a URL's user info has to encode, as scrapeSelf does
-    registry.add("roastery.monitoring.metrics-password", () -> "p@ss w:rd");
+    registry.add("prometheus-proxy.agent.proxy", () -> "localhost:" + agentPort);
   }
 
   @AfterAll

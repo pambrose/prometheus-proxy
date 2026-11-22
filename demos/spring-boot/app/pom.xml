@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
   The Spring Boot demo's roastery (../README.md): a Spring Boot app, built with Maven, with the prometheus-proxy agent
-  embedded in it. It's a Maven project of its own, outside the repository's Gradle build, as an application that embeds
-  the agent is.
+  embedded in it by the project's Spring Boot starter. It's a Maven project of its own, outside the repository's Gradle
+  build, as an application that embeds the agent is.
 
-  The agent comes from Maven Central at prometheus-proxy.version, or, with -Dprometheus-proxy.version=<a snapshot>, from
-  the local Maven repository, where demo.sh up-local and CI publish this checkout first.
+  The starter, and the agent it brings, come from Maven Central at prometheus-proxy.version, or, with
+  -Dprometheus-proxy.version=<a snapshot>, from the local Maven repository, where demo.sh up-local and CI publish this
+  checkout first.
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -39,18 +40,12 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-actuator</artifactId>
     </dependency>
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-security</artifactId>
-    </dependency>
-    <!-- Actuator's /actuator/prometheus, which the agent reads -->
-    <dependency>
-      <groupId>io.micrometer</groupId>
-      <artifactId>micrometer-registry-prometheus</artifactId>
-    </dependency>
+    <!-- The agent, run with the app from the prometheus-proxy.agent properties in application.yml. It brings Micrometer's
+         Prometheus registry, so Spring Boot puts the roastery's meters in a PrometheusRegistry bean, which the agent
+         reads in-process. -->
     <dependency>
       <groupId>com.pambrose</groupId>
-      <artifactId>prometheus-proxy</artifactId>
+      <artifactId>prometheus-proxy-spring-boot-starter</artifactId>
       <version>${prometheus-proxy.version}</version>
     </dependency>
     <!-- RoasteryAgentTest, which runs the agent against a proxy at the versions Spring Boot picks -->
