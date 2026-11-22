@@ -18,6 +18,7 @@
 
 package io.prometheus.proxy
 
+import brave.Span
 import com.pambrose.common.dsl.GuavaDsl.toStringElements
 import io.prometheus.common.Messages.BLANK_AGENT_ID_MSG
 import io.prometheus.common.ScrapeResults
@@ -39,6 +40,8 @@ internal class ScrapeRequestWrapper(
   debugEnabledVal: Boolean,
   scrapeTimeoutVal: Duration? = null,
   dashboardScrapeVal: Boolean = false,
+  val traceSpan: Span? = null,
+  traceContextVal: Map<String, String> = emptyMap(),
 ) {
   private val clock = Monotonic
   private val createTimeMark = clock.markNow()
@@ -59,6 +62,8 @@ internal class ScrapeRequestWrapper(
       scrapeTimeoutMillis = scrapeTimeoutVal?.let { maxOf(1L, it.inWholeMilliseconds) } ?: 0L
       // So the agent counts a scrape the dashboard asked for apart from Prometheus's.
       dashboardScrape = dashboardScrapeVal
+      // So the agent's span of its fetch joins traceSpan's trace.
+      traceContext.putAll(traceContextVal)
     }
 
   @Volatile

@@ -42,6 +42,10 @@ _Not yet released_
 - **Which proxy or agent is this?** Each dashboard's top bar and browser tab now name it: `Proxy: proxy:8080`, the
   proxy's host and the port Prometheus scrapes, or `Agent: agent-east`, the agent's name, so several open dashboards are
   told apart at a glance.
+- **Each scrape, traced.** With Zipkin on, each scrape Prometheus makes is now a trace of its own, from the proxy
+  through the agent to the target, showing how long the scrape waited for its agent, how long the target took, and why
+  a scrape failed. Set `sampleRate` under `proxy.internal.zipkin` and `agent.internal.zipkin` to keep a share of traces
+  instead of all of them.
 
 ### Bug Fixes
 
@@ -61,6 +65,8 @@ _Not yet released_
 - **A new look for the login page and Log out.** The login page shows the logo and Prometheus Proxy, with Proxy
   Dashboard or Agent Dashboard under it, and Log out, at the end of the top bar, is now an exit icon; hover over it for
   its name.
+- **Heartbeats are no longer traced.** An idle agent's heartbeat every few seconds no longer fills Zipkin. The
+  `grpcReportingEnabled` Zipkin setting, which never did anything, is gone; a config that sets it still loads.
 
 ## 4.6.1
 

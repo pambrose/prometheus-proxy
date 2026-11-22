@@ -21,6 +21,7 @@
 
 package io.prometheus.agent
 
+import brave.Span
 import io.prometheus.common.MetricBuilders.metricLabel
 import io.ktor.util.AttributeKey
 import com.google.common.net.HttpHeaders.ACCEPT
@@ -59,6 +60,14 @@ import io.prometheus.agent.filter.FilterOutcome
 import io.prometheus.agent.filter.MetricFilter
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.ScrapeResults.Companion.errorCode
+import io.prometheus.common.ScrapeTracing.Companion.FETCH_SPAN
+import io.prometheus.common.ScrapeTracing.Companion.TAG_CHUNKED
+import io.prometheus.common.ScrapeTracing.Companion.TAG_FILTERED_BYTES
+import io.prometheus.common.ScrapeTracing.Companion.TAG_GZIPPED
+import io.prometheus.common.ScrapeTracing.Companion.TAG_PATH
+import io.prometheus.common.ScrapeTracing.Companion.TAG_RAW_BYTES
+import io.prometheus.common.ScrapeTracing.Companion.TAG_URL
+import io.prometheus.common.ScrapeTracing.Companion.endedAs
 import io.prometheus.common.Utils.EMPTY_BYTE_ARRAY
 import io.prometheus.common.Utils.appendQueryParams
 import io.prometheus.common.Utils.sanitizeUrl
@@ -127,6 +136,38 @@ internal class AgentHttpService(
     }
 
   suspend fun fetchScrapeUrl(scrapeRequest: ScrapeRequest): ScrapeResults {
+    val span = fetchSpan(scrapeRequest)
+    return try {
+      fetchAndRecord(scrapeRequest).also { results -> span?.tagged(results) }
+    } finally {
+      span?.finish()
+    }
+  }
+
+  // The span of a fetch the proxy asked for, in the trace the proxy began for the scrape, or in one of its own from a
+  // proxy that traces nothing. None for a scrape the proxy's dashboard asked for, which the metrics leave out too.
+  private fun fetchSpan(request: ScrapeRequest): Span? =
+    if (request.dashboardScrape)
+      null
+    else
+      agent.tracing?.joined(request.traceContextMap, FETCH_SPAN)?.apply {
+        kind(Span.Kind.CLIENT)
+        tag(TAG_PATH, request.path)
+        agent.pathManager[request.path]?.also { tag(TAG_URL, sanitizeUrl(it.url)) }
+      }
+
+  // Tags a fetch span with what the fetch got: its outcome, the target's status, and the payload's size before and
+  // after the path's filter, as it went to the proxy.
+  private fun Span.tagged(results: ScrapeResults) {
+    endedAs(listOf(results.scrapeCounterMsg), results.srStatusCode)
+    tag(TAG_GZIPPED, results.srZipped.toString())
+    tag(TAG_CHUNKED, results.isChunked(agent.options.chunkContentSizeBytes).toString())
+    tag(TAG_RAW_BYTES, results.rawSize.toString())
+    tag(TAG_FILTERED_BYTES, results.filteredSize.toString())
+  }
+
+  // Fetches the scrape and records it, in the metrics and the path's history.
+  private suspend fun fetchAndRecord(scrapeRequest: ScrapeRequest): ScrapeResults {
     val pathContext = agent.pathManager[scrapeRequest.path]
     val started = TimeSource.Monotonic.markNow()
     val fetched =

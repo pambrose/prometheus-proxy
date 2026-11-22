@@ -50,6 +50,7 @@ import io.prometheus.common.Utils.parseEndpointList
 import io.prometheus.common.Utils.parseHostPort
 import io.prometheus.common.Utils.stripScheme
 import io.prometheus.common.requirePositive
+import io.prometheus.common.requireSampleRate
 import kotlin.time.Duration.Companion.seconds
 
 // The primary constructor is internal so parseOnly and suppliedConfig stay out of the public API, and the public
@@ -516,6 +517,7 @@ class AgentOptions internal constructor(
     // a non-positive duration, and neither loop condition suspends, so 0 spins without ever reaching
     // a cancellation check and pins an IO thread for the connection's lifetime.
     logger.requirePositive("agent.internal.heartbeatCheckPauseMillis", internal.heartbeatCheckPauseMillis)
+    logger.requireSampleRate("agent.internal.zipkin.sampleRate", internal.zipkin.sampleRate)
 
     val inactivityVal = internal.heartbeatMaxInactivitySecs
     logger.info { "agent.internal.heartbeatMaxInactivitySecs: $inactivityVal" }

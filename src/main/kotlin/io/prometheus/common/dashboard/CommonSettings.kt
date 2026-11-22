@@ -27,6 +27,7 @@ import io.prometheus.common.dashboard.SettingText.names
 import io.prometheus.common.dashboard.SettingText.onOff
 import io.prometheus.common.dashboard.SettingText.secs
 import io.prometheus.common.dashboard.SettingText.tlsMaterial
+import java.math.BigDecimal
 import kotlin.time.Clock
 import kotlin.time.Duration
 
@@ -161,19 +162,27 @@ internal object CommonSettings {
       )
     }
 
-  /** Zipkin tracing. */
-  fun tracing(zipkin: ZipkinConfig): SettingsGroup =
+  /** Zipkin tracing, and the share of traces it keeps, [sampleRate]. */
+  fun tracing(
+    zipkin: ZipkinConfig,
+    sampleRate: Double,
+  ): SettingsGroup =
     SettingsGroup(
       "Tracing",
       listOf(
         Setting(
           "Zipkin",
           onOff(zipkin.enabled) {
-            "${zipkin.hostname}:${zipkin.port}${zipkin.path.ensureLeadingSlash()}, service ${zipkin.serviceName}"
+            "${zipkin.hostname}:${zipkin.port}${zipkin.path.ensureLeadingSlash()}, service ${zipkin.serviceName}, " +
+              "sampling ${percent(sampleRate)}"
           },
         ),
       ),
     )
+
+  // [fraction] as a percentage, without a binary fraction's noise: 0.07 is 7%, not 7.000000000000001%.
+  private fun percent(fraction: Double): String =
+    "${BigDecimal(fraction.toString()).movePointRight(2).stripTrailingZeros().toPlainString()}%"
 
   /** The log level, [logLevel], as the startup log names it. */
   fun logging(logLevel: String): SettingsGroup =

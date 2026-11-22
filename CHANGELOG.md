@@ -66,6 +66,13 @@ All notable changes to this project are documented in this file.
 - Each dashboard's top bar and tab title say which process it is: `Proxy: <host>:<port>`, the host's name as the
   machine gives it and `proxy.http.port`, or `Agent: <name>`, `agent.name`. A name past 48 characters is cut with an
   ellipsis and shown whole in its tooltip. The tab titles read `prometheus-proxy` and `prometheus-agent` before
+- Each scrape is a Zipkin trace of its own: the proxy's `scrape` span, a `forward` span for each of the path's agents,
+  annotated when the request reaches the agent's stream, and the agent's `fetch` span of the target, which joins the
+  trace through `ScrapeRequest`'s new `trace_context`. Tracing showed only connections and registrations, since scrapes
+  ride long-lived streams
+- `proxy.internal.zipkin.sampleRate` and `agent.internal.zipkin.sampleRate` (default 1.0) set the share of traces each
+  side keeps, scrapes and gRPC calls alike, 0 or 0.01 to 1; the agent follows the proxy's decision for a scrape. The
+  Settings view shows the rate
 
 ### Bug Fixes
 
@@ -89,6 +96,8 @@ All notable changes to this project are documented in this file.
   "Agent Dashboard", where it read "Prometheus Proxy Dashboard" or "Prometheus Agent Dashboard", and its tab title is
   `Log in · Proxy Dashboard · Prometheus Proxy`. Log out, in the top bar, is an exit icon, named Log out in its tooltip
   and for screen readers
+- `sendHeartBeat` calls are no longer traced
+- The unimplemented `internal.zipkin.grpcReportingEnabled` setting is removed; a config that sets it still loads
 
 ## [4.6.1] - 2026-11-22
 

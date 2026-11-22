@@ -268,6 +268,7 @@ object TestPorts {
   const val ZIPKIN_PROXY_HTTP_PORT = 9711
   const val ZIPKIN_AGENT_HTTP_PORT = 9712
   const val ZIPKIN_BOTH_HTTP_PORT = 9713
+  const val ZIPKIN_UNSAMPLED_HTTP_PORT = 9714
 
   // First port of the block each standard harness suite registers scrape targets on (startPort + i)
   const val HARNESS_DEFAULT_START_PORT = 9600

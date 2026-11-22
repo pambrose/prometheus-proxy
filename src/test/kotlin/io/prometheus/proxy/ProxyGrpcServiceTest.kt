@@ -54,6 +54,7 @@ import io.prometheus.Proxy
 import io.prometheus.agent.AgentTokenClientInterceptor
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
 import io.prometheus.common.GrpcConstants.META_AGENT_ID_KEY
+import io.prometheus.common.ScrapeTracing
 import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
 import io.prometheus.grpc.PathRejectionCause
 import io.prometheus.grpc.ProxyServiceGrpc
@@ -384,6 +385,9 @@ class ProxyGrpcServiceTest : StringSpec() {
       every { proxy.isZipkinEnabled } returns true
       every { proxy.zipkinReporterService } throws
         UninitializedPropertyAccessException("lateinit property zipkinReporterService has not been initialized")
+      // As Proxy.tracing is: built from the reporter on first use.
+      val proxyTracing = lazy { ScrapeTracing(proxy.zipkinReporterService.newTracing(), 1.0) }
+      every { proxy.tracing } answers { proxyTracing.value }
 
       val spans = LinkedBlockingQueue<MutableSpan>()
       val tracing = Tracing.newBuilder().addSpanHandler(collectInto(spans)).build()

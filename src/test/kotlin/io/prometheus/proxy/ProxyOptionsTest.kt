@@ -273,6 +273,19 @@ class ProxyOptionsTest : StringSpec() {
       exception.message shouldContain "staleAgentCheckPauseSecs"
     }
 
+    // Brave's counting sampler takes 0, or 0.01 to 1; checked at startup, since the sampler is built on the first call.
+    "a Zipkin sample rate it can't keep should be rejected, and 0 and 0.01 to 1 taken" {
+      listOf("-0.5", "0.005", "1.5").forEach { rate ->
+        val exception =
+          shouldThrow<IllegalArgumentException> { proxyOptions(["-Dproxy.internal.zipkin.sampleRate=$rate"]) }
+        exception.message shouldContain "internal.zipkin.sampleRate"
+      }
+      listOf("0", "0.01", "0.25", "1").forEach { rate ->
+        proxyOptions(["-Dproxy.internal.zipkin.sampleRate=$rate"]).configVals.proxy.internal.zipkin.sampleRate shouldBe
+          rate.toDouble()
+      }
+    }
+
     "a non-positive maxAgentInactivitySecs should be rejected" {
       val exception =
         shouldThrow<IllegalArgumentException> { proxyOptions(["-Dproxy.internal.maxAgentInactivitySecs=0"]) }

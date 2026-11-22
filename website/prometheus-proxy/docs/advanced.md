@@ -175,6 +175,7 @@ proxy.internal.zipkin {
   port = 9411
   path = "api/v2/spans"
   serviceName = "prometheus-proxy"
+  sampleRate = 1.0
 }
 
 agent.internal.zipkin {
@@ -183,20 +184,42 @@ agent.internal.zipkin {
   port = 9411
   path = "api/v2/spans"
   serviceName = "prometheus-agent"
+  sampleRate = 1.0
 }
 ```
 
-Tracing covers the gRPC calls between agent and proxy: the agent reports a client span for each call, and the proxy
-a server span in the same trace, each under its own `serviceName`. Spans are sent in the background, so a Zipkin
-server that can't be reached costs the spans, not the agent or the proxy.
+Tracing covers each scrape and the gRPC calls between agent and proxy, each side reporting its spans under its own
+`serviceName`. Spans are sent in the background, so a Zipkin server that can't be reached costs the spans, not the
+agent or the proxy.
 
-What reaches Zipkin follows from how an agent talks to the proxy. Zipkin joins the agent's client side and the proxy's
-server side of each call into one span, so a trace names both services. Connecting and registering are unary calls
-(`connectAgent`, `registerAgent`, a `registerPath` for each path, and `sendHeartBeat` while the agent is idle), each
-traced as it completes. Scrapes travel over long-lived streams (`readRequestsFromProxy`, `writeResponsesToProxy`, and
-`writeChunkedResponsesToProxy`), and a stream's span completes only when the stream ends, so a healthy, connected agent
-reports little: its streams appear when its connection closes, lasting as long as it did. Tracing shows an agent's
-connections and registrations, not its individual scrapes.
+**A scrape's trace.** Each scrape Prometheus makes is a trace of its own:
+
+| Span      | Reported by | Covers                                                    | Tags                                                                                                   |
+|:----------|:------------|:----------------------------------------------------------|:-------------------------------------------------------------------------------------------------------|
+| `scrape`  | Proxy       | Prometheus's request, until the proxy answers it          | `path`, `agents`, `outcome`                                                                            |
+| `forward` | Proxy       | The request to one of the path's agents, until its result | `agent.id`, `agent.name`, `outcome`, `http.status_code`                                                |
+| `fetch`   | Agent       | The agent's request to the target                         | `path`, `http.url`, `outcome`, `http.status_code`, `gzipped`, `chunked`, `bytes.raw`, `bytes.filtered` |
+
+A path several agents serve has a `forward` span for each. Each `forward` span is annotated `sent to agent` when the
+request reaches the agent's stream, so the time it waited in the agent's queue shows. `outcome` is the scrape counters'
+label (see [Monitoring](monitoring.md)), and a span whose scrape failed is tagged as an error, which Zipkin shows in
+red. `bytes.raw` and `bytes.filtered` are the payload's size before and after the path's
+[metric filter](configuration/agent.md#metric-filtering). The proxy sends the trace with each request, so the agent's `fetch` span joins it;
+an agent tracing scrapes for a proxy that doesn't begins a trace for each fetch. A scrape from a dashboard's Scrape now
+isn't traced. The proxy doesn't join trace headers a scrape request carries: its scrape port takes requests from anyone,
+and a client that marked its trace sampled could make the proxy keep every one.
+
+**The gRPC calls.** Zipkin joins the agent's client side and the proxy's server side of each call into one span, so a
+trace names both services. Connecting and registering are unary calls (`connectAgent`, `registerAgent`, and a
+`registerPath` for each path), each traced as it completes. `sendHeartBeat`, which an idle agent sends every few
+seconds, is never traced. Scrapes travel over long-lived streams (`readRequestsFromProxy`, `writeResponsesToProxy`, and
+`writeChunkedResponsesToProxy`), and a stream's span completes only when the stream ends, so it appears when its
+connection closes, lasting as long as it did; each scrape's own trace shows the scrape.
+
+**Sampling.** `sampleRate` is the share of traces each side keeps: 1.0, the default, keeps every one, 0.1 one in ten,
+and 0 none. It takes 0, or from 0.01 to 1, and anything else fails startup. The proxy decides for each scrape, and the
+agent follows the decision the proxy sends, so a scrape's trace is kept whole or not at all; each side's rate applies
+to its gRPC calls too.
 
 Start Zipkin before the proxy and agents. Spans sent while it can't be reached are dropped: the reporter warns once,
 then logs further failures only at the `FINE` level, so after that first warning, lost spans leave nothing in the

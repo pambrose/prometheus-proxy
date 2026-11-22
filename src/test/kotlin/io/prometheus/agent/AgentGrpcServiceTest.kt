@@ -18,6 +18,7 @@
 
 package io.prometheus.agent
 
+import io.prometheus.common.ScrapeTracing
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.Flow
 import io.kotest.assertions.withClue
@@ -757,17 +758,18 @@ class AgentGrpcServiceTest : StringSpec() {
 
     // ==================== Finding 8: Zipkin tracing lifecycle across reconnects ====================
 
-    // tracing/grpcTracing are one-shot lazy fields. resetGrpcStubs() runs on every reconnect and must
-    // NOT close tracing, or every channel built after the first reconnect installs an interceptor over
-    // a closed Tracing and tracing silently dies for the rest of the agent's life. tracing must be
-    // closed only by the final shutDown().
-    "Finding 8: tracing survives reconnects and is closed only on final shutDown" {
+    // Agent.tracing is one-shot. resetGrpcStubs() runs on every reconnect and must NOT close it, or every
+    // channel built after the first reconnect installs an interceptor over a closed Tracing and tracing
+    // silently dies for the rest of the agent's life. The agent closes it as it stops, after the services
+    // that trace; the gRPC service's own shutDown doesn't.
+    "Finding 8: tracing survives reconnects and the gRPC service's shutDown" {
       val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       every { agent.isZipkinEnabled } returns true
       val tracing = spyk(Tracing.newBuilder().build())
       val zipkinService = mockk<ZipkinReporterService>(relaxed = true)
       every { agent.zipkinReporterService } returns zipkinService
       every { zipkinService.newTracing(any()) } returns tracing
+      agent.tracesFromReporter()
 
       // Construction builds the first channel, and its first call creates `tracing` (November #7). No server answers to
       // the channel's name, so the call fails, but only after the tracing interceptor has seen it.
@@ -777,13 +779,10 @@ class AgentGrpcServiceTest : StringSpec() {
       }
       verify(exactly = 1) { zipkinService.newTracing(any()) }
 
-      // Each reconnect swaps the channel but must NOT close the one-shot tracing.
+      // Each reconnect swaps the channel but must NOT close the one-shot tracing, and nor does stopping.
       repeat(3) { service.resetGrpcStubs() }
-      verify(exactly = 0) { tracing.close() }
-
-      // Only the final shutDown closes tracing.
       service.shutDown()
-      verify(exactly = 1) { tracing.close() }
+      verify(exactly = 0) { tracing.close() }
     }
 
     // ==================== November #7: Zipkin tracing built on the first call ====================
@@ -797,6 +796,7 @@ class AgentGrpcServiceTest : StringSpec() {
       every { agent.isZipkinEnabled } returns true
       every { agent.zipkinReporterService } throws
         UninitializedPropertyAccessException("lateinit property zipkinReporterService has not been initialized")
+      agent.tracesFromReporter()
 
       val service = AgentGrpcService(agent, agent.options, "zipkin-${System.nanoTime()}")
       try {
@@ -2006,6 +2006,12 @@ class AgentGrpcServiceTest : StringSpec() {
         verify(exactly = 1) { agent.countScrapeResult(AgentMetrics.RESULT_DROPPED) }
       }
     }
+  }
+
+  // Has [this] mocked agent build its tracing from its reporter on first use, as Agent.tracing does.
+  private fun Agent.tracesFromReporter() {
+    val tracing = lazy { ScrapeTracing(zipkinReporterService.newTracing(), 1.0) }
+    every { this@tracesFromReporter.tracing } answers { tracing.value }
   }
 
   private companion object {

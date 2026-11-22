@@ -37,6 +37,7 @@ import io.prometheus.common.ConfigWrappers.newAdminConfig
 import io.prometheus.common.ConfigWrappers.newMetricsConfig
 import io.prometheus.common.ConfigWrappers.newZipkinConfig
 import io.prometheus.common.Messages.BLANK_AGENT_ID_MSG
+import io.prometheus.common.ScrapeTracing
 import io.prometheus.common.Utils.getVersionDesc
 import io.prometheus.common.Utils.toJsonElement
 import io.prometheus.common.AgentValues.isValidLabelName
@@ -273,6 +274,18 @@ class Proxy(
   private val metricsHolder = lazy { ProxyMetrics(this) }
   internal val metrics by metricsHolder
 
+  // Named for proxy.internal.zipkin.serviceName, and null with Zipkin off. Built on first use: the gRPC server installs
+  // its tracing interceptor before initServletService assigns zipkinReporterService, so the interceptor reads this when
+  // the first call arrives (November #7), and the scrape route when the first scrape does.
+  private val tracingHolder =
+    lazy {
+      if (isZipkinEnabled)
+        ScrapeTracing(zipkinReporterService.newTracing(), proxyConfigVals.internal.zipkin.sampleRate)
+      else
+        null
+    }
+  internal val tracing by tracingHolder
+
   internal val pathManager by lazy { ProxyPathManager(this, isTestMode) }
   internal val agentContextManager = AgentContextManager(isTestMode, eventBus, activityLog = activityLog)
   internal val scrapeRequestManager = ScrapeRequestManager()
@@ -422,6 +435,9 @@ class Proxy(
     dashboardService?.stopSync()
     httpService.stopSync()
     agentCleanupService?.stopSync()
+    // After the services that trace, and before super.shutDown() stops the reporter, which sends what's still queued.
+    if (tracingHolder.isInitialized())
+      tracing?.close()
     closeMetrics()
     super.shutDown()
   }

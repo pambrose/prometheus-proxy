@@ -51,6 +51,7 @@ import io.prometheus.agent.RequestFailureException
 import io.prometheus.agent.dashboard.AgentDashboardService
 import io.prometheus.agent.discovery.FileDiscoverySource
 import io.prometheus.agent.discovery.PathDiscoveryService
+import io.prometheus.common.ScrapeTracing
 import io.prometheus.metrics.core.datapoints.Timer
 import io.prometheus.common.BaseOptions.Companion.DEBUG
 import io.prometheus.common.BaseOptions.Companion.failOnInvalidConfig
@@ -272,6 +273,19 @@ class Agent(
   internal val launchId = randomId(15)
   private val metricsHolder = lazy { AgentMetrics(this) }
   internal val metrics by metricsHolder
+
+  // Named for agent.internal.zipkin.serviceName, and null with Zipkin off. One for the agent's life, shared by every
+  // channel a reconnect builds. Built on first use: the constructor builds the first channel, with its tracing
+  // interceptor, before initServletService assigns zipkinReporterService, so the interceptor reads this on the first
+  // call (November #7).
+  private val tracingHolder =
+    lazy {
+      if (isZipkinEnabled)
+        ScrapeTracing(zipkinReporterService.newTracing(), agentConfigVals.internal.zipkin.sampleRate)
+      else
+        null
+    }
+  internal val tracing by tracingHolder
 
   internal val agentConfigVals: ConfigVals.Agent get() = configVals.agent
 
@@ -844,6 +858,7 @@ class Agent(
         { dashboardService?.stopSync() },
         { grpcService.shutDown() },
         { runBlocking { agentHttpService.close() } },
+        { if (tracingHolder.isInitialized()) tracing?.close() },
         { closeMetrics() },
       ]
     steps.runEach().forEach { e -> logger.debug(e) { "Releasing after a failed startup: ${e.message}" } }
@@ -858,6 +873,7 @@ class Agent(
         { dashboardService?.stopSync() },
         { grpcService.shutDown() },
         { runBlocking { agentHttpService.close() } },
+        { if (tracingHolder.isInitialized()) tracing?.close() },
         { closeMetrics() },
         { super.shutDown() },
       ]

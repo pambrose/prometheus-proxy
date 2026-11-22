@@ -347,6 +347,18 @@ class AgentOptionsTest : StringSpec() {
       }
     }
 
+    "a Zipkin sample rate it can't keep should be rejected, and 0 and 0.01 to 1 taken" {
+      listOf("-0.5", "0.005", "1.5").forEach { rate ->
+        shouldBeRejected {
+          agentOptions(["--name", "test", "--proxy", "host", "-Dagent.internal.zipkin.sampleRate=$rate"], false)
+        }
+      }
+      listOf("0", "0.01", "1").forEach { rate ->
+        agentOptions(["--name", "test", "--proxy", "host", "-Dagent.internal.zipkin.sampleRate=$rate"], false)
+          .configVals.agent.internal.zipkin.sampleRate shouldBe rate.toDouble()
+      }
+    }
+
     "heartbeatCheckPauseMillis of -1 should be rejected" {
       shouldBeRejected {
         agentOptions(["--name", "test", "--proxy", "host", "-Dagent.internal.heartbeatCheckPauseMillis=-1"], false)

@@ -26,6 +26,7 @@ import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
 import io.prometheus.common.MetricBuilders.rejectionCauseLabel
 import io.prometheus.common.ScrapeResults.Companion.toScrapeResults
 import io.prometheus.common.AgentValues.truncate
+import io.prometheus.common.ScrapeTracing.Companion.SENT_ANNOTATION
 import io.prometheus.grpc.AgentInfo
 import io.prometheus.grpc.ChunkData
 import io.prometheus.grpc.ChunkedScrapeResponse
@@ -468,6 +469,7 @@ internal class ProxyServiceImpl(
         proxy.metrics { scrapeQueueWait.observe(wrapper.ageDuration().toDouble(DurationUnit.SECONDS)) }
       try {
         emit(wrapper.scrapeRequest)
+        wrapper.traceSpan?.annotate(SENT_ANNOTATION)
       } catch (e: CancellationException) {
         // Cancelled after polling the wrapper out of the queue but before delivering it: fail the
         // wrapper so the waiting HTTP handler gets a prompt error instead of blocking the full

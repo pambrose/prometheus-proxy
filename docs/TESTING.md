@@ -669,6 +669,11 @@ One support helper also lives here (not a test class itself):
   start; a failure's reason without a body; the body escaped; a refusal and why; and sizes in bytes, KB, or MB
 - **ScrapeResultsTest** — ScrapeResults data class, error code mapping, timeout handling, protobuf conversion, and
   `asDashboardScrape`, which marks results without changing any other field or what is sent to the proxy
+- **ScrapeTracingTest** — a scrape's spans, the proxy's scrape and forward spans and the agent's fetch span, form one
+  trace, the fetch joining it through the context the proxy sends; at a sample rate of 0 none is kept, the agent's
+  included; a context that carries no trace begins one at the agent's rate; a rate keeps exactly its share; a heartbeat
+  is never sampled and every other gRPC call is at the rate; a span's outcome, status, and error tags; and closing
+  closes the process's tracing
 - **SharedCollectorsTest** — the collectors every agent (or proxy) in a JVM shares register on the first acquire
   and unregister, with their series cleared, on the last release; register again after a registry clear; create a
   counter's series that start at zero again at each registration, after a release cleared them; and, when the registry
@@ -884,7 +889,9 @@ mechanism that the standard suite cannot reach:
   `maxAgentsPerIdentity` refuses keeps retrying, and connects once another agent leaves
 - **InProcessZipkinTest** — with Zipkin on, the proxy and the agent each start, serve a scrape, and stop, against a
   collector that can't be reached; with it on for both and a stand-in collector, the agent's client spans and the
-  proxy's server spans arrive under their configured service names, in one trace
+  proxy's server spans arrive under their configured service names, in one trace, a scrape's scrape, forward, and fetch
+  spans form a trace of their own, and an agent that heartbeats reports no heartbeat span; and at a sample rate of 0,
+  neither side reports a span
 - **ProxyWebDashboardTest** — the dashboard service rather than the renderer: page, WebSocket push,
   selection round-trip, both layouts, the versioned asset and brand icon routes (a year's `max-age`, an icon served as
   `image/svg+xml` with `nosniff` and a `sandbox` CSP, and a 404 off the allowlist or without the version), a registered

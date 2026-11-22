@@ -49,7 +49,9 @@ class ConfigValsTest : StringSpec() {
         rejectedPathRetrySecs shouldBe 10
         rejectedPathRetryMaxSecs shouldBe 300
         scrapeRequestBacklogUnhealthySize shouldBe 25
+        zipkin.sampleRate shouldBe 1.0
       }
+      configVals.proxy.internal.zipkin.sampleRate shouldBe 1.0
     }
 
     // ==================== Agent Filters Defaults ====================

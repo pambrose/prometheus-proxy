@@ -48,6 +48,7 @@ import io.prometheus.common.EnvVars.SD_PATH
 import io.prometheus.common.EnvVars.SD_TARGET_PREFIX
 import io.prometheus.common.requireDefaultOrPositive
 import io.prometheus.common.requirePositive
+import io.prometheus.common.requireSampleRate
 import io.prometheus.proxy.dashboard.PathLink
 
 // The primary constructor is internal so parseOnly stays out of the public API, and the public constructor below keeps
@@ -372,6 +373,7 @@ class ProxyOptions internal constructor(
     logger.requirePositive("internal.scrapeRequestTimeoutSecs", internal.scrapeRequestTimeoutSecs)
     logger.requirePositive("internal.staleAgentCheckPauseSecs", internal.staleAgentCheckPauseSecs)
     logger.requirePositive("internal.maxAgentInactivitySecs", internal.maxAgentInactivitySecs)
+    logger.requireSampleRate("internal.zipkin.sampleRate", internal.zipkin.sampleRate)
     // Each agent's queue is capped at twice this, so 0 would answer every scrape with 503 agent_backlog_full.
     logger.requirePositive(
       "internal.scrapeRequestBacklogUnhealthySize",
