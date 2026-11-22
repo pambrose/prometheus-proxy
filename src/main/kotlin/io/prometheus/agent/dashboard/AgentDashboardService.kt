@@ -16,6 +16,7 @@
 
 package io.prometheus.agent.dashboard
 
+import io.prometheus.common.MetricBuilders.metricLabel
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.decodeURLPart
@@ -130,7 +131,7 @@ internal class AgentDashboardService(
         loginHeading = LOGIN_HEADING,
       ),
       site,
-    )
+    ) { outcome -> agent.metrics { dashboardLoginCount.labelValues(agent.launchId, outcome.metricLabel).inc() } }
 
   // The agent's pages: its four views, a selected path's, and Scrape now.
   private fun Route.pageRoutes(server: DashboardServer<AgentView, AgentSnapshot>) {

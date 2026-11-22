@@ -32,6 +32,11 @@ _Not yet released_
   long a scrape waits for its agent, and `proxy_build_info` shows each proxy's version. The proxy's Grafana dashboard
   and the demos' dashboards chart them, and two new alerts catch an agent with a bad token and a path the proxy keeps
   refusing.
+- **The agent counts what happens to its connection and paths.** New metrics show whether it's connected and through
+  which proxy endpoint, count its disconnects, failovers, heartbeats, refused paths and why, retries, scrapes a filter
+  let through unfiltered, discovery's reads, and dashboard logins, and record how long a scrape waits to start, and
+  `agent_build_info` shows each agent's version. The agents' Grafana dashboard charts them, and new alerts catch an
+  agent that's disconnected, one stuck on a backup proxy, and a discovery file that can't be read.
 - **A logo.** Prometheus Proxy has a logo, a suspension bridge in Prometheus orange, on the docs site, in the README,
   and on both dashboards: in the browser tab, the top bar, and the login page.
 - **Which proxy or agent is this?** Each dashboard's top bar and browser tab now name it: `Proxy: proxy:8080`, the
@@ -50,6 +55,9 @@ _Not yet released_
 - **The proxy's connect, heartbeat, and eviction counts mean what they say.** `proxy_connect_count_total` and
   `proxy_heartbeat_count_total` no longer count connects and heartbeats the proxy refused, and an eviction is counted
   only when it removed the agent.
+- **The agent's connect and result counts mean what they say.** `agent_connect_count_total` counts a connect as a
+  success once the proxy has registered the agent, and as `rejected` when the proxy refuses it, and a result counts as
+  sent only once it's on its way, with one a dropped connection loses counted as `dropped`.
 - **A new look for the login page and Log out.** The login page shows the logo and Prometheus Proxy, with Proxy
   Dashboard or Agent Dashboard under it, and Log out, at the end of the top bar, is now an exit icon; hover over it for
   its name.

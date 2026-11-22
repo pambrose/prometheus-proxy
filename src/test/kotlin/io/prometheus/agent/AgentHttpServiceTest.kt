@@ -18,6 +18,10 @@
 
 package io.prometheus.agent
 
+import io.prometheus.common.MetricBuilders.metricLabel
+import io.prometheus.agent.filter.FailOpenReason
+import io.kotest.inspectors.forAll
+import io.prometheus.common.CountingAgentMetrics
 import ch.qos.logback.classic.Level
 import io.kotest.assertions.fail
 import io.kotest.assertions.throwables.shouldThrow
@@ -1399,6 +1403,74 @@ class AgentHttpServiceTest : StringSpec() {
         service.fetchScrapeUrl(request)
 
         requestCount.load() shouldBe 1
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+    // agent.scrapeMaxRetries retries were counted nowhere. Prometheus's scrapes count theirs; a dashboard's, which the
+    // agent's scrape metrics leave out, doesn't.
+    "a retry of Prometheus's scrape should be counted, and a dashboard's not" {
+      val server =
+        embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
+          routing {
+            get("/metrics") {
+              call.response.status(HttpStatusCode.InternalServerError)
+              call.respondText("unavailable")
+            }
+          }
+        }
+
+      try {
+        val port = server.startAndAwaitReady()
+        val mockAgent = createMockAgentWithPaths(maxRetries = 1)
+        every { mockAgent.launchId } returns "test-launch-id"
+        val counts = CountingAgentMetrics().also { it.installOn(mockAgent) }
+        val service = AgentHttpService(mockAgent)
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
+
+        service.fetchScrapeUrl(scrapeRequest { path = "metrics" })
+        counts.scrapeRetries.labelValues("test-launch-id").get() shouldBe 1.0
+
+        service.fetchScrapeUrl(
+          scrapeRequest {
+            path = "metrics"
+            dashboardScrape = true
+          },
+        )
+        counts.scrapeRetries.labelValues("test-launch-id").get() shouldBe 1.0
+        service.close()
+      } finally {
+        server.stop(0, 0)
+      }
+    }
+
+    // The filter logs only the first scrape it lets through unfiltered for each reason; every one is counted.
+    "a scrape a path's filter lets through unfiltered should be counted by why" {
+      val (mockAgent, metrics) =
+        createMockAgentWithFilterAndMetrics("""{ path = "metrics", metricNameAllow = [], metricNameDeny = ["x"] }""")
+      val responses = ArrayDeque(listOf(ContentType.Application.OctetStream, ContentType.Text.Plain))
+      val server =
+        embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
+          routing {
+            get("/metrics") {
+              // Bytes that aren't valid UTF-8, sent first as a binary type and then as text.
+              call.respondBytes(byteArrayOf(0xC3.toByte(), 0x28), responses.removeFirst())
+            }
+          }
+        }
+
+      try {
+        val port = server.startAndAwaitReady()
+        val service = AgentHttpService(mockAgent)
+        mockAgent.pathManager.registerPath("metrics", "http://localhost:$port/metrics")
+
+        repeat(2) { service.fetchScrapeUrl(scrapeRequest { path = "metrics" }) }
+
+        FailOpenReason.entries.forAll { reason ->
+          metrics.filterFailOpenCount.labelValues("test-launch-id", "metrics", reason.metricLabel).get() shouldBe 1.0
+        }
         service.close()
       } finally {
         server.stop(0, 0)

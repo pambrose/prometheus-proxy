@@ -174,14 +174,22 @@ change.
 
 ### Counters
 
-| Metric                             | Labels              | Description                                  |
-|------------------------------------|---------------------|----------------------------------------------|
-| `agent_scrape_request_count_total` | `launch_id`, `type` | Scrape requests processed by this agent      |
-| `agent_scrape_result_count_total`  | `launch_id`, `type` | Scrape results sent to proxy                 |
-| `agent_connect_count_total`        | `launch_id`, `type` | Connection attempts to the proxy             |
-| `agent_filter_lines_dropped_total` | `launch_id`, `path` | Lines removed by the path's metric filter    |
-| `agent_filter_bytes_saved_total`   | `launch_id`, `path` | Bytes saved before gzip by the metric filter |
-| `agent_dashboard_scrapes_total`    | `launch_id`         | Scrapes the proxy's dashboard asked for      |
+| Metric                             | Labels                        | Description                                                            |
+|------------------------------------|-------------------------------|------------------------------------------------------------------------|
+| `agent_scrape_request_count_total` | `launch_id`, `type`           | Scrape requests processed by this agent                                |
+| `agent_scrape_result_count_total`  | `launch_id`, `type`           | Scrape results sent to proxy                                           |
+| `agent_connect_count_total`        | `launch_id`, `type`           | Connection attempts, by outcome                                        |
+| `agent_disconnects_total`          | `launch_id`                   | Registered connections that ended                                      |
+| `agent_endpoint_advances_total`    | `launch_id`                   | Moves to the next proxy endpoint after a failed connect                |
+| `agent_heartbeats_total`           | `launch_id`, `outcome`        | Heartbeats sent: `success`, `evicted`, `transient_failure`             |
+| `agent_path_rejections_total`      | `launch_id`, `cause`          | Path registrations the proxy refused, by cause                         |
+| `agent_discovery_reconciles_total` | `launch_id`, `outcome`        | Path discovery reconciles: `success`, `failure`                        |
+| `agent_scrape_retries_total`       | `launch_id`                   | Retries of a target's request                                          |
+| `agent_filter_fail_open_total`     | `launch_id`, `path`, `reason` | Scrapes a filter passed through unfiltered: `non_text`, `invalid_utf8` |
+| `agent_dashboard_logins_total`     | `launch_id`, `outcome`        | The agent dashboard's logins: `success`, `failure`, `blocked`          |
+| `agent_filter_lines_dropped_total` | `launch_id`, `path`           | Lines removed by the path's metric filter                              |
+| `agent_filter_bytes_saved_total`   | `launch_id`, `path`           | Bytes saved before gzip by the metric filter                           |
+| `agent_dashboard_scrapes_total`    | `launch_id`                   | Scrapes the proxy's dashboard asked for                                |
 
 **`agent_scrape_request_count_total` type labels:** `success`, `unsuccessful` (the target answered with a non-2xx
 status or a response over `agent.http.maxContentLengthMBytes`), `timed_out` (the target didn't answer within the
@@ -191,7 +199,8 @@ failure), `invalid_path` (the proxy asked for a path this agent doesn't serve)
 **`agent_scrape_result_count_total` type labels:** `non-gzipped`, `gzipped`, `chunked`, `dropped` (a result lost
 because the connection to the proxy closed before it was sent)
 
-**`agent_connect_count_total` type labels:** `success`, `failure`
+**`agent_connect_count_total` type labels:** `success` (the proxy registered the agent), `rejected` (the proxy
+refused the registration), `failure` (the connect or the registration failed)
 
 The `agent_scrape_*` counters and latency histogram count only Prometheus's scrapes. A scrape the proxy's dashboard
 asked for (its scrape-now), which the proxy marks with the scrape request's `dashboard_scrape` field, counts in
@@ -209,6 +218,7 @@ The two `agent_filter_*` counters only create series for paths that have a metri
 | Metric                                 | Labels                    | Buckets | Description                                    |
 |----------------------------------------|---------------------------|---------|------------------------------------------------|
 | `agent_scrape_request_latency_seconds` | `launch_id`, `agent_name` | 5ms–90s | Time to fetch metrics from the target endpoint |
+| `agent_scrape_queue_wait_seconds`      | `launch_id`               | 5ms–90s | Time a request waited for one of `agent.http.maxConcurrentClients` |
 
 Same bucket boundaries as the proxy latency histogram.
 
@@ -217,6 +227,12 @@ Same bucket boundaries as the proxy latency histogram.
 | Metric                      | Labels      | Description                                  |
 |-----------------------------|-------------|----------------------------------------------|
 | `agent_start_time_seconds`  | `launch_id` | Agent start time (Unix epoch)                |
+| `agent_build_info`          | `launch_id`, `agent_name`, `version` | Always 1                    |
+| `agent_connected`           | `launch_id` | 1 while connected and registered, else 0     |
+| `agent_proxy_endpoint_index` | `launch_id` | Endpoint in use, by its place in `agent.proxy.endpoints`; 0 is the primary |
+| `agent_paths`               | `launch_id`, `source` | Paths registered with the proxy: `static`, `discovered` |
+| `agent_discovery_last_success_timestamp_seconds` | `launch_id` | Discovery's last successful reconcile (Unix epoch) |
+| `agent_dashboard_sessions`  | `launch_id` | The agent dashboard's open pages             |
 | `agent_scrape_backlog_size` | `launch_id` | Pending scrape requests queued at this agent |
 | `agent_client_cache_size`   | `launch_id` | Number of cached HTTP clients                |
 
@@ -347,11 +363,13 @@ Both dashboards use template variables:
 
 | Section             | Panels                                                             | What to Watch                                                                                                                 |
 |---------------------|--------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------|
-| **Overview**        | Agent count, Total scrape rate, Uptime table                       | Unexpected agent count changes                                                                                                |
-| **Connections**     | Successful connections and failures per second, per agent          | Failure spikes indicate proxy or network issues                                                                               |
-| **Scrape Activity** | Request rate by agent, Unsuccessful scrapes by agent, Result types | Imbalanced load; unsuccessful scrapes point at a failing target; any `dropped` result is a scrape lost to a closed connection |
-| **Latency**         | P50/P90/P99 overall, P99 per agent                                 | Per-agent latency outliers point to slow targets                                                                              |
+| **Overview**        | Agent count, Connected, Not on primary, Total scrape rate, Uptime and Versions tables | Unexpected agent count changes; an agent not connected, or on a backup endpoint                       |
+| **Connections**     | Successful connections, failures and rejections, Connected by agent, Disconnects and endpoint advances, Heartbeats by outcome | Failure spikes indicate proxy or network issues; a rejected connect is the proxy refusing the agent |
+| **Scrape Activity** | Request rate by agent, Unsuccessful scrapes by agent, Result types, Retries, Filter fail-open | Imbalanced load; unsuccessful scrapes point at a failing target; any `dropped` result is a scrape lost to a closed connection |
+| **Paths & Discovery** | Registered paths by source, Path rejections by cause, Discovery reconciles, Since last discovery | A path the proxy keeps refusing; a discovery file that fails to read                                  |
+| **Latency**         | P50/P90/P99 overall, Queue wait P50/P90/P99, P99 per agent         | Per-agent latency outliers point to slow targets; queue wait climbing means too few `agent.http.maxConcurrentClients`              |
 | **Agent Internals** | Backlog size, HTTP client cache size                               | Growing backlog means the agent is falling behind                                                                             |
+| **Dashboard**       | Logins by outcome, Open pages                                      | Wrong or blocked logins to an agent's dashboard                                                                               |
 
 ---
 

@@ -143,7 +143,7 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 4,
+        "w": 3,
         "x": 4,
         "y": 1
       },
@@ -211,8 +211,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 4,
-        "x": 8,
+        "w": 3,
+        "x": 7,
         "y": 1
       },
       "fieldConfig": {
@@ -272,7 +272,7 @@
       "gridPos": {
         "h": 4,
         "w": 4,
-        "x": 12,
+        "x": 10,
         "y": 1
       },
       "fieldConfig": {
@@ -347,8 +347,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 4,
-        "x": 16,
+        "w": 3,
+        "x": 14,
         "y": 1
       },
       "fieldConfig": {
@@ -423,8 +423,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 4,
-        "x": 20,
+        "w": 3,
+        "x": 17,
         "y": 1
       },
       "fieldConfig": {
@@ -483,6 +483,83 @@
             "uid": "${datasource}"
           },
           "expr": "max(up{job=\"coffee-shop\"})",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Agent",
+      "description": "Whether the coffee shop's embedded agent is connected to the proxy. Its metrics reach Prometheus through the proxy, so while it is disconnected there are none to read.",
+      "id": 17,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "Connected",
+                  "color": "green",
+                  "index": 0
+                },
+                "0": {
+                  "text": "Disconnected",
+                  "color": "red",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none",
+          "noValue": "Disconnected"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "max(agent_connected{job=\"coffee-shop-agent\"})",
           "legendFormat": "",
           "refId": "A"
         }

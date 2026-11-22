@@ -49,6 +49,17 @@ All notable changes to this project are documented in this file.
 - The proxy's Grafana dashboard has panels for them (queue wait, disconnects by reason, Security & Rejections, and the
   dashboard's logins), `grafana/alerts.yml` adds ProxyAgentAuthFailures and ProxyPathRejections, and the basics and
   network demos' dashboards show disconnects, path rejections, and queue wait
+- The agent counts what happens to its connection and paths: `agent_connected` and `agent_proxy_endpoint_index`,
+  `agent_disconnects_total`, `agent_endpoint_advances_total`, `agent_heartbeats_total` (by `outcome`),
+  `agent_path_rejections_total` (every refusal, by `cause`), `agent_paths` (by `source`),
+  `agent_discovery_reconciles_total` and `agent_discovery_last_success_timestamp_seconds`, `agent_scrape_retries_total`,
+  `agent_filter_fail_open_total`, `agent_scrape_queue_wait_seconds`, `agent_dashboard_logins_total` and
+  `agent_dashboard_sessions`, and `agent_build_info`. `agent_connect_count_total` gains `type="rejected"`, a
+  registration the proxy refused
+- The agents' Grafana dashboard has panels for them (connected and failover, heartbeats, retries and filter fail-open,
+  Paths & Discovery, queue wait, and the dashboard's logins), `grafana/alerts.yml` adds AgentDisconnected,
+  AgentDiscoveryFailing, and AgentNotOnPrimary, the network demo's dashboard shows agents off their primary, and the
+  embedded demo's whether the coffee shop's agent is connected
 - The project has a logo, a suspension bridge in Prometheus orange (`website/prometheus-proxy/docs/images/logo.svg`,
   and `favicon.svg`, its cut for 16px): in the README's title, the docs site's header and tab icon, and both
   dashboards' tab icon, top bar, and login page
@@ -71,6 +82,9 @@ All notable changes to this project are documented in this file.
   accepts, `proxy_eviction_count_total` only an eviction that removed the agent, and
   `proxy_chunked_transfers_abandoned_total` also a transfer whose scrape ended first, at a timeout or when Prometheus
   hung up
+- `agent_connect_count_total{type="success"}` counts a connect once the proxy has registered the agent, rather than as
+  the connection opens, and `agent_scrape_result_count_total` counts a result as sent once gRPC takes it to send, and
+  as `dropped` when the connection ends first
 - The dashboards' login page shows the logo and "Prometheus Proxy" over the dashboard's name, "Proxy Dashboard" or
   "Agent Dashboard", where it read "Prometheus Proxy Dashboard" or "Prometheus Agent Dashboard", and its tab title is
   `Log in · Proxy Dashboard · Prometheus Proxy`. Log out, in the top bar, is an exit icon, named Log out in its tooltip

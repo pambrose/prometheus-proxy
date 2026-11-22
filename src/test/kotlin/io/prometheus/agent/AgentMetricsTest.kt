@@ -18,6 +18,15 @@
 
 package io.prometheus.agent
 
+import io.prometheus.common.registeredCounts
+import io.prometheus.agent.dashboard.AgentDashboardService
+import io.mockk.mockk
+import io.kotest.inspectors.forAll
+import io.prometheus.metrics.model.snapshots.CounterSnapshot
+import io.prometheus.BuildConfig
+import io.prometheus.common.MetricBuilders
+import io.prometheus.common.registeredSnapshot
+import io.prometheus.common.registeredMetricNames
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.collections.shouldContain
@@ -255,6 +264,122 @@ class AgentMetricsTest : StringSpec() {
 
       metrics.filterLinesDropped.labelValues("test-launch-id", "metrics").get() shouldBe 3.0
       metrics.filterBytesSaved.labelValues("test-launch-id", "metrics").get() shouldBe 128.0
+    }
+    // ==================== Added series ====================
+
+    "the counters, histogram, and gauges added for connections, paths, discovery, and the dashboard should register" {
+      opened(AgentMetrics(mockAgentForMetrics()))
+
+      registeredMetricNames() shouldContainAll
+        listOf(
+          "agent_disconnects",
+          "agent_endpoint_advances",
+          "agent_heartbeats",
+          "agent_path_rejections",
+          "agent_discovery_reconciles",
+          "agent_discovery_last_success_timestamp_seconds",
+          "agent_scrape_retries",
+          "agent_filter_fail_open",
+          "agent_scrape_queue_wait_seconds",
+          "agent_dashboard_logins",
+          "agent_build_info",
+          "agent_connected",
+          "agent_proxy_endpoint_index",
+          "agent_paths",
+          "agent_dashboard_sessions",
+        )
+    }
+
+    "agent_build_info should carry the agent's launch ID, name, and version, and go when its metrics close" {
+      val leaving = opened(AgentMetrics(mockAgentForMetrics()))
+      val staying = mockAgentForMetrics().also { every { it.launchId } returns "staying-launch-id" }
+      opened(AgentMetrics(staying))
+
+      fun info() = registeredSnapshot<GaugeSnapshot>("agent_build_info").dataPoints.map { it.labels }
+
+      info().map { it.get("launch_id") }.toSet() shouldBe setOf("test-launch-id", "staying-launch-id")
+      info().forAll {
+        it.get("agent_name") shouldBe "test-agent"
+        it.get("version") shouldBe BuildConfig.APP_VERSION
+      }
+      leaving.close()
+      info().map { it.get("launch_id") } shouldBe listOf("staying-launch-id")
+    }
+
+    // A series created by its first increment starts at 1, so increase() and rate() saw nothing of a single
+    // disconnect or refused path. Each agent's series of the labels with a known set of values start at zero.
+    "an agent's counters with a known set of labels should start at zero, and go when its metrics close" {
+      val metrics = opened(AgentMetrics(mockAgentForMetrics()))
+      // Another agent keeps the collectors registered once this one's close.
+      opened(AgentMetrics(mockAgentForMetrics().also { every { it.launchId } returns "other-launch-id" }))
+
+      fun values(
+        name: String,
+        label: String? = null,
+      ) = registeredCounts(name, label, launchId = "test-launch-id")
+
+      values("agent_connect_count", "type") shouldBe mapOf("success" to 0.0, "failure" to 0.0, "rejected" to 0.0)
+      values("agent_scrape_result_count", "type") shouldBe
+        mapOf("non-gzipped" to 0.0, "gzipped" to 0.0, "chunked" to 0.0, "dropped" to 0.0)
+      values("agent_heartbeats", "outcome") shouldBe
+        mapOf("success" to 0.0, "evicted" to 0.0, "transient_failure" to 0.0)
+      values("agent_path_rejections", "cause").keys shouldBe MetricBuilders.REJECTION_CAUSES.toSet()
+      listOf("agent_disconnects", "agent_endpoint_advances", "agent_scrape_retries").forAll {
+        values(it) shouldBe mapOf("" to 0.0)
+      }
+      // Discovery's and the dashboard's only for an agent that has them.
+      values("agent_discovery_reconciles", "outcome") shouldBe emptyMap()
+      values("agent_dashboard_logins", "outcome") shouldBe emptyMap()
+
+      metrics.close()
+      values("agent_heartbeats", "outcome") shouldBe emptyMap()
+    }
+
+    "an agent with discovery and a dashboard should start their counters at zero too" {
+      val agent = mockAgentForMetrics()
+      every { agent.pathDiscoveryService } returns mockk(relaxed = true)
+      every { agent.dashboardService } returns mockk(relaxed = true)
+      opened(AgentMetrics(agent))
+
+      registeredCounts("agent_discovery_reconciles", "outcome").keys shouldBe setOf("success", "failure")
+      registeredCounts("agent_dashboard_logins", "outcome").keys shouldBe setOf("success", "failure", "blocked")
+    }
+
+    // What agent_connect_count_total counts an attempt as, from how registering the agent ended.
+    "a connect attempt should count as a success once registered, rejected when refused, and a failure otherwise" {
+      AgentMetrics.connectOutcome(null) shouldBe "success"
+      AgentMetrics.connectOutcome(RequestFailureException.fromProxy("registerAgent", "refused")) shouldBe "rejected"
+      AgentMetrics.connectOutcome(IllegalStateException("UNAVAILABLE")) shouldBe "failure"
+    }
+
+    "the sampled gauges should report the agent's connection, endpoint, paths by source, and dashboard pages" {
+      val agent = mockAgentForMetrics()
+      every { agent.isConnectedToProxy } returns true
+      every { agent.grpcService.currentEndpointIndex } returns 2
+      every { agent.pathManager.registeredPaths } returns
+        listOf(
+          AgentPathManager.PathContext(1, "a", "http://a", "{}", PathSource.STATIC),
+          AgentPathManager.PathContext(2, "b", "http://b", "{}", PathSource.DISCOVERED),
+          AgentPathManager.PathContext(3, "c", "http://c", "{}", PathSource.DISCOVERED),
+        )
+      val dashboard = mockk<AgentDashboardService>(relaxed = true)
+      every { dashboard.sessionsOpen } returns 4
+      every { agent.dashboardService } returns dashboard
+      opened(AgentMetrics(agent))
+
+      fun gauge(name: String) = registeredSnapshot<GaugeSnapshot>(name).dataPoints
+
+      gauge("agent_connected").single().value shouldBe 1.0
+      gauge("agent_proxy_endpoint_index").single().value shouldBe 2.0
+      gauge("agent_paths").associate { it.labels.get("source") to it.value } shouldBe
+        mapOf("static" to 1.0, "discovered" to 2.0)
+      gauge("agent_dashboard_sessions").single().value shouldBe 4.0
+    }
+
+    "an agent without a dashboard should report no dashboard pages" {
+      opened(AgentMetrics(mockAgentForMetrics()))
+
+      registeredSnapshot<GaugeSnapshot>("agent_dashboard_sessions").dataPoints shouldBe emptyList()
     }
   }
 }

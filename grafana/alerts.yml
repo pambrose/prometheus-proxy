@@ -94,3 +94,30 @@ groups:
         labels: { severity: warning }
         annotations:
           summary: "Agent {{ $labels.job }} scrape backlog is large"
+
+      # For an agent Prometheus scrapes directly. Scraped through the proxy, a disconnected agent's metrics can't be
+      # read at all, and its job's up series goes to 0 instead.
+      - alert: AgentDisconnected
+        expr: agent_connected == 0
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "Agent {{ $labels.job }} is not connected to a proxy"
+
+      # Every reconcile failing, the agent keeping the paths it read last: a missing or malformed discovery file.
+      - alert: AgentDiscoveryFailing
+        expr: |
+          sum by (job) (increase(agent_discovery_reconciles_total{outcome="failure"}[15m])) > 0
+            and sum by (job) (increase(agent_discovery_reconciles_total{outcome="success"}[15m])) == 0
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Agent {{ $labels.job }} can't read its path discovery file"
+
+      # Connected through a backup endpoint: the primary proxy, or the agent's link to it, is down.
+      - alert: AgentNotOnPrimary
+        expr: agent_proxy_endpoint_index > 0
+        for: 30m
+        labels: { severity: warning }
+        annotations:
+          summary: "Agent {{ $labels.job }} has been on a backup proxy endpoint for 30 minutes"

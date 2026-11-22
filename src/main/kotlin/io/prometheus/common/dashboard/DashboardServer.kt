@@ -115,8 +115,8 @@ internal class DashboardSettings(
 )
 
 /**
- * How a dashboard login went, which the server tells its owner of (`onLogin`), such as for the proxy to count in
- * `proxy_dashboard_logins_total`.
+ * How a dashboard login went, which the server tells its owner of (`onLogin`), for it to count in its
+ * `proxy_dashboard_logins_total` or `agent_dashboard_logins_total`.
  */
 internal enum class DashboardLoginOutcome {
   /**

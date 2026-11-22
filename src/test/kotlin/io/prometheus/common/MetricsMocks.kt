@@ -18,6 +18,10 @@
 
 package io.prometheus.common
 
+import io.prometheus.metrics.core.metrics.Gauge
+import io.prometheus.metrics.model.snapshots.CounterSnapshot
+import io.prometheus.agent.AgentPathManager
+import io.prometheus.agent.AgentMetrics
 import io.prometheus.metrics.model.snapshots.MetricSnapshot
 import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.mockk.every
@@ -59,21 +63,51 @@ internal fun mockAgentForMetrics(): Agent {
   val mockAgentHttpService = mockk<AgentHttpService>(relaxed = true)
   every { mockAgentHttpService.httpClientCache } returns mockHttpClientCache
 
+  val mockPathManager = mockk<AgentPathManager>(relaxed = true)
+  every { mockPathManager.registeredPaths } returns emptyList()
+
   val mockAgent = mockk<Agent>(relaxed = true)
   every { mockAgent.launchId } returns "test-launch-id"
+  every { mockAgent.agentName } returns "test-agent"
   every { mockAgent.scrapeRequestBacklogSize } returns AtomicInt(0)
   every { mockAgent.agentHttpService } returns mockAgentHttpService
+  every { mockAgent.pathManager } returns mockPathManager
+  every { mockAgent.isConnectedToProxy } returns false
+  // An agent without discovery or a dashboard, unless a spec stubs them.
+  every { mockAgent.pathDiscoveryService } returns null
+  every { mockAgent.dashboardService } returns null
 
   return mockAgent
 }
 
 /**
- * A relaxed [ProxyMetrics] whose counters and queue-wait histogram are real collectors, never registered, so a spec
- * reads what a call counted: `connects.get()`, or `pathRejections.labelValues("invalid_path").get()`. [installOn]
- * routes a mocked or spied proxy's `metrics { }` blocks to them.
+ * A relaxed mock of [metrics], the proxy's or the agent's, whose collectors are real and never registered, so a spec
+ * reads what a call counted: `connects.get()`, or `pathRejections.labelValues("invalid_path").get()`. Every labeled
+ * counter is stubbed, read or not: a relaxed mock's labeled counter can't be incremented, its `labelValues` answering a
+ * plain `DataPoint`. A subclass's `installOn` routes a mocked or spied proxy's or agent's `metrics { }` blocks to them.
  */
-internal class CountingProxyMetrics {
-  val metrics: ProxyMetrics = mockk(relaxed = true)
+internal abstract class CountingMetrics<M : Any>(
+  val metrics: M,
+) {
+  /** How many observations the queue-wait histogram holds, across its series. */
+  val queueWaitCount: Long get() = queueWait.collect().dataPoints.sumOf { it.count }
+
+  protected abstract val queueWait: Histogram
+
+  // [collector], which [metrics] answers for the member [member] reads.
+  protected fun <T : Any> stub(
+    member: M.() -> T,
+    collector: T,
+  ): T = collector.also { every { metrics.member() } returns it }
+
+  protected fun counter(
+    name: String,
+    vararg labelNames: String,
+  ): Counter = Counter.builder().name(name).labelNames(*labelNames).build()
+}
+
+/** The proxy's [CountingMetrics]. */
+internal class CountingProxyMetrics : CountingMetrics<ProxyMetrics>(mockk(relaxed = true)) {
   val scrapeRequests = stub({ scrapeRequestCount }, counter("scrape_requests", "type"))
   val connects = stub({ connectCount }, counter("connects"))
   val heartbeats = stub({ heartbeatCount }, counter("heartbeats"))
@@ -87,27 +121,39 @@ internal class CountingProxyMetrics {
   val bindingMismatches = stub({ bindingMismatchCount }, counter("binding_mismatches", "rpc"))
   val lateResults = stub({ lateScrapeResultCount }, counter("late_results"))
   val dashboardLogins = stub({ dashboardLoginCount }, counter("dashboard_logins", "outcome"))
-  val queueWait: Histogram = stub({ scrapeQueueWait }, Histogram.builder().name("queue_wait").build())
-
-  /** How many observations the queue-wait histogram holds. */
-  val queueWaitCount: Long get() = queueWait.collect().dataPoints.sumOf { it.count }
+  override val queueWait: Histogram = stub({ scrapeQueueWait }, Histogram.builder().name("queue_wait").build())
 
   /** Routes [proxy]'s `metrics { }` blocks, a mock's or a spy's, to these collectors; returns [proxy]. */
   fun installOn(proxy: Proxy): Proxy =
     proxy.also {
       every { it.metrics(any<ProxyMetrics.() -> Unit>()) } answers { firstArg<ProxyMetrics.() -> Unit>()(metrics) }
     }
+}
 
-  // [collector], which [metrics] answers for the member [member] reads.
-  private fun <T : Any> stub(
-    member: ProxyMetrics.() -> T,
-    collector: T,
-  ): T = collector.also { every { metrics.member() } returns it }
+/** The agent's [CountingMetrics], labeled as the agent's are, `launch_id` first. */
+internal class CountingAgentMetrics : CountingMetrics<AgentMetrics>(mockk(relaxed = true)) {
+  val scrapeResults = stub({ scrapeResultCount }, counter("scrape_results", "launch_id", "type"))
+  val connects = stub({ connectCount }, counter("connects", "launch_id", "type"))
+  val disconnects = stub({ disconnectCount }, counter("disconnects", "launch_id"))
+  val endpointAdvances = stub({ endpointAdvanceCount }, counter("endpoint_advances", "launch_id"))
+  val heartbeats = stub({ heartbeatCount }, counter("heartbeats", "launch_id", "outcome"))
+  val pathRejections = stub({ pathRejectionCount }, counter("path_rejections", "launch_id", "cause"))
+  val discoveryReconciles = stub({ discoveryReconcileCount }, counter("discovery_reconciles", "launch_id", "outcome"))
+  val discoveryLastSuccess =
+    stub({ discoveryLastSuccess }, Gauge.builder().name("discovery_last_success").labelNames("launch_id").build())
+  val scrapeRetries = stub({ scrapeRetryCount }, counter("scrape_retries", "launch_id"))
+  val filterFailOpen = stub({ filterFailOpenCount }, counter("filter_fail_open", "launch_id", "path", "reason"))
+  val filterLinesDropped = stub({ filterLinesDropped }, counter("filter_lines_dropped", "launch_id", "path"))
+  val filterBytesSaved = stub({ filterBytesSaved }, counter("filter_bytes_saved", "launch_id", "path"))
+  val dashboardLogins = stub({ dashboardLoginCount }, counter("dashboard_logins", "launch_id", "outcome"))
+  override val queueWait: Histogram =
+    stub({ scrapeQueueWait }, Histogram.builder().name("queue_wait").labelNames("launch_id").build())
 
-  private fun counter(
-    name: String,
-    vararg labelNames: String,
-  ): Counter = Counter.builder().name(name).labelNames(*labelNames).build()
+  /** Routes [agent]'s `metrics { }` blocks, a mock's or a spy's, to these collectors; returns [agent]. */
+  fun installOn(agent: Agent): Agent =
+    agent.also {
+      every { it.metrics(any<AgentMetrics.() -> Unit>()) } answers { firstArg<AgentMetrics.() -> Unit>()(metrics) }
+    }
 }
 
 /** The names of the metric families registered in the default registry. */
@@ -119,3 +165,16 @@ internal fun registeredMetricNames(): List<String> =
 /** The default registry's snapshot of the [T] family named [name], which must be registered. */
 internal inline fun <reified T : MetricSnapshot> registeredSnapshot(name: String): T =
   PrometheusRegistry.defaultRegistry.scrape().filterIsInstance<T>().single { it.metadata.name == name }
+
+/**
+ * The registered counter [name]'s values, by the value of its [label], or under "" without one; only the series of
+ * [launchId], an agent's, when given.
+ */
+internal fun registeredCounts(
+  name: String,
+  label: String? = null,
+  launchId: String? = null,
+): Map<String, Double> =
+  registeredSnapshot<CounterSnapshot>(name).dataPoints
+    .filter { launchId == null || it.labels.get("launch_id") == launchId }
+    .associate { (label?.let { l -> it.labels.get(l) } ?: "") to it.value }
