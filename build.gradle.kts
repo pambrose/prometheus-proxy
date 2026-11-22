@@ -323,6 +323,13 @@ fun Project.configureTesting() {
     if (runContainerTests) {
       outputs.upToDateWhen { false }
       outputs.cacheIf("the container specs test Docker images, which aren't inputs") { false }
+      // The images are built from the fat JARs, so the specs never test stale ones.
+      dependsOn("agentJar", "proxyJar")
+      // A run of only the container specs runs several at a time (ContainerTestsConfig); one with any other spec
+      // doesn't, since those share the JVM's default registry and log capture.
+      if (testsOnlyContainerSpecs()) {
+        systemProperty("kotest.framework.config.fqn", "io.prometheus.containers.support.ContainerTestsConfig")
+      }
     }
 
     // Scale the test JVM heap to the harness load. LARGE+ generates multi-MB scrape payloads
@@ -359,6 +366,17 @@ fun Project.configureTesting() {
 // the default registry or a log capture with the other. test runs neither itself, only both, so `./gradlew test`, check,
 // build, and the Kover tasks still run every spec. A run that names specs with --tests, as IntelliJ's do, or excludes
 // test with -x test, leaves test as it was: the specs it runs, in one JVM, or none.
+// Whether the command line names specs with --tests, and every one it names is a container spec, as `make
+// container-tests`, `make scaling-tests`, and container-tests.yml do.
+fun Project.testsOnlyContainerSpecs(): Boolean {
+  val named =
+    gradle.startParameter.taskRequests.flatMap { request ->
+      request.args.zipWithNext().filter { (option, _) -> option == "--tests" }.map { (_, spec) -> spec } +
+        request.args.filter { it.startsWith("--tests=") }.map { it.removePrefix("--tests=") }
+    }
+  return named.isNotEmpty() && named.all { it.startsWith("io.prometheus.containers.") }
+}
+
 fun Project.configureTestPartitions() {
   val startParameter = gradle.startParameter
   val testsNamed = startParameter.taskRequests.any { "--tests" in it.args }

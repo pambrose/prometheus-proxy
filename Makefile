@@ -318,7 +318,7 @@ codescene:  ## Run CodeScene's pull request check locally with the cs CLI, on th
 	fi; \
 	echo "The CodeScene check would pass: no finding is new or worse outside test code"
 
-container-tests: jars  ## Run the Testcontainers tests (needs Docker)
+container-tests:  ## Run the Testcontainers tests, building the fat JARs first (needs Docker)
 	@DOCKER_HOST="$$(docker context inspect --format '{{.Endpoints.docker.Host}}' 2>/dev/null)"; \
 	if [ -z "$$DOCKER_HOST" ]; then \
 		echo "Error: could not detect active Docker context. Is Docker running?" >&2; exit 1; \
@@ -383,7 +383,7 @@ docker-clean-dry:  ## Preview what `make docker-clean` would reclaim (removes no
 docker-clean:  ## Reclaim Docker disk left by the container tests (ARGS="--all" to include cache, base and built images)
 	@./bin/docker-clean-tests.sh $(ARGS)
 
-scaling-tests: jars  ## Run the parameter-driven scaling container test (tune via SCALE_* vars; needs Docker)
+scaling-tests:  ## Run the parameter-driven scaling container test (tune via SCALE_* vars; needs Docker)
 	@$(SCALING_BANNER) scaling-tests "$(if $(SCALE_SETTINGS),$(SCALE_SETTINGS),built-in defaults)"
 	@DOCKER_HOST="$$(docker context inspect --format '{{.Endpoints.docker.Host}}' 2>/dev/null)"; \
 	if [ -z "$$DOCKER_HOST" ]; then \

@@ -45,6 +45,7 @@ import org.testcontainers.DockerClientFactory
 import org.testcontainers.containers.GenericContainer
 import org.testcontainers.containers.Network
 import org.testcontainers.containers.wait.strategy.Wait
+import org.testcontainers.lifecycle.Startables
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -117,9 +118,11 @@ class ContainersScalingTest : StringSpec() {
               ).withMemoryMib(agentMemMib)
           }
 
-          stubs.forEach { it.start() }
-          proxy.start()
-          agents.forEach { it.start() }
+          // Started in batches, each batch at once: one at a time, the five-agent scenario spent most of its time
+          // waiting on agent JVMs to start, and all at once, a 40-agent preset would start 40 JVMs on the Docker VM.
+          // The agents wait for the proxy, which they register with.
+          (stubs + proxy).startInBatches()
+          agents.startInBatches()
 
           // --- per-path correctness (run concurrently or sequentially per the scenario) ---
           val checks = buildList<suspend () -> Unit> {
@@ -229,6 +232,13 @@ private val dockerVmMib: Long by lazy {
 private fun ScalingScenario.agentMemoryMib(): Long =
   ((dockerVmMib * VM_BUDGET_PERCENT / 100 - PROXY_MEM_MIB) / totalAgents.coerceAtLeast(1))
     .coerceIn(AGENT_MIN_MEM_MIB, AGENT_MAX_MEM_MIB)
+
+/** How many containers [startInBatches] starts at once. */
+private const val START_BATCH_SIZE = 4
+
+/** Starts these containers [START_BATCH_SIZE] at a time, each batch at once, returning once all have started. */
+private fun List<GenericContainer<*>>.startInBatches() =
+  chunked(START_BATCH_SIZE).forEach { batch -> Startables.deepStart(batch).join() }
 
 /** Pin a JVM container's memory so its heap auto-sizes to the cgroup limit instead of 25% of host RAM. */
 private fun GenericContainer<*>.withMemoryMib(mib: Long): GenericContainer<*> =

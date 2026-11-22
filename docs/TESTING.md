@@ -971,7 +971,15 @@ End-to-end Testcontainers specs that build the proxy and agent images from `etc/
 alongside `nginx:1.31-alpine` metrics stubs (and `prom/prometheus:v3.14.0` where needed), each pinned by digest as
 well as tag, and exercise the full Prometheus → proxy → agent → endpoint scrape path over real network transport.
 Every spec is gated on `RUN_CONTAINER_TESTS=true`; shared factories live in
-`containers/support/ContainerTestSupport.kt`.
+`containers/support/ContainerTestSupport.kt`. With `RUN_CONTAINER_TESTS=true` the test task builds the fat JARs first,
+since the images are built from them, so `make container-tests` and container-tests.yml are one Gradle invocation.
+
+`containers/support/ContainerTestsConfig.kt` is the Kotest config of a run of only the container specs (`--tests`
+naming nothing else, as `make container-tests`, `make scaling-tests`, and container-tests.yml do), which
+`build.gradle.kts` selects with `kotest.framework.config.fqn`: it runs three specs at a time. Each spec starts its own
+containers on a network of its own, with random host ports, and shares only the two images, which build once, so the
+specs spend most of their time waiting on containers to start, side by side. A run with any other spec stays one spec
+at a time.
 
 `containers/support/LoopbackPortBindings.kt` publishes every container port on `127.0.0.1` instead of
 Docker's `0.0.0.0` default. It has no call sites: it is registered through
