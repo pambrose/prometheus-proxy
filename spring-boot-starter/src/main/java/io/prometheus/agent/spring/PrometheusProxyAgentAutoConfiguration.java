@@ -17,19 +17,16 @@
 package io.prometheus.agent.spring;
 
 import org.springframework.boot.autoconfigure.AutoConfiguration;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.boot.health.autoconfigure.contributor.ConditionalOnEnabledHealthIndicator;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 
 /**
  * Runs an embedded agent with the app, as {@link PrometheusProxyAgent}, unless {@code prometheus-proxy.agent.enabled}
- * is false, and reports its connection as the {@code prometheusAgent} health component when Spring Boot's health
- * support is present. An app's own {@code PrometheusProxyAgent} bean takes the place of the starter's.
+ * is false. An app's own {@code PrometheusProxyAgent} bean takes the place of the starter's.
+ * {@link PrometheusProxyAgentHealthAutoConfiguration} reports its connection.
  */
 @AutoConfiguration
 @ConditionalOnProperty(prefix = "prometheus-proxy.agent", name = "enabled", matchIfMissing = true)
@@ -39,19 +36,5 @@ public final class PrometheusProxyAgentAutoConfiguration {
   @ConditionalOnMissingBean
   PrometheusProxyAgent prometheusProxyAgent(PrometheusProxyAgentProperties properties, ApplicationContext context) {
     return new PrometheusProxyAgent(properties, context);
-  }
-
-  // Apart, so an app without spring-boot-health skips it on the class check alone: the enabled check's condition is in
-  // spring-boot-health, so it's on the bean method, which is read only once the class check has passed. Its name is
-  // lowercase, as Spring Boot's are, so management.health.prometheusagent.enabled turns the indicator off.
-  @Configuration(proxyBeanMethods = false)
-  @ConditionalOnClass(name = "org.springframework.boot.health.contributor.HealthIndicator")
-  static class HealthIndicatorConfiguration {
-    @Bean
-    @ConditionalOnEnabledHealthIndicator("prometheusagent")
-    @ConditionalOnMissingBean(name = "prometheusAgentHealthIndicator")
-    PrometheusProxyAgentHealthIndicator prometheusAgentHealthIndicator(PrometheusProxyAgent agent) {
-      return new PrometheusProxyAgentHealthIndicator(agent);
-    }
   }
 }

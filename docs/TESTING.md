@@ -1059,15 +1059,18 @@ agent runs with what it gets in an app. `TestingGuideTest` reads only the root p
   property becomes its `EmbeddedAgentConfig` setting, with the secrets out of `toString`; the default name (the app's,
   with its build's version) and path (`<app>_metrics`, or `application_metrics`); the registry served, or not with
   `source=none` or no `PrometheusRegistry` bean; `settings` keys keeping their case from a properties file, and losing
-  it from an environment variable; customizers running after the properties in their order; `required` failing the
+  it from an environment variable; customizers running after the properties in their order, a builder method of one
+  replacing a property but not a `settings` entry, which only its `setting()` replaces; `start()` on a running agent
+  keeping it; the started line naming no proxy, which a customizer can change; `required` failing the
   app without a proxy, on a bad setting, or on a customizer's failure, a checked exception included, and the app
   running without the agent otherwise, whatever stopped it: a setting the builder or the agent rejects, a certificate
   it can't read, a `settings` key its config can't hold, or a customizer that throws; and the `prometheusAgent` health
-  indicator, UNKNOWN while off or connecting, turned off by
-  `management.health.prometheusagent.enabled`, and absent without spring-boot-health, which the app then starts
-  without.
+  indicator, from its own auto-configuration: UNKNOWN while off or connecting, turned off by
+  `management.health.prometheusagent.enabled`, absent for an app with two agents of its own, and absent without
+  spring-boot-health, which the app then starts without.
 - **PrometheusProxyAgentIntegrationTest** — a `@SpringBootTest` app with Actuator and no web server, its agent pointed
-  at a proxy in the same JVM, on fixed ports that the root project's `TestPorts` lists (`STARTER_PROXY_*`): the proxy serves the app's Micrometer meter and Spring Boot's JVM metrics at
+  at a proxy in the same JVM, on fixed ports that the root project's `TestPorts` lists (`STARTER_PROXY_*`): the proxy
+  serves the app's Micrometer meter and Spring Boot's JVM metrics at
   `/roastery_metrics`, its service discovery has the path's labels, and the health component is UP with the agent's
   name and proxy.
 - **RegistryMetricsSourceTest** — a `PrometheusRegistry` written in the text format or OpenMetrics, as the scrape

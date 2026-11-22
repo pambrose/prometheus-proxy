@@ -95,7 +95,9 @@ variable, which then names no setting.
 For what properties can't hold, such as a certificate the app reads from a secret store, or a registry that isn't a
 bean, a `PrometheusProxyAgentCustomizer` bean is given the agent's
 [`EmbeddedAgentConfig.Builder`](embedded-agent.md#embeddedagentconfig) once the properties are applied, just before
-the agent starts. Several run in their `@Order`, each after the one before.
+the agent starts. Several run in their `@Order`, each after the one before. A builder method a customizer calls
+replaces what a property set, but not a `settings.<key>` property, which takes precedence over the builder's methods,
+as anything `setting()` sets does: change one of those with `setting()` and its key.
 
 ```java
 --8<-- "spring-boot-starter/src/test/java/website/AgentCustomizations.java:starter-customizer"
@@ -103,7 +105,8 @@ the agent starts. Several run in their `@Order`, each after the one before.
 
 The agent is the `PrometheusProxyAgent` bean, whose `agent()` gives the running agent's
 [`EmbeddedAgentInfo`](embedded-agent.md#embeddedagentinfo), or nothing while it's off. An app's own
-`PrometheusProxyAgent` bean takes the place of the starter's.
+`PrometheusProxyAgent` bean takes the place of the starter's, and has the health component; an app with more than one
+has none, since it couldn't choose between them.
 
 ## Spring Boot's Versions of the Agent's Libraries
 
