@@ -38,7 +38,7 @@ DASHBOARD_URL="http://localhost:${NGINX_DEMO_DASHBOARD_PORT:-8594}/dashboard"
 NGINX_DASHBOARD_URL="http://localhost:${NGINX_DEMO_NGINX_PORT:-8590}/dashboard"
 # agent-current's own dashboard, behind the firewall with it (agent.dashboard in config/agent-current.conf).
 AGENT_DASHBOARD_URL="http://localhost:${NGINX_DEMO_AGENT_DASHBOARD_PORT:-8595}/dashboard"
-PROMETHEUS_URL="http://localhost:${NGINX_DEMO_PROMETHEUS_PORT:-9690}"
+PROMETHEUS_URL="http://localhost:${NGINX_DEMO_PROMETHEUS_PORT:-9590}"
 PROXY_URL="http://localhost:${NGINX_DEMO_PROXY_PORT:-8580}"
 # Prometheus graphs, over the last 10 minutes: whether each agent's path answered, and how often nginx closed an
 # agent's stream.
@@ -139,18 +139,17 @@ nginx_exec() { "${COMPOSE[@]}" exec -T nginx "$@"; }
 # Whether a service's container is running.
 running() { [[ -n "$("${COMPOSE[@]}" ps --status running --quiet "$1" 2>/dev/null)" ]]; }
 
-# The variant of an entrance (agents or dashboard) that's in place, or "changed by hand": conf_in_use <kind>
+# The variant of an entrance (agents or dashboard) that's in place, or "changed by hand", compared in one exec in the
+# container: conf_in_use <kind>
 conf_in_use() {
-  local kind="$1" variant
   local -a variants
-  if [[ "$kind" == agents ]]; then variants=("${AGENTS_VARIANTS[@]}"); else variants=("${DASHBOARD_VARIANTS[@]}"); fi
-  for variant in "${variants[@]}"; do
-    if nginx_exec cmp -s "/etc/nginx/demo/$kind-$variant.conf" "/etc/nginx/conf.d/$kind.conf"; then
-      echo "$variant"
-      return
-    fi
-  done
-  echo "changed by hand"
+  if [[ "$1" == agents ]]; then variants=("${AGENTS_VARIANTS[@]}"); else variants=("${DASHBOARD_VARIANTS[@]}"); fi
+  # shellcheck disable=SC2016 # $1 and $v are the container shell's
+  nginx_exec sh -c 'kind="$1"; shift
+    for v in "$@"; do
+      if cmp -s "/etc/nginx/demo/$kind-$v.conf" "/etc/nginx/conf.d/$kind.conf"; then echo "$v"; exit; fi
+    done
+    echo "changed by hand"' sh "$1" "${variants[@]}"
 }
 
 # The variant file of an entrance in place, or that it was changed by hand: conf_file <kind>
@@ -171,16 +170,27 @@ shutdown_timeout_set() { nginx_exec test -f "$SHUTDOWN_CONF"; }
 # How many of nginx's workers are old ones, shutting down after a reload, holding connections they opened before it.
 old_workers() { nginx_exec ps -o args | grep -c 'worker process is shutting down' || true; }
 
-# Puts a variant of an entrance in place and reloads nginx, checking the config first: use_conf <kind> <variant>
+# Puts a variant of an entrance in place and reloads nginx, checking the config first, in one exec in the container:
+# use_conf <kind> <variant>
 use_conf() {
-  nginx_exec cp "/etc/nginx/demo/$1-$2.conf" "/etc/nginx/conf.d/$1.conf"
-  nginx_exec nginx -t -q || die "nginx refused nginx/$1-$2.conf; see '$0 logs nginx'"
-  nginx_exec nginx -s reload 2>/dev/null
+  nginx_exec sh -c "cp /etc/nginx/demo/$1-$2.conf /etc/nginx/conf.d/$1.conf && nginx -t -q && nginx -s reload" \
+    2>/dev/null || die "nginx refused nginx/$1-$2.conf; see '$0 logs nginx'"
 }
 
-# What a reload of the agents' entrance does to the agents connected at the time, as one point.
+# The sentence that opens a config scenario's how it works: copies_sentence <kind> <variant>
+copies_sentence() { echo "This copies nginx/$1-$2.conf in as nginx's conf.d/$1.conf and reloads nginx."; }
+
+# Restarts nginx and waits for it to pass requests to the proxy again. A restart closes every agent's connection, and
+# ends any old worker a reload left.
+restart_nginx() {
+  "${COMPOSE[@]}" restart nginx >/dev/null
+  wait_for "$NGINX_DASHBOARD_URL" "The proxy dashboard, through nginx,"
+}
+
+# What a reload of the agents' entrance does to the agents connected at the time, as one point, by whether nginx runs
+# with worker_shutdown_timeout: reload_point <0 or 1>
 reload_point() {
-  if shutdown_timeout_set; then
+  if (($1)); then
     point "Within ${SHUTDOWN_SECS} seconds, nginx's old workers close the agents' connections, and each agent" \
       "reconnects at once, to a new worker, under this config: each shows a disconnect and a connect in the proxy's" \
       "Activity view, $DASHBOARD_URL/activity"
@@ -221,34 +231,27 @@ start_proxy() {
   [[ "$(keepalive_secs)" != "$1" ]] || return 1
   NGINX_DEMO_KEEPALIVE_SECS="$1" "${COMPOSE[@]}" up --detach --no-deps proxy
   wait_for "$DASHBOARD_URL" "The proxy dashboard"
-  "${COMPOSE[@]}" restart nginx >/dev/null
-  wait_for "$NGINX_DASHBOARD_URL" "The proxy dashboard, through nginx,"
+  restart_nginx
 }
 
-# Puts nginx and the proxy back as `up` starts them: the default keepalive, which restarts nginx too, and nginx's stock
-# configs and no worker_shutdown_timeout, restarting nginx if anything differed or an old worker is left, which also
-# ends the old workers.
+# Puts nginx and the proxy back as `up` starts them: nginx's stock configs and no worker_shutdown_timeout, then the
+# default keepalive. nginx restarts once, at most: with a recreated proxy, which restarts it, or if anything differed
+# or an old worker was left, which the restart ends.
 reset_demo() {
-  local restart=0
-  if start_proxy "$DEFAULT_KEEPALIVE_SECS"; then
-    restart=1
-  fi
-  if [[ "$(conf_in_use agents)" != stock ]]; then
-    nginx_exec cp /etc/nginx/demo/agents-stock.conf /etc/nginx/conf.d/agents.conf
-    restart=1
-  fi
-  if [[ "$(conf_in_use dashboard)" != stock ]]; then
-    nginx_exec cp /etc/nginx/demo/dashboard-stock.conf /etc/nginx/conf.d/dashboard.conf
-    restart=1
-  fi
+  local restart=0 kind
+  for kind in agents dashboard; do
+    if [[ "$(conf_in_use "$kind")" != stock ]]; then
+      nginx_exec cp "/etc/nginx/demo/$kind-stock.conf" "/etc/nginx/conf.d/$kind.conf"
+      restart=1
+    fi
+  done
   if shutdown_timeout_set; then
     nginx_exec rm -f "$SHUTDOWN_CONF"
     restart=1
   fi
   (($(old_workers) == 0)) || restart=1
-  if ((restart)); then
-    "${COMPOSE[@]}" restart nginx >/dev/null
-    wait_for "$NGINX_DASHBOARD_URL" "The proxy dashboard, through nginx,"
+  if ! start_proxy "$DEFAULT_KEEPALIVE_SECS" && ((restart)); then
+    restart_nginx
   fi
 }
 
@@ -672,68 +675,72 @@ main() {
       "alive. An agent that's scraped doesn't need to."
     follow_up "To see every request as it comes, run" "$0 logs nginx"
     ;;
-  nginx-stock | nginx-long-timeouts | nginx-short-timeouts)
-    local variant="${cmd#nginx-}"
-    use_conf agents "$variant"
-    case "$variant" in
-    stock)
-      bold "nginx's agents' entrance has its default stream timeouts again, 60 seconds"
-      how_it_works "This copies nginx/agents-stock.conf in as nginx's conf.d/agents.conf and reloads nginx. It sets" \
-        "neither grpc_read_timeout, for the stream the proxy sends scrape requests on, nor client_body_timeout, for" \
-        "the streams the agent sends results on, so both are nginx's default, 60 seconds."
-      watch_for
-      reload_point
-      point "Under these timeouts, agent-current, whose keepalives come after 30 seconds, stays connected, and" \
-        "agent-legacy, with nothing on its stream for results in chunks, is cut off every minute, once its connection" \
-        "is with a worker under them."
-      ;;
-    long-timeouts)
-      bold "nginx's agents' entrance now closes a stream only after a day without anything on it"
-      how_it_works "This copies nginx/agents-long-timeouts.conf in as nginx's conf.d/agents.conf and reloads nginx." \
-        "It raises grpc_read_timeout, for the stream the proxy sends scrape requests on, and client_body_timeout," \
-        "for the streams the agent sends results on, to a day. For an agent or a proxy from 4.6.1 or earlier, it's" \
-        "the fix short of upgrading both: they send nothing on a stream between results."
-      watch_for
-      reload_point
-      if shutdown_timeout_set; then
-        point "agent-legacy then stays connected: the proxy's Activity view shows no more disconnects from it," \
-          "$DASHBOARD_URL/activity"
-      else
-        point "agent-legacy is cut off once more, within a minute, by the worker it's on, which keeps the old" \
-          "timeouts. It reconnects to a new worker, under these timeouts, and then stays connected: the proxy's" \
-          "Activity view shows no more disconnects from it, $DASHBOARD_URL/activity"
-      fi
-      point "Prometheus's graph of nginx closing an agent's stream drops back to 0 within a minute or two:" \
-        "$CUTS_GRAPH_URL"
-      ;;
-    short-timeouts)
-      bold "nginx's agents' entrance now closes a stream after 20 seconds without anything on it"
-      how_it_works "This copies nginx/agents-short-timeouts.conf in as nginx's conf.d/agents.conf and reloads nginx." \
-        "It cuts grpc_read_timeout, for the stream the proxy sends scrape requests on, and client_body_timeout, for" \
-        "the streams the agent sends results on, to 20 seconds, under the $(keepalive_secs) seconds after which the" \
-        "proxy and agent-current send a keepalive."
-      watch_for
-      reload_point
-      if shutdown_timeout_set; then
-        point "Then both agents are cut off about every 20 seconds, agent-current included: its stream for results in" \
-          "chunks goes quiet for 20 seconds before its keepalive comes. Its own Activity view shows each" \
-          "disconnect, with the reason: $AGENT_DASHBOARD_URL/activity"
-        point "A scrape that lands while an agent reconnects fails, so both paths dip in Prometheus: $UP_GRAPH_URL"
-        follow_up "Next, run" "$0 keepalive 10"
-      else
-        point "agent-current isn't cut off, though its keepalives come after 30 seconds: its connection is with an" \
-          "old worker, under the timeouts it opened with. Its own Activity view stays quiet:" \
-          "$AGENT_DASHBOARD_URL/activity"
-        follow_up "To see the old workers, run" "$0 nginx-workers"
-      fi
-      ;;
-    esac
+  nginx-stock)
+    local shutdown=0
+    use_conf agents stock
+    shutdown_timeout_set && shutdown=1
+    bold "nginx's agents' entrance has its default stream timeouts again, 60 seconds"
+    how_it_works "$(copies_sentence agents stock)" \
+      "It sets neither grpc_read_timeout, for the stream the proxy sends scrape requests on, nor" \
+      "client_body_timeout, for the streams the agent sends results on, so both are nginx's default, 60 seconds."
+    watch_for
+    reload_point "$shutdown"
+    point "Under these timeouts, agent-current, whose keepalives come after 30 seconds, stays connected, and" \
+      "agent-legacy, with nothing on its stream for results in chunks, is cut off every minute, once its connection" \
+      "is with a worker under them."
+    ;;
+  nginx-long-timeouts)
+    local shutdown=0
+    use_conf agents long-timeouts
+    shutdown_timeout_set && shutdown=1
+    bold "nginx's agents' entrance now closes a stream only after a day without anything on it"
+    how_it_works "$(copies_sentence agents long-timeouts)" \
+      "It raises grpc_read_timeout, for the stream the proxy sends scrape requests on, and client_body_timeout, for" \
+      "the streams the agent sends results on, to a day. For an agent or a proxy from 4.6.1 or earlier, it's the" \
+      "fix short of upgrading both: they send nothing on a stream between results."
+    watch_for
+    reload_point "$shutdown"
+    if ((shutdown)); then
+      point "agent-legacy then stays connected: the proxy's Activity view shows no more disconnects from it," \
+        "$DASHBOARD_URL/activity"
+    else
+      point "agent-legacy is cut off once more, within a minute, by the worker it's on, which keeps the old" \
+        "timeouts. It reconnects to a new worker, under these timeouts, and then stays connected: the proxy's" \
+        "Activity view shows no more disconnects from it, $DASHBOARD_URL/activity"
+    fi
+    point "Prometheus's graph of nginx closing an agent's stream drops back to 0 within a minute or two:" \
+      "$CUTS_GRAPH_URL"
+    ;;
+  nginx-short-timeouts)
+    local shutdown=0
+    use_conf agents short-timeouts
+    shutdown_timeout_set && shutdown=1
+    bold "nginx's agents' entrance now closes a stream after 20 seconds without anything on it"
+    how_it_works "$(copies_sentence agents short-timeouts)" \
+      "It cuts grpc_read_timeout, for the stream the proxy sends scrape requests on, and client_body_timeout, for" \
+      "the streams the agent sends results on, to 20 seconds, under the $(keepalive_secs) seconds after which the" \
+      "proxy and agent-current send a keepalive."
+    watch_for
+    reload_point "$shutdown"
+    if ((shutdown)); then
+      point "Then both agents are cut off about every 20 seconds, agent-current included: its stream for results in" \
+        "chunks goes quiet for 20 seconds before its keepalive comes. Its own Activity view shows each" \
+        "disconnect, with the reason: $AGENT_DASHBOARD_URL/activity"
+      point "A scrape that lands while an agent reconnects fails, so both paths dip in Prometheus: $UP_GRAPH_URL"
+      follow_up "Next, run" "$0 keepalive 10"
+    else
+      point "agent-current isn't cut off, though its keepalives come after 30 seconds: its connection is with an" \
+        "old worker, under the timeouts it opened with. Its own Activity view stays quiet:" \
+        "$AGENT_DASHBOARD_URL/activity"
+      follow_up "To see the old workers, run" "$0 nginx-workers"
+    fi
     ;;
   nginx-workers)
-    local old
+    local processes old
+    processes="$(nginx_exec ps -o pid,etime,args | grep -E 'PID|nginx:')"
+    old="$(grep -c 'worker process is shutting down' <<<"$processes" || true)"
     bold "nginx's processes"
-    nginx_exec ps -o pid,etime,args | grep -E 'PID|nginx:' | sed 's/^/  /'
-    old="$(old_workers)"
+    awk '{ print "  " $0 }' <<<"$processes"
     how_it_works "This lists the processes in the nginx container. A reload starts new workers under the new config," \
       "and tells the old ones to take no new connections and to exit once the ones they have end. An old worker" \
       "keeps those connections under the config they opened with."
@@ -760,7 +767,7 @@ main() {
       point "A reload reaches every agent within ${SHUTDOWN_SECS} seconds, at the cost of one reconnect each."
     else
       nginx_exec cp /etc/nginx/demo/main-shutdown-timeout.conf "$SHUTDOWN_CONF"
-      "${COMPOSE[@]}" restart nginx >/dev/null
+      restart_nginx
       bold "nginx now runs with worker_shutdown_timeout ${SHUTDOWN_SECS}s"
       how_it_works "This copies nginx/main-shutdown-timeout.conf, which sets worker_shutdown_timeout, into the main.d" \
         "directory nginx's main config includes, and restarts nginx. After a reload, an old worker now closes the" \
@@ -816,52 +823,49 @@ main() {
       follow_up "To put the default back, run" "$0 keepalive $DEFAULT_KEEPALIVE_SECS"
     fi
     ;;
-  dashboard-stock | dashboard-upgrade | dashboard-host)
-    local variant="${cmd#dashboard-}"
-    use_conf dashboard "$variant"
-    case "$variant" in
-    stock)
-      bold "nginx's entrance for the dashboard is a plain proxy_pass again"
-      how_it_works "This copies nginx/dashboard-stock.conf in as nginx's conf.d/dashboard.conf and reloads nginx." \
-        "nginx passes each request on as HTTP/1.0 and drops the Upgrade and Connection headers, so the dashboard's" \
-        "WebSocket handshake reaches it as a plain request, which it answers with 400."
-      watch_for
-      point "Reload the dashboard through nginx: it shows a blinking red 'reconnecting...', and nothing on it moves:" \
-        "$NGINX_DASHBOARD_URL"
-      ;;
-    upgrade)
-      bold "nginx's entrance for the dashboard now passes the WebSocket handshake's headers"
-      how_it_works "This copies nginx/dashboard-upgrade.conf in as nginx's conf.d/dashboard.conf and reloads nginx." \
-        "It passes requests on over HTTP/1.1, with the Upgrade header and a Connection header of upgrade on a" \
-        "handshake. The Host header is still nginx's own default, the upstream's name, proxy:8094, while the" \
-        "browser's Origin header names the address it opened, localhost:${NGINX_DEMO_NGINX_PORT:-8590}. The dashboard" \
-        "takes a WebSocket, and any POST, only from a page of its own, an Origin that matches the Host, so another" \
-        "site's page can't use it, and refuses this one with 403."
-      watch_for
-      point "Reload the dashboard through nginx: it's still 'reconnecting...': $NGINX_DASHBOARD_URL"
-      point "The proxy logs each refusal with the setting that would allow it: 'Refused a dashboard request from" \
-        "origin http://localhost:${NGINX_DEMO_NGINX_PORT:-8590}; add it to proxy.dashboard.allowedOrigins if" \
-        "expected'. To see it, run $0 logs proxy"
-      point "In the Paths view, click the scrape button, the circular arrow beside /storefront_metrics: the result" \
-        "says 'Origin not allowed', since the button sends a POST: $NGINX_DASHBOARD_URL/paths"
-      follow_up "Next, run" "$0 dashboard-host"
-      ;;
-    host)
-      bold "nginx's entrance for the dashboard now passes the browser's Host header too"
-      how_it_works "This copies nginx/dashboard-host.conf in as nginx's conf.d/dashboard.conf and reloads nginx." \
-        "It adds proxy_set_header Host \$http_host, the Host header as the browser sent it, port included (nginx's" \
-        "\$host drops the port), so the browser's Origin matches it. Listing the address in" \
-        "proxy.dashboard.allowedOrigins, as the proxy's log suggested, works too, and suits an nginx that must pass" \
-        "another Host."
-      watch_for
-      point "Reload the dashboard through nginx: the live indicator stops blinking, and the page updates every" \
-        "second, as it does reached directly: $NGINX_DASHBOARD_URL"
-      point "The scrape button in the Paths view works through nginx too, and shows the start of what Prometheus" \
-        "gets from /storefront_metrics."
-      point "With nginx ending TLS in front of it, the browser's Origin would start with https, and the dashboard" \
-        "would mark its session cookie Secure, so the browser sends it only over TLS."
-      ;;
-    esac
+  dashboard-stock)
+    use_conf dashboard stock
+    bold "nginx's entrance for the dashboard is a plain proxy_pass again"
+    how_it_works "$(copies_sentence dashboard stock)" \
+      "nginx passes each request on as HTTP/1.0 and drops the Upgrade and Connection headers, so the dashboard's" \
+      "WebSocket handshake reaches it as a plain request, which it answers with 400."
+    watch_for
+    point "Reload the dashboard through nginx: it shows a blinking red 'reconnecting...', and nothing on it moves:" \
+      "$NGINX_DASHBOARD_URL"
+    ;;
+  dashboard-upgrade)
+    use_conf dashboard upgrade
+    bold "nginx's entrance for the dashboard now passes the WebSocket handshake's headers"
+    how_it_works "$(copies_sentence dashboard upgrade)" \
+      "It passes requests on over HTTP/1.1, with the Upgrade header and a Connection header of upgrade on a" \
+      "handshake. The Host header is still nginx's own default, the upstream's name, proxy:8094, while the" \
+      "browser's Origin header names the address it opened, localhost:${NGINX_DEMO_NGINX_PORT:-8590}. The dashboard" \
+      "takes a WebSocket, and any POST, only from a page of its own, an Origin that matches the Host, so another" \
+      "site's page can't use it, and refuses this one with 403."
+    watch_for
+    point "Reload the dashboard through nginx: it's still 'reconnecting...': $NGINX_DASHBOARD_URL"
+    point "The proxy logs each refusal with the setting that would allow it: 'Refused a dashboard request from" \
+      "origin http://localhost:${NGINX_DEMO_NGINX_PORT:-8590}; add it to proxy.dashboard.allowedOrigins if" \
+      "expected'. To see it, run $0 logs proxy"
+    point "In the Paths view, click the scrape button, the circular arrow beside /storefront_metrics: the result" \
+      "says 'Origin not allowed', since the button sends a POST: $NGINX_DASHBOARD_URL/paths"
+    follow_up "Next, run" "$0 dashboard-host"
+    ;;
+  dashboard-host)
+    use_conf dashboard host
+    bold "nginx's entrance for the dashboard now passes the browser's Host header too"
+    how_it_works "$(copies_sentence dashboard host)" \
+      "It adds proxy_set_header Host \$http_host, the Host header as the browser sent it, port included (nginx's" \
+      "\$host drops the port), so the browser's Origin matches it. Listing the address in" \
+      "proxy.dashboard.allowedOrigins, as the proxy's log suggested, works too, and suits an nginx that must pass" \
+      "another Host."
+    watch_for
+    point "Reload the dashboard through nginx: the live indicator stops blinking, and the page updates every" \
+      "second, as it does reached directly: $NGINX_DASHBOARD_URL"
+    point "The scrape button in the Paths view works through nginx too, and shows the start of what Prometheus" \
+      "gets from /storefront_metrics."
+    point "With nginx ending TLS in front of it, the browser's Origin would start with https, and the dashboard" \
+      "would mark its session cookie Secure, so the browser sends it only over TLS."
     ;;
   reset)
     reset_demo

@@ -23,7 +23,7 @@ OUT_DIR="$REPO_DIR/website/prometheus-proxy/docs/images/nginx-demo"
 DASHBOARD_URL="http://localhost:${NGINX_DEMO_DASHBOARD_PORT:-8594}/dashboard"
 NGINX_DASHBOARD_URL="http://localhost:${NGINX_DEMO_NGINX_PORT:-8590}/dashboard"
 AGENT_DASHBOARD_URL="http://localhost:${NGINX_DEMO_AGENT_DASHBOARD_PORT:-8595}/dashboard"
-PROMETHEUS_URL="http://localhost:${NGINX_DEMO_PROMETHEUS_PORT:-9690}"
+PROMETHEUS_URL="http://localhost:${NGINX_DEMO_PROMETHEUS_PORT:-9590}"
 
 WAIT_SECS="${WAIT_SECS:-150}"
 
@@ -107,11 +107,11 @@ streams_closed() {
     sed -nE 's/.*"value":\[[0-9.]+,"([0-9]+)".*/\1/p'
 }
 
-# Whether it's at least this many.
-streams_closed_at_least() {
-  local closed
-  closed="$(streams_closed)"
-  [[ -n "$closed" ]] && ((closed >= $1))
+# Whether a count, from a function that prints one or nothing, is at least this much: at_least <function> <n>
+at_least() {
+  local count
+  count="$("$1")"
+  [[ -n "$count" ]] && ((count >= $2))
 }
 
 # How many disconnects agent-current's Activity view lists, or nothing. A notice's event, a disconnect's among them,
@@ -122,21 +122,16 @@ disconnects() {
   { grep -o '>disconnected</span>' <<<"$body" || true; } | wc -l | tr -d ' '
 }
 
-# Whether it lists at least this many.
-disconnects_at_least() {
-  local count
-  count="$(disconnects)"
-  [[ -n "$count" ]] && ((count >= $1))
-}
 
 # Whether both agents are connected to the proxy.
 both_connected() { [[ -n "$(agent_id agent-current)" && -n "$(agent_id agent-legacy)" ]]; }
 
 # Captures a page at WIDTH x HEIGHT, at 2x, in a theme: the dashboard follows the browser's preferred color scheme.
-# The timing is Chrome's: --virtual-time-budget=<ms> by default, the virtual time the page gets to load and run, or
+# The timing is Chrome's: --virtual-time-budget=<ms>, the virtual time the page gets to load and run, or
 # --timeout=<ms>, real time, for a page waiting on something virtual time skips past, such as a WebSocket's answer.
+# capture <url> <png> <theme> <timing>
 capture() {
-  local url="$1" png="$2" theme="$3" timing="${4:---virtual-time-budget=3000}" scheme=0 profile
+  local url="$1" png="$2" theme="$3" timing="$4" scheme=0 profile
   [[ "$theme" == dark ]] || scheme=1
   profile="$(mktemp -d)"
   "$CHROME_BIN" --headless=new --disable-gpu --hide-scrollbars --no-first-run --no-default-browser-check \
@@ -186,12 +181,11 @@ wait_until "agent-current's recent scrapes" page_has "$DASHBOARD_URL/agents/$cur
 shoot agents "$DASHBOARD_URL/agents/$current"
 
 step "Part 2: nginx's stream timeouts cut off an agent from 4.6.0 every minute"
-# Two cuts, a minute apart, so the Activity view shows the pattern, not a one-off. Counted from a value read after
-# Prometheus's next scrape, so the reconnects of the reset above don't count.
-sleep 10
+# Two cuts, a minute apart, so the Activity view shows the pattern, not a one-off. Counted from a value Prometheus
+# scraped after the reset's reconnects, which part 1's wait for ten scrapes leaves well behind.
 closed="$(streams_closed)"
 [[ -n "$closed" ]] || die "Prometheus has no proxy_agent_disconnects_total"
-wait_until "nginx to close agent-legacy's stream twice" streams_closed_at_least $((closed + 2))
+wait_until "nginx to close agent-legacy's stream twice" at_least streams_closed $((closed + 2))
 shoot legacy-cut "$DASHBOARD_URL/activity"
 
 step "Part 3: A shorter stream timeout, and a reload that doesn't reach connected agents"
@@ -203,7 +197,7 @@ before="$(disconnects)"
 # Within 10 seconds the old worker closes agent-current's connection, and the agent moves to a worker under the
 # 20-second timeouts, which then cut it off about every 20 seconds: that disconnect and three cuts, so its Activity
 # view shows the pattern.
-wait_until "nginx to cut agent-current off three times" disconnects_at_least $((before + 4))
+wait_until "nginx to cut agent-current off three times" at_least disconnects $((before + 4))
 shoot short-timeouts "$AGENT_DASHBOARD_URL/activity"
 
 step "Part 4: The dashboard behind nginx"

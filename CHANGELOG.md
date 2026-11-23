@@ -107,7 +107,7 @@ All notable changes to this project are documented in this file.
   `nginx-short-timeouts`), lists the old workers a reload leaves (`nginx-workers`), sets `worker_shutdown_timeout`
   (`nginx-shutdown-timeout`), changes the proxy's keepalive interval (`keepalive`), and fronts the dashboard with
   nginx, without and with what its WebSocket needs (`dashboard-stock`, `dashboard-upgrade`, `dashboard-host`). Its
-  ports are 500 above the basics demo's, but Prometheus's, 600 above, since 9590 is a port the harness specs bind
+  ports are 500 above the basics demo's
 
 ### Bug Fixes
 

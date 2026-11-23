@@ -15,7 +15,7 @@ same setup.
 ``` mermaid
 %%{init: {'flowchart': {'curve': 'linear'}}}%%
 graph LR
-  P[Prometheus :9690] -->|discovery and scrapes| Proxy[Proxy, dashboard :8594]
+  P[Prometheus :9590] -->|discovery and scrapes| Proxy[Proxy, dashboard :8594]
   Browser[Browser] -->|dashboard :8590| Nginx
   Nginx[nginx: TLS on 443] -->|gRPC, plaintext| Proxy
   Nginx -->|HTTP| Proxy
@@ -76,14 +76,13 @@ it starts in under a minute, and runs without a network connection.
 | Proxy dashboard | <http://localhost:8594/dashboard> (its history at `/activity`) |
 | The proxy dashboard, through nginx | <http://localhost:8590/dashboard> |
 | agent-current's dashboard | <http://localhost:8595/dashboard> (its connection at `/connection`, its history at `/activity`) |
-| Prometheus | <http://localhost:9690> |
+| Prometheus | <http://localhost:9590> |
 | The proxy's service discovery | <http://localhost:8580/discovery> |
 
-Each port is the Basics Demo's plus 500, so the demos can run side by side, but Prometheus's, plus 600: 9590 is a port
-the repository's tests bind. Every port binds to `127.0.0.1` only: the
+Each port is the Basics Demo's plus 500, so the demos can run side by side. Every port binds to `127.0.0.1` only: the
 dashboards run without their login, which suits a laptop and nothing shared. To move a port that is already taken,
 set `NGINX_DEMO_DASHBOARD_PORT`, `NGINX_DEMO_NGINX_PORT`, `NGINX_DEMO_AGENT_DASHBOARD_PORT`,
-`NGINX_DEMO_PROMETHEUS_PORT`, or `NGINX_DEMO_PROXY_PORT`, for example `NGINX_DEMO_PROMETHEUS_PORT=9691 make up`.
+`NGINX_DEMO_PROMETHEUS_PORT`, or `NGINX_DEMO_PROXY_PORT`, for example `NGINX_DEMO_PROMETHEUS_PORT=19590 make up`.
 
 ## What's running
 

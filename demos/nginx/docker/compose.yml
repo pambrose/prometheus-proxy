@@ -10,8 +10,7 @@
 # one level up, and the repository root three.
 #
 # Every published port binds to 127.0.0.1 only: the dashboards have no login, which suits a demo on a laptop and
-# nothing else. Each default port is the basics demo's plus 500, so the demos can run at once, but Prometheus's, which
-# is plus 600, since 9590 is a port the test suite's harness specs bind. Set
+# nothing else. Each default port is the basics demo's plus 500, so the demos can run at once. Set
 # NGINX_DEMO_DASHBOARD_PORT, NGINX_DEMO_NGINX_PORT, NGINX_DEMO_AGENT_DASHBOARD_PORT, NGINX_DEMO_PROXY_PORT, or
 # NGINX_DEMO_PROMETHEUS_PORT to move a host port that's already taken.
 
@@ -139,7 +138,7 @@ services:
     volumes:
       - ../prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
-      - "127.0.0.1:${NGINX_DEMO_PROMETHEUS_PORT:-9690}:9090"
+      - "127.0.0.1:${NGINX_DEMO_PROMETHEUS_PORT:-9590}:9090"
     depends_on:
       - proxy
     healthcheck:

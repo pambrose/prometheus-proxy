@@ -151,7 +151,7 @@ object TestPorts {
   const val HEARTBEAT_EVICTION_HTTP_PORT = 9569
 
   // InProcessClientCancelledScrapeTest
-  const val CLIENT_CANCELLED_HTTP_PORT = 9590
+  const val CLIENT_CANCELLED_HTTP_PORT = 9599
   const val CLIENT_CANCELLED_DASHBOARD_PORT = 9591
 
   // InProcessScrapeTimeoutHeaderTest

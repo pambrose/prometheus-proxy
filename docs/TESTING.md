@@ -1031,9 +1031,9 @@ process, which surfaces as a wait strategy timing out against a status the conta
 - **ContainersProxyFailoverTest** — two proxies on distinct network aliases; the agent moves to the standby
   when the active one stops
 - **ContainersNginxTest** — the proxy behind nginx, which ends the agent's TLS and passes its gRPC calls on
-  (`grpc_pass`), with the transport filter off on both sides: a scrape reaches the target, and, with nginx's stream
-  timeouts cut to 10 seconds, the stream keepalives keep an idle agent connected (one connect, no stream ended), while
-  with them off nginx cuts it off, the control that shows the timeouts bite
+  (`grpc_pass`), with the transport filter off on both sides and nginx's stream timeouts cut to 10 seconds: a scrape
+  reaches the target, and the stream keepalives then keep the idle agent connected (one connect, no stream ended),
+  while with them off nginx cuts it off, the control that shows the timeouts bite
 - **ContainersWebDashboardTest** — the dashboard against the real fat JAR, which is the point: htmx ships as
   a WebJar served from the classpath, so a packaging regression would leave the page loading a 404
 - **ContainersPortBindingTest** — every published port binds loopback rather than the wildcard address

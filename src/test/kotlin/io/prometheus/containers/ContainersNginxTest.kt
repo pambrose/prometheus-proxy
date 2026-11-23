@@ -23,6 +23,10 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.doubles.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.ktor.client.HttpClient
+import io.prometheus.common.TestCerts.CA_CERT
+import io.prometheus.common.TestCerts.SERVER_CERT
+import io.prometheus.common.TestCerts.SERVER_KEY
 import io.prometheus.common.TestPorts.PROXY_AGENT_PORT
 import io.prometheus.common.TestPorts.PROXY_HTTP_PORT
 import io.prometheus.common.TestPorts.PROXY_METRICS_PORT
@@ -67,35 +71,27 @@ class ContainersNginxTest : StringSpec() {
       val httpClient = httpClient()
       afterSpec { httpClient.close() }
 
-      "a scrape reaches the agent's target through nginx, which ends the agent's TLS" {
+      "a scrape reaches the target through nginx, and keepalives keep the idle agent connected past its timeouts" {
         withProxyBehindNginx(keepaliveSecs = KEEPALIVE_SECS) { proxy ->
-          eventually(30.seconds) {
-            httpClient.bodyOf(proxy.baseUrl(PROXY_HTTP_PORT) + "/test_metrics") shouldContain METRIC
-          }
-        }
-      }
-
-      "keepalives keep an idle agent connected past nginx's stream timeouts" {
-        withProxyBehindNginx(keepaliveSecs = KEEPALIVE_SECS) { proxy ->
-          // Nothing scrapes the agent, so its streams carry only keepalives, for more than twice nginx's timeouts.
+          // Through nginx, which ends the agent's TLS.
+          eventually(30.seconds) { httpClient.scrape(proxy) shouldContain METRIC }
+          // Nothing scrapes the agent now, so its streams carry only keepalives, for more than twice nginx's timeouts.
           delay(IDLE_WAIT)
-          val metrics = httpClient.bodyOf(proxy.baseUrl(PROXY_METRICS_PORT) + "/metrics")
+          val metrics = httpClient.proxyMetrics(proxy)
           metrics.sampleValue(CONNECTS) shouldBe 1.0
           metrics.sampleValue(STREAMS_ENDED) shouldBe 0.0
-          httpClient.bodyOf(proxy.baseUrl(PROXY_HTTP_PORT) + "/test_metrics") shouldContain METRIC
+          httpClient.scrape(proxy) shouldContain METRIC
         }
       }
 
       "without keepalives, nginx's stream timeouts cut an idle agent off" {
         withProxyBehindNginx(keepaliveSecs = 0) { proxy ->
           eventually(IDLE_WAIT) {
-            val metrics = httpClient.bodyOf(proxy.baseUrl(PROXY_METRICS_PORT) + "/metrics")
-            metrics.sampleValue(STREAMS_ENDED) shouldBeGreaterThanOrEqual 1.0
+            httpClient.proxyMetrics(proxy).sampleValue(STREAMS_ENDED) shouldBeGreaterThanOrEqual 1.0
           }
           // The agent reconnects after each cut, so the proxy has seen it connect again.
           eventually(30.seconds) {
-            val metrics = httpClient.bodyOf(proxy.baseUrl(PROXY_METRICS_PORT) + "/metrics")
-            metrics.sampleValue(CONNECTS) shouldBeGreaterThanOrEqual 2.0
+            httpClient.proxyMetrics(proxy).sampleValue(CONNECTS) shouldBeGreaterThanOrEqual 2.0
           }
         }
       }
@@ -128,7 +124,7 @@ class ContainersNginxTest : StringSpec() {
       agentContainer(
         network,
         configText = AGENT_CONFIG,
-        hostFiles = mapOf("testing/certs/ca.pem" to "/config/ca.pem"),
+        hostFiles = mapOf(CA_CERT to "/config/ca.pem"),
         waitLogRegex = ".*Registered http://metrics-stub/metrics as /test_metrics.*",
       )
     try {
@@ -149,11 +145,11 @@ class ContainersNginxTest : StringSpec() {
       withNetwork(network)
       // The test certificate names *.test.google.fr, so the agent dials nginx by a name it covers.
       withNetworkAliases(NGINX_ALIAS)
-      // In place of the image's default.conf: generated here, not a classpath resource, since ConfigFileKeysTest
-      // reads every .conf among the container suite's resources as HOCON.
+      // In place of the image's default.conf, built from the spec's constants, so nginx's timeouts and the waits that
+      // depend on them come from one place.
       withCopyToContainer(transferable(NGINX_CONFIG), "/etc/nginx/conf.d/default.conf")
-      withCopyFileToContainer(MountableFile.forHostPath("testing/certs/server1.pem"), "/etc/nginx/certs/server.pem")
-      withCopyFileToContainer(MountableFile.forHostPath("testing/certs/server1.key"), "/etc/nginx/certs/server.key")
+      withCopyFileToContainer(MountableFile.forHostPath(SERVER_CERT), "/etc/nginx/certs/server.pem")
+      withCopyFileToContainer(MountableFile.forHostPath(SERVER_KEY), "/etc/nginx/certs/server.key")
       withExposedPorts(NGINX_TLS_PORT)
       withLogConsumer(logConsumer(NGINX_ALIAS))
       waitingFor(Wait.forListeningPort())
@@ -214,6 +210,13 @@ class ContainersNginxTest : StringSpec() {
         }
       }
       """.trimIndent()
+
+    // The path's scrape through the proxy, and the proxy's own metrics.
+    private suspend fun HttpClient.scrape(proxy: GenericContainer<*>): String =
+      bodyOf(proxy.baseUrl(PROXY_HTTP_PORT) + "/test_metrics")
+
+    private suspend fun HttpClient.proxyMetrics(proxy: GenericContainer<*>): String =
+      bodyOf(proxy.baseUrl(PROXY_METRICS_PORT) + "/metrics")
 
     // A sample's value in exposition text, by its name and labels as written; NaN when it's missing.
     private fun String.sampleValue(sample: String): Double =

@@ -25,7 +25,7 @@ kind clusters; it needs kind, `kubectl`, and Helm as well as Docker.
    ▼
  proxy ── dashboard :8594
    ▲  HTTP service discovery (/discovery) and scrapes through :8080; the proxy's own metrics directly
- Prometheus :9690 (5s scrapes)
+ Prometheus :9590 (5s scrapes)
 ```
 
 Only nginx reaches the proxy's agent port. The proxy sees both agents' calls arrive from nginx, so it lists each at the
@@ -64,15 +64,14 @@ it starts in under a minute, even without a network connection.
 | Proxy dashboard | <http://localhost:8594/dashboard> (its history at `/activity`) |
 | The proxy dashboard, through nginx | <http://localhost:8590/dashboard> |
 | agent-current's dashboard | <http://localhost:8595/dashboard> (its connection at `/connection`, its history at `/activity`) |
-| Prometheus | <http://localhost:9690> |
+| Prometheus | <http://localhost:9590> |
 | The proxy's service discovery | <http://localhost:8580/discovery> |
 
 `make open` opens the proxy dashboard, directly and through nginx, agent-current's dashboard, and a Prometheus graph of
 whether each agent's path answered.
 
-Every port is the basics demo's plus 500, so the demos can run at once, but Prometheus's, plus 600: 9590 is a port the
-repository's tests bind. If a port is already taken, move it, for example
-with `NGINX_DEMO_PROMETHEUS_PORT=9691 make up`. The variables are `NGINX_DEMO_DASHBOARD_PORT`, `NGINX_DEMO_NGINX_PORT`,
+Every port is the basics demo's plus 500, so the demos can run at once. If a port is already taken, move it, for example
+with `NGINX_DEMO_PROMETHEUS_PORT=19590 make up`. The variables are `NGINX_DEMO_DASHBOARD_PORT`, `NGINX_DEMO_NGINX_PORT`,
 `NGINX_DEMO_AGENT_DASHBOARD_PORT`, `NGINX_DEMO_PROMETHEUS_PORT`, and `NGINX_DEMO_PROXY_PORT`; the proxy dashboard's link
 into Prometheus keeps the default port (`config/proxy.conf`). Every port binds to `127.0.0.1` only. The dashboards run
 without their login, so this setup is for a laptop, not for anything shared.

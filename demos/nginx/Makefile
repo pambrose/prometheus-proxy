@@ -10,10 +10,10 @@
 DEMO_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 REPO_DIR := $(abspath $(DEMO_DIR)/../..)
 
-# demo.sh runs from this directory as ./demo.sh, so the commands it prints with $0 read `./demo.sh nginx-stock`, as the
-# README's do. The settings the scripts read, the NGINX_DEMO_*_PORT variables and bin/screenshots.sh's WAIT_SECS and
-# SKIP_UPTIME_WAIT, reach them both from the environment (`NGINX_DEMO_PROMETHEUS_PORT=9691 make up`) and from make's
-# command line (`make up NGINX_DEMO_PROMETHEUS_PORT=9691`), since make exports a command-line variable to its recipes.
+# demo.sh runs from this directory as ./demo.sh, so the commands it prints with $0 read `./demo.sh nginx-stock`, as
+# the README's do. The settings the scripts read, the NGINX_DEMO_*_PORT variables and bin/screenshots.sh's WAIT_SECS,
+# reach them both from the environment (`NGINX_DEMO_PROMETHEUS_PORT=19590 make up`) and from make's command line
+# (`make up NGINX_DEMO_PROMETHEUS_PORT=19590`), since make exports a command-line variable to its recipes.
 DEMO = cd "$(DEMO_DIR)" && ./demo.sh
 
 # demo.sh runs the root Makefile's targets (site-version, and jars for up-local) with the make that ran this one, so

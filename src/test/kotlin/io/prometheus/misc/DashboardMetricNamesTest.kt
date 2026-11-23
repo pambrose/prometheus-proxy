@@ -320,7 +320,7 @@ class DashboardMetricNamesTest : StringSpec() {
         add(ScrapeDispatch.IN_FLIGHT_LIMIT_LABEL)
         add(ScrapeDispatch.BACKLOG_FULL_LABEL)
         add("agent_name")
-        addAll(listOf("proxy_pass", "proxy_set_header", "proxy_http_version"))
+        addAll(listOf("proxy_pass", "proxy_set_header"))
       }
 
     private val SNIPPET =
