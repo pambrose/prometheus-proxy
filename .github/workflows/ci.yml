@@ -72,7 +72,8 @@ jobs:
   # Model-checks the TLA+ specs in specs/tla (ProxyRegistry and AgentFailover) with their quick configs, alongside the
   # build. The specs model the design rather than test the code, so this catches a spec edit that breaks one of their
   # properties; keeping each spec in step with the classes it models is up to the change that touches them (see
-  # specs/tla/README.md). make downloads the pinned TLA+ tools and checks their SHA-256 before running them.
+  # specs/tla/README.md). make downloads the pinned TLA+ tools and checks their SHA-256 before running them. The slower
+  # reconnect config, which took this job from about 2.5 to 9 minutes, runs locally with make tla-checks-full.
   tla:
     runs-on: ubuntu-latest
     timeout-minutes: 15

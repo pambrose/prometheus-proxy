@@ -63,6 +63,7 @@ class ProxySettingsTest : StringSpec() {
         maxPathsPerAgent = 0
         maxAgentInactivitySecs = 45
         staleAgentCheckEnabled = false
+        streamKeepaliveSecs = 0
       }
       transportFilterDisabled = true
       dashboard {
@@ -94,6 +95,7 @@ class ProxySettingsTest : StringSpec() {
       settings.value("TLS", "Certificate chain") shouldBe "file ${TestCerts.SERVER_CERT}"
       settings.value("TLS", "Private key") shouldBe "PEM, set"
       settings.value("gRPC server", "Handshake timeout") shouldBe "30s"
+      settings.value("gRPC server", "Stream keepalive") shouldBe "off"
       settings.value("Agent limits", "Paths per agent") shouldBe "unlimited"
       settings.value("Agent limits", "Path length") shouldBe "300 characters"
       // Off in the config, but forced on by the disabled transport filter, as the proxy runs it.
@@ -120,6 +122,7 @@ class ProxySettingsTest : StringSpec() {
       settings.value("Scrapes", "Scrapes in flight") shouldBe "unhealthy at 800"
       settings.value("gRPC server", "Handshake timeout") shouldBe "gRPC default (120s)"
       settings.value("gRPC server", "Max connection age") shouldBe "gRPC default (no limit)"
+      settings.value("gRPC server", "Stream keepalive") shouldBe "after 30s without a message"
       settings.value("Agent limits", "Stale agent check") shouldBe "on, every 10s, evicting after 60s idle"
       settings.value("Service discovery", "Service discovery") shouldBe "off"
       settings.value("Dashboard", "Login") shouldBe "off"

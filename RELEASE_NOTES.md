@@ -55,8 +55,9 @@ _Not yet released_
   the target took and how often the agent retried it, and why a scrape failed. Set `sampleRate` under
   `proxy.internal.zipkin` and `agent.internal.zipkin` to keep a share of traces instead of all of them.
 - **Nginx's defaults are enough.** A current agent and proxy keep their streams open with a keepalive every 30
-  seconds, so nginx's default 60-second timeouts no longer cut off an agent that isn't scraped for a minute. Agents and
-  proxies from 4.6.1 or earlier don't send them, so with one of those on either end, still raise nginx's timeouts.
+  seconds, so nginx's default 60-second timeouts no longer cut off an agent that isn't scraped for a minute. For a
+  reverse proxy with a shorter idle timeout, lower `proxy.internal.streamKeepaliveSecs`. Agents and proxies from 4.6.1
+  or earlier don't send them, so with one of those on either end, still raise nginx's timeouts.
 
 ### Bug Fixes
 

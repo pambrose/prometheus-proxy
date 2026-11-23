@@ -27,8 +27,10 @@ agent auth is off; see [Transport Filter](configuration/proxy.md#transport-filte
 
     An agent's streams carry nothing between scrapes, and its connection ends when any of them closes. Nginx closes a
     stream that's quiet for 60 seconds by default. A current agent and proxy keep each of their streams open with a
-    keepalive after 30 seconds of quiet, so nginx's defaults are enough for them. Each side sends keepalives only once
-    the other says it takes them, so with an agent or a proxy from 4.6.1 or earlier on either end, an agent that isn't
+    keepalive after 30 seconds of quiet, so nginx's defaults are enough for them. The proxy sets the interval for both
+    directions, `proxy.internal.streamKeepaliveSecs`: keep it under the reverse proxy's idle timeout, or set it to 0 to
+    turn keepalives off. Each side sends keepalives only once the other says it takes them, so with an agent or a proxy
+    from 4.6.1 or earlier on either end, an agent that isn't
     scraped for a minute is cut off, reconnects, and is briefly without its paths, which can fail a scrape. For such a
     pair, raise both timeouts, in the `server` or `location` block that passes to the proxy:
 

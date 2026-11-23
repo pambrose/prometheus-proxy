@@ -171,6 +171,7 @@ class ProxyServiceImplTest : StringSpec() {
     val mockProxy = mockk<Proxy>(relaxed = true)
     every { mockProxy.options } returns mockOptions
     every { mockProxy.proxyConfigVals } returns configVals.proxy
+    every { mockProxy.streamKeepalive } returns 30.seconds
     every { mockProxy.metrics(any<ProxyMetrics.() -> Unit>()) } answers {
       val block = firstArg<ProxyMetrics.() -> Unit>()
       block(metrics)
@@ -1099,13 +1100,29 @@ class ProxyServiceImplTest : StringSpec() {
     }
 
     // So the agent sends keepalives on its response streams only to a proxy that ignores them.
-    "registerAgent should tell the agent the proxy takes keepalives" {
+    // The agent sends its keepalives as often as the proxy says, so whoever runs the reverse proxy in front of the
+    // proxy tunes both directions with proxy.internal.streamKeepaliveSecs.
+    "registerAgent should tell the agent how often to send keepalives, as the proxy is configured" {
       val (proxy, context) = proxyWithRealAgentContext()
+      every { proxy.streamKeepalive } returns 20.seconds
 
       val response = ProxyServiceImpl(proxy).registerAgent(registerAgentRequest { agentId = context.agentId })
 
       response.valid.shouldBeTrue()
-      response.streamKeepalives.shouldBeTrue()
+      response.streamKeepaliveMillis shouldBe 20_000L
+    }
+
+    // proxy.internal.streamKeepaliveSecs = 0: nothing on either stream to the agent, and the agent is told to send
+    // none.
+    "with keepalives off, the proxy should send none and tell the agent to send none" {
+      val (proxy, context) = proxyWithRealAgentContext()
+      context.assignProperties(registerAgentRequest { streamKeepalives = true })
+      val service = ProxyServiceImpl(proxy, streamKeepalive = Duration.ZERO)
+
+      service.registerAgent(registerAgentRequest { agentId = context.agentId }).streamKeepaliveMillis shouldBe 0L
+      val agentInfo = agentInfo { agentId = context.agentId }
+      withTimeoutOrNull(300.milliseconds) { service.readRequestsFromProxy(agentInfo).first() }.shouldBeNull()
+      withTimeoutOrNull(300.milliseconds) { service.readPathNoticesFromProxy(agentInfo).first() }.shouldBeNull()
     }
 
     // The stream ends with the context; with the transport filter disabled, readRequestsFromProxy removes it.

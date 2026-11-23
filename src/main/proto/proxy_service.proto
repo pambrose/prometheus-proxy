@@ -39,9 +39,14 @@ message RegisterAgentResponse {
   // name can never be reused with different semantics.
   reserved 4;
   reserved "proxy_url";
-  // Whether the proxy ignores a keepalive on writeResponsesToProxy and writeChunkedResponsesToProxy. The agent sends
-  // one after a while with no result only to a proxy that sets it, as a proxy predating it would take one for a result.
-  bool stream_keepalives = 5;
+  // 5 was stream_keepalives, a flag in place of stream_keepalive_millis before any release carried it. Reserved so no
+  // build that had it reads the interval as a flag, or the flag as an interval.
+  reserved 5;
+  reserved "stream_keepalives";
+  // How long the agent's writeResponsesToProxy and writeChunkedResponsesToProxy go without a result before it sends a
+  // keepalive, in milliseconds (proxy.internal.streamKeepaliveSecs), which the proxy skips. 0, as from a proxy with
+  // keepalives off or one predating them, which would take a keepalive for a result, means none.
+  int64 stream_keepalive_millis = 6;
 }
 
 message RegisterPathRequest {

@@ -194,6 +194,7 @@ Configure agent cleanup and scrape request management:
 | `maxAgentProxyEndpoints`            | 16      | Max entries of an agent's proxy endpoint list (0 = unlimited)                            |
 | `maxTargetUrlLength`                | 2048    | Max characters of a path's target URL, as the agent reports it (0 = unlimited)           |
 | `maxAgentsPerIdentity`              | 10000   | Max agents connected as one identity with `transportFilterDisabled` (0 = unlimited)      |
+| `streamKeepaliveSecs`               | 30      | Seconds a stream to or from an agent goes quiet before a keepalive, both ways (0 = off)  |
 
 The three path limits are safety nets against a runaway or misbehaving agent, set well above normal use. A path
 over a limit is refused at registration, before it is checked against the agent's

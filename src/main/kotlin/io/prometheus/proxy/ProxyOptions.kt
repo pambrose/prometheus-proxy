@@ -452,6 +452,10 @@ class ProxyOptions internal constructor(
         require(value >= 0) { "internal.$name must be >= 0 (0 = unlimited): $value" }
         logger.info { "internal.$name: ${if (value == 0) "unlimited" else value}" }
       }
+      require(streamKeepaliveSecs >= 0) { "internal.streamKeepaliveSecs must be >= 0 (0 = off): $streamKeepaliveSecs" }
+      logger.info {
+        "internal.streamKeepaliveSecs: ${if (streamKeepaliveSecs == 0) "off" else "${streamKeepaliveSecs}s"}"
+      }
     }
   }
 

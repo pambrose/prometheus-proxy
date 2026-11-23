@@ -62,7 +62,6 @@ import io.mockk.spyk
 import io.mockk.verify
 import io.prometheus.Agent
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
-import io.prometheus.common.GrpcConstants.STREAM_KEEPALIVE
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.deadlineExceeded
 import io.prometheus.common.Utils.HostPort
@@ -114,7 +113,6 @@ import kotlin.concurrent.atomics.update
 import kotlin.reflect.full.callSuspend
 import kotlin.reflect.full.declaredMemberFunctions
 import kotlin.reflect.jvm.isAccessible
-import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
@@ -169,11 +167,10 @@ class AgentGrpcServiceTest : StringSpec() {
     transportFilterDisabled: Boolean = false,
     timeSource: TimeSource = TimeSource.Monotonic,
     activityLog: AgentActivityLog? = null,
-    streamKeepalive: Duration = STREAM_KEEPALIVE,
     block: suspend (AgentGrpcService) -> Unit,
   ) {
     val agent = createMockAgent(proxySpec, transportFilterDisabled = transportFilterDisabled, activityLog = activityLog)
-    val service = AgentGrpcService(agent, agent.options, "test-server", timeSource, streamKeepalive)
+    val service = AgentGrpcService(agent, agent.options, "test-server", timeSource)
     try {
       block(service)
     } finally {
@@ -189,9 +186,8 @@ class AgentGrpcServiceTest : StringSpec() {
     transportFilterDisabled: Boolean = false,
     timeSource: TimeSource = TimeSource.Monotonic,
     activityLog: AgentActivityLog? = null,
-    streamKeepalive: Duration = STREAM_KEEPALIVE,
     block: suspend (AgentGrpcService, ProxyServiceGrpcKt.ProxyServiceCoroutineStub) -> Unit,
-  ) = withService(proxySpec, transportFilterDisabled, timeSource, activityLog, streamKeepalive) { service ->
+  ) = withService(proxySpec, transportFilterDisabled, timeSource, activityLog) { service ->
     val stub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
     service.grpcStub = stub
     service.unaryDeadlineSecs = 0
@@ -213,15 +209,15 @@ class AgentGrpcServiceTest : StringSpec() {
   // The next message queued for the proxy, taken as gRPC takes it to send, which counts the result it completes.
   private fun <T> Channel<Outgoing<T>>.taken(agent: Agent): T = tryReceive().getOrThrow().sent(agent)
 
-  // The first message the agent sends on each response stream, with no result to send and a keepalive due every 50ms,
-  // after a registration whose answer says whether the proxy [proxyTakesKeepalives], or null for none in a while.
-  private suspend fun firstResponses(proxyTakesKeepalives: Boolean): Pair<ScrapeResponse?, ChunkedScrapeResponse?> {
+  // The first message the agent sends on each response stream, with no result to send, after a registration whose
+  // answer gives [keepaliveMillis] as the keepalive interval, or null for none in a while.
+  private suspend fun firstResponses(keepaliveMillis: Long): Pair<ScrapeResponse?, ChunkedScrapeResponse?> {
     var sent: Pair<ScrapeResponse?, ChunkedScrapeResponse?> = null to null
-    withStubbedService("localhost:$PROXY_AGENT_PORT", streamKeepalive = 50.milliseconds) { service, stub ->
+    withStubbedService("localhost:$PROXY_AGENT_PORT") { service, stub ->
       coEvery { stub.registerAgent(any(), any<Metadata>()) } returns
         registerAgentResponse {
           valid = true
-          streamKeepalives = proxyTakesKeepalives
+          streamKeepaliveMillis = keepaliveMillis
         }
       val nonChunked = CompletableDeferred<ScrapeResponse>()
       val chunked = CompletableDeferred<ChunkedScrapeResponse>()
@@ -751,16 +747,17 @@ class AgentGrpcServiceTest : StringSpec() {
 
     // Between scrapes the response streams carry nothing, so a reverse proxy in front of the proxy, such as nginx with
     // its default 60s timeouts, closed them and ended the agent's connection.
-    "the response streams should send a keepalive to a proxy that takes them while no result comes" {
-      val (nonChunked, chunked) = firstResponses(proxyTakesKeepalives = true)
+    "the response streams should send a keepalive as often as the proxy says while no result comes" {
+      val (nonChunked, chunked) = firstResponses(keepaliveMillis = 50)
 
       nonChunked.shouldNotBeNull().keepalive.shouldBeTrue()
       chunked.shouldNotBeNull().keepalive.shouldBeTrue()
     }
 
-    // A proxy predating them would take one for a result.
-    "the response streams should send no keepalive to a proxy that predates them" {
-      firstResponses(proxyTakesKeepalives = false) shouldBe (null to null)
+    // A proxy predating them gives no interval, and would take a keepalive for a result; one with keepalives off gives
+    // 0.
+    "the response streams should send no keepalive when the proxy gives no interval" {
+      firstResponses(keepaliveMillis = 0) shouldBe (null to null)
     }
 
     "registerAgent should throw RequestFailureException on invalid response" {
