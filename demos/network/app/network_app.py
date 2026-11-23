@@ -6,7 +6,7 @@ headquarters, and inventory and shipping at a branch office. Every service serve
 /<service>/metrics. Counters advance with elapsed time on a compressed "day" (DAY_SECS), so the graphs move during a
 short demo.
 
-The inventory payload is the large one: one price and one stock level per item, about 480,000 characters, so the
+The inventory payload is the large one: one price and one stock level per item, about 496,000 characters, so the
 branch's agent sends it to the proxy in chunks, and a thin link can't carry it within Prometheus's scrape timeout. Its
 per-item price list is most of it, and no dashboard uses it, which is what `demo.sh filter` drops at the agent.
 
@@ -28,7 +28,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PORT = int(os.environ.get("NETWORK_APP_PORT", "8000"))
-# The inventory's item count, sized so its payload is about 480,000 characters and its gzipped size exceeds the
+# The inventory's item count, sized so its payload is about 496,000 characters and its gzipped size exceeds the
 # agent's 32 KB chunk threshold.
 INVENTORY_ITEMS = int(os.environ.get("INVENTORY_ITEMS", "4000"))
 # One simulated day, in seconds: traffic peaks and dips once per DAY_SECS.

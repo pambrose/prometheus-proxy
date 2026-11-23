@@ -131,9 +131,10 @@ its admin and metrics ports, so no restart policy ever fired. See
       primary, waits out the deadline above on the departed standby, and only then reaches the primary.
       Give a recovered primary a few seconds before stopping the standby.
 
-    All endpoints must share the same TLS configuration. The agent builds one TLS context and one
-    authority override for the whole list, so endpoints with different CAs or certificate SANs fail
-    with an opaque handshake error rather than a clear configuration error.
+    All endpoints share one TLS configuration. The agent builds one TLS context and one authority
+    override for the whole list, so its trust collection must hold every proxy's CA, and an
+    `overrideAuthority` must be a name every proxy's certificate carries; otherwise the handshake fails
+    with an opaque error rather than a clear configuration error.
 
 - For **agent** redundancy, use [consolidated mode](advanced.md#consolidated-mode), with each agent
   scraping its own instance of the service: the proxy merges their answers into each scrape of the

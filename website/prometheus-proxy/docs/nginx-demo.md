@@ -230,7 +230,7 @@ it to proxy.dashboard.allowedOrigins if expected`. Passing the browser's `Host` 
 | `demo.sh nginx-short-timeouts` | Both stream timeouts cut to 20 seconds |
 | `demo.sh nginx-workers` | Lists nginx's processes, the old workers a reload left among them |
 | `demo.sh nginx-shutdown-timeout` | Sets `worker_shutdown_timeout` to 10 seconds, and restarts nginx |
-| `demo.sh keepalive <secs>` | Recreates the proxy with this stream keepalive interval |
+| `demo.sh keepalive <secs>` | Recreates the proxy with this stream keepalive interval, and restarts nginx, which looks up the new proxy's address |
 | `demo.sh dashboard-stock` | The dashboard's entrance as a plain `proxy_pass` |
 | `demo.sh dashboard-upgrade` | The same, passing the WebSocket handshake's headers |
 | `demo.sh dashboard-host` | The same, passing the browser's `Host` too |

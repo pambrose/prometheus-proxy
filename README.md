@@ -20,8 +20,8 @@ endpoints.
 [Prometheus Proxy](https://prometheus-proxy.com/) enables Prometheus to scrape metrics endpoints running
 behind a firewall and preserves the native pull-based model architecture.
 
-**See it work on your laptop:** six self-contained [demos](#-try-the-demos) run the proxy, its agents, Prometheus,
-and Grafana with one command, and a guided tour walks you through each one.
+**See it work on your laptop:** six self-contained [demos](#-try-the-demos) run the proxy, its agents, and
+Prometheus, with Grafana in three of them, with one command, and a guided tour walks you through each one.
 
 Questions about the API? The [docs site](https://prometheus-proxy.com/) has a
 [Context7](https://context7.com/pambrose/prometheus-proxy) chat on every page that answers from this project's
@@ -104,8 +104,8 @@ Version 4.7.0 adds:
   registered or refused, in order
 - **Settings view** - both dashboards show every setting the process is running with; tokens, passwords, and keys
   show only as set or not set
-- **Metrics without an endpoint** - an app that embeds the agent hands it its metrics registry with
-  `source(path, source)`, so it serves no `/metrics` endpoint
+- **Metrics without an endpoint** - an app that embeds the agent hands it a `MetricsSource` that writes its
+  registry, with `source(path, source)`, so it serves no `/metrics` endpoint
 - **Spring Boot starter** - add the [starter](https://prometheus-proxy.com/spring-boot-starter/) to a Spring Boot app,
   and the agent starts and stops with the app and serves its metrics without `/actuator/prometheus`
 - **Ktor plugin** - `install(PrometheusProxyAgent)` from the [plugin](https://prometheus-proxy.com/ktor-plugin/) in a
@@ -169,7 +169,8 @@ proxy) and register the paths for which they will provide data. One proxy can wo
 - ✅ **High performance** - Built with Kotlin coroutines and gRPC
 - ✅ **Secure** - Optional TLS with mutual authentication, plus per-agent identities with path authorization
 - ✅ **Scalable** - One proxy supports many agents
-- ✅ **Highly available** - Agents fail over across an ordered list of proxies, and back again
+- ✅ **Highly available** - Agents fail over across an ordered list of proxies, and back to the primary on their next
+  reconnect
 - ✅ **Dynamic** - Agents pick up target changes from a watched file, no restart needed
 - ✅ **Bandwidth-conscious** - Optional per-path metric filtering drops unwanted families at the agent
 - ✅ **Observable** - A live dashboard shows every agent, path, and recent scrape in one place, and scrapes a path on demand
@@ -187,7 +188,7 @@ proxy) and register the paths for which they will provide data. One proxy can wo
 
 > 📖 **Docs site:** [Quick Start guide](https://prometheus-proxy.com/getting-started/) walks through these steps with more detail.
 >
-> 🎬 **Rather watch it first?** The [demos](#-try-the-demos) start the proxy, agents, Prometheus, and Grafana with one command.
+> 🎬 **Rather watch it first?** The [demos](#-try-the-demos) start the proxy, agents, and Prometheus, with Grafana in three of them, with one command.
 
 **Requirements:** Java 17 or newer
 
@@ -230,7 +231,8 @@ proxy) and register the paths for which they will provide data. One proxy can wo
    echo $! > proxy.pid
 
    # On the agent's machine
-   nohup java -jar prometheus-agent.jar --proxy mymachine.local --config myapps.conf > agent.log 2>&1 &
+   nohup java -jar prometheus-agent.jar --proxy mymachine.local \
+     --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf > agent.log 2>&1 &
    echo $! > agent.pid
 
    # Later, to follow a log or stop a process
@@ -252,7 +254,8 @@ prometheus-proxy
 
 # On the agent's machine, inside the firewall
 brew install pambrose/tap/prometheus-agent
-prometheus-agent --proxy mymachine.local --config myapps.conf
+prometheus-agent --proxy mymachine.local \
+  --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf
 ```
 
 To keep either one running in the background, edit its config in `$(brew --prefix)/etc/` and start it with
@@ -499,7 +502,7 @@ agent. This approach eliminates the need for a separate agent process when your 
 
 > 📖 **Docs site:** [Embedded Agent guide](https://prometheus-proxy.com/embedded-agent/) for the full API surface and lifecycle details.
 
-> 🎬 **See it running:** the [embedded demo](demos/embedded) runs the agent inside a Ktor coffee shop, built with `embeddedAgent { }`, and the [Spring Boot demo](demos/spring-boot) inside a Spring Boot roastery written in Java, run by the Spring Boot starter. Each starts with one command, and the website's [Embedded Demo](https://prometheus-proxy.com/embedded-demo/) and [Spring Boot Demo](https://prometheus-proxy.com/spring-boot-demo/) pages walk through them.
+> 🎬 **See it running:** the [embedded demo](demos/embedded) runs the agent inside a Ktor coffee shop, installed with the Ktor plugin (`install(PrometheusProxyAgent)`), and the [Spring Boot demo](demos/spring-boot) inside a Spring Boot roastery written in Java, run by the Spring Boot starter. Each starts with one command, and the website's [Embedded Demo](https://prometheus-proxy.com/embedded-demo/) and [Spring Boot Demo](https://prometheus-proxy.com/spring-boot-demo/) pages walk through them.
 
 In Kotlin:
 
@@ -624,8 +627,8 @@ that did not change. Behavior worth knowing:
   *valid-but-empty* file removes all discovered paths.
 - **Polling, not inotify.** Reliable under Kubernetes ConfigMap updates and bind mounts, where file
   watches often miss changes.
-- **Config-file only.** `discovery.file.path` points at a list, so there is no CLI/env equivalent
-  (though `enabled`, the path, and the interval are scalars you can also set via `-D`).
+- **No CLI flag or env var.** `enabled`, `file.path`, and `reconcileIntervalSecs` are set in the
+  config file, or with a `-D` override.
 
 Because the file is a plain HOCON/JSON list, it can be **generated** — by a Kubernetes ConfigMap, an
 Ansible template, or a cron job querying a service registry — so your automation only needs permission
@@ -666,10 +669,11 @@ worth knowing:
 - **Regexes are fully anchored**, matching Prometheus `relabel_config` semantics: `"go_"` matches
   nothing, `"go_.*"` is required to match `go_goroutines`. `metricNameDeny` is applied after
   `metricNameAllow`, so deny wins on overlap.
-- **Matching is per metric family, not per series.** A `# HELP`/`# TYPE` line opens a family and the
-  verdict is computed once, so a histogram's `_bucket`, `_sum`, and `_count` series are always kept
-  or dropped together with their metadata lines — a filter can never deliver a histogram with some of
-  its series missing.
+- **Matching is per metric family, not per series.** A `# HELP`, `# TYPE`, or `# UNIT` line opens a
+  family and the verdict is computed once, so a histogram's `_bucket`, `_sum`, and `_count` series are
+  kept or dropped together with their metadata lines — a filter never delivers such a histogram with
+  some of its series missing. A series that follows no metadata line of its family is judged on its
+  own full name.
 - **Fails open.** A non-text `Content-Type` (protobuf, an HTML error body) or a body that is not
   valid UTF-8 passes through unfiltered and byte-exact. The worst case is bandwidth not saved, never
   a corrupted payload.
@@ -700,7 +704,7 @@ agent {
 Or comma-separated on the command line / environment (either **replaces** `endpoints` entirely):
 
 ```bash
-java -jar prometheus-agent.jar --proxy proxy-a.example.com:50051,proxy-b.example.com:50051
+java -jar prometheus-agent.jar --config myconfig.conf --proxy proxy-a.example.com:50051,proxy-b.example.com:50051
 # or: PROXY_HOSTNAME=proxy-a.example.com:50051,proxy-b.example.com:50051
 ```
 
@@ -717,8 +721,10 @@ Two things to know before deploying a pair:
   so its service-discovery endpoint returns an empty list — which Prometheus treats as "these targets
   no longer exist" and silently **deletes** them: no `up=0`, no alert. With `static_config` the
   standby 404s, Prometheus records `up=0`, and your alerting works unchanged.
-- **All endpoints share one TLS configuration** (one trust store, one `overrideAuthority`), so proxies
-  with different CAs or certificate SANs fail with an opaque handshake error.
+- **All endpoints share one TLS configuration.** The agent builds one TLS context and one authority
+  override for the whole list, so its trust collection must hold every proxy's CA, and an
+  `overrideAuthority` must be a name every proxy's certificate carries; otherwise the handshake fails
+  with an opaque error rather than a clear configuration error.
 
 > 📖 **Docs site:** [High availability](https://prometheus-proxy.com/production/#high-availability) for the full Prometheus-side setup, and [Running an HA pair](https://prometheus-proxy.com/web-dashboard/#running-an-ha-pair) for how the dashboard shows failed-over agents.
 
@@ -757,7 +763,8 @@ day or more, as the example does, or the agent reconnects every minute. The [ngi
 end. An agent that disconnects ends that stream, and is removed at once; one that dies before opening its stream, or
 whose connection stays half-open, is removed after the inactivity timeout (default: 1 minute, controlled by
 `proxy.internal.maxAgentInactivitySecs`). The proxy also limits the agents connected as one auth identity to
-`proxy.internal.maxAgentsPerIdentity` (10,000), and with agent auth off every agent shares one identity.
+`proxy.internal.maxAgentsPerIdentity` (10,000), and with agent auth off, or only the shared `agentToken`, every agent
+shares one identity.
 
 > 📖 **Docs site:** [Advanced Topics guide](https://prometheus-proxy.com/advanced/) covers the Nginx reverse-proxy setup, federation, and other advanced configurations.
 
@@ -817,9 +824,9 @@ host name by default, which leaves it open to DNS rebinding (a page pointing its
 dashboard's address); list the names you reach it by in `proxy.dashboard.allowedHosts` to close that. See
 [Dashboard exposure](https://prometheus-proxy.com/web-dashboard/#exposure).
 
-Accessibility: text and UI colors clear the WCAG AA contrast thresholds with a measured floor of
-4.59:1, the path table carries proper header semantics, and connection loss and recovery are
-announced to screen readers rather than signalled by colour alone.
+Accessibility: text clears the WCAG AA contrast threshold of 4.5:1 with a measured floor of 4.59:1,
+and non-text indicators clear 3:1; the path table carries proper header semantics, and connection
+loss and recovery are announced to screen readers rather than signalled by colour alone.
 
 > 📖 **Docs site:** [Dashboard guide](https://prometheus-proxy.com/web-dashboard/) for the layouts, the links, the status-bar gauges, and HA-pair behavior.
 
@@ -832,7 +839,7 @@ path's recent scrapes as the agent saw them, a Scrape now button that fetches it
 metric filter, the agent's discovery file, an Activity view of what happened to its connection and paths, and a
 Settings view of every setting it resolved. It is off by default, takes the same login settings as the proxy's (`agent.dashboard.password`, or
 `DASHBOARD_PASSWORD`), and listens on port 8095; the agent's Helm chart turns it on with `dashboard.enabled`, and every
-demo turns it on for its agents:
+demo turns it on for its agents, all but the nginx demo's 4.6.0 agent, which predates it:
 
 ```bash
 java -jar prometheus-agent.jar --config agent.conf --dashboard    # or DASHBOARD_ENABLED=true / agent.dashboard.enabled
@@ -880,20 +887,20 @@ lists every CLI option with its environment variable, config property, and defau
 | **Both**  | `--admin, -r`      | `ADMIN_ENABLED`                 | Enable admin/health-check endpoints                  |
 | **Both**  | `--metrics, -e`    | `METRICS_ENABLED`               | Enable internal metrics collection                   |
 | **Both**  | `--agent_token`    | `AGENT_TOKEN`                   | Pre-shared agent auth token; both sides must match (Default: disabled). For per-agent identities see `proxy.auth` |
+| **Both**  | `--dashboard`      | `DASHBOARD_ENABLED`             | Enable the dashboard (Default: disabled)             |
+| **Both**  | `--dashboard_port` | `DASHBOARD_PORT`                | Dashboard port (Default: 8094 proxy, 8095 agent)     |
+| **Both**  | `--dashboard_host` | `DASHBOARD_HOST`                | Listen address for the dashboard (Default: 0.0.0.0)  |
+| **Both**  |                    | `DASHBOARD_PASSWORD`            | Requires a login on the dashboard (Default: none)    |
+| **Both**  |                    | `DASHBOARD_USERNAME`            | The dashboard login's username (Default: admin)      |
 | **Proxy** | `--port, -p`       | `PROXY_PORT`                    | Port for Prometheus to scrape (Default: 8080)        |
 | **Proxy** | `--agent_port, -a` | `AGENT_PORT`                    | Port for Agents to connect via gRPC (Default: 50051) |
-| **Proxy** | `--dashboard`      | `DASHBOARD_ENABLED`             | Enable the operational dashboard (Default: disabled) |
-| **Proxy** | `--dashboard_port` | `DASHBOARD_PORT`                | Port for the operational dashboard (Default: 8094)   |
-| **Proxy** | `--dashboard_host` | `DASHBOARD_HOST`                | Listen address for the dashboard (Default: 0.0.0.0)  |
-| **Proxy** |                    | `DASHBOARD_PASSWORD`            | Requires a login on the dashboard (Default: none)    |
-| **Proxy** |                    | `DASHBOARD_USERNAME`            | The dashboard login's username (Default: admin)      |
 | **Agent** | `--proxy, -p`      | `PROXY_HOSTNAME`                | Hostname/IP of the Proxy. Accepts a comma-separated failover list (e.g. `proxy-a:50051,proxy-b:50051`); see `agent.proxy.endpoints` |
 
 ### Configuration Notes
 
 * **Formats:** Supports HOCON (`.conf`), JSON (`.json`), and Java Properties (`.properties`).
 * **Logging:** Customize with `-Dlogback.configurationFile=/path/to/logback.xml`. To pick up edits without a restart, set `scan="true"` on that file's `<configuration>` element, as [`logback/docker-logback.xml`](logback/docker-logback.xml) does; the config bundled in the JARs can't be watched.
-* **Dynamic Props:** Use `-Dproperty.name=value` for any scalar configuration key (parsed as Java properties, so list/object values like `proxy.auth` must be set in a config file).
+* **Dynamic Props:** Use `-Dproperty.name=value` after the JAR, as in `java -jar prometheus-proxy.jar -Dproxy.http.port=9090`, for any scalar configuration key (parsed as Java properties, so list/object values like `proxy.auth` must be set in a config file). It overrides the config file, but a CLI option or environment variable for the same setting overrides it; before `-jar` it is a JVM system property instead, which a config file's value overrides.
 * **Per-Agent Auth:** `proxy.auth` (per-agent identities with path authorization) is a list of objects, so it is config-file-only — see [Per-Agent Identities and Path Authorization](#per-agent-identities-and-path-authorization).
 * **Keepalives:** See the [gRPC keepalive guide](https://grpc.io/docs/guides/keepalive/) for tuning details.
 * **Exposition formats:** Scrapes are carried as text, so the agent asks targets only for the text and OpenMetrics formats. Native histograms, which Prometheus receives only in the protobuf format, aren't available through the proxy.
@@ -1024,8 +1031,10 @@ agent-side change is needed. The proxy resolves the token to an identity and enf
 requested path matches one of the identity's `paths` patterns. Patterns are single-segment globs where `*` matches any run
 of characters and `?` matches one (e.g. `team_a_*`); an **empty** `paths` list authorizes every path. An unknown token is
 rejected with `UNAUTHENTICATED`; a path outside the identity's patterns fails registration with a "not authorized" reason.
-Because authorization is per-identity-per-path, consolidated mode (multiple agents serving one path) still works as long as
-each agent's identity permits the shared path.
+A path also belongs to the identity whose agent serves it: while a live agent serves a path, only an agent of the same
+identity may take it over or, in consolidated mode (multiple agents serving one path), join it, so agents that share a
+consolidated path must present one identity. Another identity's registration is refused, and retried, until the path's
+agents are gone. With agent auth off, or only the shared `agentToken`, every agent has the same identity.
 
 `proxy.auth` is a list of objects, so it is set in the config file only — there is no equivalent CLI flag or environment
 variable. Identity names must be unique, tokens non-empty and distinct, from each other and from `proxy.agentToken`,

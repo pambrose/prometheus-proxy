@@ -506,9 +506,9 @@ cmd_tour() {
       "works whether or not the proxy has the path, so when a path doesn't scrape, it tells you whether the agent can" \
       "read the app's metrics. It leaves no trace in Recent scrapes or the agent's metrics."
     instruct "Open the dashboard's Connection view: $AGENT_DASHBOARD_URL/connection" \
-      "It reads connected, to proxy:50051, the one proxy endpoint the coffee shop gives its agent, over TLS. Below" \
-      "are the settings the agent resolved, its token shown only as set. In part 8, when the proxy goes away, this" \
-      "view says why the agent can't connect."
+      "It reads connected, to proxy:50051, the one proxy endpoint the coffee shop gives its agent, over TLS. In" \
+      "part 8, when the proxy goes away, this view says why the agent can't connect. The Settings view, the last" \
+      "tab, lists the settings the agent resolved, its token shown only as set: $AGENT_DASHBOARD_URL/settings"
     instruct "Open the dashboard's Activity view: $AGENT_DASHBOARD_URL/activity" \
       "It lists what the agent did, newest first: registered, the two paths on one line, above connected, to" \
       "proxy:50051, from when the app started. If the agent tried before the proxy was listening, a connect failed" \

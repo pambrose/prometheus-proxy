@@ -19,7 +19,7 @@ helm install prometheus-proxy ./charts/prometheus-proxy --namespace monitoring \
 
 The chart runs one proxy per release: agents register their paths with the proxy they connect to, so a second replica
 behind the same Service would answer scrapes for paths it doesn't hold. For high availability, install a second
-release and give the agents both proxies (a comma-separated `proxy.hostname`).
+release and give the agents both proxies (a comma-separated `proxy.hostname` in the agent chart).
 
 ## Securing the agent port
 

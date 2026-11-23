@@ -608,7 +608,8 @@ cmd_clusters() {
   watch_for
   point "Every Service in $TARGET is ClusterIP, so nothing in it can be reached from outside the cluster. The" \
     "agent opened its connection from $TARGET to the proxy's NodePort in $MONITORING; nothing connected in."
-  point "Each cluster runs one of the charts the project ships, installed with nothing but a values file."
+  point "Each cluster runs one of the charts the project ships, given a values file and a config file, and the" \
+    "agent's chart the proxy's address."
   point "Prometheus's one job asks the proxy's /discovery what to scrape, so its config names no target in $TARGET."
   point "On the proxy dashboard the agent is listed under its pod's name, $(agent_pod): $DASHBOARD_URL"
   point "The agent's Service lists only its metrics port, 8083. Its own dashboard, on 8095 in its pod, is on no" \
@@ -894,8 +895,8 @@ cmd_tour() {
     instruct "Open the Connection view: $AGENT_DASHBOARD_URL/connection" \
       "The agent is connected to the proxy's NodePort on $MONITORING's node, under its pod's name. Under Discovery" \
       "is the file the chart mounts from the agent-targets ConfigMap, /app/discovery/targets.conf, read every 5" \
-      "seconds, with three entries and its last read ok. Settings shows what the agent resolved from" \
-      "config/agent.conf, such as its 3-second scrape timeout."
+      "seconds, with three entries and its last read ok. The Settings view, the last tab, shows what the agent" \
+      "resolved from config/agent.conf, such as its 3-second scrape timeout: $AGENT_DASHBOARD_URL/settings"
     instruct "Open the Activity view: $AGENT_DASHBOARD_URL/activity" \
       "It lists what the agent did since its pod started, newest first. From the bottom: it connected to the proxy," \
       "then registered its static path, and its three discovered ones on a line of their own. Each line is in the" \

@@ -109,11 +109,11 @@ Patterns are single-segment globs: `*` matches any run of characters and `?` mat
 [Proxy configuration](../configuration/proxy.md#internal-settings)), so a path that is too long, has more
 than one segment, or has whitespace, a control character, `?`, or `#` in it is refused as invalid, whatever the
 patterns. A `*` matches any run of characters, line breaks included, so this check is what keeps an agent from
-registering a path that would forge lines in the proxy's log. Because authorization is per-identity-per-path,
-[consolidated mode](../advanced.md#consolidated-mode) still works as long as each participating
-agent's identity permits the shared path. A consolidated path belongs to the identity that registered
-it, though: another identity whose patterns match is refused while agents still serve the path, and
-joins only once they are gone.
+registering a path that would forge lines in the proxy's log. A path also belongs to the identity whose agent
+serves it: while a live agent serves a path in [consolidated mode](../advanced.md#consolidated-mode) (multiple
+agents serving one path), only an agent of the same identity may join it, so agents that share a consolidated path
+must present one identity. Another identity's registration is refused, and retried, until the path's agents are
+gone, even when its patterns match.
 
 A non-consolidated path is protected the same way. While a live agent serves it, only an agent of the
 same identity may take it over, which keeps redeploys working; an agent of another identity is refused

@@ -104,8 +104,8 @@ The charts get nothing but a values file each, a config file, and the proxy's ad
 ## Scenarios
 
 `demo.sh`, in `demos/kubernetes`, drives the scenarios below. Run it from that directory, where `make up` started the
-demo; each command prints what to watch, and how long it took. The times on this page were measured on an
-Apple-silicon laptop.
+demo; most commands print what to watch, and the ones that add, remove, or replace something, how long it took. The
+times on this page were measured on an Apple-silicon laptop.
 
 ### The Helm charts on two clusters, with no inbound access
 

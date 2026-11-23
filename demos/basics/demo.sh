@@ -584,8 +584,8 @@ cmd_tour() {
       "only leaves just the refusal."
     step "Stop and remove the contractor's agent." -- rogue-agent-stop
     instruct "Open agent-east's dashboard on its Connection view: $EAST_DASHBOARD_URL/connection" \
-      "agent-east is connected to proxy:50051, its one proxy endpoint. Below that are its discovery file and the" \
-      "settings it resolved."
+      "agent-east is connected to proxy:50051, its one proxy endpoint. Below that is its discovery file. The settings" \
+      "it resolved are on its Settings view: $EAST_DASHBOARD_URL/settings"
     step "Stop the proxy, as an outage or a bad deploy would. The proxy's dashboard goes with it, but agent-east's" \
       "keeps answering, since it runs on the agent." -- proxy-down
     instruct "On agent-east's dashboard, open the Paths view, click /orders_metrics, then Scrape now." \
@@ -844,8 +844,8 @@ main() {
       "used to make two such agents swap the paths every few seconds."
     point "The proxy told agent-east. Its own dashboard lists its six paths as retrying, each taken over by" \
       "agent-east-copy, and its Activity view has the takeover, at $EAST_DASHBOARD_URL"
-    point "The proxy's log line, printed below, names both agents and gives the fix: set agent.consolidated = true" \
-      "on each, if both should serve the paths."
+    point "The proxy's log line, printed below, names both agents by agentId and gives the fix: set" \
+      "agent.consolidated = true on each, if both should serve the paths."
     point "The copy's own dashboard lists the six paths, each with a green light, since the proxy accepted every one," \
       "at $COPY_DASHBOARD_URL"
     follow_up "To undo it, run" "$0 duplicate-agent-stop"

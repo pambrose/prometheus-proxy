@@ -99,8 +99,9 @@ is for a laptop, not for anything shared.
 ## Guided tour
 
 `make tour` walks through these parts one step at a time. To follow them here instead, run the scenario commands
-from `demos/network`; each one prints what to watch. `./demo.sh heal` ends each part: it removes every toxic, brings back every link and
-proxy, and returns any agent on the standby to the primary. Leave about a minute between parts so the graphs catch up.
+from `demos/network`; each one prints what to watch. From part 2 on, each part ends with `./demo.sh heal`, which
+removes every toxic, brings back every link and proxy, and returns any agent on the standby to the primary; part 3 then
+runs `unfilter` too. Leave about a minute between parts so the graphs catch up.
 
 ### 1. Two agents reach the proxy over a simulated WAN
 
@@ -340,11 +341,11 @@ The optional `[agent]` is `agent-branch` (the default) or `agent-hq`.
 | `docker/compose.yml` | The services, their ports, the WAN's network aliases, and their images |
 | `config/toxiproxy.json` | The WAN's four links: each one's name, the port it listens on, and the proxy it reaches |
 | `config/proxy.conf` | The dashboard, service discovery, a shared agent token, tracing, and a 30-second eviction limit, so part 5 fits a demo |
-| `config/proxy-standby.conf` | The standby: `proxy.conf`, with its own scrape address for service discovery |
+| `config/proxy-standby.conf` | The standby: `proxy.conf`, with its own scrape address for service discovery and its own Zipkin service name |
 | `config/agent-hq.conf`, `config/agent-branch.conf` | Each agent's two links in order, its token, its dashboard and the port it listens on, tracing, paths and their labels (the `job` Prometheus uses), and a 3-second scrape timeout |
 | `config/agent-branch-filtered.conf` | `agent-branch.conf`, dashboard included, plus the filter that drops the inventory's price list, for part 3 |
 | `prometheus/prometheus.yml` | One HTTP service discovery job against both proxies, and one job for each proxy's own metrics |
-| `prometheus/network-alerts.yml` | The fast demo alerts: a target down, an agent evicted, and no agents connected |
+| `prometheus/network-alerts.yml` | The fast demo alerts: a target down, an agent evicted, an agent off its primary, and no agents connected |
 | `grafana/` | The provisioned datasource, dashboard folder, and the network dashboard |
 | `app/network_app.py` | The simulated services |
 | `Makefile` | The demo's targets: `make up`, `make up-local` (which runs the proxy and agent built from this checkout, for trying a change to them), `down`, `status`, `open`, `tour`, and `logs`, which `make help` lists, and `screenshots`, which it leaves out, since it's for maintaining the site |
@@ -383,7 +384,7 @@ running demo resets the links it has: every link up, with no toxics.
   <http://localhost:8195/dashboard>, and agent-branch's Connection view for the agent's side.
 - **agent-branch's Activity view is empty, or starts over**: `filter` and `unfilter` restart agent-branch, and an agent
   keeps its activity in memory only. Its dashboard reconnects to the restarted agent on its own.
-- The proxies log a warning at startup that the dashboard has no authentication; the agents, that their dashboard
-  listens on every interface without a login, and that their token crosses without TLS; and Toxiproxy, that its API is
-  unauthenticated. All are expected here, and are why every port binds to `127.0.0.1` and the WAN's API is published
-  nowhere.
+- The proxies log warnings at startup that the dashboard has no authentication, and that the agents' token crosses
+  without TLS; the agents, that their dashboard listens on every interface without a login, and that their token
+  crosses without TLS; and Toxiproxy, that its API is unauthenticated. All are expected here, and are why every port
+  binds to `127.0.0.1` and the WAN's API is published nowhere.

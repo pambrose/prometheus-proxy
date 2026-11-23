@@ -187,8 +187,9 @@ startup rather than surfacing later as a connection error.
 
 !!! warning "All endpoints share one TLS configuration"
 
-    The agent builds a single TLS context and authority override for the whole list. Endpoints with
-    different CAs or certificate SANs fail with an opaque handshake error rather than a clear
+    The agent builds one TLS context and one authority override for the whole list, so its trust
+    collection must hold every proxy's CA, and an `overrideAuthority` must be a name every proxy's
+    certificate carries; otherwise the handshake fails with an opaque error rather than a clear
     configuration error.
 
 See [High availability](../production.md#high-availability) for the Prometheus side — in particular,

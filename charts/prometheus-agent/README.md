@@ -15,7 +15,7 @@ config: |
     ]
   }
 EOF
-helm install prometheus-agent ./charts/prometheus-agent -f agent-values.yaml
+helm install prometheus-agent ./charts/prometheus-agent --namespace monitoring --create-namespace -f agent-values.yaml
 ```
 
 `proxy.hostname` is required. A comma-separated list of proxies is tried in order, for failover.
@@ -34,8 +34,9 @@ discovery:
     ]
 ```
 
-Edit the `<release>-discovery` ConfigMap (or your own, with `discovery.existingConfigMap`) and the agent picks up the
-change within `discovery.reconcileIntervalSecs`, after the kubelet updates the mounted file.
+Edit the `prometheus-agent-discovery` ConfigMap (`<release>-prometheus-agent-discovery` for a release whose name doesn't
+contain `prometheus-agent`; the install's notes name it), or your own, with `discovery.existingConfigMap`, and the agent
+picks up the change within `discovery.reconcileIntervalSecs`, after the kubelet updates the mounted file.
 
 ## More than one replica
 

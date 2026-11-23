@@ -114,7 +114,7 @@ else; the Cloud Platforms page shows how to make your own.
 ## Guided tour
 
 `make tour` walks through these parts one step at a time. To follow them here instead, run the scenario commands
-from `demos/embedded`; each one prints what to watch. Leave about a minute between parts so the graphs catch up.
+from `demos/embedded`; most print what to watch. Leave about a minute between parts so the graphs catch up.
 
 ### 1. An app with the agent embedded, and no port open for Prometheus
 
@@ -149,8 +149,8 @@ connection, each path's registration, its scrapes as it saw them, and what it di
   works whether or not the proxy has the path, so when a path doesn't scrape, it tells you whether the agent can read
   the app's metrics.
 - The **Connection** view, <http://localhost:8395/dashboard/connection>, reads `connected`, to `proxy:50051`, over
-  TLS, and lists the settings the agent resolved, its token shown only as set. In part 8, it says why the agent can't
-  connect.
+  TLS, with its token set. In part 8, it says why the agent can't connect. The **Settings** view,
+  <http://localhost:8395/dashboard/settings>, lists the settings the agent resolved, its token shown only as set.
 - The **Activity** view, <http://localhost:8395/dashboard/activity>, lists what the agent did, newest first: the two
   paths `registered`, above `connected`. If the agent tried before the proxy was listening, a `connect failed` sits
   below them.

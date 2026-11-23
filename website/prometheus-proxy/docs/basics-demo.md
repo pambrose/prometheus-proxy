@@ -123,8 +123,8 @@ proxy to Prometheus, so the proxy monitors itself the same way it serves everyth
 </figure>
 
 The Paths view lists every path with the agent serving it, its target, and how its last scrape went. `/shipping_metrics`
-shows `agent-west-1 +1`, since two agents serve it. The button after a path copies its URL on the proxy, the one
-to curl, and the one after a target copies the target's URL.
+shows one of the west agents, followed by `+1`, since two agents serve it. The button after a path copies its URL on
+the proxy, the one to curl, and the one after a target copies the target's URL.
 
 ### Each agent's own dashboard
 
@@ -298,10 +298,10 @@ holds nothing from the old one, so the proxy's dashboard starts its histories ov
 Someone deployed agent-east's config twice. The copy registers the same paths with the same identity, and the newer
 registration takes each one: agent-east-copy serves all six, and agent-east stays connected with none. The two
 settle; agent-east waits rather than taking the paths back, which used to make two such agents swap them every few
-seconds. The command prints the proxy's log line, which names both agents and gives the fix: `agent.consolidated =
-true` on each, if both should serve the paths. The proxy told agent-east, whose own dashboard lists its six paths as
-`retrying`, each taken over by agent-east-copy. `./demo.sh duplicate-agent-stop` removes the copy, and agent-east,
-told that no agent serves its paths any more, takes them back within seconds, with no restart.
+seconds. The command prints the proxy's log line, which names both agents by agentId and gives the fix:
+`agent.consolidated = true` on each, if both should serve the paths. The proxy told agent-east, whose own dashboard
+lists its six paths as `retrying`, each taken over by agent-east-copy. `./demo.sh duplicate-agent-stop` removes the
+copy, and agent-east, told that no agent serves its paths any more, takes them back within seconds, with no restart.
 
 ### A login for the dashboard
 

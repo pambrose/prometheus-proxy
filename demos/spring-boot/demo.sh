@@ -518,8 +518,8 @@ cmd_tour() {
       "It lists what has happened to the agent, newest first: registered, for /roastery_metrics, and under it" \
       "connected, to the proxy, from when the roastery started."
     instruct "Open the Connection view, and keep it open: $AGENT_DASHBOARD_URL/connection" \
-      "It reads connected, and lists the agent's one proxy endpoint, proxy:50051, with no error, then the settings" \
-      "the agent resolved."
+      "It reads connected, and lists the agent's one proxy endpoint, proxy:50051, with no error. The settings the" \
+      "agent resolved are on the Settings view, the last tab."
     step "Stop the proxy, as when a proxy host goes away." -- proxy-stop
     step "Start the proxy again." -- proxy-start
   fi

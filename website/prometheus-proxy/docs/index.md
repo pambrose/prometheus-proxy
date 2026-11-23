@@ -94,7 +94,7 @@ Get running in under a minute:
     # Start the agent
     java -jar prometheus-agent.jar \
       --proxy proxy-host.example.com \
-      --config myapps.conf
+      --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf
     ```
 
 === "Docker"

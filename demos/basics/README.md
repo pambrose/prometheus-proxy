@@ -131,7 +131,7 @@ Open the dashboard on the **Agents** view.
 - `/proxy_metrics` is the proxy's own metrics. They leave the proxy, go through an agent, and come back through the
   proxy to Prometheus, so the proxy monitors itself with the same path as everything else.
 - Switch to **Paths**: every path, the agent serving it, its target, its last scrape, and its status.
-  `/shipping_metrics` shows `agent-west-1 +1`: two agents serve it.
+  `/shipping_metrics` shows one of the west agents, followed by `+1`: two agents serve it.
 - Each row ends with links to its job in Prometheus and in Grafana, shown as their brand icons and filled from the
   label the agent registered the path with; the Grafana one is a way into the next part.
 
@@ -291,7 +291,7 @@ in `config/agent-*.conf`). This part starts with agent-rogue, which part 8 left 
   newer registration takes each one: the dashboard shows agent-east-copy with 6 paths and agent-east with 0.
 - They settle. agent-east stays connected without paths, and waits rather than taking them back, which used to make
   two such agents swap the paths every few seconds. The command prints the proxy's log line, which names both agents
-  and says the fix: `agent.consolidated = true` on each, if both should serve the paths.
+  by agentId and says the fix: `agent.consolidated = true` on each, if both should serve the paths.
 - The proxy told agent-east. Its own dashboard, <http://localhost:8095/dashboard>, lists its six paths as `retrying`,
   each taken over by agent-east-copy, and its **Activity** view has the takeover.
 - The copy's own dashboard lists the six paths, each green, since the proxy accepted every one:
@@ -358,7 +358,7 @@ The services are `orders`, `payments`, `inventory`, `catalog`, and `shipping`, p
 | `docker/compose.yml` | The services, their ports, and their images, and the proxy's dashboard password for part 11 |
 | `config/proxy.conf` | The dashboard, service discovery, the per-agent identities, and a 30-second eviction limit, so part 7 fits a demo |
 | `config/agent-duplicate.conf` | agent-east's config under another name, with a dashboard port of its own, for part 10 |
-| `config/agent-*.conf` | Each agent's proxy endpoint, identity token, dashboard port, paths, and their labels (the `job` Prometheus uses), discovery for agent-east, consolidated mode for the west pair, and a 3-second scrape timeout |
+| `config/agent-*.conf` | Each agent's proxy endpoint, identity token, dashboard port, paths, and their labels (the `job` Prometheus uses), discovery for agent-east, consolidated mode for the west pair, and a 3-second scrape timeout for agent-east and the west pair |
 | `prometheus/prometheus.yml` | One HTTP service discovery job against the proxy |
 | `prometheus/demo-alerts.yml` | The fast demo alerts |
 | `grafana/` | The provisioned datasource, dashboard folder, and demo dashboard |
@@ -381,8 +381,8 @@ and Prometheus doesn't notice one at all, so `make up` reloads Prometheus's conf
 - **The dashboard is empty, or shows only some agents**: the agents connect a few seconds after the proxy starts.
   Give it ten seconds, or check `make logs SERVICE=agent-east`.
 - **A scenario left things in an odd state**: `./demo.sh recover`, `undiscover`, `agent-thaw`, `agent-start`,
-  `rogue-agent-stop`, `proxy-up`, and `duplicate-agent-stop` undo every scenario. For a clean slate,
+  `rogue-agent-stop`, `proxy-up`, `duplicate-agent-stop`, and `login-off` undo every scenario. For a clean slate,
   `make down && make up`.
-- The proxy logs a warning at startup that the dashboard has no authentication, and each agent logs the same for its
-  own, which listens on every interface in its container. That's expected here, and is why every port binds to
-  `127.0.0.1`.
+- The proxy logs warnings at startup that the dashboard has no authentication, and that agent tokens are sent without
+  TLS; each agent logs the same for its own dashboard, which listens on every interface in its container, and that its
+  token crosses without TLS. All are expected here, and are why every port binds to `127.0.0.1`.

@@ -15,9 +15,9 @@ The agent's own [dashboard](https://prometheus-proxy.com/agent-dashboard/) is on
 with no change to the roastery. It shows the agent's side of its connection, from inside the roastery, and the
 tour watches it while the proxy stops and starts again.
 
-The coffee shop in the [embedded demo](../embedded) shows the rest with an app in Kotlin: a rush, an alert in Grafana,
-a deploy that hands the agent's path to the new version, the proxy going away, and secrets from the environment. The
-website's [Spring Boot Demo](https://prometheus-proxy.com/spring-boot-demo/) page walks through this
+The coffee shop in the [embedded demo](../embedded) shows the rest with an app in Kotlin: a rush in Grafana, an alert
+in Prometheus, a deploy that hands the agent's path to the new version, the proxy going away, and secrets from the
+environment. The website's [Spring Boot Demo](https://prometheus-proxy.com/spring-boot-demo/) page walks through this
 one.
 
 ```mermaid
@@ -44,7 +44,7 @@ graph LR
 
 - [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2: Docker Desktop, or Docker Engine with the
   Compose plugin.
-- `curl`, `make`, and `bash`.
+- `git`, to clone the repository, and `curl`, `make`, and `bash`.
 - For `make up-local` only: a JDK 17 or later and [Maven](https://maven.apache.org/install.html) 3.9 or later, which
   build the library and the roastery from this checkout.
 
