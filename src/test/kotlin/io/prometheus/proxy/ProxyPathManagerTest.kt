@@ -791,7 +791,7 @@ class ProxyPathManagerTest : StringSpec() {
       response.reason shouldContain "path not found"
     }
 
-    // unregisterPath's path reaches removePath unchecked, and its ERROR line and reason wrote it whole (October #4,
+    // unregisterPath's path reaches removePath unchecked, and its log line and reason wrote it whole (October #4,
     // found while fixing #23).
     "removePath should cut the path it can't remove to 64 characters in the log and the reason" {
       val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
@@ -799,7 +799,7 @@ class ProxyPathManagerTest : StringSpec() {
 
       var reason = ""
       val events =
-        captureLogs<ProxyPathManager>(Level.WARN) { reason = manager.removePath(longPath, "agent-123").reason }
+        captureLogs<ProxyPathManager>(Level.INFO) { reason = manager.removePath(longPath, "agent-123").reason }
 
       reason shouldContain "p".repeat(64) + "..."
       reason.length shouldBeLessThan 200
@@ -1958,6 +1958,39 @@ class ProxyPathManagerTest : StringSpec() {
       waitingNotices(oldAgent) shouldBe listOf(noticeOf("metrics"))
     }
 
+    // A displaced agent unregistering the path another agent took is expected, as is one unregistering a path that's
+    // gone: the agent's view is stale, not the proxy's. Both were logged at ERROR.
+    "removePath should log a path it can't remove at INFO" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val oldAgent = noticed("launch-old")
+      val newAgent = noticed("launch-new")
+      manager.addPath("metrics", "{}", oldAgent)
+      manager.addPath("metrics", "{}", newAgent)
+
+      val events =
+        captureLogs<ProxyPathManager>(Level.INFO) {
+          manager.removePath("metrics", oldAgent.agentId).valid.shouldBeFalse()
+          manager.removePath("nonexistent", oldAgent.agentId).valid.shouldBeFalse()
+        }.filter { "Unable to remove path" in it.formattedMessage }
+
+      events.map { it.level } shouldBe listOf(Level.INFO, Level.INFO)
+    }
+
+    // It gave the path up, so it isn't told the path is free once the holder leaves.
+    "an agent that unregisters a path it waits on should stop waiting on it" {
+      val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
+      val oldAgent = noticed("launch-old")
+      val newAgent = noticed("launch-new")
+      manager.addPath("metrics", "{}", oldAgent)
+      manager.addPath("metrics", "{}", newAgent)
+      waitingNotices(oldAgent)
+
+      manager.removePath("metrics", oldAgent.agentId)
+      manager.removePath("metrics", newAgent.agentId)
+
+      waitingNotices(oldAgent).shouldBeEmpty()
+    }
+
     "an agent waiting on a path should be told it's free when its holder disconnects" {
       val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
       val oldAgent = noticed("launch-old")
@@ -2115,6 +2148,7 @@ class ProxyPathManagerTest : StringSpec() {
           every { proxyEndpointsList } returns LazyStringArrayList()
           every { currentEndpointIndex } returns 0
           every { pathNotices } returns false
+          every { streamKeepalives } returns false
         },
       )
       val consolidated2 = AgentContext("remote-c2")
@@ -2127,6 +2161,7 @@ class ProxyPathManagerTest : StringSpec() {
           every { proxyEndpointsList } returns LazyStringArrayList()
           every { currentEndpointIndex } returns 0
           every { pathNotices } returns false
+          every { streamKeepalives } returns false
         },
       )
       val newAgent = AgentContext("remote-new")

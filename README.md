@@ -719,10 +719,11 @@ java -jar prometheus-agent.jar --tf_disabled --config myconfig.conf
 An example nginx config is [`nginx/docker/nginx.conf`](nginx/docker/nginx.conf), and an example proxy and agent config
 is [`nginx/nginx-proxy.conf`](nginx/nginx-proxy.conf).
 
-**⚠️ Note:** Raise nginx's `grpc_read_timeout` and `client_body_timeout` (60 seconds by default) well above your
-longest scrape interval, as the example does. An agent's streams carry nothing between scrapes, and its connection
-ends when nginx closes any of them, so with the defaults an agent that isn't scraped for a minute reconnects every
-minute.
+**⚠️ Note:** An agent's streams carry nothing between scrapes, and its connection ends when nginx closes any of them,
+which it does after 60 seconds of quiet by default. A current agent and proxy keep their streams open with keepalives,
+which each sends only once the other says it takes them. With an agent or a proxy from 4.6.1 or earlier, raise nginx's
+`grpc_read_timeout` and `client_body_timeout` well above your longest scrape interval, as the example does, or an
+agent that isn't scraped for a minute reconnects every minute.
 
 **⚠️ Note:** With `transportFilterDisabled`, the proxy can't see a connection close, only the agent's request stream
 end. An agent that disconnects ends that stream, and is removed at once; one that dies before opening its stream, or

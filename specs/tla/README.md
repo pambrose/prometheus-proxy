@@ -19,8 +19,9 @@ transport filter disabled, a stream that names another connection's agentId, whi
 It also models path notices and reclaims: the notice `takeOverPath` queues for a displaced connection of another
 launch, its delivery on `readPathNoticesFromProxy`, the agent counting the path as taken over, which it keeps across
 its reconnects, and its reclaim, which the proxy refuses while a live connection of another launch holds the path.
-Heartbeats, chunking, metrics, and the event bus are abstracted away, and so are the notice that a path is free and the
-waiting list that sends it, which only bring a reclaim forward. Agent-side failover is in `AgentFailover.tla`.
+Heartbeats, stream keepalives, chunking, metrics, and the event bus are abstracted away, and so are the notice that a
+path is free and the waiting list that sends it, which only bring a reclaim forward. Agent-side failover is in
+`AgentFailover.tla`.
 
 It is a model of the code, not the code: when you change one of those classes, update the matching action.
 

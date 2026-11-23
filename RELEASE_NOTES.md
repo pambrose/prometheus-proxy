@@ -54,6 +54,9 @@ _Not yet released_
   through the agent to the target, showing which Prometheus asked, how long the scrape waited for its agent, how long
   the target took and how often the agent retried it, and why a scrape failed. Set `sampleRate` under
   `proxy.internal.zipkin` and `agent.internal.zipkin` to keep a share of traces instead of all of them.
+- **Nginx's defaults are enough.** A current agent and proxy keep their streams open with a keepalive every 30
+  seconds, so nginx's default 60-second timeouts no longer cut off an agent that isn't scraped for a minute. Agents and
+  proxies from 4.6.1 or earlier don't send them, so with one of those on either end, still raise nginx's timeouts.
 
 ### Bug Fixes
 
@@ -85,6 +88,8 @@ _Not yet released_
   `grpcReportingEnabled` Zipkin setting, which never did anything, is gone; a config that sets it still loads.
 - **The release date is the release commit's.** The version the proxy and agent print, and the dashboards' Settings,
   give the date of the commit a build is from rather than the day it was built.
+- **Fewer ERROR lines on the proxy.** An unregister the proxy can't apply, for a path that's gone or that another
+  agent now holds, is logged at INFO instead of ERROR.
 
 ### Documentation
 

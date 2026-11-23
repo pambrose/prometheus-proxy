@@ -88,6 +88,12 @@ All notable changes to this project are documented in this file.
 - `proxy.internal.zipkin.sampleRate` and `agent.internal.zipkin.sampleRate` (default 1.0) set the share of traces each
   side keeps, scrapes and gRPC calls alike, 0 or 0.01 to 1; the agent follows the proxy's decision for a scrape. The
   Settings view shows the rate
+- The agent and the proxy keep their gRPC streams open with a keepalive after 30 seconds without a message, so a
+  reverse proxy's idle timeout, such as nginx's default 60 seconds, no longer cuts off an agent that isn't scraped for a
+  minute and briefly drops its paths. Each side says at registration that it takes keepalives (`stream_keepalives` on
+  `RegisterAgentRequest` and `RegisterAgentResponse`), and the other sends them only then, as one predating them would
+  take a keepalive for a scrape request or a result: with an agent or a proxy from 4.6.1 or earlier, nginx's timeouts
+  still need raising
 
 ### Bug Fixes
 
@@ -126,6 +132,9 @@ All notable changes to this project are documented in this file.
 - The unimplemented `internal.zipkin.grpcReportingEnabled` setting is removed; a config that sets it still loads
 - `BuildConfig.BUILD_TIME` and the release date the version and the dashboards show are the time of the commit the
   build is from, not of the build, so every build of a commit is the same
+- The proxy logs an unregister it can't apply, for a path that's gone or that another agent now holds, at INFO rather
+  than ERROR: after a takeover, the displaced agent unregistering the path is expected. An agent waiting on the path
+  also stops waiting, so it isn't told the path is free
 
 ### Build & Tooling
 

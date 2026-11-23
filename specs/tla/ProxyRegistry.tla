@@ -24,10 +24,11 @@
 (*                           launch holds the path, on the connection it   *)
 (*                           was told on or one it reconnects with         *)
 (*                                                                         *)
-(* Heartbeats, chunking, metrics, and the event bus are abstracted away,  *)
-(* and so are the notices that a path is free and the waiting list that   *)
-(* sends them, which only bring a reclaim forward: the reclaim loop       *)
-(* retries without them.                                                  *)
+(* Heartbeats, stream keepalives, chunking, metrics, and the event bus    *)
+(* are abstracted away: a keepalive changes no state, as the reader that  *)
+(* sends one just waits again. So are the notices that a path is free and *)
+(* the waiting list that sends them, which only bring a reclaim forward:  *)
+(* the reclaim loop retries without them.                                 *)
 (* Eviction and transport termination both reach removeAgentContext, so   *)
 (* both are the nondeterministic Disconnect action.                        *)
 (***************************************************************************)
@@ -93,7 +94,7 @@ VARIABLES
 
     \* Path notices and reclaims
     notices,        \* [Conns -> SUBSET Paths]: AgentContext's unread notices that another agent took the path
-    told,           \* [Launches -> SUBSET Paths]: each agent's taken-over paths (AgentPathManager.takenOverPaths),
+    told,           \* [Launches -> SUBSET Paths]: each agent's taken-over paths (their AgentPathManager.paths entries),
                     \* which its reconnects keep
     heard,          \* [Launches -> SUBSET Paths]: a ghost, told as it would be had no reconnect forgotten any of it,
                     \* for ReconnectReclaims to state without assuming KeepTold

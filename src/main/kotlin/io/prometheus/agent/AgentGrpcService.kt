@@ -60,6 +60,7 @@ import io.prometheus.grpc.heartBeatRequest
 import io.prometheus.grpc.pathMapSizeRequest
 import io.prometheus.grpc.registerAgentRequest
 import io.prometheus.grpc.registerPathRequest
+import io.prometheus.grpc.scrapeResponse
 import io.prometheus.grpc.summaryData
 import io.prometheus.grpc.unregisterPathRequest
 import kotlin.concurrent.atomics.AtomicInt
@@ -69,10 +70,16 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
 import kotlinx.coroutines.channels.ClosedSendChannelException
+import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.channels.consume
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.consumeAsFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.selects.onTimeout
+import kotlinx.coroutines.selects.select
 import java.io.ByteArrayInputStream
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
@@ -81,7 +88,9 @@ import java.util.concurrent.locks.ReentrantLock
 import java.util.zip.CRC32
 import kotlin.concurrent.atomics.plusAssign
 import kotlin.concurrent.withLock
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeMark
 import kotlin.time.DurationUnit
 import kotlin.time.TimeSource
@@ -160,9 +169,15 @@ internal class AgentGrpcService(
   private val options: AgentOptions,
   private val inProcessServerName: String,
   private val timeSource: TimeSource = TimeSource.Monotonic,
+  // How long a response stream goes without sending before it sends a keepalive; see writeResponsesToProxyUntil...
+  private val streamKeepalive: Duration = STREAM_KEEPALIVE,
 ) {
   private val grpcLock = ReentrantLock()
   private var grpcStarted by atomicBoolean(false)
+
+  // Whether the proxy this connection registered with ignores a keepalive on the response streams, as its answer to
+  // registerAgent says; one predating them would take it for a result.
+  private var proxyTakesKeepalives by atomicBoolean(false)
 
   // Latched by shutDownChannelPermanently() and never cleared: the agent is stopping for good, so no
   // further channel may be created. Read and written only under grpcLock, which is what makes the
@@ -500,12 +515,15 @@ internal class AgentGrpcService(
         currentEndpointIndex = this@AgentGrpcService.currentEndpointIndex
         // Every connection reads them; see readPathNoticesFromProxy.
         pathNotices = true
+        // readRequestsFromProxy skips them.
+        streamKeepalives = true
       }
     unaryStub().registerAgent(request)
       .also { response ->
         agent.markMsgSent()
         if (!response.valid)
           throw RequestFailureException.fromProxy("registerAgent", response.reason)
+        proxyTakesKeepalives = response.streamKeepalives
       }
     initialConnectionLatch.countDown()
   }
@@ -645,6 +663,9 @@ internal class AgentGrpcService(
       }
     grpcStub.readRequestsFromProxy(agentInfo)
       .collect { grpcRequest: ScrapeRequest ->
+        // The proxy keeping the stream open: nothing to scrape.
+        if (grpcRequest.keepalive)
+          return@collect
         // The actual fetch happens at the other end of the channel, not here.
         // Not the whole message: a scrape request carries the Authorization header Prometheus sent.
         logger.debug { "readRequestsFromProxy(): scrapeId=${grpcRequest.scrapeId} path=${grpcRequest.path}" }
@@ -754,6 +775,36 @@ internal class AgentGrpcService(
     }
   }
 
+  // The messages of [channel], for one of the response streams, and, to a proxy that takes them, [keepalive] after
+  // streamKeepalive with none. Between scrapes the stream carries nothing, and a reverse proxy in front of the proxy
+  // closes a quiet stream, nginx after its client_body_timeout (60s by default), which ends the connection. Consumes
+  // [channel] as consumeAsFlow does: once the flow ends, by its end or a failure, what's left in it is dropped. The
+  // wait is a select, so a message that comes as it ends isn't lost, as a receive a timeout cancels can lose it.
+  private fun <T> streamOf(
+    channel: ReceiveChannel<Outgoing<T>>,
+    agent: Agent,
+    keepalive: T,
+  ): Flow<T> {
+    if (!proxyTakesKeepalives)
+      return channel.consumeAsFlow().map { it.sent(agent) }
+    return flow {
+      channel.consume {
+        while (true) {
+          val next =
+            select {
+              channel.onReceiveCatching { it }
+              onTimeout(streamKeepalive) { null }
+            }
+          when {
+            next == null -> emit(keepalive)
+            next.isClosed -> next.exceptionOrNull()?.let { throw it } ?: break
+            else -> emit(next.getOrThrow().sent(agent))
+          }
+        }
+      }
+    }
+  }
+
   suspend fun writeResponsesToProxyUntilDisconnected(
     agent: Agent,
     connectionContext: AgentConnectionContext,
@@ -805,13 +856,13 @@ internal class AgentGrpcService(
       // Ends by disconnection from server
       launch(Dispatchers.IO) {
         runStreamTask("writeResponsesToProxy") {
-          grpcStub.writeResponsesToProxy(nonChunkedChannel.consumeAsFlow().map { it.sent(agent) })
+          grpcStub.writeResponsesToProxy(streamOf(nonChunkedChannel, agent, KEEPALIVE_RESPONSE))
         }
       }
 
       launch(Dispatchers.IO) {
         runStreamTask("writeChunkedResponsesToProxy") {
-          grpcStub.writeChunkedResponsesToProxy(chunkedChannel.consumeAsFlow().map { it.sent(agent) })
+          grpcStub.writeChunkedResponsesToProxy(streamOf(chunkedChannel, agent, KEEPALIVE_CHUNKED_RESPONSE))
         }
       }
     }
@@ -819,6 +870,11 @@ internal class AgentGrpcService(
 
   companion object {
     private val logger = logger {}
+
+    // Under nginx's default client_body_timeout (60s) and Envoy's stream_idle_timeout (5m), as the proxy's is.
+    private val STREAM_KEEPALIVE = 30.seconds
+    private val KEEPALIVE_RESPONSE: ScrapeResponse = scrapeResponse { keepalive = true }
+    private val KEEPALIVE_CHUNKED_RESPONSE: ChunkedScrapeResponse = chunkedScrapeResponse { keepalive = true }
 
     /**
      * A channel of messages for the proxy that counts what it can't deliver as dropped: what's queued when a writer's

@@ -683,6 +683,8 @@ internal class ProxyPathManager(
           }
 
           agentContext == null -> {
+            // An agent waiting on the path gives it up, so it isn't told the path is free.
+            pathMap[key] = agentInfo.withoutWaiter(agentId)
             val agentIds = agentInfo.agentContexts.joinToString(", ") { it.agentId }
             "Unable to remove path /$shown - invalid agentId: $agentId -- [$agentIds]"
           }
@@ -696,7 +698,9 @@ internal class ProxyPathManager(
         }
       }
 
-    failure?.let { msg -> logger.error { msg } }
+    // The agent's view is stale, not the proxy's: a displaced agent unregisters a path another agent took, or one that
+    // agent has since dropped.
+    failure?.let { msg -> logger.info { msg } }
     return unregisterPathResponse {
       valid = failure == null
       reason = failure.orEmpty()

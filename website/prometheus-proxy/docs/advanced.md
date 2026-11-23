@@ -23,12 +23,14 @@ on both proxy and agent:
 In this mode the proxy also limits the agents connected as one auth identity, which is every agent when
 agent auth is off; see [Transport Filter](configuration/proxy.md#transport-filter).
 
-!!! warning "Raise Nginx's stream timeouts"
+!!! warning "Nginx's stream timeouts"
 
     An agent's streams carry nothing between scrapes, and its connection ends when any of them closes. Nginx closes a
-    stream that's quiet for 60 seconds, so with its defaults an agent that isn't scraped for a minute is cut off,
-    reconnects, and is briefly without its paths, which can fail a scrape. Raise both timeouts, in the `server` or
-    `location` block that passes to the proxy:
+    stream that's quiet for 60 seconds by default. A current agent and proxy keep each of their streams open with a
+    keepalive after 30 seconds of quiet, so nginx's defaults are enough for them. Each side sends keepalives only once
+    the other says it takes them, so with an agent or a proxy from 4.6.1 or earlier on either end, an agent that isn't
+    scraped for a minute is cut off, reconnects, and is briefly without its paths, which can fail a scrape. For such a
+    pair, raise both timeouts, in the `server` or `location` block that passes to the proxy:
 
     | Directive | Covers |
     |-----------|--------|
@@ -38,8 +40,7 @@ agent auth is off; see [Transport Filter](configuration/proxy.md#transport-filte
     Set them well above your longest scrape interval, as
     [`nginx/docker/nginx.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/nginx/docker/nginx.conf) does
     with `1d`. Without them, the agent's log shows `RST_STREAM closed stream` on `readRequestsFromProxy()` or
-    `writeResponsesToProxy()`, then `Disconnected from proxy`, a minute after the last scrape. The stream that tells an
-    agent another agent took one of its paths sends a keepalive every 30 seconds, so it stays open either way.
+    `writeResponsesToProxy()`, then `Disconnected from proxy`, a minute after the last scrape.
 
 Example Nginx and proxy configuration files are available in the repository:
 

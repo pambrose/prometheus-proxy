@@ -84,6 +84,7 @@ import io.prometheus.grpc.scrapeRequest
 import io.prometheus.grpc.unregisterPathResponse
 import io.prometheus.common.captureLogs
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
@@ -207,6 +208,43 @@ class AgentGrpcServiceTest : StringSpec() {
 
   // The next message queued for the proxy, taken as gRPC takes it to send, which counts the result it completes.
   private fun <T> Channel<Outgoing<T>>.taken(agent: Agent): T = tryReceive().getOrThrow().sent(agent)
+
+  // The first message the agent sends on each response stream, with no result to send and a keepalive due every 50ms,
+  // after a registration whose answer says whether the proxy [proxyTakesKeepalives], or null for none in a while.
+  private suspend fun firstResponses(proxyTakesKeepalives: Boolean): Pair<ScrapeResponse?, ChunkedScrapeResponse?> {
+    val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
+    val service = AgentGrpcService(agent, agent.options, "test-server", streamKeepalive = 50.milliseconds)
+    val stub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
+    coEvery { stub.registerAgent(any(), any<Metadata>()) } returns
+      registerAgentResponse {
+        valid = true
+        streamKeepalives = proxyTakesKeepalives
+      }
+    val nonChunked = CompletableDeferred<ScrapeResponse>()
+    val chunked = CompletableDeferred<ChunkedScrapeResponse>()
+    coEvery { stub.writeResponsesToProxy(any(), any()) } coAnswers {
+      nonChunked.complete(arg<Flow<ScrapeResponse>>(0).first())
+      EMPTY_INSTANCE
+    }
+    coEvery { stub.writeChunkedResponsesToProxy(any(), any()) } coAnswers {
+      chunked.complete(arg<Flow<ChunkedScrapeResponse>>(0).first())
+      EMPTY_INSTANCE
+    }
+    service.grpcStub = stub
+    service.unaryDeadlineSecs = 0
+    try {
+      service.registerAgent(CountDownLatch(1))
+      return coroutineScope {
+        val writer = launch { service.writeResponsesToProxyUntilDisconnected(agent, AgentConnectionContext(128)) }
+        val sent =
+          withTimeoutOrNull(1.seconds) { nonChunked.await() } to withTimeoutOrNull(1.seconds) { chunked.await() }
+        writer.cancel()
+        sent
+      }
+    } finally {
+      service.shutDown()
+    }
+  }
 
   init {
     "parseProxyHostname should extract hostname and port correctly" {
@@ -680,6 +718,57 @@ class AgentGrpcServiceTest : StringSpec() {
         service.registerAgent(CountDownLatch(1))
 
         coVerify { mockStub.registerAgent(match { it.pathNotices }, any<Metadata>()) }
+      }
+    }
+
+    // What makes the proxy send keepalives on readRequestsFromProxy, which only an agent that ignores them may say.
+    "registerAgent should say the agent takes stream keepalives" {
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
+        coEvery { mockStub.registerAgent(any(), any<Metadata>()) } returns registerAgentResponse { valid = true }
+
+        service.registerAgent(CountDownLatch(1))
+
+        coVerify { mockStub.registerAgent(match { it.streamKeepalives }, any<Metadata>()) }
+      }
+    }
+
+    // The proxy keeping the stream open: nothing to scrape.
+    "readRequestsFromProxy should ignore a keepalive" {
+      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
+      val service = AgentGrpcService(agent, agent.options, "test-server")
+      val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
+      val request = scrapeRequest {
+        agentId = "test-agent-123"
+        scrapeId = 1L
+        path = "/metrics"
+      }
+      every { mockStub.readRequestsFromProxy(any(), any()) } returns flowOf(scrapeRequest { keepalive = true }, request)
+      service.grpcStub = mockStub
+      val connectionContext = AgentConnectionContext(128)
+
+      service.readRequestsFromProxy(mockk<AgentHttpService>(relaxed = true), connectionContext)
+
+      val channel = connectionContext.scrapeRequestActions()
+      channel.tryReceive().isSuccess.shouldBeTrue()
+      channel.tryReceive().isSuccess.shouldBeFalse()
+      service.shutDown()
+    }
+
+    // Between scrapes the response streams carry nothing, so a reverse proxy in front of the proxy, such as nginx with
+    // its default 60s timeouts, closed them and ended the agent's connection.
+    "the response streams should send a keepalive to a proxy that takes them while no result comes" {
+      for (takesKeepalives in [true, false]) {
+        withClue("proxy takes keepalives: $takesKeepalives") {
+          val (nonChunked, chunked) = firstResponses(proxyTakesKeepalives = takesKeepalives)
+          if (takesKeepalives) {
+            nonChunked.shouldNotBeNull().keepalive.shouldBeTrue()
+            chunked.shouldNotBeNull().keepalive.shouldBeTrue()
+          } else {
+            // A proxy predating them would take one for a result.
+            nonChunked.shouldBeNull()
+            chunked.shouldBeNull()
+          }
+        }
       }
     }
 
