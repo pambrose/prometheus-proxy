@@ -23,6 +23,7 @@ import com.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.pambrose.common.dsl.GuavaDsl.toStringElements
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.common.ScrapeResults
+import io.prometheus.common.receiveCatchingWithin
 import io.prometheus.common.AgentValues.shownValue
 import io.prometheus.grpc.PathNotice
 import io.prometheus.grpc.PathRejectionCause
@@ -32,8 +33,6 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.CONFLATED
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
 import kotlinx.coroutines.channels.ClosedSendChannelException
-import kotlinx.coroutines.selects.onTimeout
-import kotlinx.coroutines.selects.select
 import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.AtomicInt
@@ -221,22 +220,13 @@ internal class AgentContext(
 
   /**
    * Waits for the next scrape request, at most [idle], and takes it, or returns null once the context is invalidated,
-   * or when [idle] passes with none, while it stays valid.
-   *
-   * The wait is a select, so a request's signal that comes as the wait ends is either taken or left for the next one:
-   * a receive that a timeout cancels can take the signal and lose it, leaving the request queued unread.
+   * or when [idle] passes with none, while it stays valid. A signal that comes as the wait ends isn't lost (see
+   * receiveCatchingWithin), which would leave its request queued unread.
    */
   suspend fun readScrapeRequest(idle: Duration = Duration.INFINITE): ScrapeRequestWrapper? {
     while (true) {
-      val signalled =
-        if (idle.isInfinite())
-          scrapeRequestNotifier.receiveCatching().isSuccess
-        else
-          select {
-            scrapeRequestNotifier.onReceiveCatching { it.isSuccess }
-            onTimeout(idle) { null }
-          } ?: return null
-      if (!signalled)
+      val signal = scrapeRequestNotifier.receiveCatchingWithin(idle) ?: return null
+      if (signal.isClosed)
         return null
       scrapeRequestQueue.poll()?.let {
         queuedCount -= 1
@@ -307,20 +297,13 @@ internal class AgentContext(
 
   /**
    * Waits for unread path notices and takes them all, or returns null once the context is invalidated, or none once
-   * [timeout] passes with no notice. A select, as in [readScrapeRequest], so a wake that comes as the wait ends isn't
-   * lost, which left the notices unread until the next one woke it.
+   * [timeout] passes with no notice. A wake that comes as the wait ends isn't lost (see receiveCatchingWithin), which
+   * left the notices unread until the next one woke it.
    */
   suspend fun awaitPathNotices(timeout: Duration = Duration.INFINITE): List<PathNotice>? {
     while (true) {
-      val signalled =
-        if (timeout.isInfinite())
-          pathNoticeSignal.receiveCatching().isSuccess
-        else
-          select {
-            pathNoticeSignal.onReceiveCatching { it.isSuccess }
-            onTimeout(timeout) { null }
-          } ?: return emptyList()
-      if (!signalled)
+      val signal = pathNoticeSignal.receiveCatchingWithin(timeout) ?: return emptyList()
+      if (signal.isClosed)
         return null
       val notices =
         synchronized(pendingPathNotices) {

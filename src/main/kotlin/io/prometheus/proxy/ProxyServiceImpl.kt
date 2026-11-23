@@ -23,6 +23,7 @@ import io.grpc.Status
 import io.grpc.StatusException
 import io.prometheus.Proxy
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
+import io.prometheus.common.GrpcConstants.STREAM_KEEPALIVE
 import io.prometheus.common.MetricBuilders.rejectionCauseLabel
 import io.prometheus.common.ScrapeResults.Companion.toScrapeResults
 import io.prometheus.common.ScrapeTracing.Companion.TAG_QUEUE_WAIT
@@ -63,7 +64,6 @@ import kotlinx.coroutines.flow.flow
 import kotlin.concurrent.atomics.AtomicLong
 import kotlin.concurrent.atomics.fetchAndIncrement
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.seconds
 import kotlin.time.DurationUnit
 
 /**
@@ -449,10 +449,9 @@ internal class ProxyServiceImpl(
 
   // Sends the agent the notices about paths another agent took from it, until the proxy stops or the context is
   // invalidated; see ProxyPathManager.takeOverPath. Unlike readRequestsFromProxy, its end removes nothing, even with
-  // the transport filter disabled: the scrape request stream, which every agent reads, does that. Notices are rare, and
-  // a reverse proxy in front of this one closes a stream that sends nothing for a while, nginx after its
-  // grpc_read_timeout (60s by default), which would end the agent's connection, so it sends a notice with no path,
-  // which the agent ignores, after streamKeepalive with nothing else.
+  // the transport filter disabled: the scrape request stream, which every agent reads, does that. Notices are rare, so
+  // it sends a notice with no path, which the agent ignores, after streamKeepalive with nothing else (see
+  // STREAM_KEEPALIVE). Every agent that reads the stream ignores one, so no flag is needed.
   override fun readPathNoticesFromProxy(request: AgentInfo): Flow<PathNotice> =
     flow {
       val agentContext = readableAgentContext(request.agentId, "readPathNoticesFromProxy")
@@ -488,10 +487,9 @@ internal class ProxyServiceImpl(
   }
 
   // Delivers [agentContext]'s queued scrape requests until the proxy stops or the context is invalidated, skipping
-  // the ones no longer awaited. Starting counts: see Proxy.isStartingOrRunning. Between scrapes the stream carries
-  // nothing, and a reverse proxy in front of this one closes a quiet stream, nginx after its grpc_read_timeout (60s by
-  // default), which ends the agent's connection, so an agent that takes them gets a keepalive after streamKeepalive
-  // with no request. One that predates them would take it for a scrape request.
+  // the ones no longer awaited. Starting counts: see Proxy.isStartingOrRunning. An agent that takes them gets a
+  // keepalive after streamKeepalive with no request (see STREAM_KEEPALIVE), and never one that doesn't, whatever the
+  // wait returns.
   private suspend fun FlowCollector<ScrapeRequest>.emitScrapeRequests(agentContext: AgentContext) {
     val idle = if (agentContext.acceptsStreamKeepalives) streamKeepalive else Duration.INFINITE
     while (proxy.isStartingOrRunning && agentContext.isValid()) {
@@ -909,8 +907,6 @@ internal class ProxyServiceImpl(
     private val PATH_ID_GENERATOR = AtomicLong(0L)
     private const val RPC_NAME = "writeChunkedResponsesToProxy"
 
-    // Under nginx's default grpc_read_timeout and client_body_timeout (60s) and Envoy's stream_idle_timeout (5m).
-    private val STREAM_KEEPALIVE = 30.seconds
     private val KEEPALIVE_NOTICE: PathNotice = PathNotice.getDefaultInstance()
     private val KEEPALIVE_REQUEST: ScrapeRequest = scrapeRequest { keepalive = true }
     internal const val UNKNOWN_ADDRESS = "Unknown"

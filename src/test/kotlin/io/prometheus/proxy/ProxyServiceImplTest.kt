@@ -1053,10 +1053,8 @@ class ProxyServiceImplTest : StringSpec() {
     // default 60s timeouts, closed it and ended the agent's connection: one not scraped for a minute reconnected each
     // minute.
     "readRequestsFromProxy should send a keepalive to an agent that takes them while no scrape request comes" {
-      val proxy = createMockProxy()
-      val context = AgentContext("remote")
+      val (proxy, context) = proxyWithRealAgentContext()
       context.assignProperties(registerAgentRequest { streamKeepalives = true })
-      every { proxy.agentContextManager.getAgentContext(context.agentId) } returns context
 
       val first =
         ProxyServiceImpl(proxy, streamKeepalive = 50.milliseconds)
@@ -1068,9 +1066,7 @@ class ProxyServiceImplTest : StringSpec() {
 
     // An agent predating them would take a keepalive for a scrape request.
     "readRequestsFromProxy should send no keepalive to an agent that predates them" {
-      val proxy = createMockProxy()
-      val context = AgentContext("remote")
-      every { proxy.agentContextManager.getAgentContext(context.agentId) } returns context
+      val (proxy, context) = proxyWithRealAgentContext()
 
       val first =
         withTimeoutOrNull(300.milliseconds) {
@@ -1104,9 +1100,7 @@ class ProxyServiceImplTest : StringSpec() {
 
     // So the agent sends keepalives on its response streams only to a proxy that ignores them.
     "registerAgent should tell the agent the proxy takes keepalives" {
-      val proxy = createMockProxy()
-      val context = AgentContext("remote")
-      every { proxy.agentContextManager.getAgentContext(context.agentId) } returns context
+      val (proxy, context) = proxyWithRealAgentContext()
 
       val response = ProxyServiceImpl(proxy).registerAgent(registerAgentRequest { agentId = context.agentId })
 

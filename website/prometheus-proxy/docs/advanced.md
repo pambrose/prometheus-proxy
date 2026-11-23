@@ -172,6 +172,10 @@ Fine-tune gRPC keepalive behavior for specific network environments:
 
 See the [gRPC keepalive guide](https://grpc.io/docs/guides/keepalive/) for detailed tuning advice.
 
+These settings send HTTP/2 PINGs, which check the connection but carry no data on a stream, so they don't keep a
+reverse proxy from closing a quiet stream: nginx answers a PING without resetting a stream's timeout. The agent and
+the proxy send keepalive messages on their streams for that; see [Nginx Reverse Proxy](#nginx-reverse-proxy).
+
 ## Stale Agent Cleanup
 
 The proxy periodically checks for inactive agents and evicts them:

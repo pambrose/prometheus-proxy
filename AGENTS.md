@@ -121,7 +121,7 @@ When promoting a type from `internal` to `public`, also add a cross-reference to
 ### gRPC Service Definition
 
 Defined in `src/main/proto/proxy_service.proto` — read it for the current RPC set. Note the defaults that
-aren't in the proto: a scrape result is sent in chunks once its gzipped size reaches `chunkContentSizeKbs` (32 KB), the heartbeat fires every 5s during inactivity, and each stream sends a keepalive after 30s of quiet (`ProxyServiceImpl.STREAM_KEEPALIVE`, `AgentGrpcService.STREAM_KEEPALIVE`), so a reverse proxy's idle timeout doesn't close it. A side sends keepalives only once the other said at registration that it takes them (`stream_keepalives`, both ways), since one predating them would take a keepalive for a scrape request or a result. Every wait that ends in a keepalive is a `select` with `onTimeout`, never a receive inside `withTimeoutOrNull`, which can take a channel's element as it times out and lose it.
+aren't in the proto: a scrape result is sent in chunks once its gzipped size reaches `chunkContentSizeKbs` (32 KB), the heartbeat fires every 5s during inactivity, and each stream sends a keepalive after 30s of quiet (`GrpcConstants.STREAM_KEEPALIVE`), so a reverse proxy's idle timeout doesn't close it. A side sends keepalives only once the other said at registration that it takes them (`stream_keepalives`, both ways), since one predating them would take a keepalive for a scrape request or a result. Every wait that ends in a keepalive goes through `receiveCatchingWithin` (`common/Channels.kt`), a `select` with `onTimeout`, never a receive inside `withTimeoutOrNull`, which can take a channel's element as it times out and lose it.
 
 ### Key Mechanisms
 

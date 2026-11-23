@@ -112,13 +112,11 @@ Expose it with a `LoadBalancer` Service (or an Ingress controller):
     gRPC runs over HTTP/2. A plain `LoadBalancer` (L4) forwards it transparently. If you put
     an Ingress in front instead, it must support HTTP/2 / gRPC backends (for example, the
     NGINX Ingress `nginx.ingress.kubernetes.io/backend-protocol: GRPC` annotation). Terminate
-    or pass through TLS as described under [TLS](#tls). A current agent and proxy keep their
-    streams open with keepalives every 30 seconds; with an agent or a proxy from 4.6.1 or
-    earlier, whose streams carry nothing between scrapes, also raise the Ingress's stream
-    timeouts well above the scrape interval. On NGINX Ingress, those are the
+    or pass through TLS as described under [TLS](#tls). With an agent or a proxy from 4.6.1 or
+    earlier, also raise the Ingress's stream timeouts, as
+    [Nginx Reverse Proxy](advanced.md#nginx-reverse-proxy) explains: on NGINX Ingress, the
     `nginx.ingress.kubernetes.io/proxy-read-timeout` annotation and the controller ConfigMap's
-    `client-body-timeout`, both 60 seconds by default. See
-    [Nginx Reverse Proxy](advanced.md#nginx-reverse-proxy).
+    `client-body-timeout`.
 
 ## Deploying the Agent
 

@@ -62,6 +62,7 @@ import io.mockk.spyk
 import io.mockk.verify
 import io.prometheus.Agent
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
+import io.prometheus.common.GrpcConstants.STREAM_KEEPALIVE
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.deadlineExceeded
 import io.prometheus.common.Utils.HostPort
@@ -113,6 +114,7 @@ import kotlin.concurrent.atomics.update
 import kotlin.reflect.full.callSuspend
 import kotlin.reflect.full.declaredMemberFunctions
 import kotlin.reflect.jvm.isAccessible
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
@@ -167,10 +169,11 @@ class AgentGrpcServiceTest : StringSpec() {
     transportFilterDisabled: Boolean = false,
     timeSource: TimeSource = TimeSource.Monotonic,
     activityLog: AgentActivityLog? = null,
+    streamKeepalive: Duration = STREAM_KEEPALIVE,
     block: suspend (AgentGrpcService) -> Unit,
   ) {
     val agent = createMockAgent(proxySpec, transportFilterDisabled = transportFilterDisabled, activityLog = activityLog)
-    val service = AgentGrpcService(agent, agent.options, "test-server", timeSource)
+    val service = AgentGrpcService(agent, agent.options, "test-server", timeSource, streamKeepalive)
     try {
       block(service)
     } finally {
@@ -186,8 +189,9 @@ class AgentGrpcServiceTest : StringSpec() {
     transportFilterDisabled: Boolean = false,
     timeSource: TimeSource = TimeSource.Monotonic,
     activityLog: AgentActivityLog? = null,
+    streamKeepalive: Duration = STREAM_KEEPALIVE,
     block: suspend (AgentGrpcService, ProxyServiceGrpcKt.ProxyServiceCoroutineStub) -> Unit,
-  ) = withService(proxySpec, transportFilterDisabled, timeSource, activityLog) { service ->
+  ) = withService(proxySpec, transportFilterDisabled, timeSource, activityLog, streamKeepalive) { service ->
     val stub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
     service.grpcStub = stub
     service.unaryDeadlineSecs = 0
@@ -212,38 +216,32 @@ class AgentGrpcServiceTest : StringSpec() {
   // The first message the agent sends on each response stream, with no result to send and a keepalive due every 50ms,
   // after a registration whose answer says whether the proxy [proxyTakesKeepalives], or null for none in a while.
   private suspend fun firstResponses(proxyTakesKeepalives: Boolean): Pair<ScrapeResponse?, ChunkedScrapeResponse?> {
-    val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
-    val service = AgentGrpcService(agent, agent.options, "test-server", streamKeepalive = 50.milliseconds)
-    val stub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
-    coEvery { stub.registerAgent(any(), any<Metadata>()) } returns
-      registerAgentResponse {
-        valid = true
-        streamKeepalives = proxyTakesKeepalives
+    var sent: Pair<ScrapeResponse?, ChunkedScrapeResponse?> = null to null
+    withStubbedService("localhost:$PROXY_AGENT_PORT", streamKeepalive = 50.milliseconds) { service, stub ->
+      coEvery { stub.registerAgent(any(), any<Metadata>()) } returns
+        registerAgentResponse {
+          valid = true
+          streamKeepalives = proxyTakesKeepalives
+        }
+      val nonChunked = CompletableDeferred<ScrapeResponse>()
+      val chunked = CompletableDeferred<ChunkedScrapeResponse>()
+      coEvery { stub.writeResponsesToProxy(any(), any()) } coAnswers {
+        nonChunked.complete(arg<Flow<ScrapeResponse>>(0).first())
+        EMPTY_INSTANCE
       }
-    val nonChunked = CompletableDeferred<ScrapeResponse>()
-    val chunked = CompletableDeferred<ChunkedScrapeResponse>()
-    coEvery { stub.writeResponsesToProxy(any(), any()) } coAnswers {
-      nonChunked.complete(arg<Flow<ScrapeResponse>>(0).first())
-      EMPTY_INSTANCE
-    }
-    coEvery { stub.writeChunkedResponsesToProxy(any(), any()) } coAnswers {
-      chunked.complete(arg<Flow<ChunkedScrapeResponse>>(0).first())
-      EMPTY_INSTANCE
-    }
-    service.grpcStub = stub
-    service.unaryDeadlineSecs = 0
-    try {
+      coEvery { stub.writeChunkedResponsesToProxy(any(), any()) } coAnswers {
+        chunked.complete(arg<Flow<ChunkedScrapeResponse>>(0).first())
+        EMPTY_INSTANCE
+      }
       service.registerAgent(CountDownLatch(1))
-      return coroutineScope {
-        val writer = launch { service.writeResponsesToProxyUntilDisconnected(agent, AgentConnectionContext(128)) }
-        val sent =
-          withTimeoutOrNull(1.seconds) { nonChunked.await() } to withTimeoutOrNull(1.seconds) { chunked.await() }
+      coroutineScope {
+        val writer =
+          launch { service.writeResponsesToProxyUntilDisconnected(service.agent, AgentConnectionContext(128)) }
+        sent = withTimeoutOrNull(1.seconds) { nonChunked.await() } to withTimeoutOrNull(1.seconds) { chunked.await() }
         writer.cancel()
-        sent
       }
-    } finally {
-      service.shutDown()
     }
+    return sent
   }
 
   init {
@@ -734,42 +732,35 @@ class AgentGrpcServiceTest : StringSpec() {
 
     // The proxy keeping the stream open: nothing to scrape.
     "readRequestsFromProxy should ignore a keepalive" {
-      val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
-      val service = AgentGrpcService(agent, agent.options, "test-server")
-      val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
-      val request = scrapeRequest {
-        agentId = "test-agent-123"
-        scrapeId = 1L
-        path = "/metrics"
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, stub ->
+        val request = scrapeRequest {
+          agentId = "test-agent-123"
+          scrapeId = 1L
+          path = "/metrics"
+        }
+        every { stub.readRequestsFromProxy(any(), any()) } returns flowOf(scrapeRequest { keepalive = true }, request)
+        val connectionContext = AgentConnectionContext(128)
+
+        service.readRequestsFromProxy(mockk<AgentHttpService>(relaxed = true), connectionContext)
+
+        val channel = connectionContext.scrapeRequestActions()
+        channel.tryReceive().isSuccess.shouldBeTrue()
+        channel.tryReceive().isSuccess.shouldBeFalse()
       }
-      every { mockStub.readRequestsFromProxy(any(), any()) } returns flowOf(scrapeRequest { keepalive = true }, request)
-      service.grpcStub = mockStub
-      val connectionContext = AgentConnectionContext(128)
-
-      service.readRequestsFromProxy(mockk<AgentHttpService>(relaxed = true), connectionContext)
-
-      val channel = connectionContext.scrapeRequestActions()
-      channel.tryReceive().isSuccess.shouldBeTrue()
-      channel.tryReceive().isSuccess.shouldBeFalse()
-      service.shutDown()
     }
 
     // Between scrapes the response streams carry nothing, so a reverse proxy in front of the proxy, such as nginx with
     // its default 60s timeouts, closed them and ended the agent's connection.
     "the response streams should send a keepalive to a proxy that takes them while no result comes" {
-      for (takesKeepalives in [true, false]) {
-        withClue("proxy takes keepalives: $takesKeepalives") {
-          val (nonChunked, chunked) = firstResponses(proxyTakesKeepalives = takesKeepalives)
-          if (takesKeepalives) {
-            nonChunked.shouldNotBeNull().keepalive.shouldBeTrue()
-            chunked.shouldNotBeNull().keepalive.shouldBeTrue()
-          } else {
-            // A proxy predating them would take one for a result.
-            nonChunked.shouldBeNull()
-            chunked.shouldBeNull()
-          }
-        }
-      }
+      val (nonChunked, chunked) = firstResponses(proxyTakesKeepalives = true)
+
+      nonChunked.shouldNotBeNull().keepalive.shouldBeTrue()
+      chunked.shouldNotBeNull().keepalive.shouldBeTrue()
+    }
+
+    // A proxy predating them would take one for a result.
+    "the response streams should send no keepalive to a proxy that predates them" {
+      firstResponses(proxyTakesKeepalives = false) shouldBe (null to null)
     }
 
     "registerAgent should throw RequestFailureException on invalid response" {

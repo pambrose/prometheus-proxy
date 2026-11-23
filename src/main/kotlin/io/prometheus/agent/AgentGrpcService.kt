@@ -45,6 +45,8 @@ import io.prometheus.common.Utils.failureKey
 import io.prometheus.common.Utils.logStreamFailure
 import io.prometheus.common.Utils.HostPort
 import io.prometheus.common.Utils.parseEndpointList
+import io.prometheus.common.GrpcConstants.STREAM_KEEPALIVE
+import io.prometheus.common.receiveCatchingWithin
 import io.prometheus.common.Utils.sanitizeUrl
 import io.prometheus.grpc.ChunkedScrapeResponse
 import io.prometheus.grpc.ProxyServiceGrpcKt
@@ -74,12 +76,8 @@ import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.consume
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.selects.onTimeout
-import kotlinx.coroutines.selects.select
 import java.io.ByteArrayInputStream
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
@@ -90,7 +88,6 @@ import kotlin.concurrent.atomics.plusAssign
 import kotlin.concurrent.withLock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
-import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeMark
 import kotlin.time.DurationUnit
 import kotlin.time.TimeSource
@@ -169,7 +166,7 @@ internal class AgentGrpcService(
   private val options: AgentOptions,
   private val inProcessServerName: String,
   private val timeSource: TimeSource = TimeSource.Monotonic,
-  // How long a response stream goes without sending before it sends a keepalive; see writeResponsesToProxyUntil...
+  // How long a response stream goes without sending before it sends a keepalive; see streamOf.
   private val streamKeepalive: Duration = STREAM_KEEPALIVE,
 ) {
   private val grpcLock = ReentrantLock()
@@ -776,25 +773,19 @@ internal class AgentGrpcService(
   }
 
   // The messages of [channel], for one of the response streams, and, to a proxy that takes them, [keepalive] after
-  // streamKeepalive with none. Between scrapes the stream carries nothing, and a reverse proxy in front of the proxy
-  // closes a quiet stream, nginx after its client_body_timeout (60s by default), which ends the connection. Consumes
-  // [channel] as consumeAsFlow does: once the flow ends, by its end or a failure, what's left in it is dropped. The
-  // wait is a select, so a message that comes as it ends isn't lost, as a receive a timeout cancels can lose it.
+  // streamKeepalive with none (see STREAM_KEEPALIVE). Consumes [channel] as consumeAsFlow does: once the flow ends, by
+  // its end or a failure, what's left in it is dropped. A message that comes as a wait ends isn't lost (see
+  // receiveCatchingWithin).
   private fun <T> streamOf(
     channel: ReceiveChannel<Outgoing<T>>,
     agent: Agent,
     keepalive: T,
   ): Flow<T> {
-    if (!proxyTakesKeepalives)
-      return channel.consumeAsFlow().map { it.sent(agent) }
+    val idle = if (proxyTakesKeepalives) streamKeepalive else Duration.INFINITE
     return flow {
       channel.consume {
         while (true) {
-          val next =
-            select {
-              channel.onReceiveCatching { it }
-              onTimeout(streamKeepalive) { null }
-            }
+          val next = channel.receiveCatchingWithin(idle)
           when {
             next == null -> emit(keepalive)
             next.isClosed -> next.exceptionOrNull()?.let { throw it } ?: break
@@ -871,8 +862,6 @@ internal class AgentGrpcService(
   companion object {
     private val logger = logger {}
 
-    // Under nginx's default client_body_timeout (60s) and Envoy's stream_idle_timeout (5m), as the proxy's is.
-    private val STREAM_KEEPALIVE = 30.seconds
     private val KEEPALIVE_RESPONSE: ScrapeResponse = scrapeResponse { keepalive = true }
     private val KEEPALIVE_CHUNKED_RESPONSE: ChunkedScrapeResponse = chunkedScrapeResponse { keepalive = true }
 
