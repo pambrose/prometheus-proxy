@@ -21,6 +21,7 @@ package io.prometheus.agent
 import ch.qos.logback.classic.Level
 import com.google.common.util.concurrent.RateLimiter
 import com.google.common.util.concurrent.Service
+import com.pambrose.common.service.AbstractGenericService
 import com.pambrose.common.util.runCatchingCancellable
 import io.grpc.Status
 import io.grpc.StatusException
@@ -44,7 +45,9 @@ import io.ktor.client.engine.cio.CIO
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkConstructor
+import io.mockk.mockkObject
 import io.mockk.unmockkConstructor
+import io.mockk.unmockkObject
 import io.mockk.verify
 import io.prometheus.Agent
 import io.ktor.server.cio.CIO as ServerCIO
@@ -341,6 +344,34 @@ class AgentTest : StringSpec() {
           if (agent.isRunning) agent.stopSync()
         } catch (_: Exception) {
         }
+      }
+    }
+
+    // An embedded agent's host stops it after the work that needs it (EmbeddedAgentInfo is AutoCloseable), where a JVM
+    // shutdown hook stopped it on SIGTERM alongside the host's own hooks, in no set order. An Agent built and started
+    // directly, as the standalone agent is, keeps the hook. The spy on common-utils' hook factory calls the real one.
+    "an embedded agent registers no JVM shutdown hook, and one started directly does" {
+      mockkObject(AbstractGenericService.Companion)
+      try {
+        val embedded =
+          Agent.startEmbedded(exitOnMissingConfig = false, logBanner = false) {
+            agentOptions(["--proxy", "localhost:1"], exitOnMissingConfig = false)
+          }
+        embedded.use {
+          verify(exactly = 0) {
+            AbstractGenericService.shutDownHookAction(match { it is Agent && it.launchId == embedded.launchId })
+          }
+        }
+
+        val direct = createTestAgent()
+        direct.startSync()
+        try {
+          verify(exactly = 1) { AbstractGenericService.shutDownHookAction(direct) }
+        } finally {
+          direct.stopSync()
+        }
+      } finally {
+        unmockkObject(AbstractGenericService.Companion)
       }
     }
 

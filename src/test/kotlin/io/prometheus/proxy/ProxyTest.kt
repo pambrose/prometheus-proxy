@@ -878,9 +878,10 @@ class ProxyTest : StringSpec() {
     }
   }
 
-  // How many times common-utils logged registering the cleanup service with the proxy while [block] ran.
+  // How many times common-utils logged registering the cleanup service with the proxy while [block] ran. It logs that
+  // at DEBUG, since common-utils 5.3.0.
   private fun cleanupServiceRegistrations(block: () -> Unit): Int =
-    captureLogs(SERVICE_LOGGER) { block() }
+    captureLogs(SERVICE_LOGGER, Level.DEBUG) { block() }
       .map { it.formattedMessage }
       .count { it.startsWith("Adding service") && "AgentContextCleanupService" in it }
 

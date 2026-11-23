@@ -220,9 +220,10 @@ backlog means agents can't keep up. See [Performance Tuning](advanced.md#perform
 
 ## Shutdown
 
-- Standalone proxy/agent processes shut down cleanly on SIGTERM. **Embedded** agents should be
-  stopped via `EmbeddedAgentInfo.shutdown()`, which blocks until terminated.
-  See [Embedded Agent](embedded-agent.md).
+- Standalone proxy/agent processes shut down cleanly on SIGTERM. **Embedded** agents register no
+  shutdown hook of their own: stop one with `EmbeddedAgentInfo.shutdown()`, which blocks until
+  terminated, where the application stops its own services. The Ktor plugin and the Spring Boot
+  starter do this with the app. See [Embedded Agent](embedded-agent.md#embeddedagentinfo).
 
 ## Pre-flight checklist
 

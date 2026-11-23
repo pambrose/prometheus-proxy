@@ -159,7 +159,10 @@ aren't in the proto: a scrape result is sent in chunks once its gzipped size rea
 - **Chunking**: Large metric payloads are split into `ChunkedScrapeResponse` messages to stay within gRPC limits. Configurable via `chunkContentSizeKbs`.
 - **Stale agent cleanup**: `AgentContextCleanupService` evicts inactive agents after `maxAgentInactivitySecs` (default 60s).
 - **Consolidated mode**: Multiple agents can register the same path for redundancy.
-- **Embedded agent**: Agents can run inside other JVM apps via `startAsyncAgent()`.
+- **Embedded agent**: Agents can run inside other JVM apps via `startAsyncAgent()`. One started that way
+  (`Agent.startEmbedded`, which `EmbeddedAgentConfig` uses too) sets `isEmbedded`, so it registers no JVM shutdown
+  hook (common-utils' `registersShutDownHook`): its host stops it after the work that needs it, where the hook stopped
+  it on SIGTERM alongside the host's own hooks, in no set order. The standalone agent keeps the hook.
 - **Proxy failover**: The agent rotates through an ordered `agent.proxy.endpoints` list (`AgentGrpcService.advanceEndpoint` / `resetEndpoint`, chosen by `EndpointFailover.beforeAttempt`); a failed connect or a rejected registration advances, and only a connection that registered and then dropped retries from the head.
 - **Path takeover**: a non-consolidated registration takes the path (`ProxyPathManager.takeOverPath`), and a displaced
   agent of another launch stays connected. The proxy tells it on `readPathNoticesFromProxy`

@@ -120,6 +120,12 @@ _Released 2026-11-23_
   agent now holds, is logged at INFO instead of ERROR.
 - **A refused token is an ERROR, once.** When the proxy refuses an agent's token, the agent logs one ERROR line that
   says where the token is set, instead of a WARN with a stack trace, and a reminder every 10 minutes while it lasts.
+- **An embedded agent stops when your app stops it.** An agent started with `startAsyncAgent()` or
+  `EmbeddedAgentConfig` no longer registers a JVM shutdown hook, which on SIGTERM stopped it at the same time as the
+  app's own shutdown, in no set order. Stop it with `shutdown()` or `close()` where your app stops its own services;
+  the Ktor plugin and the Spring Boot starter do.
+- **Quieter starts and stops.** The proxy and agent log their services' setup steps, and their starting and stopping,
+  at DEBUG instead of INFO, and the shutdown hook's lines go to the log instead of stderr.
 
 ### Documentation
 
