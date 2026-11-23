@@ -130,7 +130,9 @@ Only these types are part of the supported, documented public API. Everything el
   - `startIfConfigured()` returns null in those cases instead, logging why, and also when no proxy is set.
   - `fromEnvironment()` reads `PROMETHEUS_PROXY`, `PROMETHEUS_AGENT_TOKEN`, `PROMETHEUS_PROXY_CERT`, and
     `PROMETHEUS_PROXY_AUTHORITY`, which nothing else reads. Its `internal` overload takes the lookup function, so
-    tests can call it, as with `EnvVars`' parsing.
+    tests can call it, as with `EnvVars`' parsing. The builder remembers which values it read, until code sets the same
+    key, and `start()` checks them first with the agent's own parsers (`EnvironmentSetting`), so a value the agent
+    refuses names its variable as well as its setting, and never the value.
   - `agentMetricsAt(path)` serves the agent's own metric families in-process (`AgentMetricsSource`), and reaches the
     agent in `AgentOptions.agentMetricsPath`. With it, the agent collects its metrics (`Agent.collectsMetrics`) even
     when `isMetricsEnabled`, which controls the metrics port, is off.

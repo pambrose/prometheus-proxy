@@ -52,7 +52,10 @@ before 4.3.0 it kept running instead.
 A setting failed a check at startup. The line names the setting and why it was refused: fix it and start again. A
 standalone proxy or agent logs this one line and exits with status 1; before 4.5.0, some of these settings ended in
 an uncaught exception's stack trace instead. An [embedded agent](embedded-agent.md#agentstartasyncagent) throws a
-`ConfigLoadException` with the same reason.
+`ConfigLoadException` with the same reason. When the setting came from the app's environment through
+[`fromEnvironment()`](embedded-agent.md#settings-from-the-environment), the line names the variable too, as in
+`Invalid configuration: PROMETHEUS_PROXY_CERT, read by fromEnvironment() for agent.tls.trustCertCollectionPem:
+trustCertCollectionPem is neither PEM text nor the base64 of PEM text`: fix the variable.
 
 Settings that fail startup since 4.5.0:
 

@@ -337,6 +337,12 @@ carries a `logback.xml`, which would replace the host application's logging conf
   and given to `onFailure` with why and what was thrown; why read along the cause chain, each message once, with a
   URL's credentials masked; and real failed starts, a key, a certificate, a setting, a wrong-typed token, a duplicate
   path, a dashboard password, and an admin port in use, saying why without the token, a password, or a PEM
+- **EnvironmentSettingTest** — a value `fromEnvironment()` read that the agent refuses as it starts: an endpoint it
+  can't parse names `PROMETHEUS_PROXY` and `agent.proxy.endpoints`, and a certificate that isn't PEM, or PEM with no
+  certificate in it, names `PROMETHEUS_PROXY_CERT` and `agent.tls.trustCertCollectionPem`, with the agent's reason and
+  never the value, as `start()` throws it and `startIfConfigured()` logs it; no token or authority refused as the agent
+  starts; a setting the agent's own variable sets not checked; and one set from code after `fromEnvironment()`, by a
+  builder method or `setting()`, keeping the agent's own message
 - **EmbeddedAgentInfoTest** — EmbeddedAgentInfo data class (launchId, agentName storage), and its connection,
   `isConnected` and `proxyEndpoint`, read live from the agent; and `use` stopping the agent after its block, and
   running the block on a null handle
