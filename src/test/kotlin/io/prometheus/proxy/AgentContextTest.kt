@@ -18,6 +18,7 @@
 
 package io.prometheus.proxy
 
+import ch.qos.logback.classic.Level
 import com.google.protobuf.LazyStringArrayList
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
@@ -36,6 +37,7 @@ import kotlin.time.TestTimeSource
 import kotlin.time.TimeSource
 import io.mockk.mockk
 import io.mockk.verify
+import io.prometheus.common.captureLogs
 import io.prometheus.grpc.PathNotice
 import io.prometheus.grpc.PathRejectionCause
 import io.prometheus.grpc.RegisterAgentRequest
@@ -139,6 +141,26 @@ class AgentContextTest : StringSpec() {
 
       context.queuePathNotice(noticeOf("one-too-many", "taker-1")).shouldBeFalse()
       context.queuePathNotice(noticeOf("path1", "")).shouldBeTrue()
+    }
+
+    // A notice the limit drops leaves the agent showing a path it no longer holds, so the proxy says so: once while the
+    // notices stay full, and again if they fill up again after the agent reads them.
+    "queuePathNotice should warn once each time the unread notices fill up" {
+      val context = AgentContext("remote")
+      val cap = AgentContext.MAX_PENDING_PATH_NOTICES
+
+      val warnings =
+        captureLogs<AgentContext>(Level.WARN) {
+          (1..cap + 2).forEach { context.queuePathNotice(noticeOf("path$it", "taker-1")) }
+          context.awaitPathNotices().shouldNotBeNull()
+          (1..cap + 1).forEach { context.queuePathNotice(noticeOf("again$it", "taker-1")) }
+        }
+
+      warnings.map { it.formattedMessage }.apply {
+        size shouldBe 2
+        first() shouldContain "/path${cap + 1}"
+        last() shouldContain "/again${cap + 1}"
+      }
     }
 
     // ==================== Creation Tests ====================

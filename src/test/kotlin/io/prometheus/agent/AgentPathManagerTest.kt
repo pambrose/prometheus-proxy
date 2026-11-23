@@ -103,6 +103,10 @@ class AgentPathManagerTest : StringSpec() {
       valid = true
       pathId = 1L
     }
+    coEvery { mockGrpcService.reclaimPathOnProxy(any(), any(), any(), any()) } returns registerPathResponse {
+      valid = true
+      pathId = 1L
+    }
     coEvery { mockGrpcService.unregisterPathOnProxy(any()) } returns unregisterPathResponse { valid = true }
 
     // Create a real ConfigVals with minimal config
@@ -470,11 +474,13 @@ class AgentPathManagerTest : StringSpec() {
 
       manager["a_metrics"].shouldNotBeNull().url shouldBe "http://a/v2"
       coVerify(exactly = 1) { grpc.unregisterPathOnProxy("a_metrics") }
-      coVerify(exactly = 2) { grpc.registerPathOnProxy("a_metrics", any(), any(), any()) }
+      coVerify(exactly = 1) { grpc.registerPathOnProxy("a_metrics", any(), any(), any()) }
+      coVerify(exactly = 1) { grpc.reclaimPathOnProxy("a_metrics", any(), "http://a/v2", any()) }
     }
 
     // Another agent took over the path, so the proxy rejects this agent's unregister. The new URL must still be
-    // applied rather than blocked forever behind the failed unregister.
+    // applied rather than blocked forever behind the failed unregister: registered again as a reclaim, which takes the
+    // path once no agent serves it.
     "reconcile should apply a changed URL when the proxy rejects the unregister" {
       val agent = createMockAgent()
       val grpc = agent.grpcService
@@ -488,7 +494,7 @@ class AgentPathManagerTest : StringSpec() {
       manager.reconcileDiscoveredPaths([DiscoveredPath("a", "a_metrics", "http://a/v2", "{}")])
 
       manager["a_metrics"].shouldNotBeNull().url shouldBe "http://a/v2"
-      coVerify(exactly = 1) { grpc.registerPathOnProxy("a_metrics", any(), "http://a/v2", any()) }
+      coVerify(exactly = 1) { grpc.reclaimPathOnProxy("a_metrics", any(), "http://a/v2", any()) }
     }
 
     "reconcile should drop a stale discovered path the proxy no longer holds" {
@@ -2216,20 +2222,125 @@ class AgentPathManagerTest : StringSpec() {
       manager.pathFailures.getValue("discovered").takenOver.shouldBeTrue()
     }
 
-    // The proxy no longer maps the path to this agent, so it would refuse the unregister.
-    "unregistering a taken-over path should drop it without asking the proxy" {
+    // The agent's word that another agent took the path can be stale, as when a notice crossed its own registration,
+    // and skipping the call left the proxy sending it scrapes for a path it had dropped. The proxy refuses to
+    // unregister a path it no longer maps to the agent, which is no news for a path taken over.
+    "unregistering a taken-over path should still ask the proxy, and not warn when the proxy no longer maps it" {
       val agent = createMockAgent()
       val grpc = agent.grpcService
       val manager = AgentPathManager(agent)
       manager.registerPath("metrics", METRICS_URL)
       manager.notePathNotice(takenNotice("metrics", "agent-east-copy"))
+      coEvery { grpc.unregisterPathOnProxy(any()) } throws
+        RequestFailureException("unregisterPathOnProxy() - proxy no longer maps /metrics to this agent")
 
-      manager.unregisterPath("metrics")
+      val warnings = captureLogs<AgentPathManager>(Level.WARN) { manager.unregisterPath("metrics") }
 
-      coVerify(exactly = 0) { grpc.unregisterPathOnProxy(any()) }
+      coVerify(exactly = 1) { grpc.unregisterPathOnProxy("metrics") }
+      warnings.shouldBeEmpty()
       manager["metrics"].shouldBeNull()
       manager.takenOverContexts.shouldBeEmpty()
       manager.pathFailures.shouldBeEmpty()
+    }
+
+    // A notice handled while the path was being unregistered left a taken-over entry for a path the agent no longer
+    // had, shown on its dashboard until the next retry dropped it.
+    "a notice that lands while the path is unregistered should leave no taken-over entry" {
+      val agent = createMockAgent()
+      val grpc = agent.grpcService
+      val manager = AgentPathManager(agent)
+      manager.registerPath("metrics", METRICS_URL)
+      coEvery { grpc.unregisterPathOnProxy(any()) } answers {
+        manager.notePathNotice(takenNotice("metrics", "agent-east-copy"))
+        unregisterPathResponse { valid = true }
+      }
+
+      manager.unregisterPath("metrics")
+
+      manager.takenOverContexts.shouldBeEmpty()
+      manager.pathFailures.shouldBeEmpty()
+    }
+
+    // The proxy's notice and its answer to the registration come on different streams, so the notice can come first.
+    // Dropped as a notice about a path the agent didn't have, it left the path shown registered while another agent
+    // held it.
+    "a notice that arrives before the registration's answer should still mark the path taken over" {
+      val agent = createMockAgent()
+      val grpc = agent.grpcService
+      val manager = AgentPathManager(agent)
+      coEvery { grpc.registerPathOnProxy(any(), any(), any(), any()) } answers {
+        manager.notePathNotice(takenNotice("metrics", "agent-east-copy"))
+        registerPathResponse {
+          valid = true
+          pathId = 1L
+        }
+      }
+
+      manager.registerPath("metrics", METRICS_URL)
+
+      manager.registeredPaths.shouldBeEmpty()
+      manager.takenOverContexts.map { it.path } shouldBe listOf("metrics")
+    }
+
+    "a notice that arrives before the proxy refuses the registration should be dropped" {
+      val agent = createMockAgent()
+      val grpc = agent.grpcService
+      val manager = AgentPathManager(agent)
+      coEvery { grpc.registerPathOnProxy(any(), any(), any(), any()) } answers {
+        manager.notePathNotice(takenNotice("metrics", "agent-east-copy"))
+        throw RequestFailureException("registerPathOnProxy() - proxy rejected path /metrics")
+      }
+
+      shouldThrow<RequestFailureException> { manager.registerPath("metrics", METRICS_URL) }
+
+      manager["metrics"].shouldBeNull()
+      manager.takenOverContexts.shouldBeEmpty()
+    }
+
+    // Unregistered for the edit, the path is free, unless another agent took it meanwhile, which a reclaim leaves to
+    // it. Registered again the usual way, the edit took the path back from that agent.
+    "an edited discovered path should be registered again as a reclaim" {
+      val agent = createMockAgent(agentHocon = "discovery.enabled = true")
+      val grpc = agent.grpcService
+      coEvery { grpc.reclaimPathOnProxy(any(), any(), any(), any()) } returns
+        registerPathResponse {
+          valid = true
+          pathId = 2L
+        }
+      val manager = AgentPathManager(agent)
+      manager.reconcileDiscoveredPaths([DiscoveredPath("d", "discovered", METRICS_URL, "{}")])
+
+      manager.reconcileDiscoveredPaths([DiscoveredPath("d", "discovered", "http://edited/metrics", "{}")])
+
+      coVerify(exactly = 1) { grpc.registerPathOnProxy("discovered", any(), any(), any()) }
+      coVerify(exactly = 1) { grpc.reclaimPathOnProxy("discovered", any(), "http://edited/metrics", "DISCOVERED") }
+      manager.registeredPaths.single().url shouldBe "http://edited/metrics"
+    }
+
+    "a discovery edit refused because another agent took the path meanwhile should leave it taken over, with the edit" {
+      val agent = createMockAgent(agentHocon = "discovery.enabled = true")
+      val grpc = agent.grpcService
+      coEvery { grpc.reclaimPathOnProxy(any(), any(), any(), any()) } throws
+        RequestFailureException.fromProxy(
+          "registerPathOnProxy",
+          "Path /discovered is served by agentId 7 (agent-b), of another launch",
+          PathRejectionCause.HELD_BY_ANOTHER_AGENT,
+        )
+      val manager = AgentPathManager(agent)
+      manager.reconcileDiscoveredPaths([DiscoveredPath("d", "discovered", METRICS_URL, "{}")])
+      val edited = [DiscoveredPath("d", "discovered", "http://edited/metrics", "{}")]
+
+      manager.reconcileDiscoveredPaths(edited)
+      manager.reconcileDiscoveredPaths(edited)
+
+      coVerify(exactly = 1) { grpc.registerPathOnProxy("discovered", any(), any(), any()) }
+      coVerify(exactly = 1) { grpc.reclaimPathOnProxy(any(), any(), any(), any()) }
+      manager.registeredPaths.shouldBeEmpty()
+      manager.takenOverContexts.single().url shouldBe "http://edited/metrics"
+      manager.pathFailures.getValue("discovered").apply {
+        takenOver.shouldBeTrue()
+        reason.message shouldContain "agent-b"
+      }
     }
 
     // Waiting to take a path back isn't refused for good, so the connection mustn't end as one serving nothing.
