@@ -56,7 +56,8 @@ internal object DashboardCss {
     """
     /* Every quiet colour is set so its *worst* pairing still clears 4.5:1, not just its pairing with
        --surface. --ink-3 is the binding case: it lands on --surface-2 under the table and section
-       headers, which is a full step closer than the reading plane. */
+       headers, which is a full step closer than the reading plane. A hovered list row's --surface-3 is
+       closer still, so the row's --ink-3 line steps up to --ink-2 there (.md-row:hover .host). */
     :root { color-scheme:light dark;
       --bg:#f2f5f8; --surface:#fff; --surface-2:#e9edf2; --surface-3:#dde3ea;
       --line:#cfd7e0; --line-soft:#e3e9ef; --ink:#131820; --ink-2:#48525f; --ink-3:#626b77;
@@ -164,6 +165,8 @@ internal object DashboardCss {
     /* 11.5px, matching .bar-right and .hero-meta: this is the same job -- quiet supporting metadata --
        and a separate 11px step for it was a size the hierarchy never used. */
     .md-row .host { display:block; color:var(--ink-3); font-size:11.5px; margin-top:2px; }
+    /* --ink-3 on a hovered row's --surface-3 is 4.18:1 light and 4.30:1 dark; --ink-2 is 6.14:1 and 6.28:1. */
+    .md-row:hover .host { color:var(--ink-2); }
     .md-row .tag, .kv .k .tag { margin-left:7px; }
     .md-detail { background:var(--surface); }
     .hero { padding:14px 18px; border-bottom:1px solid var(--line); }
@@ -280,8 +283,9 @@ internal object DashboardCss {
       .copy::before, .scrape-now::before, .close::before, .guide-toggle::before, .logout button::before,
       .theme button::before {
         forced-color-adjust:none; background:ButtonText; } }
-    /* A scrape-now's result, above the Paths table: a heading line, then the start of the body. The body is the one
-       block of a target's own text on the page, in a bounded box that scrolls rather than pushing the table away. */
+    /* A scrape-now's result, above the Paths view's table or list: a heading line, then the start of the body. The
+       body is the one block of a target's own text on the page, in a bounded box that scrolls rather than pushing the
+       table away. */
     .scrape-result { padding:10px 15px; background:var(--surface); border-bottom:1px solid var(--line); }
     .sr-head { display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
     .sr-head .close { margin-left:auto; }
@@ -292,9 +296,9 @@ internal object DashboardCss {
       white-space:pre; }
     .sr-note { margin-top:5px; font-size:11.5px; }
     .tag.crit { background:var(--crit-soft); color:var(--crit); margin-left:7px; }
-    /* The Paths view's search, on the recessed plane like the table header below it. The input holds content, so it
-       is square; it takes focus as the rest of the page does. A checked box is neutral ink: the accent is kept for
-       focus and the current row. */
+    /* The Paths and Activity views' search, on the recessed plane like the table header below it. The input holds
+       content, so it is square; it takes focus as the rest of the page does. A checked box is neutral ink: the accent
+       is kept for focus and the current row. */
     .filters { display:flex; flex-wrap:wrap; align-items:center; gap:16px; padding:9px 15px;
       background:var(--surface-2); border-bottom:1px solid var(--line); }
     .filters input[type=search] { font:inherit; color:var(--ink); background:var(--surface);

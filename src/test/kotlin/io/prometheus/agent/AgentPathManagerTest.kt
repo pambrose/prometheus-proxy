@@ -71,8 +71,8 @@ import io.kotest.matchers.booleans.shouldBeTrue
 
 @Suppress("LargeClass")
 class AgentPathManagerTest : StringSpec() {
-  // Captures the "Registered ..." lines doRegisterPath emits, which is the only place the agent reports
-  // whether a configured filter actually attached to a path.
+  // Captures the "Registered ..." lines recordRegistered emits, the only place the agent's log reports whether a
+  // configured filter actually attached to a path.
   private suspend fun captureRegistrationLogs(block: suspend () -> Unit): List<String> =
     captureLogs<AgentPathManager> { block() }.map { it.formattedMessage }.filter { it.startsWith("Registered ") }
 
@@ -186,8 +186,8 @@ class AgentPathManagerTest : StringSpec() {
       coVerify { agent.grpcService.registerPathOnProxy("health", "{}", any(), any()) }
     }
 
-    // A whitespace path registers on the proxy but can never be scraped: the scrape route answers a blank path
-    // with a 404, so it is refused here, where an empty one already is.
+    // A whitespace path can never be scraped, and the proxy refuses it, so it is refused here, before the call, as an
+    // empty one is.
     "registerPath should throw when path or url is blank" {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
@@ -536,9 +536,10 @@ class AgentPathManagerTest : StringSpec() {
       manager["c_metrics"].shouldNotBeNull()
     }
 
-    // What the agent dashboard's activity feed shows: a path registered, refused once (its retries' repeats only at
-    // DEBUG in the log, and not at all in the feed), and unregistered.
-    "registering, refusing, and unregistering a path should be recorded in the activity feed" {
+    // What the agent dashboard's activity feed shows: a path registered and unregistered, static or discovered. A
+    // registerPath call the proxy refuses throws to its caller and isn't recorded; registerPaths records a refusal (see
+    // "a refusal should be recorded with the proxy's reason" below).
+    "registering and unregistering a path should be recorded in the activity feed, and a refused registerPath not" {
       val log = AgentActivityLog(capacity = 20)
       val agent = createMockAgent()
       every { agent.activityLog } returns log
@@ -1043,10 +1044,8 @@ class AgentPathManagerTest : StringSpec() {
       text shouldContain "http://localhost:9100/metrics"
     }
 
-    // Bug #7: The gRPC call was inside pathMutex, blocking all concurrent path
-    // operations for the full RPC duration. The fix moves the gRPC call outside
-    // the mutex so concurrent registrations for different paths can proceed in
-    // parallel. The mutex now only protects the local pathContextMap update.
+    // registerPath holds pathMutex across the proxy RPC and the write to the local path map, so the two can't
+    // disagree; concurrent registrations therefore run one at a time.
     "concurrent registerPath calls are serialized for atomicity (finding 19)" {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
@@ -1213,10 +1212,7 @@ class AgentPathManagerTest : StringSpec() {
       manager["metrics2"].shouldNotBeNull()
     }
 
-    // A proxy rejects a single path (valid=false, surfaced as RequestFailureException) when, for example,
-    // the agent's identity isn't authorized for it. That rejection must not abort registration of the
-    // agent's other paths -- previously it ended the whole connection and the agent reconnected forever
-    // with every path down.
+    // A mock agent with a static pathConfigs entry for each of [paths].
     fun agentWithStaticPaths(
       vararg paths: String,
       agentHocon: String = "",
@@ -1300,6 +1296,10 @@ class AgentPathManagerTest : StringSpec() {
       warnings.filter { "collide" in it } shouldHaveSize 1
     }
 
+    // A proxy rejects a single path (valid=false, surfaced as RequestFailureException) when, for example,
+    // the agent's identity isn't authorized for it. That rejection must not abort registration of the
+    // agent's other paths -- previously it ended the whole connection and the agent reconnected forever
+    // with every path down.
     "registerPaths should register the remaining paths when the proxy rejects one" {
       val (mockAgent, mockGrpcService) = agentWithStaticPaths("metrics1", "metrics2", "metrics3")
       coEvery { mockGrpcService.registerPathOnProxy("metrics2", any(), any(), any()) } throws
@@ -1896,8 +1896,8 @@ class AgentPathManagerTest : StringSpec() {
     "registerPath should attach a filter configured with a leading slash" {
       // cfg.path normalization in AgentPathManager strips a leading "/" when building filtersByPath,
       // so a user writing path = "/metrics" in agent.filters must still attach to a path registered as
-      // "metrics". Deleting that removePrefix("/") call passes every other test (all of which
-      // configure filter paths without a leading slash), so it needs its own coverage.
+      // "metrics". Deleting that removePrefix("/") call passes every other test (no other test attaches
+      // a filter configured with a leading slash), so it needs its own coverage.
       val agent = createMockAgent("""{ path = "/metrics", metricNameAllow = [], metricNameDeny = ["go_.*"] }""")
       val manager = AgentPathManager(agent)
 
@@ -1917,7 +1917,7 @@ class AgentPathManagerTest : StringSpec() {
 
     // The registration log is the operator-facing signal that a configured filter found its path -- a
     // filter whose path does not match any registered path is otherwise silent. These three tests pin
-    // that signal; isTestMode is flipped off because doRegisterPath suppresses the line under test mode.
+    // that signal; isTestMode is flipped off because recordRegistered suppresses the line under test mode.
     "registerPath should report an attached filter in the registration log" {
       val agent = createMockAgent("""{ path = "metrics", metricNameAllow = [], metricNameDeny = ["go_.*"] }""")
       every { agent.isTestMode } returns false
@@ -2209,6 +2209,27 @@ class AgentPathManagerTest : StringSpec() {
       failure.takenOver.shouldBeFalse()
     }
 
+    // INVALID_AGENT means the proxy has already dropped this connection's context, so the connection is ending. The
+    // takeover stays for the next connection to reclaim, as ProxyRegistry.tla's told does: dropped, the reconnect
+    // would register the path without reclaim, and take it from the agent serving it.
+    "a reclaim refused for an invalid agent should keep the path taken over for the next connection" {
+      val clock = TestTimeSource()
+      val agent = createMockAgent()
+      val grpc = agent.grpcService
+      val manager = AgentPathManager(agent, clock)
+      manager.registerPath("metrics", METRICS_URL)
+      manager.notePathNotice(takenNotice("metrics", "agent-east-copy"))
+      coEvery { grpc.reclaimPathOnProxy(any(), any(), any(), any()) } throws
+        RequestFailureException.fromProxy("registerPathOnProxy", "Invalid agentId", PathRejectionCause.INVALID_AGENT)
+
+      clock.tick(times = 1, step = 10.seconds) { manager.reclaimTakenOverPaths() }
+
+      coVerify(exactly = 1) { grpc.reclaimPathOnProxy(any(), any(), any(), any()) }
+      manager.takenOverContexts.map { it.path } shouldBe listOf("metrics")
+      manager.clear()
+      manager.takenOverContexts.map { it.path } shouldBe listOf("metrics")
+    }
+
     // Registered the usual way, a taken-over discovered path would be taken back at once, on every reconcile.
     "reconcile should leave a taken-over discovered path to its reclaim, and keep an edit for it" {
       val agent = createMockAgent(agentHocon = "discovery.enabled = true")
@@ -2446,7 +2467,7 @@ class AgentPathManagerTest : StringSpec() {
       manager.takenOverContexts.map { it.path } shouldBe listOf("discovered")
     }
 
-    // The retry loop sleeps while nothing is taken over, and a notice wakes it.
+    // The reclaim loop sleeps while nothing is taken over, and a notice wakes it.
     "the reclaim loop should take a freed path back as soon as it's told" {
       val agent = createMockAgent()
       val grpc = agent.grpcService

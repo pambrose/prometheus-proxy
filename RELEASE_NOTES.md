@@ -93,6 +93,8 @@ _Released 2026-11-23_
   longer logs a `NullPointerException` at WARN on the proxy, as it did behind Railway's TCP proxy.
 - **The docs site's address.** Its pages and sitemap name https://prometheus-proxy.com, and its 404 page loads its
   styles again.
+- **Hovered rows stay readable.** In a dashboard's list of agents or paths, a hovered row's address line fell under
+  the WCAG AA contrast floor; it now darkens on hover.
 
 ### Behavior Changes
 

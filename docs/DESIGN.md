@@ -278,7 +278,8 @@ dark ground, not algorithmically dimmed. The page follows the system by default;
   search strip, and the current tab. Structurally
   *behind* the reading plane in both themes.
 - **Pressed Plane** (`surface-3`): The furthest step from the reading plane. Row hover and neutral tag
-  backgrounds.
+  backgrounds. `ink-3` falls under 4.5:1 here (4.18:1 light, 4.30:1 dark), so a hovered row's `ink-3` line
+  steps up to `ink-2`.
 - **Structural Rule** (`line`): 1px hairlines that separate regions — bar from body, list from detail.
 - **Soft Rule** (`line-soft`): 1px hairlines that separate rows *within* a region. Always lower
   contrast than `line`, so the eye reads region boundaries before it reads row boundaries.
@@ -327,6 +328,7 @@ clears 3:1.
 |---|---|---|
 | `ink-3` on `surface-2` (table + section headers) — *the binding case* | 4.59:1 | 4.88:1 |
 | `ink-3` on `surface` | 5.40:1 | 5.37:1 |
+| `ink-2` on `surface-3` (a hovered list row's address line, which steps up from `ink-3`; computed from the tokens) | 6.14:1 | 6.28:1 |
 | `ok` on `ok-soft` (2xx pill) | 4.71:1 | 6.33:1 |
 | `ok` on `surface` (`live` label, healthy counters) | 5.38:1 | 6.88:1 |
 | `warn` on `warn-soft` (`failed over` tag) | 5.07:1 | 6.29:1 |

@@ -148,6 +148,10 @@ All notable changes to this project are documented in this file.
 - The docs site is served at https://prometheus-proxy.com: each page's canonical link and the sitemap name it, the 404
   page loads its stylesheet and script, and the links to the site from the README, `llms.txt`, `SECURITY.md`, the
   demos, the Helm charts, the cloud-proxy example, and the Homebrew formula follow it
+- A hovered row in a dashboard's list of agents or paths showed its address line at 4.18:1 (light) and 4.30:1 (dark)
+  against the hover's ground, under WCAG AA's 4.5:1; it now steps up to the secondary ink, at 6.14:1 and 6.28:1
+- The discovery entries the agent skips, which its debug page and dashboard read from other threads, are now published
+  to them safely
 
 ### Behavior Changes
 

@@ -19,6 +19,7 @@
 package io.prometheus.common.dashboard
 
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.doubles.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
@@ -27,6 +28,7 @@ import io.prometheus.common.dashboard.DashboardPage.logoutForm
 import io.prometheus.common.dashboard.DashboardPage.themePicker
 import kotlinx.html.div
 import kotlinx.html.stream.createHTML
+import kotlin.math.pow
 
 /**
  * The dashboards' theme: auto, which follows the system's, light, or dark, chosen with the bar's button. Every dark
@@ -60,6 +62,17 @@ class DashboardThemeTest : StringSpec() {
         this shouldContain """:root[data-theme="light"] { color-scheme:light; }"""
         this shouldContain ":root { color-scheme:light dark;"
       }
+    }
+
+    // A hovered list row's ground, --surface-3, is a step closer to --ink-3 than --surface-2 is, and under 4.5:1 in
+    // both themes, so the row's quiet line steps up to --ink-2 there, which clears it in light, dark, and set to dark.
+    "a hovered list row's address line should step up to a colour that clears 4.5:1 on its ground" {
+      DashboardCss.CSS shouldContain ".md-row:hover .host { color:var(--ink-2); }"
+      val inks = tokenValues("--ink-2")
+      val grounds = tokenValues("--surface-3")
+      inks.size shouldBe 3
+      grounds.size shouldBe inks.size
+      inks.zip(grounds).forEach { (ink, ground) -> contrast(ink, ground) shouldBeGreaterThan 4.5 }
     }
 
     // In the head, so a stored choice applies before the page draws, and only a choice it knows.
@@ -131,4 +144,25 @@ class DashboardThemeTest : StringSpec() {
       }
     }
   }
+}
+
+// Each value [token] takes in DashboardCss.TOKENS, light first, then the two dark selectors'.
+private fun tokenValues(token: String): List<String> =
+  Regex("$token:(#[0-9a-f]{6})").findAll(DashboardCss.TOKENS).map { it.groupValues[1] }.toList()
+
+// WCAG 2's contrast ratio of two #rrggbb colours.
+private fun contrast(
+  first: String,
+  second: String,
+): Double {
+  val (lighter, darker) = listOf(luminance(first), luminance(second)).sortedDescending()
+  return (lighter + 0.05) / (darker + 0.05)
+}
+
+private fun luminance(hex: String): Double {
+  val (red, green, blue) =
+    listOf(1, 3, 5)
+      .map { hex.substring(it, it + 2).toInt(16) / 255.0 }
+      .map { if (it <= 0.03928) it / 12.92 else ((it + 0.055) / 1.055).pow(2.4) }
+  return 0.2126 * red + 0.7152 * green + 0.0722 * blue
 }
