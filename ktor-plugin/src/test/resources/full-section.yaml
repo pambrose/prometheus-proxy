@@ -1,0 +1,33 @@
+# PrometheusProxyAgentConfigTest: every key of the plugin's section, in YAML, as an app's application.yaml holds them
+prometheus-proxy:
+  agent:
+    enabled: true
+    required: true
+    name: my-app
+    proxy: "proxy-a:50051,proxy-b"
+    token: s3cret
+    trust-certificate: TRUSTED
+    authority: prometheus-proxy
+    client-certificate: CHAIN
+    client-key: KEY
+    consolidated: true
+    metrics-port: 9101
+    dashboard:
+      port: 9102
+      host: "127.0.0.1"
+      username: ops
+      password: pw
+    paths:
+      - path: jobs_metrics
+        url: "http://localhost:9000/metrics"
+        username: scraper
+        password: secret
+        labels:
+          team: jobs
+    settings:
+      scrapeTimeoutSecs: 5
+      http:
+        clientTimeoutSecs: 10
+    path: my_app_metrics
+    labels:
+      team: web

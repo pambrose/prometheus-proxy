@@ -66,16 +66,29 @@ proxy in the same JVM and scrapes through it, so a change to the starter, or a S
 at runtime, fails there. Its `prometheus-proxy.version` is a release version literal; while the latest release
 predates what the demo shows, `demo.sh`'s `NEEDS_RELEASE_AFTER` has `make up` build the library from the checkout.
 
-The Spring Boot starter, `spring-boot-starter/`, is the build's one subproject (`:spring-boot-starter`), in Java,
+The Spring Boot starter, `spring-boot-starter/`, is one of the build's two subprojects (`:spring-boot-starter`), in Java,
 published alongside the agent at its version as `com.pambrose:prometheus-proxy-spring-boot-starter`: auto-configuration
 (`io.prometheus.agent.spring`) that runs an embedded agent as a `SmartLifecycle` bean from the `prometheus-proxy.agent.*`
 properties and serves the app's `PrometheusRegistry` bean in-process (`RegistryMetricsSource`). Its POM names no Spring
 Boot artifact and imports no BOM, so an app's own Spring Boot is the one it runs with: the Spring Boot artifacts are
 `compileOnly`, through the BOM at `spring-boot` in `libs.versions.toml`, and its JUnit 5 tests run the agent at Spring
 Boot's versions, enforced as an app's dependency management enforces them (`./gradlew :spring-boot-starter:test`, part
-of `build`). Kover, detekt, and kotlinter cover only the root project. Its `compileJava` runs in full and isn't cached,
+of `build`). Kover, detekt, and kotlinter don't cover it. Its `compileJava` runs in full and isn't cached,
 since an incremental compile drops the configuration metadata's descriptions (`ConfigurationMetadataTest`), and the
 docs site's Spring Boot Starter page shows a YAML file and a customizer from its tests, which `StarterExamplesTest` runs.
+
+The Ktor plugin, `ktor-plugin/` (`:ktor-plugin`), in Kotlin, is the other, published alongside the agent at its version
+as `com.pambrose:prometheus-proxy-ktor`: `install(PrometheusProxyAgent)` (`io.prometheus.agent.ktor`) runs an embedded
+agent with a Ktor app and serves the `PrometheusRegistry` it's given in-process. Its settings are the
+`prometheus-proxy.agent` section of the app's config file, read through Ktor's `ApplicationConfig` by the starter's
+property names (`FileSettings`), then the install block's. `AgentLifecycle` starts the agent on `ApplicationStarted`,
+begins its stop on `ApplicationStopPreparing` on a thread of its own, so the engine's grace period stays the app's, and
+waits for it on `ApplicationStopping`; keep that split. Its POM puts the agent, `ktor-server-core`, and the exposition
+formats at compile scope, since its API names their types, and `make consumer-check` resolves it as a Ktor app does (the
+consumer check's `ktor` profile) and compiles the docs site's Ktor Plugin examples, which `KtorPluginExamplesTest` runs.
+It applies kotlinter and detekt (the root's `config/detekt/detekt.yml`), and the root aggregates its coverage
+(`kover(project(":ktor-plugin"))`), so the coverage floors cover it; `./gradlew :ktor-plugin:test` runs its Kotest
+specs, and so does `build`.
 
 ## Architecture
 

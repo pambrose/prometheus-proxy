@@ -1,0 +1,4 @@
+# PrometheusProxyAgentConfigTest: a proxy read from an environment variable that isn't set, with YAML's empty default
+prometheus-proxy:
+  agent:
+    proxy: "$PROMETHEUS_PROXY_KTOR_PLUGIN_TEST_UNSET:"

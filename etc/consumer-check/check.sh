@@ -29,6 +29,10 @@
 #     library jar still carries reference.conf;
 #   - the docs site's embedded-agent examples compile (#20).
 #
+# Then, for a Ktor app that adds com.pambrose:prometheus-proxy-ktor (the pom's ktor profile), that every Ktor module
+# resolves at the catalog's version, as the agent, which runs Ktor itself, needs, and that the docs site's Ktor plugin
+# examples compile.
+#
 # Every check runs, and the ones that failed are listed at the end. The reports Maven writes, the resolved
 # dependencies and the classpath, are left in build/consumer-check.
 
@@ -53,9 +57,11 @@ netty="$(catalog_version netty)"
 protobuf="$(catalog_version protoc)"
 kotlin="$(catalog_version kotlin)"
 prometheus_metrics="$(catalog_version prometheus)"
+ktor="$(catalog_version ktor)"
+micrometer="$(catalog_version micrometer)"
 
 mvn=(mvn -B -q -f "$root/etc/consumer-check/pom.xml" "-Dprometheus-proxy.version=$version" "-Dkotlin.version=$kotlin" \
-  "-Dprometheus-metrics.version=$prometheus_metrics")
+  "-Dprometheus-metrics.version=$prometheus_metrics" "-Dktor.version=$ktor" "-Dmicrometer.version=$micrometer")
 
 failed=()
 fail() {
@@ -77,13 +83,13 @@ echo "==> Resolving com.pambrose:prometheus-proxy:$version as a Maven consumer"
 
 # dependency:list writes one group:artifact:type[:classifier]:version:scope per line, followed by a module name. This
 # prints those whose group matches the first argument as group:artifact[:classifier]:version, so a native jar's line
-# is the only one with four fields.
+# is the only one with four fields. It reads the second argument's listing, or the agent's alone.
 resolved() {
   awk -v group="$1" '
     NF && $1 ~ /:/ {
       n = split($1, f, ":")
       if (f[1] ~ group) print f[1] ":" f[2] (n == 6 ? ":" f[4] : "") ":" f[n - 1]
-    }' "$deps"
+    }' "${2:-$deps}"
 }
 
 # The lines read whose version isn't the argument.
@@ -147,6 +153,18 @@ echo "==> Compiling the docs site's embedded-agent examples"
 # With the examples profile's exposition formats, which the MetricsSource examples need as their host does; the checks
 # above resolve without it, as an application that depends only on the agent does.
 "${mvn[@]}" -Pexamples clean compile || fail "the embedded-agent examples don't compile against the published POM"
+
+echo "==> The Ktor plugin, com.pambrose:prometheus-proxy-ktor:$version, with Ktor at $ktor"
+ktor_deps="$out/ktor-dependencies.txt"
+rm -f "$ktor_deps"
+"${mvn[@]}" -Pktor dependency:list -Dsort=true "-DoutputFile=$ktor_deps"
+ktor_resolved="$(resolved '^io[.]ktor$' "$ktor_deps")"
+indented <<< "$ktor_resolved"
+echo "$ktor_resolved" | awk -F: '$2 ~ /^ktor-server-core/ { found = 1 } END { exit !found }' \
+  || fail "Ktor: ktor-server-core isn't resolved for the Ktor plugin"
+bad="$(echo "$ktor_resolved" | not_at "$ktor" | joined)"
+[ -z "$bad" ] || fail "Ktor isn't at $ktor in every module: $bad"
+"${mvn[@]}" -Pktor clean compile || fail "the Ktor plugin's examples don't compile against the published POM"
 
 if [ "${#failed[@]}" -gt 0 ]; then
   echo >&2

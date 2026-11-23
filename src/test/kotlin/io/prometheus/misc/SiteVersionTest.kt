@@ -80,6 +80,14 @@ class SiteVersionTest : StringSpec() {
         }
         File(dir, "starter.txt").delete()
 
+        // The Ktor plugin's, too
+        File(dir, "ktor.txt").writeText("""implementation("com.pambrose:prometheus-proxy-ktor:1.2.4")""")
+        siteVersion("SITE_VERSION_SOURCES=${dir.path}").apply {
+          exitCode.shouldNotBeZero()
+          errors shouldContain "1.2.4"
+        }
+        File(dir, "ktor.txt").delete()
+
         File(dir, "other.txt").writeText("image: pambrose/prometheus-agent:1.2.4\n")
         siteVersion("SITE_VERSION_SOURCES=${dir.path}").apply {
           exitCode.shouldNotBeZero()

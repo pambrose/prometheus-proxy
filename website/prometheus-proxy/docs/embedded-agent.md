@@ -128,6 +128,12 @@ config file is, so a `${?ENV_VAR}` substitution in it works.
 Azure Container Apps, or another platform, with the proxy on AWS, GCP, Azure, DigitalOcean, or Railway, and the
 [Embedded Demo](embedded-demo.md) runs it on one machine, in a Ktor app.
 
+## In Ktor
+
+The [Ktor Plugin](ktor-plugin.md) does this for a Ktor app: `install(PrometheusProxyAgent)` with the app's registry
+starts the agent once the app's modules load, stops it as the server stops, and serves the registry in-process, with
+its settings from the install block or `application.conf`.
+
 ## In Spring Boot
 
 The [Spring Boot Starter](spring-boot-starter.md) does all of this for a Spring Boot app, from a dependency and a few

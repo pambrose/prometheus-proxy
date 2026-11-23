@@ -57,6 +57,8 @@ jobs:
             build/test-results/
             spring-boot-starter/build/reports/tests/
             spring-boot-starter/build/test-results/
+            ktor-plugin/build/reports/tests/
+            ktor-plugin/build/test-results/
           retention-days: 7
 
       - name: Upload coverage to Codecov

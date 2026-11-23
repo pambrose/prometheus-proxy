@@ -1,0 +1,120 @@
+---
+icon: lucide/plug
+---
+
+# Ktor Plugin
+
+A Ktor app can run the [embedded agent](embedded-agent.md) by installing a plugin: `com.pambrose:prometheus-proxy-ktor`
+starts the agent with the app, stops it with the app, and serves the app's metrics registry to Prometheus through the
+proxy. The agent reads the registry in-process, so the app needs no `/metrics` route, no credentials for one, and no
+port for the agent to scrape.
+
+## Adding the Dependency
+
+=== "Gradle (Kotlin DSL)"
+
+    ```kotlin
+    --8<-- "EmbeddedAgentExamples.txt:ktor-gradle-dependency"
+    ```
+
+=== "Maven"
+
+    ```xml
+    --8<-- "EmbeddedAgentExamples.txt:ktor-maven-dependency"
+    ```
+
+The plugin needs Ktor 3 and Java 17 or later, and is released with the agent, at the agent's version. The agent runs
+Ktor itself, for its HTTP client and its dashboard, so the app's Ktor has to be the agent's version or later. Gradle
+picks the later of the two on its own; Maven picks the version nearest the app, so a Maven app declares its Ktor
+modules, or imports `io.ktor:ktor-bom`, at the agent's version or later.
+
+## Installing
+
+Install it with the app's registry and the path Prometheus scrapes it at, and give the agent its proxy:
+
+```kotlin
+--8<-- "ktor-plugin/src/test/kotlin/website/KtorPluginExample.kt:install"
+```
+
+With that, the app gets:
+
+- **An agent that starts and stops with the app.** It starts once every module of the app has loaded, and begins
+  stopping as soon as the server does, before the server drains the requests in flight: the agent disconnects, the
+  proxy drops its paths, and no scrape reaches an app that's going away. The app's shutdown waits for it, up to 30
+  seconds, without taking that time from the server's grace period. In development mode, a reload stops the old app's
+  agent and starts the new one's.
+- **Its metrics at the proxy's `/my_app_metrics`,** read from the registry for each scrape, in the format Prometheus
+  asks for, and with the agent's limits and the path's filter, as
+  [Metrics Served In-Process](embedded-agent.md#metrics-served-in-process) describes. Micrometer's
+  `PrometheusMeterRegistry` gives its registry as `prometheusRegistry`; an app on the Prometheus Java client gives its
+  own, such as `PrometheusRegistry.defaultRegistry`. A path is required with a registry: there's no default, since two
+  apps given the same one would take the path from each other.
+- **An app that runs without an agent that can't start.** Without a proxy, as on a developer's machine or in
+  `testApplication`, the agent logs a line and stays off. A setting it rejects, such as an unreadable certificate, is
+  logged, and the agent stays off, without stopping the app. Set `required = true` to have the app fail to start
+  instead, then without a proxy too.
+
+The `agent { }` block takes the agent's [`EmbeddedAgentConfig.Builder`](embedded-agent.md#embeddedagentconfig), with a
+typed method for each setting, such as a certificate the app reads from a secret store. As with any embedded agent, the
+agent's own environment variables, such as `AGENT_TOKEN` or `PROXY_HOSTNAME`, take precedence over its settings, so give
+the app's other names, as above.
+
+## Settings in application.conf
+
+An app that reads its settings from a file, through `EngineMain` or `configure()`, can keep the agent's there too,
+under `prometheus-proxy.agent`, in HOCON or the same keys in YAML:
+
+```hocon
+--8<-- "ktor-plugin/src/test/resources/website/application.conf:conf"
+```
+
+The install block is then left with what a file can't hold, the registry:
+
+```kotlin
+--8<-- "ktor-plugin/src/test/kotlin/website/KtorPluginExample.kt:install-file"
+```
+
+The install block runs after the file is read, so a setting it makes takes precedence. An app started with
+`embeddedServer` reads no file, so it has only the block's settings. The keys are the
+[Spring Boot Starter](spring-boot-starter.md)'s properties, and a blank value counts as unset, as an unset
+environment variable gives:
+
+| Key                        | Default                    | What it sets                                                                                                                                                                  |
+|----------------------------|----------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `proxy`                    |                            | The proxy, as `host` or `host:port` (the port defaults to 50051), or several, separated by commas, in the order the agent fails over through them. Unset, the agent stays off |
+| `token`                    |                            | The token the agent presents to the proxy, which has to match the proxy's                                                                                                     |
+| `trust-certificate`        |                            | The certificate the agent trusts the proxy's by, as PEM text or its base64, which turns [TLS](security/tls.md) on                                                             |
+| `authority`                |                            | The name the proxy's certificate was issued to, when it isn't the host the agent connects to                                                                                  |
+| `client-certificate`       |                            | The agent's certificate chain, as PEM text or its base64, for a proxy that requires mutual TLS                                                                                |
+| `client-key`               |                            | The private key of `client-certificate`, as PEM text or its base64                                                                                                            |
+| `name`                     | `Unnamed-` and the host    | The agent's name, as the proxy's dashboard and logs show it                                                                                                                   |
+| `path`                     |                            | The proxy's path the registry is served at; required with a registry                                                                                                          |
+| `labels.<name>`            |                            | The labels of the registry's path, in the proxy's [service discovery](service-discovery.md)                                                                                   |
+| `paths`                    |                            | Other targets the agent scrapes over HTTP, a list, each served at a `path` of its own from its `url`, with `username`, `password`, and `labels`                                |
+| `consolidated`             | `false`                    | Whether the agent registers its paths in [consolidated mode](advanced.md#consolidated-mode), alongside other agents serving them                                               |
+| `metrics-port`             |                            | The port of the agent's own metrics, which are off without one. They stay apart from the app's, whose JVM metrics they'd repeat                                               |
+| `dashboard.port`, `.host`  |                            | The [agent's dashboard](agent-dashboard.md), off without a port, listening on every interface unless `host` names one, such as `127.0.0.1`                                    |
+| `dashboard.password`       |                            | Requires a login to the dashboard, as `dashboard.username` (`admin` by default)                                                                                               |
+| `required`                 | `false`                    | Whether the app fails to start when the agent can't, or has no proxy                                                                                                          |
+| `settings.<key>`           |                            | Any other [agent setting](configuration/agent.md), by its key under `agent`, such as `settings.scrapeTimeoutSecs = 20`. It takes precedence over the keys above              |
+| `enabled`                  | `true`                     | Whether to run the agent at all                                                                                                                                               |
+
+`enabled`, `required`, `path`, and `labels` are the install block's properties too; the rest are the builder's.
+
+## The Agent's Connection
+
+While the agent runs, `application.prometheusProxyAgent` is its
+[`EmbeddedAgentInfo`](embedded-agent.md#embeddedagentinfo), with its connection to the proxy, read live; it's null
+while the agent is off. A route can show it:
+
+```kotlin
+--8<-- "ktor-plugin/src/test/kotlin/website/KtorPluginExample.kt:health"
+```
+
+The agent starts before the server listens on its port. The registry doesn't mind, but a path the agent scrapes at the
+app's own port, from `paths` or the builder's `scrapeSelf`, can fail a scrape that comes in that moment.
+
+## Without the Plugin
+
+[Configuring in Code](embedded-agent.md#configuring-in-code) on the Embedded Agent page starts the agent from any app,
+and the [Embedded Demo](embedded-demo.md)'s coffee shop wires it into a Ktor app by hand.

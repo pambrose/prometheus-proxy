@@ -33,6 +33,9 @@ _Not yet released_
   address: the agent starts and stops with the app, serves its metrics to Prometheus without `/actuator/prometheus`
   or a web server, and shows its connection in `/actuator/health`. The new Spring Boot Starter page lists its
   properties, and the Spring Boot demo's roastery now runs its agent with it.
+- **A Ktor plugin.** Add `prometheus-proxy-ktor` to a Ktor app and `install(PrometheusProxyAgent)` with the app's
+  registry and a path: the agent starts and stops with the app and serves its metrics to Prometheus without a
+  `/metrics` route. Set the proxy in code or in `application.conf`. The new Ktor Plugin page lists its settings.
 - **Light or dark, your choice.** Both dashboards have a theme picker in the top bar: light, dark, or auto, which
   follows your system and is where it starts. Your browser remembers it.
 - **The proxy counts what happens to its agents.** New metrics count agents disconnecting and why, connects and

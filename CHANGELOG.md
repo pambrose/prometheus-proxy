@@ -46,6 +46,12 @@ All notable changes to this project are documented in this file.
   serves the app's `PrometheusRegistry` bean in-process at `/<spring.application.name>_metrics`, and reports its
   connection as Actuator's `prometheusAgent` health component. Its other `prometheus-proxy.agent.*` properties map onto
   `EmbeddedAgentConfig`'s settings, and a `PrometheusProxyAgentCustomizer` bean changes them in code
+- A Ktor plugin, `com.pambrose:prometheus-proxy-ktor`, released with the agent at its version:
+  `install(PrometheusProxyAgent)` runs an embedded agent that starts once the app's modules load, begins stopping when
+  the server stops accepting connections, and serves the `PrometheusRegistry` it's given in-process at its `path`. Its
+  settings come from `prometheus-proxy.agent` in `application.conf` or `application.yaml`, by the starter's property
+  names, and from the install block, whose `agent { }` takes `EmbeddedAgentConfig`'s builder; the running agent's
+  `EmbeddedAgentInfo` is `application.prometheusProxyAgent`
 - The spring-boot demo's roastery runs its agent with the starter, from `application.yml`, in place of its own
   lifecycle, settings, health, and Spring Security classes, and no longer exposes `/actuator/prometheus`
 - Every demo turns on its agents' dashboards and shows the agent's side in its tour; the basics demo adds `proxy-down`

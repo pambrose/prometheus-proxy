@@ -53,6 +53,7 @@ nav = [
     { "Service Discovery" = "service-discovery.md" },
     { "Embedded Agent" = "embedded-agent.md" },
     { "Spring Boot Starter" = "spring-boot-starter.md" },
+    { "Ktor Plugin" = "ktor-plugin.md" },
     { "Monitoring" = "monitoring.md" },
     { "Grafana & Alerting" = "grafana.md" },
   ]},

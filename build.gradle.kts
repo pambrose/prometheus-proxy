@@ -190,6 +190,10 @@ dependencies {
   testImplementation(libs.testcontainers)
   // The docs site's MetricsSource examples (src/test/*/website) write a registry with it, as an embedder does.
   testImplementation(libs.prometheus.metrics.exposition.textformats)
+
+  // The Ktor plugin's coverage counts in this project's reports, so the coverage floors cover it too. Not the Spring
+  // Boot starter's: it's in Java, and its tests run at Spring Boot's versions.
+  kover(project(":ktor-plugin"))
 }
 
 // Raises every Netty module grpc-netty brings (4.2.17.Final) to the patched release in libs.versions.toml. netty-tcnative

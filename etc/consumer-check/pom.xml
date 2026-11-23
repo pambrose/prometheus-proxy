@@ -28,6 +28,8 @@
     <prometheus-proxy.version>unset</prometheus-proxy.version>
     <kotlin.version>unset</kotlin.version>
     <prometheus-metrics.version>unset</prometheus-metrics.version>
+    <ktor.version>unset</ktor.version>
+    <micrometer.version>unset</micrometer.version>
     <repo.root>${project.basedir}/../..</repo.root>
     <!-- The oldest Java the published artifact supports (jvm in gradle/libs.versions.toml). -->
     <maven.compiler.release>17</maven.compiler.release>
@@ -54,6 +56,53 @@
           <version>${prometheus-metrics.version}</version>
         </dependency>
       </dependencies>
+    </profile>
+    <profile>
+      <!-- A Ktor app with the Ktor plugin: the plugin, at the agent's version, and Micrometer's Ktor plugin and
+           Prometheus registry, which the docs site's examples serve, at the versions the agent's build uses. -->
+      <id>ktor</id>
+      <dependencies>
+        <dependency>
+          <groupId>com.pambrose</groupId>
+          <artifactId>prometheus-proxy-ktor</artifactId>
+          <version>${prometheus-proxy.version}</version>
+        </dependency>
+        <dependency>
+          <groupId>io.ktor</groupId>
+          <artifactId>ktor-server-metrics-micrometer-jvm</artifactId>
+          <version>${ktor.version}</version>
+        </dependency>
+        <dependency>
+          <groupId>io.micrometer</groupId>
+          <artifactId>micrometer-registry-prometheus</artifactId>
+          <version>${micrometer.version}</version>
+        </dependency>
+      </dependencies>
+      <build>
+        <plugins>
+          <!-- The Ktor plugin's examples, which its own tests run, under ktor-plugin/ -->
+          <plugin>
+            <groupId>org.jetbrains.kotlin</groupId>
+            <artifactId>kotlin-maven-plugin</artifactId>
+            <version>${kotlin.version}</version>
+            <executions>
+              <execution>
+                <id>ktor-examples</id>
+                <phase>compile</phase>
+                <goals>
+                  <goal>compile</goal>
+                </goals>
+                <configuration>
+                  <sourceDirs>
+                    <sourceDir>${repo.root}/ktor-plugin/src/test/kotlin/website</sourceDir>
+                  </sourceDirs>
+                  <jvmTarget>17</jvmTarget>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
     </profile>
   </profiles>
 
