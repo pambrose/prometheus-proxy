@@ -156,8 +156,8 @@ ktor-server-websockets = { module = "io.ktor:ktor-server-websockets", version.re
 ktor-server-core = { module = "io.ktor:ktor-server-core", version.ref = "ktor" }
 ktor-server-config-yaml = { module = "io.ktor:ktor-server-config-yaml", version.ref = "ktor" }
 ktor-server-test-host = { module = "io.ktor:ktor-server-test-host", version.ref = "ktor" }
-# The embedded demo's app only (demos/embedded/app), which reads this catalog so its Ktor moves with the project's.
-ktor-server-auth = { module = "io.ktor:ktor-server-auth", version.ref = "ktor" }
+# The embedded demo's app (demos/embedded/app), which reads this catalog so its Ktor moves with the project's, and the
+# Ktor plugin's tests.
 ktor-server-metrics-micrometer = { module = "io.ktor:ktor-server-metrics-micrometer", version.ref = "ktor" }
 micrometer-registry-prometheus = { module = "io.micrometer:micrometer-registry-prometheus", version.ref = "micrometer" }
 spring-boot-dependencies = { module = "org.springframework.boot:spring-boot-dependencies", version.ref = "spring-boot" }

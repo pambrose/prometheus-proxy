@@ -49,10 +49,12 @@ lists its targets). The root `Makefile`'s only demo targets, `demos-up`, `demos-
 demo's `up`, `up-local`, or `down` in turn (its `DEMOS` list), and keep going past a demo that fails.
 
 The embedded demo's coffee shop, `demos/embedded/app`, is a Gradle project of its own, outside the root build, that
-embeds the agent through the public API and reads `gradle/libs.versions.toml` (its Ktor and Micrometer entries are
-there for it). CI's `consumer-check` job builds it against the checkout with `make embedded-demo-check`
-(`./gradlew -p demos/embedded/app -PlocalProxy build`, a composite build, which lints it too), so a change to
-`Agent.startAsyncAgent` or the config tree it takes must keep it compiling.
+embeds the agent through the Ktor plugin, which reads its Micrometer registry in-process, and reads
+`gradle/libs.versions.toml` (its Ktor and Micrometer entries are there for it). CI's `consumer-check` job builds it
+against the checkout with `make embedded-demo-check` (`./gradlew -p demos/embedded/app -PlocalProxy build`, a composite
+build, which lints it too; its `settings.gradle.kts` substitutes `:ktor-plugin` for `com.pambrose:prometheus-proxy-ktor`,
+since the project's name isn't the artifact's), so a change to the plugin or to `EmbeddedAgentConfig` must keep it
+compiling.
 IntelliJ imports it as a second linked Gradle project (`.idea/gradle.xml`); its `gradle/wrapper/gradle-wrapper.properties`
 is a symlink to the root's, so the IDE syncs it with the root's Gradle instead of generating a wrapper of its own.
 

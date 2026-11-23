@@ -5,14 +5,14 @@ plugins {
   application
 }
 
-// The agent's library: a release from Maven Central, the one -PproxyVersion names (the Docker build passes the latest
-// release), or, with -PlocalProxy, this checkout, which settings.gradle.kts includes in its place.
+// The agent's Ktor plugin, which brings the agent: a release from Maven Central, the one -PproxyVersion names (the
+// Docker build passes the latest release), or, with -PlocalProxy, this checkout, which settings.gradle.kts includes in
+// its place.
 val proxyVersion = providers.gradleProperty("proxyVersion").getOrElse("latest.release")
 
 dependencies {
-  implementation("com.pambrose:prometheus-proxy:$proxyVersion")
+  implementation("com.pambrose:prometheus-proxy-ktor:$proxyVersion")
   implementation(libs.ktor.server.cio)
-  implementation(libs.ktor.server.auth)
   implementation(libs.ktor.server.html.builder)
   implementation(libs.ktor.server.metrics.micrometer)
   implementation(libs.micrometer.registry.prometheus)

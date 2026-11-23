@@ -7,8 +7,8 @@ import io.micrometer.core.instrument.Timer
 import java.time.Duration
 
 /**
- * The shop's own metrics, in [registry], which the app serves at /metrics in the Prometheus format, beside Ktor's HTTP
- * and JVM metrics:
+ * The shop's own metrics, in [registry], which the agent embedded in the app reads in-process, beside Ktor's HTTP and
+ * JVM metrics:
  *
  * - `coffee_orders_total{drink,outcome}`: orders served, rejected at a full counter, or failed with the machine broken
  * - `coffee_brew_seconds`: how long each drink took to brew, as a histogram

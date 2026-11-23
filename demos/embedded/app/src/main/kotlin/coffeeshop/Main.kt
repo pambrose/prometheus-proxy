@@ -1,14 +1,8 @@
 package coffeeshop
 
-import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
-import io.ktor.server.application.ApplicationStopped
 import io.ktor.server.application.install
-import io.ktor.server.auth.Authentication
-import io.ktor.server.auth.UserIdPrincipal
-import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.basic
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.html.respondHtml
@@ -42,7 +36,7 @@ import kotlinx.html.unsafe
 // order over HTTP on their own (Customers.kt). See demos/embedded/README.md in the repository.
 fun main() {
   val port = env("PORT").toIntOrNull() ?: 8080
-  // start(wait = true) stops the server on SIGTERM, which raises ApplicationStopped, where the agent stops too.
+  // start(wait = true) stops the server on SIGTERM, and the agent with it.
   embeddedServer(CIO, port = port) { coffeeShop(port) }.start(wait = true)
 }
 
@@ -58,41 +52,18 @@ fun Application.coffeeShop(port: Int) {
   val registry = PrometheusMeterRegistry(PrometheusConfig.DEFAULT)
   install(MicrometerMetrics) { this.registry = registry }
   val shop = CoffeeShop(ShopMetrics(registry))
-  installMetricsLogin()
+  // The agent reads the registry in-process for each scrape, so the app serves no /metrics (PrometheusAgent.kt)
+  installPrometheusAgent(registry, version)
 
   routing {
     shopRoutes(shop)
-    // The metrics the agent reads, behind the login above
-    authenticate("metrics") {
-      get("/metrics") {
-        call.respondText(registry.scrape(), ContentType.parse("text/plain; version=0.0.4; charset=utf-8"))
-      }
-    }
     adminRoutes(shop)
   }
 
   shop.open(this)
   Customers(shop, port).start(this)
-  // Once the routes are in place, so the agent's first scrape finds /metrics.
-  val agent = startPrometheusAgent(port, version)
-  monitor.subscribe(ApplicationStopped) { agent?.shutdown() }
 }
 // --8<-- [end:app-module]
-
-// /metrics is for the agent, which reads it on 127.0.0.1 with these credentials; nobody else gets in.
-private fun Application.installMetricsLogin() {
-  val user = env("METRICS_USER")
-  val password = env("METRICS_PASSWORD")
-  install(Authentication) {
-    basic("metrics") {
-      realm = "metrics"
-      validate { credentials ->
-        val ok = user.isNotEmpty() && credentials.name == user && credentials.password == password
-        if (ok) UserIdPrincipal(credentials.name) else null
-      }
-    }
-  }
-}
 
 // The shop's page, its health check, its state as text, and its counter.
 private fun Route.shopRoutes(shop: CoffeeShop) {
@@ -244,6 +215,5 @@ private fun kotlinx.html.FlowContent.card(
   span(if (bad) "value bad" else "value") { +value }
 }
 
-// An environment variable's value, trimmed, or empty when it isn't set: read the same way here and for the agent, so a
-// password with stray whitespace matches its scrape URL's.
+// An environment variable's value, trimmed, or empty when it isn't set.
 internal fun env(name: String) = System.getenv(name).orEmpty().trim()

@@ -1146,7 +1146,7 @@
     {
       "type": "timeseries",
       "title": "Scrape time through the proxy",
-      "description": "How long Prometheus's scrape of the coffee shop took: the trip through the proxy to the embedded agent, the agent's read of /metrics, and back.",
+      "description": "How long Prometheus's scrape of the coffee shop took: the trip through the proxy to the embedded agent, the agent's read of the app's registry, and back.",
       "id": 16,
       "datasource": {
         "type": "prometheus",
