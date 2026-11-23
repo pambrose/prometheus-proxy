@@ -41,6 +41,7 @@ import io.prometheus.Proxy
 import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.common.TestPorts.PATH_TAKEOVER_HTTP_PORT
 import io.prometheus.common.startAndAwaitReady
+import io.prometheus.harness.HarnessConstants.FAST_RECONNECT_ARGS
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.harness.support.TestUtils.stopAll
@@ -132,7 +133,7 @@ class AgentPathTakeoverTest : StringSpec() {
     // taking it back from the agent holding it, which did the same at its own next reconnect.
     "a displaced agent should keep waiting across a reconnect, and take the path back once the other agent leaves" {
       withProxyAndTarget { serverName, _, targetUrl ->
-        val agentA = connectedAgent(serverName, "takeover-agent-a", STATIC_CONFIG_ARG, RECONNECT_ARGS)
+        val agentA = connectedAgent(serverName, "takeover-agent-a", STATIC_CONFIG_ARG, FAST_RECONNECT_ARGS)
         val agentB = connectedAgent(serverName, "takeover-agent-b")
         try {
           eventually(10.seconds) { ownerOf(SHARED_PATH) shouldBe agentA.agentId }
@@ -148,16 +149,15 @@ class AgentPathTakeoverTest : StringSpec() {
             agentA.isConnectedToProxy.shouldBeTrue()
           }
 
-          // Reconnected, the first agent still waits rather than taking the path from the second.
-          continually(3.seconds) {
-            ownerOf(SHARED_PATH) shouldBe agentB.agentId
-            agentA.pathManager.takenOverContexts.map { it.path } shouldBe listOf(SHARED_PATH)
-          }
+          // Reconnected, the first agent still waits rather than taking the path from the second: its reclaim was
+          // refused, which put its new connection on the proxy's waiting list for the path.
+          eventually(5.seconds) { waitersOf(SHARED_PATH) shouldBe listOf(agentA.agentId) }
+          ownerOf(SHARED_PATH) shouldBe agentB.agentId
+          agentA.pathManager.takenOverContexts.map { it.path } shouldBe listOf(SHARED_PATH)
 
           agentB.stopSync(10.seconds)
 
-          // Within seconds, though its retry interval is 60s: its refused reclaim put its new connection on the proxy's
-          // waiting list, which told it the path was free.
+          // Within seconds, though its retry interval is 60s: the waiting list told it the path was free.
           eventually(5.seconds) {
             ownerOf(SHARED_PATH) shouldBe agentA.agentId
             agentA.pathManager.registeredPaths.map { it.path } shouldBe listOf(SHARED_PATH)
@@ -173,6 +173,10 @@ class AgentPathTakeoverTest : StringSpec() {
 
   private fun ownerOf(path: String): String? =
     proxy?.pathManager?.getAgentContextInfo(path)?.agentContexts?.singleOrNull()?.agentId
+
+  // The agentIds the proxy tells once [path] is free.
+  private fun waitersOf(path: String): List<String> =
+    proxy?.pathManager?.getAgentContextInfo(path)?.waiting.orEmpty().map { it.agentId }
 
   // Runs [block] against a proxy, an HTTP client, and a target that answers every scrape, and stops them all after.
   private suspend fun withProxyAndTarget(block: suspend (String, HttpClient, String) -> Unit) {
@@ -211,13 +215,5 @@ class AgentPathTakeoverTest : StringSpec() {
     private const val OWN_PATH = "takeover_own_metrics"
     private val CONFIG_ARG = listOf("--config", "config/test-configs/path-takeover.conf")
     private val STATIC_CONFIG_ARG = listOf("--config", "config/test-configs/path-takeover-static.conf")
-
-    // An agent that notices a lost connection and reconnects within a second or two, as InProcessReconnectTest's does.
-    private val RECONNECT_ARGS =
-      listOf(
-        "-Dagent.internal.heartbeatMaxInactivitySecs=1",
-        "-Dagent.internal.heartbeatCheckPauseMillis=200",
-        "-Dagent.internal.reconnectPauseSecs=1",
-      )
   }
 }

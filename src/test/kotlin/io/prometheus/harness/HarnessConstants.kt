@@ -54,6 +54,14 @@ object HarnessConstants {
   // AgentGrpcStreamRetentionTest).
   const val DEFAULT_CHUNK_SIZE_KBS = 1
 
+  // An agent that notices a lost connection within a second or two and reconnects a second later: it heartbeats after a
+  // second without sending, checks every 200ms, and pauses a second before each reconnect.
+  val FAST_RECONNECT_ARGS = [
+    "-Dagent.internal.heartbeatMaxInactivitySecs=1",
+    "-Dagent.internal.heartbeatCheckPauseMillis=200",
+    "-Dagent.internal.reconnectPauseSecs=1",
+  ]
+
   private const val HARNESS_CONFIG_FILE = "config/test-configs/harness.conf"
   private const val JUNIT_FILE = "config/test-configs/junit-test.conf"
 

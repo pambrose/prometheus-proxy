@@ -19,9 +19,8 @@ transport filter disabled, a stream that names another connection's agentId, whi
 It also models path notices and reclaims: the notice `takeOverPath` queues for a displaced connection of another
 launch, its delivery on `readPathNoticesFromProxy`, the agent counting the path as taken over, which it keeps across
 its reconnects, and its reclaim, which the proxy refuses while a live connection of another launch holds the path.
-Heartbeats, chunking, metrics, and the event
-bus are abstracted away, and so are the notice that a path is free and the waiting list that sends it, which only bring
-a reclaim forward. Agent-side failover is in `AgentFailover.tla`.
+Heartbeats, chunking, metrics, and the event bus are abstracted away, and so are the notice that a path is free and the
+waiting list that sends it, which only bring a reclaim forward. Agent-side failover is in `AgentFailover.tla`.
 
 It is a model of the code, not the code: when you change one of those classes, update the matching action.
 
@@ -44,7 +43,7 @@ connection's launch, so the others cover both cases without relabelings that che
 | `EveryScrapeFinishes` | With the handler timeout off, every started scrape still finishes |
 | `ReclaimNeverDisplaces` | A reclaim never takes a path from a live connection of another launch, so two agents with the same exclusive path never swap it back and forth |
 | `DisplacedReclaims` | An agent told its path was taken over takes it back once no connection holds it, on whichever connection it has then, unless another takes it first or that connection is invalidated |
-| `ReconnectReclaims` | An agent registers a path it was told was taken over only as a reclaim, on a connection it made since as on the one it was told on, so its reconnect never takes the path from the live agent holding it |
+| `ReconnectReclaims` | An agent registers a path it was told was taken over only as a reclaim, after a reconnect too, so its reconnect never takes the path from the live agent holding it |
 
 ### Running
 

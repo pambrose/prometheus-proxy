@@ -61,7 +61,7 @@ ASSUME Modes \subseteq BOOLEAN /\ Modes # {}
 VARIABLES
     \* Fixed per connection at Init, so TLC explores every mix of identities and modes.
     ident,          \* [Conns -> Identities]
-    consol,         \* [Conns -> BOOLEAN]  RegisterAgentRequest.consolidated
+    consol,         \* [Conns -> Modes]  RegisterAgentRequest.consolidated
     launch,         \* [Conns -> Launches] RegisterAgentRequest.launchId
 
     \* AgentContext and its lifecycle
@@ -132,8 +132,8 @@ OwnedBy(s, c) == ~CheckOwnership \/ target[s] = c
 -----------------------------------------------------------------------------
 (* Agent connection lifecycle *)
 
-\* ProxyServerTransportFilter.transportReady / connectAgent: a new AgentContext. The agent clears its state as it
-\* connects (AgentPathManager.clear), but keeps the paths it was told another agent took over.
+\* ProxyServerTransportFilter.transportReady / connectAgent: a new AgentContext, as the agent clears its state
+\* (AgentPathManager.clear).
 Connect(c) ==
     /\ phase[c] = "unborn"
     /\ phase' = [phase EXCEPT ![c] = "live"]
@@ -144,8 +144,7 @@ Connect(c) ==
                    notices, heard, regReclaim>>
 
 \* removeAgentContext step 1: removeFromContextManager, which invalidates the context, and its unread notices with it.
-\* Losing the transport also loses whatever the agent was scraping: a reconnect is a connection of its own. The paths
-\* the agent was told were taken over are the agent's, not the connection's, so they stay (see Connect).
+\* Losing the transport also loses whatever the agent was scraping: a reconnect is a connection of its own.
 RemoveCtx(c) ==
     /\ phase' = [phase EXCEPT ![c] = "ctxRemoved"]
     /\ inMgr' = inMgr \ {c}
@@ -607,9 +606,8 @@ DisplacedReclaims ==
     \A c \in Conns, p \in Paths :
         (p \in told[launch[c]] /\ pathMap[p].ctxs = {}) ~> (c \in pathMap[p].ctxs \/ pathMap[p].ctxs # {} \/ ~valid[c])
 
-\* A registration an agent starts for a path it was told another agent took over is a reclaim, on a connection it made
-\* since as on the one it was told on, so with ReclaimNeverDisplaces a reconnect never takes the path from the live
-\* agent holding it.
+\* A registration an agent starts for a path it was told another agent took over is a reclaim, after a reconnect too,
+\* so with ReclaimNeverDisplaces a reconnect never takes the path from the live agent holding it.
 ReconnectReclaims ==
     [][\A c \in Conns, p \in Paths :
          (<<c, p>> \notin regPending /\ <<c, p>> \in regPending' /\ p \in heard[launch[c]]) => <<c, p>> \in regReclaim']_vars

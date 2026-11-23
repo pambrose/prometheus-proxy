@@ -23,7 +23,6 @@ import ch.qos.logback.classic.Level
 import io.grpc.Status
 import io.grpc.StatusException
 import io.kotest.assertions.nondeterministic.eventually
-import io.kotest.assertions.throwables.shouldNotThrowAny
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
@@ -2314,7 +2313,7 @@ class AgentPathManagerTest : StringSpec() {
       manager.notePathNotice(takenNotice("metrics", "agent-east-copy"))
 
       manager.clear()
-      shouldNotThrowAny { manager.registerPaths() }
+      manager.registerPaths()
 
       manager.servesNoStaticPath().shouldBeFalse()
     }
