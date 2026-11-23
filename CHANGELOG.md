@@ -188,6 +188,12 @@ All notable changes to this project are documented in this file.
   also stops waiting, so it isn't told the path is free
 - An agent the proxy refuses for its token logs one ERROR line, without a stack trace, that names where the token is
   set, rather than a WARN with one; repeats log at DEBUG, with a reminder at ERROR every 10 minutes while it lasts
+- An agent started embedded, with `startAsyncAgent()` or `EmbeddedAgentConfig`, registers no JVM shutdown hook, which
+  on SIGTERM stopped it at the same time as its host's own hooks, in no set order. Its host stops it, as the Ktor plugin
+  and the Spring Boot starter do; one its host never stops ends with the JVM, without a graceful stop. The standalone
+  agent keeps its hook
+- The proxy and agent log less at INFO as they start and stop (common-utils 5.3.0): their services' setup steps and
+  their starting and stopping transitions log at DEBUG, and the shutdown hook's two lines go to the log, not stderr
 
 ### Build & Tooling
 
@@ -251,6 +257,10 @@ All notable changes to this project are documented in this file.
 - The basics demo's tour has a tenth part: `./demo.sh login` restarts the proxy with a dashboard password in its
   environment (`DEMO_DASHBOARD_PASSWORD` in its compose file), and `login-off` without it. Its readiness checks take a
   login page's 401 as the proxy answering
+
+### Dependencies
+
+- Update common-utils 5.2.0 → 5.3.0, which embedders get transitively
 
 ## [4.6.0] - 2026-11-20
 

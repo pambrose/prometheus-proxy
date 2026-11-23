@@ -847,6 +847,14 @@ class Agent(
       .onFailure { e -> logger.warn(e) { "triggerShutdown() failed to shut down the gRPC channel: ${e.message}" } }
   }
 
+  // Set by startEmbedded before the agent starts. An agent embedded in a host registers no JVM shutdown hook: its host
+  // stops it (EmbeddedAgentInfo, the Ktor plugin, the Spring Boot starter) once the work that needs it is done, where
+  // a hook would stop it at the same time as the host's own hooks, in no set order. The standalone agent, and an Agent
+  // built and started directly, keep the hook.
+  internal var isEmbedded = false
+
+  override val registersShutDownHook: Boolean get() = !isEmbedded
+
   // Guava calls shutDown() only after startUp() succeeds: when startUp() throws -- an admin or metrics port already in
   // use -- the service goes straight to FAILED. super.startUp() stops the servers it had already started, but without
   // this the gRPC channel and HTTP client cache built in the constructor would stay open for the life of the JVM.
@@ -1007,7 +1015,8 @@ class Agent(
      * admin, metrics, and dashboard servers binding their ports -- and not for a proxy connection. The Agent's
      * lifecycle is then owned by the caller via the returned [EmbeddedAgentInfo], which exposes the agent's
      * `launchId`, `agentName`, and connection (`isConnected`, `proxyEndpoint`), and a `shutdown()` method for graceful
-     * shutdown.
+     * shutdown. Since 4.7.0 the Agent registers no JVM shutdown hook of its own: the host stops it, with `shutdown()`
+     * or `close()`, once the work that needs it is done.
      *
      * @param configFilename Path or URL to the HOCON config file. Forwarded to the
      *   [AgentOptions] config-filename constructor so it follows the same resolution rules as the
@@ -1085,7 +1094,7 @@ class Agent(
         }
       // startSync(), not startAsync(): a startup failure must reach the caller as an exception rather than leave it
       // holding a handle to a FAILED agent.
-      val agent = newAgent(exitOnMissingConfig, options)
+      val agent = newAgent(exitOnMissingConfig, options).apply { isEmbedded = true }
       agent.startSync()
       return EmbeddedAgentInfo(agent)
     }

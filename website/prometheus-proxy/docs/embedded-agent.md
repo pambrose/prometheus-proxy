@@ -378,9 +378,14 @@ The handle `startAsyncAgent()` and `EmbeddedAgentConfig.start()` return.
 stopped. A host's health check can report it, though without failing the app's own health: a lost proxy shouldn't
 take the app down.
 
-Call `shutdown()` from your application's shutdown hook, or wherever it stops its own services. It closes the
+Call `shutdown()` wherever your application stops its own services, or from a shutdown hook of its own. It closes the
 connection to the proxy, drains the scrapes in flight, and releases the admin and metrics ports, so the agent's
-connection and background work don't outlive your application.
+connection and background work don't outlive your application. Since 4.7.0, the agent registers no JVM shutdown hook,
+so it stops when your application stops it, after the work that needs it, not at the same time as your application's
+own hooks; the [Ktor Plugin](ktor-plugin.md) and the [Spring Boot Starter](spring-boot-starter.md) stop it with the
+app. On SIGTERM, the JVM runs its shutdown hooks and exits without returning from `main()`, so in a program that runs
+until it's stopped, the agent of a `use` block stops only if a hook of the program's ends its work and waits for
+`main()` to return.
 
 ### `Agent.startSyncAgent()`
 
@@ -527,6 +532,14 @@ Then give the path a Prometheus job of its own, since the dashboard tells agents
 The proxy's [dashboard](web-dashboard.md) shows whether the agent registered, the paths it holds, and each path's
 recent scrapes, and `curl -i http://<proxy-host>:8080/<path>` scrapes a path through the proxy without Prometheus.
 [Troubleshooting](troubleshooting.md) says what each status code and outcome means.
+
+## Upgrading from 4.6.x
+
+- An agent started with `startAsyncAgent()` or `EmbeddedAgentConfig` registers no JVM shutdown hook. Through 4.6.0 it
+  did, and on SIGTERM it stopped at the same time as your application's own hooks, in no set order. Stop it with
+  `shutdown()` or `close()` where your application stops its own services (see
+  [`EmbeddedAgentInfo`](#embeddedagentinfo)); one that's never stopped ends with the JVM, without draining the scrapes
+  in flight.
 
 ## Upgrading from 4.4.x
 

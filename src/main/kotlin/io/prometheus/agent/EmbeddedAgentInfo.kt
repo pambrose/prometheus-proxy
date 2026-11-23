@@ -88,9 +88,9 @@ data class EmbeddedAgentInfo(
    * `GenericService` level — calling twice is safe but only the first invocation does work. Also safe on an
    * agent that has failed: a failed agent has already released what it held, so there is nothing to stop.
    *
-   * Blocks the calling thread until the Agent has finished shutting down. Call this from your
-   * host application's shutdown hook (or equivalent) to avoid leaking the gRPC connection and
-   * background scrape coroutines past process exit.
+   * Blocks the calling thread until the Agent has finished shutting down. An embedded Agent registers no JVM shutdown
+   * hook of its own, so call this where the host stops its own services, or from a shutdown hook of the host's, to
+   * avoid leaking the gRPC connection and background scrape coroutines past process exit.
    */
   fun shutdown() {
     agent.stop()
