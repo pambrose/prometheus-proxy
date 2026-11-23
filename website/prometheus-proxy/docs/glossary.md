@@ -29,12 +29,12 @@ See [Troubleshooting](troubleshooting.md).
 ### pathConfig
 
 An entry in the agent's `pathConfigs` list that maps a proxy `path` to the actual `url` the
-agent fetches from, optionally with `name` and `labels`. See [Example Configs](examples.md).
+agent fetches from, with a `name`, and optionally `labels`. See [Example Configs](examples.md).
 
 ### Scrape request / response
 
 The gRPC messages exchanged over the agent stream: the proxy sends a **ScrapeRequest** for a
-path, and the agent returns a **ScrapeResponse** with the fetched body, status, and headers.
+path, and the agent returns a **ScrapeResponse** with the fetched body, status code, and content type.
 
 ### Consolidated mode
 
@@ -47,7 +47,7 @@ endpoint send each series twice. See [Advanced Topics](advanced.md#consolidated-
 ### Chunking
 
 Splitting a large scrape response into multiple `ChunkedScrapeResponse` messages to stay
-within gRPC message limits. The threshold is `agent.chunkContentSizeKbs` (default 32 KB). See
+within gRPC message limits, once its gzipped size reaches `agent.chunkContentSizeKbs` (default 32 KB). See
 [Architecture](architecture.md#chunking).
 
 ### Heartbeat

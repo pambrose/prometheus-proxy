@@ -482,6 +482,8 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/prom-agent.conf,target=/app/prom-agent.conf \
     --env AGENT_CONFIG=prom-agent.conf \
     --env PROXY_HOSTNAME=prometheus-proxy \
+    --env ADMIN_ENABLED=true \
+    --env METRICS_ENABLED=true \
     pambrose/prometheus-agent:4.7.0
 ```
 
@@ -674,7 +676,8 @@ worth knowing:
 - **Applies to discovered paths too.** Filters are matched by path, so they cover both
   `pathConfigs` entries and paths added by [Dynamic Target Discovery](#dynamic-target-discovery-agent).
 - **Observable.** `agent_filter_lines_dropped_total` and `agent_filter_bytes_saved_total`, labeled by
-  `launch_id` and `path`, report what each filter is actually removing.
+  `launch_id` and `path`, report what each filter is actually removing, and `agent_filter_fail_open_total`, also
+  labeled by `reason`, counts the scrapes it let through unfiltered.
 - **Config-file only.** `filters` is a list, so there is no CLI/env equivalent.
 
 An invalid regex fails agent startup rather than surfacing later on a scrape. Not implemented:
@@ -985,9 +988,9 @@ that do not present it:
 * Agent: `--agent_token`, `AGENT_TOKEN`, or `agent.agentToken`
 
 Both sides must use the **same** value. When set, the agent attaches the token as a gRPC metadata header on every call and
-the proxy rejects any call with a missing or mismatched token (`UNAUTHENTICATED`). When the token is empty (the default),
-the open behavior is preserved and the proxy logs a startup warning — unless mutual TLS is configured, which already
-authenticates agents.
+the proxy rejects any call with a missing or mismatched token (`UNAUTHENTICATED`). When the token is empty (the default)
+and no `proxy.auth` identities are configured, the open behavior is preserved and the proxy logs a startup warning —
+unless mutual TLS is configured, which already authenticates agents.
 
 ```bash
 # Proxy requiring a token
@@ -1025,7 +1028,8 @@ Because authorization is per-identity-per-path, consolidated mode (multiple agen
 each agent's identity permits the shared path.
 
 `proxy.auth` is a list of objects, so it is set in the config file only — there is no equivalent CLI flag or environment
-variable. Identity names must be unique and tokens must be non-empty; the proxy fails fast at startup otherwise.
+variable. Identity names must be unique, tokens non-empty and distinct, from each other and from `proxy.agentToken`,
+and no identity may be named `legacy-agent-token`; the proxy fails fast at startup otherwise.
 
 #### Migrating from a shared token
 

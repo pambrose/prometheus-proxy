@@ -6,13 +6,14 @@ icon: lucide/file-code
 
 The repository ships a set of ready-to-run config files under
 [`examples/`](https://github.com/pambrose/prometheus-proxy/tree/master/examples). Each is
-shown below verbatim. For the full set of options see
+shown below verbatim, except `examples/cloud-proxy`, which
+[Cloud Platforms](cloud-platforms.md#where-to-run-the-proxy) shows. For the full set of options see
 [Agent Configuration](configuration/agent.md) and [Proxy Configuration](configuration/proxy.md).
 
 !!! note "Precedence"
 
-    Config files are the lowest-precedence source: CLI args → env vars → config file →
-    built-in defaults. See the [CLI Reference](cli-reference.md).
+    Config files rank below every other source but the built-in defaults: CLI args → env vars →
+    `-D` properties → config file → built-in defaults. See the [CLI Reference](cli-reference.md).
 
 ## Self-monitoring — `simple.conf`
 

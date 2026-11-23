@@ -23,7 +23,7 @@ one.
 ```mermaid
 %%{init: {'flowchart': {'curve': 'linear'}}}%%
 graph LR
-  P[Prometheus :9090] -->|scrapes /roastery_metrics| Proxy[Proxy, dashboard :8094]
+  P[Prometheus :9490] -->|scrapes /roastery_metrics| Proxy[Proxy, dashboard :8494]
   %% The agent connects out to the proxy, so its arrow points back. The invisible link keeps the app to the right.
   Proxy ~~~ Agent
   Agent[embedded agent, run by the Spring Boot starter, dashboard :8495] -->|gRPC over TLS, with a token| Proxy
@@ -86,7 +86,7 @@ and nothing shared. `make up` writes them, with a random token, to `docker/.env`
 | Service | Role |
 |---|---|
 | `roastery` | The app, version 1.0 (`app/`): a Spring Boot app in Java that roasts a batch of beans every two seconds and ships some to the coffee shop every five, counting both in Micrometer meters. The prometheus-proxy agent runs inside it, started by the project's Spring Boot starter, and reads them, with the JVM's and Tomcat's, from the app's metrics registry, in-process; Actuator exposes only its health. Its dashboard is on, at port 8495, from the environment (`PROMETHEUSPROXY_AGENT_DASHBOARD_PORT`). |
-| `proxy` | The stock proxy image, which takes its TLS certificate and key, and the agent's token, from environment variables, with no file mounted. Its agent port is reachable only on the compose network; its dashboard is on. |
+| `proxy` | The stock proxy image, which takes its TLS certificate and key, and the agent's token, from environment variables, with none of them in a file. Its agent port is reachable only on the compose network; its dashboard is on. |
 | `prometheus` | Scrapes the roastery's path through the proxy every 5s, and the proxy's own metrics. |
 
 ## Guided tour

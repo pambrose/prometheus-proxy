@@ -191,24 +191,24 @@ the proxy returning, at the cost of retry traffic that is negligible on a LAN.
 `chunks` and `scrapes` are **transient in-flight gauges**, not running totals — they count work happening
 *right now*, so at rest they sit at `0`. The number after the slash is a health threshold, not a capacity.
 
-- **scrapes `N`/800** — scrape requests currently being serviced. The proxy adds one the moment it forwards
-  a Prometheus scrape to an agent and removes it the moment the agent responds, times out, or disconnects.
-  It rises with concurrent in-flight scrapes — many paths at once, a slow endpoint, or a high scrape rate —
-  and falls back to `0` as they drain.
+- **scrapes `N`/800** — scrape requests currently being serviced. The proxy adds one for each agent it sends a
+  scrape to, a [Scrape now](#scrape-now) included, and removes it the moment the agent responds, times out, or
+  disconnects. It rises with concurrent in-flight scrapes — many paths at once, a slow endpoint, or a high scrape
+  rate — and falls back to `0` as they drain.
 - **chunks `N`/800** — large responses currently being reassembled. A response is streamed in chunks only
-  when it exceeds `agent.chunkContentSizeKbs` (default 32 KB); the proxy holds one context per such response
-  until its final chunk arrives. Small metrics payloads never touch it, so it stays `0` unless a big
-  endpoint is mid-transfer.
+  when its gzipped body reaches `agent.chunkContentSizeKbs` (default 32 KB); the proxy holds one context per
+  such response until its final chunk arrives. Small metrics payloads never touch it, so it stays `0` unless a
+  big endpoint is mid-transfer.
 
 Two things keep them near `0` in practice: each entry is removed as soon as its request completes, and the
 bar re-samples them on the refresh timer (`proxy.dashboard.refreshIntervalSecs`, ~2 s) rather than on every
 scrape — a fast scrape opens and closes well inside that window. To watch them move, point an agent at an
-endpoint larger than 32 KB (chunks) or drive concurrent or slow scrapes (scrapes), ideally with a shorter
-`refreshIntervalSecs`.
+endpoint whose body gzips to 32 KB or more, usually several hundred KB of text (chunks), or drive concurrent or
+slow scrapes (scrapes), ideally with a shorter `refreshIntervalSecs`.
 
 The `/800` is the **unhealthy threshold** (`proxy.internal.scrapeRequestMapUnhealthySize` and
 `chunkContextMapUnhealthySize`, by default 80% of `maxInFlightScrapeRequests`). When either count reaches
-it, that segment turns amber — a backpressure signal that requests are not draining: agents stuck or slow,
+it, both turn amber — a backpressure signal that requests are not draining: agents stuck or slow,
 or a leak. Green and near `0` is the healthy resting state.
 
 ## The Agents layout
@@ -398,11 +398,12 @@ What the proxy did with its agents and their paths, newest first:
 | `evicted` | the proxy removed an agent it hadn't heard from within `proxy.internal.maxAgentInactivitySecs` |
 | `registered` / `unregistered` | an agent added a path, or removed one; re-registering a path it already serves isn't news |
 | `taken over` | an agent took a path another agent of the same identity was serving, as a redeploy does |
+| `scraped now` | a browser scraped a path with [Scrape now](#scrape-now), with the result and the browser's address |
 | `rejected` | the proxy refused a path, with its reason: one its identity may not register, a malformed or overlong path, a path another identity holds, a consolidated agent and a path that isn't (or the reverse), or one past the agent's `maxPathsPerAgent` |
 | `refused` | an identity was already at `proxy.internal.maxAgentsPerIdentity`, so a connect was turned away |
 | `bad token` | a call came with no agent token or an unknown one, naming the host it came from |
 
-The last four, and `evicted`, are what **Problems only** keeps, marked in red; a take-over is marked in amber. The
+The last three, and `evicted`, are what **Problems only** keeps, marked in red; a take-over is marked in amber. The
 search works as on the Paths layout, matching the event, agent, identity, paths, and detail, and goes into the URL the
 same way, and **Column guide** explains this table's columns as it does the Paths table's.
 
@@ -475,8 +476,9 @@ environment — and it would fail when someone opens the page during an incident
 
 ## Cost
 
-The dashboard adds no work to the scrape path. Updates are driven by an internal event bus whose publish
-operation is non-blocking, so it can never delay an agent registration or a scrape.
+The dashboard adds little work to the scrape path: each scrape leaves a record in its path's history. Updates are
+driven by an internal event bus whose publish operation is non-blocking, so it can never delay an agent registration
+or a scrape.
 
 State is collected once per update and shared across every connected browser, so the cost does not scale
 with the number of open dashboards. Loading or reloading a page reuses that collection too, as long as it is
@@ -538,9 +540,10 @@ another site can't add without the proxy's permission, so a link or form elsewhe
 A login doesn't replace either guard, so the dashboard keeps both with a login set, and checks the Origin of the login
 and Log out forms as well.
 
-Sessions are also capped at `proxy.dashboard.maxSessions` (default 50), and a client that stops reading or
-sends an oversized message is disconnected. Neither list stops someone who can reach the port directly; a login does.
-Both are lists, so set them in a config file; see [Dashboard configuration](configuration/proxy.md#dashboard).
+Open pages, one WebSocket each, are also capped at `proxy.dashboard.maxSessions` (default 50), and a client that
+stops reading or sends an oversized message is disconnected. Neither list stops someone who can reach the port
+directly; a login does. Both are lists, so set them in a config file; see
+[Dashboard configuration](configuration/proxy.md#dashboard).
 
 ### Behind a reverse proxy
 
@@ -549,8 +552,9 @@ pass the WebSocket's handshake on, and the handshake has to pass the Origin chec
 passes each request as HTTP/1.0 and drops the `Upgrade` and `Connection` headers, so the dashboard answers the
 handshake with 400. With those headers but nginx's default `Host`, the upstream's name, the browser's `Origin` doesn't
 match it, and the dashboard refuses the handshake, Scrape now, and the login form with 403, and logs
-`Refused a dashboard request from origin …; add it to proxy.dashboard.allowedOrigins if expected`. Either way the page
-loads, and its [live indicator](#the-live-indicator) stays on **reconnecting…**. Pass both, and the browser's `Host`:
+`Refused a dashboard request from origin …; add it to proxy.dashboard.allowedOrigins if expected`. Either way,
+without a login the page loads and its [live indicator](#the-live-indicator) stays on **reconnecting…**; with a login,
+the login form is refused with 403, so the page never loads. Pass both, and the browser's `Host`:
 
 ```nginx
 # Connection: upgrade on a WebSocket handshake, and close on anything else.

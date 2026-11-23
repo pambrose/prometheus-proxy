@@ -106,7 +106,7 @@ Since 4.3.0, three more groups are available, also off by default:
 |:------------------------|:---------------------------------------------------------------------|
 | `success`               | Scrape completed successfully                                       |
 | `timed_out`             | Agent did not answer within the proxy's `scrapeRequestTimeoutSecs`  |
-| `upstream_timed_out`    | Agent answered, but its own fetch of the target timed out (408/504) |
+| `upstream_timed_out`    | The agent's fetch timed out, or the target answered 408 or 504      |
 | `invalid_path`          | No agent has registered the requested path                          |
 | `missing_path`          | The request had no path (a scrape of `/`)                           |
 | `agent_disconnected`    | Agent disconnected, evicted, or displaced before answering (503)    |
@@ -114,10 +114,10 @@ Since 4.3.0, three more groups are available, also off by default:
 | `proxy_in_flight_limit` | In-flight scrapes across agents hit `maxInFlightScrapeRequests`     |
 | `client_cancelled`      | Prometheus hung up before the agent answered                        |
 | `missing_results`       | Internal error: results object was null                             |
-| `path_not_found`        | Agent has no registration for the target path (404)                 |
-| `upstream_error`        | Target returned a non-2xx status not covered above, e.g. 5xx        |
+| `path_not_found`        | The agent doesn't serve the path, or the target answered 404        |
+| `upstream_error`        | Any other non-2xx from the target, or an unreachable target (503)   |
 | `invalid_response`      | Agent answered, but a chunk or summary failed validation (502)      |
-| `content_too_large`     | Target response exceeded the agent's content-length limit (413)     |
+| `content_too_large`     | Over the agent's content-length limit, or the target answered 413   |
 | `payload_too_large`     | Unzipped content exceeded the proxy's size limit                    |
 | `invalid_gzip`          | Gzip decompression failed                                           |
 | `proxy_stopped`         | Proxy is shutting down (503)                                        |
@@ -161,12 +161,16 @@ timeout, counts in `proxy_late_scrape_results_total`. The scrape itself was alre
     will usually see for a slow endpoint. The agent also stops at Prometheus's own `scrape_timeout` when that is
     shorter.
 
-    Likewise `content_too_large` is the agent's `maxContentLengthMBytes` limit, while
-    `payload_too_large` is the proxy's unzip limit. Both surface as HTTP 413.
+    Likewise `content_too_large` is the agent's `maxContentLengthMBytes` limit, or the target's own 413,
+    while `payload_too_large` is the proxy's unzip limit. Both surface as HTTP 413.
 
-    `upstream_error` is always the target's own status. A scrape the proxy fails itself names why
-    instead: `agent_disconnected` (look at the agent's connection, not the target), `proxy_stopped`,
-    or `invalid_response`.
+    The target's own non-2xx status passes through, so each agent-side label is the agent's own condition or
+    the target's same status: `path_not_found` for 404, `upstream_timed_out` for 408 or 504,
+    `content_too_large` for 413, and `upstream_error` for the rest. A target the agent couldn't reach, such as
+    a refused connection, is the agent's own 503 `upstream_error`; the agent's
+    `agent_scrape_request_count_total{type="failure"}` tells those apart. A scrape the proxy fails itself names
+    why instead: `agent_disconnected` (look at the agent's connection, not the target), `proxy_stopped`, or
+    `invalid_response`.
 
 ### Histograms
 
@@ -299,8 +303,8 @@ Prometheus --- HTTP GET ---> Proxy                        Agent
                               |                             |
                   records the start time                    |
                               |                             |
-                  queueWait.observe(age)                    |
-                  writeScrapeRequest() -- gRPC stream --> fetchScrapeUrl()
+                  writeScrapeRequest()                      |
+                  queueWait.observe(age) -- gRPC stream --> fetchScrapeUrl()
                               |                     agentLatency.startTimer()
                               |                             |
                               |                     HTTP GET to target
@@ -401,7 +405,7 @@ Key panels to monitor:
 | Section             | What to Watch                                                                         |
 |:--------------------|:--------------------------------------------------------------------------------------|
 | **Overview**          | Unexpected agent count changes; an agent not connected, or on a backup endpoint; each agent's version |
-| **Connections**       | Failure spikes indicate proxy or network issues; a rejected connect is the proxy refusing the agent   |
+| **Connections**       | Failure spikes indicate proxy or network issues; a rejected connect is the proxy refusing the agent; an agent scraped through the proxy can't be read while it can't connect, so watch its job's `up` |
 | **Scrape Activity**   | Imbalanced load; unsuccessful scrapes point at a failing target; any `dropped` result; retries; a filter letting scrapes through unfiltered |
 | **Paths & Discovery** | A path the proxy keeps refusing, by cause; a discovery file that fails to read                        |
 | **Latency**           | Per-agent latency outliers point to slow targets; queue wait climbing means too few `agent.http.maxConcurrentClients` |

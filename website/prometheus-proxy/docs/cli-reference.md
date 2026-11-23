@@ -103,7 +103,9 @@ shows in a process listing. Nor do the dashboard's login settings: a password tu
 
 As for the proxy, the `*_PEM` settings take a certificate or key as PEM text or its base64, and have no command-line
 option, nor do the dashboard's login settings (see [Agent Dashboard](agent-dashboard.md)). The `DASHBOARD_*` variables
-are the proxy's, read by whichever process reads them, as `ADMIN_*` and `METRICS_*` are.
+have the same names as the proxy's, and each process reads them for its own dashboard, as with `ADMIN_*` and
+`METRICS_*`. `--proxy` and `PROXY_HOSTNAME` replace `agent.proxy.endpoints`; with neither set, the agent reads that
+list, and reads `agent.proxy.hostname` only when it's empty.
 
 ### Agent HTTP Client Cache Options
 

@@ -64,6 +64,8 @@ docker run --detach --name prometheus-agent \
   --mount type=bind,source="$(pwd)"/prom-agent.conf,target=/app/prom-agent.conf \
   --env AGENT_CONFIG=prom-agent.conf \
   --env PROXY_HOSTNAME=proxy-host.example.com \
+  --env ADMIN_ENABLED=true \
+  --env METRICS_ENABLED=true \
   --restart unless-stopped \
   pambrose/prometheus-agent:4.7.0
 ; --8<-- [end:docker-agent-local-config]

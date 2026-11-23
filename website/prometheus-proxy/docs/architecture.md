@@ -71,7 +71,8 @@ The communication between Proxy and Agent uses a bidirectional gRPC protocol def
 
 Large metric responses are automatically split into chunks to stay within gRPC message size limits.
 
-- The agent checks if a response exceeds `chunkContentSizeKbs` (default: 32 KB)
+- The agent checks if a gzipped response reaches `chunkContentSizeKbs` (default: 32 KB); one too small to
+  gzip is never chunked
 - If so, the response is split into `ChunkedScrapeResponse` messages containing:
     - A **header** with metadata (status, content type, URL)
     - One or more **chunks** with payload bytes and CRC32 checksums
@@ -116,7 +117,10 @@ Filtering is off by default and configured per path. See
 ## Heartbeat
 
 The agent sends periodic heartbeat messages to maintain the gRPC connection during periods of
-inactivity. This prevents load balancers and firewalls from closing idle connections.
+inactivity. This prevents load balancers and firewalls from closing idle connections. A reverse proxy
+such as nginx can still close a quiet stream on the connection, so each stream also sends a keepalive
+after `proxy.internal.streamKeepAliveSecs` (default: 30s) without a message, once the agent and the
+proxy have both said at registration that they take them.
 
 ```hocon
 agent.internal {
@@ -132,7 +136,8 @@ agent.internal {
 2. **Connection** -- Agent establishes outbound gRPC connection to proxy
 3. **Registration** -- Agent registers its identity and configured paths; a path rejected because a live
    agent holds it is retried while the agent stays connected, first after `agent.internal.rejectedPathRetrySecs`
-   and then on a backoff that doubles up to `agent.internal.rejectedPathRetryMaxSecs`
+   for a static path, or `agent.discovery.reconcileIntervalSecs` for a discovered one, and then on a backoff that
+   doubles up to `agent.internal.rejectedPathRetryMaxSecs`
 4. **Operation** -- Agent processes scrape requests and sends heartbeats
 5. **Reconnection** -- On disconnect, agent automatically reconnects with rate limiting
 6. **Shutdown** -- Graceful cleanup of connections and resources

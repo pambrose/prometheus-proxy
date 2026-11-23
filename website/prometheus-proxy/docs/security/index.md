@@ -49,8 +49,9 @@ a shared **pre-shared token** so the proxy rejects agents that do not present it
 
 Both sides must use the **same** value. When set, the agent attaches the token as a gRPC metadata
 header on every call and the proxy rejects any call with a missing or mismatched token
-(`UNAUTHENTICATED`). When the token is empty (the default), the open behavior is preserved and the
-proxy logs a startup warning — unless mutual TLS is configured, which already authenticates agents.
+(`UNAUTHENTICATED`). When the token is empty (the default) and no
+[per-agent identities](#per-agent-identities-and-path-authorization) are configured, the open behavior is preserved
+and the proxy logs a startup warning — unless mutual TLS is configured, which already authenticates agents.
 The token is never logged. If a token or per-agent identities are configured without TLS, the proxy and the
 agent each log a startup warning that tokens are sent in cleartext.
 
@@ -124,10 +125,10 @@ legacy token and a `proxy.auth` identity cannot take over each other's live path
 
     `proxy.auth` is a list of objects, so it can only be set in a config file — there is no
     equivalent CLI flag or environment variable, and the `-D` property override (parsed as Java
-    properties) cannot express a list. Identity names must be unique and tokens non-empty, and no
-    identity may be named `legacy-agent-token`, the name the proxy gives the legacy shared token in its
-    logs (the dashboard shows it as *shared token*), even when `proxy.agentToken` isn't set; the proxy
-    fails fast at startup otherwise.
+    properties) cannot express a list. Identity names must be unique, tokens non-empty and distinct, from
+    each other and from `proxy.agentToken`, and no identity may be named `legacy-agent-token`, the name the
+    proxy gives the legacy shared token in its logs (the dashboard shows it as *shared token*), even when
+    `proxy.agentToken` isn't set; the proxy fails fast at startup otherwise.
 
     A token can still come from the environment, through HOCON substitution: `token = ${TEAM_A_TOKEN}`
     reads the `TEAM_A_TOKEN` variable, which keeps the tokens out of the config file. In Kubernetes, set the

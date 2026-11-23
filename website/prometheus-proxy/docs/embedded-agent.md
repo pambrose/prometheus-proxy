@@ -80,13 +80,13 @@ from Kotlin, or `EmbeddedAgentConfig.builder()` from Java, and call `start()`:
 
 ### Metrics Served In-Process
 
-An app with a metrics registry can hand it to the agent instead of serving it at a URL: `source(path, source)` takes a
-`MetricsSource`, which the agent asks for the app's metrics on each scrape, in-process. The app then needs no metrics
-endpoint, port, or credentials for the agent, and the agent opens no connection to it. Written for the Prometheus Java
-client's registry, which Micrometer's `PrometheusMeterRegistry` gives with `getPrometheusRegistry()`, it takes a few
-lines. `ExpositionFormats` is in `io.prometheus:prometheus-metrics-exposition-textformats`, which Micrometer's
-Prometheus registry and the agent bring at runtime only, so declare it, at the Prometheus Java client version your
-build already has:
+Since 4.7.0, an app with a metrics registry can hand it to the agent instead of serving it at a URL:
+`source(path, source)` takes a `MetricsSource`, which the agent asks for the app's metrics on each scrape, in-process.
+The app then needs no metrics endpoint, port, or credentials for the agent, and the agent opens no connection to it.
+Written for the Prometheus Java client's registry, which Micrometer's `PrometheusMeterRegistry` gives with
+`getPrometheusRegistry()`, it takes a few lines. `ExpositionFormats` is in
+`io.prometheus:prometheus-metrics-exposition-textformats`, which Micrometer's Prometheus registry and the agent bring at
+runtime only, so declare it, at the Prometheus Java client version your build already has:
 
 === "Kotlin"
 
@@ -110,11 +110,13 @@ build already has:
 - **A source's trouble stays in its scrape.** At the scrape timeout, the agent interrupts the call and answers without
   waiting for it; a call that ignores the interrupt, such as one blocked on a socket read, keeps its thread, and the
   source isn't called again until it returns. Whatever the source throws, an `Error` included, fails the scrape, as a
-  target that can't be reached does, and the agent goes on.
+  target that can't be reached does, and the agent goes on. Only a `VirtualMachineError`, such as `OutOfMemoryError`,
+  isn't kept to its scrape.
 - **The path's target shows as `in-process`** on both dashboards and in the agent's log, where a scraped path shows its
   URL, and Scrape now on the agent's dashboard reads the source.
-- **The path is checked as a `pathConfigs` entry is:** one that another path also names, or that the proxy would refuse,
-  fails `start()`. A source is code, so `toConfig()` leaves it out: start the agent with the builder's `start()`.
+- **The path is checked as a `pathConfigs` entry is:** one that another path also names, or that has a character the
+  proxy refuses (whitespace, a control character, `?`, or `#`), fails `start()`. A source is code, so `toConfig()`
+  leaves it out: start the agent with the builder's `start()`.
 
 ### A `Config` of Your Own
 
@@ -144,7 +146,8 @@ wire the agent yourself, run it from a bean, so it starts and stops with the app
 - **A `SmartLifecycle` bean** in the last phase, the default, starts the agent once the web server is serving, so the
   agent's first scrape finds the app's metrics, and stops it first on shutdown, before the web server drains: the
   agent disconnects, the proxy drops its paths, and no scrape reaches a server that's going away.
-- **Actuator's metrics:** with `micrometer-registry-prometheus` on the classpath, Actuator serves them at
+- **Actuator's metrics:** with `micrometer-registry-prometheus` on the classpath, and `prometheus` in
+  `management.endpoints.web.exposure.include`, which exposes only `health` by default, Actuator serves them at
   `/actuator/prometheus`, so `scrapeSelf` takes `"actuator/prometheus"` as its `metricsPath`, with the credentials the
   app's Spring Security asks for. Or the agent reads the registry in-process, with `source` and the app's
   `PrometheusRegistry` bean ([Metrics Served In-Process](#metrics-served-in-process)), and `/actuator/prometheus` needn't
@@ -220,11 +223,11 @@ returns the builder, whose methods chain and end with `build()`. A method called
 | `clientCertificatePem(certChainPem, privateKeyPem)`                | `agent.tls.certChainPem`, `agent.tls.privateKeyPem` | The agent's own certificate chain and key, as PEM or its base64, for a proxy that requires mutual TLS                                     |
 | `consolidated(consolidated)`                                       | `agent.consolidated`                                | Register the agent's paths in consolidated mode; `consolidated()` alone turns it on                                                       |
 | `agentMetrics(port)`                                               | `agent.metrics.enabled`, `agent.metrics.port`       | Turn on the agent's own metrics endpoint, which is off unless asked for                                                                   |
-| `dashboard(port, host)`                                            | `agent.dashboard.enabled`, `agent.dashboard.port`, `agent.dashboard.host` | Turn on the agent's [dashboard](agent-dashboard.md), which is off unless asked for; `host`, such as `127.0.0.1`, is optional |
-| `dashboardLogin(password, username)`                               | `agent.dashboard.password`, `agent.dashboard.username` | Require a login to the agent's dashboard; `username` defaults to `admin`                                                               |
+| `dashboard(port, host)`                                            | `agent.dashboard.enabled`, `agent.dashboard.port`, `agent.dashboard.host` | Since 4.7.0, turn on the agent's [dashboard](agent-dashboard.md), which is off unless asked for; `host`, such as `127.0.0.1`, is optional |
+| `dashboardLogin(password, username)`                               | `agent.dashboard.password`, `agent.dashboard.username` | Since 4.7.0, require a login to the agent's dashboard; `username` defaults to `admin`                                                  |
 | `scrapeSelf(path, port, username, password, metricsPath, labels)` | `agent.pathConfigs`                                 | Scrape the app at `http://127.0.0.1:<port>/<metricsPath>` (default `metrics`) and serve it at `path`; the rest are optional               |
 | `path(path, url, username, password, labels)`                      | `agent.pathConfigs`                                 | Scrape any target at `url` and serve it at `path`; the rest are optional, and the URL then carries no credentials of its own              |
-| `source(path, source)`, `source(path, labels, source)`             | none: it's code                                     | Serve what the `MetricsSource` writes at `path`, read in-process ([Metrics Served In-Process](#metrics-served-in-process)), with the path's labels or none |
+| `source(path, source)`, `source(path, labels, source)`             | none: it's code                                     | Since 4.7.0, serve what the `MetricsSource` writes at `path`, read in-process ([Metrics Served In-Process](#metrics-served-in-process)), with the path's labels or none |
 | `setting(key, value)`                                              | the key, under `agent`                              | Any other setting, such as `http.clientTimeoutSecs`; it takes precedence over a method that sets the same key                             |
 
 In `embeddedAgent { }`, `name`, `proxy`, `token`, `consolidated`, `agentMetricsPort`, and `dashboardPort` are properties
@@ -289,7 +292,8 @@ When you call `startAsyncAgent()`:
 
 Your application code runs normally while the agent handles metrics scraping in the background.
 
-The embedded agent's metrics register in the Prometheus Java client 1.x default registry
+With its metrics on (`agent.metrics.enabled`, or `agentMetrics(port)` in code), the embedded agent's metrics register
+in the Prometheus Java client 1.x default registry
 (`io.prometheus.metrics.model.registry.PrometheusRegistry.defaultRegistry`). A host that serves its own metrics
 from that registry exposes the agent's too; a host still on the 0.x client (`io.prometheus:simpleclient`) does
 not see them. Every agent in the JVM, two at once or one started again after `shutdown()`, shares one set of agent
@@ -343,7 +347,7 @@ The agent then serves these on its admin port, as the standalone agent does:
 |:---------------|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `/ping`        | `pong`, while the agent is running                                                                                                                                                                             |
 | `/version`     | The agent's version, release date, and build time, as JSON                                                                                                                                                     |
-| `/healthcheck` | The agent's health checks, as JSON: `all_services_healthy`, `scrape_request_backlog_check` (scrape requests waiting for the agent), `thread_deadlock`, and `metrics_service` when its metrics are on |
+| `/healthcheck` | The agent's health checks, as JSON: `all_services_healthy`, `scrape_request_backlog_check` (scrape requests waiting for the agent), `thread_deadlock`, `metrics_service` when its metrics are on, and `dashboard_service` when its dashboard is on |
 | `/threaddump`  | A dump of the JVM's threads, your application's as well as the agent's                                                                                                                                         |
 | `/debug`       | The agent's name, its ID (empty while it isn't connected), the proxy it's connected to or trying, its uptime, its admin and metrics services, each path with the URL it scrapes, credentials masked, and the paths discovery registered or skipped |
 

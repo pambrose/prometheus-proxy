@@ -203,7 +203,7 @@ spec:
 ; --8<-- [end:servicemonitor]
 
 ; --8<-- [start:tls-secret]
-# Bundle your certificate files into a Secret:
+# Bundle the proxy's certificate and key, and for mutual TLS the CA that signed the agents', into a Secret:
 kubectl create secret generic prometheus-proxy-tls \
   --namespace monitoring \
   --from-file=cert.pem \
@@ -212,9 +212,11 @@ kubectl create secret generic prometheus-proxy-tls \
 ; --8<-- [end:tls-secret]
 
 ; --8<-- [start:tls-mount]
-# Container spec excerpt — point the config at the mounted certs:
+# Proxy container spec excerpt — point the proxy at the mounted files:
           env:
-            - { name: PROXY_CONFIG, value: /app/tls.conf }
+            - { name: CERT_CHAIN_FILE_PATH, value: /app/certs/cert.pem }
+            - { name: PRIVATE_KEY_FILE_PATH, value: /app/certs/key.pem }
+            - { name: TRUST_CERT_COLLECTION_FILE_PATH, value: /app/certs/ca.pem }   # mutual TLS only
           volumeMounts:
             - { name: tls, mountPath: /app/certs, readOnly: true }
       volumes:

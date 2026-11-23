@@ -123,7 +123,7 @@ proxy to Prometheus, so the proxy monitors itself the same way it serves everyth
 </figure>
 
 The Paths view lists every path with the agent serving it, its target, and how its last scrape went. `/shipping_metrics`
-shows `agent-west-2 +1`, since two agents serve it. The button after a path copies its URL on the proxy, the one
+shows `agent-west-1 +1`, since two agents serve it. The button after a path copies its URL on the proxy, the one
 to curl, and the one after a target copies the target's URL.
 
 ### Each agent's own dashboard
@@ -245,7 +245,7 @@ shows it, searched here for the contractor's agent:
 The command also prints the proxy's log line:
 
 ```
-WARN  [ProxyServiceImpl.kt:335] - Agent identity 'contractor' denied registration of path /payments_metrics
+WARN  [ProxyServiceImpl.kt:360] - Agent identity 'contractor' denied registration of path /payments_metrics
 ```
 
 Payments keeps coming from agent-east, untouched. With a shared token, the newer agent would have taken the path

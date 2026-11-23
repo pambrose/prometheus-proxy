@@ -94,7 +94,7 @@ is for a laptop, not for anything shared.
 | `network-app` | The simulated services (`app/network_app.py`). Traffic follows a 5-minute "day", so the graphs move. |
 | `prometheus` | Scrapes every agent's paths through whichever proxy advertises them, every 5s with a 4s timeout, and both proxies' own metrics directly, from this side of the WAN. It loads the demo's fast alerts (`prometheus/network-alerts.yml`). |
 | `grafana` | Opens on the **Prometheus Proxy Network Demo** dashboard. |
-| `zipkin` | Every proxy and agent reports a span for each gRPC call between them but heartbeats, and each scrape's spans, under its own name. |
+| `zipkin` | Every proxy and agent reports a span for each gRPC call between them but heartbeats and the stream of path notices, and each scrape's spans, under its own name. |
 
 ## Guided tour
 
@@ -261,8 +261,9 @@ what the agent tries.
 - On agent-branch's Connection view, the line under its state counts its connects, one more with each drop, and it
   stays on branch-to-proxy:50053 with no **failed over** tag. Its Activity view shows each drop as **disconnected**,
   then **connected** and **registered**.
-- Every proxy and agent reports a span to Zipkin for each gRPC call between them but heartbeats, under its own
-  service name. In Zipkin, the search is `serviceName` = `agent-branch` and `spanName` = `proxyservice/connectagent`.
+- Every proxy and agent reports a span to Zipkin for each gRPC call between them but heartbeats and the stream of
+  path notices, under its own service name. In Zipkin, the search is `serviceName` = `agent-branch` and `spanName` =
+  `proxyservice/connectagent`.
   Open <http://localhost:9511/zipkin/?serviceName=agent-branch&spanName=proxyservice%2Fconnectagent>, which fills that search in, and click **Run Query**. Each reconnect is a `connectagent` trace,
   then `registeragent` and a `registerpath` for each path. Zipkin joins the agent's client side and the proxy's server side of each call into one span, so the
   trace names both services, and its annotations mark when the agent sent the call and the proxy answered it.

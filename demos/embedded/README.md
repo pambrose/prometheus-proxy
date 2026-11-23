@@ -24,9 +24,9 @@ flowchart TB
   end
 
   subgraph host["The proxy host"]
-    proxy["proxy<br/>TLS from PEM variables<br/>scrapes :8080, dashboard :8094"]
-    prometheus["Prometheus :9090"]
-    grafana["Grafana :3000<br/>Coffee Shop dashboard"]
+    proxy["proxy<br/>TLS from PEM variables<br/>scrapes :8380, dashboard :8394"]
+    prometheus["Prometheus :9390"]
+    grafana["Grafana :3300<br/>Coffee Shop dashboard"]
   end
 
   lb -->|"1.0, or 1.1 once<br/>1.0 has stopped"| ktor
@@ -102,7 +102,7 @@ this setup is for a laptop, not for anything shared.
 | `coffee-shop` | The app, version 1.0 (`app/`): a Ktor server whose built-in customers order over HTTP, and whose baristas brew from a queue. Its metrics, with Ktor's HTTP and the JVM's, are in a Micrometer registry, and it serves no `/metrics`. The prometheus-proxy agent runs inside it, installed with the [Ktor plugin](https://prometheus-proxy.com/ktor-plugin/) from settings the app builds in memory from its environment, and reads the registry in-process. Its admin endpoints, `/debug` among them, are on port 8393, for debugging it, and its [dashboard](https://prometheus-proxy.com/agent-dashboard/) on port 8395. |
 | `coffee-shop-next` | Not started by default. `demo.sh deploy` starts version 1.1 of the same image beside 1.0, as a rolling deploy does. Its agent's dashboard is on port 8396. |
 | `load-balancer` | Caddy (`config/Caddyfile`), the coffee shop's one address, on port 8390, as a platform's load balancer is. It sends every request to 1.0, or to 1.1 once a deploy has stopped 1.0, so the status page, the order counter, and the knobs keep answering at the same URL through a deploy. |
-| `proxy` | The stock proxy image, which takes its TLS certificate and key, and the agents' token, from environment variables, with no file mounted. Its agent port is reachable only on the compose network; its dashboard is on. |
+| `proxy` | The stock proxy image, which takes its TLS certificate and key, and the agents' token, from environment variables, with none of them in a file. Its agent port is reachable only on the compose network; its dashboard is on. |
 | `prometheus` | Scrapes the coffee shop's paths through the proxy every 5s, and the proxy's own metrics. It loads the project's alerting rules (`grafana/alerts.yml`) and the coffee shop's (`prometheus/embedded-alerts.yml`). |
 | `grafana` | Opens on the **Coffee Shop** dashboard. The project's own **Prometheus Proxy** and **Prometheus Agents** dashboards (`grafana/*.json`) are linked from its top bar. |
 

@@ -168,8 +168,9 @@ Or give them as [environment variables](#certificates-as-environment-variables),
 
 ## Override Authority
 
-For testing, when the proxy's certificate doesn't list the host name the agent dials among its subject alternative
-names:
+When the proxy's certificate doesn't list the host name the agent dials among its subject alternative names, as with
+a test certificate, or one issued to a fixed name as on [Cloud Platforms](../cloud-platforms.md#securing-the-link),
+name the one it does list:
 
 ```hocon
 agent.tls.overrideAuthority = "expected.hostname.com"

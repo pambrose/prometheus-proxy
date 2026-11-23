@@ -12,7 +12,8 @@ security, reliability, and tuning knobs documented elsewhere into one operationa
 - **Encrypt the gRPC channel with TLS**, and prefer **mutual TLS** so the proxy authenticates
   agents and vice-versa. See [TLS Setup](security/tls.md).
 - **Set an agent token** (`--agent_token` / `AGENT_TOKEN`) as a lightweight app-level control
-  in addition to TLS. An empty token leaves the agent port open and logs a startup warning.
+  in addition to TLS. An empty token, with no per-agent identities or mutual TLS, leaves the agent port open and
+  logs a startup warning.
 - **Prefer per-agent identities over one shared token.** A shared token cannot tell agents
   apart, so any holder can register — and silently take over — any path, including one already
   served by another agent. Named identities under `proxy.auth` scope each agent to its own path
@@ -94,8 +95,9 @@ its admin and metrics ports, so no restart policy ever fired. See
 
 - For **proxy** redundancy, give the agent an ordered list of proxy endpoints. It uses the first that
   accepts it, and moves to the next on a failed connect or when a proxy rejects its registration (or
-  every one of its static paths); when a registered connection drops it returns to the head of the
-  list, so a recovered primary is picked up on the next reconnect without any manual step.
+  every one of its static paths, for a cause that can't clear); when a registered connection drops it
+  returns to the head of the list, so a recovered primary is picked up on the next reconnect without any
+  manual step.
 
     ```hocon
     agent {
@@ -114,7 +116,8 @@ its admin and metrics ports, so no restart policy ever fired. See
     wrong.
 
     Failing over is quick: a refused connection, or a name that doesn't resolve, moves the agent to the
-    next endpoint at once. Two things can slow a switch:
+    next endpoint, which it tries within `agent.internal.reconnectPauseSecs` (3 seconds by default). Two
+    things can slow a switch:
 
     - An endpoint whose host is gone, rather than refusing connections, isn't known to be down until the
       connection attempt times out. That takes `agent.grpc.unaryDeadlineSecs` (`--unary_deadline_secs`,
@@ -152,19 +155,29 @@ its admin and metrics ports, so no restart policy ever fired. See
     longer exist" and **deletes** them: no `up=0`, no failed scrape, no alert. The series simply stop,
     which is the one failure mode an HA pair is supposed to make impossible.
 
-    With `static_config`, the standby returns `404` for a path it does not know, Prometheus records
-    `up=0` for that target, and your existing alerting works unchanged.
+    With `static_config`, the standby returns `404` for a path it does not know, and Prometheus records
+    `up=0` for that target, so losing the path on both proxies is a failed scrape you can alert on (below).
 
 ```yaml
 scrape_configs:
   - job_name: proxied-metrics
     static_configs:
       - targets: ["proxy-a.example.com:8080", "proxy-b.example.com:8080"]
+    # One instance for the series, whichever proxy serves them; up keeps each proxy's own
+    metric_relabel_configs:
+      - target_label: instance
+        replacement: proxied-metrics
 ```
 
-Both proxies are scraped every interval. Exactly one of them has the agent connected and returns the
-metrics; the other returns `404` and shows as `up=0`. Deduplicate in the usual Prometheus HA way
-(distinct `external_labels` plus a downstream deduplicating reader, or `honor_labels`).
+Both proxies are scraped every interval. At any moment one of them has the agent connected and returns the
+metrics; the other returns `404` and shows as `up=0`, so an alert on each target's `up == 0` fires for the standby
+all the time. Alert on the job instead, which fires only when neither proxy serves the path:
+`max by (job) (up{job="proxied-metrics"}) == 0`.
+
+The series come from whichever proxy has the agent, so their `instance` label changes when the agent fails over.
+The `metric_relabel_configs` above give them one `instance` either way, so each series carries on across a failover,
+and leave `up`, which metric relabelling doesn't touch, with each proxy's own. Or aggregate `without (instance)` in
+your queries.
 
 ## Sizing & tuning
 

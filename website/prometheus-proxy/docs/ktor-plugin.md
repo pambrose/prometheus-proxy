@@ -74,9 +74,10 @@ The install block is then left with what a file can't hold, the registry:
 --8<-- "ktor-plugin/src/test/kotlin/website/KtorPluginExample.kt:install-file"
 ```
 
-The install block runs after the file is read, so a setting it makes takes precedence. An app started with
-`embeddedServer` reads no file, so it has only the block's settings. The keys are the
-[Spring Boot Starter](spring-boot-starter.md)'s properties, and a blank value counts as unset, as an unset
+The install block runs after the file is read, so a setting it makes takes precedence, but not over a `settings.<key>`
+key, which takes precedence over the builder's methods, as anything `setting()` sets does: change one of those with
+`setting()` and its key. An app started with `embeddedServer` reads no file, so it has only the block's settings. The
+keys are the [Spring Boot Starter](spring-boot-starter.md)'s properties, and a blank value counts as unset, as an unset
 environment variable gives:
 
 | Key                        | Default                    | What it sets                                                                                                                                                                  |
@@ -84,7 +85,7 @@ environment variable gives:
 | `proxy`                    |                            | The proxy, as `host` or `host:port` (the port defaults to 50051), or several, separated by commas, in the order the agent fails over through them. Unset, the agent stays off |
 | `token`                    |                            | The token the agent presents to the proxy, which has to match the proxy's                                                                                                     |
 | `trust-certificate`        |                            | The certificate the agent trusts the proxy's by, as PEM text or its base64, which turns [TLS](security/tls.md) on                                                             |
-| `authority`                |                            | The name the proxy's certificate was issued to, when it isn't the host the agent connects to                                                                                  |
+| `authority`                |                            | The name the proxy's certificate was issued to, when it isn't the host the agent connects to; used with `trust-certificate`                                                   |
 | `client-certificate`       |                            | The agent's certificate chain, as PEM text or its base64, for a proxy that requires mutual TLS                                                                                |
 | `client-key`               |                            | The private key of `client-certificate`, as PEM text or its base64                                                                                                            |
 | `name`                     | `Unnamed-` and the host    | The agent's name, as the proxy's dashboard and logs show it                                                                                                                   |

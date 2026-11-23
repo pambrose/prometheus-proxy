@@ -51,13 +51,15 @@ Each path config entry has these fields:
 
     A `path` is one URL segment — it must not contain an embedded `/`. The proxy serves each
     registered path at `/<path>` (a one-segment route), so a multi-segment value like
-    `app/metrics` is rejected at registration (the agent logs the failure rather than reconnecting).
-    Use `app_metrics` instead.
+    `app/metrics` is rejected at registration: the agent logs the failure and keeps its other paths,
+    but reconnects if the proxy rejects every static path this way. Use `app_metrics` instead.
 
     A `path` also can't contain whitespace, a control character, `?`, or `#`: no scrape's request path
     can carry one, so Prometheus could never reach such a path. The agent refuses a `pathConfigs` entry
     with one at startup, naming it, and the proxy refuses such a path at registration. Every other
-    character is allowed, including `.`, `-`, `~`, and `:`.
+    character is allowed, including `.`, `-`, `~`, and `:`. The proxy also refuses a path it answers
+    itself: `favicon.ico`, and `proxy.service.discovery.path` or `proxy.internal.blitz.path` while
+    that feature is on.
 
     The proxy matches a scrape's path as the client sends it, without decoding percent-escapes, so
     keep a `path` to characters a client sends as they are. A client that percent-encodes one, such
@@ -74,7 +76,7 @@ paths against a **watched file** at runtime — no restart, and paths that did n
 ```hocon
 agent {
   discovery {
-    enabled = false                                    // Enable dynamic discovery
+    enabled = true                                     // Enable dynamic discovery
     file.path = "/etc/prometheus-proxy/targets.conf"   // HOCON/JSON list of paths
     reconcileIntervalSecs = 30                         // Poll and full-resync interval
   }
@@ -156,9 +158,9 @@ java -jar prometheus-agent.jar --proxy proxy-host.example.com:50051 --config age
 
 For redundancy, give the agent an ordered list of proxy endpoints instead of a single hostname. It
 uses the first that accepts it, and moves to the next on a failed connect or when a proxy rejects its
-registration (or every one of its static paths); when a registered connection drops it returns to the
-head of the list, so a recovered primary is picked up on the next reconnect. Only one connection is
-active at a time.
+registration (or every one of its static paths, for a cause that can't clear); when a registered
+connection drops it returns to the head of the list, so a recovered primary is picked up on the next
+reconnect. Only one connection is active at a time.
 
 ```hocon
 agent {
@@ -215,8 +217,8 @@ Configure how the agent makes HTTP requests to scrape endpoints:
 
 ### HTTP Client Cache
 
-The agent caches HTTP clients keyed by authentication credentials (for basic auth / bearer token
-scenarios). Configure cache behavior:
+The agent caches HTTP clients keyed by the basic auth credentials in a target's URL, if any. Configure
+cache behavior:
 
 ```hocon
 --8<-- "ConfigExamples.txt:agent-cache-config"
@@ -242,7 +244,7 @@ loaded as the agent starts, so a missing file or a wrong password fails the agen
 |:----------------------|:--------|:--------------------------------------------------|
 | `scrapeTimeoutSecs`   | 15      | Total time allowed for a scrape including retries; a shorter Prometheus scrape timeout wins, and the agent sends whichever applies to the target in `X-Prometheus-Scrape-Timeout-Seconds` |
 | `scrapeMaxRetries`    | 0       | Maximum retries; 0 disables retries               |
-| `chunkContentSizeKbs` | 32      | Chunked above this; at most 4032                  |
+| `chunkContentSizeKbs` | 32      | Gzipped result chunked at this size; at most 4032 |
 | `minGzipSizeBytes`    | 512     | Gzip-compressed above this; at most 4128768       |
 
 !!! note "Text exposition formats only"
@@ -359,13 +361,14 @@ scrape time.
     entry does not match the registered path. The `agent_filter_*` counters below are the other way to
     tell: they are only ever created for paths whose filter actually ran.
 
-Two counters, both labeled by `launch_id` and `path`, track filtering and are only created for paths
+Three counters, each labeled by `launch_id` and `path`, track filtering and are only created for paths
 that actually have a filter configured:
 
-| Metric                             | Labels              | Description                                  |
-|:-----------------------------------|:--------------------|:---------------------------------------------|
-| `agent_filter_lines_dropped_total` | `launch_id`, `path` | Exposition lines dropped by the filter       |
-| `agent_filter_bytes_saved_total`   | `launch_id`, `path` | Bytes removed from the payload by the filter |
+| Metric                             | Labels                        | Description                                  |
+|:-----------------------------------|:------------------------------|:---------------------------------------------|
+| `agent_filter_lines_dropped_total` | `launch_id`, `path`           | Exposition lines dropped by the filter       |
+| `agent_filter_bytes_saved_total`   | `launch_id`, `path`           | Bytes removed from the payload by the filter |
+| `agent_filter_fail_open_total`     | `launch_id`, `path`, `reason` | Scrapes let through unfiltered, by reason    |
 
 Not implemented: `dropLabels`, metric renaming/relabeling, and an agent-global filter -- every filter
 is per-path.

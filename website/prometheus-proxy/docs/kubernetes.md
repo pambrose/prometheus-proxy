@@ -253,8 +253,8 @@ match the `path` value from the agent `ConfigMap`.
 
 ## TLS
 
-To secure the proxy ↔ agent gRPC channel, bundle your certificates into a `Secret` and mount
-it into the proxy and agent containers:
+To secure the proxy ↔ agent gRPC channel, bundle the proxy's certificate files into a `Secret` and
+mount it into the proxy container:
 
 ```bash
 --8<-- "KubernetesExamples.txt:tls-secret"
@@ -264,7 +264,11 @@ it into the proxy and agent containers:
 --8<-- "KubernetesExamples.txt:tls-mount"
 ```
 
-The mounted config (`tls.conf`) references the certificate paths under `/app/certs`. See
+The environment variables point the proxy at the files under `/app/certs`.
+`TRUST_CERT_COLLECTION_FILE_PATH` turns on mutual TLS; leave it out for TLS without client certificates.
+The agent needs a `Secret` of its own, in its own namespace: the CA that signed the proxy's certificate,
+plus a client certificate and key for mutual TLS, given in the same three variables. Each chart's `tls`
+values (`tls.secretName` and the file names in it) set this up from such a `Secret`. See
 [TLS Setup](security/tls.md) for the full configuration, including mutual authentication.
 
 ## Health Probes & Resources
