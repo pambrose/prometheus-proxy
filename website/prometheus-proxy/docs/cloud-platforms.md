@@ -69,8 +69,8 @@ Start the agent once the app serves `/metrics`, and stop it when the app stops. 
 ```
 
 In Spring Boot, the [Spring Boot Starter](spring-boot-starter.md) starts and stops it with the app, as the
-[Spring Boot Demo](spring-boot-demo.md) shows, or a `SmartLifecycle` bean of the app's own does; see
-[In Spring Boot](embedded-agent.md#in-spring-boot).
+[Spring Boot Demo](spring-boot-demo.md) shows; [In Spring Boot](embedded-agent.md#in-spring-boot) covers doing it with
+a bean of your own.
 
 Keep the agent out of the health check the platform restarts the app on. The app serves without its agent, which
 reconnects by itself once the proxy is back, so a failed check would only restart a working app. To see whether the

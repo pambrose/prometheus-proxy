@@ -90,8 +90,7 @@ Lifecycle:
 
 Scenarios:
   settings           Show the agent's settings as Spring Boot bound them, and the agent starting
-  peek               Try /actuator/prometheus, which the roastery doesn't expose, then read its metrics through the
-                     proxy
+  peek               Show that /actuator/prometheus isn't served, then read the metrics through the proxy
   health             Show the agent in Actuator's /actuator/health: connected, and to which proxy
   versions           Compare the versions of the agent's libraries the roastery runs, which Spring Boot picked, with
                      the agent's own
@@ -474,7 +473,7 @@ cmd_tour() {
   tour_contents "Spring Boot demo"
 
   if part 1 "The roastery is a Spring Boot app, written in Java, that roasts the coffee shop's beans. The" \
-    "prometheus-proxy agent runs inside it, started by the project's Spring Boot starter from four properties in" \
+    "prometheus-proxy agent runs inside it, started by the project's Spring Boot starter from a few properties in" \
     "application.yml, with no code of the roastery's own."; then
     instruct "What runs in this demo." \
       "The roastery, one container and one JVM, with the agent inside it, and outside it the proxy and" \
@@ -504,9 +503,8 @@ cmd_tour() {
 
   if part 4 "The agent serves a dashboard of its own, from inside the roastery, which shows the agent's side of" \
     "its connection: whether it's connected, whether the proxy took its path, and the scrapes it answered. The demo" \
-    "turns it on with two environment variables the agent reads itself, DASHBOARD_ENABLED and DASHBOARD_PORT, over" \
-    "the settings the starter gives it, so the roastery didn't change. In application.yml, the starter's" \
-    "prometheus-proxy.agent.dashboard.port turns it on the same way."; then
+    "turns it on from the environment, with PROMETHEUSPROXY_AGENT_DASHBOARD_PORT, which Spring Boot binds to the" \
+    "starter's prometheus-proxy.agent.dashboard.port, so application.yml needn't change."; then
     instruct "Open the roastery agent's dashboard: $AGENT_DASHBOARD_URL" \
       "Its Paths view lists the agent's one path, /roastery_metrics, registered, with a green light. Under its" \
       "target, in-process, are the status of its last scrape and a strip of its recent ones, a new one every five" \

@@ -60,9 +60,8 @@ the versions of some of the agent's libraries (kotlinx-serialization, Jackson 2,
 agent's own; `make spring-boot-demo-check` (in CI's `consumer-check` job) builds it against the snapshot
 `consumer-check` publishes, the starter's included, and runs its `RoasteryAgentTest`, which starts the agent against a
 proxy in the same JVM and scrapes through it, so a change to the starter, or a Spring Boot release that breaks the agent
-at runtime, fails there. Its `prometheus-proxy.version` is a release version literal, the starter's, so until the
-first release that publishes the starter its `demo.sh` builds the library from the checkout, and a plain `mvn package`
-there fails.
+at runtime, fails there. Its `prometheus-proxy.version` is a release version literal; while the latest release
+predates what the demo shows, `demo.sh`'s `NEEDS_RELEASE_AFTER` has `make up` build the library from the checkout.
 
 The Spring Boot starter, `spring-boot-starter/`, is the build's one subproject (`:spring-boot-starter`), in Java,
 published alongside the agent at its version as `com.pambrose:prometheus-proxy-spring-boot-starter`: auto-configuration

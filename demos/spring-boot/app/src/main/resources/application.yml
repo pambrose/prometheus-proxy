@@ -12,13 +12,9 @@ server:
   shutdown: graceful
 
 management:
-  endpoints:
-    web:
-      exposure:
-        # Health alone: the agent reads the metrics registry in-process, so /actuator/prometheus isn't exposed
-        include: health
-  # The components' details, the agent's among them (the starter's prometheusAgent); the demo publishes the app on
-  # 127.0.0.1 only
+  # The health components' details, the agent's among them (the starter's prometheusAgent); the demo publishes the app
+  # on 127.0.0.1 only. Actuator exposes only health over HTTP, its default: the agent reads the metrics registry
+  # in-process, so /actuator/prometheus needn't be exposed.
   endpoint:
     health:
       show-details: always

@@ -40,9 +40,9 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-actuator</artifactId>
     </dependency>
-    <!-- The agent, run with the app from the prometheus-proxy.agent properties in application.yml. It brings Micrometer's
-         Prometheus registry, so Spring Boot puts the roastery's meters in a PrometheusRegistry bean, which the agent
-         reads in-process. -->
+    <!-- The agent, run with the app from the prometheus-proxy.agent properties in application.yml. It brings
+         Micrometer's Prometheus registry, so Spring Boot puts the roastery's meters in a PrometheusRegistry bean, which
+         the agent reads in-process. -->
     <dependency>
       <groupId>com.pambrose</groupId>
       <artifactId>prometheus-proxy-spring-boot-starter</artifactId>
