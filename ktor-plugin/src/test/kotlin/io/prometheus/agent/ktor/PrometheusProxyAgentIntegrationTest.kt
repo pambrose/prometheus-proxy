@@ -16,12 +16,12 @@
 
 package io.prometheus.agent.ktor
 
+import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldMatch
-import io.ktor.server.application.Application
 import io.ktor.server.application.install
 import io.ktor.server.metrics.micrometer.MicrometerMetrics
 import io.ktor.server.testing.testApplication
@@ -34,8 +34,7 @@ import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
-import java.time.Duration
-import java.time.Instant
+import kotlin.time.Duration.Companion.seconds
 
 // A Ktor app with Micrometer and the plugin, served in-process through a proxy in the same JVM: Prometheus's scrape of
 // the proxy's path reaches the app's registry, and once the app stops, the proxy no longer has the path.
@@ -55,10 +54,8 @@ class PrometheusProxyAgentIntegrationTest : StringSpec() {
     }
 
     "the proxy serves the app's metrics until the app stops" {
-      var app: Application? = null
       testApplication {
         application {
-          app = this
           val meterRegistry = PrometheusMeterRegistry(PrometheusConfig.DEFAULT)
           install(MicrometerMetrics) { registry = meterRegistry }
           Counter.builder("orders").description("Orders placed").register(meterRegistry).increment(4.0)
@@ -74,35 +71,21 @@ class PrometheusProxyAgentIntegrationTest : StringSpec() {
         }
         startApplication()
 
-        val body = scrapeWhen("/ktor_app_metrics") { it == 200 }
+        // The proxy answers 404 for the path until the agent has registered it
+        val body = eventually(30.seconds) { send(PATH).apply { statusCode() shouldBe 200 }.body() }
         // The app's own meter and one Micrometer binds for the JVM
         body shouldContain "orders_total 4.0"
         body shouldContain "jvm_threads_live_threads"
         // The path's labels, in the proxy's service discovery
         send("/discovery").body() shouldMatch Regex("""(?s).*"team":\s*"web".*""")
-        val agent = app?.prometheusProxyAgent.shouldNotBeNull()
+        val agent = application.prometheusProxyAgent.shouldNotBeNull()
         agent.isConnected shouldBe true
         agent.proxyEndpoint shouldBe "localhost:$AGENT_PORT"
       }
 
       // The agent stopped with the app and disconnected, so the proxy dropped its path
-      scrapeWhen("/ktor_app_metrics") { it == 404 }
+      eventually(30.seconds) { send(PATH).statusCode() shouldBe 404 }
     }
-  }
-
-  // The proxy answers 404 for the path until the agent has registered it, and again once it has left
-  private fun scrapeWhen(
-    path: String,
-    status: (Int) -> Boolean,
-  ): String {
-    val deadline = Instant.now().plus(Duration.ofSeconds(30))
-    var response = send(path)
-    while (!status(response.statusCode()) && Instant.now().isBefore(deadline)) {
-      Thread.sleep(250)
-      response = send(path)
-    }
-    status(response.statusCode()) shouldBe true
-    return response.body()
   }
 
   private fun send(path: String): HttpResponse<String> =
@@ -112,6 +95,8 @@ class PrometheusProxyAgentIntegrationTest : StringSpec() {
     )
 
   private companion object {
+    const val PATH = "/ktor_app_metrics"
+
     // Fixed, below the ephemeral range, where a port taken from ServerSocket(0) and bound again later can go to another
     // connection in between; the root project's TestPorts lists them (KTOR_PLUGIN_PROXY_*), so no root spec binds them.
     const val SCRAPE_PORT = 11402

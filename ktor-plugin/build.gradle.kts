@@ -98,25 +98,7 @@ mavenPublishing {
   pom {
     name.set(pluginArtifactId)
     description.set("A Ktor plugin that runs a prometheus-proxy agent with the app and serves its metrics in-process.")
-    url.set("https://github.com/pambrose/prometheus-proxy")
-    licenses {
-      license {
-        name.set("Apache License 2.0")
-        url.set("https://www.apache.org/licenses/LICENSE-2.0")
-      }
-    }
-    developers {
-      developer {
-        id.set("pambrose")
-        name.set("Paul Ambrose")
-        email.set("paul@pambrose.com")
-      }
-    }
-    scm {
-      connection.set("scm:git:git://github.com/pambrose/prometheus-proxy.git")
-      developerConnection.set("scm:git:ssh://github.com/pambrose/prometheus-proxy.git")
-      url.set("https://github.com/pambrose/prometheus-proxy")
-    }
+    // The URL, license, developer, and SCM come from the root's gradle.properties, as the root project's do
   }
 
   publishToMavenCentral(automaticRelease = true)

@@ -18,9 +18,11 @@ package io.prometheus.agent.ktor
 
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.StringSpec
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.types.shouldBeSameInstanceAs
 import io.ktor.events.Events
 import io.ktor.server.application.Application
@@ -47,40 +49,40 @@ class AgentLifecycleTest : StringSpec() {
   init {
     "the app's start starts the agent, which the app's handle then gives" {
       val app = TestApp()
-      val lifecycle = app.lifecycle(proxy = "localhost:50051")
+      val launches = app.lifecycle(proxy = "localhost:50051")
 
       app.started()
 
-      lifecycle.launched?.toString() shouldContain "endpoints=[localhost:50051]"
+      launches.single().toString() shouldContain "endpoints=[localhost:50051]"
       app.application.prometheusProxyAgent shouldBeSameInstanceAs app.agent
     }
 
     "another app's start on the same monitor, as a reload gives, starts nothing" {
       val app = TestApp()
-      val lifecycle = app.lifecycle(proxy = "localhost:50051")
+      val launches = app.lifecycle(proxy = "localhost:50051")
 
       app.events.raise(ApplicationStarted, mockk<Application>())
 
-      lifecycle.launched.shouldBeNull()
+      launches.shouldBeEmpty()
     }
 
     "a disabled agent stays off" {
       val app = TestApp()
-      val lifecycle = app.lifecycle(proxy = "localhost:50051") { enabled = false }
+      val launches = app.lifecycle(proxy = "localhost:50051") { enabled = false }
 
       app.started()
 
-      lifecycle.launched.shouldBeNull()
+      launches.shouldBeEmpty()
       app.application.prometheusProxyAgent.shouldBeNull()
     }
 
     "without a proxy the agent stays off" {
       val app = TestApp()
-      val lifecycle = app.lifecycle(proxy = null)
+      val launches = app.lifecycle(proxy = null)
 
       app.started()
 
-      lifecycle.launched.shouldBeNull()
+      launches.shouldBeEmpty()
       app.application.prometheusProxyAgent.shouldBeNull()
     }
 
@@ -94,11 +96,11 @@ class AgentLifecycleTest : StringSpec() {
 
     "a path without a registry still starts the agent" {
       val app = TestApp()
-      val lifecycle = app.lifecycle(proxy = "localhost:50051") { path = "unused_metrics" }
+      val launches = app.lifecycle(proxy = "localhost:50051") { path = "unused_metrics" }
 
       app.started()
 
-      lifecycle.launched?.toString()?.contains("unused_metrics") shouldBe false
+      launches.single().toString() shouldNotContain "unused_metrics"
     }
 
     "an agent that can't start stays off" {
@@ -198,14 +200,14 @@ class AgentLifecycleTest : StringSpec() {
 
     "once the app stops, its handlers are gone, so the next app's start starts nothing more" {
       val app = TestApp()
-      val lifecycle = app.lifecycle(proxy = "localhost:50051")
+      val launches = app.lifecycle(proxy = "localhost:50051")
       app.started()
       app.events.raise(ApplicationStopping, app.application)
       app.events.raise(ApplicationStopped, app.application)
 
       app.started()
 
-      lifecycle.launches shouldBe 1
+      launches.size shouldBe 1
     }
   }
 
@@ -229,24 +231,19 @@ class AgentLifecycleTest : StringSpec() {
       failure: Exception? = null,
       stopTimeoutMillis: Long = 5_000,
       configure: PrometheusProxyAgentConfig.() -> Unit = {},
-    ): Launches {
+    ): List<EmbeddedAgentConfig> {
       val config = PrometheusProxyAgentConfig(MapApplicationConfig()).apply {
         proxy?.also { agent { this.proxy = it } }
       }
       config.configure()
-      val launches = Launches()
+      // The settings of each launch, a failed one's included
+      val launches = mutableListOf<EmbeddedAgentConfig>()
       AgentLifecycle(application = application, config = config, stopTimeoutMillis = stopTimeoutMillis) { settings ->
-        launches.launches++
+        launches += settings
         failure?.also { throw it }
-        launches.launched = settings
         agent
       }.subscribe()
       return launches
     }
-  }
-
-  private class Launches {
-    var launched: EmbeddedAgentConfig? = null
-    var launches = 0
   }
 }

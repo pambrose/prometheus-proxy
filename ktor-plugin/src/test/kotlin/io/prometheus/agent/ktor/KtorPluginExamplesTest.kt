@@ -24,7 +24,6 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
-import io.ktor.server.application.Application
 import io.ktor.server.config.HoconApplicationConfig
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
@@ -32,73 +31,49 @@ import io.prometheus.metrics.model.registry.PrometheusRegistry
 import website.agentHealth
 import website.module
 import website.moduleWithFileSettings
-import java.net.ServerSocket
 
 // The docs site's Ktor Plugin page shows website/KtorPluginExample.kt and website/application.conf: they do what the
 // page says.
 class KtorPluginExamplesTest : StringSpec() {
   init {
     "the page's module runs without the agent where PROMETHEUS_PROXY isn't set, and its health says so" {
-      var app: Application? = null
       testApplication {
-        application {
-          app = this
-          module()
-        }
+        application { module() }
 
         // The tests' environment has no PROMETHEUS_PROXY
         client.get("/health/agent").bodyAsText() shouldBe "off"
-        app?.prometheusProxyAgent.shouldBeNull()
+        application.prometheusProxyAgent.shouldBeNull()
       }
     }
 
     "the page's application.conf starts the agent with the environment's proxy, serving the registry at its path" {
-      val proxy = "localhost:${ServerSocket(0).use { it.localPort }}"
-      // As Ktor loads application.conf, whose ${?…} substitutions read the environment and system properties
-      val file =
-        ConfigFactory
-          .parseResources("website/application.conf")
-          .withFallback(
-            ConfigFactory.parseMap(mapOf("PROMETHEUS_PROXY" to proxy, "PROMETHEUS_AGENT_TOKEN" to "s3cret")),
-          )
-          .resolve()
-      var app: Application? = null
+      val proxy = "localhost:${closedPort()}"
       testApplication {
-        environment { config = HoconApplicationConfig(file) }
+        environment { config = pageConfig("PROMETHEUS_PROXY" to proxy, "PROMETHEUS_AGENT_TOKEN" to "s3cret") }
         application {
-          app = this
           moduleWithFileSettings()
           routing { agentHealth() }
         }
 
         // The proxy is a port nothing listens on, so the agent keeps trying to connect
         client.get("/health/agent").bodyAsText() shouldBe "connecting"
-        app?.prometheusProxyAgent.shouldNotBeNull().agentName shouldBe "my-app"
+        application.prometheusProxyAgent.shouldNotBeNull().agentName shouldBe "my-app"
       }
     }
 
     "the page's application.conf leaves the agent off without PROMETHEUS_PROXY" {
-      val file = ConfigFactory.parseResources("website/application.conf").resolve()
-      var app: Application? = null
       testApplication {
-        environment { config = HoconApplicationConfig(file) }
-        application {
-          app = this
-          moduleWithFileSettings()
-        }
+        environment { config = pageConfig() }
+        application { moduleWithFileSettings() }
         startApplication()
 
-        app?.prometheusProxyAgent.shouldBeNull()
+        application.prometheusProxyAgent.shouldBeNull()
       }
     }
 
     "the page's application.conf builds the settings the page describes" {
-      val file =
-        ConfigFactory
-          .parseResources("website/application.conf")
-          .withFallback(ConfigFactory.parseMap(mapOf("PROMETHEUS_PROXY" to "proxy.example.com:50051")))
-          .resolve()
-      val config = PrometheusProxyAgentConfig(HoconApplicationConfig(file).config("prometheus-proxy.agent"))
+      val config =
+        PrometheusProxyAgentConfig(pageConfig("PROMETHEUS_PROXY" to "proxy.example.com:50051").config(SECTION))
       config.registry = PrometheusRegistry()
 
       val shown = config.builder().build().toString()
@@ -108,5 +83,19 @@ class KtorPluginExamplesTest : StringSpec() {
       shown shouldContain "sources={my_app_metrics=in-process}"
       config.labels shouldBe mapOf("team" to "web")
     }
+  }
+
+  private companion object {
+    const val SECTION = "prometheus-proxy.agent"
+
+    // The page's application.conf, as Ktor loads it, with env standing in for the environment its ${?…} substitutions
+    // read
+    fun pageConfig(vararg env: Pair<String, String>) =
+      HoconApplicationConfig(
+        ConfigFactory
+          .parseResources("website/application.conf")
+          .withFallback(ConfigFactory.parseMap(env.toMap()))
+          .resolve(),
+      )
   }
 }

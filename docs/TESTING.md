@@ -1113,8 +1113,8 @@ count them. `TestingGuideTest` reads only the root project's specs, so name new 
   that isn't a boolean or a number; the registry served at its path, and refused without one; the install block's
   settings taking precedence, and every `agent { }` block running in turn.
 - **PrometheusProxyAgentPluginTest** — the plugin in a `testApplication`, with a real agent pointed at a port nothing
-  listens on: off without a proxy, or when the file disables it; started by the file's proxy or the install block's,
-  and stopped with the app; off on a setting it rejects, which fails the app's start when required, as no proxy does.
+  listens on (`closedPort()`, in **TestSupport.kt**): started by the file's proxy or the install block's, and stopped
+  with the app; off when the file disables it; off on a setting it rejects, which fails the app's start when required.
 - **PrometheusProxyAgentIntegrationTest** — a `testApplication` with Micrometer and the plugin, its agent pointed at a
   proxy in the same JVM on fixed ports that the root project's `TestPorts` lists (`KTOR_PLUGIN_PROXY_*`): the proxy
   serves the app's meter and Micrometer's JVM metrics at `/ktor_app_metrics`, its service discovery has the path's

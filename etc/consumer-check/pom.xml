@@ -80,12 +80,27 @@
       </dependencies>
       <build>
         <plugins>
-          <!-- The Ktor plugin's examples, which its own tests run, under ktor-plugin/ -->
+          <!-- Only the Ktor plugin's examples, which its own tests run, under ktor-plugin/: the agent's examples compile
+               without the profile, so they still catch a dependency only the plugin brings. -->
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>default-compile</id>
+                <phase>none</phase>
+              </execution>
+            </executions>
+          </plugin>
           <plugin>
             <groupId>org.jetbrains.kotlin</groupId>
             <artifactId>kotlin-maven-plugin</artifactId>
             <version>${kotlin.version}</version>
             <executions>
+              <execution>
+                <id>compile</id>
+                <phase>none</phase>
+              </execution>
               <execution>
                 <id>ktor-examples</id>
                 <phase>compile</phase>

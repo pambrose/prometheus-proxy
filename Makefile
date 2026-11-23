@@ -37,11 +37,15 @@ HOMEBREW_TAP_DIR ?= ../homebrew-tap
 HOMEBREW_FORMULAE := prometheus-agent prometheus-proxy
 # `make release` publishes only from a clean, up-to-date checkout of this branch whose GitHub CI has passed.
 RELEASE_BRANCH ?= master
-MAVEN_CENTRAL_URL := https://repo1.maven.org/maven2/com/pambrose/prometheus-proxy
-# The Spring Boot starter (spring-boot-starter/), which every publish releases alongside the agent, at its version
-STARTER_MAVEN_CENTRAL_URL := https://repo1.maven.org/maven2/com/pambrose/prometheus-proxy-spring-boot-starter
-# The Ktor plugin (ktor-plugin/), which every publish releases alongside the agent, at its version
-KTOR_MAVEN_CENTRAL_URL := https://repo1.maven.org/maven2/com/pambrose/prometheus-proxy-ktor
+# The artifacts every publish releases to Maven Central, as com.pambrose:<artifact>, at one version: the agent, the
+# Spring Boot starter (spring-boot-starter/), and the Ktor plugin (ktor-plugin/). release-check, the release's
+# confirmation, and the version checks read them from here.
+MAVEN_ARTIFACTS := prometheus-proxy prometheus-proxy-spring-boot-starter prometheus-proxy-ktor
+MAVEN_CENTRAL_URL := https://repo1.maven.org/maven2/com/pambrose
+# The artifacts as an extended regex alternation, (prometheus-proxy|...)
+empty :=
+space := $(empty) $(empty)
+MAVEN_ARTIFACTS_PATTERN := ($(subst $(space),|,$(MAVEN_ARTIFACTS)))
 # The files step 2 of docs/RELEASE.md bumps to the new version; release-check fails if one doesn't mention VERSION, or
 # still has the previous release's version where step 2 bumps it. Keep this list in step with that step.
 RELEASE_VERSION_FILES := README.md llms.txt etc/compose/proxy.yml examples/cloud-proxy/docker-compose.yml \
@@ -511,7 +515,7 @@ reports: coverage  ## Alias for `coverage`
 # ends at a letter or digit, so a sentence's full stop isn't part of it, and starts with a digit, so latest isn't a
 # version.
 site-version:  ## Print the version the docs site advertises in its image tags and Maven coordinate
-	@versions=$$(grep -rhoE '(pambrose/prometheus-(proxy|agent)|com\.pambrose:prometheus-proxy(-spring-boot-starter|-ktor)?):[0-9]([0-9A-Za-z.-]*[0-9A-Za-z])?' \
+	@versions=$$(grep -rhoE '(pambrose/prometheus-(proxy|agent)|com\.pambrose:$(MAVEN_ARTIFACTS_PATTERN)):[0-9]([0-9A-Za-z.-]*[0-9A-Za-z])?' \
 		$(SITE_VERSION_SOURCES) | sed 's/.*://' | sort -u); \
 	[ -n "$$versions" ] \
 		|| { echo "ERROR: no image tag or Maven coordinate in $(SITE_VERSION_SOURCES) gives a version" >&2; exit 1; }; \
@@ -615,7 +619,7 @@ release-check: _require-version _check-gpg-env _check-maven-central-env  ## Fail
 	@prev=$$(awk -v h='## [$(VERSION)]' 'f && /^## \[/ { sub(/^## \[/, ""); sub(/\].*/, ""); print; exit } index($$0, h) == 1 { f = 1 }' CHANGELOG.md); \
 	[ -n "$$prev" ] || { echo "ERROR: CHANGELOG.md has no release section below [$(VERSION)]" >&2; exit 1; }; \
 	p=$$(printf '%s' "$$prev" | sed 's/\./\\./g'); \
-	stale=$$(grep -nE "prometheus-(proxy|agent)(-spring-boot-starter|-ktor)?:$$p([^0-9.]|\$$)|<version>$$p</version>|^(version: $$p|appVersion: \"$$p\")\$$|e\.g\., \`$$p\`|\`$$p\` literal|--branch $$p( |\$$)" \
+	stale=$$(grep -nE "(prometheus-(proxy|agent)|$(MAVEN_ARTIFACTS_PATTERN)):$$p([^0-9.]|\$$)|<version>$$p</version>|^(version: $$p|appVersion: \"$$p\")\$$|e\.g\., \`$$p\`|\`$$p\` literal|--branch $$p( |\$$)" \
 		$(RELEASE_VERSION_FILES) | sed 's/^/  /'); \
 	[ -z "$$stale" ] || { printf 'ERROR: still at the previous version, %s (step 2 of docs/RELEASE.md):\n%s\n' "$$prev" "$$stale" >&2; exit 1; }
 	@tagged=$$(git rev-parse -q --verify "refs/tags/$(VERSION)^{commit}"); \
@@ -641,12 +645,10 @@ release-check: _require-version _check-gpg-env _check-maven-central-env  ## Fail
 	missing=$$(echo '$(RELEASE_REQUIRED_JOBS)' | tr ';' '\n' | sed 's/^ *//' | while read -r job; do \
 		echo "$$jobs" | grep -qFx "$$job success" || echo "  $$job"; done); \
 	[ -z "$$missing" ] || { printf 'ERROR: required CI jobs have not passed for HEAD:\n%s\n' "$$missing" >&2; exit 1; }
-	@! curl -fsI "$(MAVEN_CENTRAL_URL)/$(VERSION)/prometheus-proxy-$(VERSION).pom" >/dev/null 2>&1 \
-		|| { echo "ERROR: com.pambrose:prometheus-proxy:$(VERSION) is already on Maven Central; bump the version" >&2; exit 1; }
-	@! curl -fsI "$(STARTER_MAVEN_CENTRAL_URL)/$(VERSION)/prometheus-proxy-spring-boot-starter-$(VERSION).pom" >/dev/null 2>&1 \
-		|| { echo "ERROR: com.pambrose:prometheus-proxy-spring-boot-starter:$(VERSION) is already on Maven Central; bump the version" >&2; exit 1; }
-	@! curl -fsI "$(KTOR_MAVEN_CENTRAL_URL)/$(VERSION)/prometheus-proxy-ktor-$(VERSION).pom" >/dev/null 2>&1 \
-		|| { echo "ERROR: com.pambrose:prometheus-proxy-ktor:$(VERSION) is already on Maven Central; bump the version" >&2; exit 1; }
+	@for a in $(MAVEN_ARTIFACTS); do \
+		! curl -fsI "$(MAVEN_CENTRAL_URL)/$$a/$(VERSION)/$$a-$(VERSION).pom" >/dev/null 2>&1 \
+			|| { echo "ERROR: com.pambrose:$$a:$(VERSION) is already on Maven Central; bump the version" >&2; exit 1; }; \
+	done
 	@for c in proxy agent; do \
 		! docker buildx imagetools inspect $(IMAGE_PREFIX)-$$c:$(VERSION) >/dev/null 2>&1 \
 			|| { echo "ERROR: $(IMAGE_PREFIX)-$$c:$(VERSION) is already published; bump the version" >&2; exit 1; }; \
@@ -655,9 +657,9 @@ release-check: _require-version _check-gpg-env _check-maven-central-env  ## Fail
 
 _confirm-release:
 	@echo "About to publish $(VERSION). A Maven Central release can't be removed."
-	@echo "  Maven Central: com.pambrose:prometheus-proxy:$(VERSION)"
-	@echo "                 com.pambrose:prometheus-proxy-spring-boot-starter:$(VERSION)"
-	@echo "                 com.pambrose:prometheus-proxy-ktor:$(VERSION)"
+	@label="  Maven Central:"; for a in $(MAVEN_ARTIFACTS); do \
+		printf '%-16s com.pambrose:%s:%s\n' "$$label" "$$a" "$(VERSION)"; label=""; \
+	done
 	@echo "  Docker Hub:    $(IMAGE_PREFIX)-proxy and $(IMAGE_PREFIX)-agent, tagged $(VERSION) and latest"
 	@echo "                 for $(PLATFORMS)"
 	@printf 'Continue? [y/N] ' && read ans && [ "$$ans" = "y" ] || { echo "Nothing published."; exit 1; }

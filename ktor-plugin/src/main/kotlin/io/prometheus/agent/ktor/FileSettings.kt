@@ -20,13 +20,13 @@ import io.ktor.server.config.ApplicationConfig
 import io.prometheus.agent.EmbeddedAgentConfig
 import io.prometheus.common.ConfigLoadException
 
-// The prometheus-proxy.agent section of the app's configuration file, read through Ktor's ApplicationConfig, so HOCON,
-// YAML, and a MapApplicationConfig read alike. Each value is read as text, as YAML and a MapApplicationConfig hold it,
-// and a blank one counts as unset, as an unset environment variable gives.
+// The prometheus-proxy.agent section of the app's configuration file, or one of its paths entries, read through Ktor's
+// ApplicationConfig, so HOCON, YAML, and a MapApplicationConfig read alike. Each value is read as text, as YAML and a
+// MapApplicationConfig hold it, and a blank one counts as unset, as an unset environment variable gives.
 internal class FileSettings(
   private val config: ApplicationConfig,
 ) {
-  fun string(key: String): String? = string(config, key)
+  fun string(key: String): String? = config.propertyOrNull(key)?.getString()?.takeUnless { it.isBlank() }
 
   fun boolean(key: String): Boolean? =
     string(key)?.let { it.toBooleanStrictOrNull() ?: invalid("$SECTION.$key must be true or false: $it") }
@@ -34,7 +34,7 @@ internal class FileSettings(
   fun int(key: String): Int? = string(key)?.let { it.toIntOrNull() ?: invalid("$SECTION.$key must be a number: $it") }
 
   // A section of keys and values, such as labels, its nested keys joined with dots
-  fun stringMap(key: String): Map<String, String> = stringMap(config, key)
+  fun stringMap(key: String): Map<String, String> = section(key).mapValues { it.value.toString() }
 
   // The file's settings, as the Spring Boot starter applies its properties: who the agent is and how it reaches the
   // proxy, what it serves of its own, the targets it scrapes, then settings, any other agent setting by its key.
@@ -43,14 +43,14 @@ internal class FileSettings(
     features(builder)
     targets().forEach { target ->
       builder.path(
-        path = string(target, "path").orEmpty(),
-        url = string(target, "url").orEmpty(),
-        username = string(target, "username"),
-        password = string(target, "password"),
-        labels = stringMap(target, "labels"),
+        path = target.string("path").orEmpty(),
+        url = target.string("url").orEmpty(),
+        username = target.string("username"),
+        password = target.string("password"),
+        labels = target.stringMap("labels"),
       )
     }
-    section(config, "settings").forEach { (key, value) -> builder.setting(key = key, value = value) }
+    section("settings").forEach { (key, value) -> builder.setting(key = key, value = value) }
   }
 
   private fun connection(builder: EmbeddedAgentConfig.Builder) {
@@ -74,26 +74,18 @@ internal class FileSettings(
   }
 
   // The paths list's targets, or none when the file has no paths
-  private fun targets(): List<ApplicationConfig> = if (has(config, "paths")) config.configList("paths") else emptyList()
+  private fun targets(): List<FileSettings> =
+    if (has("paths")) config.configList("paths").map(::FileSettings) else emptyList()
+
+  // A section's values by their keys, its nested sections' joined with dots, as the agent's settings take them
+  private fun section(key: String): Map<String, Any> =
+    if (has(key)) flattened(config.config(key).toMap()) else emptyMap()
+
+  // Whether the file has a value or a section at key: Ktor's configs differ in whether a missing one throws
+  private fun has(key: String): Boolean = config.keys().any { it == key || it.startsWith("$key.") }
 
   private companion object {
     const val SECTION = "prometheus-proxy.agent"
-
-    fun string(
-      config: ApplicationConfig,
-      key: String,
-    ): String? = config.propertyOrNull(key)?.getString()?.takeUnless { it.isBlank() }
-
-    fun stringMap(
-      config: ApplicationConfig,
-      key: String,
-    ): Map<String, String> = section(config, key).mapValues { it.value.toString() }
-
-    // A section's values by their keys, its nested sections' joined with dots, as the agent's settings take them
-    fun section(
-      config: ApplicationConfig,
-      key: String,
-    ): Map<String, Any> = if (has(config, key)) flattened(config.config(key).toMap()) else emptyMap()
 
     fun flattened(
       values: Map<String, Any?>,
@@ -114,12 +106,6 @@ internal class FileSettings(
           }
         }
       }
-
-    // Whether the file has a value or a section at key: Ktor's configs differ in whether a missing one throws
-    fun has(
-      config: ApplicationConfig,
-      key: String,
-    ): Boolean = config.keys().any { it == key || it.startsWith("$key.") }
 
     fun invalid(message: String): Nothing = throw ConfigLoadException(message)
   }
