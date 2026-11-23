@@ -51,9 +51,11 @@ fun Application.coffeeShop(port: Int) {
   // goes first: it configures the registry, which Micrometer wants done before any meter is registered.
   val registry = PrometheusMeterRegistry(PrometheusConfig.DEFAULT)
   install(MicrometerMetrics) { this.registry = registry }
-  val shop = CoffeeShop(ShopMetrics(registry))
+
   // The agent reads the registry in-process for each scrape, so the app serves no /metrics (PrometheusAgent.kt)
   installPrometheusAgent(registry, version)
+
+  val shop = CoffeeShop(ShopMetrics(registry))
 
   routing {
     shopRoutes(shop)
