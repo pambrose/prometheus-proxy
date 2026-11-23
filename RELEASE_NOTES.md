@@ -59,9 +59,13 @@ _Not yet released_
   the target took and how often the agent retried it, and why a scrape failed. Set `sampleRate` under
   `proxy.internal.zipkin` and `agent.internal.zipkin` to keep a share of traces instead of all of them.
 - **Nginx's defaults are enough.** A current agent and proxy keep their streams open with a keepalive every 30
-  seconds, so nginx's default 60-second timeouts no longer cut off an agent that isn't scraped for a minute. For a
-  reverse proxy with a shorter idle timeout, lower `proxy.internal.streamKeepAliveSecs`. Agents and proxies from 4.6.1
-  or earlier don't send them, so with one of those on either end, still raise nginx's timeouts.
+  seconds, so nginx's default 60-second timeouts no longer cut off an agent every minute. For a reverse proxy with a
+  shorter idle timeout, lower `proxy.internal.streamKeepAliveSecs`. Agents and proxies from 4.6.1 or earlier don't
+  send them, so with one of those on either end, still raise nginx's timeouts.
+- **An nginx demo.** A new demo puts nginx between the agents and the proxy, ending the agents' TLS, and in front of
+  the dashboard. Its tour shows an agent from 4.6.0 cut off by nginx's timeouts every minute, a reload of nginx that
+  doesn't reach a connected agent until `worker_shutdown_timeout` is set, a stream timeout shorter than the keepalive,
+  and what nginx has to pass on for the dashboard's live updates.
 
 ### Bug Fixes
 
@@ -98,9 +102,12 @@ _Not yet released_
 
 ### Documentation
 
-- **Nginx's stream timeouts.** With nginx's defaults, an agent behind it that isn't scraped for a minute is cut off and
-  reconnects every minute, and a scrape can fail while its paths are gone. The nginx example now raises
+- **Nginx's stream timeouts.** With nginx's defaults, an agent behind it is cut off and reconnects every minute, even
+  while it's scraped, and a scrape can fail while its paths are gone. The nginx example now raises
   `grpc_read_timeout` and `client_body_timeout`, and the Advanced Topics page explains why both are needed.
+- **Behind nginx: reloads, TLS, and the dashboard.** The Advanced Topics page explains why a reload of nginx doesn't
+  reach a connected agent and how `worker_shutdown_timeout` fixes it, and what an agent needs to reach an nginx that
+  ends its TLS; the Dashboard page, what nginx has to pass on for the dashboard's live updates.
 
 ## 4.6.1
 

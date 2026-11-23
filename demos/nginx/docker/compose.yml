@@ -1,0 +1,149 @@
+# The Prometheus Proxy nginx demo: a proxy with its dashboard, nginx in front of it, two agents behind a simulated
+# firewall that reach the proxy only through nginx, one of this release, with a dashboard of its own, and one of 4.6.0,
+# a set of simulated services, and Prometheus. See ../README.md. From demos/nginx:
+#
+#   make up        # starts everything, with the proxy and agent of the latest release, from Docker Hub
+#   make up-local  # the same, with the proxy and agent built from this checkout
+#   make down      # stops it and removes its containers and network
+#
+# Compose resolves every relative path here against this file's directory, demos/nginx/docker: the demo's configs are
+# one level up, and the repository root three.
+#
+# Every published port binds to 127.0.0.1 only: the dashboards have no login, which suits a demo on a laptop and
+# nothing else. Each default port is the basics demo's plus 500, so the demos can run at once. Set
+# NGINX_DEMO_DASHBOARD_PORT, NGINX_DEMO_NGINX_PORT, NGINX_DEMO_AGENT_DASHBOARD_PORT, NGINX_DEMO_PROXY_PORT, or
+# NGINX_DEMO_PROMETHEUS_PORT to move a host port that's already taken.
+
+name: prometheus-proxy-nginx-demo
+
+# What both agents wait for: nginx passing requests to the proxy, and the services they scrape.
+x-agent-depends-on: &agent-depends-on
+  nginx:
+    condition: service_healthy
+  nginx-app:
+    condition: service_healthy
+
+services:
+  proxy:
+    image: prometheus-proxy-demo/proxy:local
+    build:
+      context: ../../..
+      dockerfile: etc/docker/proxy.Dockerfile
+    hostname: proxy
+    # The stream keepalive interval has no environment variable, so it's a -D option, which the image passes to the
+    # proxy. `demo.sh keepalive <secs>` recreates the proxy with NGINX_DEMO_KEEPALIVE_SECS set.
+    command: ["-Dproxy.internal.streamKeepAliveSecs=${NGINX_DEMO_KEEPALIVE_SECS:-30}"]
+    environment:
+      PROXY_CONFIG: /app/proxy.conf
+    volumes:
+      - ../config/proxy.conf:/app/proxy.conf:ro
+    # Its agent port, 50051, is published nowhere: only nginx reaches it, on the demo's network.
+    ports:
+      - "127.0.0.1:${NGINX_DEMO_DASHBOARD_PORT:-8594}:8094"  # The dashboard, directly
+      - "127.0.0.1:${NGINX_DEMO_PROXY_PORT:-8580}:8080"      # Scrape port: /discovery and each path, for curl
+    restart: on-failure
+
+  # The reverse proxy: the agents' entrance, TLS on 443, which passes their gRPC calls to the proxy's agent port, and
+  # the dashboard's entrance, on 8090, which passes to the proxy's dashboard. Each is a file in conf.d copied from a
+  # variant in ../nginx, which is mounted read-only: the command below puts the stock ones in place when the container
+  # is created, and leaves them alone when it restarts, and demo.sh copies others in and reloads nginx. The main config
+  # is the image's own with one include added, of main.d, where `demo.sh nginx-shutdown-timeout` puts a setting. The
+  # image's default.conf goes, and its entrypoint's setup scripts, which edit that file, don't run, since the command
+  # isn't nginx itself. The certificate is the repository's test certificate, which names *.test.google.fr, so the
+  # agents dial nginx by a name it covers, its alias below.
+  nginx:
+    image: nginx:1.31-alpine@sha256:713fc2ebfd92e8217db451477182ee91944b123d2b1ee9fd5a8c6e91ca6c3a11
+    command:
+      - sh
+      - -c
+      - >-
+        mkdir -p /etc/nginx/main.d
+        && rm -f /etc/nginx/conf.d/default.conf
+        && { [ -f /etc/nginx/conf.d/agents.conf ]
+        || cp /etc/nginx/demo/agents-stock.conf /etc/nginx/conf.d/agents.conf; }
+        && { [ -f /etc/nginx/conf.d/dashboard.conf ]
+        || cp /etc/nginx/demo/dashboard-stock.conf /etc/nginx/conf.d/dashboard.conf; }
+        && exec nginx -g 'daemon off;'
+    volumes:
+      - ../nginx:/etc/nginx/demo:ro
+      - ../nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ../../../testing/certs/server1.pem:/etc/nginx/certs/server1.pem:ro
+      - ../../../testing/certs/server1.key:/etc/nginx/certs/server1.key:ro
+    networks:
+      default:
+        aliases:
+          - nginx.test.google.fr
+    ports:
+      - "127.0.0.1:${NGINX_DEMO_NGINX_PORT:-8590}:8090"  # The dashboard, through nginx
+    depends_on:
+      - proxy
+    # Healthy once it passes a request through to the proxy's dashboard, so the agents start once both are up. The
+    # address is IPv4's, which nginx listens on: wget would try localhost's IPv6 address first.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8090/dashboard"]
+      interval: 2s
+      timeout: 2s
+      retries: 60
+    restart: on-failure
+
+  # The agent of this release: the latest release's image, which demo.sh pulls and tags as this one (make up), or one
+  # built from this checkout's agent jar (make up-local, which builds with --build). The other demos run the same tag,
+  # so they don't keep two copies of it. Its dashboard listens on the port its config sets (agent.dashboard.port),
+  # published here on the same port, since a dashboard names its session cookie for the port it listens on.
+  agent-current:
+    image: prometheus-proxy-demo/agent:local
+    build:
+      context: ../../..
+      dockerfile: etc/docker/agent.Dockerfile
+    hostname: storefront-01
+    environment:
+      AGENT_CONFIG: /app/agent.conf
+    volumes:
+      - ../config/agent-current.conf:/app/agent.conf:ro
+      - ../../../testing/certs/ca.pem:/certs/ca.pem:ro
+    ports:
+      - "127.0.0.1:${NGINX_DEMO_AGENT_DASHBOARD_PORT:-8595}:8595"  # agent-current's dashboard
+    depends_on: *agent-depends-on
+    restart: on-failure
+
+  # An agent of release 4.6.0, which predates the stream keepalives, pinned here whatever the latest release is, and
+  # left alone by Dependabot (.github/dependabot.yml). It has no dashboard: 4.6.0's agent has none.
+  agent-legacy:
+    image: pambrose/prometheus-agent:4.6.0@sha256:283aa633dcc0b243db067078b3fbd346a5ae7725a91f2d1152a34d67da2e6729
+    hostname: warehouse-01
+    environment:
+      AGENT_CONFIG: /app/agent.conf
+    volumes:
+      - ../config/agent-legacy.conf:/app/agent.conf:ro
+      - ../../../testing/certs/ca.pem:/certs/ca.pem:ro
+    depends_on: *agent-depends-on
+    restart: on-failure
+
+  # The applications behind the firewall, simulated (app/nginx_app.py).
+  nginx-app:
+    image: python:3.15-alpine@sha256:0f9552bb28711333da16915ec146f5e6bb44a7fdac9ced15dc17c2e0206346dd
+    command: ["python", "-u", "/app/nginx_app.py"]
+    volumes:
+      - ../app:/app:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+    restart: on-failure
+
+  # The same image, digest included, as PROMETHEUS_IMAGE in the root Makefile.
+  prometheus:
+    image: prom/prometheus:v3.14.0@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0
+    volumes:
+      - ../prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "127.0.0.1:${NGINX_DEMO_PROMETHEUS_PORT:-9590}:9090"
+    depends_on:
+      - proxy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:9090/-/ready"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    restart: on-failure

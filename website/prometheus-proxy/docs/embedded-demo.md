@@ -288,3 +288,4 @@ no shell to write a variable to a file, takes its certificate and key as base64 
   Boot starter, and shows the agent's lifecycle with the app's, the app's metrics read in-process, and the versions
   Spring Boot picks.
 - The [Basics Demo](basics-demo.md) runs standalone agents behind a simulated firewall, with the proxy's dashboard.
+- The [nginx Demo](nginx-demo.md) puts the proxy behind nginx, a reverse proxy that ends the agents' TLS.

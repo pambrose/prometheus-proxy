@@ -9,8 +9,8 @@ annotating a Service is all it takes for Prometheus to scrape it, that Kubernete
 what a change to the agent's config costs next to a change to its targets.
 Unlike the other demos, it needs kind, `kubectl`, and Helm as well as Docker: see [What you need](#what-you-need).
 
-It follows the [network demo](../network), which follows the [basics demo](../basics): those two show the
-dashboard, Grafana, the proxy's features, and the link through the firewall, and this one assumes them. It keeps the
+It follows the [nginx demo](../nginx), the [network demo](../network), and the [basics demo](../basics): those show
+the dashboard, Grafana, the proxy's features, and the link through the firewall, and this one assumes them. It keeps the
 same proxy and agent and shows them on Kubernetes. The website's
 [Kubernetes Demo](https://prometheus-proxy.com/kubernetes-demo/) page walks through the same scenarios
 with screenshots, and its [Kubernetes](https://prometheus-proxy.com/kubernetes/) page is the guide to

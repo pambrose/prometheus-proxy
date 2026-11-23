@@ -244,15 +244,26 @@ until `proxy.internal.maxAgentInactivitySecs` (default 60s) evicts it. This is e
 
 ### Agents reconnect every minute behind Nginx
 
-The agent logs `RST_STREAM closed stream` on `readRequestsFromProxy()`, `writeResponsesToProxy()`, or
-`writeChunkedResponsesToProxy()`, then `Disconnected from proxy`, about a minute after its last scrape, and again each
-minute while nothing scrapes it. Its paths are gone from the proxy for a moment each time, so a scrape can fail.
+The agent logs `RST_STREAM closed stream` on `writeChunkedResponsesToProxy()` or `writeResponsesToProxy()`, or
+`HTTP status code 504` on `readRequestsFromProxy()`, then `Disconnected from proxy`, about a minute after it connects,
+and again every minute, scraped or not. Its paths are gone from the proxy for a moment each time, so a scrape can fail.
 
-- **Cause:** Nginx closes a gRPC stream that's quiet for 60 seconds, and an agent's streams carry nothing between
-  scrapes. A current agent and proxy keep their streams open with keepalives, but only when both support them, so this
-  happens when the agent or the proxy is from 4.6.1 or earlier.
-- **Fix:** upgrade both, or raise `grpc_read_timeout` and `client_body_timeout` well above the longest scrape interval;
-  see [Nginx Reverse Proxy](advanced.md#nginx-reverse-proxy).
+- **Cause:** Nginx closes a gRPC stream that's quiet for 60 seconds, and an agent's stream for chunked results carries
+  nothing while its results are small, and its other streams nothing between scrapes. A current agent and proxy keep
+  their streams open with keepalives, but only when both support them, so this happens when the agent or the proxy is
+  from 4.6.1 or earlier, or when a reverse proxy's idle timeout is under `proxy.internal.streamKeepAliveSecs`.
+- **Fix:** upgrade both, or raise `grpc_read_timeout` and `client_body_timeout` to a day or more; under a shorter idle
+  timeout, lower `streamKeepAliveSecs` below it. See [Nginx Reverse Proxy](advanced.md#nginx-reverse-proxy).
+
+### A change to nginx doesn't reach connected agents
+
+After `nginx -s reload`, agents connected before it behave as before, and nginx's process list shows workers
+`shutting down` that never exit.
+
+- **Cause:** a reload leaves each open connection with the old worker it's on, under the old config, until the
+  connection ends, and an agent's connection, which its keepalives keep open, doesn't.
+- **Fix:** set `worker_shutdown_timeout` in nginx's main context and restart nginx once; from then on, each reload
+  hands the agents to the new workers that long after it. See [Nginx Reverse Proxy](advanced.md#nginx-reverse-proxy).
 
 ### `RESOURCE_EXHAUSTED` when an agent connects behind Nginx
 
@@ -267,6 +278,17 @@ in once another agent leaves.
   counts until it is evicted. Giving each team its own `proxy.auth` identity also keeps one team's
   agents from using up another's room. See
   [Transport Filter](configuration/proxy.md#transport-filter).
+
+---
+
+## The dashboard behind a reverse proxy stays on reconnecting…
+
+The page loads, but its live indicator never turns green, and Scrape now or the login may say `Origin not allowed`.
+
+- **Cause:** the reverse proxy doesn't pass the WebSocket handshake's `Upgrade` and `Connection` headers, or passes a
+  `Host` header that doesn't match the browser's `Origin`, which the dashboard refuses.
+- **Fix:** pass both headers, over HTTP/1.1, and the browser's `Host`, or list the dashboard's public address in
+  `proxy.dashboard.allowedOrigins`; see [Behind a reverse proxy](web-dashboard.md#behind-a-reverse-proxy).
 
 ---
 

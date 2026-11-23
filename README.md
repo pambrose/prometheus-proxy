@@ -47,7 +47,7 @@ documentation.
 
 ## 🎬 Try the Demos
 
-The quickest way to understand Prometheus Proxy is to watch it work. The repository ships five self-contained demos,
+The quickest way to understand Prometheus Proxy is to watch it work. The repository ships six self-contained demos,
 each started with `make up` and run locally. Each has a guided tour, `make tour`, that walks you through
 it one step at a time: what to open, what to look for, and how each step does what it does.
 
@@ -60,12 +60,13 @@ it one step at a time: what to open, what to look for, and how each step does wh
 |---|---|---|
 | [Basics](demos/basics) | The proxy, its live dashboard, and three agents behind a simulated firewall, with Prometheus and Grafana. A service fails and another hangs, a redundant pair of agents keeps a path up, new targets appear without a restart, a frozen agent is evicted, the proxy refuses a path an agent's identity doesn't allow, an agent's own dashboard shows the refusal and a lost proxy from its side, and the dashboard asks for a login. | 11 parts, about 28 minutes |
 | [Network](demos/network) | The same proxy and agents with a simulated WAN between them, and a standby proxy. A far link, a thin one fixed by filtering at the agent, a proxy that goes away, a link that dies silently, a flaky link traced in Zipkin, and the whole WAN going down, each also seen from the agent's own dashboard. | 7 parts, about 24 minutes |
+| [nginx](demos/nginx) | The same proxy and agents behind nginx, which ends the agents' TLS. An agent from before the stream keepalives is cut off every minute by nginx's timeouts, a reload of nginx never reaches an agent that's connected until `worker_shutdown_timeout` is set, a load balancer's shorter timeout calls for a shorter keepalive, and the dashboard's live updates need nginx to pass its WebSocket on. | 4 parts, about 19 minutes |
 | [Kubernetes](demos/kubernetes) | The project's Helm charts on two kind clusters. The target cluster exposes nothing, annotating a Service is all it takes for Prometheus to scrape it, Kubernetes replaces a lost agent by itself, and a config change costs a restart where a target change doesn't, with the agent's own dashboard reached through `kubectl port-forward`. Needs kind, `kubectl`, and Helm as well as Docker. | 5 parts, about 15 minutes |
 | [Embedded (Ktor)](demos/embedded) | A Ktor coffee shop with the agent embedded in it, its metrics in Grafana with no port opened for them. A rush fills the queue, a broken machine fires an alert, a deploy hands the agent's paths to the new version, the shop keeps serving while the proxy is away, the agent's own dashboard runs inside the app, and every secret comes from the environment. | 9 parts, about 23 minutes |
 | [Spring Boot](demos/spring-boot) | A Spring Boot roastery, written in Java, with the agent embedded by the project's Spring Boot starter. The agent starts and stops with the app, reports its connection in Actuator's health, reads the app's metrics in-process, with no `/actuator/prometheus`, runs with the versions of its libraries Spring Boot picks, serves its own dashboard from inside the app, and goes first in a graceful shutdown. | 5 parts, about 11 minutes |
 
 Start with the basics demo. The proxy and agent are the released images, from Docker Hub, so there's nothing to build:
-on macOS or Linux, the basics, network, embedded, and Spring Boot demos need only
+on macOS or Linux, the basics, network, nginx, embedded, and Spring Boot demos need only
 [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2, `git`, `make`, `curl`, and a browser; the
 embedded and Spring Boot demos build their apps inside Docker. The Kubernetes demo runs two Kubernetes clusters in Docker, so it also
 needs [kind](https://kind.sigs.k8s.io/) 0.33.0 or later, [`kubectl`](https://kubernetes.io/docs/tasks/tools/), and
@@ -85,6 +86,7 @@ The demos use different ports, so they can run side by side. Each demo's README 
 script, and the website's
 [Basics Demo](https://prometheus-proxy.com/basics-demo/),
 [Network Demo](https://prometheus-proxy.com/network-demo/),
+[nginx Demo](https://prometheus-proxy.com/nginx-demo/),
 [Kubernetes Demo](https://prometheus-proxy.com/kubernetes-demo/),
 [Embedded Demo](https://prometheus-proxy.com/embedded-demo/), and
 [Spring Boot Demo](https://prometheus-proxy.com/spring-boot-demo/) pages walk through the same
@@ -719,11 +721,11 @@ java -jar prometheus-agent.jar --tf_disabled --config myconfig.conf
 An example nginx config is [`nginx/docker/nginx.conf`](nginx/docker/nginx.conf), and an example proxy and agent config
 is [`nginx/nginx-proxy.conf`](nginx/nginx-proxy.conf).
 
-**⚠️ Note:** An agent's streams carry nothing between scrapes, and its connection ends when nginx closes any of them,
-which it does after 60 seconds of quiet by default. A current agent and proxy keep their streams open with keepalives,
-which each sends only once the other says it takes them. With an agent or a proxy from 4.6.1 or earlier, raise nginx's
-`grpc_read_timeout` and `client_body_timeout` well above your longest scrape interval, as the example does, or an
-agent that isn't scraped for a minute reconnects every minute.
+**⚠️ Note:** An agent's connection ends when nginx closes any of its streams, which it does after 60 seconds of quiet
+by default, and one of them, for results sent in chunks, is quiet while the agent's results are small, scraped or not.
+A current agent and proxy keep their streams open with keepalives, which each sends only once the other says it takes
+them. With an agent or a proxy from 4.6.1 or earlier, raise nginx's `grpc_read_timeout` and `client_body_timeout` to a
+day or more, as the example does, or the agent reconnects every minute. The [nginx demo](demos/nginx) shows both.
 
 **⚠️ Note:** With `transportFilterDisabled`, the proxy can't see a connection close, only the agent's request stream
 end. An agent that disconnects ends that stream, and is removed at once; one that dies before opening its stream, or

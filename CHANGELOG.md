@@ -98,10 +98,16 @@ All notable changes to this project are documented in this file.
   side keeps, scrapes and gRPC calls alike, 0 or 0.01 to 1; the agent follows the proxy's decision for a scrape. The
   Settings view shows the rate
 - The agent and the proxy keep their gRPC streams open with a keepalive after 30 seconds without a message, so a
-  reverse proxy's idle timeout, such as nginx's default 60 seconds, no longer cuts off an agent that isn't scraped for a
-  minute and briefly drops its paths. The new `proxy.internal.streamKeepAliveSecs` sets the interval for both
+  reverse proxy's idle timeout, such as nginx's default 60 seconds, no longer cuts off an agent every minute, scraped
+  or not, and briefly drops its paths. The new `proxy.internal.streamKeepAliveSecs` sets the interval for both
   directions; 0 turns keepalives off. Each sends them only to the other once it says it takes them, so with an agent
   or a proxy from 4.6.1 or earlier, nginx's timeouts still need raising
+- An nginx demo, in `demos/nginx`: the proxy behind nginx, which ends the agents' TLS, with an agent of this release and
+  one of 4.6.0, and Prometheus. `./demo.sh` swaps nginx's stream timeouts (`nginx-stock`, `nginx-long-timeouts`,
+  `nginx-short-timeouts`), lists the old workers a reload leaves (`nginx-workers`), sets `worker_shutdown_timeout`
+  (`nginx-shutdown-timeout`), changes the proxy's keepalive interval (`keepalive`), and fronts the dashboard with
+  nginx, without and with what its WebSocket needs (`dashboard-stock`, `dashboard-upgrade`, `dashboard-host`). Its
+  ports are 500 above the basics demo's
 
 ### Bug Fixes
 
@@ -173,8 +179,14 @@ All notable changes to this project are documented in this file.
 
 - The nginx example (`nginx/docker/nginx.conf`) raises `grpc_read_timeout` and `client_body_timeout`, and the README
   and the Advanced Topics, Troubleshooting, and Kubernetes pages say to: nginx closes a gRPC stream that's quiet for
-  60 seconds, so with its defaults an agent that wasn't scraped for a minute reconnected every minute and was briefly
-  without its paths. The example drops `client_header_timeout`, which doesn't apply to a quiet stream
+  60 seconds, so with its defaults an agent reconnected every minute and was briefly without its paths, even while it
+  was scraped, since its stream for chunked results is quiet while its results are small. The example drops
+  `client_header_timeout`, which doesn't apply to a quiet stream
+- The Advanced Topics page says that an `nginx -s reload` leaves a connected agent on an old worker, under the old
+  config, for as long as its connection lasts, which with keepalives is indefinitely, and that
+  `worker_shutdown_timeout` bounds it; that an agent dialing a TLS-terminating nginx needs a trust collection; and the
+  Dashboard page, that behind a reverse proxy the dashboard's WebSocket needs the `Upgrade` and `Connection` headers
+  passed and the browser's `Host` header, or its address in `proxy.dashboard.allowedOrigins`
 
 ## [4.6.1] - 2026-11-22
 

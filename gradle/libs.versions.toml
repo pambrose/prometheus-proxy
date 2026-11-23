@@ -20,7 +20,7 @@ kover = "0.9.11"
 maven-publish = "0.37.0"
 protobuf = "0.10.1"
 shadow = "9.6.1"
-taskinfo = "3.1.0"
+taskinfo = "3.1.1"
 versions = "0.67.0"
 
 # gRPC / Protobuf

@@ -353,6 +353,8 @@ tour does this last: the agents reconnect within a few seconds, and the dashboar
   thin, dead, flaky, or missing link does. It also covers what this demo leaves out: the agents failing over to a
   standby proxy, a filter at the agent that keeps a payload from crossing the firewall, and a call followed through
   the firewall in Zipkin.
+- The [nginx Demo](nginx-demo.md) puts nginx, a reverse proxy that ends the agents' TLS, between the agents and the
+  proxy, and in front of the dashboard.
 - [Dashboard](web-dashboard.md) covers every part of the dashboard, and how to turn it on for your own proxy.
 - [Agent Dashboard](agent-dashboard.md) covers the agent's own dashboard, and how to turn it on for your agents.
 - [Grafana & Alerting](grafana.md) covers the dashboards and alerting rules the project ships.

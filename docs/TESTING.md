@@ -764,17 +764,17 @@ These support helpers also live here (not test classes themselves):
 - **CiHygieneTest** — every job in `.github/workflows` sets `timeout-minutes`, every tool image the `Makefile` runs
   (`*_IMAGE`) and every third-party image `ContainerTestSupport` gives the container suite is pinned by digest, in a
   form Testcontainers pulls by digest, the suite's Prometheus is the `Makefile`'s, every image each demo's compose file
-  (`demos/*/docker/compose.yml`, the basics and network demos') pulls is pinned by digest and any Prometheus it runs
-  is the `Makefile`'s, as is every image the Kubernetes demo's manifests and kind configs (`demos/kubernetes/k8s` and
-  `demos/kubernetes/kind`) name, the kind node image among them, every `astral-sh/setup-uv` step installs a pinned uv,
-  the same one in each, the CRD schemas `helm-lint` validates against come from a fixed commit, and `docs.yml` uploads
-  and deploys the site only from the `workflow_dispatch` `make release` starts with `make gh-docs`, so a hung job gives
-  its check back, what CI runs changes only with a diff here, and a push to `master` leaves the live site alone
+  (`demos/*/docker/compose.yml`, every demo's but the Kubernetes demo's) pulls is pinned by digest and any Prometheus it
+  runs is the `Makefile`'s, as is every image the Kubernetes demo's manifests and kind configs (`demos/kubernetes/k8s`
+  and `demos/kubernetes/kind`) name, the kind node image among them, every `astral-sh/setup-uv` step installs a pinned
+  uv, the same one in each, the CRD schemas `helm-lint` validates against come from a fixed commit, and `docs.yml`
+  uploads and deploys the site only from the `workflow_dispatch` `make release` starts with `make gh-docs`, so a hung
+  job gives its check back, what CI runs changes only with a diff here, and a push to `master` leaves the live site
+  alone
 - **ConfigFileKeysTest** — every setting in a HOCON config the repo ships or its tests load (`config/test-configs`,
-  `examples`, `testing`, `etc/compose`, the basics, network, and Kubernetes demos' `demos/basics/config`,
-  `demos/network/config`, and `demos/kubernetes/config`, the container suite's agent configs, and the bundled
-  `reference.conf`) is one `config/config.conf` declares, with the same shape, since HOCON ignores a key it doesn't
-  know; a list's entries are checked against the fields its schema entry gives, as for `proxy.auth` and
+  `examples`, `testing`, `etc/compose`, each demo's `demos/<name>/config`, the container suite's agent configs, and the
+  bundled `reference.conf`) is one `config/config.conf` declares, with the same shape, since HOCON ignores a key it
+  doesn't know; a list's entries are checked against the fields its schema entry gives, as for `proxy.auth` and
   `agent.pathConfigs`, and a discovery targets file's `paths` entries against `agent.pathConfigs`'. The same goes for
   every `proxy.` or `agent.` key a test source under `src/test/kotlin` passes as a `-D` setting in a string literal,
   which HOCON ignores just the same; a key built at run time isn't seen
@@ -1030,6 +1030,10 @@ process, which surfaces as a wait strategy timing out against a status the conta
   watched file, with no static `pathConfigs`, scrapes end to end
 - **ContainersProxyFailoverTest** — two proxies on distinct network aliases; the agent moves to the standby
   when the active one stops
+- **ContainersNginxTest** — the proxy behind nginx, which ends the agent's TLS and passes its gRPC calls on
+  (`grpc_pass`), with the transport filter off on both sides and nginx's stream timeouts cut to 10 seconds: a scrape
+  reaches the target, and the stream keepalives then keep the idle agent connected (one connect, no stream ended),
+  while with them off nginx cuts it off, the control that shows the timeouts bite
 - **ContainersWebDashboardTest** — the dashboard against the real fat JAR, which is the point: htmx ships as
   a WebJar served from the classpath, so a packaging regression would leave the page loading a 404
 - **ContainersPortBindingTest** — every published port binds loopback rather than the wildcard address

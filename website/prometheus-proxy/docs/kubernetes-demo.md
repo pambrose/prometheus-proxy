@@ -4,14 +4,14 @@ icon: lucide/boxes
 
 # Kubernetes Demo
 
-The [Basics Demo](basics-demo.md) and the [Network Demo](network-demo.md) show the proxy, its dashboard, and the link
-through the firewall. This third demo deploys the same proxy and agent the way a platform team would run them: on two
-[kind](https://kind.sigs.k8s.io/) clusters, with the project's own Helm charts, and Kubernetes doing the operating. It
-shows that the target cluster exposes nothing, how `kubectl port-forward` reaches the agent's own dashboard inside it
-all the same, that annotating a Service is all it takes for Prometheus to scrape it, that Kubernetes replaces a lost
-agent by itself, and what a change to the agent's config costs next to a change to its targets. Every screenshot on
-this page comes from it. Unlike the other demos, it needs kind, `kubectl`, and Helm as well as Docker: see
-[What you need](#what-you-need).
+The [Basics Demo](basics-demo.md), the [Network Demo](network-demo.md), and the [nginx Demo](nginx-demo.md) show the
+proxy, its dashboard, and the link through the firewall. This fourth demo deploys the same proxy and agent the way a
+platform team would run them: on two [kind](https://kind.sigs.k8s.io/) clusters, with the project's own Helm charts, and
+Kubernetes doing the operating. It shows that the target cluster exposes nothing, how `kubectl port-forward` reaches the
+agent's own dashboard inside it all the same, that annotating a Service is all it takes for Prometheus to scrape it,
+that Kubernetes replaces a lost agent by itself, and what a change to the agent's config costs next to a change to its
+targets. Every screenshot on this page comes from it. Unlike the other demos, it needs kind, `kubectl`, and Helm as well
+as Docker: see [What you need](#what-you-need).
 
 ``` mermaid
 %%{init: {'flowchart': {'curve': 'linear'}}}%%

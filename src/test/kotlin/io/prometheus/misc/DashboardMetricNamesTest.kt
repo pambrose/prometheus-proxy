@@ -312,13 +312,15 @@ class DashboardMetricNamesTest : StringSpec() {
 
     // The words with a series' prefix that the pages give as label values and label names, not series: the scrape
     // outcomes the proxy records in proxy_scrape_requests_total's type label, taken from the code that records them,
-    // and the label agent_scrape_request_latency_seconds carries the agent's name in.
+    // the label agent_scrape_request_latency_seconds carries the agent's name in, and the nginx directives the pages
+    // on running behind nginx name.
     private val NOT_SERIES =
       buildSet {
         addAll(ProxyFailure.entries.map { it.label }.toSet())
         add(ScrapeDispatch.IN_FLIGHT_LIMIT_LABEL)
         add(ScrapeDispatch.BACKLOG_FULL_LABEL)
         add("agent_name")
+        addAll(listOf("proxy_pass", "proxy_set_header"))
       }
 
     private val SNIPPET =

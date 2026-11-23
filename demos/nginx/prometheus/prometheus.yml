@@ -1,0 +1,34 @@
+# Prometheus config for the nginx demo (demos/nginx/docker/compose.yml).
+#
+# The agents' paths are found, not listed: one job discovers every path the agents register through the proxy's HTTP
+# service discovery endpoint, and scrapes each through the proxy. A path is gone from the proxy for a moment while its
+# agent reconnects, and a scrape that lands then fails, which is how nginx closing an agent's connection shows in
+# up{job="warehouse"}. `make check-rules`, from the repository root, validates this file with promtool.
+#
+# The proxy's own metrics are scraped directly, not through nginx, which stands only between the agents and the proxy,
+# and in front of the dashboard.
+
+global:
+  # Short intervals so the dashboards move visibly during a demo.
+  scrape_interval: 5s
+  scrape_timeout: 4s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: proxy-discovered
+    http_sd_configs:
+      - url: http://proxy:8080/discovery
+        refresh_interval: 5s
+    relabel_configs:
+      # Each agent's path labels include a job (storefront, warehouse), which replaces this scrape config's job_name,
+      # since Prometheus applies job_name only to a target that has no job label. Keep the serving agent's name as an
+      # `agent` label, and drop the container host names.
+      - source_labels: [agentName]
+        target_label: agent
+      - action: labeldrop
+        regex: agentName|hostName
+
+  # The proxy's own metrics, among them proxy_agent_disconnects_total, by reason.
+  - job_name: prometheus-proxy
+    static_configs:
+      - targets: ["proxy:8082"]
