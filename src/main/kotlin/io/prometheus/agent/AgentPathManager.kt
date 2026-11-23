@@ -501,7 +501,7 @@ internal class AgentPathManager(
     e: Throwable,
   ) {
     val rejection = e as? RequestFailureException
-    if (rejection != null && !rejection.retryable && rejection.rejectionCause != INVALID_AGENT) {
+    if (rejection?.dropsTakeover == true) {
       paths -= path
       recordFailure(path, e, retrying = false, retryAt = null)
       logRejection(source, path, rejection, repeat = false, retryIn = null)
@@ -946,6 +946,11 @@ internal class AgentPathManager(
 
     // A path's place in registering while no notice about it has come.
     private val NO_NOTICE: PathNotice = PathNotice.getDefaultInstance()
+
+    // Whether a refused reclaim drops the takeover: a refusal that can't clear, but not INVALID_AGENT, which says the
+    // proxy has already dropped this connection's context; see reclaimFailed.
+    private val RequestFailureException.dropsTakeover: Boolean
+      get() = !retryable && rejectionCause != INVALID_AGENT
 
     private val RequestFailureException.retryable: Boolean
       get() = rejectionCause in RETRYABLE_CAUSES
