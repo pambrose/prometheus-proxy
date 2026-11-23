@@ -324,7 +324,8 @@ seconds, on the connection it kept, with no restart.
 ```
 
 That's the tour. For proxy failover, filtering at the agent, and tracing through the firewall, go on to the
-[network demo](../network). The same proxy and agent, deployed on Kubernetes with their Helm charts, are in the
+[network demo](../network). The proxy behind nginx, a reverse proxy that ends the agents' TLS, is in the
+[nginx demo](../nginx). The same proxy and agent, deployed on Kubernetes with their Helm charts, are in the
 [Kubernetes demo](../kubernetes), which needs kind, `kubectl`, and Helm as well as Docker. The demos use different
 ports, so they can run side by side, but each takes memory and CPU: `make down` stops this one and frees its
 resources.

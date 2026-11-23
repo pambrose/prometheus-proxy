@@ -328,6 +328,9 @@ clean slate, `make down && make up`.
 - The demo's [README](https://github.com/pambrose/prometheus-proxy/tree/master/demos/network) has these scenarios as
   a guided tour, explaining how each one works, and lists the files that set the demo up,
   including which Toxiproxy toxic each scenario uses.
+- The [nginx Demo](nginx-demo.md) puts nginx, a reverse proxy that ends the agents' TLS, between the agents and the
+  proxy, and shows what its stream timeouts and its reloads do to an agent's connection, and what the dashboard needs
+  behind it.
 - The [Kubernetes Demo](kubernetes-demo.md) deploys the same proxy and agent with their Helm charts on two kind
   clusters, and shows Kubernetes driving the agent's targets and replacing its pod. It needs kind, `kubectl`, and Helm
   as well as Docker.

@@ -518,7 +518,8 @@ web page can do that:
 - **A WebSocket from another site.** Browsers let any page open a WebSocket to any address, so the
   dashboard refuses a handshake whose `Origin` is not its own host. Behind a reverse proxy that rewrites
   the Host header, the browser's origin is the proxy's public name, so list it in
-  `proxy.dashboard.allowedOrigins`.
+  `proxy.dashboard.allowedOrigins`, or pass the browser's Host on; see
+  [Behind a reverse proxy](#behind-a-reverse-proxy).
 - **DNS rebinding.** A page can point its own DNS name at the dashboard's address, after which the browser
   sends that name as both `Origin` and `Host`, and the Origin check passes. List the names you reach the
   dashboard by in `proxy.dashboard.allowedHosts` and it refuses any other host name with a 403, on every
@@ -540,6 +541,46 @@ and Log out forms as well.
 Sessions are also capped at `proxy.dashboard.maxSessions` (default 50), and a client that stops reading or
 sends an oversized message is disconnected. Neither list stops someone who can reach the port directly; a login does.
 Both are lists, so set them in a config file; see [Dashboard configuration](configuration/proxy.md#dashboard).
+
+### Behind a reverse proxy
+
+The dashboard's live updates come over a WebSocket, at `/dashboard/events`, so a reverse proxy in front of it has to
+pass the WebSocket's handshake on, and the handshake has to pass the Origin check. With a plain `proxy_pass`, nginx
+passes each request as HTTP/1.0 and drops the `Upgrade` and `Connection` headers, so the dashboard answers the
+handshake with 400. With those headers but nginx's default `Host`, the upstream's name, the browser's `Origin` doesn't
+match it, and the dashboard refuses the handshake, Scrape now, and the login form with 403, and logs
+`Refused a dashboard request from origin …; add it to proxy.dashboard.allowedOrigins if expected`. Either way the page
+loads, and its [live indicator](#the-live-indicator) stays on **reconnecting…**. Pass both, and the browser's `Host`:
+
+```nginx
+# Connection: upgrade on a WebSocket handshake, and close on anything else.
+map $http_upgrade $connection_upgrade {
+  default upgrade;
+  ''      close;
+}
+
+server {
+  listen 443 ssl;
+  ssl_certificate     /etc/nginx/certs/server.pem;
+  ssl_certificate_key /etc/nginx/certs/server.key;
+
+  location /dashboard {
+    proxy_pass http://proxy-host:8094;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+    proxy_set_header Host $http_host;
+  }
+}
+```
+
+`$http_host` is the `Host` header as the browser sent it, port included; `$host` drops the port, which breaks the match
+on a port other than the scheme's. To keep nginx's own `Host`, list the address the browser opens in
+`proxy.dashboard.allowedOrigins` instead, for example `["https://dashboard.example.com"]`. Keep the path as it is: the
+page's links, its assets, its WebSocket, and its session cookie are all under `proxy.dashboard.path`, so a prefix nginx
+adds or strips breaks them. Over `https`, the dashboard marks its session cookie `Secure`. Every login reaches the
+dashboard from nginx's address, so the per-address limit on wrong logins is everyone's. The agent's dashboard takes
+the same settings under `agent.dashboard`. The [nginx Demo](nginx-demo.md) shows each step.
 
 ## Limits
 

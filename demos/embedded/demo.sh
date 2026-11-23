@@ -623,6 +623,7 @@ cmd_tour() {
   bold "The other demos:"
   echo "Standalone agents behind a firewall, with the proxy's dashboard, are in the basics demo, in demos/basics."
   echo "Proxy failover, filtering at the agent, and tracing are in the network demo, in demos/network."
+  echo "The proxy behind nginx, a reverse proxy that ends the agents' TLS, is in the nginx demo, in demos/nginx."
   echo "The same proxy and agent, deployed on Kubernetes with their Helm charts, are in the Kubernetes demo, in" \
     "demos/kubernetes, which needs kind, kubectl, and Helm as well as Docker."
   echo "The agent in a Spring Boot app, written in Java, is in the Spring Boot demo, in demos/spring-boot."

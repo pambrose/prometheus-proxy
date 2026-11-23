@@ -690,7 +690,8 @@ cmd_tour() {
   bold "That's the tour."
   echo "To start again from a part, run $MAKE_NAME tour PART=<n>, or $0 tour <n>."
   echo
-  bold "The other demo:"
+  bold "The other demos:"
+  echo "The proxy behind nginx, a reverse proxy that ends the agents' TLS, is in the nginx demo, in demos/nginx."
   echo "The same proxy and agent, deployed on Kubernetes with their Helm charts, are in the Kubernetes demo, in" \
     "demos/kubernetes, which needs kind, kubectl, and Helm as well as Docker."
   echo

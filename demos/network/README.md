@@ -11,8 +11,9 @@ the proxies' dashboards and on the agents' own.
 It follows the [basics demo](../basics), which shows the dashboard, Grafana, and the proxy's features: start with
 that one. This one keeps the same pieces and changes only the link through the firewall, the thing the product
 exists to cross. The website's [Network Demo](https://prometheus-proxy.com/network-demo/) page walks
-through the same scenarios with screenshots. The [Kubernetes demo](../kubernetes) follows this one, and deploys the
-same proxy and agent with their Helm charts on two kind clusters; it needs kind, `kubectl`, and Helm as well as Docker.
+through the same scenarios with screenshots. The [nginx demo](../nginx) follows this one, and puts nginx, a reverse
+proxy, between the agents and the proxy; the [Kubernetes demo](../kubernetes) comes after it, and needs kind,
+`kubectl`, and Helm as well as Docker.
 
 ```
  network-app  (simulated services: orders and payments at headquarters, inventory and shipping at a branch)
@@ -307,8 +308,9 @@ what the agent tries.
 ./demo.sh heal            # returns any agent on the standby to the primary
 ```
 
-That's the tour. The same proxy and agent, deployed on Kubernetes with their Helm charts, are in the
-[Kubernetes demo](../kubernetes), which needs kind, `kubectl`, and Helm as well as Docker.
+That's the tour. The proxy behind nginx, a reverse proxy that ends the agents' TLS, is in the [nginx demo](../nginx).
+The same proxy and agent, deployed on Kubernetes with their Helm charts, are in the [Kubernetes demo](../kubernetes),
+which needs kind, `kubectl`, and Helm as well as Docker.
 
 ## Scenario reference
 

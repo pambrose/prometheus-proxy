@@ -29,6 +29,7 @@ nav = [
     { "Quick Start" = "getting-started.md" },
     { "Basics Demo" = "basics-demo.md" },
     { "Network Demo" = "network-demo.md" },
+    { "nginx Demo" = "nginx-demo.md" },
     { "Kubernetes Demo" = "kubernetes-demo.md" },
     { "Embedded Demo" = "embedded-demo.md" },
     { "Spring Boot Demo" = "spring-boot-demo.md" },

@@ -25,29 +25,80 @@ agent auth is off; see [Transport Filter](configuration/proxy.md#transport-filte
 
 !!! warning "Nginx's stream timeouts"
 
-    An agent's streams carry nothing between scrapes, and its connection ends when any of them closes. Nginx closes a
-    stream that's quiet for 60 seconds by default. A current agent and proxy keep each of their streams open with a
-    keepalive after 30 seconds of quiet, so nginx's defaults are enough for them. The proxy sets the interval for both
-    directions, `proxy.internal.streamKeepAliveSecs`: keep it under the reverse proxy's idle timeout, or set it to 0 to
-    turn keepalives off. Each side sends keepalives only once the other says it takes them, so with an agent or a proxy
-    from 4.6.1 or earlier on either end, an agent that isn't
-    scraped for a minute is cut off, reconnects, and is briefly without its paths, which can fail a scrape. For such a
-    pair, raise both timeouts, in the `server` or `location` block that passes to the proxy:
+    An agent's connection ends when any of its streams closes, and nginx closes a stream that's quiet for 60 seconds by
+    default. A stream can be quiet while the agent is scraped: the one it sends chunked results on carries nothing
+    while its results stay under `chunkContentSizeKbs` (32 KB) gzipped. A current agent and proxy keep each of their
+    streams open with a keepalive after 30 seconds of quiet, so nginx's defaults are enough for them. The proxy sets
+    the interval for both directions, `proxy.internal.streamKeepAliveSecs`: keep it under the reverse proxy's idle
+    timeout, or set it to 0 to turn keepalives off. Each side sends keepalives only once the other says it takes them,
+    so with an agent or a proxy from 4.6.1 or earlier on either end, the agent is cut off every minute, scraped or not,
+    reconnects, and is briefly without its paths, which can fail a scrape. For such a pair, raise both timeouts, in the
+    `server` or `location` block that passes to the proxy:
 
     | Directive | Covers |
     |-----------|--------|
-    | `grpc_read_timeout` | the stream the proxy sends scrape requests on |
+    | `grpc_read_timeout` | the streams the proxy sends on: scrape requests, and a current proxy's path notices |
     | `client_body_timeout` | the streams the agent sends scrape results on |
 
-    Set them well above your longest scrape interval, as
-    [`nginx/docker/nginx.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/nginx/docker/nginx.conf) does
-    with `1d`. Without them, the agent's log shows `RST_STREAM closed stream` on `readRequestsFromProxy()` or
-    `writeResponsesToProxy()`, then `Disconnected from proxy`, a minute after the last scrape.
+    Set them to a day or more, as
+    [`nginx/docker/nginx.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/nginx/docker/nginx.conf) does:
+    a stream for chunked results can stay quiet for as long as the results stay small, so a timeout above the scrape
+    interval isn't enough, and even a day's cuts such an agent off once a day. Without them, nginx's access log ends
+    the stream it closed with 408 (`client_body_timeout`) or 504 (`grpc_read_timeout`), and the agent's log shows
+    `RST_STREAM closed stream` on `writeChunkedResponsesToProxy()` or `writeResponsesToProxy()`, or
+    `HTTP status code 504` on `readRequestsFromProxy()`, then `Disconnected from proxy`, a minute after it connected.
+
+!!! warning "Reloads and connected agents"
+
+    `nginx -s reload` starts new workers under the new config and leaves each open connection with the old worker it's
+    on, under the old config, until the connection ends. An agent's connection, which the keepalives keep open, doesn't
+    end, so a change a reload brings doesn't reach an agent connected before it, and each reload leaves old workers
+    running. Set `worker_shutdown_timeout` in nginx's main context:
+
+    ```nginx
+    worker_shutdown_timeout 10s;
+    ```
+
+    An old worker then closes its connections that long after a reload, and each agent reconnects at once, to a new
+    worker, under the new config, at the cost of one reconnect per agent, which a scrape can land in. A worker takes
+    the value from the config it started with, so it covers the reloads after it's in place: restart nginx once to
+    bring it in.
 
 Example Nginx and proxy configuration files are available in the repository:
 
 - [`nginx/docker/nginx.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/nginx/docker/nginx.conf)
 - [`nginx/nginx-proxy.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/nginx/nginx-proxy.conf)
+- The nginx Demo's configs, [`demos/nginx/nginx/`](https://github.com/pambrose/prometheus-proxy/tree/master/demos/nginx/nginx),
+  with TLS, the dashboard, and `worker_shutdown_timeout`, which `make up` in `demos/nginx` runs
+
+### TLS at nginx
+
+To end the agents' TLS at nginx, serve TLS on its listener and pass the calls to the proxy's agent port in plaintext:
+
+```nginx
+server {
+  listen 443 ssl;
+  # gRPC needs HTTP/2.
+  http2 on;
+  ssl_certificate     /etc/nginx/certs/server.pem;
+  ssl_certificate_key /etc/nginx/certs/server.key;
+
+  location / {
+    grpc_pass grpc://proxy-host:50051;
+  }
+}
+```
+
+The proxy needs no TLS settings. The agent needs to know what to trust: set `agent.tls.trustCertCollectionFilePath`
+(or `trustCertCollectionPem`) to the CA certificate that signed nginx's. An agent uses TLS only when it has a trust
+collection or a client certificate, so set it even for a certificate a public CA signed, to a CA bundle. The agent
+checks nginx's certificate against the host it dials; `agent.tls.overrideAuthority` names another. The proxy warns at
+startup that agent tokens cross without TLS, as they do on the hop from nginx to the proxy, so keep that hop on a
+private network.
+
+To put the proxy's dashboard behind nginx too, see
+[Behind a reverse proxy](web-dashboard.md#behind-a-reverse-proxy): its live updates need nginx to pass the WebSocket
+on. The [nginx Demo](nginx-demo.md) runs all of this, and shows each of the warnings above.
 
 ## Prometheus Federation
 

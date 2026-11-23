@@ -47,6 +47,8 @@ Run `make help` for the current target list with descriptions (auto-extracted fr
 Each demo under `demos/` is self-contained, with its own Makefile run from its directory (`make -C demos/<name> help`
 lists its targets). The root `Makefile`'s only demo targets, `demos-up`, `demos-up-local`, and `demos-down`, run every
 demo's `up`, `up-local`, or `down` in turn (its `DEMOS` list), and keep going past a demo that fails.
+The nginx demo's `agent-legacy` runs release 4.6.0's agent image on purpose, as an agent from before the stream
+keepalives, so keep it pinned there (Dependabot ignores it).
 
 The embedded demo's coffee shop, `demos/embedded/app`, is a Gradle project of its own, outside the root build, that
 embeds the agent through the Ktor plugin, which reads its Micrometer registry in-process, and reads

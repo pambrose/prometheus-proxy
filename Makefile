@@ -54,11 +54,11 @@ RELEASE_VERSION_FILES := README.md llms.txt etc/compose/proxy.yml examples/cloud
 	website/prometheus-proxy/docs/docker.md src/test/kotlin/website/DockerExamples.txt \
 	src/test/kotlin/website/EmbeddedAgentExamples.txt src/test/kotlin/website/KubernetesExamples.txt \
 	docs/RELEASE.md .claude/skills/publishing-release/SKILL.md \
-	demos/basics/README.md demos/network/README.md demos/kubernetes/README.md demos/embedded/README.md \
-	demos/spring-boot/README.md demos/spring-boot/app/pom.xml \
+	demos/basics/README.md demos/network/README.md demos/nginx/README.md demos/kubernetes/README.md \
+	demos/embedded/README.md demos/spring-boot/README.md demos/spring-boot/app/pom.xml \
 	website/prometheus-proxy/docs/basics-demo.md website/prometheus-proxy/docs/network-demo.md \
-	website/prometheus-proxy/docs/kubernetes-demo.md website/prometheus-proxy/docs/embedded-demo.md \
-	website/prometheus-proxy/docs/spring-boot-demo.md
+	website/prometheus-proxy/docs/nginx-demo.md website/prometheus-proxy/docs/kubernetes-demo.md \
+	website/prometheus-proxy/docs/embedded-demo.md website/prometheus-proxy/docs/spring-boot-demo.md
 # The CI jobs that must have passed for the release commit, as workflow-file/job-name, separated by semicolons since
 # job names can hold spaces. make release itself runs only the tests and the distro build, so these are what cover
 # the coverage floors, TLA+, the alerting rules, the Helm charts, the docs site build, what a Maven build that embeds
@@ -76,18 +76,19 @@ SITE_DIR := $(WEBSITE_DIR)/prometheus-proxy
 SITE_VERSION_SOURCES := $(SITE_DIR)/docs src/test/kotlin/website src/test/java/website
 
 # The customer demos, whose Prometheus configs and rules check-rules validates: the dashboard and Grafana, the network
-# between the agents and the proxies, the Helm charts deployed on two kind clusters, an app with the agent embedded,
-# its metrics in Grafana, and a Spring Boot app with the agent embedded. Each demo under demos/ is
+# between the agents and the proxies, nginx between them, the Helm charts deployed on two kind clusters, an app with the
+# agent embedded, its metrics in Grafana, and a Spring Boot app with the agent embedded. Each demo under demos/ is
 # self-contained, with its own Makefile for starting and stopping it (`make -C demos/<name> help`); this one's only
 # demo targets, demos-up, demos-up-local, and demos-down, run those Makefiles' up, up-local, and down for every demo.
 BASICS_DEMO_DIR := demos/basics
 NETWORK_DEMO_DIR := demos/network
+NGINX_DEMO_DIR := demos/nginx
 KUBERNETES_DEMO_DIR := demos/kubernetes
 EMBEDDED_DEMO_DIR := demos/embedded
 SPRING_BOOT_DEMO_DIR := demos/spring-boot
 # The demos demos-up, demos-up-local, and demos-down run, in that order: the Kubernetes demo, which needs kind, kubectl,
 # and Helm too, last.
-DEMOS := basics network embedded spring-boot kubernetes
+DEMOS := basics network nginx embedded spring-boot kubernetes
 
 # Runs a target of every demo's own Makefile, one after another: $(call run_demos,<target>). A demo that fails doesn't
 # stop the rest; the failed ones are listed at the end.
@@ -266,7 +267,7 @@ tla-checks-full: tla-checks  ## The quick TLA+ checks and the slower reconnect c
 
 # Each demo's Prometheus config is checked as the demo's Prometheus sees it, with the rule files the demo mounts where
 # its rule_files glob looks, so promtool also checks the demo's alerting rules and that the config loads them. The
-# Kubernetes demo's has no rules.
+# nginx, Kubernetes, and Spring Boot demos' have no rules.
 check-rules:  ## Validate the alerting rules in grafana/alerts.yml, and each demo's Prometheus config and rules, with promtool (needs Docker)
 	docker run --rm -v "$(CURDIR)/grafana:/rules:ro" --entrypoint promtool $(PROMETHEUS_IMAGE) check rules /rules/alerts.yml
 	docker run --rm -v "$(CURDIR)/$(BASICS_DEMO_DIR)/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
@@ -275,6 +276,8 @@ check-rules:  ## Validate the alerting rules in grafana/alerts.yml, and each dem
 		--entrypoint promtool $(PROMETHEUS_IMAGE) check config /etc/prometheus/prometheus.yml
 	docker run --rm -v "$(CURDIR)/$(NETWORK_DEMO_DIR)/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
 		-v "$(CURDIR)/$(NETWORK_DEMO_DIR)/prometheus/network-alerts.yml:/etc/prometheus/rules/network-alerts.yml:ro" \
+		--entrypoint promtool $(PROMETHEUS_IMAGE) check config /etc/prometheus/prometheus.yml
+	docker run --rm -v "$(CURDIR)/$(NGINX_DEMO_DIR)/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
 		--entrypoint promtool $(PROMETHEUS_IMAGE) check config /etc/prometheus/prometheus.yml
 	docker run --rm -v "$(CURDIR)/$(KUBERNETES_DEMO_DIR)/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
 		--entrypoint promtool $(PROMETHEUS_IMAGE) check config /etc/prometheus/prometheus.yml
