@@ -2,9 +2,9 @@
 
 ---
 
-## Unreleased
+## 4.7.0
 
-_Not yet released_
+_Released 2026-11-23_
 
 ### New Features
 
