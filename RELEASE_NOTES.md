@@ -31,10 +31,11 @@ _Released 2026-11-23_
   uses too, and `source(path, source)` takes any other metrics as a `MetricsSource`.
 - **An embedded agent in a few lines.** For an app with no framework, such as a worker or a daemon,
   `fromEnvironment()` reads the proxy, token, and certificate from `PROMETHEUS_PROXY`, `PROMETHEUS_AGENT_TOKEN`, and
-  `PROMETHEUS_PROXY_CERT`; `startIfConfigured()` starts the agent only where a proxy is set, and keeps the app running
-  when it can't start, logging why; and `agentMetricsAt(path)` serves the agent's own metrics through the proxy, with
-  no port opened for them. The agent's handle is `AutoCloseable`, so `startIfConfigured().use { … }` stops the agent
-  with the app. The Embedded Agent page shows a whole worker's agent, in Kotlin and Java.
+  `PROMETHEUS_PROXY_CERT`, and names the variable when its value can't be used; `startIfConfigured()` starts the
+  agent only where a proxy is set, and keeps the app running when it can't start, logging why; and
+  `agentMetricsAt(path)` serves the agent's own metrics through the proxy, with no port opened for them. The agent's
+  handle is `AutoCloseable`, so `startIfConfigured().use { … }` stops the agent with the app. The Embedded Agent page
+  shows a whole worker's agent, in Kotlin and Java.
 - **A Spring Boot starter.** Add `prometheus-proxy-spring-boot-starter` to a Spring Boot app and set the proxy's
   address: the agent starts and stops with the app, serves its metrics to Prometheus without `/actuator/prometheus`
   or a web server, and shows its connection in `/actuator/health`. The new Spring Boot Starter page lists its

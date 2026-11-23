@@ -115,6 +115,19 @@ internal object TlsMaterial {
   }
 
   /**
+   * Reads [value], the setting named [setting], as the certificates a trust collection holds, as [clientContext] reads
+   * them, and throws [IllegalArgumentException], without the value in its message, when it can't.
+   */
+  fun checkTrustCollection(
+    setting: String,
+    value: String,
+  ) {
+    ByteArrayInputStream(pemText(setting, value).toByteArray()).use {
+      val _ = GrpcSslContexts.forClient().trustManager(it)
+    }
+  }
+
+  /**
    * The client side's context: [trust] pins the servers to trust, or the JVM's trust store is used without one, and
    * [certChain] with [privateKey] enables mutual auth.
    */

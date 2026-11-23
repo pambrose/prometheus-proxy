@@ -75,6 +75,8 @@ class EmbeddedAgentConfig private constructor(
   // empty without one.
   private val agentMetricsPath: String,
   private val agentMetricsLabels: String,
+  // The values fromEnvironment set, by the variable each came from, that nothing set after it.
+  private val readFromEnvironment: Map<EnvironmentSetting, String>,
 ) {
   /**
    * The settings as the `Config` tree a config file would hold, rooted at `agent`. The paths [source][Builder.source]
@@ -91,13 +93,23 @@ class EmbeddedAgentConfig private constructor(
    * does with a `Config`, and returns its handle once it has started.
    *
    * @param logBanner When `true` (default), logs the agent's ASCII banner and version on startup.
-   * @throws ConfigLoadException when a setting is invalid.
+   * @throws ConfigLoadException when a setting is invalid. One that [fromEnvironment][Builder.fromEnvironment] read is
+   *   named by its variable, such as `PROMETHEUS_PROXY_CERT`, as well as its setting.
    * @throws IllegalStateException if the agent fails to start.
    * @see startIfConfigured for an agent that stays off without a proxy, and keeps the app running when it can't start.
    */
   @JvmOverloads
-  fun start(logBanner: Boolean = true): EmbeddedAgentInfo =
-    Agent.startEmbedded(exitOnMissingConfig = false, logBanner = logBanner) { agentOptions() }
+  fun start(logBanner: Boolean = true): EmbeddedAgentInfo = start(logBanner, System::getenv)
+
+  // start, with the environment the agent's own variables are read from, which tests give. A value fromEnvironment read
+  // is checked first, so the agent's refusal of it names the variable the app set, not only the setting.
+  internal fun start(
+    logBanner: Boolean,
+    env: (String) -> String?,
+  ): EmbeddedAgentInfo {
+    EnvironmentSetting.check(readFromEnvironment, env)
+    return Agent.startEmbedded(exitOnMissingConfig = false, logBanner = logBanner) { agentOptions() }
+  }
 
   /**
    * Starts an agent with these settings, as [start] does, when they name a proxy, and returns its handle; returns null
@@ -192,6 +204,7 @@ class EmbeddedAgentConfig private constructor(
     private val sources = mutableListOf<AgentPathManager.PathConfig>()
     private var agentMetricsPath = ""
     private var agentMetricsLabels = "{}"
+    private val readFromEnvironment = linkedMapOf<EnvironmentSetting, String>()
     private val settings = linkedMapOf<String, Any>()
 
     /** The agent's name, as the proxy's dashboard and logs show it (`agent.name`). */
@@ -240,6 +253,7 @@ class EmbeddedAgentConfig private constructor(
     ): Builder =
       apply {
         values["tls.trustCertCollectionPem"] = pem
+        setFromCode("tls.trustCertCollectionPem")
         put("tls.overrideAuthority", authority)
       }
 
@@ -269,6 +283,11 @@ class EmbeddedAgentConfig private constructor(
      * precedence, and one called before it holds where the variable isn't set. Nothing else reads these variables: the
      * agent itself doesn't. Its own, such as `AGENT_TOKEN` and `PROXY_HOSTNAME`, still take precedence over its
      * settings, these included.
+     *
+     * A value the agent refuses as it starts, an endpoint it can't parse or a certificate it can't read, fails
+     * [start][EmbeddedAgentConfig.start] with a [ConfigLoadException] that names the variable as well as the setting,
+     * such as `PROMETHEUS_PROXY_CERT, read by fromEnvironment() for agent.tls.trustCertCollectionPem: …`, and never
+     * the value.
      */
     fun fromEnvironment(): Builder = fromEnvironment(System::getenv)
 
@@ -276,10 +295,20 @@ class EmbeddedAgentConfig private constructor(
     internal fun fromEnvironment(env: (String) -> String?): Builder =
       apply {
         fun read(name: String) = env(name)?.trim()?.ifEmpty { null }
-        read(PROMETHEUS_PROXY)?.also { proxy = it }
-        read(PROMETHEUS_AGENT_TOKEN)?.also { token = it }
-        read(PROMETHEUS_PROXY_CERT)?.also {
-          trustCertificatePem(pem = it, authority = read(PROMETHEUS_PROXY_AUTHORITY) ?: DEFAULT_AUTHORITY)
+        // Each value, once set, is noted as the variable's, which a builder method or setting() called later forgets
+        read(EnvironmentSetting.PROXY.variable)?.also {
+          proxy = it
+          readFromEnvironment[EnvironmentSetting.PROXY] = it
+        }
+        read(EnvironmentSetting.TOKEN.variable)?.also {
+          token = it
+          readFromEnvironment[EnvironmentSetting.TOKEN] = it
+        }
+        read(EnvironmentSetting.CERT.variable)?.also { pem ->
+          val authority = read(EnvironmentSetting.AUTHORITY.variable)
+          trustCertificatePem(pem = pem, authority = authority ?: DEFAULT_AUTHORITY)
+          readFromEnvironment[EnvironmentSetting.CERT] = pem
+          authority?.also { readFromEnvironment[EnvironmentSetting.AUTHORITY] = it }
         }
       }
 
@@ -491,7 +520,11 @@ class EmbeddedAgentConfig private constructor(
     fun setting(
       key: String,
       value: Any,
-    ): Builder = apply { settings[key] = value }
+    ): Builder =
+      apply {
+        settings[key] = value
+        setFromCode(key)
+      }
 
     // Sets a method's or a property's setting, or, given null, takes it out.
     private fun put(
@@ -499,6 +532,12 @@ class EmbeddedAgentConfig private constructor(
       value: Any?,
     ) {
       if (value == null) values.remove(key) else values[key] = value
+      setFromCode(key)
+    }
+
+    // Forgets that fromEnvironment set [key], once code sets it after: the value then isn't the variable's.
+    private fun setFromCode(key: String) {
+      readFromEnvironment.keys.removeAll { it.key == key }
     }
 
     /** The settings, ready to [start][EmbeddedAgentConfig.start]. */
@@ -512,7 +551,13 @@ class EmbeddedAgentConfig private constructor(
           ->
           tree.withValue("agent.$key", ConfigValueFactory.fromAnyRef(value))
         }
-      return EmbeddedAgentConfig(config, sources.toList(), agentMetricsPath, agentMetricsLabels)
+      return EmbeddedAgentConfig(
+        config,
+        sources.toList(),
+        agentMetricsPath,
+        agentMetricsLabels,
+        readFromEnvironment.toMap(),
+      )
     }
 
     // A path's labels as the JSON pathConfigs takes, or null for none.
@@ -539,12 +584,8 @@ class EmbeddedAgentConfig private constructor(
 
     private val logger = logger {}
 
-    // The variables fromEnvironment reads, and the authority it gives a certificate without PROMETHEUS_PROXY_AUTHORITY:
-    // the name the Cloud Platforms page's certificate for the proxy is issued to.
-    private const val PROMETHEUS_PROXY = "PROMETHEUS_PROXY"
-    private const val PROMETHEUS_AGENT_TOKEN = "PROMETHEUS_AGENT_TOKEN"
-    private const val PROMETHEUS_PROXY_CERT = "PROMETHEUS_PROXY_CERT"
-    private const val PROMETHEUS_PROXY_AUTHORITY = "PROMETHEUS_PROXY_AUTHORITY"
+    // The authority fromEnvironment gives a certificate without PROMETHEUS_PROXY_AUTHORITY: the name the Cloud
+    // Platforms page's certificate for the proxy is issued to.
     private const val DEFAULT_AUTHORITY = "prometheus-proxy"
 
     // Where a config names the proxy, as builder methods and setting() put it.
