@@ -23,9 +23,23 @@ on both proxy and agent:
 In this mode the proxy also limits the agents connected as one auth identity, which is every agent when
 agent auth is off; see [Transport Filter](configuration/proxy.md#transport-filter).
 
-Nginx closes a gRPC stream that sends nothing for `grpc_read_timeout` (60 seconds by default), and an agent's
-connection ends with any of its streams. The stream that tells an agent another agent took one of its paths sends a
-keepalive every 30 seconds for that reason, so keep `grpc_read_timeout` above that.
+!!! warning "Raise Nginx's stream timeouts"
+
+    An agent's streams carry nothing between scrapes, and its connection ends when any of them closes. Nginx closes a
+    stream that's quiet for 60 seconds, so with its defaults an agent that isn't scraped for a minute is cut off,
+    reconnects, and is briefly without its paths, which can fail a scrape. Raise both timeouts, in the `server` or
+    `location` block that passes to the proxy:
+
+    | Directive | Covers |
+    |-----------|--------|
+    | `grpc_read_timeout` | the stream the proxy sends scrape requests on |
+    | `client_body_timeout` | the streams the agent sends scrape results on |
+
+    Set them well above your longest scrape interval, as
+    [`nginx/docker/nginx.conf`](https://github.com/pambrose/prometheus-proxy/blob/master/nginx/docker/nginx.conf) does
+    with `1d`. Without them, the agent's log shows `RST_STREAM closed stream` on `readRequestsFromProxy()` or
+    `writeResponsesToProxy()`, then `Disconnected from proxy`, a minute after the last scrape. The stream that tells an
+    agent another agent took one of its paths sends a keepalive every 30 seconds, so it stays open either way.
 
 Example Nginx and proxy configuration files are available in the repository:
 

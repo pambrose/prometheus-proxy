@@ -241,6 +241,17 @@ agent that dies before opening that stream, or whose connection stays half-open,
 until `proxy.internal.maxAgentInactivitySecs` (default 60s) evicts it. This is expected; see
 [Nginx Reverse Proxy](advanced.md#nginx-reverse-proxy).
 
+### Agents reconnect every minute behind Nginx
+
+The agent logs `RST_STREAM closed stream` on `readRequestsFromProxy()`, `writeResponsesToProxy()`, or
+`writeChunkedResponsesToProxy()`, then `Disconnected from proxy`, about a minute after its last scrape, and again each
+minute while nothing scrapes it. Its paths are gone from the proxy for a moment each time, so a scrape can fail.
+
+- **Cause:** Nginx closes a gRPC stream that's quiet for 60 seconds, and an agent's streams carry nothing between
+  scrapes.
+- **Fix:** raise `grpc_read_timeout` and `client_body_timeout` well above the longest scrape interval; see
+  [Nginx Reverse Proxy](advanced.md#nginx-reverse-proxy).
+
 ### `RESOURCE_EXHAUSTED` when an agent connects behind Nginx
 
 With `transportFilterDisabled`, the proxy refuses a connect once
