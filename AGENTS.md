@@ -57,12 +57,14 @@ IntelliJ imports it as a second linked Gradle project (`.idea/gradle.xml`); its 
 is a symlink to the root's, so the IDE syncs it with the root's Gradle instead of generating a wrapper of its own.
 
 The Spring Boot demo's roastery, `demos/spring-boot/app`, is a Maven project, a Spring Boot app in Java that embeds the
-agent through `EmbeddedAgentConfig.builder()`. Spring Boot's dependency management sets the versions of some of the
-agent's libraries (kotlinx-serialization, Jackson 2, Logback, gRPC), older than the agent's own;
-`make spring-boot-demo-check` (in CI's `consumer-check` job) builds it against the snapshot `consumer-check` publishes
-and runs its `RoasteryAgentTest`, which starts the agent against a proxy in the same JVM and scrapes through it, so a
-change to the builder's Java surface, or a Spring Boot release that breaks the agent at runtime, fails there. Its
-`prometheus-proxy.version` is a release version literal.
+agent through the Spring Boot starter, with no agent code of its own: `application.yml` sets the starter's
+`prometheus-proxy.agent.*` properties, and exposes only Actuator's health. Spring Boot's dependency management sets
+the versions of some of the agent's libraries (kotlinx-serialization, Jackson 2, Logback, gRPC), older than the
+agent's own; `make spring-boot-demo-check` (in CI's `consumer-check` job) builds it against the snapshot
+`consumer-check` publishes, the starter's included, and runs its `RoasteryAgentTest`, which starts the agent against a
+proxy in the same JVM and scrapes through it, so a change to the starter, or a Spring Boot release that breaks the agent
+at runtime, fails there. Its `prometheus-proxy.version` is a release version literal; while the latest release
+predates what the demo shows, `demo.sh`'s `NEEDS_RELEASE_AFTER` has `make up` build the library from the checkout.
 
 The Spring Boot starter, `spring-boot-starter/`, is the build's one subproject (`:spring-boot-starter`), in Java,
 published alongside the agent at its version as `com.pambrose:prometheus-proxy-spring-boot-starter`: auto-configuration

@@ -14,8 +14,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * The roastery: every few seconds it roasts a batch of green beans from one origin, and every so often ships roasted
- * beans to the coffee shop. Its meters, in the registry Actuator serves at {@code /actuator/prometheus}, count the
- * batches by origin, time the roasts, and gauge the stock.
+ * beans to the coffee shop. Its meters, in the registry the agent reads in-process, count the batches by origin, time
+ * the roasts, and gauge the stock.
  */
 @Component
 public class Roastery {

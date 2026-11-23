@@ -1,7 +1,7 @@
 # The Spring Boot demo's roastery (../README.md). docker/compose.yml builds it one of two ways, which APP_BUILD picks:
 #
-#   compiled (make up)        builds the app here with Maven, against the release of com.pambrose:prometheus-proxy that
-#                             PROXY_VERSION names, from Maven Central, so the demo needs only Docker
+#   compiled (make up)        builds the app here with Maven, against the release of the project's Spring Boot starter
+#                             that PROXY_VERSION names, from Maven Central, so the demo needs only Docker
 #   prebuilt (make up-local)  copies target/roastery.jar, which demo.sh built on the host against this checkout
 ARG APP_BUILD=compiled
 

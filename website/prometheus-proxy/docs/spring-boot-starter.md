@@ -8,7 +8,8 @@ A Spring Boot app can run the [embedded agent](embedded-agent.md) with a depende
 `com.pambrose:prometheus-proxy-spring-boot-starter` starts the agent with the app, serves the app's metrics to
 Prometheus through the proxy, and reports the agent's connection in Actuator's health. The agent reads the app's
 metrics registry in-process, so the app needs no `/actuator/prometheus` endpoint, no credentials for one, and no web
-server at all: a worker that consumes a queue is scraped as a web app is.
+server at all: a worker that consumes a queue is scraped as a web app is. The [Spring Boot Demo](spring-boot-demo.md)
+runs it in a roastery app.
 
 ## Adding the Dependency
 
@@ -119,4 +120,4 @@ Boot release to break it, a property in the app's pom sets that library back: `k
 ## Without the Starter
 
 [In Spring Boot](embedded-agent.md#in-spring-boot) on the Embedded Agent page shows what the starter does in a few beans
-of the app's own, which the Spring Boot Demo's roastery has, for an app that wants to wire the agent itself.
+of the app's own, for an app that wants to wire the agent itself.

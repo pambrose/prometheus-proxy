@@ -1,7 +1,7 @@
 # The Spring Boot demo (../README.md): the roastery, a Spring Boot app with the prometheus-proxy agent embedded, the
 # stock proxy, and Prometheus. demo.sh starts it, and writes .env beside this file, which compose reads: the proxy's TLS
-# certificate and key, the CA certificate the agent trusts, the agent's token, and the password for Actuator's
-# /actuator/prometheus. Every port is published on 127.0.0.1 only.
+# certificate and key, the CA certificate the agent trusts, and the agent's token. Every port is published on 127.0.0.1
+# only.
 name: prometheus-proxy-spring-boot-demo
 
 services:
@@ -12,20 +12,17 @@ services:
       args:
         APP_BUILD: ${SPRING_BOOT_DEMO_APP_BUILD:-compiled}
         PROXY_VERSION: ${SPRING_BOOT_DEMO_PROXY_VERSION:-}
-    # The settings the roastery's AgentSettings binds, through application.yml
+    # The settings application.yml reads into the starter's prometheus-proxy.agent properties
     environment:
       PROMETHEUS_PROXY: proxy:50051
       PROMETHEUS_AGENT_TOKEN: ${AGENT_TOKEN:-}
       PROMETHEUS_PROXY_CERT: ${PROXY_CA_PEM:-}
       # The name the test certificate (testing/certs/server1.pem) was issued to
       PROMETHEUS_PROXY_AUTHORITY: foo.test.google.fr
-      METRICS_USER: ${METRICS_USER:-}
-      METRICS_PASSWORD: ${METRICS_PASSWORD:-}
-      # The agent's own dashboard, which the agent turns on from its environment, over what the roastery's code sets,
-      # so the code needs no change. It has no password, so the agent warns at startup that it listens on every
-      # interface without a login: the container's, whose port is published on 127.0.0.1 only.
-      DASHBOARD_ENABLED: "true"
-      DASHBOARD_PORT: "8495"
+      # The agent's own dashboard: the starter's prometheus-proxy.agent.dashboard.port, which Spring Boot binds from
+      # this variable, so application.yml needn't change. It has no password, so the agent warns at startup that it
+      # listens on every interface without a login: the container's, whose port is published on 127.0.0.1 only.
+      PROMETHEUSPROXY_AGENT_DASHBOARD_PORT: "8495"
     ports:
       - "127.0.0.1:${SPRING_BOOT_DEMO_APP_PORT:-8490}:8080"  # The status page and Actuator, for curl
       - "127.0.0.1:${SPRING_BOOT_DEMO_AGENT_DASHBOARD_PORT:-8495}:8495"  # The agent's dashboard

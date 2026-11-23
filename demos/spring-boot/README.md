@@ -1,17 +1,18 @@
 # Spring Boot demo
 
 A self-contained demo of Prometheus Proxy's agent embedded in a Spring Boot app written in Java. The roastery, which
-roasts the coffee shop's beans, runs the agent inside its own JVM, started by a Spring bean from settings Spring Boot
-binds. The agent reads the metrics Spring Boot's Actuator serves behind Spring Security, and sends them to a proxy,
-which Prometheus scrapes. The demo shows the parts that are Spring Boot's own:
+roasts the coffee shop's beans, runs the agent inside its own JVM, started by the project's
+[Spring Boot starter](https://prometheus-proxy.com/spring-boot-starter/) from a few properties in `application.yml`.
+The agent reads the app's metrics from its Micrometer registry, in-process, and sends them to a proxy, which Prometheus
+scrapes. The demo shows the parts that are Spring Boot's own:
 - the agent's lifecycle with the app's;
 - the agent's connection in Actuator's health;
-- Actuator's metrics behind a password;
+- the app's metrics served with no `/actuator/prometheus` endpoint;
 - the versions of the agent's libraries that Spring Boot's dependency management picks;
 - a graceful shutdown that takes the agent down first.
 
 The agent's own [dashboard](https://prometheus-proxy.com/agent-dashboard/) is on too, turned on by the environment
-with no change to the roastery's code. It shows the agent's side of its connection, from inside the roastery, and the
+with no change to the roastery. It shows the agent's side of its connection, from inside the roastery, and the
 tour watches it while the proxy stops and starts again.
 
 The coffee shop in the [embedded demo](../embedded) shows the rest with an app in Kotlin: a rush, an alert in Grafana,
@@ -25,8 +26,8 @@ graph LR
   P[Prometheus :9090] -->|scrapes /roastery_metrics| Proxy[Proxy, dashboard :8094]
   %% The agent connects out to the proxy, so its arrow points back. The invisible link keeps the app to the right.
   Proxy ~~~ Agent
-  Agent[embedded agent, a SmartLifecycle bean, dashboard :8495] -->|gRPC over TLS, with a token| Proxy
-  Agent -->|reads /actuator/prometheus on 127.0.0.1| App[roastery: Spring Boot, Actuator behind Spring Security]
+  Agent[embedded agent, run by the Spring Boot starter, dashboard :8495] -->|gRPC over TLS, with a token| Proxy
+  Agent -->|reads its metrics registry in-process| App[roastery: Spring Boot, Micrometer]
 
   subgraph host[Proxy host]
     P
@@ -78,13 +79,13 @@ in the roastery's log, that it listens on all interfaces without a login: the co
 reaches.
 
 The demo's TLS certificates are the repository's test ones (`testing/certs`), which are public, so it suits a laptop
-and nothing shared. `make up` writes them, with a random token and password, to `docker/.env` the first time it runs.
+and nothing shared. `make up` writes them, with a random token, to `docker/.env` the first time it runs.
 
 ## What's running
 
 | Service | Role |
 |---|---|
-| `roastery` | The app, version 1.0 (`app/`): a Spring Boot app in Java that roasts a batch of beans every two seconds and ships some to the coffee shop every five, counting both in Micrometer meters. Actuator serves them, with the JVM's and Tomcat's, at `/actuator/prometheus`, which Spring Security guards with Basic Auth. The prometheus-proxy agent runs inside it, and reads `/actuator/prometheus` on `127.0.0.1`. Its dashboard is on, at port 8495, from the environment the agent reads itself (`DASHBOARD_ENABLED`, `DASHBOARD_PORT`). |
+| `roastery` | The app, version 1.0 (`app/`): a Spring Boot app in Java that roasts a batch of beans every two seconds and ships some to the coffee shop every five, counting both in Micrometer meters. The prometheus-proxy agent runs inside it, started by the project's Spring Boot starter, and reads them, with the JVM's and Tomcat's, from the app's metrics registry, in-process; Actuator exposes only its health. Its dashboard is on, at port 8495, from the environment (`PROMETHEUSPROXY_AGENT_DASHBOARD_PORT`). |
 | `proxy` | The stock proxy image, which takes its TLS certificate and key, and the agent's token, from environment variables, with no file mounted. Its agent port is reachable only on the compose network; its dashboard is on. |
 | `prometheus` | Scrapes the roastery's path through the proxy every 5s, and the proxy's own metrics. |
 
@@ -95,17 +96,17 @@ and nothing shared. `make up` writes them, with a random token and password, to 
 
 ### 1. A Spring Boot app with the agent embedded
 
-Open the roastery's status page, then run `./demo.sh settings`. It shows the settings Spring Boot bound, with the
-token, the certificate, and the password shown only as set, and the agent starting and registering
+Open the roastery's status page, then run `./demo.sh settings`. It shows the settings the starter bound, with the
+token and the certificate shown only as set, and the agent starting and registering
 `/roastery_metrics`. The proxy dashboard's Agents view lists `roastery-1.0`, named after the version in the app's
 Spring Boot build info. `./demo.sh health` shows the agent in Actuator's `/actuator/health`: UP, with the proxy's
 address, while it's connected, and UNKNOWN, while the app's own health stays UP, when it isn't.
 
-### 2. Actuator's metrics, behind Spring Security, through the proxy
+### 2. The app's metrics, read in-process, through the proxy
 
-`./demo.sh peek` tries `/actuator/prometheus` without its password, which answers 401, then reads the same metrics
-through the proxy. The agent read them with the credentials, which `scrapeSelf` percent-encoded into the scrape URL,
-so Prometheus never needs them.
+`./demo.sh peek` tries `/actuator/prometheus`, which answers 404, since the roastery exposes only Actuator's health,
+then reads the roastery's metrics through the proxy. For each scrape, the agent reads the app's `PrometheusRegistry`
+bean, where Micrometer keeps the meters, so there's no metrics endpoint, password, or Spring Security to set up.
 
 ### 3. What Spring Boot's dependency management picked
 
@@ -122,11 +123,11 @@ property in the pom sets that library back: `kotlin-serialization.version`, `jac
 ### 4. The agent's own dashboard, with the proxy stopped and started
 
 The agent serves a dashboard of its own, from inside the roastery, at <http://localhost:8495/dashboard>. Compose
-turns it on with `DASHBOARD_ENABLED` and `DASHBOARD_PORT`, which the agent reads from its environment over what the
-roastery's code sets, so the code didn't change. Its Paths view lists `/roastery_metrics`, registered, with its recent
-scrapes. Select it to see each scrape the proxy asked for, and press Scrape now to have the agent read Actuator's
-metrics at once, from inside the roastery. The Activity view lists what has happened to the agent, newest first, the
-Connection view its proxy endpoint, and the Settings view its settings.
+turns it on with `PROMETHEUSPROXY_AGENT_DASHBOARD_PORT`, which Spring Boot binds to the starter's
+`prometheus-proxy.agent.dashboard.port`, so `application.yml` needn't change. Its Paths view lists
+`/roastery_metrics`, registered, with its recent scrapes. Select it to see each scrape the proxy asked for, and press
+Scrape now to have the agent read the roastery's registry at once. The Activity view lists what has happened to the
+agent, newest first, the Connection view its proxy endpoint, and the Settings view its settings.
 
 `./demo.sh proxy-stop` stops the proxy, and its dashboard with it. The agent's still answers: its Connection view
 turns failing, with the error the agent got connecting to the proxy, and its Activity view adds disconnected and
@@ -146,9 +147,9 @@ the roastery's path, and no scrape reaches the web server once it starts drainin
 
 | Command | Effect | How it works |
 |---|---|---|
-| `demo.sh settings` | Shows the agent's settings as Spring Boot bound them, and the agent starting | The roastery's log lines from `PrometheusAgentLifecycle` and the agent |
-| `demo.sh peek` | Tries `/actuator/prometheus` without the password, then reads it through the proxy | `curl` of the app's `/actuator/prometheus`, then of the proxy's `/roastery_metrics` |
-| `demo.sh health` | Shows the agent's component of `/actuator/health` and the app's health | `curl` of the app's `/actuator/health`, whose `prometheusAgent` component `PrometheusAgentHealthIndicator` reports from `EmbeddedAgentInfo.isConnected` |
+| `demo.sh settings` | Shows the agent's settings as Spring Boot bound them, and the agent starting | The roastery's log lines from the starter's `PrometheusProxyAgent` and the agent |
+| `demo.sh peek` | Tries `/actuator/prometheus`, which the roastery doesn't expose, then reads its metrics through the proxy | `curl` of the app's `/actuator/prometheus`, then of the proxy's `/roastery_metrics` |
+| `demo.sh health` | Shows the agent's component of `/actuator/health` and the app's health | `curl` of the app's `/actuator/health`, whose `prometheusAgent` component the starter reports from `EmbeddedAgentInfo.isConnected` |
 | `demo.sh versions` | Compares the agent's libraries' versions in the roastery with the agent's own | The jar names in the image's `/app/lib`, against `gradle/libs.versions.toml` |
 | `demo.sh proxy-stop` / `proxy-start` | Stops the proxy, or starts it again, which the agent's dashboard shows | `docker compose stop` / `start proxy`: the agent retries every few seconds, its dashboard's Connection view shows the error, and its Activity view the disconnect and the reconnect |
 | `demo.sh stop-app` / `start-app` | Stops the roastery with SIGTERM, or starts it again | `docker compose stop` / `start roastery` |
@@ -157,8 +158,9 @@ the roastery's path, and no scrape reaches the web server once it starts drainin
 
 | Path | What it is |
 |---|---|
-| `app/` | The roastery: a Maven project of its own, outside the repository's Gradle build, whose parent is Spring Boot's `spring-boot-starter-parent`. Its `Dockerfile` builds it with Maven inside Docker (`make up`) or copies a jar built on the host (`make up-local`), and runs Spring Boot's extracted layout on a JRE. |
-| `app/src/main/java/roastery/` | `PrometheusAgentLifecycle`, the `SmartLifecycle` bean that runs the agent; `AgentSettings`, the `@ConfigurationProperties` record it's built from, whose values `src/main/resources/application.yml` reads from the environment; `SecurityConfig`, which lets only the agent's user read `/actuator/prometheus`; `PrometheusAgentHealthIndicator`, which puts the agent in `/actuator/health`; and the roastery itself. |
+| `app/` | The roastery: a Maven project of its own, outside the repository's Gradle build, whose parent is Spring Boot's `spring-boot-starter-parent`, and which depends on the project's Spring Boot starter, `com.pambrose:prometheus-proxy-spring-boot-starter`. Its `Dockerfile` builds it with Maven inside Docker (`make up`) or copies a jar built on the host (`make up-local`), and runs Spring Boot's extracted layout on a JRE. |
+| `app/src/main/java/roastery/` | The roastery itself: its meters and schedule (`Roastery`), its status page, and its main class. It has no code for the agent, which the starter runs. |
+| `app/src/main/resources/application.yml` | The starter's `prometheus-proxy.agent` properties, read from the environment, and the details Actuator's health shows. |
 | `app/src/test/java/roastery/RoasteryAgentTest.java` | Starts the roastery and a proxy in one JVM, and scrapes through the proxy: the agent at the versions Spring Boot picks, which `make spring-boot-demo-check` runs on every pull request. |
 | `config/proxy.conf` | The proxy's settings: its metrics and its dashboard. Its TLS material and token come from the environment. |
 | `docker/compose.yml` | The services above, with the agent's dashboard turned on in the roastery's environment. |
