@@ -62,7 +62,11 @@ class ContainersHttpsTargetTest : StringSpec() {
         GenericContainer<Nothing>(NGINX_IMAGE).apply {
           withNetwork(network)
           withNetworkAliases("waterzooi.test.google.be")
-          withClasspathResourceMapping("containers/nginx-tls.conf", "/etc/nginx/conf.d/https.conf", BindMode.READ_ONLY)
+          withClasspathResourceMapping(
+            "containers/nginx/nginx-tls.conf",
+            "/etc/nginx/conf.d/https.conf",
+            BindMode.READ_ONLY,
+          )
           withClasspathResourceMapping("containers/metrics.txt", NGINX_METRICS_DEST, BindMode.READ_ONLY)
           withCopyFileToContainer(MountableFile.forHostPath("testing/certs/server1.pem"), "/etc/nginx/certs/server.pem")
           withCopyFileToContainer(MountableFile.forHostPath("testing/certs/server1.key"), "/etc/nginx/certs/server.key")
