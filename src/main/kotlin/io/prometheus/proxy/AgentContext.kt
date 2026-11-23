@@ -23,6 +23,7 @@ import com.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.pambrose.common.dsl.GuavaDsl.toStringElements
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.common.ScrapeResults
+import io.prometheus.common.receiveCatchingWithin
 import io.prometheus.common.AgentValues.shownValue
 import io.prometheus.grpc.PathNotice
 import io.prometheus.grpc.PathRejectionCause
@@ -32,7 +33,6 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.CONFLATED
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
 import kotlinx.coroutines.channels.ClosedSendChannelException
-import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.AtomicInt
@@ -131,6 +131,10 @@ internal class AgentContext(
   var acceptsPathNotices: Boolean by atomicBoolean(false)
     private set
 
+  /** Whether the agent ignores a keepalive on its scrape request stream, so the proxy sends it one while idle. */
+  var acceptsStreamKeepalives: Boolean by atomicBoolean(false)
+    private set
+
   /**
    * The auth identity the agent registered as, for the dashboard; empty with agent auth off.
    *
@@ -179,6 +183,7 @@ internal class AgentContext(
     hostName = request.hostName
     consolidated = request.consolidated
     acceptsPathNotices = request.pathNotices
+    acceptsStreamKeepalives = request.streamKeepalives
     proxyEndpoints = request.proxyEndpointsList.toList()
     currentEndpointIndex = request.currentEndpointIndex
   }
@@ -213,10 +218,22 @@ internal class AgentContext(
     return true
   }
 
-  suspend fun readScrapeRequest(): ScrapeRequestWrapper? =
-    scrapeRequestNotifier.receiveCatching().getOrNull()?.let {
-      scrapeRequestQueue.poll()?.also { queuedCount -= 1 }
+  /**
+   * Waits for the next scrape request, at most [idle], and takes it, or returns null once the context is invalidated,
+   * or when [idle] passes with none, while it stays valid. A signal that comes as the wait ends isn't lost (see
+   * receiveCatchingWithin), which would leave its request queued unread.
+   */
+  suspend fun readScrapeRequest(idle: Duration = Duration.INFINITE): ScrapeRequestWrapper? {
+    while (true) {
+      val signal = scrapeRequestNotifier.receiveCatchingWithin(idle) ?: return null
+      if (signal.isClosed)
+        return null
+      scrapeRequestQueue.poll()?.let {
+        queuedCount -= 1
+        return it
+      }
     }
+  }
 
   fun isValid() = valid && !scrapeRequestNotifier.isClosedForReceive
 
@@ -280,12 +297,14 @@ internal class AgentContext(
 
   /**
    * Waits for unread path notices and takes them all, or returns null once the context is invalidated, or none once
-   * [timeout] passes with no notice.
+   * [timeout] passes with no notice. A wake that comes as the wait ends isn't lost (see receiveCatchingWithin), which
+   * left the notices unread until the next one woke it.
    */
   suspend fun awaitPathNotices(timeout: Duration = Duration.INFINITE): List<PathNotice>? {
     while (true) {
-      val signal = withTimeoutOrNull(timeout) { pathNoticeSignal.receiveCatching() } ?: return emptyList()
-      signal.getOrNull() ?: return null
+      val signal = pathNoticeSignal.receiveCatchingWithin(timeout) ?: return emptyList()
+      if (signal.isClosed)
+        return null
       val notices =
         synchronized(pendingPathNotices) {
           pathNoticesFull = false

@@ -82,6 +82,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.zip.CRC32
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -1041,11 +1042,70 @@ class ProxyServiceImplTest : StringSpec() {
       every { proxy.agentContextManager.getAgentContext(context.agentId) } returns context
 
       val first =
-        ProxyServiceImpl(proxy, pathNoticeKeepalive = 50.milliseconds)
+        ProxyServiceImpl(proxy, streamKeepalive = 50.milliseconds)
           .readPathNoticesFromProxy(agentInfo { agentId = context.agentId })
           .first()
 
       first.path shouldBe ""
+    }
+
+    // Between scrapes this stream carries nothing, so a reverse proxy in front of the proxy, such as nginx with its
+    // default 60s timeouts, closed it and ended the agent's connection: one not scraped for a minute reconnected each
+    // minute.
+    "readRequestsFromProxy should send a keepalive to an agent that takes them while no scrape request comes" {
+      val (proxy, context) = proxyWithRealAgentContext()
+      context.assignProperties(registerAgentRequest { streamKeepalives = true })
+
+      val first =
+        ProxyServiceImpl(proxy, streamKeepalive = 50.milliseconds)
+          .readRequestsFromProxy(agentInfo { agentId = context.agentId })
+          .first()
+
+      first.keepalive.shouldBeTrue()
+    }
+
+    // An agent predating them would take a keepalive for a scrape request.
+    "readRequestsFromProxy should send no keepalive to an agent that predates them" {
+      val (proxy, context) = proxyWithRealAgentContext()
+
+      val first =
+        withTimeoutOrNull(300.milliseconds) {
+          ProxyServiceImpl(proxy, streamKeepalive = 50.milliseconds)
+            .readRequestsFromProxy(agentInfo { agentId = context.agentId })
+            .first()
+        }
+
+      first.shouldBeNull()
+    }
+
+    // A keepalive is for the reverse proxy alone: nothing to assign, and no agent activity.
+    "writeResponsesToProxy should ignore a keepalive" {
+      val proxy = createMockProxy()
+
+      ProxyServiceImpl(proxy).writeResponsesToProxy(flowOf(scrapeResponse { keepalive = true }))
+
+      verify(exactly = 0) { proxy.scrapeRequestManager.assignScrapeResults(any(), any()) }
+    }
+
+    "writeChunkedResponsesToProxy should ignore a keepalive, without warning about a message with no part" {
+      val proxy = createMockProxy()
+
+      val warnings =
+        captureLogs<ProxyServiceImpl>(Level.WARN) {
+          ProxyServiceImpl(proxy).writeChunkedResponsesToProxy(flowOf(chunkedScrapeResponse { keepalive = true }))
+        }
+
+      warnings.shouldBeEmpty()
+    }
+
+    // So the agent sends keepalives on its response streams only to a proxy that ignores them.
+    "registerAgent should tell the agent the proxy takes keepalives" {
+      val (proxy, context) = proxyWithRealAgentContext()
+
+      val response = ProxyServiceImpl(proxy).registerAgent(registerAgentRequest { agentId = context.agentId })
+
+      response.valid.shouldBeTrue()
+      response.streamKeepalives.shouldBeTrue()
     }
 
     // The stream ends with the context; with the transport filter disabled, readRequestsFromProxy removes it.

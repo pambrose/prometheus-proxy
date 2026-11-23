@@ -205,6 +205,7 @@ class AgentContextTest : StringSpec() {
       every { request.proxyEndpointsList } returns LazyStringArrayList()
       every { request.currentEndpointIndex } returns 0
       every { request.pathNotices } returns false
+      every { request.streamKeepalives } returns false
 
       context.assignProperties(request)
 
@@ -304,6 +305,20 @@ class AgentContextTest : StringSpec() {
 
       val result = context.readScrapeRequest()
       result.shouldNotBeNull()
+      context.scrapeRequestBacklogSize shouldBe 0
+    }
+
+    // The proxy sends a keepalive when the wait ends with no request, which mustn't lose a request's signal: one queued
+    // after it is still read.
+    "readScrapeRequest should return null once its idle wait ends with no request, and still read one queued later" {
+      val context = AgentContext("remote-addr")
+      val wrapper = mockk<ScrapeRequestWrapper>(relaxed = true)
+
+      context.readScrapeRequest(idle = 50.milliseconds).shouldBeNull()
+      context.isValid().shouldBeTrue()
+      context.writeScrapeRequest(wrapper)
+
+      context.readScrapeRequest(idle = 1.seconds) shouldBe wrapper
       context.scrapeRequestBacklogSize shouldBe 0
     }
 
@@ -655,6 +670,7 @@ class AgentContextTest : StringSpec() {
       every { request.proxyEndpointsList } returns LazyStringArrayList()
       every { request.currentEndpointIndex } returns 0
       every { request.pathNotices } returns false
+      every { request.streamKeepalives } returns false
       context.assignProperties(request)
 
       context.launchId shouldBe "launch-abc"

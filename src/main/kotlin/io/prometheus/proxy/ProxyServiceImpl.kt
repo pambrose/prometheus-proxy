@@ -23,6 +23,7 @@ import io.grpc.Status
 import io.grpc.StatusException
 import io.prometheus.Proxy
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
+import io.prometheus.common.GrpcConstants.STREAM_KEEPALIVE
 import io.prometheus.common.MetricBuilders.rejectionCauseLabel
 import io.prometheus.common.ScrapeResults.Companion.toScrapeResults
 import io.prometheus.common.ScrapeTracing.Companion.TAG_QUEUE_WAIT
@@ -51,6 +52,7 @@ import io.prometheus.grpc.agentInfo
 import io.prometheus.grpc.heartBeatResponse
 import io.prometheus.grpc.pathMapSizeResponse
 import io.prometheus.grpc.registerAgentResponse
+import io.prometheus.grpc.scrapeRequest
 import io.prometheus.grpc.registerPathResponse
 import io.prometheus.grpc.unregisterPathResponse
 import io.prometheus.proxy.ProxyPathManager.PathMetadata
@@ -62,7 +64,6 @@ import kotlinx.coroutines.flow.flow
 import kotlin.concurrent.atomics.AtomicLong
 import kotlin.concurrent.atomics.fetchAndIncrement
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.seconds
 import kotlin.time.DurationUnit
 
 /**
@@ -81,8 +82,9 @@ import kotlin.time.DurationUnit
  */
 internal class ProxyServiceImpl(
   private val proxy: Proxy,
-  // How long the path notices stream goes without sending before it sends a keepalive; see readPathNoticesFromProxy.
-  private val pathNoticeKeepalive: Duration = PATH_NOTICE_KEEPALIVE,
+  // How long a stream to the agent goes without sending before it sends a keepalive; see readRequestsFromProxy and
+  // readPathNoticesFromProxy.
+  private val streamKeepalive: Duration = STREAM_KEEPALIVE,
 ) : ProxyServiceGrpcKt.ProxyServiceCoroutineImplBase() {
   override suspend fun connectAgent(request: Empty): Empty {
     if (proxy.options.transportFilterDisabled) {
@@ -223,6 +225,8 @@ internal class ProxyServiceImpl(
     return registerAgentResponse {
       valid = isValid
       agentId = request.agentId
+      // writeResponsesToProxy and writeChunkedResponsesToProxy skip them.
+      streamKeepalives = true
       if (!isValid) {
         // Smart-cast to non-null: isValid == false implies failureReason != null.
         reason = failureReason
@@ -445,15 +449,14 @@ internal class ProxyServiceImpl(
 
   // Sends the agent the notices about paths another agent took from it, until the proxy stops or the context is
   // invalidated; see ProxyPathManager.takeOverPath. Unlike readRequestsFromProxy, its end removes nothing, even with
-  // the transport filter disabled: the scrape request stream, which every agent reads, does that. Notices are rare, and
-  // a reverse proxy in front of this one closes a stream that sends nothing for a while, nginx after its
-  // grpc_read_timeout (60s by default), which would end the agent's connection, so it sends a notice with no path,
-  // which the agent ignores, after pathNoticeKeepalive with nothing else.
+  // the transport filter disabled: the scrape request stream, which every agent reads, does that. Notices are rare, so
+  // it sends a notice with no path, which the agent ignores, after streamKeepalive with nothing else (see
+  // STREAM_KEEPALIVE). Every agent that reads the stream ignores one, so no flag is needed.
   override fun readPathNoticesFromProxy(request: AgentInfo): Flow<PathNotice> =
     flow {
       val agentContext = readableAgentContext(request.agentId, "readPathNoticesFromProxy")
       while (proxy.isStartingOrRunning) {
-        val notices = agentContext.awaitPathNotices(pathNoticeKeepalive) ?: break
+        val notices = agentContext.awaitPathNotices(streamKeepalive) ?: break
         if (notices.isEmpty()) emit(KEEPALIVE_NOTICE) else notices.forEach { emit(it) }
       }
     }
@@ -484,32 +487,46 @@ internal class ProxyServiceImpl(
   }
 
   // Delivers [agentContext]'s queued scrape requests until the proxy stops or the context is invalidated, skipping
-  // the ones no longer awaited. Starting counts: see Proxy.isStartingOrRunning.
+  // the ones no longer awaited. Starting counts: see Proxy.isStartingOrRunning. An agent that takes them gets a
+  // keepalive after streamKeepalive with no request (see STREAM_KEEPALIVE), and never one that doesn't, whatever the
+  // wait returns.
   private suspend fun FlowCollector<ScrapeRequest>.emitScrapeRequests(agentContext: AgentContext) {
+    val idle = if (agentContext.acceptsStreamKeepalives) streamKeepalive else Duration.INFINITE
     while (proxy.isStartingOrRunning && agentContext.isValid()) {
-      val wrapper = agentContext.readScrapeRequest()?.takeIf { isStillAwaited(it) } ?: continue
-      val queueWait = wrapper.ageDuration()
-      // A dashboard's scrape-now is left out, as it is from the latency histogram.
-      if (!wrapper.scrapeRequest.dashboardScrape)
-        proxy.metrics { scrapeQueueWait.observe(queueWait.toDouble(DurationUnit.SECONDS)) }
-      try {
-        emit(wrapper.scrapeRequest)
-        // On the forward span, so the time the request waited in the agent's queue shows, and reads as a number.
-        wrapper.traceSpan?.apply {
-          annotate("sent to agent")
-          tag(TAG_QUEUE_WAIT, queueWait.inWholeMilliseconds.toString())
-        }
-      } catch (e: CancellationException) {
-        // Cancelled after polling the wrapper out of the queue but before delivering it: fail the
-        // wrapper so the waiting HTTP handler gets a prompt error instead of blocking the full
-        // scrape-timeout window (finding 14).
-        proxy.scrapeRequestManager.failScrapeRequest(
-          wrapper.scrapeId,
-          "readRequestsFromProxy cancelled",
-          ProxyFailure.AGENT_DISCONNECTED,
-        )
-        throw e
+      val wrapper = agentContext.readScrapeRequest(idle)
+      when {
+        wrapper == null -> if (idle.isFinite() && agentContext.isValid()) emit(KEEPALIVE_REQUEST)
+        isStillAwaited(wrapper) -> sendScrapeRequest(wrapper) { emit(it) }
       }
+    }
+  }
+
+  // Sends the agent [wrapper]'s request with [send].
+  private suspend fun sendScrapeRequest(
+    wrapper: ScrapeRequestWrapper,
+    send: suspend (ScrapeRequest) -> Unit,
+  ) {
+    val queueWait = wrapper.ageDuration()
+    // A dashboard's scrape-now is left out, as it is from the latency histogram.
+    if (!wrapper.scrapeRequest.dashboardScrape)
+      proxy.metrics { scrapeQueueWait.observe(queueWait.toDouble(DurationUnit.SECONDS)) }
+    try {
+      send(wrapper.scrapeRequest)
+      // On the forward span, so the time the request waited in the agent's queue shows, and reads as a number.
+      wrapper.traceSpan?.apply {
+        annotate("sent to agent")
+        tag(TAG_QUEUE_WAIT, queueWait.inWholeMilliseconds.toString())
+      }
+    } catch (e: CancellationException) {
+      // Cancelled after polling the wrapper out of the queue but before delivering it: fail the
+      // wrapper so the waiting HTTP handler gets a prompt error instead of blocking the full
+      // scrape-timeout window (finding 14).
+      proxy.scrapeRequestManager.failScrapeRequest(
+        wrapper.scrapeId,
+        "readRequestsFromProxy cancelled",
+        ProxyFailure.AGENT_DISCONNECTED,
+      )
+      throw e
     }
   }
 
@@ -596,6 +613,9 @@ internal class ProxyServiceImpl(
     val sender = StreamSender(connectionAgentId)
     runCatchingCancellable {
       requests.collect { response ->
+        // The agent keeping the stream open, for a reverse proxy in front of this one, and nothing else.
+        if (response.keepalive)
+          return@collect
         // Whatever becomes of the result: one whose scrape is no longer tracked still proves the agent is alive.
         sender.markActive(response.agentId)
         try {
@@ -673,6 +693,9 @@ internal class ProxyServiceImpl(
     private var lastMissingChunkScrapeId: Long? = null
 
     fun read(response: ChunkedScrapeResponse) {
+      // The agent keeping the stream open, as on writeResponsesToProxy: none of the three parts, and no warning.
+      if (response.keepalive)
+        return
       // Whatever becomes of the message: a transfer whose scrape is no longer tracked still proves the agent is alive,
       // and on a slow link one transfer can take longer than maxAgentInactivitySecs. Only a header names the agent.
       sender.markActive(if (response.hasHeader()) response.header.headerAgentId else null)
@@ -884,9 +907,8 @@ internal class ProxyServiceImpl(
     private val PATH_ID_GENERATOR = AtomicLong(0L)
     private const val RPC_NAME = "writeChunkedResponsesToProxy"
 
-    // Under nginx's default grpc_read_timeout (60s) and Envoy's stream_idle_timeout (5m).
-    internal val PATH_NOTICE_KEEPALIVE = 30.seconds
     private val KEEPALIVE_NOTICE: PathNotice = PathNotice.getDefaultInstance()
+    private val KEEPALIVE_REQUEST: ScrapeRequest = scrapeRequest { keepalive = true }
     internal const val UNKNOWN_ADDRESS = "Unknown"
 
     // The most characters a chunked transfer keeps of each string in its header; see boundedHeader. A fixed bound, not

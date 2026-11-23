@@ -2324,6 +2324,28 @@ class AgentPathManagerTest : StringSpec() {
       }
     }
 
+    // Until the proxy's notice names the holder, the path's holder is unknown, not gone: a second refusal, before the
+    // notice came, showed it as having left. The proxy's refusal names the holder, so it is shown instead.
+    "a path refused again before the proxy names its holder should still show the proxy's refusal" {
+      val clock = TestTimeSource()
+      val agent = createMockAgent(agentHocon = "discovery.enabled = true")
+      val grpc = agent.grpcService
+      coEvery { grpc.reclaimPathOnProxy(any(), any(), any(), any()) } throws
+        heldRefusal("Path /discovered is served by agentId 7 (agent-b), of another launch")
+      val manager = AgentPathManager(agent, clock)
+      manager.reconcileDiscoveredPaths([DiscoveredPath("d", "discovered", METRICS_URL, "{}")])
+      manager.reconcileDiscoveredPaths([DiscoveredPath("d", "discovered", "http://edited/metrics", "{}")])
+
+      clock += 10.seconds
+      manager.reclaimTakenOverPaths()
+
+      coVerify(exactly = 2) { grpc.reclaimPathOnProxy(any(), any(), any(), any()) }
+      manager.pathFailures.getValue("discovered").reason.message.apply {
+        this shouldContain "agent-b"
+        this shouldNotContain "has left"
+      }
+    }
+
     // Waiting to take a path back isn't refused for good, so the connection mustn't end as one serving nothing.
     "a taken-over static path should still count as served" {
       val agent = createMockAgent(pathConfigsHocon = """{ name = m, path = metrics, url = "$METRICS_URL" }""")

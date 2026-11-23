@@ -22,6 +22,11 @@ message RegisterAgentRequest {
   // that path is free again. Additive both ways: a proxy keeps no notices for an agent predating it, which leaves it
   // false, and a proxy predating it ignores it.
   bool path_notices = 9;
+  // Whether the agent ignores a keepalive on readRequestsFromProxy. The proxy sends one after a while with no scrape
+  // request only to an agent that sets it, as an agent predating it would take one for a scrape request. A reverse
+  // proxy in front of the proxy, such as nginx, closes a stream that's quiet for its timeout, and an agent's connection
+  // ends when any of its streams does.
+  bool stream_keepalives = 10;
 }
 
 message RegisterAgentResponse {
@@ -34,6 +39,9 @@ message RegisterAgentResponse {
   // name can never be reused with different semantics.
   reserved 4;
   reserved "proxy_url";
+  // Whether the proxy ignores a keepalive on writeResponsesToProxy and writeChunkedResponsesToProxy. The agent sends
+  // one after a while with no result only to a proxy that sets it, as a proxy predating it would take one for a result.
+  bool stream_keepalives = 5;
 }
 
 message RegisterPathRequest {
@@ -141,6 +149,8 @@ message ScrapeRequest {
   // the proxy traces nothing, and then the agent, with its own tracing on, starts a trace of its own. Additive both
   // ways: an agent predating it ignores it, and a proxy predating it leaves it empty.
   map<string, string> trace_context = 10;
+  // Nothing to scrape: the proxy keeping the stream open (see RegisterAgentRequest.stream_keepalives).
+  bool keepalive = 11;
 }
 
 message ScrapeResponse {
@@ -156,6 +166,8 @@ message ScrapeResponse {
     string content_as_text = 9;
     bytes content_as_zipped = 10;
   }
+  // No result: the agent keeping the stream open (see RegisterAgentResponse.stream_keepalives).
+  bool keepalive = 11;
 }
 
 message ChunkedScrapeResponse {
@@ -165,6 +177,8 @@ message ChunkedScrapeResponse {
     ChunkData chunk = 2;
     SummaryData summary = 3;
   }
+  // None of the three: the agent keeping the stream open (see RegisterAgentResponse.stream_keepalives).
+  bool keepalive = 4;
 }
 
 message HeaderData {

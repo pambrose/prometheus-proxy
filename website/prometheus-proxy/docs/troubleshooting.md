@@ -249,9 +249,10 @@ The agent logs `RST_STREAM closed stream` on `readRequestsFromProxy()`, `writeRe
 minute while nothing scrapes it. Its paths are gone from the proxy for a moment each time, so a scrape can fail.
 
 - **Cause:** Nginx closes a gRPC stream that's quiet for 60 seconds, and an agent's streams carry nothing between
-  scrapes.
-- **Fix:** raise `grpc_read_timeout` and `client_body_timeout` well above the longest scrape interval; see
-  [Nginx Reverse Proxy](advanced.md#nginx-reverse-proxy).
+  scrapes. A current agent and proxy keep their streams open with keepalives, but only when both support them, so this
+  happens when the agent or the proxy is from 4.6.1 or earlier.
+- **Fix:** upgrade both, or raise `grpc_read_timeout` and `client_body_timeout` well above the longest scrape interval;
+  see [Nginx Reverse Proxy](advanced.md#nginx-reverse-proxy).
 
 ### `RESOURCE_EXHAUSTED` when an agent connects behind Nginx
 

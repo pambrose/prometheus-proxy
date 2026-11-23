@@ -45,6 +45,8 @@ import io.prometheus.common.Utils.failureKey
 import io.prometheus.common.Utils.logStreamFailure
 import io.prometheus.common.Utils.HostPort
 import io.prometheus.common.Utils.parseEndpointList
+import io.prometheus.common.GrpcConstants.STREAM_KEEPALIVE
+import io.prometheus.common.receiveCatchingWithin
 import io.prometheus.common.Utils.sanitizeUrl
 import io.prometheus.grpc.ChunkedScrapeResponse
 import io.prometheus.grpc.ProxyServiceGrpcKt
@@ -60,6 +62,7 @@ import io.prometheus.grpc.heartBeatRequest
 import io.prometheus.grpc.pathMapSizeRequest
 import io.prometheus.grpc.registerAgentRequest
 import io.prometheus.grpc.registerPathRequest
+import io.prometheus.grpc.scrapeResponse
 import io.prometheus.grpc.summaryData
 import io.prometheus.grpc.unregisterPathRequest
 import kotlin.concurrent.atomics.AtomicInt
@@ -69,9 +72,11 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
 import kotlinx.coroutines.channels.ClosedSendChannelException
+import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.channels.consume
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.consumeAsFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import java.io.ByteArrayInputStream
 import java.util.concurrent.ConcurrentHashMap
@@ -81,6 +86,7 @@ import java.util.concurrent.locks.ReentrantLock
 import java.util.zip.CRC32
 import kotlin.concurrent.atomics.plusAssign
 import kotlin.concurrent.withLock
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.TimeMark
 import kotlin.time.DurationUnit
@@ -160,9 +166,15 @@ internal class AgentGrpcService(
   private val options: AgentOptions,
   private val inProcessServerName: String,
   private val timeSource: TimeSource = TimeSource.Monotonic,
+  // How long a response stream goes without sending before it sends a keepalive; see streamOf.
+  private val streamKeepalive: Duration = STREAM_KEEPALIVE,
 ) {
   private val grpcLock = ReentrantLock()
   private var grpcStarted by atomicBoolean(false)
+
+  // Whether the proxy this connection registered with ignores a keepalive on the response streams, as its answer to
+  // registerAgent says; one predating them would take it for a result.
+  private var proxyTakesKeepalives by atomicBoolean(false)
 
   // Latched by shutDownChannelPermanently() and never cleared: the agent is stopping for good, so no
   // further channel may be created. Read and written only under grpcLock, which is what makes the
@@ -500,12 +512,15 @@ internal class AgentGrpcService(
         currentEndpointIndex = this@AgentGrpcService.currentEndpointIndex
         // Every connection reads them; see readPathNoticesFromProxy.
         pathNotices = true
+        // readRequestsFromProxy skips them.
+        streamKeepalives = true
       }
     unaryStub().registerAgent(request)
       .also { response ->
         agent.markMsgSent()
         if (!response.valid)
           throw RequestFailureException.fromProxy("registerAgent", response.reason)
+        proxyTakesKeepalives = response.streamKeepalives
       }
     initialConnectionLatch.countDown()
   }
@@ -645,6 +660,9 @@ internal class AgentGrpcService(
       }
     grpcStub.readRequestsFromProxy(agentInfo)
       .collect { grpcRequest: ScrapeRequest ->
+        // The proxy keeping the stream open: nothing to scrape.
+        if (grpcRequest.keepalive)
+          return@collect
         // The actual fetch happens at the other end of the channel, not here.
         // Not the whole message: a scrape request carries the Authorization header Prometheus sent.
         logger.debug { "readRequestsFromProxy(): scrapeId=${grpcRequest.scrapeId} path=${grpcRequest.path}" }
@@ -754,6 +772,30 @@ internal class AgentGrpcService(
     }
   }
 
+  // The messages of [channel], for one of the response streams, and, to a proxy that takes them, [keepalive] after
+  // streamKeepalive with none (see STREAM_KEEPALIVE). Consumes [channel] as consumeAsFlow does: once the flow ends, by
+  // its end or a failure, what's left in it is dropped. A message that comes as a wait ends isn't lost (see
+  // receiveCatchingWithin).
+  private fun <T> streamOf(
+    channel: ReceiveChannel<Outgoing<T>>,
+    agent: Agent,
+    keepalive: T,
+  ): Flow<T> {
+    val idle = if (proxyTakesKeepalives) streamKeepalive else Duration.INFINITE
+    return flow {
+      channel.consume {
+        while (true) {
+          val next = channel.receiveCatchingWithin(idle)
+          when {
+            next == null -> emit(keepalive)
+            next.isClosed -> next.exceptionOrNull()?.let { throw it } ?: break
+            else -> emit(next.getOrThrow().sent(agent))
+          }
+        }
+      }
+    }
+  }
+
   suspend fun writeResponsesToProxyUntilDisconnected(
     agent: Agent,
     connectionContext: AgentConnectionContext,
@@ -805,13 +847,13 @@ internal class AgentGrpcService(
       // Ends by disconnection from server
       launch(Dispatchers.IO) {
         runStreamTask("writeResponsesToProxy") {
-          grpcStub.writeResponsesToProxy(nonChunkedChannel.consumeAsFlow().map { it.sent(agent) })
+          grpcStub.writeResponsesToProxy(streamOf(nonChunkedChannel, agent, KEEPALIVE_RESPONSE))
         }
       }
 
       launch(Dispatchers.IO) {
         runStreamTask("writeChunkedResponsesToProxy") {
-          grpcStub.writeChunkedResponsesToProxy(chunkedChannel.consumeAsFlow().map { it.sent(agent) })
+          grpcStub.writeChunkedResponsesToProxy(streamOf(chunkedChannel, agent, KEEPALIVE_CHUNKED_RESPONSE))
         }
       }
     }
@@ -819,6 +861,9 @@ internal class AgentGrpcService(
 
   companion object {
     private val logger = logger {}
+
+    private val KEEPALIVE_RESPONSE: ScrapeResponse = scrapeResponse { keepalive = true }
+    private val KEEPALIVE_CHUNKED_RESPONSE: ChunkedScrapeResponse = chunkedScrapeResponse { keepalive = true }
 
     /**
      * A channel of messages for the proxy that counts what it can't deliver as dropped: what's queued when a writer's
