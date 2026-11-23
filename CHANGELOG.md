@@ -174,6 +174,9 @@ All notable changes to this project are documented in this file.
   re-probing the stopped proxy
 - The Java compiles no longer wait for the Kotlin ones, since no Java source uses its own source set's Kotlin classes,
   and CI's build job runs `check` rather than `build`, leaving the fat JARs to the jobs that build and test them
+- `TestPortsTest` fails on a port a spec binds that a demo publishes on the host (a compose port, a kind `hostPort`,
+  or a `demo.sh` port default), since a spec run while that demo was up reached the demo's container. The admin-path
+  specs and `HarnessHelpersTest` move off the basics and network demos' ports (8098, 8099, 9511)
 
 ### Documentation
 
