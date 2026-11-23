@@ -279,6 +279,11 @@ object TestPorts {
   const val STARTER_PROXY_HTTP_PORT = 11400
   const val STARTER_PROXY_AGENT_PORT = 11401
 
+  // The Ktor plugin's PrometheusProxyAgentIntegrationTest (ktor-plugin/, a project of its own, whose tests can't import
+  // this): its proxy's scrape and agent ports, listed here for the same reason; its test repeats the numbers.
+  const val KTOR_PLUGIN_PROXY_HTTP_PORT = 11402
+  const val KTOR_PLUGIN_PROXY_AGENT_PORT = 11403
+
   // First port of the block each standard harness suite registers scrape targets on (startPort + i)
   const val HARNESS_DEFAULT_START_PORT = 9600
   const val IN_PROCESS_NO_ADMIN_START_PORT = 10100

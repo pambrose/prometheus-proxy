@@ -6,8 +6,8 @@ description: Use when publishing prometheus-proxy to Maven Central, cutting a re
 # Publishing prometheus-proxy
 
 Published to Maven Central as `com.pambrose:prometheus-proxy`, with the Spring Boot starter
-(`spring-boot-starter/`) as `com.pambrose:prometheus-proxy-spring-boot-starter` at the same version, which every
-publish task releases too. No JitPack.
+(`spring-boot-starter/`) as `com.pambrose:prometheus-proxy-spring-boot-starter` and the Ktor plugin (`ktor-plugin/`)
+as `com.pambrose:prometheus-proxy-ktor`, at the same version, which every publish task releases too. No JitPack.
 
 Repository declarations are centralized in `settings.gradle.kts` via `dependencyResolutionManagement(FAIL_ON_PROJECT_REPOS)` and resolve solely from Maven Central.
 

@@ -1094,6 +1094,38 @@ agent runs with what it gets in an app. `TestingGuideTest` reads only the root p
   reads the agent's settings from the environment, and `website.AgentCustomizations`, with its stand-ins
   **SecretStore** and **BatchJobs**, sets the certificate and serves a second registry.
 
+### Ktor Plugin Tests (`ktor-plugin/`)
+
+The Ktor plugin is a Kotlin subproject, with Kotest specs under `ktor-plugin/src/test/kotlin/`. `./gradlew
+:ktor-plugin:test` runs them, and so does `build`; the root project aggregates their coverage, so the coverage floors
+count them. `TestingGuideTest` reads only the root project's specs, so name new ones here.
+
+- **AgentLifecycleTest** — the lifecycle's events raised by hand on a mocked app's monitor, with the agent's start
+  replaced: the app's `ApplicationStarted` starts the agent and puts its handle in the app's attributes, and another
+  app's, as a development-mode reload gives, doesn't; the agent stays off when disabled or without a proxy, and a
+  required one fails the start; a start that throws leaves the agent off, or, when required, fails the app's start with
+  the exception, a checked one wrapped; `ApplicationStopPreparing` begins the stop without waiting for it, and
+  `ApplicationStopping` waits, up to its timeout, or stops an agent the engine didn't, once whichever come; an agent
+  that fails to stop doesn't fail the app's; and the handlers are gone once the app stops.
+- **PrometheusProxyAgentConfigTest** — `prometheus-proxy.agent` in HOCON, YAML (`full-section.yaml`), and a
+  `MapApplicationConfig` builds the tree the same builder calls do; a blank value, such as YAML's empty default for an
+  unset environment variable (`unset-proxy.yaml`), counts as unset; the dashboard login's default username; a value
+  that isn't a boolean or a number; the registry served at its path, and refused without one; the install block's
+  settings taking precedence, and every `agent { }` block running in turn.
+- **PrometheusProxyAgentPluginTest** — the plugin in a `testApplication`, with a real agent pointed at a port nothing
+  listens on (`closedPort()`, in **TestSupport.kt**): started by the file's proxy or the install block's, and stopped
+  with the app; off when the file disables it; off on a setting it rejects, which fails the app's start when required.
+- **PrometheusProxyAgentIntegrationTest** — a `testApplication` with Micrometer and the plugin, its agent pointed at a
+  proxy in the same JVM on fixed ports that the root project's `TestPorts` lists (`KTOR_PLUGIN_PROXY_*`): the proxy
+  serves the app's meter and Micrometer's JVM metrics at `/ktor_app_metrics`, its service discovery has the path's
+  labels, the handle reports the connection, and once the app stops, the proxy no longer has the path.
+- **RegistryMetricsSourceTest** — a `PrometheusRegistry` written in the text format or OpenMetrics, as the scrape
+  accepts, and only the families it names.
+- **KtorPluginExamplesTest** — the Ktor Plugin page's examples, in `website/KtorPluginExample.kt` and the test
+  resources' `website/application.conf`: the module runs without the agent where `PROMETHEUS_PROXY` isn't set, and its
+  health route says so; the file starts the agent with the environment's proxy, serving the registry at its path, and
+  leaves it off without one.
+
 ## Testing Patterns
 
 ### Mocking with MockK

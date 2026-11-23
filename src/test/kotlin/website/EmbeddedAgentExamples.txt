@@ -43,6 +43,36 @@ dependencies {
 }
 // --8<-- [end:starter-gradle-dependency]
 
+<!-- --8<-- [start:ktor-maven-dependency] -->
+<!-- pom.xml: the plugin, and Micrometer for the app's metrics registry, with Ktor at the agent's version or later -->
+<dependencies>
+  <dependency>
+    <groupId>com.pambrose</groupId>
+    <artifactId>prometheus-proxy-ktor</artifactId>
+    <version>4.6.1</version>
+  </dependency>
+  <dependency>
+    <groupId>io.ktor</groupId>
+    <artifactId>ktor-server-metrics-micrometer-jvm</artifactId>
+    <version>${ktor.version}</version>
+  </dependency>
+  <dependency>
+    <groupId>io.micrometer</groupId>
+    <artifactId>micrometer-registry-prometheus</artifactId>
+    <version>${micrometer.version}</version>
+  </dependency>
+</dependencies>
+<!-- --8<-- [end:ktor-maven-dependency] -->
+
+// --8<-- [start:ktor-gradle-dependency]
+// build.gradle.kts: the plugin, and Micrometer for the app's metrics registry
+dependencies {
+  implementation("com.pambrose:prometheus-proxy-ktor:4.6.1")
+  implementation("io.ktor:ktor-server-metrics-micrometer:$ktorVersion")
+  implementation("io.micrometer:micrometer-registry-prometheus:$micrometerVersion")
+}
+// --8<-- [end:ktor-gradle-dependency]
+
 // --8<-- [start:embedded-agent-config]
 // Minimal config for an embedded agent:
 agent {
