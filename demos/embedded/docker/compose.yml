@@ -9,7 +9,7 @@
 # Compose resolves every relative path here against this file's directory, demos/embedded/docker: the demo's configs
 # are one level up, and the repository root three. It reads the secrets from .env beside this file, which demo.sh
 # writes: the proxy's TLS certificate and key, the certificate the coffee shop's agent trusts (the repository's test
-# certificates, testing/certs), a token, and the password for the coffee shop's /metrics.
+# certificates, testing/certs), and a token.
 #
 # Every published port binds to 127.0.0.1 only: the proxy's dashboard and the agents' have no authentication, Grafana
 # lets anyone view it without signing in, and its admin password is the default, which suits a demo on a laptop and
@@ -28,8 +28,6 @@ x-coffee-shop-env: &coffee-shop-env
   PROMETHEUS_AGENT_TOKEN: ${AGENT_TOKEN:-}
   PROMETHEUS_PROXY_CERT: ${PROXY_CA_PEM:-}
   PROMETHEUS_PROXY_AUTHORITY: foo.test.google.fr
-  METRICS_USER: ${METRICS_USER:-}
-  METRICS_PASSWORD: ${METRICS_PASSWORD:-}
   # Read by the agent itself, not the app, and over anything the app's code sets: the agent's own metrics, on port
   # 8083, its admin endpoints, on 8093, with /debug, and its dashboard, on the port each version's DASHBOARD_PORT
   # gives. Take ADMIN_ENABLED and DEBUG_ENABLED out once the agent works: the admin port has no authentication, and

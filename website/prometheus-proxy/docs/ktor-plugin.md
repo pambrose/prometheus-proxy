@@ -7,7 +7,7 @@ icon: lucide/plug
 A Ktor app can run the [embedded agent](embedded-agent.md) by installing a plugin: `com.pambrose:prometheus-proxy-ktor`
 starts the agent with the app, stops it with the app, and serves the app's metrics registry to Prometheus through the
 proxy. The agent reads the registry in-process, so the app needs no `/metrics` route, no credentials for one, and no
-port for the agent to scrape.
+port for the agent to scrape. The [Embedded Demo](embedded-demo.md)'s coffee shop runs it, under load, with Grafana.
 
 ## Adding the Dependency
 
@@ -117,4 +117,4 @@ app's own port, from `paths` or the builder's `scrapeSelf`, can fail a scrape th
 ## Without the Plugin
 
 [Configuring in Code](embedded-agent.md#configuring-in-code) on the Embedded Agent page starts the agent from any app,
-and the [Embedded Demo](embedded-demo.md)'s coffee shop wires it into a Ktor app by hand.
+in Ktor or not, with its settings built in code, and stops it when the app calls `shutdown()`.

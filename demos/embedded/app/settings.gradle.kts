@@ -23,6 +23,13 @@ dependencyResolutionManagement {
   }
 }
 
-// The checkout's build, which takes the place of com.pambrose:prometheus-proxy, whatever version build.gradle.kts asks
-// for.
-if (providers.gradleProperty("localProxy").isPresent) includeBuild("../../..")
+// The checkout's build, which takes the place of com.pambrose:prometheus-proxy and its Ktor plugin, whatever version
+// build.gradle.kts asks for. Gradle matches the root project to the agent's coordinates by its name, but the plugin's
+// project, :ktor-plugin, is named apart from its artifact, so it's matched here.
+if (providers.gradleProperty("localProxy").isPresent) {
+  includeBuild("../../..") {
+    dependencySubstitution {
+      substitute(module("com.pambrose:prometheus-proxy-ktor")).using(project(":ktor-plugin"))
+    }
+  }
+}

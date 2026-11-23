@@ -1,50 +1,41 @@
 package coffeeshop
 
-import io.github.oshai.kotlinlogging.KotlinLogging
-import io.prometheus.agent.EmbeddedAgentInfo
-import io.prometheus.agent.embeddedAgent
-import io.prometheus.common.ConfigLoadException
-
-private val logger = KotlinLogging.logger {}
+import io.ktor.server.application.Application
+import io.ktor.server.application.install
+import io.micrometer.prometheusmetrics.PrometheusMeterRegistry
+import io.prometheus.agent.ktor.PrometheusProxyAgent
 
 // The website's Embedded Demo page shows this function, with its KDoc, from here to its end marker.
 // --8<-- [start:agent-config]
 
 /**
- * Starts the prometheus-proxy agent embedded in the shop, from the app's own settings, in memory: no config file holds
- * the token, the proxy's certificate, or the password for /metrics. It connects to the proxy, so the app opens no port
- * for Prometheus, and answers each scrape by reading the app's /metrics on 127.0.0.1. It's named after [appVersion],
- * so the proxy's dashboard and logs tell the old and new versions apart during a deploy.
+ * Runs the prometheus-proxy agent embedded in the shop, with the Ktor plugin, from the app's own settings, in memory: no
+ * config file holds the token or the proxy's certificate. It connects to the proxy, so the app opens no port for
+ * Prometheus, and reads [registry] in-process for each scrape, so the app has no /metrics either. It's named after
+ * [appVersion], so the proxy's dashboard and logs tell the old and new versions apart during a deploy.
  *
- * Returns null when the agent is off, without PROMETHEUS_PROXY, or can't start: the shop's metrics aren't worth an
- * outage, so it keeps serving either way.
+ * The plugin starts the agent once the app has loaded, and stops it as the server stops. Without PROMETHEUS_PROXY, or
+ * with a setting it can't use, the agent logs why and stays off: the shop's metrics aren't worth an outage, so it keeps
+ * serving either way.
  */
-fun startPrometheusAgent(
-  appPort: Int,
+fun Application.installPrometheusAgent(
+  registry: PrometheusMeterRegistry,
   appVersion: String,
-): EmbeddedAgentInfo? {
-  // host:port, the proxy's agent port
-  val proxyEndpoint = env("PROMETHEUS_PROXY").ifEmpty {
-    logger.info { "PROMETHEUS_PROXY isn't set, so the Prometheus agent stays off" }
-    return null
-  }
-  return try {
-    embeddedAgent {
+) {
+  install(PrometheusProxyAgent) {
+    // The shop's metrics, Ktor's and the JVM's among them, at the proxy's /coffee_shop_metrics
+    this.registry = registry.prometheusRegistry
+    path = "coffee_shop_metrics"
+    agent {
       // The version tells the old and new deployments apart on the proxy's dashboard and in its logs
       name = "coffee-shop-$appVersion"
-      proxy = proxyEndpoint
+      // host:port, the proxy's agent port
+      proxy = env("PROMETHEUS_PROXY")
       token = env("PROMETHEUS_AGENT_TOKEN")
       // The certificate the proxy's is signed with, as PEM or its base64, and the name it was issued to
       trustCertificatePem(
         pem = env("PROMETHEUS_PROXY_CERT"),
         authority = env("PROMETHEUS_PROXY_AUTHORITY").ifEmpty { "prometheus-proxy" },
-      )
-      // The app's own /metrics; the agent sends the credentials as Basic Auth
-      scrapeSelf(
-        path = "coffee_shop_metrics",
-        port = appPort,
-        username = env("METRICS_USER"),
-        password = env("METRICS_PASSWORD"),
       )
       // The agent's own metrics, served to the proxy too, when METRICS_ENABLED in the app's environment turns them on,
       // on their default port, 8083, inside the container only; a METRICS_PORT would have to change this too. Without
@@ -52,15 +43,7 @@ fun startPrometheusAgent(
       // here: ADMIN_ENABLED and DEBUG_ENABLED.
       if (env("METRICS_ENABLED").equals("true", ignoreCase = true))
         scrapeSelf(path = "coffee_shop_agent_metrics", port = 8083)
-    }.start(logBanner = false).also { agent ->
-      logger.info { "Prometheus agent ${agent.agentName} started; it connects to the proxy at $proxyEndpoint" }
     }
-  } catch (e: ConfigLoadException) {
-    logger.error { "The Prometheus agent's settings are invalid, so it stays off: ${e.message}" }
-    null
-  } catch (e: IllegalStateException) {
-    logger.error { "The Prometheus agent could not start, so it stays off: ${e.message}" }
-    null
   }
 }
 // --8<-- [end:agent-config]

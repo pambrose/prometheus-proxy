@@ -17,7 +17,7 @@ graph LR
   %% The agent connects out to the proxy, so its arrow points back. The invisible link keeps the app to the right.
   Proxy ~~~ Agent
   Agent[embedded agent, dashboard :8395] -->|gRPC over TLS, with a token| Proxy
-  Agent -->|reads /metrics on 127.0.0.1| App[coffee shop: Ktor]
+  Agent -->|reads its registry in-process| App[coffee shop: Ktor]
   LB[load balancer :8390] --> App
 
   subgraph Proxy host
@@ -84,15 +84,15 @@ The ports are the [Basics Demo](basics-demo.md)'s plus 300, so the two can run s
 
 | Service | Role |
 |---|---|
-| `coffee-shop` | The app, version 1.0: a Ktor server whose built-in customers order over HTTP, and whose baristas brew from a queue. It serves its metrics, with Ktor's HTTP and the JVM's, at `/metrics` behind Basic Auth. The agent runs inside it, started with [`embeddedAgent { }`](embedded-agent.md#configuring-in-code) from settings the app builds in code, and reads `/metrics` on `127.0.0.1`. Its admin endpoints, `/debug` among them, are on port 8393, for debugging it, and its [dashboard](agent-dashboard.md) on port 8395. |
+| `coffee-shop` | The app, version 1.0: a Ktor server whose built-in customers order over HTTP, and whose baristas brew from a queue. Its metrics, with Ktor's HTTP and the JVM's, are in a Micrometer registry, and it serves no `/metrics`. The agent runs inside it, installed with the [Ktor plugin](ktor-plugin.md) from settings the app builds in code, and reads the registry in-process. Its admin endpoints, `/debug` among them, are on port 8393, for debugging it, and its [dashboard](agent-dashboard.md) on port 8395. |
 | `coffee-shop-next` | Started only by `demo.sh deploy`: version 1.1 of the same image, beside 1.0, as a rolling deploy does. Its agent's dashboard is on port 8396. |
 | `load-balancer` | The coffee shop's one address, on port 8390, as a platform's load balancer is: it sends every request to 1.0, or to 1.1 once a deploy has stopped 1.0. |
 | `proxy` | The stock proxy image. It takes its TLS certificate and key as [PEM in environment variables](security/tls.md#certificates-as-environment-variables), and the agent's token from one too, with no file mounted. |
 | `prometheus` | Scrapes the coffee shop's paths through the proxy every 5 seconds, and the proxy's own metrics, and loads the project's alerting rules and the coffee shop's. |
 | `grafana` | Opens on the Coffee Shop dashboard, which links to the two dashboards the project ships. |
 
-The secrets are the repository's test certificates, a token, and a password, which `make up` writes to the demo's
-`docker/.env` the first time it runs. The certificates are public, so this suits a laptop and nothing shared;
+The secrets are the repository's test certificates and a token, which `make up` writes to the demo's `docker/.env`
+the first time it runs. The certificates are public, so this suits a laptop and nothing shared;
 [Cloud Platforms](cloud-platforms.md#securing-the-link) shows how to make your own.
 
 ## The app and its agent
@@ -105,10 +105,9 @@ Select any screenshot on this page to see it full size.
   <figcaption>The coffee shop's status page</figcaption>
 </figure>
 
-The coffee shop's status page shows the queue, the baristas on shift, and the drinks served. Its `/metrics` answers 401
-without the password; `./demo.sh peek` shows it, then reads the same metrics through the proxy, where Prometheus finds
-them. The agent reads `/metrics` on `127.0.0.1` with the credentials it holds, so Prometheus never needs the password or
-a way into the app.
+The coffee shop's status page shows the queue, the baristas on shift, and the drinks served. It has no `/metrics`:
+`./demo.sh peek` shows it answering 404, then reads the shop's metrics through the proxy, where Prometheus finds them.
+The agent reads the app's registry in-process, so Prometheus needs no password, port, or way into the app.
 
 <figure markdown="span">
   ![The proxy dashboard's Agents view, with the coffee shop's agent selected](images/embedded-demo/agents.webp#only-dark){ loading=lazy }
@@ -121,19 +120,18 @@ with two paths, the coffee shop's metrics and its own, and its scrapes as they h
 
 The agent has a [dashboard](agent-dashboard.md) of its own, served from inside the app at
 <http://localhost:8395/dashboard>, with its side of the same two paths: each one's registration with the proxy, and its
-recent scrapes as the agent saw them. Select `coffee_shop_metrics`, and **Scrape now** fetches the app's `/metrics` at
-once, from inside the app, with the credentials the agent holds, and shows what came back, whether or not the proxy has
-the path. Its Connection view shows the agent's connection to the proxy, and its Activity view what the agent did, in
+recent scrapes as the agent saw them. Select `coffee_shop_metrics`, whose target is `in-process`, and **Scrape now**
+reads the app's registry at once, from inside the app, and shows what came back, whether or not the proxy has the path. Its Connection view shows the agent's connection to the proxy, and its Activity view what the agent did, in
 order. The coffee shop's environment turns it on, with nothing in the app's code: `DASHBOARD_ENABLED=true`, and a
 `DASHBOARD_PORT` for each version, 8395 for 1.0 and 8396 for 1.1, which the agent reads itself, over anything the app's
 code sets.
 
 ## Where the agent is configured
 
-The coffee shop configures its agent in code, with no config file. `startPrometheusAgent`, in
+The coffee shop configures its agent in code, with no config file. `installPrometheusAgent`, in
 [`PrometheusAgent.kt`](https://github.com/pambrose/prometheus-proxy/blob/master/demos/embedded/app/src/main/kotlin/coffeeshop/PrometheusAgent.kt),
-builds the agent's settings from the app's environment with
-[`embeddedAgent { }`](embedded-agent.md#configuring-in-code) and starts it:
+builds the agent's settings from the app's environment in the [Ktor plugin](ktor-plugin.md)'s `agent { }` block,
+and installs the plugin with the app's registry:
 
 ```kotlin
 --8<-- "demos/embedded/app/src/main/kotlin/coffeeshop/PrometheusAgent.kt:agent-config"
@@ -141,14 +139,16 @@ builds the agent's settings from the app's environment with
 
 The app's Ktor module, `coffeeShop` in
 [`Main.kt`](https://github.com/pambrose/prometheus-proxy/blob/master/demos/embedded/app/src/main/kotlin/coffeeshop/Main.kt),
-starts the agent and stops it with the app:
+calls it with the registry that Ktor's metrics and the shop's share; the plugin starts the agent once the module has
+loaded, and stops it as the server stops:
 
 ```kotlin
 --8<-- "demos/embedded/app/src/main/kotlin/coffeeshop/Main.kt:app-module"
 ```
 
-- The app depends on `com.pambrose:prometheus-proxy`, as [Adding the Dependency](embedded-agent.md#adding-the-dependency)
-  shows; the demo's build uses the latest release (`make up`) or this checkout (`make up-local`).
+- The app depends on `com.pambrose:prometheus-proxy-ktor`, which brings the agent, as
+  [Adding the Dependency](ktor-plugin.md#adding-the-dependency) shows; the demo's build uses the latest release
+  (`make up`) or this checkout (`make up-local`).
 - Its image is built from
   [`app/Dockerfile`](https://github.com/pambrose/prometheus-proxy/blob/master/demos/embedded/app/Dockerfile), as
   [Packaging the App](cloud-platforms.md#packaging-the-app) describes, with a second way in that copies in a build
@@ -156,7 +156,7 @@ starts the agent and stops it with the app:
 - The environment comes from the demo's
   [`docker/compose.yml`](https://github.com/pambrose/prometheus-proxy/blob/master/demos/embedded/docker/compose.yml),
   whose `x-coffee-shop-env` block gives the proxy's address and the name its certificate was issued to, and reads the
-  token, the CA certificate, and the password for `/metrics` from `docker/.env`, which `make up` writes the first time
+  token and the CA certificate from `docker/.env`, which `make up` writes the first time
   it runs. It also turns on the agent's own metrics, its admin endpoints, `/debug`, and its dashboard, with
   `METRICS_ENABLED`, `ADMIN_ENABLED`, `DEBUG_ENABLED`, and `DASHBOARD_ENABLED`, which the agent reads itself, and each
   version's service gives the dashboard its port, in `DASHBOARD_PORT`.
@@ -221,7 +221,7 @@ DEBUG_ENABLED: "true"     # adds /debug
 | `/version` | The agent's version, release date, and build time, as JSON |
 | `/healthcheck` | The agent's health checks, as JSON: its own health, not its connection, so it stays healthy while the proxy is down |
 | `/threaddump` | Every thread in the coffee shop's JVM, the app's as well as the agent's |
-| `/debug` | Only with `DEBUG_ENABLED`: the agent's name, the ID the proxy gave it when it connected, which is empty while it isn't connected, the proxy it's connected to or trying, and each path with the URL it scrapes, the password masked |
+| `/debug` | Only with `DEBUG_ENABLED`: the agent's name, the ID the proxy gave it when it connected, which is empty while it isn't connected, the proxy it's connected to or trying, and each path with the URL it scrapes, or `in-process` for the app's registry |
 
 Turn them off once the agent works, since the admin port has no authentication and `/threaddump` shows the app's
 threads: take `ADMIN_ENABLED` and `DEBUG_ENABLED` out of the app's environment and restart it, with no new build, and
@@ -259,7 +259,7 @@ no shell to write a variable to a file, takes its certificate and key as base64 
 
 | Command | Effect |
 |---|---|
-| `demo.sh peek` | Tries `/metrics` without the password, then reads it through the proxy |
+| `demo.sh peek` | Looks for the coffee shop's `/metrics`, which it doesn't have, then reads its metrics through the proxy |
 | `demo.sh order [drink]` | Orders a drink at the counter (default `latte`) |
 | `demo.sh rush` / `calm` | Starts a rush, or ends it and keeps three baristas |
 | `demo.sh baristas <count>` | Puts this many baristas on shift, from 1 to 12 |

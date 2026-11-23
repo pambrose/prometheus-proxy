@@ -96,7 +96,7 @@ Lifecycle:
   tour [part]        Walk through the demo's guided tour, pausing before each step (from part 1, or the one given)
 
 Scenarios:
-  peek               Try the coffee shop's /metrics without its password, then read it through the proxy
+  peek               Look for the coffee shop's /metrics, which it doesn't have, then read its metrics through the proxy
   order [drink]      Order a drink at the counter (default: latte)
   rush               Start a rush: customers order three times as often
   baristas <count>   Put this many baristas on shift (1 to 12; the shop opens with 3)
@@ -215,9 +215,9 @@ check_jdk() {
 }
 
 # Writes the secrets the containers read, the first time the demo starts: the proxy's TLS certificate and key, as
-# base64, the certificate of the CA that signed it, which the coffee shop's agent trusts, a token the agent presents,
-# and the password for the coffee shop's /metrics. The certificates are the repository's test ones (testing/certs),
-# public, so this suits a demo on a laptop and nothing else; the Cloud Platforms page shows how to make your own.
+# base64, the certificate of the CA that signed it, which the coffee shop's agent trusts, and a token the agent
+# presents. The certificates are the repository's test ones (testing/certs), public, so this suits a demo on a laptop
+# and nothing else; the Cloud Platforms page shows how to make your own.
 write_env() {
   [[ -f "$ENV_FILE" ]] && return
   b64() { base64 <"$CERTS_DIR/$1" | tr -d '\n'; }
@@ -226,13 +226,11 @@ write_env() {
     umask 077
     cat >"$ENV_FILE" <<EOF
 # Written by demos/embedded/demo.sh, and read by docker compose (compose.yml). Not committed: delete it, and the next
-# make up writes a new one, with a new token and password.
+# make up writes a new one, with a new token.
 CERT_CHAIN_PEM=$(b64 server1.pem)
 PRIVATE_KEY_PEM=$(b64 server1.key)
 PROXY_CA_PEM=$(b64 ca.pem)
 AGENT_TOKEN=$(random_hex)
-METRICS_USER=agent
-METRICS_PASSWORD=$(random_hex)
 EOF
   )
 }
@@ -484,7 +482,7 @@ cmd_tour() {
     instruct "Open the coffee shop: $APP_URL" \
       "Its status page shows the queue, the baristas on shift, and the drinks served so far, and refreshes every" \
       "two seconds."
-    step "Try the coffee shop's /metrics without its password, then read the same metrics through the proxy." \
+    step "Look for the coffee shop's /metrics, then read its metrics through the proxy." \
       -- peek
     instruct "Open the proxy dashboard: $DASHBOARD_URL" \
       "Its Agents view lists one agent, coffee-shop-1.0, named after the app's version, with two paths: the coffee" \
@@ -499,14 +497,14 @@ cmd_tour() {
       "their scrapes to this agent. Beside each are the status of its last scrape and its recent scrapes, a strip of" \
       "dots, green for a success, which fills as Prometheus scrapes every five seconds."
     instruct "Select coffee_shop_metrics." \
-      "Its URL is the app's own /metrics, on 127.0.0.1, its credentials masked. Recent scrapes lists the last ones" \
-      "Prometheus asked for, newest first: when each ran, the app's status, how long the agent's fetch took, and the" \
-      "body's size and whether the agent gzipped it."
+      "Its target reads in-process: the agent reads the app's metrics registry itself, with no URL, port, or" \
+      "password. Recent scrapes lists the last ones Prometheus asked for, newest first: when each ran, the status," \
+      "how long the agent's read took, and the body's size and whether the agent gzipped it."
     instruct "Press Scrape now." \
-      "The agent fetches the coffee shop's /metrics at once, from inside the app, with the credentials it holds, and" \
-      "shows what came back: the status, the size, the metric families and samples, and the start of the body, as" \
-      "Prometheus would get it. It works whether or not the proxy has the path, so when a path doesn't scrape, it" \
-      "tells you whether the app answers its agent. It leaves no trace in Recent scrapes or the agent's metrics."
+      "The agent reads the coffee shop's registry at once, from inside the app, and shows what came back: the" \
+      "status, the size, the metric families and samples, and the start of the body, as Prometheus would get it. It" \
+      "works whether or not the proxy has the path, so when a path doesn't scrape, it tells you whether the agent can" \
+      "read the app's metrics. It leaves no trace in Recent scrapes or the agent's metrics."
     instruct "Open the dashboard's Connection view: $AGENT_DASHBOARD_URL/connection" \
       "It reads connected, to proxy:50051, the one proxy endpoint the coffee shop gives its agent, over TLS. Below" \
       "are the settings the agent resolved, its token shown only as set. In part 8, when the proxy goes away, this" \
@@ -518,9 +516,9 @@ cmd_tour() {
     instruct "Turn it on from the environment, or in code." \
       "The coffee shop's environment sets DASHBOARD_ENABLED=true for both versions, and DASHBOARD_PORT, 8395 for" \
       "1.0 and 8396 for 1.1 (docker/compose.yml), which the agent reads itself, so turning it off, or on again," \
-      "takes a restart and no new build. In code, dashboard(port = 8395) in embeddedAgent { } does the same, though" \
-      "the environment overrides it. It has no login unless DASHBOARD_PASSWORD sets one, so the demo publishes it on" \
-      "127.0.0.1, and on a platform its port would stay on the internal network."
+      "takes a restart and no new build. In code, dashboard(port = 8395) in the plugin's agent { } does the same," \
+      "though the environment overrides it. It has no login unless DASHBOARD_PASSWORD sets one, so the demo publishes" \
+      "it on 127.0.0.1, and on a platform its port would stay on the internal network."
   fi
 
   if part 3 "Prometheus scrapes the proxy at the paths the agent registered, and Grafana shows what it" \
@@ -609,8 +607,8 @@ cmd_tour() {
       "Its AgentId is back, the one the proxy gave it when it reconnected."
   fi
 
-  if part 9 "The coffee shop and the proxy hold a token, TLS certificates, and a password, and neither reads" \
-    "them from a file: the setup a platform that passes secrets as environment variables needs."; then
+  if part 9 "The coffee shop and the proxy hold a token and TLS certificates, and neither reads them from a" \
+    "file: the setup a platform that passes secrets as environment variables needs."; then
     step "Show where the coffee shop and the proxy get their secrets." -- secrets
     instruct "Read the website's Cloud Platforms page: https://prometheus-proxy.com/cloud-platforms/" \
       "It sets up the same thing for real: the app on ECS, Cloud Run, or Azure Container Apps, and the proxy on" \
@@ -647,17 +645,17 @@ main() {
   peek)
     local code
     code="$(curl -s -o /dev/null -w '%{http_code}' "$APP_URL/metrics")"
-    bold "Without its password, the coffee shop's /metrics answers $code"
+    bold "The coffee shop has no /metrics: it answers $code"
     echo
     bold "Through the proxy, $PROXY_URL/coffee_shop_metrics answers with the metrics:"
     # head stops reading early, so pipefail would see grep's broken pipe as a failure.
     curl -fsS "$PROXY_URL/coffee_shop_metrics" | grep -E '^coffee_(orders_total|queue_depth|baristas)' | head -6 ||
       true
     echo "  ..."
-    how_it_works "The coffee shop serves its metrics at /metrics behind Basic Auth, as an app on a public platform" \
-      "would. Its embedded agent reads them on 127.0.0.1 with the credentials, which it holds in its config, and" \
-      "sends them to the proxy over its own connection. Prometheus scrapes the proxy at the path the agent" \
-      "registered, /coffee_shop_metrics, and never needs the password or a way into the app."
+    how_it_works "The coffee shop serves no metrics endpoint at all. Its embedded agent, which the app installs" \
+      "with the Ktor plugin, reads the app's metrics registry in-process for each scrape, and sends the metrics to" \
+      "the proxy over its own connection. Prometheus scrapes the proxy at the path the agent registered," \
+      "/coffee_shop_metrics, and needs no password, port, or way into the app."
     ;;
   order)
     local drink="${1:-latte}"
@@ -825,7 +823,8 @@ main() {
     watch_for
     point "/debug is the agent as it sees itself: its name, the ID the proxy gave it when it connected, which is" \
       "empty while it isn't connected, the proxy it's connected to or trying, and each path with the URL the agent" \
-      "scrapes, the password masked. When a path doesn't scrape, its URL here is the first thing to check."
+      "scrapes, or in-process for the app's registry. When a path doesn't scrape, its target here is the first thing" \
+      "to check."
     point "/healthcheck is the agent's own health, not its connection: it stays healthy while the proxy is down." \
       "To see /debug tell them apart, run $0 proxy-stop, then $0 debug again."
     point "/ping is for a liveness probe, and /version tells you which release of the agent the app runs."
@@ -835,7 +834,7 @@ main() {
   secrets)
     local proxy_id
     bold "The coffee shop's settings for its agent, by name (their values stay in the container):"
-    "${COMPOSE[@]}" exec -T coffee-shop printenv | cut -d= -f1 | { grep -E '^(PROMETHEUS_|METRICS_(USER|PASSWORD)$)' || true; } |
+    "${COMPOSE[@]}" exec -T coffee-shop printenv | cut -d= -f1 | { grep -E '^PROMETHEUS_' || true; } |
       sort | sed 's/^/  /'
     bold "What the coffee shop's container holds, besides the JRE: the app, and no config file"
     "${COMPOSE[@]}" exec -T coffee-shop ls /app | sed 's/^/  /'
@@ -843,9 +842,9 @@ main() {
     bold "The proxy's secrets, by name:"
     docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$proxy_id" | cut -d= -f1 |
       { grep -E '^(AGENT_TOKEN|CERT_CHAIN_PEM|PRIVATE_KEY_PEM)$' || true; } | sed 's/^/  /'
-    how_it_works "The coffee shop builds its agent's settings in code from its environment, with" \
-      "embeddedAgent { }, so the token, the certificate it trusts, and the password for its /metrics" \
-      "never sit in a file (app/src/main/kotlin/coffeeshop/PrometheusAgent.kt). The proxy is the stock image, which" \
+    how_it_works "The coffee shop builds its agent's settings in code from its environment, in the Ktor plugin's" \
+      "agent { } block, so the token and the certificate it trusts never sit in a file" \
+      "(app/src/main/kotlin/coffeeshop/PrometheusAgent.kt). The proxy is the stock image, which" \
       "has no shell to write a variable to a file, and takes its TLS certificate and key as PEM, base64-encoded, in" \
       "CERT_CHAIN_PEM and PRIVATE_KEY_PEM. demo.sh wrote all of them to docker/.env, which docker compose reads; on a" \
       "cloud platform they're the service's variables."

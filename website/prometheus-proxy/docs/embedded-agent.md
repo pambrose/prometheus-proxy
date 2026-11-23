@@ -126,7 +126,8 @@ config file is, so a `${?ENV_VAR}` substitution in it works.
 
 [Cloud Platforms](cloud-platforms.md) builds on this to run an embedded agent in an app on ECS on Fargate, Cloud Run,
 Azure Container Apps, or another platform, with the proxy on AWS, GCP, Azure, DigitalOcean, or Railway, and the
-[Embedded Demo](embedded-demo.md) runs it on one machine, in a Ktor app.
+[Embedded Demo](embedded-demo.md) runs an embedded agent on one machine, in a Ktor app, with the
+[Ktor Plugin](ktor-plugin.md).
 
 ## In Ktor
 
