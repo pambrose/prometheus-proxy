@@ -169,6 +169,12 @@ dependencies {
   // compile classpaths (compile scope in the POM).
   api(libs.typesafe.config)
   implementation(libs.prometheus.metrics.core)
+  // EmbeddedAgentConfig.Builder.source and MetricsSource.of take a PrometheusRegistry, so a compiler that calls either
+  // needs the type: api puts it on consumers' compile classpaths (compile scope in the POM).
+  api(libs.prometheus.metrics.model)
+  // The text formats the agent writes a registry it serves in-process in (MetricsSource.of). Declared, rather than left
+  // to common-utils, which brings it at runtime only, so the published POM names it, at the catalog's version.
+  implementation(libs.prometheus.metrics.exposition.textformats)
   // Aligns the Prometheus Java client modules common-utils brings with prometheus-metrics-core; see libs.versions.toml.
   implementation(platform(libs.prometheus.metrics.bom))
   implementation(libs.dropwizard.metrics)
@@ -188,8 +194,6 @@ dependencies {
   testImplementation(libs.lincheck)
   testImplementation(libs.mockk)
   testImplementation(libs.testcontainers)
-  // The docs site's MetricsSource examples (src/test/*/website) write a registry with it, as an embedder does.
-  testImplementation(libs.prometheus.metrics.exposition.textformats)
 
   // The Ktor plugin's coverage counts in this project's reports, so the coverage floors cover it too. Not the Spring
   // Boot starter's: it's in Java, and its tests run at Spring Boot's versions.

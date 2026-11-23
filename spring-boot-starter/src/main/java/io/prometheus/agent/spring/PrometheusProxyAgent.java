@@ -70,10 +70,11 @@ public class PrometheusProxyAgent implements SmartLifecycle {
     try {
       launch();
     } catch (RuntimeException e) {
-      // A setting the agent rejects (ConfigLoadException), a key its config can't hold, or a customizer's own failure
+      // A key the agent's config can't hold, or a customizer's own failure, or, for a required agent, a setting the
+      // agent rejects (ConfigLoadException) or its failure to start. Any other agent's start logs its own failure.
       failed(e, e);
     } catch (Exception e) {
-      // A checked exception, which Kotlin throws undeclared, such as the agent's start timing out
+      // A checked exception, which Kotlin throws undeclared, such as a required agent's start timing out
       failed(e, new IllegalStateException("The Prometheus agent could not start", e));
     }
   }
@@ -86,10 +87,15 @@ public class PrometheusProxyAgent implements SmartLifecycle {
     logger.info("{}, so the Prometheus agent stays off", PROXY_UNSET);
   }
 
+  // A required agent starts with start(), whose failure fails the app, and any other with startIfConfigured(), which
+  // logs a failure, with why, and leaves the agent off
   private void launch() {
     EmbeddedAgentConfig config = config();
     logger.info("Starting the Prometheus agent with {}", config);
-    EmbeddedAgentInfo started = config.start(false);
+    EmbeddedAgentInfo started = properties.isRequired() ? config.start(false) : config.startIfConfigured(false);
+    if (started == null) {
+      return;
+    }
     agent = started;
     // No proxy named: a customizer, or the agent's own PROXY_HOSTNAME, can override the property's. The line above
     // gives the settings, and the agent logs the proxy it connects to.
@@ -196,7 +202,7 @@ public class PrometheusProxyAgent implements SmartLifecycle {
               + "spring-boot-starter-micrometer-metrics");
       return;
     }
-    builder.source(metricsPath(), properties.getLabels(), new RegistryMetricsSource(registry));
+    builder.source(metricsPath(), properties.getLabels(), registry);
   }
 
   // The name given, or the app's, with its build's version when it has build info, or none, for the agent's default

@@ -27,11 +27,10 @@ kotlin {
 
 dependencies {
   // In the POM, at compile scope, since the plugin's API names their types: the agent, at this version (its
-  // EmbeddedAgentConfig.Builder and EmbeddedAgentInfo); Ktor's server core (Application, ApplicationPlugin); and the
-  // exposition formats the registry is written with, whose model holds the PrometheusRegistry the plugin takes.
+  // EmbeddedAgentConfig.Builder and EmbeddedAgentInfo, and the PrometheusRegistry the plugin takes, which the agent's
+  // own API brings); and Ktor's server core (Application, ApplicationPlugin).
   api(project(":"))
   api(libs.ktor.server.core)
-  api(libs.prometheus.metrics.exposition.textformats)
   implementation(libs.kotlin.logging)
 
   testImplementation(libs.kotest)

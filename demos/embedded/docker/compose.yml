@@ -28,12 +28,12 @@ x-coffee-shop-env: &coffee-shop-env
   PROMETHEUS_AGENT_TOKEN: ${AGENT_TOKEN:-}
   PROMETHEUS_PROXY_CERT: ${PROXY_CA_PEM:-}
   PROMETHEUS_PROXY_AUTHORITY: foo.test.google.fr
-  # Read by the agent itself, not the app, and over anything the app's code sets: the agent's own metrics, on port
-  # 8083, its admin endpoints, on 8093, with /debug, and its dashboard, on the port each version's DASHBOARD_PORT
-  # gives. Take ADMIN_ENABLED and DEBUG_ENABLED out once the agent works: the admin port has no authentication, and
-  # /threaddump shows every thread in the app. The dashboard has no login either, unless DASHBOARD_PASSWORD sets one,
-  # and listens on every interface in the container, which a published port needs, so the agent warns of it at startup.
-  METRICS_ENABLED: "true"
+  # Read by the agent itself, not the app, and over anything the app's code sets: its admin endpoints, on 8093, with
+  # /debug, and its dashboard, on the port each version's DASHBOARD_PORT gives. Its own metrics need nothing here: the
+  # app's code serves them at the proxy's /coffee_shop_agent_metrics. Take ADMIN_ENABLED and DEBUG_ENABLED out once
+  # the agent works: the admin port has no authentication, and /threaddump shows every thread in the app. The dashboard
+  # has no login either, unless DASHBOARD_PASSWORD sets one, and listens on every interface in the container, which a
+  # published port needs, so the agent warns of it at startup.
   ADMIN_ENABLED: "true"
   DEBUG_ENABLED: "true"
   DASHBOARD_ENABLED: "true"

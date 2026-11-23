@@ -49,15 +49,21 @@ token or the password, and start it:
     --8<-- "EmbeddedAgentConfigJavaExample.java:embedded-java-config"
     ```
 
-- The app's settings are `PROMETHEUS_PROXY` (the proxy's agent port, as `host:port`), `PROMETHEUS_AGENT_TOKEN`,
-  `PROMETHEUS_PROXY_CERT` (the proxy's certificate, as PEM or its base64), and `METRICS_USER` and `METRICS_PASSWORD`
-  for its own `/metrics`. Without `PROMETHEUS_PROXY`, as on a developer's machine, the agent stays off.
+- The app's settings are `PROMETHEUS_PROXY` (the proxy's agent port, as `host:port`), `PROMETHEUS_AGENT_TOKEN`, and
+  `PROMETHEUS_PROXY_CERT` (the proxy's certificate, as PEM or its base64), which
+  [`fromEnvironment()`](embedded-agent.md#settings-from-the-environment) reads, with the certificate checked against
+  `prometheus-proxy`, the name [Securing the Link](#securing-the-link) issues it to (`PROMETHEUS_PROXY_AUTHORITY` for
+  another), and `METRICS_USER` and `METRICS_PASSWORD` for its own `/metrics`. Without `PROMETHEUS_PROXY`, as on a
+  developer's machine, `startIfConfigured()` leaves the agent off.
 - The agent reads its own environment variables too, such as `AGENT_TOKEN` and `PROXY_HOSTNAME`, and they take
   precedence over the config, so keep those names out of the app's environment unless you mean the agent to use them.
 - The app's version in `agent.name` tells the old and new revisions apart in the proxy's logs during a deploy.
 - The agent's admin and metrics servers stay off, as they are unless asked for, since the app has no port to spare for
-  them.
-- `scrapeSelf` percent-encodes the credentials into the scrape URL, so a password with any character works.
+  them. [`agentMetricsAt`](embedded-agent.md#the-agents-own-metrics) serves the agent's own metrics through the proxy
+  instead, with no port.
+- `scrapeSelf` percent-encodes the credentials into the scrape URL, so a password with any character works. An app with
+  a metrics registry needn't serve it at all: `source(path, registry)` has the agent
+  [read it in-process](embedded-agent.md#metrics-served-in-process).
 - A failure to start is logged, and the app carries on without the agent: its metrics aren't worth an outage.
 
 ### Starting and Stopping It With the App
@@ -154,7 +160,8 @@ openssl rand -hex 32 > agent-token
 - The proxy takes `server.crt` and `server.key` as `CERT_CHAIN_PEM` and `PRIVATE_KEY_PEM`, and the token as
   `AGENT_TOKEN`.
 - The agent trusts `server.crt` (`agent.tls.trustCertCollectionPem`), checks it against the fixed name
-  (`agent.tls.overrideAuthority = "prometheus-proxy"`), and presents the token (`agent.agentToken`).
+  (`agent.tls.overrideAuthority = "prometheus-proxy"`), and presents the token (`agent.agentToken`): `fromEnvironment()`
+  sets all three from `PROMETHEUS_PROXY_CERT` and `PROMETHEUS_AGENT_TOKEN`, with `prometheus-proxy` as the name.
 - A variable field that takes one line takes the certificate and key as base64: `base64 < server.crt | tr -d '\n'`.
   See [Certificates as Environment Variables](security/tls.md#certificates-as-environment-variables) for the forms a
   PEM setting takes.

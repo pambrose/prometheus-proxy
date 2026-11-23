@@ -22,11 +22,10 @@ java {
 }
 
 dependencies {
-  // In the POM: the agent, at this version; the exposition formats RegistryMetricsSource writes a registry with, whose
-  // PrometheusRegistry its constructor takes; and Micrometer's Prometheus registry, which has Spring Boot put the app's
-  // meters in a PrometheusRegistry bean. An app's Spring Boot manages the last two, as it does when the app names them.
+  // In the POM: the agent, at this version, which serves the app's PrometheusRegistry in-process, its API naming the
+  // type; and Micrometer's Prometheus registry, which has Spring Boot put the app's meters in a PrometheusRegistry bean.
+  // An app's Spring Boot manages the latter, as it does when the app names it.
   api(project(":"))
-  api(libs.prometheus.metrics.exposition.textformats)
   implementation(libs.micrometer.registry.prometheus)
 
   // Not in the POM, nor is the BOM: the app's own Spring Boot brings these, at its version.

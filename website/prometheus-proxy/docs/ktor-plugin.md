@@ -30,7 +30,8 @@ modules, or imports `io.ktor:ktor-bom`, at the agent's version or later.
 
 ## Installing
 
-Install it with the app's registry and the path Prometheus scrapes it at, and give the agent its proxy:
+Install it with the app's registry and the path Prometheus scrapes it at, and give the agent its proxy, here from the
+app's environment, with [`fromEnvironment()`](embedded-agent.md#settings-from-the-environment):
 
 ```kotlin
 --8<-- "ktor-plugin/src/test/kotlin/website/KtorPluginExample.kt:install"
@@ -55,9 +56,10 @@ With that, the app gets:
   instead, then without a proxy too.
 
 The `agent { }` block takes the agent's [`EmbeddedAgentConfig.Builder`](embedded-agent.md#embeddedagentconfig), with a
-typed method for each setting, such as a certificate the app reads from a secret store. As with any embedded agent, the
-agent's own environment variables, such as `AGENT_TOKEN` or `PROXY_HOSTNAME`, take precedence over its settings, so give
-the app's other names, as above.
+typed method for each setting, such as a certificate the app reads from a secret store, and `agentMetricsAt(path)`,
+which serves the [agent's own metrics](embedded-agent.md#the-agents-own-metrics) through the proxy too, with no port.
+As with any embedded agent, the agent's own environment variables, such as `AGENT_TOKEN` or `PROXY_HOSTNAME`, take
+precedence over its settings, so give the app's other names, as `fromEnvironment()`'s `PROMETHEUS_` ones are.
 
 ## Settings in application.conf
 
@@ -93,7 +95,7 @@ environment variable gives:
 | `labels.<name>`            |                            | The labels of the registry's path, in the proxy's [service discovery](service-discovery.md)                                                                                   |
 | `paths`                    |                            | Other targets the agent scrapes over HTTP, a list, each served at a `path` of its own from its `url`, with `username`, `password`, and `labels`                                |
 | `consolidated`             | `false`                    | Whether the agent registers its paths in [consolidated mode](advanced.md#consolidated-mode), alongside other agents serving them                                               |
-| `metrics-port`             |                            | The port of the agent's own metrics, which are off without one. They stay apart from the app's, whose JVM metrics they'd repeat                                               |
+| `metrics-port`             |                            | The port of the agent's own metrics, which are off without one. They stay apart from the app's, whose JVM metrics they'd repeat; the builder's `agentMetricsAt(path)` serves them through the proxy, with no port |
 | `dashboard.port`, `.host`  |                            | The [agent's dashboard](agent-dashboard.md), off without a port, listening on every interface unless `host` names one, such as `127.0.0.1`                                    |
 | `dashboard.password`       |                            | Requires a login to the dashboard, as `dashboard.username` (`admin` by default)                                                                                               |
 | `required`                 | `false`                    | Whether the app fails to start when the agent can't, or has no proxy                                                                                                          |

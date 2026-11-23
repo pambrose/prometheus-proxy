@@ -23,7 +23,7 @@ scrape_configs:
       - target_label: instance
         replacement: coffee-shop
 
-  # The embedded agent's own metrics, which it serves inside the app's container and sends through the proxy too.
+  # The embedded agent's own metrics, which it serves through the proxy too, read in-process, with no port of their own.
   - job_name: coffee-shop-agent
     metrics_path: /coffee_shop_agent_metrics
     static_configs:

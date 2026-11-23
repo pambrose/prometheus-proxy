@@ -35,6 +35,7 @@ import com.pambrose.common.util.runCatchingCancellable
 import com.pambrose.common.util.simpleClassName
 import com.typesafe.config.Config
 import io.github.oshai.kotlinlogging.KotlinLogging.logger
+import io.grpc.Status
 import io.grpc.StatusException
 import io.grpc.StatusRuntimeException
 import io.prometheus.agent.AgentConnectionContext
@@ -274,6 +275,11 @@ class Agent(
   internal val launchId = randomId(15)
   private val metricsHolder = lazy { AgentMetrics(this) }
   internal val metrics by metricsHolder
+
+  // Whether the agent keeps its metrics: with their port on (isMetricsEnabled), or served at a path of their own,
+  // in-process (EmbeddedAgentConfig.Builder.agentMetricsAt), which opens no port. A getter, as the properties declared
+  // above this one can read it while the agent is built.
+  internal val collectsMetrics: Boolean get() = isMetricsEnabled || options.agentMetricsPath.isNotEmpty()
 
   // Null with Zipkin off. One for the agent's life, shared by every channel a reconnect builds, and built on the first
   // call (see scrapeTracingHolder).
@@ -603,6 +609,13 @@ class Agent(
   }
 
   internal fun handleConnectionFailure(e: Throwable) {
+    // The proxy refused a call after the connect it took, as when its token changed meanwhile: the agent's token, at
+    // ERROR, as connectAgent logs a connect the proxy refuses. A connect always comes first, so it isn't a repeat.
+    val refused = e is StatusRuntimeException || e is StatusException
+    if (refused && Status.fromThrowable(e).code == Status.Code.UNAUTHENTICATED) {
+      logger.error { grpcService.tokenRefusal(proxyHost, ShownFailure.of(e)) }
+      return
+    }
     when (e) {
       is RequestFailureException -> {
         logger.warn { "Disconnected from proxy at $proxyHost after invalid response ${e.message}" }
@@ -806,7 +819,7 @@ class Agent(
   internal fun awaitInitialPathsRegistered(timeout: Duration) = initialPathsRegisteredLatch.await(timeout)
 
   /**
-   * Executes metrics operations if metrics collection is enabled.
+   * Executes metrics operations if the agent collects its metrics ([collectsMetrics]).
    *
    * This method provides a safe way to perform metrics operations that will only
    * execute if metrics collection is enabled in the agent configuration.
@@ -814,7 +827,7 @@ class Agent(
    * @param args Lambda function containing metrics operations to execute
    */
   internal fun metrics(args: AgentMetrics.() -> Unit) {
-    if (isMetricsEnabled)
+    if (collectsMetrics)
       args.invoke(metrics)
   }
 
@@ -840,7 +853,7 @@ class Agent(
   override fun startUp() {
     runCatching {
       // Built here, so a registry that rejects them fails startup visibly instead of every connect, forever.
-      if (isMetricsEnabled) {
+      if (collectsMetrics) {
         val _ = metrics
       }
       super.startUp()

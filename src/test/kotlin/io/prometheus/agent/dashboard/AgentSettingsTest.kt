@@ -23,8 +23,11 @@ import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.prometheus.Agent
+import io.prometheus.agent.EmbeddedAgentConfig
 import io.prometheus.agent.createTempKeyStore
+import io.prometheus.agent.embeddedAgent
 import io.prometheus.common.TestCerts
+import io.prometheus.common.TestPorts
 import io.prometheus.common.agentOptionsFromConfig
 import io.prometheus.common.dashboard.text
 import io.prometheus.common.dashboard.value
@@ -139,6 +142,28 @@ class AgentSettingsTest : StringSpec() {
       } finally {
         file.delete()
       }
+    }
+
+    // An embedded agent's own metrics, served through the proxy with agentMetricsAt, are on though their port is off
+    "the settings should show an embedded agent's metrics served in-process, and their port when it's on too" {
+      fun metricsShown(configure: EmbeddedAgentConfig.Builder.() -> Unit): String {
+        val built =
+          Agent(
+            embeddedAgent(configure).agentOptions(),
+            inProcessServerName = "agent-settings-${System.nanoTime()}",
+            testMode = true,
+          ).also { created += it }
+        return AgentSettings.of(built).value("Metrics", "Metrics")
+      }
+
+      metricsShown { agentMetricsAt(path = "east_agent_metrics") } shouldBe
+        "on, in-process, at the proxy's /east_agent_metrics"
+      metricsShown {
+        agentMetrics(port = TestPorts.AGENT_METRICS_PORT)
+        agentMetricsAt(path = "east_agent_metrics")
+      } shouldBe
+        "on, port ${TestPorts.AGENT_METRICS_PORT}, /metrics, and in-process, at the proxy's /east_agent_metrics"
+      metricsShown {} shouldBe "off"
     }
 
     // The view is open to whoever reaches the dashboard, behind a login or not, so a secret never reaches it.

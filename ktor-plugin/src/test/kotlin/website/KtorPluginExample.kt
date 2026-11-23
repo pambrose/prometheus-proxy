@@ -43,9 +43,9 @@ fun Application.module() {
     path = "my_app_metrics"
     agent {
       name = "my-app"
-      // Unset, as on a developer's machine, the agent stays off
-      proxy = System.getenv("PROMETHEUS_PROXY").orEmpty()
-      token = System.getenv("PROMETHEUS_AGENT_TOKEN").orEmpty()
+      // PROMETHEUS_PROXY, PROMETHEUS_AGENT_TOKEN, and PROMETHEUS_PROXY_CERT. Without PROMETHEUS_PROXY, as on a
+      // developer's machine, the agent stays off
+      fromEnvironment()
     }
   }
 

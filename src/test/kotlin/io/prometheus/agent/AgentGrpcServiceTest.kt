@@ -540,29 +540,28 @@ class AgentGrpcServiceTest : StringSpec() {
     "a different connect failure, or one after a connect succeeded, should log a WARN again" {
       withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
         val unavailable = StatusRuntimeException(Status.UNAVAILABLE.withDescription("io exception"))
-        val unauthenticated = StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("bad token"))
+        val deadline = StatusRuntimeException(Status.DEADLINE_EXCEEDED.withDescription("too slow"))
         coEvery { mockStub.connectAgent(any(), any<Metadata>()) } throws
-          unavailable andThenThrows unavailable andThenThrows unauthenticated andThen EMPTY_INSTANCE andThenThrows
-          unauthenticated
+          unavailable andThenThrows unavailable andThenThrows deadline andThen EMPTY_INSTANCE andThenThrows deadline
 
         val events = captureLogs<AgentGrpcService>(Level.DEBUG) { repeat(5) { service.connectAgent() } }
 
         events.filter { it.level == Level.WARN }.map { it.formattedMessage }.let { warnings ->
           warnings.size shouldBe 3
           warnings[0] shouldContain "UNAVAILABLE"
-          warnings[1] shouldContain "UNAUTHENTICATED"
-          warnings[2] shouldContain "UNAUTHENTICATED"
+          warnings[1] shouldContain "DEADLINE_EXCEEDED"
+          warnings[2] shouldContain "DEADLINE_EXCEEDED"
         }
       }
     }
 
-    // Logged once, a failure that won't clear by itself, such as a refused token, sat in the log's first lines while
-    // the agent went on reconnecting every few seconds, each attempt below WARN.
+    // Logged once, a failure that won't clear by itself sat in the log's first lines while the agent went on
+    // reconnecting every few seconds, each attempt below WARN.
     "a connect failure that persists should be logged at WARN again every 10 minutes, without its stack trace" {
       val time = TestTimeSource()
       withStubbedService("localhost:$PROXY_AGENT_PORT", timeSource = time) { service, mockStub ->
         coEvery { mockStub.connectAgent(any(), any<Metadata>()) } throws
-          StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Missing or invalid agent token"))
+          StatusRuntimeException(Status.PERMISSION_DENIED.withDescription("not on the list"))
 
         val events =
           captureLogs<AgentGrpcService>(Level.DEBUG) {
@@ -573,12 +572,85 @@ class AgentGrpcServiceTest : StringSpec() {
 
         val warnings = events.filter { it.level == Level.WARN }
         warnings.size shouldBe 2
-        warnings.forEach { it.formattedMessage shouldContain "UNAUTHENTICATED" }
+        warnings.forEach { it.formattedMessage shouldContain "PERMISSION_DENIED" }
         warnings[0].throwableProxy.shouldNotBeNull()
         warnings[1].throwableProxy.shouldBeNull()
         warnings[1].formattedMessage shouldContain "still failing"
         events.count { it.level == Level.DEBUG && "Cannot connect to proxy" in it.formattedMessage } shouldBe 4
       }
+    }
+
+    // A wrong token was a WARN among the connect failures, easy to miss in an app whose metrics never arrived: it's the
+    // agent's own setting, so it's an ERROR that names it. The agent keeps retrying, as the proxy's token may change.
+    "a connect the proxy refuses for the agent's token should log one ERROR naming the setting, the rest at DEBUG" {
+      val time = TestTimeSource()
+      withStubbedService("localhost:$PROXY_AGENT_PORT", timeSource = time) { service, mockStub ->
+        service.agent.options.also { every { it.agentToken } returns "wrong-token" }
+        coEvery { mockStub.connectAgent(any(), any<Metadata>()) } throws
+          StatusException(Status.UNAUTHENTICATED.withDescription("Missing or invalid agent token"))
+
+        val events =
+          captureLogs<AgentGrpcService>(Level.DEBUG) {
+            repeat(4) { service.connectAgent().shouldBeFalse() }
+            time += 10.minutes
+            service.connectAgent().shouldBeFalse()
+          }
+
+        events.filter { it.level == Level.WARN }.shouldBeEmpty()
+        val errors = events.filter { it.level == Level.ERROR }
+        errors.map { it.formattedMessage } shouldBe
+          [
+            TOKEN_REFUSED,
+            "$TOKEN_REFUSED (still refused)",
+          ]
+        errors.forEach { it.throwableProxy.shouldBeNull() }
+        events.count { it.level == Level.DEBUG && "Cannot connect to proxy" in it.formattedMessage } shouldBe 3
+      }
+    }
+
+    "a connect refused for want of a token should say the agent sends none" {
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
+        service.agent.options.also { every { it.agentToken } returns "" }
+        coEvery { mockStub.connectAgent(any(), any<Metadata>()) } throws
+          StatusException(Status.UNAUTHENTICATED.withDescription("Missing or invalid agent token"))
+
+        val errors =
+          captureLogs<AgentGrpcService>(Level.DEBUG) { service.connectAgent().shouldBeFalse() }
+            .filter { it.level == Level.ERROR }
+
+        errors.single().formattedMessage shouldBe
+          "The proxy at localhost:$PROXY_AGENT_PORT requires an agent token, and the agent sends none " +
+          "(StatusException: UNAUTHENTICATED: Missing or invalid agent token). Give the agent a token the proxy " +
+          "accepts: $TOKEN_SETTINGS"
+      }
+    }
+
+    // As a token rotated on the proxy refuses an agent that was connected: the rejection is news again, at ERROR, and
+    // in the activity feed once, not once a retry.
+    "a refused token should log an ERROR again, and be recorded again, only after a connect since" {
+      val log = AgentActivityLog(capacity = 20)
+      withStubbedService("first:$PROXY_AGENT_PORT,second:$PROXY_HTTP_PORT", activityLog = log) { service, mockStub ->
+        service.agent.options.also { every { it.agentToken } returns "wrong-token" }
+        val refused = StatusException(Status.UNAUTHENTICATED.withDescription("Missing or invalid agent token"))
+        val errors =
+          captureLogs<AgentGrpcService>(Level.DEBUG) {
+            every { service.agent.proxyHost } returns "first:$PROXY_AGENT_PORT"
+            coEvery { mockStub.connectAgent(any(), any<Metadata>()) } throws refused
+            repeat(3) { service.connectAgent().shouldBeFalse() }
+            every { service.agent.proxyHost } returns "second:$PROXY_HTTP_PORT"
+            coEvery { mockStub.connectAgent(any(), any<Metadata>()) } returns EMPTY_INSTANCE
+            service.connectAgent().shouldBeTrue()
+            every { service.agent.proxyHost } returns "first:$PROXY_AGENT_PORT"
+            coEvery { mockStub.connectAgent(any(), any<Metadata>()) } throws refused
+            repeat(3) { service.connectAgent().shouldBeFalse() }
+          }.filter { it.level == Level.ERROR }
+
+        errors.size shouldBe 2
+        errors.forEach { it.formattedMessage shouldContain "refused the agent's token" }
+      }
+
+      log.snapshot().entries.map { it.kind } shouldBe
+        [AgentActivityKind.CONNECT_FAILED, AgentActivityKind.CONNECTED, AgentActivityKind.CONNECT_FAILED]
     }
 
     // gRPC's DEADLINE_EXCEEDED description carries the time the call took, so against a proxy that accepts TCP but
@@ -2223,5 +2295,17 @@ class AgentGrpcServiceTest : StringSpec() {
   private companion object {
     // createMockAgent's launch ID, the first label of every agent series.
     const val LAUNCH_ID = "launch-123"
+
+    // Where the ERROR for a refused token says the token is set
+    const val TOKEN_SETTINGS =
+      "it's given with --agent_token, AGENT_TOKEN, or agent.agentToken, in that order of precedence, which an " +
+        "embedded agent's token() sets, and fromEnvironment() reads from PROMETHEUS_AGENT_TOKEN. The agent keeps " +
+        "retrying"
+
+    // The ERROR for a token the proxy at localhost refused
+    const val TOKEN_REFUSED =
+      "The proxy at localhost:$PROXY_AGENT_PORT refused the agent's token (StatusException: " +
+        "UNAUTHENTICATED: Missing or invalid agent token). Check that the agent has a token the proxy accepts: " +
+        TOKEN_SETTINGS
   }
 }

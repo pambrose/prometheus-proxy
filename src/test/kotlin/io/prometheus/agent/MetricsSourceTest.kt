@@ -38,11 +38,8 @@ import io.prometheus.common.testConfigVals
 import io.prometheus.grpc.ScrapeRequest
 import io.prometheus.grpc.registerPathResponse
 import io.prometheus.grpc.scrapeRequest
-import io.prometheus.metrics.core.metrics.Counter
-import io.prometheus.metrics.core.metrics.Gauge
-import io.prometheus.metrics.model.registry.PrometheusRegistry
-import website.registrySource
-import java.io.ByteArrayOutputStream
+import website.EmbeddedAgentSourceJavaExample
+import website.runWorker
 import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicBoolean
@@ -91,7 +88,7 @@ class MetricsSourceTest : StringSpec() {
         proxy { auth = [] }
         """,
       )
-      every { agent.isMetricsEnabled } returns false
+      every { agent.collectsMetrics } returns false
       every { agent.isTestMode } returns true
       every { agent.grpcService } returns grpc
       every { agent.scrapeHistory } returns null
@@ -355,22 +352,15 @@ class MetricsSourceTest : StringSpec() {
       written shouldBe 1024L * 1024
     }
 
-    // The docs site's example, run against a real registry: what an embedder copies writes what the scrape asks for.
-    "the docs site's registry source should write in the format asked for, and only the families named" {
-      val registry = PrometheusRegistry()
-      Counter.builder().name("orders").register(registry).inc()
-      Gauge.builder().name("queue_depth").register(registry).set(3.0)
-      val source = registrySource(registry)
+    // The docs site's worker, which serves its registry in-process: it does its work whether or not the agent starts,
+    // as where the tests run, with no PROMETHEUS_PROXY. RegistryMetricsSourceTest covers what a registry source writes.
+    "the docs site's worker should do its work, in Kotlin and in Java" {
+      val ran = mutableListOf<String>()
 
-      val text = ByteArrayOutputStream()
-      source.write("", emptySet(), text) shouldContain "version=0.0.4"
-      text.toString() shouldContain "orders_total 1.0"
-      text.toString() shouldContain "queue_depth 3.0"
+      runWorker(version = "1.0") { ran += "Kotlin" }
+      EmbeddedAgentSourceJavaExample.runWorker("1.0") { ran += "Java" }
 
-      val openMetrics = ByteArrayOutputStream()
-      source.write(OPEN_METRICS, setOf("queue_depth"), openMetrics) shouldContain "openmetrics"
-      openMetrics.toString() shouldContain "queue_depth 3.0"
-      openMetrics.toString() shouldNotContain "orders"
+      ran shouldBe listOf("Kotlin", "Java")
     }
 
     // As for a URL: a click on the dashboard's Scrape now isn't a scrape Prometheus made.

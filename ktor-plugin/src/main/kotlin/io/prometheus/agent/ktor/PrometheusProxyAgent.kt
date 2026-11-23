@@ -34,7 +34,8 @@ import io.prometheus.agent.EmbeddedAgentInfo
  *   registry = meterRegistry.prometheusRegistry
  *   path = "my_app_metrics"
  *   agent {
- *     proxy = System.getenv("PROMETHEUS_PROXY")
+ *     // PROMETHEUS_PROXY, PROMETHEUS_AGENT_TOKEN, and the proxy's certificate
+ *     fromEnvironment()
  *   }
  * }
  * ```

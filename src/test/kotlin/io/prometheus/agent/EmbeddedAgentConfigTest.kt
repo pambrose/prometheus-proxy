@@ -28,11 +28,13 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.types.shouldBeInstanceOf
 import io.kotest.matchers.types.shouldBeSameInstanceAs
+import io.prometheus.Agent
 import io.prometheus.common.ConfigLoadException
 import io.prometheus.common.TestCerts.CA_CERT
 import io.prometheus.common.TestCerts.CLIENT_CERT
 import io.prometheus.common.TestCerts.CLIENT_KEY
 import io.prometheus.common.TestCerts.read
+import io.prometheus.metrics.model.registry.PrometheusRegistry
 import java.net.URI
 
 // The typed builder for an embedded agent's in-memory config, and its Kotlin DSL: each method's setting reaches the
@@ -354,8 +356,121 @@ class EmbeddedAgentConfigTest : StringSpec() {
       listOf(TOKEN, PEM, PASSWORD).forEach { shown shouldNotContain it }
     }
 
+    "fromEnvironment sets the proxy, the token, and the certificate from the PROMETHEUS_ variables" {
+      val env =
+        mapOf(
+          "PROMETHEUS_PROXY" to " proxy-a.example.com:50443,proxy-b.example.com ",
+          "PROMETHEUS_AGENT_TOKEN" to "$TOKEN\n",
+          "PROMETHEUS_PROXY_CERT" to read(CA_CERT),
+          "PROMETHEUS_PROXY_AUTHORITY" to "proxy.internal",
+        )
+
+      val options = EmbeddedAgentConfig.builder().fromEnvironment(env::get).build().options()
+
+      options.proxyHostname shouldBe "proxy-a.example.com:50443,proxy-b.example.com:50051"
+      options.agentToken shouldBe TOKEN
+      options.hasTrustCertCollection.shouldBeTrue()
+      options.overrideAuthority shouldBe "proxy.internal"
+    }
+
+    // The Cloud Platforms page issues the proxy's certificate to prometheus-proxy, as the demos' apps default it
+    "fromEnvironment checks the certificate against prometheus-proxy without PROMETHEUS_PROXY_AUTHORITY" {
+      val env = mapOf("PROMETHEUS_PROXY_CERT" to read(CA_CERT), "PROMETHEUS_PROXY_AUTHORITY" to " ")
+
+      embeddedAgent { fromEnvironment(env::get) }.options().overrideAuthority shouldBe "prometheus-proxy"
+    }
+
+    "fromEnvironment leaves a setting alone when its variable is unset or blank" {
+      val env = mapOf("PROMETHEUS_PROXY" to "", "PROMETHEUS_AGENT_TOKEN" to "  ", "PROMETHEUS_PROXY_AUTHORITY" to "x")
+
+      val config =
+        embeddedAgent {
+          proxy = "proxy.example.com"
+          token = TOKEN
+          fromEnvironment(env::get)
+        }
+
+      config.options().proxyHostname shouldBe "proxy.example.com:50051"
+      config.options().agentToken shouldBe TOKEN
+      // The authority goes with a certificate, and there is none
+      config.options().isTlsEnabled.shouldBeFalse()
+      config.toString() shouldNotContain "overrideAuthority"
+    }
+
+    "a builder method called after fromEnvironment takes precedence" {
+      val env = mapOf("PROMETHEUS_PROXY" to "from-the-environment:50051")
+
+      embeddedAgent {
+        fromEnvironment(env::get)
+        proxy = "from-the-code:50051"
+      }.options().proxyHostname shouldBe "from-the-code:50051"
+    }
+
+    // System.getenv can't be set in a test; the tests' environment has none of the variables
+    "fromEnvironment reads the process's environment" {
+      val fromProcess = embeddedAgent { fromEnvironment() }.toString()
+
+      fromProcess shouldBe
+        embeddedAgent { fromEnvironment { name -> System.getenv(name) } }.toString()
+    }
+
+    "agentMetricsAt adds an in-process path for the agent's own metrics, which turns on its metrics but no port" {
+      val config =
+        embeddedAgent {
+          agentMetricsAt(path = "/my_app_agent_metrics", labels = mapOf("team" to "web"))
+        }
+      // An agent built from the settings, never started
+      val agent =
+        Agent(
+          options = config.agentOptions(),
+          inProcessServerName = "embedded-config-${System.nanoTime()}",
+          testMode = true,
+        )
+      try {
+        val path = agent.pathManager.pathConfigs.single()
+        path.path shouldBe "my_app_agent_metrics"
+        path.url shouldBe "in-process"
+        path.labels shouldBe """{"team":"web"}"""
+        path.metricsSource.shouldBeInstanceOf<AgentMetricsSource>()
+        // A startup message names the method that added it
+        path.origin shouldBe "agentMetricsAt()"
+        agent.collectsMetrics.shouldBeTrue()
+        agent.isMetricsEnabled.shouldBeFalse()
+      } finally {
+        agent.grpcService.shutDown()
+        agent.agentHttpService.close()
+      }
+      config.toString() shouldContain "agentMetricsAt=my_app_agent_metrics"
+      config.toConfig().hasPath("agent.pathConfigs").shouldBeFalse()
+    }
+
+    "agentMetricsAt called again moves the agent's metrics to the new path" {
+      val config =
+        embeddedAgent {
+          agentMetricsAt(path = "first_agent_metrics")
+          agentMetricsAt(path = "second_agent_metrics")
+        }
+
+      config.agentOptions().agentMetricsPath shouldBe "second_agent_metrics"
+      config.agentOptions().agentMetricsLabels shouldBe "{}"
+    }
+
+    "source with a registry serves it in-process, with or without labels" {
+      val registry = PrometheusRegistry()
+      val sources =
+        embeddedAgent {
+          source(path = "app_metrics", registry = registry)
+          source(path = "jobs_metrics", labels = mapOf("team" to "batch"), registry = registry)
+        }.agentOptions().metricsSources
+
+      sources.map { it.path } shouldBe listOf("app_metrics", "jobs_metrics")
+      sources.map { it.labels } shouldBe listOf("{}", """{"team":"batch"}""")
+      sources.forEach { it.metricsSource.shouldBeInstanceOf<RegistryMetricsSource>() }
+    }
+
     // As a setting the agent rejects throws ConfigLoadException when it starts, so does a value the builder rejects.
     "a blank path, a port out of range, or a URL with no scheme throws ConfigLoadException" {
+      shouldThrow<ConfigLoadException> { embeddedAgent { agentMetricsAt(path = "/") } }
       shouldThrow<ConfigLoadException> { embeddedAgent { scrapeSelf(" ", 8080) } }
       shouldThrow<ConfigLoadException> { embeddedAgent { scrapeSelf("app", 0) } }
       shouldThrow<ConfigLoadException> { embeddedAgent { path("", "http://host/metrics") } }

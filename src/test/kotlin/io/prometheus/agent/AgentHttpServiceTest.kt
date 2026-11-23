@@ -108,7 +108,7 @@ class AgentHttpServiceTest : StringSpec() {
     val mockAgent = mockk<Agent>(relaxed = true)
     every { mockAgent.options } returns mockOptions
     every { mockAgent.pathManager } returns mockPathManager
-    every { mockAgent.isMetricsEnabled } returns false
+    every { mockAgent.collectsMetrics } returns false
     return mockAgent
   }
 
@@ -170,7 +170,7 @@ class AgentHttpServiceTest : StringSpec() {
     val mockAgent = mockk<Agent>(relaxed = true)
     every { mockAgent.options } returns mockOptions
     every { mockAgent.configVals } returns configVals
-    every { mockAgent.isMetricsEnabled } returns false
+    every { mockAgent.collectsMetrics } returns false
     every { mockAgent.isTestMode } returns true
     every { mockAgent.grpcService } returns mockGrpcService
 
@@ -1102,7 +1102,7 @@ class AgentHttpServiceTest : StringSpec() {
     "fetchScrapeUrl should count a scrape the dashboard asked for only as a dashboard scrape, and not time it" {
       val closedPort = ServerSocket(0).use { it.localPort }
       val mockAgent = createMockAgentWithPaths()
-      every { mockAgent.isMetricsEnabled } returns true
+      every { mockAgent.collectsMetrics } returns true
       val service = AgentHttpService(mockAgent)
       mockAgent.pathManager.registerPath("metrics", "http://localhost:$closedPort/metrics")
 

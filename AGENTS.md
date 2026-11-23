@@ -73,7 +73,8 @@ predates what the demo shows, `demo.sh`'s `NEEDS_RELEASE_AFTER` has `make up` bu
 The Spring Boot starter, `spring-boot-starter/`, is one of the build's two subprojects (`:spring-boot-starter`), in Java,
 published alongside the agent at its version as `com.pambrose:prometheus-proxy-spring-boot-starter`: auto-configuration
 (`io.prometheus.agent.spring`) that runs an embedded agent as a `SmartLifecycle` bean from the `prometheus-proxy.agent.*`
-properties and serves the app's `PrometheusRegistry` bean in-process (`RegistryMetricsSource`). Its POM names no Spring
+properties and serves the app's `PrometheusRegistry` bean in-process (the builder's `source(path, registry)`), starting
+a required agent with `start()` and any other with `startIfConfigured()`. Its POM names no Spring
 Boot artifact and imports no BOM, so an app's own Spring Boot is the one it runs with: the Spring Boot artifacts are
 `compileOnly`, through the BOM at `spring-boot` in `libs.versions.toml`, and its JUnit 5 tests run the agent at Spring
 Boot's versions, enforced as an app's dependency management enforces them (`./gradlew :spring-boot-starter:test`, part
@@ -87,9 +88,11 @@ agent with a Ktor app and serves the `PrometheusRegistry` it's given in-process.
 `prometheus-proxy.agent` section of the app's config file, read through Ktor's `ApplicationConfig` by the starter's
 property names (`FileSettings`), then the install block's. `AgentLifecycle` starts the agent on `ApplicationStarted`,
 begins its stop on `ApplicationStopPreparing` on a thread of its own, so the engine's grace period stays the app's, and
-waits for it on `ApplicationStopping`; keep that split. Its POM puts the agent, `ktor-server-core`, and the exposition
-formats at compile scope, since its API names their types, and `make consumer-check` resolves it as a Ktor app does (the
-consumer check's `ktor` profile) and compiles the docs site's Ktor Plugin examples, which `KtorPluginExamplesTest` runs.
+waits for it on `ApplicationStopping`; keep that split. A required agent starts with `start()`, and any other with
+`startIfConfigured()`, which logs a failure itself. Its POM puts the agent and `ktor-server-core` at compile scope, since
+its API names their types (the `PrometheusRegistry` it takes comes with the agent's), and `make consumer-check` resolves
+it as a Ktor app does (the consumer check's `ktor` profile) and compiles the docs site's Ktor Plugin examples, which
+`KtorPluginExamplesTest` runs.
 It applies kotlinter and detekt (the root's `config/detekt/detekt.yml`), and the root aggregates its coverage
 (`kover(project(":ktor-plugin"))`), so the coverage floors cover it; `./gradlew :ktor-plugin:test` runs its Kotest
 specs, and so does `build`.
@@ -120,16 +123,27 @@ Only these types are part of the supported, documented public API. Everything el
   file or URL, or a Typesafe `Config` built in memory; `typesafe-config` is therefore an `api` dependency)
 - `io.prometheus.Proxy` (entry point + companion `main`)
 - `io.prometheus.agent.AgentOptions` / `io.prometheus.proxy.ProxyOptions` / `io.prometheus.common.BaseOptions`
-- `io.prometheus.agent.EmbeddedAgentConfig` and `embeddedAgent { }` (an embedded agent's settings built in code with
-  typed methods, for Java through `EmbeddedAgentConfig.builder()`, and started with `start()`; it builds the `Config`
-  `startAsyncAgent(Config)` takes)
+- `io.prometheus.agent.EmbeddedAgentConfig` and `embeddedAgent { }`: an embedded agent's settings, built in code with
+  typed methods (from Java, with `EmbeddedAgentConfig.builder()`). It builds the same `Config` that
+  `startAsyncAgent(Config)` takes.
+  - `start()` starts the agent, and throws on a setting the agent rejects or a start that fails.
+  - `startIfConfigured()` returns null in those cases instead, logging why, and also when no proxy is set.
+  - `fromEnvironment()` reads `PROMETHEUS_PROXY`, `PROMETHEUS_AGENT_TOKEN`, `PROMETHEUS_PROXY_CERT`, and
+    `PROMETHEUS_PROXY_AUTHORITY`, which nothing else reads. Its `internal` overload takes the lookup function, so
+    tests can call it, as with `EnvVars`' parsing.
+  - `agentMetricsAt(path)` serves the agent's own metric families in-process (`AgentMetricsSource`), and reaches the
+    agent in `AgentOptions.agentMetricsPath`. With it, the agent collects its metrics (`Agent.collectsMetrics`) even
+    when `isMetricsEnabled`, which controls the metrics port, is off.
 - `io.prometheus.agent.MetricsSource` (a host's metrics, which the agent reads in-process for a path added with the
   builder's `source()`, in place of a URL; a source is code, so it reaches the agent in `AgentOptions.metricsSources`,
   not in the `Config` tree, and `AgentHttpService.fetchFromSource` reads it with a target's limits and filter, calling
   it in a scope of its own, so a call that ignores the timeout's interrupt holds only its own thread, and anything it
-  throws but a `VirtualMachineError` fails only its scrape)
+  throws but a `VirtualMachineError` fails only its scrape). `MetricsSource.of(registry)` and `source(path, registry)`
+  serve a `PrometheusRegistry` (`RegistryMetricsSource`), which leaves out the agent's own families when it's the
+  default registry and an agent collects them, so each series is served once; `prometheus-metrics-model` is therefore
+  an `api` dependency, and the text formats an `implementation` one
 - `io.prometheus.agent.EmbeddedAgentInfo` (handle returned by `Agent.startAsyncAgent`, with the agent's connection,
-  `isConnected` and `proxyEndpoint`, read live for a host's health check)
+  `isConnected` and `proxyEndpoint`, read live for a host's health check; `AutoCloseable`, `close()` being `shutdown()`)
 - `io.prometheus.common.EnvVars`
 - `io.prometheus.common.ConfigLoadException` (thrown by `startAsyncAgent` and `startSyncAgent` when `exitOnMissingConfig` is false, and by `startAsyncAgent(Config)` always, on a config that can't be loaded or a setting the options or the Agent reject, with a config URL's credentials redacted from its whole cause chain, so embedded hosts can catch it instead of the JVM exiting)
 
@@ -161,7 +175,7 @@ aren't in the proto: a scrape result is sent in chunks once its gzipped size rea
 - **Dynamic target discovery**: `PathDiscoveryService` polls a watched file and calls `AgentPathManager.reconcileDiscoveredPaths`; paths are tagged `STATIC`/`DISCOVERED`, and static entries are never touched.
 - **Per-agent auth**: `AgentAuthManager` + `AgentAuthServerInterceptor` resolve `proxy.auth` identity tokens and enforce path globs on `registerPath`; legacy `proxy.agentToken` maps to an allow-all identity. `registerPath` runs `ProxyPathManager.formRejection` (length, form, labels size) before the globs see a path, and `AgentAuthManager.globMatches` matches in time proportional to the path's length; keep both, since a regex or the other order lets one authenticated agent stall the proxy with a long path. With `transportFilterDisabled`, where the agent names its own agentId on every call, `readRequestsFromProxy` looks the context up once and removes only that object (`Proxy.removeAgentContextIfCurrent`), and `AgentContextManager.addAgentContextWithinLimit` caps the contexts one identity holds at `proxy.internal.maxAgentsPerIdentity`.
 - **Agent-supplied values**: the proxy cuts what an agent reports about itself (`ProxyServiceImpl.boundedRegistration`, `proxy.internal.maxAgentFieldLength` / `maxAgentProxyEndpoints`) and about each path (`ProxyPathManager.addPath`: the target URL, redacted before it's cut, to `maxTargetUrlLength`), and logs every agent-supplied value through `AgentValues.shownValue`, which cuts it and escapes its control characters so it can't forge a log line (`ProxyPathManager.shownPath` for a path or `agentId`, its first 64 characters); bound or cut any new agent-supplied value before storing it, and pass it through `shownValue` before logging it. `formRejection` refuses a path with whitespace, a control character, `?`, or `#` (`AgentValues.pathCharacterProblem`), which the agent checks on its `pathConfigs` at startup too.
-- **Shared metrics**: `AgentMetrics` / `ProxyMetrics` build their collectors once per JVM in their companion objects and share them through `SharedCollectors`, since the default registry rejects a second collector with the same name and label names, which kept a second agent in a JVM from connecting. Add a new metric to its companion's `SHARED` list; an agent metric takes `launch_id` as its first label and goes in `PER_LAUNCH` too, so a stopped agent's series are removed (and, given the label values, start at zero).
+- **Shared metrics**: `AgentMetrics` / `ProxyMetrics` build their collectors once per JVM in their companion objects and share them through `SharedCollectors`, since the default registry rejects a second collector with the same name and label names, which kept a second agent in a JVM from connecting. Add a new metric to its companion's `SHARED` list (the agent's `COLLECTORS`, whose names `agentMetricsAt` serves and a registry source of the default registry leaves out); an agent metric takes `launch_id` as its first label and goes in `PER_LAUNCH`, which `COLLECTORS` includes, so a stopped agent's series are removed (and, given the label values, start at zero).
 - **TLS material**: each certificate, key, or trust collection is a file (`tls.*FilePath`) or PEM text or its base64
   (`tls.*Pem`, `*_PEM` env vars, no CLI flags), never both (`TlsSource.requireOneSource`); `TlsMaterial` builds the
   gRPC TLS context from either with `GrpcSslContexts`. Never log a PEM value, only whether it's set.
@@ -257,7 +271,7 @@ Lincheck concurrency specs (`*LincheckTest`) carry the Kotest `Lincheck` tag (`c
 
 TLA+ specs in `specs/tla/` model the design rather than test the code: `ProxyRegistry.tla` covers `AgentContextManager`, `AgentContext`'s invalidate and drain, `ProxyPathManager`'s register and remove, `ScrapeRequestManager`, and `Proxy.removeAgentContext`; `AgentFailover.tla` covers `EndpointFailover`. When you change the locking, ordering, or lifecycle of one of those, update the matching action and run `make tla-checks` (about a minute; it fetches the pinned TLA+ tools into `specs/tla/`, git-ignored, and checks their SHA-256), which CI's `tla` job runs on every pull request; it runs `make tla-checks-full`, which adds the slower `ProxyRegistryReconnect.cfg`, instead when a file under `specs/tla/` or the pinned TLA+ tools (`TLA_VERSION`, `TLA_SHA256`) change, as TLC reads nothing else. Run `make tla-checks-full` locally when you change how a reconnect treats a taken-over path. `specs/tla/README.md` lists the properties.
 
-What embedders get from Maven Central is checked by a Maven build, not a Gradle one: `make consumer-check` (CI's `consumer-check` job, which `RELEASE_REQUIRED_JOBS` lists) publishes to the local Maven repository at a throwaway `-consumer-check-SNAPSHOT` version and builds `etc/consumer-check` against it. It fails unless the website's embedded-agent examples compile, Maven resolves Jackson, every netty-tcnative native, Netty, protobuf, and every Prometheus Java client module at the catalog's versions, and no jar carries a `logback.xml`; it resolves as a project that depends only on the agent, and adds the exposition formats the `MetricsSource` examples need only for their compile (its `examples` profile). So a type a public class exposes goes in `api(...)`, a pin an embedder needs is declared directly (Maven ignores a dependency's BOM imports, and a classifier jar is its own artifact), and a resource only the fat JARs need goes in `src/shadow/resources`, as `logback.xml` does.
+What embedders get from Maven Central is checked by a Maven build, not a Gradle one: `make consumer-check` (CI's `consumer-check` job, which `RELEASE_REQUIRED_JOBS` lists) publishes to the local Maven repository at a throwaway `-consumer-check-SNAPSHOT` version and builds `etc/consumer-check` against it. It fails unless the website's embedded-agent examples compile, Maven resolves Jackson, every netty-tcnative native, Netty, protobuf, and every Prometheus Java client module at the catalog's versions, and no jar carries a `logback.xml`; it resolves and compiles the examples as a project that depends only on the agent. So a type a public class exposes goes in `api(...)`, a pin an embedder needs is declared directly (Maven ignores a dependency's BOM imports, and a classifier jar is its own artifact), and a resource only the fat JARs need goes in `src/shadow/resources`, as `logback.xml` does.
 
 Specs in `src/test/kotlin/io/prometheus/misc/` check the docs and CI against the code, so a change can fail them without touching a test: `TestingGuideTest` fails when a spec isn't named in its package's section of `docs/TESTING.md` or a support file isn't named there at all, so add each new one; `WebsiteConfigKeysTest` and `DashboardMetricNamesTest` check the `proxy.`/`agent.` config keys, table defaults, and `proxy_*`/`agent_*` series the website names against `config/config.conf` and the exposed metrics; `ConfigFileKeysTest` fails on a setting in a shipped or test config (`config/test-configs`, `examples`, …), or a `-D` key a test passes in a string literal, that `config/config.conf` doesn't declare; `CiHygieneTest` requires a `timeout-minutes` on every workflow job, a digest on every `*_IMAGE` in the `Makefile` and on every third-party `*_IMAGE` in `ContainerTestSupport`, a pinned uv `version` on every `setup-uv` step, and a fixed commit for the CRD schemas; and `SiteVersionTest` pins `make site-version`, which `docs.yml`'s deploy check and `bin/docker-*.sh` read.
 

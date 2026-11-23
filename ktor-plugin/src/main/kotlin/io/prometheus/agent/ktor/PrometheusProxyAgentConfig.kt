@@ -69,7 +69,8 @@ class PrometheusProxyAgentConfig internal constructor(
 
   /**
    * Makes the rest of the agent's settings in code, with [EmbeddedAgentConfig.Builder], such as its proxy, token, and
-   * certificates, read from wherever the app keeps them. It runs after the file's settings are applied, so a builder
+   * certificates, read from wherever the app keeps them: [fromEnvironment][EmbeddedAgentConfig.Builder.fromEnvironment]
+   * reads them from `PROMETHEUS_PROXY` and the like. It runs after the file's settings are applied, so a builder
    * method it calls replaces what the file set, but not a `settings.<key>` key: that's a `setting()`, which takes
    * precedence over the builder's methods whatever their order. To change one, call `setting()` with its key. Called
    * more than once, each block runs, in turn.
@@ -87,7 +88,7 @@ class PrometheusProxyAgentConfig internal constructor(
       val servedAt = path
       if (servedAt.isNullOrBlank())
         throw ConfigLoadException("prometheus-proxy.agent.path is required to serve a registry")
-      builder.source(path = servedAt, labels = labels, source = RegistryMetricsSource(registry))
+      builder.source(path = servedAt, labels = labels, registry = registry)
     }
     agentBlocks.forEach { builder.it() }
     return builder

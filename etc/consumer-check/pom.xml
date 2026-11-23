@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  A Maven project that depends on com.pambrose:prometheus-proxy, as an application that embeds the agent does. Its
-  examples profile adds the Prometheus client's exposition formats, which the MetricsSource examples write a registry
-  with, as their host does; only check.sh's compile uses it, so what it checks Maven resolves is what an application
-  that depends only on the agent gets, and not versions this project's own declaration chose by nearest-wins.
+  A Maven project that depends on com.pambrose:prometheus-proxy alone, as an application that embeds the agent does, so
+  what check.sh checks Maven resolves is what such an application gets. The examples that serve a registry in-process
+  compile with nothing more: the agent's POM puts the PrometheusRegistry its API takes at compile scope, and the text
+  formats it writes one in at runtime.
   `make consumer-check` publishes this checkout to the local Maven repository and runs check.sh, which builds this
   project against what Maven resolves from the published POM. The repo's own builds resolve through Gradle, which
   honors the published BOM imports and conflict rules that Maven doesn't, so only a Maven build like this one sees what
@@ -23,11 +23,10 @@
   <version>1</version>
 
   <properties>
-    <!-- Set by check.sh: the version make consumer-check published, and Kotlin's, the Prometheus Java client's, Ktor's,
-         and Micrometer's from gradle/libs.versions.toml. -->
+    <!-- Set by check.sh: the version make consumer-check published, and Kotlin's, Ktor's, and Micrometer's from
+         gradle/libs.versions.toml. -->
     <prometheus-proxy.version>unset</prometheus-proxy.version>
     <kotlin.version>unset</kotlin.version>
-    <prometheus-metrics.version>unset</prometheus-metrics.version>
     <ktor.version>unset</ktor.version>
     <micrometer.version>unset</micrometer.version>
     <repo.root>${project.basedir}/../..</repo.root>
@@ -45,18 +44,6 @@
   </dependencies>
 
   <profiles>
-    <profile>
-      <id>examples</id>
-      <dependencies>
-        <!-- ExpositionFormats, which the MetricsSource examples write a registry with, declared as the docs site tells
-             an embedder to: the agent, and Micrometer's Prometheus registry, bring it at runtime only. -->
-        <dependency>
-          <groupId>io.prometheus</groupId>
-          <artifactId>prometheus-metrics-exposition-textformats</artifactId>
-          <version>${prometheus-metrics.version}</version>
-        </dependency>
-      </dependencies>
-    </profile>
     <profile>
       <!-- A Ktor app with the Ktor plugin: the plugin, at the agent's version, and Micrometer's Ktor plugin and
            Prometheus registry, which the docs site's examples serve, at the versions the agent's build uses. -->

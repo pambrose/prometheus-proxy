@@ -31,22 +31,15 @@ fun Application.installPrometheusAgent(
       // The version tells the old and new deployments apart on the proxy's dashboard and in its logs
       name = "coffee-shop-$appVersion"
 
-      // host:port, the proxy's agent port
-      proxy = env("PROMETHEUS_PROXY")
-      token = env("PROMETHEUS_AGENT_TOKEN")
+      // The proxy's agent port, as host:port (PROMETHEUS_PROXY), the token (PROMETHEUS_AGENT_TOKEN), and the
+      // certificate the proxy's is signed with, as PEM or its base64 (PROMETHEUS_PROXY_CERT), with the name it was
+      // issued to (PROMETHEUS_PROXY_AUTHORITY)
+      fromEnvironment()
 
-      // The certificate the proxy's is signed with, as PEM or its base64, and the name it was issued to
-      trustCertificatePem(
-        pem = env("PROMETHEUS_PROXY_CERT"),
-        authority = env("PROMETHEUS_PROXY_AUTHORITY").ifEmpty { "prometheus-proxy" },
-      )
-
-      // The agent's own metrics, served to the proxy too, when METRICS_ENABLED in the app's environment turns them on,
-      // on their default port, 8083, inside the container only; a METRICS_PORT would have to change this too. Without
-      // them, the path would only fail. Its admin endpoints and /debug come from the environment as well, with nothing
-      // here: ADMIN_ENABLED and DEBUG_ENABLED.
-      if (env("METRICS_ENABLED").equals("true", ignoreCase = true))
-        scrapeSelf(path = "coffee_shop_agent_metrics", port = 8083)
+      // The agent's own metrics, for Grafana's Prometheus Agents dashboard, at the proxy's /coffee_shop_agent_metrics,
+      // read in-process too: the agent opens no port for them. Its admin endpoints and /debug come from the environment,
+      // with nothing here: ADMIN_ENABLED and DEBUG_ENABLED.
+      agentMetricsAt(path = "coffee_shop_agent_metrics")
     }
   }
 }

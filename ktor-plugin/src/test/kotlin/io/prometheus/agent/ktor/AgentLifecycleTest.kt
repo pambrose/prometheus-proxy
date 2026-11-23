@@ -112,6 +112,17 @@ class AgentLifecycleTest : StringSpec() {
       app.application.prometheusProxyAgent.shouldBeNull()
     }
 
+    // As startIfConfigured, which starts an agent that isn't required, returns null for a start that fails, having
+    // logged why
+    "an agent whose start leaves it off stays off" {
+      val app = TestApp()
+      app.lifecycle(proxy = "localhost:50051", started = false)
+
+      app.started()
+
+      app.application.prometheusProxyAgent.shouldBeNull()
+    }
+
     "a required agent that can't start fails the app's start with why" {
       val app = TestApp()
       app.lifecycle(proxy = "localhost:50051", failure = ConfigLoadException("bad certificate")) { required = true }
@@ -229,6 +240,7 @@ class AgentLifecycleTest : StringSpec() {
     fun lifecycle(
       proxy: String?,
       failure: Exception? = null,
+      started: Boolean = true,
       stopTimeoutMillis: Long = 5_000,
       configure: PrometheusProxyAgentConfig.() -> Unit = {},
     ): List<EmbeddedAgentConfig> {
@@ -241,7 +253,7 @@ class AgentLifecycleTest : StringSpec() {
       AgentLifecycle(application = application, config = config, stopTimeoutMillis = stopTimeoutMillis) { settings ->
         launches += settings
         failure?.also { throw it }
-        agent
+        agent.takeIf { started }
       }.subscribe()
       return launches
     }

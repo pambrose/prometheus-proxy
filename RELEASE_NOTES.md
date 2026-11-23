@@ -26,9 +26,15 @@ _Released 2026-11-23_
   the process is running with, from its ports, authentication, and TLS to its limits and timeouts, so you can check
   them without reading the startup log. Tokens, passwords, and private keys show only as set or not set.
 - **Metrics without an endpoint.** An app that embeds the agent can hand it its metrics registry with
-  `source(path, source)`, instead of serving its metrics at a URL for the agent to scrape: no `/metrics` endpoint,
-  port, or password to set up. The Embedded Agent page shows it for the Prometheus Java client's registry, which
-  Micrometer's uses too.
+  `source(path, registry)`, instead of serving its metrics at a URL for the agent to scrape: no `/metrics` endpoint,
+  port, password, or extra dependency to set up. It takes the Prometheus Java client's registry, which Micrometer's
+  uses too, and `source(path, source)` takes any other metrics as a `MetricsSource`.
+- **An embedded agent in a few lines.** For an app with no framework, such as a worker or a daemon,
+  `fromEnvironment()` reads the proxy, token, and certificate from `PROMETHEUS_PROXY`, `PROMETHEUS_AGENT_TOKEN`, and
+  `PROMETHEUS_PROXY_CERT`; `startIfConfigured()` starts the agent only where a proxy is set, and keeps the app running
+  when it can't start, logging why; and `agentMetricsAt(path)` serves the agent's own metrics through the proxy, with
+  no port opened for them. The agent's handle is `AutoCloseable`, so `startIfConfigured().use { … }` stops the agent
+  with the app. The Embedded Agent page shows a whole worker's agent, in Kotlin and Java.
 - **A Spring Boot starter.** Add `prometheus-proxy-spring-boot-starter` to a Spring Boot app and set the proxy's
   address: the agent starts and stops with the app, serves its metrics to Prometheus without `/actuator/prometheus`
   or a web server, and shows its connection in `/actuator/health`. The new Spring Boot Starter page lists its
@@ -112,6 +118,8 @@ _Released 2026-11-23_
   give the date of the commit a build is from rather than the day it was built.
 - **Fewer ERROR lines on the proxy.** An unregister the proxy can't apply, for a path that's gone or that another
   agent now holds, is logged at INFO instead of ERROR.
+- **A refused token is an ERROR, once.** When the proxy refuses an agent's token, the agent logs one ERROR line that
+  says where the token is set, instead of a WARN with a stack trace, and a reminder every 10 minutes while it lasts.
 
 ### Documentation
 
@@ -123,7 +131,7 @@ _Released 2026-11-23_
   ends its TLS; the Dashboard page, what nginx has to pass on for the dashboard's live updates.
 - **Debugging an embedded agent.** The Embedded Agent page's new Debugging section turns on the agent's admin
   endpoints and `/debug` with `ADMIN_ENABLED` and `DEBUG_ENABLED`, says what each shows, and puts the agent's own
-  metrics on the Agents dashboard with `METRICS_ENABLED`. The embedded demo's tour walks through them.
+  metrics on the Agents dashboard with `agentMetricsAt`. The embedded demo's tour walks through them.
 - **The dashboard's login in the basics demo.** The tour's new last part turns it on, with the password in the proxy's
   environment, signs in and out, and turns it off again (`./demo.sh login`, `./demo.sh login-off`).
 

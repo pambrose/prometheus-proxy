@@ -18,13 +18,18 @@ package io.prometheus.agent
 
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigValueFactory
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.ktor.http.Url
 import io.ktor.http.encodeURLParameter
 import io.prometheus.Agent
 import io.prometheus.common.ConfigLoadException
+import io.prometheus.common.EnvVars
 import io.prometheus.common.Utils.sanitizeUrl
+import io.prometheus.common.Utils.sanitizeUrlsInText
+import io.prometheus.metrics.model.registry.PrometheusRegistry
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import java.util.function.BiConsumer
 
 /**
  * An embedded agent's settings, built in code with typed methods rather than as a config file, and started with
@@ -44,6 +49,19 @@ import kotlinx.serialization.json.JsonPrimitive
  *   }.start(logBanner = false)
  * ```
  *
+ * A program with a metrics registry, and no HTTP server for the agent to scrape, takes a few lines: the agent reads the
+ * proxy and its credentials from the environment ([Builder.fromEnvironment]), serves the registry and its own metrics
+ * in-process ([Builder.source], [Builder.agentMetricsAt]), and stays off where there's no proxy ([startIfConfigured]):
+ *
+ * ```kotlin
+ * embeddedAgent {
+ *   name = "worker-$version"
+ *   fromEnvironment()
+ *   source(path = "worker_metrics", registry = PrometheusRegistry.defaultRegistry)
+ *   agentMetricsAt(path = "worker_agent_metrics")
+ * }.startIfConfigured().use { worker.run() }
+ * ```
+ *
  * It builds the same tree a config file holds, rooted at `agent`, so starting it behaves as
  * [Agent.startAsyncAgent][io.prometheus.Agent.Companion.startAsyncAgent] does with a `Config`: the built-in defaults
  * fill in what isn't set, the environment variables of single settings take precedence, and a setting the agent can't
@@ -53,15 +71,20 @@ class EmbeddedAgentConfig private constructor(
   private val config: Config,
   // The paths served in-process (Builder.source), which no Config can hold.
   private val sources: List<AgentPathManager.PathConfig>,
+  // The path the agent's own metrics are served at, in-process (Builder.agentMetricsAt), and its labels as JSON, or
+  // empty without one.
+  private val agentMetricsPath: String,
+  private val agentMetricsLabels: String,
 ) {
   /**
    * The settings as the `Config` tree a config file would hold, rooted at `agent`. The paths [source][Builder.source]
-   * adds aren't in it, since a [MetricsSource] is code: an agent started from the tree alone doesn't serve them.
+   * and [agentMetricsAt][Builder.agentMetricsAt] add aren't in it, since they're served by code: an agent started from
+   * the tree alone doesn't serve them.
    */
   fun toConfig(): Config = config
 
   // The options the agent starts with: the tree's settings, and the paths served in-process.
-  internal fun agentOptions(): AgentOptions = AgentOptions(config, sources)
+  internal fun agentOptions(): AgentOptions = AgentOptions(config, sources, agentMetricsPath, agentMetricsLabels)
 
   /**
    * Starts an agent with these settings, as [Agent.startAsyncAgent][io.prometheus.Agent.Companion.startAsyncAgent]
@@ -70,10 +93,72 @@ class EmbeddedAgentConfig private constructor(
    * @param logBanner When `true` (default), logs the agent's ASCII banner and version on startup.
    * @throws ConfigLoadException when a setting is invalid.
    * @throws IllegalStateException if the agent fails to start.
+   * @see startIfConfigured for an agent that stays off without a proxy, and keeps the app running when it can't start.
    */
   @JvmOverloads
   fun start(logBanner: Boolean = true): EmbeddedAgentInfo =
     Agent.startEmbedded(exitOnMissingConfig = false, logBanner = logBanner) { agentOptions() }
+
+  /**
+   * Starts an agent with these settings, as [start] does, when they name a proxy, and returns its handle; returns null
+   * when they don't, or when it can't start, so the app runs without it: its metrics aren't worth an outage.
+   *
+   * The settings name a proxy with the builder's [proxy][Builder.proxy], which
+   * [fromEnvironment][Builder.fromEnvironment] reads from `PROMETHEUS_PROXY`, or the agent's own `PROXY_HOSTNAME`
+   * environment variable names one. Without one, as on a developer's machine, the agent stays off, with an INFO line
+   * that says so. A start that fails, for a setting the agent rejects ([ConfigLoadException]) or for anything else,
+   * such as its admin port being in use, is logged at ERROR with why, which holds no token, password, or PEM, and is
+   * given to [onFailure].
+   *
+   * The handle is [AutoCloseable], and Kotlin's `use` and Java's try-with-resources both take a null one, so a program
+   * that runs while its agent does reads as `startIfConfigured().use { worker.run() }`, which runs the worker whether
+   * or not the agent started, and stops the agent after it.
+   *
+   * @param logBanner When `true` (default), logs the agent's ASCII banner and version on startup.
+   * @param onFailure Called after a failed start is logged, with why, as the log line gives it, and what the start
+   *   threw, for an app that reports such a failure elsewhere; none by default.
+   * @return the agent's handle, or null when it stays off.
+   */
+  @JvmOverloads
+  fun startIfConfigured(
+    logBanner: Boolean = true,
+    onFailure: BiConsumer<in String, in Exception>? = null,
+  ): EmbeddedAgentInfo? = startIfConfigured(onFailure, System::getenv) { start(logBanner = logBanner) }
+
+  // startIfConfigured, with the environment it reads PROXY_HOSTNAME from, and the start, which tests replace.
+  @Suppress("TooGenericExceptionCaught")
+  internal fun startIfConfigured(
+    onFailure: BiConsumer<in String, in Exception>?,
+    env: (String) -> String?,
+    launch: () -> EmbeddedAgentInfo,
+  ): EmbeddedAgentInfo? {
+    if (!namesProxy(env)) {
+      logger.info { "No proxy is set, so the Prometheus agent stays off" }
+      return null
+    }
+    return try {
+      launch()
+    } catch (e: Exception) {
+      // A setting the agent rejects (ConfigLoadException), a failure to start (IllegalStateException), or a checked
+      // exception, which Kotlin throws undeclared, such as the start timing out
+      val reason = failureReason(e)
+      logger.error { "The Prometheus agent could not start, so it stays off: $reason" }
+      onFailure?.accept(reason, e)
+      null
+    }
+  }
+
+  // Whether the settings name a proxy: the builder's, a setting() of the proxy's endpoints or host name, or the agent's
+  // own PROXY_HOSTNAME, which takes precedence over them. Without one, the agent would try localhost.
+  private fun namesProxy(env: (String) -> String?): Boolean =
+    !env(EnvVars.PROXY_HOSTNAME.name).isNullOrBlank() ||
+      PROXY_KEYS.any { key ->
+        config.hasPath(key) &&
+          when (val value = config.getValue(key).unwrapped()) {
+            is List<*> -> value.any { it.toString().isNotBlank() }
+            else -> value.toString().isNotBlank()
+          }
+      }
 
   /**
    * The settings, [setting][Builder.setting]'s included, with the token, a password, and each PEM shown only as set or
@@ -85,7 +170,8 @@ class EmbeddedAgentConfig private constructor(
         ""
       else
         sources.joinToString(prefix = ", sources={", postfix = "}") { "${it.path}=${it.url}" }
-    return "EmbeddedAgentConfig(${shown(config.getObject("agent").unwrapped())}$shownSources)"
+    val shownAgentMetrics = if (agentMetricsPath.isEmpty()) "" else ", agentMetricsAt=$agentMetricsPath"
+    return "EmbeddedAgentConfig(${shown(config.getObject("agent").unwrapped())}$shownSources$shownAgentMetrics)"
   }
 
   /**
@@ -104,6 +190,8 @@ class EmbeddedAgentConfig private constructor(
     private val values = linkedMapOf<String, Any>()
     private val paths = mutableListOf<Map<String, String>>()
     private val sources = mutableListOf<AgentPathManager.PathConfig>()
+    private var agentMetricsPath = ""
+    private var agentMetricsLabels = "{}"
     private val settings = linkedMapOf<String, Any>()
 
     /** The agent's name, as the proxy's dashboard and logs show it (`agent.name`). */
@@ -168,6 +256,33 @@ class EmbeddedAgentConfig private constructor(
         values["tls.privateKeyPem"] = privateKeyPem
       }
 
+    /**
+     * Reads the proxy, and how to reach it, from the app's environment, under the names the docs and demos give them:
+     *
+     * - `PROMETHEUS_PROXY` sets [proxy];
+     * - `PROMETHEUS_AGENT_TOKEN` sets [token];
+     * - `PROMETHEUS_PROXY_CERT` sets [trustCertificatePem], with `PROMETHEUS_PROXY_AUTHORITY` as its authority, or
+     *   `prometheus-proxy` without one, the name the docs' certificate for the proxy is issued to. To check the
+     *   certificate against the host the agent connects to, set `PROMETHEUS_PROXY_AUTHORITY` to that host.
+     *
+     * A variable that isn't set, or is blank, leaves its setting as it was, so a builder method called after this takes
+     * precedence, and one called before it holds where the variable isn't set. Nothing else reads these variables: the
+     * agent itself doesn't. Its own, such as `AGENT_TOKEN` and `PROXY_HOSTNAME`, still take precedence over its
+     * settings, these included.
+     */
+    fun fromEnvironment(): Builder = fromEnvironment(System::getenv)
+
+    // fromEnvironment, reading the variables with env, which tests give, since System.getenv can't be set.
+    internal fun fromEnvironment(env: (String) -> String?): Builder =
+      apply {
+        fun read(name: String) = env(name)?.trim()?.ifEmpty { null }
+        read(PROMETHEUS_PROXY)?.also { proxy = it }
+        read(PROMETHEUS_AGENT_TOKEN)?.also { token = it }
+        read(PROMETHEUS_PROXY_CERT)?.also {
+          trustCertificatePem(pem = it, authority = read(PROMETHEUS_PROXY_AUTHORITY) ?: DEFAULT_AUTHORITY)
+        }
+      }
+
     /** Whether the agent registers its paths in consolidated mode, alongside other agents (`agent.consolidated`). */
     @get:JvmSynthetic
     @set:JvmSynthetic
@@ -194,6 +309,26 @@ class EmbeddedAgentConfig private constructor(
 
     /** Turns on the agent's own metrics endpoint, on [port]; sets [agentMetricsPort]. */
     fun agentMetrics(port: Int): Builder = apply { agentMetricsPort = port }
+
+    /**
+     * Has the agent serve its own metrics, the `agent_*` series the project's Agents dashboard reads, to Prometheus at
+     * the proxy's [path], read in-process as [source] reads an app's: the agent keeps them without opening their port,
+     * which nothing outside the app could reach. Only this agent's series are served, not those of another agent in the
+     * JVM, nor the JVM's own metrics, which the app's path carries. A [source] of the default registry, where they're
+     * kept, leaves them out, so each series is served once. [labels] are the path's labels in the proxy's service
+     * discovery. Called again, it moves them to the new path.
+     */
+    @JvmOverloads
+    fun agentMetricsAt(
+      path: String,
+      labels: Map<String, String> = emptyMap(),
+    ): Builder =
+      apply {
+        val normalized = path.removePrefix("/")
+        if (normalized.isBlank()) invalid("A path is required")
+        agentMetricsPath = normalized
+        agentMetricsLabels = labelsJson(labels) ?: "{}"
+      }
 
     /**
      * The port of the agent's dashboard, which shows its connection, each path and why the proxy refused one, and its
@@ -305,6 +440,27 @@ class EmbeddedAgentConfig private constructor(
     ): Builder = source(path, emptyMap(), source)
 
     /**
+     * Has the agent serve [registry], the app's metrics, read in-process for each scrape, to Prometheus at the proxy's
+     * [path], as [source] with [MetricsSource.of] does: Micrometer's `PrometheusMeterRegistry.prometheusRegistry`, or
+     * the Prometheus Java client's `PrometheusRegistry.defaultRegistry`, in the format Prometheus asks for. The agent's
+     * own metrics aren't among them: [agentMetricsAt] serves those.
+     */
+    fun source(
+      path: String,
+      registry: PrometheusRegistry,
+    ): Builder = source(path, emptyMap(), registry)
+
+    /**
+     * Has the agent serve [registry] at [path], as the [source] without labels does, with [labels], the path's labels
+     * in the proxy's service discovery.
+     */
+    fun source(
+      path: String,
+      labels: Map<String, String>,
+      registry: PrometheusRegistry,
+    ): Builder = source(path, labels, MetricsSource.of(registry))
+
+    /**
      * Has the agent serve [source] at [path], as the [source] without labels does, with [labels], the path's labels in
      * the proxy's service discovery.
      */
@@ -356,7 +512,7 @@ class EmbeddedAgentConfig private constructor(
           ->
           tree.withValue("agent.$key", ConfigValueFactory.fromAnyRef(value))
         }
-      return EmbeddedAgentConfig(config, sources.toList())
+      return EmbeddedAgentConfig(config, sources.toList(), agentMetricsPath, agentMetricsLabels)
     }
 
     // A path's labels as the JSON pathConfigs takes, or null for none.
@@ -380,6 +536,33 @@ class EmbeddedAgentConfig private constructor(
     /** A builder for an [EmbeddedAgentConfig], for Java; from Kotlin, [embeddedAgent] reads better. */
     @JvmStatic
     fun builder(): Builder = Builder()
+
+    private val logger = logger {}
+
+    // The variables fromEnvironment reads, and the authority it gives a certificate without PROMETHEUS_PROXY_AUTHORITY:
+    // the name the Cloud Platforms page's certificate for the proxy is issued to.
+    private const val PROMETHEUS_PROXY = "PROMETHEUS_PROXY"
+    private const val PROMETHEUS_AGENT_TOKEN = "PROMETHEUS_AGENT_TOKEN"
+    private const val PROMETHEUS_PROXY_CERT = "PROMETHEUS_PROXY_CERT"
+    private const val PROMETHEUS_PROXY_AUTHORITY = "PROMETHEUS_PROXY_AUTHORITY"
+    private const val DEFAULT_AUTHORITY = "prometheus-proxy"
+
+    // Where a config names the proxy, as builder methods and setting() put it.
+    private val PROXY_KEYS = listOf("agent.proxy.endpoints", "agent.proxy.hostname")
+
+    // How many causes failureReason reads, which also ends a cycle.
+    private const val MAX_CAUSES = 8
+
+    // Why a start failed, as startIfConfigured logs it: what was thrown's message, then each cause's that adds to it,
+    // since a failure to start is Guava's "Expected the service Agent [FAILED] to be RUNNING", with why in its cause.
+    // A URL in it, which a config's or a target's error can quote, is shown with its credentials masked.
+    internal fun failureReason(e: Throwable): String =
+      generateSequence(e) { it.cause }
+        .take(MAX_CAUSES)
+        .map { it.message?.takeUnless { message -> message.isBlank() } ?: it.javaClass.name }
+        .fold(emptyList<String>()) { shown, message -> if (shown.any { message in it }) shown else shown + message }
+        .joinToString(": ")
+        .let(::sanitizeUrlsInText)
 
     private fun invalid(message: String): Nothing = throw ConfigLoadException(message)
 

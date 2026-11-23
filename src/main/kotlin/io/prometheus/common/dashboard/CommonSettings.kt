@@ -108,15 +108,32 @@ internal object CommonSettings {
       ) + extra,
     )
 
-  /** The metrics endpoint, and the JVM metric groups it adds to the process's own. */
-  fun metrics(metrics: MetricsConfig): SettingsGroup =
+  /**
+   * The metrics endpoint, and the JVM metric groups it adds to the process's own. An embedded agent can serve its own
+   * metrics through the proxy at [inProcessPath] instead (`agentMetricsAt`), or as well, with no port for them; empty
+   * without one, as the proxy always is.
+   */
+  fun metrics(
+    metrics: MetricsConfig,
+    inProcessPath: String = "",
+  ): SettingsGroup =
     SettingsGroup(
       "Metrics",
       listOf(
-        Setting("Metrics", onOff(metrics.enabled) { "port ${metrics.port}, ${metrics.path.ensureLeadingSlash()}" }),
+        Setting("Metrics", onOff(metrics.enabled || inProcessPath.isNotEmpty()) { served(metrics, inProcessPath) }),
         Setting("JVM metrics", names(jvmExports(metrics), empty = "none")),
       ),
     )
+
+  // Where the metrics are served: on their port, at the proxy's [inProcessPath], read in-process, or both.
+  private fun served(
+    metrics: MetricsConfig,
+    inProcessPath: String,
+  ): String =
+    listOfNotNull(
+      "port ${metrics.port}, ${metrics.path.ensureLeadingSlash()}".takeIf { metrics.enabled },
+      "in-process, at the proxy's ${inProcessPath.ensureLeadingSlash()}".takeIf { inProcessPath.isNotEmpty() },
+    ).joinToString(", and ")
 
   private fun jvmExports(metrics: MetricsConfig): List<String> =
     with(metrics) {

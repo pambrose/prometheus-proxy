@@ -253,7 +253,7 @@ internal class AgentHttpService(
   // Times a scrape for agent_scrape_request_latency_seconds, unless the metrics are off or the proxy's dashboard asked
   // for the scrape.
   private fun latencyTimer(request: ScrapeRequest): Timer? =
-    if (agent.isMetricsEnabled && !request.dashboardScrape) agent.startTimer() else null
+    if (agent.collectsMetrics && !request.dashboardScrape) agent.startTimer() else null
 
   private suspend fun fetchContentFromUrl(
     req: ScrapeRequest,

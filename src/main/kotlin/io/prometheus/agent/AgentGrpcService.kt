@@ -219,7 +219,8 @@ internal class AgentGrpcService(
   // reach its proxy, as the proxy's never can. A proxy that stays down, or a dead primary in a failover list, logs its
   // failure once and then at DEBUG (October #17), with a WARN again every CONNECT_FAILURE_REMINDER_INTERVAL while it
   // lasts, since a failure that won't clear by itself, such as a refused token, otherwise sat in the log's first lines.
-  // The endpoints are the configured list, so this stays as small.
+  // A refused token logs at ERROR in place of each WARN, naming the setting, and again after a connect elsewhere. The
+  // endpoints are the configured list, so this stays as small.
   private val connectFailures = ConcurrentHashMap<String, LoggedFailure>()
 
   // [connects] is how many connects had succeeded when the activity feed was last told of the failure.
@@ -452,45 +453,91 @@ internal class AgentGrpcService(
       // routine "couldn't connect, will retry". Only transient connection failures return false.
       if (e is Error)
         throw e
-      // Compared by gRPC status code, or by class without one, since a deadline's description changes every attempt
-      // (November #9).
-      val failure = failureKey(e)
-      val message =
-        "Cannot connect to proxy at $proxyHost using ${tlsContext.desc()} - ${e.simpleClassName}: ${e.message}"
-      val latest = ShownFailure.of(e)
-      lastConnectFailed = true
-      // The first failure, and a change, at WARN with the stack trace for diagnosis; a repeat at DEBUG, and at WARN
-      // again, without the stack trace, once the last WARN is CONNECT_FAILURE_REMINDER_INTERVAL old.
-      val last = connectFailures[proxyHost]
-      // The activity feed is told of a failure when it is new or changes, as the log's WARN is, and again once a
-      // connect has succeeded since, elsewhere, as when the agent fails back to a primary still down; its repeats would
-      // fill the feed.
-      val connects = successfulConnects.load()
-      if (last?.key != failure || last.connects != connects)
-        agent.activityLog?.record(
-          AgentActivityKind.CONNECT_FAILED,
-          detail = "$proxyHost: ${latest.message}",
-          group = "$proxyHost $failure",
-        )
-      when {
-        last?.key != failure -> {
-          connectFailures[proxyHost] = LoggedFailure(failure, timeSource.markNow(), latest, connects)
-          logger.warn(e) { message }
-        }
-
-        last.warnedAt.elapsedNow() >= CONNECT_FAILURE_REMINDER_INTERVAL -> {
-          connectFailures[proxyHost] = LoggedFailure(failure, timeSource.markNow(), latest, connects)
-          logger.warn { "$message (still failing, retrying every few seconds)" }
-        }
-
-        else -> {
-          connectFailures[proxyHost] = LoggedFailure(failure, last.warnedAt, latest, connects)
-          logger.debug { message }
-        }
-      }
+      connectFailed(proxyHost, e)
       false
     }
   }
+
+  // A failed connect to [proxyHost]: kept for the agent's dashboard, told to the activity feed when it's news, and
+  // logged. Compared by gRPC status code, or by class without one, since a deadline's description changes every attempt
+  // (November #9).
+  private fun connectFailed(
+    proxyHost: String,
+    e: Throwable,
+  ) {
+    val failure = failureKey(e)
+    val latest = ShownFailure.of(e)
+    lastConnectFailed = true
+    val last = connectFailures[proxyHost]
+    // The activity feed is told of a failure when it is new or changes, as the log's WARN is, and again once a connect
+    // has succeeded since, elsewhere, as when the agent fails back to a primary still down; its repeats would fill the
+    // feed.
+    val connects = successfulConnects.load()
+    val news = last?.key != failure || last.connects != connects
+    if (news)
+      agent.activityLog?.record(
+        AgentActivityKind.CONNECT_FAILED,
+        detail = "$proxyHost: ${latest.message}",
+        group = "$proxyHost $failure",
+      )
+    val loggedAt = logConnectFailure(proxyHost, e, last, news)
+    connectFailures[proxyHost] = LoggedFailure(failure, loggedAt, latest, connects)
+  }
+
+  // Logs a failed connect to [proxyHost], the [last] one logged before it, if any, and returns when one was last logged
+  // above DEBUG. The first failure, and a change, at WARN with the stack trace for diagnosis; a repeat at DEBUG, and at
+  // WARN again, without the stack trace, once the last WARN is CONNECT_FAILURE_REMINDER_INTERVAL old. A refused token
+  // is the agent's own setting, which won't fix itself unless the proxy's changes, so it's an ERROR that names the
+  // setting, in place of each WARN, without a stack trace, and again when it's [news] to the activity feed, as after a
+  // connect since.
+  private fun logConnectFailure(
+    proxyHost: String,
+    e: Throwable,
+    last: LoggedFailure?,
+    news: Boolean,
+  ): TimeMark {
+    val message =
+      "Cannot connect to proxy at $proxyHost using ${tlsContext.desc()} - ${e.simpleClassName}: ${e.message}"
+    val failure = failureKey(e)
+    val refusal = if (failure == Status.Code.UNAUTHENTICATED.name) tokenRefusal(proxyHost, ShownFailure.of(e)) else null
+    return when {
+      last?.key != failure || (refusal != null && news) -> {
+        logAboveDebug(e, message, refusal, reminder = false)
+        timeSource.markNow()
+      }
+
+      last.warnedAt.elapsedNow() >= CONNECT_FAILURE_REMINDER_INTERVAL -> {
+        logAboveDebug(e, message, refusal, reminder = true)
+        timeSource.markNow()
+      }
+
+      else -> {
+        logger.debug { message }
+        last.warnedAt
+      }
+    }
+  }
+
+  // A failed connect logged above DEBUG: a refused token at ERROR, as [refusal] says it, and any other failure at WARN,
+  // with its stack trace unless it's a [reminder].
+  private fun logAboveDebug(
+    e: Throwable,
+    message: String,
+    refusal: String?,
+    reminder: Boolean,
+  ) {
+    when {
+      refusal != null -> logger.error { if (reminder) "$refusal (still refused)" else refusal }
+      reminder -> logger.warn { "$message (still failing, retrying every few seconds)" }
+      else -> logger.warn(e) { message }
+    }
+  }
+
+  // What a call the proxy at [proxyHost] refused with UNAUTHENTICATED logs, at ERROR, with what it [said].
+  internal fun tokenRefusal(
+    proxyHost: String,
+    said: ShownFailure,
+  ): String = tokenRefusal(proxyHost, hasToken = options.agentToken.isNotEmpty(), said = said.message)
 
   suspend fun registerAgent(initialConnectionLatch: CountDownLatch) {
     val request =
@@ -883,5 +930,25 @@ internal class AgentGrpcService(
 
     // How often a connect failure that persists is logged at WARN again.
     private val CONNECT_FAILURE_REMINDER_INTERVAL = 10.minutes
+
+    /**
+     * Why the proxy at [proxyHost] refused the agent with UNAUTHENTICATED, as [said], and the setting to check: the
+     * proxy refused its token, or, when it [hasToken] not, requires one. The setting is named for every way the token
+     * is given, since an embedded agent's comes from its app, and a standalone one's from its config or environment.
+     */
+    internal fun tokenRefusal(
+      proxyHost: String,
+      hasToken: Boolean,
+      said: String,
+    ): String {
+      val refused =
+        if (hasToken)
+          "refused the agent's token ($said). Check that the agent has a token the proxy accepts"
+        else
+          "requires an agent token, and the agent sends none ($said). Give the agent a token the proxy accepts"
+      return "The proxy at $proxyHost $refused: it's given with --agent_token, AGENT_TOKEN, or agent.agentToken, in " +
+        "that order of precedence, which an embedded agent's token() sets, and fromEnvironment() reads from " +
+        "PROMETHEUS_AGENT_TOKEN. The agent keeps retrying"
+    }
   }
 }

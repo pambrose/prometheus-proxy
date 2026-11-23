@@ -19,32 +19,26 @@ package website;
 // --8<-- [start:embedded-java-source]
 import io.prometheus.agent.EmbeddedAgentConfig;
 import io.prometheus.agent.EmbeddedAgentInfo;
-import io.prometheus.agent.MetricsSource;
-import io.prometheus.metrics.expositionformats.ExpositionFormatWriter;
-import io.prometheus.metrics.expositionformats.ExpositionFormats;
 import io.prometheus.metrics.model.registry.PrometheusRegistry;
 
 public class EmbeddedAgentSourceJavaExample {
-  // The app's registry, which the agent reads in-process: Micrometer's PrometheusMeterRegistry gives its own with
-  // getPrometheusRegistry(). Written in the format the scrape asks for, and only the families it names, if it names
-  // any.
-  public static MetricsSource registrySource(PrometheusRegistry registry) {
-    ExpositionFormats formats = ExpositionFormats.init();
-    return (accept, names, out) -> {
-      ExpositionFormatWriter writer = formats.findWriter(accept);
-      writer.write(out, names.isEmpty() ? registry.scrape() : registry.scrape(names::contains));
-      return writer.getContentType();
-    };
-  }
-
-  // The app needs no /metrics endpoint for the agent, and no credentials for one: the agent reads the registry itself.
-  public static EmbeddedAgentInfo startPrometheusAgent(PrometheusRegistry registry, String proxyEndpoint) {
-    return EmbeddedAgentConfig.builder()
-      .name("my-app")
-      .proxy(proxyEndpoint)
-      .source("my_app_metrics", registrySource(registry))
-      .build()
-      .start(false);
+  // A worker with no HTTP server of its own: the agent reads its metrics from the registry, in-process, for each
+  // scrape, and serves its own beside them. Without PROMETHEUS_PROXY, as on a developer's machine, the worker runs
+  // without it.
+  public static void runWorker(String version, Runnable work) {
+    EmbeddedAgentConfig config =
+      EmbeddedAgentConfig.builder()
+        .name("worker-" + version)
+        .fromEnvironment()
+        // Where the worker's metrics are: Micrometer's PrometheusMeterRegistry gives its own with getPrometheusRegistry()
+        .source("worker_metrics", PrometheusRegistry.defaultRegistry)
+        // The agent's own, for the Agents dashboard
+        .agentMetricsAt("worker_agent_metrics")
+        .build();
+    // Null when the agent stays off, which try-with-resources takes: the worker runs either way
+    try (EmbeddedAgentInfo agent = config.startIfConfigured(false)) {
+      work.run();
+    }
   }
 }
 // --8<-- [end:embedded-java-source]

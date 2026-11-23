@@ -170,8 +170,9 @@ webjar-simple-icons = { module = "org.webjars.npm:simple-icons", version.ref = "
 # Metrics
 prometheus-metrics-bom = { module = "io.prometheus:prometheus-metrics-bom", version.ref = "prometheus" }
 prometheus-metrics-core = { module = "io.prometheus:prometheus-metrics-core", version.ref = "prometheus" }
-# ExpositionFormats, which the docs site's MetricsSource examples and the Spring Boot starter's RegistryMetricsSource
-# write a registry with; common-utils, and Micrometer's Prometheus registry, bring it at runtime only
+# PrometheusRegistry, which the agent's public API takes (EmbeddedAgentConfig.Builder.source, MetricsSource.of)
+prometheus-metrics-model = { module = "io.prometheus:prometheus-metrics-model", version.ref = "prometheus" }
+# ExpositionFormats, which the agent writes a registry it serves in-process with (MetricsSource.of)
 prometheus-metrics-exposition-textformats = { module = "io.prometheus:prometheus-metrics-exposition-textformats", version.ref = "prometheus" }
 dropwizard-metrics = { module = "io.dropwizard.metrics:metrics-healthchecks", version.ref = "dropwizard" }
 jackson-bom = { module = "com.fasterxml.jackson:jackson-bom", version.ref = "jackson" }

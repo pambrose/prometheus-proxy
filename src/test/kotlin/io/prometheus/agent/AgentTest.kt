@@ -38,6 +38,7 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotBeEmpty
+import io.kotest.matchers.string.shouldStartWith
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.mockk.every
@@ -779,6 +780,30 @@ class AgentTest : StringSpec() {
       shouldNotThrow<Throwable> {
         agent.handleConnectionFailure(StatusRuntimeException(Status.UNAVAILABLE))
       }
+    }
+
+    // A call the proxy refuses after the connect it took, as once its token changes, is the agent's token, at ERROR,
+    // as a refused connect is; any other status is the disconnect it always was, at INFO.
+    "handleConnectionFailure should log a refused token at ERROR, naming the setting, and another status at INFO" {
+      val agent = createTestAgent("--agent_token", "wrong-token")
+
+      val events =
+        captureLogs<Agent>(Level.INFO) {
+          agent.handleConnectionFailure(
+            StatusRuntimeException(Status.UNAUTHENTICATED.withDescription("Missing or invalid agent token")),
+          )
+          agent.handleConnectionFailure(StatusException(Status.UNAUTHENTICATED))
+          agent.handleConnectionFailure(StatusRuntimeException(Status.UNAVAILABLE))
+        }
+
+      events.map { it.level } shouldBe listOf(Level.ERROR, Level.ERROR, Level.INFO)
+      events[0].formattedMessage.apply {
+        this shouldStartWith "The proxy at localhost:$PROXY_AGENT_PORT refused the agent's token " +
+          "(StatusRuntimeException: UNAUTHENTICATED: Missing or invalid agent token)"
+        this shouldContain "PROMETHEUS_AGENT_TOKEN"
+        this shouldNotContain "wrong-token"
+      }
+      events[2].formattedMessage shouldContain "Disconnected from proxy"
     }
 
     "Bug #8: handleConnectionFailure should not throw for StatusException" {

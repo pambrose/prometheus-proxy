@@ -17,29 +17,22 @@
 package website
 
 // --8<-- [start:embedded-kotlin-source]
-import io.prometheus.agent.MetricsSource
 import io.prometheus.agent.embeddedAgent
-import io.prometheus.metrics.expositionformats.ExpositionFormats
 import io.prometheus.metrics.model.registry.PrometheusRegistry
 
-// The app's registry, which the agent reads in-process: Micrometer's PrometheusMeterRegistry gives its own with
-// getPrometheusRegistry(). Written in the format the scrape asks for, and only the families it names, if it names any.
-fun registrySource(registry: PrometheusRegistry): MetricsSource {
-  val formats = ExpositionFormats.init()
-  return MetricsSource { accept, names, out ->
-    val writer = formats.findWriter(accept)
-    writer.write(out, if (names.isEmpty()) registry.scrape() else registry.scrape(names::contains))
-    writer.contentType
-  }
+// A worker with no HTTP server of its own: the agent reads its metrics from the registry, in-process, for each scrape,
+// and serves its own beside them. Without PROMETHEUS_PROXY, as on a developer's machine, the worker runs without it.
+fun runWorker(
+  version: String,
+  work: () -> Unit,
+) {
+  embeddedAgent {
+    name = "worker-$version"
+    fromEnvironment()
+    // Where the worker's metrics are: Micrometer's PrometheusMeterRegistry gives its own as prometheusRegistry
+    source(path = "worker_metrics", registry = PrometheusRegistry.defaultRegistry)
+    // The agent's own, for the Agents dashboard
+    agentMetricsAt(path = "worker_agent_metrics")
+  }.startIfConfigured(logBanner = false).use { work() }
 }
-
-// The app needs no /metrics endpoint for the agent, and no credentials for one: the agent reads the registry itself.
-fun startInProcessAgent(
-  registry: PrometheusRegistry,
-  proxyEndpoint: String,
-) = embeddedAgent {
-  name = "my-app"
-  proxy = proxyEndpoint
-  source(path = "my_app_metrics", source = registrySource(registry))
-}.start(logBanner = false)
 // --8<-- [end:embedded-kotlin-source]

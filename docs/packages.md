@@ -30,7 +30,9 @@ These are the entry points intended for embedders and integrators:
   from Java.
 - [MetricsSource][io.prometheus.agent.MetricsSource] — an embedded Agent's host's metrics, read
   in-process for a path, in place of a URL, with
-  [EmbeddedAgentConfig.Builder.source][io.prometheus.agent.EmbeddedAgentConfig.Builder.source].
+  [EmbeddedAgentConfig.Builder.source][io.prometheus.agent.EmbeddedAgentConfig.Builder.source], which
+  takes a `PrometheusRegistry` too, as
+  [MetricsSource.of][io.prometheus.agent.MetricsSource.Companion.of] does.
 - [EmbeddedAgentInfo][io.prometheus.agent.EmbeddedAgentInfo] — lifecycle handle returned by
   [Agent.startAsyncAgent][io.prometheus.Agent.Companion.startAsyncAgent] when running an Agent
   inside a host JVM.
@@ -86,13 +88,19 @@ scrape executor, path manager, HTTP-client cache, TLS helpers, and gRPC intercep
   agent-specific settings (proxy hostname, scrape timeout, chunking threshold, gzip threshold,
   HTTP-client cache sizing, TLS, and keepalive).
 - [EmbeddedAgentConfig][io.prometheus.agent.EmbeddedAgentConfig] builds an embedded agent's
-  settings in code (name, proxy, token, PEM certificates, and the paths it scrapes, with Basic
-  Auth credentials percent-encoded into their URLs) and starts it; its builder is the receiver of
-  [embeddedAgent][io.prometheus.agent.embeddedAgent], the Kotlin DSL.
+  settings in code (name, proxy, token, PEM certificates, or those from the app's environment with
+  [fromEnvironment][io.prometheus.agent.EmbeddedAgentConfig.Builder.fromEnvironment], the paths it
+  scrapes, with Basic Auth credentials percent-encoded into their URLs, the registries it serves
+  in-process, and its own metrics, with
+  [agentMetricsAt][io.prometheus.agent.EmbeddedAgentConfig.Builder.agentMetricsAt]) and starts it,
+  with [start][io.prometheus.agent.EmbeddedAgentConfig.start] or, for an app that runs without it,
+  [startIfConfigured][io.prometheus.agent.EmbeddedAgentConfig.startIfConfigured]; its builder is the
+  receiver of [embeddedAgent][io.prometheus.agent.embeddedAgent], the Kotlin DSL.
 - [EmbeddedAgentInfo][io.prometheus.agent.EmbeddedAgentInfo] is the return value of
   [Agent.startAsyncAgent][io.prometheus.Agent.Companion.startAsyncAgent], carrying the
   `launchId` and `agentName` of the started agent, its connection to the proxy (`isConnected`,
-  `proxyEndpoint`, read live for a host's health check), and a `shutdown()` method for graceful stop.
+  `proxyEndpoint`, read live for a host's health check), and a `shutdown()` method for graceful
+  stop, which `close()` calls, as it's `AutoCloseable`.
 
 # Package io.prometheus.common
 

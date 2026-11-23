@@ -118,6 +118,14 @@ class CommonSettingsTest : StringSpec() {
       }
     }
 
+    // An embedded agent's own metrics served through the proxy (agentMetricsAt), with their port off, or on as well
+    "the Metrics group should show an embedded agent's metrics served in-process, with or without their port" {
+      CommonSettings.metrics(metrics(false), inProcessPath = "worker_agent_metrics").value("Metrics") shouldBe
+        "on, in-process, at the proxy's /worker_agent_metrics"
+      CommonSettings.metrics(metrics(true), inProcessPath = "worker_agent_metrics").value("Metrics") shouldBe
+        "on, port 8082, /metrics, and in-process, at the proxy's /worker_agent_metrics"
+    }
+
     // A page shows the dashboard's username, which whoever reads it already logged in with, and never its password.
     "the Dashboard group should show where it listens and its login, never the password" {
       val options =
