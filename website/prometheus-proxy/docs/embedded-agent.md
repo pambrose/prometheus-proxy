@@ -200,6 +200,7 @@ the agent's own, which the [Embedded Demo](embedded-demo.md), the [Spring Boot D
 - **The handle is `AutoCloseable`,** and Kotlin's `use` and Java's try-with-resources both take a `null` one, so a
   program that runs while its agent does reads as `startIfConfigured().use { worker.run() }`: the worker runs whether
   or not the agent started, and the agent stops after it. Write `.use`, not `?.use`, which skips the block for `null`.
+  One that runs until it's stopped needs a shutdown hook too (see [`EmbeddedAgentInfo`](#embeddedagentinfo)).
 
 === "Kotlin"
 
@@ -385,9 +386,25 @@ connection to the proxy, drains the scrapes in flight, and releases the admin an
 connection and background work don't outlive your application. Since 4.7.0, the agent registers no JVM shutdown hook,
 so it stops when your application stops it, after the work that needs it, not at the same time as your application's
 own hooks; the [Ktor Plugin](ktor-plugin.md) and the [Spring Boot Starter](spring-boot-starter.md) stop it with the
-app. On SIGTERM, the JVM runs its shutdown hooks and exits without returning from `main()`, so in a program that runs
-until it's stopped, the agent of a `use` block stops only if a hook of the program's ends its work and waits for
-`main()` to return.
+app.
+
+On SIGTERM, the JVM runs its shutdown hooks and exits without returning from `main()`. So a program that runs until
+it's stopped, as a queue consumer does, adds a hook of its own that ends its work and waits for `main()` to return, by
+which time `use` has stopped the agent, as the [Worker Demo](worker-demo.md)'s ovens do:
+
+=== "Kotlin"
+
+    ```kotlin
+    --8<-- "EmbeddedAgentShutdownKotlinExample.kt:embedded-kotlin-shutdown"
+    ```
+
+=== "Java"
+
+    ```java
+    --8<-- "EmbeddedAgentShutdownJavaExample.java:embedded-java-shutdown"
+    ```
+
+Without the hook, the agent of a `use` block ends with the JVM, without draining the scrapes in flight.
 
 ### `Agent.startSyncAgent()`
 

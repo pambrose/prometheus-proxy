@@ -185,6 +185,9 @@ change to `Agent.startAsyncAgent()` that breaks them fails the build. **Embedded
 **EmbeddedAgentSourceJavaExample** are a worker that has the agent serve a registry and the agent's own metrics
 in-process, on the Embedded Agent page; `MetricsSourceTest` runs both. **WorkerDemoJavaExample** is the worker demo's
 oven's `main` in Java, the Worker Demo page's Java tab, which is compiled, not run: its oven and queue are stand-ins.
+**EmbeddedAgentShutdownKotlinExample** and **EmbeddedAgentShutdownJavaExample** are a program that runs until it's
+stopped, with the shutdown hook that ends its work before `use` stops the agent, on the Embedded Agent page; they're
+compiled, not run, since a test can't send its JVM a SIGTERM, and their worker is a stand-in.
 **KtorHostExample**, in `src/test/kotlin/hosts/`,
 is the Cloud Platforms page's Ktor module that starts and stops the agent; it lives outside `website/` because it needs
 a Ktor server, which the build below doesn't give a host.
