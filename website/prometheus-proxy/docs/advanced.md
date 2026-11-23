@@ -70,9 +70,9 @@ identity's registration is rejected while the first agent is connected.
 The displaced agent stays connected without the path, so two agents configured with the same path settle with
 the later one serving it. The proxy tells the displaced agent, whose [dashboard](agent-dashboard.md) and log show the
 path as taken over, and the agent takes the path back once no agent serves it, as when a rolling deploy's new version
-stops, without reconnecting. While the other agent serves the path it only waits, so the two never take it from each
-other. Only a connection the agent itself has since replaced, one of the same launch, is disconnected when it loses its
-last path. To serve a path from both agents, make them consolidated.
+stops, without reconnecting. While the other agent serves the path it only waits, through its own reconnects too, so
+the two never take it from each other. Only a connection the agent itself has since replaced, one of the same launch,
+is disconnected when it loses its last path. To serve a path from both agents, make them consolidated.
 
 In **consolidated mode**, multiple agents can register the same path:
 

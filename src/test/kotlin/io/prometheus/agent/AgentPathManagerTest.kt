@@ -23,6 +23,7 @@ import ch.qos.logback.classic.Level
 import io.grpc.Status
 import io.grpc.StatusException
 import io.kotest.assertions.nondeterministic.eventually
+import io.kotest.assertions.throwables.shouldNotThrowAny
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.StringSpec
@@ -2243,16 +2244,93 @@ class AgentPathManagerTest : StringSpec() {
       manager.servesNoStaticPath().shouldBeFalse()
     }
 
-    "a reconnect should forget taken-over paths" {
+    // Forgotten at a reconnect, a taken-over path was registered again the usual way on the new connection, taking it
+    // back from the agent holding it, which then did the same at its own next reconnect: behind nginx, whose idle
+    // timeout cut the agent left without paths every minute, the two swapped the path about every 30 seconds.
+    "a reconnect should keep a taken-over path, and forget the rest" {
       val agent = createMockAgent()
       val manager = AgentPathManager(agent)
       manager.registerPath("metrics", METRICS_URL)
+      manager.registerPath("other", METRICS_URL)
       manager.notePathNotice(takenNotice("metrics", "agent-east-copy"))
 
       manager.clear()
 
-      manager.takenOverContexts.shouldBeEmpty()
-      manager.pathFailures.shouldBeEmpty()
+      manager["other"].shouldBeNull()
+      manager.registeredPaths.shouldBeEmpty()
+      manager.takenOverContexts.map { it.path } shouldBe listOf("metrics")
+      manager.pathFailures.getValue("metrics").apply {
+        takenOver.shouldBeTrue()
+        reason.message shouldContain "agent-east-copy"
+      }
+    }
+
+    // The proxy may have freed the path while the agent was away, and its notice saying so went with the connection.
+    // Tried at once, the reclaim takes the path back if it's free, or puts the agent on the proxy's waiting list.
+    "after a reconnect, a taken-over path should be tried at once as a reclaim" {
+      val clock = TestTimeSource()
+      val agent = createMockAgent()
+      val grpc = agent.grpcService
+      val manager = AgentPathManager(agent, clock)
+      manager.registerPath("metrics", METRICS_URL)
+      manager.notePathNotice(takenNotice("metrics", "agent-east-copy"))
+      coEvery { grpc.reclaimPathOnProxy(any(), any(), any(), any()) } returns
+        registerPathResponse {
+          valid = true
+          pathId = 2L
+        }
+
+      manager.clear()
+      manager.reclaimTakenOverPaths()
+
+      coVerify(exactly = 1) { grpc.reclaimPathOnProxy("metrics", any(), METRICS_URL, "STATIC") }
+      manager.registeredPaths.map { it.path } shouldBe listOf("metrics")
+      manager["metrics"].shouldNotBeNull().pathId shouldBe 2L
+    }
+
+    // The reclaim task owns a taken-over path: registered at connect too, it would be tried twice, and a refusal while
+    // the other agent holds it would also start the static retry task.
+    "after a reconnect, registerPaths should leave a taken-over static path to its reclaim" {
+      val (agent, grpc) = agentWithStaticPaths("metrics", "other")
+      val manager = AgentPathManager(agent)
+      manager.registerPaths()
+      manager.notePathNotice(takenNotice("metrics", "agent-east-copy"))
+
+      manager.clear()
+      manager.registerPaths()
+
+      coVerify(exactly = 1) { grpc.registerPathOnProxy("metrics", any(), any(), any()) }
+      coVerify(exactly = 2) { grpc.registerPathOnProxy("other", any(), any(), any()) }
+      coVerify(exactly = 0) { grpc.reclaimPathOnProxy(any(), any(), any(), any()) }
+      manager.hasRejectedStaticPaths.shouldBeFalse()
+      manager.takenOverContexts.map { it.path } shouldBe listOf("metrics")
+    }
+
+    // An agent whose every path another agent took stays connected to wait for them, as it did before the reconnect.
+    "after a reconnect, an agent with every static path taken over should stay connected" {
+      val (agent, _) = agentWithStaticPaths("metrics")
+      val manager = AgentPathManager(agent)
+      manager.registerPaths()
+      manager.notePathNotice(takenNotice("metrics", "agent-east-copy"))
+
+      manager.clear()
+      shouldNotThrowAny { manager.registerPaths() }
+
+      manager.servesNoStaticPath().shouldBeFalse()
+    }
+
+    "after a reconnect, reconcile should leave a taken-over discovered path to its reclaim" {
+      val agent = createMockAgent(agentHocon = "discovery.enabled = true")
+      val grpc = agent.grpcService
+      val manager = AgentPathManager(agent)
+      manager.reconcileDiscoveredPaths([DiscoveredPath("d", "discovered", METRICS_URL, "{}")])
+      manager.notePathNotice(takenNotice("discovered", "agent-east-copy"))
+
+      manager.clear()
+      manager.reconcileDiscoveredPaths([DiscoveredPath("d", "discovered", METRICS_URL, "{}")])
+
+      coVerify(exactly = 1) { grpc.registerPathOnProxy("discovered", any(), any(), any()) }
+      manager.takenOverContexts.map { it.path } shouldBe listOf("discovered")
     }
 
     // The retry loop sleeps while nothing is taken over, and a notice wakes it.

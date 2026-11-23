@@ -199,7 +199,8 @@ agentId 1 keeps its connection without paths after agentId 2, of another launch,
 
 The proxy tells the displaced agent, which logs a WARN naming the agent that took the path, and its
 [dashboard](agent-dashboard.md) shows the path `retrying`, taken over by that agent. It takes the path back once no
-agent serves it, within seconds, without reconnecting, and never while the other agent does.
+agent serves it, within seconds, without reconnecting, and never while the other agent does, even after its own
+connection drops and it reconnects.
 
 If both agents should serve the paths, set `agent.consolidated = true` on each. If only one should, remove the
 paths from the other's config, or stop it. Earlier versions disconnected the displaced agent, so the two took the

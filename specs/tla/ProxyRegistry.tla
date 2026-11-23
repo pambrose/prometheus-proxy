@@ -21,7 +21,8 @@
 (*                           displaced agent of another launch, its       *)
 (*                           delivery, and the agent's reclaim, which the  *)
 (*                           proxy refuses while a live agent of another   *)
-(*                           launch holds the path                         *)
+(*                           launch holds the path, on the connection it   *)
+(*                           was told on or one it reconnects with         *)
 (*                                                                         *)
 (* Heartbeats, chunking, metrics, and the event bus are abstracted away,  *)
 (* and so are the notices that a path is free and the waiting list that   *)
@@ -37,6 +38,7 @@ CONSTANTS
     Paths,          \* scrape paths agents may register
     Identities,     \* per-agent auth identities
     Launches,       \* agent launch ids; a reconnect keeps its launch, so two connections of one launch are one agent
+    Modes,          \* the agent.consolidated settings a connection may have: BOOLEAN, or {FALSE} for exclusive paths only
     Scrapes,        \* scrape requests; one HTTP handler each
     NoConn,         \* model value: "no connection"
     UseTimeout,     \* FALSE disables the HTTP handler's timeout, so liveness proves no scrape is stranded
@@ -47,11 +49,14 @@ CONSTANTS
                     \* agentId, as before November #14's fix, to see TLC catch a stream acting on another identity
     UseReclaim,     \* TRUE has the proxy tell a displaced agent of another launch, which then registers the path
                     \* only as a reclaim; FALSE models agents and proxies predating notices
-    CheckHolder     \* FALSE drops the proxy's refusal of a reclaim while a live agent of another launch holds the
+    CheckHolder,    \* FALSE drops the proxy's refusal of a reclaim while a live agent of another launch holds the
                     \* path, as a proxy predating the flag ignores it, to see TLC catch the reclaim displacing it
+    KeepTold        \* FALSE has the agent forget its taken-over paths as it reconnects, as before it kept them, to see
+                    \* TLC catch the reconnect registering one the usual way
 
 ASSUME UseTimeout \in BOOLEAN /\ CheckOwnership \in BOOLEAN /\ SameLookup \in BOOLEAN /\ StreamSameLookup \in BOOLEAN
-ASSUME UseReclaim \in BOOLEAN /\ CheckHolder \in BOOLEAN
+ASSUME UseReclaim \in BOOLEAN /\ CheckHolder \in BOOLEAN /\ KeepTold \in BOOLEAN
+ASSUME Modes \subseteq BOOLEAN /\ Modes # {}
 
 VARIABLES
     \* Fixed per connection at Init, so TLC explores every mix of identities and modes.
@@ -88,14 +93,17 @@ VARIABLES
 
     \* Path notices and reclaims
     notices,        \* [Conns -> SUBSET Paths]: AgentContext's unread notices that another agent took the path
-    told,           \* [Conns -> SUBSET Paths]: the agent's taken-over paths (AgentPathManager.takenOverPaths)
+    told,           \* [Launches -> SUBSET Paths]: each agent's taken-over paths (AgentPathManager.takenOverPaths),
+                    \* which its reconnects keep
+    heard,          \* [Launches -> SUBSET Paths]: a ghost, told as it would be had no reconnect forgotten any of it,
+                    \* for ReconnectReclaims to state without assuming KeepTold
     regReclaim      \* SUBSET (Conns \X Paths): the registrations in regPending sent as reclaims
 
 connVars  == <<phase, inMgr, valid, draining, queue, tokens, reading, agentHas>>
 pathVars  == <<regPending, pathMap, pathCount>>
 scrapeVars == <<hstate, target, tracked, result, completedBy, checked>>
 streamVars == <<rsPhase, rsOf>>
-noticeVars == <<notices, told, regReclaim>>
+noticeVars == <<notices, told, heard, regReclaim>>
 vars == <<ident, consol, launch, connVars, pathVars, scrapeVars, streamVars, noticeVars>>
 
 Absent == [consolidated |-> FALSE, identity |-> CHOOSE i \in Identities : TRUE, ctxs |-> {}]
@@ -124,18 +132,20 @@ OwnedBy(s, c) == ~CheckOwnership \/ target[s] = c
 -----------------------------------------------------------------------------
 (* Agent connection lifecycle *)
 
-\* ProxyServerTransportFilter.transportReady / connectAgent: a new AgentContext.
+\* ProxyServerTransportFilter.transportReady / connectAgent: a new AgentContext. The agent clears its state as it
+\* connects (AgentPathManager.clear), but keeps the paths it was told another agent took over.
 Connect(c) ==
     /\ phase[c] = "unborn"
     /\ phase' = [phase EXCEPT ![c] = "live"]
     /\ inMgr' = inMgr \cup {c}
     /\ valid' = [valid EXCEPT ![c] = TRUE]
+    /\ told' = IF KeepTold THEN told ELSE [told EXCEPT ![launch[c]] = {}]
     /\ UNCHANGED <<ident, consol, launch, streamVars, draining, queue, tokens, reading, agentHas, pathVars, scrapeVars,
-                   noticeVars>>
+                   notices, heard, regReclaim>>
 
 \* removeAgentContext step 1: removeFromContextManager, which invalidates the context, and its unread notices with it.
-\* Losing the transport also loses whatever the agent was scraping, and the paths it was told were taken over: a
-\* reconnect is a connection of its own.
+\* Losing the transport also loses whatever the agent was scraping: a reconnect is a connection of its own. The paths
+\* the agent was told were taken over are the agent's, not the connection's, so they stay (see Connect).
 RemoveCtx(c) ==
     /\ phase' = [phase EXCEPT ![c] = "ctxRemoved"]
     /\ inMgr' = inMgr \ {c}
@@ -143,12 +153,12 @@ RemoveCtx(c) ==
     /\ draining' = [draining EXCEPT ![c] = TRUE]
     /\ agentHas' = [agentHas EXCEPT ![c] = {}]
     /\ notices' = [notices EXCEPT ![c] = {}]
-    /\ told' = [told EXCEPT ![c] = {}]
 
 Disconnect(c) ==
     /\ phase[c] = "live"
     /\ RemoveCtx(c)
-    /\ UNCHANGED <<ident, consol, launch, streamVars, queue, tokens, reading, pathVars, scrapeVars, regReclaim>>
+    /\ UNCHANGED <<ident, consol, launch, streamVars, queue, tokens, reading, pathVars, scrapeVars, told, heard,
+                   regReclaim>>
 
 \* removeAgentContext step 2: removeFromPathManager sweeps every path by agentId.
 SweepPaths(c) ==
@@ -196,12 +206,12 @@ RegisterStart(c, p) ==
     /\ c \in inMgr
     /\ <<c, p>> \notin regPending
     /\ regPending' = regPending \cup {<<c, p>>}
-    /\ regReclaim' = IF UseReclaim /\ p \in told[c] THEN regReclaim \cup {<<c, p>>} ELSE regReclaim
-    /\ UNCHANGED <<ident, consol, launch, streamVars, connVars, pathMap, pathCount, scrapeVars, notices, told>>
+    /\ regReclaim' = IF UseReclaim /\ p \in told[launch[c]] THEN regReclaim \cup {<<c, p>>} ELSE regReclaim
+    /\ UNCHANGED <<ident, consol, launch, streamVars, connVars, pathMap, pathCount, scrapeVars, notices, told, heard>>
 
 \* The agent's reclaim loop tries a taken-over path again, as a reclaim, until the proxy accepts it.
 Reclaim(c, p) ==
-    /\ p \in told[c]
+    /\ p \in told[launch[c]]
     /\ RegisterStart(c, p)
 
 \* addValidatedPath: the synchronized(pathMap) block, which may run after the context was torn down.
@@ -230,7 +240,7 @@ RegisterLocked(c, p) ==
            \* takeOverPath tells each displaced agent of another launch, which stays connected, that the path is taken.
            tellees == IF UseReclaim /\ ~consol[c] THEN {o \in others : valid[o] /\ launch[o] # launch[c]} ELSE {}
        IN IF rejected
-          THEN UNCHANGED <<connVars, pathMap, pathCount, notices, told>>
+          THEN UNCHANGED <<connVars, pathMap, pathCount, notices, told, heard>>
           ELSE /\ pathMap' = [pathMap EXCEPT ![p] =
                                 [consolidated |-> consol[c],
                                  identity     |-> ident[c],
@@ -244,7 +254,8 @@ RegisterLocked(c, p) ==
                                 IF x \in tellees THEN notices[x] \cup {p}
                                 ELSE IF x = c THEN notices[x] \ {p}
                                 ELSE notices[x]]
-               /\ told' = [told EXCEPT ![c] = @ \ {p}]
+               /\ told' = [told EXCEPT ![launch[c]] = @ \ {p}]
+               /\ heard' = [heard EXCEPT ![launch[c]] = @ \ {p}]
                /\ UNCHANGED <<phase, inMgr, queue, tokens, reading, agentHas>>
     /\ UNCHANGED <<ident, consol, launch, streamVars, scrapeVars>>
 
@@ -262,7 +273,8 @@ NoticeEmit(c, p) ==
     /\ phase[c] = "live"
     /\ p \in notices[c]
     /\ notices' = [notices EXCEPT ![c] = @ \ {p}]
-    /\ told' = [told EXCEPT ![c] = @ \cup {p}]
+    /\ told' = [told EXCEPT ![launch[c]] = @ \cup {p}]
+    /\ heard' = [heard EXCEPT ![launch[c]] = @ \cup {p}]
     /\ UNCHANGED <<ident, consol, launch, streamVars, connVars, pathVars, scrapeVars, regReclaim>>
 
 -----------------------------------------------------------------------------
@@ -451,16 +463,16 @@ StreamClose(a) ==
     /\ rsPhase[a] \in {"open", "notFound"}
     /\ IF rsOf[a] \in inMgr
        THEN RemoveCtx(rsOf[a]) /\ UNCHANGED <<queue, tokens, reading>>
-       ELSE UNCHANGED <<connVars, notices, told>>
+       ELSE UNCHANGED <<connVars, notices>>
     /\ rsPhase' = [rsPhase EXCEPT ![a] = "idle"]
     /\ rsOf' = [rsOf EXCEPT ![a] = NoConn]
-    /\ UNCHANGED <<ident, consol, launch, pathVars, scrapeVars, regReclaim>>
+    /\ UNCHANGED <<ident, consol, launch, pathVars, scrapeVars, told, heard, regReclaim>>
 
 -----------------------------------------------------------------------------
 
 Init ==
     /\ ident \in [Conns -> Identities]
-    /\ consol \in [Conns -> BOOLEAN]
+    /\ consol \in [Conns -> Modes]
     \* One connection's launch is fixed: the others' then cover being of its launch or not, and a relabeling of
     \* Launches checks nothing new. (TLC's symmetry reduction would do the same but is unsound for liveness.)
     /\ launch \in {f \in [Conns -> Launches] : f[CHOOSE c \in Conns : TRUE] = CHOOSE l \in Launches : TRUE}
@@ -484,7 +496,8 @@ Init ==
     /\ rsPhase = [c \in Conns |-> "idle"]
     /\ rsOf = [c \in Conns |-> NoConn]
     /\ notices = [c \in Conns |-> {}]
-    /\ told = [c \in Conns |-> {}]
+    /\ told = [l \in Launches |-> {}]
+    /\ heard = [l \in Launches |-> {}]
     /\ regReclaim = {}
 
 \* Steps the environment may or may not take: connections, registrations, requests, misbehaving agents.
@@ -538,7 +551,8 @@ TypeOK ==
     /\ rsPhase \in [Conns -> {"idle", "checked", "open", "notFound"}]
     /\ rsOf \in [Conns -> Conns \cup {NoConn}]
     /\ notices \in [Conns -> SUBSET Paths]
-    /\ told \in [Conns -> SUBSET Paths]
+    /\ told \in [Launches -> SUBSET Paths]
+    /\ heard \in [Launches -> SUBSET Paths]
     /\ regReclaim \subseteq regPending
 
 \* A non-consolidated path has exactly one agent.
@@ -585,11 +599,20 @@ TakesFromLiveOtherLaunch(c, p) ==
 ReclaimNeverDisplaces ==
     [][\A c \in Conns, p \in Paths : <<c, p>> \in regReclaim => ~TakesFromLiveOtherLaunch(c, p)]_vars
 
-\* A connection told its path was taken over takes it back once no agent holds it, unless another agent takes it
-\* first or the connection goes away: no path is left unserved while an agent told it was taken over is connected.
+\* An agent told its path was taken over takes it back once no agent holds it, on whichever connection it has then,
+\* unless another agent takes it first or that connection is invalidated: no path is left unserved while an agent told
+\* it was taken over is connected. A stale connection of the agent's, invalidated when its own newer one displaced it,
+\* is one the agent no longer uses, though the proxy has yet to remove it.
 DisplacedReclaims ==
     \A c \in Conns, p \in Paths :
-        (p \in told[c] /\ pathMap[p].ctxs = {}) ~> (c \in pathMap[p].ctxs \/ pathMap[p].ctxs # {} \/ phase[c] # "live")
+        (p \in told[launch[c]] /\ pathMap[p].ctxs = {}) ~> (c \in pathMap[p].ctxs \/ pathMap[p].ctxs # {} \/ ~valid[c])
+
+\* A registration an agent starts for a path it was told another agent took over is a reclaim, on a connection it made
+\* since as on the one it was told on, so with ReclaimNeverDisplaces a reconnect never takes the path from the live
+\* agent holding it.
+ReconnectReclaims ==
+    [][\A c \in Conns, p \in Paths :
+         (<<c, p>> \notin regPending /\ <<c, p>> \in regPending' /\ p \in heard[launch[c]]) => <<c, p>> \in regReclaim']_vars
 
 \* With the timeout disabled, every started scrape still finishes: nothing waits on a request that nobody will
 \* answer or fail.
