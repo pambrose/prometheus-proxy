@@ -82,15 +82,21 @@ Settings that fail startup since 4.5.0:
 
 The proxy has an agent token configured and the agent's token is missing or doesn't match.
 
-- **Where it shows:** the agent logs it at WARN, with a stack trace, on its first attempt, and again every 10 minutes
-  while it lasts; its reconnects every few seconds in between are at DEBUG. The proxy logs
+- **Where it shows:** since 4.7.0, the agent logs it at ERROR, without a stack trace, as
+  `The proxy at <host:port> refused the agent's token (...)`, or, with no token,
+  `The proxy at <host:port> requires an agent token, and the agent sends none (...)`, followed by where the token is
+  set. It logs it on its first attempt, again every 10 minutes while it lasts, and again once it has connected in
+  between, as after a failover; its reconnects every few seconds are at DEBUG. It keeps retrying, since a token
+  changed on the proxy can make the rejection go away. The proxy logs
   `Refused an agent from <host> (UNAUTHENTICATED): it sent an unknown agent token` (or `no agent token`) at WARN, at
   most once a minute for each host.
 
 - **Fix:** set the **same** `--agent_token` / `AGENT_TOKEN` on the agent as on the proxy, or, with
   [per-agent identities](security/index.md#per-agent-identities-and-path-authorization), the token of the agent's
-  `proxy.auth` identity. An empty token on the proxy disables the check only when no `proxy.auth` identities are
-  configured. See [Security](security/index.md#agent-authentication-pre-shared-token).
+  `proxy.auth` identity. An [embedded agent](embedded-agent.md)'s is its builder's `token()`, which
+  `fromEnvironment()` reads from `PROMETHEUS_AGENT_TOKEN`; the agent's own `AGENT_TOKEN`, if the app's environment has
+  one, takes precedence over it. An empty token on the proxy disables the check only when no `proxy.auth` identities
+  are configured. See [Security](security/index.md#agent-authentication-pre-shared-token).
 
 ---
 

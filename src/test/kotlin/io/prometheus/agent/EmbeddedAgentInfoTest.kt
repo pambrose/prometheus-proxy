@@ -67,5 +67,18 @@ class EmbeddedAgentInfoTest : StringSpec() {
 
       verify { agent.stop() }
     }
+
+    // AutoCloseable, so Kotlin's use and Java's try-with-resources stop the agent after their block
+    "use should stop the agent after its block, and run the block on a null handle" {
+      val agent = mockk<Agent>(relaxed = true)
+      val ran = mutableListOf<String>()
+
+      EmbeddedAgentInfo(agent).use { ran += "with an agent" }
+      val noAgent: EmbeddedAgentInfo? = null
+      noAgent.use { ran += "without one" }
+
+      ran shouldBe listOf("with an agent", "without one")
+      verify(exactly = 1) { agent.stop() }
+    }
   }
 }

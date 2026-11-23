@@ -20,7 +20,6 @@ package website;
 // SecretStore and BatchJobs stand in for the app's own beans.
 // --8<-- [start:starter-customizer]
 import io.prometheus.agent.spring.PrometheusProxyAgentCustomizer;
-import io.prometheus.agent.spring.RegistryMetricsSource;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -33,7 +32,7 @@ public class AgentCustomizations {
     return builder ->
         builder
             .trustCertificatePem(secrets.read("prometheus-proxy-ca"), "prometheus-proxy")
-            .source("batch_jobs_metrics", new RegistryMetricsSource(batchJobs.registry()));
+            .source("batch_jobs_metrics", batchJobs.registry());
   }
 }
 // --8<-- [end:starter-customizer]

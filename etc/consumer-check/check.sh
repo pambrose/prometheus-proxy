@@ -24,7 +24,8 @@
 #     depends on: the code protoc generates needs a runtime at least that new, and without the pins Maven chose between
 #     the two majors by declaration order;
 #   - every module of the Prometheus Java client resolves at the catalog's version, one release, as the agent's own
-#     build aligns them through the client's BOM, which Maven doesn't import from the POM;
+#     build aligns them through the client's BOM, which Maven doesn't import from the POM, and the registry model and
+#     the text formats, which a registry the agent serves in-process needs, are among them;
 #   - no jar on the classpath carries a Logback config, which would replace the host application's own (#19), and the
 #     library jar still carries reference.conf;
 #   - the docs site's embedded-agent examples compile (#20).
@@ -61,7 +62,7 @@ ktor="$(catalog_version ktor)"
 micrometer="$(catalog_version micrometer)"
 
 mvn=(mvn -B -q -f "$root/etc/consumer-check/pom.xml" "-Dprometheus-proxy.version=$version" "-Dkotlin.version=$kotlin" \
-  "-Dprometheus-metrics.version=$prometheus_metrics" "-Dktor.version=$ktor" "-Dmicrometer.version=$micrometer")
+  "-Dktor.version=$ktor" "-Dmicrometer.version=$micrometer")
 
 failed=()
 fail() {
@@ -132,6 +133,11 @@ echo "==> Prometheus Java client: $prometheus_metrics"
 prometheus_resolved="$(resolved '^io[.]prometheus$')"
 indented <<< "$prometheus_resolved"
 [ -n "$prometheus_resolved" ] || fail "Prometheus Java client: no module is resolved"
+# The registry the agent's API takes, and the text formats it writes one served in-process in
+for module in prometheus-metrics-model prometheus-metrics-exposition-textformats; do
+  echo "$prometheus_resolved" | awk -F: -v m="$module" '$2 == m { found = 1 } END { exit !found }' \
+    || fail "Prometheus Java client: $module isn't resolved"
+done
 bad="$(echo "$prometheus_resolved" | not_at "$prometheus_metrics" | joined)"
 [ -z "$bad" ] || fail "the Prometheus Java client isn't at $prometheus_metrics in every module: $bad"
 
@@ -150,9 +156,8 @@ elif ! unzip -Z1 "$library" | awk '$0 == "reference.conf" { found = 1 } END { ex
 fi
 
 echo "==> Compiling the docs site's embedded-agent examples"
-# With the examples profile's exposition formats, which the MetricsSource examples need as their host does; the checks
-# above resolve without it, as an application that depends only on the agent does.
-"${mvn[@]}" -Pexamples clean compile || fail "the embedded-agent examples don't compile against the published POM"
+# With the agent alone, as the checks above resolve it: the examples that serve a registry in-process need nothing more.
+"${mvn[@]}" clean compile || fail "the embedded-agent examples don't compile against the published POM"
 
 echo "==> The Ktor plugin, com.pambrose:prometheus-proxy-ktor:$version, with Ktor at $ktor"
 ktor_deps="$out/ktor-dependencies.txt"

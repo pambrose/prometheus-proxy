@@ -38,6 +38,7 @@ import io.ktor.server.routing.routing
 import io.prometheus.Agent
 import io.prometheus.agent.EmbeddedAgentInfo
 import io.prometheus.agent.embeddedAgent
+import io.prometheus.metrics.core.metrics.Counter
 import io.prometheus.metrics.model.registry.PrometheusRegistry
 import io.prometheus.common.ConfigLoadException
 import io.prometheus.common.LOOPBACK_HOST
@@ -179,6 +180,39 @@ class EmbeddedAgentApiTest : StringSpec() {
           response.status shouldBe HttpStatusCode.OK
           response.bodyAsText() shouldContain "in_process_metric 42.0"
           response.headers[HttpHeaders.ContentType].orEmpty() shouldContain "version=0.0.4"
+        }
+      }
+    }
+
+    // A plain program whose metrics are in the default registry, beside the agent's own: the proxy serves each once,
+    // the app's at their path and the agent's at agentMetricsAt's, with the agent's connection among them, and no JVM
+    // metrics. EmbeddedAgentConfigTest shows the metrics port stays off.
+    "an agent serves the default registry and its own metrics in-process, each series at one path" {
+      withEmbeddedAgentScraped(
+        httpPort = HTTP_PORT,
+        agentPort = GRPC_PORT,
+        configure = {
+          // After the helper clears the default registry
+          Counter.builder().name("worker_jobs").help("Jobs the worker ran").register().inc()
+          source(path = "worker_metrics", registry = PrometheusRegistry.defaultRegistry)
+          agentMetricsAt(path = "worker_agent_metrics")
+        },
+      ) { _, agent ->
+        HttpClient(ClientCIO).use { client ->
+          suspend fun scraped(path: String) = client.get("http://$LOOPBACK_HOST:$HTTP_PORT/$path").bodyAsText()
+
+          scraped("worker_metrics").apply {
+            this shouldContain "worker_jobs_total 1.0"
+            this shouldNotContain "agent_"
+          }
+          eventually(10.seconds) {
+            scraped("worker_agent_metrics").apply {
+              this shouldContain """agent_connected{launch_id="${agent.launchId}"} 1.0"""
+              this shouldContain "agent_scrape_request_count_total"
+              this shouldNotContain "worker_jobs"
+              this shouldNotContain "jvm_"
+            }
+          }
         }
       }
     }

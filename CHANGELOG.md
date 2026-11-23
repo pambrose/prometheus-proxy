@@ -43,6 +43,18 @@ All notable changes to this project are documented in this file.
   `MetricsSource`, which the agent asks for each scrape in a text format Prometheus accepts, for the families it names
   with `name[]`, so the app needs no metrics endpoint, port, or credentials for the agent. The scrape timeout,
   `http.maxContentLengthMBytes`, and the path's filter apply as to a URL, and the path's target shows as `in-process`
+- An embedded agent takes a few lines in a plain program: `source(path, registry)` serves a `PrometheusRegistry`
+  in-process, and `MetricsSource.of(registry)` gives the same source, with no dependency for the app to add
+  (`prometheus-metrics-model` is at compile scope in the agent's POM); `fromEnvironment()` reads `PROMETHEUS_PROXY`,
+  `PROMETHEUS_AGENT_TOKEN`, `PROMETHEUS_PROXY_CERT`, and `PROMETHEUS_PROXY_AUTHORITY` (default `prometheus-proxy`),
+  which the agent itself never reads; and `startIfConfigured()` starts the agent only where a proxy is set, and
+  otherwise, or when the start fails, logs why and returns null, so the app keeps running, with an optional
+  `onFailure` for the reason. `EmbeddedAgentInfo` is `AutoCloseable`, so `startIfConfigured().use { … }` runs the app
+  with its agent or without it. The Ktor plugin and the Spring Boot starter serve their registry and start their agent
+  the same way
+- `agentMetricsAt(path)` has an embedded agent serve its own metrics through the proxy, read in-process, with no
+  metrics port; a source of the default registry then leaves them out, so each series is served once. The agent's
+  dashboard shows the path in its Settings view
 - A Spring Boot starter, `com.pambrose:prometheus-proxy-spring-boot-starter`, released with the agent at its version:
   with `prometheus-proxy.agent.proxy` set, a Spring Boot 4 app runs an embedded agent that starts and stops with it,
   serves the app's `PrometheusRegistry` bean in-process at `/<spring.application.name>_metrics`, and reports its
@@ -58,7 +70,8 @@ All notable changes to this project are documented in this file.
   lifecycle, settings, health, and Spring Security classes, and no longer exposes `/actuator/prometheus`
 - The embedded demo's coffee shop runs its agent with the Ktor plugin, which reads its Micrometer registry in-process,
   in place of its own lifecycle code, and no longer serves `/metrics`, its Basic Auth, or `METRICS_USER` and
-  `METRICS_PASSWORD`; `./demo.sh peek` shows the app has no `/metrics`
+  `METRICS_PASSWORD`; `./demo.sh peek` shows the app has no `/metrics`. It reads its proxy's settings with
+  `fromEnvironment()` and serves the agent's own metrics with `agentMetricsAt`, without `METRICS_ENABLED` or port 8083
 - Every demo turns on its agents' dashboards and shows the agent's side in its tour; the basics demo adds `proxy-down`
   and `proxy-up`, the spring-boot demo `proxy-stop` and `proxy-start`, and the kubernetes demo `agent-dashboard`, which
   port-forwards to the agent's
@@ -172,6 +185,8 @@ All notable changes to this project are documented in this file.
 - The proxy logs an unregister it can't apply, for a path that's gone or that another agent now holds, at INFO rather
   than ERROR: after a takeover, the displaced agent unregistering the path is expected. An agent waiting on the path
   also stops waiting, so it isn't told the path is free
+- An agent the proxy refuses for its token logs one ERROR line, without a stack trace, that names where the token is
+  set, rather than a WARN with one; repeats log at DEBUG, with a reminder at ERROR every 10 minutes while it lasts
 
 ### Build & Tooling
 
@@ -226,7 +241,7 @@ All notable changes to this project are documented in this file.
   passed and the browser's `Host` header, or its address in `proxy.dashboard.allowedOrigins`
 - The Embedded Agent page has a Debugging section: the agent's admin endpoints and `/debug`, turned on with
   `ADMIN_ENABLED` and `DEBUG_ENABLED` (or `setting()` in code), what each shows, its logs, the proxy's view, and its
-  metrics on the Agents dashboard with `METRICS_ENABLED` and a path for them. The embedded demo turns them on from the
+  metrics on the Agents dashboard with `agentMetricsAt`. The embedded demo turns them on from the
   coffee shop's environment, publishes the admin port on `127.0.0.1:8393`, and adds `./demo.sh debug` and a tour part
   that walks through them
 - The pages that said the dashboard has no authentication say how to set its login, and that it needs TLS in front

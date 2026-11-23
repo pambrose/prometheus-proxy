@@ -181,21 +181,21 @@ regions; **EmbeddedAgentKotlinExample** and **EmbeddedAgentJavaExample** are the
 Embedded Agent page, and **EmbeddedAgentConfigKotlinExample** and **EmbeddedAgentConfigJavaExample** the ones that
 start an agent from an in-memory config, on that page and the Cloud Platforms page, compiled with the tests so that a
 change to `Agent.startAsyncAgent()` that breaks them fails the build. **EmbeddedAgentSourceKotlinExample** and
-**EmbeddedAgentSourceJavaExample** hand the agent a registry as a `MetricsSource`, on the Embedded Agent page;
-`MetricsSourceTest` runs the Kotlin one against a real registry. **KtorHostExample**, in `src/test/kotlin/hosts/`,
+**EmbeddedAgentSourceJavaExample** are a worker that has the agent serve a registry and the agent's own metrics
+in-process, on the Embedded Agent page; `MetricsSourceTest` runs both. **KtorHostExample**, in `src/test/kotlin/hosts/`,
 is the Cloud Platforms page's Ktor module that starts and stops the agent; it lives outside `website/` because it needs
 a Ktor server, which the build below doesn't give a host.
 
 The tests compile those examples against the project's own classpath, which a build that embeds the agent doesn't
 get: it gets what the published POM gives it, resolved by its own build tool. `make consumer-check`, which CI's
 `consumer-check` job runs, covers that. It publishes this checkout to the local Maven repository and has
-`etc/consumer-check/check.sh` build `etc/consumer-check`, a Maven project that depends on that artifact alone. Its
-`examples` profile adds the Prometheus client's exposition formats, which the `MetricsSource` examples write a registry
-with, as their host does, for the compile only, so the resolution checks see what an application that depends only on
-the agent gets. The check fails unless the examples compile there (a public type's supertype at runtime scope broke the
-Java one), Maven resolves Jackson, every netty-tcnative native, Netty, protobuf, and every module of the Prometheus
-Java client at the versions `gradle/libs.versions.toml` pins, and no jar on the classpath carries a `logback.xml`,
-which would replace the host application's logging config.
+`etc/consumer-check/check.sh` build `etc/consumer-check`, a Maven project that depends on that artifact alone, so the
+resolution checks and the examples' compile see what an application that depends only on the agent gets. The check
+fails unless the examples compile there (a public type's supertype at runtime scope broke the Java one, and the
+`PrometheusRegistry` the builder's `source()` takes has to be at compile scope), Maven resolves Jackson, every
+netty-tcnative native, Netty, protobuf, and every module of the Prometheus Java client at the versions
+`gradle/libs.versions.toml` pins, the registry model and the text formats among them, and no jar on the classpath
+carries a `logback.xml`, which would replace the host application's logging config.
 
 ## Test Categories
 
@@ -205,7 +205,8 @@ which would replace the host application's logging config.
   connection task ends, the others are cancelled, so an idle read stream cannot hold a dead connection open; and a
   gRPC shutdown that throws (a MockK constructor mock) still stops the admin and metrics servers and closes the client
   cache; and a scrape result is counted under its type unless the proxy's dashboard asked for its scrape, which
-  `agent_dashboard_scrapes_total` counts instead
+  `agent_dashboard_scrapes_total` counts instead; and a call the proxy refuses with `UNAUTHENTICATED` after a connect
+  logged at ERROR, naming where the token is set, and another status at INFO, as before
 - **AgentGrpcServiceTest** — gRPC service: scrape request/response streaming, heartbeats, registration, error handling;
   a connect counted once the proxy registered the agent, a refused registration as rejected; each endpoint advance and
   each heartbeat sent counted, by outcome; a scrape request's wait for its scrape recorded, not a dashboard's; and a
@@ -217,7 +218,10 @@ which would replace the host application's logging config.
   gzipped, chunked, or dropped) through `Agent.updateScrapeResultCounter`; and for the activity feed, a connect
   recorded, and a failure only when it is new or changes, and failing over from the primary and back recorded, but
   cycling on through the backups not; a failure recorded again after a connect elsewhere, as after a failback to a
-  primary still down; and a failure whose status runs on, as nginx's 504 page does, shown as its first line
+  primary still down; and a failure whose status runs on, as nginx's 504 page does, shown as its first line; a connect
+  the proxy refuses with `UNAUTHENTICATED` logged at ERROR, without a stack trace, saying the proxy refused the agent's
+  token, or that it sends none, and naming where the token is set, its repeats at DEBUG, again at ERROR every 10
+  minutes and after a connect since, when the activity feed records it once more
 - **AgentGrpcStreamRetentionTest** — a chunk the proxy has read is no longer reachable while the agent's chunked
   stream stays open, checked with weak references after 2 MiB of 1 KiB chunks. Over Netty, gRPC's retry buffer
   commits past its 1 MiB per-RPC limit and lets go; over the in-process transport, which reports no message sizes,
@@ -307,16 +311,35 @@ which would replace the host application's logging config.
   with no scheme throws `ConfigLoadException`; `source()` adds an in-process path, with or without labels, that
   reaches the agent's options but not the config tree, shows in `toString()` as `in-process`, and fails `start()` when
   another path or the proxy's rules forbid its path, with a message that names it as `source()`'s, not a
-  `pathConfigs` entry
+  `pathConfigs` entry; `source()` with a `PrometheusRegistry` serves it through `MetricsSource.of`, with or without
+  labels; `fromEnvironment()` sets the proxy, the token, and the certificate from the `PROMETHEUS_` variables, read
+  through a lookup a spec gives, trimmed, the authority `prometheus-proxy` without `PROMETHEUS_PROXY_AUTHORITY`, a blank
+  or unset variable leaving its setting alone, and a builder method called after it taking precedence; and
+  `agentMetricsAt()` gives an agent built from it, never started, an in-process path served by the agent's own metrics
+  source, named as `agentMetricsAt()`'s in a startup message, and its metrics collected with their port off; it shows
+  in `toString()`, stays out of `toConfig()`, and moves when called again
 - **MetricsSourceTest** — a path served by a `MetricsSource`: scraped in-process in the content type the source names
   (the text format when it names none), asked in a text format the scrape accepts for the families named with
   `name[]`, filtered, refused past `maxContentLengthMBytes` whether written in arrays or a byte at a time, interrupted
   at the scrape timeout, failed when the source throws, an `Error` or its own cancellation or interrupt included, and
   logged as a failed scrape of `in-process`, not an HTTP request; every byte kept when it writes from several threads
   at once; read by the dashboard's fetch, which counts nothing; a call that ignores the interrupt times out on time,
-  and the source isn't called again until it returns; and the docs site's registry source, run against a real registry
+  and the source isn't called again until it returns; and the docs site's worker, in Kotlin and in Java, doing its work
+- **RegistryMetricsSourceTest** — a `PrometheusRegistry` served in-process (`MetricsSource.of`, from Kotlin and from
+  Java): written in the text format or OpenMetrics, as the scrape accepts, and only the families it names; a source of
+  the default registry leaving out the agent metrics while an agent collects them, named or not, and serving it all
+  while none does, and a source of another registry keeping a family with an agent metric's name; and the agent's own
+  metrics, as `agentMetricsAt` serves them: the agent families alone, a counter's, a gauge's, and a histogram's series
+  of its launch only, not another agent's in the JVM, only those named, and nothing once its metrics are closed
+- **StartIfConfiguredTest** — `EmbeddedAgentConfig.startIfConfigured()`: off, with one INFO line, without a proxy; on
+  with the builder's proxy, a `setting()` of the endpoints or the host name, or `PROXY_HOSTNAME`, and off with a blank
+  one; a start that fails, a checked exception included, returning null, logged at ERROR with its cause's message,
+  and given to `onFailure` with why and what was thrown; why read along the cause chain, each message once, with a
+  URL's credentials masked; and real failed starts, a key, a certificate, a setting, a wrong-typed token, a duplicate
+  path, a dashboard password, and an admin port in use, saying why without the token, a password, or a PEM
 - **EmbeddedAgentInfoTest** — EmbeddedAgentInfo data class (launchId, agentName storage), and its connection,
-  `isConnected` and `proxyEndpoint`, read live from the agent
+  `isConnected` and `proxyEndpoint`, read live from the agent; and `use` stopping the agent after its block, and
+  running the block on a null handle
 - **RequestFailureExceptionTest** — RequestFailureException custom exception class
 - **SslSettingsTest** — SSL keystore/truststore loading for TLS configuration
 - **TrustAllX509TrustManagerTest** — TrustAllX509TrustManager (dev/test only, bypasses SSL validation)
@@ -342,7 +365,8 @@ which would replace the host application's logging config.
 - **AgentSettingsTest** (`dashboard/`) — the agent's Settings view (`AgentSettings`), from an agent built but never
   started: its groups in order; what it resolved, its endpoints, the client timeout the deprecated `cioTimeoutSecs` set,
   its trust store and TLS files, and its login's username; the defaults with nothing configured; discovery's file and
-  interval; and no token, password, PEM, or `-D` value anywhere in it
+  interval; an embedded agent's own metrics served in-process (`agentMetricsAt`) shown as on, at their path, with their
+  port when it's on too; and no token, password, PEM, or `-D` value anywhere in it
 - **AgentScrapeNowTest** (`dashboard/`) — the agent dashboard's Scrape now, its fetch stood in for: a configured path
   scraped at its own URL through its own filter, though not registered, summarized with its sizes before and after
   the filter; a gzipped body unzipped and a path asked for with a leading slash found; a failure's reason; a path the
@@ -361,11 +385,14 @@ which would replace the host application's logging config.
   families dropped or kept (HELP/TYPE/UNIT lines, histogram, summary and OpenMetrics series), line endings preserved;
   and why a filter lets a scrape through unfiltered, told once per cause
 
-Two support helpers also live here (not test classes themselves):
+Three support helpers also live here (not test classes themselves):
 
 - **KeyStoreTestSupport** — `createTempKeyStore()`, an empty keystore in an auto-deleted temp file, with its
   password, for the `SslSettings` and `AgentHttpService` trust-store tests and `AgentSettingsTest`, whose agent
   loads one as it's built
+- **RegistrySourceFromJava** (`src/test/java/io/prometheus/agent/`) — `MetricsSource.of` called from Java, as the
+  static method of the interface it is there, which Kotlin reaches through its `Companion` instead; for
+  `RegistryMetricsSourceTest`
 - **DiscoveryTestSupport** (`discovery/`) — `discoveryPathsHocon()`, which builds a discovery file's
   `paths = [...]` body for the harness and container discovery specs, so the format they write is defined in one
   place
@@ -645,7 +672,8 @@ One support helper also lives here (not a test class itself):
 - **ConfigLoadExceptionTest** — The public exception embedded hosts catch: message-only and with-cause constructors
 - **CommonSettingsTest** (`dashboard/`) — the Settings groups both dashboards share (`CommonSettings`): the About
   group with only the keys of the `-D` overrides; each TLS file named and a PEM only as set; the admin endpoints, the
-  metrics endpoint and its JVM metrics, the dashboard's address and login, never its password, Zipkin, and the log
+  metrics endpoint and its JVM metrics, an embedded agent's metrics served in-process with or without the endpoint,
+  the dashboard's address and login, never its password, Zipkin, and the log
   level, `info` when unset; and where the config came from (`configShown`): a file, a URL with its credentials redacted, in memory, or the
   built-in defaults
 - **ConfigWrappersTest** — Factory methods for AdminConfig, MetricsConfig, ZipkinConfig
@@ -905,9 +933,11 @@ mechanism that the standard suite cannot reach:
   `proxyEndpoint` report the connection once the proxy serves the agent's path, go false after `shutdown()` or once the
   proxy goes away, and are false before the first connection; a path given a username and password with the builder
   reaches a target that demands them as Basic Auth, whatever their characters; a path the builder's `source()` adds
-  serves what its source writes, through the proxy; and a config served from a URL with credentials that holds a
-  setting the agent rejects, whether its options or its constructor reject it, throws `ConfigLoadException`, with the
-  credentials in none of its messages, its cause chain, or the log
+  serves what its source writes, through the proxy; a program's default registry, served with `source()`, and the
+  agent's own metrics, served with `agentMetricsAt()`, each series at one path, the agent's connection among them and
+  no JVM metrics; and a config served from a URL with credentials that holds a setting the agent rejects, whether its
+  options or its constructor reject it, throws `ConfigLoadException`, with the credentials in none of its messages, its
+  cause chain, or the log
 - **EmbeddedAgentMetricsTest** — with metrics on, an agent started again after `shutdown()` and two agents at
   once each connect and count their own connects without a registry clear in between; a stopped agent's series go
   with it; and a host metric with an agent metric's name fails `startAsyncAgent()`, with the registry's rejection
@@ -1097,8 +1127,6 @@ agent runs with what it gets in an app. `TestingGuideTest` reads only the root p
   serves the app's Micrometer meter and Spring Boot's JVM metrics at
   `/roastery_metrics`, its service discovery has the path's labels, and the health component is UP with the agent's
   name and proxy.
-- **RegistryMetricsSourceTest** — a `PrometheusRegistry` written in the text format or OpenMetrics, as the scrape
-  accepts, and only the families it names.
 - **ConfigurationMetadataTest** — the configuration metadata in the jar, which IDEs complete the properties from: every
   property has a description, and the defaults are the fields' initial values. An incremental compile drops the
   descriptions, so the build compiles the starter in full.
@@ -1116,9 +1144,10 @@ count them. `TestingGuideTest` reads only the root project's specs, so name new 
   replaced: the app's `ApplicationStarted` starts the agent and puts its handle in the app's attributes, and another
   app's, as a development-mode reload gives, doesn't; the agent stays off when disabled or without a proxy, and a
   required one fails the start; a start that throws leaves the agent off, or, when required, fails the app's start with
-  the exception, a checked one wrapped; `ApplicationStopPreparing` begins the stop without waiting for it, and
-  `ApplicationStopping` stops an agent the engine didn't, and gives up waiting at its timeout, once whichever come;
-  an agent that fails to stop doesn't fail the app's; and the handlers are gone once the app stops.
+  the exception, a checked one wrapped, and a start that returns none, as `startIfConfigured()` does for a failure,
+  leaves it off; `ApplicationStopPreparing` begins the stop without waiting for it, and `ApplicationStopping` stops an
+  agent the engine didn't, and gives up waiting at its timeout, once whichever come; an agent that fails to stop
+  doesn't fail the app's; and the handlers are gone once the app stops.
 - **PrometheusProxyAgentConfigTest** — `prometheus-proxy.agent` in HOCON, YAML (`full-section.yaml`), and a
   `MapApplicationConfig` builds the tree the same builder calls do; a blank value, such as YAML's empty default for an
   unset environment variable (`unset-proxy.yaml`), counts as unset; the dashboard login's default username; a value
@@ -1131,8 +1160,6 @@ count them. `TestingGuideTest` reads only the root project's specs, so name new 
   proxy in the same JVM on fixed ports that the root project's `TestPorts` lists (`KTOR_PLUGIN_PROXY_*`): the proxy
   serves the app's meter and Micrometer's JVM metrics at `/ktor_app_metrics`, its service discovery has the path's
   labels, the handle reports the connection, and once the app stops, the proxy no longer has the path.
-- **RegistryMetricsSourceTest** — a `PrometheusRegistry` written in the text format or OpenMetrics, as the scrape
-  accepts, and only the families it names.
 - **KtorPluginExamplesTest** — the Ktor Plugin page's examples, in `website/KtorPluginExample.kt` and the test
   resources' `website/application.conf`: the module runs without the agent where `PROMETHEUS_PROXY` isn't set, and its
   health route says so; the file starts the agent with the environment's proxy and the file's name, and leaves it off

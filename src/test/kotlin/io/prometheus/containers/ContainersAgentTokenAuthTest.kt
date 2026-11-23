@@ -84,8 +84,8 @@ class ContainersAgentTokenAuthTest : StringSpec() {
           agentContainer(
             network,
             env = mapOf("AGENT_TOKEN" to "wrong-token"),
-            // The wrong token never registers; wait on the connect-failure log instead.
-            wait = Wait.forLogMessage(".*Cannot connect to proxy.*", 1),
+            // The wrong token never registers; wait on the agent's log of the proxy refusing it instead.
+            wait = Wait.forLogMessage(".*refused the agent's token.*", 1),
           )
         try {
           metricsStub.start()

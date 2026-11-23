@@ -104,8 +104,12 @@ Version 4.7.0 adds:
   registered or refused, in order
 - **Settings view** - both dashboards show every setting the process is running with; tokens, passwords, and keys
   show only as set or not set
-- **Metrics without an endpoint** - an app that embeds the agent hands it a `MetricsSource` that writes its
-  registry, with `source(path, source)`, so it serves no `/metrics` endpoint
+- **Metrics without an endpoint** - an app that embeds the agent hands it its metrics registry, with
+  `source(path, registry)`, or a `MetricsSource` that writes its metrics, so it serves no `/metrics` endpoint; and
+  `agentMetricsAt(path)` serves the agent's own metrics the same way, with no port
+- **Simpler embedding** - `fromEnvironment()` reads the proxy, its token, and its certificate from the app's
+  environment, and `startIfConfigured()` starts the agent only where there's a proxy, keeping the app running if it
+  can't start
 - **Spring Boot starter** - add the [starter](https://prometheus-proxy.com/spring-boot-starter/) to a Spring Boot app,
   and the agent starts and stops with the app and serves its metrics without `/actuator/prometheus`
 - **Ktor plugin** - `install(PrometheusProxyAgent)` from the [plugin](https://prometheus-proxy.com/ktor-plugin/) in a
@@ -544,7 +548,18 @@ its own `/metrics`, can build them in code instead of in a file, with `embeddedA
 `EmbeddedAgentConfig.builder()` from Java), or pass a Typesafe `Config` rooted at `agent` to
 `Agent.startAsyncAgent(config)`. The docs site's
 [Cloud Platforms](https://prometheus-proxy.com/cloud-platforms/) page builds an app on ECS, Cloud Run,
-or Azure Container Apps around it.
+or Azure Container Apps around it. A program with no HTTP server needs a few lines: the builder reads the proxy and its
+credentials from the environment, serves a `PrometheusRegistry` and the agent's own metrics in-process, and
+`startIfConfigured()` leaves the agent off where there's no proxy:
+
+```kotlin
+embeddedAgent {
+  name = "worker-$version"
+  fromEnvironment() // PROMETHEUS_PROXY, PROMETHEUS_AGENT_TOKEN, PROMETHEUS_PROXY_CERT
+  source(path = "worker_metrics", registry = PrometheusRegistry.defaultRegistry)
+  agentMetricsAt(path = "worker_agent_metrics")
+}.startIfConfigured().use { worker.run() }
+```
 
 Several agents can run in one JVM with metrics on, at once or one after another: they share one set of agent metrics,
 and each series carries its agent's `launch_id`. An embedded agent's `logLevel` sets only the `io.prometheus` loggers,

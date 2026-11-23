@@ -220,14 +220,15 @@ two paths registered. Until 1.0 stopped, its dashboard showed them as `retrying`
 
 When an embedded agent doesn't connect, or a path doesn't scrape, its admin endpoints show what it's doing. The coffee
 shop's environment turns them on with `ADMIN_ENABLED`, and its `/debug` page with `DEBUG_ENABLED`, with nothing in its
-code. The agent reads them itself, from the `x-coffee-shop-env` block of `docker/compose.yml`, beside
-`METRICS_ENABLED`, which turns on the agent's own metrics:
+code. The agent reads them itself, from the `x-coffee-shop-env` block of `docker/compose.yml`:
 
 ```yaml
-METRICS_ENABLED: "true"   # the agent's own metrics, on port 8083
 ADMIN_ENABLED: "true"     # its admin endpoints, on port 8093, published on 127.0.0.1:8393
 DEBUG_ENABLED: "true"     # adds /debug
 ```
+
+The agent's own metrics, which the **Prometheus Agents** dashboard reads, need no port: the app's code serves them, in
+`PrometheusAgent.kt`, at the proxy's `/coffee_shop_agent_metrics`, with `agentMetricsAt`.
 
 ```bash
 ./demo.sh debug
@@ -281,8 +282,9 @@ order: `disconnected`, `connect failed`, then `connected` and the paths `registe
 ```
 
 It lists the coffee shop's and the proxy's secrets by name, and shows that the app's container holds no config file.
-The app builds its agent's settings in code, in the Ktor plugin's `agent { }` block, so the token and the
-certificate it trusts never sit in a file (`app/src/main/kotlin/coffeeshop/PrometheusAgent.kt`). The
+The app builds its agent's settings in code, in the Ktor plugin's `agent { }` block, where `fromEnvironment()` reads
+them from its `PROMETHEUS_` variables, so the token and the certificate it trusts never sit in a file
+(`app/src/main/kotlin/coffeeshop/PrometheusAgent.kt`). The
 proxy is the stock image, which has no shell to write a variable to a file, and takes its certificate and key as PEM,
 base64-encoded, in `CERT_CHAIN_PEM` and `PRIVATE_KEY_PEM`. It logs only whether each is set.
 
@@ -323,7 +325,7 @@ machine.
 |---|---|
 | `app/` | The coffee shop: a Gradle project of its own, outside the repository's build, which reads the repository's version catalog (`settings.gradle.kts`). `Main.kt` is the Ktor module and its routes, `CoffeeShop.kt` the queue and baristas, `Customers.kt` the customers, who order over HTTP, `ShopMetrics.kt` its Micrometer meters, and `PrometheusAgent.kt` the embedded agent, started from a config built in memory. With `-PlocalProxy` it builds against this checkout's library (a composite build), as `make up-local` and CI do. |
 | `app/Dockerfile` | Builds the coffee shop's image: compiled inside Docker against the latest release (`make up`), or from the build on the host (`make up-local`) |
-| `docker/compose.yml` | The services, their ports, their images, and the secrets they read from `docker/.env`; the coffee shop's environment also turns on its agent's own metrics, admin endpoints, `/debug`, and dashboard |
+| `docker/compose.yml` | The services, their ports, their images, and the secrets they read from `docker/.env`; the coffee shop's environment also turns on its agent's admin endpoints, `/debug`, and dashboard |
 | `config/proxy.conf` | The proxy's dashboard and metrics; its TLS and token come from the environment |
 | `config/Caddyfile` | The load balancer: 1.0 first, then 1.1, retrying a request whose version has gone |
 | `prometheus/prometheus.yml` | The coffee shop's two paths through the proxy, and the proxy's own metrics |

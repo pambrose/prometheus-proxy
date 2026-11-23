@@ -47,8 +47,11 @@ internal class AgentLifecycle(
   private val config: PrometheusProxyAgentConfig,
   // How long the app's disposal waits for the agent to stop; tests shorten it
   private val stopTimeoutMillis: Long = STOP_TIMEOUT_MILLIS,
-  // How the agent starts; tests replace it
-  private val launch: (EmbeddedAgentConfig) -> EmbeddedAgentInfo = { it.start(logBanner = false) },
+  // How the agent starts: a required one with start(), so a failure fails the app's start, and any other with
+  // startIfConfigured(), which logs a failure, with why, and leaves the agent off. Tests replace it.
+  private val launch: (EmbeddedAgentConfig) -> EmbeddedAgentInfo? = { settings ->
+    if (config.required) settings.start(logBanner = false) else settings.startIfConfigured(logBanner = false)
+  },
 ) {
   private val agent = AtomicReference<EmbeddedAgentInfo?>()
   private val stopping = AtomicReference<Thread?>()
@@ -72,8 +75,9 @@ internal class AgentLifecycle(
     try {
       launchAgent()
     } catch (e: Exception) {
-      // A setting the agent rejects (ConfigLoadException), an agent block's own failure, or a checked exception, which
-      // Kotlin throws undeclared, such as the agent's start timing out
+      // A value in the file the builder rejects (ConfigLoadException), an agent block's own failure, or, for a required
+      // agent, its start's: a setting the agent rejects, or a checked exception, which Kotlin throws undeclared, such
+      // as the start timing out. Any other agent's start logs its own failure and returns null.
       failed(e)
     }
   }
@@ -90,7 +94,7 @@ internal class AgentLifecycle(
       }
     val settings = builder.build()
     logger.info { "Starting the Prometheus agent with $settings" }
-    val started = launch(settings)
+    val started = launch(settings) ?: return
     agent.set(started)
     application.attributes.put(AgentKey, started)
     // No proxy named: the agent's own PROXY_HOSTNAME can override the setting's. The line above gives the settings, and

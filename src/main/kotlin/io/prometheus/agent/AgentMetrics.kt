@@ -34,6 +34,7 @@ import io.prometheus.common.SharedCollectors
 import io.prometheus.metrics.core.metrics.Counter
 import io.prometheus.metrics.core.metrics.GaugeWithCallback
 import io.prometheus.metrics.core.metrics.Histogram
+import io.prometheus.metrics.core.metrics.MetricWithFixedMetadata
 import io.prometheus.metrics.core.metrics.StatefulMetric
 
 /**
@@ -90,7 +91,7 @@ internal class AgentMetrics(
   }
 
   companion object {
-    private const val LAUNCH_ID = "launch_id"
+    internal const val LAUNCH_ID = "launch_id"
     private const val AGENT_NAME = "agent_name"
     private const val TYPE = "type"
     private const val PATH = "path"
@@ -344,12 +345,26 @@ internal class AgentMetrics(
         PerLaunch(BUILD_INFO),
       )
 
+    private val COLLECTORS: List<MetricWithFixedMetadata> =
+      PER_LAUNCH.map { it.metric } +
+        listOf(SCRAPE_BACKLOG_SIZE, CLIENT_CACHE_SIZE, CONNECTED, PROXY_ENDPOINT_INDEX, PATHS, DASHBOARD_SESSIONS)
+
     private val SHARED: SharedCollectors<Agent> =
-      SharedCollectors(
-        sentinelName = START_TIME_NAME,
-        collectors =
-          PER_LAUNCH.map { it.metric } +
-            listOf(SCRAPE_BACKLOG_SIZE, CLIENT_CACHE_SIZE, CONNECTED, PROXY_ENDPOINT_INDEX, PATHS, DASHBOARD_SESSIONS),
-      )
+      SharedCollectors(sentinelName = START_TIME_NAME, collectors = COLLECTORS)
+
+    // The names of the agent's families, in both the forms a registry's scrape tests a name in: its Prometheus name and
+    // its exposition name, which differ for a counter (agent_disconnects and agent_disconnects_total).
+    private val FAMILY_NAMES: Set<String> =
+      COLLECTORS.flatMapTo(HashSet()) { collector ->
+        collector.metricFamilyDescriptor
+          ?.let { listOf(it.prometheusName, it.metadata.expositionBasePrometheusName) }
+          .orEmpty()
+      }
+
+    /** Whether [name], a family's name in either form, is one of the agent metrics'. */
+    internal fun isAgentFamily(name: String): Boolean = name in FAMILY_NAMES
+
+    /** Whether an agent in the JVM collects the agent metrics, which are then in the default registry. */
+    internal val isCollected: Boolean get() = SHARED.instances().isNotEmpty()
   }
 }

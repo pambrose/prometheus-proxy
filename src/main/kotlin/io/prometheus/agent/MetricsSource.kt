@@ -16,6 +16,7 @@
 
 package io.prometheus.agent
 
+import io.prometheus.metrics.model.registry.PrometheusRegistry
 import java.io.IOException
 import java.io.OutputStream
 
@@ -34,19 +35,9 @@ import java.io.OutputStream
  * doesn't call the source again until then, failing its scrapes meanwhile. Whatever [write] throws, short of a
  * `VirtualMachineError` such as `OutOfMemoryError`, fails the scrape it was called for, and nothing else.
  *
- * A Prometheus client's registry writes itself in a few lines, with `ExpositionFormats` from
- * `io.prometheus:prometheus-metrics-exposition-textformats`; with Micrometer's `PrometheusMeterRegistry`, the
- * Prometheus Java client's `PrometheusRegistry` it reads:
- *
- * ```kotlin
- * val formats = ExpositionFormats.init()
- * val source =
- *   MetricsSource { accept, names, out ->
- *     val writer = formats.findWriter(accept)
- *     writer.write(out, if (names.isEmpty()) registry.scrape() else registry.scrape(names::contains))
- *     writer.contentType
- *   }
- * ```
+ * A Prometheus Java client's `PrometheusRegistry`, the one Micrometer's `PrometheusMeterRegistry` gives too, needs no
+ * source of its own: [of] gives one, and the builder's [source][EmbeddedAgentConfig.Builder.source] takes the registry
+ * itself. Implement this for metrics in some other form.
  */
 fun interface MetricsSource {
   /**
@@ -71,6 +62,21 @@ fun interface MetricsSource {
     names: Set<String>,
     out: OutputStream,
   ): String
+
+  /** Where a [MetricsSource] of a registry comes from. */
+  companion object {
+    /**
+     * A source of [registry]'s metrics, such as Micrometer's `PrometheusMeterRegistry.prometheusRegistry` or the
+     * Prometheus Java client's `PrometheusRegistry.defaultRegistry`, read for each scrape: written in the text format
+     * the scrape accepts, Prometheus's or OpenMetrics, and only the families it names, when it names any.
+     *
+     * It leaves out the agent's own metrics, which an agent with its metrics on puts in the default registry: they're
+     * served at the path [agentMetricsAt][EmbeddedAgentConfig.Builder.agentMetricsAt] gives them, or on the agent's
+     * metrics port, so a source of the default registry doesn't repeat them.
+     */
+    @JvmStatic
+    fun of(registry: PrometheusRegistry): MetricsSource = RegistryMetricsSource(registry)
+  }
 }
 
 /**

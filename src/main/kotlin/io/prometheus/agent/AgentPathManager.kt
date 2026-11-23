@@ -147,14 +147,30 @@ internal class AgentPathManager(
 
   suspend fun pathMapSize(): Int = agent.grpcService.pathMapSize()
 
+  // The path an embedded agent serves its own metrics at (EmbeddedAgentConfig.Builder.agentMetricsAt), or null. Its
+  // source reads the agent's launch ID at each scrape, as it isn't assigned yet when the paths are read.
+  private fun agentMetricsPathConfig(): PathConfig? =
+    agent.options.agentMetricsPath.takeIf { it.isNotEmpty() }?.let { path ->
+      PathConfig(
+        name = path,
+        path = path,
+        url = IN_PROCESS_TARGET,
+        labels = agent.options.agentMetricsLabels,
+        metricsSource = AgentMetricsSource { agent.launchId },
+        addedBy = "agentMetricsAt()",
+      )
+    }
+
   // A blank path or url could never register, and registerPaths does not catch the require() that would reject it,
   // so one config typo would fail every connect attempt. Dropped here instead, the way discovery drops its own. The
-  // paths an embedded host serves in-process (EmbeddedAgentConfig.Builder.source) come after the config's, and are
-  // checked with them, so one can't take a configured path or use a character the proxy refuses.
+  // paths an embedded host serves in-process (EmbeddedAgentConfig.Builder.source), and the one it serves the agent's
+  // own metrics at (agentMetricsAt), come after the config's, and are checked with them, so one can't take a configured
+  // path or use a character the proxy refuses.
   val pathConfigs: List<PathConfig> =
     agentConfigVals.pathConfigs
       .map { PathConfig(name = it.name, path = it.path, url = it.url, labels = it.labels) }
       .plus(agent.options.metricsSources)
+      .plus(listOfNotNull(agentMetricsPathConfig()))
       .filter { config ->
         config.usable.also {
           if (!it)
@@ -1128,6 +1144,8 @@ internal class AgentPathManager(
     val url: String,
     val labels: String,
     val metricsSource: MetricsSource? = null,
+    // The builder method that added a path an embedded host serves in-process.
+    val addedBy: String = "source()",
   ) {
     // What a scrape of this path reads.
     val target: ScrapeTarget get() = ScrapeTarget(url, metricsSource)
@@ -1135,7 +1153,7 @@ internal class AgentPathManager(
     // Where a startup message says this path came from: a pathConfigs entry, by its name, or, for a path an embedded
     // host serves in-process, the builder method that added it, since no pathConfigs entry holds it.
     val origin: String
-      get() = if (metricsSource != null) "source()" else "agent.pathConfigs entry ${shownValue(quotedName)}"
+      get() = if (metricsSource != null) addedBy else "agent.pathConfigs entry ${shownValue(quotedName)}"
 
     // Name wrapped in double-quotes for the toPlainText() display, preserving the original format.
     val quotedName: String get() = "\"$name\""

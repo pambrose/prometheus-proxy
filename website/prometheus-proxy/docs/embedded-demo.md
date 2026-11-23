@@ -130,8 +130,9 @@ code sets.
 
 The coffee shop configures its agent in code, with no config file. `installPrometheusAgent`, in
 [`PrometheusAgent.kt`](https://github.com/pambrose/prometheus-proxy/blob/master/demos/embedded/app/src/main/kotlin/coffeeshop/PrometheusAgent.kt),
-builds the agent's settings from the app's environment in the [Ktor plugin](ktor-plugin.md)'s `agent { }` block,
-and installs the plugin with the app's registry:
+builds the agent's settings from the app's environment in the [Ktor plugin](ktor-plugin.md)'s `agent { }` block, with
+[`fromEnvironment()`](embedded-agent.md#settings-from-the-environment), serves the agent's own metrics beside the app's
+with [`agentMetricsAt`](embedded-agent.md#the-agents-own-metrics), and installs the plugin with the app's registry:
 
 ```kotlin
 --8<-- "demos/embedded/app/src/main/kotlin/coffeeshop/PrometheusAgent.kt:agent-config"
@@ -157,9 +158,9 @@ loaded, and stops it as the server stops:
   [`docker/compose.yml`](https://github.com/pambrose/prometheus-proxy/blob/master/demos/embedded/docker/compose.yml),
   whose `x-coffee-shop-env` block gives the proxy's address and the name its certificate was issued to, and reads the
   token and the CA certificate from `docker/.env`, which `make up` writes the first time
-  it runs. It also turns on the agent's own metrics, its admin endpoints, `/debug`, and its dashboard, with
-  `METRICS_ENABLED`, `ADMIN_ENABLED`, `DEBUG_ENABLED`, and `DASHBOARD_ENABLED`, which the agent reads itself, and each
-  version's service gives the dashboard its port, in `DASHBOARD_PORT`.
+  it runs. It also turns on the agent's admin endpoints, `/debug`, and its dashboard, with `ADMIN_ENABLED`,
+  `DEBUG_ENABLED`, and `DASHBOARD_ENABLED`, which the agent reads itself, and each version's service gives the
+  dashboard its port, in `DASHBOARD_PORT`.
 
 ## The coffee shop in Grafana
 
@@ -205,10 +206,9 @@ stopped first, as a failed deploy's new version does, 1.0's agent would have tak
 When an embedded agent doesn't connect, or a path doesn't scrape, its admin endpoints show what it's doing. The coffee
 shop's environment turns them on with `ADMIN_ENABLED`, and its `/debug` page with `DEBUG_ENABLED`, with nothing in its
 code, and the demo publishes the port on `127.0.0.1:8393`. The agent reads them itself, from the `x-coffee-shop-env`
-block of the demo's `docker/compose.yml`, beside `METRICS_ENABLED`, which turns on the agent's own metrics:
+block of the demo's `docker/compose.yml`:
 
 ```yaml
-METRICS_ENABLED: "true"   # the agent's own metrics, on port 8083
 ADMIN_ENABLED: "true"     # its admin endpoints, on port 8093, published on 127.0.0.1:8393
 DEBUG_ENABLED: "true"     # adds /debug
 ```
@@ -251,7 +251,8 @@ reconnects within a few seconds and registers its paths again. The dashboard's A
 ## Secrets from the environment
 
 `./demo.sh secrets` lists the coffee shop's and the proxy's secrets by name, and shows that the app's container holds
-no config file. The app builds its agent's settings in code from its environment, and the stock proxy image, which has
+no config file. The app builds its agent's settings in code from its environment, with `fromEnvironment()`, and the
+stock proxy image, which has
 no shell to write a variable to a file, takes its certificate and key as base64 PEM in `CERT_CHAIN_PEM` and
 `PRIVATE_KEY_PEM`, and logs only whether each is set. On a cloud platform, they're the service's variables.
 

@@ -86,7 +86,7 @@ class AgentHttpServiceDashboardTest : StringSpec() {
         proxy { auth = [] }
         """,
       )
-      every { agent.isMetricsEnabled } returns false
+      every { agent.collectsMetrics } returns false
       every { agent.isTestMode } returns true
       every { agent.grpcService } returns grpc
       every { agent.scrapeHistory } returns history

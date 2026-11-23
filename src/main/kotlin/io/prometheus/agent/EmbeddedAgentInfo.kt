@@ -21,8 +21,9 @@ import io.prometheus.Agent
 /**
  * Lifecycle handle for an [Agent] started in the background of a host JVM.
  *
- * Returned by [Agent.startAsyncAgent][io.prometheus.Agent.Companion.startAsyncAgent] and [EmbeddedAgentConfig.start],
- * this is the supported way for embedders to interact with an Agent they did not construct directly. The
+ * Returned by [Agent.startAsyncAgent][io.prometheus.Agent.Companion.startAsyncAgent], [EmbeddedAgentConfig.start], and
+ * [EmbeddedAgentConfig.startIfConfigured], this is the supported way for embedders to interact with an Agent they did
+ * not construct directly. The
  * underlying [Agent] instance is intentionally hidden so consumers depend only on this stable,
  * minimal surface — identity (for logging and metrics correlation), its connection to the proxy, and shutdown.
  *
@@ -40,6 +41,17 @@ import io.prometheus.Agent
  * info.shutdown()
  * ```
  *
+ * It's [AutoCloseable], [close] doing what [shutdown] does, so an agent that runs while a block does is stopped after
+ * it by Kotlin's `use` or Java's try-with-resources:
+ *
+ * ```kotlin
+ * embeddedAgent {
+ *   name = "worker"
+ *   fromEnvironment()
+ *   source(path = "worker_metrics", registry = registry)
+ * }.startIfConfigured().use { worker.run() }
+ * ```
+ *
  * @property launchId Random 15-character identifier generated when the [Agent] was constructed.
  *   Stable for the lifetime of this agent; every agent gets its own, whether after a restart or
  *   alongside it in the same JVM, so it is the right key for distinguishing this run from prior
@@ -50,7 +62,7 @@ import io.prometheus.Agent
  */
 data class EmbeddedAgentInfo(
   private val agent: Agent,
-) {
+) : AutoCloseable {
   /** See class-level KDoc. */
   val launchId: String get() = agent.launchId
 
@@ -83,4 +95,7 @@ data class EmbeddedAgentInfo(
   fun shutdown() {
     agent.stop()
   }
+
+  /** Stops the agent, as [shutdown] does, for Kotlin's `use` and Java's try-with-resources. */
+  override fun close() = shutdown()
 }

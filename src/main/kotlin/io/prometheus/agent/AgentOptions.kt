@@ -80,13 +80,28 @@ class AgentOptions internal constructor(
     this(emptyArray(), exitOnMissingConfig = false, parseOnly = false, suppliedConfig = config)
 
   // An embedded agent's options, with the paths its host serves in-process (EmbeddedAgentConfig.Builder.source), which
-  // are code, so no config holds them.
-  internal constructor(config: Config, metricsSources: List<AgentPathManager.PathConfig>) : this(config) {
+  // are code, so no config holds them, and the path it serves its own metrics at, in-process (agentMetricsAt).
+  internal constructor(
+    config: Config,
+    metricsSources: List<AgentPathManager.PathConfig>,
+    agentMetricsPath: String = "",
+    agentMetricsLabels: String = "{}",
+  ) : this(config) {
     this.metricsSources = metricsSources
+    this.agentMetricsPath = agentMetricsPath
+    this.agentMetricsLabels = agentMetricsLabels
   }
 
   // The paths the agent's host serves in-process, which AgentPathManager registers after the config's pathConfigs.
   internal var metricsSources: List<AgentPathManager.PathConfig> = emptyList()
+    private set
+
+  // The path the agent serves its own metrics at, in-process, which AgentPathManager adds to its paths, and its labels
+  // as JSON; empty without one. With one, the agent collects its metrics whether or not their port is on.
+  internal var agentMetricsPath: String = ""
+    private set
+
+  internal var agentMetricsLabels: String = "{}"
     private set
 
   constructor(args: List<String>, exitOnMissingConfig: Boolean) :
