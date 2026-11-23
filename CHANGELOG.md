@@ -264,6 +264,9 @@ All notable changes to this project are documented in this file.
 - The basics demo's tour has a tenth part: `./demo.sh login` restarts the proxy with a dashboard password in its
   environment (`DEMO_DASHBOARD_PASSWORD` in its compose file), and `login-off` without it. Its readiness checks take a
   login page's 401 as the proxy answering
+- The Embedded Agent page shows, in Kotlin and Java, the shutdown hook a program that runs until it's stopped adds,
+  which ends its work on SIGTERM and waits for `main` to return, so `use` stops the agent after the work
+  (`EmbeddedAgentShutdownKotlinExample`, `EmbeddedAgentShutdownJavaExample`)
 
 ### Dependencies
 

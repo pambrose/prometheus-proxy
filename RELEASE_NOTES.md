@@ -143,6 +143,8 @@ _Released 2026-11-23_
 - **Debugging an embedded agent.** The Embedded Agent page's new Debugging section turns on the agent's admin
   endpoints and `/debug` with `ADMIN_ENABLED` and `DEBUG_ENABLED`, says what each shows, and puts the agent's own
   metrics on the Agents dashboard with `agentMetricsAt`. The embedded demo's tour walks through them.
+- **Stopping an embedded agent on SIGTERM.** The Embedded Agent page shows, in Kotlin and Java, the shutdown hook a
+  program that runs until it's stopped adds, so its work finishes first and `use` then stops the agent.
 - **The dashboard's login in the basics demo.** The tour's new last part turns it on, with the password in the proxy's
   environment, signs in and out, and turns it off again (`./demo.sh login`, `./demo.sh login-off`).
 
