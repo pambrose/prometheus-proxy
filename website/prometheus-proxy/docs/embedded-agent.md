@@ -177,6 +177,13 @@ the agent's own, which the [Embedded Demo](embedded-demo.md), the [Spring Boot D
   takes precedence, and one called before it holds where the variable isn't set.
 - **Only `fromEnvironment()` reads these:** the agent doesn't, so an app that never calls it can use the names for
   anything.
+- **A value the agent refuses names its variable.** A `PROMETHEUS_PROXY` endpoint the agent can't parse, or a
+  `PROMETHEUS_PROXY_CERT` it can't read as a certificate, fails `start()`, or has `startIfConfigured()` log, with the
+  variable, the setting, and the agent's reason, never the value: `Invalid configuration: PROMETHEUS_PROXY, read by
+  fromEnvironment() for agent.proxy.endpoints: Invalid port in 'proxy:abc': 'abc' is not a valid integer`. The agent
+  takes any token or authority as it starts: a token the proxy refuses is logged once the agent connects
+  ([Troubleshooting](troubleshooting.md#unauthenticated-missing-or-invalid-agent-token)), and a wrong authority fails
+  the TLS handshake.
 
 ### Starting Where There's a Proxy
 

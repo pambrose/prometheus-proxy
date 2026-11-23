@@ -47,7 +47,8 @@ All notable changes to this project are documented in this file.
   in-process, and `MetricsSource.of(registry)` gives the same source, with no dependency for the app to add
   (`prometheus-metrics-model` is at compile scope in the agent's POM); `fromEnvironment()` reads `PROMETHEUS_PROXY`,
   `PROMETHEUS_AGENT_TOKEN`, `PROMETHEUS_PROXY_CERT`, and `PROMETHEUS_PROXY_AUTHORITY` (default `prometheus-proxy`),
-  which the agent itself never reads; and `startIfConfigured()` starts the agent only where a proxy is set, and
+  which the agent itself never reads, and a proxy or certificate from them that the agent can't use fails the start
+  with an error naming the variable; and `startIfConfigured()` starts the agent only where a proxy is set, and
   otherwise, or when the start fails, logs why and returns null, so the app keeps running, with an optional
   `onFailure` for the reason. `EmbeddedAgentInfo` is `AutoCloseable`, so `startIfConfigured().use { … }` runs the app
   with its agent or without it. The Ktor plugin and the Spring Boot starter serve their registry and start their agent
