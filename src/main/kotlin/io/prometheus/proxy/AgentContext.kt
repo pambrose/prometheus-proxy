@@ -21,6 +21,7 @@ package io.prometheus.proxy
 import com.pambrose.common.delegate.AtomicDelegates.atomicBoolean
 import com.pambrose.common.delegate.AtomicDelegates.nonNullableReference
 import com.pambrose.common.dsl.GuavaDsl.toStringElements
+import io.github.oshai.kotlinlogging.KotlinLogging.logger
 import io.prometheus.common.ScrapeResults
 import io.prometheus.common.AgentValues.shownValue
 import io.prometheus.grpc.PathNotice
@@ -89,6 +90,10 @@ internal class AgentContext(
   // manager queues them under pathMap. The signal wakes the stream; it's conflated, as one wake reads them all.
   private val pendingPathNotices = LinkedHashMap<String, PathNotice>()
   private val pathNoticeSignal = Channel<Unit>(CONFLATED)
+
+  // Whether the unread notices filled up and the proxy has said so; see queuePathNotice. Cleared as the agent reads
+  // them, so filling up again is said again. Guarded by pendingPathNotices' monitor.
+  private var pathNoticesFull = false
 
   /**
    * Wall-clock instant this context was created, i.e. when the agent connected.
@@ -240,16 +245,31 @@ internal class AgentContext(
    * Queues [notice] for the agent's path notices stream, in place of any unread notice for the same path.
    *
    * Returns false, without queueing, once the context is invalidated, or when [MAX_PENDING_PATH_NOTICES] other paths
-   * are already waiting: an agent that stops reading them can't grow them without end.
+   * are already waiting: an agent that stops reading them can't grow them without end. A notice dropped for that
+   * leaves the agent showing a path another agent took as registered, so the first one is logged at WARN.
    */
   fun queuePathNotice(notice: PathNotice): Boolean {
+    var justFilled = false
     val queued =
       synchronized(pendingPathNotices) {
+        if (!valid)
+          return false
         val room = notice.path in pendingPathNotices || pendingPathNotices.size < MAX_PENDING_PATH_NOTICES
-        (valid && room).also { if (it) pendingPathNotices[notice.path] = notice }
+        if (room) {
+          pendingPathNotices[notice.path] = notice
+        } else {
+          justFilled = !pathNoticesFull
+          pathNoticesFull = true
+        }
+        room
       }
     if (queued)
       pathNoticeSignal.trySend(Unit)
+    else if (justFilled)
+      logger.warn {
+        "agentId $agentId (${shownValue(agentName)}) has $MAX_PENDING_PATH_NOTICES unread path notices, the most the " +
+          "proxy keeps; dropping the one about /${shownValue(notice.path)}, and any more until the agent reads them"
+      }
     return queued
   }
 
@@ -268,6 +288,7 @@ internal class AgentContext(
       signal.getOrNull() ?: return null
       val notices =
         synchronized(pendingPathNotices) {
+          pathNoticesFull = false
           pendingPathNotices.values.toList().also { pendingPathNotices.clear() }
         }
       if (notices.isNotEmpty())
@@ -330,6 +351,7 @@ internal class AgentContext(
   override fun hashCode() = agentId.hashCode()
 
   companion object {
+    private val logger = logger {}
     private val AGENT_ID_GENERATOR = AtomicLong(0L)
 
     // How many rejected paths one connection's memo keeps; see recordRejection.
