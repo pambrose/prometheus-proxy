@@ -149,6 +149,13 @@ All notable changes to this project are documented in this file.
 - The Java compiles no longer wait for the Kotlin ones, since no Java source uses its own source set's Kotlin classes,
   and CI's build job runs `check` rather than `build`, leaving the fat JARs to the jobs that build and test them
 
+### Documentation
+
+- The nginx example (`nginx/docker/nginx.conf`) raises `grpc_read_timeout` and `client_body_timeout`, and the README
+  and the Advanced Topics, Troubleshooting, and Kubernetes pages say to: nginx closes a gRPC stream that's quiet for
+  60 seconds, so with its defaults an agent that wasn't scraped for a minute reconnected every minute and was briefly
+  without its paths. The example drops `client_header_timeout`, which doesn't apply to a quiet stream
+
 ## [4.6.1] - 2026-11-22
 
 ### New Features

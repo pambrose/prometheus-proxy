@@ -85,6 +85,12 @@ _Not yet released_
 - **The release date is the release commit's.** The version the proxy and agent print, and the dashboards' Settings,
   give the date of the commit a build is from rather than the day it was built.
 
+### Documentation
+
+- **Nginx's stream timeouts.** With nginx's defaults, an agent behind it that isn't scraped for a minute is cut off and
+  reconnects every minute, and a scrape can fail while its paths are gone. The nginx example now raises
+  `grpc_read_timeout` and `client_body_timeout`, and the Advanced Topics page explains why both are needed.
+
 ## 4.6.1
 
 _Released 2026-11-22_
