@@ -61,7 +61,7 @@ Clone the repository at the latest release, then run the demo's commands from it
 its targets:
 
 ```bash
-git clone -c advice.detachedHead=false --depth 1 --branch 4.6.1 https://github.com/pambrose/prometheus-proxy.git
+git clone -c advice.detachedHead=false --depth 1 --branch 4.7.0 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/nginx
 make up      # pulls the images, starts everything, prints the URLs
 make tour    # walks through every scenario below, pausing before each step
@@ -149,7 +149,7 @@ it reconnects fails: `up{job="warehouse"}` dips to 0 now and then, and
 ```
 
 agent-legacy is cut off once more, by the worker it's on, which keeps the old timeouts, then reconnects to a new worker
-under the day-long ones and stays connected. For an agent or a proxy from 4.6.1 or earlier, raising both timeouts is
+under the day-long ones and stays connected. For an agent or a proxy from 4.6.0 or earlier, raising both timeouts is
 the fix short of upgrading both.
 
 ### A shorter stream timeout, and a reload that doesn't reach connected agents

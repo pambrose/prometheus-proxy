@@ -53,7 +53,7 @@ graph LR
 From a clone of the release, so the scripts match the images:
 
 ```bash
-git clone -c advice.detachedHead=false --depth 1 --branch 4.6.1 https://github.com/pambrose/prometheus-proxy.git
+git clone -c advice.detachedHead=false --depth 1 --branch 4.7.0 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/spring-boot
 make up      # builds the roastery, starts everything, prints the URLs
 make tour    # the guided tour, about 11 minutes

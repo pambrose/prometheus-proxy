@@ -112,7 +112,7 @@ Expose it with a `LoadBalancer` Service (or an Ingress controller):
     gRPC runs over HTTP/2. A plain `LoadBalancer` (L4) forwards it transparently. If you put
     an Ingress in front instead, it must support HTTP/2 / gRPC backends (for example, the
     NGINX Ingress `nginx.ingress.kubernetes.io/backend-protocol: GRPC` annotation). Terminate
-    or pass through TLS as described under [TLS](#tls). With an agent or a proxy from 4.6.1 or
+    or pass through TLS as described under [TLS](#tls). With an agent or a proxy from 4.6.0 or
     earlier, also raise the Ingress's stream timeouts, as
     [Nginx Reverse Proxy](advanced.md#nginx-reverse-proxy) explains: on NGINX Ingress, the
     `nginx.ingress.kubernetes.io/proxy-read-timeout` annotation and the controller ConfigMap's

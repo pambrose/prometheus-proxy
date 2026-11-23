@@ -251,7 +251,7 @@ and again every minute, scraped or not. Its paths are gone from the proxy for a 
 - **Cause:** Nginx closes a gRPC stream that's quiet for 60 seconds, and an agent's stream for chunked results carries
   nothing while its results are small, and its other streams nothing between scrapes. A current agent and proxy keep
   their streams open with keepalives, but only when both support them, so this happens when the agent or the proxy is
-  from 4.6.1 or earlier, or when a reverse proxy's idle timeout is under `proxy.internal.streamKeepAliveSecs`.
+  from 4.6.0 or earlier, or when a reverse proxy's idle timeout is under `proxy.internal.streamKeepAliveSecs`.
 - **Fix:** upgrade both, or raise `grpc_read_timeout` and `client_body_timeout` to a day or more; under a shorter idle
   timeout, lower `streamKeepAliveSecs` below it. See [Nginx Reverse Proxy](advanced.md#nginx-reverse-proxy).
 

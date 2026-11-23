@@ -20,7 +20,7 @@ endpoints.
 [Prometheus Proxy](https://prometheus-proxy.com/) enables Prometheus to scrape metrics endpoints running
 behind a firewall and preserves the native pull-based model architecture.
 
-**See it work on your laptop:** three self-contained [demos](#-try-the-demos) run the proxy, its agents, Prometheus,
+**See it work on your laptop:** six self-contained [demos](#-try-the-demos) run the proxy, its agents, Prometheus,
 and Grafana with one command, and a guided tour walks you through each one.
 
 Questions about the API? The [docs site](https://prometheus-proxy.com/) has a
@@ -75,7 +75,7 @@ from the checkout) starts every demo, one after another, and `make demos-down` s
 of memory and CPU.
 
 ```bash
-git clone -c advice.detachedHead=false --depth 1 --branch 4.6.1 https://github.com/pambrose/prometheus-proxy.git
+git clone -c advice.detachedHead=false --depth 1 --branch 4.7.0 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/basics
 make up      # pulls the images, starts everything, and prints the URLs
 make tour    # the guided tour
@@ -94,12 +94,35 @@ scenarios.
 
 ## ✨ New Features
 
-Version 4.6.1 (released 2026-11-22) puts a login on the proxy's dashboard: set `DASHBOARD_PASSWORD`, and the dashboard
-shows a login page, with the username `admin` unless you set `DASHBOARD_USERNAME`. The proxy now logs
-a refused agent token where an operator looks, and no longer logs an exception for a connection that closes before it
-is ready, such as a port probe or a failed TLS handshake. The Embedded Agent page has a new
-[Debugging](https://prometheus-proxy.com/embedded-agent/#debugging) section, which the embedded demo's tour walks
-through. The [release notes](RELEASE_NOTES.md) and the [changelog](CHANGELOG.md) have the full list.
+Version 4.7.0 adds:
+
+- **Agent dashboard** - the agent serves a [dashboard](https://prometheus-proxy.com/agent-dashboard/) of its own, off
+  by default, showing its connection, its paths and why the proxy refused any, its filters, and its discovery file
+- **Per-path scrapes on the agent** - the agent's dashboard shows each path's recent scrapes, and its Scrape now button
+  fetches a target from the agent right away
+- **Agent Activity view** - the agent's dashboard lists the agent connecting, disconnecting, failing over, and its paths
+  registered or refused, in order
+- **Settings view** - both dashboards show every setting the process is running with; tokens, passwords, and keys
+  show only as set or not set
+- **Metrics without an endpoint** - an app that embeds the agent hands it its metrics registry with
+  `source(path, source)`, so it serves no `/metrics` endpoint
+- **Spring Boot starter** - add the [starter](https://prometheus-proxy.com/spring-boot-starter/) to a Spring Boot app,
+  and the agent starts and stops with the app and serves its metrics without `/actuator/prometheus`
+- **Ktor plugin** - `install(PrometheusProxyAgent)` from the [plugin](https://prometheus-proxy.com/ktor-plugin/) in a
+  Ktor app, and the agent starts and stops with the app and serves its metrics without a `/metrics` route
+- **Theme picker** - both dashboards offer light, dark, or auto, which follows your system
+- **Proxy metrics** - new metrics count agent disconnects, refused connects and paths, bad agent tokens, late
+  results, dashboard logins, and how long a scrape waits for its agent, with new Grafana panels and alerts
+- **Agent metrics** - new metrics show the agent's connection and proxy endpoint, and count its disconnects,
+  failovers, refused paths, retries, and dashboard logins, with new Grafana panels and alerts
+- **Dashboard names** - each dashboard's top bar and browser tab name it, `Proxy: proxy:8080` or `Agent: agent-east`
+- **Scrape tracing** - with Zipkin on, each scrape is a trace from the proxy through the agent to the target
+- **Stream keepalives** - the proxy and the agent keep their streams open behind nginx's default 60-second timeouts
+- **nginx demo** - a new [demo](demos/nginx) puts nginx between the agents and the proxy, ending the agents' TLS
+- **Dashboard logins** - set `DASHBOARD_PASSWORD`, and the proxy's or the agent's dashboard shows a login page, with
+  the username `admin` unless you set `DASHBOARD_USERNAME`
+
+The [release notes](RELEASE_NOTES.md) and the [changelog](CHANGELOG.md) have the full list.
 
 Each earlier release's summary is in the [release notes](RELEASE_NOTES.md), and the [changelog](CHANGELOG.md) has
 every change.
@@ -276,13 +299,13 @@ docker network create prometheus-proxy-net
 docker run --rm --name prometheus-proxy --network prometheus-proxy-net \
   -p 8080:8080 -p 50051:50051 \
   --env METRICS_ENABLED=true \
-  pambrose/prometheus-proxy:4.6.1
+  pambrose/prometheus-proxy:4.7.0
 
 # Start agent, in another terminal
 docker run --rm --network prometheus-proxy-net \
   --env PROXY_HOSTNAME=prometheus-proxy \
   --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-  pambrose/prometheus-agent:4.6.1
+  pambrose/prometheus-agent:4.7.0
 
 # Scrape the proxy's and the agent's own metrics through the proxy
 curl http://localhost:8080/proxy_metrics
@@ -300,7 +323,7 @@ too (Docker doesn't allow `--rm` with `--restart`):
 
 ```bash
 docker run --detach --name prometheus-proxy --restart unless-stopped --network prometheus-proxy-net \
-  -p 8080:8080 -p 50051:50051 --env METRICS_ENABLED=true pambrose/prometheus-proxy:4.6.1
+  -p 8080:8080 -p 50051:50051 --env METRICS_ENABLED=true pambrose/prometheus-proxy:4.7.0
 
 docker logs --follow prometheus-proxy   # follow its log
 docker stop prometheus-proxy            # stop it, and no longer restart it
@@ -402,8 +425,8 @@ scrape_configs:
 The docker images support multiple architectures (amd64, arm64, s390x, ppc64le):
 
 ```bash
-docker pull pambrose/prometheus-proxy:4.6.1
-docker pull pambrose/prometheus-agent:4.6.1
+docker pull pambrose/prometheus-proxy:4.7.0
+docker pull pambrose/prometheus-agent:4.7.0
 ```
 
 ### Production Docker Setup
@@ -421,7 +444,7 @@ docker run --detach --name prometheus-proxy --restart unless-stopped \
         -p 8082:8082 -p 8092:8092 -p 50051:50051 -p 8080:8080 \
         --env ADMIN_ENABLED=true \
         --env METRICS_ENABLED=true \
-        pambrose/prometheus-proxy:4.6.1
+        pambrose/prometheus-proxy:4.7.0
 ```
 
 Start an agent container with:
@@ -433,7 +456,7 @@ docker run --detach --name prometheus-agent --restart unless-stopped \
         -p 8083:8083 -p 8093:8093 \
         --env PROXY_HOSTNAME=prometheus-proxy \
         --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-        pambrose/prometheus-agent:4.6.1
+        pambrose/prometheus-agent:4.7.0
 ```
 
 Or use Docker Compose: [`etc/compose/proxy.yml`](etc/compose/proxy.yml) runs a proxy, an agent, and a Prometheus server
@@ -459,7 +482,7 @@ docker run --rm -p 8083:8083 -p 8093:8093 \
     --mount type=bind,source="$(pwd)"/prom-agent.conf,target=/app/prom-agent.conf \
     --env AGENT_CONFIG=prom-agent.conf \
     --env PROXY_HOSTNAME=prometheus-proxy \
-    pambrose/prometheus-agent:4.6.1
+    pambrose/prometheus-agent:4.7.0
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
@@ -724,7 +747,7 @@ is [`nginx/nginx-proxy.conf`](nginx/nginx-proxy.conf).
 **⚠️ Note:** An agent's connection ends when nginx closes any of its streams, which it does after 60 seconds of quiet
 by default, and one of them, for results sent in chunks, is quiet while the agent's results are small, scraped or not.
 A current agent and proxy keep their streams open with keepalives, which each sends only once the other says it takes
-them. With an agent or a proxy from 4.6.1 or earlier, raise nginx's `grpc_read_timeout` and `client_body_timeout` to a
+them. With an agent or a proxy from 4.6.0 or earlier, raise nginx's `grpc_read_timeout` and `client_body_timeout` to a
 day or more, as the example does, or the agent reconnects every minute. The [nginx demo](demos/nginx) shows both.
 
 **⚠️ Note:** With `transportFilterDisabled`, the proxy can't see a connection close, only the agent's request stream
@@ -938,7 +961,7 @@ docker run --rm -p 8082:8082 -p 8092:8092 -p 50440:50440 -p 8080:8080 \
     --env PROXY_CONFIG=tls-no-mutual-auth.conf \
     --env ADMIN_ENABLED=true \
     --env METRICS_ENABLED=true \
-    pambrose/prometheus-proxy:4.6.1
+    pambrose/prometheus-proxy:4.7.0
 
 docker run --rm \
     --mount type=bind,source="$(pwd)"/testing/certs,target=/app/testing/certs \
@@ -946,7 +969,7 @@ docker run --rm \
     --env AGENT_CONFIG=tls-no-mutual-auth.conf \
     --env PROXY_HOSTNAME=mymachine.local:50440 \
     --name docker-agent \
-    pambrose/prometheus-agent:4.6.1
+    pambrose/prometheus-agent:4.7.0
 ```
 
 **Note:** The `WORKDIR` of the proxy and agent images is `/app`, so make sure to use `/app` as the base directory in the
@@ -1170,7 +1193,7 @@ repositories {
 }
 
 dependencies {
-  implementation("com.pambrose:prometheus-proxy:4.6.1")
+  implementation("com.pambrose:prometheus-proxy:4.7.0")
 }
 ```
 

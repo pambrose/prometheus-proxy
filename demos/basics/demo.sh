@@ -19,7 +19,7 @@ IMAGES=(prometheus-proxy-demo/proxy:local prometheus-proxy-demo/agent:local)
 RELEASED_IMAGES=(pambrose/prometheus-proxy pambrose/prometheus-agent)
 # The demo shows what came after this release, so until a later one is out, up builds the proxy and agent from this
 # checkout, as up-local does. When the demo comes to use something unreleased, set this to the latest release.
-NEEDS_RELEASE_AFTER=4.6.1
+NEEDS_RELEASE_AFTER=4.7.0
 # The dashboard password the login scenario gives the proxy. A demo's, in a public file, as Grafana's admin password
 # is: never use it anywhere else.
 LOGIN_PASSWORD="admin"

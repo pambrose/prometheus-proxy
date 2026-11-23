@@ -49,8 +49,6 @@ _Not yet released_
   let through unfiltered, discovery's reads, and dashboard logins, and record how long a scrape waits to start, and
   `agent_build_info` shows each agent's version. The agents' Grafana dashboard charts them, and new alerts catch an
   agent that's disconnected, one stuck on a backup proxy, and a discovery file that can't be read.
-- **A logo.** Prometheus Proxy has a logo, a suspension bridge in Prometheus orange, on the docs site, in the README,
-  and on both dashboards: in the browser tab, the top bar, and the login page.
 - **Which proxy or agent is this?** Each dashboard's top bar and browser tab now name it: `Proxy: proxy:8080`, the
   proxy's host and the port Prometheus scrapes, or `Agent: agent-east`, the agent's name, so several open dashboards are
   told apart at a glance.
@@ -60,12 +58,21 @@ _Not yet released_
   `proxy.internal.zipkin` and `agent.internal.zipkin` to keep a share of traces instead of all of them.
 - **Nginx's defaults are enough.** A current agent and proxy keep their streams open with a keepalive every 30
   seconds, so nginx's default 60-second timeouts no longer cut off an agent every minute. For a reverse proxy with a
-  shorter idle timeout, lower `proxy.internal.streamKeepAliveSecs`. Agents and proxies from 4.6.1 or earlier don't
+  shorter idle timeout, lower `proxy.internal.streamKeepAliveSecs`. Agents and proxies from 4.6.0 or earlier don't
   send them, so with one of those on either end, still raise nginx's timeouts.
 - **An nginx demo.** A new demo puts nginx between the agents and the proxy, ending the agents' TLS, and in front of
   the dashboard. Its tour shows an agent from 4.6.0 cut off by nginx's timeouts every minute, a reload of nginx that
   doesn't reach a connected agent until `worker_shutdown_timeout` is set, a stream timeout shorter than the keepalive,
   and what nginx has to pass on for the dashboard's live updates.
+- **A login for the dashboards.** Set `DASHBOARD_PASSWORD` (or `proxy.dashboard.password` on the proxy,
+  `agent.dashboard.password` on the agent) and the dashboard shows a login page before anything else, styled after
+  Grafana's. The username is `admin` unless you set `DASHBOARD_USERNAME`. A login lasts until **Log out**, an exit
+  icon at the end of the top bar, 24 hours without use, or 7 days, and a restart signs everyone out; a page left open
+  then goes to the login page. Scripts send the login as HTTP Basic Auth (`curl -u`); a browser always gets the login
+  page. After 10 wrong logins from one address within a minute, or 100 in all, the dashboard refuses logins for up to
+  a minute. Each dashboard serves plain HTTP, so put TLS in front of it, such as a reverse proxy, unless the network is
+  trusted, and keep its port internal either way. Both Helm charts read the password from a Secret
+  (`dashboard.login.existingSecret`).
 
 ### Bug Fixes
 
@@ -79,6 +86,13 @@ _Not yet released_
   the path went unserved until it restarted. It now shows the path as taken over, and takes it back within seconds of
   the path being free, and not before, even if it reconnects meanwhile. Agents and proxies from earlier releases behave
   as before.
+- **A refused agent token shows in the proxy's log.** The proxy logs it at WARN, naming the host and whether the token
+  was unknown or missing, at most once a minute for each host. Before, only the dashboard's activity feed showed it,
+  and the agent said why only on its first attempt; now it says so again every 10 minutes while it can't connect.
+- **No exception for a connection that closes early.** A port probe, or a connection that fails its TLS handshake, no
+  longer logs a `NullPointerException` at WARN on the proxy, as it did behind Railway's TCP proxy.
+- **The docs site's address.** Its pages and sitemap name https://prometheus-proxy.com, and its 404 page loads its
+  styles again.
 
 ### Behavior Changes
 
@@ -90,9 +104,6 @@ _Not yet released_
 - **The agent's connect and result counts mean what they say.** `agent_connect_count_total` counts a connect as a
   success once the proxy has registered the agent, and as `rejected` when the proxy refuses it, and a result counts as
   sent only once it's on its way, with one a dropped connection loses counted as `dropped`.
-- **A new look for the login page and Log out.** The login page shows the logo and Prometheus Proxy, with Proxy
-  Dashboard or Agent Dashboard under it, and Log out, at the end of the top bar, is now an exit icon; hover over it for
-  its name.
 - **Heartbeats are no longer traced.** An idle agent's heartbeat every few seconds no longer fills Zipkin. The
   `grpcReportingEnabled` Zipkin setting, which never did anything, is gone; a config that sets it still loads.
 - **The release date is the release commit's.** The version the proxy and agent print, and the dashboards' Settings,
@@ -108,37 +119,6 @@ _Not yet released_
 - **Behind nginx: reloads, TLS, and the dashboard.** The Advanced Topics page explains why a reload of nginx doesn't
   reach a connected agent and how `worker_shutdown_timeout` fixes it, and what an agent needs to reach an nginx that
   ends its TLS; the Dashboard page, what nginx has to pass on for the dashboard's live updates.
-
-## 4.6.1
-
-_Released 2026-11-22_
-
-The dashboard can ask for a login, the proxy logs a refused agent token where an operator looks, and the Embedded
-Agent page shows how to debug an embedded agent.
-
-### New Features
-
-- **A login for the dashboard.** Set `DASHBOARD_PASSWORD` (or `proxy.dashboard.password`) and the dashboard shows a
-  login page before anything else, styled after Grafana's. The username is `admin` unless you set `DASHBOARD_USERNAME`.
-  A login lasts until **Log out**, 24 hours without use, or 7 days, and a proxy restart signs everyone out; a page left
-  open then goes to the login page. Scripts send the login as HTTP Basic Auth (`curl -u`); a browser always gets the
-  login page. After 10 wrong logins from one address within a minute, or 100 in all, the dashboard refuses logins for up
-  to a minute. It still serves plain HTTP, so put TLS in front of it, such as a reverse proxy, unless the network is
-  trusted, and keep its port internal either way. The Helm chart reads the password from a Secret
-  (`dashboard.login.existingSecret`).
-
-### Bug Fixes
-
-- **A refused agent token shows in the proxy's log.** The proxy logs it at WARN, naming the host and whether the token
-  was unknown or missing, at most once a minute for each host. Before, only the dashboard's activity feed showed it,
-  and the agent said why only on its first attempt; now it says so again every 10 minutes while it can't connect.
-- **No exception for a connection that closes early.** A port probe, or a connection that fails its TLS handshake, no
-  longer logs a `NullPointerException` at WARN on the proxy, as it did behind Railway's TCP proxy.
-- **The docs site's address.** Its pages and sitemap name https://prometheus-proxy.com, and its 404 page loads its
-  styles again.
-
-### Documentation
-
 - **Debugging an embedded agent.** The Embedded Agent page's new Debugging section turns on the agent's admin
   endpoints and `/debug` with `ADMIN_ENABLED` and `DEBUG_ENABLED`, says what each shows, and puts the agent's own
   metrics on the Agents dashboard with `METRICS_ENABLED`. The embedded demo's tour walks through them.
