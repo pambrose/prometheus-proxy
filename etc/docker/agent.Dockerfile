@@ -5,7 +5,7 @@
 # package manager. The Temurin JRE links only glibc (it bundles zlib and freetype), so these few Debian packages are
 # all the OS the image carries, and all Trivy scans; distroless is rebuilt from Debian's updates. It publishes amd64,
 # arm64, s390x, and ppc64le manifests, so the full multi-arch `make docker-push` platform set resolves.
-FROM gcr.io/distroless/base-nossl-debian13:latest@sha256:3a2dbf10c2fdafe5865e2b03a4a3b9b23f2e280229a81730415379b76dc70592 AS runtime
+FROM gcr.io/distroless/base-nossl-debian13:latest@sha256:f21fdfe4ede467d9ea8a6caaec1f8381ea4502243a3e8bb1c43df80c6fbaaeae AS runtime
 
 # The Java 25 (LTS) runtime comes from Temurin, which publishes the same four platforms; the fat JAR is Java 17
 # bytecode, which runs unchanged on the newer JRE. The image takes only /opt/java/openjdk and the C.UTF-8 locale from
