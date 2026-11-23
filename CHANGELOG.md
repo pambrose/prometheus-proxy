@@ -26,7 +26,9 @@ All notable changes to this project are documented in this file.
   500 lines, in memory): connected, disconnected with why, connect failed, failed over and back, paths registered,
   refused with the proxy's reason, and unregistered, the discovery file failing or skipping entries, and a filter
   letting a scrape through unfiltered. A burst of like events is one line, and so is the same event repeated, so a long
-  outage stays one line; a page showing the view updates as each line is added
+  outage stays one line; a page showing the view updates as each line is added. An error, here and in the dashboard's
+  other views, shows as the first line of its message, cut at 200 characters (a gRPC status from nginx can carry its
+  whole HTML error page); the agent's log keeps all of it
 - The agent's Helm chart turns on the agent's dashboard with `dashboard.enabled` (port 8095, kept off the Service and
   reached with `kubectl port-forward`), with a login from `dashboard.login.existingSecret`
 - Both dashboards have a Settings view (`/dashboard/settings`) of every setting the process resolved, in groups: the

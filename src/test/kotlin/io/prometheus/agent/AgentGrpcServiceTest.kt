@@ -1980,6 +1980,27 @@ class AgentGrpcServiceTest : StringSpec() {
       }
     }
 
+    // nginx answering with a 504 gives a status whose description carries its whole HTML error page: the feed and the
+    // Connection view show its first line, and the log has the rest.
+    "a connect failure should be shown as the first line of its status" {
+      val log = AgentActivityLog(capacity = 20)
+      withStubbedService("localhost:$PROXY_AGENT_PORT", activityLog = log) { service, mockStub ->
+        coEvery { mockStub.connectAgent(any(), any<Metadata>()) } throws
+          StatusException(
+            Status.UNAVAILABLE.withDescription(
+              "HTTP status code 504\ninvalid content-type: text/html\n<html>\r\n<title>504 Gateway Time-out</title>",
+            ),
+          )
+        service.connectAgent().shouldBeFalse()
+
+        service.connectFailuresByEndpoint.values.single().message shouldBe
+          "StatusException: UNAVAILABLE: HTTP status code 504"
+      }
+
+      log.snapshot().entries.single().detail shouldBe
+        "localhost:$PROXY_AGENT_PORT: StatusException: UNAVAILABLE: HTTP status code 504"
+    }
+
     // A failure the endpoint still holds from before is news again once the agent has connected elsewhere since: after
     // a failback to a primary that is still down, the feed says why it failed this time.
     "a failure should be recorded again after a connect elsewhere, though its endpoint never connected" {

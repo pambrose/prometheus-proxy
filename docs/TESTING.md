@@ -216,8 +216,8 @@ which would replace the host application's logging config.
   `RESOURCE_EXHAUSTED` is a failed connect, which the agent retries; each result is counted under its type (non-gzipped,
   gzipped, chunked, or dropped) through `Agent.updateScrapeResultCounter`; and for the activity feed, a connect
   recorded, and a failure only when it is new or changes, and failing over from the primary and back recorded, but
-  cycling on through the backups not; and a failure recorded again after a connect elsewhere, as after a failback to a
-  primary still down
+  cycling on through the backups not; a failure recorded again after a connect elsewhere, as after a failback to a
+  primary still down; and a failure whose status runs on, as nginx's 504 page does, shown as its first line
 - **AgentGrpcStreamRetentionTest** — a chunk the proxy has read is no longer reachable while the agent's chunked
   stream stays open, checked with weak references after 2 MiB of 1 KiB chunks. Over Netty, gRPC's retry buffer
   commits past its 1 MiB per-RPC limit and lets go; over the in-process transport, which reports no message sizes,
@@ -240,6 +240,9 @@ which would replace the host application's logging config.
   line however long since but never past another, a path repeated counted once, a connect or a disconnect starting a run
   no later event folds back past, a reason from outside cut and escaped, and a change count that every line and fold
   moves, which its changes flow carries
+- **ShownFailureTest** — a failure as the agent's dashboard shows it: an exception as its class and the first line of
+  its message with text, cut at 200 characters and marked `...`, redacted and escaped, and a message-less one as before;
+  and a reason in the proxy's words kept to the longer limit, every line escaped
 - **AgentScrapeHistoryTest** — each path's last scrapes as the agent saw them: newest first and bounded per path, keyed
   without leading slashes, and past the paths the agent knows and a few gone ones, the path scraped least recently
   dropped; and a record built from the agent's results, with the body's sizes, whether it was gzipped and chunked as
