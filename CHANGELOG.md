@@ -272,6 +272,7 @@ All notable changes to this project are documented in this file.
 
 - Update common-utils 5.2.0 → 5.3.0, which embedders get transitively
 - Update Netty 4.2.20.Final → 4.2.21.Final, which embedders get through the published POM (#522)
+- Update the images' `gcr.io/distroless/base-nossl-debian13` base to its latest digest, `3a2dbf1` → `f21fdfe` (#504)
 
 ## [4.6.0] - 2026-11-20
 
