@@ -464,7 +464,9 @@ class AgentPathManagerTest : StringSpec() {
       coVerify(exactly = 1) { grpc.registerPathOnProxy("a_metrics", any(), any(), any()) }
     }
 
-    "reconcile re-registers a discovered path whose url changed" {
+    // Registered again as a reclaim, the edit never takes the path from an agent that took it meanwhile, and replaces
+    // an exclusive path in place: unregistering it first let an agent waiting on the path take it in between.
+    "reconcile should register an edited exclusive path again in place, as a reclaim" {
       val agent = createMockAgent()
       val grpc = agent.grpcService
       val manager = AgentPathManager(agent)
@@ -473,16 +475,17 @@ class AgentPathManagerTest : StringSpec() {
       manager.reconcileDiscoveredPaths([DiscoveredPath("a", "a_metrics", "http://a/v2", "{}")])
 
       manager["a_metrics"].shouldNotBeNull().url shouldBe "http://a/v2"
-      coVerify(exactly = 1) { grpc.unregisterPathOnProxy("a_metrics") }
+      coVerify(exactly = 0) { grpc.unregisterPathOnProxy(any()) }
       coVerify(exactly = 1) { grpc.registerPathOnProxy("a_metrics", any(), any(), any()) }
-      coVerify(exactly = 1) { grpc.reclaimPathOnProxy("a_metrics", any(), "http://a/v2", any()) }
+      coVerify(exactly = 1) { grpc.reclaimPathOnProxy("a_metrics", any(), "http://a/v2", "DISCOVERED") }
     }
 
+    // A proxy keeps a consolidated path's labels when an agent registers it again, so the edit unregisters it first.
     // Another agent took over the path, so the proxy rejects this agent's unregister. The new URL must still be
-    // applied rather than blocked forever behind the failed unregister: registered again as a reclaim, which takes the
-    // path once no agent serves it.
-    "reconcile should apply a changed URL when the proxy rejects the unregister" {
+    // applied rather than blocked forever behind the failed unregister.
+    "reconcile should apply a changed URL of a consolidated path when the proxy rejects the unregister" {
       val agent = createMockAgent()
+      every { agent.options.consolidated } returns true
       val grpc = agent.grpcService
       val manager = AgentPathManager(agent)
       manager.reconcileDiscoveredPaths([DiscoveredPath("a", "a_metrics", "http://a/v1", "{}")])
@@ -494,6 +497,7 @@ class AgentPathManagerTest : StringSpec() {
       manager.reconcileDiscoveredPaths([DiscoveredPath("a", "a_metrics", "http://a/v2", "{}")])
 
       manager["a_metrics"].shouldNotBeNull().url shouldBe "http://a/v2"
+      coVerify(exactly = 1) { grpc.unregisterPathOnProxy("a_metrics") }
       coVerify(exactly = 1) { grpc.reclaimPathOnProxy("a_metrics", any(), "http://a/v2", any()) }
     }
 
@@ -2074,7 +2078,7 @@ class AgentPathManagerTest : StringSpec() {
       manager.registerPath("metrics", METRICS_URL)
       manager.notePathNotice(takenNotice("metrics", "agent-east-copy"))
       coEvery { grpc.reclaimPathOnProxy(any(), any(), any(), any()) } throws
-        RequestFailureException.fromProxy("registerPathOnProxy", "held", PathRejectionCause.HELD_BY_ANOTHER_AGENT)
+        heldRefusal()
 
       clock.tick(times = 4, step = 10.seconds) { manager.reclaimTakenOverPaths() }
 
@@ -2122,7 +2126,7 @@ class AgentPathManagerTest : StringSpec() {
       manager.registerPath("metrics", METRICS_URL)
       manager.notePathNotice(takenNotice("metrics", "agent-a"))
       coEvery { grpc.reclaimPathOnProxy(any(), any(), any(), any()) } throws
-        RequestFailureException.fromProxy("registerPathOnProxy", "held", PathRejectionCause.HELD_BY_ANOTHER_AGENT)
+        heldRefusal()
       clock += 10.seconds
       manager.reclaimTakenOverPaths()
 
@@ -2148,7 +2152,7 @@ class AgentPathManagerTest : StringSpec() {
       manager.notePathNotice(takenNotice("metrics", "agent-a"))
       coEvery { grpc.reclaimPathOnProxy(any(), any(), any(), any()) } answers {
         manager.notePathNotice(takenNotice("metrics", "agent-a"))
-        throw RequestFailureException.fromProxy("registerPathOnProxy", "held", PathRejectionCause.HELD_BY_ANOTHER_AGENT)
+        throw heldRefusal()
       }
 
       // Due at 10s, then 20s later at 30s: the 20s tick doesn't try again.
@@ -2297,35 +2301,12 @@ class AgentPathManagerTest : StringSpec() {
       manager.takenOverContexts.shouldBeEmpty()
     }
 
-    // Unregistered for the edit, the path is free, unless another agent took it meanwhile, which a reclaim leaves to
-    // it. Registered again the usual way, the edit took the path back from that agent.
-    "an edited discovered path should be registered again as a reclaim" {
-      val agent = createMockAgent(agentHocon = "discovery.enabled = true")
-      val grpc = agent.grpcService
-      coEvery { grpc.reclaimPathOnProxy(any(), any(), any(), any()) } returns
-        registerPathResponse {
-          valid = true
-          pathId = 2L
-        }
-      val manager = AgentPathManager(agent)
-      manager.reconcileDiscoveredPaths([DiscoveredPath("d", "discovered", METRICS_URL, "{}")])
-
-      manager.reconcileDiscoveredPaths([DiscoveredPath("d", "discovered", "http://edited/metrics", "{}")])
-
-      coVerify(exactly = 1) { grpc.registerPathOnProxy("discovered", any(), any(), any()) }
-      coVerify(exactly = 1) { grpc.reclaimPathOnProxy("discovered", any(), "http://edited/metrics", "DISCOVERED") }
-      manager.registeredPaths.single().url shouldBe "http://edited/metrics"
-    }
-
+    // Registered the usual way, the edit took the path back from the agent that took it before its notice came.
     "a discovery edit refused because another agent took the path meanwhile should leave it taken over, with the edit" {
       val agent = createMockAgent(agentHocon = "discovery.enabled = true")
       val grpc = agent.grpcService
       coEvery { grpc.reclaimPathOnProxy(any(), any(), any(), any()) } throws
-        RequestFailureException.fromProxy(
-          "registerPathOnProxy",
-          "Path /discovered is served by agentId 7 (agent-b), of another launch",
-          PathRejectionCause.HELD_BY_ANOTHER_AGENT,
-        )
+        heldRefusal("Path /discovered is served by agentId 7 (agent-b), of another launch")
       val manager = AgentPathManager(agent)
       manager.reconcileDiscoveredPaths([DiscoveredPath("d", "discovered", METRICS_URL, "{}")])
       val edited = [DiscoveredPath("d", "discovered", "http://edited/metrics", "{}")]
@@ -2478,3 +2459,7 @@ private fun takenNotice(
   }
 
 private fun freeNotice(path: String): PathNotice = pathNotice { this.path = path }
+
+// The proxy's refusal of a reclaim while another agent holds the path, for [reason].
+private fun heldRefusal(reason: String = "held"): RequestFailureException =
+  RequestFailureException.fromProxy("registerPathOnProxy", reason, PathRejectionCause.HELD_BY_ANOTHER_AGENT)

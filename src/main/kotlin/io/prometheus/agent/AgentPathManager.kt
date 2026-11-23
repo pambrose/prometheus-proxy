@@ -113,9 +113,9 @@ internal class AgentPathManager(
   private val reclaimWake = Channel<Unit>(CONFLATED)
 
   // The path doRegisterPath is registering, with the latest notice about it that came while the proxy answered, or
-  // NO_NOTICE: the notice and the answer come on different streams, so the notice can come first, and applies once the
-  // path is recorded. Written under pathMutex, and by a notice only through computeIfPresent, so it never outlives the
-  // registration.
+  // NO_NOTICE. The notice and the answer come on different streams, so the notice can come first: it applies once the
+  // path is recorded, before the registration's caller sees the answer, and goes with a refusal. Written under
+  // pathMutex, and by a notice only through computeIfPresent, so it never outlives the registration.
   private val registering = ConcurrentHashMap<String, PathNotice>()
 
   // Every scrape's lookup of the path it asks for comes through here, which looks it up by its key (see
@@ -389,31 +389,29 @@ internal class AgentPathManager(
     base: Duration,
   ): RetryBackoff {
     val wait = if (prior == null) Duration.ZERO else minOf(maxOf(prior.wait * 2, base), maxRetryBackoff)
-    return RetryBackoff(wait, timeSource.markNow() + wait)
+    return RetryBackoff.after(wait, timeSource.markNow())
   }
 
   /**
    * Notes the proxy's [notice] about a path it took from this agent: that another agent holds it now, or that no agent
-   * serves it any more. A path this agent doesn't serve is ignored, and one it is registering waits for the proxy's
-   * answer (see [registering]). Taken over, the path shows as retrying, with who holds it, until
-   * [reclaimTakenOverPaths] takes it back; freed, its next try is due at once.
+   * serves it any more. A path this agent doesn't serve is ignored, and one it is registering waits (see
+   * [registering]). Taken over, the path shows as retrying, with who holds it, until [reclaimTakenOverPaths] takes it
+   * back; freed, its next try is due at once.
    */
   fun notePathNotice(notice: PathNotice) {
     val path = notice.path.removePrefix("/")
-    // A notice with no path is the proxy keeping the stream open, and one about a path being registered waits.
+    // A notice with no path is the proxy keeping the stream open.
     if (path.isEmpty() || registering.computeIfPresent(path) { _, _ -> notice } != null)
       return
     val holder = holderOf(notice)
     var prior: TakenOver? = null
-    var served = false
-    // Whether the path is served is checked inside the update, and dropLocally forgets the path before its takeover, so
-    // a path dropped meanwhile is never left marked.
-    takenOverPaths.compute(path) { _, current ->
-      prior = current
-      served = pathContextMap.containsKey(path)
-      if (served) takenOverBy(holder, current) else current
-    }
-    if (!served) {
+    // Whether the path is served is checked inside the update (see forget), so a path dropped meanwhile isn't marked.
+    val marked =
+      takenOverPaths.compute(path) { _, current ->
+        prior = current
+        if (pathContextMap.containsKey(path)) takenOverBy(holder, current) else null
+      }
+    if (marked == null) {
       logger.debug { "Ignoring a notice about /${shownValue(path)}, a path this agent doesn't serve" }
       return
     }
@@ -446,8 +444,12 @@ internal class AgentPathManager(
       return TakenOver(holder, current?.backoff?.copy(dueAt = now) ?: RetryBackoff(staticRetryInterval, now))
     if (current != null && current.holder == holder)
       return current
-    return TakenOver(holder, current?.backoff ?: RetryBackoff(staticRetryInterval, now + staticRetryInterval))
+    return TakenOver(holder, current?.backoff ?: RetryBackoff.after(staticRetryInterval, now))
   }
+
+  // Forgets [path] and then its takeover, in that order, so a notice handled in between can't mark it again: a notice
+  // marks a path only while it's served (see notePathNotice). Returns what the path pointed at, if anything.
+  private fun forget(path: String): PathContext? = pathContextMap.remove(path).also { takenOverPaths -= path }
 
   // Reports that the proxy gave [path] to [holder]: news, so at WARN and in the activity feed, as the proxy's own feed
   // has the takeover. The holder is another agent's own words, so it is escaped.
@@ -498,9 +500,7 @@ internal class AgentPathManager(
   ) {
     val rejection = e as? RequestFailureException
     if (rejection != null && !rejection.retryable) {
-      // The path before its takeover, as in dropLocally, so a notice can't mark it again in between.
-      pathContextMap -= path
-      takenOverPaths -= path
+      forget(path)
       recordFailure(path, e, retrying = false, retryAt = null)
       logRejection(source, path, rejection, repeat = false, retryIn = null)
       return
@@ -565,8 +565,7 @@ internal class AgentPathManager(
       // And their registration failures: every recorded failure is a configured path's or a desired discovered one's.
       registrationFailures.keys.retainAll { it in configuredStaticPaths || it in desiredByPath }
 
-      // Register new discovered paths and re-register changed ones (unregister-then-register keeps the
-      // local mapping and the proxy's stored labels in agreement).
+      // Register new discovered paths and re-register changed ones (see registerDiscoveredPath).
       for ((path, entry) in desiredByPath) {
         reconcileDiscoveredEntry(path, entry)
       }
@@ -677,10 +676,12 @@ internal class AgentPathManager(
     val prior = discoveredRejections[path]?.takeIf { it.matches(entry.url, labels) }
     if (prior?.mayRetryNow == false)
       return
-    // An edit is registered again as a reclaim: unregistered, the path is free, unless another agent took it meanwhile,
-    // which the edit, registered the usual way, would take it back from.
+    // An edit is registered again as a reclaim, so it never takes the path from an agent that took it meanwhile. An
+    // exclusive path is replaced in place, as every proxy replaces an agent's own registration of one: unregistering it
+    // first let an agent waiting on it take it in between. A proxy keeps a consolidated path's labels, so that one is
+    // unregistered first, and no agent takes a consolidated path over.
     runCatchingCancellable {
-      if (current != null)
+      if (current != null && agent.options.consolidated)
         doUnregisterPath(path)
       doRegisterPath(path, ScrapeTarget(entry.url), entry.labels, PathSource.DISCOVERED, reclaim = current != null)
     }.onSuccess {
@@ -720,8 +721,7 @@ internal class AgentPathManager(
 
   // Lock-free registration body; callers MUST hold pathMutex. Kotlin's Mutex is not reentrant, so
   // reconcileDiscoveredPaths (which holds the lock across the whole diff) calls this directly rather
-  // than the locking registerPath wrapper. A notice about the path that comes while the proxy answers applies once the
-  // path is recorded, and goes with a refusal (see registering).
+  // than the locking registerPath wrapper. A notice that comes while the proxy answers waits (see registering).
   private suspend fun doRegisterPath(
     pathVal: String,
     target: ScrapeTarget,
@@ -738,38 +738,45 @@ internal class AgentPathManager(
     val context = PathContext(0L, path, url, labelsJson, source, filtersByPath[path], target.source)
     registering[path] = NO_NOTICE
     try {
-      sendRegistration(context, reclaim)?.also { pathId -> recordRegistered(context.copy(pathId = pathId)) }
+      register(context, reclaim)
     } finally {
-      registering.remove(path)?.takeIf { it.path.isNotEmpty() }?.let(::notePathNotice)
+      registering.remove(path)?.let(::notePathNotice)
     }
   }
 
-  // Sends [context]'s registration and returns its pathId. A taken-over path is registered as a reclaim, by whichever
-  // route registers it, and only a reclaim the proxy accepts ends its takeover: a notice that came meanwhile replaced
-  // the one it ends. Another path is a reclaim when [reclaim] asks, and its refusal because another agent holds the
-  // path leaves it taken over (see waitForPath), and returns null.
-  private suspend fun sendRegistration(
+  // Registers [context] with the proxy and records it. A taken-over path is registered as a reclaim, by whichever route
+  // registers it, and only a reclaim the proxy accepts ends its takeover. Another path is a reclaim when [reclaim]
+  // asks, and waits as taken over if the proxy refuses it because another agent holds the path (see waitForPath).
+  private suspend fun register(
     context: PathContext,
     reclaim: Boolean,
-  ): Long? {
+  ) {
     val path = context.path
     val takenOver = takenOverPaths[path]
     val grpc = agent.grpcService
-    if (takenOver == null && !reclaim)
-      return grpc.registerPathOnProxy(path, context.labels, context.url, context.source.name).pathId
-    return try {
-      grpc.reclaimPathOnProxy(path, context.labels, context.url, context.source.name).pathId
-        .also { if (takenOver != null) takenOverPaths.remove(path, takenOver) }
-    } catch (e: RequestFailureException) {
-      if (takenOver != null || e.rejectionCause != HELD_BY_ANOTHER_AGENT)
-        throw e
-      waitForPath(context, e)
-      null
+    val source = context.source.name
+    if (takenOver == null && !reclaim) {
+      recordRegistered(context, grpc.registerPathOnProxy(path, context.labels, context.url, source).pathId)
+      return
     }
+    val pathId =
+      try {
+        grpc.reclaimPathOnProxy(path, context.labels, context.url, source).pathId
+      } catch (e: RequestFailureException) {
+        if (takenOver != null || e.rejectionCause != HELD_BY_ANOTHER_AGENT)
+          throw e
+        waitForPath(context, e)
+        return
+      }
+    takenOver?.let { takenOverPaths.remove(path, it) }
+    recordRegistered(context, pathId)
   }
 
-  // Records [context], which the proxy has just registered.
-  private fun recordRegistered(context: PathContext) {
+  // Records [context], which the proxy has just registered as [pathId].
+  private fun recordRegistered(
+    context: PathContext,
+    pathId: Long,
+  ) {
     val path = context.path
     // Whether a filter attached is only knowable here, where the path is actually resolved -- which is
     // why it is reported here rather than cross-checked against pathConfigs at construction time, a
@@ -782,25 +789,24 @@ internal class AgentPathManager(
           if (context.filter != null) " with a metric filter" else ""
       }
     }
-    pathContextMap[path] = context
+    pathContextMap[path] = context.copy(pathId = pathId)
     registrationFailures -= path
     agent.activityLog?.record(AgentActivityKind.PATH_REGISTERED, path, sourceName.lowercase(), sourceName)
   }
 
   // Keeps [context] as a path another agent took over, as the proxy's refusal [e] of its reclaim says, for the reclaim
-  // task to take back once no agent serves it. The refusal names the holder until the proxy's notice does. Callers
-  // MUST hold pathMutex.
+  // task to take back once no agent serves it. The proxy's notice naming the holder follows, and reports the takeover,
+  // so the refusal is logged as a repeat. Callers MUST hold pathMutex.
   private fun waitForPath(
     context: PathContext,
     e: RequestFailureException,
   ) {
     val path = context.path
-    val backoff = RetryBackoff(staticRetryInterval, timeSource.markNow() + staticRetryInterval)
-    val shown = RegistrationFailure(ShownFailure.of(e.reason), true, true, backoff.dueAt, takenOver = true)
+    val takenOver = TakenOver.unnamed(e, RetryBackoff.after(staticRetryInterval, timeSource.markNow()))
     pathContextMap[path] = context
-    takenOverPaths[path] = TakenOver("", backoff, HELD_BY_ANOTHER_AGENT, shown)
+    takenOverPaths[path] = takenOver
     reclaimWake.trySend(Unit)
-    logger.info { "Proxy gave path /$path to another agent before this one registered it again: ${e.message}" }
+    logRejection(context.source, path, e, repeat = true, retryIn = takenOver.backoff.wait)
   }
 
   // Lock-free unregistration body; callers MUST hold pathMutex (see doRegisterPath).
@@ -812,8 +818,7 @@ internal class AgentPathManager(
     // is gone, or another agent now holds it. The local entry is stale either way, so it is removed below. Keeping
     // it made reconcile retry forever and blocked a changed URL from ever applying. Transport failures still
     // propagate and keep the entry, so the next reconcile retries them. A taken-over path is asked about too, since
-    // the notice that marked it can be stale, as one that crossed this agent's own registration is; the proxy's
-    // refusal is expected there, so it isn't logged at WARN.
+    // the notice that marked it can be stale; the proxy's refusal is expected there, so it isn't logged at WARN.
     try {
       agent.grpcService.unregisterPathOnProxy(path)
     } catch (e: RequestFailureException) {
@@ -825,11 +830,10 @@ internal class AgentPathManager(
     dropLocally(path)
   }
 
-  // Forgets [path], its takeover, and its last failure, as an unregister ends. The path goes before its takeover, so a
-  // notice can't mark it again in between (see notePathNotice). Callers MUST hold pathMutex.
+  // Forgets [path], its takeover (see forget), and its last failure, as an unregister ends. Callers MUST hold
+  // pathMutex.
   private fun dropLocally(path: String) {
-    val pathContext = pathContextMap.remove(path)
-    takenOverPaths -= path
+    val pathContext = forget(path)
     registrationFailures -= path
     if (pathContext == null) {
       logger.info { "No path value /$path found in pathContextMap when unregistering" }
@@ -999,6 +1003,14 @@ internal class AgentPathManager(
 
     // How long until it is up, zero once it is.
     val remaining: Duration get() = (-dueAt.elapsedNow()).coerceAtLeast(Duration.ZERO)
+
+    companion object {
+      // A backoff of [wait], up [wait] after [now].
+      fun after(
+        wait: Duration,
+        now: TimeMark,
+      ) = RetryBackoff(wait, now + wait)
+    }
   }
 
   // A path the proxy gave to [holder], another agent's name as the proxy told it, or empty once no agent serves it,
@@ -1020,18 +1032,39 @@ internal class AgentPathManager(
       val cause = rejection?.rejectionCause
       if (rejection == null || cause == HELD_BY_ANOTHER_AGENT)
         return TakenOver(holder, next, cause)
-      val shown = RegistrationFailure(ShownFailure.of(rejection.reason), true, true, next.dueAt)
-      return TakenOver(holder, next, cause, shown)
+      return TakenOver(holder, next, cause, shownRefusal(rejection.reason, next, takenOver = false))
     }
 
     companion object {
+      // A path the proxy refused, for [rejection], because another agent holds it, before a notice names that agent:
+      // shown with the proxy's reason, which names it, until one does (see waitForPath).
+      fun unnamed(
+        rejection: RequestFailureException,
+        backoff: RetryBackoff,
+      ): TakenOver =
+        TakenOver("", backoff, HELD_BY_ANOTHER_AGENT, shownRefusal(rejection.reason, backoff, takenOver = true))
+
       private fun takeoverFailure(
         holder: String,
         backoff: RetryBackoff,
       ): RegistrationFailure {
         val reason = if (holder.isEmpty()) "Taken over by another agent, which has left" else "Taken over by $holder"
-        return RegistrationFailure(ShownFailure.of(reason), true, true, backoff.dueAt, takenOver = true)
+        return shownRefusal(reason, backoff, takenOver = true)
       }
+
+      // How the agent's dashboard shows a path refused for [reason], to be tried again as [backoff] says.
+      private fun shownRefusal(
+        reason: String,
+        backoff: RetryBackoff,
+        takenOver: Boolean,
+      ): RegistrationFailure =
+        RegistrationFailure(
+          reason = ShownFailure.of(reason),
+          refused = true,
+          retrying = true,
+          retryAt = backoff.dueAt,
+          takenOver = takenOver,
+        )
     }
   }
 

@@ -200,7 +200,8 @@ DrainEnd(c) ==
 (* Path registration *)
 
 \* registerPath's out-of-lock getAgentContext() lookup succeeded. The agent sends a path it was told was taken over as a
-\* reclaim, by whichever route registers it (AgentPathManager.doRegisterPath).
+\* reclaim, by whichever route registers it (AgentPathManager.doRegisterPath). It sends a discovery edit as a reclaim
+\* too, which the model leaves an ordinary registration: a reclaim only refuses more.
 RegisterStart(c, p) ==
     /\ c \in inMgr
     /\ <<c, p>> \notin regPending

@@ -252,12 +252,16 @@ internal class AgentContext(
     var justFilled = false
     val queued =
       synchronized(pendingPathNotices) {
+        if (!valid)
+          return false
         val room = notice.path in pendingPathNotices || pendingPathNotices.size < MAX_PENDING_PATH_NOTICES
-        if (valid && !room) {
+        if (room) {
+          pendingPathNotices[notice.path] = notice
+        } else {
           justFilled = !pathNoticesFull
           pathNoticesFull = true
         }
-        (valid && room).also { if (it) pendingPathNotices[notice.path] = notice }
+        room
       }
     if (queued)
       pathNoticeSignal.trySend(Unit)

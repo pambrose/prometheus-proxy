@@ -136,9 +136,9 @@ aren't in the proto: a scrape result is sent in chunks once its gzipped size rea
   and shown `retrying`, and registers it again only with `reclaim`, which `ProxyPathManager.reclaimRejection` refuses
   while a live agent of another launch serves it. The path entry's `waiting` list gets a "free" notice when the path is
   dropped, so the reclaim comes at once. A reconnect keeps both (`AgentPathManager.clear`), and `registerPaths` leaves
-  such a path to the reclaim task. A discovery edit registers its path again as a reclaim too, and a notice that comes
-  while the proxy answers a registration waits for the answer (`AgentPathManager.registering`), as the two come on
-  different streams. Never register a taken-over path without `reclaim`: that brings back two agents
+  such a path to the reclaim task. A discovery edit registers its path again as a reclaim too, in place for an
+  exclusive path, and a notice that comes while the proxy answers a registration waits for the answer
+  (`AgentPathManager.registering`), as the two come on different streams. Never register a taken-over path without `reclaim`: that brings back two agents
   swapping the path every few seconds (`ProxyRegistry.tla`'s `ReclaimNeverDisplaces` and `ReconnectReclaims`).
 - **Dynamic target discovery**: `PathDiscoveryService` polls a watched file and calls `AgentPathManager.reconcileDiscoveredPaths`; paths are tagged `STATIC`/`DISCOVERED`, and static entries are never touched.
 - **Per-agent auth**: `AgentAuthManager` + `AgentAuthServerInterceptor` resolve `proxy.auth` identity tokens and enforce path globs on `registerPath`; legacy `proxy.agentToken` maps to an allow-all identity. `registerPath` runs `ProxyPathManager.formRejection` (length, form, labels size) before the globs see a path, and `AgentAuthManager.globMatches` matches in time proportional to the path's length; keep both, since a regex or the other order lets one authenticated agent stall the proxy with a long path. With `transportFilterDisabled`, where the agent names its own agentId on every call, `readRequestsFromProxy` looks the context up once and removes only that object (`Proxy.removeAgentContextIfCurrent`), and `AgentContextManager.addAgentContextWithinLimit` caps the contexts one identity holds at `proxy.internal.maxAgentsPerIdentity`.

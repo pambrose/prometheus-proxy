@@ -49,8 +49,10 @@ message RegisterPathRequest {
   // running ahead of the proxy can add a source without the proxy failing to parse it.
   string path_source = 5;
   // Register the path only if no live agent of another launch serves it: an agent sends it for a path the proxy told
-  // it was taken over, so it takes the path back once the other agent leaves, never from it while it stays. A proxy
-  // predating it ignores it, which is why an agent sends it only after that proxy sent it a notice.
+  // it was taken over, so it takes the path back once the other agent leaves, never from it while it stays, and for a
+  // path it registers again with a discovery edit, so the edit never takes it from an agent that took it meanwhile. A
+  // proxy predating it ignores it and registers the path as before; only a proxy that sends notices tells an agent of
+  // a takeover, so only it gets a reclaim that would otherwise take the path back.
   bool reclaim = 6;
 }
 
