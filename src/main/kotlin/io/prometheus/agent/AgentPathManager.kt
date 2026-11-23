@@ -104,11 +104,11 @@ internal class AgentPathManager(
   // discovered set, or the agent reconnects, for the agent's dashboard: the proxy shows none of a path it refused.
   private val registrationFailures = ConcurrentHashMap<String, RegistrationFailure>()
 
-  // The paths the proxy said another agent took over, by normalized path, each with who holds it and when this agent
-  // next tries to take it back, until it does, unregisters the path, or reconnects; see notePathNotice. Each stays in
-  // pathContextMap meanwhile: a scrape sent before the takeover still finds it, the discovery reconcile sees an entry
-  // it has and leaves it alone, and a static path still counts as served. Read and written without pathMutex, so a
-  // notice never waits on a reconcile; the wake rouses reclaimTakenOverPathsWhile.
+  // The paths the proxy said another agent took over (see notePathNotice), by normalized path, each with who holds it
+  // and when this agent next tries to take it back, until it does or unregisters the path; a reconnect keeps them (see
+  // clear). Each stays in pathContextMap meanwhile: a scrape sent before the takeover still finds it, the discovery
+  // reconcile sees an entry it has and leaves it alone, and a static path still counts as served. Read and written
+  // without pathMutex, so a notice never waits on a reconcile; the wake rouses reclaimTakenOverPathsWhile.
   private val takenOverPaths = ConcurrentHashMap<String, TakenOver>()
   private val reclaimWake = Channel<Unit>(CONFLATED)
 
@@ -119,17 +119,22 @@ internal class AgentPathManager(
 
   // Routed through pathMutex so a dynamic registerPath racing a reconcile can't insert a stale
   // PathContext into the freshly-cleared map (finding 19). A reconnect clears first, which forgets every
-  // rejection, so each static and discovered path is tried again.
+  // rejection, so each static and discovered path is tried again. A path another agent took over is kept, entry and
+  // all, for the reclaim task to try at once on the new connection: the proxy may have freed it meanwhile, and its
+  // refusal puts the new connection on the proxy's waiting list. Its wait is kept, for a refusal to double, and it
+  // shows as taken over again in place of a refusal for another cause, which the connection that ended gave.
   suspend fun clear() =
     pathMutex.withLock {
-      pathContextMap.clear()
+      pathContextMap.keys.retainAll(takenOverPaths.keys)
       rejectedStaticPaths.clear()
       discoveredRejections.clear()
       staleUnregisterFailures.clear()
       reportedConflicts.clear()
       discoveryConflicts = DiscoveryConflicts(emptyList(), emptyList())
       registrationFailures.clear()
-      takenOverPaths.clear()
+      takenOverPaths.keys.retainAll(pathContextMap.keys)
+      val now = timeSource.markNow()
+      takenOverPaths.replaceAll { _, current -> TakenOver(current.holder, current.backoff.copy(dueAt = now)) }
     }
 
   suspend fun pathMapSize(): Int = agent.grpcService.pathMapSize()
@@ -225,9 +230,12 @@ internal class AgentPathManager(
   // though, so that fails the attempt and lets EndpointFailover move on. One rejection that can clear keeps the
   // connection, for the retry task to register that path once it does: failing the attempt would reconnect every
   // reconnectPauseSecs, and each reconnect clears the backoff. Transport failures still propagate: the connection
-  // is gone.
+  // is gone. A path another agent took over is left to the reclaim task (see clear), and counts as not rejected.
   suspend fun registerPaths() {
-    val rejectedCount = pathConfigs.count { registerStaticPath(it, repeat = false) != null }
+    val rejectedCount =
+      pathConfigs.count {
+        !takenOverPaths.containsKey(it.path.removePrefix("/")) && registerStaticPath(it, repeat = false) != null
+      }
     val allRejected = pathConfigs.isNotEmpty() && rejectedCount == pathConfigs.size
     if (allRejected && !hasRejectedStaticPaths)
       throw RequestFailureException("Proxy rejected all ${pathConfigs.size} static paths")
@@ -424,7 +432,7 @@ internal class AgentPathManager(
   ): TakenOver {
     val now = timeSource.markNow()
     if (holder.isEmpty())
-      return TakenOver(holder, RetryBackoff(current?.backoff?.wait ?: staticRetryInterval, now))
+      return TakenOver(holder, current?.backoff?.copy(dueAt = now) ?: RetryBackoff(staticRetryInterval, now))
     if (current != null && current.holder == holder)
       return current
     return TakenOver(holder, current?.backoff ?: RetryBackoff(staticRetryInterval, now + staticRetryInterval))

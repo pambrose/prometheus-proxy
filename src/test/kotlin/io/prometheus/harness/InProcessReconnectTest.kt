@@ -26,6 +26,7 @@ import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldNotBeEmpty
 import io.prometheus.harness.HarnessConstants.DEFAULT_CHUNK_SIZE_KBS
 import io.prometheus.harness.HarnessConstants.DEFAULT_SCRAPE_TIMEOUT_SECS
+import io.prometheus.harness.HarnessConstants.FAST_RECONNECT_ARGS
 import io.prometheus.harness.HarnessConstants.HARNESS_CONFIG
 import io.prometheus.harness.HarnessConstants.PROXY_PORT
 import io.prometheus.harness.support.HarnessSetup
@@ -54,11 +55,7 @@ class InProcessReconnectTest : StringSpec() {
             scrapeTimeoutSecs = DEFAULT_SCRAPE_TIMEOUT_SECS,
             chunkContentSizeKbs = DEFAULT_CHUNK_SIZE_KBS,
             maxConcurrentClients = HARNESS_CONFIG.concurrentClients,
-            args = [
-              "-Dagent.internal.heartbeatMaxInactivitySecs=1",
-              "-Dagent.internal.heartbeatCheckPauseMillis=200",
-              "-Dagent.internal.reconnectPauseSecs=1",
-            ],
+            args = FAST_RECONNECT_ARGS,
           )
         },
       )

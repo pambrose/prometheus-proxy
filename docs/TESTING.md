@@ -880,8 +880,10 @@ mechanism that the standard suite cannot reach:
 - **AgentPathTakeoverTest** — two agents of different launches register the same exclusive path, and the later
   takes it over: the proxy tells the first, which shows the path as taken over rather than registered, waits while
   the second holds it, and takes it back on its own connection, within seconds of the second leaving, which a 60s
-  retry couldn't do; and the first is told while scrapes of its other path keep it busy. Its config is
-  `config/test-configs/path-takeover.conf`
+  retry couldn't do; the first is told while scrapes of its other path keep it busy; and, with the path in its static
+  config, it still waits after losing its connection and reconnecting, then takes the path back on the new
+  connection once the second leaves. Its configs are `config/test-configs/path-takeover.conf` and
+  `path-takeover-static.conf`
 - **AgentProxyFailoverTest** — the agent lands on its second endpoint once the first proxy stops. Netty
   only: an in-process channel ignores host and port, so failover cannot be expressed there
 - **AgentRejectedPathRetryTest** — a static path rejected because a live agent of another identity serves it

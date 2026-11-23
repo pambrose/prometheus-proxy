@@ -65,7 +65,8 @@ _Not yet released_
 - **An agent knows when another agent takes its path, and takes it back once it's free.** A displaced agent showed the
   path as registered for as long as the other agent held it, and never registered it again after that agent left, so
   the path went unserved until it restarted. It now shows the path as taken over, and takes it back within seconds of
-  the path being free. Agents and proxies from earlier releases behave as before.
+  the path being free, and not before, even if it reconnects meanwhile. Agents and proxies from earlier releases behave
+  as before.
 
 ### Behavior Changes
 

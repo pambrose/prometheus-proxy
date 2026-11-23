@@ -17,10 +17,10 @@ the `synchronized(pathMap)` block of `addPath`, `removePath`, `removeFromPathMan
 `Proxy.removeAgentContext`, one HTTP handler per scrape, and the `readRequestsFromProxy` loop, including, with the
 transport filter disabled, a stream that names another connection's agentId, which only the identity check binds.
 It also models path notices and reclaims: the notice `takeOverPath` queues for a displaced connection of another
-launch, its delivery on `readPathNoticesFromProxy`, the agent counting the path as taken over, and its reclaim, which the
-proxy refuses while a live connection of another launch holds the path. Heartbeats, chunking, metrics, and the event
-bus are abstracted away, and so are the notice that a path is free and the waiting list that sends it, which only bring
-a reclaim forward. Agent-side failover is in `AgentFailover.tla`.
+launch, its delivery on `readPathNoticesFromProxy`, the agent counting the path as taken over, which it keeps across
+its reconnects, and its reclaim, which the proxy refuses while a live connection of another launch holds the path.
+Heartbeats, chunking, metrics, and the event bus are abstracted away, and so are the notice that a path is free and the
+waiting list that sends it, which only bring a reclaim forward. Agent-side failover is in `AgentFailover.tla`.
 
 It is a model of the code, not the code: when you change one of those classes, update the matching action.
 
@@ -42,7 +42,8 @@ connection's launch, so the others cover both cases without relabelings that che
 | `StreamIdentity` | With the transport filter disabled, a scrape-request stream reads, and as it ends removes, only a context of its caller's identity, even when it named the agentId before that context was registered |
 | `EveryScrapeFinishes` | With the handler timeout off, every started scrape still finishes |
 | `ReclaimNeverDisplaces` | A reclaim never takes a path from a live connection of another launch, so two agents with the same exclusive path never swap it back and forth |
-| `DisplacedReclaims` | A connection told its path was taken over takes it back once no connection holds it, unless another takes it first or it goes away |
+| `DisplacedReclaims` | An agent told its path was taken over takes it back once no connection holds it, on whichever connection it has then, unless another takes it first or that connection is invalidated |
+| `ReconnectReclaims` | An agent registers a path it was told was taken over only as a reclaim, after a reconnect too, so its reconnect never takes the path from the live agent holding it |
 
 ### Running
 
@@ -53,7 +54,7 @@ With `tla2tools.jar` in this directory (`make tla-checks` fetches it, or downloa
 # Safety and liveness, 2 connections (under a minute)
 java -cp tla2tools.jar tlc2.TLC -workers auto -deadlock -config ProxyRegistry.cfg ProxyRegistry.tla
 
-# Path notices and reclaims, 2 connections of one identity on one path (seconds)
+# Path notices and reclaims, 3 exclusive connections of one identity on one path (under a minute)
 java -cp tla2tools.jar tlc2.TLC -workers auto -deadlock -config ProxyRegistryReclaim.cfg ProxyRegistry.tla
 
 # Safety only, 3 connections, 2 paths, 2 scrapes (hours; not yet run to completion)
@@ -85,6 +86,13 @@ for agents and proxies predating them, so their state spaces are unchanged, and 
 `CheckHolder = FALSE` drops the proxy's refusal of a reclaim while a live connection of another launch holds the path,
 as a proxy predating the flag ignores it: TLC then reports `ReclaimNeverDisplaces` violated by a displaced connection
 taking the path back from the one that took it.
+
+The paths an agent was told were taken over are its launch's, not one connection's, so a reconnect, a connection of the
+same launch, keeps them. `KeepTold = FALSE` has the agent forget them as it connects, as it did before: TLC then
+reports `ReconnectReclaims` violated by a displaced agent reconnecting and registering the path the usual way.
+`ProxyRegistryReclaim.cfg` has three connections, so one agent can reconnect while an agent of another launch holds
+the path, and sets `Modes = {FALSE}`, leaving out consolidated connections, which are never told and never reclaim:
+with them it took several times as long. The other configs set `Modes = {TRUE, FALSE}`.
 
 ## AgentFailover
 

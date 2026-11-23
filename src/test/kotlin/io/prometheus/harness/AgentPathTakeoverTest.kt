@@ -23,8 +23,11 @@ import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotBeEmpty
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.request.get
@@ -38,10 +41,12 @@ import io.prometheus.Proxy
 import io.prometheus.common.LOOPBACK_HOST
 import io.prometheus.common.TestPorts.PATH_TAKEOVER_HTTP_PORT
 import io.prometheus.common.startAndAwaitReady
+import io.prometheus.harness.HarnessConstants.FAST_RECONNECT_ARGS
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.harness.support.TestUtils.stopAll
 import io.prometheus.metrics.model.registry.PrometheusRegistry
+import io.prometheus.proxy.RemovalReason
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -122,12 +127,56 @@ class AgentPathTakeoverTest : StringSpec() {
         }
       }
     }
+
+    // A displaced agent left without paths is the one a reverse proxy's idle timeout cuts off, as nginx's default did
+    // every minute. It forgot the takeover as it reconnected and registered its static path again the usual way,
+    // taking it back from the agent holding it, which did the same at its own next reconnect.
+    "a displaced agent should keep waiting across a reconnect, and take the path back once the other agent leaves" {
+      withProxyAndTarget { serverName, _, targetUrl ->
+        val agentA = connectedAgent(serverName, "takeover-agent-a", STATIC_CONFIG_ARG, FAST_RECONNECT_ARGS)
+        val agentB = connectedAgent(serverName, "takeover-agent-b")
+        try {
+          eventually(10.seconds) { ownerOf(SHARED_PATH) shouldBe agentA.agentId }
+          agentB.pathManager.registerPath(SHARED_PATH, targetUrl)
+          eventually(10.seconds) {
+            agentA.pathManager.takenOverContexts.map { it.path } shouldBe listOf(SHARED_PATH)
+          }
+
+          val firstAgentId = agentA.agentId
+          proxy.shouldNotBeNull().removeAgentContext(firstAgentId, RemovalReason.TERMINATION)
+          eventually(15.seconds) {
+            agentA.agentId.shouldNotBeEmpty() shouldNotBe firstAgentId
+            agentA.isConnectedToProxy.shouldBeTrue()
+          }
+
+          // Reconnected, the first agent still waits rather than taking the path from the second: its reclaim was
+          // refused, which put its new connection on the proxy's waiting list for the path.
+          eventually(5.seconds) { waitersOf(SHARED_PATH) shouldBe listOf(agentA.agentId) }
+          ownerOf(SHARED_PATH) shouldBe agentB.agentId
+          agentA.pathManager.takenOverContexts.map { it.path } shouldBe listOf(SHARED_PATH)
+
+          agentB.stopSync(10.seconds)
+
+          // Within seconds, though its retry interval is 60s: the waiting list told it the path was free.
+          eventually(5.seconds) {
+            ownerOf(SHARED_PATH) shouldBe agentA.agentId
+            agentA.pathManager.registeredPaths.map { it.path } shouldBe listOf(SHARED_PATH)
+          }
+        } finally {
+          stopAll(agentA, agentB)
+        }
+      }
+    }
   }
 
   private var proxy: Proxy? = null
 
   private fun ownerOf(path: String): String? =
     proxy?.pathManager?.getAgentContextInfo(path)?.agentContexts?.singleOrNull()?.agentId
+
+  // The agentIds the proxy tells once [path] is free.
+  private fun waitersOf(path: String): List<String> =
+    proxy?.pathManager?.getAgentContextInfo(path)?.waiting.orEmpty().map { it.agentId }
 
   // Runs [block] against a proxy, an HTTP client, and a target that answers every scrape, and stops them all after.
   private suspend fun withProxyAndTarget(block: suspend (String, HttpClient, String) -> Unit) {
@@ -155,13 +204,16 @@ class AgentPathTakeoverTest : StringSpec() {
   private fun connectedAgent(
     serverName: String,
     name: String,
+    configArgs: List<String> = CONFIG_ARG,
+    args: List<String> = emptyList(),
   ): Agent =
-    startAgent(serverName, args = listOf("-Dagent.name=$name"), configArgs = CONFIG_ARG)
+    startAgent(serverName, args = listOf("-Dagent.name=$name") + args, configArgs = configArgs)
       .also { it.awaitInitialConnection(10.seconds).shouldBeTrue() }
 
   companion object {
     private const val SHARED_PATH = "takeover_shared_metrics"
     private const val OWN_PATH = "takeover_own_metrics"
     private val CONFIG_ARG = listOf("--config", "config/test-configs/path-takeover.conf")
+    private val STATIC_CONFIG_ARG = listOf("--config", "config/test-configs/path-takeover-static.conf")
   }
 }

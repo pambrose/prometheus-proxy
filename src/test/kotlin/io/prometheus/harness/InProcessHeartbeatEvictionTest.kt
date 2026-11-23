@@ -28,6 +28,7 @@ import io.mockk.coEvery
 import io.mockk.spyk
 import io.prometheus.common.TestPorts
 import io.prometheus.grpc.heartBeatResponse
+import io.prometheus.harness.HarnessConstants.FAST_RECONNECT_ARGS
 import io.prometheus.harness.support.HarnessSetup
 import io.prometheus.harness.support.TestUtils.startAgent
 import io.prometheus.harness.support.TestUtils.startProxy
@@ -53,11 +54,7 @@ class InProcessHeartbeatEvictionTest : StringSpec() {
         agentSetup = {
           startAgent(
             serverName = SERVER_NAME,
-            args = [
-              "-Dagent.internal.heartbeatMaxInactivitySecs=1",
-              "-Dagent.internal.heartbeatCheckPauseMillis=200",
-              "-Dagent.internal.reconnectPauseSecs=1",
-            ],
+            args = FAST_RECONNECT_ARGS,
           )
         },
       )
