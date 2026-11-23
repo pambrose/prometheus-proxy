@@ -22,9 +22,10 @@ import java.security.MessageDigest
 import java.util.Base64
 
 /**
- * The login the dashboard requires once `proxy.dashboard.password` is set, with `proxy.dashboard.username` (default
- * `admin`): checked against the login page's form, which starts a session (see [DashboardSessions]), and against an
- * HTTP Basic `Authorization` header, which a script such as `curl -u` sends with each request instead.
+ * The login a dashboard requires once its `dashboard.password` is set (`proxy.` or `agent.`), with its
+ * `dashboard.username` (default `admin`): checked against the login page's form, which starts a session (see
+ * [DashboardSessions]), and against an HTTP Basic `Authorization` header, which a script such as `curl -u` sends with
+ * each request instead.
  *
  * Both are compared as UTF-8: the form's text is, and curl and the like send a non-ASCII Basic password that way. Only
  * the values' digests are kept ([Utils.sha256]), and [toString] shows neither.

@@ -33,13 +33,12 @@ import java.util.concurrent.atomic.AtomicInteger
 // Lincheck races ProxyMetrics' per-path histogram series: a path registering, scrapes of it finishing and recording
 // latency and response size, and the path's last registration going away, which removes its series. A scrape that
 // finishes just after the removal must not re-create series nothing would remove again, leaving a retired path on
-// /metrics forever; observing and removing both run inside the path map's per-key compute to prevent that. After every
-// run, validate removes each of the run's paths and checks that no series labelled with them is left in either
-// histogram.
+// /metrics forever; observing and removing both run inside the per-key compute of ProxyMetrics' own map of each
+// path's series to prevent that. After every run, validate removes each of the run's paths and checks that no series
+// labelled with them is left in either histogram.
 //
-// The histograms register in Prometheus' default registry, which allows each name once, so every run shares one
-// ProxyMetrics and uses its own path names. Stress only, as the shared registry is more than model checking can
-// replay.
+// Every run shares one ProxyMetrics, rather than building a Proxy each time, and uses its own path names. Stress only,
+// as the shared registry is more than model checking can replay.
 class ProxyMetricsLincheckTest : StringSpec() {
   init {
     tags(Lincheck)
@@ -105,7 +104,7 @@ class ProxyMetricsOps {
     private const val PATH_COUNT = 3
     private val RUN_IDS = AtomicInteger()
 
-    // One ProxyMetrics for every run: its histograms register in the default registry, which accepts each name once.
+    // One ProxyMetrics for every run, so a run doesn't build a Proxy of its own.
     private val METRICS: ProxyMetrics by lazy {
       PrometheusRegistry.defaultRegistry.clear()
       Proxy(

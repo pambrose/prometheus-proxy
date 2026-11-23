@@ -43,9 +43,9 @@ internal class TableText(
 /**
  * One column of a filtered table: its header, and what the column guide says it holds.
  *
- * Each view builds its list of these once per render, and both the header row ([columnHeaders]) and the column guide
- * ([DashboardPage.renderFilters]) iterate it, so a column can't reach the header without an explanation, and the
- * guide lists a column exactly when the table shows it.
+ * Each view has one list of these, built per render or once when fixed, and both the header row ([columnHeaders]) and
+ * the column guide ([DashboardPage.renderFilters]) iterate it, so a column can't reach the header without an
+ * explanation, and the guide lists a column exactly when the table shows it.
  *
  * @param label the header's text, which the guide names the column by
  * @param help one short sentence on what the column holds

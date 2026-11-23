@@ -119,8 +119,8 @@ class ScrapeResultOwnershipOps {
 
   // writeResponsesToProxy's handling of one response on [connection]'s connection, every response naming the owner:
   // the owner check runs on the wrapper the result completes and compares the connection's agentId, never the
-  // response's. A copy of ProxyServiceImpl.ownedByConnection, a private member of a service that needs a Proxy, which
-  // this spec can't build without MockK; ProxyServiceImplTest checks the product's.
+  // response's. A copy of ProxyServiceImpl.ownedByConnection, which is private; ProxyServiceImplTest checks the
+  // product's.
   private fun respond(
     connection: AgentContext,
     content: String,

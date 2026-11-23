@@ -24,8 +24,9 @@ import io.prometheus.metrics.model.registry.PrometheusRegistry
 /**
  * The [PrometheusProxyAgent] plugin's settings. Each starts from the `prometheus-proxy.agent` section of the app's
  * configuration file, in HOCON or YAML, when it has one, and the install block can change it: the block runs after
- * the file is read, so a setting it makes takes precedence. An app started with `embeddedServer` and no file has only
- * the block's.
+ * the file is read, so a setting it makes takes precedence, but not over a `settings.<key>` key, which takes
+ * precedence over the builder's methods, as anything `setting()` sets does: change one of those with `setting()` and
+ * its key. An app started with `embeddedServer` and no file has only the block's.
  *
  * The file's section takes the Spring Boot starter's property names: `proxy`, `token`, `trust-certificate`,
  * `authority`, `client-certificate`, `client-key`, `name`, `consolidated`, `metrics-port`, `dashboard.port`,
@@ -68,8 +69,10 @@ class PrometheusProxyAgentConfig internal constructor(
 
   /**
    * Makes the rest of the agent's settings in code, with [EmbeddedAgentConfig.Builder], such as its proxy, token, and
-   * certificates, read from wherever the app keeps them. It runs after the file's settings are applied, so a setting it
-   * makes takes precedence. Called more than once, each block runs, in turn.
+   * certificates, read from wherever the app keeps them. It runs after the file's settings are applied, so a builder
+   * method it calls replaces what the file set, but not a `settings.<key>` key: that's a `setting()`, which takes
+   * precedence over the builder's methods whatever their order. To change one, call `setting()` with its key. Called
+   * more than once, each block runs, in turn.
    */
   fun agent(block: EmbeddedAgentConfig.Builder.() -> Unit) {
     agentBlocks += block

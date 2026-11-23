@@ -38,7 +38,8 @@ import kotlin.time.Duration.Companion.seconds
 /**
  * Two consolidated agents register the **same** proxy path, each scraping a different backend. The proxy
  * merges both responses, so a single scrape of `/consolidated` returns metrics from both agents. Consolidation
- * and response merging are otherwise only proven by the in-process harness; this exercises them end-to-end.
+ * and response merging are otherwise only unit-tested (`ProxyPathManagerTest`, `ScrapeDispatchTest`); this
+ * exercises them end-to-end.
  */
 class ContainersConsolidatedTest : StringSpec() {
   init {

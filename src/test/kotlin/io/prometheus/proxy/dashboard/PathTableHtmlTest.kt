@@ -67,8 +67,8 @@ class PathTableHtmlTest : StringSpec() {
     return ProxyDashboardHtml.pushFragment(snapshot, null, "/dashboard", DashboardLayout.PATH, 0, filter)
   }
 
-  // The demo's two links, one into Prometheus and one into Grafana, each for the path's job label, and a runbook that
-  // needs only the path.
+  // Two name-only links, like the demo's, one into Prometheus and one into Grafana, each for the path's job label, and
+  // a runbook that needs only the path.
   private val demoLinks =
     PathLink.parseAll(
       [

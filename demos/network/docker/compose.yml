@@ -11,7 +11,7 @@
 #
 # Every published port binds to 127.0.0.1 only: the dashboards have no authentication, Grafana lets anyone view it
 # without signing in, and its admin password is the default, which suits a demo on a laptop and nothing else. Each
-# default port is the basics demo's plus 100, so the two demos can run at once. Set NETWORK_DEMO_DASHBOARD_PORT,
+# default port is the basics demo's plus 100, so the demos can run at once. Set NETWORK_DEMO_DASHBOARD_PORT,
 # NETWORK_DEMO_STANDBY_DASHBOARD_PORT, NETWORK_DEMO_HQ_DASHBOARD_PORT, NETWORK_DEMO_BRANCH_DASHBOARD_PORT,
 # NETWORK_DEMO_PROXY_PORT, NETWORK_DEMO_PROMETHEUS_PORT, NETWORK_DEMO_GRAFANA_PORT, or NETWORK_DEMO_ZIPKIN_PORT to move
 # a host port that's already taken.
@@ -183,8 +183,8 @@ services:
       retries: 60
     restart: on-failure
 
-  # Every proxy and agent reports a span for each gRPC call between them, so a presenter can follow a reconnect through
-  # the WAN.
+  # Every proxy and agent reports a span for each gRPC call between them but heartbeats and the path notices stream, and
+  # for each scrape, so a presenter can follow a reconnect through the WAN.
   zipkin:
     # The image's own healthcheck reports it healthy once it accepts spans.
     image: openzipkin/zipkin:3.6.1@sha256:d17e856dcbba7ffeefbbfc252f89ab78a4ab6faed47e646d46daad78f91b5ee2

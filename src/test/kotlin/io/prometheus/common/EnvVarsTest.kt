@@ -196,7 +196,8 @@ class EnvVarsTest : StringSpec() {
       EnvVars.entries.size shouldBe 56
     }
 
-    "EnvVars entries should contain all defined constants" {
+    // A subset; the test below checks the whole set.
+    "EnvVars entries should contain the listed constants" {
       val allNames = EnvVars.entries.map { it.name }
 
       allNames shouldContainAll [

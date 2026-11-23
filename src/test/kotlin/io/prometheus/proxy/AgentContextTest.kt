@@ -225,7 +225,7 @@ class AgentContextTest : StringSpec() {
       context.isNotValid().shouldBeTrue()
     }
 
-    // M3: invalidate() now drains buffered scrape requests and calls closeChannel() on each
+    // M3: invalidate() now drains buffered scrape requests and fails each with an agent-disconnected result,
     // so HTTP handlers waiting on awaitCompleted() are notified immediately instead of
     // waiting for the full scrape timeout to expire.
     "invalidate should complete pending scrape request wrappers" {
@@ -368,8 +368,8 @@ class AgentContextTest : StringSpec() {
 
     // Writers failing on a closed context each hold a backlog slot until their send throws, so a concurrent writer can
     // find the cap reached on a context with nothing queued. It must report the disconnect, not a full backlog: the
-    // HTTP handler labels the two differently (agent_disconnected vs backlog_full). A cap of 0 puts a single writer
-    // over it deterministically.
+    // HTTP handler labels the two differently (agent_disconnected vs agent_backlog_full). A cap of 0 puts a single
+    // writer over it deterministically.
     "writeScrapeRequest over the cap on a closed context should report the disconnect, not a full backlog" {
       val context = AgentContext("remote-addr")
       context.invalidate()
@@ -655,7 +655,7 @@ class AgentContextTest : StringSpec() {
       val context = AgentContext("10.0.1.14:54321")
       context.remoteAddr shouldBe "10.0.1.14:54321"
 
-      // AgentConnected is emitted from the transport filter, which runs before registerAgent, so a
+      // AgentConnected is emitted on the connection's first authenticated call, which precedes registerAgent, so a
       // just-connected context legitimately has no identity yet. Only AgentRegistered means a named
       // agent -- the dashboard renders a placeholder for this state rather than the raw sentinel.
       context.launchId shouldBe "Unassigned"

@@ -100,7 +100,7 @@ internal enum class HeartBeatResult {
   /** The proxy acknowledged the heartbeat; the connection is healthy. */
   SUCCESS,
 
-  /** The proxy reported it no longer knows this agent (evicted its context); reconnect immediately. */
+  /** The proxy refused the heartbeat, usually because it evicted this agent's context; reconnect immediately. */
   EVICTED,
 
   /** The heartbeat RPC failed (deadline/transport/other); tolerated up to a threshold before reconnecting. */
@@ -264,8 +264,9 @@ internal class AgentGrpcService(
   /**
    * Advances to the next endpoint, wrapping at the end, and reports whether the selection changed.
    *
-   * Called after a *failed connect*. A `false` return (a single-endpoint list) tells the caller not to
-   * rebuild the channel, so a non-failover agent does exactly what it always did.
+   * Called after an attempt that never became usable: a *failed connect*, or a registration the proxy rejected. A
+   * `false` return (a single-endpoint list) tells the caller not to rebuild the channel, so a non-failover agent does
+   * exactly what it always did.
    */
   fun advanceEndpoint(): Boolean =
     grpcLock.withLock {
@@ -350,8 +351,8 @@ internal class AgentGrpcService(
   // collect and reinstating the deadlock. Latching shutDownRequested under grpcLock makes the outcome the same either
   // way the race lands: reset-then-stop tears the new channel down, stop-then-reset never creates it.
   //
-  // The full shutDown() (tracing included) still runs from the service shutDown() hook, and
-  // channel.shutdownNow() is idempotent so that later call is a no-op on the channel.
+  // shutDown() still runs from Agent's shutDown() hook, and channel.shutdownNow() is idempotent, so that later call is
+  // a no-op on the channel. Agent closes the tracing itself, as it stops.
   fun shutDownChannelPermanently() =
     grpcLock.withLock {
       shutDownRequested = true
@@ -606,8 +607,9 @@ internal class AgentGrpcService(
         throw RequestFailureException.fromProxy("unregisterPathOnProxy", reason)
     }
 
-  // Sends one heartbeat and classifies the outcome for the caller (Agent.startHeartBeat), which uses the
-  // result to keep the connection or tear it down. A NOT_FOUND *response* (proxy evicted this agent) maps
+  // Sends one heartbeat and classifies the outcome for the caller (Agent.sendHeartBeat), which uses the
+  // result to keep the connection or tear it down. A response with valid=false (the proxy has no context for this
+  // agentId, usually because it evicted the agent, or the call's connection or identity doesn't match it) maps
   // to EVICTED; any RPC failure -- DEADLINE_EXCEEDED / UNAVAILABLE / non-gRPC -- maps to TRANSIENT_FAILURE
   // so the caller can force a reconnect after N consecutive failures rather than spinning forever on a
   // half-open transport (finding 2). Cancellation propagates (runCatchingCancellable) for clean shutdown.
@@ -841,8 +843,8 @@ internal class AgentGrpcService(
             processScrapeResults(agent, connectionContext, nonChunkedChannel, chunkedChannel)
           }
         } finally {
-          // Close channels when the producer finishes so consumers' consumeAsFlow() will complete.
-          // This is the sole owner of channel lifecycle — no outer finally needed.
+          // Close the channels when the producer finishes, so each streamOf flow ends. closeAll() also closes them
+          // when a stream fails; no outer finally is needed.
           nonChunkedChannel.close()
           chunkedChannel.close()
         }

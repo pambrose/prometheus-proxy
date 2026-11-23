@@ -129,7 +129,7 @@ class AgentLifecycleTest : StringSpec() {
       thrown.cause?.message shouldBe "too slow"
     }
 
-    "the engine's stop begins the agent's, and the app's disposal waits for it" {
+    "the engine's stop begins the agent's without waiting for it, and the app's disposal doesn't stop it again" {
       val app = TestApp()
       val stopping = CountDownLatch(1)
       val release = CountDownLatch(1)
@@ -198,7 +198,7 @@ class AgentLifecycleTest : StringSpec() {
       verify(exactly = 0) { app.agent.shutdown() }
     }
 
-    "once the app stops, its handlers are gone, so the next app's start starts nothing more" {
+    "once the app stops, its handlers are gone, so its start event raised again starts nothing more" {
       val app = TestApp()
       val launches = app.lifecycle(proxy = "localhost:50051")
       app.started()

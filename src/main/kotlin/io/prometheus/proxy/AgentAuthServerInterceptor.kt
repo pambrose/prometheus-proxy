@@ -44,7 +44,8 @@ import kotlin.time.Duration.Companion.minutes
  *
  * A refused call is logged at WARN, naming the host it came from, at most once a minute for each host, and goes in the
  * dashboard's activity feed, each host's calls within a minute counted on one line: a wrong token is the usual reason a
- * new agent never appears, and the agent itself logs why only for its first attempt.
+ * new agent never appears, and the agent itself logs why at WARN only for its first attempt and every ten minutes
+ * after.
  *
  * @param authManager resolves presented tokens to identities
  * @param activityLog where a refused call is recorded; null with the dashboard off

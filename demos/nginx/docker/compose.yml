@@ -47,10 +47,10 @@ services:
   # the dashboard's entrance, on 8090, which passes to the proxy's dashboard. Each is a file in conf.d copied from a
   # variant in ../nginx, which is mounted read-only: the command below puts the stock ones in place when the container
   # is created, and leaves them alone when it restarts, and demo.sh copies others in and reloads nginx. The main config
-  # is the image's own with one include added, of main.d, where `demo.sh nginx-shutdown-timeout` puts a setting. The
-  # image's default.conf goes, and its entrypoint's setup scripts, which edit that file, don't run, since the command
-  # isn't nginx itself. The certificate is the repository's test certificate, which names *.test.google.fr, so the
-  # agents dial nginx by a name it covers, its alias below.
+  # is the image's own with two workers and one include added, of main.d, where `demo.sh nginx-shutdown-timeout` puts a
+  # setting. The image's default.conf goes, and its entrypoint's setup scripts, which edit that file, don't run, since
+  # the command isn't nginx itself. The certificate is the repository's test certificate, which names *.test.google.fr,
+  # so the agents dial nginx by a name it covers, its alias below.
   nginx:
     image: nginx:1.31-alpine@sha256:713fc2ebfd92e8217db451477182ee91944b123d2b1ee9fd5a8c6e91ca6c3a11
     command:

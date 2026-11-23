@@ -265,8 +265,9 @@ class EmbeddedAgentConfigTest : StringSpec() {
     }
 
     // The agent checks a source path as it checks a pathConfigs entry, at startup, where it can be fixed, and names it
-    // as what added it, since no pathConfigs entry holds it.
-    "a source path that a pathConfigs entry also names, or that the proxy would refuse, fails the agent's start" {
+    // as what added it, since no pathConfigs entry holds it. Only a duplicate and a character the proxy refuses are
+    // checked there: a path the proxy refuses for another reason, such as one with two segments, fails as it registers.
+    "a source path that a pathConfigs entry also names, or with a character the proxy refuses, fails the start" {
       fun startFailure(config: EmbeddedAgentConfig): String =
         runCatching { config.start(logBanner = false) }
           .onSuccess { it.shutdown() }

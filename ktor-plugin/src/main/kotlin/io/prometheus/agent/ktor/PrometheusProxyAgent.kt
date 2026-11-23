@@ -40,7 +40,8 @@ import io.prometheus.agent.EmbeddedAgentInfo
  * ```
  *
  * Its settings are the `prometheus-proxy.agent` section of the app's configuration file, when it has one, then the
- * install block's, which take precedence (see [PrometheusProxyAgentConfig]).
+ * install block's, which take precedence, but not over the file's `settings.<key>` keys (see
+ * [PrometheusProxyAgentConfig]).
  *
  * The agent starts once every module of the app has loaded, and only with a proxy: without one it logs a line and
  * stays off, as on a developer's machine. An agent that can't start, such as one given a certificate it can't read, is

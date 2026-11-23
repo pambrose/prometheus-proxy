@@ -92,8 +92,8 @@ class EmbeddedAgentConfig private constructor(
    * Builds an [EmbeddedAgentConfig]. Each method returns the builder, so calls chain in Java and read as statements in
    * Kotlin's [embeddedAgent] block; a method called twice keeps its last value, and [path], [scrapeSelf], and [source]
    * add a path each time. Anything the builder has no method for, [setting] sets by its key. A value the builder can
-   * tell is wrong, such as a port out of range, throws [ConfigLoadException], as [start] does for one the agent
-   * rejects.
+   * tell is wrong, such as a blank path or a [scrapeSelf] port out of range, throws [ConfigLoadException], as [start]
+   * does for one the agent rejects.
    *
    * In Kotlin, a setting that takes one value is a property too, so `name = "my-app"` does what `name("my-app")` does;
    * Java sees only the methods.
@@ -117,8 +117,9 @@ class EmbeddedAgentConfig private constructor(
     fun name(name: String): Builder = apply { this.name = name }
 
     /**
-     * The proxy the agent connects to, as `host` or `host:port` (the port defaults to 50051), or several, separated by
-     * commas, in the order the agent fails over through them, as `PROXY_HOSTNAME` takes them (`agent.proxy.endpoints`).
+     * The proxy the agent connects to, as `host` or `host:port` (the port defaults to `agent.proxy.port`, normally
+     * 50051), or several, separated by commas, in the order the agent fails over through them, as `PROXY_HOSTNAME`
+     * takes them (`agent.proxy.endpoints`).
      */
     @get:JvmSynthetic
     @set:JvmSynthetic
@@ -293,9 +294,10 @@ class EmbeddedAgentConfig private constructor(
     /**
      * Has the agent serve [source], the app's own metrics read in-process, to Prometheus at the proxy's [path]: the app
      * needs no metrics endpoint, port, or credentials for the agent to read them, and the agent opens no connection to
-     * it. A [path] that a `pathConfigs` entry or another path also names, or one the proxy would refuse, fails
-     * [EmbeddedAgentConfig.start], as such a `pathConfigs` entry does. The path's target shows as `in-process`. See
-     * [MetricsSource] for how the agent calls it. [source] comes last, so a Kotlin lambda can follow the call.
+     * it. A [path] that a `pathConfigs` entry or another path also names, or that has whitespace, a control character,
+     * `?`, or `#`, fails [EmbeddedAgentConfig.start], as such a `pathConfigs` entry does. The path's target shows as
+     * `in-process`. See [MetricsSource] for how the agent calls it. [source] comes last, so a Kotlin lambda can follow
+     * the call.
      */
     fun source(
       path: String,

@@ -116,10 +116,11 @@ class HttpClientCacheTest : StringSpec() {
 
     // Finding 9 swallowed Throwable, which is broader than it needs to be: catching Exception fully
     // meets its goal (keep a throwing close from killing the sweeper) while preserving the policy the
-    // same review series set in Agent.handleConnectionFailure, AgentHttpService.fetchContentFromUrl,
+    // same review series set in Agent.handleConnectionFailure, AgentHttpService's scrape fetch,
     // and AgentGrpcService.connectAgent -- a JVM Error means terminate, not run on in a corrupted
-    // state. Sites 218/230 are reached from inside the very catch(Throwable) block whose
-    // `if (e is Error) throw e` was added one PR earlier, so swallowing here reopened that hole.
+    // state. The cache's close sites in getOrCreateClient and onFinishedWithClient run inside
+    // AgentHttpService.fetchGuarded's try, whose catch(Throwable) hands an Error to failedResults to
+    // rethrow, so swallowing here would reopen that hole.
     "closeQuietly should rethrow a JVM Error rather than downgrading it to a warning" {
       val throwing = mockk<HttpClient>(relaxed = true)
       every { throwing.close() } throws OutOfMemoryError("simulated heap exhaustion")
@@ -131,8 +132,8 @@ class HttpClientCacheTest : StringSpec() {
     // Finding 9, wiring: the test above only proves the helper swallows a throw, not that the sweeper
     // actually routes through it. This drives a throwing close through the background cleanup loop --
     // the one site (clientsToClose.forEach) that sits outside runCatchingCancellable but inside
-    // while(isActive), on a scope with no exception handler, so an escaping throw kills the sweeper
-    // silently. Reverting that site to `it.close()` must fail this test.
+    // while(isActive), so an escaping throw kills the sweeper; the scope's exception handler only logs
+    // it. Reverting that site to `it.close()` must fail this test.
     "Finding 9: a throwing close in the sweeper must not kill the cleanup loop" {
       val sweeperCache = HttpClientCache(
         maxCacheSize = 5,
@@ -246,10 +247,8 @@ class HttpClientCacheTest : StringSpec() {
     }
 
     "should evict least recently used client when cache is full" {
-      // Use a dedicated cache with long expiry to prevent the cleanup coroutine
-      // from removing idle entries during the test. The shared cache's 500ms idle
-      // time can be exceeded under load (e.g. when running the full test suite),
-      // causing the cleanup coroutine to shrink the cache before the eviction step.
+      // Use a dedicated cache with long expiry, so its cleanup coroutine can't remove
+      // an idle entry during the test.
       val lruCache = HttpClientCache(
         maxCacheSize = 5,
         maxAge = 30.seconds,
@@ -258,24 +257,25 @@ class HttpClientCacheTest : StringSpec() {
       )
 
       try {
-        // Fill cache to capacity with distinct timestamps so LRU order is deterministic
+        // Fill cache to capacity. LRU order is the order entries were last used (the cache
+        // is an access-ordered LinkedHashMap), not their timestamps, so it is deterministic.
         val entries: MutableList<CacheEntry> = []
         for (i in 1..5) {
           val key = ClientKey("user$i", "pass$i")
           val entry = lruCache.getOrCreateClient(key) { createMockHttpClient() }
           entries.add(entry)
-          delay(2.milliseconds) // Ensure each entry gets a distinct timestamp
+          delay(2.milliseconds)
         }
 
         lruCache.currentCacheSize() shouldBe 5
 
-        // Access user1 to make it most recently used (now has newest timestamp)
+        // Access user1 to make it most recently used
         delay(2.milliseconds)
         val firstKey = ClientKey("user1", "pass1")
         val firstEntry = lruCache.getOrCreateClient(firstKey) { createMockHttpClient() }
         firstEntry.client shouldBe entries[0].client
 
-        // Add user6, which should evict user2 (oldest timestamp after user1 was refreshed)
+        // Add user6, which should evict user2 (least recently used after user1 was refreshed)
         val newKey = ClientKey("user6", "pass6")
         val newEntry = lruCache.getOrCreateClient(newKey) { createMockHttpClient() }
 
@@ -285,7 +285,7 @@ class HttpClientCacheTest : StringSpec() {
         val user1Entry = lruCache.getOrCreateClient(firstKey) { createMockHttpClient() }
         user1Entry.client shouldBe entries[0].client
 
-        // user2 should have been evicted (oldest entry after user1 refresh)
+        // user2 should have been evicted (least recently used after user1 refresh)
         val evictedKey = ClientKey("user2", "pass2")
         val evictedEntry = lruCache.getOrCreateClient(evictedKey) { createMockHttpClient() }
         evictedEntry.client shouldNotBe entries[1].client
@@ -380,7 +380,7 @@ class HttpClientCacheTest : StringSpec() {
       val entries = ConcurrentLinkedQueue<CacheEntry>()
 
       // Launch on Dispatchers.IO (multi-threaded) and release all coroutines together via a start
-      // latch so they genuinely contend on the cache's mutex / ConcurrentHashMap, rather than merely
+      // latch so they genuinely contend on the cache's mutex, rather than merely
       // interleaving on the single-threaded test dispatcher (which would not exercise thread-safety).
       val startLatch = CountDownLatch(1)
       val jobs = (1..10).map {
@@ -506,7 +506,7 @@ class HttpClientCacheTest : StringSpec() {
       // Get a client entry
       val entry = cache.getOrCreateClient(key) { createMockHttpClient() }
 
-      // Entry should be marked as in use
+      // The entry is cached
       cache.currentCacheSize() shouldBe 1
 
       // Mark as finished - should not close immediately since not marked for close
@@ -585,14 +585,14 @@ class HttpClientCacheTest : StringSpec() {
       fastCleanupCache.currentCacheSize() shouldBe 0
     }
 
-    "onDoneWithClient should close client when entry is marked for close and not in use" {
+    "an entry evicted while in use should be replaced on its next request" {
       val key = ClientKey("user1", "pass1")
 
       // Get a client entry (marks it as in use)
       val entry = cache.getOrCreateClient(key) { createMockHttpClient() }
       cache.currentCacheSize() shouldBe 1
 
-      // Ensure key1 has the oldest timestamp so it's the LRU eviction target
+      // key1, used first, is the least recently used, so it's the LRU eviction target
       delay(2.milliseconds)
 
       // Now evict it (triggers markForClose) by filling cache past capacity
@@ -603,10 +603,10 @@ class HttpClientCacheTest : StringSpec() {
       }
 
       // The original entry was evicted (marked for close), but still in use
-      // When we call onFinishedWithClient, it should close the client
+      // onFinishedWithClient releases it; that its client is closed then isn't checked here
       cache.onFinishedWithClient(entry)
 
-      // The evicted entry's client was closed - getting the same key creates a new client
+      // The evicted entry is gone - getting the same key creates a new client
       val newEntry = cache.getOrCreateClient(key) { createMockHttpClient() }
       newEntry.client shouldNotBe entry.client
 
@@ -638,11 +638,9 @@ class HttpClientCacheTest : StringSpec() {
         val slowKey = ClientKey("slow", "client")
         val slowEntry = slowCache.getOrCreateClient(slowKey) { slowClient }
 
-        // Ensure the slow entry has an older timestamp than the filler entries.
-        // Without this, entries created in the same millisecond have equal access
-        // times, and HashMap iteration order makes LRU eviction non-deterministic —
-        // a filler entry could be evicted instead of the slow entry, causing the
-        // slow entry to never be marked for close.
+        // The slow entry, used before the filler entries, is the least recently used, so
+        // it is the one evicted and marked for close. LRU order is the cache's access
+        // order, not its timestamps, so this delay isn't what decides it.
         delay(50.milliseconds)
 
         // Fill the cache to evict the slow entry (marks it for close).
@@ -795,7 +793,7 @@ class HttpClientCacheTest : StringSpec() {
         val entry = evictCache.getOrCreateClient(key) { mockClient }
         evictCache.onFinishedWithClient(entry)
 
-        // Ensure older timestamp so this entry is evicted first
+        // Used first, so this entry is the least recently used and evicted first
         delay(50.milliseconds)
 
         // Not closed yet
@@ -912,11 +910,8 @@ class HttpClientCacheTest : StringSpec() {
       }
     }
 
-    // Companion to the above: verify that the cleanup coroutine still catches real
-    // (non-cancellation) exceptions from cleanup operations. runCatchingCancellable
-    // only rethrows CancellationException; other failures are still handled by getOrElse.
     // Renamed from "cleanup should still run after a non-cancellation error": this test injects no
-    // error, it only exercises ordinary background expiry. The error path it was named for is covered
+    // error, it only exercises ordinary background expiry. A throwing close in the sweeper is covered
     // by "Finding 9: a throwing close in the sweeper must not kill the cleanup loop" above.
     "background cleanup should remove an expired entry" {
       val cleanupCache = HttpClientCache(

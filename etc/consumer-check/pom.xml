@@ -23,8 +23,8 @@
   <version>1</version>
 
   <properties>
-    <!-- Set by check.sh: the version make consumer-check published, and Kotlin's and the Prometheus Java client's from
-         gradle/libs.versions.toml. -->
+    <!-- Set by check.sh: the version make consumer-check published, and Kotlin's, the Prometheus Java client's, Ktor's,
+         and Micrometer's from gradle/libs.versions.toml. -->
     <prometheus-proxy.version>unset</prometheus-proxy.version>
     <kotlin.version>unset</kotlin.version>
     <prometheus-metrics.version>unset</prometheus-metrics.version>

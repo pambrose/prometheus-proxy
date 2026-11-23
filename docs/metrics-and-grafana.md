@@ -183,7 +183,7 @@ change.
 | `agent_scrape_result_count_total`  | `launch_id`, `type`           | Scrape results sent to proxy                                           |
 | `agent_connect_count_total`        | `launch_id`, `type`           | Connection attempts, by outcome                                        |
 | `agent_disconnects_total`          | `launch_id`                   | Registered connections that ended                                      |
-| `agent_endpoint_advances_total`    | `launch_id`                   | Moves to the next proxy endpoint after a failed connect                |
+| `agent_endpoint_advances_total`    | `launch_id`                   | Moves to the next proxy endpoint after a failed connect or a rejected registration |
 | `agent_heartbeats_total`           | `launch_id`, `outcome`        | Heartbeats sent: `success`, `evicted`, `transient_failure`             |
 | `agent_path_rejections_total`      | `launch_id`, `cause`          | Path registrations the proxy refused, by cause                         |
 | `agent_discovery_reconciles_total` | `launch_id`, `outcome`        | Path discovery reconciles: `success`, `failure`                        |

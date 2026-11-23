@@ -74,7 +74,7 @@ internal class HttpClientCache(
   // tracker: get() moves an entry to the most-recently-used end, so the least-recently-used entry is
   // always the iteration head -- O(1) eviction, no parallel recency map (finding 25). Every access is
   // under accessMutex, so the plain map is safe; cacheSize mirrors the size for a lock-free
-  // currentCacheSize() read from the metrics/health-check threads (Bug #12).
+  // currentCacheSize() read by the agent_client_cache_size gauge (Bug #12).
   private val cache = LinkedHashMap<String, CacheEntry>(INITIAL_CAPACITY, LOAD_FACTOR, true)
   private val cacheSize = AtomicInt(0)
 
@@ -386,7 +386,7 @@ internal class HttpClientCache(
     //
     // Deliberately catches Exception, not Throwable: a JVM Error means the agent should terminate
     // rather than continue in a corrupted state, matching Agent.handleConnectionFailure,
-    // AgentHttpService.fetchContentFromUrl, and AgentGrpcService.connectAgent. Catching Exception is
+    // AgentHttpService.failedResults, and AgentGrpcService.connectAgent. Catching Exception is
     // enough to meet finding 9's goal. HttpClient.close() does not suspend, so no CancellationException
     // can arise here.
     internal fun closeQuietly(client: HttpClient) {
@@ -394,7 +394,7 @@ internal class HttpClientCache(
         .onFailure { e ->
           // Re-throw JVM Errors (OutOfMemoryError, StackOverflowError, etc.) so the agent terminates
           // instead of running in a corrupted state. Mirrors the Error-rethrow policy at
-          // AgentHttpService.fetchContentFromUrl(), Agent.handleConnectionFailure(), and connectAgent().
+          // AgentHttpService.failedResults(), Agent.handleConnectionFailure(), and connectAgent().
           if (e is Error)
             throw e
 

@@ -126,7 +126,7 @@ class AgentClientInterceptorTest : StringSpec() {
       verify(exactly = 0) { mockAgent.grpcService }
     }
 
-    "onHeaders should not overwrite agentId when already set" {
+    "starting a call should not assign agentId when one is already set" {
       val mockAgent = mockk<Agent>(relaxed = true)
       every { mockAgent.agentId } returns "existing-id"
 
@@ -139,8 +139,8 @@ class AgentClientInterceptorTest : StringSpec() {
       // Start the call
       call.start(mockk(relaxed = true), Metadata())
 
-      // Since agentId is already set ("existing-id"), the onHeaders callback
-      // should not attempt to assign a new agentId
+      // The relaxed underlying call never calls the listener, so onHeaders doesn't run here: this checks only that
+      // starting the call assigns no agentId
       verify(exactly = 0) { mockAgent.agentId = any() }
     }
 

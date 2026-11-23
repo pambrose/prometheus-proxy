@@ -80,7 +80,7 @@ class CiHygieneTest : StringSpec() {
   }
 
   // The images a compose file, Kubernetes manifest, or kind config pulls: the value of every `image:` key, but the
-  // proxy and agent images built from this checkout.
+  // :local ones demo.sh tags, the proxy, agent, and app images it builds or pulls.
   private fun pulledImages(file: File) =
     YAML_IMAGE
       .findAll(file.readText())

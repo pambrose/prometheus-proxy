@@ -108,9 +108,9 @@ jobs:
           TARGET: ${{ steps.choose.outputs.target }}
         run: make "$TARGET"
 
-  # Validates the alerting rules users load into Prometheus (grafana/alerts.yml) with promtool, from the Prometheus
-  # image the container suite runs. DashboardMetricNamesTest separately checks that every series the rules query is
-  # one the proxy or agent exposes.
+  # Validates the alerting rules users load into Prometheus (grafana/alerts.yml), and each demo's Prometheus config and
+  # rules, with promtool, from the Prometheus image the container suite runs. DashboardMetricNamesTest separately checks
+  # that every series the rules query is one the proxy or agent exposes.
   rules:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -156,13 +156,16 @@ jobs:
   # Builds etc/consumer-check, a Maven project that depends only on the artifact this commit would publish, as an
   # application that embeds the agent does (`make consumer-check`). The other jobs compile and test against Gradle's
   # resolution, so only this one sees what a Maven embedder gets: it fails unless the docs site's embedded-agent
-  # examples compile, Jackson, netty-tcnative, and Netty resolve at the catalog's versions, and no jar on the classpath
-  # carries a logback.xml. make spring-boot-demo-check then builds the Spring Boot demo's roastery (demos/spring-boot/app)
-  # against the same artifact, at the versions Spring Boot's dependency management sets, and runs its RoasteryAgentTest,
-  # which starts the agent against a proxy. make embedded-demo-check builds the embedded demo's coffee shop
-  # (demos/embedded/app), a Gradle project of its own that embeds the agent through the public API, against this
-  # checkout, so a change to that API that breaks the demo fails here. make -k runs every check even when one fails, so
-  # each reports. The runner's Maven builds the Maven projects; setup-java caches what they download, keyed on their poms
+  # examples compile; Jackson, netty-tcnative, Netty, protobuf, and every Prometheus Java client module resolve at the
+  # catalog's versions; no jar on the classpath carries a logback.xml, and the library jar carries its reference.conf;
+  # and, for a Ktor app that adds the Ktor plugin, every Ktor module resolves at the catalog's version and the docs
+  # site's Ktor plugin examples compile (etc/consumer-check/check.sh). make spring-boot-demo-check then builds the
+  # Spring Boot demo's roastery (demos/spring-boot/app) against the same artifact, at the versions Spring Boot's
+  # dependency management sets, and runs its RoasteryAgentTest, which starts the agent against a proxy. make
+  # embedded-demo-check builds the embedded demo's coffee shop (demos/embedded/app), a Gradle project of its own that
+  # embeds the agent through the Ktor plugin, against this checkout, so a change to the plugin or to
+  # EmbeddedAgentConfig that breaks the demo fails here. make -k runs every check even when one fails, so each
+  # reports. The runner's Maven builds the Maven projects; setup-java caches what they download, keyed on their poms
   # and the version catalog.
   consumer-check:
     runs-on: ubuntu-latest

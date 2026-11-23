@@ -42,7 +42,7 @@ down:  ## Stop the demo and remove its containers and network
 status:  ## Show the containers, the nginx configs in use, and the URLs
 	@$(DEMO) status
 
-open:  ## Open the proxy dashboard, directly and through nginx, the agents' dashboards, and Prometheus in the browser
+open:  ## Open the proxy dashboard, directly and through nginx, agent-current's dashboard, and Prometheus in the browser
 	@$(DEMO) open
 
 tour:  ## Walk through the demo's guided tour, pausing before each step (PART=n starts from part n)

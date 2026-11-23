@@ -46,8 +46,8 @@ tls:
   keyFile: key.pem
   caFile: ""
 
-# The admin endpoints (/ping, /healthcheck, /version, /threaddump). The probes use /ping, so leave them on unless you
-# replace the probes. Unauthenticated: the port is not added to the Service.
+# The admin endpoints (/ping, /healthcheck, /version, /threaddump). The probes use /ping; with them off, the chart
+# probes the HTTP and gRPC ports' TCP sockets instead. Unauthenticated: the port is not added to the Service.
 admin:
   enabled: true
   port: 8092

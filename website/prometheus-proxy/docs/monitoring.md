@@ -224,7 +224,7 @@ script's right Basic Auth logs in on every request, so it isn't counted.
 | `agent_scrape_result_count_total`  | `launch_id`, `type` | Results sent (`non-gzipped`, `gzipped`, `chunked`, `dropped`)                                 |
 | `agent_connect_count_total`        | `launch_id`, `type` | Connection attempts (`success`, `failure`, `rejected`)                                        |
 | `agent_disconnects_total`          | `launch_id`         | Registered connections to the proxy that ended                                                |
-| `agent_endpoint_advances_total`    | `launch_id`         | Moves to the next proxy endpoint after a failed connect                                       |
+| `agent_endpoint_advances_total`    | `launch_id`         | Moves to the next proxy endpoint after a failed connect or a rejected registration            |
 | `agent_heartbeats_total`           | `launch_id`, `outcome` | Heartbeats sent (`success`, `evicted`, `transient_failure`)                                |
 | `agent_path_rejections_total`      | `launch_id`, `cause` | Path registrations the proxy refused, by the cause it gave                                   |
 | `agent_discovery_reconciles_total` | `launch_id`, `outcome` | Path discovery reconciles (`success`, `failure`)                                           |
@@ -244,9 +244,9 @@ to send, and as `dropped` when the connection to the proxy closes first.
 
 A connect counts as `success` once the proxy has registered the agent, as `rejected` when the proxy refuses the
 registration, and as `failure` when it can't be made or registered. `agent_disconnects_total` counts each registered
-connection that ends, however it ends, and `agent_endpoint_advances_total` each move to the next endpoint in
-`agent.proxy.endpoints` after a failed connect; a return to the primary shows as `agent_proxy_endpoint_index` going back
-to 0. A heartbeat is `evicted` when the proxy no longer knows the agent.
+connection that ends, however it ends, unless the agent is stopping, and `agent_endpoint_advances_total` each move to
+the next endpoint in `agent.proxy.endpoints` after a failed connect or a rejected registration; a return to the primary
+shows as `agent_proxy_endpoint_index` going back to 0. A heartbeat is `evicted` when the proxy no longer knows the agent.
 
 `agent_path_rejections_total` counts every refusal, retries included, while the agent's dashboard and log show a path's
 first; its `cause` is the cause the proxy gave, lowercased, or `unspecified` from a proxy that predates it.

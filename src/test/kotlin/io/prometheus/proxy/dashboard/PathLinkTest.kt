@@ -92,7 +92,8 @@ class PathLinkTest : StringSpec() {
       jobUrl("a-b_c.d~e") shouldBe "https://p.example.com/graph?job=a-b_c.d~e"
     }
 
-    // The demo's Prometheus link: PromQL's braces and quotes encoded in the template, the placeholder literal.
+    // A link like the demo's Prometheus one: PromQL's braces and quotes encoded in the template, the placeholder
+    // literal.
     "the template's own encoding should be kept as written" {
       urlFor("http://localhost:9090/graph?g0.expr=up%7Bjob%3D%22{label.job}%22%7D") shouldBe
         "http://localhost:9090/graph?g0.expr=up%7Bjob%3D%22orders%22%7D"

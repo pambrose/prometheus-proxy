@@ -76,8 +76,8 @@ updates:
       default-days: 7
 
   # The basics demo's third-party images (demos/basics/docker/compose.yml): Grafana and the Python image its
-  # simulated services run on, each pinned by tag and digest. The proxy and agent images it builds from this checkout
-  # aren't pulled, so there's nothing to update for them.
+  # simulated services run on, each pinned by tag and digest. Its proxy and agent images are the latest release's or
+  # built from this checkout, so there's nothing to update for them here.
   - package-ecosystem: docker-compose
     directory: /demos/basics/docker
     schedule:
@@ -93,8 +93,8 @@ updates:
       - dependency-name: "prom/prometheus"
 
   # The network demo's third-party images (demos/network/docker/compose.yml): Toxiproxy, Grafana, Zipkin, and the
-  # Python image its simulated services run on, each pinned by tag and digest. Like the basics demo, it builds its
-  # proxy and agent images from this checkout.
+  # Python image its simulated services run on, each pinned by tag and digest. Like the basics demo's, its proxy and
+  # agent images are the latest release's or built from this checkout.
   - package-ecosystem: docker-compose
     directory: /demos/network/docker
     schedule:
@@ -200,8 +200,8 @@ updates:
 
   # The Kubernetes demo's third-party images in its manifests (demos/kubernetes/k8s), which the docker ecosystem reads:
   # the Python image its simulated services and targets-sync run on, pinned by tag and digest. Its kind node image
-  # (demos/kubernetes/kind) isn't here: it moves with the kind release it was built for, by hand. Like the other demos,
-  # it builds its proxy and agent images from this checkout.
+  # (demos/kubernetes/kind) isn't here: it moves with the kind release it was built for, by hand. Like the other demos',
+  # its proxy and agent images are the latest release's, which the charts name, or built from this checkout.
   - package-ecosystem: docker
     directory: /demos/kubernetes/k8s
     schedule:

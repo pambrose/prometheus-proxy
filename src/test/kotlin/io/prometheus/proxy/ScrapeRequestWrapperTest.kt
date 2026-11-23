@@ -169,7 +169,7 @@ class ScrapeRequestWrapperTest : StringSpec() {
     "awaitCompleted should return false on timeout" {
       val wrapper = createWrapper()
 
-      // Do not call markComplete — should timeout
+      // Do not call complete() — should time out
       val result = wrapper.awaitCompleted(100.milliseconds)
       result.shouldBeFalse()
     }
@@ -199,7 +199,7 @@ class ScrapeRequestWrapperTest : StringSpec() {
 
     // ==================== complete() Tests ====================
 
-    "complete without metrics should not throw" {
+    "complete should not throw" {
       val wrapper = createWrapper()
 
       // Should not throw

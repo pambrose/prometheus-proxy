@@ -274,9 +274,8 @@ cmd_up_local() {
 # with ones built from this checkout (start_demo).
 start_demo() {
   local old_ids id
-  # The images the demo ran, to remove below once nothing tags them: each build makes new ones, since the jars'
-  # BuildConfig carries the build time, and a release's tags replace a build's. One the network demo still runs is in
-  # use, and stays.
+  # The images the demo ran, to remove below once nothing tags them: a build from changed code makes new ones, and a
+  # release's tags replace a build's. One another demo still runs is in use, and stays.
   old_ids="$(docker image inspect -f '{{.Id}}' "${IMAGES[@]}" 2>/dev/null || true)"
 
   if [[ $# -gt 0 ]]; then

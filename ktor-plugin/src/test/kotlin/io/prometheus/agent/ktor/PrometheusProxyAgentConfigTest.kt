@@ -138,7 +138,7 @@ class PrometheusProxyAgentConfigTest : StringSpec() {
         "prometheus-proxy.agent.metrics-port must be a number: ninety"
     }
 
-    "the registry is served in-process at the path, with its labels" {
+    "the registry is served in-process at the path" {
       val config = PrometheusProxyAgentConfig(MapApplicationConfig("path" to "my_app_metrics", "labels.team" to "web"))
       config.registry = PrometheusRegistry()
 

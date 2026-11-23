@@ -103,7 +103,7 @@ proxy.grpc {
 
 // Agent gRPC keepalive settings:
 agent.grpc {
-  keepAliveTimeSecs = -1              // -1 = use server default
+  keepAliveTimeSecs = -1              // -1 = gRPC's default, no keepalive PINGs
   keepAliveTimeoutSecs = 20
   keepAliveWithoutCalls = false
 }

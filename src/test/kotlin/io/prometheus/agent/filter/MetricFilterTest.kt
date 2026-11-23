@@ -283,9 +283,9 @@ class MetricFilterTest : StringSpec() {
     }
 
     "a denied family followed by an allowed family should not poison the second family's verdict" {
-      // Regression guard: the verdict must be recomputed unconditionally on every HELP/TYPE line.
-      // A sticky-false bug (only recompute when currentVerdict is already true) would leave "up"
-      // denied here even though nothing denies it.
+      // Regression guard: the verdict must be recomputed whenever a HELP/TYPE line opens a new family,
+      // whatever the previous verdict. A sticky-false bug (only recompute when currentVerdict is already
+      // true) would leave "up" denied here even though nothing denies it.
       val text =
         """
         # HELP go_goroutines Number of goroutines

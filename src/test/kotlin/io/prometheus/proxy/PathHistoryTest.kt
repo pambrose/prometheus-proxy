@@ -203,7 +203,8 @@ class PathHistoryTest : StringSpec() {
       f.scrapes(setOf("app"))["app"]!!.map { it.statusCode } shouldContainExactly [200, 503]
     }
 
-    // A request for //app reaches the scrape route as path "/app"; the path map keys it as "app".
+    // A record whose path keeps a leading slash still keys under the path map's key, "app". The scrape route strips
+    // every leading slash, so it records none.
     "a leading slash should key a scrape under the path map's key" {
       val f = Fixture()
       f.history.record(record("/app"))

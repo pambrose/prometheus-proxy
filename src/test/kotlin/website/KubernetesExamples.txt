@@ -172,7 +172,7 @@ spec:
       volumes:
         - name: agent-config
           configMap:
-            name: prometheus-agent-config   # agent.conf url points at http://localhost:9100/metrics
+            name: prometheus-agent-config   # with its agent.conf url changed to http://localhost:9100/metrics
 ; --8<-- [end:agent-sidecar]
 
 ; --8<-- [start:prometheus-scrape]

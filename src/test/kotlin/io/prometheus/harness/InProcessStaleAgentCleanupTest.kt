@@ -28,11 +28,11 @@ import io.prometheus.harness.support.TestUtils.startProxy
 import io.prometheus.proxy.AgentContext
 import kotlin.time.Duration.Companion.seconds
 
-// Proxy.startUp() decides whether to run the stale-agent eviction thread from two inputs: the
+// The Proxy builds the stale-agent eviction service from two inputs, and startUp() starts it: the
 // proxy.internal.staleAgentCheckEnabled switch, and transportFilterDisabled, which forces it on because
-// without a transport filter nothing else can reclaim a leaked context. The switch defaults to true, so
-// every other spec runs with eviction on and neither of the other two branches is ever taken. No agent is
-// needed: a context planted straight into the manager is exactly the leak the thread exists to clean up.
+// without a transport filter nothing else can reclaim a leaked context. ProxyTest checks which of them builds
+// the service; this checks that the thread evicts, or doesn't. No agent is needed: a context planted straight
+// into the manager is exactly the leak the thread exists to clean up.
 class InProcessStaleAgentCleanupTest : StringSpec() {
   init {
     // Both proxies in one case, because the forced-on proxy's eviction is what proves a full check cycle

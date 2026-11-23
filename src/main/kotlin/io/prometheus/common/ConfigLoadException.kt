@@ -17,10 +17,11 @@
 package io.prometheus.common
 
 /**
- * Thrown when startup cannot complete — a configuration file or URL cannot be loaded/parsed, the
- * command-line options fail to parse, or a setting is invalid — and the process was started with
+ * Thrown when an Agent's startup cannot complete — a configuration file or URL cannot be loaded/parsed, the
+ * command-line options fail to parse, or a setting is invalid — and it was started with
  * `exitOnMissingConfig = false` (the embedded mode used by
- * [Agent.startAsyncAgent][io.prometheus.Agent.Companion.startAsyncAgent]).
+ * [Agent.startAsyncAgent][io.prometheus.Agent.Companion.startAsyncAgent]). The Proxy never throws it: its
+ * entry point exits instead.
  *
  * An invalid setting is one the agent can't use, from the config, a `-D` override, the command line, or an
  * environment variable: a value of the wrong type or out of range, an unresolved `${…}` substitution, a

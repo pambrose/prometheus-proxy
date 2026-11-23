@@ -58,7 +58,7 @@ class ProxyServerTransportFilterTest : StringSpec() {
     }
 
     // No call on this connection has been authenticated yet, so it isn't announced as a connected agent: that waits
-    // for connectAgent.
+    // for its first authenticated call.
     "transportReady should not count or announce the context before the agent connects" {
       val (mockProxy, agentContextManager) = createMockProxy()
       val filter = ProxyServerTransportFilter(mockProxy)

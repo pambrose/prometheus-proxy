@@ -24,7 +24,7 @@ import java.security.KeyStore
 
 /**
  * Creates an empty keystore (default JKS/PKCS12 type) in an auto-deleted temp file and returns its
- * path and password. Shared by the SslSettings and AgentHttpService trust-store tests.
+ * path and password. Shared by the SslSettings and AgentHttpService trust-store tests, and by AgentSettingsTest.
  */
 internal fun createTempKeyStore(prefix: String = "keystore-test"): Pair<String, String> {
   val password = "test-password"

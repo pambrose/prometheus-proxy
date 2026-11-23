@@ -92,8 +92,6 @@ class DashboardScriptTest : StringSpec() {
       page shouldContain "function closeScrapeResult(panel)"
     }
 
-    // The script tells the server which layout the page shows, from its URL, on every announce. The map comes from
-    // DashboardLayout, so a new layout can't be left out of it.
     // Light, dark, or auto, from the bar's picker, kept in this browser; the head applies it before the page draws.
     "the page should apply a stored theme in its head, and its script should set the theme a picker button names" {
       val page = renderFullPage(snapshot())
@@ -114,6 +112,8 @@ class DashboardScriptTest : StringSpec() {
       ProxyDashboardHtml.pushFragment(snapshot(), null, "/dashboard") shouldNotContain DashboardPage.THEME_PICKER_ID
     }
 
+    // The script tells the server which layout the page shows, from its URL, on every announce. The map comes from
+    // DashboardLayout, so a new layout can't be left out of it.
     "the page script should name each layout by its route" {
       renderFullPage(snapshot()) shouldContain
         """var LAYOUTS = {"paths":"PATH","activity":"ACTIVITY","settings":"SETTINGS"};"""
@@ -145,9 +145,6 @@ class DashboardScriptTest : StringSpec() {
       page shouldNotContain "addEventListener('htmx:ws:error'"
     }
 
-    // htmx 4 renamed every WebSocket event and attribute. A listener left on an htmx 2 name never fires,
-    // so the page would keep claiming "live" through an outage; ws-connect still works but logs a
-    // deprecation warning on every load; and hx-ext no longer exists.
     // A session that ends while the page is open, by expiring, a Log out elsewhere, or a proxy restart: the socket
     // closes, the page asks whether it may still use the dashboard, and on a 401 reloads, which the server answers with
     // the login page. A scrape refused with a 401 does the same, rather than showing the refusal in the panel.
@@ -164,6 +161,9 @@ class DashboardScriptTest : StringSpec() {
       page shouldContain "if (response.status === 401) { location.reload(); return null; }"
     }
 
+    // htmx 4 renamed every WebSocket event and attribute. A listener left on an htmx 2 name never fires,
+    // so the page would keep claiming "live" through an outage; ws-connect still works but logs a
+    // deprecation warning on every load; and hx-ext no longer exists.
     "the page should use no htmx 2 WebSocket names" {
       val page = renderFullPage(snapshot())
       page shouldNotContain "htmx:wsOpen"

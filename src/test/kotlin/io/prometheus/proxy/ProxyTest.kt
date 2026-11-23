@@ -258,8 +258,8 @@ class ProxyTest : StringSpec() {
     }
 
     // Agent-supplied labels must not clobber the proxy-computed reserved keys (__metrics_path__,
-    // agentName, hostName). Reserved keys are written last/skipped so an agent cannot redirect the
-    // scrape target or spoof identity via a colliding label name.
+    // agentName, hostName). An agent label with a reserved key is dropped when the path registers, so an
+    // agent cannot redirect the scrape target or spoof identity via a colliding label name.
     "buildServiceDiscoveryJson should not let agent labels override reserved keys" {
       val proxy = createTestProxy("-Dproxy.service.discovery.targetPrefix=proxy:$PROXY_HTTP_PORT")
       val agentContext = createAgentContext(name = "agent-real", host = "real-host")
@@ -647,11 +647,11 @@ class ProxyTest : StringSpec() {
 
     // ==================== Bug #20: shutDown ordering Tests ====================
 
-    // Bug #20: failAllInFlightScrapeRequests must run before invalidateAllAgentContexts
-    // so HTTP handlers get "Proxy is shutting down" instead of generic "missing_results".
-    // We test the ordering by calling the operations in the correct (fixed) order and
-    // verifying the wrapper receives the shutdown failure reason.
-    "Bug #20: failing scrape requests before invalidating gives informative error" {
+    // Bug #20: shutDown runs failAllInFlightScrapeRequests before invalidateAllAgentContexts, so a request still
+    // queued for its agent gets "Proxy is shutting down" instead of the agent_disconnected invalidate() gives it.
+    // This calls the two in shutDown's order and checks that a tracked request gets the shutdown reason. The request
+    // isn't queued on its agent, so the order itself isn't tested here.
+    "Bug #20: failing scrape requests then invalidating should give a tracked request the shutdown reason" {
       val proxy = createTestProxy()
       val agentContext = createAgentContext()
       proxy.agentContextManager.addAgentContext(agentContext)
@@ -678,8 +678,9 @@ class ProxyTest : StringSpec() {
       wrapper.proxyFailure shouldBe ProxyFailure.PROXY_STOPPED
     }
 
-    // Verify the old (broken) order would lose the failure reason
-    "Bug #20: invalidating before failing loses the informative error" {
+    // Invalidating first fails only the requests queued on the agents, so a request that is only tracked is left for
+    // failAllInFlightScrapeRequests.
+    "Bug #20: invalidating first should leave a request not queued on its agent to failAllInFlightScrapeRequests" {
       val proxy = createTestProxy()
       val agentContext = createAgentContext()
       proxy.agentContextManager.addAgentContext(agentContext)
@@ -701,8 +702,7 @@ class ProxyTest : StringSpec() {
       // completes it: ScrapeRequestWrapper.complete() publishes the result behind its CAS (finding 16).
       proxy.scrapeRequestManager.failAllInFlightScrapeRequests("Proxy is shutting down", ProxyFailure.PROXY_STOPPED)
 
-      // Results are set, but awaitCompleted() would have already returned false
-      // (before the failure reason was set) in the old ordering
+      // Invalidation left the request alone, so the shutdown failure completed it.
       wrapper.scrapeResults.shouldNotBeNull()
     }
 

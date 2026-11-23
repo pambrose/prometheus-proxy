@@ -107,7 +107,7 @@ class HttpClientCacheOps {
   // the cache's Mutex and reports it as never resuming (20,000 real-thread runs of the same scrapes never hang), and it
   // counts a cancelled operation as finished before its finally has released the client. Inside runBlocking, a scrape
   // waits for the Mutex as it does on the agent's own threads. Cancellation during release is covered by
-  // HttpClientCacheTest instead.
+  // HttpClientCacheCancellationTest instead.
   @Operation(blocking = true)
   fun scrape(
     @Param(name = "key") key: Int,

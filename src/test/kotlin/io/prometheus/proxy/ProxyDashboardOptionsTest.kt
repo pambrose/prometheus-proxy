@@ -139,8 +139,8 @@ class ProxyDashboardOptionsTest : StringSpec() {
       proxyOptions(["-Dproxy.dashboard.refreshIntervalSecs=0"]).dashboardEnabled.shouldBeFalse()
     }
 
-    // At 0 the path table would keep no scrape for any path, so it would lose its gone paths, the thing it is for, and
-    // the activity feed would keep no line.
+    // At 0 no path would keep any scrape, leaving the History column and each agent's Recent scrapes empty, and the
+    // activity feed would keep no line.
     "a non-positive dashboard pathHistorySize, departedPathRetentionSecs, or activityLogSize should be rejected" {
       for (name in ["pathHistorySize", "departedPathRetentionSecs", "activityLogSize"]) {
         shouldThrow<IllegalArgumentException> {

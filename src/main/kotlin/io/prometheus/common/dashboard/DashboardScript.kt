@@ -64,9 +64,10 @@ internal class DashboardScript(
 
   /**
    * The page's script. It reads the selection back out of the URL that hx-push-url already set, and tells the server,
-   * so the push loop knows whether this session wants a detail pane. It also runs the connection indicator, the path
-   * search, the copy and scrape-now buttons, the column guide, the tabs' arrow keys, and the scrape times' conversion
-   * to the viewer's zone, the only things on the page that htmx does not model; everything else is htmx.
+   * so the push loop knows whether this session wants a detail pane. It also runs the connection indicator and the
+   * session check, the table search, the copy and scrape-now buttons, the column guide, the theme picker, the tabs'
+   * arrow keys, the tab's title, and the scrape times' conversion to the viewer's zone, the only things on the page
+   * that htmx does not model; everything else is htmx.
    */
   val js =
     """
@@ -108,8 +109,8 @@ internal class DashboardScript(
         // Only on an open socket. Nothing is lost by skipping: every open announces again from the URL.
         if (!s || s.readyState !== WebSocket.OPEN) return false;
         seq += 1;
-        // The URL's query carries the Paths view's filter (see applyFilter), which the server applies to the table
-        // each push renders, so a reload or a shared link shows the same rows.
+        // The URL's query carries the view's filter, the Paths or Activity table's (see applyFilter), which the server
+        // applies to the table each push renders, so a reload or a shared link shows the same rows.
         s.send(JSON.stringify({ select: selectedId(), layout: layout(), seq: seq, search: window.location.search }));
         return true;
       }
@@ -138,8 +139,8 @@ internal class DashboardScript(
       // The same transition is spoken into the live region. The beacon reports this visually with colour
       // and a change of rhythm, neither of which reaches a screen reader; without this the page goes
       // silently stale, which is the one failure this dashboard exists to make impossible to miss.
-      // Scoped to the connection and the result of a copy click -- announcing every pushed counter would
-      // make the region unusable.
+      // Scoped to the connection and the user's own acts (a copy, a scrape-now, a theme choice, a filter change) --
+      // announcing every pushed counter would make the region unusable.
       var wasDown = false;
       function announceConn(up) {
         var region = document.getElementById('$ANNOUNCER_ID');
@@ -181,7 +182,7 @@ internal class DashboardScript(
       // htmx 4 dispatches its history events on document, which a listener on <body> never hears.
       document.addEventListener('htmx:after:history:push', announce);
       window.addEventListener('popstate', announce);
-      // The copy buttons beside the path table's target URLs. One listener on <body> rather than one per
+      // The copy buttons beside the path table's paths and target URLs. One listener on <body> rather than one per
       // button: the push loop replaces the table every frame, so a button's own listener would last one
       // frame. The result mark is kept here for the same reason, by button id, and put back on that id's
       // new button after each frame until it expires.
@@ -203,14 +204,15 @@ internal class DashboardScript(
           mark = null;
         }, $COPY_MARK_MILLIS);
       }
-      // The tab's title, which counts the paths failing or gone, from the status bar, which every push renders.
+      // The tab's title, which counts the dashboard's problems, from the status bar, which every push renders.
       function updateTitle() {
         var bar = document.getElementById('$STATUS_ID');
         var title = bar && bar.getAttribute('$TITLE_ATTR');
         if (title && document.title !== title) document.title = title;
       }
-      // The search above the path table. A change applies as it is typed: it goes into the URL, and the socket is
-      // told, so the next frame's table is filtered. Without this script the form still works, as a plain GET.
+      // The search above the Paths or Activity table. A change applies as it is typed: it goes into the URL, and the
+      // socket is told, so the next frame's table is filtered. Without this script the form still works, as a plain
+      // GET.
       var countDue = 0;
       var filterTimer = 0;
       function applyFilter() {
@@ -296,10 +298,10 @@ internal class DashboardScript(
         });
       }
       // Scrape now: a path's Scrape button has the server scrape it at once, and the result shows in the panel above the
-      // table. A request of the script's own, not hx-post: the push loop replaces the table every frame, which would
-      // drop a request its button made. The panel is outside every pushed region, so a push never clears a result.
-      // The header is the one htmx sends, which the route requires, so no page on another site can make the server
-      // scrape. Closing the panel hands focus back to the button that filled it.
+      // Paths view's table or list. A request of the script's own, not hx-post: the push loop replaces the button's
+      // region every frame, which would drop a request its button made. The panel is outside every pushed region, so a
+      // push never clears a result. The header is the one htmx sends, which the route requires, so no page on another
+      // site can make the server scrape. Closing the panel hands focus back to the button that filled it.
       var scrapedFrom = null;
       function scrapeNow(btn) {
         var panel = document.getElementById('$SCRAPE_RESULT_ID');
@@ -480,7 +482,7 @@ internal class DashboardScript(
     """.trimIndent()
 
   private companion object {
-    // How long the path search waits after a keystroke before applying the filter: long enough not to push a new table
+    // How long the table search waits after a keystroke before applying the filter: long enough not to push a new table
     // per letter, short enough to read as typing into a live view.
     const val FILTER_DEBOUNCE_MILLIS = 250
 

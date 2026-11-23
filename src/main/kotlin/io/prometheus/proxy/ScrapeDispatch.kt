@@ -186,7 +186,8 @@ internal object ScrapeDispatch {
     val scrapeRequest = createScrapeRequest(agentContext, proxy, scrape, span)
     val timeoutTime = scrape.timeout ?: proxy.proxyConfigVals.internal.scrapeRequestTimeoutSecs.seconds
 
-    // A terminal response here means the agent disconnected or the request timed out.
+    // A terminal response here means the in-flight limit or the agent's backlog was full, the agent disconnected before
+    // the request was queued, or the request timed out.
     dispatchScrapeRequest(agentContext, proxy, scrapeRequest, timeoutTime)?.let { return it }
 
     logger.debug { "Results returned from $agentContext for $scrapeRequest" }
@@ -218,9 +219,9 @@ internal object ScrapeDispatch {
   }
 
   // Registers the request, sends it to the agent, and awaits completion, cleaning up the request map, and any chunked
-  // transfer still open for the request, in a finally. Returns a terminal ScrapeRequestResponse for the
-  // agent-disconnected and timed-out cases, or null when the agent completed and the caller should read
-  // scrapeRequest.scrapeResults.
+  // transfer still open for the request, in a finally. Returns a terminal ScrapeRequestResponse when the in-flight
+  // limit or the agent's backlog is full, the agent disconnected before the request was queued, or the request timed
+  // out, or null when the request completed and the caller should read scrapeRequest.scrapeResults.
   private suspend fun dispatchScrapeRequest(
     agentContext: AgentContext,
     proxy: Proxy,
@@ -307,7 +308,7 @@ internal object ScrapeDispatch {
         }
       }
 
-  // The status the target answered the agent with.
+  // The result's status: the one the target answered the agent with, or the proxy's own for a failure it made itself.
   private val ScrapeResults.httpStatus: HttpStatusCode
     get() = HttpStatusCode.fromValue(srStatusCode)
 

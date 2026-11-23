@@ -108,7 +108,10 @@ enum class EnvVars {
   /** Path or URL to the Agent HOCON config file. Equivalent to the `--config`/`-c` CLI flag. */
   AGENT_CONFIG,
 
-  /** Hostname (or `host:port`) of the Proxy the Agent should connect to. */
+  /**
+   * Hostname (or `host:port`) of the Proxy the Agent should connect to, or a comma-separated list of them, which the
+   * Agent fails over through in order.
+   */
   PROXY_HOSTNAME,
 
   /** Friendly name for this Agent reported in metrics and logs. */
@@ -127,7 +130,7 @@ enum class EnvVars {
   SCRAPE_MAX_RETRIES,
 
   /**
-   * Threshold above which a scrape response is split into chunked gRPC messages, in kilobytes.
+   * Size at or above which a gzipped scrape response is split into chunked gRPC messages, in kilobytes.
    * Also doubles as the chunk buffer size. Default `32`.
    */
   CHUNK_CONTENT_SIZE_KBS,
@@ -156,7 +159,7 @@ enum class EnvVars {
   /** HTTP client request timeout used by the Agent when scraping endpoints, in seconds. */
   CLIENT_TIMEOUT_SECS,
 
-  /** Maximum number of pooled HTTP clients the Agent caches (keyed by auth credentials / target). */
+  /** Maximum number of pooled HTTP clients the Agent caches (keyed by auth credentials). */
   MAX_CLIENT_CACHE_SIZE,
 
   /** Maximum age before a cached HTTP client is evicted, in minutes. */
@@ -205,15 +208,22 @@ enum class EnvVars {
   ADMIN_PORT,
 
   /**
-   * Disable the gRPC transport filter that records remote-peer information per call. Set `true` when running
-   * behind an L7 reverse proxy (e.g. nginx) that strips this information. Default `false`.
+   * Disable the gRPC transport filter, with which the Proxy tracks each Agent by its connection. Set `true` when
+   * running behind an L7 reverse proxy (e.g. nginx), which relays the Agents' calls over connections of its own; the
+   * Proxy then learns an Agent has gone when its request stream ends. Default `false`.
    */
   TRANSPORT_FILTER_DISABLED,
 
-  /** Filesystem path to the TLS certificate chain file (PEM). Empty disables TLS on this side. */
+  /**
+   * Filesystem path to the TLS certificate chain file (PEM). Empty leaves the Proxy's gRPC port in plaintext; the Agent
+   * still uses TLS when given a trust collection.
+   */
   CERT_CHAIN_FILE_PATH,
 
-  /** Filesystem path to the TLS private key file (PEM). Empty disables TLS on this side. */
+  /**
+   * Filesystem path to the TLS private key file (PEM). Empty leaves the Proxy's gRPC port in plaintext; the Agent still
+   * uses TLS when given a trust collection.
+   */
   PRIVATE_KEY_FILE_PATH,
 
   /** Filesystem path to the trust-store certificate collection (PEM) used to validate the peer. */

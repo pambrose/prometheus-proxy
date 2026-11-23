@@ -40,8 +40,8 @@ import kotlin.time.Duration.Companion.seconds
 /**
  * Verifies the pre-shared agent-token feature end-to-end over real Netty transport in the packaged JARs.
  *
- * Each case stands up its own proxy + agent + metrics-stub stack (the proxy/agent images are content-hash
- * cached, so only container startup is paid per case) and tears it down in a `finally`.
+ * Each case stands up its own proxy + agent + metrics-stub stack (the proxy and agent images are built once per JVM
+ * and shared, so only container startup is paid per case) and tears it down in a `finally`.
  */
 class ContainersAgentTokenAuthTest : StringSpec() {
   init {

@@ -60,19 +60,22 @@ RELEASE_VERSION_FILES := README.md llms.txt etc/compose/proxy.yml examples/cloud
 	website/prometheus-proxy/docs/nginx-demo.md website/prometheus-proxy/docs/kubernetes-demo.md \
 	website/prometheus-proxy/docs/embedded-demo.md website/prometheus-proxy/docs/spring-boot-demo.md
 # The CI jobs that must have passed for the release commit, as workflow-file/job-name, separated by semicolons since
-# job names can hold spaces. make release itself runs only the tests and the distro build, so these are what cover
-# the coverage floors, TLA+, the alerting rules, the Helm charts, the docs site build, what a Maven build that embeds
-# the agent gets from the POM about to be published (consumer-check), the container suite, and the image and workflow
-# scans. The site build is here because make release ends by deploying the site, so a commit whose site doesn't build
-# stops before anything is published. The workflow file tells apart jobs with the same name, such as ci.yml's and
-# docs.yml's build. Renaming one of these jobs, or adding a check a release should wait for, means updating this list.
+# job names can hold spaces. make release itself runs only the tests (all-tests, which takes in the container suite and
+# the full TLA+ checks) and the distro build, so these are what cover the coverage floors, the alerting rules, the Helm
+# charts and their install into kind, the docs site build, what a Maven build that embeds the agent gets from the POM
+# about to be published (consumer-check), and the image and workflow scans; ci.yml/tla and the container suite are here
+# too, so a commit CI failed them on stops first. The site build is here because make release ends by deploying the
+# site, so a commit whose site doesn't build stops before anything is published. The workflow file tells apart jobs
+# with the same name, such as ci.yml's and docs.yml's build. Renaming one of these jobs, or adding a check a release
+# should wait for, means updating this list.
 RELEASE_REQUIRED_JOBS := ci.yml/build;ci.yml/tla;ci.yml/rules;ci.yml/helm;ci.yml/docs-site;ci.yml/consumer-check;\
 	container-tests.yml/container-tests;container-tests.yml/helm-smoke;security.yml/image-scan (proxy);\
 	security.yml/image-scan (agent);security.yml/codeql;zizmor.yml/code-scanning
 WEBSITE_DIR := website
 SITE_DIR := $(WEBSITE_DIR)/prometheus-proxy
 # Where site-version looks: the docs site's pages, and the snippet directories zensical.toml's snippets base_path
-# names. Its last entry, the repo root, gives the site only examples/ and grafana/, which name no version.
+# names. Its last entry, the repo root, gives the site examples/, grafana/, and sources from the demos' apps, the Ktor
+# plugin's and Spring Boot starter's tests, and src/test/kotlin/hosts, none of which names a version.
 SITE_VERSION_SOURCES := $(SITE_DIR)/docs src/test/kotlin/website src/test/java/website
 
 # The customer demos, whose Prometheus configs and rules check-rules validates: the dashboard and Grafana, the network
@@ -137,8 +140,9 @@ CI_JOBS := tla-checks check-rules helm-lint build-site consumer-check spring-boo
 # which the local repository may already hold from Maven Central, so the check always reads what this checkout builds.
 CONSUMER_CHECK_VERSION := $(patsubst %-SNAPSHOT,%,$(VERSION))-consumer-check-SNAPSHOT
 
-# zizmor audits the GitHub Actions workflows and dependabot.yml. The same version as .github/workflows/zizmor.yml, with
-# the digest zizmor-action pins for it (its support/versions file); update the two together.
+# zizmor audits the GitHub Actions workflows and dependabot.yml. The same version as .github/workflows/zizmor.yml;
+# update the two together. zizmor-action installs zizmor from hash-pinned wheels, not this image, so the digest here is
+# the image's own multi-platform index, as above.
 ZIZMOR_IMAGE := ghcr.io/zizmorcore/zizmor:1.31.1@sha256:42d409dbb851d4c5d35a058cf042b828bea1e3f2884378c526eb0974780e18d9
 
 # What codescene compares this checkout with: the merge base of HEAD and this ref, as of the last fetch, where a pull
@@ -341,7 +345,7 @@ container-tests:  ## Run the Testcontainers tests, building the fat JARs first (
 	echo "Using DOCKER_HOST=$$DOCKER_HOST"; \
 	DOCKER_HOST="$$DOCKER_HOST" RUN_CONTAINER_TESTS=true $(GRADLE) test --tests "io.prometheus.containers.*"
 
-all-tests: tests lincheck-tests container-tests tla-checks-full ## Run the full suite: all tests + the container tests
+all-tests: tests lincheck-tests container-tests tla-checks-full ## Run the full suite: all tests, Lincheck, the container tests, and the full TLA+ checks
 
 # Runs CI's jobs one after another on the working tree, uncommitted changes included. A failed job doesn't stop the
 # rest, as in CI, where they run in parallel; the failed ones are listed at the end. The Codecov upload is left out, and
@@ -388,8 +392,8 @@ _publish-consumer-check: _require-version
 	$(GRADLE) -PoverrideVersion=$(CONSUMER_CHECK_VERSION) publishToMavenLocal
 
 # Also in CI's consumer-check job: builds the embedded demo's coffee shop (demos/embedded/app), a Gradle project of its
-# own that embeds the agent through the public API, against this checkout (a composite build, which lints it too), so a
-# change to Agent.startAsyncAgent or the config tree it takes that breaks the demo fails here.
+# own that embeds the agent through the Ktor plugin, against this checkout (a composite build, which lints it too), so
+# a change to the plugin or to EmbeddedAgentConfig that breaks the demo fails here.
 embedded-demo-check:  ## Build the embedded demo's coffee shop against this checkout
 	$(GRADLE) -p demos/embedded/app -PlocalProxy build
 

@@ -39,7 +39,7 @@ public class Roastery {
     Origin.GUATEMALA,
   };
   private static final int BATCH_KG = 15;
-  // Beans lose about a sixth of their weight in the roaster
+  // Beans lose about a fifth of their weight in the roaster
   private static final int ROASTED_KG = 12;
   private static final int RESTOCK_KG = 300;
 

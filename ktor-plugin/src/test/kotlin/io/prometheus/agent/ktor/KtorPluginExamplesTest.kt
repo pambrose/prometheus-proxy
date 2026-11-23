@@ -46,7 +46,7 @@ class KtorPluginExamplesTest : StringSpec() {
       }
     }
 
-    "the page's application.conf starts the agent with the environment's proxy, serving the registry at its path" {
+    "the page's application.conf starts the agent, with the environment's proxy and the file's name" {
       val proxy = "localhost:${closedPort()}"
       testApplication {
         environment { config = pageConfig("PROMETHEUS_PROXY" to proxy, "PROMETHEUS_AGENT_TOKEN" to "s3cret") }

@@ -56,8 +56,8 @@ import io.ktor.server.cio.CIO as ServerCIO
 // be loaded (it surfaces as ConfigLoadException instead of exiting the host JVM). This pins the success
 // contract: an agent built from a config file, or from one built in memory, connects to a real proxy over Netty, the
 // returned handle reports the configured name, and shutdown() tears the connection down so the proxy forgets the agent.
-// The banner is left on (the default) because that is what an embedding host gets unless it opts out. It
-// also pins the failure contract for a config that loads but holds a setting the agent can't use.
+// The config-file case leaves the banner on (the default), because that is what an embedding host gets unless it opts
+// out. It also pins the failure contract for a config that loads but holds a setting the agent can't use.
 class EmbeddedAgentApiTest : StringSpec() {
   init {
     "startAsyncAgent should connect the agent from a config file and shutdown() should disconnect it" {
@@ -107,10 +107,10 @@ class EmbeddedAgentApiTest : StringSpec() {
       }
     }
 
-    // The in-memory overload, which EmbeddedAgentConfig.start() calls: a host that holds the agent's settings itself
-    // passes them as a Config, so no config file holds them on disk. The proxy serves the path the agent registered,
-    // from the target the config names.
-    "startAsyncAgent should start the agent from an in-memory config, and the proxy should serve its path" {
+    // EmbeddedAgentConfig.start(), which starts the agent as startAsyncAgent(Config) does, both through
+    // Agent.startEmbedded: a host that holds the agent's settings itself builds them in memory, so no config file holds
+    // them on disk. The proxy serves the path the agent registered, from the target the settings name.
+    "EmbeddedAgentConfig.start() should start the agent from in-memory settings, and the proxy should serve its path" {
       withEmbeddedAgentScraped(
         httpPort = HTTP_PORT,
         agentPort = GRPC_PORT,

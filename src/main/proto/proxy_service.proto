@@ -176,7 +176,8 @@ message ScrapeResponse {
 
 message ChunkedScrapeResponse {
   oneof chunk_one_of {
-    // Changes to the field names meta, data, and summary are hard-coded in the impl code
+    // Renaming header, chunk, or summary renames the generated accessors the proxy and the agent use, such as
+    // ChunkOneOfCase.HEADER, CHUNK, and SUMMARY, and hasHeader().
     HeaderData header = 1;
     ChunkData chunk = 2;
     SummaryData summary = 3;

@@ -75,8 +75,8 @@ class InProcessReconnectTest : StringSpec() {
       val originalAgentId = agent.agentId
       originalAgentId.shouldNotBeEmpty()
 
-      // Drop this agent's context on the proxy. The agent's next heartbeat returns valid=false, which
-      // it surfaces as NOT_FOUND, closing the connection and forcing the run loop to reconnect.
+      // Drop this agent's context on the proxy. Invalidating it ends the proxy's stream of scrape requests,
+      // which ends the agent's connection and sends the run loop to reconnect.
       proxy.removeAgentContext(originalAgentId, RemovalReason.TERMINATION)
 
       // After reconnecting, the agent registers a fresh agentId and re-registers agent1_metrics.

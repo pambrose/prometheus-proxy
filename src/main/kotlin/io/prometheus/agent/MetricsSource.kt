@@ -60,7 +60,8 @@ fun interface MetricsSource {
    * @return the content type of what was written, such as `text/plain; version=0.0.4; charset=utf-8`; empty for the
    *   Prometheus text format.
    * @throws IOException when the metrics can't be written, which fails the scrape, as a target that can't be reached
-   *   does. Any other exception or error does too.
+   *   does. Any other exception or error does too: only a `VirtualMachineError`, such as `OutOfMemoryError`, isn't
+   *   kept to its scrape.
    * @throws InterruptedException when the call is interrupted, as the agent does at the scrape timeout, so a source in
    *   Java can let one through from a call it makes.
    */

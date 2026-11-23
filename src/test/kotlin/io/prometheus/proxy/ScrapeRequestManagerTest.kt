@@ -172,7 +172,7 @@ class ScrapeRequestManagerTest : StringSpec() {
     // Tests the scrape request/response correlation mechanism. When Prometheus sends a
     // scrape request, the proxy tracks it by scrapeId. When the agent returns results,
     // assignScrapeResults matches the response to the original request and calls
-    // markComplete() to signal the waiting HTTP handler. This test verifies that
+    // complete() to publish the results and signal the waiting HTTP handler. This test verifies that
     // multiple concurrent scrapes are correctly tracked and completed independently.
     "multiple assignScrapeResults should complete each wrapper" {
       val manager = ScrapeRequestManager()
@@ -310,10 +310,8 @@ class ScrapeRequestManagerTest : StringSpec() {
     // ==================== Bug #15: Double-assignment protection Tests ====================
 
     // Bug #15: If assignScrapeResults is called twice with the same scrapeId (e.g., due
-    // to gRPC retries or agent bugs), the second call would overwrite scrapeResults and
-    // call markComplete() again. markComplete() invokes requestTimer?.observeDuration(),
-    // recording a duplicate latency observation and skewing metrics. The fix uses an
-    // AtomicBoolean in markComplete() so observeDuration() is only called once.
+    // to gRPC retries or agent bugs), the second call would overwrite scrapeResults. Now
+    // ScrapeRequestWrapper.complete()'s CAS lets only the first call publish its results.
 
     "Bug #15: assignScrapeResults should complete each time wrapper is in map" {
       val manager = ScrapeRequestManager()
@@ -514,7 +512,7 @@ class ScrapeRequestManagerTest : StringSpec() {
     // ==================== in-flight limit ====================
 
     // The tracking map holds every scrape request in flight across all agents, so admitting through it
-    // bounds the proxy's memory when many agents are busy at once.
+    // bounds how many scrapes the proxy works on at once: a concurrency limit, not a memory bound.
 
     "tryAddToScrapeRequestMap should refuse a request once the in-flight limit is reached" {
       val manager = ScrapeRequestManager()

@@ -33,12 +33,12 @@ import io.prometheus.agent.AgentActivityLog
  * Polls a [PathDiscoverySource] on an interval and reconciles the agent's discovered paths.
  *
  * Launched by [io.prometheus.Agent] as a per-connection task, so it starts on each connect and is cancelled on
- * disconnect. A connect clears every path and registers the static ones, and the first tick registers the discovered
- * set again. A successful read, an empty one included, is reconciled and kept as the last good read. A failed read is
- * logged, and the last good read is reconciled instead: a no-op while its paths are still registered, and it registers
- * them again after a reconnect cleared them, so an agent that reconnects while the file is unreadable still serves the
- * paths it last read (November #11). The agent keeps one instance across connections, so the last good read outlives
- * a reconnect; before the first one, a failed read reconciles nothing.
+ * disconnect. A connect clears every path but one another agent took over, and registers the static ones, and the
+ * first tick registers the discovered set again. A successful read, an empty one included, is reconciled and kept as
+ * the last good read. A failed read is logged, and the last good read is reconciled instead: a no-op while its paths
+ * are still registered, and it registers them again after a reconnect cleared them, so an agent that reconnects while
+ * the file is unreadable still serves the paths it last read (November #11). The agent keeps one instance across
+ * connections, so the last good read outlives a reconnect; before the first one, a failed read reconciles nothing.
  *
  * @param pathManager the manager whose discovered paths are reconciled
  * @param source the discovery source to poll

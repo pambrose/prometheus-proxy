@@ -54,9 +54,9 @@ fun testConfigVals(hocon: String): ConfigVals =
  * `.properties` are parsed differently from the default `.conf`. (`BaseOptions.getConfigSyntax` does the
  * same job for the URL branch, which a local file never reaches.)
  *
- * A file is the only way to reach some settings at all. An empty string cannot be expressed on the command
- * line, where a blank value falls back to the config default, nor through `-D`, whose parse rejects one --
- * so the `require(... .isNotEmpty())` guards in ProxyOptions are only testable this way.
+ * An empty string can't be set with a CLI flag, where a blank value falls back to the config default. A config
+ * file can set one, and so can an empty `-D` value (`-Dkey=`); either reaches the `require(... .isNotEmpty())`
+ * guards in ProxyOptions.
  */
 fun proxyOptionsFromConfig(
   contents: String,

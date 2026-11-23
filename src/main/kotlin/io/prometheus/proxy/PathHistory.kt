@@ -73,8 +73,9 @@ internal class PathHistory(
    * A path as it left the path map, its last agent gone: what its gone row shows that its scrapes can't.
    *
    * Copied out of the path's entry rather than holding it, which would keep the agent's context, and its queue, alive.
-   * The agent-supplied values were bounded as the path registered (`ProxyPathManager.addPath`), so this needs no bound
-   * of its own.
+   * The agent-supplied values were bounded already: the agent's name as the agent registered
+   * (`ProxyServiceImpl.registerAgent`), and the target URL and source as the path did (`ProxyPathManager.addPath`). So
+   * this needs no bound of its own.
    *
    * @param at when the path left, from which its retention runs unless it was scraped later
    * @param agentName the name of the agent that served it last

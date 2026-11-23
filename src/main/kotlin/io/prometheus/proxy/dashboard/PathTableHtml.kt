@@ -63,8 +63,8 @@ import io.prometheus.common.dashboard.DashboardPage.renderFilters
  * Flat on purpose: no selection and no drill-in, so the whole table is a single out-of-band swap and the push path
  * stays the cheapest of any layout. The row IS the answer, which is the reason to have this view at all.
  *
- * Apart from [ProxyDashboardHtml], which renders the page around it and the agent view, and shares with this the
- * helpers both layouts need: [agentLabel], which both must name an agent through, and [scrapeTime].
+ * Apart from [ProxyDashboardHtml], which renders the page around it and the agent view, and shares with this
+ * [agentLabel], which every view must name an agent through.
  */
 internal object PathTableHtml {
   /** The search and the table, as the page first renders them; see `DashboardPage.renderFilters`. */
@@ -236,9 +236,8 @@ internal object PathTableHtml {
   /**
    * A path, and while the proxy serves it, the button that copies its proxy URL, the one to curl to check the path
    * through the proxy. The proxy can't know the name the viewer reaches it by, so the button carries the path, and the
-   * page's script joins it to the host the page was opened at and the scrape port,
-   * [io.prometheus.proxy.dashboard.DashboardPage.SCRAPE_PORT_ATTR] on `<body>`. With
-   * [scrapeNow], the button that scrapes it at once follows.
+   * page's script joins it to the host the page was opened at and the scrape port, [DashboardPage.SCRAPE_PORT_ATTR] on
+   * `<body>`. With [scrapeNow], the button that scrapes it at once follows.
    */
   private fun TR.pathCell(
     path: PathView,

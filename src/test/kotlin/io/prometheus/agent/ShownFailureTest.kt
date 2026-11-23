@@ -27,7 +27,8 @@ import io.kotest.matchers.string.shouldNotContain
 
 /**
  * [ShownFailure], a failure as the agent's dashboard shows it: an exception as its class and the first line of its
- * message, cut, redacted, and escaped, and a reason in the proxy's words as it is, up to a sentence or two.
+ * message, cut, redacted, and escaped, and a reason in the proxy's words with every line kept, escaped, and not cut
+ * at an exception's limit.
  */
 class ShownFailureTest : StringSpec() {
   init {
@@ -80,8 +81,9 @@ class ShownFailureTest : StringSpec() {
       }
     }
 
-    // A reason in the proxy's words isn't an exception's message, and keeps the longer limit and every line, escaped.
-    "a reason should be shown up to the longer limit, with its line breaks escaped" {
+    // A reason in the proxy's words isn't an exception's message: it keeps every line, escaped, and isn't cut at an
+    // exception's limit.
+    "a reason should not be cut at an exception's limit, and its line breaks should be escaped" {
       val reason = "a".repeat(300) + "\nb"
 
       ShownFailure.of(reason).message shouldBe "a".repeat(300) + "\\nb"

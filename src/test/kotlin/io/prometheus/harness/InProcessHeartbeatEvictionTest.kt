@@ -76,7 +76,8 @@ class InProcessHeartbeatEvictionTest : StringSpec() {
           valid = false
           reason = "test: evicted"
         }
-      // With a deadline set, unaryStub() derives a fresh stub per call and the spy would never be consulted.
+      // With a deadline set, sendHeartBeat derives a fresh stub per call (stubWithDeadline) and the spy would never be
+      // consulted. A unary deadline of 0 gives heartbeats none either (Agent.heartbeatDeadlineSecs).
       grpcService.unaryDeadlineSecs = 0
       grpcService.grpcStub = evictingStub
 

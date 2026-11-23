@@ -24,8 +24,8 @@ import java.util.zip.CRC32
 /**
  * Accumulates chunked scrape response data with CRC32 integrity validation.
  *
- * When a scrape response exceeds the gRPC message size limit, the agent sends it as a
- * sequence of header, chunk, and summary messages. This class reassembles the chunks into
+ * When a gzipped scrape result reaches the agent's `chunkContentSizeKbs` (32 KB by default), the
+ * agent sends it as a sequence of header, chunk, and summary messages. This class reassembles the chunks into
  * a single byte stream, validating running CRC32 checksums and byte/chunk counts at each
  * step. On successful summary validation, it produces a complete [ScrapeResults].
  *

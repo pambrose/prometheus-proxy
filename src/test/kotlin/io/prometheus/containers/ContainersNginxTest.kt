@@ -54,11 +54,12 @@ import kotlin.time.Duration.Companion.seconds
  * runs it: nginx ends the agent's TLS, with the project's `testing/certs` `server1.pem`, and passes its gRPC calls to
  * the proxy's agent port in plaintext (`grpc_pass`), and both sides turn the transport filter off.
  *
- * nginx closes a stream that carries nothing for its `grpc_read_timeout` (the stream of scrape requests) or
- * `client_body_timeout` (the streams of results), and an agent's connection ends when any of its streams closes. The
- * proxy and agent keep each stream open with a keepalive after `proxy.internal.streamKeepAliveSecs` of quiet. Here
- * nginx's timeouts are [NGINX_TIMEOUT_SECS] rather than its default 60, so the spec takes seconds: an idle agent stays
- * connected past them with keepalives on, and, the control that shows the timeouts bite, is cut off with them off.
+ * nginx closes a stream that carries nothing for its `grpc_read_timeout` (the streams the proxy sends on: scrape
+ * requests and path notices) or `client_body_timeout` (the streams of results), and an agent's connection ends when
+ * any of its streams closes. The proxy and agent keep each stream open with a keepalive after
+ * `proxy.internal.streamKeepAliveSecs` of quiet. Here nginx's timeouts are [NGINX_TIMEOUT_SECS] rather than its
+ * default 60, so the spec takes seconds: an idle agent stays connected past them with keepalives on, and, the control
+ * that shows the timeouts bite, is cut off with them off.
  * A scrape through the proxy proves nothing about that, since the agent reconnects within a second, so the cases count
  * the proxy's connects and the streams it saw end.
  */

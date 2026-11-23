@@ -21,8 +21,8 @@ import io.prometheus.Agent
 /**
  * Lifecycle handle for an [Agent] started in the background of a host JVM.
  *
- * Returned by [Agent.startAsyncAgent][io.prometheus.Agent.Companion.startAsyncAgent], this is the
- * supported way for embedders to interact with an Agent they did not construct directly. The
+ * Returned by [Agent.startAsyncAgent][io.prometheus.Agent.Companion.startAsyncAgent] and [EmbeddedAgentConfig.start],
+ * this is the supported way for embedders to interact with an Agent they did not construct directly. The
  * underlying [Agent] instance is intentionally hidden so consumers depend only on this stable,
  * minimal surface — identity (for logging and metrics correlation), its connection to the proxy, and shutdown.
  *

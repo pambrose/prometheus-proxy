@@ -42,7 +42,7 @@ import kotlin.time.TimeSource.Monotonic
 // Measured over 6000 server starts on this machine: 8 failures with the wildcard bind, 0 with this.
 const val LOOPBACK_HOST = "127.0.0.1"
 
-// Start an embeddedServer with start(wait = false) and poll until it serves HTTP. A bare
+// Start an embeddedServer with startSuspend(wait = false) and poll until it serves HTTP. A bare
 // TCP-connect probe isn't enough: CIO's listening socket can accept and immediately close
 // while the routing pipeline is still being installed, surfacing as EOFException or empty
 // bodies on the next real request. Sending a real HTTP/1.0 line and waiting for the "HTTP/"
@@ -59,8 +59,8 @@ const val LOOPBACK_HOST = "127.0.0.1"
 // the application module answers *every* request with 404 -- byte-identical to the 404 a fully
 // configured server returns for the probe's own unrouted /__readiness__ path. Three probes against
 // an unrouted engine are three indistinguishable successes, so the streak alone let specs race the
-// module install and see a 404 with their route handler never invoked. startSuspend() above is what
-// actually closes that window.
+// module install and see a 404 with their route handler never invoked. startSuspend(), called below, is
+// what actually closes that window.
 //
 // The deadline is generous because it is only a ceiling, not a wait: a healthy server satisfies
 // the streak in tens of milliseconds. The extra headroom absorbs CPU contention during a full

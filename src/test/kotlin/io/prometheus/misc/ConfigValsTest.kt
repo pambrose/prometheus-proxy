@@ -112,10 +112,10 @@ class ConfigValsTest : StringSpec() {
       }
     }
 
-    // The contrast with the endpoints case above is the point of having both tests: every proxy.dashboard key
-    // is a SCALAR, so tscfg emits a hasPathOrNull guard for each and for the block itself. A config
-    // predating the dashboard therefore loads without needing a reference.conf entry at all -- this pins that,
-    // so the guard cannot silently regress into an unguarded getList.
+    // tscfg guards the proxy.dashboard block and each of its scalar keys with hasPathOrNull. Its lists,
+    // allowedOrigins, allowedHosts, and links, are read with an unguarded getList, as endpoints is above, so
+    // reference.conf defaults them. A config predating the dashboard loads only with those defaults, and this
+    // pins them.
     "a config that predates the dashboard should still load" {
       val config =
         ConfigFactory.parseString("proxy { http { port = 9999 } }")

@@ -132,6 +132,7 @@ internal class CountingProxyMetrics : CountingMetrics<ProxyMetrics>(mockk(relaxe
 
 /** The agent's [CountingMetrics], labeled as the agent's are, `launch_id` first. */
 internal class CountingAgentMetrics : CountingMetrics<AgentMetrics>(mockk(relaxed = true)) {
+  val scrapeRequests = stub({ scrapeRequestCount }, counter("scrape_requests", "launch_id", "type"))
   val scrapeResults = stub({ scrapeResultCount }, counter("scrape_results", "launch_id", "type"))
   val connects = stub({ connectCount }, counter("connects", "launch_id", "type"))
   val disconnects = stub({ disconnectCount }, counter("disconnects", "launch_id"))
@@ -146,6 +147,7 @@ internal class CountingAgentMetrics : CountingMetrics<AgentMetrics>(mockk(relaxe
   val filterLinesDropped = stub({ filterLinesDropped }, counter("filter_lines_dropped", "launch_id", "path"))
   val filterBytesSaved = stub({ filterBytesSaved }, counter("filter_bytes_saved", "launch_id", "path"))
   val dashboardLogins = stub({ dashboardLoginCount }, counter("dashboard_logins", "launch_id", "outcome"))
+  val dashboardScrapes = stub({ dashboardScrapeCount }, counter("dashboard_scrapes", "launch_id"))
   override val queueWait: Histogram =
     stub({ scrapeQueueWait }, Histogram.builder().name("queue_wait").labelNames("launch_id").build())
 

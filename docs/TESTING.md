@@ -364,7 +364,8 @@ which would replace the host application's logging config.
 Two support helpers also live here (not test classes themselves):
 
 - **KeyStoreTestSupport** — `createTempKeyStore()`, an empty keystore in an auto-deleted temp file, with its
-  password, for the `SslSettings` and `AgentHttpService` trust-store tests
+  password, for the `SslSettings` and `AgentHttpService` trust-store tests and `AgentSettingsTest`, whose agent
+  loads one as it's built
 - **DiscoveryTestSupport** (`discovery/`) — `discoveryPathsHocon()`, which builds a discovery file's
   `paths = [...]` body for the harness and container discovery specs, so the format they write is defined in one
   place
@@ -879,7 +880,7 @@ mechanism that the standard suite cannot reach:
   ended it, and failing connects to an open page when the proxy stops; and, with the agent's metrics on, its connect, its
   refused path, its disconnect, and its dashboard sign-in counted
 - **AgentDiscoveryTest** — dynamic target discovery: the agent reconciles a watched file's paths, adding,
-  updating and removing them with no restart
+  replacing and removing them with no restart
 - **AgentMetricFilterTest** — per-path metric filtering: a denied metric family never reaches the proxy
 - **AgentPathAuthTest** — per-agent identity with path-glob authorization, over Netty so the token header
   actually crosses the wire; a security boundary. Its `proxy.auth` list is in `config/test-configs/path-auth.conf`,
@@ -898,14 +899,15 @@ mechanism that the standard suite cannot reach:
   reaches the proxy once rather than on every retry, whether static or discovered; Netty, so each token resolves
   to its own identity
 - **EmbeddedAgentApiTest** — the public `startAsyncAgent()` handle connects from a config file, reports its
-  identity, and disconnects on `shutdown()`; the overload that takes an in-memory `Config`, through the
-  `EmbeddedAgentConfig` builder, starts an agent whose path the proxy serves, and throws `ConfigLoadException` for a
-  setting it can't use; the handle's `isConnected` and `proxyEndpoint` report the connection once the proxy serves the
-  agent's path, go false after `shutdown()` or once the proxy goes away, and are false before the first connection; a
-  path given a username and password with the builder reaches a target that demands them as Basic Auth, whatever their
-  characters; a path the builder's `source()` adds serves what its source writes, through the proxy; and a config
-  served from a URL with credentials that holds a setting the agent rejects, whether its options or its constructor reject it, throws
-  `ConfigLoadException`, with the credentials in none of its messages, its cause chain, or the log
+  identity, and disconnects on `shutdown()`; the `EmbeddedAgentConfig` builder's `start()` starts an agent from
+  settings built in memory, whose path the proxy serves, and the overload of `startAsyncAgent()` that takes an
+  in-memory `Config` throws `ConfigLoadException` for a setting it can't use; the handle's `isConnected` and
+  `proxyEndpoint` report the connection once the proxy serves the agent's path, go false after `shutdown()` or once the
+  proxy goes away, and are false before the first connection; a path given a username and password with the builder
+  reaches a target that demands them as Basic Auth, whatever their characters; a path the builder's `source()` adds
+  serves what its source writes, through the proxy; and a config served from a URL with credentials that holds a
+  setting the agent rejects, whether its options or its constructor reject it, throws `ConfigLoadException`, with the
+  credentials in none of its messages, its cause chain, or the log
 - **EmbeddedAgentMetricsTest** — with metrics on, an agent started again after `shutdown()` and two agents at
   once each connect and count their own connects without a registry clear in between; a stopped agent's series go
   with it; and a host metric with an agent metric's name fails `startAsyncAgent()`, with the registry's rejection
@@ -1115,8 +1117,8 @@ count them. `TestingGuideTest` reads only the root project's specs, so name new 
   app's, as a development-mode reload gives, doesn't; the agent stays off when disabled or without a proxy, and a
   required one fails the start; a start that throws leaves the agent off, or, when required, fails the app's start with
   the exception, a checked one wrapped; `ApplicationStopPreparing` begins the stop without waiting for it, and
-  `ApplicationStopping` waits, up to its timeout, or stops an agent the engine didn't, once whichever come; an agent
-  that fails to stop doesn't fail the app's; and the handlers are gone once the app stops.
+  `ApplicationStopping` stops an agent the engine didn't, and gives up waiting at its timeout, once whichever come;
+  an agent that fails to stop doesn't fail the app's; and the handlers are gone once the app stops.
 - **PrometheusProxyAgentConfigTest** — `prometheus-proxy.agent` in HOCON, YAML (`full-section.yaml`), and a
   `MapApplicationConfig` builds the tree the same builder calls do; a blank value, such as YAML's empty default for an
   unset environment variable (`unset-proxy.yaml`), counts as unset; the dashboard login's default username; a value
@@ -1133,8 +1135,8 @@ count them. `TestingGuideTest` reads only the root project's specs, so name new 
   accepts, and only the families it names.
 - **KtorPluginExamplesTest** — the Ktor Plugin page's examples, in `website/KtorPluginExample.kt` and the test
   resources' `website/application.conf`: the module runs without the agent where `PROMETHEUS_PROXY` isn't set, and its
-  health route says so; the file starts the agent with the environment's proxy, serving the registry at its path, and
-  leaves it off without one.
+  health route says so; the file starts the agent with the environment's proxy and the file's name, and leaves it off
+  without one, and builds settings that serve the registry at its path.
 
 ## Testing Patterns
 

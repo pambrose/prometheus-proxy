@@ -76,7 +76,8 @@ class DashboardLoginTest : StringSpec() {
       DashboardLogin.credentials(basic("no colon")).shouldBeNull()
     }
 
-    // Basic Auth splits at the first colon, so a password may contain one; ProxyOptions refuses a username with one.
+    // Basic Auth splits at the first colon, so a password may contain one; BaseOptions refuses a username with one,
+    // for the proxy's dashboard and the agent's.
     "the credentials should split at the first colon, so the password may contain colons" {
       val credentials = DashboardLogin.credentials(basic("admin:a:b:c")).shouldNotBeNull()
       String(credentials.first, Charsets.UTF_8) shouldBe "admin"

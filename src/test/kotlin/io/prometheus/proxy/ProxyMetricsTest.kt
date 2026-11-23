@@ -432,7 +432,7 @@ class ProxyMetricsTest : StringSpec() {
 
     // A series created by its first increment starts at 1, so increase() and rate() saw nothing of a single rejection
     // or eviction, and the demo's panels and the alerts built on them stayed empty until a second one.
-    "each labeled counter whose label has a known set of values should expose them all at zero" {
+    "each labeled counter whose label has a known set of values should expose a series for each of them" {
       opened(ProxyMetrics(mockProxyForMetrics()))
 
       fun labels(

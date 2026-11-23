@@ -14,10 +14,11 @@ this directory.
 ## ProxyRegistry
 
 `ProxyRegistry.tla` models the proxy's agent registry, path map, and scrape-request lifecycle: `AgentContextManager`,
-`AgentContext` (validity, queue, notifier, `invalidate()` and its drain), `ProxyPathManager` (the out-of-lock lookup and
-the `synchronized(pathMap)` block of `addPath`, `removePath`, `removeFromPathManager`), `ScrapeRequestManager`,
-`Proxy.removeAgentContext`, one HTTP handler per scrape, and the `readRequestsFromProxy` loop, including, with the
-transport filter disabled, a stream that names another connection's agentId, which only the identity check binds.
+`AgentContext` (validity, queue, notifier, `invalidate()` and its drain), `ProxyPathManager` (`addPath`, after
+`registerPath`'s out-of-lock context lookup, and its `synchronized(pathMap)` block in `addValidatedPath`, `removePath`,
+`removeFromPathManager`), `ScrapeRequestManager`, `Proxy.removeAgentContext`, one HTTP handler per scrape, and the
+`readRequestsFromProxy` loop, including, with the transport filter disabled, a stream that names another connection's
+agentId, which only the identity check binds.
 It also models path notices and reclaims: the notice `takeOverPath` queues for a displaced connection of another
 launch, its delivery on `readPathNoticesFromProxy`, the agent counting the path as taken over, which it keeps across
 its reconnects, and its reclaim, which the proxy refuses while a live connection of another launch holds the path.
@@ -60,7 +61,8 @@ java -cp tla2tools.jar tlc2.TLC -workers auto -deadlock -config ProxyRegistry.cf
 # Path notices and reclaims, 2 connections of one identity on one path (seconds)
 java -cp tla2tools.jar tlc2.TLC -workers auto -deadlock -config ProxyRegistryReclaim.cfg ProxyRegistry.tla
 
-# The same with a reconnect, 3 exclusive connections (about a minute; make tla-checks-full, not CI)
+# The same with a reconnect, 3 exclusive connections (about a minute; make tla-checks-full, which CI runs when this
+# directory or the pinned tools change)
 java -cp tla2tools.jar tlc2.TLC -workers auto -deadlock -config ProxyRegistryReconnect.cfg ProxyRegistry.tla
 
 # Safety only, 3 connections, 2 paths, 2 scrapes (hours; not yet run to completion)
@@ -69,8 +71,10 @@ java -cp tla2tools.jar tlc2.TLC -workers auto -deadlock -config ProxyRegistrySaf
 
 `-deadlock` turns off deadlock checking: a run that ends with every scrape done and nothing left to do is fine.
 
-To see a property fail, set `CheckOwnership = FALSE` in a config: TLC then finds an agent answering another agent's
-scrape and reports `AnswerFromOwner` violated with the trace.
+To see a property fail, set `CheckOwnership = FALSE` in `ProxyRegistry.cfg`: TLC then finds an agent answering another
+agent's scrape and reports `AnswerFromOwner` violated with the trace. This flag and the two below matter only in
+`ProxyRegistry.cfg` and `ProxyRegistrySafety.cfg`: the reclaim and reconnect configs have no scrapes, don't check
+`AnswerFromOwner`, and have only one identity, so `StreamIdentity` can't fail there.
 
 `SameLookup = FALSE` keeps the owner check but restores how it ran before October #21's fix: on a lookup of its own,
 before `assignScrapeResults` looked the scrape up again, with an untracked scrape id let through. TLC then reports

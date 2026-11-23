@@ -460,7 +460,7 @@ internal object AgentDashboardHtml {
     }
 
   /**
-   * The page's title: the product's name, after a count of the problems while there are any, so a dashboard in a
+   * The page's title: the dashboard's name, after a count of the problems while there are any, so a dashboard in a
    * background tab still says when something is wrong: each path refused or retrying, and a connection failing.
    */
   internal fun pageTitle(snapshot: AgentSnapshot): String {

@@ -319,9 +319,6 @@ class ProxyServiceImplTest : StringSpec() {
       verify { mockAgentContext.markActivityTime(false) }
     }
 
-    // October #23: the name, host name, launch ID, and endpoint list an agent reports were stored whole, bounded only
-    // by gRPC's 4 MiB message limit, and repeated for every path the agent serves: in logs, service discovery, the
-    // dashboard, and /debug. They are now cut to proxy.internal limits; the agent stays registered.
     // The dashboard names the identity an agent registered as. Recorded in either transport-filter mode, apart from
     // authIdentityName, which binds the context and is set only with the filter disabled.
     "registerAgent should record the identity the call authenticated as, without binding the context to it" {
@@ -395,6 +392,9 @@ class ProxyServiceImplTest : StringSpec() {
       agentContext.identityName shouldBe ""
     }
 
+    // October #23: the name, host name, launch ID, and endpoint list an agent reports were stored whole, bounded only
+    // by gRPC's 4 MiB message limit, and repeated for every path the agent serves: in logs, service discovery, the
+    // dashboard, and /debug. They are now cut to proxy.internal limits; the agent stays registered.
     "registerAgent should cut over-long agent-reported fields to the proxy.internal limits" {
       val (proxy, agentContext) = proxyWithRealAgentContext(maxAgentFieldLength = 256, maxAgentProxyEndpoints = 4)
       val request =
@@ -938,7 +938,8 @@ class ProxyServiceImplTest : StringSpec() {
 
       response.valid.shouldBeFalse()
       response.reason shouldContain "does not match"
-      // unregisterPath has no identity gate of its own, so the binding check is the only guard.
+      // unregisterPath checks no path globs, and the victim's context has no bound identity, so the connection's
+      // agentId check is the only guard here.
       coVerify(exactly = 0) { pathManager.removePath(any(), any()) }
     }
 
@@ -1365,7 +1366,7 @@ class ProxyServiceImplTest : StringSpec() {
 
     // Tests the gRPC streaming flow for scrape requests from proxy to agent.
     // The proxy continuously streams scrape requests to the agent while:
-    // 1. The proxy is running
+    // 1. The proxy is starting or running
     // 2. The agent context is valid
     // This test simulates the agent becoming invalid after processing one request,
     // which terminates the stream. The isValid() mock returns [true, false] to
@@ -1682,7 +1683,7 @@ class ProxyServiceImplTest : StringSpec() {
       every { mockAgentContext.agentId } returns testAgentId
       // Valid for two iterations then invalid
       every { mockAgentContext.isValid() } returnsMany [true, true, false]
-      // Return null both times (channel drained)
+      // Return null both times, as readScrapeRequest does once the context is invalidated or its idle wait passes
       coEvery { mockAgentContext.readScrapeRequest() } returns null
       every { proxy.agentContextManager.getAgentContext(testAgentId) } returns mockAgentContext
 
@@ -1740,7 +1741,7 @@ class ProxyServiceImplTest : StringSpec() {
       verify(exactly = 0) { proxy.removeAgentContextIfCurrent(any(), any()) }
     }
 
-    "readRequestsFromProxy should clean up on stream cancellation when transportFilterDisabled" {
+    "readRequestsFromProxy should clean up after streaming a request when transportFilterDisabled" {
       val proxy = createMockProxy(transportFilterDisabled = true, isRunning = true)
       val mockAgentContext = mockk<AgentContext>(relaxed = true)
       val mockScrapeRequestWrapper = mockk<ScrapeRequestWrapper>(relaxed = true)
@@ -1748,7 +1749,7 @@ class ProxyServiceImplTest : StringSpec() {
       val testAgentId = "test-agent-cancel-cleanup"
 
       every { mockAgentContext.agentId } returns testAgentId
-      // Valid for one iteration, then stream will be cancelled by the test
+      // Valid for one iteration, then invalid, which ends the stream
       every { mockAgentContext.isValid() } returnsMany [true, false]
       coEvery { mockAgentContext.readScrapeRequest() } returns mockScrapeRequestWrapper andThen null
       every { mockScrapeRequestWrapper.scrapeRequest } returns mockScrapeRequest
@@ -2290,7 +2291,7 @@ class ProxyServiceImplTest : StringSpec() {
     // ==================== Bug #20: transportFilterDisabled cleanup Tests ====================
 
     // Bug #20: When transportFilterDisabled is true and readRequestsFromProxy is called,
-    // the finally block should clean up the AgentContext via removeAgentContext.
+    // the finally block should clean up the AgentContext it streamed via removeAgentContextIfCurrent.
     "Bug #20: readRequestsFromProxy should cleanup on stream termination when transportFilterDisabled" {
       val proxy = createMockProxy(transportFilterDisabled = true)
       val agentContext = AgentContext("test-addr")
@@ -2312,8 +2313,8 @@ class ProxyServiceImplTest : StringSpec() {
       verify { proxy.removeAgentContextIfCurrent(agentContext, RemovalReason.STREAM_TERMINATED) }
     }
 
-    // Bug #20: When transportFilterDisabled is false, readRequestsFromProxy should NOT
-    // call removeAgentContext (transport filter handles cleanup instead).
+    // Bug #20: When transportFilterDisabled is false, readRequestsFromProxy should NOT call removeAgentContext or
+    // removeAgentContextIfCurrent (transport filter handles cleanup instead).
     "Bug #20: readRequestsFromProxy should not cleanup when transportFilterDisabled is false" {
       val proxy = createMockProxy(transportFilterDisabled = false)
       val agentContext = AgentContext("test-addr")
@@ -3386,7 +3387,8 @@ class ProxyServiceImplTest : StringSpec() {
         }
 
       exception.status.code shouldBe Status.PERMISSION_DENIED.code
-      // With the transport filter disabled, a closing stream removes the agent it named.
+      // With the transport filter disabled, a stream's end removes the context it streamed, so a refused stream,
+      // which streamed nothing, must remove nothing.
       verify(exactly = 0) { proxy.removeAgentContext(any(), any()) }
       verify(exactly = 0) { proxy.removeAgentContextIfCurrent(any(), any()) }
     }
@@ -3465,7 +3467,8 @@ class ProxyServiceImplTest : StringSpec() {
     }
 
     // The identity is read off the owner the tracked scrape holds. It was looked up in the AgentContextManager by the
-    // owner's agentId, and a missing context let the result through; the mocked manager here has no such context.
+    // owner's agentId, and a context that was missing or had no bound identity let the result through; the relaxed
+    // manager here answers that lookup with an unbound mock context.
     "writeResponsesToProxy should ignore a result from a different identity when the transport filter is disabled" {
       val victim = victimScrape(AgentContext("victim-host", authIdentityName = "team-a"))
       val scrapeRequestManager = ScrapeRequestManager().apply { tryAddToScrapeRequestMap(victim, Int.MAX_VALUE) }

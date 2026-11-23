@@ -68,7 +68,7 @@ class OptionsTest : StringSpec() {
         }
     }
 
-    "should override defaults with quoted system property values" {
+    "should override a default with a single system property value" {
       val configVals = readProxyOptions(["-Dproxy.http.port=9394"])
       configVals.proxy.http.port shouldBe 9394
     }
@@ -145,7 +145,7 @@ class OptionsTest : StringSpec() {
 
     "verifyAgentChunkSettings should accept custom chunk size" {
       val options = agentOptions(["--name", "test", "--proxy", "host", "--chunk", "64"], false)
-      // chunkContentSizeBytes is multiplied by 1024 in processing
+      // --chunk is in KB; chunkContentSizeBytes is that times 1024
       options.chunkContentSizeBytes shouldBe 64 * 1024
     }
 

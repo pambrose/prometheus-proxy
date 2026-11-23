@@ -70,8 +70,7 @@ import io.prometheus.common.proxyOptions
 import io.prometheus.common.captureLogs
 
 // Tests for ProxyHttpConfig which configures Ktor server plugins for the proxy HTTP service.
-// Note: Full integration tests with testApplication would require ktor-server-test-host dependency.
-// These tests verify the configuration logic without running a full HTTP server.
+// A few build Ktor's config objects directly; most run an embedded CIO server with the proxy's plugins installed.
 class ProxyHttpConfigTest : StringSpec() {
   // ==================== Helper Methods ====================
 
@@ -313,7 +312,7 @@ class ProxyHttpConfigTest : StringSpec() {
       }
     }
 
-    // ==================== getFormattedLog Tests ====================
+    // ==================== HTTP Status Code Constants ====================
 
     "Found status should have value 302" {
       HttpStatusCode.Found.value shouldBe 302
@@ -350,7 +349,7 @@ class ProxyHttpConfigTest : StringSpec() {
     }
 
     // ==================== getFormattedLog Tests ====================
-    // getFormattedLog is private in ProxyHttpConfig. It has two branches:
+    // getFormattedLog, a member of the internal ProxyHttpConfig object, has two branches:
     // - Found (302): includes Location header in the log
     // - All other statuses: standard log format without Location
 
@@ -398,18 +397,18 @@ class ProxyHttpConfigTest : StringSpec() {
     // ==================== configureCallLogging Filter Tests ====================
     // The filter checks call.request.path().startsWith("/")
 
-    "callLogging filter should accept paths starting with slash" {
+    "a path starting with a slash should pass the startsWith check the call-logging filter uses" {
       // The filter logic: call.request.path().startsWith("/")
       val path = "/metrics"
       path.startsWith("/") shouldBe true
     }
 
-    "callLogging filter should accept root path" {
+    "the root path should pass the startsWith check the call-logging filter uses" {
       val path = "/"
       path.startsWith("/") shouldBe true
     }
 
-    "callLogging filter should reject paths not starting with slash" {
+    "a path without a leading slash should fail the startsWith check the call-logging filter uses" {
       // This case would only happen if request.path() returns a path without leading slash,
       // which is unusual in HTTP but the filter handles it defensively
       val path = "metrics"
@@ -422,17 +421,12 @@ class ProxyHttpConfigTest : StringSpec() {
       val config = CallLoggingConfig()
       with(ProxyHttpConfig) { config.configureCallLogging() }
 
-      // CallLoggingConfig.level has no public getter, so read the backing field reflectively.
-      val field = CallLoggingConfig::class.java.getDeclaredField("level")
-      field.isAccessible = true
-      val level = field.get(config) as Level
-
-      level shouldBe Level.DEBUG
+      config.level shouldBe Level.DEBUG
     }
 
     // ==================== configureKtorServer Integration Tests ====================
     // These tests verify the full configureKtorServer() function by running an embedded server
-    // with all plugins installed, then making HTTP requests to verify behavior.
+    // with every plugin but CallLogging, which test mode leaves out, then making HTTP requests to verify behavior.
 
     "configureKtorServer should add X-Engine default header to responses" {
       val proxy = createTestProxy()

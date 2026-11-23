@@ -134,7 +134,8 @@ class ProxyServiceImplMetricsTest : StringSpec() {
 
     // ==================== path rejections and binding mismatches ====================
 
-    // The activity feed notes a path's first rejection only; the counter counts every one.
+    // The counter counts every rejection, even one like this unknown agent's, which never reaches the activity feed.
+    // The feed notes a connected agent's rejection once for each cause.
     "registerPath should count every rejection by its cause" {
       val fixture = Fixture()
       val request =

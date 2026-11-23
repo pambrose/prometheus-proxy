@@ -57,7 +57,8 @@ internal data class RowFilter(
   companion object {
     val NONE = RowFilter()
 
-    // A search box's worth: the query is browser input, on a port with no auth, matched against every row each push.
+    // A search box's worth: the query is browser input, on a port that may have no auth, matched against every row each
+    // push.
     internal const val MAX_QUERY_LENGTH = 200
 
     /** A filter from browser input, which may be absent, padded, or longer than any search needs. */

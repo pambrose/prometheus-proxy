@@ -28,10 +28,10 @@ import kotlin.time.TimeSource
 /**
  * The dashboard's logins, from its login page, each a random token the browser keeps in a cookie.
  *
- * Kept in memory, so a proxy restart signs everyone out. A session ends [idleTimeout] after its last request or
- * [maxAge] after it began, whichever comes first, and at most [maxSessions] are kept, the least recently used going
- * first. Only
- * each token's SHA-256 is kept, so a lookup's timing says nothing about the tokens it holds.
+ * Kept in memory, so a restart of the proxy or the agent signs everyone out. A session ends [idleTimeout] after its
+ * last request or [maxAge] after it began, whichever comes first, and at most [maxSessions] are kept, the least
+ * recently used going first. Only each token's SHA-256 is kept, so a lookup's timing says nothing about the tokens it
+ * holds.
  *
  * Thread-safe: every access takes the map's monitor, which is a leaf.
  *

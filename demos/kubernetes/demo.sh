@@ -232,9 +232,8 @@ build_images() {
   docker buildx version >/dev/null 2>&1 || die "docker buildx is missing; the demo builds its images with it"
   bold "Building the proxy and agent from this checkout"
   "$MAKE" --no-print-directory -C "$REPO_DIR" jars
-  # The jars change on every build (their BuildConfig carries the build time), so each build makes new images and
-  # leaves the previous ones untagged; remember them to remove afterwards. One another demo still runs is in use, and
-  # stays.
+  # A build from changed code makes new images and leaves the previous ones untagged; remember them to remove
+  # afterwards. One another demo still runs is in use, and stays.
   old_ids="$(docker image inspect -f '{{.Id}}' "$PROXY_IMAGE" "$AGENT_IMAGE" 2>/dev/null || true)"
   bold "Building $PROXY_IMAGE and $AGENT_IMAGE from the jars"
   # --load, so the image lands in Docker's own store whichever builder is selected; kind loads it from there. Without

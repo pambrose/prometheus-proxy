@@ -80,7 +80,7 @@ class AgentContextLincheckTest : StringSpec() {
 class AgentContextOps {
   private val context = AgentContext("lincheck")
 
-  // Wrappers each outcome applies to, by identity; guarded by their own monitor.
+  // Wrappers each outcome applies to, by identity; both guarded by accepted's monitor.
   private val accepted: MutableSet<ScrapeRequestWrapper> = Collections.newSetFromMap(IdentityHashMap())
   private val read: MutableSet<ScrapeRequestWrapper> = Collections.newSetFromMap(IdentityHashMap())
 

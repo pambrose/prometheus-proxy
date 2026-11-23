@@ -160,13 +160,16 @@ internal class AgentContextManager(
     }
   }
 
-  /** Announces a pending context as a connected agent; called on its first authenticated call. Idempotent. */
+  /**
+   * Announces a pending context as a connected agent. ProxyServerInterceptor calls it on every authenticated call; only
+   * the first announces.
+   */
   fun announceAgentContext(agentId: String) {
     agentContextMap[agentId]?.also { announce(it) }
   }
 
-  // Skips a context already invalidated: connectAgent can announce in the moment after transportTerminated removed it,
-  // which would report a connection that is already gone.
+  // Skips a context already invalidated: ProxyServerInterceptor can announce in the moment after transportTerminated
+  // removed it, which would report a connection that is already gone.
   private fun announce(agentContext: AgentContext) {
     if (agentContext.isValid() && agentContext.markAnnounced()) {
       logger.info { "Registering agentId: ${agentContext.agentId}" }
@@ -274,9 +277,9 @@ internal class AgentContextManager(
     // How often a refused connect may be logged at WARN for one identity.
     private val REFUSAL_WARNING_INTERVAL = 1.minutes
 
-    // The most identities whose last WARN is remembered. Only a configured identity can be refused, so in practice the
-    // cap forgets none; a proxy with more identities than this all refused within a minute would only warn of the one
-    // refused least recently again early.
+    // The most identities whose last WARN is remembered. Only a configured identity, or the empty one agents share with
+    // agent auth off, can be refused, so in practice the cap forgets none; a proxy with more identities than this all
+    // refused within a minute would only warn of the one refused least recently again early.
     private const val MAX_REFUSAL_IDENTITIES = 1_000
 
     // An identity as the log names it, after "connected". Agents with agent auth off share the empty one.

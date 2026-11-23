@@ -337,9 +337,10 @@ class AgentOptionsTest : StringSpec() {
       }
     }
 
-    // heartbeatCheckPauseMillis is the poll interval of the keepalive loop in Agent.connectToProxy.
-    // delay() returns immediately for a non-positive duration, so 0 spins that loop without ever
-    // suspending or reaching a cancellation check, pinning an IO thread for the connection's lifetime.
+    // heartbeatCheckPauseMillis is the poll interval of the keepalive loops in Agent.sendHeartBeats and
+    // Agent.awaitDisconnectWithoutHeartBeat. delay() returns immediately for a non-positive duration, so 0 spins
+    // either loop without ever suspending or reaching a cancellation check, pinning an IO thread for the connection's
+    // lifetime.
     // Same hazard the discovery.reconcileIntervalSecs guard below already covers.
     "heartbeatCheckPauseMillis of 0 should be rejected" {
       shouldBeRejected {
@@ -599,8 +600,8 @@ class AgentOptionsTest : StringSpec() {
 
     // ==================== Failover Endpoint Resolution ====================
     //
-    // These are the only tests that reach the agent.proxy.endpoints fallback: it is gated behind
-    // `proxyHostname.isEmpty()`, and every other case in this file passes --proxy, which skips it.
+    // The config's endpoints are used only when neither --proxy nor PROXY_HOSTNAME is given (see
+    // AgentOptions.proxyHostnameSpec). The tests below that read a configured list pass no --proxy.
 
     "agent.proxy.endpoints should resolve to an ordered spec that re-parses intact" {
       val options = agentOptions(["--name", "test", "--config", ENDPOINTS_CONFIG_FILE], false)
