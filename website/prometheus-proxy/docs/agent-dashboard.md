@@ -88,9 +88,9 @@ The agent's own dashboard shows those. It runs on the agent, on a port of its ow
 
 Then open `http://<agent-host>:8095/dashboard`.
 
-The flags and the environment variables are the proxy's, read by whichever process reads them, as the admin and
-metrics settings are. The other settings, `maxSessions`, `allowedOrigins`, and `allowedHosts`, work as the proxy's do;
-see [Exposure](web-dashboard.md#exposure).
+The flags and the environment variables have the same names as the proxy's, and each process reads them for its own
+dashboard, as with the admin and metrics settings. The other settings, `maxSessions`, `allowedOrigins`, and
+`allowedHosts`, work as the proxy's do; see [Exposure](web-dashboard.md#exposure).
 
 ## The Paths view
 

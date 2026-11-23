@@ -149,7 +149,8 @@ import kotlin.time.Duration.Companion.seconds
  * - Each proxy can handle the full set of agents
  * - An agent configured with an ordered endpoint list (`agent.proxy.endpoints`, or a comma-separated
  *   `--proxy` / `PROXY_HOSTNAME`) connects to the first endpoint that answers and moves to the next on
- *   a failed connect, returning to the head of the list once a working connection drops
+ *   a failed connect or a rejected registration, returning to the head of the list once a working
+ *   connection drops
  * - An agent holds **one** connection at a time and registers its paths only on that proxy, so a
  *   standby proxy serves nothing until an agent fails over to it
  * - Prometheus should scrape every proxy with identical `static_config` target lists. Do not use
@@ -282,8 +283,8 @@ class Proxy(
   internal val agentContextManager = AgentContextManager(isTestMode, eventBus, activityLog = activityLog)
   internal val scrapeRequestManager = ScrapeRequestManager()
 
-  // Per-Proxy-instance id (mirrors Agent.launchId). Intentionally used to label only proxy_start_time_seconds,
-  // which is enough to detect a restart on a Prometheus target; the counters/histograms are left
+  // Per-Proxy-instance id (mirrors Agent.launchId). Intentionally used to label only proxy_start_time_seconds and
+  // proxy_build_info, which is enough to detect a restart on a Prometheus target; the counters/histograms are left
   // unlabeled since PromQL rate()/increase() already tolerate counter resets across restarts.
   internal val launchId = randomId(15)
 
@@ -426,7 +427,7 @@ class Proxy(
   override fun shutDown() {
     // Fail in-flight scrape requests BEFORE invalidating agent contexts so that
     // HTTP handlers waiting on awaitCompleted() receive the informative "Proxy is shutting down"
-    // error message rather than a generic "missing_results" from the agent context drain.
+    // (proxy_stopped) rather than the "Agent disconnected" (agent_disconnected) the agent context drain gives.
     scrapeRequestManager.failAllInFlightScrapeRequests("Proxy is shutting down", ProxyFailure.PROXY_STOPPED)
     agentContextManager.invalidateAllAgentContexts()
     grpcService.stopSync()
@@ -498,17 +499,17 @@ class Proxy(
   }
 
   /**
-   * Removes an agent context when an agent disconnects.
+   * Removes an agent context when an agent disconnects or is evicted.
    *
    * This method is called when an agent disconnects from the proxy, either gracefully
-   * or due to network issues. It performs cleanup by removing the agent from both
-   * the path manager (so requests are no longer routed to it) and the context manager
-   * (to free up resources).
+   * or due to network issues, and when the cleanup service evicts an inactive agent. It performs
+   * cleanup by removing the agent from both the path manager (so requests are no longer routed to it)
+   * and the context manager (to free up resources).
    *
-   * @param agentId Unique identifier of the agent that disconnected. Must not be empty.
+   * @param agentId Unique identifier of the agent that disconnected. Must not be blank.
    * @param reason Why the agent was removed, which the logs, its failed scrapes, and the activity feed report
    * @return The removed AgentContext, or null if the agent was not found
-   * @throws IllegalArgumentException if agentId is empty
+   * @throws IllegalArgumentException if agentId is blank
    */
   internal fun removeAgentContext(
     agentId: String,
@@ -657,7 +658,8 @@ class Proxy(
    * The generated JSON includes:
    * - **targets**: Array containing the proxy endpoint for each path
    * - **labels**: Metadata about each target including:
-   *   - `__metrics_path__`: The path to scrape
+   *   - `__metrics_path__`: The path to scrape, after the path prefix of an `sdTargetPrefix` URL
+   *   - `__scheme__`: The scheme of an `sdTargetPrefix` URL, when it is one
    *   - `agentName`: Names of agents serving this path
    *   - `hostName`: Hostnames of agents serving this path
    *   - Custom labels from agent path configuration

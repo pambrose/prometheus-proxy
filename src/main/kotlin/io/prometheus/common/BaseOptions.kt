@@ -91,9 +91,9 @@ private const val MIN_SAMPLE_RATE = 0.01
 /**
  * Requires [value], a gRPC timeout or keepalive setting or the scrape port's idle timeout, to be -1 or positive, then
  * logs it as `name: value`. -1 is the sentinel that keeps the built-in default, gRPC's (the `> -1L` guards in
- * ProxyGrpcService rely on it) or ProxyHttpService's, and is logged as `name: default ([default])`. Any other
- * non-positive value would surface as an opaque gRPC builder exception at startup or, as the idle timeout, make the
- * scrape port close every connection unanswered (November #1).
+ * ProxyGrpcService and AgentGrpcService rely on it) or ProxyHttpService's, and is logged as
+ * `name: default ([default])`. Any other non-positive value would surface as an opaque gRPC builder exception at
+ * startup or, as the idle timeout, make the scrape port close every connection unanswered (November #1).
  */
 internal fun KLogger.requireDefaultOrPositive(
   name: String,
@@ -215,8 +215,10 @@ abstract class BaseOptions protected constructor(
     get() = dashboardPassword.ifEmpty { null }?.let { DashboardLogin(dashboardUsername, it) }
 
   /**
-   * Disables the gRPC transport filter that records remote-peer information per call. Set when running behind
-   * an L7 reverse proxy (e.g. nginx) that already strips this information.
+   * Disables the gRPC transport filter, with which the proxy tracks each agent by its connection, creating its context
+   * when the connection opens and removing it when the connection closes. Set when running behind an L7 reverse proxy
+   * (e.g. nginx), which relays the agents' calls over connections of its own. With it off, the agent connects with
+   * `connectAgentWithTransportFilterDisabled`, and the proxy learns an agent has gone when its request stream ends.
    *
    * Both `--tf-disabled` (current) and `--tf_disabled` (legacy typo) are accepted to preserve backwards
    * compatibility for existing deployments.
@@ -228,7 +230,8 @@ abstract class BaseOptions protected constructor(
   /**
    * Filesystem path to the TLS certificate chain (PEM). Must be paired with [privateKeyFilePath], or the key given as
    * PEM (`tls.privateKeyPem`); supplying one without the other is rejected by [validateTlsConfig]. Empty, with no
-   * `tls.certChainPem` either, disables TLS on this side and exposes plaintext gRPC. See also [isTlsEnabled].
+   * `tls.certChainPem` either, leaves the proxy's gRPC port in plaintext; the agent still uses TLS when it is given a
+   * trust collection ([trustCertCollectionFilePath]). See also [isTlsEnabled].
    */
   @Parameter(names = ["-t", "--cert"], description = "Certificate chain file path")
   var certChainFilePath = ""
@@ -237,7 +240,8 @@ abstract class BaseOptions protected constructor(
   /**
    * Filesystem path to the TLS private key (PEM) matching [certChainFilePath]. Must be paired with the certificate
    * chain, as a file or as PEM; supplying one without the other is rejected by [validateTlsConfig]. Empty, with no
-   * `tls.privateKeyPem` either, disables TLS on this side.
+   * `tls.privateKeyPem` either, leaves the proxy's gRPC port in plaintext; the agent still uses TLS when it is given a
+   * trust collection.
    */
   @Parameter(names = ["-k", "--key"], description = "Private key file path")
   var privateKeyFilePath = ""
@@ -328,7 +332,10 @@ abstract class BaseOptions protected constructor(
   internal var trustCertCollectionPem = ""
     private set
 
-  /** Whether TLS is on for this side: a certificate chain and a private key are both given, as files or as PEM. */
+  /**
+   * Whether a certificate chain and a private key are both given, as files or as PEM, which turns TLS on for the proxy.
+   * The agent also uses TLS when it is given only a trust collection.
+   */
   val isTlsEnabled: Boolean
     get() = certChainSource.isGiven && privateKeySource.isGiven
 
@@ -429,7 +436,7 @@ abstract class BaseOptions protected constructor(
     // exitOnMissingConfig means "is a config file required?", and the Proxy leaves it false because it
     // runs fine off the built-in reference config, yet it is always a standalone CLI. Conflating them
     // made `prometheus-proxy.jar --version` print the version and then die with an uncaught
-    // ConfigLoadException and exit code 1, instead of exiting 0 as documented on the flags below.
+    // ConfigLoadException and exit code 1, instead of exiting 0 as documented on the version and usage flags.
     fun exitOrThrow(
       exitCode: Int,
       message: String,

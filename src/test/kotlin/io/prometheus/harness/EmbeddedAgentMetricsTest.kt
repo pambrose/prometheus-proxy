@@ -106,8 +106,8 @@ class EmbeddedAgentMetricsTest : StringSpec() {
 
     // The agent builds its metrics as it starts, so a registry that rejects them -- here for a host metric with one of
     // their names -- fails startAsyncAgent, instead of every connect, forever, with nothing reported to the host.
-    // startAsyncAgent reports every startup failure as an IllegalStateException, so only its cause tells the registry's
-    // rejection apart from another failure, such as a metrics port already in use.
+    // startAsyncAgent reports a failure in the agent's startUp() as an IllegalStateException, so only its cause tells
+    // the registry's rejection apart from another failure there, such as a metrics port already in use.
     "a host metric with an agent metric's name should fail the agent's startup" {
       val hostMetric = Gauge.builder().name("agent_connect_count").register()
       try {

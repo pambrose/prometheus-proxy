@@ -19,7 +19,7 @@ IMAGES=(prometheus-proxy-demo/proxy:local prometheus-proxy-demo/spring-boot-app:
 RELEASED_PROXY_IMAGE=pambrose/prometheus-proxy
 # The demo shows what came after this release (the agent's own dashboard, and the Spring Boot starter the roastery runs
 # it with), so until a later one is out, up builds everything from this checkout, as up-local does.
-NEEDS_RELEASE_AFTER=4.6.1
+NEEDS_RELEASE_AFTER=4.7.0
 # The version up-local publishes this checkout's library at, to the local Maven repository, for the roastery's Maven
 # build: never a released one, so nothing mistakes it for one.
 LOCAL_LIBRARY_VERSION="$(sed -n 's/^version=//p' "$REPO_DIR/gradle.properties")"
@@ -518,8 +518,8 @@ cmd_tour() {
       "It lists what has happened to the agent, newest first: registered, for /roastery_metrics, and under it" \
       "connected, to the proxy, from when the roastery started."
     instruct "Open the Connection view, and keep it open: $AGENT_DASHBOARD_URL/connection" \
-      "It reads connected, and lists the agent's one proxy endpoint, proxy:50051, with no error, then the settings" \
-      "the agent resolved."
+      "It reads connected, and lists the agent's one proxy endpoint, proxy:50051, with no error. The settings the" \
+      "agent resolved are on the Settings view, the last tab."
     step "Stop the proxy, as when a proxy host goes away." -- proxy-stop
     step "Start the proxy again." -- proxy-start
   fi

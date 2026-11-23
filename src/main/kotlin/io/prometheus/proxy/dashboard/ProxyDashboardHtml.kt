@@ -175,8 +175,8 @@ internal object ProxyDashboardHtml {
           main { div { settingsInner(snapshot.settings, oob = false) } }
         }
       }
-      // The one piece htmx does not model: telling the server which agent THIS session is viewing, so
-      // the push loop knows whether to send a detail pane. hx-push-url already puts the selection in
+      // What htmx does not model (see DashboardScript): above all, telling the server which agent THIS session is
+      // viewing, so the push loop knows whether to send a detail pane. hx-push-url already puts the selection in
       // the URL, so this reads it back rather than tracking state of its own.
       script { unsafe { raw(SCRIPT) } }
     }
@@ -188,7 +188,7 @@ internal object ProxyDashboardHtml {
     layout: DashboardLayout,
   ) = tabs(DashboardLayout.entries, layout, routeBase)
 
-  /** Status counters. Driven by the timer rather than the event bus -- these drift, they do not change. */
+  /** Status counters. Every push renders them, on a change or a tick: the tick keeps the drifting ones live. */
   fun FlowContent.renderStatus(
     snapshot: ProxySnapshot,
     oob: Boolean = false,
@@ -449,12 +449,12 @@ internal object ProxyDashboardHtml {
    * context — so a just-connected agent legitimately has none yet. Showing the raw placeholder would
    * read as corruption rather than as a normal transient state.
    *
-   * Shared by both layouts so one agent never appears under two different labels.
+   * Shared by the Agents, Paths, and Activity views so one agent never appears under two different labels.
    */
   internal fun agentLabel(name: String): String = if (name == UNASSIGNED) "(registering…)" else name
 
   /**
-   * The page's title: the product's name, after a count of the paths failing or gone while there are any, so a
+   * The page's title: the dashboard's name, after a count of the paths failing or gone while there are any, so a
    * dashboard left in a background tab still says when something is wrong. Counted by [PathView.isProblem], as the
    * "Problems only" filter counts them, so the title and the filtered table agree.
    */

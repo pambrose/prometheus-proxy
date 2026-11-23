@@ -79,7 +79,7 @@ internal object DashboardPage {
   const val ANNOUNCER_ID = "conn-announce"
 
   // The tabs, which the page's script moves between with the arrow keys. No path or agent can give an element this id:
-  // every id built from one starts with a prefix (agent-row-, copy-, scrape-path-).
+  // every id built from one starts with a prefix (agent-row-, path-row-, copy-, link-, scrape-path-).
   const val NAV_ID = "layout-nav"
   const val VIEW_ATTR = "data-view"
   const val COPY_ATTR = "data-copy"
@@ -92,7 +92,7 @@ internal object DashboardPage {
 
   // The column guide under the search, and the button at the search's end that opens it; one pair for both tables, as
   // the search's ids are. No path or agent can give an element either id: every id built from one starts with a prefix
-  // (agent-row-, copy-, scrape-path-).
+  // (agent-row-, path-row-, copy-, link-, scrape-path-).
   const val COLUMN_GUIDE_ID = "column-guide"
   const val COLUMN_GUIDE_TOGGLE_ID = "column-guide-toggle"
 
@@ -108,7 +108,7 @@ internal object DashboardPage {
   const val SCRAPE_ID_PREFIX = "scrape-path-"
   const val SAY_ATTR = "data-say"
 
-  // On the status bar: the page's title, which counts the paths failing or gone, for the page's script to put in the
+  // On the status bar: the page's title, which counts the dashboard's problems, for the page's script to put in the
   // tab.
   const val TITLE_ATTR = "data-title"
 
@@ -290,7 +290,7 @@ internal object DashboardPage {
   /**
    * The one live region on the page. Kept outside every out-of-band id on purpose: a region the push loop rewrites
    * would re-announce itself on every frame, so this is written only by the socket lifecycle handlers, which fire when
-   * the state actually changes, and by the result of a click.
+   * the state actually changes, and by the user's own acts: a copy, a scrape-now, a theme choice, and a filter change.
    */
   fun FlowContent.announcer() {
     div("sr-only") {

@@ -71,7 +71,7 @@ class AdminDefaultPathTest : StringSpec() {
     }
 
     "proxy version path should return version info" {
-      agentConfigVals.admin.apply {
+      proxyConfigVals.admin.apply {
         KtorDsl.blockingGet("$port/$versionPath".withPrefix()) { response ->
           response.status shouldBe HttpStatusCode.OK
           response.bodyAsText() shouldContain "version"

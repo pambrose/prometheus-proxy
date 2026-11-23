@@ -55,8 +55,9 @@ import kotlinx.coroutines.flow.drop
  * target from the agent, as Prometheus would through the proxy.
  *
  * Off by default (`agent.dashboard.enabled`), so an agent embedded in another app opens no port of its own unless
- * asked. Its updates come from the server's push loop, on its refresh interval, and at once on each new line of the
- * activity feed ([io.prometheus.agent.AgentActivityLog]).
+ * asked. Its updates come from the server's push loop, on its refresh interval, and on each write to the activity feed
+ * ([io.prometheus.agent.AgentActivityLog]), a repeat folded into a line included: a burst wakes it at once, then at
+ * most every 250 ms.
  *
  * With `agent.dashboard.password` set, every request needs a session from the login page, or, from a script, the login
  * as HTTP Basic Auth. Without a password, the default, the port has no authentication. The listen address is
@@ -81,7 +82,7 @@ internal class AgentDashboardService(
 
   private val site =
     object : DashboardSite<AgentView, AgentSnapshot> {
-      // A new line of the activity feed; the first value is the count at the start, which is no change.
+      // A write to the activity feed, a fold included; the first value is the count at the start, which is no change.
       override val changes: Flow<Any?> = agent.activityLog?.changes?.drop(1) ?: emptyFlow()
 
       override suspend fun collect(): AgentSnapshot = AgentSnapshot.collect(agent, settings)

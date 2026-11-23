@@ -1,7 +1,8 @@
 # The embedded demo's coffee shop (../README.md). docker/compose.yml builds it one of two ways, which APP_BUILD picks:
 #
-#   compiled (make up)        compiles the app here, against the release of com.pambrose:prometheus-proxy that
-#                             PROXY_VERSION names, from Maven Central, so the demo needs only Docker
+#   compiled (make up)        compiles the app here, against the release of com.pambrose:prometheus-proxy-ktor, the
+#                             agent's Ktor plugin, that PROXY_VERSION names, from Maven Central, so the demo needs
+#                             only Docker
 #   prebuilt (make up-local)  copies build/install/coffee-shop, which demo.sh built on the host against this checkout
 #
 # The repository's version catalog comes in as the named build context `catalog`, since this directory is the build

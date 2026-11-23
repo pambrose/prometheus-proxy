@@ -71,8 +71,8 @@ import kotlin.time.DurationUnit
  * Handles all gRPC RPCs defined in `proxy_service.proto`: agent connection and registration,
  * path registration/unregistration, heartbeat processing, and bidirectional scrape request/response
  * streaming (including chunked transfers for large payloads). Validates agent identity on every
- * call and delegates state management to [AgentContextManager], [ProxyPathManager], and
- * [ScrapeRequestManager].
+ * call that names an agent, except `pathMapSize`, and delegates state management to
+ * [AgentContextManager], [ProxyPathManager], and [ScrapeRequestManager].
  *
  * @param proxy the parent [Proxy] instance
  * @see ProxyGrpcService
@@ -142,8 +142,9 @@ internal class ProxyServiceImpl(
    * [AgentContext] while presenting its own valid token.
    *
    * Returns null (allow) when the connection agentId is unset, which happens when no transport
-   * filter ran: `transportFilterDisabled` deployments and in-process tests. Those paths have no
-   * transport-assigned identity to compare against; [identityMismatchReason] binds them instead.
+   * filter ran: `transportFilterDisabled` deployments, and tests that call this class with no gRPC
+   * server. The in-process server runs the filter too. With no transport-assigned identity to compare
+   * against, [identityMismatchReason] binds the calls instead.
    */
   private fun connectionMismatchReason(
     requestAgentId: String,
@@ -880,11 +881,12 @@ internal class ProxyServiceImpl(
     // removes another agent's transfer.
     //
     // This sweep can race Proxy.removeAgentContext() (from the transport-terminated or cleanup-service
-    // thread), and the scrape's HTTP handler, which removes the transfer as it returns, for the same
+    // thread), Proxy.removeAgentContextIfCurrent() (as a scrape-request stream ends, with the transport
+    // filter disabled), and the scrape's HTTP handler, which removes the transfer as it returns, for the same
     // scrapeId. Double-handling is prevented by two invariants that future edits must preserve:
     // (a) contextManager.removeChunkedContext() is a ConcurrentHashMap.remove(), so only one caller gets
     // the non-null context and the ?.also block (warn + failScrapeRequest + metric) runs at most once,
-    // and removeAgentContext, which counts the transfers it reclaims in the same metric, never counts one
+    // and either removal, which counts the transfers it reclaims in the same metric, never counts one
     // this sweep removed; and (b) failScrapeRequest() -> ScrapeRequestWrapper.complete() is idempotent
     // via an AtomicBoolean compareAndSet, so even a double-fail has no observable effect.
     fun abandonUnfinished() {

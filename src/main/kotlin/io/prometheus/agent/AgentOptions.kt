@@ -67,8 +67,8 @@ class AgentOptions internal constructor(
   args = args,
   envConfig = AGENT_CONFIG.name,
   exitOnMissingConfig = exitOnMissingConfig,
-  // For the Agent, exitOnMissingConfig doubles as the standalone/embedded switch: main() and
-  // startSyncAgent() pass true, while embedded hosts pass false so startup failures stay catchable.
+  // For the Agent, exitOnMissingConfig doubles as the standalone/embedded switch: main() passes true, while
+  // embedded hosts pass false so startup failures stay catchable.
   embedded = !exitOnMissingConfig,
   suppliedConfig = suppliedConfig,
 ) {
@@ -100,8 +100,8 @@ class AgentOptions internal constructor(
    * config, normally `50051`) or `hostname:port`.
    *
    * Accepts a **comma-separated list** for high availability — `proxy1:50051,proxy2:50051`. The agent tries
-   * them in order, first successful connection wins, and rotates on a failed connect. A single value behaves
-   * exactly as it always has.
+   * them in order, first successful connection wins, and rotates on a failed connect or a rejected registration. A
+   * single value behaves exactly as it always has.
    *
    * Empty means "fall back to [PROXY_HOSTNAME] env var, then `agent.proxy.endpoints` from config, then
    * `agent.proxy.hostname[:port]`".
@@ -127,8 +127,9 @@ class AgentOptions internal constructor(
     private set
 
   /**
-   * Pre-shared token presented to the Proxy on every gRPC call. Must match the Proxy's `proxy.agentToken`; the
-   * Proxy rejects calls with a missing or mismatched token (`UNAUTHENTICATED`). Empty (default) sends no token.
+   * Pre-shared token presented to the Proxy on every gRPC call. Must match the Proxy's `proxy.agentToken`, or the
+   * token of one of its `proxy.auth` identities; the Proxy rejects calls with a missing or mismatched token
+   * (`UNAUTHENTICATED`). Empty (default) sends no token.
    * Resolved from CLI → [AGENT_TOKEN] env var → `agent.agentToken` config. Never logged.
    */
   @Parameter(names = ["--agent_token"], description = "Pre-shared token presented to the Proxy")
@@ -248,7 +249,7 @@ class AgentOptions internal constructor(
     private set
 
   /**
-   * Maximum number of pooled HTTP clients the Agent caches (keyed by target/auth credentials).
+   * Maximum number of pooled HTTP clients the Agent caches (keyed by their auth credentials).
    * `-1` means "fall back to [MAX_CLIENT_CACHE_SIZE] env var, then `agent.http.clientCache.maxSize`
    * (default `100`)". Validated `> 0`.
    */

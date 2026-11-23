@@ -306,10 +306,8 @@ fun Project.configureKotlin() {
   tasks.withType<KotlinCompile>().configureEach {
     val isMainCompile = name == "compileKotlin"
     compilerOptions {
-      // Collection literals and name-based destructuring are language-wide opt-ins,
-      // so enable them for every Kotlin source set (main + test) rather than per-task.
-      // name-mismatch only warns where `complete` would change a short-form `(a, b)`
-      // destructuring's meaning; move to `complete` once those sites use `[a, b]`.
+      // Collection literals are a language-wide opt-in, so enable them for every
+      // Kotlin source set (main + test) rather than per-task.
       freeCompilerArgs.addAll("-Xcollection-literals")
 
       // Run the unused-return-value checker over production code only. Kotest's
@@ -733,7 +731,7 @@ fun Project.configureCoverage() {
         verify {
           // Deliberately NOT onCheck. koverVerify has no way to tell "coverage genuinely regressed" from
           // "no tests ran", so wiring it into `check` fails at 0% for every legitimate test-less
-          // invocation -- `./gradlew build -x test` in AGENTS.md and `clean build -x test` in ci.yml among
+          // invocation -- `./gradlew build -x test` in AGENTS.md and `make build`'s `clean build -x test` among
           // them. Each would need its own -x koverVerify, which is four places to forget. CI runs this
           // task explicitly alongside the suite (see ci.yml), and `make coverage-verify` runs it locally.
           onCheck = false

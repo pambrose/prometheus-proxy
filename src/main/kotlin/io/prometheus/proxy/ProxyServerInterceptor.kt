@@ -48,7 +48,7 @@ internal class ProxyServerInterceptor(
     val forwardingCall =
       object : ForwardingServerCall.SimpleForwardingServerCall<ReqT, RespT>(call) {
         override fun sendHeaders(headers: Metadata) {
-          // ATTRIB_AGENT_ID was assigned in ServerTransportFilter
+          // AGENT_ID_KEY was assigned in ProxyServerTransportFilter.transportReady
           call.attributes.get(AGENT_ID_KEY)?.also { headers.put(META_AGENT_ID_KEY, it) }
           super.sendHeaders(headers)
         }
@@ -75,8 +75,9 @@ internal class ProxyServerInterceptor(
     /**
      * The agentId the transport assigned to *this connection*, as opposed to the caller-supplied
      * `request.agentId` on the wire. [ProxyServiceImpl] compares the two so one authenticated agent
-     * cannot act on another agent's [AgentContext]. Null when no transport filter ran (in-process
-     * tests, or `transportFilterDisabled`), in which case the comparison is skipped.
+     * cannot act on another agent's [AgentContext]. Null when no transport filter ran: with
+     * `transportFilterDisabled`, or when a test calls the service with no gRPC server. The in-process
+     * server runs the filter too. When null, the comparison is skipped.
      */
     internal val CONNECTION_AGENT_ID_KEY: Context.Key<String> = Context.key(AGENT_ID)
   }

@@ -30,7 +30,7 @@ AGENT_IMAGE=prometheus-proxy-demo/agent:local
 RELEASED_IMAGES=(pambrose/prometheus-proxy pambrose/prometheus-agent)
 # The demo shows what came after this release, so until a later one is out, up builds the proxy and agent from this
 # checkout, as up-local does. When the demo comes to use something unreleased, set this to the latest release.
-NEEDS_RELEASE_AFTER=4.6.1
+NEEDS_RELEASE_AFTER=4.7.0
 # The chart values that choose the proxy's and the agent's images, which up and up-local set.
 PROXY_IMAGE_VALUES=()
 AGENT_IMAGE_VALUES=()
@@ -232,9 +232,8 @@ build_images() {
   docker buildx version >/dev/null 2>&1 || die "docker buildx is missing; the demo builds its images with it"
   bold "Building the proxy and agent from this checkout"
   "$MAKE" --no-print-directory -C "$REPO_DIR" jars
-  # The jars change on every build (their BuildConfig carries the build time), so each build makes new images and
-  # leaves the previous ones untagged; remember them to remove afterwards. One another demo still runs is in use, and
-  # stays.
+  # A build from changed code makes new images and leaves the previous ones untagged; remember them to remove
+  # afterwards. One another demo still runs is in use, and stays.
   old_ids="$(docker image inspect -f '{{.Id}}' "$PROXY_IMAGE" "$AGENT_IMAGE" 2>/dev/null || true)"
   bold "Building $PROXY_IMAGE and $AGENT_IMAGE from the jars"
   # --load, so the image lands in Docker's own store whichever builder is selected; kind loads it from there. Without
@@ -609,7 +608,8 @@ cmd_clusters() {
   watch_for
   point "Every Service in $TARGET is ClusterIP, so nothing in it can be reached from outside the cluster. The" \
     "agent opened its connection from $TARGET to the proxy's NodePort in $MONITORING; nothing connected in."
-  point "Each cluster runs one of the charts the project ships, installed with nothing but a values file."
+  point "Each cluster runs one of the charts the project ships, given a values file and a config file, and the" \
+    "agent's chart the proxy's address."
   point "Prometheus's one job asks the proxy's /discovery what to scrape, so its config names no target in $TARGET."
   point "On the proxy dashboard the agent is listed under its pod's name, $(agent_pod): $DASHBOARD_URL"
   point "The agent's Service lists only its metrics port, 8083. Its own dashboard, on 8095 in its pod, is on no" \
@@ -895,8 +895,8 @@ cmd_tour() {
     instruct "Open the Connection view: $AGENT_DASHBOARD_URL/connection" \
       "The agent is connected to the proxy's NodePort on $MONITORING's node, under its pod's name. Under Discovery" \
       "is the file the chart mounts from the agent-targets ConfigMap, /app/discovery/targets.conf, read every 5" \
-      "seconds, with three entries and its last read ok. Settings shows what the agent resolved from" \
-      "config/agent.conf, such as its 3-second scrape timeout."
+      "seconds, with three entries and its last read ok. The Settings view, the last tab, shows what the agent" \
+      "resolved from config/agent.conf, such as its 3-second scrape timeout: $AGENT_DASHBOARD_URL/settings"
     instruct "Open the Activity view: $AGENT_DASHBOARD_URL/activity" \
       "It lists what the agent did since its pod started, newest first. From the bottom: it connected to the proxy," \
       "then registered its static path, and its three discovered ones on a line of their own. Each line is in the" \

@@ -158,7 +158,10 @@ internal fun identityLabel(identity: String): String? =
     else -> identity
   }
 
-/** Counters that drift rather than change at an identifiable moment, sampled on a timer. */
+/**
+ * The status bar's counters, read at each collect: the agent and path counts, which change as agents come and go, and
+ * the map sizes, which drift between changes.
+ */
 internal data class HealthView(
   val agentCount: Int,
   val pathCount: Int,
@@ -175,8 +178,8 @@ internal data class HealthView(
  * An immutable point-in-time view of everything the dashboard renders.
  *
  * Materialized rather than referencing live state: [io.prometheus.proxy.AgentContextManager.agentContextEntries]
- * is the `ConcurrentHashMap`'s **live entry set**, not a snapshot, so two passes over it can disagree.
- * Copying once here means every WebSocket session renders the same consistent picture.
+ * copies the entry set, but each **`AgentContext`** in it is live, so two reads of one can disagree.
+ * Reading each once here means every WebSocket session renders the same consistent picture.
  */
 internal data class ProxySnapshot(
   val agents: List<AgentView>,
@@ -403,7 +406,7 @@ internal data class ProxySnapshot(
           .flatMap { view -> view.agentIds.map { it to view } }
           .groupBy({ it.first }, { it.second })
 
-      // Materialize the live entry set before reading fields off it.
+      // A copy of the entry set, whose contexts are live: each one's fields are read once, into its view.
       return proxy.agentContextManager.agentContextEntries
         .map { (agentId, context) ->
           AgentView(

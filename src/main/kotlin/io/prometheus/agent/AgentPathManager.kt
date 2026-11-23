@@ -34,6 +34,7 @@ import io.prometheus.grpc.PathNotice
 import io.prometheus.grpc.PathRejectionCause.CONSOLIDATION_MISMATCH
 import io.prometheus.grpc.PathRejectionCause.HELD_BY_ANOTHER_AGENT
 import io.prometheus.grpc.PathRejectionCause.HELD_BY_ANOTHER_IDENTITY
+import io.prometheus.grpc.PathRejectionCause.INVALID_AGENT
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.Channel.Factory.CONFLATED
 import kotlinx.coroutines.delay
@@ -80,9 +81,9 @@ internal class AgentPathManager(
   private val agentConfigVals = agent.configVals.agent
 
   // The retry backoff (see nextBackoff): each kind of path's base is the tick of the loop that retries it --
-  // Agent.connectToProxy's retry task for static paths, the discovery reconcile for discovered ones -- and one cap
-  // bounds both. Both loops wait a full interval after each pass, so a cap at or below a loop's interval makes every
-  // tick due, which turns that loop's backoff off.
+  // Agent.retryRejectedStaticPathsForConnection for static paths, the discovery reconcile for discovered ones -- and
+  // one cap bounds both. Both loops wait a full interval after each pass, so a cap at or below a loop's interval makes
+  // every tick due, which turns that loop's backoff off.
   private val staticRetryInterval = agentConfigVals.internal.rejectedPathRetrySecs.seconds
   private val discoveredRetryInterval = agentConfigVals.discovery.reconcileIntervalSecs.seconds
   private val maxRetryBackoff = agentConfigVals.internal.rejectedPathRetryMaxSecs.seconds
@@ -149,7 +150,7 @@ internal class AgentPathManager(
   // A blank path or url could never register, and registerPaths does not catch the require() that would reject it,
   // so one config typo would fail every connect attempt. Dropped here instead, the way discovery drops its own. The
   // paths an embedded host serves in-process (EmbeddedAgentConfig.Builder.source) come after the config's, and are
-  // checked with them, so one can't take a configured path, or a path the proxy would refuse.
+  // checked with them, so one can't take a configured path or use a character the proxy refuses.
   val pathConfigs: List<PathConfig> =
     agentConfigVals.pathConfigs
       .map { PathConfig(name = it.name, path = it.path, url = it.url, labels = it.labels) }
@@ -324,8 +325,9 @@ internal class AgentPathManager(
       logger.warn(e) { "Failed to retry static path /$path, $retrying" }
   }
 
-  // Runs retryRejectedStaticPaths every [interval] while [active] holds -- Agent.connectToProxy's retry task -- and
-  // returns once none is left to retry: only registerPaths adds one, and it runs only at connect.
+  // Runs retryRejectedStaticPaths every [interval] while [active] holds -- Agent.retryRejectedStaticPathsForConnection,
+  // the connection's retry task -- and returns once none is left to retry: only registerPaths adds one, and it runs
+  // only at connect.
   suspend fun retryRejectedStaticPathsWhile(
     interval: Duration,
     active: () -> Boolean,
@@ -484,8 +486,11 @@ internal class AgentPathManager(
   }
 
   // Records [e], the failure of a reclaim of [path] tried as [tried]. A refusal that can't clear drops the path, which
-  // then shows as refused, as at connect. Anything else keeps it taken over and waits longer before the next try,
-  // unless a notice came meanwhile, whose word is newer. The proxy's refusal while another agent holds the path is what
+  // then shows as refused, as at connect, except INVALID_AGENT: the proxy has already dropped this connection's
+  // context, so the connection is ending, and the takeover stays for the next connection to reclaim, as
+  // ProxyRegistry.tla's told does. Dropping it would have the reconnect register the path without reclaim, taking it
+  // back from the agent serving it. Anything else keeps it taken over and waits longer before the next try, unless a
+  // notice came meanwhile, whose word is newer. The proxy's refusal while another agent holds the path is what
   // the takeover already shows, so it is logged at DEBUG; one for another cause, such as an agent of another identity
   // that took the path once it was free, shows as the proxy gave it, and is logged at WARN once. Callers MUST hold
   // pathMutex.
@@ -496,7 +501,7 @@ internal class AgentPathManager(
     e: Throwable,
   ) {
     val rejection = e as? RequestFailureException
-    if (rejection != null && !rejection.retryable) {
+    if (rejection?.dropsTakeover == true) {
       paths -= path
       recordFailure(path, e, retrying = false, retryAt = null)
       logRejection(source, path, rejection, repeat = false, retryIn = null)
@@ -522,8 +527,8 @@ internal class AgentPathManager(
     }
   }
 
-  // Runs reclaimTakenOverPaths while [active] holds -- Agent.connectToProxy's reclaim task -- sleeping until the next
-  // path's try is due within RECLAIM_WINDOW, or until a notice, with none taken over.
+  // Runs reclaimTakenOverPaths while [active] holds -- the connection's reclaim task, which Agent.launchConnectionTasks
+  // starts -- sleeping until the next path's try is due within RECLAIM_WINDOW, or until a notice, with none taken over.
   suspend fun reclaimTakenOverPathsWhile(active: () -> Boolean) {
     while (active()) {
       val wait = paths.values.minOfOrNull { it.takenOver?.backoff?.remaining ?: Duration.INFINITE }
@@ -555,7 +560,8 @@ internal class AgentPathManager(
    * desired path colliding with a [PathSource.STATIC] path, or with a configured static path the proxy
    * rejected, is skipped (static wins). Each per-path operation is isolated, so one failing path does
    * not abort the rest of the reconcile. A failure is retried on the next call (reconcile is idempotent),
-   * except a rejection for a cause that can't clear: see [registerDiscoveredPath].
+   * except a rejection: one that can clear waits out its backoff, and one that can't isn't retried as it stands;
+   * see [registerDiscoveredPath].
    */
   suspend fun reconcileDiscoveredPaths(desired: List<DiscoveredPath>) =
     pathMutex.withLock {
@@ -668,8 +674,9 @@ internal class AgentPathManager(
 
   // Registers, or re-registers, one discovered path; callers MUST hold pathMutex. The failure is recorded in
   // discoveredRejections, and a rejection whose cause can't clear (see RETRYABLE_CAUSES) isn't tried again until the
-  // entry's URL or labels change, it leaves the desired set and returns, or the agent reconnects. Any other failure
-  // is still retried on the next reconcile, and its stack trace is logged once rather than on every one.
+  // entry's URL or labels change, it leaves the desired set and returns, or the agent reconnects. One that can clear
+  // is retried once its backoff is up (see nextBackoff). Any other failure is still retried on the next reconcile, and
+  // its stack trace is logged once rather than on every one.
   private suspend fun registerDiscoveredPath(
     path: String,
     entry: DiscoveredPath,
@@ -940,6 +947,11 @@ internal class AgentPathManager(
     // A path's place in registering while no notice about it has come.
     private val NO_NOTICE: PathNotice = PathNotice.getDefaultInstance()
 
+    // Whether a refused reclaim drops the takeover: a refusal that can't clear, but not INVALID_AGENT, which says the
+    // proxy has already dropped this connection's context; see reclaimFailed.
+    private val RequestFailureException.dropsTakeover: Boolean
+      get() = !retryable && rejectionCause != INVALID_AGENT
+
     private val RequestFailureException.retryable: Boolean
       get() = rejectionCause in RETRYABLE_CAUSES
 
@@ -953,7 +965,7 @@ internal class AgentPathManager(
     internal fun requestedPathKey(path: String): String = path.trimStart('/')
   }
 
-  // The last failure to register a discovered entry. [retryable] says whether the entry stays in the desired set;
+  // The last failure to register a discovered entry. [retryable] says whether the entry is tried again as it stands;
   // [failure] identifies the failure, as Utils.failureKey gives it, so a repeat is logged at DEBUG instead of a fresh
   // stack trace. Only that comparison reads it: the log lines take the full message from the exception itself.
   private data class DiscoveredRejection(

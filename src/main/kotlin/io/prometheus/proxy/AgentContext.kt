@@ -150,7 +150,7 @@ internal class AgentContext(
    *
    * Reported at registration, which is exactly when it changes: a failover is a reconnect, so an agent
    * appearing here on its secondary endpoint has, by definition, just failed over to this proxy. Empty
-   * for an agent predating the fields, or one with no failover configured.
+   * for an agent predating the fields, and a single entry for one with no failover configured.
    */
   var proxyEndpoints: List<String> by nonNullableReference(emptyList())
     private set

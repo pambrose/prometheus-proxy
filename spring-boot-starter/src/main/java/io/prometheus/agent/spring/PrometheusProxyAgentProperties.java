@@ -58,11 +58,15 @@ public class PrometheusProxyAgentProperties {
 
   /**
    * The agent's name, as the proxy's dashboard and logs show it. Defaults to spring.application.name, followed by the
-   * build's version when the app has build info, which tells an old deployment from a new one.
+   * build's version when the app has build info, which tells an old deployment from a new one. Without
+   * spring.application.name, it's Unnamed- and the host.
    */
   private String name;
 
-  /** The proxy's path the app's metrics are served at. Defaults to spring.application.name followed by _metrics. */
+  /**
+   * The proxy's path the app's metrics are served at. Defaults to spring.application.name followed by _metrics, and
+   * to application_metrics without spring.application.name.
+   */
   private String path;
 
   /** The labels of the app's path, in the proxy's service discovery. */

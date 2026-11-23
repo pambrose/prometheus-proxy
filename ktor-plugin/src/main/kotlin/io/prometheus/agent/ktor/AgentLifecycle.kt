@@ -40,7 +40,8 @@ import kotlin.concurrent.thread
 //    stops the agent itself when the app is disposed without the engine stopping.
 //
 // The handlers are the app's, not the plugin's: in development mode, a reload disposes the app and creates another on
-// the same monitor, so each handler checks that the event is its app's, and they're all removed once the app stops.
+// the same monitor, so each handler checks that the event is its app's, but for ApplicationStopPreparing's, which
+// carries the environment rather than the app, and they're all removed once the app stops.
 internal class AgentLifecycle(
   private val application: Application,
   private val config: PrometheusProxyAgentConfig,

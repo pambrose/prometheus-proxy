@@ -3,9 +3,9 @@ name: Documentation
 # published to Maven Central and Docker Hub and checked the images, and that run deploys master as the release left it.
 # A push to master builds the site and the KDocs without deploying them, so the live site keeps describing the release
 # its visitors can install, never features merged since; and the build is a check on each commit, which make
-# release-check requires to have passed. Nothing else builds the KDocs before a release. To deploy master between
-# releases, a fix the live site can't wait for, run `make gh-docs`: it deploys master as it is, unreleased pages
-# included.
+# release-check requires to have passed. CI's consumer-check job builds the KDocs too, on every pull request, for the
+# javadoc jar it publishes to the local Maven repository. To deploy master between releases, a fix the live site can't
+# wait for, run `make gh-docs`: it deploys master as it is, unreleased pages included.
 on:
   push:
     branches:
@@ -54,8 +54,8 @@ jobs:
       - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:
           distribution: temurin
-          # JDK 25 (the last, so the default) runs Gradle and the tests, matching the Docker runtime; JDK 17 is the
-          # toolchain the main code compiles with.
+          # JDK 25 (the last, so the default) runs Gradle, matching the Docker runtime; JDK 17 is the toolchain the
+          # main code compiles with.
           java-version: |
             17
             25

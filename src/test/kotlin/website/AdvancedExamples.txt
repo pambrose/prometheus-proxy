@@ -31,8 +31,7 @@ grpcurl -plaintext localhost:50051 list
 
 # Output:
 #   ProxyService
-#   grpc.health.v1.Health
-#   grpc.reflection.v1alpha.ServerReflection
+#   grpc.reflection.v1.ServerReflection
 ; --8<-- [end:grpc-reflection-list]
 
 ; --8<-- [start:grpc-reflection-describe]
@@ -104,7 +103,7 @@ proxy.grpc {
 
 // Agent gRPC keepalive settings:
 agent.grpc {
-  keepAliveTimeSecs = -1              // -1 = use server default
+  keepAliveTimeSecs = -1              // -1 = gRPC's default, no keepalive PINGs
   keepAliveTimeoutSecs = 20
   keepAliveWithoutCalls = false
 }

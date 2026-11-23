@@ -182,8 +182,9 @@ class PathDiscoveryServiceTest : StringSpec() {
       coVerify(exactly = 1) { pathManager.reconcileDiscoveredPaths(emptyList()) }
     }
 
-    // run() is what the Agent launches. Its interval wait is sliced so a disconnect ends discovery within one slice,
-    // rather than a full interval later, which would otherwise hold up shutdown.
+    // run() is what the Agent launches, and ends by cancelling it. keepRunning is a backstop: the interval wait is
+    // sliced, so if nothing cancels it, discovery still ends within one slice of keepRunning turning false, rather than
+    // a full interval later.
     "run should stop within one wait slice once keepRunning turns false" {
       val pathManager = mockk<AgentPathManager>(relaxed = true)
       val running = AtomicBoolean(true)

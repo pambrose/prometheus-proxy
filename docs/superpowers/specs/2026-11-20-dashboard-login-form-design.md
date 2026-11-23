@@ -1,7 +1,7 @@
 # Dashboard login form — design
 
 Approved in conversation on 2026-11-20. Replaces the browser's native HTTP Basic Auth prompt, which the dashboard
-login of 4.6.1 shows, with a login page.
+login of 4.7.0 shows, with a login page.
 
 ## Intent
 

@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file.
 
 ---
 
-## [Unreleased]
+## [4.7.0] - 2026-11-23
 
 ### New Features
 
@@ -103,13 +103,24 @@ All notable changes to this project are documented in this file.
   reverse proxy's idle timeout, such as nginx's default 60 seconds, no longer cuts off an agent every minute, scraped
   or not, and briefly drops its paths. The new `proxy.internal.streamKeepAliveSecs` sets the interval for both
   directions; 0 turns keepalives off. Each sends them only to the other once it says it takes them, so with an agent
-  or a proxy from 4.6.1 or earlier, nginx's timeouts still need raising
+  or a proxy from 4.6.0 or earlier, nginx's timeouts still need raising
 - An nginx demo, in `demos/nginx`: the proxy behind nginx, which ends the agents' TLS, with an agent of this release and
   one of 4.6.0, and Prometheus. `./demo.sh` swaps nginx's stream timeouts (`nginx-stock`, `nginx-long-timeouts`,
   `nginx-short-timeouts`), lists the old workers a reload leaves (`nginx-workers`), sets `worker_shutdown_timeout`
   (`nginx-shutdown-timeout`), changes the proxy's keepalive interval (`keepalive`), and fronts the dashboard with
   nginx, without and with what its WebSocket needs (`dashboard-stock`, `dashboard-upgrade`, `dashboard-host`). Its
   ports are 500 above the basics demo's
+- The proxy's and the agent's dashboards can require a login: set `proxy.dashboard.password` or
+  `agent.dashboard.password` (`DASHBOARD_PASSWORD`) and a browser gets a login page, styled after Grafana's, with the
+  logo and "Prometheus Proxy" over the dashboard's name, and the username `proxy.dashboard.username` or
+  `agent.dashboard.username` (`DASHBOARD_USERNAME`, default `admin`). A login starts a session, kept in memory, that
+  ends after 24 hours idle, 7 days, or Log out, an exit icon in the top bar, and a page left open stops getting updates
+  when its session ends; a script sends the login as HTTP Basic Auth instead, which a browser's request
+  (`Sec-Fetch-Mode`) can't. After 10 wrong logins from one address within a minute, or 100 in all, logins are refused
+  with a 429 for up to a minute. Neither setting has a command-line flag, and the password is never logged. The proxy
+  and the agent refuse to start with an empty username, a colon in it, or a control character in either, and log a
+  wrong login at WARN at most once a minute per address. The dashboards serve plain HTTP, so the docs say to put TLS in
+  front of them. Both Helm charts take the password from a Secret, `dashboard.login.existingSecret`
 
 ### Bug Fixes
 
@@ -127,6 +138,20 @@ All notable changes to this project are documented in this file.
   a reverse proxy's idle timeout causes. Its attempts count in the rejection metrics as the new cause
   `held_by_another_agent`. The proxy tells it on a stream of its own, which sends a keepalive every 30 seconds so a
   reverse proxy such as nginx doesn't close it. Agents and proxies predating this behave as before
+- A connection that closes before its transport is ready, such as a port probe or one that fails its TLS handshake, no
+  longer has Netty log a `NullPointerException` at WARN from the proxy's transport filter (seen behind Railway's TCP
+  proxy); the proxy logs it at DEBUG
+- The proxy logs a refused agent token at WARN, naming the host and whether the token was unknown or missing, at most
+  once a minute for each host; it reached only the dashboard's activity feed, which is often off. The agent logs a
+  connect failure that persists at WARN again every 10 minutes, without the stack trace, where it logged one only on
+  its first attempt and then reconnected at DEBUG
+- The docs site is served at https://prometheus-proxy.com: each page's canonical link and the sitemap name it, the 404
+  page loads its stylesheet and script, and the links to the site from the README, `llms.txt`, `SECURITY.md`, the
+  demos, the Helm charts, the cloud-proxy example, and the Homebrew formula follow it
+- A hovered row in a dashboard's list of agents or paths showed its address line at 4.18:1 (light) and 4.30:1 (dark)
+  against the hover's ground, under WCAG AA's 4.5:1; it now steps up to the secondary ink, at 6.14:1 and 6.28:1
+- The discovery entries the agent skips, which its debug page and dashboard read from other threads, are now published
+  to them safely
 
 ### Behavior Changes
 
@@ -140,10 +165,6 @@ All notable changes to this project are documented in this file.
 - `agent_connect_count_total{type="success"}` counts a connect once the proxy has registered the agent, rather than as
   the connection opens, and `agent_scrape_result_count_total` counts a result as sent once gRPC takes it to send, and
   as `dropped` when the connection ends first
-- The dashboards' login page shows the logo and "Prometheus Proxy" over the dashboard's name, "Proxy Dashboard" or
-  "Agent Dashboard", where it read "Prometheus Proxy Dashboard" or "Prometheus Agent Dashboard", and its tab title is
-  `Log in · Proxy Dashboard · Prometheus Proxy`. Log out, in the top bar, is an exit icon, named Log out in its tooltip
-  and for screen readers
 - `sendHeartBeat` calls are no longer traced
 - The unimplemented `internal.zipkin.grpcReportingEnabled` setting is removed; a config that sets it still loads
 - `BuildConfig.BUILD_TIME` and the release date the version and the dashboards show are the time of the commit the
@@ -179,49 +200,6 @@ All notable changes to this project are documented in this file.
 - `TestPortsTest` fails on a port a spec binds that a demo publishes on the host (a compose port, a kind `hostPort`,
   or a `demo.sh` port default), since a spec run while that demo was up reached the demo's container. The admin-path
   specs and `HarnessHelpersTest` move off the basics and network demos' ports (8098, 8099, 9511)
-
-### Documentation
-
-- The nginx example (`nginx/docker/nginx.conf`) raises `grpc_read_timeout` and `client_body_timeout`, and the README
-  and the Advanced Topics, Troubleshooting, and Kubernetes pages say to: nginx closes a gRPC stream that's quiet for
-  60 seconds, so with its defaults an agent reconnected every minute and was briefly without its paths, even while it
-  was scraped, since its stream for chunked results is quiet while its results are small. The example drops
-  `client_header_timeout`, which doesn't apply to a quiet stream
-- The Advanced Topics page says that an `nginx -s reload` leaves a connected agent on an old worker, under the old
-  config, for as long as its connection lasts, which with keepalives is indefinitely, and that
-  `worker_shutdown_timeout` bounds it; that an agent dialing a TLS-terminating nginx needs a trust collection; and the
-  Dashboard page, that behind a reverse proxy the dashboard's WebSocket needs the `Upgrade` and `Connection` headers
-  passed and the browser's `Host` header, or its address in `proxy.dashboard.allowedOrigins`
-
-## [4.6.1] - 2026-11-22
-
-### New Features
-
-- The dashboard can require a login: set `proxy.dashboard.password` (`DASHBOARD_PASSWORD`) and a browser gets a login
-  page, styled after Grafana's, with the username `proxy.dashboard.username` (`DASHBOARD_USERNAME`, default `admin`). A
-  login starts a session, kept in memory, that ends after 24 hours idle, 7 days, or Log out, in the top bar, and a page
-  left open stops getting updates when its session ends; a script sends the login as HTTP Basic Auth instead, which a
-  browser's request (`Sec-Fetch-Mode`) can't. After 10 wrong logins from one address within a minute, or 100 in all,
-  logins are refused with a 429 for up to a minute. Neither setting has a command-line flag, and the password is never
-  logged. The proxy refuses to start with an empty username, a colon in it, or a control character in either, and logs a
-  wrong login at WARN at most once a minute per address. The dashboard serves plain HTTP, so the docs say to put TLS in
-  front of it. The Helm chart takes the password from a Secret, `dashboard.login.existingSecret`
-
-### Bug Fixes
-
-- A connection that closes before its transport is ready, such as a port probe or one that fails its TLS handshake, no
-  longer has Netty log a `NullPointerException` at WARN from the proxy's transport filter (seen behind Railway's TCP
-  proxy); the proxy logs it at DEBUG
-- The proxy logs a refused agent token at WARN, naming the host and whether the token was unknown or missing, at most
-  once a minute for each host; it reached only the dashboard's activity feed, which is often off. The agent logs a
-  connect failure that persists at WARN again every 10 minutes, without the stack trace, where it logged one only on
-  its first attempt and then reconnected at DEBUG
-- The docs site is served at https://prometheus-proxy.com: each page's canonical link and the sitemap name it, the 404
-  page loads its stylesheet and script, and the links to the site from the README, `llms.txt`, `SECURITY.md`, the
-  demos, the Helm charts, the cloud-proxy example, and the Homebrew formula follow it
-
-### Build & Tooling
-
 - `make docker-build` builds the proxy and agent images for this machine into the local Docker, as
   `prometheus-proxy:local` and `prometheus-agent:local`, and `make docker-scan` builds them and lists their CVEs with
   Docker Scout, the libraries inside the fat jars included
@@ -236,6 +214,16 @@ All notable changes to this project are documented in this file.
 
 ### Documentation
 
+- The nginx example (`nginx/docker/nginx.conf`) raises `grpc_read_timeout` and `client_body_timeout`, and the README
+  and the Advanced Topics, Troubleshooting, and Kubernetes pages say to: nginx closes a gRPC stream that's quiet for
+  60 seconds, so with its defaults an agent reconnected every minute and was briefly without its paths, even while it
+  was scraped, since its stream for chunked results is quiet while its results are small. The example drops
+  `client_header_timeout`, which doesn't apply to a quiet stream
+- The Advanced Topics page says that an `nginx -s reload` leaves a connected agent on an old worker, under the old
+  config, for as long as its connection lasts, which with keepalives is indefinitely, and that
+  `worker_shutdown_timeout` bounds it; that an agent dialing a TLS-terminating nginx needs a trust collection; and the
+  Dashboard page, that behind a reverse proxy the dashboard's WebSocket needs the `Upgrade` and `Connection` headers
+  passed and the browser's `Host` header, or its address in `proxy.dashboard.allowedOrigins`
 - The Embedded Agent page has a Debugging section: the agent's admin endpoints and `/debug`, turned on with
   `ADMIN_ENABLED` and `DEBUG_ENABLED` (or `setting()` in code), what each shows, its logs, the proxy's view, and its
   metrics on the Agents dashboard with `METRICS_ENABLED` and a path for them. The embedded demo turns them on from the

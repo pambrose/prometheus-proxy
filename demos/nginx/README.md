@@ -28,8 +28,8 @@ kind clusters; it needs kind, `kubectl`, and Helm as well as Docker.
  Prometheus :9590 (5s scrapes)
 ```
 
-Only nginx reaches the proxy's agent port. The proxy sees both agents' calls arrive from nginx, so it lists each at the
-address **Unknown**.
+Only nginx reaches the proxy's agent port. The proxy's transport filter is off behind nginx, so it records no address
+for an agent, and lists each at the address **Unknown**.
 
 ## What you need
 
@@ -49,7 +49,7 @@ Clone the repository at the latest release, then run the demo's commands from it
 its targets:
 
 ```bash
-git clone -c advice.detachedHead=false --depth 1 --branch 4.6.1 https://github.com/pambrose/prometheus-proxy.git
+git clone -c advice.detachedHead=false --depth 1 --branch 4.7.0 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/nginx
 make up      # pulls the images, starts everything, and prints the URLs
 make tour    # walks through the guided tour below, pausing before each step
@@ -137,7 +137,7 @@ results on.
 ```
 
 - agent-legacy is cut off once more, within a minute, by the worker it's on, which keeps the old timeouts, then
-  reconnects to a new worker under the day-long ones, and stays connected. For an agent or a proxy from 4.6.1 or
+  reconnects to a new worker under the day-long ones, and stays connected. For an agent or a proxy from 4.6.0 or
   earlier, this is the fix short of upgrading both.
 
 ### 3. A shorter stream timeout, and a reload that doesn't reach connected agents
@@ -209,8 +209,9 @@ The proxy's dashboard updates live over a WebSocket, which a reverse proxy has t
 ```
 
 - The page goes live. `proxy_set_header Host $http_host` passes the `Host` header as the browser sent it, port
-  included (`$host` drops it). Listing the address in `proxy.dashboard.allowedOrigins` works too. With nginx ending
-  TLS in front of the dashboard, the dashboard marks its session cookie `Secure`.
+  included (`$host` drops it). Listing the address in `proxy.dashboard.allowedOrigins` works too. Here nginx passes
+  the dashboard on over plain HTTP; if it ended TLS in front of the dashboard, the browser's `Origin` would start with
+  `https`, and a login's session cookie would be marked `Secure`, so the browser would send it only over TLS.
 
 ## Scenario reference
 
@@ -222,7 +223,7 @@ The proxy's dashboard updates live over a WebSocket, which a reverse proxy has t
 | `demo.sh nginx-short-timeouts` | Both stream timeouts cut to 20 seconds | `nginx/agents-short-timeouts.conf`: both at `20s` |
 | `demo.sh nginx-workers` | Lists nginx's processes, the old workers a reload left among them | `ps` in the nginx container |
 | `demo.sh nginx-shutdown-timeout` | nginx's old workers close their connections 10 seconds after a reload | Copies `nginx/main-shutdown-timeout.conf` (`worker_shutdown_timeout 10s`) into `main.d` and restarts nginx |
-| `demo.sh keepalive <secs>` | The proxy's stream keepalive interval, for both directions | Recreates the proxy with `-Dproxy.internal.streamKeepAliveSecs=<secs>` |
+| `demo.sh keepalive <secs>` | The proxy's stream keepalive interval, for both directions | Recreates the proxy with `-Dproxy.internal.streamKeepAliveSecs=<secs>`, and restarts nginx, which looks up the new proxy's address |
 | `demo.sh dashboard-stock` | The dashboard's entrance as a plain `proxy_pass` | `nginx/dashboard-stock.conf` in as `conf.d/dashboard.conf`, and a reload |
 | `demo.sh dashboard-upgrade` | The same, passing the WebSocket handshake's headers | `nginx/dashboard-upgrade.conf`: HTTP/1.1, `Upgrade`, and `Connection` |
 | `demo.sh dashboard-host` | The same, passing the browser's `Host` too | `nginx/dashboard-host.conf`: `proxy_set_header Host $http_host` |
@@ -259,7 +260,7 @@ it. nginx's configs are in `nginx/`, not `config/`, since they're nginx's own fo
 
 ## Troubleshooting
 
-- **`port is already allocated`**: another service holds the port; the other demos' are 100 to 400 lower, so it isn't
+- **`port is already allocated`**: another service holds the port; the other demos' are 100 to 500 lower, so it isn't
   one of them. Move it with the variables above.
 - **A config change doesn't seem to take**: an agent's connection stays with the nginx worker it opened on, under the
   config it opened with, until `worker_shutdown_timeout` is set (part 3). `./demo.sh reset` restarts nginx, and every

@@ -17,7 +17,7 @@
 
 name: prometheus-proxy-demo
 
-# The three agents share one image: the latest release's, which demo.sh pulls and tags as this one (make up), or one
+# Every agent shares one image: the latest release's, which demo.sh pulls and tags as this one (make up), or one
 # built from this checkout's agent jar (make up-local, which builds with --build).
 #
 # Each agent serves its own dashboard (agent.dashboard in its config), published on its service below rather than

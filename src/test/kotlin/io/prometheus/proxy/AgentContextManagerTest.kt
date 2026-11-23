@@ -64,8 +64,8 @@ class AgentContextManagerTest : StringSpec() {
       manager.agentContextEntries.map { it.key } shouldBe listOf(context.agentId)
     }
 
-    // connectAgent can announce a context in the moment after transportTerminated invalidated it, which logged a
-    // "Registering" line and emitted AgentConnected for a connection that was already gone.
+    // An authenticated call can announce a context in the moment after transportTerminated invalidated it, which
+    // logged a "Registering" line and emitted AgentConnected for a connection that was already gone.
     "an invalidated pending context should not be announced" {
       val manager = AgentContextManager(isTestMode = true)
       val context = AgentContext("10.0.1.14:1234")
@@ -211,7 +211,7 @@ class AgentContextManagerTest : StringSpec() {
 
     // ==================== Backlog Aggregation Tests ====================
 
-    "totalAgentScrapeRequestBacklogSize should sum across agents" {
+    "totalAgentScrapeRequestBacklogSize should be zero for agents with no backlog" {
       val manager = AgentContextManager(isTestMode = true)
       val context1 = AgentContext("remote-1")
       val context2 = AgentContext("remote-2")
@@ -223,9 +223,9 @@ class AgentContextManagerTest : StringSpec() {
       manager.totalAgentScrapeRequestBacklogSize shouldBe 0
     }
 
-    // ==================== Concurrent Access Tests ====================
+    // ==================== Bulk Add and Remove Tests ====================
 
-    "concurrent add and remove should not lose agents" {
+    "adding 100 agents and removing 50 should leave 50" {
       val manager = AgentContextManager(isTestMode = true)
       val contexts = (1..100).map { AgentContext("remote-$it") }
 

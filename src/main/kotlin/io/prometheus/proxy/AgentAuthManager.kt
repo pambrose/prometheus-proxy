@@ -29,7 +29,8 @@ import java.security.MessageDigest
  * a `data class` would get wrong. Identities are compared by token digest via [MessageDigest.isEqual],
  * never by object equality.
  *
- * @param name identity name, used only for logging and failure messages
+ * @param name identity name: what path ownership, the binding of calls with the transport filter disabled, and
+ *   `proxy.internal.maxAgentsPerIdentity` compare, and what the logs, failure messages, and dashboard show
  * @param tokenDigest SHA-256 digest of the identity's pre-shared token
  * @param pathGlobs glob patterns, matched by [AgentAuthManager.globMatches]; an empty list authorizes every path
  * @see AgentAuthManager

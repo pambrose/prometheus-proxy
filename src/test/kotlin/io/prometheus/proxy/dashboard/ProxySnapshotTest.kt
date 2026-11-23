@@ -124,8 +124,8 @@ class ProxySnapshotTest : StringSpec() {
 
     // ==================== Path view ====================
 
-    // A departed path's only remaining attribution is the scrape record, since its agent list is empty
-    // by definition -- so servingAgent has to fall through to it or the row says nothing useful.
+    // A departed path the proxy kept only the scrapes of has no agent names, so servingAgent has to fall
+    // through to its last scrape, or the row says nothing useful.
     "a path view should name its serving agent, falling back to the last scrape" {
       DashboardFixtures.pathView(
         agentIds = ["a1", "a2"],

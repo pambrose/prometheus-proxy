@@ -49,8 +49,9 @@ a shared **pre-shared token** so the proxy rejects agents that do not present it
 
 Both sides must use the **same** value. When set, the agent attaches the token as a gRPC metadata
 header on every call and the proxy rejects any call with a missing or mismatched token
-(`UNAUTHENTICATED`). When the token is empty (the default), the open behavior is preserved and the
-proxy logs a startup warning — unless mutual TLS is configured, which already authenticates agents.
+(`UNAUTHENTICATED`). When the token is empty (the default) and no
+[per-agent identities](#per-agent-identities-and-path-authorization) are configured, the open behavior is preserved
+and the proxy logs a startup warning — unless mutual TLS is configured, which already authenticates agents.
 The token is never logged. If a token or per-agent identities are configured without TLS, the proxy and the
 agent each log a startup warning that tokens are sent in cleartext.
 
@@ -108,11 +109,11 @@ Patterns are single-segment globs: `*` matches any run of characters and `?` mat
 [Proxy configuration](../configuration/proxy.md#internal-settings)), so a path that is too long, has more
 than one segment, or has whitespace, a control character, `?`, or `#` in it is refused as invalid, whatever the
 patterns. A `*` matches any run of characters, line breaks included, so this check is what keeps an agent from
-registering a path that would forge lines in the proxy's log. Because authorization is per-identity-per-path,
-[consolidated mode](../advanced.md#consolidated-mode) still works as long as each participating
-agent's identity permits the shared path. A consolidated path belongs to the identity that registered
-it, though: another identity whose patterns match is refused while agents still serve the path, and
-joins only once they are gone.
+registering a path that would forge lines in the proxy's log. A path also belongs to the identity whose agent
+serves it: while a live agent serves a path in [consolidated mode](../advanced.md#consolidated-mode) (multiple
+agents serving one path), only an agent of the same identity may join it, so agents that share a consolidated path
+must present one identity. Another identity's registration is refused, and retried, until the path's agents are
+gone, even when its patterns match.
 
 A non-consolidated path is protected the same way. While a live agent serves it, only an agent of the
 same identity may take it over, which keeps redeploys working; an agent of another identity is refused
@@ -124,10 +125,10 @@ legacy token and a `proxy.auth` identity cannot take over each other's live path
 
     `proxy.auth` is a list of objects, so it can only be set in a config file — there is no
     equivalent CLI flag or environment variable, and the `-D` property override (parsed as Java
-    properties) cannot express a list. Identity names must be unique and tokens non-empty, and no
-    identity may be named `legacy-agent-token`, the name the proxy gives the legacy shared token in its
-    logs (the dashboard shows it as *shared token*), even when `proxy.agentToken` isn't set; the proxy
-    fails fast at startup otherwise.
+    properties) cannot express a list. Identity names must be unique, tokens non-empty and distinct, from
+    each other and from `proxy.agentToken`, and no identity may be named `legacy-agent-token`, the name the
+    proxy gives the legacy shared token in its logs (the dashboard shows it as *shared token*), even when
+    `proxy.agentToken` isn't set; the proxy fails fast at startup otherwise.
 
     A token can still come from the environment, through HOCON substitution: `token = ${TEAM_A_TOKEN}`
     reads the `TEAM_A_TOKEN` variable, which keeps the tokens out of the config file. In Kubernetes, set the

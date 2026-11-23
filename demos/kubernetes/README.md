@@ -52,7 +52,7 @@ Clone the repository at the latest release, then run the demo's commands from it
 its targets:
 
 ```bash
-git clone -c advice.detachedHead=false --depth 1 --branch 4.6.1 https://github.com/pambrose/prometheus-proxy.git
+git clone -c advice.detachedHead=false --depth 1 --branch 4.7.0 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/kubernetes
 make up      # creates both clusters, installs everything, and prints the URLs
 make tour    # walks through the guided tour below, pausing before each step
@@ -106,7 +106,8 @@ every command, and puts back the context that was current when it creates a clus
 ## Guided tour
 
 `make tour` walks through these parts one step at a time. To follow them here instead, run the scenario commands
-from `demos/kubernetes`; each one prints what to watch, and how long it took. The times below were measured on an Apple-silicon laptop.
+from `demos/kubernetes`; most commands print what to watch, and the ones that add, remove, or replace something, how
+long it took. The times below were measured on an Apple-silicon laptop.
 
 ### 1. The Helm charts on two clusters, with no inbound access
 
@@ -119,7 +120,7 @@ These are the earlier demos' proxy and agent, now deployed with their Helm chart
 - Every Service in `pp-target` is ClusterIP: nothing in it can be reached from outside, and kind maps no port of it to
   the host but its API server's, for `kubectl`. The agent opened its connection to the proxy; nothing connected in.
 - `helm list` shows the proxy chart in `pp-monitoring` and the agent chart in `pp-target`: the charts the project
-  ships, with nothing but a values file each.
+  ships, given nothing but a values file and a config file each, and, for the agent, the proxy's address.
 - Prometheus's config names no target in `pp-target`. Its one job asks the proxy's `/discovery` what to scrape.
 - Open the proxy dashboard. One agent is connected, named for its pod, `prometheus-agent-<hash>-<id>`, the name
   `kubectl` shows, with four paths: its own metrics (source **cfg**, from its config) and the three services (source
@@ -147,8 +148,8 @@ connection, each path's registration and recent scrapes, and its discovery. See
   the fetch took, and the body's size. Scrape now has the agent fetch the target at once, from inside `pp-target`, the
   only place its address resolves: `http://orders.apps.svc.cluster.local:8000/metrics`
 - The Connection view shows the agent connected to the proxy's NodePort, under its pod's name. Under Discovery is the
-  file the chart mounts from `agent-targets`, `/app/discovery/targets.conf`, read every 5 seconds, with its last read,
-  and under Settings what the agent resolved from `config/agent.conf`, such as its 3-second scrape timeout.
+  file the chart mounts from `agent-targets`, `/app/discovery/targets.conf`, read every 5 seconds, with its last read.
+  The Settings view shows what the agent resolved from `config/agent.conf`, such as its 3-second scrape timeout.
 - The Activity view lists what the agent did since its pod started, newest first. Read from the bottom, it connected to
   the proxy, then registered its static path, and its three discovered ones on a line of their own. Each line is in the
   agent's log too, but the log stays behind the firewall and scrolls away.
@@ -308,8 +309,8 @@ each carries its `launch_id`. One agent per cluster, which Kubernetes replaces i
 
 ## Troubleshooting
 
-- **`make up` fails creating `pp-monitoring` with a port in use**: another service holds 8294, 9290, or 8280; the other
-  demos' ports are 100 and 200 lower, so it isn't them. Move it with the variables above, then `make down && make up`.
+- **`make up` fails creating `pp-monitoring` with a port in use**: another service holds 8294, 9290, or 8280, and not
+  another demo, since none of them uses those ports. Move it with the variables above, then `make down && make up`.
 - **`make up` says a port differs**: the running `pp-monitoring` was created with other ports. `make down` first.
 - **The dashboard shows no agent**: `make logs` shows the agent's log, and `make status` both clusters' pods. The
   agent reaches the proxy through `pp-monitoring`'s node address, which changes if Docker restarts the node:
@@ -319,7 +320,8 @@ each carries its `launch_id`. One agent per cluster, which Kubernetes replaces i
 - **`./demo.sh agent-dashboard` stops with `lost connection to pod`**: the agent's pod was replaced; run it again. If
   it can't listen on 8295, another program holds it: set `KUBERNETES_DEMO_AGENT_DASHBOARD_PORT`. If it says the
   dashboard is off, the agent was installed before the demo turned it on: `make up` upgrades it.
-- The proxy logs a warning at startup that the dashboard has no authentication, and the agent one that its token
-  crosses without TLS. The agent also logs a WARN that its dashboard has no authentication and listens on all
-  interfaces. All are expected here: every published port binds to `127.0.0.1`, and the agent's dashboard is on no
-  Service, so only `kubectl port-forward` reaches it.
+- The proxy logs warnings at startup that the dashboard has no authentication and that agent tokens cross without
+  TLS, and the agent one that its token crosses without TLS. The agent also logs a WARN that its dashboard has no
+  authentication and listens on all interfaces. All are expected here: the token crosses only Docker's `kind` network
+  on this machine, every published port binds to `127.0.0.1`, and the agent's dashboard is on no Service, so only
+  `kubectl port-forward` reaches it.

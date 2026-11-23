@@ -15,15 +15,15 @@ The agent's own [dashboard](https://prometheus-proxy.com/agent-dashboard/) is on
 with no change to the roastery. It shows the agent's side of its connection, from inside the roastery, and the
 tour watches it while the proxy stops and starts again.
 
-The coffee shop in the [embedded demo](../embedded) shows the rest with an app in Kotlin: a rush, an alert in Grafana,
-a deploy that hands the agent's path to the new version, the proxy going away, and secrets from the environment. The
-website's [Spring Boot Demo](https://prometheus-proxy.com/spring-boot-demo/) page walks through this
+The coffee shop in the [embedded demo](../embedded) shows the rest with an app in Kotlin: a rush in Grafana, an alert
+in Prometheus, a deploy that hands the agent's path to the new version, the proxy going away, and secrets from the
+environment. The website's [Spring Boot Demo](https://prometheus-proxy.com/spring-boot-demo/) page walks through this
 one.
 
 ```mermaid
 %%{init: {'flowchart': {'curve': 'linear'}}}%%
 graph LR
-  P[Prometheus :9090] -->|scrapes /roastery_metrics| Proxy[Proxy, dashboard :8094]
+  P[Prometheus :9490] -->|scrapes /roastery_metrics| Proxy[Proxy, dashboard :8494]
   %% The agent connects out to the proxy, so its arrow points back. The invisible link keeps the app to the right.
   Proxy ~~~ Agent
   Agent[embedded agent, run by the Spring Boot starter, dashboard :8495] -->|gRPC over TLS, with a token| Proxy
@@ -44,7 +44,7 @@ graph LR
 
 - [Docker](https://docs.docker.com/get-started/get-docker/) with Compose v2: Docker Desktop, or Docker Engine with the
   Compose plugin.
-- `curl`, `make`, and `bash`.
+- `git`, to clone the repository, and `curl`, `make`, and `bash`.
 - For `make up-local` only: a JDK 17 or later and [Maven](https://maven.apache.org/install.html) 3.9 or later, which
   build the library and the roastery from this checkout.
 
@@ -53,7 +53,7 @@ graph LR
 From a clone of the release, so the scripts match the images:
 
 ```bash
-git clone -c advice.detachedHead=false --depth 1 --branch 4.6.1 https://github.com/pambrose/prometheus-proxy.git
+git clone -c advice.detachedHead=false --depth 1 --branch 4.7.0 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/spring-boot
 make up      # builds the roastery, starts everything, prints the URLs
 make tour    # the guided tour, about 11 minutes
@@ -86,7 +86,7 @@ and nothing shared. `make up` writes them, with a random token, to `docker/.env`
 | Service | Role |
 |---|---|
 | `roastery` | The app, version 1.0 (`app/`): a Spring Boot app in Java that roasts a batch of beans every two seconds and ships some to the coffee shop every five, counting both in Micrometer meters. The prometheus-proxy agent runs inside it, started by the project's Spring Boot starter, and reads them, with the JVM's and Tomcat's, from the app's metrics registry, in-process; Actuator exposes only its health. Its dashboard is on, at port 8495, from the environment (`PROMETHEUSPROXY_AGENT_DASHBOARD_PORT`). |
-| `proxy` | The stock proxy image, which takes its TLS certificate and key, and the agent's token, from environment variables, with no file mounted. Its agent port is reachable only on the compose network; its dashboard is on. |
+| `proxy` | The stock proxy image, which takes its TLS certificate and key, and the agent's token, from environment variables, with none of them in a file. Its agent port is reachable only on the compose network; its dashboard is on. |
 | `prometheus` | Scrapes the roastery's path through the proxy every 5s, and the proxy's own metrics. |
 
 ## Guided tour

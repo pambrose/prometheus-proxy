@@ -293,7 +293,8 @@ internal class AgentHttpService(
 
   // Reads [source], a path served in-process, whose target shows as [label], as a target's body is read: on a thread
   // it may block, which the scrape's timeout interrupts, in a text format the scrape accepts, up to maxContentLength,
-  // and through [filter]. A source that fails fails the scrape, as a target that can't be reached does.
+  // and through [filter]. A source that fails fails the scrape, as a target that can't be reached does, unless it
+  // throws a VirtualMachineError.
   private suspend fun fetchFromSource(
     source: MetricsSource,
     label: String,
@@ -315,7 +316,8 @@ internal class AgentHttpService(
   // Calls [source] for [req], writing to [out], apart from the scrape: its timeout interrupts the call and stops
   // waiting for it, so a source stuck in a call that ignores interrupts, such as a socket read, holds a thread of its
   // own, but not the scrape, the agent's other scrapes, or its shutdown. Until that call returns, the source isn't
-  // called again, so stuck calls don't pile up. What the source throws fails only the scrape (see sourceFailure).
+  // called again, so stuck calls don't pile up. What the source throws, short of a VirtualMachineError, fails only the
+  // scrape (see sourceFailure).
   private suspend fun callSource(
     source: MetricsSource,
     req: ScrapeRequest,
@@ -349,9 +351,9 @@ internal class AgentHttpService(
     req: ScrapeRequest,
     logUrl: String,
   ): ScrapeResults {
-    // Catch regular exceptions and HttpRequestTimeoutException (which is a CancellationException)
-    // but let other CancellationExceptions propagate (like system shutdown). Uses the shared
-    // cause-walk predicate so the catch branch and the status-code mapping agree (finding 34).
+    // Catch regular exceptions, Ktor's HttpRequestTimeoutException (an IOException) among them, and the scrape
+    // timeout's TimeoutCancellationException, but let other CancellationExceptions propagate (like system shutdown).
+    // Uses the shared cause-walk predicate so the catch branch and the status-code mapping agree (finding 34).
     if (e is CancellationException && !e.hasTimeoutCause())
       throw e
 
@@ -713,7 +715,7 @@ internal class AgentHttpService(
     private const val TIMED_OUT_MSG = "timed_out"
     private const val FAILURE_MSG = "failure"
 
-    // Cap on the retry backoff so total retry time stays bounded within the scrape timeout (finding 28).
+    // Cap on each retry's backoff delay; the scrape timeout bounds the retries' total time (finding 28).
     private const val MAX_RETRY_DELAY_MS = 5000L
 
     private const val PROTOBUF_MEDIA_TYPE = "application/vnd.google.protobuf"
@@ -745,8 +747,6 @@ internal class AgentHttpService(
     // The content type of a source that names none: the Prometheus text format, which a scrape always accepts.
     private const val TEXT_FORMAT = "text/plain; version=0.0.4; charset=utf-8"
 
-    // The metric families a scrape asks for with name[] parameters, as the Prometheus client libraries read them; empty
-    // for all of them.
     // What the agent makes of [e], which a source's call threw: the call's own cancellation, when it was [cancelled],
     // or a VirtualMachineError, as they are, and an exception as it is; but an Error, or a CancellationException or
     // InterruptedException the source threw itself, as an IOException, so it fails the scrape and not the agent.
@@ -777,6 +777,8 @@ internal class AgentHttpService(
       }
     }
 
+    // The metric families a scrape asks for with name[] parameters, as the Prometheus client libraries read them; empty
+    // for all of them.
     private fun requestedNames(encodedQueryParams: String): Set<String> =
       if (encodedQueryParams.isBlank())
         emptySet()

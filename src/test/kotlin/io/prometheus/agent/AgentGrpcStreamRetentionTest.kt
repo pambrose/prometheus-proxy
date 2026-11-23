@@ -147,7 +147,7 @@ class AgentGrpcStreamRetentionTest : StringSpec() {
   }
 
   init {
-    // Fails until the agent's in-process channel stops buffering for retry: every chunk stays reachable.
+    // Fails if the agent's in-process channel buffers for retry again: every chunk would stay reachable.
     "a chunk the in-process proxy has read should not stay reachable while the agent's stream is open" {
       val proxy = ChunkReader(CHUNK_COUNT)
       val server = server(inProcessServerName = IN_PROCESS_NAME) { addService(proxy) }

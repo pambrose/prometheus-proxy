@@ -26,11 +26,10 @@ abstract class AbstractHarnessTests(
 ) : StringSpec() {
   init {
     // proxyCallTest runs a sequential and a parallel scrape phase, each guarded by
-    // withTimeout(HARNESS_CONFIG.proxyCallTimeoutSecs). Kotest's per-invocation timeout
-    // defaults to 60s, which would fire before the code's own guard under load — and it
-    // silently caps the LARGE+ configs, whose 120-480s budgets could otherwise never run.
-    // Raise the spec-level ceilings above the sum of both phases so the code's withTimeout
-    // stays the real limit (and failures surface with its message, not a Kotest cutoff).
+    // withTimeout(HARNESS_CONFIG.proxyCallTimeoutSecs). Kotest's test and invocation timeouts
+    // default to 10 minutes, under the sum of both phases at XXLARGE (2 x 480s). Raise the
+    // spec-level ceilings above that sum so the code's withTimeout stays the real limit (and
+    // failures surface with its message, not a Kotest cutoff).
     val harnessTimeoutMillis = ((HARNESS_CONFIG.proxyCallTimeoutSecs * 2) + 60).seconds.inWholeMilliseconds
     timeout = harnessTimeoutMillis
     invocationTimeout = harnessTimeoutMillis

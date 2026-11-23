@@ -350,8 +350,9 @@ class ProxyDashboardHtmlTest : StringSpec() {
       html shouldContain "Connection to the proxy restored"
     }
 
-    // A region the push loop rewrites would re-announce itself on every frame; this one is written only
-    // by the socket lifecycle handlers, so it must stay out of every out-of-band fragment.
+    // A region the push loop rewrites would re-announce itself on every frame; this one is written only by the
+    // page's script, on a connection change or the user's own act (a copy, a scrape-now, a theme, a new search), so
+    // it must stay out of every out-of-band fragment.
     // Every layout's push, now that the Paths and Activity pages carry a column guide outside their tables too.
     "the live region must not be part of any pushed fragment" {
       (DashboardLayout.entries + null).forEach { layout ->

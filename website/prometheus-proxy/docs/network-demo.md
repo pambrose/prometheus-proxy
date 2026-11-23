@@ -65,7 +65,7 @@ Clone the repository at the latest release, then run the demo's commands from it
 its targets:
 
 ```bash
-git clone -c advice.detachedHead=false --depth 1 --branch 4.6.1 https://github.com/pambrose/prometheus-proxy.git
+git clone -c advice.detachedHead=false --depth 1 --branch 4.7.0 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/network
 make up      # pulls the images, starts everything, prints the URLs
 make tour    # walks through every scenario below, pausing before each step
@@ -99,13 +99,13 @@ shared. To move a port that is already taken, set `NETWORK_DEMO_DASHBOARD_PORT`,
 |---|---|
 | `proxy` | The proxy, outside the firewall, with its dashboard and [service discovery](service-discovery.md) on. |
 | `proxy-standby` | The standby: the same config, with its own dashboard. It serves nothing until an agent can't connect to the primary. |
-| `wan` | Toxiproxy: the four links, `hq-to-proxy`, `hq-to-standby`, `branch-to-proxy`, and `branch-to-standby`. The proxies see every agent at its address, as they would behind a NAT. |
+| `wan` | Toxiproxy: the four links, `hq-to-proxy`, `hq-to-standby`, `branch-to-proxy`, and `branch-to-standby`. The proxies see every agent at the WAN's address, as they would behind a NAT. |
 | `agent-hq` | The agent at headquarters: two small services and its own metrics. The scenarios that degrade one agent's links leave its links alone, so it is the steady reference. Its [dashboard](agent-dashboard.md) is on, on port 8196. |
 | `agent-branch` | The agent at a branch office: a small shipping service, its own metrics, and an inventory service whose payload is about 496,000 characters, about 56 KB gzipped, so the agent sends it in chunks. Its [dashboard](agent-dashboard.md) is on, on port 8197, and shows the agent's side of each scenario. |
 | `network-app` | The simulated services. Their traffic follows a 5-minute "day", so the graphs move. |
 | `prometheus` | Scrapes every agent's paths through whichever proxy advertises them, every 5 seconds with a 4-second timeout, and both proxies' own metrics directly, from its own side of the WAN. It loads a few fast demo alerts. |
 | `grafana` | Opens on the demo's dashboard: scrape time per agent, target health, payload size, connects, connected agents per proxy, evictions, bytes a filter saved, and firing alerts. |
-| `zipkin` | Receives a span from every proxy and agent for each gRPC call between them but heartbeats, and each scrape's spans. |
+| `zipkin` | Receives a span from every proxy and agent for each gRPC call between them but heartbeats and the stream of path notices, and each scrape's spans. |
 
 ## Scenarios
 
@@ -257,8 +257,9 @@ agent stays on `branch-to-proxy:50053`, with no **failed over** tag; its Activit
 **disconnected**, then **connected** and **registered**.
 
 Every proxy and agent reports a [Zipkin](advanced.md#zipkin-tracing) span for each gRPC call between them but
-heartbeats, under its own service name. In Zipkin, the search is `serviceName` = `agent-branch` and `spanName` =
-`proxyservice/connectagent`. Open <http://localhost:9511/zipkin/?serviceName=agent-branch&spanName=proxyservice%2Fconnectagent>, which fills that search in, and click **Run Query**.
+heartbeats and the stream of path notices, under its own service name. In Zipkin, the search is `serviceName` =
+`agent-branch` and `spanName` = `proxyservice/connectagent`.
+Open <http://localhost:9511/zipkin/?serviceName=agent-branch&spanName=proxyservice%2Fconnectagent>, which fills that search in, and click **Run Query**.
 
 <figure markdown="span">
   ![A reconnect's connectagent call, traced from agent-branch to the proxy](images/network-demo/tracing.webp){ loading=lazy }

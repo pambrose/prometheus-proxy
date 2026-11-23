@@ -188,7 +188,7 @@ class AgentHttpServiceTest : StringSpec() {
   // Same as createMockAgentWithPaths, but also wires agent.metrics { ... } to actually invoke its
   // lambda against a real AgentMetrics instance. A relaxed mockk<Agent> discards a lambda parameter
   // instead of invoking it, so without this wiring the filterLinesDropped/filterBytesSaved recording
-  // block in buildScrapeResults's filtering branch is never exercised -- see AgentTest's "metrics
+  // block in AgentHttpService.filtered is never exercised -- see AgentTest's "metrics
   // should invoke lambda when metrics enabled" and ProxyServiceImplTest's createMockProxy for the
   // same pattern. Every agent's metrics are shared in the JVM, so each test's AgentMetrics is closed
   // after it, which removes the series it recorded.
@@ -219,7 +219,7 @@ class AgentHttpServiceTest : StringSpec() {
       openMetrics.clear()
     }
 
-    // ==================== Invalid Path Tests ====================
+    // ==================== Scrape Timeout Tests ====================
 
     // The proxy forwards the scraping client's timeout, so the agent stops a scrape nobody is still waiting for.
     "scrapeTimeout should use the agent's scrapeTimeoutSecs when the request carries no client timeout" {
@@ -235,6 +235,8 @@ class AgentHttpServiceTest : StringSpec() {
       AgentHttpService(createMockAgent()).scrapeTimeout(scrapeRequest { scrapeTimeoutMillis = 30_000L }) shouldBe
         10.seconds
     }
+
+    // ==================== Invalid Path Tests ====================
 
     "fetchScrapeUrl should return error results for invalid path" {
       val mockAgent = createMockAgent()
@@ -340,7 +342,7 @@ class AgentHttpServiceTest : StringSpec() {
 
     // ==================== HttpClientCache Tests ====================
 
-    "httpClientCache should be initialized from agent options" {
+    "httpClientCache should be created with the service" {
       val mockAgent = createMockAgent()
       val service = AgentHttpService(mockAgent)
 
@@ -1732,7 +1734,7 @@ class AgentHttpServiceTest : StringSpec() {
       }
 
       val spiedService = spyk(service)
-      // HttpRequestTimeoutException is a CancellationException, but should be caught and converted to 408
+      // HttpRequestTimeoutException is an IOException; it should be caught and, as a timeout cause, converted to 408
       coEvery {
         spiedService.fetchContent(any<String>(), any(), any(), any())
       } coAnswers {
@@ -1939,8 +1941,6 @@ class AgentHttpServiceTest : StringSpec() {
       }
     }
 
-    // The 413 warnings must say which target and scrape they are about: an agent serving many paths otherwise
-    // logs a size failure that can't be traced to one. The URL carries a query secret to show it is sanitized.
     // maxContentLengthMBytes is a memory bound, so it has to limit what is read, not just what is kept: Ktor's
     // non-streaming request read the whole body into the heap before either size check ran. A target that never stops
     // sending -- a misrouted URL, a log-tail endpoint -- was buffered until the scrape timeout, and an OutOfMemoryError
@@ -2036,6 +2036,8 @@ class AgentHttpServiceTest : StringSpec() {
       }
     }
 
+    // The 413 warnings must say which target and scrape they are about: an agent serving many paths otherwise
+    // logs a size failure that can't be traced to one. The URL carries a query secret to show it is sanitized.
     "fetchScrapeUrl Content-Length 413 warning names the sanitized URL and scrapeId" {
       val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
@@ -2130,7 +2132,7 @@ class AgentHttpServiceTest : StringSpec() {
 
     "fetchScrapeUrl reads the full chunked body (no Content-Length) when under the limit" {
       // respondTextWriter streams with chunked transfer-encoding and no Content-Length, so the
-      // bounded readRemaining(maxContentLength + 1) path is exercised. The body is well under the
+      // bounded readBuffer(maxContentLength + 1) path is exercised. The body is well under the
       // 10 MB default limit, so it must be returned intact (not truncated at the read cap).
       val content = "metric_a 1.0\nmetric_b 2.0\nmetric_c 3.0\n".repeat(50)
       val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
@@ -2338,7 +2340,7 @@ class AgentHttpServiceTest : StringSpec() {
     }
 
     // The pure-function tests above pin isFilterableContentType's own truth table, but nothing exercised
-    // the gate INSIDE buildScrapeResults: `!isFilterableContentType(contentType)` could be mutated to
+    // the gate INSIDE MetricFilter.previewBytes: `!isFilterableContentType(contentType)` could be mutated to
     // `false && !isFilterableContentType(contentType)` -- permanently disabling the gate -- and every
     // existing test still passed. text/html is deliberately chosen over a binary content type: it is
     // valid UTF-8, which isolates this gate from the separate invalid-UTF-8 fail-open path (an HTML
@@ -2394,9 +2396,9 @@ class AgentHttpServiceTest : StringSpec() {
     }
 
     // ==================== Fix pass: filter/guard ordering properties ====================
-    // These pin the three load-bearing properties of buildScrapeResults that had zero coverage:
-    // the maxContentLength guard reads RAW bytes; zipped/srContentAsText/srContentAsZipped all read
-    // FILTERED bytes; and an unfiltered path is untouched. See task-5-report.md fix pass.
+    // These pin three load-bearing properties of a scrape's results that had zero coverage: the
+    // maxContentLength guard in buildScrapeResults reads RAW bytes; zipped/srContentAsText/srContentAsZipped,
+    // which scrapedResults builds, all read FILTERED bytes; and an unfiltered path is untouched.
 
     "Fix pass: maxContentLength guard evaluates raw bytes, not filtered bytes" {
       // maxContentLengthMBytes must be >= 1 (it's whole megabytes), so the read cap
@@ -2462,7 +2464,7 @@ class AgentHttpServiceTest : StringSpec() {
         filterHocon =
         """{ path = "metrics", metricNameAllow = [], metricNameDeny = ["denied_metric"] }""",
       )
-      // minGzipSizeBytes stays at the createMockAgentWithFilter default (1_000_000), so this small
+      // minGzipSizeBytes stays at the createMockAgentWithPaths default (1_000_000), so this small
       // payload stays on the non-zipped text path -- srContentAsText is what's under test.
       val content =
         "# TYPE allowed_metric counter\nallowed_metric 1\n" +
@@ -2610,7 +2612,7 @@ class AgentHttpServiceTest : StringSpec() {
     // ==================== Fix pass: exercise the recording call site ====================
     // A relaxed mockk<Agent> never invokes a lambda parameter -- it just returns a default and
     // discards it -- so the prior suite's createMockAgent*() helpers left the agent.metrics { ... }
-    // recording block in buildScrapeResults's filtering branch as dead code: swapping the two
+    // recording block in AgentHttpService.filtered as dead code: swapping the two
     // counters, swapping their label arguments, or inverting the bytes-saved arithmetic would all
     // still pass every test. This test drives a real filtered scrape with metrics wired through a
     // real AgentMetrics instance (see createMockAgentWithFilterAndMetrics) and asserts exact counts.

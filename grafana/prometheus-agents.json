@@ -845,7 +845,7 @@
         "legend": { "calcs": [], "displayMode": "list", "placement": "bottom" },
         "tooltip": { "mode": "single", "sort": "none" }
       },
-      "description": "Connections that ended, and moves to the next proxy endpoint after a failed connect."
+      "description": "Connections that ended, and moves to the next proxy endpoint after a failed connect or a rejected registration."
     },
     {
       "id": 31,
@@ -1359,6 +1359,7 @@
         "current": {},
         "hide": 0,
         "includeAll": false,
+        "label": "Datasource",
         "multi": false,
         "name": "datasource",
         "options": [],

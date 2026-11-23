@@ -54,6 +54,10 @@ tune them to your environment. Each rule is grounded in a metric documented in
 [Monitoring](monitoring.md), except `ProxyDown`, which uses Prometheus' own `up` series and expects
 the proxy's scrape job to be named `prometheus-proxy`.
 
+`AgentConnectFailures` and `AgentDisconnected` are for an agent Prometheus scrapes directly. An agent scraped
+through the proxy can't be scraped while it isn't connected, so neither rule sees it then: alert on its job's
+`up{job="agent-cluster-a"} == 0` instead.
+
 ```yaml
 --8<-- "grafana/alerts.yml"
 ```

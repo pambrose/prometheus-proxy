@@ -66,8 +66,9 @@ tls:
   # The name to check the proxy's certificate against, when it differs from proxy.hostname (OVERRIDE_AUTHORITY).
   overrideAuthority: ""
 
-# The admin endpoints (/ping, /healthcheck, /version, /threaddump). The probes use them, so leave them on unless you
-# replace the probes.
+# The admin endpoints (/ping, /healthcheck, /version, /threaddump). The probes use /ping and /healthcheck; with them
+# off, the pod has no readiness probe, and its liveness probe checks only that the metrics port accepts a connection,
+# if metrics are on.
 admin:
   enabled: true
   port: 8093

@@ -241,7 +241,7 @@ class AgentGrpcServiceTest : StringSpec() {
   }
 
   init {
-    "parseProxyHostname should extract hostname and port correctly" {
+    "the proxy endpoint should extract hostname and port correctly" {
       val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -252,7 +252,7 @@ class AgentGrpcServiceTest : StringSpec() {
       service.shutDown()
     }
 
-    "parseProxyHostname should use default port when not specified" {
+    "the proxy endpoint should use default port when not specified" {
       val agent = createMockAgent("example.com")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -263,7 +263,7 @@ class AgentGrpcServiceTest : StringSpec() {
       service.shutDown()
     }
 
-    "parseProxyHostname should strip http prefix" {
+    "the proxy endpoint should strip http prefix" {
       val agent = createMockAgent("http://example.com:$PROXY_HTTP_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -274,7 +274,7 @@ class AgentGrpcServiceTest : StringSpec() {
       service.shutDown()
     }
 
-    "parseProxyHostname should strip https prefix" {
+    "the proxy endpoint should strip https prefix" {
       val agent = createMockAgent("https://example.com:8443")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -285,7 +285,7 @@ class AgentGrpcServiceTest : StringSpec() {
       service.shutDown()
     }
 
-    "parseProxyHostname should handle custom port" {
+    "the proxy endpoint should handle custom port" {
       val agent = createMockAgent("proxy.example.org:$PROMETHEUS_PORT")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -296,7 +296,7 @@ class AgentGrpcServiceTest : StringSpec() {
       service.shutDown()
     }
 
-    "parseProxyHostname should handle IPv4 address" {
+    "the proxy endpoint should handle IPv4 address" {
       val agent = createMockAgent("192.168.1.100:5000")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -307,7 +307,7 @@ class AgentGrpcServiceTest : StringSpec() {
       service.shutDown()
     }
 
-    "parseProxyHostname should handle hostname without port and default to $PROXY_AGENT_PORT" {
+    "the proxy endpoint should handle hostname without port and default to $PROXY_AGENT_PORT" {
       val agent = createMockAgent("my-proxy-server")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -318,7 +318,7 @@ class AgentGrpcServiceTest : StringSpec() {
       service.shutDown()
     }
 
-    "parseProxyHostname should strip http prefix and use custom port" {
+    "the proxy endpoint should strip http prefix and use custom port" {
       val agent = createMockAgent("http://localhost:9999")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -329,7 +329,7 @@ class AgentGrpcServiceTest : StringSpec() {
       service.shutDown()
     }
 
-    "parseProxyHostname should strip https prefix and use custom port" {
+    "the proxy endpoint should strip https prefix and use custom port" {
       val agent = createMockAgent("https://secure.proxy.com:443")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -340,7 +340,7 @@ class AgentGrpcServiceTest : StringSpec() {
       service.shutDown()
     }
 
-    "parseProxyHostname should handle http prefix without port" {
+    "the proxy endpoint should handle http prefix without port" {
       val agent = createMockAgent("http://example.com")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -351,7 +351,7 @@ class AgentGrpcServiceTest : StringSpec() {
       service.shutDown()
     }
 
-    "parseProxyHostname should handle https prefix without port" {
+    "the proxy endpoint should handle https prefix without port" {
       val agent = createMockAgent("https://example.com")
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
@@ -362,10 +362,10 @@ class AgentGrpcServiceTest : StringSpec() {
       service.shutDown()
     }
 
-    // The backlog counter is now incremented on the consumer side (inside the launched coroutine
-    // in Agent.kt) rather than the producer side (readRequestsFromProxy). This eliminates leaks
-    // when items are discarded from a cancelled channel — items that were never consumed are
-    // never counted. The increment and decrement are always paired in the same try-finally scope.
+    // These two tests model a counter incremented on the consumer side, with a local counter and channel; they don't
+    // touch the agent. The agent counts on the producer side instead: readRequestsFromProxy increments
+    // scrapeRequestBacklogSize as it queues a request, and the scrape loop in Agent.processScrapeRequests decrements
+    // it in a finally. AgentBacklogDriftTest and AgentConnectionContextLincheckTest cover that accounting.
     "backlog counter should never go negative with consumer-side increment pattern" {
       val channel = Channel<Int>(UNLIMITED)
       val backlogSize = AtomicInt(0)
@@ -373,7 +373,7 @@ class AgentGrpcServiceTest : StringSpec() {
       val itemCount = 10_000
 
       coroutineScope {
-        // Producer: mirrors readRequestsFromProxy — no increment, just send
+        // Producer: no increment, just send
         launch(Dispatchers.IO) {
           repeat(itemCount) { i ->
             channel.send(i)
@@ -381,7 +381,7 @@ class AgentGrpcServiceTest : StringSpec() {
           channel.close()
         }
 
-        // Consumer: mirrors Agent.kt consumer loop — increment then try/finally decrement
+        // Consumer: increment then try/finally decrement
         launch(Dispatchers.IO) {
           for (@Suppress("UnusedPrivateProperty") item in channel) {
             backlogSize.incrementAndFetch()
@@ -932,7 +932,7 @@ class AgentGrpcServiceTest : StringSpec() {
       // which also acquired grpcLock. With ReentrantLock the self-call was fine,
       // but a concurrent external shutDown() call would block for the entire
       // duration of channel creation + awaitTermination (up to 5s).
-      // After the fix, resetGrpcStubs calls shutDownLocked() directly
+      // After the fix, resetGrpcStubs calls shutDownChannelLocked() under the lock it already holds
       // (no nested lock acquisition), so the lock is held for the minimum
       // necessary time and concurrent callers are not blocked excessively.
 
@@ -975,8 +975,8 @@ class AgentGrpcServiceTest : StringSpec() {
 
       // Before the fix, each resetGrpcStubs call internally called shutDown(),
       // which redundantly re-acquired grpcLock. While ReentrantLock allowed this,
-      // it was unnecessary overhead. After the fix, shutDownLocked() is called
-      // directly without the extra lock acquisition.
+      // it was unnecessary overhead. After the fix, shutDownChannelLocked() is called
+      // under the lock resetGrpcStubs already holds, without the extra acquisition.
 
       val completedWithinTimeout = AtomicBoolean(false)
       val iterations = 20
@@ -1160,7 +1160,8 @@ class AgentGrpcServiceTest : StringSpec() {
 
       service.readRequestsFromProxy(mockHttpService, connectionContext)
 
-      // After readRequestsFromProxy completes, items are buffered in the UNLIMITED channel.
+      // After readRequestsFromProxy completes, items are buffered in the request channel, which holds backlogCapacity
+      // (128) of them.
       // Use tryReceive to read them without cancelling the channel.
       val channel = connectionContext.scrapeRequestActions()
       channel.tryReceive().isSuccess.shouldBeTrue()
@@ -1223,7 +1224,7 @@ class AgentGrpcServiceTest : StringSpec() {
     // ==================== processScrapeResults Tests ====================
     // processScrapeResults is private, so we test it via Kotlin reflection.
     // It routes ScrapeResults to either nonChunkedChannel or chunkedChannel based on
-    // whether the content is zipped and whether the zipped size exceeds chunkContentSizeBytes.
+    // whether the content is zipped and whether the zipped size is at least chunkContentSizeBytes.
 
     "processScrapeResults should route non-zipped result to nonChunkedChannel" {
       val agent = createMockAgent("localhost:$PROXY_AGENT_PORT")
@@ -1257,7 +1258,8 @@ class AgentGrpcServiceTest : StringSpec() {
 
       // Chunked channel should be empty
       chunkedChannel.tryReceive().isSuccess.shouldBeFalse()
-      // Counted through the agent, which leaves out the result of a scrape the dashboard asked for.
+      // Counted through agent.countScrapeResult; the gRPC service leaves out the result of a scrape the dashboard asked
+      // for.
       verify(exactly = 1) { agent.countScrapeResult(AgentMetrics.RESULT_NON_GZIPPED) }
 
       service.shutDown()
@@ -1770,12 +1772,14 @@ class AgentGrpcServiceTest : StringSpec() {
     // Bug #6 (channel close): The outer finally block in writeResponsesToProxyUntilDisconnected
     // redundantly closed both channels after the inner finally (producer) had already closed them.
     // While Channel.close() is idempotent, the redundancy obscured which code path owned
-    // channel cleanup. The fix removes the outer finally, leaving the inner (producer) as
-    // the sole owner. These tests verify the producer-close pattern is sufficient.
+    // channel cleanup. The fix removes the outer finally: the producer's finally closes the channels when it ends,
+    // and runStreamTask's closeAll() closes them when a stream fails. These tests verify the producer-close pattern
+    // is sufficient, with consumeAsFlow consumers of their own.
 
     "Bug #6 (channel close): producer-side close should terminate consumeAsFlow consumers" {
-      // Mirrors the writeResponsesToProxyUntilDisconnected pattern: a producer closes channels
-      // in its finally block, and consumers using consumeAsFlow() should complete normally.
+      // Mirrors the producer in writeResponsesToProxyUntilDisconnected, which closes the channels in its finally
+      // block. The real writers read through streamOf, which ends, as consumeAsFlow() does here, once the channel is
+      // closed and empty.
       val channel = Channel<Int>(UNLIMITED)
       val consumed: MutableList<Int> = []
       val consumerCompleted = AtomicBoolean(false)
@@ -1792,7 +1796,7 @@ class AgentGrpcServiceTest : StringSpec() {
           }
         }
 
-        // Consumer: consumes via flow (mirrors grpcStub.writeResponsesToProxy)
+        // Consumer: consumes via flow
         launch(Dispatchers.IO) {
           channel.consumeAsFlow().collect { consumed.add(it) }
           consumerCompleted.store(true)
@@ -1841,7 +1845,7 @@ class AgentGrpcServiceTest : StringSpec() {
       val service = AgentGrpcService(agent, agent.options, "test-server")
 
       val mockStub = mockk<ProxyServiceGrpcKt.ProxyServiceCoroutineStub>(relaxed = true)
-      // Mock the streaming calls to just consume the flow
+      // Stub the streaming calls to return at once, without reading the flow
       coEvery { mockStub.writeResponsesToProxy(any()) } returns EMPTY_INSTANCE
       coEvery { mockStub.writeChunkedResponsesToProxy(any()) } returns EMPTY_INSTANCE
       service.grpcStub = mockStub
@@ -1893,7 +1897,7 @@ class AgentGrpcServiceTest : StringSpec() {
       service.shutDown()
     }
 
-    "Bug #6: grpcStarted should be false when channel is uninitialized" {
+    "Bug #6: grpcStarted should be true, with the channel initialized, after construction" {
       // Verify the invariant: grpcStarted=true implies channel is initialized.
       // We use reflection to read the grpcStarted delegate and verify
       // it was set correctly after construction.
@@ -2042,8 +2046,8 @@ class AgentGrpcServiceTest : StringSpec() {
     // ==================== Failover Endpoint Rotation ====================
 
     // The whole feature must be inert for a single-endpoint agent -- i.e. every deployment that existed
-    // before failover. advanceEndpoint() returns false, which is what tells Agent.run() not to rebuild
-    // the channel, so the retry path stays byte-for-byte what it was.
+    // before failover. advanceEndpoint() returns false, which is what tells EndpointFailover.beforeAttempt not to
+    // rebuild the channel for a new endpoint, so the retry path stays byte-for-byte what it was.
     "a single endpoint should report no failover and refuse to rotate" {
       withService("localhost:$PROXY_AGENT_PORT") { service ->
         service.failoverEndpointsDesc.shouldBeNull()

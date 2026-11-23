@@ -1062,7 +1062,7 @@ class ScrapeDispatchTest : StringSpec() {
       merged shouldContain "metric_c 3.0"
       // The empty agent should not produce a blank line between the two metrics.
       // Without the fix this would be "metric_a 1.0\n\n\nmetric_c 3.0\n" (three newlines).
-      // With the fix it's "metric_a 1.0\n\nmetric_c 3.0\n" (two newlines: trailing + separator).
+      // With the fix it's "metric_a 1.0\nmetric_c 3.0": each result is trimmed, then joined by one newline.
       merged shouldNotContain "\n\n\n"
     }
 

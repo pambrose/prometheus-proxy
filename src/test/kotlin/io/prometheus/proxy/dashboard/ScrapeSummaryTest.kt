@@ -145,7 +145,7 @@ class ScrapeSummaryTest : StringSpec() {
       }
     }
 
-    "a failed scrape should carry the agent's reason, cut and escaped, and no body" {
+    "a failed scrape should carry the agent's reason, escaped, and no body" {
       val failed =
         ScrapeRequestResponse(
           statusCode = HttpStatusCode.ServiceUnavailable,

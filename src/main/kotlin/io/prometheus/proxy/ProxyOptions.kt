@@ -85,8 +85,9 @@ class ProxyOptions internal constructor(
   /**
    * Pre-shared token agents must present on every gRPC call to authenticate to the Proxy. When set, a server
    * interceptor rejects any agent RPC with a missing or mismatched token (`UNAUTHENTICATED`).
-   * Empty (default) disables token authentication and leaves the agent port open, subject only to TLS/network
-   * controls. Resolved from CLI → [AGENT_TOKEN] env var → `proxy.agentToken` config. Never logged.
+   * Empty (default) adds no shared token. With no `proxy.auth` identities either, that leaves the agent port open,
+   * subject only to TLS/network controls. Resolved from CLI → [AGENT_TOKEN] env var → `proxy.agentToken` config.
+   * Never logged.
    */
   @Parameter(names = ["--agent_token"], description = "Pre-shared agent authentication token")
   var agentToken = ""

@@ -4,7 +4,7 @@
 #
 #   make up        # builds the coffee shop against the latest release, and starts everything
 #   make up-local  # the same, with the library, proxy, and coffee shop built from this checkout
-#   make down      # stops it and removes its containers, network, and volume
+#   make down      # stops it and removes its containers and network
 #
 # Compose resolves every relative path here against this file's directory, demos/embedded/docker: the demo's configs
 # are one level up, and the repository root three. It reads the secrets from .env beside this file, which demo.sh

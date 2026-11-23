@@ -2,9 +2,10 @@ name: Container Tests
 
 # Runs the full Testcontainers end-to-end suite (io.prometheus.containers.*): builds the
 # proxy/agent images from etc/docker/*.Dockerfile and exercises the Prometheus -> proxy -> agent ->
-# endpoint scrape path across smoke, HTTP-surface, consolidated, large-payload, reconnect,
-# agent-token-auth, TLS/HTTPS, and parameter-driven scaling specs. The scaling spec runs its
-# small default table here (no SCALE_* overrides). Runs on pull requests, so a change that breaks the fat JARs,
+# endpoint scrape path across every spec in that package, from smoke, HTTP-surface, consolidated,
+# large-payload, reconnect, failover, discovery, auth, TLS/HTTPS, nginx, dashboard, and packaging
+# specs to the parameter-driven scaling one. The scaling spec runs its small default table here
+# (no SCALE_* overrides). Runs on pull requests, so a change that breaks the fat JARs,
 # the images, or the scrape path shows up before it merges, and on push to master and on demand. No untrusted
 # event payloads are referenced.
 on:

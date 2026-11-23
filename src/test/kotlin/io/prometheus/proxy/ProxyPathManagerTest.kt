@@ -311,9 +311,6 @@ class ProxyPathManagerTest : StringSpec() {
       exception.message shouldContain "Blank path"
     }
 
-    // The scrape route is registered as get("/*"), which matches exactly one path segment, so a
-    // multi-segment path would be advertised in service discovery yet 404 at scrape time. Reject it
-    // at registration with a clear reason instead of silently registering an unreachable path.
     // Labels Prometheus couldn't decode are left out of service discovery (see ProxyTest). The path still registers,
     // since labels matter only there, and the registration says which labels won't appear.
     "addPath should register a path whose labels service discovery can't serve, and warn about them" {
@@ -387,6 +384,9 @@ class ProxyPathManagerTest : StringSpec() {
       manager.pathMapSize shouldBe 1
     }
 
+    // The scrape route is registered as get("/*"), which matches exactly one path segment, so a
+    // multi-segment path would be advertised in service discovery yet 404 at scrape time. Reject it
+    // at registration with a clear reason instead of silently registering an unreachable path.
     "addPath should reject a multi-segment path" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
@@ -597,8 +597,8 @@ class ProxyPathManagerTest : StringSpec() {
       manager.getAgentContextInfo("/metrics")?.agentContexts?.map { it.agentId } shouldBe [newcomer.agentId]
     }
 
-    // An agent retries a rejection that can clear -- here a path another identity's live agent holds -- every
-    // rejectedPathRetrySecs, so the proxy reports it once and logs the repeats at DEBUG.
+    // An agent retries a rejection that can clear -- here a path another identity's live agent holds -- starting
+    // rejectedPathRetrySecs apart, so the proxy reports it once and logs the repeats at DEBUG.
     "a rejection repeated for the same path and agent should be logged once" {
       val manager = ProxyPathManager(createMockProxy(), isTestMode = true)
       val owner = AgentContext("remote-owner")
@@ -691,8 +691,8 @@ class ProxyPathManagerTest : StringSpec() {
     }
 
     // Tests consolidated path behavior: when multiple agents register the same path with
-    // consolidated=true, they are grouped together. Prometheus scrapes are load-balanced
-    // across all agents in the consolidated group. This differs from non-consolidated
+    // consolidated=true, they are grouped together. Each Prometheus scrape is sent to every
+    // agent in the group, and their answers are merged. This differs from non-consolidated
     // paths where a new registration overwrites the previous one.
     "addPath should append to consolidated path" {
       val proxy = createMockProxy()
@@ -841,9 +841,9 @@ class ProxyPathManagerTest : StringSpec() {
       exception.message shouldContain "Blank agentId"
     }
 
-    // Tests partial removal from a consolidated path group. When one agent disconnects,
+    // Tests partial removal from a consolidated path group. When one agent unregisters the path,
     // only that agent is removed from the group - the path remains registered with the
-    // remaining agents. The path is only fully removed when the last agent disconnects.
+    // remaining agents. The path is only fully removed when the last agent goes.
     // This ensures continuous availability during rolling deployments or agent restarts.
     "removePath should remove one element from consolidated path" {
       val proxy = createMockProxy()
@@ -1223,7 +1223,7 @@ class ProxyPathManagerTest : StringSpec() {
       result.shouldBeNull()
     }
 
-    // ==================== removeFromPathManager Edge Cases ====================
+    // ==================== Per-path metric series and path keys ====================
 
     // A path's per-path metric series go when its last registration does, so a retired path stops holding series
     // in memory and on /metrics.
@@ -1555,9 +1555,11 @@ class ProxyPathManagerTest : StringSpec() {
       manager.getAgentContextInfo("/metrics").shouldBeNull()
     }
 
-    // ==================== getAgentContextInfo Defensive Copy ====================
+    // ==================== getAgentContextInfo Immutable Entries ====================
 
-    "getAgentContextInfo should return a snapshot copy" {
+    // getAgentContextInfo returns the stored entry, not a copy: entries are immutable, and a registration replaces
+    // the path's entry rather than changing it.
+    "getAgentContextInfo should return an entry that later registrations don't change" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
       val context1 = createMockAgentContext(consolidated = true)
@@ -1717,7 +1719,9 @@ class ProxyPathManagerTest : StringSpec() {
 
     // Bug #6: When a non-consolidated agent overwrites a path, the old agent context(s)
     // were left orphaned — still in the agentContextManager but with no paths in the
-    // pathMap. The fix invalidates displaced agents that have no other registered paths.
+    // pathMap. The fix invalidates a displaced context left with no paths when it is of the
+    // taker's own launch, a copy the agent has already left; one of another launch stays
+    // connected. Contexts built without a launch id all share the default one.
 
     "overwriting non-consolidated path should invalidate displaced agent that is already disconnected" {
       val proxy = createMockProxy()
@@ -2186,7 +2190,7 @@ class ProxyPathManagerTest : StringSpec() {
       info.agentContexts.shouldHaveSize(2)
     }
 
-    "overwriting should invalidate displaced dead agents with backlog and drain it" {
+    "overwriting a path held by a dead agent whose backlog was drained should leave it invalid" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
 
@@ -2211,10 +2215,10 @@ class ProxyPathManagerTest : StringSpec() {
       oldAgent.isValid().shouldBeFalse()
     }
 
-    // Bug #8 fix: displaced live agents with zero remaining paths are now
-    // invalidated even if they have a backlog. The backlog is drained on
-    // invalidation, and the agent will reconnect.
-    "overwriting should invalidate displaced live agent and drain its backlog" {
+    // Bug #8 fix: a displaced context of the taker's own launch, left with zero paths, is
+    // invalidated even if it still has a backlog, which invalidation drains. Both contexts
+    // here share the default launch id, so the old one is a copy the agent has already left.
+    "overwriting should invalidate a displaced live context of the same launch and drain its backlog" {
       val proxy = createMockProxy()
       val manager = ProxyPathManager(proxy, isTestMode = true)
 
@@ -2231,7 +2235,7 @@ class ProxyPathManagerTest : StringSpec() {
       // Old agent is still connected but has zero remaining paths after overwrite
       manager.addPath("/metrics", """{"job":"test"}""", newAgent)
 
-      // Old agent should be invalidated (zero paths remaining)
+      // Old agent should be invalidated (same launch, zero paths remaining)
       oldAgent.isValid().shouldBeFalse()
       // Backlog should be drained by invalidation
       oldAgent.scrapeRequestBacklogSize shouldBe 0
@@ -2239,7 +2243,7 @@ class ProxyPathManagerTest : StringSpec() {
 
     // ==================== Activity feed ====================
 
-    // An agent re-registers a path it already serves after every reconnect hiccup, which is not news.
+    // The same connection registering a path it already serves, as a discovery edit made in place does, is not news.
     "a new registration, but not a repeat of it, should go in the activity feed" {
       val (manager, log) = managerWithActivity()
       val agent = launched("remote-a", "launch-a", name = "agent-east")
@@ -2268,7 +2272,7 @@ class ProxyPathManagerTest : StringSpec() {
       }
     }
 
-    // A rejection that can clear is retried on every registration attempt; the feed, like the log's WARN, says it once.
+    // However often an agent sends a rejected path, the feed, like the log's WARN, says it once.
     "a rejection should go in the activity feed the first time the agent is told it" {
       val (manager, log) = managerWithActivity()
       val agent = launched("remote-a", "launch-a", name = "agent-east")
@@ -2283,7 +2287,7 @@ class ProxyPathManagerTest : StringSpec() {
       }
     }
 
-    // A path with a slash is refused before the checks that log through rejectPath; the feed has it all the same.
+    // The multi-segment check logs on its own rather than through rejectPath; the feed has it all the same.
     "a path with more than one segment should go in the activity feed once" {
       val (manager, log) = managerWithActivity()
       val agent = launched("remote-a", "launch-a", name = "agent-east")

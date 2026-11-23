@@ -94,7 +94,7 @@ Get running in under a minute:
     # Start the agent
     java -jar prometheus-agent.jar \
       --proxy proxy-host.example.com \
-      --config myapps.conf
+      --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf
     ```
 
 === "Docker"
@@ -106,13 +106,13 @@ Get running in under a minute:
     # Start the proxy
     docker run --rm --name prometheus-proxy --network prometheus-proxy-net \
       -p 8080:8080 -p 50051:50051 --env METRICS_ENABLED=true \
-      pambrose/prometheus-proxy:4.6.1
+      pambrose/prometheus-proxy:4.7.0
 
     # Start the agent, in another terminal
     docker run --rm --network prometheus-proxy-net \
       --env PROXY_HOSTNAME=prometheus-proxy \
       --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-      pambrose/prometheus-agent:4.6.1
+      pambrose/prometheus-agent:4.7.0
 
     # Scrape the proxy's and the agent's own metrics through the proxy
     curl http://localhost:8080/proxy_metrics
@@ -123,13 +123,14 @@ Get running in under a minute:
 
     ```bash
     # From a clone of https://github.com/pambrose/prometheus-proxy
-    # Start the proxy, in the cluster where Prometheus runs
-    helm install prometheus-proxy ./charts/prometheus-proxy --namespace monitoring --create-namespace
+    # Start the proxy, in the cluster where Prometheus runs, with a LoadBalancer for agents in other clusters
+    helm install prometheus-proxy ./charts/prometheus-proxy --namespace monitoring --create-namespace \
+      --set agentService.enabled=true
 
     # Start the agent, in the cluster whose services it scrapes
     helm install prometheus-agent ./charts/prometheus-agent \
       --set proxy.hostname=proxy-host.example.com:50051 \
-      --set-file config=myapps.conf
+      --set-file config=examples/myapps.conf
     ```
 
 See the [Quick Start Guide](getting-started.md) for detailed instructions.

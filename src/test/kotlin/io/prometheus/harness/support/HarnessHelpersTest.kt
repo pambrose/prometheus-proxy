@@ -103,8 +103,8 @@ class HarnessHelpersTest : StringSpec() {
       }
     }
 
-    // Setup fails at once when the agent never connects, naming the cause, and stops what it started.
-    "setupProxyAndAgent should fail, and stop both services, when the agent never connects" {
+    // Setup fails at once when the agent never connects, naming the cause, and stops the proxy it started.
+    "setupProxyAndAgent should fail, and stop the proxy, when the agent never connects" {
       withPortNothingListensOn { unusedPort ->
         val harness =
           object : HarnessSetup() {
@@ -124,7 +124,7 @@ class HarnessHelpersTest : StringSpec() {
           }
         try {
           shouldThrow<IllegalStateException> { harness.setUp() }.message shouldContain "did not connect"
-          // Both were stopped, so their ports are free again.
+          // The proxy was stopped, so its ports are free again. The agent binds none.
           awaitPortFree(HARNESS_HELPERS_HTTP_PORT, maxAttempts = 10, delayMs = 100)
           awaitPortFree(HARNESS_PROXY_AGENT_PORT, maxAttempts = 10, delayMs = 100)
         } finally {

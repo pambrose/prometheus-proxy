@@ -141,10 +141,9 @@ class AgentContextTest : StringSpec() {
       result.shouldBeNull()
     }
 
-    // Verifies that the scrape request channel maintains FIFO (First-In-First-Out) ordering.
-    // This is critical for correct scrape behavior: Prometheus expects responses in the same
-    // order as requests. The underlying Channel implementation guarantees this ordering,
-    // but this test ensures the AgentContext wrapper doesn't break that guarantee.
+    // Verifies that scrape requests are read in the order they were written (FIFO). Results are matched to their
+    // requests by scrape ID, not by order. The queue under it is a ConcurrentLinkedQueue, which keeps this order; this
+    // test checks that AgentContext keeps it too.
     "readScrapeRequest should return requests in FIFO order" {
       AgentContext("192.168.1.1").apply {
         val mockRequest1 = mockk<ScrapeRequestWrapper>(relaxed = true)
@@ -178,8 +177,8 @@ class AgentContextTest : StringSpec() {
 
     // Tests the graceful shutdown behavior of an agent context.
     // When invalidate() is called, the context is marked invalid and buffered
-    // requests are drained (with closeChannel() called on each). After invalidation,
-    // readScrapeRequest() returns null because the channel was drained and closed.
+    // requests are drained, each completed with an agent-disconnected result. After invalidation,
+    // readScrapeRequest() returns null because the context's request notifier is closed.
     "invalidate should drain scrape request channel" {
       val context = AgentContext("192.168.1.1")
       val mockRequest = mockk<ScrapeRequestWrapper>(relaxed = true)

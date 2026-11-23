@@ -97,7 +97,7 @@ class AgentMetricFilterTest : StringSpec() {
 
         try {
           agent.awaitInitialConnection(10.seconds).shouldBeTrue()
-          // Must match the filters[].path in harness.conf exactly, with no leading slash.
+          // Must match the filters[].path in harness.conf; a leading slash on either is ignored.
           agent.pathManager.registerPath("filtered_metrics", "http://localhost:$stubPort/metrics")
 
           eventually(10.seconds) {

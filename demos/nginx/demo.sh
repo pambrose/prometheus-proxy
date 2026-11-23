@@ -20,7 +20,7 @@ IMAGES=(prometheus-proxy-demo/proxy:local prometheus-proxy-demo/agent:local)
 RELEASED_IMAGES=(pambrose/prometheus-proxy pambrose/prometheus-agent)
 # The demo shows what came after this release, so until a later one is out, up builds the proxy and agent from this
 # checkout, as up-local does. When the demo comes to use something unreleased, set this to the latest release.
-NEEDS_RELEASE_AFTER=4.6.1
+NEEDS_RELEASE_AFTER=4.7.0
 
 # nginx's config variants (nginx/): the agents' entrance, agents-<variant>.conf, and the dashboard's,
 # dashboard-<variant>.conf, each copied into conf.d as agents.conf or dashboard.conf.
@@ -696,7 +696,7 @@ main() {
     bold "nginx's agents' entrance now closes a stream only after a day without anything on it"
     how_it_works "$(copies_sentence agents long-timeouts)" \
       "It raises grpc_read_timeout, for the stream the proxy sends scrape requests on, and client_body_timeout, for" \
-      "the streams the agent sends results on, to a day. For an agent or a proxy from 4.6.1 or earlier, it's the" \
+      "the streams the agent sends results on, to a day. For an agent or a proxy from 4.6.0 or earlier, it's the" \
       "fix short of upgrading both: they send nothing on a stream between results."
     watch_for
     reload_point "$shutdown"

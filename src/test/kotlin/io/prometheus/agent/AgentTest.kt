@@ -536,9 +536,9 @@ class AgentTest : StringSpec() {
 
     // ==================== Bug #12: currentCacheSize non-blocking ====================
 
-    // Bug #12: The health check previously used runBlocking { getCacheStats().totalEntries }
-    // which could block the health check thread while waiting for the cache mutex.
-    // The fix uses currentCacheSize() which reads from ConcurrentHashMap.size (non-blocking).
+    // Bug #12: A health check once used runBlocking { getCacheStats().totalEntries }, which could block its thread
+    // while waiting for the cache mutex. currentCacheSize() reads an atomic copy of the size instead, without the
+    // mutex; the agent_client_cache_size gauge reads it.
     "httpClientCache.currentCacheSize should return 0 for empty cache" {
       val agent = createTestAgent()
 
@@ -550,9 +550,8 @@ class AgentTest : StringSpec() {
     "httpClientCache.currentCacheSize should not require coroutine context" {
       val agent = createTestAgent()
 
-      // currentCacheSize() reads from ConcurrentHashMap.size and must work from any thread
-      // without needing runBlocking or a coroutine context. The old getCacheStats() approach
-      // required a coroutine context (mutex), which would deadlock in health check callbacks.
+      // currentCacheSize() reads an atomic copy of the size, so it works from any thread without runBlocking or a
+      // coroutine context. getCacheStats() takes the cache's mutex, which needs one.
       val thread = Thread {
         val size = agent.agentHttpService.httpClientCache.currentCacheSize()
         size shouldBe 0
@@ -666,8 +665,8 @@ class AgentTest : StringSpec() {
       counter.load() shouldBe 0
     }
 
-    // Bug #5: Verify the health check uses non-negative values
-    "scrapeRequestBacklogSize should never be negative for health check" {
+    // Bug #5: Balanced increments and decrements leave the counter the backlog health check reads at zero or above.
+    "scrapeRequestBacklogSize should not go negative after balanced increments and decrements" {
       val agent = createTestAgent()
 
       // Simulate balanced increment/decrement cycles

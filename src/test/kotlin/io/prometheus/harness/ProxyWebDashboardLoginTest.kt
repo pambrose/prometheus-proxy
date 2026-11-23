@@ -219,7 +219,7 @@ class ProxyWebDashboardLoginTest : StringSpec() {
       }
     }
 
-    "a wrong login should say so, and be logged once, without the username given" {
+    "a wrong login should say so, and be logged at WARN once, without the username given" {
       withProxy {
         val logs =
           captureLogs<DashboardServer<*, *>>(Level.DEBUG) {

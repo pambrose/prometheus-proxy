@@ -173,7 +173,7 @@ class ProxyUtilsTest : StringSpec() {
 
     // ==================== Bug #14: respondWith no longer sets status redundantly ====================
 
-    "respondWith should set CacheControl header and respond with text" {
+    "respondWith should respond with text and status OK" {
       val server = embeddedServer(ServerCIO, host = LOOPBACK_HOST, port = 0) {
         routing {
           get("/test-respond") {

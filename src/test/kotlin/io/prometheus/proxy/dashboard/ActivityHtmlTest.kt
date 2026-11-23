@@ -72,7 +72,7 @@ class ActivityHtmlTest : StringSpec() {
     renderFullPage(snapshot(authEnabled = authEnabled), DashboardLayout.ACTIVITY)
 
   init {
-    "the activity table should show each line's time, event, agent, path, and detail, newest first" {
+    "the activity table should show each line's time, event, agent, path, and detail, in the feed's order" {
       val html =
         activityPush(
           [
@@ -239,7 +239,7 @@ class ActivityHtmlTest : StringSpec() {
       }
     }
 
-    "the Detail column should wrap where the rest of the row doesn't" {
+    "the stylesheet should let a wrap cell wrap where the rest of the row doesn't" {
       DashboardCss.CSS shouldContain ".ptable td.wrap { white-space:normal;"
     }
   }

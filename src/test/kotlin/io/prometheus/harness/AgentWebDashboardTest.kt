@@ -288,7 +288,7 @@ class AgentWebDashboardTest : StringSpec() {
       }
     }
 
-    // What the agent's log says, in order, on the dashboard: connecting, a refused path, and, once the proxy goes away,
+    // What the agent's log says, on the dashboard: connecting, a refused path, and, once the proxy goes away,
     // the disconnect and the failing connects, each pushed to an open Activity page as it happens.
     "the Activity view should show the agent's connection and paths, and push the proxy going away" {
       val proxy =

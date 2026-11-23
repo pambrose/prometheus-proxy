@@ -87,45 +87,57 @@ The proxy has an agent token configured and the agent's token is missing or does
   `Refused an agent from <host> (UNAUTHENTICATED): it sent an unknown agent token` (or `no agent token`) at WARN, at
   most once a minute for each host.
 
-- **Fix:** set the **same** `--agent_token` / `AGENT_TOKEN` on the agent as on the proxy. An
-  empty token on the proxy disables the check. See
-  [Security](security/index.md#agent-authentication-pre-shared-token).
+- **Fix:** set the **same** `--agent_token` / `AGENT_TOKEN` on the agent as on the proxy, or, with
+  [per-agent identities](security/index.md#per-agent-identities-and-path-authorization), the token of the agent's
+  `proxy.auth` identity. An empty token on the proxy disables the check only when no `proxy.auth` identities are
+  configured. See [Security](security/index.md#agent-authentication-pre-shared-token).
 
 ---
 
 ## Prometheus scrape returns an error
 
-Scrape the path directly with `curl -i` and match the status:
+Scrape the path directly with `curl -i` and match the status. A non-2xx status the target answers with passes
+through to Prometheus. Its label in `proxy_scrape_requests_total` is `path_not_found` for a 404, `upstream_timed_out`
+for a 408 or 504, `content_too_large` for a 413, and `upstream_error` for any other; the agent's own 404, timeout,
+and size limit carry the same labels.
 
 ### `404 Not Found`
 
-The proxy has no usable mapping for that path.
+The proxy has no usable mapping for that path, or the target answered 404.
 
-- **`metrics_path` mismatch** — the Prometheus `metrics_path` must exactly equal the agent's
+- **`metrics_path` mismatch** (`invalid_path`) — the Prometheus `metrics_path` must exactly equal the agent's
   `path` (with a single leading slash). `app1_metrics` in the agent → `metrics_path:
   '/app1_metrics'` in Prometheus.
 - **Multi-segment path** — a registered `path` containing an embedded `/` is rejected at
   registration with `Multi-segment path not supported (use a single path segment)`, and
   scrapes 404. Use a single segment (e.g. `app_metrics`, not `app/metrics`).
-- **Agent not registered** — confirm the agent started cleanly and registered the path
+- **Agent not registered** (`invalid_path`) — confirm the agent started cleanly and registered the path
   (check `proxy_path_map_size` and the agent logs).
 - **Agent gone** (`invalid_agent_context`) — every agent on the path has disconnected, and the
   path is on its way out; seen briefly as the path's last agent leaves. Check
   `proxy_agent_map_size` and whether the agent is up.
+- **Target answered 404** (`path_not_found`) — the agent reached the target, but the path's `url` names a page the
+  target doesn't serve. Check the `url` in the agent's config.
 
 ### `503 Service Unavailable`
 
-The path is known but cannot be served right now.
+The path is known but cannot be served right now, or the agent couldn't reach the target.
 
 - **Proxy shutting down** (`proxy_stopped`).
 - **Agent disconnected** (`agent_disconnected`) — before or during the scrape, including an eviction
   or another agent taking over the path. Transient during agent restarts. Consolidated mode keeps a
   path answering while one of its agents is down, when each agent scrapes its own instance of the
   service; see [Consolidated Mode](advanced.md#consolidated-mode).
+- **Agent or proxy busy** (`agent_backlog_full`, `proxy_in_flight_limit`) — the agent's queue already holds twice
+  `proxy.internal.scrapeRequestBacklogUnhealthySize` scrapes, or `proxy.internal.maxInFlightScrapeRequests` scrapes
+  are in flight across all agents. See [Performance Tuning](advanced.md#performance-tuning).
+- **Target unreachable** (`upstream_error`) — the agent couldn't connect to the target, as when it is down or its name
+  doesn't resolve, and answered 503 itself. The agent counts these in
+  `agent_scrape_request_count_total{type="failure"}`, and a 503 the target answered with as `unsuccessful`.
 
 ### `502 Bad Gateway`
 
-- **Target error** (`upstream_error`) — the target itself returned the status; check the target.
+- **Target error** (`upstream_error`) — the target itself answered 502; check the target.
 - **Unusable response** (`invalid_response`) — the agent answered, but a chunk or summary failed
   validation. Check `proxy_chunk_validation_failures_total` and the proxy log.
 
@@ -185,8 +197,9 @@ leave; it doesn't retry the others while it stays connected.
 
 The proxy logs the first rejection of a path for an agent connection at WARN, and an identical repeat at
 DEBUG -- an agent retries a rejection that can clear, and a lasting conflict would otherwise fill the log.
-To see every attempt, set `io.prometheus.proxy.ProxyPathManager` to DEBUG. The agent logs its own side of
-the same conflict, so its log shows whether it is still retrying.
+A multi-segment path is logged at ERROR, and a path the agent's identity may not register at WARN, each time, as the
+agent retries neither. To see every attempt, set `io.prometheus.proxy.ProxyPathManager` to DEBUG. The agent logs its
+own side of the same conflict, so its log shows whether it is still retrying.
 
 ### An agent is connected but serves no paths
 
@@ -251,7 +264,7 @@ and again every minute, scraped or not. Its paths are gone from the proxy for a 
 - **Cause:** Nginx closes a gRPC stream that's quiet for 60 seconds, and an agent's stream for chunked results carries
   nothing while its results are small, and its other streams nothing between scrapes. A current agent and proxy keep
   their streams open with keepalives, but only when both support them, so this happens when the agent or the proxy is
-  from 4.6.1 or earlier, or when a reverse proxy's idle timeout is under `proxy.internal.streamKeepAliveSecs`.
+  from 4.6.0 or earlier, or when a reverse proxy's idle timeout is under `proxy.internal.streamKeepAliveSecs`.
 - **Fix:** upgrade both, or raise `grpc_read_timeout` and `client_body_timeout` to a day or more; under a shorter idle
   timeout, lower `streamKeepAliveSecs` below it. See [Nginx Reverse Proxy](advanced.md#nginx-reverse-proxy).
 
@@ -283,7 +296,8 @@ in once another agent leaves.
 
 ## The dashboard behind a reverse proxy stays on reconnecting…
 
-The page loads, but its live indicator never turns green, and Scrape now or the login may say `Origin not allowed`.
+The page loads, but its live indicator never turns green, and Scrape now may say `Origin not allowed`. With a login,
+the login form says it instead, and the page never loads.
 
 - **Cause:** the reverse proxy doesn't pass the WebSocket handshake's `Upgrade` and `Connection` headers, or passes a
   `Host` header that doesn't match the browser's `Origin`, which the dashboard refuses.

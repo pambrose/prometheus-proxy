@@ -92,7 +92,7 @@ class AgentConnectionContextTest : StringSpec() {
             // Simulate work
           }
         job.invokeOnCompletion {
-          // This mirrors Agent.kt:255 and Agent.kt:268
+          // This mirrors the invokeOnCompletion in Agent.launchConnectionTask
           context.close()
           completedLatch.countDown()
         }
@@ -333,10 +333,10 @@ class AgentConnectionContextTest : StringSpec() {
       received2.isClosed.shouldBeTrue()
     }
 
-    "Bug #7: backlog counter should remain accurate when sends are dropped" {
-      // Verifies that the try/finally pattern for scrapeRequestBacklogSize works
-      // correctly even when sendScrapeResults drops the result on a closed channel.
-      // The counter should still decrement in the finally block.
+    "Bug #7: a counter kept in a try/finally should return to zero when sends are dropped" {
+      // Models the scrape loop's try/finally with a local counter, not the agent's scrapeRequestBacklogSize:
+      // sendScrapeResults drops a result on a closed channel without throwing, and the counter still decrements in
+      // the finally block.
       val context = AgentConnectionContext(128)
       val backlogSize = AtomicInt(0)
 

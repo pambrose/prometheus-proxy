@@ -53,7 +53,7 @@ internal fun interface PathDiscoverySource {
 
 /**
  * A [PathDiscoverySource] that reports the entries its last [PathDiscoverySource.read] dropped as unusable, for the
- * agent's debug page.
+ * agent's debug page and its dashboard.
  *
  * Separate from [PathDiscoverySource] on purpose: that stays a single-method interface, so a source can still be a
  * lambda, and a source with nothing to report need not implement this at all.

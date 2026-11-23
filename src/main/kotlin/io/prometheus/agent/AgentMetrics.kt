@@ -77,7 +77,7 @@ internal class AgentMetrics(
 
   /**
    * A metric whose series carry `launch_id` first, which [close] removes for the closing agent. [atZero] are the series
-   * each agent starts at zero, by the values of its labels after `launch_id`: [EACH] of a label's known values, or
+   * each agent starts at zero, by the values of its labels after `launch_id`: [each] of a label's known values, or
    * [LAUNCH_ONLY] for a counter labeled by `launch_id` alone. [startsFor] says whether an agent has them, as only one
    * with discovery has discovery's.
    */
@@ -173,7 +173,7 @@ internal class AgentMetrics(
         labelNames(LAUNCH_ID)
       }
 
-    // A connection that ended after the connect succeeded, however it ended.
+    // A connection that ended after the connect succeeded, however it ended, unless the agent was stopping.
     private val DISCONNECT_COUNT =
       counter {
         name("agent_disconnects_total")
@@ -181,12 +181,12 @@ internal class AgentMetrics(
         labelNames(LAUNCH_ID)
       }
 
-    // A failed connect moving on to the next endpoint in agent.proxy.endpoints; a return to the primary shows as
-    // agent_proxy_endpoint_index going back to 0.
+    // A failed connect, or a registration the proxy rejected, moving on to the next endpoint in agent.proxy.endpoints;
+    // a return to the primary shows as agent_proxy_endpoint_index going back to 0.
     private val ENDPOINT_ADVANCE_COUNT =
       counter {
         name("agent_endpoint_advances_total")
-        help("Agent moves to the next proxy endpoint after a failed connect")
+        help("Agent moves to the next proxy endpoint after a failed connect or a rejected registration")
         labelNames(LAUNCH_ID)
       }
 

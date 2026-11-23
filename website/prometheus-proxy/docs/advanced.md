@@ -31,7 +31,7 @@ agent auth is off; see [Transport Filter](configuration/proxy.md#transport-filte
     streams open with a keepalive after 30 seconds of quiet, so nginx's defaults are enough for them. The proxy sets
     the interval for both directions, `proxy.internal.streamKeepAliveSecs`: keep it under the reverse proxy's idle
     timeout, or set it to 0 to turn keepalives off. Each side sends keepalives only once the other says it takes them,
-    so with an agent or a proxy from 4.6.1 or earlier on either end, the agent is cut off every minute, scraped or not,
+    so with an agent or a proxy from 4.6.0 or earlier on either end, the agent is cut off every minute, scraped or not,
     reconnects, and is briefly without its paths, which can fail a scrape. For such a pair, raise both timeouts, in the
     `server` or `location` block that passes to the proxy:
 

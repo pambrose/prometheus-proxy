@@ -32,8 +32,8 @@ Configure the gRPC service that agents connect to:
 The agent gRPC port is unauthenticated by default. Set a
 [pre-shared token](../security/index.md#agent-authentication-pre-shared-token) so the proxy rejects
 agents that do not present a matching value (`UNAUTHENTICATED`). Resolved from `--agent_token` →
-`AGENT_TOKEN` → `proxy.agentToken`; empty (the default) disables the check and logs a startup warning
-unless mutual TLS is configured. The token is never logged.
+`AGENT_TOKEN` → `proxy.agentToken`; empty (the default) disables the check unless `proxy.auth` (below) is
+set, and logs a startup warning unless `proxy.auth` or mutual TLS is configured. The token is never logged.
 
 ```hocon
 proxy {
@@ -61,10 +61,10 @@ proxy {
 ```
 
 Because `auth` is a list of objects, it is config-file-only — there is no CLI/env equivalent, and the
-`-D` override cannot express a list. Identity names must be unique and tokens non-empty. The name
-`legacy-agent-token` is reserved for the legacy `proxy.agentToken`, which the logs name that way and the
-dashboard shows as *shared token*, so the proxy refuses to start with an entry of that name, whether or
-not `proxy.agentToken` is set.
+`-D` override cannot express a list. Identity names must be unique, and tokens non-empty and unique, the
+legacy `proxy.agentToken` included. The name `legacy-agent-token` is reserved for the legacy `proxy.agentToken`,
+which the logs name that way and the dashboard shows as *shared token*, so the proxy refuses to start with an
+entry of that name, whether or not `proxy.agentToken` is set.
 
 ## Service Discovery
 
@@ -156,8 +156,8 @@ It runs on its own port rather than the admin port, partly because the admin por
 that cannot host WebSockets, and partly so the dashboard can be firewalled without also cutting off the
 `/ping` and `/healthcheck` endpoints Kubernetes probes target.
 
-Like the admin and metrics endpoints, it has **no authentication and no TLS** — treat the port as
-internal. See [Dashboard](../web-dashboard.md) for what it shows.
+It serves plain HTTP, with **no TLS**, and without a `password` it has **no authentication**, like the admin and
+metrics endpoints — treat the port as internal. See [Dashboard](../web-dashboard.md) for what it shows.
 
 ## Metrics
 
@@ -197,9 +197,9 @@ Configure agent cleanup and scrape request management:
 | `streamKeepAliveSecs`               | 30      | Seconds a stream to or from an agent goes quiet before a keepalive, both ways (0 = off)  |
 
 The three path limits are safety nets against a runaway or misbehaving agent, set well above normal use. A path
-over a limit is refused at registration, before it is checked against the agent's
-[identity patterns](#per-agent-identities), and the agent logs the rejection once without retrying it. The proxy
-warns when an agent reaches 80% of `maxPathsPerAgent`.
+over a limit is refused at registration, and the agent logs the rejection once without retrying it. A path too long,
+or with labels too large, is refused before it is checked against the agent's
+[identity patterns](#per-agent-identities). The proxy warns when an agent reaches 80% of `maxPathsPerAgent`.
 
 The agent limits bound what an agent reports about itself and its targets. The proxy only displays these values, in
 its logs, service discovery labels, dashboard, and `/debug` page, but it keeps them, and repeats some of them for
@@ -223,10 +223,12 @@ proxy.internal {
 ## Transport Filter
 
 The transport filter detects agent disconnections immediately. Disable it when using a
-reverse proxy like Nginx:
+reverse proxy like Nginx, on the proxy and on each of its agents, since the proxy refuses an agent
+whose setting doesn't match its own:
 
 ```hocon
-proxy.transportFilterDisabled = true
+proxy.transportFilterDisabled = true   // The proxy's config
+agent.transportFilterDisabled = true   // Each agent's config
 ```
 
 !!! warning

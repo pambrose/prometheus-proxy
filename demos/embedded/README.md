@@ -24,9 +24,9 @@ flowchart TB
   end
 
   subgraph host["The proxy host"]
-    proxy["proxy<br/>TLS from PEM variables<br/>scrapes :8080, dashboard :8094"]
-    prometheus["Prometheus :9090"]
-    grafana["Grafana :3000<br/>Coffee Shop dashboard"]
+    proxy["proxy<br/>TLS from PEM variables<br/>scrapes :8380, dashboard :8394"]
+    prometheus["Prometheus :9390"]
+    grafana["Grafana :3300<br/>Coffee Shop dashboard"]
   end
 
   lb -->|"1.0, or 1.1 once<br/>1.0 has stopped"| ktor
@@ -63,7 +63,7 @@ Clone the repository at the latest release, then run the demo's commands from it
 its targets:
 
 ```bash
-git clone -c advice.detachedHead=false --depth 1 --branch 4.6.1 https://github.com/pambrose/prometheus-proxy.git
+git clone -c advice.detachedHead=false --depth 1 --branch 4.7.0 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/embedded
 make up      # builds the coffee shop, starts everything, and prints the URLs
 make tour    # walks through the guided tour below, pausing before each step
@@ -102,7 +102,7 @@ this setup is for a laptop, not for anything shared.
 | `coffee-shop` | The app, version 1.0 (`app/`): a Ktor server whose built-in customers order over HTTP, and whose baristas brew from a queue. Its metrics, with Ktor's HTTP and the JVM's, are in a Micrometer registry, and it serves no `/metrics`. The prometheus-proxy agent runs inside it, installed with the [Ktor plugin](https://prometheus-proxy.com/ktor-plugin/) from settings the app builds in memory from its environment, and reads the registry in-process. Its admin endpoints, `/debug` among them, are on port 8393, for debugging it, and its [dashboard](https://prometheus-proxy.com/agent-dashboard/) on port 8395. |
 | `coffee-shop-next` | Not started by default. `demo.sh deploy` starts version 1.1 of the same image beside 1.0, as a rolling deploy does. Its agent's dashboard is on port 8396. |
 | `load-balancer` | Caddy (`config/Caddyfile`), the coffee shop's one address, on port 8390, as a platform's load balancer is. It sends every request to 1.0, or to 1.1 once a deploy has stopped 1.0, so the status page, the order counter, and the knobs keep answering at the same URL through a deploy. |
-| `proxy` | The stock proxy image, which takes its TLS certificate and key, and the agents' token, from environment variables, with no file mounted. Its agent port is reachable only on the compose network; its dashboard is on. |
+| `proxy` | The stock proxy image, which takes its TLS certificate and key, and the agents' token, from environment variables, with none of them in a file. Its agent port is reachable only on the compose network; its dashboard is on. |
 | `prometheus` | Scrapes the coffee shop's paths through the proxy every 5s, and the proxy's own metrics. It loads the project's alerting rules (`grafana/alerts.yml`) and the coffee shop's (`prometheus/embedded-alerts.yml`). |
 | `grafana` | Opens on the **Coffee Shop** dashboard. The project's own **Prometheus Proxy** and **Prometheus Agents** dashboards (`grafana/*.json`) are linked from its top bar. |
 
@@ -114,7 +114,7 @@ else; the Cloud Platforms page shows how to make your own.
 ## Guided tour
 
 `make tour` walks through these parts one step at a time. To follow them here instead, run the scenario commands
-from `demos/embedded`; each one prints what to watch. Leave about a minute between parts so the graphs catch up.
+from `demos/embedded`; most print what to watch. Leave about a minute between parts so the graphs catch up.
 
 ### 1. An app with the agent embedded, and no port open for Prometheus
 
@@ -149,8 +149,8 @@ connection, each path's registration, its scrapes as it saw them, and what it di
   works whether or not the proxy has the path, so when a path doesn't scrape, it tells you whether the agent can read
   the app's metrics.
 - The **Connection** view, <http://localhost:8395/dashboard/connection>, reads `connected`, to `proxy:50051`, over
-  TLS, and lists the settings the agent resolved, its token shown only as set. In part 8, it says why the agent can't
-  connect.
+  TLS, with its token set. In part 8, it says why the agent can't connect. The **Settings** view,
+  <http://localhost:8395/dashboard/settings>, lists the settings the agent resolved, its token shown only as set.
 - The **Activity** view, <http://localhost:8395/dashboard/activity>, lists what the agent did, newest first: the two
   paths `registered`, above `connected`. If the agent tried before the proxy was listening, a `connect failed` sits
   below them.

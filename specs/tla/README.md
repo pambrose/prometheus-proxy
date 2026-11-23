@@ -5,19 +5,20 @@ Two independent specs: `ProxyRegistry.tla` for the proxy side and `AgentFailover
 `make tla-checks` (from the repo root) model-checks both with their quick configs in about a minute, and fails if either
 finds a violation. `make tla-checks-full` adds the slower `ProxyRegistryReconnect.cfg`, about a minute more here and
 several in CI. CI's `tla` job runs the full set when a file in this directory or the pinned TLA+ tools change, as TLC
-reads nothing else, and the quick configs otherwise, on every pull request and push to `master`. Either downloads the
-TLA+ tools jar (pinned in the Makefile's `TLA_VERSION`) into this directory, and refuses a download whose SHA-256
-doesn't match `TLA_SHA256`; the jar is git-ignored. It checks the jar on every run, so after a version bump the old one
-is replaced rather than run. To run a config by hand, or the long `ProxyRegistrySafety.cfg`, use the commands below from
-this directory.
+reads nothing else, and the quick configs otherwise, on every pull request and push to `master`; a manual run of the
+workflow runs the full set. Either downloads the TLA+ tools jar (pinned in the Makefile's `TLA_VERSION`) into this
+directory, and refuses a download whose SHA-256 doesn't match `TLA_SHA256`; the jar is git-ignored. It checks the jar
+on every run, so after a version bump the old one is replaced rather than run. To run a config by hand, or the long
+`ProxyRegistrySafety.cfg`, use the commands below from this directory.
 
 ## ProxyRegistry
 
 `ProxyRegistry.tla` models the proxy's agent registry, path map, and scrape-request lifecycle: `AgentContextManager`,
-`AgentContext` (validity, queue, notifier, `invalidate()` and its drain), `ProxyPathManager` (the out-of-lock lookup and
-the `synchronized(pathMap)` block of `addPath`, `removePath`, `removeFromPathManager`), `ScrapeRequestManager`,
-`Proxy.removeAgentContext`, one HTTP handler per scrape, and the `readRequestsFromProxy` loop, including, with the
-transport filter disabled, a stream that names another connection's agentId, which only the identity check binds.
+`AgentContext` (validity, queue, notifier, `invalidate()` and its drain), `ProxyPathManager` (`addPath`, after
+`registerPath`'s out-of-lock context lookup, and its `synchronized(pathMap)` block in `addValidatedPath`, `removePath`,
+`removeFromPathManager`), `ScrapeRequestManager`, `Proxy.removeAgentContext`, one HTTP handler per scrape, and the
+`readRequestsFromProxy` loop, including, with the transport filter disabled, a stream that names another connection's
+agentId, which only the identity check binds.
 It also models path notices and reclaims: the notice `takeOverPath` queues for a displaced connection of another
 launch, its delivery on `readPathNoticesFromProxy`, the agent counting the path as taken over, which it keeps across
 its reconnects, and its reclaim, which the proxy refuses while a live connection of another launch holds the path.
@@ -60,7 +61,8 @@ java -cp tla2tools.jar tlc2.TLC -workers auto -deadlock -config ProxyRegistry.cf
 # Path notices and reclaims, 2 connections of one identity on one path (seconds)
 java -cp tla2tools.jar tlc2.TLC -workers auto -deadlock -config ProxyRegistryReclaim.cfg ProxyRegistry.tla
 
-# The same with a reconnect, 3 exclusive connections (about a minute; make tla-checks-full, not CI)
+# The same with a reconnect, 3 exclusive connections (about a minute; make tla-checks-full, which CI runs when this
+# directory or the pinned tools change, and on a manual run)
 java -cp tla2tools.jar tlc2.TLC -workers auto -deadlock -config ProxyRegistryReconnect.cfg ProxyRegistry.tla
 
 # Safety only, 3 connections, 2 paths, 2 scrapes (hours; not yet run to completion)
@@ -69,8 +71,10 @@ java -cp tla2tools.jar tlc2.TLC -workers auto -deadlock -config ProxyRegistrySaf
 
 `-deadlock` turns off deadlock checking: a run that ends with every scrape done and nothing left to do is fine.
 
-To see a property fail, set `CheckOwnership = FALSE` in a config: TLC then finds an agent answering another agent's
-scrape and reports `AnswerFromOwner` violated with the trace.
+To see a property fail, set `CheckOwnership = FALSE` in `ProxyRegistry.cfg`: TLC then finds an agent answering another
+agent's scrape and reports `AnswerFromOwner` violated with the trace. This flag and the two below matter only in
+`ProxyRegistry.cfg` and `ProxyRegistrySafety.cfg`: the reclaim and reconnect configs have no scrapes, don't check
+`AnswerFromOwner`, and have only one identity, so `StreamIdentity` can't fail there.
 
 `SameLookup = FALSE` keeps the owner check but restores how it ran before October #21's fix: on a lookup of its own,
 before `assignScrapeResults` looked the scrape up again, with an untracked scrape id let through. TLC then reports
@@ -90,9 +94,9 @@ identities, so letting each connection intrude only doubles the states.
 `UseReclaim` turns path notices and reclaims on; `ProxyRegistry.cfg` and `ProxyRegistrySafety.cfg` leave it off, as
 for agents and proxies predating them, so their state spaces are unchanged, and `ProxyRegistryReclaim.cfg` and
 `ProxyRegistryReconnect.cfg` turn it on.
-`CheckHolder = FALSE` drops the proxy's refusal of a reclaim while a live connection of another launch holds the path,
-as a proxy predating the flag ignores it: TLC then reports `ReclaimNeverDisplaces` violated by a displaced connection
-taking the path back from the one that took it.
+`CheckHolder = FALSE`, in `ProxyRegistryReclaim.cfg`, drops the proxy's refusal of a reclaim while a live connection of
+another launch holds the path, as a proxy predating the flag ignores it: TLC then reports `ReclaimNeverDisplaces`
+violated by a displaced connection taking the path back from the one that took it.
 
 The paths an agent was told were taken over are its launch's, not one connection's, so a reconnect, a connection of the
 same launch, keeps them. `KeepTold = FALSE` has the agent forget them as it connects, as it did before: TLC then
@@ -120,6 +124,8 @@ java -cp tla2tools.jar tlc2.TLC -workers auto -deadlock -config AgentFailover.cf
 ```
 
 It takes about a second at `NumEndpoints = 3` and passes for 1 through 4. Setting `FailbackOnConnect = TRUE` restores
-the 4.0.0 rule, which failed back once an attempt had connected: TLC then shows `SettlesOnAWorkingProxy` violated by an
-agent looping forever on a primary that accepts connections but rejects registration while the secondary is up.
-(`FailsForwardAfterFailure` fails too, as it restates the current rule.)
+the 4.0.0 rule, which failed back once an attempt had connected: TLC then reports `FailsForwardAfterFailure` violated,
+as it restates the current rule, by an agent going back to a primary that accepted its connection but rejected its
+registration, and stops there. To see the loop that rule caused, drop `FailsForwardAfterFailure` from `PROPERTIES` too:
+TLC then shows `SettlesOnAWorkingProxy` violated by an agent looping forever on a primary that accepts connections but
+rejects registration while another proxy is up.

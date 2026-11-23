@@ -158,8 +158,9 @@ import io.prometheus.agent.ShownFailure
  * - Resource exhaustion with proper cleanup
  *
  * Built directly, the constructor throws [IllegalArgumentException] for a setting it rejects: an HTTPS trust store or
- * TLS certificate file that is missing or malformed, a duplicate `pathConfigs` or `filters` entry, or a filter regex
- * that doesn't compile. [startAsyncAgent] and [startSyncAgent] report those as they report an invalid option: a
+ * TLS certificate file that is missing or malformed, a duplicate `pathConfigs` or `filters` entry, a path with a
+ * character the proxy refuses (whitespace, a control character, `?`, or `#`), or a filter regex that doesn't compile.
+ * [startAsyncAgent] and [startSyncAgent] report those as they report an invalid option: a
  * [io.prometheus.common.ConfigLoadException] when embedded, and a logged error and exit code 1 otherwise.
  *
  * @param options Configuration options for the agent, typically loaded from command line or config files
@@ -748,7 +749,7 @@ class Agent(
    * Updates the scrape counter metrics for the specified operation type.
    *
    * This method increments the counter for scrape operations, categorized by type
-   * (e.g., "success", "failure", "timeout"). The metrics are labeled with the
+   * (e.g., "success", "failure", "timed_out"). The metrics are labeled with the
    * agent's launch ID for tracking across agent restarts.
    *
    * @param type The type/category of scrape operation. Empty strings are ignored.
@@ -976,9 +977,10 @@ class Agent(
     }
 
     // Builds the Agent an entry point starts. A setting its options or the Agent itself rejects -- a wrong type, a
-    // value out of range, a trust store it can't load, a duplicate pathConfigs or filters entry, a filter regex that
-    // doesn't compile -- throws a redacted ConfigLoadException when embedded, and exits 1 otherwise, as a config that
-    // can't be loaded does (November #8). Only the build is covered: a failure to start is an IllegalStateException.
+    // value out of range, a trust store it can't load, a duplicate pathConfigs or filters entry, a path with a
+    // character the proxy refuses, a filter regex that doesn't compile -- throws a redacted ConfigLoadException when
+    // embedded, and exits 1 otherwise, as a config that can't be loaded does (November #8). Only the build is covered:
+    // a failure to start is an IllegalStateException.
     private fun newAgent(
       exitOnMissingConfig: Boolean,
       options: () -> AgentOptions,
@@ -989,9 +991,10 @@ class Agent(
      * another JVM application.
      *
      * Unlike [startSyncAgent], this does not block for the Agent's lifetime. It waits only for startup -- the
-     * admin and metrics servers binding their ports -- and not for a proxy connection. The Agent's lifecycle is
-     * then owned by the caller via the returned [EmbeddedAgentInfo], which exposes the agent's `launchId` and
-     * `agentName` and a `shutdown()` method for graceful shutdown.
+     * admin, metrics, and dashboard servers binding their ports -- and not for a proxy connection. The Agent's
+     * lifecycle is then owned by the caller via the returned [EmbeddedAgentInfo], which exposes the agent's
+     * `launchId`, `agentName`, and connection (`isConnected`, `proxyEndpoint`), and a `shutdown()` method for graceful
+     * shutdown.
      *
      * @param configFilename Path or URL to the HOCON config file. Forwarded to the
      *   [AgentOptions] config-filename constructor so it follows the same resolution rules as the
@@ -1007,9 +1010,10 @@ class Agent(
      * @throws io.prometheus.common.ConfigLoadException when `exitOnMissingConfig` is `false` and the config can't be
      *   loaded or parsed, or a setting is invalid, whether it comes from the config or an environment variable: a
      *   value of the wrong type or out of range, an unresolved `${…}` substitution, a malformed proxy endpoint, a
-     *   duplicate `pathConfigs` or `filters` entry, a filter regex that doesn't compile, or an HTTPS trust store or
-     *   TLS certificate file that is missing or malformed. Credentials in a config URL are redacted from its message
-     *   and from every message in its cause chain.
+     *   duplicate `pathConfigs` or `filters` entry, a path with a character the proxy refuses (whitespace, a control
+     *   character, `?`, or `#`), a filter regex that doesn't compile, or an HTTPS trust store or TLS certificate file
+     *   that is missing or malformed. Credentials in a config URL are redacted from its message and from every message
+     *   in its cause chain.
      * @throws IllegalStateException if the Agent fails to start, for example because its admin or metrics port is
      *   already in use. The startup failure is the cause, and whatever the Agent had opened is released first.
      */

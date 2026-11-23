@@ -74,12 +74,12 @@ class ProxyEventBusTest : StringSpec() {
       repeat(1_000) { bus.emit(ProxyEvent.AgentConnected("agent-$it")) }
     }
 
-    // A slow subscriber loses the oldest events rather than applying backpressure to the emitter. That
+    // With no subscriber, nothing is kept: replay = 0, so an emit no one collects is dropped. That
     // is the deliberate trade: every consumer re-reads a full snapshot when woken, so a dropped event
     // costs a slightly later refresh, never a wrong render.
     "a backlog with no subscriber should not be replayed to one that joins later" {
       val bus = ProxyEventBus()
-      // Far more than the buffer holds, with nobody collecting: these overflow and are dropped.
+      // Far more than the buffer holds, with nobody collecting: each is dropped as it is emitted.
       repeat(5_000) { bus.emit(ProxyEvent.PathRegistered("path-$it", "agent-1")) }
 
       val seen = collect(bus, 1) { bus.emit(ProxyEvent.AgentConnected("late")) }
@@ -106,7 +106,7 @@ class ProxyEventBusTest : StringSpec() {
       }
     }
 
-    // AgentConnected fires when the transport is established, which is BEFORE registerAgent supplies
+    // AgentConnected fires on the connection's first authenticated call, which is BEFORE registerAgent supplies
     // identity -- so it deliberately carries only the id. AgentDisconnected is NOT emitted here: it
     // moved to Proxy.removeAgentContext so its happens-before edge covers the path sweep too.
     "AgentContextManager should emit on connect only" {
@@ -125,7 +125,8 @@ class ProxyEventBusTest : StringSpec() {
 
     // The transport filter registers every connection's context before any call is authenticated, so anyone who could
     // reach the agent port appeared on the dashboard as a connected agent. A pending context is announced only when
-    // announceAgentContext is called -- by connectAgent, which the auth interceptor lets through -- and only once.
+    // announceAgentContext is called -- by ProxyServerInterceptor, on each call that passed authentication -- and only
+    // once.
     "a pending context should announce AgentConnected when announced, not when added, and only once" {
       val bus = ProxyEventBus()
       val manager = AgentContextManager(isTestMode = true, eventBus = bus)

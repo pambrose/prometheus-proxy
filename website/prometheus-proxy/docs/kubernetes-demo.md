@@ -61,7 +61,7 @@ Clone the repository at the latest release, then run the demo's commands from it
 its targets:
 
 ```bash
-git clone -c advice.detachedHead=false --depth 1 --branch 4.6.1 https://github.com/pambrose/prometheus-proxy.git
+git clone -c advice.detachedHead=false --depth 1 --branch 4.7.0 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/kubernetes
 make up      # creates both clusters, installs everything, prints the URLs
 make tour    # walks through every scenario below, pausing before each step
@@ -104,8 +104,8 @@ The charts get nothing but a values file each, a config file, and the proxy's ad
 ## Scenarios
 
 `demo.sh`, in `demos/kubernetes`, drives the scenarios below. Run it from that directory, where `make up` started the
-demo; each command prints what to watch, and how long it took. The times on this page were measured on an
-Apple-silicon laptop.
+demo; most commands print what to watch, and the ones that add, remove, or replace something, how long it took. The
+times on this page were measured on an Apple-silicon laptop.
 
 ### The Helm charts on two clusters, with no inbound access
 
@@ -242,9 +242,10 @@ prometheus-agent-85db4c79cb-s6d98 is on the dashboard with its paths, 2s after
 The change turns on the agent's JVM metrics. The chart renders the agent's config into a ConfigMap and stamps the pod
 with its checksum, so the upgrade replaces the pod, and the chart's `strategy: Recreate` stops the old one before
 starting the new, since both would register the same paths. That's a gap: scrapes through the proxy fail for about
-1.3 seconds. Compare the annotated Service above, where the targets changed and nothing restarted. That's why the agent
-chart keeps the targets in a ConfigMap of their own, which the agent re-reads in place, apart from its main config,
-which only a restart applies. `./demo.sh restore-config` puts the original config back, with another replacement.
+1.3 seconds, which the script rounds up to whole seconds. Compare the annotated Service above, where the targets
+changed and nothing restarted. That's why the agent chart keeps the targets in a ConfigMap of their own, which the
+agent re-reads in place, apart from its main config, which only a restart applies. `./demo.sh restore-config` puts the
+original config back, with another replacement.
 
 ## Scenario reference
 

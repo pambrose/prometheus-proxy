@@ -19,7 +19,7 @@ IMAGES=(prometheus-proxy-demo/proxy:local prometheus-proxy-demo/agent:local)
 RELEASED_IMAGES=(pambrose/prometheus-proxy pambrose/prometheus-agent)
 # The demo shows what came after this release, so until a later one is out, up builds the proxy and agent from this
 # checkout, as up-local does. When the demo comes to use something unreleased, set this to the latest release.
-NEEDS_RELEASE_AFTER=4.6.1
+NEEDS_RELEASE_AFTER=4.7.0
 # The dashboard password the login scenario gives the proxy. A demo's, in a public file, as Grafana's admin password
 # is: never use it anywhere else.
 LOGIN_PASSWORD="admin"
@@ -274,9 +274,8 @@ cmd_up_local() {
 # with ones built from this checkout (start_demo).
 start_demo() {
   local old_ids id
-  # The images the demo ran, to remove below once nothing tags them: each build makes new ones, since the jars'
-  # BuildConfig carries the build time, and a release's tags replace a build's. One the network demo still runs is in
-  # use, and stays.
+  # The images the demo ran, to remove below once nothing tags them: a build from changed code makes new ones, and a
+  # release's tags replace a build's. One another demo still runs is in use, and stays.
   old_ids="$(docker image inspect -f '{{.Id}}' "${IMAGES[@]}" 2>/dev/null || true)"
 
   if [[ $# -gt 0 ]]; then
@@ -585,8 +584,8 @@ cmd_tour() {
       "only leaves just the refusal."
     step "Stop and remove the contractor's agent." -- rogue-agent-stop
     instruct "Open agent-east's dashboard on its Connection view: $EAST_DASHBOARD_URL/connection" \
-      "agent-east is connected to proxy:50051, its one proxy endpoint. Below that are its discovery file and the" \
-      "settings it resolved."
+      "agent-east is connected to proxy:50051, its one proxy endpoint. Below that is its discovery file. The settings" \
+      "it resolved are on its Settings view: $EAST_DASHBOARD_URL/settings"
     step "Stop the proxy, as an outage or a bad deploy would. The proxy's dashboard goes with it, but agent-east's" \
       "keeps answering, since it runs on the agent." -- proxy-down
     instruct "On agent-east's dashboard, open the Paths view, click /orders_metrics, then Scrape now." \
@@ -845,8 +844,8 @@ main() {
       "used to make two such agents swap the paths every few seconds."
     point "The proxy told agent-east. Its own dashboard lists its six paths as retrying, each taken over by" \
       "agent-east-copy, and its Activity view has the takeover, at $EAST_DASHBOARD_URL"
-    point "The proxy's log line, printed below, names both agents and gives the fix: set agent.consolidated = true" \
-      "on each, if both should serve the paths."
+    point "The proxy's log line, printed below, names both agents by agentId and gives the fix: set" \
+      "agent.consolidated = true on each, if both should serve the paths."
     point "The copy's own dashboard lists the six paths, each with a green light, since the proxy accepted every one," \
       "at $COPY_DASHBOARD_URL"
     follow_up "To undo it, run" "$0 duplicate-agent-stop"

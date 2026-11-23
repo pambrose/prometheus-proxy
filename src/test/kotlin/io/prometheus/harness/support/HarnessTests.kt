@@ -97,9 +97,9 @@ internal object HarnessTests {
   private const val CHUNKED = "chunked"
   private const val SUMMARY_PREFIX = "Reading summary "
 
-  // Poll the loopback port until it accepts a TCP connection. CIO's embeddedServer.start()
-  // returns before the listener is bound; without this probe the first scrape can race startup. Fails when the port
-  // never answers, as awaitPortFree does, rather than letting the test fail later on a refused scrape.
+  // Poll the loopback port until it accepts a TCP connection. CIO's embeddedServer.start() returns once the port is
+  // bound, so this is a check rather than a wait: a server that never answers fails here, naming the port, as
+  // awaitPortFree does, rather than letting the test fail later on a refused scrape.
   internal suspend fun awaitPortReady(
     port: Int,
     timeout: kotlin.time.Duration = 5.seconds,
@@ -223,7 +223,8 @@ internal object HarnessTests {
           .map { it.substringBefore(" for scrapeId") } shouldBe
           listOf("${SUMMARY_PREFIX}chunkCount: $chunkCount byteCount: $zippedSize")
       }
-      // The agent counts the result once it has queued the summary, which can be after the proxy has answered.
+      // The agent counts the result as its stream hands the summary to gRPC, before the proxy has it; eventually is
+      // only a margin.
       if (agent.isMetricsEnabled)
         eventually(5.seconds) { chunkedCount() - chunkedBefore shouldBe 1.0 }
 

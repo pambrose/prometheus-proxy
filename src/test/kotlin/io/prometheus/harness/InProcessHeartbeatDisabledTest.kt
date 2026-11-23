@@ -113,10 +113,8 @@ class InProcessHeartbeatDisabledTest : StringSpec() {
           // The fix has two halves and the scrape above only covers the first: the keepalive loop must
           // also terminate once the connection closes. Assert the stop here rather than leaving it to
           // the finally, where runCatching would discard the TimeoutException that Guava's timed
-          // awaitTerminated throws on expiry. The alternative rejected in the production comment
-          // (awaitCancellation() as the loop body) hangs stopSync exactly this way, and without this
-          // assertion the spec would still report green while every heartbeatEnabled=false embedded
-          // agent hung on shutdown.
+          // awaitTerminated throws on expiry. Without this assertion the spec would still report green
+          // while every heartbeatEnabled=false embedded agent hung on shutdown.
           val elapsed = measureTime { agent.stopSync(15.seconds) }
 
           agent.isRunning.shouldBeFalse()

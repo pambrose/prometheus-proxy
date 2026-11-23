@@ -12,8 +12,8 @@ Azure Container Apps and the proxy on another host, run on one machine.
 ``` mermaid
 %%{init: {'flowchart': {'curve': 'linear'}}}%%
 graph LR
-  G[Grafana :3000] --> P[Prometheus :9090]
-  P -->|scrapes /coffee_shop_metrics| Proxy[Proxy, dashboard :8094]
+  G[Grafana :3300] --> P[Prometheus :9390]
+  P -->|scrapes /coffee_shop_metrics| Proxy[Proxy, dashboard :8394]
   %% The agent connects out to the proxy, so its arrow points back. The invisible link keeps the app to the right.
   Proxy ~~~ Agent
   Agent[embedded agent, dashboard :8395] -->|gRPC over TLS, with a token| Proxy
@@ -53,7 +53,7 @@ Clone the repository at the latest release, then run the demo's commands from it
 its targets:
 
 ```bash
-git clone -c advice.detachedHead=false --depth 1 --branch 4.6.1 https://github.com/pambrose/prometheus-proxy.git
+git clone -c advice.detachedHead=false --depth 1 --branch 4.7.0 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/embedded
 make up      # builds the coffee shop, starts everything, prints the URLs
 make tour    # walks through every scenario below, pausing before each step
@@ -87,7 +87,7 @@ The ports are the [Basics Demo](basics-demo.md)'s plus 300, so the two can run s
 | `coffee-shop` | The app, version 1.0: a Ktor server whose built-in customers order over HTTP, and whose baristas brew from a queue. Its metrics, with Ktor's HTTP and the JVM's, are in a Micrometer registry, and it serves no `/metrics`. The agent runs inside it, installed with the [Ktor plugin](ktor-plugin.md) from settings the app builds in code, and reads the registry in-process. Its admin endpoints, `/debug` among them, are on port 8393, for debugging it, and its [dashboard](agent-dashboard.md) on port 8395. |
 | `coffee-shop-next` | Started only by `demo.sh deploy`: version 1.1 of the same image, beside 1.0, as a rolling deploy does. Its agent's dashboard is on port 8396. |
 | `load-balancer` | The coffee shop's one address, on port 8390, as a platform's load balancer is: it sends every request to 1.0, or to 1.1 once a deploy has stopped 1.0. |
-| `proxy` | The stock proxy image. It takes its TLS certificate and key as [PEM in environment variables](security/tls.md#certificates-as-environment-variables), and the agent's token from one too, with no file mounted. |
+| `proxy` | The stock proxy image. It takes its TLS certificate and key as [PEM in environment variables](security/tls.md#certificates-as-environment-variables), and the agent's token from one too, with none of them in a file. |
 | `prometheus` | Scrapes the coffee shop's paths through the proxy every 5 seconds, and the proxy's own metrics, and loads the project's alerting rules and the coffee shop's. |
 | `grafana` | Opens on the Coffee Shop dashboard, which links to the two dashboards the project ships. |
 

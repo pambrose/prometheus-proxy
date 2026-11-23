@@ -41,7 +41,7 @@ import kotlin.time.Duration.Companion.seconds
 // add/remove assertions below.
 class AgentDiscoveryTest : StringSpec() {
   init {
-    "agent adds, updates, and removes discovered paths from a watched file without restart" {
+    "agent adds, replaces, and removes discovered paths from a watched file without restart" {
       PrometheusRegistry.defaultRegistry.clear()
 
       val discoveryFile = File.createTempFile("discovery", ".conf").apply { deleteOnExit() }

@@ -75,9 +75,9 @@ import io.ktor.server.cio.CIO as ServerCIO
 /**
  * The operational dashboard (Feature 5) over the Netty transport.
  *
- * Drives the real service rather than the renderer: serves the page, opens the WebSocket, and asserts
- * that a fragment arrives carrying an agent that connected *after* the socket was already open. That
- * ordering is the point — it proves the push path works, not merely that the initial render does.
+ * Drives the real service rather than the renderer, end to end: its pages, WebSocket, guards, and routes. The first
+ * spec asserts that a fragment arrives carrying an agent that connected *after* the socket was already open. That
+ * ordering is its point — it proves the push path works, not merely that the initial render does.
  */
 class ProxyWebDashboardTest : StringSpec() {
   /** The proxy, client and optional agent one spec runs against. Torn down by [withDashboard]. */
@@ -125,8 +125,9 @@ class ProxyWebDashboardTest : StringSpec() {
    * tears all of it down.
    *
    * Eight specs used to repeat this frame verbatim. The only genuinely per-spec inputs are the port triple,
-   * the config file, the dashboard arguments (empty for the one spec that checks the feature stays off) and
-   * how the client is built — so those are the parameters, and everything else lives here once.
+   * the config file, the dashboard arguments (empty for the one spec that checks the feature stays off), how
+   * the client is built, and whether the proxy's metrics are on — so those are the parameters, and everything
+   * else lives here once.
    */
   private suspend fun withDashboard(
     httpPort: Int,
@@ -250,7 +251,7 @@ class ProxyWebDashboardTest : StringSpec() {
             it shouldContain "hx-swap-oob"
             it shouldNotContain """id="${ProxyDashboardHtml.AGENT_LIST_ID}""""
           }
-          // What the page sends as soon as its socket opens.
+          // Like what the page sends as soon as its socket opens, without its seq and search.
           send(Frame.Text("""{"select":null,"layout":"AGENT"}"""))
 
           // Connect an agent only NOW, with the socket already open, so the frame below can only have
@@ -442,7 +443,7 @@ class ProxyWebDashboardTest : StringSpec() {
 
     // The browser-to-proxy half of the socket. A row click and a layout switch each send one JSON message;
     // the service must parse it, record it on the session, and re-render at once rather than on the next
-    // tick. The parsers are unit-tested; this is the only place the session state they feed is exercised.
+    // tick. The parsers are unit-tested; this spec drives the selection and the layout switch they feed.
     "a selection sent over the WebSocket should switch the pushed regions to that agent and layout" {
       withDashboard(
         SELECT_HTTP_PORT,
@@ -461,7 +462,8 @@ class ProxyWebDashboardTest : StringSpec() {
             it shouldNotContain """id="${ProxyDashboardHtml.DETAIL_ID}""""
           }
 
-          // A row click sends this exact message; the selection must show up in a pushed agent list.
+          // A row click sends a message like this one, with its search too; the selection must show up in a pushed
+          // agent list.
           send(Frame.Text("""{"select":"$agentId","layout":"AGENT","seq":1}"""))
           awaitFrame(SELECTED_ROW)
           // Every frame rendered from that message carries its count, which the page compares against the
@@ -475,7 +477,7 @@ class ProxyWebDashboardTest : StringSpec() {
       }
     }
 
-    // The base path is configurable down to "/" itself, and the service special-cases that: the page owns
+    // The base path is configurable down to "/" itself, and DashboardServer special-cases that: the page owns
     // the root, so the root-to-base redirect is skipped, and every other route hangs directly off "/".
     "the dashboard can be mounted at the root path" {
       withDashboard(
@@ -528,7 +530,7 @@ class ProxyWebDashboardTest : StringSpec() {
       }
     }
 
-    // The DNS-rebinding Host check (see ProxyDashboardService.isHostAllowed) covers every route. It is opt-in; every
+    // The DNS-rebinding Host check (see DashboardServer.isHostAllowed) covers every route. It is opt-in; every
     // other spec runs without it.
     "with allowedHosts set, a request naming an unknown Host should be refused on every route" {
       withDashboard(HOST_HTTP_PORT, HOST_GRPC_PORT, HOST_DASHBOARD_PORT, configFile = HOSTS_CONFIG_FILE) {
@@ -712,8 +714,8 @@ class ProxyWebDashboardTest : StringSpec() {
           val recent = recorded()
           requests shouldBe 1.0
           bytes shouldBe 1.0
-          // The agent counts it in its own scrape metrics: the request, its result, and its latency. The result is
-          // counted once the agent has sent it, which can be after the proxy has answered.
+          // The agent counts it in its own scrape metrics: the request, its result, and its latency. All three are
+          // recorded before the proxy has the result; eventually is only a margin.
           eventually(10.seconds) { AGENT_SCRAPE_METRICS.map(::counted) shouldBe [1.0, 1.0, 1.0] }
           counted(AGENT_DASHBOARD_SCRAPES) shouldBe 0.0
 
@@ -1019,7 +1021,8 @@ class ProxyWebDashboardTest : StringSpec() {
     private const val PAGE_CACHE_GRPC_PORT = TestPorts.DASHBOARD_UI_PAGE_CACHE_GRPC_PORT
     private const val PAGE_CACHE_DASHBOARD_PORT = TestPorts.DASHBOARD_UI_PAGE_CACHE_DASHBOARD_PORT
 
-    // Each round GETs all three page routes, and the agent route both as a page and as an htmx fragment.
+    // Each round GETs the Agents and Paths pages and an agent's, the agent route both as a page and as an htmx
+    // fragment.
     private const val PAGE_ROUNDS = 5
 
     private const val PAGE_FRESH_HTTP_PORT = TestPorts.DASHBOARD_UI_PAGE_FRESH_HTTP_PORT

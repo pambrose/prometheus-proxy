@@ -25,7 +25,7 @@ The [Embedded Demo](embedded-demo.md)'s coffee shop shows the rest with an app i
 ``` mermaid
 %%{init: {'flowchart': {'curve': 'linear'}}}%%
 graph LR
-  P[Prometheus :9090] -->|scrapes /roastery_metrics| Proxy[Proxy, dashboard :8094]
+  P[Prometheus :9490] -->|scrapes /roastery_metrics| Proxy[Proxy, dashboard :8494]
   %% The agent connects out to the proxy, so its arrow points back. The invisible link keeps the app to the right.
   Proxy ~~~ Agent
   Agent[embedded agent, run by the Spring Boot starter, dashboard :8495] -->|gRPC over TLS, with a token| Proxy
@@ -63,7 +63,7 @@ Clone the repository at the latest release, then run the demo's commands from it
 its targets:
 
 ```bash
-git clone -c advice.detachedHead=false --depth 1 --branch 4.6.1 https://github.com/pambrose/prometheus-proxy.git
+git clone -c advice.detachedHead=false --depth 1 --branch 4.7.0 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/spring-boot
 make up      # builds the roastery, starts everything, prints the URLs
 make tour    # walks through the parts below, pausing before each step
@@ -91,7 +91,7 @@ example `SPRING_BOOT_DEMO_APP_PORT=8491 make up`.
 | Service | Role |
 |---|---|
 | `roastery` | A Spring Boot app in Java that roasts a batch of beans every two seconds and ships some to the coffee shop every five, counting both in Micrometer meters. The agent runs inside it, started by the Spring Boot starter, and reads them, with the JVM's and Tomcat's, from the app's metrics registry, in-process; Actuator exposes only its health. Its dashboard is on, at port 8495, from the environment. |
-| `proxy` | The stock proxy image, which takes its TLS certificate and key, and the agent's token, from environment variables, with no file mounted. Its dashboard is on. |
+| `proxy` | The stock proxy image, which takes its TLS certificate and key, and the agent's token, from environment variables, with none of them in a file. Its dashboard is on. |
 | `prometheus` | Scrapes the roastery's path through the proxy every 5s, and the proxy's own metrics. |
 
 ## Where the agent is configured

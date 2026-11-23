@@ -52,15 +52,15 @@ ktor = "3.6.1"
 
 # WebJars (htmx client assets, served from the classpath -- no CDN, works airgapped).
 # htmx 4 ships its WebSocket extension in this same WebJar (dist/ext/hx-ws.min.js), so there is no separate
-# htmx-ext-ws dependency. ProxyDashboardService reads the version through BuildConfig, so both the classpath paths it
-# reads and the URLs it serves the assets at follow it. A major bump means porting ProxyDashboardHtml's page shell
-# and script (attributes, event names, the WebSocket config), not just the version.
+# htmx-ext-ws dependency. DashboardServer reads the version through BuildConfig, so both the classpath paths it reads
+# and the URLs it serves the assets at follow it. A major bump means porting DashboardPage's page shell and
+# DashboardScript's script (attributes, event names, the WebSocket config), not just the version.
 htmx = "4.0.2"
 # Simple Icons (CC0), the brand marks the dashboard's Links column can show (LinkIcon). The WebJar holds every brand, in
 # 7.5 MB, so build.gradle.kts extracts only the SVGs LinkIcon names, through a configuration of its own, and the WebJar
-# stays out of the `webjars` bundle, the runtime classpath, the POM, and the fat JARs. ProxyDashboardService serves the
-# icons at a URL that carries this version, read through BuildConfig. Simple Icons removes brands in major versions, so
-# the extraction fails the build when one LinkIcon names is gone.
+# stays out of the `webjars` bundle, the runtime classpath, the POM, and the fat JARs. DashboardServer serves the icons
+# at a URL that carries this version, read through BuildConfig. Simple Icons removes brands in major versions, so the
+# extraction fails the build when one LinkIcon names is gone.
 simple-icons = "16.2.0"
 
 # Metrics

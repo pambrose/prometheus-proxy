@@ -455,19 +455,18 @@ class BaseOptionsTest : StringSpec() {
       result.output shouldNotContain "Exception in thread"
     }
 
-    "standalone Proxy CLI starts with no config file at all" {
-      // The blank-config fallback must survive the change: the Proxy runs off its built-in reference
-      // config, so --version with no -c reaches the version branch rather than a missing-config exit.
+    "standalone Proxy CLI prints the version with no config file" {
+      // --version with no -c exits 0. It exits as the arguments are parsed, before any config is read, so this
+      // doesn't reach the blank-config fallback the Proxy runs on without a config file.
       runCliMain("io.prometheus.Proxy", "--version").exitCode shouldBe 0
     }
 
     // ==================== readConfig Error Message ====================
 
-    // The readConfig error message uses escaped-dollar interpolation to produce a
-    // literal "$" before the env var name (e.g., "$AGENT_CONFIG"). This replaced the
-    // Kotlin 2.x multi-dollar syntax ($$"...$$$envConfig") for clarity. This test
-    // verifies the interpolation produces the expected output.
-    "readConfig error message should include literal dollar sign before env var name" {
+    // readConfig's missing-config message uses Kotlin's multi-dollar syntax ($$"...$$$envConfig") to put a
+    // literal "$" before the env var name (e.g., "$AGENT_CONFIG"). This test builds the same template itself and
+    // checks what it produces; it doesn't call readConfig.
+    "the multi-dollar template readConfig uses should put a literal dollar sign before the env var name" {
       val envConfig = "AGENT_CONFIG"
       val message = $$"A configuration file or url must be specified with --config or $$$envConfig"
 
@@ -621,7 +620,7 @@ class BaseOptionsTest : StringSpec() {
       }
     }
 
-    // ==================== Bug #2: Integration tests (CLI > env > config) ====================
+    // ==================== Bug #2: resolveBoolean precedence (CLI > env > config) ====================
 
     "env=false should override config=true when no CLI flag" {
       resolveBoolean(
@@ -633,7 +632,7 @@ class BaseOptionsTest : StringSpec() {
       ).shouldBeFalse()
     }
 
-    "CLI --admin flag should win over env=false" {
+    "an explicitly set CLI value should win over env=false" {
       resolveBoolean(
         cliValue = true,
         cliExplicitlySet = true,

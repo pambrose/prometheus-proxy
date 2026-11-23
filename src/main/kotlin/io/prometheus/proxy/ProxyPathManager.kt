@@ -244,7 +244,8 @@ internal class ProxyPathManager(
   /**
    * Returns why [path] can't be registered as given, or null when its form and size are fine: it names no path
    * segment, it is longer than `proxy.internal.maxPathLength`, its [labels] are larger than `maxLabelsSizeBytes`, it
-   * has a character no scrape's request path can carry, or it has more than one segment.
+   * has a character no scrape's request path can carry, it has more than one segment, or it is a path the proxy
+   * serves itself (the favicon, service discovery, or blitz path).
    *
    * Each check is linear in the input and takes no lock, so `registerPath` runs them before it matches the path
    * against the caller's identity globs, which must never see a path of unbounded length (October #22). [addPath]
@@ -371,8 +372,9 @@ internal class ProxyPathManager(
   /**
    * Notes that [agentContext] is told [cause] for [path], and returns whether that is news: the first time, or a cause
    * other than last time (see [AgentContext.recordRejection]). News goes in the activity feed, so the feed shows each
-   * rejection once, however often the agent retries. Every rejection of a path passes through here, those made outside
-   * this class included, though each logs as it always has.
+   * rejection once, however often the agent retries. Every rejection the feed shows passes through here, the
+   * authorization one ProxyServiceImpl makes included, though each logs as it always has. A refused reclaim doesn't:
+   * reclaimRejection keeps that waiting state out of the feed.
    */
   internal fun noteRejection(
     agentContext: AgentContext,
@@ -428,10 +430,11 @@ internal class ProxyPathManager(
       ?: if (agentInfo?.serves(agentContext) == true) null else pathLimitRejection(agentContext, path)
   }
 
-  // Re-checks validity inside the lock: agent removal (transportTerminated / cleanup eviction) can
-  // interleave between the caller's out-of-lock getAgentContext() check and here, invalidating the
-  // context. Inserting a path for an invalidated context creates a permanently-dead path that no
-  // cleanup sweeps, so reject it and let the agent re-register on reconnect (finding 7). Callers MUST hold pathMap.
+  // Re-checks validity inside the lock: agent removal (transportTerminated / cleanup eviction / the scrape-request
+  // stream ending, with the transport filter disabled) can interleave between the caller's out-of-lock
+  // getAgentContext() check and here, invalidating the context. Inserting a path for an invalidated context creates a
+  // permanently-dead path that no cleanup sweeps, so reject it and let the agent re-register on reconnect (finding 7).
+  // Callers MUST hold pathMap.
   private fun invalidatedRejection(
     agentContext: AgentContext,
     path: String,

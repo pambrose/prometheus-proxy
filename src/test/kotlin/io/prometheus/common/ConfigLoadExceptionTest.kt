@@ -23,8 +23,7 @@ import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeSameInstanceAs
 
-// ConfigLoadException is public API: embedded hosts catch it. Every throw inside the project passes a cause, so
-// without these the message-only constructor was never exercised.
+// ConfigLoadException is public API: embedded hosts catch it. These cover both of its constructors.
 class ConfigLoadExceptionTest : StringSpec() {
   init {
     "a message-only ConfigLoadException should carry its message and no cause" {

@@ -44,8 +44,8 @@ class TrustAllX509TrustManagerTest : StringSpec() {
       issuers.shouldBeEmpty()
     }
 
-    "getAcceptedIssuers should return same instance on multiple calls" {
-      // The implementation returns a static empty array
+    "getAcceptedIssuers should return equal arrays on multiple calls" {
+      // The implementation returns a static empty array; shouldBe compares arrays by content, not identity
       val issuers1 = TrustAllX509TrustManager.getAcceptedIssuers()
       val issuers2 = TrustAllX509TrustManager.getAcceptedIssuers()
 

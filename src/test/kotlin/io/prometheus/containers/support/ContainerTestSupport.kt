@@ -43,10 +43,10 @@ import java.nio.file.Path
  * Shared factories and helpers for the Testcontainers end-to-end suite.
  *
  * Every spec in `io.prometheus.containers` is gated on [containerTestsEnabled]; the Makefile and the
- * `container-tests` GitHub workflow set `RUN_CONTAINER_TESTS=true` and build the fat JARs first. The
- * proxy and agent images are built from the `etc/docker` Dockerfiles via [proxyImage] / [agentImage]; Testcontainers
- * content-hashes the Dockerfile + JAR inputs, so building the same image across multiple specs reuses the
- * cached build.
+ * `container-tests` GitHub workflow set `RUN_CONTAINER_TESTS=true`, and with it set the Gradle test task builds the fat
+ * JARs first. The proxy and agent images are built from the `etc/docker` Dockerfiles via [proxyImage] / [agentImage],
+ * one shared instance each, so every spec in the JVM uses one build of each image, and Docker's layer cache reuses the
+ * unchanged steps across runs.
  */
 @Suppress("TooManyFunctions")
 object ContainerTestSupport {

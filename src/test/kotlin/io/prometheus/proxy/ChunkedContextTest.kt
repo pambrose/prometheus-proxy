@@ -538,7 +538,7 @@ class ChunkedContextTest : StringSpec() {
     // would wrap to negative, bypassing the maxZippedContentSize check. The fix changes
     // totalByteCount to Long.
 
-    "Bug #15: totalByteCount should not overflow with large accumulated chunks" {
+    "Bug #15: totalByteCount should accumulate as a Long across chunks" {
       val response = createHeaderResponse()
       // Set a limit above Int.MAX_VALUE
       val limit = Int.MAX_VALUE.toLong() + 1000L
@@ -546,9 +546,8 @@ class ChunkedContextTest : StringSpec() {
 
       val crc = CRC32()
 
-      // Simulate accumulating just under Int.MAX_VALUE in the first chunk
-      // We can't actually allocate 2GB, but we can verify the counter is Long
-      // by checking the type behavior with moderate values
+      // We can't actually allocate 2GB, so this only checks that the counter accumulates
+      // as a Long across two small chunks
       val data1 = ByteArray(1000) { 0x41 }
       crc.update(data1)
       context.applyChunk(data1, data1.size, 1, crc.value)

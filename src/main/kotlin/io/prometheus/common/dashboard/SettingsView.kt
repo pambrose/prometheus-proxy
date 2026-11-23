@@ -43,10 +43,10 @@ internal data class SettingsGroup(
 
 /**
  * What a push to a Settings page keeps (see [DashboardFrame.sent]): that the page was sent its settings, at the count
- * of messages [seq] it had sent. The settings are fixed for the life of the process, so a page is sent them once,
- * in the first frame after it connects, and every later frame carries the status bar alone. A page left open across a
- * restart reconnects to the new process as a new session, which sends the new values; a value selected on the page
- * stays selected, as a push replacing the region every tick would clear it.
+ * of messages [seq] it had sent. The settings are fixed for the life of the process, so a page is sent them only in
+ * the frame that answers each of its messages, its first included, and every other frame carries the status bar
+ * alone. A page left open across a restart reconnects to the new process as a new session, which sends the new values;
+ * a value selected on the page stays selected, as a push replacing the region every tick would clear it.
  */
 internal data class SettingsShown(
   val seq: Long,

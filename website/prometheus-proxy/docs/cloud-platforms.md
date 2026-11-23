@@ -235,7 +235,9 @@ proxy's config and a Prometheus config for each of them, and a Compose file that
   Cloud Run service receives traffic on one port, so that port is the agent port (`--port=50051`), served over
   end-to-end HTTP/2 (`--use-http2`) with TLS from Google's front end, and Prometheus runs as a sidecar that scrapes the
   proxy on `localhost:8080`. The front end is a reverse proxy, so turn the
-  [transport filter](advanced.md#nginx-reverse-proxy) off on both sides. The agent's stream ends at the service's
+  [transport filter](advanced.md#nginx-reverse-proxy) off on both sides. Its certificate comes from a public CA, so
+  the agent dials the service's own host on port 443 and trusts a CA bundle in place of `server.crt`, with no authority
+  override, as with [TLS at nginx](advanced.md#tls-at-nginx). The agent's stream ends at the service's
   request timeout, at most 60 minutes, and the agent reconnects. The proxy needs the same single, always-on instance
   as the app. A VM is simpler.
 
@@ -268,7 +270,8 @@ proxy's config and a Prometheus config for each of them, and a Compose file that
   [HTTP/2 for its services](https://docs.digitalocean.com/products/app-platform/how-to/configure-http2/), which gRPC
   needs, but its [limits page](https://docs.digitalocean.com/products/app-platform/details/limits/) says it doesn't
   support gRPC. Its edge is also a reverse proxy, which needs the
-  [transport filter](advanced.md#nginx-reverse-proxy) off on both sides. Try it with your own app before relying on it.
+  [transport filter](advanced.md#nginx-reverse-proxy) off on both sides and, as on Cloud Run, a CA bundle for the agent
+  to trust. Try it with your own app before relying on it.
 - On DigitalOcean Kubernetes, see [Kubernetes](kubernetes.md).
 
 ### Railway

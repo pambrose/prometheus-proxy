@@ -20,10 +20,11 @@ package io.prometheus.common
  * Canonical port numbers shared across the test suite (unit, harness, and Testcontainers specs).
  *
  * The first group mirrors the proxy/agent config defaults and the fixed ports used by the container suite, for tests
- * that assert those defaults or run inside a container; TestPortsTest's port checks skip them, by name (NEVER_BOUND). A
- * spec that binds a port on this machine uses a dedicated one from the groups below instead: a proxy, agent or
- * Prometheus already running here holds the defaults. They live in a neutral test-support object so any test package
- * can reference them without depending on the Testcontainers support harness.
+ * that assert those defaults or run inside a container; TestPortsTest's ephemeral-range and demo-port checks skip
+ * them, by name (NEVER_BOUND), though they must still be distinct. A spec that binds a port on this machine uses a
+ * dedicated one from the groups below instead: a proxy, agent or Prometheus already running here holds the defaults.
+ * They live in a neutral test-support object so any test package can reference them without depending on the
+ * Testcontainers support harness.
  */
 object TestPorts {
   const val PROXY_HTTP_PORT = 8080
@@ -279,8 +280,9 @@ object TestPorts {
   const val STARTER_PROXY_HTTP_PORT = 11400
   const val STARTER_PROXY_AGENT_PORT = 11401
 
-  // The Ktor plugin's PrometheusProxyAgentIntegrationTest (ktor-plugin/, a project of its own, whose tests can't import
-  // this): its proxy's scrape and agent ports, listed here for the same reason; its test repeats the numbers.
+  // The Ktor plugin's PrometheusProxyAgentIntegrationTest (ktor-plugin/, a subproject whose tests can't import the
+  // root's test sources): its proxy's scrape and agent ports, listed here for the same reason; its test repeats the
+  // numbers.
   const val KTOR_PLUGIN_PROXY_HTTP_PORT = 11402
   const val KTOR_PLUGIN_PROXY_AGENT_PORT = 11403
 

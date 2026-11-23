@@ -182,7 +182,7 @@ new `login`, `logout`, and `session` routes sit beside the others.
 
 **Files:** `website/prometheus-proxy/docs/web-dashboard.md` (Login: the page, sessions and their limits, Log out,
 restart signs out, `curl -u` for scripts),
-`configuration/proxy.md`, `README.md`, `llms.txt`, `SECURITY.md`, `CHANGELOG.md`, `RELEASE_NOTES.md` (4.6.1 entries say
+`configuration/proxy.md`, `README.md`, `llms.txt`, `SECURITY.md`, `CHANGELOG.md`, `RELEASE_NOTES.md` (4.7.0 entries say
 "a login page", Basic Auth for scripts), `config/config.conf` and `ConfigVals` (comment), `EnvVars.kt`,
 `ProxyOptions.kt` comments, `demos/basics/config/proxy.conf` comment, `docs/TESTING.md` (DashboardSessionsTest,
 LoginHtmlTest, the rewritten login spec), `docs/DESIGN.md` (the login page's type and layout).

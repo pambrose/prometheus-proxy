@@ -102,7 +102,7 @@ Three more groups are off by default:
 |-------------------------|------------------------------------------------------------------------------|
 | `success`               | Scrape completed successfully                                                |
 | `timed_out`             | Agent did not answer within the proxy's `scrapeRequestTimeoutSecs`           |
-| `upstream_timed_out`    | Agent answered, but its fetch exceeded `agent.scrapeTimeoutSecs`, or Prometheus's shorter scrape timeout (408/504) |
+| `upstream_timed_out`    | Agent answered, but its fetch exceeded `agent.scrapeTimeoutSecs`, or Prometheus's shorter scrape timeout, or the target answered 408 or 504 |
 | `invalid_path`          | No agent has registered the requested path                                   |
 | `missing_path`          | The request had no path (a scrape of `/`)                                    |
 | `agent_disconnected`    | Agent disconnected, was evicted, or was displaced before it answered (503)   |
@@ -110,10 +110,10 @@ Three more groups are off by default:
 | `proxy_in_flight_limit` | In-flight scrapes across agents hit `maxInFlightScrapeRequests`              |
 | `client_cancelled`      | Prometheus hung up before the agent answered                                 |
 | `missing_results`       | Internal error: results object was null                                      |
-| `path_not_found`        | Agent has no registration for the target path (404)                          |
-| `upstream_error`        | Target returned a non-2xx status not covered above, e.g. 5xx                 |
+| `path_not_found`        | The agent doesn't serve the path, or the target answered 404                 |
+| `upstream_error`        | Any other non-2xx from the target, or an unreachable target (503)            |
 | `invalid_response`      | Agent answered, but a chunk or summary failed validation (502)               |
-| `content_too_large`     | Target response exceeded `agent.http.maxContentLengthMBytes` (413)           |
+| `content_too_large`     | Over `agent.http.maxContentLengthMBytes`, or the target answered 413         |
 | `payload_too_large`     | Unzipped content exceeded `maxUnzippedContentSizeMBytes`                     |
 | `invalid_gzip`          | Gzip decompression failed                                                    |
 | `proxy_stopped`         | Proxy is shutting down (503)                                                 |
@@ -128,10 +128,13 @@ Several values come in proxy-side / agent-side pairs, and the distinction determ
   `agent.scrapeTimeoutSecs` (and Prometheus's `scrape_timeout`, which the agent also honors) or fix the slow target,
   rather than touching the proxy timeout.
 - `content_too_large` is the agent's own `maxContentLengthMBytes` limit rejecting the target
-  response; `payload_too_large` is the proxy's unzip limit. Both surface as HTTP 413.
-- `upstream_error` is always the target's own status. When the proxy fails a scrape itself it says why:
-  `agent_disconnected` (the agent went away mid-scrape — look at the agent's connection, not the target),
-  `proxy_stopped`, or `invalid_response`.
+  response, or the target's own 413; `payload_too_large` is the proxy's unzip limit. Both surface as HTTP 413.
+- The target's own non-2xx status passes through, so each agent-side label is the agent's own condition or the
+  target's same status: `path_not_found` for 404, `upstream_timed_out` for 408 or 504, `content_too_large` for 413,
+  and `upstream_error` for the rest. A target the agent couldn't reach, such as a refused connection, is the agent's
+  own 503 `upstream_error`; the agent's `agent_scrape_request_count_total{type="failure"}` tells those apart. When
+  the proxy fails a scrape itself it says why: `agent_disconnected` (the agent went away mid-scrape — look at the
+  agent's connection, not the target), `proxy_stopped`, or `invalid_response`.
 
 ### Histograms
 
@@ -180,7 +183,7 @@ change.
 | `agent_scrape_result_count_total`  | `launch_id`, `type`           | Scrape results sent to proxy                                           |
 | `agent_connect_count_total`        | `launch_id`, `type`           | Connection attempts, by outcome                                        |
 | `agent_disconnects_total`          | `launch_id`                   | Registered connections that ended                                      |
-| `agent_endpoint_advances_total`    | `launch_id`                   | Moves to the next proxy endpoint after a failed connect                |
+| `agent_endpoint_advances_total`    | `launch_id`                   | Moves to the next proxy endpoint after a failed connect or a rejected registration |
 | `agent_heartbeats_total`           | `launch_id`, `outcome`        | Heartbeats sent: `success`, `evicted`, `transient_failure`             |
 | `agent_path_rejections_total`      | `launch_id`, `cause`          | Path registrations the proxy refused, by cause                         |
 | `agent_discovery_reconciles_total` | `launch_id`, `outcome`        | Path discovery reconciles: `success`, `failure`                        |
@@ -210,7 +213,7 @@ activity feed records it. An agent that predates the field counts a dashboard sc
 The `launch_id` label identifies each agent instance: an agent gets a new one each time it starts, and each of
 several agents embedded in one JVM has its own, so you can tell their series apart.
 
-The two `agent_filter_*` counters only create series for paths that have a metric filter configured
+The three `agent_filter_*` counters only create series for paths that have a metric filter configured
 (`agent.filters`), so they are absent entirely unless metric filtering is in use.
 
 ### Histograms
@@ -366,7 +369,7 @@ Both dashboards use template variables:
 | Section             | Panels                                                             | What to Watch                                                                                                                 |
 |---------------------|--------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------|
 | **Overview**        | Agent count, Connected, Not on primary, Total scrape rate, Uptime and Versions tables | Unexpected agent count changes; an agent not connected, or on a backup endpoint                       |
-| **Connections**     | Successful connections, failures and rejections, Connected by agent, Disconnects and endpoint advances, Heartbeats by outcome | Failure spikes indicate proxy or network issues; a rejected connect is the proxy refusing the agent |
+| **Connections**     | Successful connections, failures and rejections, Connected by agent, Disconnects and endpoint advances, Heartbeats by outcome | Failure spikes indicate proxy or network issues; a rejected connect is the proxy refusing the agent; an agent scraped through the proxy can't be read while it can't connect, so watch its job's `up` |
 | **Scrape Activity** | Request rate by agent, Unsuccessful scrapes by agent, Result types, Retries, Filter fail-open | Imbalanced load; unsuccessful scrapes point at a failing target; any `dropped` result is a scrape lost to a closed connection |
 | **Paths & Discovery** | Registered paths by source, Path rejections by cause, Discovery reconciles, Since last discovery | A path the proxy keeps refusing; a discovery file that fails to read                                  |
 | **Latency**         | P50/P90/P99 overall, Queue wait P50/P90/P99, P99 per agent         | Per-agent latency outliers point to slow targets; queue wait climbing means too few `agent.http.maxConcurrentClients`              |

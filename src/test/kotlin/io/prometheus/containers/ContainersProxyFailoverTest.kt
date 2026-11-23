@@ -63,8 +63,7 @@ class ContainersProxyFailoverTest : StringSpec() {
         val proxyB = proxyContainer(network, alias = PROXY_B_ALIAS)
 
         // The endpoint list is config-file-only in this fixture rather than a -D override: dynamic -D
-        // params are parsed with PROPERTIES syntax and cannot carry a HOCON list, and the comma form
-        // reads more clearly here anyway.
+        // params are parsed with PROPERTIES syntax and cannot carry a HOCON list, so the list goes in the file.
         val agentConfig =
           """
           agent {

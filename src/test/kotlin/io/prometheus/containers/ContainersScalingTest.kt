@@ -53,7 +53,8 @@ import kotlin.time.Duration.Companion.seconds
  * scrapable end-to-end through the proxy. Each [ScalingScenario] stands up its own topology:
  *
  *  - **agents × endpoints/agent** — N agents, each registering M unique paths.
- *  - **payload size per endpoint** — `seriesPerEndpoint` filler series, exercising the chunking/gzip path.
+ *  - **payload size per endpoint** — `seriesPerEndpoint` filler series, exercising gzip, and chunking once a
+ *    payload's gzipped size reaches the default 32 KB chunk size (`make scaling-payload`).
  *  - **consolidated fan-out** — K agents sharing one `consolidated` path; one scrape merges across all K.
  *  - **scrape concurrency** — the per-path checks run concurrently or sequentially.
  *
@@ -205,8 +206,8 @@ private const val CONSOLIDATED_PATH = "scale_consolidated"
 // the cgroup limit instead, so the whole fan-out fits the host.
 //
 // The cap must also be large enough that a connected, actively-scraped agent does not GC-thrash: too
-// tight (≈ its working set) and the agent stalls, drops its heartbeat stream, and the proxy evicts its
-// paths — a scrape then 404s. So the budget is a fraction of the *actual* Docker VM, divided across the
+// tight (≈ its working set) and the agent stalls, stops sending heartbeats, and the proxy evicts it as
+// inactive — a scrape of its paths then 404s. So the budget is a fraction of the *actual* Docker VM, divided across the
 // agents and clamped to a workable range: a 40-agent fan-out on an 8 GB VM lands near the floor, the
 // same fan-out on a 16 GB VM gets roomy headroom, and a few-agent / large-payload preset gets ample heap.
 private const val BYTES_PER_MIB = 1024L * 1024L
@@ -254,10 +255,7 @@ private fun boolEnv(
   default: Boolean,
 ) = System.getenv(name)?.toBooleanStrictOrNull() ?: default
 
-/**
- * A single tuned scenario when any `SCALE_*` override is present; otherwise a small CI-safe default table that
- * touches each dimension (baseline, agents × endpoints, payload size, consolidated fan-out).
- */
+/** The `SCALE_*` variables; any one set selects the single tuned scenario. */
 private val scaleEnvVars =
   [
     "SCALE_AGENTS",
@@ -268,6 +266,10 @@ private val scaleEnvVars =
     "SCALE_CONCURRENCY_LIMIT",
   ]
 
+/**
+ * A single tuned scenario when any `SCALE_*` override is present; otherwise a small CI-safe default table that
+ * touches each dimension (baseline, agents × endpoints, payload size, consolidated fan-out).
+ */
 private val scalingScenarios: List<ScalingScenario> =
   if (scaleEnvVars.any { System.getenv(it) != null })
     [

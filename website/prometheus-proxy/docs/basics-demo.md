@@ -58,7 +58,7 @@ Clone the repository at the latest release, then run the demo's commands from it
 its targets:
 
 ```bash
-git clone -c advice.detachedHead=false --depth 1 --branch 4.6.1 https://github.com/pambrose/prometheus-proxy.git
+git clone -c advice.detachedHead=false --depth 1 --branch 4.7.0 https://github.com/pambrose/prometheus-proxy.git
 cd prometheus-proxy/demos/basics
 make up      # pulls the images, starts everything, prints the URLs
 make tour    # walks through every scenario below, pausing before each step
@@ -123,8 +123,8 @@ proxy to Prometheus, so the proxy monitors itself the same way it serves everyth
 </figure>
 
 The Paths view lists every path with the agent serving it, its target, and how its last scrape went. `/shipping_metrics`
-shows `agent-west-2 +1`, since two agents serve it. The button after a path copies its URL on the proxy, the one
-to curl, and the one after a target copies the target's URL.
+shows one of the west agents, followed by `+1`, since two agents serve it. The button after a path copies its URL on
+the proxy, the one to curl, and the one after a target copies the target's URL.
 
 ### Each agent's own dashboard
 
@@ -245,7 +245,7 @@ shows it, searched here for the contractor's agent:
 The command also prints the proxy's log line:
 
 ```
-WARN  [ProxyServiceImpl.kt:335] - Agent identity 'contractor' denied registration of path /payments_metrics
+WARN  [ProxyServiceImpl.kt:360] - Agent identity 'contractor' denied registration of path /payments_metrics
 ```
 
 Payments keeps coming from agent-east, untouched. With a shared token, the newer agent would have taken the path
@@ -298,10 +298,10 @@ holds nothing from the old one, so the proxy's dashboard starts its histories ov
 Someone deployed agent-east's config twice. The copy registers the same paths with the same identity, and the newer
 registration takes each one: agent-east-copy serves all six, and agent-east stays connected with none. The two
 settle; agent-east waits rather than taking the paths back, which used to make two such agents swap them every few
-seconds. The command prints the proxy's log line, which names both agents and gives the fix: `agent.consolidated =
-true` on each, if both should serve the paths. The proxy told agent-east, whose own dashboard lists its six paths as
-`retrying`, each taken over by agent-east-copy. `./demo.sh duplicate-agent-stop` removes the copy, and agent-east,
-told that no agent serves its paths any more, takes them back within seconds, with no restart.
+seconds. The command prints the proxy's log line, which names both agents by agentId and gives the fix:
+`agent.consolidated = true` on each, if both should serve the paths. The proxy told agent-east, whose own dashboard
+lists its six paths as `retrying`, each taken over by agent-east-copy. `./demo.sh duplicate-agent-stop` removes the
+copy, and agent-east, told that no agent serves its paths any more, takes them back within seconds, with no restart.
 
 ### A login for the dashboard
 

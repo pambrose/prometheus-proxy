@@ -45,9 +45,10 @@ import org.testcontainers.containers.wait.strategy.Wait
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * Forces the agent's chunked + gzipped scrape path with a large (~150 KB) synthetic exposition and verifies
+ * Forces the agent's chunked + gzipped scrape path with a large (~220 KB) synthetic exposition and verifies
  * the proxy reassembles it intact. The agent's `CHUNK_CONTENT_SIZE_KBS=1` makes even modest payloads chunk,
- * and a low `MIN_GZIP_SIZE_BYTES` forces gzip. Chunking is otherwise only unit-tested.
+ * and a low `MIN_GZIP_SIZE_BYTES` forces gzip. The harness specs chunk in-process (`chunkedScrapeTest`); this
+ * runs it through the packaged images.
  */
 class ContainersLargePayloadTest : StringSpec() {
   init {
