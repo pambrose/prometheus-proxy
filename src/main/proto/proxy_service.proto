@@ -39,9 +39,13 @@ message RegisterAgentResponse {
   // name can never be reused with different semantics.
   reserved 4;
   reserved "proxy_url";
-  // Whether the proxy ignores a keepalive on writeResponsesToProxy and writeChunkedResponsesToProxy. The agent sends
-  // one after a while with no result only to a proxy that sets it, as a proxy predating it would take one for a result.
-  bool stream_keepalives = 5;
+  // 5 was stream_keepalives, an unreleased flag that stream_keepalive_millis replaced; reserved so neither is misread.
+  reserved 5;
+  reserved "stream_keepalives";
+  // How long the agent's writeResponsesToProxy and writeChunkedResponsesToProxy go without a result before it sends a
+  // keepalive, in milliseconds (proxy.internal.streamKeepAliveSecs), which the proxy skips. 0, as from a proxy with
+  // keepalives off or one predating them, which would take a keepalive for a result, means none.
+  int64 stream_keepalive_millis = 6;
 }
 
 message RegisterPathRequest {
@@ -166,7 +170,7 @@ message ScrapeResponse {
     string content_as_text = 9;
     bytes content_as_zipped = 10;
   }
-  // No result: the agent keeping the stream open (see RegisterAgentResponse.stream_keepalives).
+  // No result: the agent keeping the stream open (see RegisterAgentResponse.stream_keepalive_millis).
   bool keepalive = 11;
 }
 
@@ -177,7 +181,7 @@ message ChunkedScrapeResponse {
     ChunkData chunk = 2;
     SummaryData summary = 3;
   }
-  // None of the three: the agent keeping the stream open (see RegisterAgentResponse.stream_keepalives).
+  // None of the three: the agent keeping the stream open (see RegisterAgentResponse.stream_keepalive_millis).
   bool keepalive = 4;
 }
 

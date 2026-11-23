@@ -201,6 +201,12 @@ internal object ProxySettings {
           Setting("Max connection idle", grpcDefault(options.maxConnectionIdleSecs, "no limit")),
           Setting("Max connection age", grpcDefault(options.maxConnectionAgeSecs, "no limit")),
           Setting("Connection age grace", grpcDefault(options.maxConnectionAgeGraceSecs, "no limit")),
+          Setting(
+            "Stream keepalive",
+            options.configVals.proxy.internal.streamKeepAliveSecs.let { seconds ->
+              onOff(seconds > 0) { "after ${secs(seconds)} without a message" }
+            },
+          ),
         ),
     )
 

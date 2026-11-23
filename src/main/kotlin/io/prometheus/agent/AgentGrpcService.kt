@@ -45,7 +45,6 @@ import io.prometheus.common.Utils.failureKey
 import io.prometheus.common.Utils.logStreamFailure
 import io.prometheus.common.Utils.HostPort
 import io.prometheus.common.Utils.parseEndpointList
-import io.prometheus.common.GrpcConstants.STREAM_KEEPALIVE
 import io.prometheus.common.receiveCatchingWithin
 import io.prometheus.common.Utils.sanitizeUrl
 import io.prometheus.grpc.ChunkedScrapeResponse
@@ -87,6 +86,7 @@ import java.util.zip.CRC32
 import kotlin.concurrent.atomics.plusAssign
 import kotlin.concurrent.withLock
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.TimeMark
 import kotlin.time.DurationUnit
@@ -166,15 +166,15 @@ internal class AgentGrpcService(
   private val options: AgentOptions,
   private val inProcessServerName: String,
   private val timeSource: TimeSource = TimeSource.Monotonic,
-  // How long a response stream goes without sending before it sends a keepalive; see streamOf.
-  private val streamKeepalive: Duration = STREAM_KEEPALIVE,
 ) {
   private val grpcLock = ReentrantLock()
   private var grpcStarted by atomicBoolean(false)
 
-  // Whether the proxy this connection registered with ignores a keepalive on the response streams, as its answer to
-  // registerAgent says; one predating them would take it for a result.
-  private var proxyTakesKeepalives by atomicBoolean(false)
+  // How long the response streams go without a result before they send a keepalive, as the proxy this connection
+  // registered with says in its answer to registerAgent. INFINITE when it gives 0: keepalives off, or a proxy predating
+  // them, which would take one for a result.
+  @Volatile
+  private var responseKeepalive = Duration.INFINITE
 
   // Latched by shutDownChannelPermanently() and never cleared: the agent is stopping for good, so no
   // further channel may be created. Read and written only under grpcLock, which is what makes the
@@ -520,7 +520,8 @@ internal class AgentGrpcService(
         agent.markMsgSent()
         if (!response.valid)
           throw RequestFailureException.fromProxy("registerAgent", response.reason)
-        proxyTakesKeepalives = response.streamKeepalives
+        responseKeepalive =
+          if (response.streamKeepaliveMillis > 0) response.streamKeepaliveMillis.milliseconds else Duration.INFINITE
       }
     initialConnectionLatch.countDown()
   }
@@ -772,20 +773,18 @@ internal class AgentGrpcService(
     }
   }
 
-  // The messages of [channel], for one of the response streams, and, to a proxy that takes them, [keepalive] after
-  // streamKeepalive with none (see STREAM_KEEPALIVE). Consumes [channel] as consumeAsFlow does: once the flow ends, by
-  // its end or a failure, what's left in it is dropped. A message that comes as a wait ends isn't lost (see
-  // receiveCatchingWithin).
+  // The messages of [channel], for one of the response streams, and [keepalive] after responseKeepalive with none.
+  // Consumes [channel] as consumeAsFlow does: once the flow ends, by its end or a failure, what's left in it is
+  // dropped. A message that comes as a wait ends isn't lost (see receiveCatchingWithin).
   private fun <T> streamOf(
     channel: ReceiveChannel<Outgoing<T>>,
     agent: Agent,
     keepalive: T,
-  ): Flow<T> {
-    val idle = if (proxyTakesKeepalives) streamKeepalive else Duration.INFINITE
-    return flow {
+  ): Flow<T> =
+    flow {
       channel.consume {
         while (true) {
-          val next = channel.receiveCatchingWithin(idle)
+          val next = channel.receiveCatchingWithin(responseKeepalive)
           when {
             next == null -> emit(keepalive)
             next.isClosed -> next.exceptionOrNull()?.let { throw it } ?: break
@@ -794,7 +793,6 @@ internal class AgentGrpcService(
         }
       }
     }
-  }
 
   suspend fun writeResponsesToProxyUntilDisconnected(
     agent: Agent,

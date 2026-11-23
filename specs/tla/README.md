@@ -2,12 +2,14 @@
 
 Two independent specs: `ProxyRegistry.tla` for the proxy side and `AgentFailover.tla` for the agent's failover.
 
-`make tla-checks` (from the repo root) model-checks both with their quick configs in under a minute, and fails if
-either finds a violation; CI's `tla` job runs it on every pull request and push to `master`. It downloads the TLA+
-tools jar (pinned in the Makefile's `TLA_VERSION`) into this directory, and refuses a download whose SHA-256 doesn't
-match `TLA_SHA256`; the jar is git-ignored. It checks the jar on every run, so after a version bump the old one is
-replaced rather than run. To run a config by hand, or the long `ProxyRegistrySafety.cfg`, use the commands below
-from this directory.
+`make tla-checks` (from the repo root) model-checks both with their quick configs in about a minute, and fails if either
+finds a violation. `make tla-checks-full` adds the slower `ProxyRegistryReconnect.cfg`, about a minute more here and
+several in CI. CI's `tla` job runs the full set when a file in this directory or the pinned TLA+ tools change, as TLC
+reads nothing else, and the quick configs otherwise, on every pull request and push to `master`. Either downloads the
+TLA+ tools jar (pinned in the Makefile's `TLA_VERSION`) into this directory, and refuses a download whose SHA-256
+doesn't match `TLA_SHA256`; the jar is git-ignored. It checks the jar on every run, so after a version bump the old one
+is replaced rather than run. To run a config by hand, or the long `ProxyRegistrySafety.cfg`, use the commands below from
+this directory.
 
 ## ProxyRegistry
 
@@ -55,8 +57,11 @@ With `tla2tools.jar` in this directory (`make tla-checks` fetches it, or downloa
 # Safety and liveness, 2 connections (under a minute)
 java -cp tla2tools.jar tlc2.TLC -workers auto -deadlock -config ProxyRegistry.cfg ProxyRegistry.tla
 
-# Path notices and reclaims, 3 exclusive connections of one identity on one path (under a minute)
+# Path notices and reclaims, 2 connections of one identity on one path (seconds)
 java -cp tla2tools.jar tlc2.TLC -workers auto -deadlock -config ProxyRegistryReclaim.cfg ProxyRegistry.tla
+
+# The same with a reconnect, 3 exclusive connections (about a minute; make tla-checks-full, not CI)
+java -cp tla2tools.jar tlc2.TLC -workers auto -deadlock -config ProxyRegistryReconnect.cfg ProxyRegistry.tla
 
 # Safety only, 3 connections, 2 paths, 2 scrapes (hours; not yet run to completion)
 java -cp tla2tools.jar tlc2.TLC -workers auto -deadlock -config ProxyRegistrySafety.cfg ProxyRegistry.tla
@@ -83,7 +88,8 @@ One connection, the `Intruder`, plays the caller: connections are interchangeabl
 identities, so letting each connection intrude only doubles the states.
 
 `UseReclaim` turns path notices and reclaims on; `ProxyRegistry.cfg` and `ProxyRegistrySafety.cfg` leave it off, as
-for agents and proxies predating them, so their state spaces are unchanged, and `ProxyRegistryReclaim.cfg` turns it on.
+for agents and proxies predating them, so their state spaces are unchanged, and `ProxyRegistryReclaim.cfg` and
+`ProxyRegistryReconnect.cfg` turn it on.
 `CheckHolder = FALSE` drops the proxy's refusal of a reclaim while a live connection of another launch holds the path,
 as a proxy predating the flag ignores it: TLC then reports `ReclaimNeverDisplaces` violated by a displaced connection
 taking the path back from the one that took it.
@@ -91,9 +97,10 @@ taking the path back from the one that took it.
 The paths an agent was told were taken over are its launch's, not one connection's, so a reconnect, a connection of the
 same launch, keeps them. `KeepTold = FALSE` has the agent forget them as it connects, as it did before: TLC then
 reports `ReconnectReclaims` violated by a displaced agent reconnecting and registering the path the usual way.
-`ProxyRegistryReclaim.cfg` has three connections, so one agent can reconnect while an agent of another launch holds
-the path, and sets `Modes = {FALSE}`, leaving out consolidated connections, which are never told and never reclaim:
-with them it took several times as long. The other configs set `Modes = {TRUE, FALSE}`.
+`ProxyRegistryReconnect.cfg` has three connections, so one agent can reconnect while an agent of another launch
+holds the path; with two, as in `ProxyRegistryReclaim.cfg`, a reconnect never meets an agent of another launch, so
+`ReconnectReclaims` holds there trivially. It sets `Modes = {FALSE}`, leaving out consolidated connections, which are
+never told and never reclaim: with them it took several times as long. The other configs set `Modes = {TRUE, FALSE}`.
 
 ## AgentFailover
 

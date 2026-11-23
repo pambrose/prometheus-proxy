@@ -27,8 +27,10 @@ agent auth is off; see [Transport Filter](configuration/proxy.md#transport-filte
 
     An agent's streams carry nothing between scrapes, and its connection ends when any of them closes. Nginx closes a
     stream that's quiet for 60 seconds by default. A current agent and proxy keep each of their streams open with a
-    keepalive after 30 seconds of quiet, so nginx's defaults are enough for them. Each side sends keepalives only once
-    the other says it takes them, so with an agent or a proxy from 4.6.1 or earlier on either end, an agent that isn't
+    keepalive after 30 seconds of quiet, so nginx's defaults are enough for them. The proxy sets the interval for both
+    directions, `proxy.internal.streamKeepAliveSecs`: keep it under the reverse proxy's idle timeout, or set it to 0 to
+    turn keepalives off. Each side sends keepalives only once the other says it takes them, so with an agent or a proxy
+    from 4.6.1 or earlier on either end, an agent that isn't
     scraped for a minute is cut off, reconnects, and is briefly without its paths, which can fail a scrape. For such a
     pair, raise both timeouts, in the `server` or `location` block that passes to the proxy:
 
@@ -174,7 +176,8 @@ See the [gRPC keepalive guide](https://grpc.io/docs/guides/keepalive/) for detai
 
 These settings send HTTP/2 PINGs, which check the connection but carry no data on a stream, so they don't keep a
 reverse proxy from closing a quiet stream: nginx answers a PING without resetting a stream's timeout. The agent and
-the proxy send keepalive messages on their streams for that; see [Nginx Reverse Proxy](#nginx-reverse-proxy).
+the proxy send keepalive messages on their streams for that, every `proxy.internal.streamKeepAliveSecs`; see
+[Nginx Reverse Proxy](#nginx-reverse-proxy).
 
 ## Stale Agent Cleanup
 

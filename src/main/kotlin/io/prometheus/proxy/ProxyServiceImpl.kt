@@ -23,7 +23,6 @@ import io.grpc.Status
 import io.grpc.StatusException
 import io.prometheus.Proxy
 import io.prometheus.common.DefaultObjects.EMPTY_INSTANCE
-import io.prometheus.common.GrpcConstants.STREAM_KEEPALIVE
 import io.prometheus.common.MetricBuilders.rejectionCauseLabel
 import io.prometheus.common.ScrapeResults.Companion.toScrapeResults
 import io.prometheus.common.ScrapeTracing.Companion.TAG_QUEUE_WAIT
@@ -82,10 +81,12 @@ import kotlin.time.DurationUnit
  */
 internal class ProxyServiceImpl(
   private val proxy: Proxy,
-  // How long a stream to the agent goes without sending before it sends a keepalive; see readRequestsFromProxy and
-  // readPathNoticesFromProxy.
-  private val streamKeepalive: Duration = STREAM_KEEPALIVE,
 ) : ProxyServiceGrpcKt.ProxyServiceCoroutineImplBase() {
+  // How long a stream between the proxy and an agent goes without a message before a keepalive, zero for none (see
+  // Proxy.streamKeepalive), and the longest the streams to an agent wait for something to send: forever when off.
+  private val streamKeepalive = proxy.streamKeepalive
+  private val keepaliveIdle = if (streamKeepalive.isPositive()) streamKeepalive else Duration.INFINITE
+
   override suspend fun connectAgent(request: Empty): Empty {
     if (proxy.options.transportFilterDisabled) {
       val msg = "Agent (false) and Proxy (true) do not have matching transportFilterDisabled config values"
@@ -226,7 +227,7 @@ internal class ProxyServiceImpl(
       valid = isValid
       agentId = request.agentId
       // writeResponsesToProxy and writeChunkedResponsesToProxy skip them.
-      streamKeepalives = true
+      streamKeepaliveMillis = streamKeepalive.inWholeMilliseconds
       if (!isValid) {
         // Smart-cast to non-null: isValid == false implies failureReason != null.
         reason = failureReason
@@ -450,13 +451,13 @@ internal class ProxyServiceImpl(
   // Sends the agent the notices about paths another agent took from it, until the proxy stops or the context is
   // invalidated; see ProxyPathManager.takeOverPath. Unlike readRequestsFromProxy, its end removes nothing, even with
   // the transport filter disabled: the scrape request stream, which every agent reads, does that. Notices are rare, so
-  // it sends a notice with no path, which the agent ignores, after streamKeepalive with nothing else (see
-  // STREAM_KEEPALIVE). Every agent that reads the stream ignores one, so no flag is needed.
+  // it sends a notice with no path, which the agent ignores, after keepaliveIdle with nothing else (see
+  // Proxy.streamKeepalive). Every agent that reads the stream ignores one, so no flag is needed.
   override fun readPathNoticesFromProxy(request: AgentInfo): Flow<PathNotice> =
     flow {
       val agentContext = readableAgentContext(request.agentId, "readPathNoticesFromProxy")
       while (proxy.isStartingOrRunning) {
-        val notices = agentContext.awaitPathNotices(streamKeepalive) ?: break
+        val notices = agentContext.awaitPathNotices(keepaliveIdle) ?: break
         if (notices.isEmpty()) emit(KEEPALIVE_NOTICE) else notices.forEach { emit(it) }
       }
     }
@@ -488,10 +489,10 @@ internal class ProxyServiceImpl(
 
   // Delivers [agentContext]'s queued scrape requests until the proxy stops or the context is invalidated, skipping
   // the ones no longer awaited. Starting counts: see Proxy.isStartingOrRunning. An agent that takes them gets a
-  // keepalive after streamKeepalive with no request (see STREAM_KEEPALIVE), and never one that doesn't, whatever the
-  // wait returns.
+  // keepalive after keepaliveIdle with no request (see Proxy.streamKeepalive), and never one that doesn't, whatever
+  // the wait returns.
   private suspend fun FlowCollector<ScrapeRequest>.emitScrapeRequests(agentContext: AgentContext) {
-    val idle = if (agentContext.acceptsStreamKeepalives) streamKeepalive else Duration.INFINITE
+    val idle = if (agentContext.acceptsStreamKeepalives) keepaliveIdle else Duration.INFINITE
     while (proxy.isStartingOrRunning && agentContext.isValid()) {
       val wrapper = agentContext.readScrapeRequest(idle)
       when {

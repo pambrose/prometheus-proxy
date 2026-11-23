@@ -1,6 +1,6 @@
 .PHONY: default help stop clean clean-all stubs build tibuild refresh jars \
         tests medium-tests xxl-tests nh-tests ip-tests netty-tests tls-tests \
-        lincheck-tests tla-checks check-rules helm-lint zizmor codescene \
+        lincheck-tests tla-checks tla-checks-full check-rules helm-lint zizmor codescene \
         container-tests scaling-tests all-tests ci ci-build consumer-check spring-boot-demo-check embedded-demo-check \
         demos-up demos-up-local demos-down \
         _publish-consumer-check regen-certs \
@@ -250,10 +250,13 @@ _tla-tools:
 		mv $(TLA_JAR).tmp $(TLA_JAR); \
 	fi
 
-tla-checks: _tla-tools  ## Model-check the TLA+ specs in specs/tla (the quick configs; fetches the pinned TLA+ tools if needed)
+tla-checks: _tla-tools  ## Model-check the TLA+ specs in specs/tla with their quick configs, as CI does (fetches the pinned TLA+ tools if needed)
 	$(TLC) -metadir $(CURDIR)/build/tla/AgentFailover -config AgentFailover.cfg AgentFailover.tla
 	$(TLC) -metadir $(CURDIR)/build/tla/ProxyRegistry -config ProxyRegistry.cfg ProxyRegistry.tla
 	$(TLC) -metadir $(CURDIR)/build/tla/ProxyRegistryReclaim -config ProxyRegistryReclaim.cfg ProxyRegistry.tla
+
+tla-checks-full: tla-checks  ## The quick TLA+ checks and the slower reconnect config (see specs/tla/README.md)
+	$(TLC) -metadir $(CURDIR)/build/tla/ProxyRegistryReconnect -config ProxyRegistryReconnect.cfg ProxyRegistry.tla
 
 # Each demo's Prometheus config is checked as the demo's Prometheus sees it, with the rule files the demo mounts where
 # its rule_files glob looks, so promtool also checks the demo's alerting rules and that the config loads them. The
@@ -329,7 +332,7 @@ container-tests:  ## Run the Testcontainers tests, building the fat JARs first (
 	echo "Using DOCKER_HOST=$$DOCKER_HOST"; \
 	DOCKER_HOST="$$DOCKER_HOST" RUN_CONTAINER_TESTS=true $(GRADLE) test --tests "io.prometheus.containers.*"
 
-all-tests: tests lincheck-tests container-tests  ## Run the full suite: all tests + the container tests
+all-tests: tests lincheck-tests container-tests tla-checks-full ## Run the full suite: all tests + the container tests
 
 # Runs CI's jobs one after another on the working tree, uncommitted changes included. A failed job doesn't stop the
 # rest, as in CI, where they run in parallel; the failed ones are listed at the end. The Codecov upload is left out, and
