@@ -1,0 +1,37 @@
+# Prometheus config for the worker demo (demos/worker/docker/compose.yml). It names no oven: one job discovers every
+# path the ovens' agents register through the proxy's HTTP service discovery endpoint, and scrapes each through the
+# proxy, so an oven added or stopped is a target added or gone within one refresh, with no change here. `make
+# check-rules` validates this file with promtool.
+
+global:
+  # Short intervals so Grafana moves visibly during the tour.
+  scrape_interval: 5s
+  scrape_timeout: 4s
+  evaluation_interval: 5s
+
+# The website's Worker Demo page shows the ovens' job, from here to the end marker.
+# --8<-- [start:discovery]
+scrape_configs:
+  # Each oven registers two paths: its metrics, at /oven_<container id>_metrics, which this job scrapes, and its
+  # agent's own, at /oven_<container id>_agent_metrics, which the relabeling below gives a job of their own.
+  - job_name: oven
+    http_sd_configs:
+      - url: http://proxy:8080/discovery
+        refresh_interval: 5s
+    relabel_configs:
+      # The instance is the oven, by its agent's name, oven-<container id>, rather than the proxy every target shares.
+      - source_labels: [agentName]
+        target_label: instance
+      # The agent's own metrics, which the project's Prometheus Agents dashboard reads by job.
+      - source_labels: [__metrics_path__]
+        regex: /oven_.+_agent_metrics
+        target_label: job
+        replacement: oven-agent
+      - action: labeldrop
+        regex: agentName|hostName
+  # --8<-- [end:discovery]
+
+  # The proxy's own metrics.
+  - job_name: prometheus-proxy
+    static_configs:
+      - targets: [ 'proxy:8082' ]

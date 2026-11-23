@@ -39,6 +39,31 @@
           </set>
         </option>
       </GradleProjectSettings>
+      <GradleProjectSettings>
+        <compositeConfiguration>
+          <compositeBuild compositeDefinitionSource="SCRIPT">
+            <builds>
+              <build path="$PROJECT_DIR$" name="prometheus-proxy">
+                <projects>
+                  <project path="$PROJECT_DIR$" />
+                  <project path="$PROJECT_DIR$/ktor-plugin" />
+                  <project path="$PROJECT_DIR$/spring-boot-starter" />
+                </projects>
+              </build>
+            </builds>
+          </compositeBuild>
+        </compositeConfiguration>
+        <option name="externalProjectPath" value="$PROJECT_DIR$/demos/worker/app" />
+        <option name="gradleJvm" value="17" />
+        <option name="modules">
+          <set>
+            <option value="$PROJECT_DIR$" />
+            <option value="$PROJECT_DIR$/demos/worker/app" />
+            <option value="$PROJECT_DIR$/ktor-plugin" />
+            <option value="$PROJECT_DIR$/spring-boot-starter" />
+          </set>
+        </option>
+      </GradleProjectSettings>
     </option>
   </component>
 </project>

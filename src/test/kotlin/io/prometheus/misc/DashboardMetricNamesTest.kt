@@ -193,6 +193,7 @@ class DashboardMetricNamesTest : StringSpec() {
       "demos/network/grafana/dashboards/network-overview.json" to ::dashboardExprs,
       "demos/network/prometheus/network-alerts.yml" to ::ruleExprs,
       "demos/embedded/grafana/dashboards/coffee-shop.json" to ::dashboardExprs,
+      "demos/worker/grafana/dashboards/bakery.json" to ::dashboardExprs,
     )
 
   init {

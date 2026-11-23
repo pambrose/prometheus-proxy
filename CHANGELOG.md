@@ -124,6 +124,13 @@ All notable changes to this project are documented in this file.
   (`nginx-shutdown-timeout`), changes the proxy's keepalive interval (`keepalive`), and fronts the dashboard with
   nginx, without and with what its WebSocket needs (`dashboard-stock`, `dashboard-upgrade`, `dashboard-host`). Its
   ports are 500 above the basics demo's
+- A worker demo, in `demos/worker`: a bakery whose ovens are plain Kotlin programs with no framework or HTTP server,
+  taking orders from a Redis queue, each with the agent embedded in its `main`, beside the proxy, Prometheus, and
+  Grafana. Each oven is a Prometheus target of its own through the proxy's service discovery. `./demo.sh` shows an
+  oven listening on no port (`sockets`), its metrics and its agent's at their own paths (`metrics`), a rush (`rush`)
+  that more ovens clear (`scale`), and ovens with no proxy, a bad certificate, or a wrong token that bake all the same
+  (`no-proxy`, `bad-cert`, `wrong-token`). `make worker-demo-check`, in CI's `consumer-check` job, builds it against
+  the checkout. Its ports are 600 above the basics demo's
 - The proxy's and the agent's dashboards can require a login: set `proxy.dashboard.password` or
   `agent.dashboard.password` (`DASHBOARD_PASSWORD`) and a browser gets a login page, styled after Grafana's, with the
   logo and "Prometheus Proxy" over the dashboard's name, and the username `proxy.dashboard.username` or
