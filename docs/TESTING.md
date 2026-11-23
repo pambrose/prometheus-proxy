@@ -46,7 +46,7 @@ make netty-tests      # Netty integration tests only
 make tls-tests        # TLS integration tests only
 make lincheck-tests   # Lincheck concurrency tests only (left out of every other target but all-tests)
 make tla-checks       # Model-check the TLA+ specs in specs/tla with their quick configs, as CI does
-make tla-checks-full  # The quick TLA+ checks plus the slower reconnect config, which CI leaves out
+make tla-checks-full  # The quick TLA+ checks plus the slower reconnect config
 make container-tests  # Full Testcontainers end-to-end suite (needs Docker)
 make scaling-tests    # Parameter-driven scaling container test only (needs Docker)
 make all-tests        # Full suite: `make tests` + `make lincheck-tests` + `make container-tests`

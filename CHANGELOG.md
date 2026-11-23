@@ -90,9 +90,9 @@ All notable changes to this project are documented in this file.
   Settings view shows the rate
 - The agent and the proxy keep their gRPC streams open with a keepalive after 30 seconds without a message, so a
   reverse proxy's idle timeout, such as nginx's default 60 seconds, no longer cuts off an agent that isn't scraped for a
-  minute and briefly drops its paths. The new `proxy.internal.streamKeepaliveSecs` sets the interval for both
-  directions, as the proxy tells the agent at registration; 0 turns keepalives off. Each sends them only to the other
-  once it says it takes them, so with an agent or a proxy from 4.6.1 or earlier, nginx's timeouts still need raising
+  minute and briefly drops its paths. The new `proxy.internal.streamKeepAliveSecs` sets the interval for both
+  directions; 0 turns keepalives off. Each sends them only to the other once it says it takes them, so with an agent
+  or a proxy from 4.6.1 or earlier, nginx's timeouts still need raising
 
 ### Bug Fixes
 

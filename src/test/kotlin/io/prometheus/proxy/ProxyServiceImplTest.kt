@@ -1043,7 +1043,7 @@ class ProxyServiceImplTest : StringSpec() {
       every { proxy.agentContextManager.getAgentContext(context.agentId) } returns context
 
       val first =
-        ProxyServiceImpl(proxy, streamKeepalive = 50.milliseconds)
+        ProxyServiceImpl(proxy.also { every { it.streamKeepalive } returns 50.milliseconds })
           .readPathNoticesFromProxy(agentInfo { agentId = context.agentId })
           .first()
 
@@ -1058,7 +1058,7 @@ class ProxyServiceImplTest : StringSpec() {
       context.assignProperties(registerAgentRequest { streamKeepalives = true })
 
       val first =
-        ProxyServiceImpl(proxy, streamKeepalive = 50.milliseconds)
+        ProxyServiceImpl(proxy.also { every { it.streamKeepalive } returns 50.milliseconds })
           .readRequestsFromProxy(agentInfo { agentId = context.agentId })
           .first()
 
@@ -1071,7 +1071,7 @@ class ProxyServiceImplTest : StringSpec() {
 
       val first =
         withTimeoutOrNull(300.milliseconds) {
-          ProxyServiceImpl(proxy, streamKeepalive = 50.milliseconds)
+          ProxyServiceImpl(proxy.also { every { it.streamKeepalive } returns 50.milliseconds })
             .readRequestsFromProxy(agentInfo { agentId = context.agentId })
             .first()
         }
@@ -1099,9 +1099,8 @@ class ProxyServiceImplTest : StringSpec() {
       warnings.shouldBeEmpty()
     }
 
-    // So the agent sends keepalives on its response streams only to a proxy that ignores them.
     // The agent sends its keepalives as often as the proxy says, so whoever runs the reverse proxy in front of the
-    // proxy tunes both directions with proxy.internal.streamKeepaliveSecs.
+    // proxy tunes both directions with proxy.internal.streamKeepAliveSecs.
     "registerAgent should tell the agent how often to send keepalives, as the proxy is configured" {
       val (proxy, context) = proxyWithRealAgentContext()
       every { proxy.streamKeepalive } returns 20.seconds
@@ -1112,12 +1111,12 @@ class ProxyServiceImplTest : StringSpec() {
       response.streamKeepaliveMillis shouldBe 20_000L
     }
 
-    // proxy.internal.streamKeepaliveSecs = 0: nothing on either stream to the agent, and the agent is told to send
+    // proxy.internal.streamKeepAliveSecs = 0: nothing on either stream to the agent, and the agent is told to send
     // none.
     "with keepalives off, the proxy should send none and tell the agent to send none" {
       val (proxy, context) = proxyWithRealAgentContext()
       context.assignProperties(registerAgentRequest { streamKeepalives = true })
-      val service = ProxyServiceImpl(proxy, streamKeepalive = Duration.ZERO)
+      val service = ProxyServiceImpl(proxy.also { every { it.streamKeepalive } returns Duration.ZERO })
 
       service.registerAgent(registerAgentRequest { agentId = context.agentId }).streamKeepaliveMillis shouldBe 0L
       val agentInfo = agentInfo { agentId = context.agentId }

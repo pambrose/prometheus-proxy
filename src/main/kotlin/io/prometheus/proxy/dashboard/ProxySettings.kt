@@ -201,19 +201,14 @@ internal object ProxySettings {
           Setting("Max connection idle", grpcDefault(options.maxConnectionIdleSecs, "no limit")),
           Setting("Max connection age", grpcDefault(options.maxConnectionAgeSecs, "no limit")),
           Setting("Connection age grace", grpcDefault(options.maxConnectionAgeGraceSecs, "no limit")),
-          Setting("Stream keepalive", streamKeepalive(options.configVals.proxy.internal.streamKeepaliveSecs)),
+          Setting(
+            "Stream keepalive",
+            options.configVals.proxy.internal.streamKeepAliveSecs.let { seconds ->
+              onOff(seconds > 0) { "after ${secs(seconds)} without a message" }
+            },
+          ),
         ),
     )
-
-  // How long a stream to or from an agent goes without a message before a keepalive, both ways (see
-  // Proxy.streamKeepalive).
-  private fun streamKeepalive(seconds: Int): String =
-    if (seconds ==
-    0
-  )
-    "off"
-    else
-    "after ${secs(seconds)} without a message"
 
   // The HTTP service discovery endpoint Prometheus can read the paths from.
   private fun serviceDiscovery(

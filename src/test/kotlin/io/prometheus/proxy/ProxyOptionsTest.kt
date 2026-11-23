@@ -643,12 +643,12 @@ class ProxyOptionsTest : StringSpec() {
 
     // A reverse proxy whose idle timeout is at or under the default needs a shorter interval; 0 turns keepalives off.
     "the stream keepalive should default to 30 seconds, accept 0 for off, and reject a negative value" {
-      proxyOptions([]).configVals.proxy.internal.streamKeepaliveSecs shouldBe 30
-      val off = proxyOptions(["-Dproxy.internal.streamKeepaliveSecs=0"]).configVals.proxy.internal
-      off.streamKeepaliveSecs shouldBe 0
+      proxyOptions([]).configVals.proxy.internal.streamKeepAliveSecs shouldBe 30
+      val off = proxyOptions(["-Dproxy.internal.streamKeepAliveSecs=0"]).configVals.proxy.internal
+      off.streamKeepAliveSecs shouldBe 0
       val exception =
-        shouldThrow<IllegalArgumentException> { proxyOptions(["-Dproxy.internal.streamKeepaliveSecs=-1"]) }
-      exception.message shouldContain "streamKeepaliveSecs"
+        shouldThrow<IllegalArgumentException> { proxyOptions(["-Dproxy.internal.streamKeepAliveSecs=-1"]) }
+      exception.message shouldContain "streamKeepAliveSecs"
     }
 
     // A blank bind address would fail only when the scrape server starts, with an opaque Ktor error.

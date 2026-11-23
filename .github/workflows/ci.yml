@@ -69,24 +69,42 @@ jobs:
           name: prometheus-proxy
           fail_ci_if_error: false
 
-  # Model-checks the TLA+ specs in specs/tla (ProxyRegistry and AgentFailover) with their quick configs, alongside the
-  # build. The specs model the design rather than test the code, so this catches a spec edit that breaks one of their
-  # properties; keeping each spec in step with the classes it models is up to the change that touches them (see
-  # specs/tla/README.md). make downloads the pinned TLA+ tools and checks their SHA-256 before running them. The slower
-  # reconnect config, which took this job from about 2.5 to 9 minutes, runs locally with make tla-checks-full.
+  # Model-checks the TLA+ specs in specs/tla (ProxyRegistry and AgentFailover) alongside the build. The specs model the
+  # design rather than test the code, so this catches a spec edit that breaks one of their properties; keeping each
+  # spec in step with the classes it models is up to the change that touches them (see specs/tla/README.md). make
+  # downloads the pinned TLA+ tools and checks their SHA-256 before running them. It runs the quick configs, and the
+  # full set, with the slower reconnect config, only when what TLC reads changes: a file under specs/tla, or the pinned
+  # tools (TLA_VERSION or TLA_SHA256 in the Makefile). TLC reads nothing else, so any other change gets the same result.
+  # The checkout is the pull request's merge commit, or a squash-merged commit on master, so its first parent is the
+  # base; a manual run, or one whose base can't be read, checks the full set.
   tla:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 2
       - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:
           distribution: temurin
           java-version: 25
+      - name: Choose the quick or the full TLA+ checks
+        id: choose
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT_NAME" = workflow_dispatch ] \
+            || ! git diff --quiet HEAD^1 HEAD -- specs/tla \
+            || git diff HEAD^1 HEAD -- Makefile | grep -qE '^[-+]TLA_(VERSION|SHA256) '; then
+            echo "target=tla-checks-full" >> "$GITHUB_OUTPUT"
+          else
+            echo "target=tla-checks" >> "$GITHUB_OUTPUT"
+          fi
       - name: Model-check the TLA+ specs
-        run: make tla-checks
+        env:
+          TARGET: ${{ steps.choose.outputs.target }}
+        run: make "$TARGET"
 
   # Validates the alerting rules users load into Prometheus (grafana/alerts.yml) with promtool, from the Prometheus
   # image the container suite runs. DashboardMetricNamesTest separately checks that every series the rules query is

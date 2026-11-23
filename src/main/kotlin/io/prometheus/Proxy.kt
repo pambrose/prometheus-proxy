@@ -322,7 +322,7 @@ class Proxy(
   // tells the agent at registration; zero for none. An agent's streams carry nothing between scrapes, its connection
   // ends when any of them closes, and a reverse proxy in front of the proxy closes a quiet stream: nginx after its
   // grpc_read_timeout or client_body_timeout (60s by default), Envoy after its stream_idle_timeout (5m).
-  internal val streamKeepalive: Duration get() = proxyConfigVals.internal.streamKeepaliveSecs.seconds
+  internal val streamKeepalive: Duration get() = proxyConfigVals.internal.streamKeepAliveSecs.seconds
 
   // Whether agent-supplied job and instance labels are kept out of service discovery; see isReservedSdLabelKey.
   internal val reserveJobAndInstanceLabels: Boolean

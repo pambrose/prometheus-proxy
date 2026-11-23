@@ -81,11 +81,10 @@ import kotlin.time.DurationUnit
  */
 internal class ProxyServiceImpl(
   private val proxy: Proxy,
-  // How long a stream between the proxy and an agent goes without a message before a keepalive, zero for none; see
-  // Proxy.streamKeepalive.
-  streamKeepalive: Duration = proxy.streamKeepalive,
 ) : ProxyServiceGrpcKt.ProxyServiceCoroutineImplBase() {
-  // The longest the streams to an agent wait for something to send before they send a keepalive: forever when off.
+  // How long a stream between the proxy and an agent goes without a message before a keepalive, zero for none (see
+  // Proxy.streamKeepalive), and the longest the streams to an agent wait for something to send: forever when off.
+  private val streamKeepalive = proxy.streamKeepalive
   private val keepaliveIdle = if (streamKeepalive.isPositive()) streamKeepalive else Duration.INFINITE
 
   override suspend fun connectAgent(request: Empty): Empty {
@@ -228,7 +227,7 @@ internal class ProxyServiceImpl(
       valid = isValid
       agentId = request.agentId
       // writeResponsesToProxy and writeChunkedResponsesToProxy skip them.
-      streamKeepaliveMillis = if (keepaliveIdle.isFinite()) keepaliveIdle.inWholeMilliseconds else 0L
+      streamKeepaliveMillis = streamKeepalive.inWholeMilliseconds
       if (!isValid) {
         // Smart-cast to non-null: isValid == false implies failureReason != null.
         reason = failureReason

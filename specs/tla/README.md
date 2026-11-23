@@ -2,14 +2,14 @@
 
 Two independent specs: `ProxyRegistry.tla` for the proxy side and `AgentFailover.tla` for the agent's failover.
 
-`make tla-checks` (from the repo root) model-checks both with their quick configs in about a minute, and fails if
-either finds a violation; CI's `tla` job runs it on every pull request and push to `master`. `make tla-checks-full`
-adds the slower `ProxyRegistryReconnect.cfg`, about a minute more here and several in CI, which is why CI leaves it
-out: run it when you change how a reconnect treats a taken-over path. It downloads the TLA+
-tools jar (pinned in the Makefile's `TLA_VERSION`) into this directory, and refuses a download whose SHA-256 doesn't
-match `TLA_SHA256`; the jar is git-ignored. It checks the jar on every run, so after a version bump the old one is
-replaced rather than run. To run a config by hand, or the long `ProxyRegistrySafety.cfg`, use the commands below
-from this directory.
+`make tla-checks` (from the repo root) model-checks both with their quick configs in about a minute, and fails if either
+finds a violation. `make tla-checks-full` adds the slower `ProxyRegistryReconnect.cfg`, about a minute more here and
+several in CI. CI's `tla` job runs the full set when a file in this directory or the pinned TLA+ tools change, as TLC
+reads nothing else, and the quick configs otherwise, on every pull request and push to `master`. Either downloads the
+TLA+ tools jar (pinned in the Makefile's `TLA_VERSION`) into this directory, and refuses a download whose SHA-256
+doesn't match `TLA_SHA256`; the jar is git-ignored. It checks the jar on every run, so after a version bump the old one
+is replaced rather than run. To run a config by hand, or the long `ProxyRegistrySafety.cfg`, use the commands below from
+this directory.
 
 ## ProxyRegistry
 

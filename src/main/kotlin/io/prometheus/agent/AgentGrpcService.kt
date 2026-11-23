@@ -171,8 +171,8 @@ internal class AgentGrpcService(
   private var grpcStarted by atomicBoolean(false)
 
   // How long the response streams go without a result before they send a keepalive, as the proxy this connection
-  // registered with says in its answer to registerAgent; forever when it gives none, as one predating them, which would
-  // take a keepalive for a result, doesn't.
+  // registered with says in its answer to registerAgent. INFINITE when it gives 0: keepalives off, or a proxy predating
+  // them, which would take one for a result.
   @Volatile
   private var responseKeepalive = Duration.INFINITE
 
@@ -780,12 +780,11 @@ internal class AgentGrpcService(
     channel: ReceiveChannel<Outgoing<T>>,
     agent: Agent,
     keepalive: T,
-  ): Flow<T> {
-    val idle = responseKeepalive
-    return flow {
+  ): Flow<T> =
+    flow {
       channel.consume {
         while (true) {
-          val next = channel.receiveCatchingWithin(idle)
+          val next = channel.receiveCatchingWithin(responseKeepalive)
           when {
             next == null -> emit(keepalive)
             next.isClosed -> next.exceptionOrNull()?.let { throw it } ?: break
@@ -794,7 +793,6 @@ internal class AgentGrpcService(
         }
       }
     }
-  }
 
   suspend fun writeResponsesToProxyUntilDisconnected(
     agent: Agent,
