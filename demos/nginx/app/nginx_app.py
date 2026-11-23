@@ -24,6 +24,8 @@ PORT = int(os.environ.get("NGINX_APP_PORT", "8000"))
 # Each service, and how many units of work it finishes a second: requests for the storefront, parcels for the
 # warehouse.
 SERVICES = {"storefront": 12.0, "warehouse": 3.0}
+# Each service's metrics path, and the service it names.
+METRICS_PATHS = {f"/{service}/metrics": service for service in SERVICES}
 
 START = time.time()
 
@@ -42,11 +44,11 @@ def metrics(service, rate):
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        parts = self.path.strip("/").split("/")
+        service = METRICS_PATHS.get(self.path)
         if self.path == "/healthz":
             self.reply(200, "ok\n")
-        elif len(parts) == 2 and parts[1] == "metrics" and parts[0] in SERVICES:
-            self.reply(200, metrics(parts[0], SERVICES[parts[0]]), "text/plain; version=0.0.4; charset=utf-8")
+        elif service:
+            self.reply(200, metrics(service, SERVICES[service]), "text/plain; version=0.0.4; charset=utf-8")
         else:
             self.reply(404, "not found\n")
 
@@ -63,4 +65,5 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
+    # All interfaces, so the agents reach it over the compose network; docker/compose.yml publishes none of its ports.
+    ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()  # nosec B104
