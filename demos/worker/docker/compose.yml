@@ -25,12 +25,15 @@ x-oven-env: &oven-env
   PROMETHEUS_AGENT_TOKEN: demo-bakery-token
   REDIS_URL: redis://redis:6379
 
-# What each oven waits for: the queue, and the proxy, which an agent retries until it's there.
-x-oven-depends-on: &oven-depends-on
-  redis:
-    condition: service_healthy
-  proxy:
-    condition: service_started
+# What every oven shares: its image, which demo.sh builds, and what it waits for: the queue, and the proxy, which an
+# agent retries until it's there.
+x-oven: &oven
+  image: prometheus-proxy-demo/worker-app:local
+  depends_on:
+    redis:
+      condition: service_healthy
+    proxy:
+      condition: service_started
 
 services:
   # The worker, which `demo.sh scale` runs 1 to 5 of. demo.sh builds its image (app/Dockerfile): against the latest
@@ -38,7 +41,7 @@ services:
   # no ports: it serves nothing, and its agent connects out. Each replica's host name is its container's ID, which
   # names its agent and its paths. On SIGTERM it finishes the order in the oven, then stops its agent.
   oven:
-    image: prometheus-proxy-demo/worker-app:local
+    <<: *oven
     build:
       context: ../app
       additional_contexts:
@@ -47,34 +50,30 @@ services:
         APP_BUILD: ${WORKER_DEMO_APP_BUILD:-compiled}
         PROXY_VERSION: ${WORKER_DEMO_PROXY_VERSION:-}
     environment: *oven-env
-    depends_on: *oven-depends-on
     restart: on-failure
 
   # The ovens that `demo.sh no-proxy`, `bad-cert`, and `wrong-token` start, one each, and stop again: the same image,
   # with no proxy set, with a PROMETHEUS_PROXY_CERT that isn't a certificate, and with a token the proxy refuses. Each
   # bakes all the same.
   oven-no-proxy:
-    image: prometheus-proxy-demo/worker-app:local
+    <<: *oven
     profiles: [misconfigured]
     environment:
       REDIS_URL: redis://redis:6379
-    depends_on: *oven-depends-on
 
   oven-bad-cert:
-    image: prometheus-proxy-demo/worker-app:local
+    <<: *oven
     profiles: [misconfigured]
     environment:
       <<: *oven-env
       PROMETHEUS_PROXY_CERT: "not a certificate"
-    depends_on: *oven-depends-on
 
   oven-wrong-token:
-    image: prometheus-proxy-demo/worker-app:local
+    <<: *oven
     profiles: [misconfigured]
     environment:
       <<: *oven-env
       PROMETHEUS_AGENT_TOKEN: not-the-bakery-token
-    depends_on: *oven-depends-on
 
   # The order queue, a Redis list. Not published: demo.sh reaches it with docker compose exec. It keeps nothing on
   # disk: the queue starts empty each time.

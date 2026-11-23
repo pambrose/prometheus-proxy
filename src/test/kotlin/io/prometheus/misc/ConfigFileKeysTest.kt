@@ -184,6 +184,15 @@ class ConfigFileKeysTest : StringSpec() {
     private const val HARNESS_CONFIG = "config/test-configs/harness.conf"
     private const val BUNDLED_DEFAULTS = "src/main/resources/reference.conf"
     private const val DISCOVERY_PATHS_KEY = "paths"
+
+    // Every demo's config directory, found as TestPortsTest finds the demos, so a new demo's configs are checked too
+    private val DEMO_CONFIG_DIRS =
+      File("demos")
+        .listFiles { file -> file.isDirectory }
+        .orEmpty()
+        .map { demo -> "demos/${demo.name}/config" }
+        .sorted()
+
     private val CONFIG_DIRS =
       listOf(
         "config/test-configs",
@@ -191,29 +200,10 @@ class ConfigFileKeysTest : StringSpec() {
         "examples/cloud-proxy",
         "testing",
         "etc/compose",
-        "demos/basics/config",
-        "demos/network/config",
-        "demos/nginx/config",
-        "demos/kubernetes/config",
-        "demos/embedded/config",
-        "demos/spring-boot/config",
-        "demos/worker/config",
         "src/test/resources/containers",
-      )
+      ) + DEMO_CONFIG_DIRS
 
-    private val SHIPPED_CONFIG_DIRS =
-      listOf(
-        "examples",
-        "examples/cloud-proxy",
-        "demos/basics/config",
-        "demos/network/config",
-        "demos/nginx/config",
-        "demos/kubernetes/config",
-        "demos/embedded/config",
-        "demos/spring-boot/config",
-        "demos/worker/config",
-        "etc/compose",
-      )
+    private val SHIPPED_CONFIG_DIRS = listOf("examples", "examples/cloud-proxy", "etc/compose") + DEMO_CONFIG_DIRS
 
     private const val TEST_SOURCES = "src/test/kotlin"
     private const val TEST_UTILS = "src/test/kotlin/io/prometheus/harness/support/TestUtils.kt"

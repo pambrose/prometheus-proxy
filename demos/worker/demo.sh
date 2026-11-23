@@ -125,7 +125,8 @@ require_demo() {
   answers "$PROXY_URL/discovery" || die "the demo isn't running; start it with '$MAKE_NAME up' in demos/worker"
 }
 
-# The ovens running, one a line, in compose's order: <number> <host name, its container's ID> <container ID>
+# The ovens running, one a line, in compose's order: <number> <host name>. An oven's host name is its container's
+# short ID, which docker takes wherever it takes a container.
 ovens() {
   local -a ids=()
   local id
@@ -133,7 +134,7 @@ ovens() {
     [[ -n "$id" ]] && ids+=("$id")
   done < <("${COMPOSE[@]}" ps --quiet oven 2>/dev/null || true)
   ((${#ids[@]} > 0)) || return 0
-  docker inspect -f '{{index .Config.Labels "com.docker.compose.container-number"}} {{.Config.Hostname}} {{.Id}}' \
+  docker inspect -f '{{index .Config.Labels "com.docker.compose.container-number"}} {{.Config.Hostname}}' \
     "${ids[@]}" | sort -n
 }
 
@@ -154,13 +155,6 @@ discovered_paths() {
 # How many of the paths an oven's metrics are at (not its agent's) the proxy's service discovery lists.
 discovered_ovens() { discovered_paths | grep -cE '^oven_[^_]+_metrics$' || true; }
 
-# A query's result in Prometheus, one series a line: <instance> <value>. Series without an instance are left out.
-prom_values() {
-  curl -fsS --get --data-urlencode "query=$1" "$PROMETHEUS_URL/api/v1/query" 2>/dev/null |
-    grep -oE '"instance":"[^"]*"[^{}]*\},"value":\[[0-9.]+,"[^"]*"\]' |
-    sed -E 's/^"instance":"([^"]*)".*,"([^"]*)"\]$/\1 \2/' || true
-}
-
 # A query's one value in Prometheus, as an integer, or 0 when it has none.
 prom_number() {
   local value
@@ -170,7 +164,7 @@ prom_number() {
 }
 
 # How many ovens Prometheus scrapes: the oven job's targets it has an up for.
-scraped_ovens() { prom_values 'up{job="oven"}' | grep -c . || true; }
+scraped_ovens() { prom_number 'count(up{job="oven"})'; }
 
 # Whether the counts are as given: has_count <want> <command>...
 has_count() {
@@ -181,12 +175,9 @@ has_count() {
 
 # Prometheus's oven targets, with each one's scrape URL and whether its last scrape succeeded, from its targets API.
 print_targets() {
-  local line
   curl -fsS "$PROMETHEUS_URL/api/v1/targets?state=active" 2>/dev/null |
     grep -oE '"scrapeUrl":"[^"]*"|"health":"[a-z]*"' | sed -E 's/^"[a-zA-Z]+":"(.*)"$/\1/' | paste - - |
-    grep '/oven_' | sort | while IFS= read -r line; do
-    printf '  %-56s %s\n' "${line%%$'\t'*}" "${line##*$'\t'}"
-  done || true
+    grep '/oven_' | sort | awk -F'\t' '{ printf "  %-56s %s\n", $1, $2 }' || true
 }
 
 # Whether version $1 (x.y.z) is later than $2. bash 3.2, macOS's, has no sort -V everywhere, so field by field.
@@ -315,12 +306,12 @@ cmd_down() {
 }
 
 cmd_status() {
-  local number host id path waiting
+  local number host path waiting
   "${COMPOSE[@]}" "${ON_DEMAND[@]}" ps
   if answers "$PROXY_URL/discovery"; then
     echo
     bold "The ovens, and the paths their agents registered with the proxy"
-    while read -r number host id; do
+    while read -r number host; do
       printf '  oven %s, oven-%s:' "$number" "$host"
       for path in $(discovered_paths | grep -E "^oven_${host}_" || true); do printf ' /%s' "$path"; done
       echo
@@ -353,9 +344,10 @@ cmd_open() {
 # whose open files name each socket's inode; /proc/net's tables list every socket in the container's network
 # namespace, by inode, with a TCP socket's state, 0A listening and 01 connected, and a Unix socket's flags, 00010000
 # for one that accepts connections. A UDP socket the JVM held would be one it reads from.
+# jvm_sockets <oven's host name>
 jvm_sockets() {
   # shellcheck disable=SC2016 # $t is the container's shell's
-  "${COMPOSE[@]}" exec -T oven sh -c \
+  docker exec "$1" sh -c \
     'ls -l /proc/1/fd; for t in tcp tcp6 udp udp6 unix; do echo "== $t"; cat "/proc/net/$t"; done' | awk '
       /socket:\[/ { match($0, /socket:\[[0-9]+\]/); jvm[substr($0, RSTART + 8, RLENGTH - 9)] = 1; next }
       /^== / { table = $2; next }
@@ -367,15 +359,14 @@ jvm_sockets() {
 }
 
 cmd_sockets() {
-  local host name published sockets listening remote port hex
+  local host published sockets listening remote port hex
   require_demo
   host="$(first_oven)"
-  name="$("${COMPOSE[@]}" ps --format '{{.Name}}' oven | sort | head -1)"
-  published="$(docker port "$name" 2>/dev/null || true)"
+  published="$(docker port "$host" 2>/dev/null || true)"
   bold "The oven publishes no port"
-  echo "  docker port $name: ${published:-(nothing)}"
+  echo "  docker port $host: ${published:-(nothing)}"
   echo
-  sockets="$(jvm_sockets)"
+  sockets="$(jvm_sockets "$host")"
   listening="$(awk '$1 == "listening" { print $2 }' <<<"$sockets" | sort | uniq -c |
     awk '{ printf ", %s %s", $1, $2 }')"
   bold "What the oven's JVM has open, from /proc in its container"
@@ -412,26 +403,26 @@ cmd_sockets() {
     "each with the proxy's address, proxy:8080, as the host: $PROMETHEUS_URL/targets"
 }
 
+# Shows what the proxy serves at a path: a few of its lines, an extended regex, and how many samples it has with each
+# of two prefixes. show_path <path> <title> <regex> <lines> <prefix> <other prefix>
+show_path() {
+  local body
+  body="$(curl -fsS "$PROXY_URL/$1")" || die "the proxy didn't serve /$1"
+  bold "$2, at $PROXY_URL/$1:"
+  grep -E "$3" <<<"$body" | head -n "$4" | sed 's/^/  /' || true
+  echo "  ..."
+  echo "  $(grep -c "^$5" <<<"$body" || true) $5 samples, and $(grep -c "^$6" <<<"$body" || true) $6 samples"
+}
+
 # The metrics scenario: the oven's metrics and its agent's, each at its own path through the proxy.
 cmd_metrics() {
-  local host oven_body agent_body
+  local host
   require_demo
   host="$(first_oven)"
-  oven_body="$(curl -fsS "$PROXY_URL/oven_${host}_metrics")" || die "the proxy didn't serve /oven_${host}_metrics"
-  agent_body="$(curl -fsS "$PROXY_URL/oven_${host}_agent_metrics")" ||
-    die "the proxy didn't serve /oven_${host}_agent_metrics"
-  bold "The oven's metrics, at $PROXY_URL/oven_${host}_metrics:"
-  grep -E '^bakery_(orders_baked_total|queue_depth)' <<<"$oven_body" | head -6 | sed 's/^/  /' || true
-  echo "  ..."
-  echo "  $(grep -c '^bakery_' <<<"$oven_body" || true) bakery_ samples, and $(grep -c '^agent_' <<<"$oven_body" ||
-    true) agent_ samples"
+  show_path "oven_${host}_metrics" "The oven's metrics" '^bakery_(orders_baked_total|queue_depth)' 6 bakery_ agent_
   echo
-  bold "Its agent's own, at $PROXY_URL/oven_${host}_agent_metrics:"
-  grep -E '^agent_(connected|paths|scrape_request_count_total)' <<<"$agent_body" | head -4 |
-    sed 's/^/  /' || true
-  echo "  ..."
-  echo "  $(grep -c '^agent_' <<<"$agent_body" || true) agent_ samples, and $(grep -c '^bakery_' <<<"$agent_body" ||
-    true) bakery_ samples"
+  show_path "oven_${host}_agent_metrics" "Its agent's own" '^agent_(connected|paths|scrape_request_count_total)' 4 \
+    agent_ bakery_
   how_it_works "The oven's Counter, Gauge, and Histogram are the Prometheus Java client's, in its default registry," \
     "which the agent serves with source(path, registry). The agent keeps its own metrics in that registry too, and" \
     "agentMetricsAt(path) serves them at a path of their own, so a source of the default registry leaves them out:" \
@@ -480,25 +471,23 @@ scale_up() {
 # Stops the ovens past the count given, one SIGTERM each, as a scale-in does, and shows how they went:
 # scale_down <count>
 scale_down() {
-  local count="$1" number host id up
-  local -a ids=() hosts=()
-  while read -r number host id; do
+  local count="$1" number host up
+  local -a hosts=()
+  while read -r number host; do
     ((number > count)) || continue
-    ids+=("$id")
     hosts+=("$host")
   done < <(ovens)
-  ((${#ids[@]} > 0)) || return 0
   # As a platform's scale-in does: SIGTERM, and up to 30 seconds to stop
-  docker stop --time 30 "${ids[@]}" >/dev/null
+  docker stop --time 30 "${hosts[@]}" >/dev/null
   for host in "${hosts[@]}"; do
     bold "oven-$host stopped. Its log, from the SIGTERM:"
     # The oven's lines, then its agent's, the agent without its full description in braces
-    docker logs "$(ovens_id "$host" "${ids[@]}")" 2>&1 |
+    docker logs "$host" 2>&1 |
       grep -E 'Stopping|oven is off|Disconnected from proxy|Terminated Agent' |
       sed -E -e 's/Agent\{[^}]*\}/Agent{...}/' -e 's/^/  /'
   done
   echo
-  if [[ -z "$(discovered_paths | grep -E "^oven_($(IFS='|' && echo "${hosts[*]}"))_" || true)" ]]; then
+  if has_count "$count" discovered_ovens; then
     bold "The proxy's service discovery dropped their paths as their agents disconnected"
   fi
   wait_until 30 has_count "$count" scraped_ovens || true
@@ -512,7 +501,7 @@ scale_down() {
       echo "  oven-$host's scrapes all succeeded: discovery dropped it before a scrape found its path gone"
     fi
   done
-  docker rm "${ids[@]}" >/dev/null
+  docker rm "${hosts[@]}" >/dev/null
   how_it_works "This stops each oven numbered above $count with docker stop, which sends it a SIGTERM, as" \
     "Kubernetes or ECS does on a scale-in, and the JVM runs its shutdown hooks. The oven's, in main, tells the oven" \
     "to stop, and waits for main to return: the oven finishes the order it's baking, takes no more, and returns," \
@@ -524,15 +513,6 @@ scale_down() {
     "disconnecting and stopping. No order taken from the queue is lost."
   point "The proxy dashboard's Paths view lists only the remaining ovens' paths: $DASHBOARD_URL/paths"
   point "In Grafana, 'Scrape up, by oven' can show that one 0 for a stopped oven, then its series ends."
-}
-
-# The container ID of the oven with the host name given, among the IDs given: ovens_id <host> <id>...
-ovens_id() {
-  local host="$1" id
-  shift
-  for id in "$@"; do
-    [[ "$id" == "$host"* ]] && echo "$id" && return
-  done
 }
 
 cmd_scale() {
@@ -551,16 +531,14 @@ cmd_scale() {
   fi
 }
 
-# The log of the misconfigured oven a scenario started, as oven_log last read it.
-OVEN_LOG=""
-
-# Reads a misconfigured oven's log into OVEN_LOG: oven_log <service>
-oven_log() { OVEN_LOG="$("${COMPOSE[@]}" "${ON_DEMAND[@]}" logs --no-log-prefix "$1" 2>/dev/null || true)"; }
+# A misconfigured oven's log: oven_log <service>
+oven_log() { "${COMPOSE[@]}" "${ON_DEMAND[@]}" logs --no-log-prefix "$1" 2>/dev/null || true; }
 
 # Whether a misconfigured oven has logged its agent's line and its first order: oven_logged <service> <regex>
 oven_logged() {
-  oven_log "$1"
-  grep -qE "$2" <<<"$OVEN_LOG" && grep -q "Baked the first order" <<<"$OVEN_LOG"
+  local log
+  log="$(oven_log "$1")"
+  grep -qE "$2" <<<"$log" && grep -q "Baked the first order" <<<"$log"
 }
 
 # The no-proxy, bad-certificate, and wrong-token ovens: starts one of them and waits for its agent's line, an extended
@@ -571,10 +549,13 @@ misconfigured_oven() {
   wait_until 60 oven_logged "$1" "$2" || die "$1 didn't log what was expected within 60s; see '$0 logs $1'"
 }
 
-# Prints a misconfigured oven's lines: its agent's, an extended regex, and its first order. show_oven_lines <regex>
+# Prints a misconfigured oven's lines: its agent's, an extended regex, and its first order.
+# show_oven_lines <service> <regex>
 show_oven_lines() {
-  logged "The oven" "$(grep -E "$1" <<<"$OVEN_LOG" | head -1)"
-  logged "Then it" "$(grep "Baked the first order" <<<"$OVEN_LOG" | head -1)"
+  local log
+  log="$(oven_log "$1")"
+  logged "The oven" "$(grep -E "$2" <<<"$log" | head -1)"
+  logged "Then it" "$(grep "Baked the first order" <<<"$log" | head -1)"
 }
 
 # Stops and removes a misconfigured oven: remove_oven <service>
@@ -586,7 +567,7 @@ cmd_no_proxy() {
   local pattern="No proxy is set"
   misconfigured_oven oven-no-proxy "$pattern"
   bold "An oven with no proxy set bakes, with its agent off"
-  show_oven_lines "$pattern"
+  show_oven_lines oven-no-proxy "$pattern"
   remove_oven oven-no-proxy
   how_it_works "This starts oven-no-proxy, the same image with PROMETHEUS_PROXY unset, as on a developer's machine," \
     "then stops it. fromEnvironment() leaves the proxy unset, so startIfConfigured() doesn't start the agent: it logs" \
@@ -599,7 +580,7 @@ cmd_bad_cert() {
   local pattern="could not start"
   misconfigured_oven oven-bad-cert "$pattern"
   bold "An oven whose agent can't start bakes, with its agent off"
-  show_oven_lines "$pattern"
+  show_oven_lines oven-bad-cert "$pattern"
   remove_oven oven-bad-cert
   how_it_works "This starts oven-bad-cert, with PROMETHEUS_PROXY_CERT set to text that isn't a certificate, then" \
     "stops it. fromEnvironment() reads it as the certificate the agent trusts the proxy by, which the agent rejects" \
@@ -616,10 +597,9 @@ cmd_wrong_token() {
   misconfigured_oven oven-wrong-token "$pattern"
   # The agent retries every few seconds: watch it for a while, to see that only the first refusal is logged above DEBUG
   sleep 20
-  oven_log oven-wrong-token
-  errors="$(grep -c "$pattern" <<<"$OVEN_LOG" || true)"
+  errors="$(oven_log oven-wrong-token | grep -c "$pattern" || true)"
   bold "An oven whose token the proxy refuses bakes, while its agent retries"
-  show_oven_lines "$pattern"
+  show_oven_lines oven-wrong-token "$pattern"
   remove_oven oven-wrong-token
   sleep 6
   refusals=$(($(prom_number 'sum(proxy_agent_auth_failures_total)') - before))

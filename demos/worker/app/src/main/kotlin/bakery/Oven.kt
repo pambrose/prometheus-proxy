@@ -129,7 +129,7 @@ class Oven(
       return
     }
     val secs = bakeSecs(item)
-    Thread.sleep((secs * MILLIS_PER_SEC).toLong())
+    Thread.sleep(secs.seconds.inWholeMilliseconds)
     baked.labelValues(item.label).inc()
     bakeTime.labelValues(item.label).observe(secs)
     total += 1
@@ -144,8 +144,7 @@ class Oven(
   // Every 30 seconds, what the oven baked since the last time, so its log shows it at work.
   private fun summarize() {
     if (lastSummary.elapsedNow() < SUMMARY_INTERVAL) return
-    val secs = SUMMARY_INTERVAL.inWholeSeconds
-    logger.info { "Baked $sinceSummary orders in the last ${secs}s; ${waiting.get().toLong()} waiting" }
+    logger.info { "Baked $sinceSummary orders in the last $SUMMARY_INTERVAL; ${waiting.get().toLong()} waiting" }
     sinceSummary = 0
     lastSummary = TimeSource.Monotonic.markNow()
   }
@@ -154,7 +153,6 @@ class Oven(
     private val logger = logger {}
     private val SUMMARY_INTERVAL = 30.seconds
     private val RETRY_PAUSE = 1.seconds
-    private const val MILLIS_PER_SEC = 1000
     private const val JITTER = 0.3
   }
 }

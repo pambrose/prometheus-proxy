@@ -140,10 +140,7 @@
         <artifactId>maven-compiler-plugin</artifactId>
         <configuration>
           <includes>
-            <include>website/EmbeddedAgentJavaExample.java</include>
-            <include>website/EmbeddedAgentConfigJavaExample.java</include>
-            <include>website/EmbeddedAgentSourceJavaExample.java</include>
-            <include>website/WorkerDemoJavaExample.java</include>
+            <include>website/*.java</include>
           </includes>
         </configuration>
       </plugin>

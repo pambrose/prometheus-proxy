@@ -75,20 +75,30 @@ public class WorkerDemoJavaExample {
 
   // A stand-in for the demo's queue, a Redis list.
   static final class OrderQueue {
+    final String url;
+
     OrderQueue(String url) {
+      this.url = url;
     }
   }
 
   // A stand-in for the demo's oven, which bakes the queue's orders until it's stopped, and records its metrics in the
   // registry.
   static final class Oven {
+    final OrderQueue queue;
+    final PrometheusRegistry registry;
+
     Oven(OrderQueue queue, PrometheusRegistry registry) {
+      this.queue = queue;
+      this.registry = registry;
     }
 
     void runUntilStopped() {
+      // Takes orders from the queue and bakes them, one at a time, until stop()
     }
 
     void stop() {
+      // Has runUntilStopped() return once the order in the oven is done
     }
   }
 }
