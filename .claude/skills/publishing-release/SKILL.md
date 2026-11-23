@@ -30,7 +30,7 @@ When bumping the version, update `version` in `gradle.properties` and every hard
 - `charts/prometheus-{proxy,agent}/Chart.yaml` — `version` and `appVersion` (the image tag the charts deploy)
 - `website/prometheus-proxy/docs/{getting-started,index,docker}.md` — Docker pull/run examples
 - `src/test/kotlin/website/{DockerExamples,EmbeddedAgentExamples,KubernetesExamples}.txt` — snippet sources the website's Docker, Embedded Agent, and Kubernetes pages include
-- `README.md`, `llms.txt`, `demos/{basics,network,nginx,kubernetes,embedded,spring-boot}/README.md`, and `website/prometheus-proxy/docs/{basics-demo,network-demo,nginx-demo,kubernetes-demo,embedded-demo,spring-boot-demo,getting-started}.md` — the `git clone --branch` tag the demos and the Helm install check out
+- `README.md`, `llms.txt`, `demos/{basics,network,nginx,kubernetes,embedded,spring-boot,worker}/README.md`, and `website/prometheus-proxy/docs/{basics-demo,network-demo,nginx-demo,kubernetes-demo,embedded-demo,spring-boot-demo,worker-demo,getting-started}.md` — the `git clone --branch` tag the demos and the Helm install check out
 - `demos/spring-boot/app/pom.xml` — `prometheus-proxy.version`, the release the Spring Boot demo builds against
 - this line, and step 2 of `docs/RELEASE.md`
 

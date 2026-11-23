@@ -54,9 +54,10 @@ is, unreleased pages included.
      Kubernetes pages, so the published site shows whatever version is here.
    - The `git clone --branch` tag the demos and the Helm install check out, so a reader runs the scripts released with
      the images they pull: `README.md` and `llms.txt`, `demos/basics/README.md`, `demos/network/README.md`,
-     `demos/nginx/README.md`, `demos/kubernetes/README.md`, `demos/embedded/README.md`, and
-     `demos/spring-boot/README.md`, and the website's `basics-demo.md`, `network-demo.md`, `nginx-demo.md`,
-     `kubernetes-demo.md`, `embedded-demo.md`, `spring-boot-demo.md`, and `getting-started.md`.
+     `demos/nginx/README.md`, `demos/kubernetes/README.md`, `demos/embedded/README.md`,
+     `demos/spring-boot/README.md`, and `demos/worker/README.md`, and the website's `basics-demo.md`,
+     `network-demo.md`, `nginx-demo.md`, `kubernetes-demo.md`, `embedded-demo.md`, `spring-boot-demo.md`,
+     `worker-demo.md`, and `getting-started.md`.
    - `demos/spring-boot/app/pom.xml` — `prometheus-proxy.version`, the release of the Spring Boot starter the Spring
      Boot demo's roastery builds against with `make up`.
    - This step, and the matching line in `.claude/skills/publishing-release/SKILL.md`.

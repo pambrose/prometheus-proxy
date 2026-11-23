@@ -12,7 +12,7 @@ gRPC connection initiated from inside the firewall, preserving Prometheus's nati
 
 !!! tip "See it work on your laptop"
 
-    Six self-contained demos run the proxy, its agents, and Prometheus from the released images with one command,
+    Seven self-contained demos run the proxy, its agents, and Prometheus from the released images with one command,
     and a guided tour walks you through each:
 
     - the [Basics Demo](basics-demo.md);
@@ -20,7 +20,8 @@ gRPC connection initiated from inside the firewall, preserving Prometheus's nati
     - the [nginx Demo](nginx-demo.md), with nginx, a reverse proxy, between the agents and the proxy;
     - the [Kubernetes Demo](kubernetes-demo.md), with the Helm charts on two kind clusters;
     - the [Embedded Demo](embedded-demo.md), with the agent embedded in a Ktor app;
-    - the [Spring Boot Demo](spring-boot-demo.md), with the agent embedded in a Spring Boot app.
+    - the [Spring Boot Demo](spring-boot-demo.md), with the agent embedded in a Spring Boot app;
+    - the [Worker Demo](worker-demo.md), with the agent embedded in a plain Kotlin program with no HTTP server.
 
     All but the Kubernetes Demo need only Docker; it also needs kind, `kubectl`, and Helm.
 

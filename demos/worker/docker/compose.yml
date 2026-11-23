@@ -1,0 +1,166 @@
+# The Prometheus Proxy worker demo: a bakery whose ovens are workers with no HTTP server, plain Kotlin programs that take
+# orders from a Redis queue, each with the agent embedded in it, which connects to a proxy, with Prometheus and Grafana
+# beside the proxy. See ../README.md. From demos/worker:
+#
+#   make up        # builds the oven against the latest release, and starts everything
+#   make up-local  # the same, with the library, proxy, and oven built from this checkout
+#   make down      # stops it and removes its containers and network
+#
+# Compose resolves every relative path here against this file's directory, demos/worker/docker: the demo's configs are
+# one level up, and the repository root three.
+#
+# Every published port binds to 127.0.0.1 only: the proxy's dashboard has no authentication, Grafana lets anyone view
+# it without signing in, and its admin password is the default, which suits a demo on a laptop and nothing else. The
+# default ports are the basics demo's plus 600, so the demos can run at once. Set WORKER_DEMO_DASHBOARD_PORT,
+# WORKER_DEMO_PROXY_PORT, WORKER_DEMO_PROMETHEUS_PORT, or WORKER_DEMO_GRAFANA_PORT to move a host port that's already
+# taken. The ovens and Redis publish none.
+
+name: prometheus-proxy-worker-demo
+
+# An oven's settings: the proxy's agent port on the compose network (PROMETHEUS_PROXY) and the token its agent presents
+# (PROMETHEUS_AGENT_TOKEN), which the oven's fromEnvironment() reads, and the queue (REDIS_URL). The token is a demo
+# token in a public file: never reuse it.
+x-oven-env: &oven-env
+  PROMETHEUS_PROXY: proxy:50051
+  PROMETHEUS_AGENT_TOKEN: demo-bakery-token
+  REDIS_URL: redis://redis:6379
+
+# What every oven shares: its image, which demo.sh builds, and what it waits for: the queue, and the proxy, which an
+# agent retries until it's there.
+x-oven: &oven
+  image: prometheus-proxy-demo/worker-app:local
+  depends_on:
+    redis:
+      condition: service_healthy
+    proxy:
+      condition: service_started
+
+services:
+  # The worker, which `demo.sh scale` runs 1 to 5 of. demo.sh builds its image (app/Dockerfile): against the latest
+  # release, from Maven Central (make up), or from the build on the host against this checkout (make up-local). It has
+  # no ports: it serves nothing, and its agent connects out. Each replica's host name is its container's ID, which
+  # names its agent and its paths. On SIGTERM it finishes the order in the oven, then stops its agent.
+  oven:
+    <<: *oven
+    build:
+      context: ../app
+      additional_contexts:
+        catalog: ../../../gradle
+      args:
+        APP_BUILD: ${WORKER_DEMO_APP_BUILD:-compiled}
+        PROXY_VERSION: ${WORKER_DEMO_PROXY_VERSION:-}
+    environment: *oven-env
+    restart: on-failure
+
+  # The ovens that `demo.sh no-proxy`, `bad-cert`, and `wrong-token` start, one each, and stop again: the same image,
+  # with no proxy set, with a PROMETHEUS_PROXY_CERT that isn't a certificate, and with a token the proxy refuses. Each
+  # bakes all the same.
+  oven-no-proxy:
+    <<: *oven
+    profiles: [misconfigured]
+    environment:
+      REDIS_URL: redis://redis:6379
+
+  oven-bad-cert:
+    <<: *oven
+    profiles: [misconfigured]
+    environment:
+      <<: *oven-env
+      PROMETHEUS_PROXY_CERT: "not a certificate"
+
+  oven-wrong-token:
+    <<: *oven
+    profiles: [misconfigured]
+    environment:
+      <<: *oven-env
+      PROMETHEUS_AGENT_TOKEN: not-the-bakery-token
+
+  # The order queue, a Redis list. Not published: demo.sh reaches it with docker compose exec. It keeps nothing on
+  # disk: the queue starts empty each time.
+  redis:
+    image: redis:8.10.3-alpine@sha256:7958cfbb9d152f87dadfbc89f1b0b15938f0b81ff8982feb327476f4911935c3
+    command: [redis-server, --save, "", --appendonly, "no"]
+    tmpfs: [/data]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    restart: on-failure
+
+  # The counter, where the customers' orders come in (../counter/counter.sh): a steady trickle onto the queue, which
+  # one oven keeps up with. `demo.sh rush` runs a rush beside it, in this container. The Redis image, for its redis-cli.
+  counter:
+    image: redis:8.10.3-alpine@sha256:7958cfbb9d152f87dadfbc89f1b0b15938f0b81ff8982feb327476f4911935c3
+    entrypoint: [sh, /counter.sh]
+    volumes:
+      - ../counter/counter.sh:/counter.sh:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: on-failure
+
+  # The stock proxy image: the latest release's, which demo.sh pulls and tags as this one (make up), or one built from
+  # this checkout's proxy jar (make up-local). Its agent port isn't published: the ovens reach it on the compose
+  # network.
+  proxy:
+    image: prometheus-proxy-demo/proxy:local
+    build:
+      context: ../../..
+      dockerfile: etc/docker/proxy.Dockerfile
+    hostname: proxy
+    environment:
+      PROXY_CONFIG: /app/proxy.conf
+      AGENT_TOKEN: demo-bakery-token
+    volumes:
+      - ../config/proxy.conf:/app/proxy.conf:ro
+    ports:
+      - "127.0.0.1:${WORKER_DEMO_DASHBOARD_PORT:-8694}:8094"  # Dashboard
+      - "127.0.0.1:${WORKER_DEMO_PROXY_PORT:-8680}:8080"      # Scrape port: the ovens' paths and /discovery, for curl
+    restart: on-failure
+
+  # The same image, digest included, as PROMETHEUS_IMAGE in the Makefile.
+  prometheus:
+    image: prom/prometheus:v3.14.0@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0
+    volumes:
+      - ../prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "127.0.0.1:${WORKER_DEMO_PROMETHEUS_PORT:-9690}:9090"
+    depends_on:
+      - proxy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:9090/-/ready"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    restart: on-failure
+
+  grafana:
+    image: grafana/grafana:13.3.1@sha256:0615ec4fbd4072004b7d86b46ded63013a74b7d6eb1119273dd89e8fa25c13cf
+    environment:
+      # Anyone who opens Grafana sees the dashboards without signing in, as a Viewer, the only role Grafana gives
+      # anonymous users. To use Explore or change a dashboard, sign in as admin / admin.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/dashboards/bakery.json
+      # Nothing phones home or downloads at startup, so the demo runs offline once the images are pulled.
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+    volumes:
+      - ../grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../grafana/dashboards/bakery.json:/etc/grafana/dashboards/bakery.json:ro
+      # The project's own dashboards, from the repo, so the demo always shows the current ones.
+      - ../../../grafana/prometheus-proxy.json:/etc/grafana/dashboards/prometheus-proxy.json:ro
+      - ../../../grafana/prometheus-agents.json:/etc/grafana/dashboards/prometheus-agents.json:ro
+    ports:
+      - "127.0.0.1:${WORKER_DEMO_GRAFANA_PORT:-3600}:3000"
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:3000/api/health"]
+      interval: 2s
+      timeout: 2s
+      retries: 60
+    restart: on-failure

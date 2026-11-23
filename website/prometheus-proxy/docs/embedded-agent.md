@@ -89,7 +89,8 @@ Since 4.7.0, an app with a metrics registry can hand it to the agent instead of 
 `source(path, registry)` takes the Prometheus Java client's `PrometheusRegistry`, which Micrometer's
 `PrometheusMeterRegistry` gives with `getPrometheusRegistry()`, and the agent reads it on each scrape, in-process. The
 app then needs no metrics endpoint, port, or credentials for the agent, and the agent opens no connection to it. A
-program with no HTTP server at all, such as a worker that consumes a queue, is scraped as a web app is:
+program with no HTTP server at all, such as a worker that consumes a queue, is scraped as a web app is, as the
+[Worker Demo](worker-demo.md)'s ovens are:
 
 === "Kotlin"
 
@@ -238,7 +239,8 @@ config file is, so a `${?ENV_VAR}` substitution in it works.
 [Cloud Platforms](cloud-platforms.md) builds on this to run an embedded agent in an app on ECS on Fargate, Cloud Run,
 Azure Container Apps, or another platform, with the proxy on AWS, GCP, Azure, DigitalOcean, or Railway, and the
 [Embedded Demo](embedded-demo.md) runs an embedded agent on one machine, in a Ktor app, with the
-[Ktor Plugin](ktor-plugin.md).
+[Ktor Plugin](ktor-plugin.md). The [Worker Demo](worker-demo.md) runs one in each of a plain Kotlin program's replicas,
+with no framework or HTTP server, scaled out and in.
 
 ## In Ktor
 

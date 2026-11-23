@@ -1,0 +1,16 @@
+<configuration>
+  <!-- The oven's logging, which configures the embedded agent's loggers too: the library carries none of its own -->
+  <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%d{HH:mm:ss.SSS} %-5level %logger{24} - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <root level="INFO">
+    <appender-ref ref="STDOUT"/>
+  </root>
+
+  <!-- As the standalone agent has it: only gRPC's internal warnings and errors -->
+  <logger name="io.grpc.internal" level="WARN"/>
+  <logger name="io.netty" level="WARN"/>
+</configuration>

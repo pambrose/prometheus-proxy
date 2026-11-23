@@ -70,6 +70,18 @@ proxy in the same JVM and scrapes through it, so a change to the starter, or a S
 at runtime, fails there. Its `prometheus-proxy.version` is a release version literal; while the latest release
 predates what the demo shows, `demo.sh`'s `NEEDS_RELEASE_AFTER` has `make up` build the library from the checkout.
 
+The worker demo's oven, `demos/worker/app`, is a Gradle project of its own, like the coffee shop: a plain Kotlin program
+with no framework or HTTP server that takes orders from a Redis queue (through Jedis, whose version is in
+`gradle/libs.versions.toml` for it) and embeds the agent in its `main` with `embeddedAgent { }`, `fromEnvironment()`,
+`source(path, registry)` of the Prometheus Java client's default registry, `agentMetricsAt(path)`, and
+`startIfConfigured().use { }`. The website's Worker Demo page shows that `main` between snippet markers, and its Java tab
+is `src/test/java/website/WorkerDemoJavaExample.java`, which `make consumer-check` compiles. Each replica's paths are
+named after its container's host name, and Prometheus finds them through the proxy's service discovery, so
+`demo.sh scale` adds and removes targets with no Prometheus change. CI's `consumer-check` job builds it against the
+checkout with `make worker-demo-check` (`./gradlew -p demos/worker/app -PlocalProxy build`, a composite build, which lints
+it too), so a change to `EmbeddedAgentConfig`, `MetricsSource`, or `EmbeddedAgentInfo` must keep it compiling. IntelliJ
+links it as the coffee shop is, its wrapper properties a symlink to the root's.
+
 The Spring Boot starter, `spring-boot-starter/`, is one of the build's two subprojects (`:spring-boot-starter`), in Java,
 published alongside the agent at its version as `com.pambrose:prometheus-proxy-spring-boot-starter`: auto-configuration
 (`io.prometheus.agent.spring`) that runs an embedded agent as a `SmartLifecycle` bean from the `prometheus-proxy.agent.*`

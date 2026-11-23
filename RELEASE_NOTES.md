@@ -36,6 +36,10 @@ _Released 2026-11-23_
   `agentMetricsAt(path)` serves the agent's own metrics through the proxy, with no port opened for them. The agent's
   handle is `AutoCloseable`, so `startIfConfigured().use { … }` stops the agent with the app. The Embedded Agent page
   shows a whole worker's agent, in Kotlin and Java.
+- **A demo of the agent in a worker.** `demos/worker` runs a bakery whose ovens are plain Kotlin programs, with no
+  framework or HTTP server, each with the agent started in a few lines of its `main`. An oven listens on no port and
+  is scraped all the same, more ovens become more Prometheus targets with no change to Prometheus's config, and an
+  oven with no proxy, or with the agent's settings wrong, keeps baking.
 - **A Spring Boot starter.** Add `prometheus-proxy-spring-boot-starter` to a Spring Boot app and set the proxy's
   address: the agent starts and stops with the app, serves its metrics to Prometheus without `/actuator/prometheus`
   or a web server, and shows its connection in `/actuator/health`. The new Spring Boot Starter page lists its

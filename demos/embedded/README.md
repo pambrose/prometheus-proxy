@@ -293,8 +293,9 @@ sets up the same thing for real, with the app on ECS, Cloud Run, or Azure Contai
 Azure, DigitalOcean, or Railway.
 Standalone agents behind a firewall are in the [basics demo](../basics), proxy failover and tracing in the
 [network demo](../network), the proxy behind nginx in the [nginx demo](../nginx), the Helm charts in the
-[Kubernetes demo](../kubernetes), and the agent in a Spring Boot app,
-written in Java, in the [Spring Boot demo](../spring-boot). The demos use different
+[Kubernetes demo](../kubernetes), the agent in a Spring Boot app,
+written in Java, in the [Spring Boot demo](../spring-boot), and in a plain Kotlin program with no HTTP server, scaled
+out and in, in the [worker demo](../worker). The demos use different
 ports, so they can run side by side, but each takes memory and CPU: `make down` stops this one and frees its
 resources.
 

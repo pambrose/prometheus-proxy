@@ -33,6 +33,7 @@ nav = [
     { "Kubernetes Demo" = "kubernetes-demo.md" },
     { "Embedded Demo" = "embedded-demo.md" },
     { "Spring Boot Demo" = "spring-boot-demo.md" },
+    { "Worker Demo" = "worker-demo.md" },
   ]},
   { "Deployment" = [
     { "Docker" = "docker.md" },
