@@ -13,7 +13,7 @@ serialization = "1.13.0"
 config = "6.1.2"
 detekt = "2.0.0-alpha.6"
 dokka = "2.3.0"
-gradle-plugins = "1.1.9"
+gradle-plugins = "1.1.10"
 # 0.9.10 or later: 0.9.9 gave a report variant built in the same Gradle run as another the other's filters, so the
 # per-class check (koverVerifyPerClass) had to run in its own invocation.
 kover = "0.9.11"
@@ -36,7 +36,7 @@ protoc = "4.36.2"
 # Ahead of the netty-tcnative grpc-java is built and tested with (2.0.81.Final for grpc 1.84.x and 1.85.x, per its
 # SECURITY.md) for the native fixes in 2.0.82-2.0.86, among them a use-after-free on session-key rotation, NUL bytes
 # accepted in SNI names, an out-of-bounds read in ALPN protocol selection, and session ticket keys left in freed memory.
-# That is one release ahead of 2.0.85.Final, the version Netty 4.2.20.Final, below, is built against. tcnative 2.0.x
+# That is one release ahead of 2.0.85.Final, the version Netty 4.2.21.Final, below, is built against. tcnative 2.0.x
 # keeps its API stable, so grpc and Netty work with it unchanged. Go back to tracking grpc's version once it reaches
 # 2.0.86.Final or later. common-utils' grpc-utils also brings tcnative, with its per-platform natives;
 # build.gradle.kts declares the classes and every native at this version.
@@ -44,7 +44,7 @@ tcnative = "2.0.86.Final"
 # grpc-netty 1.85.1 brings Netty 4.2.17.Final, which has CVE-2026-93492 (HTTP/2 HPACK encoder DoS) and the other
 # advisories 4.2.18.Final, 4.2.19.Final, and 4.2.20.Final fix. build.gradle.kts raises every Netty module except
 # netty-tcnative (pinned above) to this release, and declares them through the `netty` bundle so the published POM pins
-# it for embedders too. Drop the override and the bundle once grpc brings 4.2.20.Final or later.
+# it for embedders too. Drop the override and the bundle once grpc brings this release or later.
 netty = "4.2.21.Final"
 
 # Ktor

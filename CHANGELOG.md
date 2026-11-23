@@ -239,7 +239,7 @@ All notable changes to this project are documented in this file.
 - Dependabot holds the Spring Boot demo's Maven image at JDK 25: it reads the JDK in the image's tag as part of the
   version, so JDK 26 came as a patch update
 - Update the GitHub Actions the workflows pin by commit SHA: `actions/setup-java` 6.2.0 → 6.3.0 and
-  `anthropics/claude-code-action` 1.0.275 → 1.0.276 (#477)
+  `anthropics/claude-code-action` 1.0.275 → 1.0.278 (#477, #521)
 
 ### Documentation
 
@@ -271,6 +271,7 @@ All notable changes to this project are documented in this file.
 ### Dependencies
 
 - Update common-utils 5.2.0 → 5.3.0, which embedders get transitively
+- Update Netty 4.2.20.Final → 4.2.21.Final, which embedders get through the published POM (#522)
 
 ## [4.6.0] - 2026-11-20
 
