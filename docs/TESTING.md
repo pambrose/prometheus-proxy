@@ -718,7 +718,10 @@ One support helper also lives here (not a test class itself):
   per refresh interval however many reads, a fresh collect for the push loop's tick that the reads after it share,
   shared by concurrent reads, and none reused across a change, even one landing mid-collect
 - **TestPortsTest** — every port in `TestPorts` is distinct, so no two specs can bind the same port, and below 32768,
-  outside the ephemeral range the OS hands out to outgoing connections
+  outside the ephemeral range the OS hands out to outgoing connections; and none a spec binds is a host port a demo
+  publishes (its `docker/compose.yml` ports, its kind configs' `hostPort`s, and its `demo.sh` port defaults), so a
+  spec run while a demo is up doesn't reach the demo's container. The constants that mirror the product defaults skip
+  the 32768 and demo checks, by name, since no spec binds them on the host
 - **TlsMaterialTest** — TLS material given as PEM text (`*Pem` settings, `*_PEM` env vars): a value is read as PEM,
   as base64 of PEM (wrapped in lines or not), or as PEM on one line with literal `\n` escapes, and anything else is
   refused without the value in the message; a file and a PEM for the same material are refused; server and client
@@ -734,9 +737,9 @@ These support helpers also live here (not test classes themselves):
 - **TestPorts** — canonical port constants shared across the unit, harness, and container suites, so no test
   hard-codes a port literal. The ones that mirror the proxy/agent config defaults and the fixed container ports are
   for asserting those defaults and for container-internal ports; anything a test binds on the host uses a dedicated
-  entry instead, since a proxy, agent, or Prometheus already running on the machine holds the defaults.
-  `TestUtils.startProxy` / `startAgent` bind the `HARNESS_*` gRPC, admin, and metrics ports unless a spec passes
-  its own
+  entry instead, one no demo publishes, since a proxy, agent, or Prometheus already running on the machine holds the
+  defaults. `TestUtils.startProxy` / `startAgent` bind the `HARNESS_*` gRPC, admin, and metrics ports unless a spec
+  passes its own
 - **TestCerts** — the repository's test certificates (`testing/certs`): their paths, text, and base64, for the specs
   that give TLS material as PEM
 - **TestOptions** — factories that build `ProxyOptions` / `AgentOptions` from a list, `ConfigVals` from a HOCON

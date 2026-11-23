@@ -20,10 +20,10 @@ package io.prometheus.common
  * Canonical port numbers shared across the test suite (unit, harness, and Testcontainers specs).
  *
  * The first group mirrors the proxy/agent config defaults and the fixed ports used by the container suite, for tests
- * that assert those defaults or run inside a container. A spec that binds a port on this machine uses a dedicated one
- * from the groups below instead: a proxy, agent or Prometheus already running here holds the defaults. They live in a
- * neutral test-support object so any test package can reference them without depending on the Testcontainers support
- * harness.
+ * that assert those defaults or run inside a container; TestPortsTest's port checks skip them, by name (NEVER_BOUND). A
+ * spec that binds a port on this machine uses a dedicated one from the groups below instead: a proxy, agent or
+ * Prometheus already running here holds the defaults. They live in a neutral test-support object so any test package
+ * can reference them without depending on the Testcontainers support harness.
  */
 object TestPorts {
   const val PROXY_HTTP_PORT = 8080
@@ -40,12 +40,12 @@ object TestPorts {
   const val NGINX_PORT = 80
 
   // Dedicated ports for the harness specs. Each spec owns its own, so no two specs -- or two cases within one --
-  // bind the same port; TestPortsTest fails the build when two of these collide, or when one is 32768 or above, in
-  // the range the OS hands out to outgoing connections.
+  // bind the same port; TestPortsTest fails the build when two of these collide, when one is 32768 or above, in
+  // the range the OS hands out to outgoing connections, or when one is a host port a demo publishes (demos/).
 
-  // Admin endpoints on non-default ports (misc/Admin*PathTest)
-  const val ADMIN_EMPTY_PATH_ADMIN_PORT = 8098
-  const val ADMIN_CUSTOM_PATH_ADMIN_PORT = 8099
+  // Admin endpoints on non-default ports (harness/Admin*PathTest)
+  const val ADMIN_EMPTY_PATH_ADMIN_PORT = 9755
+  const val ADMIN_CUSTOM_PATH_ADMIN_PORT = 9756
 
   // The standard harness suite (HarnessSetup subclasses)
   const val HARNESS_PROXY_PORT = 9505
@@ -59,7 +59,7 @@ object TestPorts {
   const val HARNESS_AGENT_METRICS_PORT = 9510
 
   // HarnessHelpersTest
-  const val HARNESS_HELPERS_HTTP_PORT = 9511
+  const val HARNESS_HELPERS_HTTP_PORT = 9757
 
   // The scrape target HarnessTests.timeoutTest serves, which every standard harness suite runs
   const val HARNESS_TIMEOUT_TARGET_PORT = 9528
