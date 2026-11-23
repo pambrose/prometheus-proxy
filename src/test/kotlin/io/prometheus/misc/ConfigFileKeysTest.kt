@@ -43,10 +43,11 @@ class ConfigFileKeysTest : StringSpec() {
     ConfigFactory.empty().withValue(DISCOVERY_PATHS_KEY, schema.toConfig().getValue("agent.pathConfigs")).root()
   }
 
-  // Every .conf in these directories is HOCON but the container suite's nginx config, which is nginx's own format.
+  // Every .conf in these directories is HOCON. nginx's configs, in nginx's own format, live in directories of their
+  // own, which the scan, not descending into subdirectories, doesn't reach: the container suite's in containers/nginx,
+  // and the nginx demo's in demos/nginx/nginx.
   private val configFiles by lazy {
-    val dirConfigs = CONFIG_DIRS.flatMap { dir -> confFiles(dir).filterNot { it.name == NGINX_CONFIG } }
-    (dirConfigs + File(BUNDLED_DEFAULTS)).sortedBy { it.invariantSeparatorsPath }
+    (CONFIG_DIRS.flatMap(::confFiles) + File(BUNDLED_DEFAULTS)).sortedBy { it.invariantSeparatorsPath }
   }
 
   private fun confFiles(dir: String) = File(dir).listFiles { file -> file.extension == "conf" }.orEmpty().toList()
@@ -182,7 +183,6 @@ class ConfigFileKeysTest : StringSpec() {
     private const val REFERENCE_CONFIG = "config/config.conf"
     private const val HARNESS_CONFIG = "config/test-configs/harness.conf"
     private const val BUNDLED_DEFAULTS = "src/main/resources/reference.conf"
-    private const val NGINX_CONFIG = "nginx-tls.conf"
     private const val DISCOVERY_PATHS_KEY = "paths"
     private val CONFIG_DIRS =
       listOf(
