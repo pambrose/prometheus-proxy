@@ -726,6 +726,24 @@ class AgentGrpcServiceTest : StringSpec() {
       }
     }
 
+    // The proxy sets the interval, so the agent's log is where its operator sees it.
+    "registerAgent should log the stream keepalive interval the proxy gives, or that it gives none" {
+      withStubbedService("localhost:$PROXY_AGENT_PORT") { service, mockStub ->
+        suspend fun keepaliveLines(millis: Long): List<String> {
+          coEvery { mockStub.registerAgent(any(), any<Metadata>()) } returns registerAgentResponse {
+            valid = true
+            streamKeepaliveMillis = millis
+          }
+          return captureLogs<AgentGrpcService>(Level.INFO) { service.registerAgent(CountDownLatch(1)) }
+            .filter { it.level == Level.INFO && "stream keepalives" in it.formattedMessage }
+            .map { it.formattedMessage }
+        }
+
+        keepaliveLines(30_000).single() shouldContain "after 30s without a result"
+        keepaliveLines(0).single() shouldContain "no stream keepalives"
+      }
+    }
+
     // The proxy keeping the stream open: nothing to scrape.
     "readRequestsFromProxy should ignore a keepalive" {
       withStubbedService("localhost:$PROXY_AGENT_PORT") { service, stub ->

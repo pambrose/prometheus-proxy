@@ -522,6 +522,12 @@ internal class AgentGrpcService(
           throw RequestFailureException.fromProxy("registerAgent", response.reason)
         responseKeepalive =
           if (response.streamKeepaliveMillis > 0) response.streamKeepaliveMillis.milliseconds else Duration.INFINITE
+        logger.info {
+          if (responseKeepalive.isFinite())
+            "Sending stream keepalives to proxy $agentHostName after $responseKeepalive without a result"
+          else
+            "Sending no stream keepalives to proxy $agentHostName: it gives no interval"
+        }
       }
     initialConnectionLatch.countDown()
   }
