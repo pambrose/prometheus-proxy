@@ -12,6 +12,46 @@ REPO_DIR="$(cd "$DEMO_DIR/../.." && pwd)"
 MAKE="${MAKE:-$(command -v make || command -v gmake || echo make)}"
 MAKE_NAME="${MAKE##*/}"
 COMPOSE=(docker compose -f "$DEMO_DIR/docker/compose.yml")
+# Where up keeps the host ports moved with the *_PORT variables (docker/compose.yml's list), so each later command, and
+# docker compose, which reads this file on its own, uses them with no variable set again. Not committed. Delete a
+# port's line to go back to its default.
+PORTS_FILE="$DEMO_DIR/docker/.env"
+
+# Takes each port saved in docker/.env that the environment doesn't set, so the URLs below match what compose
+# publishes. A variable set on the command line wins, and up saves it in turn.
+load_saved_ports() {
+  local name value
+  [[ -f "$PORTS_FILE" ]] || return 0
+  while IFS='=' read -r name value || [[ -n "$name" ]]; do
+    if [[ "$name" =~ ^[A-Z0-9_]+_PORT$ && -z "${!name:-}" ]]; then
+      export "$name=$value"
+    fi
+  done <"$PORTS_FILE"
+}
+load_saved_ports
+
+# Saves in docker/.env each port variable compose.yml reads that the environment sets, in place of its old line,
+# keeping the file's other lines: save_ports
+save_ports() {
+  local name saved=""
+  local -a lines=()
+  while IFS= read -r name; do
+    if [[ -n "${!name:-}" ]]; then
+      lines+=("$name=${!name}")
+      saved+="|$name"
+    fi
+  done < <(grep -oE '\$\{[A-Z0-9_]+_PORT:-' "$DEMO_DIR/docker/compose.yml" | sed 's/^\${//; s/:-$//' | sort -u)
+  ((${#lines[@]})) || return 0
+  (
+    umask 077
+    {
+      # The file's other lines; grep finds none when every line is a port saved again, which isn't a failure
+      [[ ! -f "$PORTS_FILE" ]] || grep -vE "^(${saved#|})=" "$PORTS_FILE" || true
+      printf '%s\n' "${lines[@]}"
+    } >"$PORTS_FILE.new"
+    mv "$PORTS_FILE.new" "$PORTS_FILE"
+  )
+}
 # The images the demo runs, under these tags whichever way they came. The proxy's is pulled from Docker Hub (up) or
 # built from this checkout (up-local), under the tag the other demos use, so there's one copy of it; the roastery's is
 # built either way, against the latest release (up) or this checkout (up-local).
@@ -24,7 +64,8 @@ NEEDS_RELEASE_AFTER=4.7.0
 # build: never a released one, so nothing mistakes it for one.
 LOCAL_LIBRARY_VERSION="$(sed -n 's/^version=//p' "$REPO_DIR/gradle.properties")"
 LOCAL_LIBRARY_VERSION="${LOCAL_LIBRARY_VERSION%-SNAPSHOT}-spring-boot-demo-SNAPSHOT"
-# The secrets the demo's containers read (compose.yml), which up writes the first time it runs.
+# The secrets the demo's containers read (compose.yml), which up writes the first time it runs, to the file it saves
+# the moved ports in (PORTS_FILE).
 ENV_FILE="$DEMO_DIR/docker/.env"
 CERTS_DIR="$REPO_DIR/testing/certs"
 
@@ -55,13 +96,21 @@ text_width() {
 }
 
 # Prints text wrapped to that width, its first line after $1 and the rest after $2, which is as wide as $1 shows:
-# wrap <first> <rest> <text>...
+# wrap <first> <rest> <text>... It breaks lines only between words, and gives a word longer than a line, such as a
+# Prometheus URL, a line of its own, unbroken, so a terminal still opens it as a link.
 wrap() {
   local first="$1" rest="$2" line
   while IFS= read -r line; do
-    printf '%s%s\n' "$first" "${line% }"
+    printf '%s%s\n' "$first" "$line"
     first="$rest"
-  done < <(fold -s -w $(($(text_width) - ${#rest})) <<<"${*:3}")
+  done < <(awk -v width=$(($(text_width) - ${#rest})) '{
+      for (i = 1; i <= NF; i++) {
+        if (len > 0 && len + 1 + length($i) > width) { print out; out = ""; len = 0 }
+        out = len > 0 ? out " " $i : $i
+        len += (len > 0 ? 1 : 0) + length($i)
+      }
+    }
+    END { if (len > 0) print out }' <<<"${*:3}")
 }
 
 # What a scenario changed: a heading, then each thing to look for as a point of its own, its arguments joined.
@@ -128,7 +177,7 @@ wait_until() {
 
 answers() { curl -fsS -o /dev/null "$1" 2>/dev/null; }
 
-wait_for() { wait_until 120 answers "$1" || die "$2 did not answer at $1 within 120s; see '$0 logs'"; }
+wait_for() { wait_until 120 answers "$1" || die "$2 did not answer within 120s; see '$0 logs'. It was asked at $1"; }
 
 # A service's log lines that match an extended regex, one a line, or nothing: log_lines <service> <regex>
 log_lines() { "${COMPOSE[@]}" logs --no-log-prefix "$1" 2>/dev/null | grep -E "$2" || true; }
@@ -170,10 +219,10 @@ need() { command -v "$1" >/dev/null 2>&1 || die "$1 is not on the PATH; $2"; }
 # The tools up and up-local need, checked before anything is pulled, built, or started. Without curl, the wait for
 # each service would retry for two minutes and then blame the service.
 check_tools() {
-  need docker "install Docker (https://docs.docker.com/get-started/get-docker/)"
+  need docker "install Docker: https://docs.docker.com/get-started/get-docker/"
   docker info >/dev/null 2>&1 || die "Docker isn't running"
   docker compose version >/dev/null 2>&1 ||
-    die "the demo needs Docker Compose v2, the docker compose plugin (https://docs.docker.com/compose/install/)"
+    die "the demo needs Docker Compose v2, the docker compose plugin: https://docs.docker.com/compose/install/"
   need curl "install curl; the demo uses it to wait for each service to answer"
 }
 
@@ -183,27 +232,29 @@ check_tools() {
 check_build_tools() {
   local java="${JAVA_HOME:+$JAVA_HOME/bin/}java" version
   command -v "$java" >/dev/null 2>&1 ||
-    die "building from this checkout takes a JDK 17 or later; install one, or set JAVA_HOME (https://adoptium.net)"
+    die "building from this checkout takes a JDK 17 or later; set JAVA_HOME to one, or get one at https://adoptium.net"
   version="$("$java" -version 2>&1 | sed -nE '1s/.*version "(1\.)?([0-9]+).*/\2/p')"
   if ! [[ "$version" =~ ^[0-9]+$ ]] || ((version < 17)); then
     die "building from this checkout takes a JDK 17 or later, not Java ${version:-of an unknown version} ($java)"
   fi
-  need mvn "install Maven 3.9 or later (https://maven.apache.org/install.html), which builds the roastery"
+  need mvn "install Maven 3.9 or later, which builds the roastery: https://maven.apache.org/install.html"
 }
 
 # Writes the secrets the containers read, the first time the demo starts: the proxy's TLS certificate and key, as
 # base64, the certificate of the CA that signed it, which the roastery's agent trusts, and a token the agent presents.
+# It adds them to docker/.env, which holds any ports up saved too (save_ports), unless the file has them already.
 # The certificates are the repository's test ones (testing/certs), public, so this suits a demo on a laptop and nothing
 # else; the Cloud Platforms page shows how to make your own.
 write_env() {
-  [[ -f "$ENV_FILE" ]] && return
+  grep -q '^AGENT_TOKEN=' "$ENV_FILE" 2>/dev/null && return
   b64() { base64 <"$CERTS_DIR/$1" | tr -d '\n'; }
   random_hex() { od -An -N16 -tx1 /dev/urandom | tr -d ' \n'; }
   (
     umask 077
-    cat >"$ENV_FILE" <<EOF
-# Written by demos/spring-boot/demo.sh, and read by docker compose (compose.yml). Not committed: delete it, and the
-# next make up writes a new one, with a new token.
+    cat >>"$ENV_FILE" <<EOF
+# Written by demos/spring-boot/demo.sh, and read by docker compose (compose.yml): these secrets, and any host ports
+# make up saved, moved with the SPRING_BOOT_DEMO_*_PORT variables. Not committed. Delete a port's line to put it back
+# to its default, or the whole file, and the next make up writes a new one, with a new token.
 CERT_CHAIN_PEM=$(b64 server1.pem)
 PRIVATE_KEY_PEM=$(b64 server1.key)
 PROXY_CA_PEM=$(b64 ca.pem)
@@ -250,6 +301,7 @@ start_demo() {
   # runs is in use, and stays.
   old_ids="$(docker image inspect -f '{{.Id}}' "${IMAGES[@]}" 2>/dev/null || true)"
   write_env
+  save_ports
 
   if [[ $# -gt 0 ]]; then
     bold "Starting the demo with the proxy of release $1, from Docker Hub, and the roastery built against it"
@@ -271,7 +323,7 @@ start_demo() {
   fi
   # Compose recreates a container when its own config changes, not when a file it mounts does: reload Prometheus's
   # config (SIGHUP), so a demo started from an older checkout runs this one's.
-  "${COMPOSE[@]}" kill --signal SIGHUP prometheus >/dev/null
+  "${COMPOSE[@]}" --progress quiet kill --signal SIGHUP prometheus >/dev/null
 
   for id in $old_ids; do
     if [[ -z "$(docker image inspect -f '{{join .RepoTags ""}}' "$id" 2>/dev/null)" ]]; then
@@ -352,8 +404,7 @@ cmd_versions() {
   local libs
   libs="$("${COMPOSE[@]}" exec -T roastery ls /app/lib 2>/dev/null)" ||
     die "the roastery isn't running; start the demo with '$MAKE_NAME up'"
-  bold "The agent's libraries: the versions it's built with, and the ones the roastery runs, which Spring Boot" \
-    "$(lib_version "$libs" spring-boot) picked"
+  bold "The agent's libraries, and the versions Spring Boot $(lib_version "$libs" spring-boot) picked:"
   printf '  %-24s %-14s %s\n' "Library" "The agent's" "The roastery's"
   row "kotlinx-serialization" "$(catalog_version serialization)" "$(lib_version "$libs" kotlinx-serialization-json-jvm)"
   row "Jackson 2" "$(catalog_version jackson)" "$(lib_version "$libs" jackson-databind 2)"
@@ -368,7 +419,7 @@ cmd_versions() {
     "RoasteryAgentTest checks on every pull request. Were one to break it, the pom sets that library to the agent's" \
     "version with the property Spring Boot names it by, such as grpc-java.version or netty.version, which Spring" \
     "Boot's Version Properties appendix lists for every library it manages. netty-tcnative has none, since Netty's" \
-    "BOM sets it: the pom pins netty-tcnative-classes and netty-tcnative-boringssl-static, with each native's" \
+    "BOM sets it: the pom would pin netty-tcnative-classes and netty-tcnative-boringssl-static, with each native's" \
     "classifier, in its own dependencyManagement."
   watch_for
   point "Each row ends with how the roastery's version compares with the agent's: older, the same, or newer."
@@ -493,6 +544,57 @@ TOUR_PARTS=(
   "2 A graceful shutdown takes the agent down first"
 )
 
+# The tour's last words: how to start it again, the other demos, in the order the docs site's Demos page gives them,
+# and how to stop this one. tour_ending <this demo's directory under demos/>
+tour_ending() {
+  local demo
+  bold "That's the tour."
+  wrap "" "" "To start again from a part, run $MAKE_NAME tour PART=<n>, or $0 tour <n>."
+  echo
+  bold "The other demos:"
+  for demo in basics network nginx kubernetes ktor spring-boot plain-kotlin; do
+    [[ "$demo" != "$1" ]] || continue
+    case "$demo" in
+    basics)
+      wrap "  - " "    " "Standalone agents behind a simulated firewall, with the proxy's dashboard, discovery," \
+        "eviction, and an identity for each agent, are in the basics demo, in demos/basics."
+      ;;
+    network)
+      wrap "  - " "    " "Proxy failover, filtering at the agent, and tracing, over a simulated WAN, are in the" \
+        "network demo, in demos/network."
+      ;;
+    nginx)
+      wrap "  - " "    " "The proxy behind nginx, a reverse proxy that ends the agents' TLS, is in the nginx demo," \
+        "in demos/nginx."
+      ;;
+    kubernetes)
+      wrap "  - " "    " "The proxy and agent deployed on Kubernetes with their Helm charts are in the Kubernetes" \
+        "demo, in demos/kubernetes, which needs kind, kubectl, and Helm as well as Docker."
+      ;;
+    ktor)
+      wrap "  - " "    " "The agent embedded in a Ktor app through the Ktor plugin, under load, with alerts and a" \
+        "deploy, is in the Ktor demo, in demos/ktor."
+      ;;
+    spring-boot)
+      wrap "  - " "    " "The agent embedded in a Spring Boot app written in Java, through the Spring Boot starter," \
+        "is in the Spring Boot demo, in demos/spring-boot."
+      ;;
+    plain-kotlin)
+      wrap "  - " "    " "The agent embedded in plain Kotlin programs with no framework or HTTP server, scaled out" \
+        "and in, is in the plain Kotlin demo, in demos/plain-kotlin."
+      ;;
+    esac
+  done
+  echo
+  if [[ "$1" == kubernetes ]]; then
+    wrap "" "" "This demo's two kind clusters take a few GB of memory. To delete them and free it, run" \
+      "$MAKE_NAME down, or $0 down."
+  else
+    wrap "" "" "The demos use different ports, so they can run side by side, but each takes memory and CPU." \
+      "To stop this one and free its resources, run $MAKE_NAME down, or $0 down."
+  fi
+}
+
 cmd_tour() {
   check_tour_from "${1:-}"
   answers "$APP_URL/actuator/health" ||
@@ -518,8 +620,7 @@ cmd_tour() {
   if part 2 "The agent reads the roastery's metrics from its registry, inside the JVM, rather than over HTTP, so" \
     "the roastery serves no metrics endpoint, and has no password or Spring Security to set up for one."; then
     step "Try Actuator's /actuator/prometheus, then read the roastery's metrics through the proxy." -- peek
-    instruct "Open Prometheus's graph of the batches roasted in the last minute, by origin:" \
-      "$GRAPH_URL" \
+    instruct "Open Prometheus's graph of the batches roasted in the last minute, by origin: $GRAPH_URL" \
       "Each line counts one origin's batches in the minute before each point, about 30 in all, a batch every two" \
       "seconds. Prometheus scrapes the proxy at /roastery_metrics, and the instance label names the roastery."
   fi
@@ -562,20 +663,7 @@ cmd_tour() {
 
   wait_after_output "Press Enter to finish the tour"
   blank_line
-  bold "That's the tour."
-  echo "To start again from a part, run $MAKE_NAME tour PART=<n>, or $0 tour <n>."
-  echo
-  bold "The other demos:"
-  echo "An app with the agent embedded under load, in Grafana, with alerts, a deploy that hands its path to the new"
-  echo "version, the proxy going away, and its secrets, is the coffee shop in the Ktor demo, in demos/ktor."
-  echo "Standalone agents behind a firewall, with the proxy's dashboard, are in the basics demo, in demos/basics."
-  echo "Proxy failover, filtering at the agent, and tracing are in the network demo, in demos/network."
-  echo "The proxy behind nginx, a reverse proxy that ends the agents' TLS, is in the nginx demo, in demos/nginx."
-  echo "The same proxy and agent, deployed on Kubernetes with their Helm charts, are in the Kubernetes demo, in" \
-    "demos/kubernetes, which needs kind, kubectl, and Helm as well as Docker."
-  echo
-  echo "The demos use different ports, so they can run side by side, but each takes memory and CPU."
-  echo "To stop this one and free its resources, run $MAKE_NAME down, or $0 down."
+  tour_ending spring-boot
 }
 
 main() {
@@ -590,7 +678,7 @@ main() {
   logs) "${COMPOSE[@]}" logs --follow --tail 50 "$@" ;;
   tour) cmd_tour "$@" ;;
   settings)
-    bold "The roastery logged its agent's settings, as Spring Boot bound them, and the agent starting:"
+    bold "The roastery logged its agent starting, with the settings Spring Boot bound:"
     # The latest start's three lines, as the log keeps every start's, and the agent registers its path again on each
     # reconnect (proxy-start)
     log_lines roastery "Starting the Prometheus agent|Prometheus agent .* started|Registered .* as /" |
@@ -610,10 +698,10 @@ main() {
     code="$(curl -s -o /dev/null -w '%{http_code}' "$APP_URL/actuator/prometheus")"
     bold "The roastery's /actuator/prometheus answers $code"
     echo
-    bold "Through the proxy, $PROXY_URL/roastery_metrics answers with the metrics:"
+    bold "Its metrics, read through the proxy: $PROXY_URL/roastery_metrics"
     # head stops reading early, so pipefail would see grep's broken pipe as a failure.
-    curl -fsS "$PROXY_URL/roastery_metrics" | grep -E '^roastery_(batches_roasted_total|roasted_stock)' | head -6 ||
-      true
+    curl -fsS "$PROXY_URL/roastery_metrics" | grep -E '^roastery_(batches_roasted_total|roasted_stock)' | head -6 |
+      sed 's/^/  /' || true
     echo "  ..."
     how_it_works "The roastery exposes only Actuator's health, so /actuator/prometheus isn't there to guard. For each" \
       "scrape, the agent reads the app's PrometheusRegistry bean, where Micrometer keeps the roastery's meters, in" \
@@ -626,7 +714,7 @@ main() {
   health)
     local json
     json="$(curl -fsS "$APP_URL/actuator/health")" ||
-      die "the roastery isn't answering at $APP_URL; is the demo running? See '$0 status'"
+      die "the demo may not be running; '$0 status' shows whether it is. The roastery doesn't answer at $APP_URL"
     bold "The agent's component of Actuator's /actuator/health:"
     sed -nE 's/.*("prometheusAgent":\{"details":\{[^}]*\},"status":"[A-Z_]+"\}).*/  \1/p' <<<"$json"
     # The app's own status, the last in the JSON

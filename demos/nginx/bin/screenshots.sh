@@ -19,6 +19,21 @@ DEMO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_DIR="$(cd "$DEMO_DIR/../.." && pwd)"
 DEMO="$DEMO_DIR/demo.sh"
 OUT_DIR="$REPO_DIR/website/prometheus-proxy/docs/images/nginx-demo"
+# Where `make up` keeps the host ports moved with the *_PORT variables, as demo.sh reads them.
+PORTS_FILE="$DEMO_DIR/docker/.env"
+
+# Takes each port saved in docker/.env that the environment doesn't set, so the URLs below match what compose
+# publishes. A variable set on the command line wins, and up saves it in turn.
+load_saved_ports() {
+  local name value
+  [[ -f "$PORTS_FILE" ]] || return 0
+  while IFS='=' read -r name value || [[ -n "$name" ]]; do
+    if [[ "$name" =~ ^[A-Z0-9_]+_PORT$ && -z "${!name:-}" ]]; then
+      export "$name=$value"
+    fi
+  done <"$PORTS_FILE"
+}
+load_saved_ports
 
 DASHBOARD_URL="http://localhost:${NGINX_DEMO_DASHBOARD_PORT:-8594}/dashboard"
 NGINX_DASHBOARD_URL="http://localhost:${NGINX_DEMO_NGINX_PORT:-8590}/dashboard"

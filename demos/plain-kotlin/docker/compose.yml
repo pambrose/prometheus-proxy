@@ -1,6 +1,6 @@
-# The Prometheus Proxy plain Kotlin demo: a bakery whose ovens are workers with no HTTP server, plain Kotlin programs that take
-# orders from a Redis queue, each with the agent embedded in it, which connects to a proxy, with Prometheus and Grafana
-# beside the proxy. See ../README.md. From demos/plain-kotlin:
+# The Prometheus Proxy plain Kotlin demo: a bakery whose ovens are workers with no HTTP server, plain Kotlin programs
+# that take orders from a Redis queue, each with the agent embedded in it, which connects to a proxy, with Prometheus
+# and Grafana beside the proxy. See ../README.md. From demos/plain-kotlin:
 #
 #   make up        # builds the oven against the latest release, and starts everything
 #   make up-local  # the same, with the library, proxy, and oven built from this checkout
@@ -12,8 +12,9 @@
 # Every published port binds to 127.0.0.1 only: the proxy's dashboard has no authentication, Grafana lets anyone view
 # it without signing in, and its admin password is the default, which suits a demo on a laptop and nothing else. The
 # default ports are the basics demo's plus 600, so the demos can run at once. Set PLAIN_KOTLIN_DEMO_DASHBOARD_PORT,
-# PLAIN_KOTLIN_DEMO_PROXY_PORT, PLAIN_KOTLIN_DEMO_PROMETHEUS_PORT, or PLAIN_KOTLIN_DEMO_GRAFANA_PORT to move a host port
-# that's already taken. The ovens and Redis publish none.
+# PLAIN_KOTLIN_DEMO_PROXY_PORT, PLAIN_KOTLIN_DEMO_PROMETHEUS_PORT, or PLAIN_KOTLIN_DEMO_GRAFANA_PORT for make up to
+# move a host port that's already taken; make up saves it in docker/.env, which compose reads on its own. The ovens and
+# Redis publish none.
 
 name: prometheus-proxy-plain-kotlin-demo
 
@@ -28,7 +29,7 @@ x-oven-env: &oven-env
 # What every oven shares: its image, which demo.sh builds, and what it waits for: the queue, and the proxy, which an
 # agent retries until it's there.
 x-oven: &oven
-  image: prometheus-proxy-demo/worker-app:local
+  image: prometheus-proxy-demo/plain-kotlin-app:local
   depends_on:
     redis:
       condition: service_healthy

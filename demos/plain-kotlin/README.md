@@ -84,11 +84,13 @@ minute.
 
 `make open` opens the proxy's dashboard, Grafana, and Prometheus's targets in your browser.
 
-The ports are the basics demo's plus 600, so the demos can run side by side. If a port is already taken, move it, for
-example with `PLAIN_KOTLIN_DEMO_GRAFANA_PORT=3601 make up`. The variables are `PLAIN_KOTLIN_DEMO_DASHBOARD_PORT`,
-`PLAIN_KOTLIN_DEMO_GRAFANA_PORT`, `PLAIN_KOTLIN_DEMO_PROMETHEUS_PORT`, and `PLAIN_KOTLIN_DEMO_PROXY_PORT`. Every port
-binds to `127.0.0.1` only, and the ovens and Redis publish none. The proxy's dashboard has no authentication, and
-Grafana uses its default admin password, so this setup is for a laptop, not for anything shared.
+The ports are the basics demo's plus 600, so the demos can run side by side. If a port is already taken, set its
+variable for `make up`, for example `PLAIN_KOTLIN_DEMO_GRAFANA_PORT=3601 make up`. The variables are
+`PLAIN_KOTLIN_DEMO_DASHBOARD_PORT`, `PLAIN_KOTLIN_DEMO_GRAFANA_PORT`, `PLAIN_KOTLIN_DEMO_PROMETHEUS_PORT`, and
+`PLAIN_KOTLIN_DEMO_PROXY_PORT`. `make up` saves the port in `docker/.env`, which every later command and docker compose
+read, so you set it once; delete its line there to go back to the default. Every port binds to `127.0.0.1` only, and
+the ovens and Redis publish none. The proxy's dashboard has no authentication, and Grafana uses its default admin
+password, so this setup is for a laptop, not for anything shared.
 
 ## What's running
 
@@ -177,16 +179,17 @@ oven's JVM, reads the oven's metrics in-process and sends them out to the proxy.
 ```
 
 Compose publishes no port for the oven, and the oven's JVM, its container's process 1, listens on nothing: its only
-connections are the two it opened, to Redis and to the proxy's agent port. Prometheus's targets page,
-<http://localhost:9690/targets>, lists the oven's path through the proxy all the same, `oven_<id>_metrics`, under the
-`oven` job, and its agent's own, `oven_<id>_agent_metrics`, under `oven-agent`. Prometheus's config names neither: its
-one job reads the proxy's service discovery, which lists each path an agent registered. The code above does the rest.
+connections are the two it opened, to Redis and to the proxy's agent port. Prometheus lists the oven's path through
+the proxy all the same, `oven_<id>_metrics`, under the `oven` job, and its agent's own, `oven_<id>_agent_metrics`,
+under `oven-agent`. Its config names neither: its one job reads the proxy's service discovery, which lists each path an
+agent registered, and the code above does the rest. Prometheus's targets page shows both:
+<http://localhost:9690/targets>
 
 ### 2. The metrics in Grafana
 
-Open Grafana, <http://localhost:3600>. It lands on the **Bakery** dashboard: ovens scraped, agents connected, waiting
-orders, orders baked a minute, and the bake time, then each oven's orders, the backlog against the number of ovens, bake
-times, and how much of its time each oven spends baking.
+Grafana lands on the **Bakery** dashboard: ovens scraped, agents connected, waiting orders, orders baked a minute, and
+the bake time, then each oven's orders, the backlog against the number of ovens, bake times, and how much of its time
+each oven spends baking. Open it: <http://localhost:3600>
 
 ```bash
 ./demo.sh metrics
@@ -220,13 +223,15 @@ each, and the three clear the backlog in about two minutes.
 
 It stops the other two ovens with SIGTERM, as a scale-in on Kubernetes or ECS does, and shows each one's log: the oven
 finishing the order it was baking, so no order taken from the queue is lost, then its agent, which `use { }` stops,
-disconnecting from the proxy. The proxy drops the agents' paths at once: its service discovery,
-<http://localhost:8680/discovery>, which Prometheus follows, lists only the remaining oven's two. The Paths view of its
-dashboard, <http://localhost:8694/dashboard/paths>, marks the stopped ovens' paths `gone` and keeps them for an hour, so
-it's clear what left, and its Activity view lists each stopped oven's agent as disconnected. Prometheus drops the
-stopped ovens' targets at its next discovery refresh, within 5 seconds, with no restart and no config change. A scrape
-that comes between an agent's disconnect and that refresh finds no path and records `up` 0, as a terminating pod's can
-on Kubernetes: **Scrape up, by oven** shows it, and the command says whether one did.
+disconnecting from the proxy. The proxy drops the agents' paths at once, and its service discovery, which Prometheus
+follows, lists only the remaining oven's two: <http://localhost:8680/discovery>
+
+Prometheus drops the stopped ovens' targets at its next discovery refresh, within 5 seconds, with no restart and no
+config change. A scrape that comes between an agent's disconnect and that refresh finds no path and records `up` 0, as
+a terminating pod's can on Kubernetes: **Scrape up, by oven** shows it, and the command says whether one did.
+
+The proxy dashboard's Activity view lists each stopped oven's agent as disconnected, and its Paths view marks the
+stopped ovens' paths `gone` and keeps them for an hour, so it's clear what left: <http://localhost:8694/dashboard/paths>
 
 ### 5. No proxy, no outage
 
@@ -249,11 +254,23 @@ settings wrong, shows its log, and stops it:
   that at ERROR once, naming where the token is set, and keeps retrying at DEBUG: in the 20 seconds the scenario
   watches, the proxy refuses it about seven times, and the oven logs one.
 
-Each oven bakes all the same. That's the tour. Standalone agents behind a firewall are in the [basics demo](../basics),
-proxy failover and tracing in the [network demo](../network), the proxy behind nginx in the [nginx demo](../nginx), the
-Helm charts in the [Kubernetes demo](../kubernetes), the agent in a Ktor app in the [Ktor demo](../ktor), and in
-a Spring Boot app, written in Java, in the [Spring Boot demo](../spring-boot). The demos use different ports, so they
-can run side by side, but each takes memory and CPU: `make down` stops this one and frees its resources.
+Each oven bakes all the same. That's the tour. The other demos, in the order the docs site's
+[Demos](https://prometheus-proxy.com/demos/) page gives them:
+
+- [Basics demo](../basics): the whole system on one machine, the proxy and its dashboard, three agents behind a
+  simulated firewall, Prometheus, and Grafana
+- [Network demo](../network): a simulated WAN between the agents and the proxies, and what a far, thin, dead, flaky, or
+  missing link does
+- [nginx demo](../nginx): nginx between the agents and the proxy, its stream timeouts, its reloads, and TLS ended on one
+  port
+- [Kubernetes demo](../kubernetes): the Helm charts on two kind clusters, with Kubernetes doing the operating and the
+  target cluster exposing nothing
+- [Ktor demo](../ktor): a coffee shop, a Ktor app that runs the agent in its own JVM through the Ktor plugin
+- [Spring Boot demo](../spring-boot): a roastery, a Spring Boot app in Java whose agent the starter starts from
+  properties
+
+The demos use different ports, so they can run side by side, but each takes memory and CPU: `make down` stops this one
+and frees its resources.
 
 ## Scenario reference
 
@@ -267,6 +284,7 @@ can run side by side, but each takes memory and CPU: `make down` stops this one 
 | `make tour [PART=n]` | Walks through the guided tour above, from part 1 or the one given, pausing before each step |  |
 | `make status` | The containers, the ovens and their paths, the queue, and the URLs |  |
 | `make logs [SERVICE=name]` | Follows the logs, of every service or the one given |  |
+| `make open` | Opens the proxy's dashboard, Grafana, and Prometheus's targets in the browser |  |
 
 ## How it's put together
 

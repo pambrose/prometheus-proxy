@@ -12,7 +12,8 @@
 # Every published port binds to 127.0.0.1 only: the dashboards have no login, which suits a demo on a laptop and
 # nothing else. Each default port is the basics demo's plus 500, so the demos can run at once. Set
 # NGINX_DEMO_DASHBOARD_PORT, NGINX_DEMO_NGINX_PORT, NGINX_DEMO_AGENT_DASHBOARD_PORT, NGINX_DEMO_PROXY_PORT, or
-# NGINX_DEMO_PROMETHEUS_PORT to move a host port that's already taken.
+# NGINX_DEMO_PROMETHEUS_PORT for `make up` to move a host port that's already taken: `make up` saves it in .env, beside
+# this file, which compose reads on its own, so it stays moved.
 
 name: prometheus-proxy-nginx-demo
 

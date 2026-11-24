@@ -88,9 +88,10 @@ that it starts in under a minute, and runs without a network connection.
 Every port binds to `127.0.0.1` only: the dashboards run without a login, but for the proxy's in [its own
 scenario](#a-login-for-the-dashboard), and Grafana keeps its default admin password, which suits a laptop and nothing
 shared. To move a port that is already taken, set `DEMO_DASHBOARD_PORT`, `DEMO_GRAFANA_PORT`, `DEMO_PROMETHEUS_PORT`, or
-`DEMO_PROXY_PORT`, for example `DEMO_GRAFANA_PORT=3001 make up`, and for an agent's dashboard
+`DEMO_PROXY_PORT` for `make up`, for example `DEMO_GRAFANA_PORT=3001 make up`, and for an agent's dashboard
 `DEMO_AGENT_EAST_DASHBOARD_PORT`, `DEMO_AGENT_WEST_1_DASHBOARD_PORT`, `DEMO_AGENT_WEST_2_DASHBOARD_PORT`,
-`DEMO_AGENT_ROGUE_DASHBOARD_PORT`, or `DEMO_AGENT_EAST_COPY_DASHBOARD_PORT`.
+`DEMO_AGENT_ROGUE_DASHBOARD_PORT`, or `DEMO_AGENT_EAST_COPY_DASHBOARD_PORT`. `make up` saves the port in `docker/.env`,
+which every later command and docker compose read, so you set it once; delete its line there to go back to the default.
 
 ## What's running
 
@@ -356,12 +357,18 @@ tour does this last: the agents reconnect within a few seconds, and the dashboar
 
 - The demo's [README](https://github.com/pambrose/prometheus-proxy/tree/master/demos/basics) has these scenarios
   as a guided tour, explaining how each one works, and lists the files that set the demo up.
-- The [Network Demo](network-demo.md) puts a simulated WAN between the agents and the proxies, and shows what a far,
-  thin, dead, flaky, or missing link does. It also covers what this demo leaves out: the agents failing over to a
-  standby proxy, a filter at the agent that keeps a payload from crossing the firewall, and a call followed through
-  the firewall in Zipkin.
-- The [nginx Demo](nginx-demo.md) puts nginx, a reverse proxy that ends the agents' TLS, between the agents and the
-  proxy, and in front of the dashboard.
 - [Dashboard](web-dashboard.md) covers every part of the dashboard, and how to turn it on for your own proxy.
 - [Agent Dashboard](agent-dashboard.md) covers the agent's own dashboard, and how to turn it on for your agents.
 - [Grafana & Alerting](grafana.md) covers the dashboards and alerting rules the project ships.
+- The other demos, in the order the [Demos](demos/index.md) page gives them:
+    - [Network Demo](network-demo.md): a simulated WAN between the agents and the proxies, and what a far, thin, dead,
+      flaky, or missing link does
+    - [nginx Demo](nginx-demo.md): nginx between the agents and the proxy, its stream timeouts, its reloads, and TLS
+      ended on one port
+    - [Kubernetes Demo](kubernetes-demo.md): the Helm charts on two kind clusters, with Kubernetes doing the operating
+      and the target cluster exposing nothing
+    - [Ktor Demo](ktor-demo.md): a coffee shop, a Ktor app that runs the agent in its own JVM through the Ktor plugin
+    - [Spring Boot Demo](spring-boot-demo.md): a roastery, a Spring Boot app in Java whose agent the starter starts
+      from properties
+    - [Plain Kotlin Demo](plain-kotlin-demo.md): a bakery's ovens, workers with no framework or HTTP server, each
+      reading its own metrics in-process

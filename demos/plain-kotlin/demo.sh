@@ -12,10 +12,50 @@ REPO_DIR="$(cd "$DEMO_DIR/../.." && pwd)"
 MAKE="${MAKE:-$(command -v make || command -v gmake || echo make)}"
 MAKE_NAME="${MAKE##*/}"
 COMPOSE=(docker compose -f "$DEMO_DIR/docker/compose.yml")
+# Where up keeps the host ports moved with the *_PORT variables (docker/compose.yml's list), so each later command, and
+# docker compose, which reads this file on its own, uses them with no variable set again. Not committed. Delete a
+# port's line to go back to its default.
+PORTS_FILE="$DEMO_DIR/docker/.env"
+
+# Takes each port saved in docker/.env that the environment doesn't set, so the URLs below match what compose
+# publishes. A variable set on the command line wins, and up saves it in turn.
+load_saved_ports() {
+  local name value
+  [[ -f "$PORTS_FILE" ]] || return 0
+  while IFS='=' read -r name value || [[ -n "$name" ]]; do
+    if [[ "$name" =~ ^[A-Z0-9_]+_PORT$ && -z "${!name:-}" ]]; then
+      export "$name=$value"
+    fi
+  done <"$PORTS_FILE"
+}
+load_saved_ports
+
+# Saves in docker/.env each port variable compose.yml reads that the environment sets, in place of its old line,
+# keeping the file's other lines: save_ports
+save_ports() {
+  local name saved=""
+  local -a lines=()
+  while IFS= read -r name; do
+    if [[ -n "${!name:-}" ]]; then
+      lines+=("$name=${!name}")
+      saved+="|$name"
+    fi
+  done < <(grep -oE '\$\{[A-Z0-9_]+_PORT:-' "$DEMO_DIR/docker/compose.yml" | sed 's/^\${//; s/:-$//' | sort -u)
+  ((${#lines[@]})) || return 0
+  (
+    umask 077
+    {
+      # The file's other lines; grep finds none when every line is a port saved again, which isn't a failure
+      [[ ! -f "$PORTS_FILE" ]] || grep -vE "^(${saved#|})=" "$PORTS_FILE" || true
+      printf '%s\n' "${lines[@]}"
+    } >"$PORTS_FILE.new"
+    mv "$PORTS_FILE.new" "$PORTS_FILE"
+  )
+}
 # The images the demo runs, under these tags whichever way they came. The proxy's is pulled from Docker Hub (up) or
 # built from this checkout (up-local), under the tag the other demos use, so there's one copy of it; the oven's is
 # built either way, against the latest release (up) or this checkout (up-local).
-IMAGES=(prometheus-proxy-demo/proxy:local prometheus-proxy-demo/worker-app:local)
+IMAGES=(prometheus-proxy-demo/proxy:local prometheus-proxy-demo/plain-kotlin-app:local)
 RELEASED_PROXY_IMAGE=pambrose/prometheus-proxy
 # The demo shows what came after this release (fromEnvironment(), source(path, registry), agentMetricsAt(), and
 # startIfConfigured()), so until a later one is out, up builds everything from this checkout, as up-local does.
@@ -46,13 +86,21 @@ text_width() {
 }
 
 # Prints text wrapped to that width, its first line after $1 and the rest after $2, which is as wide as $1 shows:
-# wrap <first> <rest> <text>...
+# wrap <first> <rest> <text>... It breaks lines only between words, and gives a word longer than a line, such as a
+# Prometheus URL, a line of its own, unbroken, so a terminal still opens it as a link.
 wrap() {
   local first="$1" rest="$2" line
   while IFS= read -r line; do
-    printf '%s%s\n' "$first" "${line% }"
+    printf '%s%s\n' "$first" "$line"
     first="$rest"
-  done < <(fold -s -w $(($(text_width) - ${#rest})) <<<"${*:3}")
+  done < <(awk -v width=$(($(text_width) - ${#rest})) '{
+      for (i = 1; i <= NF; i++) {
+        if (len > 0 && len + 1 + length($i) > width) { print out; out = ""; len = 0 }
+        out = len > 0 ? out " " $i : $i
+        len += (len > 0 ? 1 : 0) + length($i)
+      }
+    }
+    END { if (len > 0) print out }' <<<"${*:3}")
 }
 
 # What a scenario changed: a heading, then each thing to look for as a point of its own, its arguments joined.
@@ -118,7 +166,7 @@ wait_until() {
 
 answers() { curl -fsS -o /dev/null "$1" 2>/dev/null; }
 
-wait_for() { wait_until 120 answers "$1" || die "$2 did not answer at $1 within 120s; see '$0 logs'"; }
+wait_for() { wait_until 120 answers "$1" || die "$2 did not answer within 120s; see '$0 logs'. It was asked at $1"; }
 
 # Fails unless the demo is running, naming how to start it.
 require_demo() {
@@ -204,10 +252,10 @@ need() { command -v "$1" >/dev/null 2>&1 || die "$1 is not on the PATH; $2"; }
 # The tools up and up-local need, checked before anything is pulled, built, or started. Without curl, the wait for
 # each service would retry for two minutes and then blame the service.
 check_tools() {
-  need docker "install Docker (https://docs.docker.com/get-started/get-docker/)"
+  need docker "install Docker: https://docs.docker.com/get-started/get-docker/"
   docker info >/dev/null 2>&1 || die "Docker isn't running"
   docker compose version >/dev/null 2>&1 ||
-    die "the demo needs Docker Compose v2, the docker compose plugin (https://docs.docker.com/compose/install/)"
+    die "the demo needs Docker Compose v2, the docker compose plugin: https://docs.docker.com/compose/install/"
   need curl "install curl; the demo uses it to wait for each service to answer"
 }
 
@@ -216,7 +264,7 @@ check_tools() {
 check_jdk() {
   local java="${JAVA_HOME:+$JAVA_HOME/bin/}java" version
   command -v "$java" >/dev/null 2>&1 ||
-    die "building from this checkout takes a JDK 17 or later; install one, or set JAVA_HOME (https://adoptium.net)"
+    die "building from this checkout takes a JDK 17 or later; set JAVA_HOME to one, or get one at https://adoptium.net"
   version="$("$java" -version 2>&1 | sed -nE '1s/.*version "(1\.)?([0-9]+).*/\2/p')"
   if ! [[ "$version" =~ ^[0-9]+$ ]] || ((version < 17)); then
     die "building from this checkout takes a JDK 17 or later, not Java ${version:-of an unknown version} ($java)"
@@ -257,6 +305,7 @@ cmd_up_local() {
 # with ones built from this checkout (start_demo). It runs one oven, whatever a scenario scaled them to.
 start_demo() {
   local old_ids id grafana_before
+  save_ports
   # The images the demo ran, to remove below once nothing tags them: each build makes new ones. One another demo still
   # runs is in use, and stays.
   old_ids="$(docker image inspect -f '{{.Id}}' "${IMAGES[@]}" 2>/dev/null || true)"
@@ -281,9 +330,9 @@ start_demo() {
   # nor Grafana reliably notices a changed file on its own. Reload Prometheus's config (SIGHUP), and restart a Grafana
   # that was already running for its dashboards, so a demo started from an older checkout runs this one's. A Grafana
   # just created read them as they are.
-  "${COMPOSE[@]}" kill --signal SIGHUP prometheus >/dev/null
+  "${COMPOSE[@]}" --progress quiet kill --signal SIGHUP prometheus >/dev/null
   if [[ -n "$grafana_before" && "$grafana_before" == "$("${COMPOSE[@]}" ps --quiet grafana)" ]]; then
-    "${COMPOSE[@]}" restart grafana >/dev/null
+    "${COMPOSE[@]}" --progress quiet restart grafana >/dev/null
   fi
   # The bakery opens with no orders waiting, whatever an earlier run's rush left in a Redis that kept running.
   "${COMPOSE[@]}" exec -T redis redis-cli DEL orders >/dev/null
@@ -393,13 +442,13 @@ cmd_sockets() {
       "container on a compose network, and which isn't the oven's."
   fi
   echo
-  bold "Prometheus scrapes it all the same, through the proxy ($PROMETHEUS_URL/targets):"
+  bold "Prometheus scrapes it anyway, through the proxy: $PROMETHEUS_URL/targets"
   print_targets
   how_it_works "The oven is a plain Kotlin program with no HTTP server, and compose publishes no port for it. Its" \
     "agent connects out to the proxy, over gRPC, and registers two paths named after the container," \
     "oven_${host}_metrics, the oven's metrics, and oven_${host}_agent_metrics, the agent's own. For each scrape," \
-    "the proxy asks the agent over that connection, and the agent reads the oven's registry in-process. Prometheus" \
-    "finds both paths in the proxy's service discovery, $PROXY_URL/discovery, so its config names no oven."
+    "the proxy asks the agent over that connection, and the agent reads the oven's registry in-process. Prometheus's" \
+    "config names no oven: it finds both paths in the proxy's service discovery, at $PROXY_URL/discovery"
   watch_for
   point "Nothing listens: the oven's only connections are the ones it opened, to the proxy and to Redis."
   point "Prometheus's targets page lists the oven's path under the oven job, and its agent's under oven-agent," \
@@ -411,7 +460,7 @@ cmd_sockets() {
 show_path() {
   local body
   body="$(curl -fsS "$PROXY_URL/$1")" || die "the proxy didn't serve /$1"
-  bold "$2, at $PROXY_URL/$1:"
+  bold "$2: $PROXY_URL/$1"
   grep -E "$3" <<<"$body" | head -n "$4" | sed 's/^/  /' || true
   echo "  ..."
   echo "  $(grep -c "^$5" <<<"$body" || true) $5 samples, and $(grep -c "^$6" <<<"$body" || true) $6 samples"
@@ -464,7 +513,7 @@ scale_up() {
   print_targets
   how_it_works "This runs docker compose up --scale oven=$count. Each new oven is the same image, whose host name" \
     "is its new container's ID: its agent registers oven_<id>_metrics and oven_<id>_agent_metrics with the proxy," \
-    "whose service discovery, $PROXY_URL/discovery, lists them at once. Prometheus reads it every 5 seconds."
+    "whose service discovery lists them at once. Prometheus reads it every 5 seconds, at $PROXY_URL/discovery"
   watch_for
   point "Prometheus's targets page lists each oven under the oven job, with no change to its config:" \
     "$PROMETHEUS_URL/targets"
@@ -614,8 +663,8 @@ cmd_wrong_token() {
   sleep 6
   refusals=$(($(prom_number 'sum(proxy_agent_auth_failures_total)') - before))
   echo
-  echo "  In about 25 seconds, the proxy refused the agent $refusals times (proxy_agent_auth_failures_total), and"
-  echo "  the oven logged $errors of them at ERROR."
+  wrap "  " "  " "In about 25 seconds, the proxy refused the agent $refusals times (proxy_agent_auth_failures_total)," \
+    "and the oven logged $errors of them at ERROR."
   how_it_works "This starts oven-wrong-token, with a PROMETHEUS_AGENT_TOKEN the proxy doesn't accept, watches it" \
     "for 20 seconds, then stops it. Its agent starts, since nothing about it is wrong until it connects, so" \
     "startIfConfigured() returns it. The proxy refuses the token (UNAUTHENTICATED): the agent logs the first" \
@@ -743,6 +792,57 @@ TOUR_PARTS=(
   "2 No proxy, no outage"
 )
 
+# The tour's last words: how to start it again, the other demos, in the order the docs site's Demos page gives them,
+# and how to stop this one. tour_ending <this demo's directory under demos/>
+tour_ending() {
+  local demo
+  bold "That's the tour."
+  wrap "" "" "To start again from a part, run $MAKE_NAME tour PART=<n>, or $0 tour <n>."
+  echo
+  bold "The other demos:"
+  for demo in basics network nginx kubernetes ktor spring-boot plain-kotlin; do
+    [[ "$demo" != "$1" ]] || continue
+    case "$demo" in
+    basics)
+      wrap "  - " "    " "Standalone agents behind a simulated firewall, with the proxy's dashboard, discovery," \
+        "eviction, and an identity for each agent, are in the basics demo, in demos/basics."
+      ;;
+    network)
+      wrap "  - " "    " "Proxy failover, filtering at the agent, and tracing, over a simulated WAN, are in the" \
+        "network demo, in demos/network."
+      ;;
+    nginx)
+      wrap "  - " "    " "The proxy behind nginx, a reverse proxy that ends the agents' TLS, is in the nginx demo," \
+        "in demos/nginx."
+      ;;
+    kubernetes)
+      wrap "  - " "    " "The proxy and agent deployed on Kubernetes with their Helm charts are in the Kubernetes" \
+        "demo, in demos/kubernetes, which needs kind, kubectl, and Helm as well as Docker."
+      ;;
+    ktor)
+      wrap "  - " "    " "The agent embedded in a Ktor app through the Ktor plugin, under load, with alerts and a" \
+        "deploy, is in the Ktor demo, in demos/ktor."
+      ;;
+    spring-boot)
+      wrap "  - " "    " "The agent embedded in a Spring Boot app written in Java, through the Spring Boot starter," \
+        "is in the Spring Boot demo, in demos/spring-boot."
+      ;;
+    plain-kotlin)
+      wrap "  - " "    " "The agent embedded in plain Kotlin programs with no framework or HTTP server, scaled out" \
+        "and in, is in the plain Kotlin demo, in demos/plain-kotlin."
+      ;;
+    esac
+  done
+  echo
+  if [[ "$1" == kubernetes ]]; then
+    wrap "" "" "This demo's two kind clusters take a few GB of memory. To delete them and free it, run" \
+      "$MAKE_NAME down, or $0 down."
+  else
+    wrap "" "" "The demos use different ports, so they can run side by side, but each takes memory and CPU." \
+      "To stop this one and free its resources, run $MAKE_NAME down, or $0 down."
+  fi
+}
+
 cmd_tour() {
   check_tour_from "${1:-}"
   require_demo
@@ -797,8 +897,9 @@ cmd_tour() {
       "It lists only the remaining oven's two paths, so Prometheus, which follows it, scrapes that oven alone now."
     instruct "Open the proxy dashboard's Paths view: $DASHBOARD_URL/paths" \
       "It still lists the stopped ovens' four paths, marked 'gone', and its status bar counts them as departed: the" \
-      "view keeps a departed path for an hour, so it's clear what left. The Activity view, $DASHBOARD_URL/activity," \
-      "lists each stopped oven's agent as disconnected: Connection closed; released 2 paths."
+      "view keeps a departed path for an hour, so it's clear what left."
+    instruct "Open the dashboard's Activity view: $DASHBOARD_URL/activity" \
+      "It lists each stopped oven's agent as disconnected: Connection closed; released 2 paths."
   fi
 
   if part 5 "An oven's metrics aren't worth an outage. startIfConfigured() starts the agent only where a proxy is" \
@@ -811,21 +912,7 @@ cmd_tour() {
 
   wait_after_output "Press Enter to finish the tour"
   blank_line
-  bold "That's the tour."
-  echo "To start again from a part, run $MAKE_NAME tour PART=<n>, or $0 tour <n>."
-  echo
-  bold "The other demos:"
-  echo "Standalone agents behind a firewall, with the proxy's dashboard, are in the basics demo, in demos/basics."
-  echo "Proxy failover, filtering at the agent, and tracing are in the network demo, in demos/network."
-  echo "The proxy behind nginx, a reverse proxy that ends the agents' TLS, is in the nginx demo, in demos/nginx."
-  echo "The same proxy and agent, deployed on Kubernetes with their Helm charts, are in the Kubernetes demo, in" \
-    "demos/kubernetes, which needs kind, kubectl, and Helm as well as Docker."
-  echo "The agent in a Ktor app, with its own dashboard, TLS, and secrets from the environment, is in the Ktor demo," \
-    "in demos/ktor."
-  echo "The agent in a Spring Boot app, written in Java, is in the Spring Boot demo, in demos/spring-boot."
-  echo
-  echo "The demos use different ports, so they can run side by side, but each takes memory and CPU."
-  echo "To stop this one and free its resources, run $MAKE_NAME down, or $0 down."
+  tour_ending plain-kotlin
 }
 
 main() {

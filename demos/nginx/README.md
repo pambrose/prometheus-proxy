@@ -70,11 +70,13 @@ it starts in under a minute, even without a network connection.
 `make open` opens the proxy dashboard, directly and through nginx, agent-current's dashboard, and a Prometheus graph of
 whether each agent's path answered.
 
-Every port is the basics demo's plus 500, so the demos can run at once. If a port is already taken, move it, for example
-with `NGINX_DEMO_PROMETHEUS_PORT=19590 make up`. The variables are `NGINX_DEMO_DASHBOARD_PORT`, `NGINX_DEMO_NGINX_PORT`,
-`NGINX_DEMO_AGENT_DASHBOARD_PORT`, `NGINX_DEMO_PROMETHEUS_PORT`, and `NGINX_DEMO_PROXY_PORT`; the proxy dashboard's link
-into Prometheus keeps the default port (`config/proxy.conf`). Every port binds to `127.0.0.1` only. The dashboards run
-without their login, so this setup is for a laptop, not for anything shared.
+Every port is the basics demo's plus 500, so the demos can run at once. If a port is already taken, move it by setting
+its variable for `make up`, for example `NGINX_DEMO_PROMETHEUS_PORT=19590 make up`. `make up` saves it in `docker/.env`,
+which every later command and docker compose read, so you set it once; delete its line there to go back to the default.
+The variables are `NGINX_DEMO_DASHBOARD_PORT`, `NGINX_DEMO_NGINX_PORT`, `NGINX_DEMO_AGENT_DASHBOARD_PORT`,
+`NGINX_DEMO_PROMETHEUS_PORT`, and `NGINX_DEMO_PROXY_PORT`; the proxy dashboard's link into Prometheus keeps the default
+port (`config/proxy.conf`). Every port binds to `127.0.0.1` only. The dashboards run without their login, so this setup
+is for a laptop, not for anything shared.
 
 ## What's running
 
@@ -114,11 +116,11 @@ proxy's agent port, which only nginx can reach.
   default, so a stream of results, open while the agent is connected, would end with 413 once its results added up to
   a megabyte. Every entrance in `nginx/` turns the limit off with `client_max_body_size 0`, as any nginx in front of the
   proxy needs.
-- Open agent-current's Connection view, <http://localhost:8595/dashboard/connection>: it's connected to
-  nginx.test.google.fr:443, using TLS (no mutual auth). The agent checks nginx's certificate against the name it
-  dials: the certificate names `*.test.google.fr`, and the agent trusts the CA that signed it
-  (`agent.tls.trustCertCollectionFilePath`). An agent uses TLS only when it's given what to trust, so this is needed
-  even for a certificate a public CA signed: then point it at a CA bundle.
+- agent-current's Connection view shows it connected to nginx.test.google.fr:443, using TLS (no mutual auth). The
+  agent checks nginx's certificate against the name it dials: the certificate names `*.test.google.fr`, and the agent
+  trusts the CA that signed it (`agent.tls.trustCertCollectionFilePath`). An agent uses TLS only when it's given what
+  to trust, so this is needed even for a certificate a public CA signed: then point it at a CA bundle. Open the
+  Connection view: <http://localhost:8595/dashboard/connection>
 
 ### 2. nginx's stream timeouts cut off an agent from 4.6.0 every minute
 
@@ -126,9 +128,9 @@ An agent keeps several gRPC streams open to the proxy, and nginx closes a stream
 its `grpc_read_timeout` covers the streams the proxy sends on, and `client_body_timeout` the streams the agent sends
 results on.
 
-- In the proxy dashboard's Activity view, <http://localhost:8594/dashboard/activity>, agent-legacy disconnects about
-  once a minute, with the reason **Stream terminated (transport filter disabled)**, and connects again a few seconds
-  later. agent-current doesn't.
+- agent-legacy disconnects about once a minute, with the reason **Stream terminated (transport filter disabled)**, and
+  connects again a few seconds later. agent-current doesn't. The proxy dashboard's Activity view shows both:
+  <http://localhost:8594/dashboard/activity>
 - An agent's stream for results sent in chunks carries something only when a result is over 32 KB gzipped, so it's
   quiet even while Prometheus scrapes the agent every 5 seconds. agent-current and the proxy send a keepalive on each
   stream after 30 seconds of quiet. agent-legacy predates them, and the proxy, seeing it doesn't take them, sends it
@@ -193,12 +195,12 @@ seconds, under the 30 seconds after which the keepalives start.
 
 ### 4. The dashboard behind nginx
 
-The proxy's dashboard updates live over a WebSocket, which a reverse proxy has to pass on.
+The proxy's dashboard updates live over a WebSocket, which a reverse proxy has to pass on. Open the dashboard through
+nginx: <http://localhost:8590/dashboard>
 
-- Open the dashboard through nginx, <http://localhost:8590/dashboard>. The page loads, then the status bar's live
-  indicator turns into a blinking red **reconnecting...** that never clears. nginx's entrance is a plain `proxy_pass`,
-  which passes each request as HTTP/1.0 and drops the `Upgrade` and `Connection` headers, so the dashboard can't take
-  the WebSocket handshake, and answers 400.
+- The page loads, then the status bar's live indicator turns into a blinking red **reconnecting...** that never
+  clears. nginx's entrance is a plain `proxy_pass`, which passes each request as HTTP/1.0 and drops the `Upgrade` and
+  `Connection` headers, so the dashboard can't take the WebSocket handshake, and answers 400.
 
 ```bash
 ./demo.sh dashboard-upgrade   # passes the WebSocket handshake's headers, over HTTP/1.1
@@ -237,6 +239,7 @@ The proxy's dashboard updates live over a WebSocket, which a reverse proxy has t
 | `make tour [PART=n]` | Walks through the guided tour above, from part 1 or the one given, pausing before each step |  |
 | `make status` | The containers, nginx's configs in use, its old workers, the proxy's keepalive, and the URLs |  |
 | `make logs [SERVICE=name]` | Follows the logs, of every service or the one given |  |
+| `make open` | Opens the proxy dashboard, directly and through nginx, agent-current's dashboard, and a Prometheus graph of whether each agent's path answered |  |
 
 `reset` undoes every scenario. For a clean slate, `make down && make up`.
 
@@ -291,3 +294,19 @@ it. nginx's configs are in `nginx/`, not `config/`, since they're nginx's own fo
   agent-current logs that its dashboard has no authentication. Both are expected here, and are why every port binds to
   `127.0.0.1`. An agent logs `Cannot connect to proxy` while nginx restarts, and connects again a few seconds after
   nginx is back.
+
+## The other demos
+
+In the order the docs site's [Demos](https://prometheus-proxy.com/demos/) page gives them:
+
+- [Basics demo](../basics): the whole system on one machine, the proxy and its dashboard, three agents behind a
+  simulated firewall, Prometheus, and Grafana
+- [Network demo](../network): a simulated WAN between the agents and the proxies, and what a far, thin, dead, flaky, or
+  missing link does
+- [Kubernetes demo](../kubernetes): the Helm charts on two kind clusters, with Kubernetes doing the operating and the
+  target cluster exposing nothing
+- [Ktor demo](../ktor): a coffee shop, a Ktor app that runs the agent in its own JVM through the Ktor plugin
+- [Spring Boot demo](../spring-boot): a roastery, a Spring Boot app in Java whose agent the starter starts from
+  properties
+- [Plain Kotlin demo](../plain-kotlin): a bakery's ovens, workers with no framework or HTTP server, each reading its own
+  metrics in-process

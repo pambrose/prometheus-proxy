@@ -22,9 +22,26 @@ set -euo pipefail
 DEMO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_DIR="$(cd "$DEMO_DIR/../.." && pwd)"
 DEMO="$DEMO_DIR/demo.sh"
+COMPOSE=(docker compose -f "$DEMO_DIR/docker/compose.yml")
 OUT_DIR="$REPO_DIR/website/prometheus-proxy/docs/images/demo"
+# Where demo.sh's up keeps the host ports moved with the *_PORT variables, as demo.sh reads it.
+PORTS_FILE="$DEMO_DIR/docker/.env"
+
+# Takes each port saved in docker/.env that the environment doesn't set, as demo.sh does, so the URLs below match what
+# compose publishes.
+load_saved_ports() {
+  local name value
+  [[ -f "$PORTS_FILE" ]] || return 0
+  while IFS='=' read -r name value || [[ -n "$name" ]]; do
+    if [[ "$name" =~ ^[A-Z0-9_]+_PORT$ && -z "${!name:-}" ]]; then
+      export "$name=$value"
+    fi
+  done <"$PORTS_FILE"
+}
+load_saved_ports
 
 DASHBOARD_URL="http://localhost:${DEMO_DASHBOARD_PORT:-8094}/dashboard"
+EAST_DASHBOARD_URL="http://localhost:${DEMO_AGENT_EAST_DASHBOARD_PORT:-8095}/dashboard"
 ROGUE_DASHBOARD_URL="http://localhost:${DEMO_AGENT_ROGUE_DASHBOARD_PORT:-8098}/dashboard"
 GRAFANA_URL="http://localhost:${DEMO_GRAFANA_PORT:-3000}"
 PROMETHEUS_URL="http://localhost:${DEMO_PROMETHEUS_PORT:-9090}"
@@ -151,6 +168,14 @@ rogue_payments_refused() { [[ "$(rogue_path_state payments_metrics)" == refused 
 # Whether agent-east is listed with no paths, as once its copy has taken them.
 east_has_no_paths() { [[ "$(attr data-path-count "$(agent_row agent-east)")" == 0 ]]; }
 
+# Whether agent-east's own dashboard answers and lists none of the services discover adds, as once it has re-read its
+# emptied discovery file. Its Paths view lists every path it knows, configured, discovered, or registered.
+east_discovers_none() {
+  local html
+  html="$(curl -fsS "$EAST_DASHBOARD_URL" 2>/dev/null)" || return 1
+  ! grep -Eq 'data-path="(search|recommendations|notifications)_metrics"' <<<"$html"
+}
+
 # Whether the Paths view shows at least this many paths from service discovery, tagged "disc". A function, so each of
 # wait_until's checks counts again: a count passed as an argument was taken once, as the wait began.
 has_discovered_sources() { (($(count_in "/paths" '>disc<') >= $1)); }
@@ -259,9 +284,22 @@ shoot_fixed() {
 }
 
 step "Waiting for every path to answer 200"
-"$DEMO" agent-thaw >/dev/null 2>&1 || true
+# Every agent running and unfrozen, whatever the scenarios run before left, so each registers its paths again: a
+# stopped agent's paths stay departed until it does. Thawing or starting an agent that runs changes nothing.
+for agent in agent-east agent-west-1 agent-west-2; do
+  "$DEMO" agent-thaw "$agent" >/dev/null 2>&1 || true
+  "$DEMO" agent-start "$agent" >/dev/null 2>&1 || true
+done
 "$DEMO" undiscover >/dev/null
 "$DEMO" recover >/dev/null
+# healthy refuses a departed path, and the proxy lists one for an hour (proxy.dashboard.departedPathRetentionSecs):
+# agent-rogue's after rogue-agent-stop, or a discovered one after undiscover, this script's own above included. make
+# screenshots' up-local leaves an unchanged proxy running, so this recreates it, and the new one starts with no paths.
+# First agent-east re-reads its emptied discovery file, or it would register the discovered paths with the new proxy,
+# then drop them. The agents reconnect within seconds.
+wait_until "agent-east to drop its discovered paths" east_discovers_none
+"${COMPOSE[@]}" --progress quiet up --detach --force-recreate --no-deps --no-build proxy
+wait_until "the recreated proxy's dashboard to answer" curl -fs -o /dev/null "$DASHBOARD_URL"
 wait_healthy "nine healthy paths" 9
 # make screenshots starts the demo just before this, so every agent's uptime would read a few seconds. Waiting until
 # agent-east has been up a minute makes the first shots look like a demo that has been running. Say why, since the

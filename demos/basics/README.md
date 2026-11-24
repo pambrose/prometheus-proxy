@@ -87,11 +87,13 @@ that it starts in under a minute, even without a network connection.
 
 `make open` opens the proxy's dashboard, agent-east's, Grafana, and Prometheus's alerts in your browser.
 
-If a port is already taken, move it, for example with `DEMO_GRAFANA_PORT=3001 make up`. The variables are
-`DEMO_DASHBOARD_PORT`, `DEMO_GRAFANA_PORT`, `DEMO_PROMETHEUS_PORT`, and `DEMO_PROXY_PORT`, and for the agents'
-dashboards `DEMO_AGENT_EAST_DASHBOARD_PORT`, `DEMO_AGENT_WEST_1_DASHBOARD_PORT`, `DEMO_AGENT_WEST_2_DASHBOARD_PORT`,
-`DEMO_AGENT_ROGUE_DASHBOARD_PORT`, and `DEMO_AGENT_EAST_COPY_DASHBOARD_PORT`; the proxy dashboard's links into
-Prometheus and Grafana keep the default ports (`config/proxy.conf`). Every port binds to `127.0.0.1` only. The
+If a port is already taken, move it by setting its variable for `make up`, for example `DEMO_GRAFANA_PORT=3001 make up`.
+`make up` saves it in `docker/.env`, which every later command and docker compose read, so you set it once; delete its
+line there to go back to the default. The variables are `DEMO_DASHBOARD_PORT`, `DEMO_GRAFANA_PORT`,
+`DEMO_PROMETHEUS_PORT`, and `DEMO_PROXY_PORT`, and for the agents' dashboards `DEMO_AGENT_EAST_DASHBOARD_PORT`,
+`DEMO_AGENT_WEST_1_DASHBOARD_PORT`, `DEMO_AGENT_WEST_2_DASHBOARD_PORT`, `DEMO_AGENT_ROGUE_DASHBOARD_PORT`, and
+`DEMO_AGENT_EAST_COPY_DASHBOARD_PORT`; the proxy dashboard's links into Prometheus and Grafana keep the default ports
+(`config/proxy.conf`). Every port binds to `127.0.0.1` only. The
 dashboards run without a login, but for the proxy's in part 11 of the tour, and Grafana uses its default admin
 password, so this setup is for a laptop, not for anything shared.
 
@@ -116,9 +118,9 @@ from `demos/basics`; each one prints what to watch. Leave about a minute between
 ### 1. How Prometheus scrapes services behind a firewall
 
 The diagram above shows the setup. Prometheus pulls metrics, but the services live behind a firewall that allows no
-inbound connections. The agents sit inside the firewall and connect *out* to the proxy over gRPC. Prometheus scrapes the proxy
-as if it were each service. The demo simulates the firewall: its containers share one network, but Prometheus has no
-targets of its own, so it reaches each service only through the proxy.
+inbound connections. The agents sit inside the firewall and connect *out* to the proxy over gRPC. Prometheus scrapes
+the proxy as if it were each service. The demo simulates the firewall: its containers share one network, but
+Prometheus has no targets of its own, so it reaches each service only through the proxy.
 
 ### 2. Agents, paths, and live scrapes on the proxy dashboard
 
@@ -145,7 +147,7 @@ Open Grafana. It lands on the **Prometheus Proxy Demo** dashboard.
 - The **Prometheus Proxy** and **Prometheus Agents** links open the dashboards the project ships for operating the
   proxy itself.
 - Prometheus's config lists no targets. It asks the proxy (`/discovery`) what exists, and each path's labels set the
-  `job`. Its answer is at <http://localhost:8080/discovery>.
+  `job`. Its answer is at <http://localhost:8080/discovery>
 
 ### 4. An outage and a timeout
 
@@ -256,8 +258,8 @@ in `config/agent-*.conf`). This part starts with agent-rogue, which part 8 left 
 ```
 
 - agent-east's **Connection** view shows it connected to `proxy:50051`, its one proxy endpoint, with its discovery file
-  below: <http://localhost:8095/dashboard/connection>, and its **Settings** view what it resolved:
-  <http://localhost:8095/dashboard/settings>
+  below: <http://localhost:8095/dashboard/connection>
+- Its **Settings** view shows the settings it resolved: <http://localhost:8095/dashboard/settings>
 
 ```bash
 ./demo.sh proxy-down      # stops the proxy
@@ -292,8 +294,8 @@ in `config/agent-*.conf`). This part starts with agent-rogue, which part 8 left 
 - They settle. agent-east stays connected without paths and waits, rather than the two taking the paths from each
   other every few seconds. The command prints the proxy's log line, which names both agents by agentId and says the
   fix: `agent.consolidated = true` on each, if both should serve the paths.
-- The proxy told agent-east. Its own dashboard, <http://localhost:8095/dashboard>, lists its six paths as `retrying`,
-  each taken over by agent-east-copy, and its **Activity** view has the takeover.
+- The proxy told agent-east. Its own dashboard lists its six paths as `retrying`, each taken over by agent-east-copy,
+  and its **Activity** view has the takeover: <http://localhost:8095/dashboard>
 - The copy's own dashboard lists the six paths, each green, since the proxy accepted every one:
   <http://localhost:8099/dashboard>
 
@@ -315,7 +317,7 @@ seconds, on the connection it kept, with no restart.
   "Invalid username or password", and the proxy logs it at WARN.
 - The password comes from the proxy's environment, `DEMO_DASHBOARD_PASSWORD` in `docker/compose.yml`, not from
   `config/proxy.conf`, so it never sits in a file. A script sends the login as HTTP Basic Auth instead:
-  `curl -u admin:admin http://localhost:8094/dashboard/paths`.
+  `curl -u admin:admin http://localhost:8094/dashboard/paths`
 - A restart clears what the proxy holds in memory, so this part comes last: the agents reconnect within a few seconds
   and register their paths again, and the dashboard's histories start over.
 
@@ -323,12 +325,23 @@ seconds, on the connection it kept, with no restart.
 ./demo.sh login-off   # restarts the proxy without the password
 ```
 
-That's the tour. For proxy failover, filtering at the agent, and tracing through the firewall, go on to the
-[network demo](../network). The proxy behind nginx, a reverse proxy that ends the agents' TLS, is in the
-[nginx demo](../nginx). The same proxy and agent, deployed on Kubernetes with their Helm charts, are in the
-[Kubernetes demo](../kubernetes), which needs kind, `kubectl`, and Helm as well as Docker. The demos use different
-ports, so they can run side by side, but each takes memory and CPU: `make down` stops this one and frees its
-resources.
+That's the tour. The other demos, in the order the docs site's [Demos](https://prometheus-proxy.com/demos/) page gives
+them:
+
+- [Network demo](../network): a simulated WAN between the agents and the proxies, and what a far, thin, dead, flaky, or
+  missing link does
+- [nginx demo](../nginx): nginx between the agents and the proxy, its stream timeouts, its reloads, and TLS ended on one
+  port
+- [Kubernetes demo](../kubernetes): the Helm charts on two kind clusters, with Kubernetes doing the operating and the
+  target cluster exposing nothing
+- [Ktor demo](../ktor): a coffee shop, a Ktor app that runs the agent in its own JVM through the Ktor plugin
+- [Spring Boot demo](../spring-boot): a roastery, a Spring Boot app in Java whose agent the starter starts from
+  properties
+- [Plain Kotlin demo](../plain-kotlin): a bakery's ovens, workers with no framework or HTTP server, each reading its own
+  metrics in-process
+
+The demos use different ports, so they can run side by side, but each takes memory and CPU: `make down` stops this one
+and frees its resources.
 
 ## Scenario reference
 
@@ -365,7 +378,7 @@ The services are `orders`, `payments`, `inventory`, `catalog`, and `shipping`, p
 | `app/demo_app.py` | The simulated services and their control API |
 | `Makefile` | The demo's targets: `make up`, `make up-local` (which runs the proxy and agent built from this checkout, for trying a change to them), `down`, `status`, `open`, `tour`, and `logs`, which `make help` lists, and `screenshots`, which it leaves out, since it's for maintaining the site |
 | `demo.sh` | Starting, stopping, and the scenarios. Its `NEEDS_RELEASE_AFTER` is the latest release that predates what the demo shows: until a later one is out, `make up` builds the proxy and agent from this checkout, as `make up-local` does, so set it to the latest release when the demo comes to use something unreleased |
-| `bin/screenshots.sh` | The Basics Demo page's screenshots, agent-rogue's dashboard among them, and the Dashboard page's of the login page, in the dark and light themes. `make screenshots` builds and starts the demo, waits a minute so the agents' uptimes read in minutes, plays the scenarios, and writes them to `website/prometheus-proxy/docs/images/demo/` (needs Chrome, ImageMagick 7, and `cwebp`). While checking a change, `SKIP_UPTIME_WAIT=1` skips the minute, so the shots show uptimes in seconds and aren't for the site, and `WAIT_SECS` sets how long each wait for a scene may take before the script fails (default 150): `make screenshots SKIP_UPTIME_WAIT=1 WAIT_SECS=60` |
+| `bin/screenshots.sh` | The Basics Demo page's screenshots, agent-rogue's dashboard among them, and the Dashboard page's of the login page, in the dark and light themes. `make screenshots` builds and starts the demo, recreates the proxy so no path an earlier scenario left shows as gone, waits a minute so the agents' uptimes read in minutes, plays the scenarios, and writes them to `website/prometheus-proxy/docs/images/demo/` (needs Chrome, ImageMagick 7, and `cwebp`). While checking a change, `SKIP_UPTIME_WAIT=1` skips the minute, so the shots show uptimes in seconds and aren't for the site, and `WAIT_SECS` sets how long each wait for a scene may take before the script fails (default 150): `make screenshots SKIP_UPTIME_WAIT=1 WAIT_SECS=60` |
 
 From the repository root, `make check-rules` validates the Prometheus config and both rule files with promtool, and
 `ConfigFileKeysTest` checks every key in `config/*.conf` against `config/config.conf`, and that each file loads as the

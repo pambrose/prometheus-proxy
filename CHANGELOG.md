@@ -383,6 +383,15 @@ All notable changes to this project are documented in this file.
   proxy-standby`, and the nginx demo's timeout and keepalive scenarios run out of the tour's order. The nginx demo's
   `reset` and `keepalive` reconnect each agent once, not twice, and its Troubleshooting covers the 400, 499, and
   502 codes in nginx's log and gRPC's harmless `Stream closed before write` warning
+- The demos remember a moved port: `make up` saves each `*_PORT` variable it's given in the demo's `docker/.env`,
+  which every later command and docker compose read, so a port is set once; the Kubernetes demo reads its ports back
+  from the running clusters. Every tour keeps a long URL whole, on a line of its own, and ends with the other six
+  demos in the Demos page's order, which every demo page and README now lists too, and `make up` no longer ends with
+  docker compose's Killing and Restarting lines
+- The network demo's tour puts the demo back as `make up` starts it before a part, and its scenarios say when the
+  demo isn't running; the nginx demo's config scenarios wait for nginx's reload and print their headline first. Every
+  demo page's scenario table has a How it works column, the Ktor and plain Kotlin demos' images are named
+  `ktor-app` and `plain-kotlin-app`, and the demos' messages end each URL's sentence with it
 
 ### Dependencies
 

@@ -74,13 +74,14 @@ minutes. After that it starts in under a minute, even without a network connecti
 
 `make open` opens both proxy dashboards, agent-branch's dashboard, Grafana, and Prometheus's alerts in your browser.
 
-Every port is the basics demo's plus 100, so both demos can run at once. If a port is already taken, move it, for
-example with `NETWORK_DEMO_GRAFANA_PORT=3101 make up`. The variables are `NETWORK_DEMO_DASHBOARD_PORT`,
-`NETWORK_DEMO_STANDBY_DASHBOARD_PORT`, `NETWORK_DEMO_HQ_DASHBOARD_PORT`, `NETWORK_DEMO_BRANCH_DASHBOARD_PORT`,
-`NETWORK_DEMO_GRAFANA_PORT`, `NETWORK_DEMO_PROMETHEUS_PORT`, `NETWORK_DEMO_PROXY_PORT`, and `NETWORK_DEMO_ZIPKIN_PORT`;
-the proxy dashboard's links into Prometheus and Grafana keep the default ports (`config/proxy.conf`). Every port binds
-to `127.0.0.1` only. The dashboards run without their login and Grafana uses its default admin password, so this setup
-is for a laptop, not for anything shared.
+Every port is the basics demo's plus 100, so both demos can run at once. If a port is already taken, set its variable
+for `make up`, for example `NETWORK_DEMO_GRAFANA_PORT=3101 make up`. `make up` saves it in `docker/.env`, which every
+later command and docker compose read, so you set it once; delete its line there to go back to the default. The
+variables are `NETWORK_DEMO_DASHBOARD_PORT`, `NETWORK_DEMO_STANDBY_DASHBOARD_PORT`, `NETWORK_DEMO_HQ_DASHBOARD_PORT`,
+`NETWORK_DEMO_BRANCH_DASHBOARD_PORT`, `NETWORK_DEMO_GRAFANA_PORT`, `NETWORK_DEMO_PROMETHEUS_PORT`,
+`NETWORK_DEMO_PROXY_PORT`, and `NETWORK_DEMO_ZIPKIN_PORT`; the proxy dashboard's links into Prometheus and Grafana keep
+the default ports (`config/proxy.conf`). Every port binds to `127.0.0.1` only. The dashboards run without their login
+and Grafana uses its default admin password, so this setup is for a laptop, not for anything shared.
 
 ## What's running
 
@@ -98,18 +99,20 @@ is for a laptop, not for anything shared.
 
 ## Guided tour
 
-`make tour` walks through these parts one step at a time. To follow them here instead, run the scenario commands
-from `demos/network`; each one prints what to watch. From part 2 on, each part ends with `./demo.sh heal`, which
-removes every toxic, brings back every link and proxy, and returns any agent on the standby to the primary; part 3 then
-runs `unfilter` too. Leave about a minute between parts so the graphs catch up.
+`make tour` walks through these parts one step at a time. It first puts the demo back as `make up` starts it, with
+`heal`, and `unfilter` if agent-branch has the filter, so `make tour PART=n` starts any part from where it expects. To
+follow them here instead, run the scenario commands from `demos/network`; each one prints what to watch. From part 2
+on, each part ends with `./demo.sh heal`, which removes every toxic, brings back every link and proxy, and returns any
+agent on the standby to the primary; part 3 then runs `unfilter` too. Leave about a minute between parts so the graphs
+catch up.
 
 ### 1. Two agents reach the proxy over a simulated WAN
 
 These are the basics demo's proxy and agents, now with a simulated WAN between them.
 
-- Open the proxy's dashboard. Two agents are connected; click agent-hq: **via hq-to-proxy:50051 (1 of 2)**, its link
-  to the primary, the first of its two endpoints. agent-branch is **via branch-to-proxy:50053 (1 of 2)**. The standby's
-  dashboard, <http://localhost:8195/dashboard>, has no agents.
+- Open the proxy's dashboard at <http://localhost:8194/dashboard>. Two agents are connected; click agent-hq: **via
+  hq-to-proxy:50051 (1 of 2)**, its link to the primary, the first of its two endpoints. agent-branch is **via
+  branch-to-proxy:50053 (1 of 2)**. The standby's dashboard, <http://localhost:8195/dashboard>, has no agents.
 - Open agent-branch's own dashboard, <http://localhost:8197/dashboard>. Each agent serves one, from behind the
   firewall, showing what only the agent can see. Its three paths are registered, each with a green light and its last
   scrapes under its URL. On its **Connection** tab it's connected through branch-to-proxy:50053, and **Proxy
@@ -267,16 +270,18 @@ what the agent tries.
   then **connected** and **registered**.
 - Every proxy and agent reports a span to Zipkin for each gRPC call between them but heartbeats and the stream of
   path notices, under its own service name. In Zipkin, the search is `serviceName` = `agent-branch` and `spanName` =
-  `proxyservice/connectagent`.
-  Open <http://localhost:9511/zipkin/?serviceName=agent-branch&spanName=proxyservice%2Fconnectagent>, which fills that search in, and click **Run Query**. Each reconnect is a `connectagent` trace,
-  then `registeragent` and a `registerpath` for each path. Zipkin joins the agent's client side and the proxy's server side of each call into one span, so the
-  trace names both services, and its annotations mark when the agent sent the call and the proxy answered it.
+  `proxyservice/connectagent`. Open
+  <http://localhost:9511/zipkin/?serviceName=agent-branch&spanName=proxyservice%2Fconnectagent>, which fills that
+  search in, and click **Run Query**. Each reconnect is a `connectagent` trace, then `registeragent` and a
+  `registerpath` for each path. Zipkin joins the agent's client side and the proxy's server side of each call into one
+  span, so the trace names both services, and its annotations mark when the agent sent the call and the proxy
+  answered it.
 - A connection's scrape streams (`readrequestsfromproxy`, `writeresponsestoproxy`, `writechunkedresponsestoproxy`) are
   traced too, and appear as the connection closes, each about 15 seconds long: as long as the connection lasted.
-- Each scrape is a trace of its own: the proxy's `scrape` span, a `forward` span for the agent it went to, and under that
-  agent-branch's `fetch` of the target, which joins the trace the proxy sent with the request. Open
-  <http://localhost:9511/zipkin/?serviceName=agent-branch&spanName=fetch> and click **Run Query**. A failed scrape's spans are red: the one in flight as a connection drops ends
-  its `forward` span as `agent_disconnected`.
+- Each scrape is a trace of its own: the proxy's `scrape` span, a `forward` span for the agent it went to, and under
+  that agent-branch's `fetch` of the target, which joins the trace the proxy sent with the request. Open
+  <http://localhost:9511/zipkin/?serviceName=agent-branch&spanName=fetch> and click **Run Query**. A failed scrape's
+  spans are red: the one in flight as a connection drops ends its `forward` span as `agent_disconnected`.
 
 ```bash
 ./demo.sh heal
@@ -315,9 +320,20 @@ what the agent tries.
 ./demo.sh heal            # returns any agent on the standby to the primary
 ```
 
-That's the tour. The proxy behind nginx, a reverse proxy that ends the agents' TLS, is in the [nginx demo](../nginx).
-The same proxy and agent, deployed on Kubernetes with their Helm charts, are in the [Kubernetes demo](../kubernetes),
-which needs kind, `kubectl`, and Helm as well as Docker.
+That's the tour. The other demos, in the order the website's [Demos](https://prometheus-proxy.com/demos/) page gives
+them:
+
+- [Basics demo](../basics): the whole system on one machine, the proxy and its dashboard, three agents behind a
+  simulated firewall, Prometheus, and Grafana
+- [nginx demo](../nginx): nginx between the agents and the proxy, its stream timeouts, its reloads, and TLS ended on one
+  port
+- [Kubernetes demo](../kubernetes): the Helm charts on two kind clusters, with Kubernetes doing the operating and the
+  target cluster exposing nothing
+- [Ktor demo](../ktor): a coffee shop, a Ktor app that runs the agent in its own JVM through the Ktor plugin
+- [Spring Boot demo](../spring-boot): a roastery, a Spring Boot app in Java whose agent the starter starts from
+  properties
+- [Plain Kotlin demo](../plain-kotlin): a bakery's ovens, workers with no framework or HTTP server, each reading its own
+  metrics in-process
 
 ## Scenario reference
 
@@ -336,6 +352,7 @@ The optional `[agent]` is `agent-branch` (the default) or `agent-hq`.
 | `make tour [PART=n]` | Walks through the guided tour above, from part 1 or the one given, pausing before each step |  |
 | `make status` | The containers, each link's state and toxics, and the URLs |  |
 | `make logs [SERVICE=name]` | Follows the logs, of every service or the one given (`wan` is Toxiproxy) |  |
+| `make open` | Opens both proxy dashboards, agent-branch's dashboard, Grafana, and Prometheus's alerts in the browser |  |
 
 `heal` and `unfilter` undo every scenario. For a clean slate, `make down && make up`.
 

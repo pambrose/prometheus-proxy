@@ -164,6 +164,9 @@ _Released 2026-11-23_
 - **The demos say what they show.** A review that ran every demo corrected their tours, scenarios, and pages where
   they didn't match what happens, and the scenarios no longer print a false result or wait in silence when there's
   nothing to do.
+- **The demos remember a moved port.** Set a demo's port variable once, for `make up`, and every later command
+  uses it: `make up` saves it in the demo's `docker/.env`. Every tour ends with the other demos, in the order the
+  docs site's Demos page gives them.
 - **The dashboard's login in the basics demo.** The tour's new last part turns it on, with the password in the proxy's
   environment, signs in and out, and turns it off again (`./demo.sh login`, `./demo.sh login-off`).
 - **The docs site.** It takes the dashboard's look, its warning and danger colors included, follows your light or

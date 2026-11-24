@@ -14,7 +14,8 @@
 # default port is the basics demo's plus 100, so the demos can run at once. Set NETWORK_DEMO_DASHBOARD_PORT,
 # NETWORK_DEMO_STANDBY_DASHBOARD_PORT, NETWORK_DEMO_HQ_DASHBOARD_PORT, NETWORK_DEMO_BRANCH_DASHBOARD_PORT,
 # NETWORK_DEMO_PROXY_PORT, NETWORK_DEMO_PROMETHEUS_PORT, NETWORK_DEMO_GRAFANA_PORT, or NETWORK_DEMO_ZIPKIN_PORT to move
-# a host port that's already taken.
+# a host port that's already taken. make up saves each one set in docker/.env, which compose reads too, so it stays
+# moved.
 
 name: prometheus-proxy-network-demo
 

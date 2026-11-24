@@ -12,6 +12,46 @@ REPO_DIR="$(cd "$DEMO_DIR/../.." && pwd)"
 MAKE="${MAKE:-$(command -v make || command -v gmake || echo make)}"
 MAKE_NAME="${MAKE##*/}"
 COMPOSE=(docker compose -f "$DEMO_DIR/docker/compose.yml")
+# Where up keeps the host ports moved with the *_PORT variables (docker/compose.yml's list), so each later command, and
+# docker compose, which reads this file on its own, uses them with no variable set again. Not committed. Delete a
+# port's line to go back to its default.
+PORTS_FILE="$DEMO_DIR/docker/.env"
+
+# Takes each port saved in docker/.env that the environment doesn't set, so the URLs below match what compose
+# publishes. A variable set on the command line wins, and up saves it in turn.
+load_saved_ports() {
+  local name value
+  [[ -f "$PORTS_FILE" ]] || return 0
+  while IFS='=' read -r name value || [[ -n "$name" ]]; do
+    if [[ "$name" =~ ^[A-Z0-9_]+_PORT$ && -z "${!name:-}" ]]; then
+      export "$name=$value"
+    fi
+  done <"$PORTS_FILE"
+}
+load_saved_ports
+
+# Saves in docker/.env each port variable compose.yml reads that the environment sets, in place of its old line,
+# keeping the file's other lines: save_ports
+save_ports() {
+  local name saved=""
+  local -a lines=()
+  while IFS= read -r name; do
+    if [[ -n "${!name:-}" ]]; then
+      lines+=("$name=${!name}")
+      saved+="|$name"
+    fi
+  done < <(grep -oE '\$\{[A-Z0-9_]+_PORT:-' "$DEMO_DIR/docker/compose.yml" | sed 's/^\${//; s/:-$//' | sort -u)
+  ((${#lines[@]})) || return 0
+  (
+    umask 077
+    {
+      # The file's other lines; grep finds none when every line is a port saved again, which isn't a failure
+      [[ ! -f "$PORTS_FILE" ]] || grep -vE "^(${saved#|})=" "$PORTS_FILE" || true
+      printf '%s\n' "${lines[@]}"
+    } >"$PORTS_FILE.new"
+    mv "$PORTS_FILE.new" "$PORTS_FILE"
+  )
+}
 # The proxy and agent images the demo runs, under these tags whichever way they came: pulled from Docker Hub (up)
 # or built from this checkout (up-local). The other demos run the same tags, so there's one copy of each. agent-legacy
 # runs a pinned image of release 4.6.0 (docker/compose.yml), which compose pulls itself.
@@ -164,26 +204,52 @@ conf_file() {
 }
 
 # Whether nginx runs with worker_shutdown_timeout: `nginx-shutdown-timeout` puts the file in place and restarts nginx
-# in one go, so the file being there means the running nginx read it.
-shutdown_timeout_set() { nginx_exec test -f "$SHUTDOWN_CONF"; }
+# in one go, so the file being there means the running nginx read it. The exec prints the answer rather than failing
+# without the file, since in a terminal Docker follows a failed exec with a hint of its own, before any headline.
+shutdown_timeout_set() { [[ "$(nginx_exec sh -c "[ -f $SHUTDOWN_CONF ] && echo set || true")" == set ]]; }
 
 # How many of nginx's workers are old ones, shutting down after a reload, holding connections they opened before it.
 old_workers() { nginx_exec ps -o args | grep -c 'worker process is shutting down' || true; }
 
-# Puts a variant of an entrance in place and reloads nginx, checking the config first, in one exec in the container:
+# Puts a variant of an entrance in place and reloads nginx, checking the config first, then waits until no worker from
+# before the reload takes new connections, in one exec in the container. nginx -s reload only signals nginx's master,
+# which starts new workers and then tells the old ones to stop taking connections: a request made as it returns can
+# still reach an old worker, under the config before. The wait ends once every worker titled "worker process" is a new
+# one, the old ones having exited or turned "worker process is shutting down" (old_workers), or fails after 10 seconds.
 # use_conf <kind> <variant>
 use_conf() {
-  nginx_exec sh -c "cp /etc/nginx/demo/$1-$2.conf /etc/nginx/conf.d/$1.conf && nginx -t -q && nginx -s reload" \
-    2>/dev/null || die "nginx refused nginx/$1-$2.conf; see '$0 logs nginx'"
+  local status=0
+  # shellcheck disable=SC2016 # the variables are the container shell's
+  nginx_exec sh -c 'workers() { ps -o pid,args | sed -n "s/^ *\([0-9][0-9]*\) nginx: worker process\$/\1/p"; }
+    before=" $(workers | tr "\n" " ")"
+    cp "/etc/nginx/demo/$1-$2.conf" "/etc/nginx/conf.d/$1.conf" && nginx -t -q && nginx -s reload || exit 1
+    i=0
+    while [ "$i" -lt 100 ]; do
+      now="$(workers)"
+      new=1
+      for pid in $now; do
+        case "$before" in *" $pid "*) new=0 ;; esac
+      done
+      [ -n "$now" ] && [ "$new" = 1 ] && exit 0
+      sleep 0.1
+      i=$((i + 1))
+    done
+    exit 2' sh "$1" "$2" 2>/dev/null || status=$?
+  case "$status" in
+  0) ;;
+  2) die "nginx didn't move to nginx/$1-$2.conf within 10 seconds; see '$0 logs nginx'" ;;
+  *) die "nginx refused nginx/$1-$2.conf; see '$0 logs nginx'" ;;
+  esac
 }
 
 # The sentence that opens a config scenario's how it works: copies_sentence <kind> <variant>
 copies_sentence() { echo "This copies nginx/$1-$2.conf in as nginx's conf.d/$1.conf and reloads nginx."; }
 
 # Restarts nginx and waits for it to pass requests to the proxy again. A restart closes every agent's connection, and
-# ends any old worker a reload left.
+# ends any old worker a reload left. Compose's progress lines, which go to stderr, stay quiet, so a scenario's headline
+# comes first.
 restart_nginx() {
-  "${COMPOSE[@]}" restart nginx >/dev/null
+  "${COMPOSE[@]}" --progress quiet restart nginx >/dev/null
   wait_for "$NGINX_DASHBOARD_URL" "The proxy dashboard, through nginx,"
 }
 
@@ -276,13 +342,14 @@ keepalive_line_since() {
 # too. It stops first, and starts again once the new proxy answers, so each agent's connection closes once, and each
 # agent reconnects once, through an nginx that has the new proxy's address. Left running, nginx would pass the agents'
 # reconnects to the proxy's old address, which the new proxy often gets, and its restart would close them again.
-# start_proxy <secs>; fails if the proxy ran with that interval.
+# Compose's progress lines stay quiet, as restart_nginx's do. start_proxy <secs>; fails if the proxy ran with that
+# interval.
 start_proxy() {
   [[ "$(keepalive_secs)" != "$1" ]] || return 1
-  "${COMPOSE[@]}" stop nginx >/dev/null
-  NGINX_DEMO_KEEPALIVE_SECS="$1" "${COMPOSE[@]}" up --detach --no-deps proxy
+  "${COMPOSE[@]}" --progress quiet stop nginx >/dev/null
+  NGINX_DEMO_KEEPALIVE_SECS="$1" "${COMPOSE[@]}" --progress quiet up --detach --no-deps proxy >/dev/null
   wait_for "$DASHBOARD_URL" "The proxy dashboard"
-  "${COMPOSE[@]}" start nginx >/dev/null
+  "${COMPOSE[@]}" --progress quiet start nginx >/dev/null
   wait_for "$NGINX_DASHBOARD_URL" "The proxy dashboard, through nginx,"
 }
 
@@ -333,7 +400,7 @@ nginx_log() {
 wait_for() {
   local url="$1" name="$2" deadline=$((SECONDS + 120))
   until curl -fsS -o /dev/null "$url" 2>/dev/null; do
-    ((SECONDS < deadline)) || die "$name did not answer at $url within 120s; see '$0 logs'"
+    ((SECONDS < deadline)) || die "$name did not answer within 120s; see '$0 logs'. It was asked at $url"
     sleep 2
   done
 }
@@ -359,10 +426,10 @@ need() { command -v "$1" >/dev/null 2>&1 || die "$1 is not on the PATH; $2"; }
 # The tools up and up-local need, checked before anything is pulled, built, or started. Without curl, the wait for
 # each service would retry for two minutes and then blame the service.
 check_tools() {
-  need docker "install Docker (https://docs.docker.com/get-started/get-docker/)"
+  need docker "install Docker: https://docs.docker.com/get-started/get-docker/"
   docker info >/dev/null 2>&1 || die "Docker isn't running"
   docker compose version >/dev/null 2>&1 ||
-    die "the demo needs Docker Compose v2, the docker compose plugin (https://docs.docker.com/compose/install/)"
+    die "the demo needs Docker Compose v2, the docker compose plugin: https://docs.docker.com/compose/install/"
   need curl "install curl; the demo uses it to wait for each service to answer"
 }
 
@@ -373,7 +440,7 @@ check_jdk() {
   local java="${JAVA_HOME:+$JAVA_HOME/bin/}java" version
   command -v "$java" >/dev/null 2>&1 ||
     die "building the proxy and agent from this checkout takes a JDK 17 or later;" \
-      "install one, or set JAVA_HOME (https://adoptium.net)"
+      "set JAVA_HOME to one, or get one at https://adoptium.net"
   version="$("$java" -version 2>&1 | sed -nE '1s/.*version "(1\.)?([0-9]+).*/\2/p')"
   if ! [[ "$version" =~ ^[0-9]+$ ]] || ((version < 17)); then
     die "building the proxy and agent from this checkout takes a JDK 17 or later, not Java ${version:-of an unknown" \
@@ -419,6 +486,7 @@ cmd_up_local() {
 # with ones built from this checkout (start_demo).
 start_demo() {
   local old_ids id
+  save_ports
   # The images the demo ran, to remove below once nothing tags them: a build makes new ones, and a release's tags
   # replace a build's. One another demo still runs is in use, and stays.
   old_ids="$(docker image inspect -f '{{.Id}}' "${IMAGES[@]}" 2>/dev/null || true)"
@@ -438,7 +506,7 @@ start_demo() {
   # Compose recreates a container when its own config changes, not when a file it mounts does, and Prometheus doesn't
   # notice a changed file on its own: reload its config (SIGHUP), so a demo started from an older checkout runs this
   # one's.
-  "${COMPOSE[@]}" kill --signal SIGHUP prometheus >/dev/null
+  "${COMPOSE[@]}" --progress quiet kill --signal SIGHUP prometheus >/dev/null
 
   for id in $old_ids; do
     if [[ -z "$(docker image inspect -f '{{join .RepoTags ""}}' "$id" 2>/dev/null)" ]]; then
@@ -611,6 +679,57 @@ TOUR_PARTS=(
   "4 The dashboard behind nginx"
 )
 
+# The tour's last words: how to start it again, the other demos, in the order the docs site's Demos page gives them,
+# and how to stop this one. tour_ending <this demo's directory under demos/>
+tour_ending() {
+  local demo
+  bold "That's the tour."
+  wrap "" "" "To start again from a part, run $MAKE_NAME tour PART=<n>, or $0 tour <n>."
+  echo
+  bold "The other demos:"
+  for demo in basics network nginx kubernetes ktor spring-boot plain-kotlin; do
+    [[ "$demo" != "$1" ]] || continue
+    case "$demo" in
+    basics)
+      wrap "  - " "    " "Standalone agents behind a simulated firewall, with the proxy's dashboard, discovery," \
+        "eviction, and an identity for each agent, are in the basics demo, in demos/basics."
+      ;;
+    network)
+      wrap "  - " "    " "Proxy failover, filtering at the agent, and tracing, over a simulated WAN, are in the" \
+        "network demo, in demos/network."
+      ;;
+    nginx)
+      wrap "  - " "    " "The proxy behind nginx, a reverse proxy that ends the agents' TLS, is in the nginx demo," \
+        "in demos/nginx."
+      ;;
+    kubernetes)
+      wrap "  - " "    " "The proxy and agent deployed on Kubernetes with their Helm charts are in the Kubernetes" \
+        "demo, in demos/kubernetes, which needs kind, kubectl, and Helm as well as Docker."
+      ;;
+    ktor)
+      wrap "  - " "    " "The agent embedded in a Ktor app through the Ktor plugin, under load, with alerts and a" \
+        "deploy, is in the Ktor demo, in demos/ktor."
+      ;;
+    spring-boot)
+      wrap "  - " "    " "The agent embedded in a Spring Boot app written in Java, through the Spring Boot starter," \
+        "is in the Spring Boot demo, in demos/spring-boot."
+      ;;
+    plain-kotlin)
+      wrap "  - " "    " "The agent embedded in plain Kotlin programs with no framework or HTTP server, scaled out" \
+        "and in, is in the plain Kotlin demo, in demos/plain-kotlin."
+      ;;
+    esac
+  done
+  echo
+  if [[ "$1" == kubernetes ]]; then
+    wrap "" "" "This demo's two kind clusters take a few GB of memory. To delete them and free it, run" \
+      "$MAKE_NAME down, or $0 down."
+  else
+    wrap "" "" "The demos use different ports, so they can run side by side, but each takes memory and CPU." \
+      "To stop this one and free its resources, run $MAKE_NAME down, or $0 down."
+  fi
+}
+
 cmd_tour() {
   check_tour_from "${1:-}"
   curl -fsS -o /dev/null "$DASHBOARD_URL" 2>/dev/null ||
@@ -693,16 +812,7 @@ cmd_tour() {
 
   wait_after_output "Press Enter to finish the tour"
   blank_line
-  bold "That's the tour."
-  echo "To start again from a part, run $MAKE_NAME tour PART=<n>, or $0 tour <n>."
-  echo
-  bold "The other demos:"
-  echo "The same proxy and agent, deployed on Kubernetes with their Helm charts, are in the Kubernetes demo, in" \
-    "demos/kubernetes, which needs kind, kubectl, and Helm as well as Docker. What the network between the agents" \
-    "and the proxy does to them is in the network demo, in demos/network."
-  echo
-  echo "The demos use different ports, so they can run side by side, but each takes memory and CPU."
-  echo "To stop this one and free its resources, run $MAKE_NAME down, or $0 down."
+  tour_ending nginx
 }
 
 main() {
@@ -771,7 +881,8 @@ main() {
     esac
     ;;
   nginx-long-timeouts)
-    local shutdown=0
+    local shutdown=0 before within
+    before="$(conf_in_use agents)"
     use_conf agents long-timeouts
     shutdown_timeout_set && shutdown=1
     bold "nginx's agents' entrance now closes a stream only after a day without anything on it"
@@ -784,12 +895,22 @@ main() {
     if ((shutdown)); then
       point "agent-legacy then stays connected: the proxy's Activity view shows no more disconnects from it," \
         "$DASHBOARD_URL/activity"
+    elif [[ "$before" == long-timeouts ]]; then
+      point "These timeouts were in place already, so the reload changes nothing for agent-legacy: once its" \
+        "connection is with a worker under them, it stays connected, and the proxy's Activity view shows no more" \
+        "disconnects from it, $DASHBOARD_URL/activity"
+    elif [[ "$before" == "changed by hand" ]]; then
+      point "agent-legacy keeps the connection it has only until the timeouts of the worker it's on end a quiet" \
+        "stream. It then reconnects to a new worker, under these timeouts, and stays connected: the proxy's" \
+        "Activity view shows no more disconnects from it after that, $DASHBOARD_URL/activity"
     else
-      point "agent-legacy is cut off once more, within a minute, by the worker it's on, which keeps the old" \
+      within="a minute"
+      [[ "$before" != short-timeouts ]] || within="20 seconds"
+      point "agent-legacy is cut off once more, within $within, by the worker it's on, which keeps the old" \
         "timeouts. It reconnects to a new worker, under these timeouts, and then stays connected: the proxy's" \
         "Activity view shows no more disconnects from it, $DASHBOARD_URL/activity"
     fi
-    point "Prometheus's graph of nginx closing an agent's stream drops back to 0 within a minute or two:" \
+    point "Prometheus's graph of nginx closing an agent's stream settles at 0 within a minute or two:" \
       "$CUTS_GRAPH_URL"
     ;;
   nginx-short-timeouts)
@@ -991,9 +1112,8 @@ main() {
       "site's page can't use it, and refuses this one with 403."
     watch_for
     point "Reload the dashboard through nginx: it's still 'reconnecting...': $NGINX_DASHBOARD_URL"
-    point "The proxy logs each refusal with the setting that would allow it: 'Refused a dashboard request from" \
-      "origin http://localhost:${NGINX_DEMO_NGINX_PORT:-8590}; add it to proxy.dashboard.allowedOrigins if" \
-      "expected'. To see it, run $0 logs proxy"
+    point "The proxy logs each refusal, 'Refused a dashboard request from origin', naming the address the browser" \
+      "opened, and the setting that would allow it, proxy.dashboard.allowedOrigins. To see it, run $0 logs proxy"
     point "In the Paths view, click the scrape button, the circular arrow beside /storefront_metrics: the result" \
       "says 'Origin not allowed', since the button sends a POST: $NGINX_DASHBOARD_URL/paths"
     follow_up "Next, run" "$0 dashboard-host"

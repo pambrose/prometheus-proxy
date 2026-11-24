@@ -72,14 +72,18 @@ takes a few minutes. `make up-local` builds the library, the proxy, and the roas
 | Prometheus | <http://localhost:9490> |
 | The roastery's metrics, through the proxy | <http://localhost:8480/roastery_metrics> |
 
-The ports are the defaults; set `SPRING_BOOT_DEMO_APP_PORT`, `SPRING_BOOT_DEMO_DASHBOARD_PORT`,
-`SPRING_BOOT_DEMO_AGENT_DASHBOARD_PORT`, `SPRING_BOOT_DEMO_PROXY_PORT`, or `SPRING_BOOT_DEMO_PROMETHEUS_PORT` to move
-one. Every port is published on `127.0.0.1` only. The agent's dashboard has no password, so the agent warns at startup,
-in the roastery's log, that it listens on all interfaces without a login: the container's, which only `127.0.0.1`
-reaches.
+The ports are the defaults. To move one that's taken, set its variable for `make up`: `SPRING_BOOT_DEMO_APP_PORT`,
+`SPRING_BOOT_DEMO_DASHBOARD_PORT`, `SPRING_BOOT_DEMO_AGENT_DASHBOARD_PORT`, `SPRING_BOOT_DEMO_PROXY_PORT`, or
+`SPRING_BOOT_DEMO_PROMETHEUS_PORT`, for example `SPRING_BOOT_DEMO_APP_PORT=8491 make up`. `make up` saves it in
+`docker/.env`, which every later command and docker compose read, so you set it once; delete its line there to go back
+to the default. Every port is published on `127.0.0.1` only. The agent's dashboard has no password, so the agent warns
+at startup, in the roastery's log, that it listens on all interfaces without a login: the container's, which only
+`127.0.0.1` reaches.
 
 The demo's TLS certificates are the repository's test ones (`testing/certs`), which are public, so it suits a laptop
-and nothing shared. `make up` writes them, with a random token, to `docker/.env` the first time it runs.
+and nothing shared. `make up` writes them, with a random token, to `docker/.env` the first time it runs, in the same
+file as any ports it saved. Delete the file, and the next `make up` writes a new one, with a new token, and forgets
+the saved ports.
 
 ## What's running
 
@@ -120,13 +124,14 @@ proxy and scrapes through it, so a Spring Boot release that breaks the agent fai
 sets that library to the agent's version with the property Spring Boot names it by, such as `grpc-java.version` or
 `netty.version`, which Spring Boot's
 [Version Properties](https://docs.spring.io/spring-boot/appendix/dependency-versions/properties.html) lists for every
-library it manages. netty-tcnative has none, since Netty's BOM sets it: the pom pins `netty-tcnative-classes` and
+library it manages. netty-tcnative has none, since Netty's BOM sets it: the pom would pin `netty-tcnative-classes` and
 `netty-tcnative-boringssl-static`, with each native's classifier, in its own `dependencyManagement`.
 
 ### 4. The agent's own dashboard, with the proxy stopped and started
 
-The agent serves a dashboard of its own, from inside the roastery, at <http://localhost:8495/dashboard>. Compose
-turns it on with `PROMETHEUSPROXY_AGENT_DASHBOARD_PORT`, which Spring Boot binds to the starter's
+The agent serves a dashboard of its own, from inside the roastery: <http://localhost:8495/dashboard>
+
+Compose turns it on with `PROMETHEUSPROXY_AGENT_DASHBOARD_PORT`, which Spring Boot binds to the starter's
 `prometheus-proxy.agent.dashboard.port`, so `application.yml` needn't change. Its Paths view lists `/roastery_metrics`,
 registered, with its recent scrapes. Select it to see each scrape the proxy asked for, and press Scrape now, the
 circular arrow after the path's name, to have the agent read the roastery's registry at once. The Activity view lists
@@ -157,7 +162,11 @@ roastery's log shows the order.
 | `demo.sh health` | Shows the agent's component of `/actuator/health` and the app's health | `curl` of the app's `/actuator/health`, whose `prometheusAgent` component the starter reports from `EmbeddedAgentInfo.isConnected` |
 | `demo.sh versions` | Compares the agent's libraries' versions in the roastery with the agent's own | The jar names in the image's `/app/lib`, against `gradle/libs.versions.toml` |
 | `demo.sh proxy-stop` / `proxy-start` | Stops the proxy, or starts it again, which the agent's dashboard shows | `docker compose stop` / `start proxy`: the agent retries every few seconds, its dashboard's Connection view shows the error, and its Activity view the disconnect and the reconnect |
-| `demo.sh stop-app` / `start-app` | Stops the roastery with SIGTERM, or starts it again | `docker compose stop` / `start roastery` |
+| `demo.sh stop-app` / `start-app` | Stops the roastery with SIGTERM, or starts it again | `docker compose stop` / `start roastery`: Spring Boot stops the agent first, then shuts down the web server |
+| `make tour [PART=n]` | Walks through the guided tour above, from part 1 or the one given, pausing before each step |  |
+| `make status` | The containers, the roastery's state, and the URLs |  |
+| `make logs [SERVICE=name]` | Follows the logs, of every service or the one given |  |
+| `make open` | Opens the roastery, the proxy's and the agent's dashboards, and Prometheus's graph of the batches roasted in the browser |  |
 
 ## Files
 
@@ -172,3 +181,17 @@ roastery's log shows the order.
 | `prometheus/prometheus.yml` | Prometheus's scrape config. |
 | `demo.sh` | Starts and stops the demo, runs its scenarios, and the tour. |
 | `Makefile` | `make up`, `up-local`, `down`, `status`, `open`, `logs`, and `tour`, which run `demo.sh`. |
+
+## The other demos
+
+- [Basics demo](../basics): the whole system on one machine, the proxy and its dashboard, three agents behind a
+  simulated firewall, Prometheus, and Grafana
+- [Network demo](../network): a simulated WAN between the agents and the proxies, and what a far, thin, dead, flaky, or
+  missing link does
+- [nginx demo](../nginx): nginx between the agents and the proxy, its stream timeouts, its reloads, and TLS ended on one
+  port
+- [Kubernetes demo](../kubernetes): the Helm charts on two kind clusters, with Kubernetes doing the operating and the
+  target cluster exposing nothing
+- [Ktor demo](../ktor): a coffee shop, a Ktor app that runs the agent in its own JVM through the Ktor plugin
+- [Plain Kotlin demo](../plain-kotlin): a bakery's ovens, workers with no framework or HTTP server, each reading its own
+  metrics in-process

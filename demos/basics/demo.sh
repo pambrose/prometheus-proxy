@@ -12,6 +12,46 @@ REPO_DIR="$(cd "$DEMO_DIR/../.." && pwd)"
 MAKE="${MAKE:-$(command -v make || command -v gmake || echo make)}"
 MAKE_NAME="${MAKE##*/}"
 COMPOSE=(docker compose -f "$DEMO_DIR/docker/compose.yml")
+# Where up keeps the host ports moved with the *_PORT variables (docker/compose.yml's list), so each later command, and
+# docker compose, which reads this file on its own, uses them with no variable set again. Not committed. Delete a
+# port's line to go back to its default.
+PORTS_FILE="$DEMO_DIR/docker/.env"
+
+# Takes each port saved in docker/.env that the environment doesn't set, so the URLs below match what compose
+# publishes. A variable set on the command line wins, and up saves it in turn.
+load_saved_ports() {
+  local name value
+  [[ -f "$PORTS_FILE" ]] || return 0
+  while IFS='=' read -r name value || [[ -n "$name" ]]; do
+    if [[ "$name" =~ ^[A-Z0-9_]+_PORT$ && -z "${!name:-}" ]]; then
+      export "$name=$value"
+    fi
+  done <"$PORTS_FILE"
+}
+load_saved_ports
+
+# Saves in docker/.env each port variable compose.yml reads that the environment sets, in place of its old line,
+# keeping the file's other lines: save_ports
+save_ports() {
+  local name saved=""
+  local -a lines=()
+  while IFS= read -r name; do
+    if [[ -n "${!name:-}" ]]; then
+      lines+=("$name=${!name}")
+      saved+="|$name"
+    fi
+  done < <(grep -oE '\$\{[A-Z0-9_]+_PORT:-' "$DEMO_DIR/docker/compose.yml" | sed 's/^\${//; s/:-$//' | sort -u)
+  ((${#lines[@]})) || return 0
+  (
+    umask 077
+    {
+      # The file's other lines; grep finds none when every line is a port saved again, which isn't a failure
+      [[ ! -f "$PORTS_FILE" ]] || grep -vE "^(${saved#|})=" "$PORTS_FILE" || true
+      printf '%s\n' "${lines[@]}"
+    } >"$PORTS_FILE.new"
+    mv "$PORTS_FILE.new" "$PORTS_FILE"
+  )
+}
 # The proxy and agent images the demo runs, under these tags whichever way they came: pulled from Docker Hub (up)
 # or built from this checkout (up-local). The other demos run the same tags, so there's one copy of each.
 IMAGES=(prometheus-proxy-demo/proxy:local prometheus-proxy-demo/agent:local)
@@ -56,13 +96,21 @@ text_width() {
 }
 
 # Prints text wrapped to that width, its first line after $1 and the rest after $2, which is as wide as $1 shows:
-# wrap <first> <rest> <text>...
+# wrap <first> <rest> <text>... It breaks lines only between words, and gives a word longer than a line, such as a
+# Prometheus URL, a line of its own, unbroken, so a terminal still opens it as a link.
 wrap() {
   local first="$1" rest="$2" line
   while IFS= read -r line; do
-    printf '%s%s\n' "$first" "${line% }"
+    printf '%s%s\n' "$first" "$line"
     first="$rest"
-  done < <(fold -s -w $(($(text_width) - ${#rest})) <<<"${*:3}")
+  done < <(awk -v width=$(($(text_width) - ${#rest})) '{
+      for (i = 1; i <= NF; i++) {
+        if (len > 0 && len + 1 + length($i) > width) { print out; out = ""; len = 0 }
+        out = len > 0 ? out " " $i : $i
+        len += (len > 0 ? 1 : 0) + length($i)
+      }
+    }
+    END { if (len > 0) print out }' <<<"${*:3}")
 }
 
 # What a scenario changed: a heading, then each thing to look for as a point of its own, its arguments joined.
@@ -155,7 +203,7 @@ answers() {
 wait_for() {
   local url="$1" name="$2" accept="${3:-}" deadline=$((SECONDS + 120))
   until answers "$url" "$accept"; do
-    ((SECONDS < deadline)) || die "$name did not answer at $url within 120s; see '$0 logs'"
+    ((SECONDS < deadline)) || die "$name did not answer within 120s; see '$0 logs'. It was asked at $url"
     sleep 2
   done
 }
@@ -214,10 +262,10 @@ need() { command -v "$1" >/dev/null 2>&1 || die "$1 is not on the PATH; $2"; }
 # The tools up and up-local need, checked before anything is pulled, built, or started. Without curl, the wait for
 # each service would retry for two minutes and then blame the service.
 check_tools() {
-  need docker "install Docker (https://docs.docker.com/get-started/get-docker/)"
+  need docker "install Docker: https://docs.docker.com/get-started/get-docker/"
   docker info >/dev/null 2>&1 || die "Docker isn't running"
   docker compose version >/dev/null 2>&1 ||
-    die "the demo needs Docker Compose v2, the docker compose plugin (https://docs.docker.com/compose/install/)"
+    die "the demo needs Docker Compose v2, the docker compose plugin: https://docs.docker.com/compose/install/"
   need curl "install curl; the demo uses it to wait for each service to answer"
 }
 
@@ -228,7 +276,7 @@ check_jdk() {
   local java="${JAVA_HOME:+$JAVA_HOME/bin/}java" version
   command -v "$java" >/dev/null 2>&1 ||
     die "building the proxy and agent from this checkout takes a JDK 17 or later;" \
-      "install one, or set JAVA_HOME (https://adoptium.net)"
+      "set JAVA_HOME to one, or get one at https://adoptium.net"
   version="$("$java" -version 2>&1 | sed -nE '1s/.*version "(1\.)?([0-9]+).*/\2/p')"
   if ! [[ "$version" =~ ^[0-9]+$ ]] || ((version < 17)); then
     die "building the proxy and agent from this checkout takes a JDK 17 or later, not Java ${version:-of an unknown" \
@@ -274,6 +322,7 @@ cmd_up_local() {
 # with ones built from this checkout (start_demo).
 start_demo() {
   local old_ids id
+  save_ports
   # The images the demo ran, to remove below once nothing tags them: a build from changed code makes new ones, and a
   # release's tags replace a build's. One another demo still runs is in use, and stays.
   old_ids="$(docker image inspect -f '{{.Id}}' "${IMAGES[@]}" 2>/dev/null || true)"
@@ -291,8 +340,8 @@ start_demo() {
   # Compose recreates a container when its own config changes, not when a file it mounts does, and neither Prometheus
   # nor Grafana reliably notices a changed file on its own. Reload Prometheus's config and rules (SIGHUP), and restart
   # Grafana for its dashboards, so a demo started from an older checkout runs this one's.
-  "${COMPOSE[@]}" kill --signal SIGHUP prometheus >/dev/null
-  "${COMPOSE[@]}" restart grafana >/dev/null
+  "${COMPOSE[@]}" --progress quiet kill --signal SIGHUP prometheus >/dev/null
+  "${COMPOSE[@]}" --progress quiet restart grafana >/dev/null
 
   for id in $old_ids; do
     if [[ -z "$(docker image inspect -f '{{join .RepoTags ""}}' "$id" 2>/dev/null)" ]]; then
@@ -462,6 +511,57 @@ TOUR_PARTS=(
   "2 A login for the dashboard"
 )
 
+# The tour's last words: how to start it again, the other demos, in the order the docs site's Demos page gives them,
+# and how to stop this one. tour_ending <this demo's directory under demos/>
+tour_ending() {
+  local demo
+  bold "That's the tour."
+  wrap "" "" "To start again from a part, run $MAKE_NAME tour PART=<n>, or $0 tour <n>."
+  echo
+  bold "The other demos:"
+  for demo in basics network nginx kubernetes ktor spring-boot plain-kotlin; do
+    [[ "$demo" != "$1" ]] || continue
+    case "$demo" in
+    basics)
+      wrap "  - " "    " "Standalone agents behind a simulated firewall, with the proxy's dashboard, discovery," \
+        "eviction, and an identity for each agent, are in the basics demo, in demos/basics."
+      ;;
+    network)
+      wrap "  - " "    " "Proxy failover, filtering at the agent, and tracing, over a simulated WAN, are in the" \
+        "network demo, in demos/network."
+      ;;
+    nginx)
+      wrap "  - " "    " "The proxy behind nginx, a reverse proxy that ends the agents' TLS, is in the nginx demo," \
+        "in demos/nginx."
+      ;;
+    kubernetes)
+      wrap "  - " "    " "The proxy and agent deployed on Kubernetes with their Helm charts are in the Kubernetes" \
+        "demo, in demos/kubernetes, which needs kind, kubectl, and Helm as well as Docker."
+      ;;
+    ktor)
+      wrap "  - " "    " "The agent embedded in a Ktor app through the Ktor plugin, under load, with alerts and a" \
+        "deploy, is in the Ktor demo, in demos/ktor."
+      ;;
+    spring-boot)
+      wrap "  - " "    " "The agent embedded in a Spring Boot app written in Java, through the Spring Boot starter," \
+        "is in the Spring Boot demo, in demos/spring-boot."
+      ;;
+    plain-kotlin)
+      wrap "  - " "    " "The agent embedded in plain Kotlin programs with no framework or HTTP server, scaled out" \
+        "and in, is in the plain Kotlin demo, in demos/plain-kotlin."
+      ;;
+    esac
+  done
+  echo
+  if [[ "$1" == kubernetes ]]; then
+    wrap "" "" "This demo's two kind clusters take a few GB of memory. To delete them and free it, run" \
+      "$MAKE_NAME down, or $0 down."
+  else
+    wrap "" "" "The demos use different ports, so they can run side by side, but each takes memory and CPU." \
+      "To stop this one and free its resources, run $MAKE_NAME down, or $0 down."
+  fi
+}
+
 cmd_tour() {
   check_tour_from "${1:-}"
   answers "$DASHBOARD_URL" login ||
@@ -615,17 +715,7 @@ cmd_tour() {
 
   wait_after_output "Press Enter to finish the tour"
   blank_line
-  bold "That's the tour."
-  echo "To start again from a part, run $MAKE_NAME tour PART=<n>, or $0 tour <n>."
-  echo
-  bold "The other demos:"
-  echo "Proxy failover, filtering at the agent, and tracing are in the network demo, in demos/network."
-  echo "The proxy behind nginx, a reverse proxy that ends the agents' TLS, is in the nginx demo, in demos/nginx."
-  echo "The same proxy and agent, deployed on Kubernetes with their Helm charts, are in the Kubernetes demo, in" \
-    "demos/kubernetes, which needs kind, kubectl, and Helm as well as Docker."
-  echo
-  echo "The demos use different ports, so they can run side by side, but each takes memory and CPU."
-  echo "To stop this one and free its resources, run $MAKE_NAME down, or $0 down."
+  tour_ending basics
 }
 
 # Restarts only the proxy, with the dashboard password given, or with none, which turns its login off. Compose
@@ -888,8 +978,8 @@ main() {
       "exit icon at the right end of the top bar, signs you out."
     point "A wrong password shows 'Invalid username or password', and the proxy logs it at WARN, at most once a" \
       "minute for each address. To see it, run $0 logs proxy"
-    point "A script sends the login as HTTP Basic Auth instead: curl -u admin:$LOGIN_PASSWORD $DASHBOARD_URL/paths" \
-      "answers, and the same curl without -u gets a 401."
+    point "A script sends the login as HTTP Basic Auth instead, and the same curl without -u gets a 401: curl -u" \
+      "admin:$LOGIN_PASSWORD $DASHBOARD_URL/paths"
     point "The dashboard serves plain HTTP, so anywhere but a laptop, put TLS in front of it."
     follow_up "To turn the login off again, run" "$0 login-off"
     ;;
