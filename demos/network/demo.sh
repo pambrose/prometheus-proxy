@@ -34,8 +34,10 @@ THIN_RATE_KBS=8      # KB/s from the agent to the proxy
 CUT_HOLD_MS=3600000  # how long a cut link holds a close, the agent's included: until heal, in practice
 
 # What a connection through a flaky link carries toward the proxy before the link closes it: about 15 seconds of the
-# agent's traffic, which agent-branch's inventory payload makes about 11 KB/s, and agent-hq's small paths about 0.4.
-flaky_bytes() { if [[ "$1" == agent-branch ]]; then echo 170000; else echo 5000; fi; }
+# agent's traffic, which agent-branch's inventory payload makes about 11 KB/s, and agent-hq's small paths about 0.5.
+flaky_bytes() { if [[ "$1" == agent-branch ]]; then echo 170000; else echo 7500; fi; }
+# A byte count in KB, as the text gives it: 7.5, or 170.
+kb() { awk -v bytes="$1" 'BEGIN { printf "%g", bytes / 1000 }'; }
 
 DASHBOARD_URL="http://localhost:${NETWORK_DEMO_DASHBOARD_PORT:-8194}/dashboard"
 STANDBY_DASHBOARD_URL="http://localhost:${NETWORK_DEMO_STANDBY_DASHBOARD_PORT:-8195}/dashboard"
@@ -245,6 +247,15 @@ other_agent() { if [[ "$1" == agent-hq ]]; then echo agent-branch; else echo age
 
 # An agent's own dashboard, at its base URL.
 agent_dashboard() { if [[ "$1" == agent-hq ]]; then echo "$HQ_DASHBOARD_URL"; else echo "$BRANCH_DASHBOARD_URL"; fi; }
+
+# The jobs of an agent's paths (the job label in config/agent-*.conf), as a sentence lists them.
+agent_jobs() {
+  if [[ "$1" == agent-hq ]]; then
+    echo "orders, payments, and agent-hq"
+  else
+    echo "inventory, shipping, and agent-branch"
+  fi
+}
 
 # Whether a proxy's container is running.
 running() { [[ -n "$("${COMPOSE[@]}" ps --status running --quiet "$1" 2>/dev/null)" ]]; }
@@ -765,12 +776,11 @@ main() {
     bold "agent-branch restarted with a filter that drops inventory_item_price_dollars"
     how_it_works "This recreates agent-branch's container with config/agent-branch-filtered.conf in place of" \
       "config/agent-branch.conf. The new config adds an agent.filters entry for /inventory_metrics that drops the" \
-      "inventory_item_price_dollars metric family from every scrape, at the agent, before it compresses the payload" \
-      "and sends it across the WAN."
+      "inventory_item_price_dollars metric family from every scrape, at the agent, before it compresses and chunks" \
+      "the payload and sends it across the WAN."
     watch_for
-    point "The agent drops that metric family before it compresses and chunks the payload. In agent-branch's" \
-      "'Recent scrapes' on the proxy's dashboard, the inventory falls from about 496,000 characters to about" \
-      "199,000, 21 KB gzipped."
+    point "In agent-branch's 'Recent scrapes' on the proxy's dashboard, the inventory falls from about 496,000" \
+      "characters to about 199,000, 21 KB gzipped."
     point "On the thin link each scrape now takes about 3 seconds, inside Prometheus's 4, so every path is green" \
       "again within about 5 seconds. Grafana's 'Filter bytes saved at the agent' climbs to about 60 KB/s: what never" \
       "crosses the WAN costs nothing to send, store, or query."
@@ -790,12 +800,19 @@ main() {
       "proxy's dashboard."
     ;;
   proxy-down)
-    local proxy
+    local proxy agent on_standby=() back=()
     proxy="$(proxy_arg "${1:-}")"
+    # The agents the standby serves, read before it stops, when its dashboard can still list them.
+    if [[ "$proxy" == proxy-standby ]]; then
+      for agent in "${AGENTS[@]}"; do
+        ! lists_agent "$STANDBY_DASHBOARD_URL" "$agent" || on_standby+=("$agent")
+      done
+    fi
     "${COMPOSE[@]}" stop "$proxy"
     bold "$proxy stopped"
     how_it_works "This runs docker compose stop $proxy, which shuts the proxy down. Its connections close as it" \
-      "exits, and an agent whose connection closed dials the next endpoint in its agent.proxy.endpoints list."
+      "exits. An agent whose connection closed tries the head of its agent.proxy.endpoints list first, the primary," \
+      "and when that connect fails, the next endpoint in the list."
     watch_for
     if [[ "$proxy" == proxy ]]; then
       point "The primary's connections close, so both agents know at once, and fail over within about 4 seconds" \
@@ -818,7 +835,36 @@ main() {
         "NetworkAgentNotOnPrimary fires for both."
       follow_up "To bring it back, run" "$0 proxy-up"
     else
-      point "The standby had no agents, so nothing moves. Any agent connected to it would return to the primary."
+      # The list may be empty, which bash 3.2, macOS's, takes as unset under set -u unless expanded this way.
+      for agent in ${on_standby[@]+"${on_standby[@]}"}; do
+        if ! running proxy; then
+          point "$agent was on the standby, and the primary is stopped too, so it has no proxy to reach. It keeps" \
+            "retrying both of its links, until a proxy starts again."
+        elif holds_cut "$(primary_link "$agent")"; then
+          point "$agent was on the standby, and its link to the primary is cut, so it has no proxy to reach. It keeps" \
+            "retrying both of its links, until the standby starts again or heal restores the link."
+        else
+          back+=("$agent")
+        fi
+      done
+      if ((${#back[@]} == 0)); then
+        ((${#on_standby[@]} > 0)) ||
+          point "The standby had no agents, so none moves, and the primary keeps serving every path."
+      else
+        if ((${#back[@]} == 1)); then
+          point "${back[0]} was on the standby, so its connection closes, and it reconnects from the head of its" \
+            "list, as a connection that registered and then dropped does. Within a few seconds the primary's" \
+            "dashboard shows it 'via' its link to the primary, '(1 of 2)': $DASHBOARD_URL"
+        else
+          point "Both agents were on the standby, so their connections close, and each reconnects from the head of" \
+            "its list, as a connection that registered and then dropped does. Within a few seconds the primary's" \
+            "dashboard shows each 'via' its link to the primary, '(1 of 2)': $DASHBOARD_URL"
+        fi
+        point "In Grafana's 'Agents off their primary', each agent back on the primary returns to 0, and" \
+          "NetworkAgentNotOnPrimary resolves for it."
+      fi
+      point "In Grafana, prometheus-proxy-standby, the standby's own metrics, goes down on 'Target health', and" \
+        "NetworkTargetDown fires for it."
       follow_up "To bring it back, run" "$0 proxy-up proxy-standby"
     fi
     ;;
@@ -857,6 +903,9 @@ main() {
     watch_for
     point "Nothing tells the agent. Within about 10 seconds its scrapes start timing out, and on the primary's" \
       "dashboard its 'idle' time climbs and its 'evicted in' countdown runs."
+    point "Prometheus can't scrape $agent's paths through either proxy, so NetworkTargetDown goes pending for" \
+      "$(agent_jobs "$agent") at about 10 seconds, and fires at about 25. It clears at about 50 seconds, about when" \
+      "the agent reaches the standby."
     point "The agent's heartbeat fails three times, with a 5-second deadline each, so at about 20 seconds it gives" \
       "up on the connection. It dials the head of its list again, the same dead link, where the connect waits out" \
       "its 30-second deadline."
@@ -865,7 +914,7 @@ main() {
       "gets its error, DEADLINE_EXCEEDED, and the agent fails over. The view is at" \
       "$(agent_dashboard "$agent")/connection"
     point "Meanwhile the primary, which hears nothing, evicts the agent at about 30 seconds, and NetworkAgentEvicted" \
-      "fires."
+      "fires. Grafana's 'Disconnects, by proxy and reason' shows it as an eviction at the primary."
     point "At about 50 seconds the agent connects through $(standby_link "$agent"), and the standby's dashboard" \
       "shows it '(2 of 2)', 'failed over', while the primary is still up. $(other_agent "$agent") is untouched" \
       "throughout."
@@ -882,22 +931,25 @@ main() {
     link="$(primary_link "$agent")"
     bytes="$(flaky_bytes "$agent")"
     add_toxic "$link" flaky upstream limit_data "bytes=$bytes"
-    bold "$link now closes each connection once it has carried $((bytes / 1000)) KB toward the proxy"
+    bold "$link now closes each connection once it has carried $(kb "$bytes") KB toward the proxy"
     how_it_works "This adds a Toxiproxy limit_data toxic to $link, $agent's link to the primary, which closes each" \
-      "connection through it once that connection has carried $((bytes / 1000)) KB toward the proxy. The count" \
+      "connection through it once that connection has carried $(kb "$bytes") KB toward the proxy. The count" \
       "starts over with each new connection, so the link keeps dropping the agent at about the same interval."
     watch_for
     point "That's about 15 seconds of $agent's traffic. Each time the link closes, the agent reconnects within" \
       "milliseconds and stays on the primary: a connection that registered and then dropped retries from the head" \
       "of the list."
-    point "In Grafana, 'Agent connects, by agent' climbs. Most scrapes succeed; the one in flight as a connection" \
-      "drops fails as agent_disconnected in 'Scrape outcomes at the proxies'."
+    point "In Grafana, 'Agent connects, by agent' climbs, and 'Disconnects, by proxy and reason' shows each drop at" \
+      "the primary as a termination: the connection closed, rather than going quiet. Most scrapes succeed; the one in" \
+      "flight as a connection drops fails as agent_disconnected in 'Scrape outcomes at the proxies'."
     point "On $agent's own Connection view, the line under its state counts its connects, one more with each drop," \
       "and the agent stays on $(primary_link "$agent"), with no 'failed over' tag. Its Activity view shows each drop" \
       "as disconnected, then connected and registered: $(agent_dashboard "$agent")/activity"
-    point "Every proxy and agent reports a span to Zipkin for each gRPC call between them, under its own service" \
-      "name. In Zipkin, the search is serviceName = $agent. Open this link, which fills that search in, and click" \
-      "Run Query: $ZIPKIN_URL/zipkin/?serviceName=$agent"
+    point "Every proxy and agent reports a span to Zipkin for each gRPC call between them but heartbeats and the" \
+      "stream of path notices, under its own service name. In Zipkin, the search is serviceName = $agent and" \
+      "spanName = proxyservice/connectagent. Open this link, which fills that search in, and click Run Query:"
+    # On a line of its own, unwrapped: it's longer than a narrow terminal's text, and wrap would split it.
+    printf '    %s\n' "$ZIPKIN_URL/zipkin/?serviceName=$agent&spanName=proxyservice%2Fconnectagent"
     point "Each reconnect is a connectagent trace, followed by registeragent and a registerpath for each path." \
       "Zipkin joins the agent's side and the proxy's side of each call into one span, so the trace names both."
     follow_up "To undo it, run" "$0 heal"
@@ -932,13 +984,15 @@ main() {
     how_it_works "This enables all four links again, and each agent's next retry connects through whichever of its" \
       "links it tries next."
     watch_for
-    point "Within a few seconds each agent reconnects, through whichever of its links it tries next, so one may" \
-      "land on the standby."
+    point "Within a few seconds both agents are connected again, and one may be on the standby's dashboard rather" \
+      "than the primary's."
     point "agent-branch's Connection view reads connected again, marked 'failed over' if it reached its link to the" \
       "standby. Only the endpoint it connected through loses its error; the other keeps its error until a connect" \
       "through it succeeds: $BRANCH_DASHBOARD_URL/connection"
     point "Their targets return, NetworkNoAgentsConnected resolves, and the graphs keep a gap where nothing could" \
       "be scraped."
+    point "An agent that lands on the standby shows at 1 on Grafana's 'Agents off their primary', and about 20" \
+      "seconds later NetworkAgentNotOnPrimary fires for it, until heal returns it to the primary."
     follow_up "To return any agent on the standby to the primary, run" "$0 heal"
     ;;
   heal) cmd_heal ;;

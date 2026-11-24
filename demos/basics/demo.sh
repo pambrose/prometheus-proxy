@@ -523,7 +523,7 @@ cmd_tour() {
       "They open the dashboards the project ships for operating the proxy and its agents."
     instruct "Open the proxy's service discovery: $PROXY_URL/discovery" \
       "Prometheus's config lists no targets. Instead it asks the proxy what exists, and this is the answer: every" \
-      "path the agents registered, with its labels. Each agent's labels set the job."
+      "path the agents registered, with its labels. Each path's labels set the job."
   fi
 
   if part 4 "Here you break two of the services, one at a time, and see that the proxy reports each failure" \
@@ -657,8 +657,8 @@ main() {
     watch_for
     point "On the proxy dashboard's Paths view, /${service}_metrics turns red with status 500 (upstream_error), and" \
       "so does each of its scrapes in its agent's list of recent scrapes."
-    point "In Grafana, $service's row on 'Target health' turns DOWN. After 15 seconds the DemoTargetDown alert fires:" \
-      "it shows in the 'Alerts' stat, in the 'Firing alerts' table, and on Prometheus's alerts page."
+    point "In Grafana, the $service row on 'Target health' turns DOWN. After 15 seconds the DemoTargetDown alert" \
+      "fires: it shows in the 'Alerts' stat, in the 'Firing alerts' table, and on Prometheus's alerts page."
     point "Every other service keeps answering: one failing target doesn't affect the rest."
     follow_up "To undo it, run" "$0 recover"
     ;;
@@ -722,7 +722,8 @@ main() {
     how_it_works "This runs docker compose stop $agent, which stops its container. The agent's gRPC connection to" \
       "the proxy closes as it exits, so the proxy removes the agent and its paths at once." "$consolidated"
     watch_for
-    point "$agent leaves the dashboard's Agents view at once, and its paths go with it."
+    point "$agent leaves the dashboard's Agents view at once. Each path that only it served stays on the Paths view," \
+      "listed as 'gone' for an hour (proxy.dashboard.departedPathRetentionSecs), so it's clear what left."
     if [[ -n "$other" ]]; then
       point "On the Paths view, /shipping_metrics loses its +1 and names $other alone: the pair is consolidated, so" \
         "$other keeps the path up."
@@ -756,10 +757,22 @@ main() {
     point "On the dashboard, click $agent. Its 'idle' time climbs, and its 'evicted in' countdown runs."
     [[ -z "$other" ]] || point "/shipping_metrics stalls while $agent is frozen, because the proxy waits for every" \
       "agent of a consolidated path."
-    point "After 30 seconds of silence the proxy evicts $agent, and the DemoAgentEvicted alert fires. Its own path," \
-      "/${agent//-/_}_metrics, shows as 'gone' on the Paths view, and Grafana's 'Agent disconnects at the proxy," \
-      "by reason' shows it as an eviction."
-    [[ -z "$other" ]] || point "$other carries /shipping_metrics alone from then on."
+    if [[ -n "$other" ]]; then
+      point "After 30 seconds of silence the proxy evicts $agent, and the DemoAgentEvicted alert fires. Its own path," \
+        "/${agent//-/_}_metrics, shows as 'gone' on the Paths view, and Grafana's 'Agent disconnects at the proxy," \
+        "by reason' shows it as an eviction."
+      point "$other carries /shipping_metrics alone from then on."
+    else
+      point "After 30 seconds of silence the proxy evicts agent-east, and every path it served, the six in its config" \
+        "and any it discovered, shows as 'gone' on the Paths view. The proxy dashboard's Activity view lists the" \
+        "eviction as a problem, with how many paths the proxy released."
+      point "The proxy's own metrics reach Prometheus through agent-east's /proxy_metrics path, so they stop with it." \
+        "The DemoAgentEvicted alert and Grafana's panels of the proxy's metrics, such as 'Agent disconnects at the" \
+        "proxy, by reason', can't update while agent-east is gone. Once it's back, they catch up: the alert fires," \
+        "and the panel shows the eviction."
+      point "Meanwhile DemoTargetDown fires for agent-east's jobs, and ProxyDown goes pending: Prometheus reads" \
+        "up{job=\"prometheus-proxy\"} through agent-east too, so it sees 0 though the proxy itself is up."
+    fi
     follow_up "To unfreeze it, run" "$0 agent-thaw$(agent_suffix "$agent")"
     ;;
   agent-thaw)
@@ -798,7 +811,8 @@ main() {
     how_it_works "This stops and removes the agent-rogue container. Its connection to the proxy closes as it exits," \
       "so the proxy removes the agent and its path at once."
     watch_for
-    point "agent-rogue leaves the dashboard at once, and /contractor_metrics goes with it."
+    point "agent-rogue leaves the dashboard at once. /contractor_metrics stays on the Paths view as 'gone' for an" \
+      "hour (proxy.dashboard.departedPathRetentionSecs), and leaves the proxy's /discovery at once."
     ;;
   proxy-down)
     "${COMPOSE[@]}" stop proxy
@@ -840,8 +854,8 @@ main() {
     watch_for
     point "The copy registers the same paths with the same identity, and the newer registration takes each one: the" \
       "dashboard shows agent-east-copy with agent-east's paths, and agent-east with 0."
-    point "The two settle. agent-east stays connected without paths, and waits rather than taking them back, which" \
-      "used to make two such agents swap the paths every few seconds."
+    point "The two settle. agent-east stays connected without paths and waits, rather than the two taking the paths" \
+      "from each other every few seconds."
     point "The proxy told agent-east. Its own dashboard lists its six paths as retrying, each taken over by" \
       "agent-east-copy, and its Activity view has the takeover, at $EAST_DASHBOARD_URL"
     point "The proxy's log line, printed below, names both agents by agentId and gives the fix: set" \
