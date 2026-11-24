@@ -1,4 +1,4 @@
-# prometheus-proxy Helm chart
+# prometheus-proxy Helm Chart
 
 Deploys the Prometheus Proxy server: Prometheus scrapes it, and it forwards each scrape to the agent that registered
 the path, over the gRPC connection that agent opened from inside its firewall. Install the
@@ -21,7 +21,7 @@ The chart runs one proxy per release: agents register their paths with the proxy
 behind the same Service would answer scrapes for paths it doesn't hold. For high availability, install a second
 release and give the agents both proxies (a comma-separated `proxy.hostname` in the agent chart).
 
-## Securing the agent port
+## Securing the Agent Port
 
 Without credentials, any process that can reach the gRPC port can register as an agent. Use one or more of:
 
@@ -48,7 +48,7 @@ or put the whole config, under a `proxy.conf` key, in a Secret you name in `exis
 
 See the [security guide](https://prometheus-proxy.com/security/).
 
-## The dashboard's login
+## The Dashboard's Login
 
 The dashboard (`dashboard.enabled`) stays off the Service, so you reach it with `kubectl port-forward`. To have it ask
 for a login as well, put a password in a Secret and name it in `dashboard.login.existingSecret`; the username is

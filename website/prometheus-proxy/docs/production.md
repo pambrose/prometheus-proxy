@@ -40,7 +40,7 @@ security, reliability, and tuning knobs documented elsewhere into one operationa
   plaintext between proxy and agent. See
   [Auth Header Forwarding](security/index.md#auth-header-forwarding).
 
-## Running as a service
+## Running as a Service
 
 In production, run the proxy and agents under a supervisor that starts them at boot and restarts them if
 they exit. `nohup` keeps a process running after you log out, but nothing restarts it, so don't rely on it
@@ -92,7 +92,7 @@ its admin and metrics ports, so no restart policy ever fired. See
     sudo systemctl disable --now prometheus-proxy  # stop, and no longer start at boot
     ```
 
-## High availability
+## High Availability
 
 - For **proxy** redundancy, give the agent an ordered list of proxy endpoints. It uses the first that
   accepts it, and moves to the next on a failed connect or when a proxy rejects its registration (or
@@ -148,7 +148,7 @@ its admin and metrics ports, so no restart policy ever fired. See
   on the proxy and `/healthcheck` on the agent. The proxy's `/healthcheck` measures load, so alert on it
   rather than take a busy proxy out of rotation. See [Kubernetes](kubernetes.md#health-probes-resources).
 
-### Scraping an HA pair
+### Scraping an HA Pair
 
 !!! warning "Use `static_config`, not `http_sd_config`"
 
@@ -181,7 +181,7 @@ The `metric_relabel_configs` above give them one `instance` either way, so each 
 and leave `up`, which metric relabelling doesn't touch, with each proxy's own. Or aggregate `without (instance)` in
 your queries.
 
-## Sizing & tuning
+## Sizing & Tuning
 
 Start from the defaults and adjust against the backlog and latency metrics:
 
@@ -226,7 +226,7 @@ backlog means agents can't keep up. See [Performance Tuning](advanced.md#perform
   terminated, where the application stops its own services. The Ktor plugin and the Spring Boot
   starter do this with the app. See [Embedded Agent](embedded-agent.md#embeddedagentinfo).
 
-## Pre-flight checklist
+## Pre-Flight Checklist
 
 - [ ] Proxy and agents run under a [supervisor](#running-as-a-service) that restarts them (systemd, Kubernetes,
       Docker's `--restart`, or `brew services`)

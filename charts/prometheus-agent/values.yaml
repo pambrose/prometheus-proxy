@@ -10,7 +10,7 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
-# Keep it at 1 (see the README's "More than one replica"). Every replica runs the same config, so each registers the
+# Keep it at 1 (see the README's "More Than One Replica"). Every replica runs the same config, so each registers the
 # same paths and scrapes the same targets. With agent.consolidated = true, the proxy joins their answers, so Prometheus
 # gets every series once per replica and drops the duplicates; without it, the replica that registered last serves
 # every path and the others sit idle. Kubernetes replaces a failed pod, so one replica is enough for availability.

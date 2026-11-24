@@ -1,4 +1,4 @@
-# nginx demo
+# nginx Demo
 
 A self-contained demo of Prometheus Proxy behind nginx, the reverse proxy many sites put in front of a service to end
 its TLS on one port. It runs a proxy with its web dashboard, nginx in front of it, two agents behind a simulated
@@ -31,7 +31,7 @@ kind clusters; it needs kind, `kubectl`, and Helm as well as Docker.
 Only nginx reaches the proxy's agent port. The proxy's transport filter is off behind nginx, so it records no address
 for an agent, and lists each at the address **Unknown**.
 
-## What you need
+## What You Need
 
 The proxy and agent are the latest release's images, from Docker Hub, the same ones the other demos run, so there's
 nothing to build, and agent-legacy is release 4.6.0's image. On macOS or Linux, the demo needs only:
@@ -43,7 +43,7 @@ nothing to build, and agent-legacy is release 4.6.0's image. On macOS or Linux, 
 - `curl`, which the demo uses to wait for each service to answer.
 - A web browser.
 
-## Quick start
+## Quick Start
 
 Clone the repository at the latest release, then run the demo's commands from its own directory, where `make help` lists
 its targets:
@@ -78,7 +78,7 @@ to the default. The proxy dashboard's link into Prometheus keeps the default por
 Every port binds to `127.0.0.1` only. The dashboards run without their login, so this setup is for a laptop, not for
 anything shared.
 
-## What's running
+## What's Running
 
 | Service | Role |
 |---|---|
@@ -89,12 +89,12 @@ anything shared.
 | `nginx-app` | The simulated services (`app/nginx_app.py`), with small metrics. |
 | `prometheus` | Scrapes both agents' paths through the proxy every 5 seconds, and the proxy's own metrics directly. |
 
-## Guided tour
+## Guided Tour
 
 `make tour` walks through these parts one step at a time. To follow them here instead, run the scenario commands
 from `demos/nginx`; each one prints what to watch.
 
-### 1. Two agents reach the proxy through nginx, over TLS
+### 1. Two Agents Reach the Proxy through nginx, over TLS
 
 Each agent dials nginx at `nginx.test.google.fr:443` over TLS. nginx ends the TLS and passes each gRPC call on to the
 proxy's agent port, which only nginx can reach.
@@ -122,7 +122,7 @@ proxy's agent port, which only nginx can reach.
   to trust, so this is needed even for a certificate a public CA signed: then point it at a CA bundle. Open the
   Connection view: <http://localhost:8595/dashboard/connection>
 
-### 2. nginx's stream timeouts cut off an agent from 4.6.0 every minute
+### 2. nginx's Stream Timeouts Cut Off an Agent from 4.6.0 Every Minute
 
 This part is for you if the proxy or any agent you run behind nginx, or another reverse proxy, is on 4.6.0 or earlier,
 as happens while you upgrade one before the other: keepalives flow only when both ends are newer, so such a pair goes
@@ -152,7 +152,7 @@ results on.
   reconnects to a new worker under the day-long ones, and stays connected. For an agent or a proxy from 4.6.0 or
   earlier, this is the fix short of upgrading both.
 
-### 3. A shorter stream timeout, and a reload that doesn't reach connected agents
+### 3. A Shorter Stream Timeout, and a Reload That Doesn't Reach Connected Agents
 
 Some load balancers close a quiet connection sooner than nginx's 60 seconds. Here nginx's timeouts come down to 20
 seconds, under the 30 seconds after which the keepalives start.
@@ -199,7 +199,7 @@ seconds, under the 30 seconds after which the keepalives start.
 ./demo.sh reset   # nginx and the proxy as make up starts them
 ```
 
-### 4. The dashboard behind nginx
+### 4. The Dashboard behind nginx
 
 The proxy's dashboard updates live over a WebSocket, which a reverse proxy has to pass on. Open the dashboard through
 nginx: <http://localhost:8590/dashboard>
@@ -227,7 +227,7 @@ nginx: <http://localhost:8590/dashboard>
   the dashboard on over plain HTTP; if it ended TLS in front of the dashboard, the browser's `Origin` would start with
   `https`, and a login's session cookie would be marked `Secure`, so the browser would send it only over TLS.
 
-## Scenario reference
+## Scenario Reference
 
 | Command | Effect | How it works |
 |---|---|---|
@@ -249,7 +249,7 @@ nginx: <http://localhost:8590/dashboard>
 
 `reset` undoes every scenario. For a clean slate, `make down && make up`.
 
-## How it's put together
+## How It's Put Together
 
 | File | What it sets up |
 |---|---|
@@ -301,7 +301,7 @@ it. nginx's configs are in `nginx/`, not `config/`, since they're nginx's own fo
   `127.0.0.1`. An agent logs `Cannot connect to proxy` while nginx restarts, and connects again a few seconds after
   nginx is back.
 
-## The other demos
+## The Other Demos
 
 In the order the docs site's [Demos](https://prometheus-proxy.com/demos/) page gives them:
 

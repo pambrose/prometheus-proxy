@@ -390,7 +390,7 @@ Prometheus --- HTTP GET ---> Proxy                        Agent
 --8<-- "MonitoringExamples.txt:promql-p99-latency"
 ```
 
-### P99 Latency Per Path
+### P99 Latency per Path
 
 ```promql
 --8<-- "MonitoringExamples.txt:promql-p99-per-path"

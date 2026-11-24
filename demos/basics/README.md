@@ -1,4 +1,4 @@
-# Basics demo
+# Basics Demo
 
 A self-contained demo of Prometheus Proxy. It runs the proxy with its web dashboard, three agents with theirs behind a
 simulated firewall, a set of simulated services, and Prometheus and Grafana, all on one laptop, and shows live
@@ -47,7 +47,7 @@ flowchart TB
   style inside stroke:#c0392b,stroke-width:2px,stroke-dasharray:6 4
 ```
 
-## What you need
+## What You Need
 
 The proxy and agent are the latest release's images, from Docker Hub, so there's nothing to build. On macOS or Linux,
 the demo needs only:
@@ -59,7 +59,7 @@ the demo needs only:
 - `curl`, which the demo uses to wait for each service to answer.
 - A web browser.
 
-## Quick start
+## Quick Start
 
 Clone the repository at the latest release, then run the demo's commands from its own directory, where `make help` lists
 its targets:
@@ -97,7 +97,7 @@ line there to go back to the default. The proxy dashboard's links into Prometheu
 Every port binds to `127.0.0.1` only. The dashboards run without a login, but for the proxy's in part 11 of the tour,
 and Grafana uses its default admin password, so this setup is for a laptop, not for anything shared.
 
-## What's running
+## What's Running
 
 | Service | Role |
 |---|---|
@@ -110,19 +110,19 @@ and Grafana uses its default admin password, so this setup is for a laptop, not 
 | `prometheus` | Scrapes every path through the proxy every 5s, with no target in its config. It loads the project's alerting rules (`grafana/alerts.yml`) and the demo's fast ones (`prometheus/demo-alerts.yml`). |
 | `grafana` | Opens on the **Prometheus Proxy Demo** dashboard. The project's own **Prometheus Proxy** and **Prometheus Agents** dashboards (`grafana/*.json`) are linked from its top bar. |
 
-## Guided tour
+## Guided Tour
 
 `make tour` walks through these parts one step at a time. To follow them here instead, run the scenario commands
 from `demos/basics`; each one prints what to watch. Leave about a minute between parts so the graphs catch up.
 
-### 1. How Prometheus scrapes services behind a firewall
+### 1. How Prometheus Scrapes Services behind a Firewall
 
 The diagram above shows the setup. Prometheus pulls metrics, but the services live behind a firewall that allows no
 inbound connections. The agents sit inside the firewall and connect *out* to the proxy over gRPC. Prometheus scrapes
 the proxy as if it were each service. The demo simulates the firewall: its containers share one network, but
 Prometheus has no targets of its own, so it reaches each service only through the proxy.
 
-### 2. Agents, paths, and live scrapes on the proxy dashboard
+### 2. Agents, Paths, and Live Scrapes on the Proxy Dashboard
 
 Open the dashboard on the **Agents** view.
 
@@ -137,7 +137,7 @@ Open the dashboard on the **Agents** view.
 - Each row ends with links to its job in Prometheus and in Grafana, shown as their brand icons and filled from the
   label the agent registered the path with; the Grafana one is a way into the next part.
 
-### 3. Target health and business metrics in Grafana
+### 3. Target Health and Business Metrics in Grafana
 
 Open Grafana. It lands on the **Prometheus Proxy Demo** dashboard.
 
@@ -149,7 +149,7 @@ Open Grafana. It lands on the **Prometheus Proxy Demo** dashboard.
 - Prometheus's config lists no targets. It asks the proxy (`/discovery`) what exists, and each path's labels set the
   `job`. Its answer is at <http://localhost:8080/discovery>
 
-### 4. An outage and a timeout
+### 4. An Outage and a Timeout
 
 ```bash
 ./demo.sh outage          # payments now answers 500
@@ -171,7 +171,7 @@ Open Grafana. It lands on the **Prometheus Proxy Demo** dashboard.
 ./demo.sh recover         # everything back to normal
 ```
 
-### 5. Two agents, one path
+### 5. Two Agents, One Path
 
 ```bash
 ./demo.sh agent-stop      # stops agent-west-2
@@ -184,7 +184,7 @@ Open Grafana. It lands on the **Prometheus Proxy Demo** dashboard.
 ./demo.sh agent-start     # it reconnects and rejoins in seconds
 ```
 
-### 6. New services, no restart
+### 6. New Services, No Restart
 
 ```bash
 ./demo.sh discover
@@ -201,7 +201,7 @@ Open Grafana. It lands on the **Prometheus Proxy Demo** dashboard.
 
 In the Paths view, a removed path that had been scraped stays listed as `gone`, so it's clear what left.
 
-### 7. A silent agent is evicted
+### 7. A Silent Agent Is Evicted
 
 ```bash
 ./demo.sh agent-freeze    # freezes agent-west-2: connected, but silent
@@ -217,7 +217,7 @@ In the Paths view, a removed path that had been scraped stays listed as `gone`, 
 ./demo.sh agent-thaw      # it reconnects and registers again
 ```
 
-### 8. Per-team tokens
+### 8. Per-Team Tokens
 
 The proxy has per-agent identities: each data center's agents connect with their own token, and an identity may
 register only the paths its patterns allow.
@@ -237,7 +237,7 @@ register only the paths its patterns allow.
   agent. The proxy counts every refusal in `proxy_path_rejections_total`, so an alert can catch a path that keeps
   being refused.
 
-### 9. A refused path, a lost proxy
+### 9. A Refused Path, a Lost Proxy
 
 The proxy's dashboard shows only what reaches the proxy. A path the proxy refused, or a proxy an agent can't reach,
 shows on the agent's side, so each agent here serves a dashboard of its own, on a port of its own (`agent.dashboard`
@@ -283,7 +283,7 @@ in `config/agent-*.conf`). This part starts with agent-rogue, which part 8 left 
   paths turn green, and **Activity** lists `connected` and `registered`. A new proxy holds nothing from the old one,
   so the proxy's dashboard starts its histories over.
 
-### 10. A duplicate agent
+### 10. A Duplicate Agent
 
 ```bash
 ./demo.sh duplicate-agent    # a second copy of agent-east, without consolidated mode
@@ -306,7 +306,7 @@ in `config/agent-*.conf`). This part starts with agent-rogue, which part 8 left 
 The proxy tells agent-east, which was waiting, that no agent serves its paths any more, and it takes them back within
 seconds, on the connection it kept, with no restart.
 
-### 11. A login for the dashboard
+### 11. A Login for the Dashboard
 
 ```bash
 ./demo.sh login       # restarts the proxy with a dashboard password in its environment
@@ -343,7 +343,7 @@ them:
 The demos use different ports, so they can run side by side, but each takes memory and CPU: `make down` stops this one
 and frees its resources.
 
-## Scenario reference
+## Scenario Reference
 
 | Command | Effect | How it works |
 |---|---|---|
@@ -364,7 +364,7 @@ and frees its resources.
 The services are `orders`, `payments`, `inventory`, `catalog`, and `shipping`, plus `search`, `recommendations`, and
 `notifications` once discovered. Freezing `agent-east` also stops the proxy's own metrics, which travel through it.
 
-## How it's put together
+## How It's Put Together
 
 | File | What it sets up |
 |---|---|

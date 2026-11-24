@@ -46,7 +46,7 @@ What each dashboard section watches is described under
     dashboards and the alerting rules below already loaded, against a proxy, three agents, and a set of simulated
     services; `make down` removes it. See the [Basics Demo](basics-demo.md) page.
 
-## Alerting rules
+## Alerting Rules
 
 The rules below ship as [`grafana/alerts.yml`](https://github.com/pambrose/prometheus-proxy/blob/master/grafana/alerts.yml)
 in the repository: add that file to Prometheus' `rule_files`. The thresholds are starting points —
@@ -70,7 +70,7 @@ through the proxy can't be scraped while it isn't connected, so neither rule see
     `launch_id` and the proxy's `version`, so an upgrade shows as a new version on the proxy dashboard's Version
     stat, and `agent_build_info` each agent's on the agents dashboard's Versions table.
 
-## See also
+## See Also
 
 - [Monitoring](monitoring.md) — full metric reference and PromQL examples
 - [Running in Production](production.md) — where alerting fits in the operational checklist

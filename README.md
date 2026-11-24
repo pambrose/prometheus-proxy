@@ -164,7 +164,7 @@ proxy) and register the paths for which they will provide data. One proxy can wo
   - Scrapes local metrics endpoints
   - Registers available paths with proxy
 
-### Key Benefits
+### Benefits
 
 - ✅ **Firewall-friendly** - Only requires outbound connection from agent
 - ✅ **Preserves pull model** - Prometheus continues to pull as normal
@@ -755,7 +755,7 @@ agent.pathConfigs: [{
 This leverages the existing service discovery features already built into Prometheus. A complete example config is
 [`examples/federate.conf`](examples/federate.conf).
 
-### Nginx Reverse Proxy
+### nginx Reverse Proxy
 
 To use with Nginx as a reverse proxy, disable the transport filter on both Proxy and Agent:
 ```bash
@@ -847,7 +847,7 @@ loss and recovery are announced to screen readers rather than signalled by colou
 
 > 📖 **Docs site:** [Dashboard guide](https://prometheus-proxy.com/web-dashboard/) for the layouts, the links, the status-bar gauges, and HA-pair behavior.
 
-#### The agent's dashboard
+#### The Agent's Dashboard
 
 The agent can serve a dashboard of its own, for what the proxy's can't see: an agent that can't connect, and a path the
 proxy refused. It shows the agent's connection, with the last error from each proxy endpoint while it can't connect,
@@ -1057,7 +1057,7 @@ agents are gone. With agent auth off, or only the shared `agentToken`, every age
 variable. Identity names must be unique, tokens non-empty and distinct, from each other and from `proxy.agentToken`,
 and no identity may be named `legacy-agent-token`; the proxy fails fast at startup otherwise.
 
-#### Migrating from a shared token
+#### Migrating from a Shared Token
 
 Setting `proxy.auth` does **not** disable a legacy `proxy.agentToken`. When both are present, the shared token is honored
 as an additional **allow-all** identity (and the proxy logs a warning that it is active), so you can adopt per-agent

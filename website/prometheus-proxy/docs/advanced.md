@@ -4,7 +4,7 @@ icon: lucide/wrench
 
 # Advanced Topics
 
-## Nginx Reverse Proxy
+## nginx Reverse Proxy
 
 To use Nginx as a reverse proxy in front of the gRPC service, disable the transport filter
 on both proxy and agent:

@@ -32,7 +32,7 @@ and how recent scrapes actually went.
     `make up` in a clone's `demos/basics` starts it, and `make down` removes it. The [Basics Demo](basics-demo.md) page
     walks through a failing target, paths discovered at runtime, and an evicted agent, with screenshots of each.
 
-## Enabling it
+## Enabling It
 
 === "Config file"
 
@@ -134,7 +134,7 @@ either, such as the trailing newline of a password read from a file.
     TLS (list its public origin in `allowedOrigins`; see [Exposure](#exposure)), an SSH tunnel, or
     `kubectl port-forward`. A login doesn't make the port safe to expose publicly.
 
-## Four layouts
+## Four Layouts
 
 The tabs in the top bar switch between them, and each is a real URL you can bookmark or share. The Left and Right
 arrow keys open the view before or after the current one, except while you're typing in the search.
@@ -154,7 +154,7 @@ never appeared, or the agent never did: what the proxy refused is in no other vi
 Every layout shows times in your browser's time zone, as Grafana does, whatever zone the proxy runs in, so a failed
 scrape here and the spike it caused in a Grafana panel read the same clock. Hover over a time for its date and zone.
 
-## The status bar
+## The Status Bar
 
 The bar across the top appears in every layout. It starts with the logo and which proxy the page is: its host's name
 and the port Prometheus scrapes, as `Proxy: proxy:8080`, so the dashboards of several proxies are told apart at a
@@ -170,7 +170,7 @@ half-filled circle), the default, which follows your system's light or dark sett
 and each button's tooltip names its theme. The browser remembers the choice for that dashboard, and its login page uses
 it too.
 
-### The live indicator
+### The Live Indicator
 
 The **live** indicator is the connection's own status, not the proxy's. If the proxy restarts or the
 connection drops, the green dot turns red and reads **reconnecting…**; the browser retries roughly every
@@ -186,7 +186,7 @@ failed attempt, up to a minute, which for an internal dashboard means the page c
 seconds after the proxy is already back. A steady two-second retry recovers within about that long of
 the proxy returning, at the cost of retry traffic that is negligible on a LAN.
 
-### chunks and scrapes
+### `chunks` and `scrapes`
 
 `chunks` and `scrapes` are **transient in-flight gauges**, not running totals — they count work happening
 *right now*, so at rest they sit at `0`. The number after the slash is a health threshold, not a capacity.
@@ -211,7 +211,7 @@ The `/800` is the **unhealthy threshold** (`proxy.internal.scrapeRequestMapUnhea
 it, both turn amber — a backpressure signal that requests are not draining: agents stuck or slow,
 or a leak. Green and near `0` is the healthy resting state.
 
-## The Agents layout
+## The Agents Layout
 
 Agents are listed on the left. Selecting one shows, on the right:
 
@@ -237,7 +237,7 @@ appears without a refresh. If the agent you are looking at disconnects, the pane
 rather than silently freezing on stale data. (The top-bar **live** indicator that reflects the
 connection itself is described under [The status bar](#the-status-bar).)
 
-## The Paths layout
+## The Paths Layout
 
 Every path on one row, with the endpoint behind it and how its last scrape went:
 
@@ -263,7 +263,7 @@ The copy button copies the URL as the table shows it. The agent [redacts](securi
 URL's user info and query values before sending it to the proxy, so a URL that carries either is copied with
 `***` in their place.
 
-### Searching and filtering
+### Searching and Filtering
 
 A search box above the table keeps only the rows whose path, agent, target URL or identity contains what you type,
 ignoring case, so `team-a` shows one team's paths. **Problems only** keeps the paths whose last scrape failed or whose
@@ -273,7 +273,7 @@ The search goes into the page's URL, as `/dashboard/paths?q=team-a&problems=1`, 
 bookmark or send. Pressing Enter in the box does the same as typing, and the form works as a plain link without the
 page's script.
 
-### Scrape now
+### Scrape Now
 
 The button after a path's copy button scrapes it at once, through its agent, exactly as Prometheus would, and shows
 the result above the table: the status, how long it took, the size, the content type, how many metric families and
@@ -366,7 +366,7 @@ with no prefix a link can query `up{path="/{path}"}`, written into the URL as
   placeholder fails too, as does an `icon` the dashboard doesn't have. Any of these stops the proxy at startup with a
   message naming the link.
 
-### Paths whose agent has gone
+### Paths Whose Agent Has Gone
 
 A path whose agent disconnected **stays on this screen**, marked `gone`, still naming the agent that was
 serving it, the identity it was registered as, and the target URL that agent scraped, with its copy button.
@@ -387,7 +387,7 @@ across all paths, which on a proxy with a hundred paths scraped every 15 seconds
 At most 1,000 gone paths are kept, the one seen least recently dropped first, and none survives a proxy restart.
 It is a recent-past view, not an audit log.
 
-## The Activity layout
+## The Activity Layout
 
 What the proxy did with its agents and their paths, newest first:
 
@@ -418,7 +418,7 @@ when the feed has changed, or your search has, so a row you are reading or selec
 The feed keeps the last `activityLogSize` rows (default 500), in memory only, so a restart empties it. It is a view of
 the recent past, for finding out why something didn't appear, not an audit log; the proxy's log has every event.
 
-## The Settings layout
+## The Settings Layout
 
 Every setting the proxy resolved from its flags, environment variables, config file, and defaults, so you can check
 what it runs with without reading its startup log:
@@ -446,7 +446,7 @@ sent without TLS.
 The settings don't change while the proxy runs, so the page is sent them once when it opens, and a value you select
 stays selected. If the proxy restarts, the page reconnects and shows the new process's settings.
 
-## Why it is on its own port
+## Why It Is on Its Own Port
 
 The proxy's admin port (8092) is a servlet container that cannot host WebSockets, so the dashboard could not
 live there even if that were desirable.
@@ -465,7 +465,7 @@ Ports in a fully-enabled proxy:
 | 8092 | Admin servlets (`/ping`, `/healthcheck`, `/debug`) | disabled |
 | **8094** | **Operational dashboard** | **disabled** |
 
-## Offline and airgapped deployments
+## Offline and Airgapped Deployments
 
 The dashboard loads no external assets. [htmx](https://htmx.org) ships inside the JAR as a WebJar dependency
 and is served from the classpath, so the dashboard renders with no outbound network access at all.
@@ -487,7 +487,7 @@ can't make the proxy collect any faster. Counters that drift rather than change 
 eviction countdowns — refresh on `refreshIntervalSecs` rather than on every event, and an Activity page is sent its
 table only when the feed or its search has changed.
 
-## Running an HA pair
+## Running an HA Pair
 
 Each proxy's dashboard shows **only the agents connected to that proxy**. With
 [proxy failover](production.md#high-availability) configured, an agent holds one connection at a time, so
@@ -545,7 +545,7 @@ stops reading or sends an oversized message is disconnected. Neither list stops 
 directly; a login does. Both are lists, so set them in a config file; see
 [Dashboard configuration](configuration/proxy.md#dashboard).
 
-### Behind a reverse proxy
+### Behind a Reverse Proxy
 
 The dashboard's live updates come over a WebSocket, at `/dashboard/events`, so a reverse proxy in front of it has to
 pass the WebSocket's handshake on, and the handshake has to pass the Origin check. With a plain `proxy_pass`, nginx

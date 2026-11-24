@@ -1,4 +1,4 @@
-# Ktor demo
+# Ktor Demo
 
 A self-contained demo of Prometheus Proxy's agent embedded in an app. A coffee shop, a small Ktor app with built-in
 customers, runs the agent inside its own JVM. The agent connects to a proxy, and Prometheus and Grafana sit beside
@@ -42,7 +42,7 @@ flowchart TB
   style platform stroke:#c0392b,stroke-width:2px,stroke-dasharray:6 4
 ```
 
-## What you need
+## What You Need
 
 On macOS or Linux, the demo needs:
 
@@ -57,7 +57,7 @@ On macOS or Linux, the demo needs:
 latest release's library, from Maven Central, so it needs no JDK. Until a release has everything the demo shows, it
 builds from the checkout instead, which needs a JDK 17 or later, as `make up-local` always does.
 
-## Quick start
+## Quick Start
 
 Clone the repository at the latest release, then run the demo's commands from its own directory, where `make help` lists
 its targets:
@@ -95,7 +95,7 @@ Every port binds to `127.0.0.1` only. The dashboards and the agent's admin endpo
 shop's knobs need none, and Grafana uses its default admin password, so this setup is for a laptop, not for anything
 shared.
 
-## What's running
+## What's Running
 
 | Service | Role |
 |---|---|
@@ -111,13 +111,13 @@ which `make up` writes the first time it runs, beside any port you moved, and do
 are the repository's test ones (`testing/certs`), which are public, so this suits a laptop and nothing else; the Cloud
 Platforms page shows how to make your own.
 
-## Guided tour
+## Guided Tour
 
 `make tour` walks through these nine parts one step at a time, about 23 minutes in all. To follow them here instead,
 run the scenario commands from `demos/ktor`; most print what to watch. Leave about a minute between parts so the graphs
 catch up.
 
-### 1. An app with the agent embedded, and no port open for Prometheus
+### 1. An App with the Agent Embedded, and No Port Open for Prometheus
 
 An app on a platform such as ECS, Cloud Run, or Azure Container Apps can't be scraped by a Prometheus outside the
 platform without opening its metrics to the internet. Here the agent runs inside the app instead, and connects out to
@@ -135,7 +135,7 @@ the proxy.
 - Open the proxy dashboard. One agent is connected, `coffee-shop-1.0`, named after the app's version, with two paths:
   the coffee shop's metrics, and the agent's own. It connected to the proxy over TLS.
 
-### 2. The agent's own dashboard, served from inside the app
+### 2. The Agent's Own Dashboard, Served from inside the App
 
 The proxy's dashboard shows only what reaches the proxy. The agent serves a
 [dashboard of its own](https://prometheus-proxy.com/agent-dashboard/), from inside the app, that shows its side: its
@@ -166,7 +166,7 @@ The coffee shop's environment turns it on, with nothing in its code: `DASHBOARD_
 unless `DASHBOARD_PASSWORD` sets one, so the demo publishes it on `127.0.0.1`; on a platform, its port would stay on the
 internal network.
 
-### 3. The coffee shop's metrics in Grafana
+### 3. The Coffee Shop's Metrics in Grafana
 
 Open Grafana. It lands on the **Coffee Shop** dashboard.
 
@@ -178,7 +178,7 @@ Open Grafana. It lands on the **Coffee Shop** dashboard.
   long each scrape through the proxy took.
 - The **Prometheus Agents** link opens the project's agents dashboard, which shows the embedded agent like any other.
 
-### 4. A rush fills the queue, and more baristas drain it
+### 4. A Rush Fills the Queue, and More Baristas Drain It
 
 The customers order about one and a half drinks a second, which three baristas keep up with.
 
@@ -191,7 +191,7 @@ The customers order about one and a half drinks a second, which three baristas k
 The queue climbs on the status page and in **Queue and baristas**. Once it holds 40, the counter turns customers away
 with a 429, and **Orders / sec, by outcome** shows them rejected. Eight baristas drain it.
 
-### 5. The espresso machine breaks, and an alert fires
+### 5. The Espresso Machine Breaks, and an Alert Fires
 
 ```bash
 ./demo.sh break-machine
@@ -203,7 +203,7 @@ show by outcome and by HTTP status, and within about half a minute `CoffeeShopEr
 page: its rule reads the failed orders' share over a 30-second window, and has to stay above one in ten for 10 seconds.
 The proxy and the agent are untouched: the metrics report the failure, they don't fail.
 
-### 6. A deploy hands the path to the new version
+### 6. A Deploy Hands the Path to the New Version
 
 ```bash
 ./demo.sh deploy        # starts version 1.1 beside 1.0, then stops 1.0
@@ -221,7 +221,7 @@ Each version's agent has its own dashboard, inside its own app. 1.1's lists the 
 stopped, its dashboard showed them as `retrying`, taken over by `coffee-shop-1.1`. 1.0's dashboard stops with its app,
 and answers again, starting over, after the rollback. 1.1's is at <http://localhost:8396/dashboard>
 
-### 7. The agent's admin endpoints, for debugging it
+### 7. The Agent's Admin Endpoints, for Debugging It
 
 When an embedded agent doesn't connect, or a path doesn't scrape, its admin endpoints show what it's doing. The coffee
 shop's environment turns them on with `ADMIN_ENABLED`, and its `/debug` page with `DEBUG_ENABLED`, with nothing in its
@@ -257,7 +257,7 @@ threads: take `ADMIN_ENABLED` and `DEBUG_ENABLED` out of the app's environment a
 set them again when you need to look. `ADMIN_PORT` moves the port. In code, `setting("admin.enabled", true)` and
 `setting("admin.debugEnabled", true)` do the same, though the environment overrides them.
 
-### 8. The proxy goes away, and the shop keeps serving
+### 8. The Proxy Goes Away, and the Shop Keeps Serving
 
 ```bash
 ./demo.sh proxy-stop
@@ -281,7 +281,7 @@ Once the proxy is back, the newest lines of the dashboard's **Activity** view, r
 in order: `disconnected`, `connect failed`, then `connected` and the paths `registered`. **Problems only** keeps just
 the `connect failed` lines. Open it at <http://localhost:8395/dashboard/activity>
 
-### 9. The secrets come from the environment
+### 9. The Secrets Come from the Environment
 
 ```bash
 ./demo.sh secrets
@@ -315,7 +315,7 @@ gives them:
 The demos use different ports, so they can run side by side, but each takes memory and CPU: `make down` stops this one
 and frees its resources.
 
-## Scenario reference
+## Scenario Reference
 
 | Command | Effect | How it works |
 |---|---|---|
@@ -337,7 +337,7 @@ and frees its resources.
 The drinks are `espresso`, `latte`, `cappuccino`, `mocha`, `tea`, and `cold-brew`; the first four need the espresso
 machine.
 
-## How it's put together
+## How It's Put Together
 
 | File | What it sets up |
 |---|---|

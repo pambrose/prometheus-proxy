@@ -27,11 +27,13 @@ Copyright &copy; 2026 Paul Ambrose
 # operating the proxy and its agents, then embedding the agent in an app, which fewer readers do, and looking something
 # up. Each embedded demo sits beside the integration it shows. A section's index.md, as its first entry, is the
 # section's own page (navigation.indexes): its label opens it, and shows the page's icon, so those pages have none, and
-# every section's label reads alike. Given with no title of its own, a page takes its title from its heading, where a
-# title like "Overview" named three pages.
+# every section's label reads alike. The home page stands above the sections, a page with an icon like the rest: as
+# Get Started's first entry, it was that section's own page, and its label, shown as the current page, had no icon.
+# Given with no title of its own, a page takes its title from its heading, where a title like "Overview" named three
+# pages.
 nav = [
+  { "Home" = "index.md" },
   { "Get Started" = [
-    { "Home" = "index.md" },
     { "Quick Start" = "getting-started.md" },
     { "Architecture" = "architecture.md" },
   ]},

@@ -32,7 +32,7 @@ The agent's own dashboard shows those. It runs on the agent, on a port of its ow
     It listens on all interfaces by default, and without a login the agent logs a warning at startup when it does. Set
     `agent.dashboard.host` (or `--dashboard_host`) to `127.0.0.1` to keep it on the agent's host.
 
-## Enabling it
+## Enabling It
 
 === "Config file"
 
@@ -92,7 +92,7 @@ The flags and the environment variables have the same names as the proxy's, and 
 dashboard, as with the admin and metrics settings. The other settings, `maxSessions`, `allowedOrigins`, and
 `allowedHosts`, work as the proxy's do; see [Exposure](web-dashboard.md#exposure).
 
-## The Paths view
+## The Paths View
 
 The default view lists every path the agent knows about: those in `agent.pathConfigs`, those its
 [discovery file](configuration/agent.md#dynamic-target-discovery) lists, and any registered at runtime. Each row has a
@@ -125,7 +125,7 @@ proxy's dashboard asked for, with its own Scrape now, is marked `from the proxy'
 The agent keeps these only while its dashboard is on, and only for scrapes the proxy asked for; it starts empty when
 the agent does.
 
-## Scrape now
+## Scrape Now
 
 A selected path's **Scrape now** button fetches its target from the agent at once and shows the result above the list:
 the status, the size before and after the path's filter, its metric families and samples, and the start of the body as
@@ -140,7 +140,7 @@ A Scrape now leaves no trace in what the agent reports: not in its `agent_scrape
 `agent_dashboard_scrapes_total`, its filter's counts, or the path's Recent scrapes. The agent logs it, with the address
 it came from. Turn the button off with `agent.dashboard.scrapeNowEnabled = false`.
 
-## The Connection view
+## The Connection View
 
 The connection's state, `connected`, `connecting`, or `failing`, and the endpoint in use or being tried, marked
 `failed over` when it isn't the first. Under it:
@@ -153,7 +153,7 @@ The connection's state, `connected`, `connecting`, or `failing`, and the endpoin
 
 The agent's settings are on the [Settings view](#the-settings-view).
 
-## The Activity view
+## The Activity View
 
 What has happened to the agent, newest first: the history the other views can't show, since they show only how
 things stand now. It's where you see that a path was refused just after the agent failed over, or that a connection
@@ -181,7 +181,7 @@ agent's log has all of it. The view keeps `activityLogSize` lines (500), in memo
 search filters by event, path, or detail, and **Problems only** keeps the red lines. The view updates as each line is
 added.
 
-## The Settings view
+## The Settings View
 
 Every setting the agent resolved from its flags, environment variables, config, and defaults, as on the proxy's
 [Settings layout](web-dashboard.md#the-settings-layout):
@@ -200,7 +200,7 @@ No secret reaches the page: the agent's token, the trust store's password, the d
 given as PEM show only as set or not set, and a `-D` override shows only its key. The page is sent the settings once
 when it opens, and again after the agent restarts.
 
-## The status bar
+## The Status Bar
 
 The bar along the top shows, on every view:
 

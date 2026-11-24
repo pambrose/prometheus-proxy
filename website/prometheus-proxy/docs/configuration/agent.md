@@ -45,7 +45,7 @@ Each path config entry has these fields:
 | `url`    | Yes      | Actual metrics endpoint the agent fetches from                |
 | `labels` | No       | JSON string of labels for service discovery (default: `"{}"`); keys starting with `__` are dropped |
 
-### Path rules
+### Path Rules
 
 !!! note "A path is one segment of plain characters"
 
@@ -165,7 +165,7 @@ java -jar prometheus-agent.jar \
   --proxy proxy-host.example.com:50051 --config agent.conf
 ```
 
-### Proxy failover
+### Proxy Failover
 
 For redundancy, give the agent an ordered list of proxy endpoints instead of a single hostname. It
 uses the first that accepts it, and moves to the next on a failed connect or when a proxy rejects its
