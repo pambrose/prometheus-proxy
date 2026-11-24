@@ -84,6 +84,15 @@ public class PrometheusProxyAgentProperties {
   /** The port of the agent's own metrics endpoint (the agent_* metrics), which is off without one. */
   private Integer metricsPort;
 
+  /**
+   * The proxy's path the agent's own metrics (the agent_* metrics) are served at, read in-process, with no port; none
+   * without one. The app's path doesn't carry them.
+   */
+  private String metricsProxyPath;
+
+  /** The labels of metrics-proxy-path, in the proxy's service discovery. */
+  private Map<String, String> metricsProxyPathLabels = new LinkedHashMap<>();
+
   /** The agent's dashboard, which is off without a port. */
   private final Dashboard dashboard = new Dashboard();
 
@@ -219,6 +228,22 @@ public class PrometheusProxyAgentProperties {
     this.metricsPort = metricsPort;
   }
 
+  public String getMetricsProxyPath() {
+    return metricsProxyPath;
+  }
+
+  public void setMetricsProxyPath(String metricsProxyPath) {
+    this.metricsProxyPath = metricsProxyPath;
+  }
+
+  public Map<String, String> getMetricsProxyPathLabels() {
+    return metricsProxyPathLabels;
+  }
+
+  public void setMetricsProxyPathLabels(Map<String, String> metricsProxyPathLabels) {
+    this.metricsProxyPathLabels = metricsProxyPathLabels;
+  }
+
   public Dashboard getDashboard() {
     return dashboard;
   }
@@ -245,7 +270,8 @@ public class PrometheusProxyAgentProperties {
         + ", trustCertificate=" + shown(trustCertificate) + ", authority=" + authority
         + ", clientCertificate=" + shown(clientCertificate) + ", clientKey=" + shown(clientKey) + ", name=" + name
         + ", path=" + path + ", labels=" + labels + ", source=" + source + ", paths=" + paths
-        + ", consolidated=" + consolidated + ", metricsPort=" + metricsPort + ", dashboard=" + dashboard
+        + ", consolidated=" + consolidated + ", metricsPort=" + metricsPort + ", metricsProxyPath=" + metricsProxyPath
+        + ", metricsProxyPathLabels=" + metricsProxyPathLabels + ", dashboard=" + dashboard
         + ", required=" + required + ", settings=" + settings.keySet() + "]";
   }
 

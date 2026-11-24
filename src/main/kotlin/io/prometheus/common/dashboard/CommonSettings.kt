@@ -109,9 +109,9 @@ internal object CommonSettings {
     )
 
   /**
-   * The metrics endpoint, and the JVM metric groups it adds to the process's own. An embedded agent can serve its own
-   * metrics through the proxy at [inProcessPath] instead (`agentMetricsAt`), or as well, with no port for them; empty
-   * without one, as the proxy always is.
+   * The metrics endpoint, and the JVM metric groups it adds to the process's own. An agent can serve its own metrics
+   * through the proxy at [inProcessPath] instead (`agent.metrics.proxyPath`, or an embedded agent's `agentMetricsAt`),
+   * or as well, with no port for them; empty without one, as the proxy always is.
    */
   fun metrics(
     metrics: MetricsConfig,

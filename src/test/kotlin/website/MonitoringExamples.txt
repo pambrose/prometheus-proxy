@@ -28,6 +28,17 @@ agent {
 }
 ; --8<-- [end:enable-metrics-agent]
 
+; --8<-- [start:agent-metrics-proxy-path]
+agent {
+  metrics {
+    // Served through the proxy at /cluster_a_agent_metrics, read in-process, with no port
+    proxyPath = cluster_a_agent_metrics
+    // Optional: the path's labels in the proxy's service discovery, as JSON
+    proxyPathLabels = "{\"cluster\": \"a\"}"
+  }
+}
+; --8<-- [end:agent-metrics-proxy-path]
+
 ; --8<-- [start:jvm-metrics-config]
 proxy.metrics {
   enabled = true

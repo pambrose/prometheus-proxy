@@ -37,6 +37,7 @@ import io.prometheus.common.ConfigLoadException
 import io.prometheus.common.Utils.HostPort
 import io.prometheus.common.Utils.parseEndpointList
 import io.prometheus.common.agentOptions
+import io.prometheus.common.agentOptionsFromConfig
 import io.prometheus.common.shouldBeRejected
 import io.prometheus.common.testConfigVals
 import org.slf4j.LoggerFactory

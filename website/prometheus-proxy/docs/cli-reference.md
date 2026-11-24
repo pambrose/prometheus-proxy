@@ -70,6 +70,7 @@ shows in a process listing. Nor do the dashboard's login settings: a password tu
 | `--debug, -b`                  | `DEBUG_ENABLED`                   | `agent.admin.debugEnabled`                  | false       | Enable debug servlet                                |
 | `--metrics, -e`                | `METRICS_ENABLED`                 | `agent.metrics.enabled`                     | false       | Enable metrics collection                           |
 | `--metrics_port, -m`           | `METRICS_PORT`                    | `agent.metrics.port`                        | 8083        | Metrics listen port                                 |
+| `--metrics_proxy_path`         | `METRICS_PROXY_PATH`              | `agent.metrics.proxyPath`                   | ""          | Proxy path for the agent's own metrics, no port     |
 | `--dashboard`                  | `DASHBOARD_ENABLED`               | `agent.dashboard.enabled`                   | false       | Enable the agent's dashboard                        |
 | `--dashboard_port`             | `DASHBOARD_PORT`                  | `agent.dashboard.port`                      | 8095        | Agent dashboard listen port                         |
 | `--dashboard_path`             | `DASHBOARD_PATH`                  | `agent.dashboard.path`                      | "dashboard" | Agent dashboard base path                           |
@@ -106,6 +107,10 @@ option, nor do the dashboard's login settings (see [Agent Dashboard](agent-dashb
 have the same names as the proxy's, and each process reads them for its own dashboard, as with `ADMIN_*` and
 `METRICS_*`. `--proxy` and `PROXY_HOSTNAME` replace `agent.proxy.endpoints`; with neither set, the agent reads that
 list, and reads `agent.proxy.hostname` only when it's empty.
+
+`--metrics_proxy_path` (since 4.7.0) has the agent serve its own metrics through the proxy at that path, read
+in-process, with or without the metrics port; its labels, `agent.metrics.proxyPathLabels`, have no command-line option
+or variable (see [Monitoring](monitoring.md#port-or-proxy-path)).
 
 ### Agent HTTP Client Cache Options
 

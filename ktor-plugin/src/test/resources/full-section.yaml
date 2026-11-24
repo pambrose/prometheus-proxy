@@ -12,6 +12,9 @@ prometheus-proxy:
     client-key: KEY
     consolidated: true
     metrics-port: 9101
+    metrics-proxy-path: my_app_agent_metrics
+    metrics-proxy-path-labels:
+      team: agents
     dashboard:
       port: 9102
       host: "127.0.0.1"
