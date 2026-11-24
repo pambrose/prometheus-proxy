@@ -44,7 +44,7 @@ document.addEventListener(
 
 // A slide's image, unnamed as GLightbox leaves it, named by the caption the slide shows below it
 const nameImage = (slide) => {
-  const image = slide.querySelector('img:not([alt]), img[alt=""]');
+  const image = slide.querySelector("img:not([alt]), img[alt='']");
   const caption = slide.querySelector(".gslide-title");
   if (image && caption) {
     image.alt = caption.textContent.trim();
