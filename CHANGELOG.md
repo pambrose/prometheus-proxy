@@ -274,6 +274,20 @@ All notable changes to this project are documented in this file.
   included, their labels no longer overflow their boxes
 - The demo pages' screenshots are taken at three times the pixel density, and their lightbox no longer draws one
   larger than its pixels, so their text is sharp when opened on a large screen and when zoomed
+- The docs site wears the dashboard's look: burnt orange for links, the current page, and focus, and its system
+  monospace for the headings, the navigation's sections, and code, with the reading text in the system's sans, so no
+  page loads a web font from Google. It follows the reader's light or dark setting, where it always opened dark
+- The docs site's "Edit this page" and "View source" links open the page's source, where they led to a missing
+  file; each heading has a permalink; the production checklist renders as checkboxes; and HOCON examples are
+  highlighted. The site's Markdown extensions had replaced Zensical's defaults, which these come back with
+- The docs site's reference tables break a flag, key, or variable only after a dot, an underscore, or a slash, where
+  they broke one at any letter, and the CLI Reference gives its tables the table of contents' width. Its callouts and
+  tables are a size larger, its index pages are titled by their headings, not "Overview", a missing page offers the
+  way back, and Back from the KDocs returns to the page before them
+- The docs site's sidebar has seven sections, in the order a reader goes: Get Started, Demos, Configure, Deploy,
+  Operate, Embed, and Reference, where it had nine, one of a single page and one of eight. Each embedded demo sits
+  beside the integration it shows, the monitoring pages beside the dashboards, and a new Demos page lists all seven
+  demos, what each shows, and what it needs, where the home page listed them before its introduction
 - The basics demo's tour has a tenth part: `./demo.sh login` restarts the proxy with a dashboard password in its
   environment (`DEMO_DASHBOARD_PASSWORD` in its compose file), and `login-off` without it. Its readiness checks take a
   login page's 401 as the proxy answering

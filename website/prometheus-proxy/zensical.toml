@@ -11,64 +11,73 @@ site_url = "https://prometheus-proxy.com/"
 
 repo_url = "https://github.com/pambrose/prometheus-proxy"
 repo_name = "pambrose/prometheus-proxy"
+# Where each page's edit and view-source links find it: the pages live under website/prometheus-proxy/docs, not in the
+# repository's top-level docs directory, where the default looks.
+edit_uri = "edit/master/website/prometheus-proxy/docs/"
 
-# The Mermaid diagrams' styles, for javascripts/diagrams.js, which overrides/main.html loads ahead of the theme's bundle.
-extra_css = ["stylesheets/diagrams.css"]
+# The Mermaid diagrams' styles, for javascripts/diagrams.js, which overrides/main.html loads ahead of the theme's bundle,
+# then the site's own look: the dashboard's burnt orange and monospace, and the reference tables' and callouts' sizing.
+extra_css = ["stylesheets/diagrams.css", "stylesheets/extra.css"]
 
 copyright = """
 Copyright &copy; 2026 Paul Ambrose
 """
 
+# The sections follow what a reader is doing: getting started, watching a demo run, configuring, deploying, and
+# operating the proxy and its agents, then embedding the agent in an app, which fewer readers do, and looking something
+# up. Each embedded demo sits beside the integration it shows. A section's index.md, as its first entry, is the
+# section's own page (navigation.indexes): its label opens it, and shows the page's icon, so those pages have none, and
+# every section's label reads alike. Given with no title of its own, a page takes its title from its heading, where a
+# title like "Overview" named three pages.
 nav = [
-  { "Overview" = [
+  { "Get Started" = [
     { "Home" = "index.md" },
-    { "Architecture" = "architecture.md" },
-    { "Glossary" = "glossary.md" },
-  ]},
-  { "Getting Started" = [
     { "Quick Start" = "getting-started.md" },
+    { "Architecture" = "architecture.md" },
+  ]},
+  { "Demos" = [
+    "demos/index.md",
     { "Basics Demo" = "basics-demo.md" },
     { "Network Demo" = "network-demo.md" },
     { "nginx Demo" = "nginx-demo.md" },
     { "Kubernetes Demo" = "kubernetes-demo.md" },
-    { "Ktor Demo" = "ktor-demo.md" },
-    { "Spring Boot Demo" = "spring-boot-demo.md" },
-    { "Plain Kotlin Demo" = "plain-kotlin-demo.md" },
   ]},
-  { "Deployment" = [
+  { "Configure" = [
+    "configuration/index.md",
+    { "Agent" = "configuration/agent.md" },
+    { "Proxy" = "configuration/proxy.md" },
+    "security/index.md",
+    { "TLS Setup" = "security/tls.md" },
+    { "Service Discovery" = "service-discovery.md" },
+    { "Example Configs" = "examples.md" },
+  ]},
+  { "Deploy" = [
     { "Docker" = "docker.md" },
     { "Kubernetes" = "kubernetes.md" },
     { "Cloud Platforms" = "cloud-platforms.md" },
-  ]},
-  { "Configuration" = [
-    { "Overview" = "configuration/index.md" },
-    { "Agent" = "configuration/agent.md" },
-    { "Proxy" = "configuration/proxy.md" },
-    { "CLI Reference" = "cli-reference.md" },
-    { "Example Configs" = "examples.md" },
-  ]},
-  { "Security" = [
-    { "Overview" = "security/index.md" },
-    { "TLS Setup" = "security/tls.md" },
-  ]},
-  { "Features" = [
-    { "Service Discovery" = "service-discovery.md" },
-    { "Embedded Agent" = "embedded-agent.md" },
-    { "Spring Boot Starter" = "spring-boot-starter.md" },
-    { "Ktor Plugin" = "ktor-plugin.md" },
-    { "Monitoring" = "monitoring.md" },
-    { "Grafana & Alerting" = "grafana.md" },
-  ]},
-  { "Operations" = [
-    { "Dashboard" = "web-dashboard.md" },
-    { "Agent Dashboard" = "agent-dashboard.md" },
     { "Running in Production" = "production.md" },
-    { "Troubleshooting" = "troubleshooting.md" },
-  ]},
-  { "Advanced" = [
     { "Advanced Topics" = "advanced.md" },
   ]},
-  { "KDocs" = "api.md" },
+  { "Operate" = [
+    { "Dashboard" = "web-dashboard.md" },
+    { "Agent Dashboard" = "agent-dashboard.md" },
+    { "Monitoring" = "monitoring.md" },
+    { "Grafana & Alerting" = "grafana.md" },
+    { "Troubleshooting" = "troubleshooting.md" },
+  ]},
+  { "Embed" = [
+    { "Embedded Agent" = "embedded-agent.md" },
+    { "Plain Kotlin Demo" = "plain-kotlin-demo.md" },
+    { "Ktor Plugin" = "ktor-plugin.md" },
+    { "Ktor Demo" = "ktor-demo.md" },
+    { "Spring Boot Starter" = "spring-boot-starter.md" },
+    { "Spring Boot Demo" = "spring-boot-demo.md" },
+  ]},
+  { "Reference" = [
+    { "CLI Reference" = "cli-reference.md" },
+    { "Glossary" = "glossary.md" },
+    { "KDocs" = "api.md" },
+  ]},
 ]
 
 # ----------------------------------------------------------------------------
@@ -87,11 +96,16 @@ language = "en"
 logo = "images/logo.svg"
 favicon = "images/favicon.svg"
 
+# No web font: the text is the system's sans and the headings and code the dashboard's system monospace
+# (stylesheets/extra.css), so no page asks Google Fonts for one, as the dashboards ask nothing of any CDN.
+font = false
+
+# The header's repository link shows GitHub's mark, not a generic one.
+icon.repo = "fontawesome/brands/github"
+
 features = [
-    "announce.dismiss",
     "content.action.edit",
     "content.action.view",
-    "content.code.annotate",
     "content.code.copy",
     "content.code.select",
     "content.footnote.tooltips",
@@ -103,7 +117,6 @@ features = [
     "navigation.instant",
     "navigation.instant.prefetch",
     "navigation.instant.progress",
-    "navigation.path",
     "navigation.sections",
     "navigation.top",
     "navigation.tracking",
@@ -111,16 +124,31 @@ features = [
     "toc.follow",
 ]
 
-# Dark mode first = default
+# The reader's system setting first, then light, then dark: the toggle steps through the three, each named for the one it
+# switches to. Both schemes take the dashboard's burnt orange for links, the current page, and focus (primary and accent
+# "custom", whose values are in stylesheets/extra.css), so its screenshots sit in a site of their own colors.
 [[project.theme.palette]]
-scheme = "slate"
-toggle.icon = "lucide/moon"
+media = "(prefers-color-scheme)"
+primary = "custom"
+accent = "custom"
+toggle.icon = "lucide/sun-moon"
 toggle.name = "Switch to light mode"
 
 [[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
 scheme = "default"
+primary = "custom"
+accent = "custom"
 toggle.icon = "lucide/sun"
 toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+primary = "custom"
+accent = "custom"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to system preference"
 
 # ----------------------------------------------------------------------------
 # Social links
@@ -128,6 +156,7 @@ toggle.name = "Switch to dark mode"
 [[project.extra.social]]
 icon = "fontawesome/brands/github"
 link = "https://github.com/pambrose/prometheus-proxy"
+name = "GitHub repository"
 
 # ----------------------------------------------------------------------------
 # Plugins
@@ -152,40 +181,63 @@ auto_caption = true
 # Markdown extensions
 # ----------------------------------------------------------------------------
 
-# attr_list - add HTML attributes to Markdown elements
-[project.markdown_extensions.attr_list]
+# Listing any extension here replaces Zensical's whole default set, so the set is listed in full: without it, the pages
+# lost their headings' permalinks (toc) and the production checklist rendered as literal "[ ]" (tasklist). Left out:
+# pymdownx.arithmatex, since no page has math and the site loads no math renderer for it.
 
-# md_in_html - render Markdown inside HTML blocks (needed for grid cards)
-[project.markdown_extensions.md_in_html]
+[project.markdown_extensions.abbr]
+[project.markdown_extensions.admonition]                # Callouts (!!!)
+[project.markdown_extensions.attr_list]                 # HTML attributes on Markdown elements
+[project.markdown_extensions.def_list]
+[project.markdown_extensions.footnotes]
+[project.markdown_extensions.md_in_html]                # Markdown inside HTML blocks, for the grid cards
 
-# admonition - callout blocks (!!!)
-[project.markdown_extensions.admonition]
+# Each heading's permalink, for linking straight to a setting or a step
+[project.markdown_extensions.toc]
+permalink = true
 
-# pymdownx.details - collapsible admonitions (???)
-[project.markdown_extensions.pymdownx.details]
+[project.markdown_extensions.pymdownx.betterem]
+[project.markdown_extensions.pymdownx.caret]
+[project.markdown_extensions.pymdownx.details]          # Collapsible callouts (???)
 
-# pymdownx.emoji - inline icons (:material-*:, :octicons-*:, :fontawesome-*:)
+# Inline icons (:material-*:, :octicons-*:, :fontawesome-*:)
 [project.markdown_extensions.pymdownx.emoji]
 emoji_index = "material.extensions.emoji.twemoji"
 emoji_generator = "material.extensions.emoji.to_svg"
 
-# pymdownx.snippets - import code from external files
+# Syntax highlighting. Pygments has no HOCON lexer, so the config blocks are read as Scala, which colors their
+# comments, strings, numbers, booleans, and ${?VAR} substitutions and, unlike JavaScript or HCL, flags none of their
+# syntax as an error.
+[project.markdown_extensions.pymdownx.highlight]
+anchor_linenums = true
+line_spans = "__span"
+pygments_lang_class = true
+extend_pygments_lang = [{ name = "hocon", lang = "scala" }]
+
+[project.markdown_extensions.pymdownx.inlinehilite]
+[project.markdown_extensions.pymdownx.keys]
+[project.markdown_extensions.pymdownx.magiclink]
+[project.markdown_extensions.pymdownx.mark]
+[project.markdown_extensions.pymdownx.smartsymbols]
+
+# Code from files outside the pages: the examples the tests compile and run, and the shipped configs
 [project.markdown_extensions.pymdownx.snippets]
 base_path = ["../../src/test/kotlin/website", "../../src/test/java/website", "../.."]
 check_paths = true
 
-# pymdownx.superfences - fenced code blocks with Mermaid support (Mermaid is built-in)
+# Fenced code, and the Mermaid diagrams (Mermaid is built in)
 [project.markdown_extensions.pymdownx.superfences]
 custom_fences = [
   { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" },
 ]
 
-# pymdownx.tabbed - content tabs
+# Content tabs
 [project.markdown_extensions.pymdownx.tabbed]
 alternate_style = true
+combine_header_slug = true
 
-# pymdownx.highlight - syntax highlighting
-[project.markdown_extensions.pymdownx.highlight]
-anchor_linenums = true
-line_spans = "__span"
-pygments_lang_class = true
+# Checklists render as checkboxes
+[project.markdown_extensions.pymdownx.tasklist]
+custom_checkbox = true
+
+[project.markdown_extensions.pymdownx.tilde]

@@ -8,6 +8,9 @@
       lightbox show each screenshot no larger than its pixels. See the script's header. #}
   <script src="{{ 'javascripts/screenshots.js' | url }}"></script>
   {{ super() }}
+  {#- After the theme's bundle, whose document$ it runs on for every page: it gives the reference tables' keys and flags
+      a place to break after each dot, underscore, and slash, and nowhere inside a word. See the script's header. #}
+  <script src="{{ 'javascripts/tables.js' | url }}"></script>
   {#- Context7's chat for questions about the API, answered from its index of this repository. The widget reads its
       settings from the last script tag with a data-library attribute and adds its chat box to the page once, outside
       the parts that instant navigation replaces, so it stays open from page to page. #}

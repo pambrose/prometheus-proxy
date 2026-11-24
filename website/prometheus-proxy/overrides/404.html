@@ -1,0 +1,13 @@
+{#- A page that isn't there: the theme's said only "404 - Not found". This one says so, and offers the ways back: the
+    header's search, which instant navigation keeps, and the pages most addresses were looking for. -#}
+{% extends "main.html" %}
+{% block content %}
+  <h1>Page not found</h1>
+  <p>There's no page at this address; it may have been renamed. Search for it above, or start from one of these:</p>
+  <ul>
+    <li><a href="{{ 'getting-started/' | url }}">Quick Start</a>: run a proxy and an agent, and scrape through them</li>
+    <li><a href="{{ 'configuration/' | url }}">Configuration</a>: every setting, in the config file, as a flag, and as an environment variable</li>
+    <li><a href="{{ 'troubleshooting/' | url }}">Troubleshooting</a>: why a target isn't being scraped</li>
+    <li><a href="{{ '.' | url }}">Home</a></li>
+  </ul>
+{% endblock %}
