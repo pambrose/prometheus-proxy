@@ -16,8 +16,10 @@
 document.addEventListener(
   "click",
   (event) => {
-    if (!(event.target instanceof Element) || !event.target.closest("a.glightbox")) return;
-    for (const link of document.querySelectorAll('a.glightbox[data-type="image"]:not([data-srcset])')) {
+    if (!(event.target instanceof Element) || !event.target.closest("a.glightbox")) {
+      return;
+    }
+    for (const link of document.querySelectorAll("a.glightbox[data-type=image]:not([data-srcset])")) {
       link.dataset.srcset = `${link.href} 2x`;
       // GLightbox sets the srcset only with sizes, which a density descriptor ignores.
       link.dataset.sizes = "100vw";
