@@ -59,7 +59,7 @@ IMAGES=(prometheus-proxy-demo/proxy:local prometheus-proxy-demo/spring-boot-app:
 RELEASED_PROXY_IMAGE=pambrose/prometheus-proxy
 # The demo shows what came after this release (the agent's own dashboard, and the Spring Boot starter the roastery runs
 # it with), so until a later one is out, up builds everything from this checkout, as up-local does.
-NEEDS_RELEASE_AFTER=4.7.0
+NEEDS_RELEASE_AFTER=4.6.0
 # The version up-local publishes this checkout's library at, to the local Maven repository, for the roastery's Maven
 # build: never a released one, so nothing mistakes it for one.
 LOCAL_LIBRARY_VERSION="$(sed -n 's/^version=//p' "$REPO_DIR/gradle.properties")"

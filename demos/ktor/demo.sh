@@ -59,7 +59,7 @@ IMAGES=(prometheus-proxy-demo/proxy:local prometheus-proxy-demo/ktor-app:local)
 RELEASED_PROXY_IMAGE=pambrose/prometheus-proxy
 # The demo shows what came after this release (the agent's own dashboard), so until a later one is out, up builds
 # everything from this checkout, as up-local does.
-NEEDS_RELEASE_AFTER=4.7.0
+NEEDS_RELEASE_AFTER=4.6.0
 # The secrets the demo's containers read (compose.yml), which up writes the first time it runs.
 ENV_FILE="$DEMO_DIR/docker/.env"
 CERTS_DIR="$REPO_DIR/testing/certs"

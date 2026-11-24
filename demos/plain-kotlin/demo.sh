@@ -59,7 +59,7 @@ IMAGES=(prometheus-proxy-demo/proxy:local prometheus-proxy-demo/plain-kotlin-app
 RELEASED_PROXY_IMAGE=pambrose/prometheus-proxy
 # The demo shows what came after this release (fromEnvironment(), source(path, registry), agentMetricsAt(), and
 # startIfConfigured()), so until a later one is out, up builds everything from this checkout, as up-local does.
-NEEDS_RELEASE_AFTER=4.7.0
+NEEDS_RELEASE_AFTER=4.6.0
 # The services only a scenario starts, so down and status cover them too.
 ON_DEMAND=(--profile misconfigured)
 # The most ovens `scale` runs.

@@ -60,7 +60,7 @@ IMAGES=(prometheus-proxy-demo/proxy:local prometheus-proxy-demo/agent:local)
 RELEASED_IMAGES=(pambrose/prometheus-proxy pambrose/prometheus-agent)
 # The demo shows what came after this release, so until a later one is out, up builds the proxy and agent from this
 # checkout, as up-local does. When the demo comes to use something unreleased, set this to the latest release.
-NEEDS_RELEASE_AFTER=4.7.0
+NEEDS_RELEASE_AFTER=4.6.0
 
 # nginx's config variants (nginx/): the agents' entrance, agents-<variant>.conf, and the dashboard's,
 # dashboard-<variant>.conf, each copied into conf.d as agents.conf or dashboard.conf.
