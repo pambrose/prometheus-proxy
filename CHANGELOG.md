@@ -214,6 +214,9 @@ All notable changes to this project are documented in this file.
 
 ### Build & Tooling
 
+- `make release-check` refuses a release while any demo's `NEEDS_RELEASE_AFTER` isn't below the version, which
+  would leave `make up` from the release's tag building the proxy and agent from source, and step 2 of
+  `docs/RELEASE.md` says when to raise and lower it
 - CodeScene no longer rates the Kotlin sources on Primitive Obsession, String Heavy Function Arguments, Excess Number of
   Function Arguments, or Global Conditionals, which flagged the code's intended shape and pushed changes into
   workarounds; its function-level rules (Complex Method, Bumpy Road Ahead, Complex Conditional, nesting, Large Method)
