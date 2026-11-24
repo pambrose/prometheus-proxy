@@ -266,7 +266,8 @@ connected and has registered the path. A 404 there means it hasn't; the agent's 
 With `transportFilterDisabled` (required when fronting gRPC with Nginx), the proxy notices an
 agent leave when the agent's request stream ends, which a disconnect normally does at once. An
 agent that dies before opening that stream, or whose connection stays half-open, stays listed
-until `proxy.internal.maxAgentInactivitySecs` (default 60s) evicts it. This is expected; see
+until [`proxy.internal.maxAgentInactivitySecs`](configuration/proxy.md#internal-settings) (default 60s) evicts it.
+This is expected; see
 [Nginx Reverse Proxy](advanced.md#nginx-reverse-proxy).
 
 ### Agents reconnect every minute behind Nginx

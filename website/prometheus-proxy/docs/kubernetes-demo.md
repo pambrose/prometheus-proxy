@@ -16,6 +16,14 @@ as Docker: see [What you need](#what-you-need).
 ``` mermaid
 %%{init: {'flowchart': {'curve': 'linear'}}}%%
 graph TB
+  accTitle: The Kubernetes Demo's two clusters
+  accDescr {
+    In pp-monitoring, outside the firewall, Prometheus on port 9290 discovers and scrapes paths through the
+    prometheus-proxy chart, dashboard 8294. In pp-target, behind the firewall with nothing exposed, the prometheus-
+    agent chart, dashboard 8295 through kubectl port-forward, connects out over gRPC to a NodePort of the proxy and
+    fetches metrics over HTTP from the orders, payments, shipping, and search services. targets-sync watches those
+    services and writes the agent-targets ConfigMap, which is mounted in the agent.
+  }
   P[Prometheus :9290] -->|discovery and scrapes| Proxy[prometheus-proxy chart, dashboard :8294]
   %% The agent connects out, across Docker's kind network, so its arrow points back. The invisible link keeps the
   %% target cluster below the monitoring one.
@@ -116,7 +124,7 @@ times on this page were measured on an Apple-silicon laptop.
 ./demo.sh clusters    # pp-target's Services, each cluster's Helm release, and Prometheus's one job
 ```
 
-```text
+``` { .text .pp-output title="./demo.sh clusters" }
 $ kubectl --context kind-pp-target get services --all-namespaces
 NAMESPACE     NAME               TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)                  AGE
 apps          orders             ClusterIP   10.96.135.38    <none>        8000/TCP                 2m27s
@@ -210,7 +218,7 @@ is the demo's: a discovery source in the agent that read Services itself would r
 ./demo.sh delete-agent-pod   # deletes the agent's pod; its Deployment starts another
 ```
 
-```text
+``` { .text .pp-output title="./demo.sh delete-agent-pod" }
 $ kubectl --context kind-pp-target -n monitoring delete pod prometheus-agent-8588c987c9-dqns8 --wait=false
 pod "prometheus-agent-8588c987c9-dqns8" deleted from monitoring namespace
 prometheus-agent-8588c987c9-llglr is on the dashboard with its paths, 2s after
@@ -238,7 +246,7 @@ the proxy's, above, saw both pods.
 ./demo.sh change-config      # helm upgrade with a change to the agent's main config
 ```
 
-```text
+``` { .text .pp-output title="./demo.sh change-config" }
 Upgrading the prometheus-agent chart with config/agent-change.conf added to its main config
 $ helm --kube-context kind-pp-target --namespace monitoring upgrade prometheus-agent ../../charts/prometheus-agent \
     --reuse-values --set-file config=<(cat config/agent.conf config/agent-change.conf)

@@ -21,6 +21,20 @@ body > div[id^="d__mermaid_"] {
   outline-offset: 4px;
 }
 
+/* A diagram's description, its accDescr, which a screen reader reads with the diagram's button: hidden from view, as
+   the diagram itself shows it. */
+.md-typeset .diagram-desc {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 dialog.diagram-zoom {
   box-sizing: border-box;
   width: 100vw;
@@ -48,8 +62,23 @@ dialog.diagram-zoom .diagram-zoom-view {
   height: 100%;
 }
 
+/* A diagram too tall to show whole at its size on the page is drawn larger, and the dialog scrolls through it, so the
+   arrow keys and Page Down scroll it while the focus is on its Close button, which stays in view. */
+dialog.diagram-zoom.scrolls {
+  overflow: auto;
+}
+
+/* It takes the focus only to scroll; it fills the window, so a ring around it would only trace the window's edge. */
+dialog.diagram-zoom:focus {
+  outline: none;
+}
+
+dialog.diagram-zoom.scrolls .diagram-zoom-view {
+  height: auto;
+}
+
 dialog.diagram-zoom button {
-  position: absolute;
+  position: fixed;
   top: 8px;
   right: 12px;
   width: 36px;

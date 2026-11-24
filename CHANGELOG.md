@@ -322,6 +322,40 @@ All notable changes to this project are documented in this file.
   block's Copy and Select buttons show while the pointer is over it, on its own color, where the end of its first line
   showed through them, and the screenshots' lightbox is GLightbox 3.3.1 served from the site, where the theme fetched
   whichever 3.x was newest from unpkg
+- The docs site's home page says what the project does in one line, draws it in another (Prometheus and the proxy on
+  one side of the firewall, the agent on the other), gives one Docker command to try it, and offers three ways on: a
+  demo, the Quick Start, and onboarding a team. It dropped its list of eleven benefits, its use cases, and its six
+  cards, and its JAR tab, which ran a jar it never downloaded
+- The docs site's CLI Reference stacks each setting's option over its environment variable, so its descriptions fit
+  a line, and gives each row an anchor named by its config key (`#agent.scrapeTimeoutSecs`), marked when a link lands
+  on it. The configuration pages point there for each setting's option and variable, the agent's scrape settings give
+  theirs, the proxy's internal settings say they have none, and the pages that name `maxAgentInactivitySecs` link to
+  it. The site's tables take the dashboard's padding
+- The Security page has the steps for onboarding a team: choose its path prefix and token, add its identity, restart
+  the proxy (which reconnects every agent, now said up front rather than in a closing note), hand over the token, and
+  confirm the team's agents on the dashboard. Its identity examples read each token from an environment variable,
+  where they wrote it in the config, and the Running in Production page says that revoking an identity takes a restart
+- The docs site's callouts take the dashboard's colors: amber for a warning and red for a danger, with a note, a tip,
+  and an info neutral, where the theme gave each a hue of its own and a warning the orange that marks a link. Light
+  mode's code sits on the dashboard's cool gray, and its links are a shade darker, so they keep 4.5:1 on every ground
+- The docs site sets what a command prints apart from what you type: the Quick Start's Verify step and the demo pages
+  show a log or a script's output outlined, under a label naming whose output it is, with no Copy button, and Verify
+  shows the agent's log with the dashboard's ok light and its HTTP statuses as the dashboard's green and red pills
+- The docs site's diagrams each have a text equivalent, which a screen reader reads with the diagram's button, named
+  by the diagram's title, where it heard only "Enlarge the diagram". A diagram too tall to show whole at its size on
+  the page opens at up to twice that size, to scroll through, where it opened smaller than on the page. The
+  screenshots' lightbox marks the focused button in the site's orange, where GLightbox drew a navy ring the overlay all
+  but hid, and Tab no longer stops on each line of a code block
+- The docs site's headings step by a third, 32, 24, and 18px, and each section's heading has a hairline above it, so
+  the levels tell apart in the monospace most browsers draw them in, which has no weight between regular and bold.
+  The basics demo's scenarios have short titles, on its page, in its tour, and in its README, so its page's contents
+  fit a line each, and their links still work. Callouts and screenshot captions take the tables' size
+- The Embedded Agent page shows the builder first, and starting the agent from a config file after it, where the file
+  came first. The production checklist links each item to the section that covers it, and draws checkboxes, where it
+  drew circles, and the Quick Start says once which places its `proxy-host.example.com` stands for
+- The docs site's lists with a code block in them, a procedure's steps or a demo's scenarios, give their code the
+  column's width, where it was held to the reading measure and scrolled sideways. A card's link underlines only the
+  page's name, and the screenshots' lightbox sets its caption on the dashboard's dark surface, where it was a white bar
 - The basics demo's tour has a tenth part: `./demo.sh login` restarts the proxy with a dashboard password in its
   environment (`DEMO_DASHBOARD_PASSWORD` in its compose file), and `login-off` without it. Its readiness checks take a
   login page's 401 as the proxy answering

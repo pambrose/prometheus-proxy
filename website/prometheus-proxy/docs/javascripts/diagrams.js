@@ -8,7 +8,11 @@
 //   1. waits for the page's font before drawing, and
 //   2. hands the theme a bindFunctions that keeps the diagram's shadow root, which the theme calls with it once the
 //      diagram is on the page, and marks the diagram as a button that shows it in a dialog filling the window. A
-//      diagram is an SVG, so it stays sharp at any size.
+//      diagram is an SVG, so it stays sharp at any size, and
+//   3. gives the diagram its text equivalent, the accTitle and accDescr its source declares, which Mermaid writes
+//      into the SVG as its title and desc. The closed shadow root hides those from a screen reader, and from
+//      aria-describedby, which can't reach into one, so the button takes the title in its name, and a visually hidden
+//      paragraph after it, which the button names as its description, holds the description.
 // Instant navigation swaps only the page's content, so the wrapper, and the listeners below, last from page to page.
 // The styles are in stylesheets/diagrams.css, which every page lists: a style this added to the head would be gone
 // after one.
@@ -23,12 +27,43 @@
       .load(`1em ${getComputedStyle(document.body).fontFamily}`)
       .then(() => document.fonts.ready));
 
+  // The text of the drawn SVG's title or desc, or "" for a diagram whose source declares none.
+  const svgText = (root, tag) => root.querySelector(`svg > ${tag}`)?.textContent.trim() ?? "";
+
+  // The visually hidden paragraph after the diagram that holds its description: the one a drawing before this one
+  // left, or a new one.
+  let descriptions = 0;
+  const descriptionOf = (host) => {
+    const next = host.nextElementSibling;
+    if (next?.classList.contains("diagram-desc")) {
+      return next;
+    }
+    const desc = document.createElement("p");
+    descriptions += 1;
+    desc.id = `diagram-desc-${descriptions}`;
+    desc.className = "diagram-desc";
+    host.after(desc);
+    return desc;
+  };
+
+  const describe = (host, text) => {
+    if (text) {
+      const desc = descriptionOf(host);
+      desc.textContent = text;
+      host.setAttribute("aria-describedby", desc.id);
+    }
+  };
+
   const enlargeable = (root) => {
-    roots.set(root.host, root);
-    root.host.tabIndex = 0;
-    root.host.setAttribute("role", "button");
-    root.host.setAttribute("aria-label", "Enlarge the diagram");
-    root.host.title = "Click to enlarge";
+    const host = root.host;
+    const title = svgText(root, "title");
+    roots.set(host, root);
+    host.dataset.title = title;
+    host.tabIndex = 0;
+    host.setAttribute("role", "button");
+    host.setAttribute("aria-label", title ? `Enlarge the diagram: ${title}` : "Enlarge the diagram");
+    host.title = "Click to enlarge";
+    describe(host, svgText(root, "desc"));
   };
 
   // Whether [mermaid] has a render this script hasn't wrapped yet.
@@ -73,6 +108,7 @@
     }
     dialog = document.createElement("dialog");
     dialog.className = "diagram-zoom";
+    dialog.tabIndex = -1;
     dialog.setAttribute("aria-label", "Diagram");
     const close = document.createElement("button");
     close.type = "button";
@@ -88,19 +124,48 @@
     return dialog;
   };
 
+  // Whether the view shows the whole diagram at least as large as the page does.
+  const fitsWhole = (onPage, view) =>
+    Math.min(view.clientWidth / onPage.width, view.clientHeight / onPage.height) >= 1;
+
+  // The copy's size: filling the view, keeping its proportions, or, for a diagram so tall that the view could show it
+  // whole only smaller than the page does, up to twice its size on the page, as wide as the view allows, through
+  // which the dialog scrolls (diagrams.css), where it was drawn smaller than on the page.
+  const sizeCopy = (copy, onPage, view) => {
+    const fits = fitsWhole(onPage, view);
+    copy.style.display = "block";
+    copy.style.margin = "0 auto";
+    copy.style.width = fits ? "100%" : `${Math.min(view.clientWidth, onPage.width * 2)}px`;
+    copy.style.height = fits ? "100%" : "auto";
+    return fits;
+  };
+
+  // A dialog that scrolls takes the focus itself, so the arrow keys and Page Down scroll it, where they went to the
+  // page behind it from its Close button, which stays in view (position: fixed); Tab still reaches Close.
+  const scrollable = (zoom, scrolls) => {
+    zoom.classList.toggle("scrolls", scrolls);
+    if (scrolls) {
+      zoom.focus();
+    }
+  };
+
   const enlarge = (host) => {
     const svg = roots.get(host)?.querySelector("svg");
     if (!svg) {
       return;
     }
+    const onPage = svg.getBoundingClientRect();
     const zoom = zoomDialog();
-    const copy = svg.cloneNode(true);
-    // Mermaid caps the SVG at its natural width; here it fills the view instead, keeping its proportions.
-    copy.removeAttribute("style");
-    copy.setAttribute("width", "100%");
-    copy.setAttribute("height", "100%");
-    zoom.querySelector(".diagram-zoom-view").shadowRoot.replaceChildren(copy);
+    const view = zoom.querySelector(".diagram-zoom-view");
+    zoom.classList.remove("scrolls");
+    zoom.setAttribute("aria-label", host.dataset.title || "Diagram");
     zoom.showModal();
+    // Mermaid caps the SVG at its natural width, which the copy sets aside for the size the view gives it.
+    const copy = svg.cloneNode(true);
+    copy.removeAttribute("style");
+    const fits = sizeCopy(copy, onPage, view);
+    view.shadowRoot.replaceChildren(copy);
+    scrollable(zoom, !fits);
   };
 
   const diagramOf = (target) => target?.closest?.(".md-typeset div.mermaid[role=button]");

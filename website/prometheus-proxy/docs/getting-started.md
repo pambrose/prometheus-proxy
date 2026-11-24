@@ -165,6 +165,9 @@ The proxy runs outside the firewall alongside your Prometheus server.
 The agent runs inside the firewall with your monitored services. It needs a configuration file
 that specifies which metrics endpoints to expose.
 
+From here on, `proxy-host.example.com` stands for the proxy's host, as the agent and Prometheus reach it. Put yours
+in its place in `agent.conf`, in the commands that name it, and in Prometheus's target, in the next step.
+
 ### Create an Agent Config
 
 Create a file called `agent.conf`:
@@ -188,7 +191,7 @@ Each entry in `pathConfigs` maps:
 - `path` — the URL path on the proxy that Prometheus will scrape
 - `url` — the actual metrics endpoint the agent will fetch from
 
-### Start the Agent
+### Start It
 
 === "JAR"
 
@@ -331,7 +334,7 @@ The `metrics_path` must match the `path` value in the agent's `pathConfigs`.
 
 The agent's log says when it has connected and registered each path:
 
-```text
+``` { .text .pp-output .pp-output--ok title="The agent's log" }
 Connected to proxy at proxy-host.example.com:50051 using plaintext
 Registered http://localhost:9100/metrics as /my_app_metrics with labels {} (static)
 ```
@@ -342,14 +345,15 @@ Then scrape the path through the proxy, as Prometheus will:
 curl -i http://proxy-host.example.com:8080/my_app_metrics
 ```
 
-`HTTP/1.1 200 OK`, followed by the same metrics `curl http://localhost:9100/metrics` returns on the agent's host,
-means every hop works: Prometheus can reach the proxy, the agent is connected and has registered the path, and the
-agent can reach the target. Any other status says which hop failed:
+<span class="pp-status pp-status--ok">HTTP/1.1 200 OK</span>, followed by the same metrics
+`curl http://localhost:9100/metrics` returns on the agent's host, means every hop works: Prometheus can reach the
+proxy, the agent is connected and has registered the path, and the agent can reach the target. Any other status says
+which hop failed:
 
-- **`404 Not Found`**: no agent has registered the path. Check the agent's log for the `Registered` line, and that
-  the path matches the agent's `path`.
-- **`503 Service Unavailable`**: the agent has the path, but it couldn't reach the target, or it was disconnected.
-  Check the `url` with `curl` from the agent's host.
+- <span class="pp-status pp-status--crit">404 Not Found</span>: no agent has registered the path. Check the agent's
+  log for the `Registered` line, and that the path matches the agent's `path`.
+- <span class="pp-status pp-status--crit">503 Service Unavailable</span>: the agent has the path, but it couldn't
+  reach the target, or it was disconnected. Check the `url` with `curl` from the agent's host.
 
 [Troubleshooting](troubleshooting.md#prometheus-scrape-returns-an-error) covers every status. Once Prometheus has
 scraped the job, its target page (Status → Target health) shows `my-app` as up.

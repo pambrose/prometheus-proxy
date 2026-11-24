@@ -29,6 +29,13 @@ The Agent runs inside the firewall with the monitored services. It provides:
 ``` mermaid
 %%{init: {'sequence': {'actorMargin': 16, 'width': 130, 'wrap': true}}}%%
 sequenceDiagram
+    accTitle: Request flow
+    accDescr {
+      The agent connects to the proxy's gRPC port when it starts, registers itself, and registers the path
+      /app_metrics. When Prometheus scrapes /app_metrics on the proxy's port 8080, the proxy looks up the agent for
+      the path and sends it a scrape request over the stream. The agent fetches /metrics from the app on port 9100
+      and sends the response back over the stream, and the proxy returns it to Prometheus.
+    }
     participant P as Prometheus
     participant Proxy as Proxy :8080
     participant gRPC as Proxy gRPC :50051

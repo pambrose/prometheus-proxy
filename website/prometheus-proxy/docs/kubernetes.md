@@ -19,6 +19,12 @@ The two components play different roles, and that determines where each one runs
 
 ```mermaid
 flowchart TB
+  accTitle: The proxy and agent charts in two clusters
+  accDescr {
+    In the monitoring cluster, Prometheus scrapes the proxy on port 8080, and the proxy listens for agents on gRPC
+    port 50051. In the target cluster, behind a firewall, the agent scrapes my-app's /metrics on port 9100 in the
+    cluster and connects out to the proxy over gRPC on port 50051.
+  }
   subgraph monitoring["Monitoring cluster"]
     prom["Prometheus"]
     proxy["Prometheus Proxy<br/>:8080 HTTP / :50051 gRPC"]

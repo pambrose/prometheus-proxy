@@ -147,7 +147,7 @@ Open Grafana. It lands on the **Prometheus Proxy Demo** dashboard.
 - Prometheus's config lists no targets. It asks the proxy (`/discovery`) what exists, and each path's labels set the
   `job`. Its answer is at <http://localhost:8080/discovery>.
 
-### 4. One service fails, another hangs, and the rest keep working
+### 4. An outage and a timeout
 
 ```bash
 ./demo.sh outage          # payments now answers 500
@@ -169,7 +169,7 @@ Open Grafana. It lands on the **Prometheus Proxy Demo** dashboard.
 ./demo.sh recover         # everything back to normal
 ```
 
-### 5. A second agent keeps a path up when one stops
+### 5. Two agents, one path
 
 ```bash
 ./demo.sh agent-stop      # stops agent-west-2
@@ -182,7 +182,7 @@ Open Grafana. It lands on the **Prometheus Proxy Demo** dashboard.
 ./demo.sh agent-start     # it reconnects and rejoins in seconds
 ```
 
-### 6. New services appear without a restart
+### 6. New services, no restart
 
 ```bash
 ./demo.sh discover
@@ -199,7 +199,7 @@ Open Grafana. It lands on the **Prometheus Proxy Demo** dashboard.
 
 In the Paths view, a removed path that had been scraped stays listed as `gone`, so it's clear what left.
 
-### 7. The proxy evicts an agent that goes silent
+### 7. A silent agent is evicted
 
 ```bash
 ./demo.sh agent-freeze    # freezes agent-west-2: connected, but silent
@@ -215,7 +215,7 @@ In the Paths view, a removed path that had been scraped stays listed as `gone`, 
 ./demo.sh agent-thaw      # it reconnects and registers again
 ```
 
-### 8. Per-team tokens restrict which paths an agent can register
+### 8. Per-team tokens
 
 The proxy has per-agent identities: each data center's agents connect with their own token, and an identity may
 register only the paths its patterns allow.
@@ -235,7 +235,7 @@ register only the paths its patterns allow.
   agent. The proxy counts every refusal in `proxy_path_rejections_total`, so an alert can catch a path that keeps
   being refused.
 
-### 9. An agent's own dashboard shows a refused path and a lost proxy
+### 9. A refused path, a lost proxy
 
 The proxy's dashboard shows only what reaches the proxy. A path the proxy refused, or a proxy an agent can't reach,
 shows on the agent's side, so each agent here serves a dashboard of its own, on a port of its own (`agent.dashboard`
@@ -281,7 +281,7 @@ in `config/agent-*.conf`). This part starts with agent-rogue, which part 8 left 
   paths turn green, and **Activity** lists `connected` and `registered`. A new proxy holds nothing from the old one,
   so the proxy's dashboard starts its histories over.
 
-### 10. A duplicate agent takes over the paths, and the proxy logs the fix
+### 10. A duplicate agent
 
 ```bash
 ./demo.sh duplicate-agent    # a second copy of agent-east, without consolidated mode

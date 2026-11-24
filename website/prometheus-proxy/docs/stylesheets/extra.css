@@ -14,15 +14,45 @@ body {
   --md-code-font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 }
 
-/* Light: the dashboard's accent. A link's text is a step darker, 5.1:1 on white and 4.7:1 on the code background a
-   linked flag sits on, where the accent itself fell under 4.5:1; links darken further on hover and focus, 6.7:1. */
+/* Light: the dashboard's accent. A link's text is a step darker, 5.7:1 on white, 5.2:1 on the code background a linked
+   flag sits on, and at least 4.75:1 on a callout's, where the accent itself fell under 4.5:1; links darken further on
+   hover and focus, 6.7:1. */
 [data-md-color-primary="custom"] {
   --md-primary-fg-color: #c8461f;
   --md-primary-fg-color--light: #d9663f;
   --md-primary-fg-color--dark: #a3381a;
   --md-primary-bg-color: #fff;
   --md-primary-bg-color--light: #ffffffb3;
-  --md-typeset-a-color: #c1441e;
+  --md-typeset-a-color: #b53f1c;
+}
+
+/* The dashboard's grounds and its warn and crit pairs, for the code and the callouts. Light code sits on the
+   dashboard's cold paper, a cool gray as light as the theme's #f5f5f5, so the highlighter's colors keep their 4.5:1;
+   a callout's ground is a step darker than the code's, so code inside one still shows as code. */
+[data-md-color-scheme="default"] {
+  --md-code-bg-color: #f2f5f8;
+  --pp-callout-bg: #e9edf2;
+  --pp-callout-icon: #626b77;
+  --pp-line: #cfd7e0;
+  --pp-ok: #1a7a42;
+  --pp-ok-soft: #e3f4ea;
+  --pp-warn: #8a5d08;
+  --pp-warn-soft: #f9f0da;
+  --pp-crit: #c02a20;
+  --pp-crit-soft: #fbe6e4;
+}
+
+/* Dark keeps the theme's code ground, and a callout's is a step lighter. */
+[data-md-color-scheme="slate"] {
+  --pp-callout-bg: #1c222b;
+  --pp-callout-icon: #858f9d;
+  --pp-line: #2b333f;
+  --pp-ok: #3fb950;
+  --pp-ok-soft: #12251a;
+  --pp-warn: #d29922;
+  --pp-warn-soft: #2a2110;
+  --pp-crit: #f85149;
+  --pp-crit-soft: #2d1512;
 }
 
 [data-md-color-accent="custom"] {
@@ -51,7 +81,8 @@ body {
 .md-nav__item--section > .md-nav__link,
 .md-typeset h1,
 .md-typeset h2,
-.md-typeset h3 {
+.md-typeset h3,
+.md-typeset h4 {
   font-family: var(--md-code-font-family);
   letter-spacing: 0;
 }
@@ -65,8 +96,69 @@ body {
   font-weight: 640;
 }
 
+/* The headings' levels in size and space, since the monospace most readers get (Menlo, Consolas, Liberation Mono)
+   has only a regular and a bold, so the weights above differ only in Safari's SF Mono. Each level is 4/3 of the one
+   below, 32, 24, and 18px over the 16px text, where the theme's 30, 24, and 20 stepped by 1.25 and 1.2. A section's
+   h2 gets the most room above and a hairline in the dashboard's line color, which marks a section as its panels do;
+   the title sits close over its introduction, and a long heading breaks into even lines. */
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3,
+.md-typeset h4 {
+  text-wrap: balance;
+}
+
+.md-typeset h1 {
+  margin: 0 0 0.75em;
+  font-size: 2em;
+  line-height: 1.25;
+}
+
+.md-typeset h2 {
+  margin: 2em 0 0.5em;
+  padding-top: 0.5em;
+  border-top: 1px solid var(--pp-line);
+  font-size: 1.5em;
+  line-height: 1.3;
+}
+
+.md-typeset h1 + h2 {
+  padding-top: 0;
+  border-top: 0;
+}
+
 .md-typeset h3 {
+  margin: 1.8em 0 0.5em;
+  font-size: 1.125em;
   font-weight: 600;
+  line-height: 1.35;
+}
+
+.md-typeset h2 + h3 {
+  margin-top: 0.9em;
+}
+
+.md-typeset h4 {
+  font-size: 1em;
+}
+
+/* A checklist's boxes are squares, as a checkbox's are, where the theme drew circles, which read as a choice of one,
+   as radio buttons do. */
+:root {
+  --md-tasklist-icon: url("data:image/svg+xml;charset=utf-8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect x='3' y='3' width='18' height='18' rx='2' fill='none' stroke='black' stroke-width='2'/></svg>");
+}
+
+/* A page's contents list breaks a long heading into even lines. */
+.md-nav--secondary .md-nav__link {
+  text-wrap: balance;
+}
+
+/* A screenshot's caption, as secondary text at the tables' size, where the theme set it in italics at the reading
+   size, which competed with the text around it. */
+.md-typeset figcaption {
+  color: var(--md-default-fg-color--light);
+  font-size: 0.7rem;
+  font-style: normal;
 }
 
 /* Reading text at 16px, the theme's 15px a step up, so a long page's measure comes nearer the comfortable range. */
@@ -80,6 +172,19 @@ body {
 .md-typeset > :is(p, ul, ol, dl, blockquote):not(:has(img)),
 .md-typeset .tabbed-block > :is(p, ul, ol, dl):not(:has(img)),
 .md-typeset > .admonition {
+  max-width: 27rem;
+}
+
+/* A list with a code block or a table in it, a procedure's steps or a demo's scenarios, takes the column's width, as
+   code and tables do elsewhere, where its code was held to the reading measure and scrolled sideways; its text keeps
+   the measure. */
+.md-typeset > ul:has(pre, table),
+.md-typeset > ol:has(pre, table) {
+  max-width: none;
+}
+
+.md-typeset > ul:has(pre, table) > li > p,
+.md-typeset > ol:has(pre, table) > li > p {
   max-width: 27rem;
 }
 
@@ -103,10 +208,117 @@ body {
   }
 }
 
-/* Callouts carry the cautions a reader most needs, which the theme set a step under the text around them, at 12.8px. */
+/* Callouts carry the cautions a reader most needs, which the theme set a step under the text around them, at 12.8px;
+   they take the tables' 14px, the site's one size under the reading text. */
 .md-typeset .admonition,
 .md-typeset details {
-  font-size: 0.72rem;
+  font-size: 0.7rem;
+}
+
+/* A callout's color says what it means, as the dashboard's do: amber for a caution, red for a danger. A note, a tip,
+   and an info are neutral, where the theme gave each a hue of its own (blue, teal, cyan) and a warning the orange that
+   means a link here. Each keeps its own icon and title, so the color is never the only sign. */
+.md-typeset :is(.admonition, details):is(.note, .tip, .info) {
+  background-color: var(--pp-callout-bg);
+}
+
+.md-typeset :is(.note, .tip, .info) > :is(.admonition-title, summary)::before {
+  background-color: var(--pp-callout-icon);
+}
+
+.md-typeset :is(.admonition, details).warning {
+  background-color: var(--pp-warn-soft);
+}
+
+.md-typeset .warning > :is(.admonition-title, summary)::before {
+  background-color: var(--pp-warn);
+}
+
+.md-typeset :is(.admonition, details).danger {
+  background-color: var(--pp-crit-soft);
+}
+
+.md-typeset .danger > :is(.admonition-title, summary)::before {
+  background-color: var(--pp-crit);
+}
+
+/* What a command prints, set apart from what you type: a block you type from is filled, and one the proxy or agent
+   answers with is drawn in the dashboard's line, on the page, under a label naming whose output it is (a fence's
+   title, as `{ .text .pp-output title="The agent's log" }`). There's nothing in it to run, so it has no Copy or Select
+   buttons. Output that shows things working (.pp-output--ok) leads its label with the dashboard's ok light. */
+.md-typeset .pp-output > .filename {
+  border: 1px solid var(--pp-line);
+  border-bottom: 0;
+  background-color: transparent;
+  color: var(--md-default-fg-color--light);
+  font-family: var(--md-code-font-family);
+  font-weight: 500;
+}
+
+.md-typeset .pp-output--ok > .filename::before {
+  display: inline-block;
+  width: 0.5em;
+  height: 0.5em;
+  margin-right: 0.6em;
+  border-radius: 50%;
+  background-color: var(--pp-ok);
+  vertical-align: 0.05em;
+  content: "";
+}
+
+.md-typeset .pp-output > pre > code {
+  border: 1px solid var(--pp-line);
+  background-color: transparent;
+}
+
+.md-typeset .pp-output .md-code__nav {
+  display: none;
+}
+
+/* An HTTP status as the dashboard shows a scrape's: a pill, green for one that worked and red for one that didn't,
+   whose text says which, so the color is never the only sign. */
+.md-typeset .pp-status {
+  padding: 0.1em 0.55em;
+  border-radius: 20px;
+  font-family: var(--md-code-font-family);
+  font-size: 0.85em;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.md-typeset .pp-status--ok {
+  background-color: var(--pp-ok-soft);
+  color: var(--pp-ok);
+}
+
+.md-typeset .pp-status--crit {
+  background-color: var(--pp-crit-soft);
+  color: var(--pp-crit);
+}
+
+/* The screenshots' lightbox caption, on the dashboard's dark surface in the site's reading face, under the dark
+   overlay, where GLightbox set it black in Arial on a white bar. */
+.glightbox-clean .gslide-description {
+  background: #151a21;
+}
+
+.glightbox-clean .gdesc-inner {
+  padding: 0.7em 1em;
+}
+
+.glightbox-clean .gslide-title {
+  margin-bottom: 0;
+  color: #e7ebf1;
+  font-family: var(--md-text-font-family);
+  font-size: 0.7rem;
+}
+
+/* The screenshots' lightbox is dark in either scheme, so its buttons' focus ring is the dark scheme's accent, 7:1 on
+   its overlay, where GLightbox drew a navy one the overlay all but hid, and the browser's own for a focus the site's
+   script moves (javascripts/screenshots.js). */
+.glightbox-container .gbtn:is(.focused, :focus-visible) {
+  outline: 2px solid #ff7043;
+  outline-offset: 2px;
 }
 
 /* A table's text a step up from the theme's 12.8px. */
@@ -125,4 +337,194 @@ body {
 
 .md-typeset table:not([class]) code .md-table-key {
   white-space: nowrap;
+}
+
+/* A table's cells at the dashboard's padding, about 8px by 14px, where the theme's 13px by 17px gave the CLI Reference's
+   descriptions a column a few words wide. */
+.md-typeset table:not([class]) th,
+.md-typeset table:not([class]) td {
+  padding: 0.6em 1em;
+}
+
+/* The row a link lands on, such as a configuration page's link to a setting's row in the CLI Reference, marked as the
+   current place is. */
+.md-typeset table:not([class]) tr:has(:target) {
+  background-color: var(--md-accent-fg-color--transparent);
+}
+
+/* The home page reads as three groups, each set close within: what the project does (the title, the lede, the flow
+   line, and how it works), Try It, and Next Steps. The headings' space is the only wide one, so space means a new
+   group. */
+
+/* The home page's lede, the social card's line, a step up from the reading text and close under the title it
+   finishes, where the title's own margin set it off like a section. */
+.md-typeset h1:has(+ .pp-lede) {
+  margin-bottom: 0.5em;
+}
+
+.md-typeset .pp-lede {
+  margin-top: 0;
+  color: var(--md-default-fg-color);
+  font-size: 1.2em;
+  line-height: 1.45;
+}
+
+/* What Try It's command prints, close under the command, as its result: the theme sets the block's margin on both
+   its wrapper and its pre. */
+.md-typeset .highlight:has(+ .pp-result),
+.md-typeset .highlight:has(+ .pp-result) > pre {
+  margin-bottom: 0.5em;
+}
+
+.md-typeset .pp-result {
+  margin-top: 0.5em;
+}
+
+/* The home page's flow line, the social card's: Prometheus and the proxy on one side of the firewall, the agent and
+   its endpoints on the other, and the firewall the accent's wall between them, a border so it holds in forced colors.
+   The diagram is one image to a screen reader, its aria-label the line in words. */
+.md-typeset .pp-flow {
+  container-type: inline-size;
+  margin: 1.5em 0;
+}
+
+.md-typeset .pp-flow__diagram {
+  display: flex;
+  color: var(--md-default-fg-color--light);
+  font-family: var(--md-code-font-family);
+  font-size: 0.8rem;
+  line-height: 1.7;
+  white-space: pre;
+}
+
+.md-typeset .pp-flow__side {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The zones' names at the tables' size, which stays put when the line stacks and shrinks. */
+.md-typeset .pp-flow__zone {
+  padding: 0 1ch;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+}
+
+/* Each zone's name sits against the wall, so the two read as the sides it divides. */
+.md-typeset .pp-flow__side:first-child .pp-flow__zone {
+  text-align: right;
+}
+
+.md-typeset .pp-flow__line b {
+  color: var(--md-default-fg-color);
+  font-weight: 600;
+}
+
+.md-typeset .pp-flow__wall {
+  flex: none;
+  border-left: 3px solid var(--md-primary-fg-color);
+}
+
+/* Where the line doesn't fit across, a phone's column, the zones stack, outside over inside, and the wall lies
+   between them. The longer half, 32 characters, shrinks with a column narrower than about 300px, so it never runs
+   past the edge. */
+@container (width < 33.5em) {
+  .md-typeset .pp-flow__diagram {
+    flex-direction: column;
+    font-size: min(0.75rem, 5cqi);
+  }
+
+  .md-typeset .pp-flow__zone {
+    padding: 0;
+  }
+
+  .md-typeset .pp-flow__side:first-child .pp-flow__zone {
+    text-align: left;
+  }
+
+  .md-typeset .pp-flow__wall {
+    margin: 0.5em 0;
+    border-top: 3px solid var(--md-primary-fg-color);
+    border-left: 0;
+  }
+}
+
+/* The home page's ways on: one list, a row each, the whole row its link, in the dashboard's rows rather than the
+   theme's cards. The link is the row's name; the text under it says where it goes. */
+.md-typeset .pp-ways > ul {
+  max-width: 27rem;
+  margin: 1em 0;
+  padding: 0;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  list-style: none;
+}
+
+.md-typeset .pp-ways > ul > li {
+  position: relative;
+  margin: 0;
+  padding: 0.625em 1em;
+}
+
+.md-typeset .pp-ways > ul > li + li {
+  border-top: 1px solid var(--md-default-fg-color--lightest);
+}
+
+.md-typeset .pp-ways > ul > li > p {
+  margin: 0;
+}
+
+/* A row's description at the callouts' size, under its name, as the dashboard sets a row's detail under its title. */
+.md-typeset .pp-ways > ul > li > p + p {
+  margin-top: 0.25em;
+  color: var(--md-default-fg-color--light);
+  font-size: 0.7rem;
+  line-height: 1.6;
+}
+
+.md-typeset .pp-ways > ul > li code {
+  white-space: nowrap;
+}
+
+.md-typeset .pp-ways > ul > li > p:first-child a {
+  font-family: var(--md-code-font-family);
+  font-weight: 600;
+}
+
+/* The row's outline shows the focus, below, so the link draws none of its own inside it: only where the row can
+   show it, so a browser without :has keeps the link's. */
+@supports selector(:has(a)) {
+  .md-typeset .pp-ways > ul > li > p:first-child a:focus-visible {
+    outline: none;
+  }
+}
+
+/* The link covers its whole row, so the row is one target. */
+.md-typeset .pp-ways > ul > li > p:first-child a::before {
+  position: absolute;
+  inset: 0;
+  content: "";
+}
+
+/* The arrow is decoration, so its alternative text is empty. */
+.md-typeset .pp-ways > ul > li > p:first-child::after {
+  margin-left: 0.5ch;
+  color: var(--md-typeset-a-color);
+  content: "→" / "";
+}
+
+.md-typeset .pp-ways > ul > li:hover {
+  background-color: var(--md-code-bg-color);
+}
+
+.md-typeset .pp-ways > ul > li:has(a:focus-visible) {
+  outline: 2px solid var(--md-accent-fg-color);
+  outline-offset: -2px;
+}
+
+/* A card's link, an arrow and the page it opens: the arrow and the name laid out apart, so the link's underline runs
+   under the name alone, where it ran under the space after the arrow too. Last in the file, after the home page's
+   links, which are less specific. */
+.md-typeset .grid.cards a:has(> .twemoji:first-child) {
+  display: inline-flex;
+  gap: 0.3em;
+  align-items: center;
 }

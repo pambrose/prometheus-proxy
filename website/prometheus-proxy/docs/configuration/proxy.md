@@ -7,6 +7,9 @@ icon: lucide/server
 The proxy runs outside the firewall alongside Prometheus. It accepts scrape requests from
 Prometheus on HTTP and communicates with agents via gRPC.
 
+The settings below are keys in the proxy's config file. Most also have a command-line option and an environment
+variable, which the [CLI Reference](../cli-reference.md#proxy-options) gives in each key's row.
+
 ## HTTP Service
 
 Configure the HTTP service that Prometheus scrapes:
@@ -171,7 +174,8 @@ See [Monitoring](../monitoring.md) for the complete metrics reference.
 
 ## Internal Settings
 
-Configure agent cleanup and scrape request management:
+Configure agent cleanup and scrape request management. These settings have no command-line option or environment
+variable: set them in the config file, or with `-D`, as `-Dproxy.internal.maxAgentInactivitySecs=120`.
 
 ```hocon
 --8<-- "AdvancedExamples.txt:stale-agent-config"
@@ -180,7 +184,7 @@ Configure agent cleanup and scrape request management:
 | Setting                             | Default | Description                                                                              |
 |:------------------------------------|:--------|:-----------------------------------------------------------------------------------------|
 | `staleAgentCheckEnabled`            | true    | Enable periodic stale agent cleanup                                                      |
-| `maxAgentInactivitySecs`            | 60      | Seconds of inactivity before agent is evicted                                            |
+| `maxAgentInactivitySecs`            | 60      | Seconds an agent may go without contacting the proxy before the proxy evicts it          |
 | `staleAgentCheckPauseSecs`          | 10      | Interval between cleanup checks                                                          |
 | `scrapeRequestTimeoutSecs`          | 90      | Timeout for individual scrape requests                                                   |
 | `scrapeRequestBacklogUnhealthySize` | 25      | Backlog that marks the proxy unhealthy; each agent's queue is capped at twice this       |
@@ -236,7 +240,7 @@ agent.transportFilterDisabled = true   // Each agent's config
     With `transportFilterDisabled`, the proxy can't see a connection close, only the agent's request
     stream end. An agent that disconnects ends that stream, and is removed at once. One that dies
     before opening its stream, or whose connection stays half-open, is removed after the inactivity
-    timeout (default: 60 seconds, `proxy.internal.maxAgentInactivitySecs`).
+    timeout (default: 60 seconds, [`proxy.internal.maxAgentInactivitySecs`](#internal-settings)).
 
 !!! note "Give each agent its own identity"
 

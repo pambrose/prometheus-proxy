@@ -17,9 +17,10 @@ security, reliability, and tuning knobs documented elsewhere into one operationa
 - **Prefer per-agent identities over one shared token.** A shared token cannot tell agents
   apart, so any holder can register — and silently take over — any path, including one already
   served by another agent. Named identities under `proxy.auth` scope each agent to its own path
-  patterns and can be revoked individually. See
-  [Per-Agent Identities](security/index.md#per-agent-identities-and-path-authorization),
-  including the incremental migration path from a shared token.
+  patterns, and one can be revoked without touching the others, though adding or revoking one takes a proxy
+  restart, which reconnects every agent. See
+  [Per-Agent Identities](security/index.md#per-agent-identities-and-path-authorization), including
+  [onboarding a team](security/index.md#onboarding-a-team) and the incremental migration path from a shared token.
 - **Segment the network** so only trusted agents can reach the gRPC port (`50051`).
 - **Keep the scrape port (`8080`) to Prometheus.** It has no authentication, and whoever reaches it can have
   the agents scrape their targets with their own query string and `Authorization` header. Bind it to a
@@ -227,15 +228,20 @@ backlog means agents can't keep up. See [Performance Tuning](advanced.md#perform
 
 ## Pre-flight checklist
 
-- [ ] Proxy and agents run under a supervisor that restarts them (systemd, Kubernetes, Docker's
-      `--restart`, or `brew services`)
-- [ ] TLS (ideally mutual) enabled on the gRPC channel
-- [ ] Agent token set (per-agent identities where teams share a proxy), or mutual TLS in place
-- [ ] gRPC port reachable by agents; admin and dashboard ports **not** publicly exposed
-- [ ] Metrics enabled and scraped by Prometheus
-- [ ] Dashboards imported and alert rules loaded
-- [ ] `maxConcurrentClients` / timeouts tuned for your targets
-- [ ] Content-size limits sized for your largest payload
-- [ ] JVM heap sized for peak decompressed payload × concurrency
-- [ ] Liveness probes on `/ping`; readiness on `/ping` (proxy) and `/healthcheck` (agent)
-- [ ] Consolidated mode where you need agent redundancy, with each agent scraping its own instance
+- [ ] Proxy and agents run under a [supervisor](#running-as-a-service) that restarts them (systemd, Kubernetes,
+      Docker's `--restart`, or `brew services`)
+- [ ] [TLS](security/tls.md) (ideally mutual) enabled on the gRPC channel, and
+      [confirmed on](security/tls.md#confirm-its-on)
+- [ ] [Agent token](security/index.md#agent-authentication-pre-shared-token) set
+      ([per-agent identities](security/index.md#per-agent-identities-and-path-authorization) where teams share a
+      proxy), or mutual TLS in place
+- [ ] gRPC port reachable by agents; admin and dashboard ports **not** [publicly exposed](#security)
+- [ ] [Metrics enabled](monitoring.md#enabling-metrics) and scraped by Prometheus
+- [ ] [Dashboards imported](grafana.md#importing) and [alert rules](grafana.md#alerting-rules) loaded
+- [ ] `maxConcurrentClients` / timeouts [tuned](#sizing-tuning) for your targets
+- [ ] [Content-size limits](configuration/proxy.md#content-size-limits) sized for your largest payload
+- [ ] JVM heap [sized](#sizing-tuning) for peak decompressed payload × concurrency
+- [ ] [Liveness probes](kubernetes.md#health-probes-resources) on `/ping`; readiness on `/ping` (proxy) and
+      `/healthcheck` (agent)
+- [ ] [Consolidated mode](advanced.md#consolidated-mode) where you need agent redundancy, with each agent scraping
+      its own instance

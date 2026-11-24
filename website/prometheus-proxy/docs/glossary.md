@@ -110,7 +110,7 @@ set. See [Agent Dashboard](agent-dashboard.md).
 ### Stale agent cleanup
 
 The proxy's periodic eviction of agents that have been inactive longer than
-`proxy.internal.maxAgentInactivitySecs` (default 60s). See
+[`proxy.internal.maxAgentInactivitySecs`](configuration/proxy.md#internal-settings) (default 60s). See
 [Architecture](architecture.md#stale-agent-cleanup).
 
 ### Embedded agent

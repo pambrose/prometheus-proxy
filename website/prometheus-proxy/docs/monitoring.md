@@ -202,7 +202,8 @@ Each of these counters exposes every value of its label at zero from the start, 
 alert built on them, see the first event rather than only a second one.
 
 **Agents that leave:** `proxy_agent_disconnects_total` counts each agent the proxy removes, by why:
-`eviction` (no contact within `maxAgentInactivitySecs`, also in `proxy_eviction_count_total`), `termination` (its
+`eviction` (no contact within [`maxAgentInactivitySecs`](configuration/proxy.md#internal-settings), also in
+`proxy_eviction_count_total`), `termination` (its
 connection closed), or `stream_terminated` (its scrape stream ended, with `transportFilterDisabled`). A connection that
 never authenticated, such as a port probe, isn't counted.
 

@@ -15,6 +15,14 @@ same setup.
 ``` mermaid
 %%{init: {'flowchart': {'curve': 'linear'}}}%%
 graph TB
+  accTitle: The nginx Demo's containers
+  accDescr {
+    Outside the firewall, Prometheus on port 9590 discovers and scrapes paths through the proxy, dashboard 8594.
+    nginx ends TLS on port 443 and passes the agents' gRPC to the proxy in plaintext, and HTTP to it, including a
+    browser's dashboard requests on 8590. Inside the firewall, agent-current, dashboard 8595, and agent-legacy,
+    release 4.6.0, connect to nginx over gRPC with TLS and fetch metrics over HTTP from nginx-app's simulated
+    services.
+  }
   P[Prometheus :9590] -->|discovery and scrapes| Proxy[Proxy, dashboard :8594]
   Browser[Browser] -->|dashboard :8590| Nginx
   Nginx[nginx: TLS on 443] -->|gRPC, plaintext| Proxy

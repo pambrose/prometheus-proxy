@@ -1,193 +1,81 @@
+---
+# The page has two sections, which a scroll finds; its Try It command, one line of which is mostly a long URL, takes
+# the table of contents' width to fit
+hide:
+  - toc
+---
+
 # Prometheus Proxy
 
-**Enable Prometheus to scrape metrics endpoints behind firewalls.**
+Prometheus scrapes endpoints behind a firewall, still by pull, with no inbound firewall rule.
+{ .pp-lede }
 
-[Prometheus](https://prometheus.io) uses a pull model for collecting metrics. This is problematic when a firewall
-separates the Prometheus server from its metrics endpoints. **Prometheus Proxy** solves this by using a persistent
-gRPC connection initiated from inside the firewall, preserving Prometheus's native pull-based architecture.
+<!-- The social card's flow line (social-card/card.html), the firewall drawn as the accent's wall between the two
+     zones; stylesheets/extra.css stacks the zones, the wall between them, where the line doesn't fit across. -->
+<div class="pp-flow">
+  <div class="pp-flow__diagram" role="img" aria-label="Prometheus, outside the firewall, scrapes the proxy. The agent, inside the firewall, connects out to the proxy over gRPC and fetches each endpoint's /metrics.">
+    <div class="pp-flow__side">
+      <span class="pp-flow__zone">outside the firewall</span>
+      <span class="pp-flow__line"><b>Prometheus</b> ──▶ <b>proxy</b> ◀── gRPC ──</span>
+    </div>
+    <div class="pp-flow__wall"></div>
+    <div class="pp-flow__side">
+      <span class="pp-flow__zone">inside the firewall</span>
+      <span class="pp-flow__line">── <b>agent</b> ──▶ <b>/metrics</b></span>
+    </div>
+  </div>
+</div>
 
-!!! tip "See it work on your laptop"
+Prometheus pulls, so it can't reach an endpoint on the far side of a firewall. Prometheus Proxy turns the connection
+around and leaves the pull alone: an agent inside the firewall connects out to a proxy beside Prometheus, on port
+50051, and Prometheus scrapes the proxy on port 8080 as it would any target. The proxy hands each scrape to the agent,
+which fetches the endpoint and sends the result back over its connection.
 
-    Seven self-contained [demos](demos/index.md) run the proxy, its agents, and Prometheus from the released images
-    with one command, and a guided tour walks you through each. Start with the [Basics Demo](basics-demo.md).
+## Try It
 
-## How It Works
+On one machine, with Docker. The agent serves two paths through the proxy, the proxy's metrics and its own, so there's
+nothing else to set up.
 
-``` mermaid
-%%{init: {'flowchart': {'curve': 'linear'}}}%%
-graph TB
-  P[Prometheus] -->|HTTP scrape| Proxy
-  %% The agent initiates the outbound gRPC connection, so the arrow points back to the proxy. The
-  %% invisible link pins Proxy above Agent -- mermaid has no single reverse arrow to do it directly,
-  %% and curve:linear (above) keeps the resulting back-edge as straight as it can be drawn.
-  Proxy ~~~ Agent
-  Agent -->|gRPC stream| Proxy
-  Agent -->|HTTP fetch| E1[App 1 :9100/metrics]
-  Agent -->|HTTP fetch| E2[App 2 :9100/metrics]
-  Agent -->|HTTP fetch| E3[App 3 :9100/metrics]
+```bash
+# A network for the two containers, so the agent reaches the proxy by its name
+docker network create prometheus-proxy-net
 
-  subgraph Outside Firewall
-    P
-    Proxy
-  end
+# Start the proxy
+docker run --rm --name prometheus-proxy --network prometheus-proxy-net \
+  -p 8080:8080 -p 50051:50051 --env METRICS_ENABLED=true \
+  pambrose/prometheus-proxy:4.7.0
 
-  subgraph Inside Firewall
-    Agent
-    E1
-    E2
-    E3
-  end
+# Start the agent, in another terminal
+docker run --rm --network prometheus-proxy-net \
+  --env PROXY_HOSTNAME=prometheus-proxy \
+  --env AGENT_CONFIG=https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf \
+  pambrose/prometheus-agent:4.7.0
+
+# Scrape the proxy's and the agent's own metrics through the proxy
+curl http://localhost:8080/proxy_metrics
+curl http://localhost:8080/agent_metrics
 ```
 
-The system comprises two components:
-
-- **Proxy** — runs outside the firewall alongside Prometheus. Accepts scrape requests from Prometheus
-  on HTTP (port 8080) and communicates with agents via gRPC (port 50051).
-- **Agent** — runs inside the firewall with monitored services. Initiates an *outbound* gRPC
-  connection to the proxy and responds to scrape requests by fetching metrics from local endpoints.
-
-## Key Benefits
-
-- **Firewall-friendly** — only requires an outbound connection from the agent
-- **Preserves pull model** — Prometheus continues to pull metrics as normal
-- **High performance** — built with Kotlin coroutines and gRPC streaming
-- **Secure** — optional TLS with mutual authentication, plus
-  [per-agent identities](security/index.md#per-agent-identities-and-path-authorization) that scope
-  each agent to the paths it may register
-- **Scalable** — one proxy supports many agents, each serving multiple paths
-- **Highly available** — agents [fail over](production.md#high-availability) across an ordered list
-  of proxies, and return to a recovered primary at their next reconnect
-- **Dynamic** — agents pick up target changes from a
-  [watched file](configuration/agent.md#dynamic-target-discovery) at runtime, no restart needed
-- **Bandwidth-conscious** — optional per-path
-  [metric filtering](configuration/agent.md#metric-filtering) drops unwanted families at the agent,
-  before they cross the WAN
-- **Observable** — a [live dashboard](web-dashboard.md) shows every agent, path, and recent
-  scrape in one place, and scrapes a path on demand
-- **Embeddable** — the agent can [run inside a JVM app](embedded-agent.md), with its settings
-  built in code, so an app on a [cloud platform](cloud-platforms.md) needs no secret files
-- **Zero changes** to existing Prometheus configuration patterns
-
-## Quick Start
-
-Get running in under a minute:
-
-=== "JAR"
-
-    ```bash
-    # Start the proxy
-    java -jar prometheus-proxy.jar
-
-    # Start the agent
-    java -jar prometheus-agent.jar \
-      --proxy proxy-host.example.com \
-      --config https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/myapps.conf
-    ```
-
-=== "Docker"
-
-    ```bash
-    # A network for the two containers, so the agent reaches the proxy by its name
-    docker network create prometheus-proxy-net
-
-    # Start the proxy
-    docker run --rm --name prometheus-proxy --network prometheus-proxy-net \
-      -p 8080:8080 -p 50051:50051 --env METRICS_ENABLED=true \
-      pambrose/prometheus-proxy:4.7.0
-
-    # Start the agent, in another terminal
-    docker run --rm --network prometheus-proxy-net \
-      --env PROXY_HOSTNAME=prometheus-proxy \
-      --env AGENT_CONFIG='https://raw.githubusercontent.com/pambrose/prometheus-proxy/master/examples/simple.conf' \
-      pambrose/prometheus-agent:4.7.0
-
-    # Scrape the proxy's and the agent's own metrics through the proxy
-    curl http://localhost:8080/proxy_metrics
-    curl http://localhost:8080/agent_metrics
-    ```
-
-=== "Helm"
-
-    ```bash
-    # From a clone of https://github.com/pambrose/prometheus-proxy
-    # Start the proxy, in the cluster where Prometheus runs, with a LoadBalancer for agents in other clusters
-    helm install prometheus-proxy ./charts/prometheus-proxy --namespace monitoring --create-namespace \
-      --set agentService.enabled=true
-
-    # Start the agent, in the cluster whose services it scrapes
-    helm install prometheus-agent ./charts/prometheus-agent \
-      --set proxy.hostname=proxy-host.example.com:50051 \
-      --set-file config=examples/myapps.conf
-    ```
-
-See the [Quick Start Guide](getting-started.md) for detailed instructions.
-
-## Common Use Cases
-
-| Scenario                    | Description                                                   |
-|:----------------------------|:--------------------------------------------------------------|
-| **Enterprise environments** | Scrape metrics across corporate firewall boundaries           |
-| **Multi-cloud deployments** | Bridge different network segments                             |
-| **Secure environments**     | Monitor internal services without opening inbound ports       |
-| **Federation**              | Scrape existing Prometheus instances via `/federate` endpoint |
-| **Kubernetes**              | Monitor services across clusters or namespaces                |
-| **Multi-team proxies**      | Share one proxy across teams, each scoped to its own paths    |
-| **Dynamic fleets**          | Reconcile churning targets from a generated file, no restarts |
-
-## API Reference
-
-Full API documentation (KDocs) is available at [KDocs](kdocs/).
+Each `curl` prints metrics in Prometheus's text format, which the agent fetched and sent back through the proxy.
+{ .pp-result }
 
 ## Next Steps
 
-<div class="grid cards" markdown>
+<div class="pp-ways" markdown>
 
--   :lucide-monitor-play:{ .lg .middle } __Demos__
+- [Try a demo](basics-demo.md)
 
-    ---
+    The Basics Demo runs the proxy, three agents behind a simulated firewall, Prometheus, and Grafana with one
+    `make up`, and a guided tour walks you through it. Six more are under Demos.
 
-    Watch the proxy and agents work, with Prometheus and Grafana, on your laptop
+- [Install it](getting-started.md)
 
-    [:lucide-arrow-right: Demos](demos/index.md)
+    Run the proxy beside Prometheus and an agent beside your services, from the JAR, Homebrew, Docker, or Helm, and
+    point Prometheus at the proxy.
 
--   :lucide-layers:{ .lg .middle } __Architecture__
+- [Onboard a team](security/index.md#onboarding-a-team)
 
-    ---
-
-    Understand the proxy/agent components, gRPC protocol, and request flow
-
-    [:lucide-arrow-right: Architecture](architecture.md)
-
--   :lucide-settings:{ .lg .middle } __Configuration__
-
-    ---
-
-    Configure the application with HOCON and environment variables
-
-    [:lucide-arrow-right: Configuration](configuration/index.md)
-
--   :lucide-shield:{ .lg .middle } __Security & TLS__
-
-    ---
-
-    Set up TLS encryption and mutual authentication
-
-    [:lucide-arrow-right: Security](security/index.md)
-
--   :lucide-activity:{ .lg .middle } __Monitoring__
-
-    ---
-
-    Built-in metrics and Grafana dashboards
-
-    [:lucide-arrow-right: Monitoring](monitoring.md)
-
--   :lucide-cloud:{ .lg .middle } __Cloud Platforms__
-
-    ---
-
-    Embed the agent in an app on ECS, Cloud Run, or Azure Container Apps
-
-    [:lucide-arrow-right: Cloud Platforms](cloud-platforms.md)
+    Give each team's agents an identity of their own, scoped to the paths they may register, so one proxy serves every
+    team.
 
 </div>

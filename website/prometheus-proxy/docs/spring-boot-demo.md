@@ -25,6 +25,12 @@ The [Ktor Demo](ktor-demo.md)'s coffee shop shows the rest with an app in Kotlin
 ``` mermaid
 %%{init: {'flowchart': {'curve': 'linear'}}}%%
 graph TB
+  accTitle: The Spring Boot Demo's containers
+  accDescr {
+    On the proxy host, Prometheus on port 9490 scrapes /roastery_metrics through the proxy, dashboard 8494. In the
+    roastery, one container and one JVM, the agent the Spring Boot starter runs, dashboard 8495, reads the app's
+    metrics registry in-process and connects to the proxy over gRPC with TLS and a token.
+  }
   P[Prometheus :9490] -->|scrapes /roastery_metrics| Proxy[Proxy, dashboard :8494]
   %% The agent connects out to the proxy, so its arrow points back. The invisible link keeps the app below.
   Proxy ~~~ Agent
@@ -168,7 +174,7 @@ adds connected and registered.
 `./demo.sh stop-app` stops the roastery with SIGTERM, as a platform does on a deploy or a scale-down. The agent, in the
 last lifecycle phase, stops first, and the roastery's log shows the order:
 
-```text
+``` { .text .pp-output title="The roastery's log" }
 Stopping the Prometheus agent roastery-1.0
 Commencing graceful shutdown. Waiting for active requests to complete
 Graceful shutdown complete

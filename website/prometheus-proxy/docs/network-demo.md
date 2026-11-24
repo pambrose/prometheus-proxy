@@ -17,6 +17,14 @@ of each failure: the endpoint it's trying, the error it got from each, and what 
 ``` mermaid
 %%{init: {'flowchart': {'curve': 'linear'}}}%%
 graph TB
+  accTitle: The Network Demo's containers
+  accDescr {
+    Outside the firewall, Grafana on port 3100 reads Prometheus on 9190, which discovers and scrapes paths through
+    the primary proxy, dashboard 8194, and the standby proxy, dashboard 8195. Inside the firewall, agent-hq and
+    agent-branch, dashboards 8196 and 8197, connect over gRPC through a simulated WAN, Toxiproxy, whose primary
+    links reach the primary proxy and whose standby links reach the standby, and they fetch metrics over HTTP from
+    network-app's simulated services.
+  }
   G[Grafana :3100] --> P[Prometheus :9190]
   P -->|discovery and scrapes| Proxy[Proxy, dashboard :8194]
   P -->|discovery and scrapes| Standby[Standby proxy, dashboard :8195]
@@ -232,11 +240,11 @@ shipping, and agent-branch, which Prometheus can't scrape through either proxy; 
 agent's heartbeat fails three times, with a 5-second deadline each, so at about 20 seconds the agent gives up on the
 connection and dials the head of its list again: the same dead link, where the connect waits out its 30-second
 deadline (`agent.grpc.unaryDeadlineSecs`). Meanwhile the primary, which has heard nothing, evicts the agent after 30
-seconds of silence (`proxy.internal.maxAgentInactivitySecs`, which the demo sets to 30), and **NetworkAgentEvicted**
-fires. At about 50 seconds agent-branch connects through its link to the standby, failed over, while the primary is
-still up, and about then **NetworkTargetDown** clears. Grafana's **Agents off their primary** shows it at 1. About 20
-seconds later **NetworkAgentNotOnPrimary** fires for agent-branch alone, until `./demo.sh heal` brings it back.
-agent-hq is untouched throughout.
+seconds of silence ([`proxy.internal.maxAgentInactivitySecs`](configuration/proxy.md#internal-settings), which the
+demo sets to 30), and **NetworkAgentEvicted** fires. At about 50 seconds agent-branch connects through its link to the
+standby, failed over, while the primary is still up, and about then **NetworkTargetDown** clears. Grafana's **Agents
+off their primary** shows it at 1. About 20 seconds later **NetworkAgentNotOnPrimary** fires for agent-branch alone,
+until `./demo.sh heal` brings it back. agent-hq is untouched throughout.
 
 agent-branch's Connection view, <http://localhost:8197/dashboard/connection>, shows the agent's side of the wait: from
 about 20 seconds it reads **connecting**, with `branch-to-proxy:50053` tagged **trying**, until the connect's deadline
